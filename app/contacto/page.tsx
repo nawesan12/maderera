@@ -237,6 +237,50 @@ export default function ContactoPage() {
             </Card>
           </motion.div>
         </div>
+
+        {/* Map */}
+        <motion.div
+          className="mt-12"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+        >
+          <h3 className="text-lg font-bold mb-4">Encontranos en el mapa</h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card className="overflow-hidden border-0 shadow-md">
+              <div className="p-3 bg-brand-gray text-white text-sm font-semibold flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-brand-orange" />
+                Casa Central - Av. Juan B. Justo 4153
+              </div>
+              <div className="h-52">
+                <iframe
+                  src="https://www.openstreetmap.org/export/embed.html?bbox=-57.5600,-38.0120,-57.5480,-38.0040&layer=mapnik&marker=-38.0080,-57.5540"
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  title="Mapa Casa Central"
+                />
+              </div>
+            </Card>
+            <Card className="overflow-hidden border-0 shadow-md">
+              <div className="p-3 bg-brand-gray text-white text-sm font-semibold flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-brand-orange" />
+                Aserradero - Canosa N°61
+              </div>
+              <div className="h-52">
+                <iframe
+                  src="https://www.openstreetmap.org/export/embed.html?bbox=-57.5570,-38.0200,-57.5450,-38.0120&layer=mapnik&marker=-38.0160,-57.5510"
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  title="Mapa Aserradero"
+                />
+              </div>
+            </Card>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

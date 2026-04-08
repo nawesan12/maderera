@@ -50,6 +50,7 @@ const navLinks = [
 
 export function Navbar() {
   const [productsOpen, setProductsOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { totalItems } = useBudget();
 
   return (
@@ -204,7 +205,7 @@ export function Navbar() {
               </Link>
 
               {/* Mobile menu */}
-              <Sheet>
+              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <SheetTrigger className="lg:hidden inline-flex items-center justify-center rounded-xl text-sm font-medium h-10 w-10 hover:bg-muted transition-colors">
                   <Menu className="h-5 w-5" />
                 </SheetTrigger>
@@ -217,6 +218,7 @@ export function Navbar() {
                       <Link
                         key={link.href}
                         href={link.href}
+                        onClick={() => setMobileMenuOpen(false)}
                         className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-brand-cream text-sm"
                       >
                         <div className="w-8 h-8 rounded-lg bg-brand-orange/10 flex items-center justify-center">
@@ -233,13 +235,14 @@ export function Navbar() {
                       <Link
                         key={link.href}
                         href={link.href}
+                        onClick={() => setMobileMenuOpen(false)}
                         className="px-3 py-2.5 rounded-xl hover:bg-brand-cream text-sm font-medium"
                       >
                         {link.name}
                       </Link>
                     ))}
                     <div className="border-t my-3" />
-                    <Link href="/presupuesto">
+                    <Link href="/presupuesto" onClick={() => setMobileMenuOpen(false)}>
                       <Button className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full font-semibold">
                         Pedir Presupuesto
                       </Button>

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Quiénes Somos - Desde 1981 | Maderera Juan B. Justo",
+  title: "Quiénes Somos - Desde 1981",
   description:
     "Empresa familiar fundada en 1981 en Mar del Plata. Más de 40 años proveyendo madera de calidad. Marca propia Moldava con distribución nacional.",
   keywords: [

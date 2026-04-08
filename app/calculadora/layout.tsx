@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Calculadora de Medidas | Maderera Juan B. Justo",
+  title: "Calculadora de Medidas",
   description:
     "Calculá los materiales exactos para tu proyecto: techos, placas, pisos y decks. Herramienta gratuita online. Agregá resultados directo al presupuesto.",
   keywords: [
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     "materiales construcción",
   ],
   openGraph: {
-    title: "Calculadora de Medidas | Maderera Juan B. Justo",
+    title: "Calculadora de Medidas",
     description:
       "Herramienta gratuita para calcular materiales de construcción. Techos, placas, pisos y decks.",
   },

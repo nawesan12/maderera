@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Stock entre Sucursales | Maderera Juan B. Justo",
+  title: "Stock entre Sucursales",
   description:
     "Consultá la disponibilidad de productos en tiempo real en Casa Central y Aserradero. Más de 200 productos con stock visible por sucursal.",
   keywords: [

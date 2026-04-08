@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Catálogo de Productos | Maderera Juan B. Justo",
+  title: "Catálogo de Productos",
   description:
     "Explorá nuestro catálogo completo: techos, placas, pisos, molduras, ferretería, decks, construcción en seco y cubiertas. Stock disponible en Mar del Plata.",
   keywords: [
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     "maderera",
   ],
   openGraph: {
-    title: "Catálogo de Productos | Maderera Juan B. Justo",
+    title: "Catálogo de Productos",
     description:
       "Más de 200 productos para construcción y carpintería. Consultá stock en tiempo real entre sucursales.",
   },

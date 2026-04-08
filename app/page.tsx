@@ -109,7 +109,7 @@ export default function HomePage() {
                 </Button>
               </Link>
               <Link href="/calculadora">
-                <Button size="lg" variant="outline" className="border-white/20 text-white hover:bg-white/10 text-base h-14 px-8 rounded-full backdrop-blur-sm">
+                <Button size="lg" className="bg-white/10 border-2 border-white/30 !text-white hover:bg-white/20 text-base h-14 px-8 rounded-full backdrop-blur-sm">
                   <Calculator className="mr-2 h-5 w-5" />
                   Calculá tus medidas
                 </Button>
@@ -516,8 +516,8 @@ export default function HomePage() {
       {/* FINAL CTA - Bold, full-width */}
       <section className="relative py-28 overflow-hidden">
         <div className="absolute inset-0 bg-brand-orange" />
-        {/* Geometric accent */}
-        <div className="absolute top-0 right-0 w-1/3 h-full bg-brand-orange-dark opacity-50 skew-x-[-12deg] translate-x-20" />
+        {/* Geometric accent - hidden on small screens */}
+        <div className="absolute top-0 right-0 w-1/3 h-full bg-brand-orange-dark opacity-50 skew-x-[-12deg] translate-x-20 hidden md:block" />
         <div className="container mx-auto px-4 text-center relative z-10">
           <motion.div {...fadeUp}>
             <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 tracking-tight">

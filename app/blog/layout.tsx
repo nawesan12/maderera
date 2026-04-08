@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Blog - Tips y Novedades | Maderera Juan B. Justo",
+  title: "Blog - Tips y Novedades",
   description:
     "Guías, tips y novedades sobre madera, construcción y carpintería. Aprendé a elegir materiales, optimizar cortes y más.",
   keywords: [

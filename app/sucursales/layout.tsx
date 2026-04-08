@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Sucursales en Mar del Plata | Maderera Juan B. Justo",
+  title: "Sucursales en Mar del Plata",
   description:
     "Dos sucursales en Mar del Plata: Casa Central en Av. Juan B. Justo 4153 y Aserradero en Canosa 61. Horarios, servicios y contacto directo.",
   keywords: [

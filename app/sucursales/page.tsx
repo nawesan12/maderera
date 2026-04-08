@@ -17,7 +17,7 @@ const branches = [
     whatsapp: "2235903118",
     hours: "Lunes a Viernes 08:00 - 16:00 hs | Sábados 08:00 - 12:00 hs",
     image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&q=80",
-    mapEmbed: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3143.7!2d-57.55!3d-38.0!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzjCsDAwJzAwLjAiUyA1N8KwMzMnMDAuMCJX!5e0!3m2!1ses!2sar!4v1",
+    mapQuery: "Av+Juan+B+Justo+4153+Mar+del+Plata+Argentina",
     services: [
       "Servicio de corte de placas a medida con precisión",
       "Amplio stock de molduras y listonería Moldava",
@@ -36,7 +36,7 @@ const branches = [
     whatsapp: "2235060817",
     hours: "Lunes a Viernes 08:00 - 16:00 hs | Sábados 08:00 - 12:00 hs",
     image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80",
-    mapEmbed: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3143.7!2d-57.55!3d-38.0!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzjCsDAwJzAwLjAiUyA1N8KwMzMnMDAuMCJX!5e0!3m2!1ses!2sar!4v1",
+    mapQuery: "Canosa+61+Mar+del+Plata+Argentina",
     services: [
       "Planta de fabricación con tecnología moderna",
       "Stock permanente de techos, escaleras y decks",
@@ -150,6 +150,18 @@ export default function SucursalesPage() {
                           Llamar
                         </Button>
                       </a>
+                    </div>
+
+                    {/* Map */}
+                    <div className="rounded-xl overflow-hidden border h-52 lg:h-64">
+                      <iframe
+                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${branch.name === "Casa Central" ? "-57.5600,-38.0120,-57.5480,-38.0040" : "-57.5570,-38.0200,-57.5450,-38.0120"}&layer=mapnik&marker=${branch.name === "Casa Central" ? "-38.0080,-57.5540" : "-38.0160,-57.5510"}`}
+                        width="100%"
+                        height="100%"
+                        style={{ border: 0 }}
+                        loading="lazy"
+                        title={`Mapa ${branch.name}`}
+                      />
                     </div>
                   </CardContent>
                 </div>

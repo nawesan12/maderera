@@ -18,9 +18,62 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Maderera Juan B. Justo | Desde 1981 en Mar del Plata",
+  title: {
+    default: "Maderera Juan B. Justo | Desde 1981 en Mar del Plata",
+    template: "%s | Maderera Juan B. Justo",
+  },
   description:
-    "Maderera líder en Mar del Plata. Techos, placas, pisos, molduras, ferretería, decks, construcción en seco y más. Presupuestos sin cargo.",
+    "Maderera líder en Mar del Plata desde 1981. Techos, placas, pisos, molduras Moldava, ferretería, decks, construcción en seco y más. Presupuestos sin cargo. Dos sucursales: Casa Central y Aserradero.",
+  keywords: [
+    "maderera mar del plata",
+    "madera mar del plata",
+    "maderera juan b justo",
+    "placas melamina mar del plata",
+    "molduras moldava",
+    "tirantes pino",
+    "machimbre",
+    "fenólicos",
+    "construcción en seco",
+    "decks mar del plata",
+    "presupuesto madera",
+  ],
+  authors: [{ name: "Maderera Juan B. Justo" }],
+  creator: "Maderera Juan B. Justo",
+  metadataBase: new URL("https://mjbj.ar"),
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "es_AR",
+    url: "https://mjbj.ar",
+    siteName: "Maderera Juan B. Justo",
+    title: "Maderera Juan B. Justo | Desde 1981 en Mar del Plata",
+    description:
+      "Más de 40 años proveyendo madera de calidad. Techos, placas, pisos, molduras, ferretería y más. Presupuestos sin cargo.",
+    images: [
+      {
+        url: "/cropped-icon-180x180.png",
+        width: 180,
+        height: 180,
+        alt: "Maderera Juan B. Justo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "Maderera Juan B. Justo | Desde 1981 en Mar del Plata",
+    description:
+      "Más de 40 años proveyendo madera de calidad en Mar del Plata. Presupuestos sin cargo.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  icons: {
+    icon: "/cropped-icon-180x180.png",
+    apple: "/cropped-icon-180x180.png",
+  },
 };
 
 export default function RootLayout({
@@ -33,7 +86,7 @@ export default function RootLayout({
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col overflow-x-hidden">
         <TooltipProvider>
           <BudgetProvider>
             <Navbar />

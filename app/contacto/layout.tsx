@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Contacto | Maderera Juan B. Justo - Mar del Plata",
+  title: "Contacto",
   description:
     "Contactanos por WhatsApp, teléfono, email o visitanos en nuestras sucursales. Casa Central: (0223) 474-3328. Aserradero: (0223) 483-0535.",
   keywords: [

@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Navbar } from "@/components/navbar";
-import { Footer } from "@/components/footer";
-import { WhatsAppButton } from "@/components/whatsapp-button";
 import { BudgetProvider } from "@/lib/budget-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
@@ -40,9 +37,7 @@ export const metadata: Metadata = {
   authors: [{ name: "Maderera Juan B. Justo" }],
   creator: "Maderera Juan B. Justo",
   metadataBase: new URL("https://mjbj.ar"),
-  alternates: {
-    canonical: "/",
-  },
+  alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     locale: "es_AR",
@@ -51,29 +46,15 @@ export const metadata: Metadata = {
     title: "Maderera Juan B. Justo | Desde 1981 en Mar del Plata",
     description:
       "Más de 40 años proveyendo madera de calidad. Techos, placas, pisos, molduras, ferretería y más. Presupuestos sin cargo.",
-    images: [
-      {
-        url: "/cropped-icon-180x180.png",
-        width: 180,
-        height: 180,
-        alt: "Maderera Juan B. Justo",
-      },
-    ],
+    images: [{ url: "/cropped-icon-180x180.png", width: 180, height: 180, alt: "Maderera Juan B. Justo" }],
   },
   twitter: {
     card: "summary",
     title: "Maderera Juan B. Justo | Desde 1981 en Mar del Plata",
-    description:
-      "Más de 40 años proveyendo madera de calidad en Mar del Plata. Presupuestos sin cargo.",
+    description: "Más de 40 años proveyendo madera de calidad en Mar del Plata. Presupuestos sin cargo.",
   },
-  robots: {
-    index: true,
-    follow: true,
-  },
-  icons: {
-    icon: "/cropped-icon-180x180.png",
-    apple: "/cropped-icon-180x180.png",
-  },
+  robots: { index: true, follow: true },
+  icons: { icon: "/cropped-icon-180x180.png", apple: "/cropped-icon-180x180.png" },
 };
 
 export default function RootLayout({
@@ -89,10 +70,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col overflow-x-hidden">
         <TooltipProvider>
           <BudgetProvider>
-            <Navbar />
-            <main className="flex-1">{children}</main>
-            <Footer />
-            <WhatsAppButton />
+            {children}
           </BudgetProvider>
         </TooltipProvider>
       </body>

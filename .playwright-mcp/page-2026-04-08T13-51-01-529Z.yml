@@ -1,0 +1,233 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img [ref=e6]
+        - text: (0223) 474-3328
+      - generic [ref=e8]:
+        - img [ref=e9]
+        - text: Lun-Vie 8:00-16:00 | Sáb 8:00-12:00
+    - generic [ref=e12]:
+      - link "Portal Profesionales" [ref=e13] [cursor=pointer]:
+        - /url: /profesionales
+      - generic [ref=e14]: "|"
+      - link "Contacto" [ref=e15] [cursor=pointer]:
+        - /url: /contacto
+  - navigation [ref=e16]:
+    - generic [ref=e18]:
+      - link "Maderera Juan B. Justo Maderera Juan B. Justo" [ref=e19] [cursor=pointer]:
+        - /url: /
+        - img "Maderera Juan B. Justo" [ref=e20]
+        - generic [ref=e21]:
+          - paragraph [ref=e22]: Maderera
+          - paragraph [ref=e23]: Juan B. Justo
+      - generic [ref=e24]:
+        - button "Productos" [ref=e26]:
+          - text: Productos
+          - img [ref=e27]
+        - link "Calculadora" [ref=e29] [cursor=pointer]:
+          - /url: /calculadora
+        - link "Stock" [ref=e30] [cursor=pointer]:
+          - /url: /stock
+        - link "Sucursales" [ref=e31] [cursor=pointer]:
+          - /url: /sucursales
+        - link "Profesionales" [ref=e32] [cursor=pointer]:
+          - /url: /profesionales
+        - button "Más" [ref=e34]:
+          - text: Más
+          - img [ref=e35]
+      - generic [ref=e37]:
+        - link [ref=e38] [cursor=pointer]:
+          - /url: /calculadora
+          - button [ref=e39]:
+            - img
+        - link [ref=e40] [cursor=pointer]:
+          - /url: /presupuesto
+          - button [ref=e41]:
+            - img
+        - link "Pedir Presupuesto" [ref=e42] [cursor=pointer]:
+          - /url: /presupuesto
+          - button "Pedir Presupuesto" [ref=e43]
+  - main [ref=e44]:
+    - generic [ref=e45]:
+      - generic [ref=e47]:
+        - generic [ref=e48]:
+          - img [ref=e49]
+          - heading "Contacto" [level=1] [ref=e52]
+        - paragraph [ref=e53]: Estamos para ayudarte. Consultanos por cualquier medio.
+      - generic [ref=e55]:
+        - generic [ref=e56]:
+          - heading "Información de Contacto" [level=2] [ref=e57]
+          - generic [ref=e58]:
+            - generic [ref=e60]: Casa Central
+            - generic [ref=e61]:
+              - generic [ref=e62]:
+                - img [ref=e63]
+                - generic [ref=e66]: Av. Juan B. Justo 4153, Mar del Plata
+              - generic [ref=e67]:
+                - img [ref=e68]
+                - generic [ref=e70]: (0223) 474-3328
+              - generic [ref=e71]:
+                - img [ref=e72]
+                - generic [ref=e75]: info@mjbj.com.ar
+              - generic [ref=e76]:
+                - img [ref=e77]
+                - generic [ref=e79]: "WhatsApp: 223-5903118"
+              - generic [ref=e80]:
+                - img [ref=e81]
+                - generic [ref=e84]: Lun-Vie 8-16hs | Sáb 8-12hs
+          - generic [ref=e85]:
+            - generic [ref=e87]: Aserradero
+            - generic [ref=e88]:
+              - generic [ref=e89]:
+                - img [ref=e90]
+                - generic [ref=e93]: Canosa N°61, Mar del Plata
+              - generic [ref=e94]:
+                - img [ref=e95]
+                - generic [ref=e97]: (0223) 483-0535
+              - generic [ref=e98]:
+                - img [ref=e99]
+                - generic [ref=e102]: info@aserradero.mjbj.com.ar
+              - generic [ref=e103]:
+                - img [ref=e104]
+                - generic [ref=e106]: "WhatsApp: 223-5060817"
+              - generic [ref=e107]:
+                - img [ref=e108]
+                - generic [ref=e111]: Lun-Vie 8-16hs | Sáb 8-12hs
+          - link "Escribinos por WhatsApp" [ref=e112] [cursor=pointer]:
+            - /url: https://wa.me/5492235903118?text=Hola!%20Quisiera%20hacer%20una%20consulta.
+            - button "Escribinos por WhatsApp" [ref=e113]:
+              - img
+              - text: Escribinos por WhatsApp
+        - generic [ref=e115]:
+          - generic [ref=e116]:
+            - generic [ref=e117]: Envianos tu Consulta
+            - generic [ref=e118]: Completá el formulario y te responderemos a la brevedad.
+          - generic [ref=e119]:
+            - generic [ref=e120]:
+              - generic [ref=e121]:
+                - generic [ref=e122]: Nombre completo
+                - textbox "Tu nombre" [ref=e123]
+              - generic [ref=e124]:
+                - generic [ref=e125]: Email
+                - textbox "tu@email.com" [ref=e126]
+            - generic [ref=e127]:
+              - generic [ref=e128]:
+                - generic [ref=e129]: Teléfono
+                - textbox "223-..." [ref=e130]
+              - generic [ref=e131]:
+                - generic [ref=e132]: Motivo de consulta
+                - combobox [ref=e133]:
+                  - generic [ref=e134]: Seleccioná
+                  - img: ▼
+                - textbox [ref=e135]
+            - generic [ref=e136]:
+              - generic [ref=e137]: Mensaje
+              - textbox "Contanos en qué podemos ayudarte..." [ref=e138]
+            - button "Enviar Mensaje" [ref=e139]:
+              - img
+              - text: Enviar Mensaje
+  - contentinfo [ref=e140]:
+    - generic [ref=e141]:
+      - generic [ref=e142]:
+        - generic [ref=e143]:
+          - generic [ref=e144]:
+            - img "Maderera Juan B. Justo" [ref=e145]
+            - generic [ref=e146]:
+              - paragraph [ref=e147]: Maderera
+              - paragraph [ref=e148]: Juan B. Justo
+          - paragraph [ref=e149]: Desde 1981 abasteciendo a Mar del Plata con los mejores productos de la industria maderera.
+          - generic [ref=e150]:
+            - link [ref=e151] [cursor=pointer]:
+              - /url: "#"
+              - img [ref=e152]
+            - link [ref=e154] [cursor=pointer]:
+              - /url: "#"
+              - img [ref=e155]
+        - generic [ref=e157]:
+          - heading "Productos" [level=3] [ref=e158]
+          - list [ref=e159]:
+            - listitem [ref=e160]:
+              - link "Techos" [ref=e161] [cursor=pointer]:
+                - /url: /catalogo?cat=techos
+            - listitem [ref=e162]:
+              - link "Placas" [ref=e163] [cursor=pointer]:
+                - /url: /catalogo?cat=placas
+            - listitem [ref=e164]:
+              - link "Pisos" [ref=e165] [cursor=pointer]:
+                - /url: /catalogo?cat=pisos
+            - listitem [ref=e166]:
+              - link "Molduras" [ref=e167] [cursor=pointer]:
+                - /url: /catalogo?cat=molduras
+            - listitem [ref=e168]:
+              - link "Ferretería" [ref=e169] [cursor=pointer]:
+                - /url: /catalogo?cat=ferreteria
+            - listitem [ref=e170]:
+              - link "Decks y Escaleras" [ref=e171] [cursor=pointer]:
+                - /url: /catalogo?cat=decks
+            - listitem [ref=e172]:
+              - link "Construcción en Seco" [ref=e173] [cursor=pointer]:
+                - /url: /catalogo?cat=construccion-seco
+            - listitem [ref=e174]:
+              - link "Cubiertas" [ref=e175] [cursor=pointer]:
+                - /url: /catalogo?cat=cubiertas
+        - generic [ref=e176]:
+          - heading "Navegación" [level=3] [ref=e177]
+          - list [ref=e178]:
+            - listitem [ref=e179]:
+              - link "Catálogo" [ref=e180] [cursor=pointer]:
+                - /url: /catalogo
+            - listitem [ref=e181]:
+              - link "Calculadora de Medidas" [ref=e182] [cursor=pointer]:
+                - /url: /calculadora
+            - listitem [ref=e183]:
+              - link "Stock entre Sucursales" [ref=e184] [cursor=pointer]:
+                - /url: /stock
+            - listitem [ref=e185]:
+              - link "Pedir Presupuesto" [ref=e186] [cursor=pointer]:
+                - /url: /presupuesto
+            - listitem [ref=e187]:
+              - link "Portal Profesionales" [ref=e188] [cursor=pointer]:
+                - /url: /profesionales
+            - listitem [ref=e189]:
+              - link "Sucursales" [ref=e190] [cursor=pointer]:
+                - /url: /sucursales
+            - listitem [ref=e191]:
+              - link "Quiénes Somos" [ref=e192] [cursor=pointer]:
+                - /url: /nosotros
+            - listitem [ref=e193]:
+              - link "Blog" [ref=e194] [cursor=pointer]:
+                - /url: /blog
+            - listitem [ref=e195]:
+              - link "Contacto" [ref=e196] [cursor=pointer]:
+                - /url: /contacto
+        - generic [ref=e197]:
+          - heading "Contacto" [level=3] [ref=e198]
+          - list [ref=e199]:
+            - listitem [ref=e200]:
+              - img [ref=e201]
+              - generic [ref=e204]:
+                - paragraph [ref=e205]: Casa Central
+                - paragraph [ref=e206]: Av. Juan B. Justo 4153, Mar del Plata
+            - listitem [ref=e207]:
+              - img [ref=e208]
+              - generic [ref=e211]:
+                - paragraph [ref=e212]: Aserradero
+                - paragraph [ref=e213]: Canosa N°61, Mar del Plata
+            - listitem [ref=e214]:
+              - img [ref=e215]
+              - text: (0223) 474-3328
+            - listitem [ref=e217]:
+              - img [ref=e218]
+              - text: info@mjbj.com.ar
+            - listitem [ref=e221]:
+              - img [ref=e222]
+              - text: Lun-Vie 8-16hs | Sáb 8-12hs
+      - separator [ref=e225]
+      - generic [ref=e226]:
+        - paragraph [ref=e227]: © 2026 Maderera Juan B. Justo. Todos los derechos reservados.
+        - paragraph [ref=e228]: Desde 1981 en Mar del Plata
+  - link:
+    - /url: https://wa.me/5492235903118?text=Hola!%20Quisiera%20consultar%20sobre...
+  - button "Open Next.js Dev Tools" [ref=e234] [cursor=pointer]:
+    - img [ref=e235]

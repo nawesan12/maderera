@@ -1,0 +1,198 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img [ref=e6]
+        - text: (0223) 474-3328
+      - generic [ref=e8]:
+        - img [ref=e9]
+        - text: Lun-Vie 8:00-16:00 | Sáb 8:00-12:00
+    - generic [ref=e12]:
+      - link "Portal Profesionales" [ref=e13] [cursor=pointer]:
+        - /url: /profesionales
+      - generic [ref=e14]: "|"
+      - link "Contacto" [ref=e15] [cursor=pointer]:
+        - /url: /contacto
+  - navigation [ref=e16]:
+    - generic [ref=e18]:
+      - link "Maderera Juan B. Justo Maderera Juan B. Justo" [ref=e19] [cursor=pointer]:
+        - /url: /
+        - img "Maderera Juan B. Justo" [ref=e20]
+        - generic [ref=e21]:
+          - paragraph [ref=e22]: Maderera
+          - paragraph [ref=e23]: Juan B. Justo
+      - generic [ref=e24]:
+        - button "Productos" [ref=e26]:
+          - text: Productos
+          - img [ref=e27]
+        - link "Calculadora" [ref=e29] [cursor=pointer]:
+          - /url: /calculadora
+        - link "Stock" [ref=e30] [cursor=pointer]:
+          - /url: /stock
+        - link "Sucursales" [ref=e31] [cursor=pointer]:
+          - /url: /sucursales
+        - link "Profesionales" [ref=e32] [cursor=pointer]:
+          - /url: /profesionales
+        - button "Más" [ref=e34]:
+          - text: Más
+          - img [ref=e35]
+      - generic [ref=e37]:
+        - link [ref=e38] [cursor=pointer]:
+          - /url: /calculadora
+          - button [ref=e39]:
+            - img
+        - link [ref=e40] [cursor=pointer]:
+          - /url: /presupuesto
+          - button [ref=e41]:
+            - img
+        - link "Pedir Presupuesto" [ref=e42] [cursor=pointer]:
+          - /url: /presupuesto
+          - button "Pedir Presupuesto" [ref=e43]
+  - main [ref=e44]:
+    - generic [ref=e45]:
+      - generic [ref=e46]:
+        - img "Calculadora" [ref=e48]
+        - generic [ref=e51]:
+          - paragraph [ref=e52]: Herramienta gratuita
+          - heading "Calculadora de Medidas" [level=1] [ref=e53]
+          - paragraph [ref=e54]: Ingresá las dimensiones de tu proyecto y obtené la lista exacta de materiales. Los resultados se agregan directo al presupuesto.
+      - generic [ref=e56]:
+        - tablist [ref=e57]:
+          - tab "Techos" [selected] [ref=e58]:
+            - img
+            - text: Techos
+          - tab "Placas" [ref=e59]:
+            - img
+            - text: Placas
+          - tab "Pisos" [ref=e60]:
+            - img
+            - text: Pisos
+          - tab "Decks" [ref=e61]:
+            - img
+            - text: Decks
+        - tabpanel [ref=e62]:
+          - generic [ref=e64]:
+            - generic [ref=e65]:
+              - generic [ref=e66]: Calculadora de Techos
+              - generic [ref=e67]: Ingresá las medidas de tu techo para calcular los materiales necesarios.
+            - generic [ref=e68]:
+              - generic [ref=e69]:
+                - generic [ref=e70]:
+                  - generic [ref=e71]: Largo (metros)
+                  - spinbutton [ref=e72]
+                - generic [ref=e73]:
+                  - generic [ref=e74]: Ancho (metros)
+                  - spinbutton [ref=e75]
+              - generic [ref=e76]:
+                - generic [ref=e77]: Tipo de madera
+                - combobox [ref=e78]:
+                  - generic [ref=e79]: pino
+                  - img: ▼
+                - textbox [ref=e80]: pino
+              - button "Calcular Materiales" [disabled]:
+                - img
+                - text: Calcular Materiales
+  - contentinfo [ref=e81]:
+    - generic [ref=e82]:
+      - generic [ref=e83]:
+        - generic [ref=e84]:
+          - generic [ref=e85]:
+            - img "Maderera Juan B. Justo" [ref=e86]
+            - generic [ref=e87]:
+              - paragraph [ref=e88]: Maderera
+              - paragraph [ref=e89]: Juan B. Justo
+          - paragraph [ref=e90]: Desde 1981 abasteciendo a Mar del Plata con los mejores productos de la industria maderera.
+          - generic [ref=e91]:
+            - link [ref=e92] [cursor=pointer]:
+              - /url: "#"
+              - img [ref=e93]
+            - link [ref=e95] [cursor=pointer]:
+              - /url: "#"
+              - img [ref=e96]
+        - generic [ref=e98]:
+          - heading "Productos" [level=3] [ref=e99]
+          - list [ref=e100]:
+            - listitem [ref=e101]:
+              - link "Techos" [ref=e102] [cursor=pointer]:
+                - /url: /catalogo?cat=techos
+            - listitem [ref=e103]:
+              - link "Placas" [ref=e104] [cursor=pointer]:
+                - /url: /catalogo?cat=placas
+            - listitem [ref=e105]:
+              - link "Pisos" [ref=e106] [cursor=pointer]:
+                - /url: /catalogo?cat=pisos
+            - listitem [ref=e107]:
+              - link "Molduras" [ref=e108] [cursor=pointer]:
+                - /url: /catalogo?cat=molduras
+            - listitem [ref=e109]:
+              - link "Ferretería" [ref=e110] [cursor=pointer]:
+                - /url: /catalogo?cat=ferreteria
+            - listitem [ref=e111]:
+              - link "Decks y Escaleras" [ref=e112] [cursor=pointer]:
+                - /url: /catalogo?cat=decks
+            - listitem [ref=e113]:
+              - link "Construcción en Seco" [ref=e114] [cursor=pointer]:
+                - /url: /catalogo?cat=construccion-seco
+            - listitem [ref=e115]:
+              - link "Cubiertas" [ref=e116] [cursor=pointer]:
+                - /url: /catalogo?cat=cubiertas
+        - generic [ref=e117]:
+          - heading "Navegación" [level=3] [ref=e118]
+          - list [ref=e119]:
+            - listitem [ref=e120]:
+              - link "Catálogo" [ref=e121] [cursor=pointer]:
+                - /url: /catalogo
+            - listitem [ref=e122]:
+              - link "Calculadora de Medidas" [ref=e123] [cursor=pointer]:
+                - /url: /calculadora
+            - listitem [ref=e124]:
+              - link "Stock entre Sucursales" [ref=e125] [cursor=pointer]:
+                - /url: /stock
+            - listitem [ref=e126]:
+              - link "Pedir Presupuesto" [ref=e127] [cursor=pointer]:
+                - /url: /presupuesto
+            - listitem [ref=e128]:
+              - link "Portal Profesionales" [ref=e129] [cursor=pointer]:
+                - /url: /profesionales
+            - listitem [ref=e130]:
+              - link "Sucursales" [ref=e131] [cursor=pointer]:
+                - /url: /sucursales
+            - listitem [ref=e132]:
+              - link "Quiénes Somos" [ref=e133] [cursor=pointer]:
+                - /url: /nosotros
+            - listitem [ref=e134]:
+              - link "Blog" [ref=e135] [cursor=pointer]:
+                - /url: /blog
+            - listitem [ref=e136]:
+              - link "Contacto" [ref=e137] [cursor=pointer]:
+                - /url: /contacto
+        - generic [ref=e138]:
+          - heading "Contacto" [level=3] [ref=e139]
+          - list [ref=e140]:
+            - listitem [ref=e141]:
+              - img [ref=e142]
+              - generic [ref=e145]:
+                - paragraph [ref=e146]: Casa Central
+                - paragraph [ref=e147]: Av. Juan B. Justo 4153, Mar del Plata
+            - listitem [ref=e148]:
+              - img [ref=e149]
+              - generic [ref=e152]:
+                - paragraph [ref=e153]: Aserradero
+                - paragraph [ref=e154]: Canosa N°61, Mar del Plata
+            - listitem [ref=e155]:
+              - img [ref=e156]
+              - text: (0223) 474-3328
+            - listitem [ref=e158]:
+              - img [ref=e159]
+              - text: info@mjbj.com.ar
+            - listitem [ref=e162]:
+              - img [ref=e163]
+              - text: Lun-Vie 8-16hs | Sáb 8-12hs
+      - separator [ref=e166]
+      - generic [ref=e167]:
+        - paragraph [ref=e168]: © 2026 Maderera Juan B. Justo. Todos los derechos reservados.
+        - paragraph [ref=e169]: Desde 1981 en Mar del Plata
+  - link:
+    - /url: https://wa.me/5492235903118?text=Hola!%20Quisiera%20consultar%20sobre...
+  - button "Open Next.js Dev Tools" [ref=e175] [cursor=pointer]:
+    - img [ref=e176]

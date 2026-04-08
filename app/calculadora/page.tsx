@@ -77,7 +77,7 @@ export default function CalculadoraPage() {
       <section className="relative py-20 overflow-hidden">
         <div className="absolute inset-0">
           <Image
-            src="https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1920&q=80"
+            src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1920&q=80"
             alt="Calculadora"
             fill
             className="object-cover"

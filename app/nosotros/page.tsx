@@ -158,7 +158,7 @@ export default function NosotrosPage() {
               viewport={{ once: true }}
             >
               <Image
-                src="https://images.unsplash.com/photo-1595514535215-95a8a7e38f04?w=800&q=80"
+                src="https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800&q=80"
                 alt="Molduras Moldava"
                 fill
                 className="object-cover"

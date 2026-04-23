@@ -3,11 +3,15 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Truck, MapPin, Clock, Package, Check, ChevronRight } from "lucide-react";
+import { Truck, MapPin, Clock, Package, Check, ChevronRight, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { pedidos, type PedidoEstado } from "@/lib/dashboard-data";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { pedidos as initialPedidos, type PedidoEstado, type Pedido } from "@/lib/dashboard-data";
 
 const estadoConfig: Record<string, { bg: string; label: string; icon: React.ElementType }> = {
   preparando: { bg: "bg-yellow-500/15 text-yellow-400", label: "Preparando", icon: Package },
@@ -24,8 +28,28 @@ const nextEstado: Record<string, PedidoEstado> = {
 
 export default function AdminPedidosPage() {
   const [estados, setEstados] = useState<Record<string, PedidoEstado>>({});
+  const [pedidosList, setPedidosList] = useState<Pedido[]>(initialPedidos);
+  const [newOpen, setNewOpen] = useState(false);
+  const [newCliente, setNewCliente] = useState("");
+  const [newItems, setNewItems] = useState("");
+  const [newTotal, setNewTotal] = useState("");
+  const [newTipo, setNewTipo] = useState<"retiro" | "entrega">("retiro");
+  const [newSucursal, setNewSucursal] = useState("Central");
 
   const getEstado = (id: string, original: PedidoEstado) => estados[id] || original;
+
+  const handleNewPedido = () => {
+    const id = `PED-${1206 + pedidosList.length - initialPedidos.length}`;
+    const now = new Date();
+    const fecha = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/2026 ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const newPedido: Pedido = {
+      id, fecha, cliente: newCliente, items: newItems, total: newTotal || "$0",
+      estado: "preparando", sucursal: newSucursal, tipo: newTipo,
+    };
+    setPedidosList((prev) => [newPedido, ...prev]);
+    toast.success("Pedido registrado", { description: `${id} — ${newCliente}` });
+    setNewOpen(false); setNewCliente(""); setNewItems(""); setNewTotal("");
+  };
 
   const avanzarEstado = (id: string, estadoActual: PedidoEstado) => {
     const next = nextEstado[estadoActual];
@@ -36,18 +60,23 @@ export default function AdminPedidosPage() {
 
   return (
     <div className="space-y-6">
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold">Pedidos y Entregas</h1>
-        <p className="text-sm text-white/40">Seguimiento de pedidos en curso</p>
-      </motion.div>
+      <div className="flex items-center justify-between">
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+          <h1 className="text-2xl font-bold">Pedidos y Entregas</h1>
+          <p className="text-sm text-white/40">Seguimiento de pedidos en curso</p>
+        </motion.div>
+        <Button className="bg-brand-orange hover:bg-brand-orange-dark text-white rounded-lg" onClick={() => setNewOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" /> Nuevo Pedido
+        </Button>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Preparando", value: pedidos.filter((p) => getEstado(p.id, p.estado) === "preparando").length, color: "text-yellow-400" },
-          { label: "Listos", value: pedidos.filter((p) => getEstado(p.id, p.estado) === "listo").length, color: "text-blue-400" },
-          { label: "En Camino", value: pedidos.filter((p) => getEstado(p.id, p.estado) === "en-camino").length, color: "text-brand-orange" },
-          { label: "Entregados Hoy", value: pedidos.filter((p) => getEstado(p.id, p.estado) === "entregado").length, color: "text-green-400" },
+          { label: "Preparando", value: pedidosList.filter((p) => getEstado(p.id, p.estado) === "preparando").length, color: "text-yellow-400" },
+          { label: "Listos", value: pedidosList.filter((p) => getEstado(p.id, p.estado) === "listo").length, color: "text-blue-400" },
+          { label: "En Camino", value: pedidosList.filter((p) => getEstado(p.id, p.estado) === "en-camino").length, color: "text-brand-orange" },
+          { label: "Entregados Hoy", value: pedidosList.filter((p) => getEstado(p.id, p.estado) === "entregado").length, color: "text-green-400" },
         ].map((s, i) => (
           <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
             <Card className="bg-white/[0.03] border-white/5">
@@ -62,7 +91,7 @@ export default function AdminPedidosPage() {
 
       {/* Pedidos cards */}
       <div className="space-y-3">
-        {pedidos.map((pedido, i) => {
+        {pedidosList.map((pedido, i) => {
           const estado = getEstado(pedido.id, pedido.estado);
           const config = estadoConfig[estado];
           const canAdvance = estado !== "entregado";
@@ -132,6 +161,61 @@ export default function AdminPedidosPage() {
           );
         })}
       </div>
+
+      {/* New Pedido Dialog */}
+      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <DialogContent className="bg-[#18181b] border-white/10 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5 text-brand-orange" />
+              Nuevo Pedido
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label className="text-xs text-white/60">Cliente</Label>
+              <Input value={newCliente} onChange={(e) => setNewCliente(e.target.value)} placeholder="Nombre del cliente" className="bg-white/5 border-white/10 text-white placeholder:text-white/30" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-white/60">Detalle de items</Label>
+              <Input value={newItems} onChange={(e) => setNewItems(e.target.value)} placeholder="Ej: 12 placas melamina + corte" className="bg-white/5 border-white/10 text-white placeholder:text-white/30" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs text-white/60">Monto</Label>
+                <Input value={newTotal} onChange={(e) => setNewTotal(e.target.value)} placeholder="$0" className="bg-white/5 border-white/10 text-white placeholder:text-white/30 font-mono" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-white/60">Tipo</Label>
+                <Select value={newTipo} onValueChange={(v) => v && setNewTipo(v as "retiro" | "entrega")}>
+                  <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="retiro">Retiro en sucursal</SelectItem>
+                    <SelectItem value="entrega">Entrega a domicilio</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-white/60">Sucursal</Label>
+              <Select value={newSucursal} onValueChange={(v) => v && setNewSucursal(v)}>
+                <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Central">Casa Central</SelectItem>
+                  <SelectItem value="Aserradero">Aserradero</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white" disabled={!newCliente || !newItems} onClick={handleNewPedido}>
+              <Plus className="h-4 w-4 mr-2" /> Registrar Pedido
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

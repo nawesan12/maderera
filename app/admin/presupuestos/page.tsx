@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { ClipboardList, Search, Eye, MessageCircle, Download, Check, X, Package } from "lucide-react";
+import { ClipboardList, Search, Eye, MessageCircle, Download, Check, X, Package, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
 import { presupuestos, type PresupuestoEstado } from "@/lib/dashboard-data";
 
 const estadoConfig: Record<string, { bg: string; label: string }> = {
@@ -31,9 +32,15 @@ const mockItems = [
 export default function AdminPresupuestosPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [estados, setEstados] = useState<Record<string, PresupuestoEstado>>({});
+  const [newOpen, setNewOpen] = useState(false);
+  const [newCliente, setNewCliente] = useState("");
+  const [newEmpresa, setNewEmpresa] = useState("");
+  const [newItems, setNewItems] = useState("5");
+  const [newTotal, setNewTotal] = useState("");
+  const [presupuestosList, setPresupuestosList] = useState(presupuestos);
 
   const getEstado = (p: typeof presupuestos[0]) => estados[p.id] || p.estado;
-  const selected = presupuestos.find((p) => p.id === selectedId);
+  const selected = presupuestosList.find((p) => p.id === selectedId);
 
   const changeEstado = (id: string, estado: PresupuestoEstado) => {
     setEstados((prev) => ({ ...prev, [id]: estado }));
@@ -41,17 +48,33 @@ export default function AdminPresupuestosPage() {
   };
 
   const stats = {
-    total: presupuestos.length,
-    pendientes: presupuestos.filter((p) => getEstado(p) === "pendiente" || getEstado(p) === "revision").length,
-    aceptados: presupuestos.filter((p) => getEstado(p) === "aceptado").length,
+    total: presupuestosList.length,
+    pendientes: presupuestosList.filter((p) => getEstado(p) === "pendiente" || getEstado(p) === "revision").length,
+    aceptados: presupuestosList.filter((p) => getEstado(p) === "aceptado").length,
     montoTotal: "$22.405.000",
+  };
+
+  const handleNewPresupuesto = () => {
+    const id = `P-2026-${String(422 + presupuestosList.length - presupuestos.length).padStart(4, "0")}`;
+    setPresupuestosList((prev) => [{
+      id, fecha: "08/04/2026", cliente: newCliente, empresa: newEmpresa,
+      items: parseInt(newItems) || 5, total: newTotal || "$0",
+      estado: "pendiente" as PresupuestoEstado, sucursal: "Central", asesor: "Martín",
+    }, ...prev]);
+    toast.success("Presupuesto creado", { description: `${id} — ${newCliente}` });
+    setNewOpen(false); setNewCliente(""); setNewEmpresa(""); setNewTotal("");
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Presupuestos</h1>
-        <p className="text-sm text-white/40">Gestión de presupuestos recibidos</p>
+      <div className="flex items-center justify-between">
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+          <h1 className="text-2xl font-bold">Presupuestos</h1>
+          <p className="text-sm text-white/40">Gestión de presupuestos recibidos</p>
+        </motion.div>
+        <Button className="bg-brand-orange hover:bg-brand-orange-dark text-white rounded-lg" onClick={() => setNewOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" /> Nuevo Presupuesto
+        </Button>
       </div>
 
       {/* Stats */}
@@ -97,7 +120,7 @@ export default function AdminPresupuestosPage() {
                 </tr>
               </thead>
               <tbody>
-                {presupuestos.map((p, i) => (
+                {presupuestosList.map((p, i) => (
                   <motion.tr
                     key={p.id}
                     className="border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer"
@@ -236,6 +259,41 @@ export default function AdminPresupuestosPage() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* New Presupuesto Dialog */}
+      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <DialogContent className="bg-[#18181b] border-white/10 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-brand-orange" />
+              Nuevo Presupuesto
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label className="text-xs text-white/60">Cliente</Label>
+              <Input value={newCliente} onChange={(e) => setNewCliente(e.target.value)} placeholder="Nombre del cliente" className="bg-white/5 border-white/10 text-white placeholder:text-white/30" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-white/60">Empresa</Label>
+              <Input value={newEmpresa} onChange={(e) => setNewEmpresa(e.target.value)} placeholder="Razón social" className="bg-white/5 border-white/10 text-white placeholder:text-white/30" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs text-white/60">Cantidad de items</Label>
+                <Input type="number" value={newItems} onChange={(e) => setNewItems(e.target.value)} min="1" className="bg-white/5 border-white/10 text-white" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-white/60">Monto total</Label>
+                <Input value={newTotal} onChange={(e) => setNewTotal(e.target.value)} placeholder="$0" className="bg-white/5 border-white/10 text-white placeholder:text-white/30 font-mono" />
+              </div>
+            </div>
+            <Button className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white" disabled={!newCliente} onClick={handleNewPresupuesto}>
+              <Plus className="h-4 w-4 mr-2" /> Crear Presupuesto
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

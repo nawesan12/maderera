@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Truck,
   Users,
+  FileText,
   Scissors,
   Building2,
   ExternalLink,
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/admin/presupuestos", icon: ClipboardList, label: "Presupuestos", badge: "23" },
   { href: "/admin/pedidos", icon: Truck, label: "Pedidos", badge: "3" },
   { href: "/admin/clientes", icon: Users, label: "Clientes" },
+  { href: "/admin/facturacion", icon: FileText, label: "Facturación", badge: "4" },
   { href: "/admin/cortes", icon: Scissors, label: "Cortes", badge: "2" },
   { href: "/admin/sucursales", icon: Building2, label: "Sucursales" },
 ];

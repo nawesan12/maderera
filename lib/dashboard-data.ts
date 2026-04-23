@@ -167,3 +167,182 @@ export const transferencias = [
   { id: "TR-088", fecha: "07/04/2026", producto: "Moldura Zócalo 7cm", cantidad: 50, origen: "Aserradero", destino: "Central", estado: "completado" },
   { id: "TR-087", fecha: "06/04/2026", producto: "Deck Grandis", cantidad: 30, origen: "Aserradero", destino: "Central", estado: "completado" },
 ];
+
+// Facturación
+export type FacturaEstado = "borrador" | "emitida" | "pagada" | "vencida" | "anulada";
+export type FacturaTipo = "A" | "B" | "C";
+
+export interface FacturaItem {
+  descripcion: string;
+  cantidad: number;
+  unidad: string;
+  precioUnitario: number;
+  subtotal: number;
+}
+
+export interface Factura {
+  id: string;
+  numero: string;
+  tipo: FacturaTipo;
+  fecha: string;
+  vencimiento: string;
+  cliente: string;
+  empresa: string;
+  cuit: string;
+  condicionIva: string;
+  direccion: string;
+  items: FacturaItem[];
+  subtotal: number;
+  iva: number;
+  total: number;
+  estado: FacturaEstado;
+  sucursal: string;
+  observaciones?: string;
+}
+
+export const facturas: Factura[] = [
+  {
+    id: "fa-001",
+    numero: "0001-00012847",
+    tipo: "A",
+    fecha: "08/04/2026",
+    vencimiento: "08/05/2026",
+    cliente: "Ing. Facundo López",
+    empresa: "López & Asociados",
+    cuit: "30-70987654-3",
+    condicionIva: "Responsable Inscripto",
+    direccion: "Ruta 2 km 398, Mar del Plata",
+    items: [
+      { descripcion: "Tirante Saligna 3x6 x 4.87m", cantidad: 22, unidad: "unidades", precioUnitario: 185000, subtotal: 4070000 },
+      { descripcion: "Machimbre Pino 1/2\" x 4m", cantidad: 80, unidad: "m²", precioUnitario: 12500, subtotal: 1000000 },
+      { descripcion: "Membrana Hidrófuga x 40m²", cantidad: 3, unidad: "rollos", precioUnitario: 95000, subtotal: 285000 },
+      { descripcion: "Clavos 2.5\" (caja x 5kg)", cantidad: 4, unidad: "cajas", precioUnitario: 18500, subtotal: 74000 },
+      { descripcion: "Flete y entrega en obra", cantidad: 1, unidad: "servicio", precioUnitario: 125000, subtotal: 125000 },
+    ],
+    subtotal: 5554000,
+    iva: 1166340,
+    total: 6720340,
+    estado: "emitida",
+    sucursal: "Aserradero",
+  },
+  {
+    id: "fa-002",
+    numero: "0001-00012846",
+    tipo: "A",
+    fecha: "07/04/2026",
+    vencimiento: "07/05/2026",
+    cliente: "Arq. Carolina Méndez",
+    empresa: "Estudio CM Arquitectura",
+    cuit: "27-32456789-4",
+    condicionIva: "Responsable Inscripto",
+    direccion: "Av. Colón 3200, Mar del Plata",
+    items: [
+      { descripcion: "Melamina Blanca 18mm 1.83x2.75", cantidad: 4, unidad: "placas", precioUnitario: 185000, subtotal: 740000 },
+      { descripcion: "Corte a medida (12 piezas)", cantidad: 1, unidad: "servicio", precioUnitario: 45000, subtotal: 45000 },
+      { descripcion: "Enchapado de cantos blancos", cantidad: 24, unidad: "metros", precioUnitario: 1500, subtotal: 36000 },
+      { descripcion: "Bisagra cierre suave 35mm", cantidad: 12, unidad: "unidades", precioUnitario: 3500, subtotal: 42000 },
+      { descripcion: "Corredera telescópica 45cm", cantidad: 6, unidad: "pares", precioUnitario: 12000, subtotal: 72000 },
+      { descripcion: "Tornillos 4x40 (caja x 200)", cantidad: 2, unidad: "cajas", precioUnitario: 8500, subtotal: 17000 },
+    ],
+    subtotal: 952000,
+    iva: 199920,
+    total: 1151920,
+    estado: "pagada",
+    sucursal: "Central",
+  },
+  {
+    id: "fa-003",
+    numero: "0001-00012845",
+    tipo: "B",
+    fecha: "06/04/2026",
+    vencimiento: "06/05/2026",
+    cliente: "Martín Pérez",
+    empresa: "Carpintería Pérez",
+    cuit: "20-28765432-1",
+    condicionIva: "Monotributista",
+    direccion: "Güemes 1800, Mar del Plata",
+    items: [
+      { descripcion: "Moldura Zócalo Moldava 7cm x 2.4m", cantidad: 30, unidad: "tiras", precioUnitario: 4200, subtotal: 126000 },
+      { descripcion: "Moldura Marco Puerta Moldava", cantidad: 8, unidad: "juegos", precioUnitario: 18500, subtotal: 148000 },
+      { descripcion: "Laca Poliuretánica Satinada 4L", cantidad: 2, unidad: "latas", precioUnitario: 32000, subtotal: 64000 },
+    ],
+    subtotal: 338000,
+    iva: 0,
+    total: 338000,
+    estado: "pagada",
+    sucursal: "Central",
+    observaciones: "Factura B - IVA incluido en precio",
+  },
+  {
+    id: "fa-004",
+    numero: "0001-00012844",
+    tipo: "A",
+    fecha: "05/04/2026",
+    vencimiento: "05/05/2026",
+    cliente: "Roberto Fernández",
+    empresa: "RF Construcciones SRL",
+    cuit: "30-71234567-8",
+    condicionIva: "Responsable Inscripto",
+    direccion: "Av. Independencia 4500, Mar del Plata",
+    items: [
+      { descripcion: "Placa Durlock STD 12.5mm 1.20x2.40", cantidad: 40, unidad: "placas", precioUnitario: 22000, subtotal: 880000 },
+      { descripcion: "Perfil Montante 69mm x 2.60m", cantidad: 60, unidad: "unidades", precioUnitario: 8500, subtotal: 510000 },
+      { descripcion: "Perfil Solera 70mm x 2.60m", cantidad: 30, unidad: "unidades", precioUnitario: 7800, subtotal: 234000 },
+      { descripcion: "Lana de Vidrio 50mm x 18m²", cantidad: 8, unidad: "rollos", precioUnitario: 45000, subtotal: 360000 },
+      { descripcion: "Tornillo Drywall 6x1\" (caja x 1000)", cantidad: 3, unidad: "cajas", precioUnitario: 15000, subtotal: 45000 },
+      { descripcion: "Masilla Durlock x 32kg", cantidad: 4, unidad: "baldes", precioUnitario: 28000, subtotal: 112000 },
+      { descripcion: "Cinta Papel Durlock x 75m", cantidad: 6, unidad: "rollos", precioUnitario: 5500, subtotal: 33000 },
+    ],
+    subtotal: 2174000,
+    iva: 456540,
+    total: 2630540,
+    estado: "vencida",
+    sucursal: "Central",
+  },
+  {
+    id: "fa-005",
+    numero: "0001-00012843",
+    tipo: "A",
+    fecha: "04/04/2026",
+    vencimiento: "04/05/2026",
+    cliente: "Ana Torres",
+    empresa: "AT Diseño Interior",
+    cuit: "27-34567890-6",
+    condicionIva: "Responsable Inscripto",
+    direccion: "San Martín 2800, Mar del Plata",
+    items: [
+      { descripcion: "Deck Grandis Tratado 1x4\" x 3.30m", cantidad: 45, unidad: "tablas", precioUnitario: 18000, subtotal: 810000 },
+      { descripcion: "Viga Grandis 2x6\" x 3.30m", cantidad: 12, unidad: "unidades", precioUnitario: 65000, subtotal: 780000 },
+      { descripcion: "Tornillo Deck Inox 10x65mm (caja x 100)", cantidad: 5, unidad: "cajas", precioUnitario: 42000, subtotal: 210000 },
+      { descripcion: "Aceite Deck Natural 4L", cantidad: 3, unidad: "latas", precioUnitario: 38000, subtotal: 114000 },
+    ],
+    subtotal: 1914000,
+    iva: 401940,
+    total: 2315940,
+    estado: "emitida",
+    sucursal: "Aserradero",
+  },
+  {
+    id: "fa-006",
+    numero: "—",
+    tipo: "A",
+    fecha: "08/04/2026",
+    vencimiento: "—",
+    cliente: "Laura Gómez",
+    empresa: "Constructora del Sur SA",
+    cuit: "30-71567890-2",
+    condicionIva: "Responsable Inscripto",
+    direccion: "Av. Constitución 6100, Mar del Plata",
+    items: [
+      { descripcion: "Melamina Roble Natural 18mm 1.83x2.75", cantidad: 6, unidad: "placas", precioUnitario: 210000, subtotal: 1260000 },
+      { descripcion: "Corte a medida (24 piezas)", cantidad: 1, unidad: "servicio", precioUnitario: 85000, subtotal: 85000 },
+      { descripcion: "Enchapado cantos Roble Natural", cantidad: 48, unidad: "metros", precioUnitario: 1800, subtotal: 86400 },
+    ],
+    subtotal: 1431400,
+    iva: 300594,
+    total: 1731994,
+    estado: "borrador",
+    sucursal: "Central",
+    observaciones: "Pendiente confirmar medidas finales del vestidor",
+  },
+];

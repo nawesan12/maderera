@@ -18,6 +18,8 @@ import {
   XCircle,
   Trash2,
   X,
+  Users,
+  Package,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -447,200 +449,223 @@ export default function AdminFacturacionPage() {
 
       {/* ==================== NEW INVOICE DIALOG ==================== */}
       <Dialog open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open) resetForm(); }}>
-        <DialogContent className="bg-[#18181b] border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-brand-orange" />
-              Nueva Factura
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-6 mt-2">
-            {/* Invoice type */}
-            <div className="flex gap-3">
-              {(["A", "B", "C"] as FacturaTipo[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setNewTipo(t)}
-                  className={`flex-1 p-3 rounded-xl border-2 text-center transition-all ${
-                    newTipo === t
-                      ? "border-brand-orange bg-brand-orange/10"
-                      : "border-white/10 hover:border-white/20"
-                  }`}
-                >
-                  <p className="text-2xl font-black">{t}</p>
-                  <p className="text-[10px] text-white/40">
-                    {t === "A" ? "Resp. Inscripto" : t === "B" ? "Consumidor Final" : "Exento"}
-                  </p>
-                </button>
-              ))}
-            </div>
-
-            <Separator className="bg-white/10" />
-
-            {/* Client info */}
-            <div>
-              <p className="text-xs text-white/40 uppercase tracking-wider font-semibold mb-3">Datos del cliente</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label className="text-xs text-white/60">Nombre / Contacto</Label>
-                  <Input value={newCliente} onChange={(e) => setNewCliente(e.target.value)} placeholder="Nombre completo" className="bg-white/5 border-white/10 text-white placeholder:text-white/30" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs text-white/60">Empresa / Razón Social</Label>
-                  <Input value={newEmpresa} onChange={(e) => setNewEmpresa(e.target.value)} placeholder="Razón social" className="bg-white/5 border-white/10 text-white placeholder:text-white/30" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs text-white/60">CUIT</Label>
-                  <Input value={newCuit} onChange={(e) => setNewCuit(e.target.value)} placeholder="XX-XXXXXXXX-X" className="bg-white/5 border-white/10 text-white placeholder:text-white/30 font-mono" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs text-white/60">Condición IVA</Label>
-                  <Select value={newCondicion} onValueChange={(v) => v && setNewCondicion(v)}>
-                    <SelectTrigger className="bg-white/5 border-white/10 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Responsable Inscripto">Responsable Inscripto</SelectItem>
-                      <SelectItem value="Monotributista">Monotributista</SelectItem>
-                      <SelectItem value="Consumidor Final">Consumidor Final</SelectItem>
-                      <SelectItem value="Exento">Exento</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2 col-span-2">
-                  <Label className="text-xs text-white/60">Domicilio</Label>
-                  <Input value={newDireccion} onChange={(e) => setNewDireccion(e.target.value)} placeholder="Dirección completa" className="bg-white/5 border-white/10 text-white placeholder:text-white/30" />
-                </div>
+        <DialogContent className="bg-[#0f0f12] border-white/10 text-white max-w-5xl w-[95vw] max-h-[92vh] overflow-y-auto p-0">
+          {/* Dialog header bar */}
+          <div className="sticky top-0 z-10 bg-[#0f0f12] border-b border-white/5 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-brand-orange/15 flex items-center justify-center">
+                <FileText className="h-5 w-5 text-brand-orange" />
+              </div>
+              <div>
+                <h2 className="font-bold text-base">Nueva Factura</h2>
+                <p className="text-[10px] text-white/40">Complete los datos para generar el comprobante</p>
               </div>
             </div>
-
-            <Separator className="bg-white/10" />
-
-            {/* Items */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-white/40 uppercase tracking-wider font-semibold">Items</p>
-                <Button size="sm" variant="outline" className="border-white/10 text-white/60 text-xs h-7" onClick={addNewItem}>
-                  <Plus className="h-3 w-3 mr-1" /> Agregar item
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {newItems.map((item, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-end p-3 rounded-lg bg-white/[0.03] border border-white/5">
-                    <div className="col-span-5 space-y-1">
-                      {i === 0 && <Label className="text-[10px] text-white/40">Descripción</Label>}
-                      <Input
-                        value={item.descripcion}
-                        onChange={(e) => updateNewItem(i, "descripcion", e.target.value)}
-                        placeholder="Producto o servicio"
-                        className="bg-white/5 border-white/10 text-white placeholder:text-white/30 h-9 text-xs"
-                      />
-                    </div>
-                    <div className="col-span-1 space-y-1">
-                      {i === 0 && <Label className="text-[10px] text-white/40">Cant.</Label>}
-                      <Input
-                        type="number"
-                        value={item.cantidad}
-                        onChange={(e) => updateNewItem(i, "cantidad", parseInt(e.target.value) || 0)}
-                        min="1"
-                        className="bg-white/5 border-white/10 text-white h-9 text-xs text-center"
-                      />
-                    </div>
-                    <div className="col-span-2 space-y-1">
-                      {i === 0 && <Label className="text-[10px] text-white/40">Unidad</Label>}
-                      <Input
-                        value={item.unidad}
-                        onChange={(e) => updateNewItem(i, "unidad", e.target.value)}
-                        className="bg-white/5 border-white/10 text-white h-9 text-xs"
-                      />
-                    </div>
-                    <div className="col-span-2 space-y-1">
-                      {i === 0 && <Label className="text-[10px] text-white/40">P. Unit.</Label>}
-                      <Input
-                        type="number"
-                        value={item.precioUnitario || ""}
-                        onChange={(e) => updateNewItem(i, "precioUnitario", parseInt(e.target.value) || 0)}
-                        placeholder="0"
-                        className="bg-white/5 border-white/10 text-white h-9 text-xs font-mono"
-                      />
-                    </div>
-                    <div className="col-span-1 space-y-1">
-                      {i === 0 && <Label className="text-[10px] text-white/40">Sub.</Label>}
-                      <p className="h-9 flex items-center text-xs font-mono text-white/60">
-                        {item.subtotal > 0 ? formatMoney(item.subtotal) : "—"}
-                      </p>
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      {newItems.length > 1 && (
-                        <Button size="sm" variant="ghost" className="h-9 w-9 p-0 text-white/30 hover:text-red-400" onClick={() => removeNewItem(i)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+            <div className="flex items-center gap-2">
+              {/* Live type selector */}
+              <div className="flex gap-1 bg-white/5 rounded-lg p-1">
+                {(["A", "B", "C"] as FacturaTipo[]).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setNewTipo(t)}
+                    className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${
+                      newTipo === t
+                        ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20"
+                        : "text-white/40 hover:text-white/60"
+                    }`}
+                  >
+                    Tipo {t}
+                  </button>
                 ))}
               </div>
             </div>
+          </div>
 
-            {/* Totals */}
-            <div className="flex justify-end">
-              <div className="w-64 space-y-2 p-4 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="flex justify-between text-sm">
-                  <span className="text-white/50">Subtotal</span>
-                  <span className="font-mono text-white">{formatMoney(newSubtotal)}</span>
-                </div>
-                {newTipo === "A" && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-white/50">IVA 21%</span>
-                    <span className="font-mono text-white">{formatMoney(newIva)}</span>
+          <div className="p-6">
+            {/* Two column layout: client left, preview right */}
+            <div className="grid lg:grid-cols-5 gap-6">
+              {/* LEFT: Client + Observations (2 cols) */}
+              <div className="lg:col-span-2 space-y-5">
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-4">
+                  <p className="text-xs text-white/40 uppercase tracking-wider font-semibold flex items-center gap-2">
+                    <Users className="h-3.5 w-3.5" /> Datos del cliente
+                  </p>
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] text-white/50">Nombre / Contacto</Label>
+                      <Input value={newCliente} onChange={(e) => setNewCliente(e.target.value)} placeholder="Nombre completo" className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-9" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] text-white/50">Empresa / Razón Social</Label>
+                      <Input value={newEmpresa} onChange={(e) => setNewEmpresa(e.target.value)} placeholder="Razón social" className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-9" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-[10px] text-white/50">CUIT</Label>
+                        <Input value={newCuit} onChange={(e) => setNewCuit(e.target.value)} placeholder="XX-XXXXXXXX-X" className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-9 font-mono text-xs" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-[10px] text-white/50">Cond. IVA</Label>
+                        <Select value={newCondicion} onValueChange={(v) => v && setNewCondicion(v)}>
+                          <SelectTrigger className="bg-white/5 border-white/10 text-white h-9 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Responsable Inscripto">Resp. Inscripto</SelectItem>
+                            <SelectItem value="Monotributista">Monotributista</SelectItem>
+                            <SelectItem value="Consumidor Final">Cons. Final</SelectItem>
+                            <SelectItem value="Exento">Exento</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] text-white/50">Domicilio</Label>
+                      <Input value={newDireccion} onChange={(e) => setNewDireccion(e.target.value)} placeholder="Dirección completa" className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-9" />
+                    </div>
                   </div>
-                )}
-                <Separator className="bg-white/10" />
-                <div className="flex justify-between text-lg font-bold">
-                  <span className="text-brand-orange">TOTAL</span>
-                  <span className="font-mono text-brand-orange">{formatMoney(newTotal)}</span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
+                  <Label className="text-[10px] text-white/50">Observaciones (opcional)</Label>
+                  <Textarea value={newObs} onChange={(e) => setNewObs(e.target.value)} placeholder="Notas, condiciones de pago, plazos, etc." rows={3} className="bg-white/5 border-white/10 text-white placeholder:text-white/20 resize-none text-sm" />
+                </div>
+
+                {/* Totals card */}
+                <div className="p-4 rounded-xl bg-brand-orange/5 border border-brand-orange/20 space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-white/50">Subtotal</span>
+                    <span className="font-mono text-white font-semibold">{formatMoney(newSubtotal)}</span>
+                  </div>
+                  {newTipo === "A" && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white/50">IVA 21%</span>
+                      <span className="font-mono text-white font-semibold">{formatMoney(newIva)}</span>
+                    </div>
+                  )}
+                  <Separator className="bg-white/10" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold text-brand-orange">TOTAL</span>
+                    <span className="text-2xl font-black font-mono text-brand-orange">{formatMoney(newTotal)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Observations */}
-            <div className="space-y-2">
-              <Label className="text-xs text-white/60">Observaciones (opcional)</Label>
-              <Textarea value={newObs} onChange={(e) => setNewObs(e.target.value)} placeholder="Notas, condiciones de pago, etc." rows={2} className="bg-white/5 border-white/10 text-white placeholder:text-white/30 resize-none" />
-            </div>
+              {/* RIGHT: Items table (3 cols) */}
+              <div className="lg:col-span-3 space-y-4">
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-xs text-white/40 uppercase tracking-wider font-semibold flex items-center gap-2">
+                      <Package className="h-3.5 w-3.5" /> Detalle de items
+                    </p>
+                    <Button size="sm" variant="outline" className="border-brand-orange/30 text-brand-orange hover:bg-brand-orange/10 text-xs h-7" onClick={addNewItem}>
+                      <Plus className="h-3 w-3 mr-1" /> Agregar
+                    </Button>
+                  </div>
 
-            {/* Submit */}
-            <div className="flex gap-3">
-              <Button
-                className="flex-1 bg-brand-orange hover:bg-brand-orange-dark text-white"
-                disabled={!newCliente || newItems.every((i) => !i.descripcion)}
-                onClick={handleCreate}
-              >
-                <FileText className="h-4 w-4 mr-2" /> Crear como Borrador
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 border-white/10 text-white/60 hover:text-white"
-                disabled={!newCliente || newItems.every((i) => !i.descripcion)}
-                onClick={() => {
-                  handleCreate();
-                  // Emitir directamente
-                  setTimeout(() => {
-                    setFacturasList((prev) => {
-                      if (prev[0]?.estado === "borrador") {
-                        const updated = [...prev];
-                        updated[0] = { ...updated[0], estado: "emitida" };
-                        return updated;
-                      }
-                      return prev;
-                    });
-                    toast.success("Factura emitida directamente");
-                  }, 100);
-                }}
-              >
-                Crear y Emitir
-              </Button>
+                  {/* Items header */}
+                  <div className="grid grid-cols-12 gap-2 px-3 mb-2">
+                    <p className="col-span-5 text-[10px] text-white/30 uppercase tracking-wider">Descripción</p>
+                    <p className="col-span-1 text-[10px] text-white/30 uppercase tracking-wider text-center">Cant.</p>
+                    <p className="col-span-2 text-[10px] text-white/30 uppercase tracking-wider">Unidad</p>
+                    <p className="col-span-2 text-[10px] text-white/30 uppercase tracking-wider text-right">P. Unitario</p>
+                    <p className="col-span-1 text-[10px] text-white/30 uppercase tracking-wider text-right">Subtotal</p>
+                    <p className="col-span-1" />
+                  </div>
+
+                  {/* Items rows */}
+                  <div className="space-y-1.5">
+                    {newItems.map((item, i) => (
+                      <div key={i} className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors">
+                        <div className="col-span-5">
+                          <Input
+                            value={item.descripcion}
+                            onChange={(e) => updateNewItem(i, "descripcion", e.target.value)}
+                            placeholder="Producto o servicio"
+                            className="bg-transparent border-0 text-white placeholder:text-white/20 h-8 text-sm px-2 focus-visible:ring-0"
+                          />
+                        </div>
+                        <div className="col-span-1">
+                          <Input
+                            type="number"
+                            value={item.cantidad}
+                            onChange={(e) => updateNewItem(i, "cantidad", parseInt(e.target.value) || 0)}
+                            min="1"
+                            className="bg-transparent border-0 text-white h-8 text-sm text-center px-1 focus-visible:ring-0"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Input
+                            value={item.unidad}
+                            onChange={(e) => updateNewItem(i, "unidad", e.target.value)}
+                            className="bg-transparent border-0 text-white h-8 text-sm px-2 focus-visible:ring-0"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Input
+                            type="number"
+                            value={item.precioUnitario || ""}
+                            onChange={(e) => updateNewItem(i, "precioUnitario", parseInt(e.target.value) || 0)}
+                            placeholder="0"
+                            className="bg-transparent border-0 text-white h-8 text-sm font-mono text-right px-2 focus-visible:ring-0"
+                          />
+                        </div>
+                        <div className="col-span-1 text-right">
+                          <p className="text-xs font-mono text-white/60 pr-1">
+                            {item.subtotal > 0 ? formatMoney(item.subtotal) : "—"}
+                          </p>
+                        </div>
+                        <div className="col-span-1 flex justify-end">
+                          {newItems.length > 1 && (
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-white/20 hover:text-red-400" onClick={() => removeNewItem(i)}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Quick add hint */}
+                  <button
+                    onClick={addNewItem}
+                    className="w-full mt-2 py-2.5 rounded-lg border border-dashed border-white/10 text-xs text-white/20 hover:text-white/40 hover:border-white/20 transition-colors"
+                  >
+                    + Agregar otra línea
+                  </button>
+                </div>
+
+                {/* Submit buttons */}
+                <div className="flex gap-3">
+                  <Button
+                    className="flex-1 bg-brand-orange hover:bg-brand-orange-dark text-white h-11 font-semibold"
+                    disabled={!newCliente || newItems.every((i) => !i.descripcion)}
+                    onClick={handleCreate}
+                  >
+                    <FileText className="h-4 w-4 mr-2" /> Guardar Borrador
+                  </Button>
+                  <Button
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-11 font-semibold"
+                    disabled={!newCliente || newItems.every((i) => !i.descripcion)}
+                    onClick={() => {
+                      handleCreate();
+                      setTimeout(() => {
+                        setFacturasList((prev) => {
+                          if (prev[0]?.estado === "borrador") {
+                            const updated = [...prev];
+                            updated[0] = { ...updated[0], estado: "emitida" };
+                            return updated;
+                          }
+                          return prev;
+                        });
+                        toast.success("Factura emitida directamente");
+                      }, 100);
+                    }}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" /> Crear y Emitir
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </DialogContent>

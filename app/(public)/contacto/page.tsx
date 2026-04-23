@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Phone, Mail, MapPin, Clock, Send, MessageCircle, CheckCircle, ArrowRight, User, AtSign } from "lucide-react";
@@ -216,7 +217,7 @@ export default function ContactoPage() {
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
                   <Button
                     className="flex-1 bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
-                    onClick={() => setSent(true)}
+                    onClick={() => { setSent(true); toast.success("Mensaje enviado correctamente"); }}
                   >
                     <Send className="h-4 w-4 mr-2" />
                     Enviar Mensaje

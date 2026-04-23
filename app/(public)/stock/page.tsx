@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
 import { Search, Warehouse, Building2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,13 +34,15 @@ export default function StockPage() {
     <div className="min-h-screen">
       <div className="bg-brand-gray text-white py-12">
         <div className="container mx-auto px-4">
-          <div className="flex items-center gap-3 mb-2">
-            <Warehouse className="h-8 w-8 text-brand-orange" />
-            <h1 className="text-3xl font-bold">Stock entre Sucursales</h1>
-          </div>
-          <p className="text-white/70">
-            Consultá la disponibilidad de productos en Casa Central y Aserradero.
-          </p>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <div className="flex items-center gap-3 mb-2">
+              <Warehouse className="h-8 w-8 text-brand-orange" />
+              <h1 className="text-3xl font-bold">Stock entre Sucursales</h1>
+            </div>
+            <p className="text-white/70">
+              Consultá la disponibilidad de productos en Casa Central y Aserradero.
+            </p>
+          </motion.div>
         </div>
       </div>
 
@@ -51,13 +54,20 @@ export default function StockPage() {
             { label: "En ambas sucursales", value: stockStats.bothInStock, color: "bg-brand-green" },
             { label: "Solo Casa Central", value: stockStats.centralOnly, color: "bg-brand-orange" },
             { label: "Solo Aserradero", value: stockStats.aserraderoOnly, color: "bg-blue-500" },
-          ].map((stat) => (
-            <Card key={stat.label}>
-              <CardContent className="p-4 text-center">
-                <p className={`text-2xl font-bold text-foreground`}>{stat.value}</p>
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-              </CardContent>
-            </Card>
+          ].map((stat, i) => (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.08, duration: 0.4 }}
+            >
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <p className={`text-2xl font-bold text-foreground`}>{stat.value}</p>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
         </div>
 

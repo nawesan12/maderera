@@ -145,6 +145,22 @@ export const stockAlerts = [
   { producto: "Placa Yeso STD 12.5mm", sucursal: "Aserradero", stock: 6, minimo: 20 },
 ];
 
+// Feed de actividad
+export const activityFeed = [
+  { type: "presupuesto", message: "Nuevo presupuesto de Arq. Carolina Méndez", time: "Hace 5 min" },
+  { type: "pedido", message: "Pedido PED-1205 marcado como preparando", time: "Hace 12 min" },
+  { type: "stock", message: "Melamina Blanca 18mm por debajo del mínimo", time: "Hace 25 min" },
+  { type: "cliente", message: "Roberto Fernández actualizó datos de contacto", time: "Hace 40 min" },
+  { type: "pedido", message: "Pedido PED-1204 listo para entrega", time: "Hace 1 hora" },
+  { type: "presupuesto", message: "Presupuesto P-2026-0419 enviado al cliente", time: "Hace 1 hora" },
+  { type: "corte", message: "Corte CRT-457 en proceso - MDF 15mm", time: "Hace 1.5 horas" },
+  { type: "stock", message: "Transferencia TR-089 en tránsito: Tirante Pino 2x6", time: "Hace 2 horas" },
+  { type: "cliente", message: "Nuevo cliente registrado: Sofía Martínez", time: "Hace 2.5 horas" },
+  { type: "presupuesto", message: "Presupuesto P-2026-0418 aceptado por Martín Pérez", time: "Hace 3 horas" },
+  { type: "pedido", message: "Pedido PED-1202 entregado en Independencia 2500", time: "Hace 4 horas" },
+  { type: "corte", message: "Corte CRT-456 terminado - Melamina Roble 18mm", time: "Hace 5 horas" },
+];
+
 // Transferencias entre sucursales
 export const transferencias = [
   { id: "TR-089", fecha: "08/04/2026", producto: "Tirante Pino 2x6", cantidad: 20, origen: "Aserradero", destino: "Central", estado: "en-transito" },

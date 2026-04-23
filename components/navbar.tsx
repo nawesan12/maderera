@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Menu,
@@ -183,6 +184,7 @@ export function Navbar() {
 
             {/* Right side */}
             <div className="flex items-center gap-1.5">
+              <ThemeToggle />
               <Link href="/calculadora">
                 <Button variant="ghost" size="icon" className="hidden md:flex text-muted-foreground hover:text-brand-orange h-10 w-10 rounded-xl">
                   <Calculator className="h-5 w-5" />

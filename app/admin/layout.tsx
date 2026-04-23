@@ -1,5 +1,6 @@
 import { AdminSidebar } from "@/components/admin/sidebar";
-import { Bell, Search } from "lucide-react";
+import { ActivityBell } from "@/components/admin/activity-bell";
+import { Search } from "lucide-react";
 
 export default function AdminLayout({
   children,
@@ -23,12 +24,7 @@ export default function AdminLayout({
             <p className="sm:hidden text-sm font-semibold text-white">MJBJ Admin</p>
           </div>
           <div className="flex items-center gap-4">
-            <button className="relative text-white/50 hover:text-white transition-colors">
-              <Bell className="h-5 w-5" />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-orange rounded-full text-[9px] font-bold flex items-center justify-center text-white">
-                5
-              </span>
-            </button>
+            <ActivityBell />
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-brand-orange flex items-center justify-center">
                 <span className="text-xs font-bold text-white">MG</span>

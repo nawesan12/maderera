@@ -29,6 +29,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { categories, testimonials, blogPosts } from "@/lib/products";
+import { AnimatedCounter } from "@/components/animated-counter";
 
 const iconMap: Record<string, React.ElementType> = {
   Home, Layers, Grid3X3, Minus, Wrench, Footprints, Building, Umbrella,
@@ -124,12 +125,14 @@ export default function HomePage() {
             transition={{ duration: 0.7, delay: 0.5 }}
           >
             {[
-              { value: "43+", label: "Años" },
-              { value: "2", label: "Sucursales" },
-              { value: "200+", label: "Productos" },
+              { target: 43, suffix: "+", label: "Años" },
+              { target: 2, suffix: "", label: "Sucursales" },
+              { target: 200, suffix: "+", label: "Productos" },
             ].map((stat) => (
               <div key={stat.label} className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl px-6 py-4 text-center min-w-[120px]">
-                <p className="text-2xl font-bold text-brand-orange">{stat.value}</p>
+                <p className="text-2xl font-bold text-brand-orange">
+                  <AnimatedCounter target={stat.target} suffix={stat.suffix} />
+                </p>
                 <p className="text-xs text-white/60 uppercase tracking-wider">{stat.label}</p>
               </div>
             ))}
@@ -303,13 +306,15 @@ export default function HomePage() {
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-8">
                 {[
-                  { value: "43+", label: "Años" },
-                  { value: "2", label: "Sucursales" },
-                  { value: "200+", label: "Productos" },
-                  { value: "1000+", label: "Clientes" },
+                  { target: 43, suffix: "+", label: "Años" },
+                  { target: 2, suffix: "", label: "Sucursales" },
+                  { target: 200, suffix: "+", label: "Productos" },
+                  { target: 1000, suffix: "+", label: "Clientes" },
                 ].map((stat) => (
                   <div key={stat.label} className="text-center sm:text-left">
-                    <p className="text-3xl font-bold text-brand-orange">{stat.value}</p>
+                    <p className="text-3xl font-bold text-brand-orange">
+                      <AnimatedCounter target={stat.target} suffix={stat.suffix} />
+                    </p>
                     <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">{stat.label}</p>
                   </div>
                 ))}
@@ -477,7 +482,7 @@ export default function HomePage() {
           <div className="grid md:grid-cols-3 gap-6">
             {blogPosts.slice(0, 3).map((post, i) => (
               <motion.div key={post.id} {...stagger} transition={{ delay: i * 0.1 }}>
-                <Link href="/blog">
+                <Link href={`/blog/${post.slug}`}>
                   <Card className="group overflow-hidden hover:shadow-xl transition-all duration-300 h-full border-0 shadow-sm bg-white">
                     <div className="relative h-52 overflow-hidden">
                       <Image

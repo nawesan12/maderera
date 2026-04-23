@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 
 export interface BudgetItem {
   id: string;
@@ -28,10 +29,15 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
   const addItem = (item: Omit<BudgetItem, "id">) => {
     const id = `${item.name}-${Date.now()}`;
     setItems((prev) => [...prev, { ...item, id }]);
+    toast.success(`${item.name} agregado al presupuesto`);
   };
 
   const removeItem = (id: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
+    setItems((prev) => {
+      const removed = prev.find((item) => item.id === id);
+      if (removed) toast("Item eliminado", { description: removed.name });
+      return prev.filter((item) => item.id !== id);
+    });
   };
 
   const updateQuantity = (id: string, quantity: number) => {
@@ -40,7 +46,10 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const clearBudget = () => setItems([]);
+  const clearBudget = () => {
+    setItems([]);
+    toast("Presupuesto limpiado");
+  };
 
   return (
     <BudgetContext.Provider

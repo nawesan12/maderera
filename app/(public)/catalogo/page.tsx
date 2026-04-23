@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, Suspense } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { motion } from "framer-motion";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { ProductCard } from "@/components/product-card";
+import { ProductCardSkeleton } from "@/components/product-card-skeleton";
 import { products, categories } from "@/lib/products";
 
 export default function CatalogoPage() {
@@ -28,6 +30,12 @@ function CatalogoContent() {
   const [selectedCategory, setSelectedCategory] = useState(initialCat);
   const [searchQuery, setSearchQuery] = useState("");
   const [stockFilter, setStockFilter] = useState<string>("todos");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 400);
+    return () => clearTimeout(timer);
+  }, []);
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
@@ -92,10 +100,12 @@ function CatalogoContent() {
       {/* Header */}
       <div className="bg-brand-gray text-white py-12">
         <div className="container mx-auto px-4">
-          <h1 className="text-3xl font-bold mb-2">Catálogo de Productos</h1>
-          <p className="text-white/70">
-            Explorá nuestra línea completa de productos para construcción y carpintería.
-          </p>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <h1 className="text-3xl font-bold mb-2">Catálogo de Productos</h1>
+            <p className="text-white/70">
+              Explorá nuestra línea completa de productos para construcción y carpintería.
+            </p>
+          </motion.div>
         </div>
       </div>
 
@@ -172,28 +182,52 @@ function CatalogoContent() {
               </p>
             </div>
 
-            {filteredProducts.length > 0 ? (
+            {loading ? (
               <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filteredProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <ProductCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : filteredProducts.length > 0 ? (
+              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                {filteredProducts.map((product, i) => (
+                  <motion.div
+                    key={product.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(i * 0.03, 0.3), duration: 0.4 }}
+                  >
+                    <ProductCard product={product} />
+                  </motion.div>
                 ))}
               </div>
             ) : (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <p className="text-muted-foreground mb-4">
-                    No se encontraron productos con los filtros seleccionados.
-                  </p>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedCategory("todos");
-                      setSearchQuery("");
-                      setStockFilter("todos");
-                    }}
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-16 text-center">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.4 }}
                   >
-                    Limpiar filtros
-                  </Button>
+                    <div className="w-20 h-20 bg-muted rounded-3xl flex items-center justify-center mx-auto mb-6">
+                      <Search className="h-10 w-10 text-muted-foreground/40" />
+                    </div>
+                    <h3 className="text-lg font-bold mb-2">No se encontraron productos</h3>
+                    <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+                      Probá ajustando los filtros o buscando con otros términos.
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() => {
+                        setSelectedCategory("todos");
+                        setSearchQuery("");
+                        setStockFilter("todos");
+                      }}
+                    >
+                      Limpiar todos los filtros
+                    </Button>
+                  </motion.div>
                 </CardContent>
               </Card>
             )}

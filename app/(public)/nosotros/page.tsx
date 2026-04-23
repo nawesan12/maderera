@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { AnimatedCounter } from "@/components/animated-counter";
 
 const timeline = [
   { year: "1981", title: "Fundación", desc: "Nace Maderera Juan B. Justo como una empresa familiar dedicada a la venta de maderas en bruto en Mar del Plata." },
@@ -173,13 +174,15 @@ export default function NosotrosPage() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             {[
-              { value: "43+", label: "Años de experiencia" },
-              { value: "2", label: "Sucursales en Mar del Plata" },
-              { value: "200+", label: "Productos en catálogo" },
-              { value: "1000+", label: "Clientes satisfechos" },
+              { target: 43, suffix: "+", label: "Años de experiencia" },
+              { target: 2, suffix: "", label: "Sucursales en Mar del Plata" },
+              { target: 200, suffix: "+", label: "Productos en catálogo" },
+              { target: 1000, suffix: "+", label: "Clientes satisfechos" },
             ].map((stat) => (
               <div key={stat.label}>
-                <p className="text-4xl font-bold">{stat.value}</p>
+                <p className="text-4xl font-bold">
+                  <AnimatedCounter target={stat.target} suffix={stat.suffix} />
+                </p>
                 <p className="text-sm text-white/70 mt-1">{stat.label}</p>
               </div>
             ))}

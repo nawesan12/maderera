@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
@@ -240,7 +241,7 @@ export default function PresupuestoPage() {
                   <Button
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
                     disabled={items.length === 0 || !nombre || !email}
-                    onClick={() => setSent(true)}
+                    onClick={() => { setSent(true); toast.success("Presupuesto enviado correctamente"); }}
                   >
                     <Send className="h-4 w-4 mr-2" />
                     Enviar Presupuesto

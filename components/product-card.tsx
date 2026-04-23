@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { Plus, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ export function ProductCard({ product }: { product: Product }) {
   const { addItem } = useBudget();
 
   return (
+    <Link href={`/catalogo/${product.id}`} className="block">
     <Card className="group overflow-hidden hover:shadow-xl transition-all duration-500 border-0 shadow-sm bg-white">
       <div className="relative aspect-[4/3] overflow-hidden">
         <Image
@@ -40,6 +42,7 @@ export function ProductCard({ product }: { product: Product }) {
             className="bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-9 w-9 p-0 shadow-lg"
             onClick={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               addItem({
                 name: product.name,
                 quantity: 1,
@@ -85,19 +88,22 @@ export function ProductCard({ product }: { product: Product }) {
           variant="outline"
           size="sm"
           className="w-full text-xs rounded-lg hover:bg-brand-orange hover:text-white hover:border-brand-orange transition-all font-medium"
-          onClick={() =>
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
             addItem({
               name: product.name,
               quantity: 1,
               unit: product.unit,
               category: product.category,
-            })
-          }
+            });
+          }}
         >
           <Plus className="h-3 w-3 mr-1" />
           Agregar a presupuesto
         </Button>
       </CardContent>
     </Card>
+    </Link>
   );
 }

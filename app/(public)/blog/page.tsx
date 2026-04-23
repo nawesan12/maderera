@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Search, BookOpen, Clock, ArrowRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -70,37 +71,39 @@ export default function BlogPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <Card className="overflow-hidden group hover:shadow-lg transition-shadow">
-              <div className="grid md:grid-cols-2">
-                <div className="relative h-64 md:h-auto overflow-hidden">
-                  <Image
-                    src={filtered[0].image}
-                    alt={filtered[0].title}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
-                <CardContent className="p-8 flex flex-col justify-center">
-                  <Badge className="w-fit bg-brand-orange border-0 text-white mb-3">
-                    {filtered[0].category}
-                  </Badge>
-                  <h2 className="text-2xl font-bold mb-3 group-hover:text-brand-orange transition-colors">
-                    {filtered[0].title}
-                  </h2>
-                  <p className="text-muted-foreground mb-4">{filtered[0].excerpt}</p>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
-                    <span>{filtered[0].date}</span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {filtered[0].readTime} lectura
-                    </span>
+            <Link href={`/blog/${filtered[0].slug}`}>
+              <Card className="overflow-hidden group hover:shadow-lg transition-shadow">
+                <div className="grid md:grid-cols-2">
+                  <div className="relative h-64 md:h-auto overflow-hidden">
+                    <Image
+                      src={filtered[0].image}
+                      alt={filtered[0].title}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
                   </div>
-                  <Button variant="outline" className="w-fit">
-                    Leer artículo <ArrowRight className="h-4 w-4 ml-2" />
-                  </Button>
-                </CardContent>
-              </div>
-            </Card>
+                  <CardContent className="p-8 flex flex-col justify-center">
+                    <Badge className="w-fit bg-brand-orange border-0 text-white mb-3">
+                      {filtered[0].category}
+                    </Badge>
+                    <h2 className="text-2xl font-bold mb-3 group-hover:text-brand-orange transition-colors">
+                      {filtered[0].title}
+                    </h2>
+                    <p className="text-muted-foreground mb-4">{filtered[0].excerpt}</p>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
+                      <span>{filtered[0].date}</span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {filtered[0].readTime} lectura
+                      </span>
+                    </div>
+                    <Button variant="outline" className="w-fit">
+                      Leer artículo <ArrowRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </CardContent>
+                </div>
+              </Card>
+            </Link>
           </motion.div>
         )}
 
@@ -114,32 +117,34 @@ export default function BlogPage() {
               viewport={{ once: true }}
               transition={{ delay: i * 0.05 }}
             >
-              <Card className="group overflow-hidden hover:shadow-lg transition-all h-full">
-                <div className="relative h-48 overflow-hidden">
-                  <Image
-                    src={post.image}
-                    alt={post.title}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <Badge className="absolute top-3 left-3 bg-brand-orange border-0 text-white text-xs">
-                    {post.category}
-                  </Badge>
-                </div>
-                <CardContent className="p-5">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                    <span>{post.date}</span>
-                    <span>·</span>
-                    <span>{post.readTime} lectura</span>
+              <Link href={`/blog/${post.slug}`}>
+                <Card className="group overflow-hidden hover:shadow-lg transition-all h-full">
+                  <div className="relative h-48 overflow-hidden">
+                    <Image
+                      src={post.image}
+                      alt={post.title}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <Badge className="absolute top-3 left-3 bg-brand-orange border-0 text-white text-xs">
+                      {post.category}
+                    </Badge>
                   </div>
-                  <h3 className="font-semibold mb-2 group-hover:text-brand-orange transition-colors line-clamp-2">
-                    {post.title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {post.excerpt}
-                  </p>
-                </CardContent>
-              </Card>
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                      <span>{post.date}</span>
+                      <span>·</span>
+                      <span>{post.readTime} lectura</span>
+                    </div>
+                    <h3 className="font-semibold mb-2 group-hover:text-brand-orange transition-colors line-clamp-2">
+                      {post.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {post.excerpt}
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
             </motion.div>
           ))}
         </div>

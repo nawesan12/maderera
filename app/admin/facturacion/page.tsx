@@ -50,6 +50,249 @@ const formatMoney = (n: number) => {
   return "$" + n.toLocaleString("es-AR");
 };
 
+function printFactura(f: Factura) {
+  const logoUrl = window.location.origin + "/cropped-icon-180x180.png";
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Factura ${f.tipo} ${f.numero} — MJBJ</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; color: #1a1a1a; background: #fff; padding: 0; }
+  .page { max-width: 800px; margin: 0 auto; padding: 48px 40px; }
+
+  /* Header */
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand img { width: 56px; height: 56px; border-radius: 12px; }
+  .brand-name { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
+  .brand-sub { font-size: 11px; color: #666; margin-top: 2px; }
+  .brand-info { font-size: 10px; color: #999; margin-top: 8px; line-height: 1.7; }
+
+  .invoice-type { text-align: right; }
+  .type-box { display: inline-block; border: 3px solid #1a1a1a; padding: 8px 20px; margin-bottom: 8px; }
+  .type-label { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+  .type-letter { font-size: 40px; font-weight: 900; line-height: 1; }
+  .invoice-meta { font-size: 11px; color: #666; line-height: 1.8; text-align: right; }
+  .invoice-meta strong { color: #1a1a1a; font-weight: 600; }
+
+  /* Divider */
+  .divider { height: 2px; background: linear-gradient(90deg, #e87c3e, #e87c3e 40%, #eee 40%); margin: 24px 0; }
+  .divider-thin { height: 1px; background: #eee; margin: 20px 0; }
+
+  /* Client */
+  .client-box { background: #fafafa; border: 1px solid #eee; border-radius: 10px; padding: 20px; margin-bottom: 28px; }
+  .client-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: #999; margin-bottom: 12px; }
+  .client-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 32px; }
+  .client-field label { font-size: 10px; color: #999; }
+  .client-field span { font-size: 13px; font-weight: 500; display: block; margin-top: 1px; }
+  .client-field.full { grid-column: span 2; }
+
+  /* Table */
+  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  .items-table th { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #999; padding: 10px 12px; border-bottom: 2px solid #1a1a1a; text-align: left; }
+  .items-table th.right { text-align: right; }
+  .items-table th.center { text-align: center; }
+  .items-table td { font-size: 12px; padding: 10px 12px; border-bottom: 1px solid #f0f0f0; }
+  .items-table td.right { text-align: right; }
+  .items-table td.center { text-align: center; }
+  .items-table td.mono { font-family: 'SF Mono', 'Consolas', monospace; font-size: 11px; }
+  .items-table tr:last-child td { border-bottom: 2px solid #eee; }
+  .items-table tr:nth-child(even) { background: #fafafa; }
+
+  /* Totals */
+  .totals { display: flex; justify-content: flex-end; margin-bottom: 28px; }
+  .totals-box { width: 280px; }
+  .total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
+  .total-row .label { color: #666; }
+  .total-row .value { font-family: 'SF Mono', 'Consolas', monospace; font-weight: 600; }
+  .total-divider { height: 2px; background: #e87c3e; margin: 8px 0; }
+  .total-final { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; }
+  .total-final .label { font-size: 16px; font-weight: 800; color: #e87c3e; }
+  .total-final .value { font-size: 22px; font-weight: 900; font-family: 'SF Mono', 'Consolas', monospace; color: #e87c3e; }
+
+  /* Observations */
+  .obs { background: #fffbf0; border: 1px solid #f0e6c8; border-radius: 8px; padding: 14px 18px; margin-bottom: 28px; font-size: 12px; color: #8a7340; }
+  .obs-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #b89a50; margin-bottom: 6px; }
+
+  /* Footer */
+  .footer { text-align: center; padding-top: 20px; border-top: 1px solid #eee; }
+  .footer p { font-size: 10px; color: #bbb; line-height: 1.8; }
+  .footer .accent { color: #e87c3e; font-weight: 600; }
+
+  /* Watermark for drafts */
+  .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-35deg); font-size: 100px; font-weight: 900; color: rgba(0,0,0,0.04); pointer-events: none; text-transform: uppercase; letter-spacing: 20px; }
+
+  /* Print */
+  @media print {
+    body { padding: 0; }
+    .page { padding: 24px 32px; max-width: 100%; }
+    .no-print { display: none !important; }
+    @page { margin: 12mm; size: A4; }
+  }
+
+  /* Print button */
+  .print-bar { background: #1a1a1a; padding: 12px 24px; display: flex; justify-content: center; gap: 12px; position: sticky; top: 0; z-index: 10; }
+  .print-btn { padding: 8px 24px; border-radius: 8px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s; }
+  .print-btn.primary { background: #e87c3e; color: white; }
+  .print-btn.primary:hover { background: #d06a2e; }
+  .print-btn.secondary { background: rgba(255,255,255,0.1); color: white; }
+  .print-btn.secondary:hover { background: rgba(255,255,255,0.15); }
+</style>
+</head>
+<body>
+  <div class="print-bar no-print">
+    <button class="print-btn primary" onclick="window.print()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Imprimir
+    </button>
+    <button class="print-btn secondary" onclick="window.print()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      Guardar como PDF
+    </button>
+  </div>
+
+  ${f.estado === "borrador" ? '<div class="watermark">Borrador</div>' : ""}
+  ${f.estado === "anulada" ? '<div class="watermark">Anulada</div>' : ""}
+
+  <div class="page">
+    <div class="header">
+      <div>
+        <div class="brand">
+          <img src="${logoUrl}" alt="MJBJ" />
+          <div>
+            <div class="brand-name">Maderera Juan B. Justo</div>
+            <div class="brand-sub">Desde 1981 en Mar del Plata</div>
+          </div>
+        </div>
+        <div class="brand-info">
+          Av. Juan B. Justo 4153, Mar del Plata (B7600)<br>
+          CUIT: 30-12345678-9 | IVA Responsable Inscripto<br>
+          Tel: (0223) 474-3328 | info@mjbj.com.ar<br>
+          Inicio de Actividades: 01/03/1981
+        </div>
+      </div>
+      <div class="invoice-type">
+        <div class="type-box">
+          <div class="type-label">Factura</div>
+          <div class="type-letter">${f.tipo}</div>
+        </div>
+        <div class="invoice-meta">
+          <strong>N°</strong> ${f.numero}<br>
+          <strong>Fecha:</strong> ${f.fecha}<br>
+          <strong>Vto. Pago:</strong> ${f.vencimiento}<br>
+          <strong>Sucursal:</strong> ${f.sucursal}
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="client-box">
+      <div class="client-title">Datos del Cliente</div>
+      <div class="client-grid">
+        <div class="client-field">
+          <label>Razón Social</label>
+          <span>${f.empresa}</span>
+        </div>
+        <div class="client-field">
+          <label>CUIT</label>
+          <span style="font-family: monospace">${f.cuit}</span>
+        </div>
+        <div class="client-field">
+          <label>Contacto</label>
+          <span>${f.cliente}</span>
+        </div>
+        <div class="client-field">
+          <label>Condición IVA</label>
+          <span>${f.condicionIva}</span>
+        </div>
+        <div class="client-field full">
+          <label>Domicilio</label>
+          <span>${f.direccion}</span>
+        </div>
+      </div>
+    </div>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width:45%">Descripción</th>
+          <th class="center" style="width:8%">Cant.</th>
+          <th style="width:12%">Unidad</th>
+          <th class="right" style="width:17%">P. Unitario</th>
+          <th class="right" style="width:18%">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${f.items
+          .map(
+            (item) => `
+        <tr>
+          <td>${item.descripcion}</td>
+          <td class="center mono">${item.cantidad}</td>
+          <td>${item.unidad}</td>
+          <td class="right mono">${formatMoney(item.precioUnitario)}</td>
+          <td class="right mono" style="font-weight:600">${formatMoney(item.subtotal)}</td>
+        </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+
+    <div class="totals">
+      <div class="totals-box">
+        <div class="total-row">
+          <span class="label">Subtotal</span>
+          <span class="value">${formatMoney(f.subtotal)}</span>
+        </div>
+        ${
+          f.tipo === "A"
+            ? `<div class="total-row">
+          <span class="label">IVA 21%</span>
+          <span class="value">${formatMoney(f.iva)}</span>
+        </div>`
+            : ""
+        }
+        <div class="total-divider"></div>
+        <div class="total-final">
+          <span class="label">TOTAL</span>
+          <span class="value">${formatMoney(f.total)}</span>
+        </div>
+      </div>
+    </div>
+
+    ${
+      f.observaciones
+        ? `<div class="obs">
+      <div class="obs-title">Observaciones</div>
+      ${f.observaciones}
+    </div>`
+        : ""
+    }
+
+    <div class="divider-thin"></div>
+
+    <div class="footer">
+      <p>
+        <span class="accent">Maderera Juan B. Justo</span> — Av. Juan B. Justo 4153, Mar del Plata<br>
+        Tel: (0223) 474-3328 | WhatsApp: (223) 590-3118 | www.mjbj.ar<br>
+        Documento no válido como factura fiscal. Sujeto a verificación con AFIP.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+  }
+}
+
 export default function AdminFacturacionPage() {
   const [facturasList, setFacturasList] = useState<Factura[]>(initialFacturas);
   const [search, setSearch] = useState("");
@@ -279,7 +522,7 @@ export default function AdminFacturacionPage() {
                           <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-white/40 hover:text-white" onClick={(e) => { e.stopPropagation(); setPreviewId(f.id); }}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-white/40 hover:text-white" onClick={(e) => { e.stopPropagation(); toast.info("PDF generado", { description: `Factura ${f.tipo} ${f.numero}` }); }}>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-white/40 hover:text-white" onClick={(e) => { e.stopPropagation(); printFactura(f); }}>
                             <Download className="h-3.5 w-3.5" />
                           </Button>
                           <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-white/40 hover:text-white" onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/5492235903118?text=${encodeURIComponent(`Hola ${f.cliente}, le enviamos la factura ${f.tipo} ${f.numero} por ${formatMoney(f.total)}.`)}`, "_blank"); }}>
@@ -322,10 +565,10 @@ export default function AdminFacturacionPage() {
                       Anular
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" className="text-xs h-7 border-white/20 text-white/70 hover:text-white" onClick={() => toast.info("PDF descargado", { description: `Factura ${preview.tipo} ${preview.numero}` })}>
+                  <Button size="sm" variant="outline" className="text-xs h-7 border-white/20 text-white/70 hover:text-white" onClick={() => printFactura(preview)}>
                     <Download className="h-3 w-3 mr-1" /> PDF
                   </Button>
-                  <Button size="sm" variant="outline" className="text-xs h-7 border-white/20 text-white/70 hover:text-white" onClick={() => toast.info("Enviando a impresora...")}>
+                  <Button size="sm" variant="outline" className="text-xs h-7 border-white/20 text-white/70 hover:text-white" onClick={() => printFactura(preview)}>
                     <Printer className="h-3 w-3 mr-1" /> Imprimir
                   </Button>
                 </div>

@@ -1,122 +1,193 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
-  LayoutDashboard,
-  Package,
+  ArrowUpRight,
+  Boxes,
+  Tags,
+  Building2,
   ClipboardList,
+  FileText,
+  LayoutDashboard,
+  Menu,
+  MessageCircle,
+  Package,
+  Scissors,
   Truck,
   Users,
-  FileText,
-  Scissors,
-  Building2,
-  ExternalLink,
-  Menu,
   X,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
-const navItems = [
-  { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/admin/stock", icon: Package, label: "Stock", badge: "18" },
-  { href: "/admin/presupuestos", icon: ClipboardList, label: "Presupuestos", badge: "23" },
-  { href: "/admin/pedidos", icon: Truck, label: "Pedidos", badge: "3" },
-  { href: "/admin/clientes", icon: Users, label: "Clientes" },
-  { href: "/admin/facturacion", icon: FileText, label: "Facturación", badge: "4" },
-  { href: "/admin/cortes", icon: Scissors, label: "Cortes", badge: "2" },
-  { href: "/admin/sucursales", icon: Building2, label: "Sucursales" },
+/**
+ * Navegación del panel.
+ *
+ * Casi sin contadores: los que había antes estaban escritos a mano y no se
+ * correspondían con nada, y un número que no es cierto es peor que ningún
+ * número porque se deja de mirar. Lo que hay que atender aparece dentro de cada
+ * pantalla, donde además se puede resolver.
+ *
+ * La excepción es WhatsApp, y por un motivo concreto: un mensaje sin contestar
+ * no se ve desde ninguna otra pantalla y el cliente está del otro lado
+ * esperando. Ese contador sale de la base, no de una constante.
+ */
+const secciones = [
+  {
+    titulo: "Operación",
+    items: [
+      { href: "/admin", icon: LayoutDashboard, label: "Resumen" },
+      { href: "/admin/pedidos", icon: Truck, label: "Pedidos" },
+      {
+        href: "/admin/whatsapp",
+        icon: MessageCircle,
+        label: "WhatsApp",
+        contador: "whatsapp" as const,
+      },
+      { href: "/admin/presupuestos", icon: ClipboardList, label: "Presupuestos" },
+      { href: "/admin/cortes", icon: Scissors, label: "Cortes" },
+    ],
+  },
+  {
+    titulo: "Catálogo",
+    items: [
+      { href: "/admin/productos", icon: Boxes, label: "Productos" },
+      { href: "/admin/stock", icon: Package, label: "Stock" },
+      { href: "/admin/precios", icon: Tags, label: "Precios" },
+    ],
+  },
+  {
+    titulo: "Administración",
+    items: [
+      { href: "/admin/clientes", icon: Users, label: "Clientes" },
+      { href: "/admin/facturacion", icon: FileText, label: "Facturación" },
+      { href: "/admin/sucursales", icon: Building2, label: "Sucursales" },
+    ],
+  },
 ];
 
-export function AdminSidebar() {
+export function AdminSidebar({
+  whatsappSinLeer = 0,
+}: {
+  whatsappSinLeer?: number;
+}) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [abierto, setAbierto] = useState(false);
 
-  const navContent = (
+  const contenido = (
     <>
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.15em] px-3 pt-3 pb-2">
-          General
-        </p>
-        {navItems.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setMobileOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                isActive
-                  ? "bg-brand-orange text-white font-semibold shadow-lg shadow-brand-orange/20"
-                  : "text-white/50 hover:text-white hover:bg-white/5"
-              }`}
-            >
-              <item.icon className="h-4 w-4 shrink-0" />
-              <span className="flex-1">{item.label}</span>
-              {item.badge && (
-                <Badge
-                  className={`text-[10px] px-1.5 py-0 h-5 font-bold border-0 ${
-                    isActive ? "bg-white/20 text-white" : "bg-brand-orange/15 text-brand-orange"
-                  }`}
-                >
-                  {item.badge}
-                </Badge>
-              )}
-            </Link>
-          );
-        })}
+      <Link
+        href="/admin"
+        className="flex items-center gap-2.5 px-5 py-5"
+        onClick={() => setAbierto(false)}
+      >
+        <Image
+          src="/cropped-icon-180x180.png"
+          alt=""
+          width={34}
+          height={34}
+          className="rounded-lg"
+        />
+        <div className="leading-tight">
+          <p className="text-base font-semibold">Maderera JBJ</p>
+          <p className="text-sm text-muted-foreground">Panel de gestión</p>
+        </div>
+      </Link>
+
+      <nav className="flex-1 space-y-6 px-3 pb-4">
+        {secciones.map((seccion) => (
+          <div key={seccion.titulo}>
+            <p className="px-2 pb-1.5 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+              {seccion.titulo}
+            </p>
+            <div className="space-y-0.5">
+              {seccion.items.map((item) => {
+                const activo =
+                  item.href === "/admin"
+                    ? pathname === "/admin"
+                    : pathname.startsWith(item.href);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setAbierto(false)}
+                    aria-current={activo ? "page" : undefined}
+                    className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-base transition-colors ${
+                      activo
+                        ? "nav-activa bg-muted font-medium text-foreground"
+                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                    }`}
+                  >
+                    <item.icon
+                      className={`h-5 w-5 ${activo ? "text-brand-orange" : ""}`}
+                    />
+                    {item.label}
+                    {"contador" in item &&
+                      item.contador === "whatsapp" &&
+                      whatsappSinLeer > 0 && (
+                        <span
+                          className="tabular ml-auto flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-green px-1.5 text-sm font-semibold text-white"
+                          aria-label={`${whatsappSinLeer} conversaciones sin leer`}
+                        >
+                          {whatsappSinLeer}
+                        </span>
+                      )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
-      <div className="p-3 border-t border-white/5">
-        <Link
-          href="/"
-          onClick={() => setMobileOpen(false)}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/40 hover:text-white hover:bg-white/5 transition-all"
-        >
-          <ExternalLink className="h-4 w-4" />
-          Ver sitio público
-        </Link>
-      </div>
+
+      <Link
+        href="/"
+        target="_blank"
+        className="mx-3 mb-4 flex items-center justify-between rounded-lg px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+      >
+        Ver el sitio público
+        <ArrowUpRight className="h-4 w-4" />
+      </Link>
     </>
   );
 
   return (
     <>
-      {/* Mobile toggle */}
+      {/* Escritorio */}
+      <aside className="hidden w-64 shrink-0 flex-col border-r bg-sidebar lg:flex">
+        {contenido}
+      </aside>
+
+      {/* Móvil */}
       <button
-        onClick={() => setMobileOpen(!mobileOpen)}
-        className="lg:hidden fixed top-3 left-3 z-50 bg-brand-orange text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
+        onClick={() => setAbierto(true)}
+        className="fixed left-4 top-3.5 z-40 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted lg:hidden"
+        aria-label="Abrir menú"
       >
-        {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        <Menu className="h-5 w-5" />
       </button>
 
-      {/* Mobile overlay */}
-      {mobileOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/60 z-40"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-
-      {/* Sidebar - desktop always visible, mobile slide-in */}
-      <aside
-        className={`w-64 bg-[#0f0f12] border-r border-white/5 flex flex-col h-screen fixed lg:sticky top-0 z-40 transition-transform duration-300 ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
-      >
-        {/* Logo */}
-        <div className="p-5 border-b border-white/5">
-          <Link href="/admin" className="flex items-center gap-3" onClick={() => setMobileOpen(false)}>
-            <Image src="/cropped-icon-180x180.png" alt="MJBJ" width={36} height={36} className="rounded-lg" />
-            <div>
-              <p className="font-bold text-white text-sm leading-tight">MJBJ Admin</p>
-              <p className="text-[10px] text-white/40 leading-tight">Panel de Control</p>
-            </div>
-          </Link>
+      {abierto && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            className="absolute inset-0 bg-foreground/20"
+            onClick={() => setAbierto(false)}
+            aria-label="Cerrar menú"
+          />
+          <aside className="relative flex h-full w-64 flex-col border-r bg-sidebar">
+            <button
+              onClick={() => setAbierto(false)}
+              className="absolute right-3 top-4 rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+              aria-label="Cerrar menú"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            {contenido}
+          </aside>
         </div>
-        {navContent}
-      </aside>
+      )}
     </>
   );
 }

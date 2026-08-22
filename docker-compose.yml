@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: mjbj-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mjbj
+      POSTGRES_PASSWORD: mjbj
+      POSTGRES_DB: mjbj
+    # 5432 lo ocupa un Postgres nativo del sistema, así que este proyecto usa 5433.
+    ports:
+      - "5433:5432"
+    volumes:
+      - mjbj-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mjbj -d mjbj"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mjbj-pgdata:

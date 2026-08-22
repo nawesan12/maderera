@@ -21,11 +21,13 @@ import {
   Building,
   Umbrella,
   ArrowRight,
+  UserRound,
+  LayoutDashboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { useBudget } from "@/lib/budget-context";
+import { useCarrito } from "@/lib/carrito-context";
 
 const productLinks = [
   { name: "Techos", href: "/catalogo?cat=techos", icon: Home, desc: "Tirantes, machimbres, aislantes" },
@@ -49,10 +51,25 @@ const navLinks = [
   { name: "Contacto", href: "/contacto" },
 ];
 
-export function Navbar() {
+/**
+ * Quién está navegando, resuelto en el servidor por el layout.
+ *
+ * Llega como prop en vez de consultarse acá con un hook de cliente para que el
+ * primer render ya salga con el estado correcto: pedirla desde el navegador
+ * hace que "Ingresar" parpadee un instante para quien ya tiene la sesión
+ * abierta.
+ */
+export interface SesionNavbar {
+  nombre: string;
+  esStaff: boolean;
+}
+
+export function Navbar({ sesion }: { sesion?: SesionNavbar | null }) {
   const [productsOpen, setProductsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { totalItems } = useBudget();
+  const { cantidadItems } = useCarrito();
+
+  const primerNombre = sesion?.nombre.trim().split(/\s+/)[0] ?? "";
 
   return (
     <>
@@ -77,6 +94,28 @@ export function Navbar() {
             <Link href="/contacto" className="hover:text-white transition-colors">
               Contacto
             </Link>
+            <span className="text-white/20">|</span>
+            {sesion ? (
+              <Link
+                href={sesion.esStaff ? "/admin" : "/mi-cuenta"}
+                className="flex items-center gap-1.5 font-medium text-white/90 transition-colors hover:text-white"
+              >
+                {sesion.esStaff ? (
+                  <LayoutDashboard className="h-3 w-3 text-brand-orange" />
+                ) : (
+                  <UserRound className="h-3 w-3 text-brand-orange" />
+                )}
+                {sesion.esStaff ? "Panel" : `Hola, ${primerNombre}`}
+              </Link>
+            ) : (
+              <Link
+                href="/ingresar"
+                className="flex items-center gap-1.5 transition-colors hover:text-white"
+              >
+                <UserRound className="h-3 w-3 text-brand-orange" />
+                Ingresar
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -190,12 +229,28 @@ export function Navbar() {
                   <Calculator className="h-5 w-5" />
                 </Button>
               </Link>
+              <Link
+                href={
+                  sesion ? (sesion.esStaff ? "/admin" : "/mi-cuenta") : "/ingresar"
+                }
+                aria-label={sesion ? "Mi cuenta" : "Ingresar"}
+              >
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-10 w-10 rounded-xl hover:text-brand-orange ${
+                    sesion ? "text-brand-orange" : "text-muted-foreground"
+                  }`}
+                >
+                  <UserRound className="h-5 w-5" />
+                </Button>
+              </Link>
               <Link href="/presupuesto" className="relative">
                 <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-brand-orange h-10 w-10 rounded-xl">
                   <ShoppingCart className="h-5 w-5" />
-                  {totalItems > 0 && (
+                  {cantidadItems > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 h-5 w-5 flex items-center justify-center text-[10px] font-bold bg-brand-orange text-white rounded-full">
-                      {totalItems}
+                      {cantidadItems}
                     </span>
                   )}
                 </Button>
@@ -213,6 +268,29 @@ export function Navbar() {
                 </SheetTrigger>
                 <SheetContent side="right" className="w-80">
                   <div className="flex flex-col gap-1 mt-8">
+                    {/* La cuenta va arriba de todo en el teléfono: es lo que se
+                        busca cuando el pedido ya está hecho. */}
+                    <Link
+                      href={
+                        sesion
+                          ? sesion.esStaff
+                            ? "/admin"
+                            : "/mi-cuenta"
+                          : "/ingresar"
+                      }
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="mb-3 flex items-center gap-3 rounded-xl bg-brand-cream px-3 py-3 text-sm font-medium"
+                    >
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-orange/10">
+                        <UserRound className="h-4 w-4 text-brand-orange" />
+                      </span>
+                      {sesion
+                        ? sesion.esStaff
+                          ? "Ir al panel"
+                          : `Mi cuenta · ${primerNombre}`
+                        : "Ingresar o crear cuenta"}
+                    </Link>
+
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.15em] px-3 mb-2">
                       Productos
                     </p>

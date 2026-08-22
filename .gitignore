@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+# imágenes subidas en desarrollo (en producción van a Vercel Blob)
+/public/subidas/*
+!/public/subidas/.gitignore
+
+# artefactos de las pruebas de navegador
+/.playwright-mcp

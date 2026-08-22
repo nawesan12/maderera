@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desglose de Inversión — Maderera Juan B. Justo | MJBJ</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..900&display=swap');
+
+        :root {
+            --dark: #0c0a08;
+            --cream: #f7f2ea;
+            --orange: #e8842a;
+            --orange-dark: #c96e1f;
+            --text-ink: #1c1917;
+            --text-body: #3d3833;
+            --text-muted: #78716c;
+            --green: #2d7a4a;
+            --radius: 10px;
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            background: #555;
+        }
+
+        .sheet {
+            width: 210mm;
+            height: 296mm;
+            margin: 0 auto;
+            background: var(--cream);
+            color: var(--text-ink);
+            padding: 12mm 14mm;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sheet > * {
+            flex-shrink: 0;
+        }
+
+        /* ═══ HEADER ═══ */
+        .head {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding-bottom: 12px;
+            border-bottom: 3px solid var(--orange);
+            margin-bottom: 16px;
+        }
+
+        .head img {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .head__titles {
+            flex: 1;
+        }
+
+        .head__titles h1 {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .head__titles h1 span {
+            color: var(--orange);
+        }
+
+        .head__sub {
+            font-size: 14px;
+            color: var(--text-muted);
+            font-weight: 500;
+            margin-top: 3px;
+        }
+
+        .head__date {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        /* ═══ SECTION TITLES ═══ */
+        .sec-title {
+            font-size: 13px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--orange);
+            margin-bottom: 8px;
+        }
+
+        /* ═══ DESGLOSE ═══ */
+        .items {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-md);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 18px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            font-size: 15px;
+        }
+
+        .item__name {
+            font-weight: 700;
+        }
+
+        .item__price {
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-body);
+            white-space: nowrap;
+        }
+
+        .item--total {
+            background: var(--dark);
+            color: white;
+            padding: 13px 18px;
+            border-bottom: none;
+        }
+
+        .item--total .item__name {
+            font-size: 16px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .item--total .item__price {
+            color: var(--orange);
+            font-size: 22px;
+            font-weight: 900;
+        }
+
+        .items-note {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin: 0 0 16px;
+            padding: 0 4px;
+        }
+
+        /* ═══ PLANES ═══ */
+        .plans {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .plan {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-md);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            border-top: 5px solid var(--orange);
+            padding: 16px 20px 14px;
+        }
+
+        .plan__name {
+            font-size: 17px;
+            font-weight: 800;
+        }
+
+        .plan__cuota {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin: 2px 0 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .plan__cuota strong {
+            color: var(--orange-dark);
+            font-weight: 800;
+        }
+
+        .hito {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            font-size: 13.5px;
+        }
+
+        .hito__label {
+            color: var(--text-body);
+            font-weight: 500;
+        }
+
+        .hito__amount {
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ═══ CONDICIONES ═══ */
+        .clauses {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-md);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            padding: 14px 20px;
+        }
+
+        .clause {
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--text-body);
+            padding: 4px 0 4px 24px;
+            position: relative;
+        }
+
+        .clause::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--green);
+            font-weight: 900;
+        }
+
+        /* ═══ FOOTER ═══ */
+        .foot {
+            margin-top: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 12px;
+            border-top: 1px solid rgba(0, 0, 0, 0.08);
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .foot strong {
+            color: var(--orange-dark);
+        }
+
+        /* ═══ PRINT ═══ */
+        @media print {
+            body {
+                background: white;
+            }
+
+            .sheet {
+                margin: 0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+
+        @page {
+            size: A4;
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sheet">
+
+        <!-- HEADER -->
+        <div class="head">
+            <img src="public/cropped-icon-180x180.png" alt="Logo MJBJ">
+            <div class="head__titles">
+                <h1>Inversión <span>y plan de pagos</span></h1>
+                <div class="head__sub">Plataforma Digital Integral &mdash; Maderera Juan B. Justo</div>
+            </div>
+            <div class="head__date">Julio 2026</div>
+        </div>
+
+        <!-- DESGLOSE -->
+        <div class="sec-title">Detalle de la inversión</div>
+        <div class="items">
+            <div class="item">
+                <div class="item__name">Identidad visual y diseño de interfaz</div>
+                <div class="item__price">$600.000</div>
+            </div>
+            <div class="item">
+                <div class="item__name">Sitio público con catálogo de productos</div>
+                <div class="item__price">$800.000</div>
+            </div>
+            <div class="item">
+                <div class="item__name">Tienda online con pagos y envíos</div>
+                <div class="item__price">$1.100.000</div>
+            </div>
+            <div class="item">
+                <div class="item__name">Motor de cálculo y cotización</div>
+                <div class="item__price">$900.000</div>
+            </div>
+            <div class="item">
+                <div class="item__name">Sistema de gestión + facturación ARCA</div>
+                <div class="item__price">$1.600.000</div>
+            </div>
+            <div class="item">
+                <div class="item__name">Portal de clientes</div>
+                <div class="item__price">$500.000</div>
+            </div>
+            <div class="item">
+                <div class="item__name">Portal de profesionales</div>
+                <div class="item__price">$400.000</div>
+            </div>
+            <div class="item">
+                <div class="item__name">Migración, capacitación y puesta en marcha</div>
+                <div class="item__price">$500.000</div>
+            </div>
+            <div class="item item--total">
+                <div class="item__name">Total del proyecto</div>
+                <div class="item__price">$6.400.000</div>
+            </div>
+        </div>
+        <div class="items-note">Todos los componentes funcionan integrados como una sola plataforma &mdash; el valor corresponde al proyecto completo.</div>
+
+        <!-- PLANES DE PAGO -->
+        <div class="sec-title">Planes de pago &mdash; a elección</div>
+        <div class="plans">
+            <div class="plan">
+                <div class="plan__name">Plan A &mdash; 4 meses</div>
+                <div class="plan__cuota">4 pagos de <strong>$1.600.000</strong></div>
+                <div class="hito">
+                    <div class="hito__label">1 &middot; Al aceptar</div>
+                    <div class="hito__amount">$1.600.000</div>
+                </div>
+                <div class="hito">
+                    <div class="hito__label">2 &middot; Mes 1 (lanzamiento)</div>
+                    <div class="hito__amount">$1.600.000</div>
+                </div>
+                <div class="hito">
+                    <div class="hito__label">3 &middot; Mes 2</div>
+                    <div class="hito__amount">$1.600.000</div>
+                </div>
+                <div class="hito">
+                    <div class="hito__label">4 &middot; Mes 3</div>
+                    <div class="hito__amount">$1.600.000</div>
+                </div>
+            </div>
+            <div class="plan">
+                <div class="plan__name">Plan B &mdash; 5 meses</div>
+                <div class="plan__cuota">5 pagos de <strong>$1.280.000</strong></div>
+                <div class="hito">
+                    <div class="hito__label">1 &middot; Al aceptar</div>
+                    <div class="hito__amount">$1.280.000</div>
+                </div>
+                <div class="hito">
+                    <div class="hito__label">2 &middot; Mes 1 (lanzamiento)</div>
+                    <div class="hito__amount">$1.280.000</div>
+                </div>
+                <div class="hito">
+                    <div class="hito__label">3 &middot; Mes 2</div>
+                    <div class="hito__amount">$1.280.000</div>
+                </div>
+                <div class="hito">
+                    <div class="hito__label">4 &middot; Mes 3</div>
+                    <div class="hito__amount">$1.280.000</div>
+                </div>
+                <div class="hito">
+                    <div class="hito__label">5 &middot; Mes 4</div>
+                    <div class="hito__amount">$1.280.000</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONDICIONES -->
+        <div class="sec-title">Condiciones incluidas</div>
+        <div class="clauses">
+            <div class="clause">La migración de datos desde Quality Software corre por nuestra cuenta, sin costo adicional.</div>
+            <div class="clause">Sin mantenimiento mensual: el único gasto recurrente es el dominio (~$21.000 por año).</div>
+            <div class="clause">El sistema, el código y los datos quedan 100% a nombre de MJBJ.</div>
+            <div class="clause">Incluye capacitación presencial del equipo y 1 mes de soporte post-lanzamiento.</div>
+            <div class="clause">Entregas semanales: pueden ver y probar cada parte funcionando durante el desarrollo.</div>
+            <div class="clause">Pueden pagar como les resulte más cómodo: transferencia, Mercado Pago o efectivo (preferentemente efectivo).</div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="foot">
+            <div>Valores en pesos argentinos (ARS)</div>
+            <div>Propuesta válida por 30 días &mdash; <strong>WhatsApp: +54 223 632-7551</strong></div>
+        </div>
+
+    </div>
+</body>
+
+</html>

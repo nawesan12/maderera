@@ -1,240 +1,256 @@
-"use client";
+import Image from "next/image";
+import Link from "next/link";
+import { ImageOff, Package } from "lucide-react";
+import { EncabezadoPanel } from "@/components/admin/encabezado";
+import { GrupoListado } from "@/components/admin/grupo";
+import { NivelStock } from "@/components/admin/nivel-stock";
+import { fechaHora, plural } from "@/components/admin/formato";
+import { BuscadorProductos } from "@/app/admin/productos/buscador";
+import { listarCategoriasAdmin } from "@/lib/dal/admin/products";
+import {
+  listarStock,
+  listarSucursales,
+  ultimosMovimientos,
+  type FilaStock,
+} from "@/lib/dal/admin/inventory";
+import { AjusteRapido } from "./ajuste-rapido";
+import { DialogoTransferencia } from "./dialogo-transferencia";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { toast } from "sonner";
-import { Package, Search, ArrowLeftRight, AlertTriangle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { products, categories } from "@/lib/products";
-import { stockAlerts, transferencias } from "@/lib/dashboard-data";
-
-const stockColor: Record<string, string> = {
-  alto: "bg-green-500/15 text-green-400",
-  medio: "bg-yellow-500/15 text-yellow-400",
-  bajo: "bg-red-500/15 text-red-400",
-  "sin-stock": "bg-white/5 text-white/30",
+const etiquetaMovimiento: Record<string, string> = {
+  ingreso: "Ingreso",
+  egreso: "Egreso",
+  ajuste: "Ajuste",
+  transferencia_salida: "Salida",
+  transferencia_entrada: "Entrada",
+  venta: "Venta",
+  devolucion: "Devolución",
 };
 
-const stockLabel: Record<string, string> = {
-  alto: "En stock",
-  medio: "Limitado",
-  bajo: "Bajo",
-  "sin-stock": "Sin stock",
-};
+export default async function AdminStockPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ buscar?: string; cat?: string }>;
+}) {
+  const params = await searchParams;
 
-export default function AdminStockPage() {
-  const [search, setSearch] = useState("");
-  const [cat, setCat] = useState("todos");
-  const [transferOpen, setTransferOpen] = useState(false);
-  const [transferProduct, setTransferProduct] = useState("");
-  const [transferQty, setTransferQty] = useState("1");
-  const [transferDir, setTransferDir] = useState("central-aserradero");
+  const [filas, categorias, sucursales, movimientos] = await Promise.all([
+    listarStock({ busqueda: params.buscar, categoria: params.cat }),
+    listarCategoriasAdmin(),
+    listarSucursales(),
+    ultimosMovimientos(8),
+  ]);
 
-  const filtered = products.filter((p) => {
-    if (cat !== "todos" && p.category !== cat) return false;
-    if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
-
-  const handleTransfer = () => {
-    const product = transferProduct || "Producto seleccionado";
-    const [from, to] = transferDir === "central-aserradero"
-      ? ["Casa Central", "Aserradero"]
-      : ["Aserradero", "Casa Central"];
-    toast.success("Transferencia registrada", {
-      description: `${transferQty}x ${product}: ${from} → ${to}`,
-    });
-    setTransferOpen(false);
-    setTransferProduct("");
-    setTransferQty("1");
-  };
+  // Tres grupos, en el orden en que se atienden: lo que no hay, lo que se está
+  // por acabar y lo que está bien.
+  const agotados = filas.filter((f) => f.total === 0);
+  const reponer = filas.filter(
+    (f) =>
+      f.total > 0 &&
+      (f.nivelCentral === "bajo" || f.nivelAserradero === "bajo"),
+  );
+  const normales = filas.filter(
+    (f) => !agotados.includes(f) && !reponer.includes(f),
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-2xl font-bold">Gestión de Stock</h1>
-          <p className="text-sm text-white/40">Control de inventario entre sucursales</p>
-        </motion.div>
-        <Button
-          className="bg-brand-orange hover:bg-brand-orange-dark text-white rounded-lg"
-          onClick={() => setTransferOpen(true)}
-        >
-          <ArrowLeftRight className="h-4 w-4 mr-2" />
-          Nueva Transferencia
-        </Button>
-      </div>
+    <div>
+      <EncabezadoPanel
+        titulo="Stock"
+        detalle={
+          reponer.length + agotados.length > 0
+            ? `${plural(reponer.length + agotados.length, "medida")} para atender de ${filas.length}`
+            : `${plural(filas.length, "medida")} en inventario`
+        }
+      >
+        <DialogoTransferencia
+          variantes={filas.map((f) => ({
+            id: f.variantId,
+            texto: `${f.productName} — ${f.label}`,
+          }))}
+          sucursales={sucursales.map((s) => ({ id: s.id, name: s.name }))}
+        />
+      </EncabezadoPanel>
 
-      {/* Alerts */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <Card className="bg-red-500/5 border-red-500/10">
-          <CardContent className="p-4 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
-            <p className="text-sm text-red-300">
-              <strong>{stockAlerts.length} productos</strong> con stock por debajo del mínimo.
-            </p>
-          </CardContent>
-        </Card>
-      </motion.div>
+      <BuscadorProductos
+        categorias={categorias}
+        busquedaActual={params.buscar ?? ""}
+        categoriaActual={params.cat ?? "todos"}
+      />
 
-      {/* Filters */}
-      <div className="flex gap-3">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
-          <Input placeholder="Buscar producto..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-white/30" />
+      {filas.length === 0 ? (
+        <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
+          <Package className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+          <p className="text-base font-medium">Ninguna medida coincide</p>
+          <p className="mt-1 text-base text-muted-foreground">
+            Probá con otro nombre, código o categoría.
+          </p>
         </div>
-        <div className="flex gap-1.5 overflow-x-auto">
-          <Button size="sm" variant={cat === "todos" ? "default" : "outline"} className={cat === "todos" ? "bg-brand-orange text-white" : "border-white/10 text-white/50"} onClick={() => setCat("todos")}>Todos</Button>
-          {categories.slice(0, 5).map((c) => (
-            <Button key={c.id} size="sm" variant={cat === c.id ? "default" : "outline"} className={cat === c.id ? "bg-brand-orange text-white" : "border-white/10 text-white/50"} onClick={() => setCat(c.id)}>{c.name}</Button>
-          ))}
-        </div>
-      </div>
-
-      {/* Stock table */}
-      <Card className="bg-white/[0.03] border-white/5">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/5">
-                  <th className="text-left p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Producto</th>
-                  <th className="text-left p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Categoría</th>
-                  <th className="text-center p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Casa Central</th>
-                  <th className="text-center p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Aserradero</th>
-                  <th className="text-right p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((product, i) => (
-                  <motion.tr
-                    key={product.id}
-                    className="border-b border-white/5 hover:bg-white/[0.02] transition-colors"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: Math.min(i * 0.02, 0.3) }}
-                  >
-                    <td className="p-4">
-                      <p className="text-sm font-medium text-white">{product.name}</p>
-                      {product.dimensions && <p className="text-[10px] text-white/30">{product.dimensions[0]}</p>}
-                    </td>
-                    <td className="p-4">
-                      <Badge className="border-0 bg-white/5 text-white/50 text-[10px]">
-                        {categories.find((c) => c.id === product.category)?.name}
-                      </Badge>
-                    </td>
-                    <td className="p-4 text-center">
-                      <Badge className={`border-0 text-xs font-medium ${stockColor[product.stockCentral]}`}>
-                        {stockLabel[product.stockCentral]}
-                      </Badge>
-                    </td>
-                    <td className="p-4 text-center">
-                      <Badge className={`border-0 text-xs font-medium ${stockColor[product.stockAserradero]}`}>
-                        {stockLabel[product.stockAserradero]}
-                      </Badge>
-                    </td>
-                    <td className="p-4 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs border-white/10 text-white/50 hover:text-white h-7"
-                        onClick={() => {
-                          setTransferProduct(product.name);
-                          setTransferOpen(true);
-                        }}
-                      >
-                        <ArrowLeftRight className="h-3 w-3 mr-1" />
-                        Transferir
-                      </Button>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Transferencias recientes */}
-      <Card className="bg-white/[0.03] border-white/5">
-        <CardHeader>
-          <CardTitle className="text-base text-white">Transferencias Recientes</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="divide-y divide-white/5">
-            {transferencias.map((t) => (
-              <div key={t.id} className="flex items-center gap-4 px-5 py-3">
-                <ArrowLeftRight className="h-4 w-4 text-brand-orange shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm text-white">{t.producto} <span className="text-white/40">x{t.cantidad}</span></p>
-                  <p className="text-[11px] text-white/40">{t.origen} → {t.destino} · {t.fecha}</p>
-                </div>
-                <Badge className={`border-0 text-[10px] ${t.estado === "completado" ? "bg-green-500/15 text-green-400" : "bg-yellow-500/15 text-yellow-400"}`}>
-                  {t.estado}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Transfer Dialog */}
-      <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
-        <DialogContent className="bg-[#18181b] border-white/10 text-white max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ArrowLeftRight className="h-5 w-5 text-brand-orange" />
-              Nueva Transferencia
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label className="text-xs text-white/60">Producto</Label>
-              <Input
-                value={transferProduct}
-                onChange={(e) => setTransferProduct(e.target.value)}
-                placeholder="Nombre del producto"
-                className="bg-white/5 border-white/10 text-white placeholder:text-white/30"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs text-white/60">Cantidad</Label>
-              <Input
-                type="number"
-                value={transferQty}
-                onChange={(e) => setTransferQty(e.target.value)}
-                min="1"
-                className="bg-white/5 border-white/10 text-white"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs text-white/60">Dirección</Label>
-              <Select value={transferDir} onValueChange={(v) => v && setTransferDir(v)}>
-                <SelectTrigger className="bg-white/5 border-white/10 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="central-aserradero">Casa Central → Aserradero</SelectItem>
-                  <SelectItem value="aserradero-central">Aserradero → Casa Central</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button
-              className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white"
-              onClick={handleTransfer}
-              disabled={!transferProduct}
+      ) : (
+        <div className="mt-6 grid gap-6 2xl:grid-cols-[1fr_320px]">
+          <div>
+            <GrupoListado
+              titulo="Sin stock"
+              cantidad={agotados.length}
+              detalle="No hay en ninguna sucursal"
+              destacado
             >
-              Confirmar Transferencia
-            </Button>
+              <Grilla filas={agotados} />
+            </GrupoListado>
+
+            <GrupoListado
+              titulo="Hay que reponer"
+              cantidad={reponer.length}
+              detalle="Por debajo del mínimo"
+              destacado
+            >
+              <Grilla filas={reponer} />
+            </GrupoListado>
+
+            <GrupoListado titulo="Con stock" cantidad={normales.length}>
+              <Grilla filas={normales} />
+            </GrupoListado>
           </div>
-        </DialogContent>
-      </Dialog>
+
+          <aside className="2xl:sticky 2xl:top-24 2xl:self-start">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Últimos movimientos
+            </h2>
+            {movimientos.length === 0 ? (
+              <p className="rounded-xl border border-dashed px-3 py-6 text-center text-base text-muted-foreground">
+                Todavía no se registró ningún movimiento.
+              </p>
+            ) : (
+              <ul className="tarjeta-hundida overflow-hidden">
+                {movimientos.map((m) => (
+                  <li
+                    key={m.id}
+                    className="flex items-baseline justify-between gap-3 border-b border-border/60 px-3 py-3 last:border-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-base">{m.productName}</p>
+                      <p className="truncate text-sm text-muted-foreground">
+                        {m.label}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {etiquetaMovimiento[m.type] ?? m.type} · {m.branchName}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {fechaHora.format(m.createdAt)}
+                      </p>
+                    </div>
+                    <span
+                      className={`tabular shrink-0 text-base font-medium ${
+                        m.qty > 0 ? "text-green-700" : "text-muted-foreground"
+                      }`}
+                    >
+                      {m.qty > 0 ? `+${m.qty}` : m.qty}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </aside>
+        </div>
+      )}
     </div>
+  );
+}
+
+function Grilla({ filas }: { filas: FilaStock[] }) {
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      {filas.map((fila) => (
+        <TarjetaStock key={fila.variantId} fila={fila} />
+      ))}
+    </div>
+  );
+}
+
+function TarjetaStock({ fila }: { fila: FilaStock }) {
+  const necesitaAtencion =
+    fila.total === 0 ||
+    fila.nivelCentral === "bajo" ||
+    fila.nivelAserradero === "bajo";
+
+  return (
+    <article
+      className={`flex gap-4 p-4 ${
+        necesitaAtencion ? "tarjeta-atencion" : "tarjeta"
+      }`}
+    >
+      <Link
+        href={`/admin/productos/${fila.productId}`}
+        className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-muted"
+      >
+        {fila.imagen ? (
+          <Image
+            src={fila.imagen}
+            alt={fila.productName}
+            fill
+            className="object-cover"
+            sizes="96px"
+          />
+        ) : (
+          <span className="flex h-full items-center justify-center text-muted-foreground">
+            <ImageOff className="h-5 w-5" />
+          </span>
+        )}
+      </Link>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Link
+              href={`/admin/productos/${fila.productId}`}
+              className="text-base font-medium leading-snug hover:text-brand-orange"
+            >
+              {fila.productName}
+            </Link>
+            <p className="text-sm text-muted-foreground">{fila.label}</p>
+            <p className="tabular text-sm text-muted-foreground">{fila.sku}</p>
+          </div>
+          <p className="tabular shrink-0 text-right">
+            <span className="block text-xl font-semibold">{fila.total}</span>
+            <span className="block text-sm text-muted-foreground">total</span>
+          </p>
+        </div>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <NivelStock
+              sucursal="Casa Central"
+              cantidad={fila.qtyCentral}
+              minimo={fila.minCentral}
+              nivel={fila.nivelCentral}
+              unidad={fila.unidad}
+            />
+            <div className="mt-2">
+              <AjusteRapido
+                variantId={fila.variantId}
+                branchSlug="casa-central"
+                sucursal="Casa Central"
+              />
+            </div>
+          </div>
+
+          <div>
+            <NivelStock
+              sucursal="Aserradero"
+              cantidad={fila.qtyAserradero}
+              minimo={fila.minAserradero}
+              nivel={fila.nivelAserradero}
+              unidad={fila.unidad}
+            />
+            <div className="mt-2">
+              <AjusteRapido
+                variantId={fila.variantId}
+                branchSlug="aserradero"
+                sucursal="Aserradero"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
   );
 }

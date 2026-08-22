@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { useBudget } from "@/lib/budget-context";
+import { useCarrito } from "@/lib/carrito-context";
 import {
   calculateRoof,
   calculateBoards,
@@ -47,7 +47,7 @@ function ResultRow({ label, value, unit, onAdd }: { label: string; value: string
 }
 
 export default function CalculadoraPage() {
-  const { addItem } = useBudget();
+  const { agregar } = useCarrito();
 
   // Roof
   const [roofLargo, setRoofLargo] = useState("");
@@ -196,41 +196,41 @@ export default function CalculadoraPage() {
                       label={roofResult.tirantes.descripcion}
                       value={roofResult.tirantes.cantidad}
                       unit={`unidades (${roofResult.tirantes.medida})`}
-                      onAdd={() => addItem({ name: roofResult.tirantes.descripcion, quantity: roofResult.tirantes.cantidad, unit: "unidades", category: "techos" })}
+                      onAdd={() => agregar({ descripcion: roofResult.tirantes.descripcion, cantidad: roofResult.tirantes.cantidad, unidad: "unidades", origen: "calculadora" })}
                     />
                     <ResultRow
                       label={roofResult.machimbre.descripcion}
                       value={roofResult.machimbre.m2}
                       unit="m²"
-                      onAdd={() => addItem({ name: roofResult.machimbre.descripcion, quantity: roofResult.machimbre.m2, unit: "m²", category: "techos" })}
+                      onAdd={() => agregar({ descripcion: roofResult.machimbre.descripcion, cantidad: roofResult.machimbre.m2, unidad: "m²", origen: "calculadora" })}
                     />
                     <ResultRow
                       label={roofResult.aislacion.descripcion}
                       value={roofResult.aislacion.rollos}
                       unit="rollos"
-                      onAdd={() => addItem({ name: roofResult.aislacion.descripcion, quantity: roofResult.aislacion.rollos, unit: "rollos", category: "techos" })}
+                      onAdd={() => agregar({ descripcion: roofResult.aislacion.descripcion, cantidad: roofResult.aislacion.rollos, unidad: "rollos", origen: "calculadora" })}
                     />
                     <ResultRow
                       label={roofResult.membrana.descripcion}
                       value={roofResult.membrana.rollos}
                       unit="rollos"
-                      onAdd={() => addItem({ name: roofResult.membrana.descripcion, quantity: roofResult.membrana.rollos, unit: "rollos", category: "techos" })}
+                      onAdd={() => agregar({ descripcion: roofResult.membrana.descripcion, cantidad: roofResult.membrana.rollos, unidad: "rollos", origen: "calculadora" })}
                     />
                     <ResultRow
                       label={roofResult.clavos.descripcion}
                       value={roofResult.clavos.kg}
                       unit="kg"
-                      onAdd={() => addItem({ name: roofResult.clavos.descripcion, quantity: roofResult.clavos.kg, unit: "kg", category: "techos" })}
+                      onAdd={() => agregar({ descripcion: roofResult.clavos.descripcion, cantidad: roofResult.clavos.kg, unidad: "kg", origen: "calculadora" })}
                     />
                     <div className="pt-4 mt-2">
                       <Button
                         className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
                         onClick={() => {
-                          addItem({ name: roofResult.tirantes.descripcion, quantity: roofResult.tirantes.cantidad, unit: "un", category: "techos" });
-                          addItem({ name: roofResult.machimbre.descripcion, quantity: roofResult.machimbre.m2, unit: "m²", category: "techos" });
-                          addItem({ name: roofResult.aislacion.descripcion, quantity: roofResult.aislacion.rollos, unit: "rollos", category: "techos" });
-                          addItem({ name: roofResult.membrana.descripcion, quantity: roofResult.membrana.rollos, unit: "rollos", category: "techos" });
-                          addItem({ name: roofResult.clavos.descripcion, quantity: roofResult.clavos.kg, unit: "kg", category: "techos" });
+                          agregar({ descripcion: roofResult.tirantes.descripcion, cantidad: roofResult.tirantes.cantidad, unidad: "un", origen: "calculadora" });
+                          agregar({ descripcion: roofResult.machimbre.descripcion, cantidad: roofResult.machimbre.m2, unidad: "m²", origen: "calculadora" });
+                          agregar({ descripcion: roofResult.aislacion.descripcion, cantidad: roofResult.aislacion.rollos, unidad: "rollos", origen: "calculadora" });
+                          agregar({ descripcion: roofResult.membrana.descripcion, cantidad: roofResult.membrana.rollos, unidad: "rollos", origen: "calculadora" });
+                          agregar({ descripcion: roofResult.clavos.descripcion, cantidad: roofResult.clavos.kg, unidad: "kg", origen: "calculadora" });
                         }}
                       >
                         <ShoppingCart className="h-4 w-4 mr-2" />
@@ -330,7 +330,7 @@ export default function CalculadoraPage() {
                     <div className="pt-4 mt-2">
                       <Button
                         className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
-                        onClick={() => addItem({ name: `Placa Melamina ${boardResult.placaDimension}`, quantity: boardResult.placasNecesarias, unit: "placas", category: "placas" })}
+                        onClick={() => agregar({ descripcion: `Placa Melamina ${boardResult.placaDimension}`, cantidad: boardResult.placasNecesarias, unidad: "placas", origen: "calculadora" })}
                       >
                         <ShoppingCart className="h-4 w-4 mr-2" />
                         Agregar al presupuesto
@@ -403,9 +403,9 @@ export default function CalculadoraPage() {
                       <Button
                         className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
                         onClick={() => {
-                          addItem({ name: "Piso Melamínico Decno Flooring", quantity: floorResult.cajasNecesarias, unit: "cajas", category: "pisos" });
-                          addItem({ name: "Zócalo Moldava 7cm", quantity: floorResult.zocalos, unit: "unidades", category: "molduras" });
-                          addItem({ name: "Underlay Foam 2mm", quantity: floorResult.underlayM2, unit: "m²", category: "pisos" });
+                          agregar({ descripcion: "Piso Melamínico Decno Flooring", cantidad: floorResult.cajasNecesarias, unidad: "cajas", origen: "calculadora" });
+                          agregar({ descripcion: "Zócalo Moldava 7cm", cantidad: floorResult.zocalos, unidad: "unidades", origen: "calculadora" });
+                          agregar({ descripcion: "Underlay Foam 2mm", cantidad: floorResult.underlayM2, unidad: "m²", origen: "calculadora" });
                         }}
                       >
                         <ShoppingCart className="h-4 w-4 mr-2" />
@@ -502,11 +502,11 @@ export default function CalculadoraPage() {
                       <Button
                         className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
                         onClick={() => {
-                          addItem({ name: deckResult.tablasDeck.descripcion, quantity: deckResult.tablasDeck.m2, unit: "m²", category: "decks" });
-                          addItem({ name: "Alfajía para deck", quantity: deckResult.estructura.tirantes, unit: "unidades", category: "decks" });
-                          addItem({ name: deckResult.tornillos.descripcion, quantity: deckResult.tornillos.cantidad, unit: "unidades", category: "ferreteria" });
+                          agregar({ descripcion: deckResult.tablasDeck.descripcion, cantidad: deckResult.tablasDeck.m2, unidad: "m²", origen: "calculadora" });
+                          agregar({ descripcion: "Alfajía para deck", cantidad: deckResult.estructura.tirantes, unidad: "unidades", origen: "calculadora" });
+                          agregar({ descripcion: deckResult.tornillos.descripcion, cantidad: deckResult.tornillos.cantidad, unidad: "unidades", origen: "calculadora" });
                           if (deckResult.protector.litros > 0) {
-                            addItem({ name: deckResult.protector.descripcion, quantity: deckResult.protector.litros, unit: "litros", category: "ferreteria" });
+                            agregar({ descripcion: deckResult.protector.descripcion, cantidad: deckResult.protector.litros, unidad: "litros", origen: "calculadora" });
                           }
                         }}
                       >

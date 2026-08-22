@@ -1,43 +1,50 @@
 import { AdminSidebar } from "@/components/admin/sidebar";
-import { ActivityBell } from "@/components/admin/activity-bell";
-import { Search } from "lucide-react";
+import { BuscadorGlobal } from "@/components/admin/buscador-global";
+import { MenuUsuario } from "@/components/admin/menu-usuario";
+import { requireStaff } from "@/lib/dal/session";
+import { conversacionesSinLeer } from "@/lib/dal/admin/whatsapp";
 
-export default function AdminLayout({
+/** Iniciales para el avatar: "Juan Pérez" -> "JP". */
+function iniciales(nombre: string) {
+  return nombre
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((parte) => parte[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+const etiquetaRol = {
+  admin: "Administración",
+  vendedor: "Ventas",
+  deposito: "Depósito",
+} as const;
+
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // El proxy ya filtró a quien no tiene cookie, pero esta es la verificación que
+  // cuenta: valida la sesión contra la base y exige rol de staff.
+  const usuario = await requireStaff();
+  const sinLeer = await conversacionesSinLeer();
+
   return (
-    <div className="dark bg-[#09090b] min-h-screen flex text-white">
-      <AdminSidebar />
-      <div className="flex-1 flex flex-col min-h-screen">
-        {/* Topbar */}
-        <header className="h-14 border-b border-white/5 flex items-center justify-between px-4 lg:px-6 bg-[#0f0f12]/80 backdrop-blur-sm sticky top-0 z-30">
-          <div className="flex items-center gap-3 pl-12 lg:pl-0">
-            <div className="relative hidden sm:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
-              <input
-                placeholder="Buscar..."
-                className="bg-white/5 border border-white/10 rounded-lg pl-9 pr-4 py-1.5 text-sm text-white placeholder:text-white/30 w-64 focus:outline-none focus:border-brand-orange/50"
-              />
-            </div>
-            <p className="sm:hidden text-sm font-semibold text-white">MJBJ Admin</p>
+    <div className="panel flex min-h-screen bg-background text-foreground">
+      <AdminSidebar whatsappSinLeer={sinLeer} />
+      <div className="flex min-h-screen flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b bg-background/85 px-4 backdrop-blur lg:px-8">
+          <div className="flex flex-1 items-center gap-3 pl-12 lg:pl-0">
+            <BuscadorGlobal />
           </div>
-          <div className="flex items-center gap-4">
-            <ActivityBell />
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-brand-orange flex items-center justify-center">
-                <span className="text-xs font-bold text-white">MG</span>
-              </div>
-              <div className="text-right">
-                <p className="text-xs font-medium text-white">Martín García</p>
-                <p className="text-[10px] text-white/40">Administrador</p>
-              </div>
-            </div>
-          </div>
+          <MenuUsuario
+            nombre={usuario.name}
+            iniciales={iniciales(usuario.name)}
+            rol={etiquetaRol[usuario.staffRole!]}
+          />
         </header>
-        {/* Content */}
-        <main className="flex-1 p-6">{children}</main>
+        <main className="panel-fondo flex-1 px-4 py-8 lg:px-8">{children}</main>
       </div>
     </div>
   );

@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1787251119244,
+      "tag": "0000_boring_kulan_gath",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787251596574,
+      "tag": "0001_bouncy_winter_soldier",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787253370946,
+      "tag": "0002_unaccent",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787287481378,
+      "tag": "0003_rainy_mentallo",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787288605608,
+      "tag": "0004_grey_rhodey",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787332674156,
+      "tag": "0005_unusual_synch",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787421388036,
+      "tag": "0006_dry_maggott",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787423340957,
+      "tag": "0007_cultured_squadron_sinister",
+      "breakpoints": true
+    }
+  ]
+}

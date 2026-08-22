@@ -39,11 +39,11 @@ import {
 } from "@/lib/dashboard-data";
 
 const estadoConfig: Record<FacturaEstado, { bg: string; label: string; icon: React.ElementType }> = {
-  borrador: { bg: "bg-white/5 text-white/50", label: "Borrador", icon: FileText },
-  emitida: { bg: "bg-blue-500/15 text-blue-400", label: "Emitida", icon: Clock },
-  pagada: { bg: "bg-green-500/15 text-green-400", label: "Pagada", icon: CheckCircle },
-  vencida: { bg: "bg-red-500/15 text-red-400", label: "Vencida", icon: AlertTriangle },
-  anulada: { bg: "bg-white/5 text-white/30 line-through", label: "Anulada", icon: XCircle },
+  borrador: { bg: "bg-muted text-muted-foreground", label: "Borrador", icon: FileText },
+  emitida: { bg: "bg-blue-100 text-blue-800", label: "Emitida", icon: Clock },
+  pagada: { bg: "bg-green-100 text-green-800", label: "Pagada", icon: CheckCircle },
+  vencida: { bg: "bg-red-100 text-red-800", label: "Vencida", icon: AlertTriangle },
+  anulada: { bg: "bg-muted text-muted-foreground line-through", label: "Anulada", icon: XCircle },
 };
 
 const formatMoney = (n: number) => {
@@ -406,30 +406,30 @@ export default function AdminFacturacionPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-2xl font-bold">Facturación</h1>
-          <p className="text-sm text-white/40">Emisión y seguimiento de comprobantes</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Facturación</h1>
+          <p className="text-base text-muted-foreground">Emisión y seguimiento de comprobantes</p>
         </motion.div>
-        <Button className="bg-brand-orange hover:bg-brand-orange-dark text-white rounded-lg" onClick={() => setNewOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" /> Nueva Factura
+        <Button className="boton-accion rounded-lg" onClick={() => setNewOpen(true)}>
+          <Plus className="h-5 w-5 mr-2" /> Nueva Factura
         </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Facturado", value: formatMoney(stats.total), color: "text-white", accent: "border-l-2 border-l-brand-orange", icon: DollarSign },
-          { label: "Pendiente de Cobro", value: formatMoney(stats.pendientes), color: "text-blue-400", accent: "border-l-2 border-l-blue-400", icon: Clock },
-          { label: "Cobrado", value: formatMoney(stats.pagadas), color: "text-green-400", accent: "border-l-2 border-l-green-400", icon: CheckCircle },
-          { label: "Vencidas", value: String(stats.vencidas), color: "text-red-400", accent: "border-l-2 border-l-red-400", icon: AlertTriangle },
+          { label: "Total Facturado", value: formatMoney(stats.total), color: "text-foreground", accent: "border-l-2 border-l-brand-orange", icon: DollarSign },
+          { label: "Pendiente de Cobro", value: formatMoney(stats.pendientes), color: "text-blue-700", accent: "border-l-2 border-l-blue-400", icon: Clock },
+          { label: "Cobrado", value: formatMoney(stats.pagadas), color: "text-green-700", accent: "border-l-2 border-l-green-400", icon: CheckCircle },
+          { label: "Vencidas", value: String(stats.vencidas), color: "text-red-700", accent: "border-l-2 border-l-red-400", icon: AlertTriangle },
         ].map((s, i) => (
           <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
-            <Card className={`bg-white/[0.03] border-white/5 ${s.accent}`}>
+            <Card className={`bg-card border-border ${s.accent}`}>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <s.icon className="h-4 w-4 text-white/30" />
-                  <p className="text-[10px] text-white/40 uppercase tracking-wider">{s.label}</p>
+                  <s.icon className="h-5 w-5 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground uppercase tracking-wider">{s.label}</p>
                 </div>
-                <p className={`text-xl font-bold font-mono ${s.color}`}>{s.value}</p>
+                <p className={`text-2xl font-bold font-mono ${s.color}`}>{s.value}</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -439,12 +439,12 @@ export default function AdminFacturacionPage() {
       {/* Filters */}
       <div className="flex gap-3">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
             placeholder="Buscar por cliente, empresa, CUIT o número..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-white/30"
+            className="pl-10 bg-muted border-border text-foreground placeholder:text-muted-foreground"
           />
         </div>
         <div className="flex gap-1.5">
@@ -459,7 +459,7 @@ export default function AdminFacturacionPage() {
               key={f.id}
               size="sm"
               variant={filtroEstado === f.id ? "default" : "outline"}
-              className={filtroEstado === f.id ? "bg-brand-orange text-white" : "border-white/10 text-white/50"}
+              className={filtroEstado === f.id ? "boton-accion" : "border-border text-muted-foreground"}
               onClick={() => setFiltroEstado(f.id)}
             >
               {f.label}
@@ -469,21 +469,21 @@ export default function AdminFacturacionPage() {
       </div>
 
       {/* Table */}
-      <Card className="bg-white/[0.03] border-white/5">
+      <Card className="bg-card border-border">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-white/5">
-                  <th className="text-left p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Tipo</th>
-                  <th className="text-left p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Número</th>
-                  <th className="text-left p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Cliente</th>
-                  <th className="text-left p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Fecha</th>
-                  <th className="text-left p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Vto.</th>
-                  <th className="text-center p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Items</th>
-                  <th className="text-right p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Total</th>
-                  <th className="text-center p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Estado</th>
-                  <th className="text-right p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Acciones</th>
+                <tr className="border-b border-border">
+                  <th className="text-left p-4 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Tipo</th>
+                  <th className="text-left p-4 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Número</th>
+                  <th className="text-left p-4 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Cliente</th>
+                  <th className="text-left p-4 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Fecha</th>
+                  <th className="text-left p-4 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Vto.</th>
+                  <th className="text-center p-4 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Items</th>
+                  <th className="text-right p-4 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Total</th>
+                  <th className="text-center p-4 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Estado</th>
+                  <th className="text-right p-4 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -492,41 +492,41 @@ export default function AdminFacturacionPage() {
                   return (
                     <motion.tr
                       key={f.id}
-                      className="border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer"
+                      className="border-b border-border hover:bg-muted/40 transition-colors cursor-pointer"
                       onClick={() => setPreviewId(f.id)}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: Math.min(i * 0.04, 0.3) }}
                     >
                       <td className="p-4">
-                        <Badge className="border-0 bg-white/10 text-white font-bold text-xs px-2">
+                        <Badge className="border-0 bg-muted text-foreground font-bold text-sm px-2">
                           {f.tipo}
                         </Badge>
                       </td>
-                      <td className="p-4 text-xs font-mono text-white/60">{f.numero}</td>
+                      <td className="p-4 text-sm font-mono text-muted-foreground">{f.numero}</td>
                       <td className="p-4">
-                        <p className="text-sm font-medium text-white">{f.cliente}</p>
-                        <p className="text-[10px] text-white/40">{f.empresa}</p>
+                        <p className="text-base font-medium text-foreground">{f.cliente}</p>
+                        <p className="text-sm text-muted-foreground">{f.empresa}</p>
                       </td>
-                      <td className="p-4 text-sm text-white/60">{f.fecha}</td>
-                      <td className="p-4 text-sm text-white/60">{f.vencimiento}</td>
-                      <td className="p-4 text-center text-sm text-white/60">{f.items.length}</td>
-                      <td className="p-4 text-right text-sm font-mono font-bold text-white">
+                      <td className="p-4 text-base text-muted-foreground">{f.fecha}</td>
+                      <td className="p-4 text-base text-muted-foreground">{f.vencimiento}</td>
+                      <td className="p-4 text-center text-base text-muted-foreground">{f.items.length}</td>
+                      <td className="p-4 text-right text-base font-mono font-bold text-foreground">
                         {formatMoney(f.total)}
                       </td>
                       <td className="p-4 text-center">
-                        <Badge className={`border-0 text-[10px] ${cfg.bg}`}>{cfg.label}</Badge>
+                        <Badge className={`border-0 text-sm ${cfg.bg}`}>{cfg.label}</Badge>
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex gap-1 justify-end">
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-white/40 hover:text-white" onClick={(e) => { e.stopPropagation(); setPreviewId(f.id); }}>
-                            <Eye className="h-3.5 w-3.5" />
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setPreviewId(f.id); }}>
+                            <Eye className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-white/40 hover:text-white" onClick={(e) => { e.stopPropagation(); printFactura(f); }}>
-                            <Download className="h-3.5 w-3.5" />
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); printFactura(f); }}>
+                            <Download className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-white/40 hover:text-white" onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/5492235903118?text=${encodeURIComponent(`Hola ${f.cliente}, le enviamos la factura ${f.tipo} ${f.numero} por ${formatMoney(f.total)}.`)}`, "_blank"); }}>
-                            <MessageCircle className="h-3.5 w-3.5" />
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/5492235903118?text=${encodeURIComponent(`Hola ${f.cliente}, le enviamos la factura ${f.tipo} ${f.numero} por ${formatMoney(f.total)}.`)}`, "_blank"); }}>
+                            <MessageCircle className="h-4 w-4" />
                           </Button>
                         </div>
                       </td>
@@ -541,35 +541,35 @@ export default function AdminFacturacionPage() {
 
       {/* ==================== INVOICE PREVIEW DIALOG ==================== */}
       <Dialog open={!!previewId} onOpenChange={() => setPreviewId(null)}>
-        <DialogContent className="bg-white text-[#1a1a1a] max-w-2xl max-h-[90vh] overflow-y-auto p-0 border-0">
+        <DialogContent className="bg-white text-[#1a1a1a] sm:max-w-3xl max-h-[90vh] overflow-y-auto p-0 border-0">
           {preview && (
             <div className="relative">
               {/* Actions bar */}
-              <div className="sticky top-0 z-10 bg-[#18181b] text-white px-6 py-3 flex items-center justify-between">
-                <p className="text-sm font-semibold">
+              <div className="sticky top-0 z-10 bg-card text-foreground px-6 py-3 flex items-center justify-between">
+                <p className="text-base font-semibold">
                   Factura {preview.tipo} {preview.numero}
                 </p>
                 <div className="flex gap-2">
                   {preview.estado === "borrador" && (
-                    <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-7" onClick={() => { changeEstado(preview.id, "emitida"); setPreviewId(null); }}>
+                    <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-foreground text-sm h-7" onClick={() => { changeEstado(preview.id, "emitida"); setPreviewId(null); }}>
                       Emitir
                     </Button>
                   )}
                   {preview.estado === "emitida" && (
-                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white text-xs h-7" onClick={() => { changeEstado(preview.id, "pagada"); setPreviewId(null); }}>
-                      <CheckCircle className="h-3 w-3 mr-1" /> Marcar Pagada
+                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-foreground text-sm h-7" onClick={() => { changeEstado(preview.id, "pagada"); setPreviewId(null); }}>
+                      <CheckCircle className="h-4 w-4 mr-1" /> Marcar Pagada
                     </Button>
                   )}
                   {(preview.estado === "emitida" || preview.estado === "borrador") && (
-                    <Button size="sm" variant="outline" className="text-xs h-7 border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => { changeEstado(preview.id, "anulada"); setPreviewId(null); }}>
+                    <Button size="sm" variant="outline" className="text-sm h-7 border-red-500/30 text-red-700 hover:bg-red-500/10" onClick={() => { changeEstado(preview.id, "anulada"); setPreviewId(null); }}>
                       Anular
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" className="text-xs h-7 border-white/20 text-white/70 hover:text-white" onClick={() => printFactura(preview)}>
-                    <Download className="h-3 w-3 mr-1" /> PDF
+                  <Button size="sm" variant="outline" className="text-sm h-7 text-foreground" onClick={() => printFactura(preview)}>
+                    <Download className="h-4 w-4 mr-1" /> PDF
                   </Button>
-                  <Button size="sm" variant="outline" className="text-xs h-7 border-white/20 text-white/70 hover:text-white" onClick={() => printFactura(preview)}>
-                    <Printer className="h-3 w-3 mr-1" /> Imprimir
+                  <Button size="sm" variant="outline" className="text-sm h-7 text-foreground" onClick={() => printFactura(preview)}>
+                    <Printer className="h-4 w-4 mr-1" /> Imprimir
                   </Button>
                 </div>
               </div>
@@ -579,19 +579,19 @@ export default function AdminFacturacionPage() {
                 {/* Header */}
                 <div className="flex items-start justify-between">
                   <div>
-                    <h2 className="text-xl font-bold text-[#1a1a1a]">MADERERA JUAN B. JUSTO</h2>
-                    <p className="text-xs text-gray-500 mt-1">Av. Juan B. Justo 4153, Mar del Plata</p>
-                    <p className="text-xs text-gray-500">CUIT: 30-12345678-9 | IVA Resp. Inscripto</p>
-                    <p className="text-xs text-gray-500">Tel: (0223) 474-3328 | info@mjbj.com.ar</p>
+                    <h2 className="tabular text-2xl font-bold text-[#1a1a1a]">MADERERA JUAN B. JUSTO</h2>
+                    <p className="text-sm text-gray-500 mt-1">Av. Juan B. Justo 4153, Mar del Plata</p>
+                    <p className="text-sm text-gray-500">CUIT: 30-12345678-9 | IVA Resp. Inscripto</p>
+                    <p className="text-sm text-gray-500">Tel: (0223) 474-3328 | info@mjbj.com.ar</p>
                   </div>
                   <div className="text-right">
                     <div className="inline-block border-2 border-[#1a1a1a] px-4 py-2 mb-2">
-                      <p className="text-2xl font-bold">FACTURA</p>
+                      <p className="tabular text-3xl font-semibold">FACTURA</p>
                       <p className="text-3xl font-black text-center">{preview.tipo}</p>
                     </div>
-                    <p className="text-xs text-gray-500">N° {preview.numero}</p>
-                    <p className="text-xs text-gray-500">Fecha: {preview.fecha}</p>
-                    <p className="text-xs text-gray-500">Vto. Pago: {preview.vencimiento}</p>
+                    <p className="text-sm text-gray-500">N° {preview.numero}</p>
+                    <p className="text-sm text-gray-500">Fecha: {preview.fecha}</p>
+                    <p className="text-sm text-gray-500">Vto. Pago: {preview.vencimiento}</p>
                   </div>
                 </div>
 
@@ -599,26 +599,26 @@ export default function AdminFacturacionPage() {
 
                 {/* Client */}
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-2 font-semibold">Datos del cliente</p>
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
+                  <p className="text-sm text-gray-400 uppercase tracking-wider mb-2 font-semibold">Datos del cliente</p>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-base">
                     <div>
-                      <span className="text-gray-400 text-xs">Razón Social: </span>
+                      <span className="text-gray-400 text-sm">Razón Social: </span>
                       <span className="font-semibold">{preview.empresa}</span>
                     </div>
                     <div>
-                      <span className="text-gray-400 text-xs">CUIT: </span>
+                      <span className="text-gray-400 text-sm">CUIT: </span>
                       <span className="font-mono">{preview.cuit}</span>
                     </div>
                     <div>
-                      <span className="text-gray-400 text-xs">Contacto: </span>
+                      <span className="text-gray-400 text-sm">Contacto: </span>
                       <span>{preview.cliente}</span>
                     </div>
                     <div>
-                      <span className="text-gray-400 text-xs">Cond. IVA: </span>
+                      <span className="text-gray-400 text-sm">Cond. IVA: </span>
                       <span>{preview.condicionIva}</span>
                     </div>
                     <div className="col-span-2">
-                      <span className="text-gray-400 text-xs">Domicilio: </span>
+                      <span className="text-gray-400 text-sm">Domicilio: </span>
                       <span>{preview.direccion}</span>
                     </div>
                   </div>
@@ -626,7 +626,7 @@ export default function AdminFacturacionPage() {
 
                 {/* Items table */}
                 <div>
-                  <table className="w-full text-sm">
+                  <table className="w-full text-base">
                     <thead>
                       <tr className="border-b-2 border-[#1a1a1a]">
                         <th className="text-left py-2 font-semibold">Descripción</th>
@@ -653,18 +653,18 @@ export default function AdminFacturacionPage() {
                 {/* Totals */}
                 <div className="flex justify-end">
                   <div className="w-64 space-y-2">
-                    <div className="flex justify-between text-sm">
+                    <div className="flex justify-between text-base">
                       <span className="text-gray-500">Subtotal</span>
                       <span className="font-mono">{formatMoney(preview.subtotal)}</span>
                     </div>
                     {preview.tipo === "A" && (
-                      <div className="flex justify-between text-sm">
+                      <div className="flex justify-between text-base">
                         <span className="text-gray-500">IVA 21%</span>
                         <span className="font-mono">{formatMoney(preview.iva)}</span>
                       </div>
                     )}
                     <Separator className="bg-gray-300" />
-                    <div className="flex justify-between text-lg font-bold">
+                    <div className="flex justify-between text-xl font-bold">
                       <span>TOTAL</span>
                       <span className="font-mono">{formatMoney(preview.total)}</span>
                     </div>
@@ -673,14 +673,14 @@ export default function AdminFacturacionPage() {
 
                 {/* Observations */}
                 {preview.observaciones && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
-                    <p className="font-semibold text-xs uppercase mb-1">Observaciones</p>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-base text-yellow-800">
+                    <p className="font-semibold text-sm uppercase mb-1">Observaciones</p>
                     {preview.observaciones}
                   </div>
                 )}
 
                 {/* Footer */}
-                <div className="text-center text-[10px] text-gray-400 pt-4 border-t border-gray-100">
+                <div className="text-center text-sm text-gray-400 pt-4 border-t border-gray-100">
                   <p>Maderera Juan B. Justo — Desde 1981 en Mar del Plata</p>
                   <p>Sucursal: {preview.sucursal} | www.mjbj.ar</p>
                 </div>
@@ -692,29 +692,29 @@ export default function AdminFacturacionPage() {
 
       {/* ==================== NEW INVOICE DIALOG ==================== */}
       <Dialog open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open) resetForm(); }}>
-        <DialogContent className="bg-[#0f0f12] border-white/10 text-white max-w-5xl w-[95vw] max-h-[92vh] overflow-y-auto p-0">
+        <DialogContent className="bg-background border-border text-foreground sm:max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto p-0">
           {/* Dialog header bar */}
-          <div className="sticky top-0 z-10 bg-[#0f0f12] border-b border-white/5 px-6 py-4 flex items-center justify-between">
+          <div className="sticky top-0 z-10 bg-background border-b border-border px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-brand-orange/15 flex items-center justify-center">
                 <FileText className="h-5 w-5 text-brand-orange" />
               </div>
               <div>
-                <h2 className="font-bold text-base">Nueva Factura</h2>
-                <p className="text-[10px] text-white/40">Complete los datos para generar el comprobante</p>
+                <h2 className="font-bold text-lg">Nueva Factura</h2>
+                <p className="text-sm text-muted-foreground">Complete los datos para generar el comprobante</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {/* Live type selector */}
-              <div className="flex gap-1 bg-white/5 rounded-lg p-1">
+              <div className="flex gap-1 bg-muted rounded-lg p-1">
                 {(["A", "B", "C"] as FacturaTipo[]).map((t) => (
                   <button
                     key={t}
                     onClick={() => setNewTipo(t)}
-                    className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${
+                    className={`px-4 py-1.5 rounded-md text-base font-bold transition-all ${
                       newTipo === t
-                        ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20"
-                        : "text-white/40 hover:text-white/60"
+                        ? "boton-accion shadow-lg shadow-brand-orange/20"
+                        : "text-muted-foreground hover:text-muted-foreground"
                     }`}
                   >
                     Tipo {t}
@@ -729,28 +729,28 @@ export default function AdminFacturacionPage() {
             <div className="grid lg:grid-cols-5 gap-6">
               {/* LEFT: Client + Observations (2 cols) */}
               <div className="lg:col-span-2 space-y-5">
-                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-4">
-                  <p className="text-xs text-white/40 uppercase tracking-wider font-semibold flex items-center gap-2">
-                    <Users className="h-3.5 w-3.5" /> Datos del cliente
+                <div className="p-4 rounded-xl bg-muted/40 border border-border space-y-4">
+                  <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold flex items-center gap-2">
+                    <Users className="h-4 w-4" /> Datos del cliente
                   </p>
                   <div className="space-y-3">
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] text-white/50">Nombre / Contacto</Label>
-                      <Input value={newCliente} onChange={(e) => setNewCliente(e.target.value)} placeholder="Nombre completo" className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-9" />
+                      <Label className="text-sm text-muted-foreground">Nombre / Contacto</Label>
+                      <Input value={newCliente} onChange={(e) => setNewCliente(e.target.value)} placeholder="Nombre completo" className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-9" />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] text-white/50">Empresa / Razón Social</Label>
-                      <Input value={newEmpresa} onChange={(e) => setNewEmpresa(e.target.value)} placeholder="Razón social" className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-9" />
+                      <Label className="text-sm text-muted-foreground">Empresa / Razón Social</Label>
+                      <Input value={newEmpresa} onChange={(e) => setNewEmpresa(e.target.value)} placeholder="Razón social" className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-9" />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1.5">
-                        <Label className="text-[10px] text-white/50">CUIT</Label>
-                        <Input value={newCuit} onChange={(e) => setNewCuit(e.target.value)} placeholder="XX-XXXXXXXX-X" className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-9 font-mono text-xs" />
+                        <Label className="text-sm text-muted-foreground">CUIT</Label>
+                        <Input value={newCuit} onChange={(e) => setNewCuit(e.target.value)} placeholder="XX-XXXXXXXX-X" className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-9 font-mono text-sm" />
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-[10px] text-white/50">Cond. IVA</Label>
+                        <Label className="text-sm text-muted-foreground">Cond. IVA</Label>
                         <Select value={newCondicion} onValueChange={(v) => v && setNewCondicion(v)}>
-                          <SelectTrigger className="bg-white/5 border-white/10 text-white h-9 text-xs">
+                          <SelectTrigger className="bg-muted border-border text-foreground h-9 text-sm">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -763,69 +763,69 @@ export default function AdminFacturacionPage() {
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] text-white/50">Domicilio</Label>
-                      <Input value={newDireccion} onChange={(e) => setNewDireccion(e.target.value)} placeholder="Dirección completa" className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-9" />
+                      <Label className="text-sm text-muted-foreground">Domicilio</Label>
+                      <Input value={newDireccion} onChange={(e) => setNewDireccion(e.target.value)} placeholder="Dirección completa" className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-9" />
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
-                  <Label className="text-[10px] text-white/50">Observaciones (opcional)</Label>
-                  <Textarea value={newObs} onChange={(e) => setNewObs(e.target.value)} placeholder="Notas, condiciones de pago, plazos, etc." rows={3} className="bg-white/5 border-white/10 text-white placeholder:text-white/20 resize-none text-sm" />
+                <div className="p-4 rounded-xl bg-muted/40 border border-border space-y-3">
+                  <Label className="text-sm text-muted-foreground">Observaciones (opcional)</Label>
+                  <Textarea value={newObs} onChange={(e) => setNewObs(e.target.value)} placeholder="Notas, condiciones de pago, plazos, etc." rows={3} className="bg-muted border-border text-foreground placeholder:text-muted-foreground resize-none text-base" />
                 </div>
 
                 {/* Totals card */}
                 <div className="p-4 rounded-xl bg-brand-orange/5 border border-brand-orange/20 space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-white/50">Subtotal</span>
-                    <span className="font-mono text-white font-semibold">{formatMoney(newSubtotal)}</span>
+                  <div className="flex justify-between text-base">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="font-mono text-foreground font-semibold">{formatMoney(newSubtotal)}</span>
                   </div>
                   {newTipo === "A" && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-white/50">IVA 21%</span>
-                      <span className="font-mono text-white font-semibold">{formatMoney(newIva)}</span>
+                    <div className="flex justify-between text-base">
+                      <span className="text-muted-foreground">IVA 21%</span>
+                      <span className="font-mono text-foreground font-semibold">{formatMoney(newIva)}</span>
                     </div>
                   )}
-                  <Separator className="bg-white/10" />
+                  <Separator className="bg-muted" />
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold text-brand-orange">TOTAL</span>
-                    <span className="text-2xl font-black font-mono text-brand-orange">{formatMoney(newTotal)}</span>
+                    <span className="text-xl font-bold text-brand-orange">TOTAL</span>
+                    <span className="text-3xl font-black font-mono text-brand-orange">{formatMoney(newTotal)}</span>
                   </div>
                 </div>
               </div>
 
               {/* RIGHT: Items table (3 cols) */}
               <div className="lg:col-span-3 space-y-4">
-                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
+                <div className="p-4 rounded-xl bg-muted/40 border border-border">
                   <div className="flex items-center justify-between mb-4">
-                    <p className="text-xs text-white/40 uppercase tracking-wider font-semibold flex items-center gap-2">
-                      <Package className="h-3.5 w-3.5" /> Detalle de items
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold flex items-center gap-2">
+                      <Package className="h-4 w-4" /> Detalle de items
                     </p>
-                    <Button size="sm" variant="outline" className="border-brand-orange/30 text-brand-orange hover:bg-brand-orange/10 text-xs h-7" onClick={addNewItem}>
-                      <Plus className="h-3 w-3 mr-1" /> Agregar
+                    <Button size="sm" variant="outline" className="border-brand-orange/30 text-brand-orange hover:bg-brand-orange/10 text-sm h-7" onClick={addNewItem}>
+                      <Plus className="h-4 w-4 mr-1" /> Agregar
                     </Button>
                   </div>
 
                   {/* Items header */}
                   <div className="grid grid-cols-12 gap-2 px-3 mb-2">
-                    <p className="col-span-5 text-[10px] text-white/30 uppercase tracking-wider">Descripción</p>
-                    <p className="col-span-1 text-[10px] text-white/30 uppercase tracking-wider text-center">Cant.</p>
-                    <p className="col-span-2 text-[10px] text-white/30 uppercase tracking-wider">Unidad</p>
-                    <p className="col-span-2 text-[10px] text-white/30 uppercase tracking-wider text-right">P. Unitario</p>
-                    <p className="col-span-1 text-[10px] text-white/30 uppercase tracking-wider text-right">Subtotal</p>
+                    <p className="col-span-5 text-sm text-muted-foreground uppercase tracking-wider">Descripción</p>
+                    <p className="col-span-1 text-sm text-muted-foreground uppercase tracking-wider text-center">Cant.</p>
+                    <p className="col-span-2 text-sm text-muted-foreground uppercase tracking-wider">Unidad</p>
+                    <p className="col-span-2 text-sm text-muted-foreground uppercase tracking-wider text-right">P. Unitario</p>
+                    <p className="col-span-1 text-sm text-muted-foreground uppercase tracking-wider text-right">Subtotal</p>
                     <p className="col-span-1" />
                   </div>
 
                   {/* Items rows */}
                   <div className="space-y-1.5">
                     {newItems.map((item, i) => (
-                      <div key={i} className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors">
+                      <div key={i} className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-muted/40 border border-border hover:border-border transition-colors">
                         <div className="col-span-5">
                           <Input
                             value={item.descripcion}
                             onChange={(e) => updateNewItem(i, "descripcion", e.target.value)}
                             placeholder="Producto o servicio"
-                            className="bg-transparent border-0 text-white placeholder:text-white/20 h-8 text-sm px-2 focus-visible:ring-0"
+                            className="bg-transparent border-0 text-foreground placeholder:text-muted-foreground h-8 text-base px-2 focus-visible:ring-0"
                           />
                         </div>
                         <div className="col-span-1">
@@ -834,14 +834,14 @@ export default function AdminFacturacionPage() {
                             value={item.cantidad}
                             onChange={(e) => updateNewItem(i, "cantidad", parseInt(e.target.value) || 0)}
                             min="1"
-                            className="bg-transparent border-0 text-white h-8 text-sm text-center px-1 focus-visible:ring-0"
+                            className="bg-transparent border-0 text-foreground h-8 text-base text-center px-1 focus-visible:ring-0"
                           />
                         </div>
                         <div className="col-span-2">
                           <Input
                             value={item.unidad}
                             onChange={(e) => updateNewItem(i, "unidad", e.target.value)}
-                            className="bg-transparent border-0 text-white h-8 text-sm px-2 focus-visible:ring-0"
+                            className="bg-transparent border-0 text-foreground h-8 text-base px-2 focus-visible:ring-0"
                           />
                         </div>
                         <div className="col-span-2">
@@ -850,18 +850,18 @@ export default function AdminFacturacionPage() {
                             value={item.precioUnitario || ""}
                             onChange={(e) => updateNewItem(i, "precioUnitario", parseInt(e.target.value) || 0)}
                             placeholder="0"
-                            className="bg-transparent border-0 text-white h-8 text-sm font-mono text-right px-2 focus-visible:ring-0"
+                            className="bg-transparent border-0 text-foreground h-8 text-base font-mono text-right px-2 focus-visible:ring-0"
                           />
                         </div>
                         <div className="col-span-1 text-right">
-                          <p className="text-xs font-mono text-white/60 pr-1">
+                          <p className="text-sm font-mono text-muted-foreground pr-1">
                             {item.subtotal > 0 ? formatMoney(item.subtotal) : "—"}
                           </p>
                         </div>
                         <div className="col-span-1 flex justify-end">
                           {newItems.length > 1 && (
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-white/20 hover:text-red-400" onClick={() => removeNewItem(i)}>
-                              <X className="h-3 w-3" />
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-700" onClick={() => removeNewItem(i)}>
+                              <X className="h-4 w-4" />
                             </Button>
                           )}
                         </div>
@@ -872,7 +872,7 @@ export default function AdminFacturacionPage() {
                   {/* Quick add hint */}
                   <button
                     onClick={addNewItem}
-                    className="w-full mt-2 py-2.5 rounded-lg border border-dashed border-white/10 text-xs text-white/20 hover:text-white/40 hover:border-white/20 transition-colors"
+                    className="w-full mt-2 py-2.5 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:text-muted-foreground hover:border-foreground/30 transition-colors"
                   >
                     + Agregar otra línea
                   </button>
@@ -881,14 +881,14 @@ export default function AdminFacturacionPage() {
                 {/* Submit buttons */}
                 <div className="flex gap-3">
                   <Button
-                    className="flex-1 bg-brand-orange hover:bg-brand-orange-dark text-white h-11 font-semibold"
+                    className="flex-1 boton-accion h-11 font-semibold"
                     disabled={!newCliente || newItems.every((i) => !i.descripcion)}
                     onClick={handleCreate}
                   >
-                    <FileText className="h-4 w-4 mr-2" /> Guardar Borrador
+                    <FileText className="h-5 w-5 mr-2" /> Guardar Borrador
                   </Button>
                   <Button
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-11 font-semibold"
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-foreground h-11 font-semibold"
                     disabled={!newCliente || newItems.every((i) => !i.descripcion)}
                     onClick={() => {
                       handleCreate();
@@ -905,7 +905,7 @@ export default function AdminFacturacionPage() {
                       }, 100);
                     }}
                   >
-                    <CheckCircle className="h-4 w-4 mr-2" /> Crear y Emitir
+                    <CheckCircle className="h-5 w-5 mr-2" /> Crear y Emitir
                   </Button>
                 </div>
               </div>

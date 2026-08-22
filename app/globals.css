@@ -182,3 +182,188 @@ input::placeholder, textarea::placeholder {
   );
   border-radius: 2px;
 }
+
+/* ---------------------------------------------------------------------------
+   Panel de gestión — superficies y profundidad
+
+   El panel es una herramienta que se usa muchas horas, así que sigue tres
+   reglas:
+
+   1. El color aparece cuando algo pide atención. Un stock normal se lee en
+      gris; el naranja queda para la acción principal y para lo que está por
+      debajo del mínimo.
+   2. La escala es grande: 16px de base, controles de 40px, nada por debajo de
+      13px. Lo usa gente que no ve de cerca.
+   3. Las superficies tienen jerarquía. No todas las tarjetas pesan lo mismo, y
+      eso se tiene que ver sin leerlas: el contenido principal se apoya sobre el
+      fondo con sombra y borde propio, lo auxiliar queda hundido y sin sombra, y
+      lo que requiere una decisión lleva un borde de acento. Cuando todo se ve
+      igual, hay que leer cada cosa para saber qué es.
+--------------------------------------------------------------------------- */
+
+/* Color por sucursal.
+
+   El color sigue a la sucursal, no al orden en que aparece: Casa Central es
+   siempre naranja y Aserradero siempre azul, en el gráfico, en la leyenda y en
+   cualquier vista futura.
+
+   El azul reemplaza al verde de marca que se usaba antes. Naranja y verde se
+   separan apenas ΔE 5.2 en visión protán: una de cada doce personas veía las
+   dos barras del mismo color. Con este azul la separación sube a 24.7 y el par
+   pasa las seis verificaciones de la paleta. */
+:root {
+  --sucursal-central: oklch(0.68 0.19 48);
+  --sucursal-aserradero: oklch(0.48 0.13 250);
+}
+
+.panel {
+  font-size: 16px;
+  line-height: 1.55;
+
+  /* El gris de texto secundario llega a 8.8:1 sobre el fondo del panel. */
+  --muted-foreground: oklch(0.40 0.012 60);
+
+  /* Bordes visibles: el token general queda en 1.35:1 sobre blanco, que a
+     efectos prácticos es invisible y hace que todo se sienta plano. */
+  --linea: oklch(0.80 0.012 70);
+  --linea-suave: oklch(0.88 0.01 72);
+
+  /* El naranja de marca sobre blanco da 3.08:1, insuficiente para texto. Los
+     botones usan este otro, que llega a 4.59:1 y se sigue leyendo como el
+     mismo color. */
+  --accion: oklch(0.58 0.19 45);
+  --accion-hover: oklch(0.50 0.18 42);
+}
+
+/* Fondo del panel: papel con grano y una veta apenas insinuada, para que las
+   tarjetas se apoyen sobre algo en lugar de flotar sobre un plano vacío. */
+.panel-fondo {
+  position: relative;
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      1100px 420px at 8% -8%,
+      oklch(0.68 0.19 48 / 0.05),
+      transparent 62%
+    ),
+    radial-gradient(
+      900px 500px at 100% 0%,
+      oklch(0.48 0.13 250 / 0.035),
+      transparent 60%
+    ),
+    repeating-linear-gradient(
+      180deg,
+      oklch(0.45 0.08 65 / 0.022) 0px,
+      oklch(0.45 0.08 65 / 0.022) 1px,
+      transparent 1px,
+      transparent 7px
+    ),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+/* ---- Niveles de superficie ------------------------------------------------ */
+
+/* Nivel 1 — contenido principal. Se levanta del fondo. */
+.tarjeta {
+  background-color: var(--card);
+  border-radius: 0.875rem;
+  box-shadow:
+    0 0 0 1px var(--linea),
+    0 1px 2px oklch(0.3 0.02 60 / 0.05),
+    0 4px 12px -8px oklch(0.3 0.02 60 / 0.12);
+  transition:
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+/* Nivel 0 — auxiliar. Se hunde de verdad: la sombra interior desde arriba es lo
+   que hace leer el plano por debajo del resto. Solo bajarle el tono lo deja
+   gris, no hundido. */
+.tarjeta-hundida {
+  background-color: oklch(0.955 0.007 78);
+  border-radius: 0.875rem;
+  box-shadow:
+    inset 0 2px 5px oklch(0.35 0.02 60 / 0.09),
+    inset 0 1px 1px oklch(0.35 0.02 60 / 0.06),
+    inset 0 0 0 1px oklch(0.86 0.012 72);
+}
+
+/* Nivel 2 — pide una decisión. El borde de acento la separa del resto. */
+.tarjeta-atencion {
+  background-color: var(--card);
+  border-radius: 0.875rem;
+  box-shadow:
+    0 0 0 1.5px oklch(0.68 0.19 48 / 0.45),
+    0 2px 4px oklch(0.68 0.19 48 / 0.08),
+    0 8px 20px -10px oklch(0.5 0.12 50 / 0.22);
+}
+
+.tarjeta-activa:hover {
+  box-shadow:
+    0 0 0 1.5px oklch(0.68 0.19 48 / 0.45),
+    0 6px 18px -6px oklch(0.3 0.03 60 / 0.16);
+  transform: translateY(-1px);
+}
+
+/* Encabezado de una tarjeta: separa el título del contenido sin una línea dura. */
+.tarjeta-cabecera {
+  background-image: linear-gradient(
+    to bottom,
+    oklch(0.975 0.006 78),
+    transparent
+  );
+  border-bottom: 1px solid var(--linea-suave);
+}
+
+/* Botón de acción principal, con el naranja que contrasta con el texto blanco. */
+.boton-accion {
+  background-color: var(--accion);
+  color: #fff;
+}
+
+.boton-accion:hover {
+  background-color: var(--accion-hover);
+}
+
+/* Las líneas del panel usan el borde visible en vez del token general. */
+.panel :is(table, thead, tbody, tr, td, th).border-b,
+.panel .border-b,
+.panel .border-t,
+.panel .border,
+.panel .divide-y > * + * {
+  border-color: var(--linea-suave);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tarjeta,
+  .tarjeta-activa:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* Cifras tabulares para todo dato numérico: cantidades, precios, medidas y
+   códigos. Alineadas en columna se comparan de un vistazo entre sucursales,
+   que es la lectura que más se repite en este negocio. */
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
+}
+
+/* Los controles del panel crecen a 40px, el mínimo que se acierta con el dedo
+   o con un pulso poco firme. */
+.panel :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]),
+.panel button:not([data-slot="dropdown-menu-item"]) {
+  min-height: 2.5rem;
+}
+
+.panel :is(input, textarea, select) {
+  font-size: 1rem;
+}
+
+/* Barra de acento del ítem activo del menú. */
+.nav-activa {
+  box-shadow: inset 2px 0 0 0 var(--color-brand-orange);
+}

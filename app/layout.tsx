@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { BudgetProvider } from "@/lib/budget-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -70,10 +69,8 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col overflow-x-hidden">
         <TooltipProvider>
-          <BudgetProvider>
-            {children}
-            <Toaster />
-          </BudgetProvider>
+          {children}
+          <Toaster />
         </TooltipProvider>
       </body>
     </html>

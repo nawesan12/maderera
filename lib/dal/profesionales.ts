@@ -217,6 +217,13 @@ export interface EventoConDetalle extends EventoPublico {
   descripcion: string | null;
   /** Si quien mira ya está anotado. */
   miInscripcion: { id: string; estado: string } | null;
+  /**
+   * Si el evento ya pasó.
+   *
+   * Lo resuelve el DAL y no la pantalla porque depende de la hora actual, y
+   * leerla durante el render de un Server Component es una impureza.
+   */
+  yaPaso: boolean;
 }
 
 export async function eventoPorSlug(
@@ -271,5 +278,6 @@ export async function eventoPorSlug(
     ...evento,
     precio: Number(evento.precio),
     miInscripcion: mia ?? null,
+    yaPaso: evento.inicia.getTime() < Date.now(),
   };
 }

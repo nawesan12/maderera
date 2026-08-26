@@ -2,7 +2,7 @@
 
 > Documento de trabajo interno del PRESTADOR. Traduce el contrato firmado
 > (`Contrato — Maderera Juan B. Justo.pdf`, 15 pp.) a un plan ejecutable.
-> Última actualización: 26/08/2026 (novena pasada, en curso).
+> Última actualización: 26/08/2026 (décima pasada: migración de datos).
 
 ---
 
@@ -274,17 +274,84 @@ defecto de los $528.300.
   leyenda del envío gratis, el aviso de la barra superior— se cambian desde el
   panel.
 
+**Décima pasada — migración desde el sistema anterior (26/08/2026):**
+
+Cláusula 1.9. `/admin/migracion`, solo para administración: reescribe cartera,
+catálogo y saldos de una sola vez y no es una acción para un mostrador apurado.
+
+- **Se construyó sin el dump, y esa es la decisión de diseño.** En vez de
+  programar contra un formato que todavía no vimos, se declara qué necesita
+  cada tabla de destino (`lib/migracion/entidades.ts`) y la pantalla pide que
+  alguien diga qué columna del archivo es cada cosa. El día que llegue la
+  exportación no hay que tocar código: hay que mapear seis columnas.
+- **Cuatro cosas migrables**: clientes, productos con sus medidas y precios,
+  existencias por sucursal y saldos de cuenta corriente. Cada una dice en
+  pantalla en qué tablas escribe y cómo reconoce un registro ya migrado.
+- **El mapeo sale hecho la primera vez.** Cada campo declara los nombres con
+  los que un sistema de escritorio argentino suele llamarlo, y gana el sinónimo
+  más largo: sin esa regla "Precio Profesional" se lo lleva el campo del precio
+  de lista —porque también contiene "precio"— y el catálogo entero queda
+  publicado con el precio de gremio.
+- **Al lado de cada campo se muestra el primer valor real del archivo.** Elegir
+  una columna por su nombre y no ver el dato es exactamente como se termina
+  migrando el teléfono adentro del CUIT.
+- **Vista previa del archivo entero antes de escribir nada**, con las filas
+  ordenadas por lo que hay que mirar: primero lo que no entra, después lo que
+  entra con reparos.
+- **Todo es repetible.** Cada entidad se identifica por una clave natural —el
+  código del sistema viejo (`customers.codigoLegacy`, columna nueva), el SKU,
+  la sucursal— y volver a correr el mismo archivo actualiza en vez de duplicar.
+  Es lo que permite corregir cuarenta filas y volver a subir el archivo entero
+  sin pensarlo dos veces, que es como termina saliendo una migración de verdad.
+  En saldos la protección es más fuerte: un movimiento de saldo inicial ya
+  cargado se omite, porque cargarlo dos veces duplica la deuda de una persona.
+- **Por lotes de 200 filas, cada lote en su transacción**, con el avance a la
+  vista. Una sola transacción para veinte mil filas bloquea media base durante
+  minutos y, si se corta, no deja nada; con lotes, un corte deja la mitad
+  adentro, que es justamente lo que la repetibilidad vuelve inofensivo.
+- **Informe de integridad**: contrasta lo que decía el archivo contra lo que
+  quedó en la base. En saldos, la suma. Es el control que ningún contador de
+  filas reemplaza: en la prueba detectó los $12.000 de un cliente que no tenía
+  ficha, que las cifras de "procesadas" daban por buenas.
+- **Las filas que no entraron se bajan como CSV** con línea y motivo, que es lo
+  que hay que mandarle a quien tiene el sistema viejo para que las corrija.
+
+**Qué es en realidad "Quality Software"** (averiguado, no supuesto): es **ISIS
+ERP Manager**, de Quality Soft Argentina, sobre SQL Server. Exporta **grilla por
+grilla a Excel** desde cualquier listado —no tiene una exportación única—, así
+que la migración por entidad separada no es una preferencia nuestra: es la forma
+del archivo que va a llegar. De ahí también que el lector avise en claro cuando
+lo que se sube es un `.xlsx` en vez de un `.csv`, que es el error más probable.
+
+**Dos defectos de lectura corregidos en el camino**, los dos encontrados
+probando con un archivo real:
+
+- La comilla se tomaba como delimitador en cualquier posición, así que `2" x 4"
+  x 3.60m` quedaba como `2 x 4 x 3.60m`. En una maderera la pulgada está en
+  todas las medidas. Ahora la comilla solo delimita si abre el campo.
+- El archivo se leía línea por línea, y un domicilio de dos renglones —que
+  Excel guarda entre comillas— partía el registro en dos y corría todas las
+  columnas de ahí en adelante. Ahora el recorrido es carácter por carácter.
+
+`lib/csv.ts` es el lector compartido: separador, codificación —los sistemas de
+escritorio viejos guardan en Windows-1252 y "Cañuelas" leído como UTF-8 sale
+roto—, comillas y números con coma decimal. La importación de precios, que
+tenía su propia copia, ahora usa el mismo.
+
 ### Lo que falta para cerrar el contrato
 
 | # | Qué | Cláusula | Depende de |
 |---|---|---|---|
-| 1 | **Migración desde Quality Software**: `/admin/migracion` con subida de archivo, mapeo de columnas, vista previa, validación, ejecución por lotes en transacción e informe de integridad. Reutiliza `lib/precios-csv.ts`. **Se construye sin el dump**: el mapeo de columnas es justamente lo que permite no saber todavía qué exporta el sistema. | 1.9 | Nada para construirlo; el dump para usarlo |
-| 2 | **SEO y publicación**: `app/sitemap.ts` y `app/robots.ts`, metadata dinámica en catálogo y ficha, datos estructurados (`Organization`, `LocalBusiness` por sucursal, `Product` con `offers`, `BreadcrumbList`), `opengraph-image.tsx`, y limpieza de los `"use client"` de más que quedan en páginas públicas (calculadora, contacto, nosotros). | 1.8 | Nada |
-| 3 | **Productos sugeridos**: la tabla `related_products` ya está creada, con tipos `complementario` y `similar`. Falta la carga desde la ficha de producto del panel y mostrarlos en la ficha pública y en el carrito, con respaldo automático por categoría cuando no hay ninguno cargado. | 1.3 | Nada |
-| 4 | **Guías escritas** (`/admin/ayuda`): paso a paso dentro del panel para gente que viene de un sistema de escritorio, más `docs/GUIAS/`. Se escriben con las pantallas ya terminadas. | 1.10 | Nada |
-| 5 | **`audit_log` transversal** de las acciones del panel. No lo pide el contrato; lo pide operar con varias personas cargando. | — | Nada |
-| 6 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Decisión de infraestructura (R5) y acceso al dominio |
-| 7 | **Capacitación presencial** y acompañamiento en la transición. | 1.10 | Fecha con el cliente |
+| 1 | **SEO y publicación**: `app/sitemap.ts` y `app/robots.ts`, metadata dinámica en catálogo y ficha, datos estructurados (`Organization`, `LocalBusiness` por sucursal, `Product` con `offers`, `BreadcrumbList`), `opengraph-image.tsx`, y limpieza de los `"use client"` de más que quedan en páginas públicas (calculadora, contacto, nosotros). | 1.8 | Nada |
+| 2 | **Productos sugeridos**: la tabla `related_products` ya está creada, con tipos `complementario` y `similar`. Falta la carga desde la ficha de producto del panel y mostrarlos en la ficha pública y en el carrito, con respaldo automático por categoría cuando no hay ninguno cargado. | 1.3 | Nada |
+| 3 | **Guías escritas** (`/admin/ayuda`): paso a paso dentro del panel para gente que viene de un sistema de escritorio, más `docs/GUIAS/`. Se escriben con las pantallas ya terminadas. | 1.10 | Nada |
+| 4 | **`audit_log` transversal** de las acciones del panel. No lo pide el contrato; lo pide operar con varias personas cargando. | — | Nada |
+| 5 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Decisión de infraestructura (R5) y acceso al dominio |
+| 6 | **Capacitación presencial** y acompañamiento en la transición. | 1.10 | Fecha con el cliente |
+
+La migración (1.9) ya no está en este cuadro: **el código está hecho y probado
+de punta a punta**. Lo que falta es el archivo del cliente, y está anotado como
+insumo pendiente.
 
 De los cobros, los avisos y ARCA no falta código: falta lo que tramita el
 cliente —credenciales de Mercado Pago, casilla con dominio verificado,
@@ -310,7 +377,7 @@ ni pagos.
 | Tienda, checkout, pagos, envíos | ✅ Hecho (7ª pasada: cobros, remitos y seguimiento) | — |
 | Portal de clientes | ✅ Hecho (4ª y 7ª pasada) | — |
 | Portal de profesionales | ✅ Hecho (8ª pasada) | — |
-| Migración Quality Software | ❌ No arrancada | Se construye entero |
+| Migración Quality Software | ✅ Hecha (10ª pasada), a la espera del archivo | — |
 
 **Estimación gruesa: el prototipo cubre ~20% del contrato.** Es la Etapa 1 casi entera,
 y sirve como maqueta de referencia para el resto.
@@ -623,3 +690,6 @@ igual y es la base sobre la que después se apoya la integración.
 - [Neon — planes y límites](https://neon.com/docs/introduction/plans)
 - [Neon — NextAuth vs Neon Auth vs Better Auth](https://neon.com/guides/nextauth-neon-auth-better-auth-postgres)
 - [Neon — Managed Better Auth con Next.js](https://neon.com/guides/neon-auth-nextjs)
+- [Quality Soft Argentina — el sistema del que se migra](https://www.qualitysoftargentina.com/)
+- [ISIS ERP Manager — manual de usuario](https://erp.sistemaisis.com/manual-de-usuario/)
+- [ISIS ERP Manager — grillas: exportar a Excel](https://erp.sistemaisis.com/manual-de-usuario/generalidades/)

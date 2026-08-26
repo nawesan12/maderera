@@ -25,6 +25,14 @@ export interface EventoAdmin {
   reservados: number;
   /** Cuánto se cobró de verdad: solo las inscripciones confirmadas. */
   recaudado: number;
+  /**
+   * Si todavía no pasó.
+   *
+   * Lo resuelve el DAL y no la pantalla porque depende de la hora actual, y
+   * leerla durante el render de un Server Component es una impureza: el mismo
+   * render puede dar dos resultados distintos.
+   */
+  proximo: boolean;
 }
 
 export async function listarEventos(): Promise<EventoAdmin[]> {
@@ -61,11 +69,14 @@ export async function listarEventos(): Promise<EventoAdmin[]> {
     .leftJoin(branches, eq(branches.id, events.branchId))
     .orderBy(desc(events.inicia));
 
+  const ahora = Date.now();
+
   return filas.map((f) => ({
     ...f,
     precio: Number(f.precio),
     // Lo confirmado por el precio: las reservas sin pagar no son plata.
     recaudado: Number(f.precio) * f.confirmados,
+    proximo: f.inicia.getTime() >= ahora,
   }));
 }
 

@@ -53,6 +53,17 @@ export const customers = pgTable(
     limiteCredito: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
     asesor: text(),
     notas: text(),
+    /**
+     * Código de esta ficha en el sistema anterior (cláusula 1.9).
+     *
+     * Es lo único que permite volver a correr la migración sin duplicar la
+     * cartera entera, y lo que después ata cada saldo de cuenta corriente a su
+     * ficha: el CUIT no alcanza porque media cartera de una maderera son
+     * consumidores finales sin CUIT cargado. Queda para siempre, no solo
+     * durante la migración, porque el cliente va a seguir nombrando a la gente
+     * por el número que usaba antes.
+     */
+    codigoLegacy: text(),
     active: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -60,6 +71,7 @@ export const customers = pgTable(
   (t) => [
     index("customers_nombre_idx").on(t.nombre),
     index("customers_cuit_idx").on(t.cuit),
+    uniqueIndex("customers_codigo_legacy_idx").on(t.codigoLegacy),
     uniqueIndex("customers_user_idx").on(t.userId),
   ],
 );

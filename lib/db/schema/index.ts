@@ -6,6 +6,7 @@ export * from "./customers";
 export * from "./entregas";
 export * from "./facturacion";
 export * from "./inventory";
+export * from "./migracion";
 export * from "./notificaciones";
 export * from "./pagos";
 export * from "./profesionales";

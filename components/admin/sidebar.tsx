@@ -11,6 +11,7 @@ import {
   CalendarDays,
   Tags,
   Building2,
+  DatabaseZap,
   ClipboardList,
   FileText,
   Landmark,
@@ -77,6 +78,7 @@ const secciones = [
       { href: "/admin/arca", icon: Landmark, label: "ARCA" },
       { href: "/admin/avisos", icon: Mail, label: "Avisos" },
       { href: "/admin/sucursales", icon: Building2, label: "Sucursales" },
+      { href: "/admin/migracion", icon: DatabaseZap, label: "Migración" },
     ],
   },
 ];

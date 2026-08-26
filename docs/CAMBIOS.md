@@ -38,6 +38,31 @@ se notifica por escrito invocando la cláusula 5.3.
 | Cuenta bancaria, CBU y alias | Pagos por transferencia | — | Pendiente |
 | Alta del número en WhatsApp Business API | Que los avisos salgan de verdad | — | Pendiente |
 | Casilla de correo y dominio verificado para el remitente | Que los avisos por correo salgan de verdad | — | Pendiente |
-| Dump de Quality Software | La migración de datos (1.9) | — | Pendiente |
+| Exportaciones del sistema anterior en CSV | Usar la migración de datos (1.9), que ya está construida | — | Pendiente |
 | Fotos de productos y lista de precios vigente | Reemplazar los datos de desarrollo | — | Pendiente |
 | Acceso al dominio `mjbj.ar` | Publicación (1.8) | — | Pendiente |
+
+### Qué pedir exactamente para la migración
+
+El sistema anterior es **ISIS ERP Manager** (Quality Soft Argentina), sobre SQL
+Server. No tiene una exportación única: **cada listado exporta su propia grilla
+a Excel**. Así que no hay que pedir "un dump", hay que pedir cuatro archivos, y
+cada uno se sube por separado en `/admin/migracion`:
+
+| Archivo | De qué listado sale | Qué columnas conviene que tenga |
+|---|---|---|
+| Clientes | Listado de clientes | Código, razón social, CUIT, condición IVA, correo, teléfono, domicilio, límite de crédito |
+| Artículos | Listado de artículos con precios | Código, descripción, rubro, medida, unidad, precio de lista, precio profesional |
+| Existencias | Informe de stock por depósito | Código, depósito, existencia, stock mínimo |
+| Cuentas corrientes | Resumen de saldos al día del corte | Código de cliente, nombre, saldo |
+
+Tres precisiones que evitan una vuelta entera:
+
+- **Guardados como CSV, no como .xlsx.** En Excel: «Guardar como» → «CSV UTF-8».
+  Si llega un .xlsx, la pantalla lo detecta y lo dice, pero es un viaje perdido.
+- **Los nombres de las columnas no importan**: el asistente pregunta cuál es
+  cuál. Lo que importa es que **estén** las de la tabla, sobre todo el **código
+  de cliente**, que es lo que ata cada saldo a su ficha y lo que permite volver
+  a correr la migración sin duplicar la cartera.
+- **El orden importa**: clientes antes que saldos, artículos antes que
+  existencias.

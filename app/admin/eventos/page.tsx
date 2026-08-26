@@ -22,9 +22,8 @@ export const metadata: Metadata = { title: "Eventos" };
 export default async function EventosAdminPage() {
   const eventos = await listarEventos();
 
-  const ahora = Date.now();
-  const proximos = eventos.filter((e) => e.inicia.getTime() >= ahora);
-  const pasados = eventos.filter((e) => e.inicia.getTime() < ahora);
+  const proximos = eventos.filter((e) => e.proximo);
+  const pasados = eventos.filter((e) => !e.proximo);
 
   const asistentes = await Promise.all(
     proximos.map(async (e) => [e.id, await asistentesDe(e.id)] as const),

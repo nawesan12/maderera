@@ -7,7 +7,7 @@ import { getSession } from "@/lib/dal/session";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import { estadoProfesional, eventoPorSlug } from "@/lib/dal/profesionales";
 import { cobrosEnVivo } from "@/lib/pagos";
-import { fechaLarga, formatearMonto, hora } from "@/lib/formato";
+import { fechaLarga, hora } from "@/lib/formato";
 import { Anotarse } from "./anotarse";
 
 export async function generateMetadata({
@@ -57,7 +57,7 @@ export default async function EventoPage({
 
   const lugares = evento.cupo > 0 ? evento.cupo - evento.inscriptos : null;
   const agotado = lugares !== null && lugares <= 0;
-  const yaPaso = evento.inicia.getTime() < Date.now();
+  const { yaPaso } = evento;
 
   return (
     <div className="min-h-screen bg-brand-cream/30">

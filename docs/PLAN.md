@@ -404,8 +404,9 @@ eso.
 | 1 | **Productos sugeridos**: la tabla `related_products` ya está creada, con tipos `complementario` y `similar`. Falta la carga desde la ficha de producto del panel y mostrarlos en la ficha pública y en el carrito, con respaldo automático por categoría cuando no hay ninguno cargado. | 1.3 | Nada |
 | 2 | **Guías escritas** (`/admin/ayuda`): paso a paso dentro del panel para gente que viene de un sistema de escritorio, más `docs/GUIAS/`. Se escriben con las pantallas ya terminadas. | 1.10 | Nada |
 | 3 | **`audit_log` transversal** de las acciones del panel. No lo pide el contrato; lo pide operar con varias personas cargando. | — | Nada |
-| 4 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Decisión de infraestructura (R5) y acceso al dominio |
-| 5 | **Capacitación presencial** y acompañamiento en la transición. | 1.10 | Fecha con el cliente |
+| 4 | **`/admin/sucursales` contra la base**: es la única pantalla del panel que sigue siendo maqueta —lee `lib/dashboard-data.ts`, el mock del prototipo, con las direcciones y las métricas escritas a mano—. Falta la edición de la ficha (incluidos `servicios`, `destacados` e `imagenUrl`, que ya existen en la tabla) y las métricas reales por sucursal. Lo mismo `components/admin/activity-bell.tsx`. | — | Nada |
+| 5 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Decisión de infraestructura (R5) y acceso al dominio |
+| 6 | **Capacitación presencial** y acompañamiento en la transición. | 1.10 | Fecha con el cliente |
 
 El SEO (1.8) sale del cuadro salvo la publicación en sí, que necesita el
 dominio. La migración (1.9) tampoco está: **el código está hecho y probado
@@ -431,7 +432,7 @@ ni pagos.
 | 10 páginas públicas | ✅ Server Components contra la base (11ª pasada) | — |
 | `lib/calculations.ts` (4 calculadoras, 170 líneas) | ✅ Lógica pura correcta | Se conserva tal cual |
 | `lib/budget-context.tsx` (carrito en memoria) | 🟡 Solo cliente, se pierde al recargar | Se reescribe con persistencia |
-| Panel admin (hoy 16 secciones) | ✅ Todo contra la base | — |
+| Panel admin (hoy 17 secciones) | 🟡 Todo contra la base salvo `/admin/sucursales` | Se reconecta |
 | `app/admin/facturacion` | 🟡 918 líneas de maqueta completa (alta, IVA, impresión) | Se conecta a la base y a ARCA |
 | Tienda, checkout, pagos, envíos | ✅ Hecho (7ª pasada: cobros, remitos y seguimiento) | — |
 | Portal de clientes | ✅ Hecho (4ª y 7ª pasada) | — |

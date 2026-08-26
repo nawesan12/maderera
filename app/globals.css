@@ -367,3 +367,405 @@ input::placeholder, textarea::placeholder {
 .nav-activa {
   box-shadow: inset 2px 0 0 0 var(--color-brand-orange);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Comprobantes impresos                                                       */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * El comprobante se imprime en A4 y se mira en pantalla antes de imprimir, así
+ * que tiene su propia hoja de estilos: tipografía más chica que el resto del
+ * panel, todo en blanco y negro salvo el acento de marca, y medidas en
+ * milímetros para que lo que se ve sea lo que sale de la impresora.
+ */
+
+.comprobante-hoja {
+  --tinta: #1a1a1a;
+  --tinta-suave: #666;
+  --linea: #e5e5e5;
+  background: #f4f4f5;
+  min-height: 100vh;
+  color: var(--tinta);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+.comprobante-hoja .barra {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  background: #1a1a1a;
+  padding: 0.75rem 1.5rem;
+}
+
+.comprobante-hoja .boton-imprimir {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  background: oklch(0.68 0.19 48);
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  transition: background-color 0.15s;
+}
+
+.comprobante-hoja .boton-imprimir:hover {
+  background: oklch(0.6 0.19 48);
+}
+
+.comprobante-hoja .hoja {
+  position: relative;
+  max-width: 210mm;
+  margin: 1.5rem auto;
+  background: #fff;
+  padding: 14mm 12mm;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.08);
+}
+
+.comprobante-hoja .marca-agua {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-32deg);
+  font-size: 5rem;
+  font-weight: 900;
+  letter-spacing: 0.5rem;
+  text-transform: uppercase;
+  color: rgb(0 0 0 / 0.06);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Cabecera: emisor | letra | numeración */
+.comprobante-hoja .cabecera {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1rem;
+  align-items: start;
+  border-bottom: 2px solid var(--tinta);
+  padding-bottom: 1rem;
+}
+
+.comprobante-hoja .razon {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.comprobante-hoja .fantasia {
+  font-size: 0.8rem;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .datos {
+  margin-top: 0.5rem;
+  font-size: 0.7rem;
+  line-height: 1.7;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .letra-caja {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.5rem;
+  border: 2px solid var(--tinta);
+  padding: 0.25rem 0.75rem;
+}
+
+.comprobante-hoja .letra {
+  font-size: 2.25rem;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.comprobante-hoja .codigo {
+  font-size: 0.55rem;
+  font-weight: 600;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .comprobante-datos {
+  text-align: right;
+}
+
+.comprobante-hoja .titulo {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.comprobante-hoja .numero {
+  font-family: var(--font-mono), monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.comprobante-hoja .comprobante-datos .datos {
+  text-align: right;
+}
+
+/* Receptor */
+.comprobante-hoja .receptor {
+  margin: 1rem 0;
+  border: 1px solid var(--linea);
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+}
+
+.comprobante-hoja .etiqueta {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .receptor-grilla {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 2rem;
+  margin-top: 0.6rem;
+}
+
+.comprobante-hoja .receptor-grilla span {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .receptor-grilla strong {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Detalle */
+.comprobante-hoja .detalle {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.comprobante-hoja .detalle th {
+  border-bottom: 1.5px solid var(--tinta);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+  text-align: left;
+}
+
+.comprobante-hoja .detalle td {
+  border-bottom: 1px solid var(--linea);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.78rem;
+  vertical-align: top;
+}
+
+.comprobante-hoja .der {
+  text-align: right;
+}
+
+.comprobante-hoja .mono {
+  font-family: var(--font-mono), monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Totales */
+.comprobante-hoja .totales {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.comprobante-hoja .totales-caja {
+  width: 17rem;
+}
+
+.comprobante-hoja .linea {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.2rem 0;
+  font-size: 0.8rem;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .total-final {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 0.4rem;
+  border-top: 2px solid oklch(0.68 0.19 48);
+  padding-top: 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.comprobante-hoja .observaciones {
+  margin-top: 1.25rem;
+  border-left: 3px solid var(--linea);
+  padding-left: 0.75rem;
+  font-size: 0.78rem;
+  color: var(--tinta-suave);
+}
+
+/* Pie fiscal */
+.comprobante-hoja .pie {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--linea);
+  padding-top: 1rem;
+}
+
+.comprobante-hoja .qr {
+  width: 26mm;
+  height: 26mm;
+  flex-shrink: 0;
+}
+
+.comprobante-hoja .qr svg {
+  width: 100%;
+  height: 100%;
+}
+
+.comprobante-hoja .cae p {
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.comprobante-hoja .chico {
+  font-size: 0.65rem;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .sin-cae {
+  width: 100%;
+  border: 1.5px dashed oklch(0.68 0.19 48);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.comprobante-hoja .leyenda {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 0.65rem;
+  color: var(--tinta-suave);
+}
+
+/**
+ * Cuerpo de una nota del blog.
+ *
+ * El HTML lo genera `lib/markdown.ts`, así que no lleva clases: los estilos van
+ * por etiqueta. Ancho de línea acotado a unos 70 caracteres, que es donde la
+ * lectura deja de cansar, y jerarquía marcada por espacio antes que por tamaño.
+ */
+.nota-cuerpo {
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  color: var(--foreground);
+}
+
+.nota-cuerpo > * + * {
+  margin-top: 1.15em;
+}
+
+.nota-cuerpo h2 {
+  margin-top: 2.25rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.nota-cuerpo h3 {
+  margin-top: 1.75rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.nota-cuerpo ul {
+  margin-left: 1.1rem;
+  list-style: disc;
+}
+
+.nota-cuerpo li + li {
+  margin-top: 0.4em;
+}
+
+.nota-cuerpo a {
+  color: oklch(0.52 0.18 40);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.nota-cuerpo blockquote {
+  border-left: 3px solid oklch(0.68 0.19 48);
+  padding-left: 1rem;
+  color: var(--muted-foreground);
+}
+
+/* Firmas del remito. Dos recuadros: el que se completa en pantalla desde el
+   celular y el que queda en blanco para firmar el papel cuando se imprime. */
+.comprobante-hoja .firma-zona {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.comprobante-hoja .firma-caja {
+  border-top: 1px solid var(--linea);
+  padding-top: 0.6rem;
+}
+
+.comprobante-hoja .firma-imagen {
+  display: block;
+  width: 100%;
+  max-width: 60mm;
+  height: 22mm;
+  object-fit: contain;
+  object-position: left bottom;
+}
+
+.comprobante-hoja .firma-vacia {
+  height: 22mm;
+  border-bottom: 1px solid var(--linea);
+}
+
+@media print {
+  .comprobante-hoja {
+    background: #fff;
+  }
+
+  .comprobante-hoja .no-imprimir {
+    display: none !important;
+  }
+
+  .comprobante-hoja .hoja {
+    margin: 0;
+    max-width: 100%;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  /* La marca de agua se imprime: es justamente lo que hay que ver en el papel
+     cuando el comprobante no está autorizado. */
+  .comprobante-hoja .marca-agua {
+    position: absolute;
+    color: rgb(0 0 0 / 0.08);
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
+  FileText,
   LayoutGrid,
   MapPin,
   Package,
@@ -26,6 +27,7 @@ const SECCIONES = [
   { href: "/mi-cuenta", titulo: "Resumen", icono: LayoutGrid, exacto: true },
   { href: "/mi-cuenta/pedidos", titulo: "Pedidos", icono: Package },
   { href: "/mi-cuenta/presupuestos", titulo: "Presupuestos", icono: ScrollText },
+  { href: "/mi-cuenta/comprobantes", titulo: "Facturas", icono: FileText },
   {
     href: "/mi-cuenta/cuenta-corriente",
     titulo: "Cuenta corriente",

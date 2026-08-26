@@ -20,14 +20,16 @@ import { Hero } from "@/components/home/hero";
 import { ProductCard } from "@/components/product-card";
 import { datosDePortada } from "@/lib/dal/catalog";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
-import { testimonials, blogPosts } from "@/lib/products";
+import { listarArticulos, listarTestimonios } from "@/lib/dal/contenido";
 
 const ANIOS = new Date().getFullYear() - 1981;
 
 export default async function HomePage() {
-  const [portada, sucursales] = await Promise.all([
+  const [portada, sucursales, testimonios, notas] = await Promise.all([
     datosDePortada(),
     listarSucursalesPublicas(),
+    listarTestimonios(),
+    listarArticulos({ limite: 3 }),
   ]);
 
   return (
@@ -50,11 +52,11 @@ export default async function HomePage() {
 
       <Historia productos={portada.totalProductos} sucursales={sucursales.length} />
 
-      <Testimonios />
+      {testimonios.length > 0 && <Testimonios testimonios={testimonios} />}
 
       <Sucursales sucursales={sucursales} />
 
-      <Blog />
+      {notas.length > 0 && <Blog notas={notas} />}
 
       <CierreCta />
     </div>
@@ -370,7 +372,11 @@ function Historia({
   );
 }
 
-function Testimonios() {
+function Testimonios({
+  testimonios,
+}: {
+  testimonios: Awaited<ReturnType<typeof listarTestimonios>>;
+}) {
   return (
     <section className="bg-brand-cream py-20">
       <div className="container mx-auto px-4">
@@ -384,9 +390,9 @@ function Testimonios() {
         </div>
 
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          {testimonials.map((t) => (
+          {testimonios.map((t) => (
             <Card
-              key={t.name}
+              key={t.id}
               className="h-full border-0 bg-white shadow-sm transition-shadow duration-300 hover:shadow-xl"
             >
               <CardContent className="p-6">
@@ -403,15 +409,15 @@ function Testimonios() {
                   ))}
                 </div>
                 <p className="mb-6 text-sm leading-relaxed text-foreground/80">
-                  &ldquo;{t.text}&rdquo;
+                  &ldquo;{t.texto}&rdquo;
                 </p>
                 <div className="flex items-center gap-3 border-t border-border/50 pt-4">
                   <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-gray text-sm font-bold text-white">
-                    {t.avatar}
+                    {t.iniciales ?? t.nombre.slice(0, 2).toUpperCase()}
                   </span>
                   <div>
-                    <p className="text-sm font-semibold">{t.name}</p>
-                    <p className="text-xs text-muted-foreground">{t.role}</p>
+                    <p className="text-sm font-semibold">{t.nombre}</p>
+                    <p className="text-xs text-muted-foreground">{t.rol}</p>
                   </div>
                 </div>
               </CardContent>
@@ -491,9 +497,11 @@ function Sucursales({
   );
 }
 
-function Blog() {
-  const notas = blogPosts.slice(0, 3);
-
+function Blog({
+  notas,
+}: {
+  notas: Awaited<ReturnType<typeof listarArticulos>>;
+}) {
   return (
     <section className="bg-brand-cream/50 py-20">
       <div className="container mx-auto px-4">
@@ -518,24 +526,26 @@ function Blog() {
           {notas.map((nota) => (
             <Link key={nota.slug} href={`/blog/${nota.slug}`} className="group">
               <Card className="h-full overflow-hidden border-0 bg-white shadow-sm transition-shadow duration-300 hover:shadow-xl">
-                <div className="relative aspect-[16/10] overflow-hidden">
-                  <Image
-                    src={nota.image}
-                    alt=""
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                  />
-                </div>
+                {nota.imagenUrl && (
+                  <div className="relative aspect-[16/10] overflow-hidden">
+                    <Image
+                      src={nota.imagenUrl}
+                      alt=""
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                    />
+                  </div>
+                )}
                 <CardContent className="p-5">
                   <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-orange">
-                    {nota.category} · {nota.readTime}
+                    {nota.categoria} · {nota.minutosLectura} min
                   </p>
                   <h3 className="mb-2 line-clamp-2 font-bold leading-snug transition-colors group-hover:text-brand-orange">
-                    {nota.title}
+                    {nota.titulo}
                   </h3>
                   <p className="line-clamp-2 text-sm text-muted-foreground">
-                    {nota.excerpt}
+                    {nota.resumen}
                   </p>
                 </CardContent>
               </Card>

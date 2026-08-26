@@ -1,10 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { useState } from "react";
 import { ArrowLeftRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAccionDeDialogo } from "@/components/admin/usar-accion";
 import {
   Dialog,
   DialogContent,
@@ -33,25 +32,17 @@ export function DialogoTransferencia({
   variantes: { id: string; texto: string }[];
   sucursales: { id: string; name: string }[];
 }) {
-  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
-  const [estado, accion, pendiente] = useActionState(
+  const [estado, accion, pendiente] = useAccionDeDialogo(
     transferirStock,
     estadoInicial,
+    () => setAbierto(false),
   );
 
   const [variante, setVariante] = useState(variantes[0]?.id ?? "");
   const [origen, setOrigen] = useState(sucursales[0]?.id ?? "");
   const [destino, setDestino] = useState(sucursales[1]?.id ?? "");
 
-  useEffect(() => {
-    if (estado.ok) {
-      toast.success(estado.ok);
-      setAbierto(false);
-      router.refresh();
-    }
-    if (estado.error) toast.error(estado.error);
-  }, [estado, router]);
 
   return (
     <Dialog open={abierto} onOpenChange={setAbierto}>

@@ -1,4 +1,4 @@
-import type { StockLevel } from "@/lib/stock-level";
+import { disponible as calcularDisponible, type StockLevel } from "@/lib/stock-level";
 
 /**
  * Nivel de stock de una sucursal.
@@ -11,22 +11,32 @@ import type { StockLevel } from "@/lib/stock-level";
  * La escala llega hasta tres veces el mínimo. Más arriba de eso ya no cambia
  * nada la decisión, y estirar la escala aplastaría justo la zona donde se
  * decide.
+ *
+ * **El número grande es el disponible, no el físico.** Es lo que se puede
+ * vender, que es la pregunta que se hace quien mira esta pantalla. El físico
+ * aparece abajo, en chico, y solo cuando hay algo reservado: si no, sería un
+ * número repetido.
  */
 export function NivelStock({
   sucursal,
   cantidad,
+  reservado = 0,
   minimo,
   nivel,
   unidad,
 }: {
   sucursal: string;
+  /** Físico: lo que hay en el galpón. */
   cantidad: number;
+  /** Comprometido en pedidos sin retirar. */
+  reservado?: number;
   minimo: number;
   nivel: StockLevel;
   unidad?: string;
 }) {
+  const libre = calcularDisponible(cantidad, reservado);
   const tope = Math.max(minimo * 3, 1);
-  const porcentaje = Math.min((cantidad / tope) * 100, 100);
+  const porcentaje = Math.min((libre / tope) * 100, 100);
 
   const color =
     nivel === "sin-stock"
@@ -59,18 +69,18 @@ export function NivelStock({
                 : ""
           }`}
         >
-          {cantidad}
+          {libre}
         </span>
       </div>
 
       <div
         className="mt-1 h-2 overflow-hidden rounded-full bg-muted"
         role="img"
-        aria-label={`${sucursal}: ${cantidad} ${unidad ?? "unidades"}, mínimo ${minimo}. ${texto}.`}
+        aria-label={`${sucursal}: ${libre} ${unidad ?? "unidades"} disponibles${reservado > 0 ? ` de ${cantidad} en el galpón` : ""}, mínimo ${minimo}. ${texto}.`}
       >
         <div
           className={`h-full rounded-full transition-[width] ${color}`}
-          style={{ width: `${Math.max(porcentaje, cantidad > 0 ? 4 : 0)}%` }}
+          style={{ width: `${Math.max(porcentaje, libre > 0 ? 4 : 0)}%` }}
         />
       </div>
 
@@ -88,6 +98,13 @@ export function NivelStock({
           <span className="tabular text-muted-foreground">mín. {minimo}</span>
         )}
       </p>
+
+      {reservado > 0 && (
+        <p className="tabular mt-0.5 text-sm text-muted-foreground">
+          {cantidad} en el galpón · {reservado} vendido
+          {reservado === 1 ? "" : "s"} sin retirar
+        </p>
+      )}
     </div>
   );
 }

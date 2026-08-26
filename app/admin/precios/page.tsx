@@ -7,6 +7,7 @@ import { fechaHora, haceCuanto, moneda, plural } from "@/components/admin/format
 import { BuscadorProductos } from "@/app/admin/productos/buscador";
 import { listarCategoriasAdmin } from "@/lib/dal/admin/products";
 import {
+  DIAS_PARA_REVISAR,
   historialDePrecios,
   listarListasDePrecios,
   listarPrecios,
@@ -23,7 +24,6 @@ const origenTexto: Record<string, string> = {
 };
 
 /** Un precio que no se toca hace más de dos meses probablemente quedó viejo. */
-const DIAS_PARA_REVISAR = 60;
 
 export default async function PreciosPage({
   searchParams,
@@ -42,13 +42,10 @@ export default async function PreciosPage({
   const general = listas.find((l) => l.isDefault);
   const profesional = listas.find((l) => l.slug === "profesional");
 
-  const limite = Date.now() - DIAS_PARA_REVISAR * 24 * 60 * 60 * 1000;
+  // El criterio de "quedó viejo" lo resuelve el DAL: depende de la hora actual,
+  // y leerla durante el render de un Server Component es una impureza.
   const sinPrecio = filas.filter((f) => Number(f.precioGeneral) <= 0);
-  const desactualizados = filas.filter(
-    (f) =>
-      Number(f.precioGeneral) > 0 &&
-      (f.actualizado === null || f.actualizado.getTime() < limite),
-  );
+  const desactualizados = filas.filter((f) => f.desactualizado);
   const alDia = filas.filter(
     (f) => !sinPrecio.includes(f) && !desactualizados.includes(f),
   );

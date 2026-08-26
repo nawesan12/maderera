@@ -1,10 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAccionDeDialogo } from "@/components/admin/usar-accion";
 import {
   Dialog,
   DialogContent,
@@ -47,22 +46,14 @@ export function DialogoMovimiento({
   customerId: string;
   nombre: string;
 }) {
-  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [tipo, setTipo] = useState("pago");
-  const [estado, accion, pendiente] = useActionState(
+  const [estado, accion, pendiente] = useAccionDeDialogo(
     registrarMovimiento,
     {} as EstadoCliente,
+    () => setAbierto(false),
   );
 
-  useEffect(() => {
-    if (estado.ok) {
-      toast.success(estado.ok);
-      setAbierto(false);
-      router.refresh();
-    }
-    if (estado.error) toast.error(estado.error);
-  }, [estado, router]);
 
   return (
     <Dialog open={abierto} onOpenChange={setAbierto}>

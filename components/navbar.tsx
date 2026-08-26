@@ -47,6 +47,8 @@ const navLinks = [
   { name: "Sucursales", href: "/sucursales" },
   { name: "Profesionales", href: "/profesionales" },
   { name: "Nosotros", href: "/nosotros" },
+  { name: "Eventos", href: "/eventos" },
+  { name: "Documentación", href: "/documentacion" },
   { name: "Blog", href: "/blog" },
   { name: "Contacto", href: "/contacto" },
 ];

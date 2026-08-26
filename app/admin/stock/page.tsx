@@ -220,6 +220,7 @@ function TarjetaStock({ fila }: { fila: FilaStock }) {
             <NivelStock
               sucursal="Casa Central"
               cantidad={fila.qtyCentral}
+              reservado={fila.reservadoCentral}
               minimo={fila.minCentral}
               nivel={fila.nivelCentral}
               unidad={fila.unidad}
@@ -237,6 +238,7 @@ function TarjetaStock({ fila }: { fila: FilaStock }) {
             <NivelStock
               sucursal="Aserradero"
               cantidad={fila.qtyAserradero}
+              reservado={fila.reservadoAserradero}
               minimo={fila.minAserradero}
               nivel={fila.nivelAserradero}
               unidad={fila.unidad}

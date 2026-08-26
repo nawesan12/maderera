@@ -57,6 +57,16 @@ export const metadata: Metadata = {
   icons: { icon: "/cropped-icon-180x180.png", apple: "/cropped-icon-180x180.png" },
 };
 
+/**
+ * Aplica el tema guardado antes del primer pintado.
+ *
+ * Va como script bloqueante en el `<head>` y no en un efecto de React a
+ * propósito: un efecto corre después de que el navegador ya dibujó, así que
+ * quien eligió modo oscuro veía un destello blanco en cada navegación. Es la
+ * única excepción a "nada de scripts inline", y la paga bien.
+ */
+const APLICAR_TEMA = `try{if(localStorage.getItem("theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -66,7 +76,11 @@ export default function RootLayout({
     <html
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: APLICAR_TEMA }} />
+      </head>
       <body className="min-h-full flex flex-col overflow-x-hidden">
         <TooltipProvider>
           {children}

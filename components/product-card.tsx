@@ -6,7 +6,8 @@ import { ImageOff, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Disponibilidad } from "@/components/catalogo/disponibilidad";
 import { useCarrito } from "@/lib/carrito-context";
-import { formatearPrecio } from "@/lib/formato";
+import { formatearPrecio, formatearUnidad } from "@/lib/formato";
+import { PrecioSinImpuestos } from "@/components/precio-sin-impuestos";
 import type { ProductoListado } from "@/lib/dal/catalog";
 
 /**
@@ -100,9 +101,14 @@ export function ProductCard({ product }: { product: ProductoListado }) {
                 )}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                por {product.unit.replace("_", " ")}
+                por {formatearUnidad(product.unit)}
                 {variasMedidas && ` · ${product.labels.length} medidas`}
               </p>
+              {/* Ley 27.743: junto al precio final se informa el neto. */}
+              <PrecioSinImpuestos
+                precioFinal={Number(product.precioDesde)}
+                className="mt-0.5"
+              />
             </>
           )}
         </div>

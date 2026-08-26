@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  numeric,
   pgEnum,
   pgTable,
   text,
@@ -60,6 +61,15 @@ export const products = pgTable(
     /** Marca propia del cliente (Moldava) o de terceros. */
     brand: text(),
     unit: unitOfSale().notNull().default("unidad"),
+    /**
+     * Alicuota de IVA con la que se factura este producto.
+     *
+     * Vive en el producto y no en la linea de factura porque es una propiedad
+     * de la mercaderia, no de la venta: la madera va al 21 %, pero hay
+     * excepciones estables que no se pueden estar recordando en cada
+     * comprobante.
+     */
+    alicuotaIva: numeric({ precision: 4, scale: 2 }).notNull().default("21"),
     featured: boolean().notNull().default(false),
     active: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -120,6 +130,47 @@ export const productImages = pgTable(
   (t) => [index("product_images_product_idx").on(t.productId)],
 );
 
+/**
+ * Productos sugeridos (cláusula 1.3).
+ *
+ * Dos relaciones distintas y por eso el tipo: **complementario** es lo que hace
+ * falta para usar el producto —los clavos del machimbre, el sellador del deck— y
+ * es lo que sube el ticket; **similar** es la alternativa cuando lo que se está
+ * mirando no convence o no hay stock.
+ *
+ * Se cargan a mano porque el criterio lo tiene el vendedor: ninguna heurística
+ * sabe que a un deck de grandis le corresponde ese fijador y no otro. Cuando no
+ * hay ninguna cargada, la ficha cae a otros productos de la misma categoría,
+ * que es mejor que no mostrar nada.
+ */
+export const tipoRelacion = pgEnum("tipo_relacion_producto", [
+  "complementario",
+  "similar",
+]);
+
+export const relatedProducts = pgTable(
+  "related_products",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    relatedProductId: uuid()
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    tipo: tipoRelacion().notNull().default("complementario"),
+    orden: integer().notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("related_products_par_idx").on(
+      t.productId,
+      t.relatedProductId,
+      t.tipo,
+    ),
+    index("related_products_producto_idx").on(t.productId, t.tipo),
+  ],
+);
+
 export const categoriesRelations = relations(categories, ({ many }) => ({
   products: many(products),
 }));
@@ -151,3 +202,4 @@ export type Category = typeof categories.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type ProductVariant = typeof productVariants.$inferSelect;
 export type ProductImage = typeof productImages.$inferSelect;
+export type RelatedProduct = typeof relatedProducts.$inferSelect;

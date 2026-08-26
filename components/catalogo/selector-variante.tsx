@@ -5,7 +5,8 @@ import { Check, Loader2, MessageCircle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Disponibilidad } from "@/components/catalogo/disponibilidad";
 import { useCarrito } from "@/lib/carrito-context";
-import { formatearPrecio } from "@/lib/formato";
+import { formatearPrecio, formatearUnidad } from "@/lib/formato";
+import { PrecioSinImpuestos } from "@/components/precio-sin-impuestos";
 import type { VarianteDetalle } from "@/lib/dal/catalog";
 
 /**
@@ -103,10 +104,15 @@ export function SelectorVariante({
           {formatearPrecio(elegida.precio)}
         </p>
         <p className="text-xs text-muted-foreground">
-          por {unit.replace("_", " ")}
+          por {formatearUnidad(unit)}
           {elegida.material && ` · ${elegida.material}`}
           {elegida.color && ` · ${elegida.color}`}
         </p>
+        {/* Ley 27.743: el precio sin impuestos nacionales, junto al final. */}
+        <PrecioSinImpuestos
+          precioFinal={Number(elegida.precio)}
+          className="mt-1"
+        />
 
         <div className="mt-3 border-t pt-3">
           <Disponibilidad

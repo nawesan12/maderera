@@ -27,12 +27,20 @@ export const estadoPresupuesto = pgEnum("estado_presupuesto", [
   "vencido",
 ]);
 
-/** De dónde salió: el presupuestador del sitio, la calculadora o el mostrador. */
+/**
+ * De dónde salió: el presupuestador del sitio, la calculadora o el mostrador.
+ *
+ * `express` es el del portal de profesionales (cláusula 1.7): mismo objeto, pero
+ * con un compromiso de respuesta en 24 horas. No es un tipo distinto de
+ * presupuesto, es una promesa distinta sobre cuándo se contesta, y por eso va
+ * como origen y no como tabla aparte.
+ */
 export const origenPresupuesto = pgEnum("origen_presupuesto", [
   "sitio",
   "calculadora",
   "mostrador",
   "telefono",
+  "express",
 ]);
 
 export const quotes = pgTable(
@@ -55,6 +63,14 @@ export const quotes = pgTable(
     asesor: text(),
     /** Hasta cuándo vale. Los precios se mueven y un presupuesto viejo no obliga. */
     validoHasta: timestamp({ withTimezone: true }),
+    /**
+     * Cuándo vence el compromiso de respuesta.
+     *
+     * Solo lo tienen los express. Sirve para ordenar la cola por urgencia real
+     * y para que el panel muestre en rojo lo que se está por pasar de hora: un
+     * SLA que nadie ve es un SLA que no se cumple.
+     */
+    respondeHasta: timestamp({ withTimezone: true }),
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

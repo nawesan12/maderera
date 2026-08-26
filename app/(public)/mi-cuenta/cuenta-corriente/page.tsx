@@ -3,12 +3,23 @@ import Link from "next/link";
 import { MessageCircle, Receipt } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { miCuentaCorriente } from "@/lib/dal/cuenta";
+import { datosParaTransferir } from "@/lib/dal/pagos";
+import { cobrosEnVivo } from "@/lib/pagos";
+import { PagarDeuda } from "@/components/cuenta/pagar-deuda";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
 
 export const metadata: Metadata = { title: "Cuenta corriente" };
 
-export default async function CuentaCorrientePage() {
-  const cuenta = await miCuentaCorriente();
+export default async function CuentaCorrientePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pago?: string }>;
+}) {
+  const [cuenta, banco, { pago }] = await Promise.all([
+    miCuentaCorriente(),
+    datosParaTransferir(),
+    searchParams,
+  ]);
 
   if (cuenta.movimientos.length === 0 && cuenta.limiteCredito === 0) {
     return (
@@ -132,6 +143,32 @@ export default async function CuentaCorrientePage() {
           </div>
         )}
       </section>
+
+      {/* La vuelta desde la pasarela trae el resultado en la URL. El saldo de
+          arriba ya es el real: lo que falta es decir qué pasó, porque un pago
+          rechazado no cambia ningún número y sin este cartel parece que no pasó
+          nada. */}
+      {pago === "aprobado" && (
+        <p className="flex items-start gap-2 rounded-xl border border-brand-green/30 bg-brand-green/5 p-4">
+          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-green text-white">
+            ✓
+          </span>
+          Recibimos tu pago. El saldo de arriba ya lo tiene descontado.
+        </p>
+      )}
+
+      {pago === "rechazado" && (
+        <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive">
+          El pago no se aprobó. Podés intentar de nuevo con otro medio o
+          transferir.
+        </p>
+      )}
+
+      <PagarDeuda
+        saldo={cuenta.saldo}
+        banco={banco}
+        enVivo={cobrosEnVivo()}
+      />
 
       {/* Acá sí va tabla: son cifras que se comparan columna contra columna, y
           el saldo corrido solo se sigue si está alineado. */}

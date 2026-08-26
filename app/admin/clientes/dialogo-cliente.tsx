@@ -1,10 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAccionDeDialogo } from "@/components/admin/usar-accion";
 import {
   Dialog,
   DialogContent,
@@ -42,24 +41,16 @@ export function DialogoCliente({
 }: {
   listas: { id: string; name: string; isDefault: boolean }[];
 }) {
-  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
-  const [estado, accion, pendiente] = useActionState(
+  const [estado, accion, pendiente] = useAccionDeDialogo(
     guardarCliente,
     {} as EstadoCliente,
+    () => setAbierto(false),
   );
 
   const [tipo, setTipo] = useState("particular");
   const [condicion, setCondicion] = useState("consumidor_final");
 
-  useEffect(() => {
-    if (estado.ok) {
-      toast.success(estado.ok);
-      setAbierto(false);
-      router.refresh();
-    }
-    if (estado.error) toast.error(estado.error);
-  }, [estado, router]);
 
   // Un profesional casi siempre factura A: se propone, sin imponerlo.
   function cambiarTipo(valor: string) {

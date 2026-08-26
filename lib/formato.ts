@@ -142,3 +142,53 @@ export function plural(
 ): string {
   return `${cantidad} ${cantidad === 1 ? singular : (pluralForma ?? singular + "s")}`;
 }
+
+/**
+ * Fecha sin hora, formateada en UTC.
+ *
+ * Para fechas que representan un día y no un instante —inicio de actividades,
+ * vencimiento del CAE— hay que leerlas en UTC. Con el formateador local, un
+ * `1981-03-01` guardado a medianoche UTC se muestra como 28/02 en Argentina,
+ * que está tres horas atrás.
+ */
+export const fechaSolaCorta = new Intl.DateTimeFormat("es-AR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "2-digit",
+  timeZone: "UTC",
+});
+
+/**
+ * Convierte a número un importe tipeado por una persona.
+ *
+ * Hay que aceptar las formas en que se escribe un precio, porque todas llegan:
+ * "528300.00" desde un campo numérico del navegador, "528.300,50" como lo
+ * escribe alguien en Argentina, y "1.500.000" cuando se tipea a mano sin
+ * decimales.
+ *
+ * Tres reglas, en orden:
+ *
+ * 1. **Con coma**, la coma es el decimal y los puntos son de miles.
+ * 2. **Sin coma y con más de un punto**, todos los puntos son de miles: no hay
+ *    ninguna notación decimal con dos puntos.
+ * 3. **Sin coma y con un solo punto**, el punto es decimal y se deja como está.
+ *
+ * La tercera regla es la importante y no se puede relajar: el error opuesto ya
+ * ocurrió, y quitar todos los puntos siempre convertía un cobro de $528.300 en
+ * uno de $52.830.000, con la factura dada por cobrada de más. Ante la
+ * ambigüedad de un solo punto gana la lectura del navegador, que es la que
+ * llega sin que nadie la escriba.
+ */
+export function parsearImporte(texto: string): number {
+  const limpio = texto.trim().replace(/\s/g, "");
+  if (!limpio) return NaN;
+
+  if (limpio.includes(",")) {
+    return Number(limpio.replace(/\./g, "").replace(",", "."));
+  }
+
+  const puntos = (limpio.match(/\./g) ?? []).length;
+  if (puntos > 1) return Number(limpio.replace(/\./g, ""));
+
+  return Number(limpio);
+}

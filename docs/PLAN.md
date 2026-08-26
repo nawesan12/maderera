@@ -2,7 +2,7 @@
 
 > Documento de trabajo interno del PRESTADOR. Traduce el contrato firmado
 > (`Contrato — Maderera Juan B. Justo.pdf`, 15 pp.) a un plan ejecutable.
-> Última actualización: 22/08/2026 (cuarta pasada).
+> Última actualización: 26/08/2026 (novena pasada, en curso).
 
 ---
 
@@ -131,9 +131,166 @@ trámites del cliente ante Meta, están listados en
 `/admin/whatsapp/configuracion`. Hasta que se completen, la bandeja avisa en
 cada pantalla que los mensajes no salen.
 
-Pendiente: Mercado Pago para cobrar de verdad (hoy el pedido se crea y el pago se
-coordina por WhatsApp), facturación ARCA, el portal de profesionales y la
-migración desde Quality Software.
+**Sexta pasada — facturación electrónica y ARCA (22/08/2026):**
+
+Reemplaza las 918 líneas de maqueta de `/admin/facturacion`, que leían datos
+inventados de `lib/dashboard-data.ts`.
+
+- **Modelo fiscal**: `invoices`, `invoice_items`, `invoice_tributos`,
+  `invoice_payments`, `puntos_venta`, `configuracion_fiscal`, `arca_tokens` y
+  `arca_log`. Un comprobante emitido no se edita ni se borra: se corrige con una
+  nota de crédito que lo referencia.
+- **Numeración sin huecos**: correlativo por punto de venta y tipo, asignado
+  dentro de la transacción y con `pg_advisory_xact_lock`, más un índice único
+  que lo respalda. Dos personas facturando a la vez no pueden tomar el mismo
+  número.
+- **IVA bien resuelto**: los precios del catálogo son finales, así que facturar
+  desagrega (`neto = total / 1,21`). La letra sale de cruzar la condición del
+  emisor con la del receptor, y en la factura B el IVA se guarda e informa a
+  ARCA aunque no se discrimine en el papel —la maqueta lo daba por cero.
+- **ARCA completo**: WSAA con firma CMS propia (`node-forge`, sin mandar el
+  certificado a un tercero) y ticket cacheado 12 h; WSFEv1 con `FECAESolicitar`,
+  `FECompUltimoAutorizado` y `FEDummy`. Cada llamada queda en `arca_log`.
+- **Sección ARCA** (`/admin/arca`): datos del emisor, puntos de venta, IVA e
+  Ingresos Brutos —con percepción configurable—, y el **libro IVA ventas** con
+  exportación a CSV para el contador, donde las notas de crédito ya restan.
+- **Comprobante impreso** (`/comprobante/[id]`): formato A4 con la letra en
+  recuadro, QR de AFIP y CAE. Sin autorización sale con marca de agua "sin valor
+  fiscal", en pantalla y en papel.
+- **Portal del cliente**: sus facturas en `/mi-cuenta/comprobantes`, con la
+  misma hoja filtrada por dueño.
+- **Transparencia fiscal** (ley 27.743): el precio sin impuestos nacionales
+  aparece en letra chica junto al precio final en catálogo, ficha y checkout.
+
+**Un defecto corregido en el camino:** el parseo de importes tipeados quitaba
+todos los puntos asumiendo formato argentino, y convertía un cobro de $528.300
+en uno de $52.830.000. Ahora la coma decide el formato (`parsearImporte` en
+`lib/formato.ts`); el mismo defecto estaba latente en los movimientos de cuenta
+corriente.
+
+**Lo que falta para que los comprobantes tengan valor fiscal** es el certificado
+digital, que tramita el cliente. Los pasos están listados en `/admin/arca`.
+Mientras tanto se factura, se numera y se imprime, marcado como sin valor
+fiscal.
+
+**Séptima pasada — cobros, avisos por correo y acopio (26/08/2026):**
+
+Cierra lo que faltaba de la Etapa 2 y del portal de clientes (cláusula 1.6).
+
+- **Cobros online** (`lib/pagos/`): Mercado Pago por HTTP, sin SDK, con la firma
+  del webhook verificada (HMAC sobre `x-signature`), y un proveedor de
+  demostración con pantalla propia en `/pago-demo/[id]`. Se paga desde la
+  confirmación del pedido y se cancela deuda de cuenta corriente desde el
+  portal. Transferencia bancaria con comprobante subido por el cliente y
+  conciliación a mano en `/admin/pagos`.
+- **Una sola función mueve plata** (`acreditarPago`): idempotente por
+  `proveedorPaymentId`, con lock de transacción y verificación del importe. Un
+  aviso que dice "aprobado" por un monto distinto al del pedido queda en revisión
+  y no acredita. Probado: el mismo webhook repetido no descuenta dos veces.
+- **Avisos por correo** (`lib/email/`): Resend por HTTP con proveedor de
+  demostración, plantillas HTML propias con la marca, bitácora en
+  `notifications_log` y pantalla `/admin/avisos` con interruptor y asunto
+  editable por evento. El comprobante sale adjunto en PDF.
+- **El stock se descuenta al vender.** Era un agujero real: vender no movía
+  inventario, y el sitio podía vender diez veces la misma placa. Ahora
+  **disponible = físico − reservado**; el pedido confirmado reserva, la entrega
+  genera el movimiento `venta`, y cancelar libera. La fuente de verdad es
+  `stock_reservations` y hay un recálculo para comprobarla.
+- **Acopio, remitos y firma digital**: un pedido se retira en varias veces y lo
+  pendiente se calcula restando. Cada retiro genera un remito numerado, que se
+  firma desde el celular en `/firmar/[token]` con el dedo. La firma se guarda en
+  la base, no como archivo: una URL pública, aunque impredecible, la deja al
+  alcance de cualquiera que la tenga.
+- **PDF de verdad** (`lib/pdf/`, con `pdf-lib`): comprobante fiscal con QR y CAE,
+  y remito con la firma incrustada. Rutas de descarga con verificación de dueño.
+- **Red de tests** (`vitest`, 57 casos): desagregado de IVA, letra del
+  comprobante, `parsearImporte`, costo de envío, disponible de stock, firma del
+  webhook y dígito verificador de CUIT. No hay tests de interfaz a propósito:
+  lo que se prueba es lo que, si se rompe, se descubre por una diferencia en un
+  papel.
+- **Lint en verde**: se eliminaron los siete errores de React 19 que arrastraba
+  el proyecto —`setState` sincrónico dentro de efectos en cinco pantallas, y una
+  lectura de la hora durante el render de un Server Component—.
+
+**Octava pasada — portal de profesionales (26/08/2026):**
+
+Cierra la cláusula 1.7 entera. Era lo último grande que no dependía de ningún
+insumo del cliente.
+
+- **Alta con validación de CUIT**: `/profesionales` se rehízo como Server
+  Component —era una maqueta de cliente con un formulario que no mandaba nada— y
+  ahora crea una solicitud real. El dígito verificador se valida con
+  `lib/cuit.ts`; no dice si el CUIT existe, pero atrapa los errores de tipeo,
+  que son los que terminan en una factura rechazada.
+- **Aprobación desde el panel** (`/admin/profesionales`): asigna lista de precios
+  y límite de cuenta corriente en el mismo paso, porque son las dos decisiones
+  que hacen que el acceso signifique algo. Si ya existe una ficha con ese CUIT se
+  marca esa, nunca se crea otra: dos fichas del mismo cliente parten su cuenta
+  corriente en dos.
+- **Precios diferenciados de verdad.** `profiles.priceListId` existía y no lo
+  usaba nadie: el catálogo consultaba siempre la lista general. Ahora
+  `lib/dal/precios-sesion.ts` resuelve la lista de quien mira, y el precio de la
+  lista propia **cae a la general cuando falta**, para que un profesional no vea
+  medio catálogo "sin precio". Todo request-time: un precio mayorista cacheado y
+  servido al público es el peor error posible de este módulo.
+- **Descuentos por volumen**: escalas por lista, categoría o producto, con la más
+  específica ganando. Se aplican solas en el carrito, con el porcentaje y el
+  precio tachado en el renglón que los generó.
+- **Presupuestos express**: el presupuestador solo armaba un mensaje de WhatsApp,
+  así que nada quedaba registrado. Ahora crea un `quote` con número y precios
+  congelados; para un profesional entra con compromiso de respuesta a 24 horas,
+  y el panel ordena la cola por lo que está más cerca de vencerlo.
+- **Documentación técnica** (`/documentacion`): pública o reservada a
+  profesionales, con el filtro por permiso dentro de la consulta.
+- **Eventos con inscripción y pago** (`/eventos`): cupo tomado con lock —dos
+  personas anotándose al último lugar no entran las dos—, inscripción gratuita
+  confirmada al instante y con precio confirmada por el mismo `acreditarPago`
+  que cobra un pedido. Asistencia y recordatorios desde el panel.
+
+**Un defecto corregido en el camino:** `parsearImporte` devolvía `NaN` con
+"1.500.000" —dos puntos y sin coma—, que es exactamente como se tipea un límite
+de crédito a mano. Ahora más de un punto significa separador de miles; el caso
+ambiguo de un solo punto sigue leyéndose como decimal, que es lo que evitó el
+defecto de los $528.300.
+
+**Novena pasada — contenido editable (26/08/2026, en curso):**
+
+- **Blog contra la base** (cláusula 1.2): `blog_posts`, `blog_categories`,
+  `testimonials` y `site_settings`. Las seis notas y los cuatro testimonios
+  vivían en `lib/products.ts` como constantes de TypeScript, así que publicar
+  una nota costaba un deploy. Ahora se escriben desde `/admin/contenido`, con
+  editor de Markdown y vista previa al lado.
+- **El listado y la nota son Server Components.** Eran pantallas de cliente
+  enteras que filtraban en memoria; ahora el filtro va por URL, que además es lo
+  que permite compartir el enlace de una categoría y que el buscador la indexe.
+  El buscador del blog es un `form` con GET y anda sin JavaScript.
+- **`lib/markdown.ts`**: conversor propio y acotado —encabezados, listas,
+  negritas, enlaces—. Escrito a mano y no con una librería porque el problema
+  real no es el parseo sino el HTML que se inyecta después: **escapa todo antes
+  de formatear**, así que una nota con `<script>` en el cuerpo sale como texto.
+  Con tests sobre eso.
+- **Testimonios y textos del sitio editables**: los testimonios son personas
+  reales y tienen que poder salir sin un deploy; los ajustes —el WhatsApp, la
+  leyenda del envío gratis, el aviso de la barra superior— se cambian desde el
+  panel.
+
+### Lo que falta para cerrar el contrato
+
+| # | Qué | Cláusula | Depende de |
+|---|---|---|---|
+| 1 | **Migración desde Quality Software**: `/admin/migracion` con subida de archivo, mapeo de columnas, vista previa, validación, ejecución por lotes en transacción e informe de integridad. Reutiliza `lib/precios-csv.ts`. **Se construye sin el dump**: el mapeo de columnas es justamente lo que permite no saber todavía qué exporta el sistema. | 1.9 | Nada para construirlo; el dump para usarlo |
+| 2 | **SEO y publicación**: `app/sitemap.ts` y `app/robots.ts`, metadata dinámica en catálogo y ficha, datos estructurados (`Organization`, `LocalBusiness` por sucursal, `Product` con `offers`, `BreadcrumbList`), `opengraph-image.tsx`, y limpieza de los `"use client"` de más que quedan en páginas públicas (calculadora, contacto, nosotros). | 1.8 | Nada |
+| 3 | **Productos sugeridos**: la tabla `related_products` ya está creada, con tipos `complementario` y `similar`. Falta la carga desde la ficha de producto del panel y mostrarlos en la ficha pública y en el carrito, con respaldo automático por categoría cuando no hay ninguno cargado. | 1.3 | Nada |
+| 4 | **Guías escritas** (`/admin/ayuda`): paso a paso dentro del panel para gente que viene de un sistema de escritorio, más `docs/GUIAS/`. Se escriben con las pantallas ya terminadas. | 1.10 | Nada |
+| 5 | **`audit_log` transversal** de las acciones del panel. No lo pide el contrato; lo pide operar con varias personas cargando. | — | Nada |
+| 6 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Decisión de infraestructura (R5) y acceso al dominio |
+| 7 | **Capacitación presencial** y acompañamiento en la transición. | 1.10 | Fecha con el cliente |
+
+De los cobros, los avisos y ARCA no falta código: falta lo que tramita el
+cliente —credenciales de Mercado Pago, casilla con dominio verificado,
+certificado fiscal y la definición sobre WhatsApp—. La lista completa de
+insumos pendientes está en `docs/CAMBIOS.md`.
+
 
 ## 2. Punto de partida real
 
@@ -148,11 +305,11 @@ ni pagos.
 | 10 páginas públicas | 🟡 Maqueta con mock | Se reconectan a datos reales |
 | `lib/calculations.ts` (4 calculadoras, 170 líneas) | ✅ Lógica pura correcta | Se conserva tal cual |
 | `lib/budget-context.tsx` (carrito en memoria) | 🟡 Solo cliente, se pierde al recargar | Se reescribe con persistencia |
-| Panel admin (7 secciones) | 🟡 Tablas con datos falsos | Se reescribe contra la DB |
+| Panel admin (hoy 16 secciones) | ✅ Todo contra la base | — |
 | `app/admin/facturacion` | 🟡 918 líneas de maqueta completa (alta, IVA, impresión) | Se conecta a la base y a ARCA |
-| Tienda, checkout, pagos, envíos | ❌ No existe | Se construye entero |
-| Portal de clientes | ❌ No existe | Se construye entero |
-| Portal de profesionales | ❌ Solo landing | Se construye entero |
+| Tienda, checkout, pagos, envíos | ✅ Hecho (7ª pasada: cobros, remitos y seguimiento) | — |
+| Portal de clientes | ✅ Hecho (4ª y 7ª pasada) | — |
+| Portal de profesionales | ✅ Hecho (8ª pasada) | — |
 | Migración Quality Software | ❌ No arrancada | Se construye entero |
 
 **Estimación gruesa: el prototipo cubre ~20% del contrato.** Es la Etapa 1 casi entera,
@@ -272,8 +429,8 @@ montar la infraestructura sin perder el hito.
 | Semana | Entrega |
 |---|---|
 | S4 | Carrito persistente (reemplaza `budget-context`), ficha de producto con variantes, checkout paso a paso, cálculo de envío por zona y opción de retiro. |
-| S5 | Mercado Pago Checkout Pro + webhook + conciliación. Transferencia bancaria con comprobante. Pago con cuenta corriente para clientes habilitados. |
-| S6 | Panel de pedidos con estados y notificaciones (email + WhatsApp — ver riesgo R4). Productos sugeridos. Integración de envíos con el transportista definido. |
+| S5 | ✅ Mercado Pago Checkout Pro + webhook + conciliación, transferencia con comprobante y pago a cuenta corriente (séptima pasada, 26/08). Falta el alta de la cuenta de Mercado Pago, que tramita el cliente. |
+| S6 | ✅ Panel de pedidos con estados y avisos por email y WhatsApp (séptima pasada). Falta: productos sugeridos, que van con el resto del trabajo de tienda de la pasada 9. |
 
 ### Etapa 3 — Gestión y facturación · S7–S9 · 05/10 → 23/10
 
@@ -281,16 +438,16 @@ montar la infraestructura sin perder el hito.
 
 | Semana | Entrega |
 |---|---|
-| S7 | Calculadora y presupuestador conectados: los resultados generan un `quote` real que cae en el admin. Gestión de cortes de placa con cola de trabajo. Es la base sobre la que se apoya después la conexión con las máquinas (sección 9). |
-| S8 | **ARCA**: WSAA + WSFEv1 en homologación. Emisión de A/B/C, notas de crédito y débito, QR, PDF. |
+| S7 | ✅ Presupuestador conectado: pedirlo desde el sitio genera un `quote` real que cae en el panel (octava pasada). Gestión de cortes de placa con cola de trabajo, que es la base de la conexión con las máquinas (sección 9). |
+| S8 | **ARCA**: ✅ WSAA + WSFEv1 escritos, emisión de A/B/C, notas de crédito, QR e impresión (sexta pasada, 22/08). Falta correrlo contra homologación con un certificado real. |
 | S9 | ARCA en producción con el certificado real. Panel de control con KPIs reales (reemplaza `dashboard-data.ts`). Base de clientes con ficha, historial y segmentación. |
 
 ### Etapa 4 — Portales, migración y lanzamiento · S10–S12 · 26/10 → 13/11
 
 | Semana | Entrega |
 |---|---|
-| S10 | Portal de clientes: ✅ cuenta corriente, pedidos y presupuestos (hecho en la cuarta pasada, 22/08). Falta: facturas y remitos en PDF, pago online de deuda, firma digital de acopio desde el celular. |
-| S11 | Portal de profesionales: registro con validación de CUIT y aprobación, precios diferenciados, presupuestos express, documentación técnica, módulo de eventos con inscripción y pago. |
+| S10 | ✅ Portal de clientes completo: cuenta corriente, pedidos y presupuestos (4ª pasada), más facturas y remitos en PDF, pago online de deuda y firma digital de acopio desde el celular (7ª pasada). |
+| S11 | ✅ Portal de profesionales completo: registro con validación de CUIT, aprobación con lista y límite, precios diferenciados con descuentos por volumen, presupuestos express con SLA, documentación técnica y eventos con inscripción y pago (octava pasada, 26/08). |
 | S12 | Migración definitiva de Quality Software, verificación de integridad, SEO y performance, dominio `mjbj.ar` + SSL, capacitación presencial y guías escritas. **Lanzamiento.** |
 
 Garantía: **13/11/2026 → 13/12/2026**. A partir de ahí, soporte solo bajo acuerdo escrito
@@ -303,11 +460,11 @@ aparte (14.2).
 | # | Riesgo | Impacto | Mitigación |
 |---|---|---|---|
 | **R1** | **Quality Software sin exportación usable.** Puede ser una base propietaria, DBF o Access sin API. Si no hay export, hay que scrapear pantallas o retipear. | Alto — la migración es obligación contractual sin costo adicional (1.9) | **Pedir un dump de muestra en S1, no en S10.** Si no hay export, notificarlo por escrito de inmediato: es un cambio de condiciones, no un problema propio. |
-| **R2** | **Certificado ARCA y punto de venta.** El trámite lo hace el cliente (7 y 13.2). El certificado de producción sale por el Administrador de Certificados Digitales, y el punto de venta debe estar habilitado como *Webservices*. | Alto — bloquea S9 entera | Arrancar el trámite en **S1**. Homologación (WSASS) se puede usar mientras tanto. |
+| **R2** | **Certificado ARCA y punto de venta.** El trámite lo hace el cliente (7 y 13.2). El certificado de producción sale por el Administrador de Certificados Digitales, y el punto de venta debe estar habilitado como *Webservices*. | Alto — bloquea S9 entera | **El código está escrito y andando contra el proveedor interno (sexta pasada).** Falta lo que depende del cliente: el certificado. El de homologación es gratis y sale online por WSASS — conviene sacarlo ya para depurar `lib/fiscal/proveedores/arca.ts` contra el ambiente de prueba, que es lo único que todavía no se pudo ejecutar. |
 | **R3** | **`CondicionIVAReceptorId` obligatorio desde abril/2026.** Toda factura necesita la condición frente al IVA del receptor. | Medio | El campo entra en `profiles` desde el schema inicial (S1) y es obligatorio en el checkout de responsables inscriptos. |
 | **R4** | **"Notificaciones automáticas por WhatsApp" (1.3).** Automatizar de verdad exige WhatsApp Business API de Meta: alta, verificación de la empresa, plantillas aprobadas y **costo por conversación**. No es gratis ni instantáneo, y choca con "sin costos recurrentes" (12). | Alto — comercial | **Resuelto por el camino (a) en la quinta pasada**: el módulo está construido contra la Cloud API, con proveedor de demostración mientras el número no esté dado de alta. Quedan dos cosas del lado del cliente: el trámite ante Meta (listado en `/admin/whatsapp/configuracion`) y aceptar por escrito el costo por conversación. **Ojo con la migración del número**: el que hoy usan en la app deja de funcionar en el teléfono al migrarlo, así que conviene evaluar dar de alta uno nuevo. |
 | **R5** | **Hosting "gratuito" (12).** Vercel Hobby no admite uso comercial → Pro, USD 20/mes. El free tier de Neon da 0,5 GB de storage, 100 compute-hours por mes y autoscaling tope 2 CU: alcanza para desarrollar, no para operar una tienda con facturación. | Alto — comercial | Neon Launch arranca en ~USD 5/mes más consumo, bastante más barato que la alternativa gestionada. Plantear el costo real ahora, no en el lanzamiento. **Decisión pendiente.** |
-| **R6** | **APIs de envío.** Andreani tiene API con cuenta corporativa; CDI probablemente no. | Medio | Diseñar `shipping_zones` con tarifas configurables desde el admin, y la API como mejora encima. Cumple 1.3 sin depender de un tercero. |
+| **R6** | **APIs de envío.** Andreani tiene API con cuenta corporativa; CDI probablemente no. | Medio | **Resuelto por el piso que funciona con cualquiera** (séptima pasada): `shipping_zones` con tarifas configurables, y `shipments` con transportista y número de seguimiento cargados a mano desde el remito. Una integración después llena esos mismos campos sin tocar una pantalla. |
 | **R7** | **Backups fiscales.** Las facturas emitidas son documentación fiscal: perderlas es un problema del cliente ante ARCA. El free tier de Neon retiene solo **6 horas** de historial para restaurar a un punto en el tiempo. | Alto | Seis horas no cubren "el lunes descubrimos algo que se rompió el viernes". Plan pago para ampliar la ventana (ver R5) + export periódico a almacenamiento propio. La cláusula 15 limita la responsabilidad, pero el daño reputacional no se limita por contrato. |
 | **R8** | **Scope creep vía 8.4.** "Alcance flexible" invita a pedidos infinitos que parecen menores. | Medio | Bitácora en `docs/CAMBIOS.md`: fecha, pedido, decisión, respuesta enviada. |
 | **R9** | **Capacitación de usuarios no técnicos.** El equipo viene de un sistema de escritorio; el rechazo al cambio hunde proyectos técnicamente correctos. | Medio | Involucrar al operador real desde S3, no en S12. Las guías escritas (1.10) se van escribiendo en cada etapa. |

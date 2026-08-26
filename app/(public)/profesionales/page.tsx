@@ -1,208 +1,357 @@
-"use client";
-
-import { useState } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import {
-  Users,
-  ShieldCheck,
-  FileText,
-  TrendingUp,
-  MessageCircle,
-  Building2,
-  Percent,
+  ArrowRight,
+  CalendarDays,
+  Check,
   Clock,
-  ChevronRight,
+  FileText,
   Lock,
-  Mail,
+  MessageCircle,
+  Percent,
+  Wallet,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getSession } from "@/lib/dal/session";
+import { clienteDeLaSesion } from "@/lib/dal/cuenta";
+import {
+  documentosReservados,
+  documentosVisibles,
+  estadoProfesional,
+  eventosProximos,
+} from "@/lib/dal/profesionales";
+import { fechaLarga, formatearMonto } from "@/lib/formato";
+import { FormularioProfesional } from "./formulario";
 
-export default function ProfesionalesPage() {
-  const [showLogin, setShowLogin] = useState(false);
+export const metadata: Metadata = {
+  title: "Portal de profesionales",
+  description:
+    "Precios diferenciados, descuentos por volumen, cuenta corriente, presupuestos express en 24 horas y documentación técnica para arquitectos, constructoras y carpinteros de Mar del Plata.",
+  alternates: { canonical: "/profesionales" },
+};
+
+const BENEFICIOS = [
+  {
+    icono: Percent,
+    titulo: "Precios diferenciados",
+    detalle:
+      "Una lista propia, no un descuento parejo: cada producto con el margen que corresponde, y escalas por cantidad que se aplican solas en el carrito.",
+  },
+  {
+    icono: Wallet,
+    titulo: "Cuenta corriente",
+    detalle:
+      "Comprás y abonás después, dentro de un límite acordado. El saldo y cada movimiento los ves en tu cuenta, sin llamar a preguntar.",
+  },
+  {
+    icono: Clock,
+    titulo: "Presupuestos express",
+    detalle:
+      "Mandás la lista de la obra y contestamos en menos de 24 horas hábiles. Con el compromiso a la vista, no como promesa.",
+  },
+  {
+    icono: FileText,
+    titulo: "Documentación técnica",
+    detalle:
+      "Fichas de producto, tablas de carga e instructivos de colocación, todos en un lugar y listos para adjuntar al pliego.",
+  },
+];
+
+/**
+ * Portal de profesionales (cláusula 1.7).
+ *
+ * Era una maqueta entera del lado del cliente, con un formulario que no mandaba
+ * nada y una lista de beneficios que no existían. Ahora es un Server Component
+ * que muestra tres cosas distintas según quién esté mirando:
+ *
+ * - **Aprobado**: el panel con lo que ya tiene habilitado.
+ * - **Con solicitud pendiente**: en qué está.
+ * - **Todos los demás**: qué se gana y el formulario para pedirlo.
+ *
+ * La misma página para los tres casos, y no tres rutas, porque la pregunta que
+ * trae a alguien acá es siempre la misma: "¿esto para mí qué es?".
+ */
+export default async function ProfesionalesPage() {
+  const [estado, sesion, cliente, eventos, documentos, reservados] =
+    await Promise.all([
+      estadoProfesional(),
+      getSession(),
+      clienteDeLaSesion(),
+      eventosProximos(),
+      documentosVisibles(),
+      documentosReservados(),
+    ]);
 
   return (
     <div className="min-h-screen">
-      <div className="bg-brand-gray text-white py-16">
+      <header className="bg-brand-gray py-14 text-white">
         <div className="container mx-auto px-4">
-          <motion.div
-            className="max-w-3xl"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <Badge className="bg-brand-orange/20 text-brand-orange border-brand-orange/30 mb-4">
-              Portal Profesionales
-            </Badge>
-            <h1 className="text-4xl font-bold mb-4">
-              Acompañamos tu obra de{" "}
-              <span className="text-brand-orange">inicio a fin</span>
-            </h1>
-            <p className="text-white/70 text-lg">
-              Beneficios exclusivos para arquitectos, constructoras, carpinteros y profesionales
-              de la construcción.
-            </p>
-          </motion.div>
+          <p className="text-sm font-semibold uppercase tracking-[0.12em] text-brand-orange">
+            Portal de profesionales
+          </p>
+          <h1 className="mt-2 max-w-3xl text-4xl font-bold leading-tight">
+            {estado.aprobado
+              ? `Hola ${(estado.nombre ?? "").split(" ")[0]}, tu acceso está activo`
+              : "Acompañamos tu obra de inicio a fin"}
+          </h1>
+          <p className="mt-3 max-w-2xl text-lg text-white/70">
+            {estado.aprobado
+              ? "Los precios del catálogo ya son los tuyos. Acá está todo lo que tenés habilitado."
+              : "Precios, financiación y respuesta rápida para arquitectos, constructoras, carpinteros y quienes viven de esto."}
+          </p>
         </div>
-      </div>
+      </header>
 
       <div className="container mx-auto px-4 py-12">
-        {/* Benefits */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
-          {[
-            { icon: Percent, title: "Precios Especiales", desc: "Descuentos por volumen y precios diferenciados para profesionales registrados." },
-            { icon: FileText, title: "Cuenta Corriente", desc: "Financiación a medida con cuenta corriente exclusiva para tu empresa." },
-            { icon: Clock, title: "Presupuestos Express", desc: "Respuesta en menos de 24hs para presupuestos de obra completos." },
-            { icon: Users, title: "Asesor Dedicado", desc: "Un ejecutivo de cuenta asignado con contacto directo por WhatsApp." },
-          ].map((benefit, i) => (
-            <motion.div
-              key={benefit.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-            >
-              <Card className="h-full hover:shadow-lg hover:border-brand-orange/30 transition-all">
-                <CardContent className="p-6">
-                  <div className="w-12 h-12 bg-brand-orange/10 rounded-xl flex items-center justify-center mb-4">
-                    <benefit.icon className="h-6 w-6 text-brand-orange" />
-                  </div>
-                  <h3 className="font-semibold mb-2">{benefit.title}</h3>
-                  <p className="text-sm text-muted-foreground">{benefit.desc}</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
+        {estado.aprobado ? (
+          <PanelDelProfesional
+            nombreLista={estado.nombreLista}
+            limiteCredito={estado.limiteCredito}
+            documentos={documentos.length}
+          />
+        ) : (
+          <div className="grid gap-10 lg:grid-cols-[1fr_26rem]">
+            <div>
+              <div className="grid gap-5 sm:grid-cols-2">
+                {BENEFICIOS.map((b) => (
+                  <article
+                    key={b.titulo}
+                    className="rounded-xl border bg-white p-5"
+                  >
+                    <b.icono className="h-6 w-6 text-brand-orange" />
+                    <h2 className="mt-3 font-semibold">{b.titulo}</h2>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                      {b.detalle}
+                    </p>
+                  </article>
+                ))}
+              </div>
 
-        {/* Portal section */}
-        <div className="grid lg:grid-cols-2 gap-12 items-start">
-          {/* Features */}
-          <div>
-            <h2 className="text-2xl font-bold mb-6">¿Qué incluye el Portal?</h2>
-            <div className="space-y-4">
-              {[
-                { icon: TrendingUp, title: "Historial de compras", desc: "Accedé al detalle de todas tus compras y facturas." },
-                { icon: FileText, title: "Presupuestos guardados", desc: "Guardá y reutilizá presupuestos para proyectos similares." },
-                { icon: Building2, title: "Stock en tiempo real", desc: "Consultá disponibilidad en ambas sucursales al instante." },
-                { icon: MessageCircle, title: "Chat directo con asesor", desc: "Comunicación directa con tu ejecutivo de cuenta." },
-                { icon: ShieldCheck, title: "Certificados y fichas técnicas", desc: "Descargá documentación técnica de todos los productos." },
-              ].map((feat) => (
-                <div key={feat.title} className="flex gap-4 p-4 rounded-lg border hover:bg-muted/50 transition-colors">
-                  <div className="w-10 h-10 bg-brand-green/10 rounded-lg flex items-center justify-center shrink-0">
-                    <feat.icon className="h-5 w-5 text-brand-green" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-sm">{feat.title}</h4>
-                    <p className="text-sm text-muted-foreground">{feat.desc}</p>
+              {reservados > 0 && (
+                <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Lock className="h-4 w-4 shrink-0" />
+                  Hay {reservados} documento{reservados === 1 ? "" : "s"} técnico
+                  {reservados === 1 ? "" : "s"} reservado
+                  {reservados === 1 ? "" : "s"} para profesionales aprobados.
+                </p>
+              )}
+            </div>
+
+            <aside>
+              {estado.solicitud?.estado === "pendiente" ? (
+                <EstadoDeSolicitud fecha={estado.solicitud.createdAt} />
+              ) : estado.solicitud?.estado === "rechazada" ? (
+                <SolicitudRechazada motivo={estado.solicitud.motivoRechazo} />
+              ) : (
+                <div className="rounded-xl border bg-white p-6">
+                  <h2 className="text-xl font-semibold">Pedí tu acceso</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Lo revisa un asesor y te contestamos en menos de 24 horas
+                    hábiles.
+                  </p>
+                  <div className="mt-5">
+                    <FormularioProfesional
+                      emailSugerido={cliente?.email ?? sesion?.email}
+                      nombreSugerido={cliente?.nombre ?? sesion?.name}
+                    />
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </aside>
           </div>
+        )}
 
-          {/* Login / Register */}
-          <Card className="sticky top-24">
-            <CardHeader>
-              <CardTitle>Accedé al Portal</CardTitle>
-              <CardDescription>
-                Registrate o iniciá sesión para acceder a beneficios exclusivos.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="login">
-                <TabsList className="w-full">
-                  <TabsTrigger value="login" className="flex-1">Iniciar Sesión</TabsTrigger>
-                  <TabsTrigger value="register" className="flex-1">Registrarse</TabsTrigger>
-                </TabsList>
-                <TabsContent value="login" className="space-y-4 mt-4">
-                  <div>
-                    <Label>Email</Label>
-                    <Input type="email" placeholder="tu@empresa.com" />
-                  </div>
-                  <div>
-                    <Label>Contraseña</Label>
-                    <Input type="password" placeholder="••••••••" />
-                  </div>
-                  <Button className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white">
-                    <Lock className="h-4 w-4 mr-2" />
-                    Ingresar
-                  </Button>
-                </TabsContent>
-                <TabsContent value="register" className="space-y-4 mt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Nombre</Label>
-                      <Input placeholder="Tu nombre" />
-                    </div>
-                    <div>
-                      <Label>Apellido</Label>
-                      <Input placeholder="Tu apellido" />
-                    </div>
-                  </div>
-                  <div>
-                    <Label>Empresa / Razón Social</Label>
-                    <Input placeholder="Nombre de tu empresa" />
-                  </div>
-                  <div>
-                    <Label>CUIT</Label>
-                    <Input placeholder="XX-XXXXXXXX-X" />
-                  </div>
-                  <div>
-                    <Label>Email profesional</Label>
-                    <Input type="email" placeholder="tu@empresa.com" />
-                  </div>
-                  <div>
-                    <Label>Teléfono</Label>
-                    <Input placeholder="223-..." />
-                  </div>
-                  <div>
-                    <Label>Rubro</Label>
-                    <Input placeholder="Arquitectura, Construcción, Carpintería..." />
-                  </div>
-                  <Button className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white">
-                    <Mail className="h-4 w-4 mr-2" />
-                    Solicitar acceso
-                  </Button>
-                  <p className="text-xs text-muted-foreground text-center">
-                    Tu solicitud será evaluada y recibirás una respuesta en 24hs hábiles.
-                  </p>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        </div>
+        {eventos.length > 0 && (
+          <section className="mt-14">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-2xl font-bold tracking-tight">
+                Próximas capacitaciones
+              </h2>
+              <Link
+                href="/eventos"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-orange-dark hover:underline"
+              >
+                Ver todas
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
 
-        {/* CTA */}
-        <div className="mt-16 text-center">
-          <Card className="bg-brand-orange/5 border-brand-orange/20">
-            <CardContent className="p-10">
-              <h3 className="text-2xl font-bold mb-3">¿Preferís hablar con un asesor?</h3>
-              <p className="text-muted-foreground mb-6">
-                Contactanos directamente y te asignamos un ejecutivo de cuenta para tu empresa.
-              </p>
-              <div className="flex flex-wrap gap-3 justify-center">
-                <a href="https://wa.me/5492235051535" target="_blank" rel="noopener noreferrer">
-                  <Button className="bg-brand-orange hover:bg-brand-orange-dark text-white">
-                    <MessageCircle className="h-4 w-4 mr-2" />
-                    Hablar con un asesor
-                  </Button>
-                </a>
-                <a href="tel:02234743328">
-                  <Button variant="outline">
-                    Llamar: (0223) 474-3328
-                  </Button>
-                </a>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {eventos.slice(0, 3).map((evento) => {
+                const lugares =
+                  evento.cupo > 0 ? evento.cupo - evento.inscriptos : null;
+
+                return (
+                  <Link
+                    key={evento.id}
+                    href={`/eventos/${evento.slug}`}
+                    className="rounded-xl border bg-white p-5 transition-shadow hover:shadow-md"
+                  >
+                    <p className="flex items-center gap-2 text-sm text-brand-orange-dark">
+                      <CalendarDays className="h-4 w-4" />
+                      {fechaLarga.format(evento.inicia)}
+                    </p>
+                    <h3 className="mt-2 font-semibold leading-snug">
+                      {evento.titulo}
+                    </h3>
+                    {evento.resumen && (
+                      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                        {evento.resumen}
+                      </p>
+                    )}
+                    <p className="mt-3 text-sm">
+                      {evento.precio > 0
+                        ? formatearMonto(evento.precio)
+                        : "Sin cargo"}
+                      {lugares !== null && (
+                        <span className="text-muted-foreground">
+                          {" · "}
+                          {lugares > 0
+                            ? `${lugares} lugar${lugares === 1 ? "" : "es"}`
+                            : "Sin cupo"}
+                        </span>
+                      )}
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        <section className="mt-14 rounded-xl border border-brand-orange/20 bg-brand-orange/5 p-8 text-center">
+          <h2 className="text-2xl font-bold">¿Preferís hablar con alguien?</h2>
+          <p className="mx-auto mt-2 max-w-xl text-muted-foreground">
+            Contanos qué obra tenés entre manos y te asignamos un asesor.
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-3">
+            <a
+              href="https://wa.me/542235903118"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Escribir por WhatsApp
+            </a>
+            <a
+              href="tel:02234743328"
+              className="inline-flex h-11 items-center rounded-lg border bg-white px-5 font-medium transition-colors hover:bg-muted"
+            >
+              (0223) 474-3328
+            </a>
+          </div>
+        </section>
       </div>
+    </div>
+  );
+}
+
+function PanelDelProfesional({
+  nombreLista,
+  limiteCredito,
+  documentos,
+}: {
+  nombreLista: string | null;
+  limiteCredito: number;
+  documentos: number;
+}) {
+  const accesos = [
+    {
+      href: "/catalogo",
+      icono: Percent,
+      titulo: "Tus precios en el catálogo",
+      detalle: nombreLista
+        ? `Estás viendo la lista ${nombreLista}.`
+        : "Los precios que ves ya son los tuyos.",
+    },
+    {
+      href: "/mi-cuenta/cuenta-corriente",
+      icono: Wallet,
+      titulo: "Cuenta corriente",
+      detalle:
+        limiteCredito > 0
+          ? `Tu límite es de ${formatearMonto(limiteCredito)}.`
+          : "Consultanos para habilitarla.",
+    },
+    {
+      href: "/presupuesto",
+      icono: Clock,
+      titulo: "Presupuesto express",
+      detalle: "Mandá la lista de la obra y contestamos en 24 horas hábiles.",
+    },
+    {
+      href: "/documentacion",
+      icono: FileText,
+      titulo: "Documentación técnica",
+      detalle: `${documentos} documento${documentos === 1 ? "" : "s"} disponible${documentos === 1 ? "" : "s"}.`,
+    },
+  ];
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      {accesos.map((a) => (
+        <Link
+          key={a.href}
+          href={a.href}
+          className="flex items-start gap-4 rounded-xl border bg-white p-5 transition-shadow hover:shadow-md"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-orange/10">
+            <a.icono className="h-5 w-5 text-brand-orange" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">{a.titulo}</span>
+            <span className="block text-sm text-muted-foreground">
+              {a.detalle}
+            </span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function EstadoDeSolicitud({ fecha }: { fecha: Date }) {
+  return (
+    <div className="rounded-xl border bg-white p-6">
+      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-orange/10">
+        <Clock className="h-5 w-5 text-brand-orange" />
+      </span>
+      <h2 className="mt-4 text-xl font-semibold">Estamos revisando tu pedido</h2>
+      <p className="mt-1 text-muted-foreground">
+        La recibimos el {fechaLarga.format(fecha)}. Un asesor la está mirando y
+        te contestamos dentro de las 24 horas hábiles.
+      </p>
+      <p className="mt-4 flex items-start gap-2 text-sm text-muted-foreground">
+        <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-green" />
+        Mientras tanto podés comprar normalmente: al habilitarte, los precios
+        cambian solos.
+      </p>
+    </div>
+  );
+}
+
+function SolicitudRechazada({ motivo }: { motivo: string | null }) {
+  return (
+    <div className="rounded-xl border bg-white p-6">
+      <h2 className="text-xl font-semibold">Sobre tu solicitud</h2>
+      <p className="mt-1 text-muted-foreground">
+        Por ahora no pudimos habilitarte el acceso.
+        {motivo ? ` ${motivo}` : ""}
+      </p>
+      <p className="mt-3 text-sm text-muted-foreground">
+        Si creés que hay un error, escribinos: la mayoría de los casos se
+        resuelven hablando.
+      </p>
+      <a
+        href="https://wa.me/542235903118"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
+      >
+        <MessageCircle className="h-4 w-4" />
+        Hablar con un asesor
+      </a>
     </div>
   );
 }

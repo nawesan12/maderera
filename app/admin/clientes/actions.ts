@@ -12,6 +12,7 @@ import {
   quotes,
 } from "@/lib/db/schema";
 import { requireStaff, requireStaffRole } from "@/lib/dal/session";
+import { parsearImporte } from "@/lib/formato";
 
 export interface EstadoCliente {
   error?: string;
@@ -133,9 +134,7 @@ export async function registrarMovimiento(
     return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
   }
 
-  const magnitud = Math.abs(
-    Number(parsed.data.monto.replace(/\./g, "").replace(",", ".")),
-  );
+  const magnitud = Math.abs(parsearImporte(parsed.data.monto));
 
   if (!Number.isFinite(magnitud) || magnitud <= 0) {
     return { error: "Poné un importe mayor a cero." };

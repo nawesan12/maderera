@@ -15,20 +15,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { db } from "@/lib/db";
 import { branches, orderItems, orders } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
+import { cobroDelPedido, datosParaTransferir } from "@/lib/dal/pagos";
+import { cobrosEnVivo } from "@/lib/pagos";
+import { BloquePago } from "@/components/pagos/bloque-pago";
 import { formatearPrecio } from "@/lib/formato";
 
 export const metadata: Metadata = {
   title: "Pedido confirmado",
   robots: { index: false, follow: false },
-};
-
-const PROXIMO_PASO: Record<string, string> = {
-  mercado_pago:
-    "Te mandamos el link de pago por WhatsApp para que lo abones cuando quieras.",
-  transferencia:
-    "Te pasamos los datos bancarios por WhatsApp. El pedido se prepara al acreditarse.",
-  efectivo: "Abonás al retirar o cuando te lo entregamos.",
-  cuenta_corriente: "Lo cargamos a tu cuenta corriente.",
 };
 
 export default async function PedidoConfirmadoPage({
@@ -51,6 +45,7 @@ export default async function PedidoConfirmadoPage({
       subtotal: orders.subtotal,
       total: orders.total,
       medioPago: orders.medioPago,
+      estadoPago: orders.estadoPago,
       sucursal: branches.name,
       sucursalDireccion: branches.address,
       createdAt: orders.createdAt,
@@ -62,13 +57,15 @@ export default async function PedidoConfirmadoPage({
 
   if (!pedido) notFound();
 
-  const [items, sesion] = await Promise.all([
+  const [items, sesion, cobro, banco] = await Promise.all([
     db
       .select()
       .from(orderItems)
       .where(eq(orderItems.orderId, pedido.id))
       .orderBy(orderItems.orden),
     getSession(),
+    cobroDelPedido(pedido.id),
+    datosParaTransferir(),
   ]);
 
   const mensaje = encodeURIComponent(
@@ -134,7 +131,7 @@ export default async function PedidoConfirmadoPage({
           </CardContent>
         </Card>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4">
           <Card className="border-0 shadow-sm">
             <CardContent className="p-5">
               <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -164,18 +161,30 @@ export default async function PedidoConfirmadoPage({
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-5">
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Pago
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {pedido.medioPago
-                  ? PROXIMO_PASO[pedido.medioPago]
-                  : "Coordinamos el pago por WhatsApp."}
-              </p>
-            </CardContent>
-          </Card>
+        </div>
+
+        {/* El pago es lo primero que hay que resolver después de confirmar, así
+            que va entero y ancho, no como una tarjeta más de la grilla. */}
+        <div className="mt-4">
+          <BloquePago
+            numero={pedido.numero}
+            total={Number(pedido.total)}
+            medioPago={pedido.medioPago}
+            estadoPago={pedido.estadoPago}
+            cobro={
+              cobro
+                ? {
+                    estado: cobro.estado,
+                    proveedor: cobro.proveedor,
+                    monto: cobro.monto,
+                    comprobanteUrl: cobro.comprobanteUrl,
+                    motivoRechazo: cobro.motivoRechazo,
+                  }
+                : null
+            }
+            banco={banco}
+            enVivo={cobrosEnVivo()}
+          />
         </div>
 
         {/* Con sesión, el pedido ya vive en el portal y se puede seguir desde

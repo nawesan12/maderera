@@ -47,6 +47,13 @@ const ESTADOS: Record<string, Estilo> = {
   moroso: { etiqueta: "Moroso", pildora: "bg-red-100 text-red-900", acento: "bg-red-600", abierto: true },
   inactivo: { etiqueta: "Inactivo", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: false },
 
+  // Comprobantes
+  emitida: { etiqueta: "Emitida", pildora: "bg-amber-100 text-amber-900", acento: "bg-amber-400", abierto: true },
+  autorizada: { etiqueta: "Autorizada", pildora: "bg-green-100 text-green-900", acento: "bg-green-600", abierto: false },
+  anulada: { etiqueta: "Anulada", pildora: "bg-muted text-muted-foreground line-through", acento: "bg-border", abierto: false },
+  rechazada: { etiqueta: "Rechazada por ARCA", pildora: "bg-red-100 text-red-900", acento: "bg-red-600", abierto: true },
+  borrador: { etiqueta: "Borrador", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: true },
+
   // Pagos y cuenta corriente
   pagado: { etiqueta: "Pagado", pildora: "bg-green-100 text-green-900", acento: "bg-green-600", abierto: false },
   parcial: { etiqueta: "Pago parcial", pildora: "bg-amber-100 text-amber-900", acento: "bg-amber-400", abierto: true },
@@ -55,6 +62,13 @@ const ESTADOS: Record<string, Estilo> = {
   nota_credito: { etiqueta: "Nota de crédito", pildora: "bg-blue-100 text-blue-900", acento: "bg-blue-500", abierto: false },
   nota_debito: { etiqueta: "Nota de débito", pildora: "bg-amber-100 text-amber-900", acento: "bg-amber-400", abierto: false },
   ajuste: { etiqueta: "Ajuste", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: false },
+
+  // Cobros. "Iniciado" es el abandono de checkout: se generó el link y nadie
+  // volvió. Se distingue del rechazo porque no hay nada que resolver.
+  iniciado: { etiqueta: "Sin pagar", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: false },
+  en_revision: { etiqueta: "A verificar", pildora: "bg-amber-100 text-amber-900", acento: "bg-amber-400", abierto: true },
+  aprobado: { etiqueta: "Acreditado", pildora: "bg-green-100 text-green-900", acento: "bg-green-600", abierto: false },
+  reintegrado: { etiqueta: "Reintegrado", pildora: "bg-blue-100 text-blue-900", acento: "bg-blue-500", abierto: false },
 };
 
 const PREDETERMINADO: Estilo = {

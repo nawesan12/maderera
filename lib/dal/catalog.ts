@@ -1,6 +1,7 @@
 import "server-only";
 
-import { and, asc, count, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { coincideBusqueda } from "@/lib/busqueda";
 import { db } from "@/lib/db";
 import {
@@ -8,12 +9,17 @@ import {
   categories,
   inventory,
   priceListItems,
-  priceLists,
   productImages,
   productVariants,
   products,
 } from "@/lib/db/schema";
-import { combinedStockLevel, stockLevel, type StockLevel } from "@/lib/stock-level";
+import { listaVigente } from "@/lib/dal/precios-sesion";
+import {
+  combinedStockLevel,
+  disponible,
+  stockLevel,
+  type StockLevel,
+} from "@/lib/stock-level";
 
 /**
  * Consultas del catálogo público.
@@ -254,25 +260,27 @@ function ordenar(
 }
 
 /**
- * Id de la lista de precios pública.
+ * Variantes con su precio y su stock por sucursal.
  *
- * Se resuelve por separado y se usa para filtrar el join de precios. Hacerlo con
- * un LEFT JOIN contra `price_lists` no alcanza: las filas de la lista profesional
- * igual entran con su precio y terminan pisando al público. Es un error que no se
- * ve —la página muestra un número plausible— pero publica el precio mayorista.
+ * La lista se filtra en el join y no con un LEFT JOIN abierto contra
+ * `price_lists`: sin el filtro, las filas de la lista profesional entran con su
+ * precio y terminan pisando al público. Es un error que no se ve —la página
+ * muestra un número plausible— pero publica el precio mayorista.
+ *
+ * El precio sale de la lista que corresponde a quien está mirando —general para
+ * el público, la propia para un profesional aprobado— y **cae a la general
+ * cuando la lista alternativa no tiene ese producto cargado**. Sin ese respaldo,
+ * un profesional vería medio catálogo sin precio, que es peor que verlo al
+ * precio de público.
  */
-async function idListaGeneral(): Promise<string | null> {
-  const [lista] = await db
-    .select({ id: priceLists.id })
-    .from(priceLists)
-    .where(eq(priceLists.isDefault, true))
-    .limit(1);
-  return lista?.id ?? null;
-}
-
-/** Variantes con su precio de lista general y su stock por sucursal. */
 async function variantesConStockYPrecio(productIds: string[]) {
-  const listaGeneralId = await idListaGeneral();
+  const lista = await listaVigente();
+
+  // Dos joins con alias: uno a la lista vigente y otro a la general. Traer las
+  // dos filas en la misma consulta es lo que permite el respaldo sin una
+  // segunda vuelta a la base por cada producto sin precio propio.
+  const propia = alias(priceListItems, "precio_propio");
+  const general = alias(priceListItems, "precio_general");
 
   const filas = await db
     .select({
@@ -280,22 +288,35 @@ async function variantesConStockYPrecio(productIds: string[]) {
       variantId: productVariants.id,
       label: productVariants.label,
       sortOrder: productVariants.sortOrder,
-      precio: priceListItems.price,
-      precioAnterior: priceListItems.precioAnterior,
-      ofertaHasta: priceListItems.ofertaHasta,
+      precio: sql<string | null>`coalesce(${propia.price}, ${general.price})`,
+      precioAnterior: sql<string | null>`coalesce(${propia.precioAnterior}, ${general.precioAnterior})`,
+      // `sql<string>` y no `Date`: Drizzle solo convierte a Date las columnas
+      // que se seleccionan directo, no las que salen de una expresión. Tiparlo
+      // como Date compila y explota en tiempo de ejecución al llamar getTime().
+      ofertaHasta: sql<string | null>`coalesce(${propia.ofertaHasta}, ${general.ofertaHasta})`,
       branchSlug: branches.slug,
       qty: inventory.qty,
+      reservado: inventory.reservado,
       minQty: inventory.minQty,
     })
     .from(productVariants)
     .leftJoin(
-      priceListItems,
-      listaGeneralId
+      propia,
+      lista.id
         ? and(
-            eq(priceListItems.variantId, productVariants.id),
-            eq(priceListItems.priceListId, listaGeneralId),
+            eq(propia.variantId, productVariants.id),
+            eq(propia.priceListId, lista.id),
           )
-        : eq(priceListItems.variantId, productVariants.id),
+        : sql`false`,
+    )
+    .leftJoin(
+      general,
+      lista.generalId
+        ? and(
+            eq(general.variantId, productVariants.id),
+            eq(general.priceListId, lista.generalId),
+          )
+        : sql`false`,
     )
     .leftJoin(inventory, eq(inventory.variantId, productVariants.id))
     .leftJoin(branches, eq(branches.id, inventory.branchId))
@@ -337,14 +358,20 @@ async function variantesConStockYPrecio(productIds: string[]) {
     // La oferta vale solo si no venció: una promoción que quedó cargada de un
     // mes atrás no puede seguir mostrando un tachado.
     const vigente =
-      fila.ofertaHasta === null || fila.ofertaHasta.getTime() > ahora;
+      fila.ofertaHasta === null ||
+      new Date(fila.ofertaHasta).getTime() > ahora;
 
     if (fila.precioAnterior !== null && vigente) {
       actual.precioAnterior = fila.precioAnterior;
     }
 
     if (fila.branchSlug && fila.qty !== null && fila.minQty !== null) {
-      const nivel = stockLevel(fila.qty, fila.minQty);
+      // Disponible, no físico: lo comprometido en pedidos sin retirar no se
+      // puede volver a vender.
+      const nivel = stockLevel(
+        disponible(fila.qty, fila.reservado ?? 0),
+        fila.minQty,
+      );
       if (fila.branchSlug === "casa-central") actual.stockCentral = nivel;
       if (fila.branchSlug === "aserradero") actual.stockAserradero = nivel;
     }
@@ -408,7 +435,9 @@ export async function obtenerProducto(
 
   if (!fila) return null;
 
-  const listaGeneralId = await idListaGeneral();
+  const lista = await listaVigente();
+  const propia = alias(priceListItems, "precio_propio");
+  const general = alias(priceListItems, "precio_general");
 
   const [imagenes, variantesCrudas] = await Promise.all([
     db
@@ -427,20 +456,32 @@ export async function obtenerProducto(
         anchoMm: productVariants.anchoMm,
         espesorMm: productVariants.espesorMm,
         sortOrder: productVariants.sortOrder,
-        precio: priceListItems.price,
+        // Mismo respaldo que en el listado: la lista propia manda, la general
+        // cubre lo que esa lista no tenga cargado.
+        precio: sql<string | null>`coalesce(${propia.price}, ${general.price})`,
         branchSlug: branches.slug,
         qty: inventory.qty,
+        reservado: inventory.reservado,
         minQty: inventory.minQty,
       })
       .from(productVariants)
       .leftJoin(
-        priceListItems,
-        listaGeneralId
+        propia,
+        lista.id
           ? and(
-              eq(priceListItems.variantId, productVariants.id),
-              eq(priceListItems.priceListId, listaGeneralId),
+              eq(propia.variantId, productVariants.id),
+              eq(propia.priceListId, lista.id),
             )
-          : eq(priceListItems.variantId, productVariants.id),
+          : sql`false`,
+      )
+      .leftJoin(
+        general,
+        lista.generalId
+          ? and(
+              eq(general.variantId, productVariants.id),
+              eq(general.priceListId, lista.generalId),
+            )
+          : sql`false`,
       )
       .leftJoin(inventory, eq(inventory.variantId, productVariants.id))
       .leftJoin(branches, eq(branches.id, inventory.branchId))
@@ -473,7 +514,7 @@ export async function obtenerProducto(
     if (v.precio !== null) actual.precio = v.precio;
 
     if (v.branchSlug && v.qty !== null && v.minQty !== null) {
-      const nivel = stockLevel(v.qty, v.minQty);
+      const nivel = stockLevel(disponible(v.qty, v.reservado ?? 0), v.minQty);
       if (v.branchSlug === "casa-central") actual.stockCentral = nivel;
       if (v.branchSlug === "aserradero") actual.stockAserradero = nivel;
     }

@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatearPrecio } from "@/lib/formato";
+import { PrecioSinImpuestos } from "@/components/precio-sin-impuestos";
 import { confirmarCompra, type EstadoCheckout } from "./actions";
 import type { ZonaEnvio } from "@/lib/dal/envios";
 
@@ -383,6 +384,10 @@ export function FormularioCheckout({
                 {formatearPrecio(String(total))}
               </span>
             </div>
+
+            {/* Ley 27.743: se informa el neto junto al precio final, que es el
+                que efectivamente se cobra. */}
+            <PrecioSinImpuestos precioFinal={total} className="mt-1 text-right" />
 
             <Button
               type="submit"

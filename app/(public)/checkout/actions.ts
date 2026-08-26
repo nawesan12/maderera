@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -19,6 +20,8 @@ import { obtenerCarrito } from "@/lib/dal/carrito";
 import { calcularEnvio, listarZonasDeEnvio } from "@/lib/dal/envios";
 import { creditoDisponible } from "@/lib/dal/cuenta";
 import { siguienteNumero } from "@/lib/dal/admin/ventas";
+import { notificarPedidoRecibido } from "@/lib/notificaciones/avisos";
+import { reservarPedido } from "@/lib/inventario/reservas";
 
 export interface EstadoCheckout {
   error?: string;
@@ -158,6 +161,8 @@ export async function confirmarCompra(
     }
   }
 
+  let pedidoCreado: string | null = null;
+
   await db.transaction(async (tx) => {
     const [pedido] = await tx
       .insert(orders)
@@ -218,6 +223,14 @@ export async function confirmarCompra(
       });
     }
 
+    // La mercadería queda comprometida en la misma transacción que crea el
+    // pedido. Un pedido de la tienda no es un carrito abandonado: alguien puso
+    // sus datos y confirmó, y si el stock no se reserva acá, el sitio le vende
+    // la misma placa al que entre un minuto después.
+    await reservarPedido(tx, pedido.id);
+
+    pedidoCreado = pedido.id;
+
     await tx.delete(cartItems).where(eq(cartItems.cartId, carrito.id!));
     await tx
       .update(carts)
@@ -227,6 +240,16 @@ export async function confirmarCompra(
 
   revalidatePath("/", "layout");
   revalidatePath("/admin/pedidos");
+
+  // La confirmación por correo sale con el pedido ya guardado y fuera del
+  // camino de la respuesta: quien compró no tiene que esperar a Resend para
+  // ver su número de pedido.
+  if (pedidoCreado) {
+    const id = pedidoCreado;
+    after(async () => {
+      await notificarPedidoRecibido(id);
+    });
+  }
 
   // La redirección va acá y no en el cliente: apenas se vacía el carrito, la
   // página de checkout manda a /presupuesto por no tener ítems, y quien acaba de

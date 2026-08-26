@@ -16,6 +16,8 @@ import {
 import { requireStaff } from "@/lib/dal/session";
 import { siguienteNumero } from "@/lib/dal/admin/ventas";
 import { avisarCambioDePedido } from "@/lib/whatsapp/avisos";
+import { notificarCambioDeEstado } from "@/lib/notificaciones/avisos";
+import { liberarReservas, reservarPedido } from "@/lib/inventario/reservas";
 
 export interface EstadoVenta {
   error?: string;
@@ -96,12 +98,18 @@ export async function avanzarPedido(id: string): Promise<EstadoVenta> {
 
   refrescar();
 
-  // El aviso al cliente sale después de que el cambio quedó guardado, y por
-  // fuera de la transacción: si WhatsApp no responde, el pedido igual avanzó.
-  // `after()` además lo saca del camino de la respuesta, para que el tablero no
-  // espere a Meta para actualizarse.
+  // Los avisos al cliente salen después de que el cambio quedó guardado, y por
+  // fuera de la transacción: si WhatsApp o el correo no responden, el pedido
+  // igual avanzó. `after()` además los saca del camino de la respuesta, para
+  // que el tablero no espere a un tercero para actualizarse.
+  //
+  // Los dos canales van en paralelo y con `allSettled`: que falle uno no puede
+  // impedir que salga el otro.
   after(async () => {
-    await avisarCambioDePedido(id, siguiente);
+    await Promise.allSettled([
+      avisarCambioDePedido(id, siguiente),
+      notificarCambioDeEstado(id, siguiente),
+    ]);
   });
 
   const TEXTO: Record<string, string> = {
@@ -132,10 +140,15 @@ export async function cancelarPedido(
       nota: motivo,
       createdByUserId: usuario.userId,
     });
+
+    // La mercadería vuelve a estar disponible. El físico no se toca: nunca
+    // salió del galpón.
+    await liberarReservas(tx, id);
   });
 
   refrescar();
-  return { ok: "Pedido cancelado." };
+  revalidatePath("/admin/stock");
+  return { ok: "Pedido cancelado. La mercadería reservada quedó disponible." };
 }
 
 const estadoPresupuestoSchema = z.enum([
@@ -251,9 +264,14 @@ export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
       .update(quotes)
       .set({ estado: "aceptado", updatedAt: new Date() })
       .where(eq(quotes.id, quoteId));
+
+    // Desde acá la mercadería tiene dueño y deja de estar disponible para el
+    // resto, aunque siga en el galpón hasta que la retiren.
+    await reservarPedido(tx, pedido.id);
   });
 
   refrescar();
+  revalidatePath("/admin/stock");
   return { ok: `Se creó el pedido ${numero}.` };
 }
 

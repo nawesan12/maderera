@@ -28,7 +28,15 @@ const MARCA = {
 const FUENTE =
   "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
-function escapar(texto: string): string {
+/**
+ * Escapa texto para meterlo en el HTML del correo.
+ *
+ * `parrafos` se inserta crudo a propósito —las plantillas propias mandan
+ * `<strong>` adentro—, así que **todo lo que venga de afuera tiene que pasar
+ * por acá antes**. El formulario de contacto es el caso: lo escribe cualquiera
+ * y termina en la bandeja de quien atiende.
+ */
+export function escapar(texto: string): string {
   return texto
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

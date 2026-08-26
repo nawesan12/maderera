@@ -503,6 +503,15 @@ const SUCURSALES = [
     whatsapp: "+542235903118",
     email: "info@mjbj.com.ar",
     hours: "Lun a Vie 8:00-16:00 · Sáb 8:00-12:00",
+    servicios: [
+      "Servicio de corte de placas a medida con precisión",
+      "Amplio stock de molduras y listonería Moldava",
+      "Fenólicos, tablas y puntales para obra",
+      "Exhibición de vestidores, placares y muebles de cocina",
+      "Asesoramiento personalizado para tu proyecto",
+      "Melaminas, MDF y terciados con servicio de fraccionamiento",
+    ].join("\n"),
+    destacados: ["Showroom de muebles", "Corte CNC", "Retiro en sucursal"].join("\n"),
     sortOrder: 0,
   },
   {
@@ -513,6 +522,15 @@ const SUCURSALES = [
     whatsapp: "+542235060817",
     email: "info@aserradero.mjbj.com.ar",
     hours: "Lun a Vie 8:00-16:00 · Sáb 8:00-12:00",
+    servicios: [
+      "Planta de fabricación con tecnología moderna",
+      "Stock permanente de techos, escaleras y decks",
+      "Machimbres en pino, saligna y grandis",
+      "Molduras marca Moldava — producción propia",
+      "Ferretería: lacas, diluyentes, selladores y más",
+      "Maderas en bruto y elaboradas a medida",
+    ].join("\n"),
+    destacados: ["Fábrica propia", "Madera a medida", "Ferretería completa"].join("\n"),
     sortOrder: 1,
   },
 ];

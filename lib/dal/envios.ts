@@ -26,6 +26,15 @@ export async function listarZonasDeEnvio(): Promise<ZonaEnvio[]> {
   }));
 }
 
+/**
+ * Las sucursales tal como las ve el público.
+ *
+ * Devuelve la ficha completa —teléfono, correo, WhatsApp, mapa— y no solo el
+ * nombre porque es la misma fuente para tres cosas que tienen que decir lo
+ * mismo: la página de sucursales, el selector de retiro del checkout y los
+ * datos estructurados que Google muestra al costado de la búsqueda. Un horario
+ * distinto en cada lado es cómo llega alguien al local un sábado a la tarde.
+ */
 export async function listarSucursalesPublicas() {
   return db
     .select({
@@ -34,6 +43,13 @@ export async function listarSucursalesPublicas() {
       nombre: branches.name,
       direccion: branches.address,
       horario: branches.hours,
+      telefono: branches.phone,
+      whatsapp: branches.whatsapp,
+      email: branches.email,
+      mapUrl: branches.mapUrl,
+      imagenUrl: branches.imagenUrl,
+      servicios: branches.servicios,
+      destacados: branches.destacados,
     })
     .from(branches)
     .where(eq(branches.active, true))

@@ -1,9 +1,21 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Phone, Mail, MapPin, Clock } from "lucide-react";
+import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { Separator } from "@/components/ui/separator";
 
-export function Footer() {
+/**
+ * El pie repite los datos de contacto, y por eso los lee de la base.
+ *
+ * Estaban escritos acá adentro: la dirección del aserradero decía "Canosa
+ * N°61" y la página de sucursales "Canosa 61". Dos textos distintos para el
+ * mismo local no es un detalle de estilo —Google los compara para decidir si
+ * confía en la ficha del negocio— y además significa que cambiar un teléfono
+ * exige buscarlo en cuatro archivos.
+ */
+export async function Footer() {
+  const sucursales = await listarSucursalesPublicas();
+  const principal = sucursales[0];
   return (
     <footer className="bg-brand-gray text-white">
       <div className="container mx-auto px-4 py-16">
@@ -91,32 +103,37 @@ export function Footer() {
           <div>
             <h3 className="font-semibold mb-4">Contacto</h3>
             <ul className="space-y-3 text-sm text-white/70">
-              <li className="flex items-start gap-2">
-                <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-brand-orange" />
-                <div>
-                  <p className="font-medium text-white">Casa Central</p>
-                  <p>Av. Juan B. Justo 4153, Mar del Plata</p>
-                </div>
-              </li>
-              <li className="flex items-start gap-2">
-                <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-brand-orange" />
-                <div>
-                  <p className="font-medium text-white">Aserradero</p>
-                  <p>Canosa N°61, Mar del Plata</p>
-                </div>
-              </li>
-              <li className="flex items-center gap-2">
-                <Phone className="h-4 w-4 shrink-0 text-brand-orange" />
-                (0223) 474-3328
-              </li>
-              <li className="flex items-center gap-2">
-                <Mail className="h-4 w-4 shrink-0 text-brand-orange" />
-                info@mjbj.com.ar
-              </li>
-              <li className="flex items-center gap-2">
-                <Clock className="h-4 w-4 shrink-0 text-brand-orange" />
-                Lun-Vie 8-16hs | Sáb 8-12hs
-              </li>
+              {sucursales.map((sucursal) => (
+                <li key={sucursal.id} className="flex items-start gap-2">
+                  <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-brand-orange" />
+                  <div>
+                    <p className="font-medium text-white">{sucursal.nombre}</p>
+                    <p>{sucursal.direccion}</p>
+                  </div>
+                </li>
+              ))}
+              {principal?.telefono && (
+                <li className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 shrink-0 text-brand-orange" />
+                  <a href={`tel:${principal.telefono.replace(/[^\d+]/g, "")}`} className="hover:text-white">
+                    {principal.telefono}
+                  </a>
+                </li>
+              )}
+              {principal?.email && (
+                <li className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 shrink-0 text-brand-orange" />
+                  <a href={`mailto:${principal.email}`} className="hover:text-white">
+                    {principal.email}
+                  </a>
+                </li>
+              )}
+              {principal?.horario && (
+                <li className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 shrink-0 text-brand-orange" />
+                  {principal.horario}
+                </li>
+              )}
             </ul>
           </div>
         </div>

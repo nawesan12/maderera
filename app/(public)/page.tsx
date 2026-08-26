@@ -18,18 +18,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Hero } from "@/components/home/hero";
 import { ProductCard } from "@/components/product-card";
-import { datosDePortada } from "@/lib/dal/catalog";
+import { datosDePortada, numerosDeLaEmpresa } from "@/lib/dal/catalog";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { listarArticulos, listarTestimonios } from "@/lib/dal/contenido";
 
-const ANIOS = new Date().getFullYear() - 1981;
+/**
+ * Los años de la empresa se leen al renderizar y no una vez al cargar el
+ * módulo: un servidor que queda levantado de un año al otro seguiría diciendo
+ * el número viejo hasta el próximo despliegue.
+ */
 
 export default async function HomePage() {
-  const [portada, sucursales, testimonios, notas] = await Promise.all([
+  const [portada, sucursales, testimonios, notas, numeros] = await Promise.all([
     datosDePortada(),
     listarSucursalesPublicas(),
     listarTestimonios(),
     listarArticulos({ limite: 3 }),
+    numerosDeLaEmpresa(),
   ]);
 
   return (
@@ -37,7 +42,7 @@ export default async function HomePage() {
       <Hero
         productos={portada.totalProductos}
         sucursales={sucursales.length}
-        anios={ANIOS}
+        anios={numeros.anios}
       />
 
       <FranjaBeneficios />
@@ -50,7 +55,12 @@ export default async function HomePage() {
 
       <Herramientas />
 
-      <Historia productos={portada.totalProductos} sucursales={sucursales.length} />
+      <Historia
+        anios={numeros.anios}
+        productos={numeros.productos}
+        sucursales={numeros.sucursales}
+        rubros={numeros.rubros}
+      />
 
       {testimonios.length > 0 && <Testimonios testimonios={testimonios} />}
 
@@ -295,17 +305,24 @@ function Herramientas() {
 }
 
 function Historia({
+  anios,
   productos,
   sucursales,
+  rubros,
 }: {
+  anios: number;
   productos: number;
   sucursales: number;
+  rubros: number;
 }) {
+  // Los cuatro números son verificables. El que decía "1000+ Clientes" no lo
+  // era: nadie lo contó nunca, y es el tipo de cifra que un cliente grande
+  // pregunta de dónde sale.
   const stats = [
-    { valor: `${ANIOS}+`, label: "Años" },
+    { valor: String(anios), label: "Años" },
     { valor: String(sucursales), label: "Sucursales" },
-    { valor: `${productos}+`, label: "Productos" },
-    { valor: "1000+", label: "Clientes" },
+    { valor: String(productos), label: "Productos" },
+    { valor: String(rubros), label: "Rubros" },
   ];
 
   return (

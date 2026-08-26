@@ -545,6 +545,37 @@ export async function productosRelacionados(
  * Se resuelve acá y no en cada sección para no repetir la consulta de productos
  * tres veces: las ofertas, los destacados y los conteos salen del mismo listado.
  */
+/** Año en que abrió la maderera. Es la única fecha fija del sitio. */
+export const ANIO_FUNDACION = 1981;
+
+/**
+ * Los números que la página "Nosotros" muestra en grande.
+ *
+ * Salen de la base y del calendario, no de constantes: decían "43 años" en
+ * 2026 —eran 45— y "200+ productos" con un catálogo que tenía otra cantidad.
+ * Un número inventado en la página institucional es de las pocas cosas que un
+ * visitante puede verificar solo, y desmiente todo lo demás.
+ *
+ * La hora se lee acá y no durante el render de la página, que es donde sería
+ * una impureza.
+ */
+export async function numerosDeLaEmpresa() {
+  const [[productos], [medidas], [sucursales], [rubros]] = await Promise.all([
+    db.select({ n: sql<number>`count(*)::int` }).from(products).where(eq(products.active, true)),
+    db.select({ n: sql<number>`count(*)::int` }).from(productVariants).where(eq(productVariants.active, true)),
+    db.select({ n: sql<number>`count(*)::int` }).from(branches).where(eq(branches.active, true)),
+    db.select({ n: sql<number>`count(*)::int` }).from(categories).where(eq(categories.active, true)),
+  ]);
+
+  return {
+    anios: new Date().getFullYear() - ANIO_FUNDACION,
+    productos: productos?.n ?? 0,
+    medidas: medidas?.n ?? 0,
+    sucursales: sucursales?.n ?? 0,
+    rubros: rubros?.n ?? 0,
+  };
+}
+
 export async function datosDePortada() {
   const [categorias, todos] = await Promise.all([
     listarCategorias(),

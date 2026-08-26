@@ -13,6 +13,9 @@ import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
 import { SelectorVariante } from "@/components/catalogo/selector-variante";
 import { obtenerProducto, productosRelacionados } from "@/lib/dal/catalog";
+import { combinedStockLevel } from "@/lib/stock-level";
+import { DatosEstructurados } from "@/components/datos-estructurados";
+import { migasJsonLd, productoJsonLd, urlAbsoluta } from "@/lib/seo";
 
 export async function generateMetadata({
   params,
@@ -24,12 +27,23 @@ export async function generateMetadata({
 
   if (!producto) return { title: "Producto no encontrado" };
 
+  // La descripción del catálogo puede venir vacía o larguísima. Google recorta
+  // alrededor de los 160 caracteres, así que se arma una que diga algo aunque
+  // el producto no tenga texto cargado.
+  const descripcion = (
+    producto.description ||
+    `${producto.name} en ${producto.categoryName}. Precio y disponibilidad en Maderera Juan B. Justo, Mar del Plata.`
+  ).slice(0, 300);
+
   return {
     title: producto.name,
-    description: producto.description,
+    description: descripcion,
+    alternates: { canonical: `/catalogo/${slug}` },
     openGraph: {
+      type: "website",
       title: producto.name,
-      description: producto.description,
+      description: descripcion,
+      url: urlAbsoluta(`/catalogo/${slug}`),
       images: producto.imagenes.slice(0, 1),
     },
   };
@@ -60,8 +74,35 @@ export default async function ProductoPage({
     (v) => v.largoMm || v.anchoMm || v.espesorMm,
   );
 
+  // Lo que ve el buscador: el producto con una oferta por medida y las migas
+  // de pan, que es lo que Google muestra en vez de la URL cruda.
+  const marcado = [
+    productoJsonLd({
+      slug: producto.slug,
+      name: producto.name,
+      description: producto.description,
+      brand: producto.brand,
+      categoryName: producto.categoryName,
+      imagenes: producto.imagenes,
+      variantes: producto.variantes.map((v) => ({
+        sku: v.sku,
+        label: v.label,
+        precio: v.precio,
+        disponibilidad: combinedStockLevel([v.stockCentral, v.stockAserradero]),
+      })),
+    }),
+    migasJsonLd([
+      { nombre: "Inicio", ruta: "/" },
+      { nombre: "Catálogo", ruta: "/catalogo" },
+      { nombre: producto.categoryName, ruta: `/catalogo?cat=${producto.categorySlug}` },
+      { nombre: producto.name, ruta: `/catalogo/${producto.slug}` },
+    ]),
+  ];
+
   return (
     <div className="min-h-screen bg-brand-cream/30">
+      <DatosEstructurados datos={marcado} />
+
       {/* Breadcrumb */}
       <div className="border-b bg-white">
         <div className="container mx-auto px-4 py-3">

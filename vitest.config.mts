@@ -17,6 +17,16 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./", import.meta.url)),
+      /**
+       * `server-only` lanza una excepción apenas se lo importa fuera de un
+       * Server Component, y varios módulos que sí queremos probar —las
+       * plantillas de correo, por ejemplo— arrastran esa marca por sus
+       * dependencias. Acá se resuelve a un módulo vacío: la marca existe para
+       * que el código no llegue al navegador, y un test no es el navegador.
+       */
+      "server-only": fileURLToPath(
+        new URL("./tests/vacio.ts", import.meta.url),
+      ),
     },
   },
 });

@@ -2,7 +2,7 @@
 
 > Documento de trabajo interno del PRESTADOR. Traduce el contrato firmado
 > (`Contrato — Maderera Juan B. Justo.pdf`, 15 pp.) a un plan ejecutable.
-> Última actualización: 26/08/2026 (décima pasada: migración de datos).
+> Última actualización: 26/08/2026 (undécima pasada: SEO y publicación).
 
 ---
 
@@ -338,18 +338,77 @@ escritorio viejos guardan en Windows-1252 y "Cañuelas" leído como UTF-8 sale
 roto—, comillas y números con coma decimal. La importación de precios, que
 tenía su propia copia, ahora usa el mismo.
 
+**Undécima pasada — SEO y publicación (26/08/2026):**
+
+Cláusula 1.8. El sitio ya estaba entero; lo que faltaba era que se pudiera
+encontrar.
+
+- **`robots.ts` y `sitemap.ts`.** El sitemap se arma en cada pedido desde la
+  base —58 URLs hoy— con la fecha real del último cambio de cada producto y
+  cada nota. En `robots`, la línea que evita el desastre clásico: **fuera de
+  producción no se indexa nada**, porque cada vista previa de cada rama queda
+  publicada en una URL alcanzable y si Google las encuentra el sitio compite
+  consigo mismo con seis copias del catálogo.
+- **Datos estructurados** (`lib/seo.ts`, con tests): la empresa y el buscador
+  en todas las páginas; **una ficha de local por sucursal** con dirección y
+  horarios; **el producto con una oferta por medida** —cada medida tiene su
+  precio y su stock, así que un precio único sería mentira— y el rango como
+  `AggregateOffer`; y migas de pan en catálogo, ficha, sucursales, contacto y
+  nosotros. Todo sale de la base: un horario equivocado en el marcado se
+  indexa igual, y después llega gente al local a una hora en que está cerrado.
+- **Metadata por filtro en el catálogo.** `?cat=placas` es ahora una página
+  propia con su título y su canónica; **la búsqueda y los ordenamientos van
+  `noindex`**, porque son combinaciones infinitas de las mismas fichas. Sin
+  esto el catálogo se indexa cien veces repetido.
+- **Imagen para compartir** (`opengraph-image.tsx`, 1200×630). Antes se
+  compartía el favicon de 180×180, que WhatsApp muestra como un cuadradito al
+  costado. En este rubro no es un detalle: mucho del tráfico llega porque
+  alguien pasó un link en un grupo de obra.
+- **Cinco páginas públicas dejaron de ser de cliente**: catálogo, sucursales,
+  nosotros, contacto y calculadora. En la calculadora lo interactivo quedó como
+  isla y el resto se arma en el servidor; en las otras cuatro no quedó nada de
+  cliente. De paso desaparecieron los `layout.tsx` que existían solo para poder
+  declarar metadata.
+
+**Tres cosas que aparecieron al hacerlo, y que importan más que el SEO:**
+
+- **`/sucursales` tenía las dos direcciones escritas a mano**, y el pie del
+  sitio otras: el aserradero era "Canosa N°61" en un lado y "Canosa 61" en el
+  otro. Google compara esos textos para decidir si confía en la ficha del
+  negocio, y además significaba que cambiar un teléfono exigía buscarlo en
+  cuatro archivos. Ahora los dos salen de `branches`, que sumó `servicios`,
+  `destacados` e `imagenUrl`.
+- **El formulario de contacto no mandaba nada.** El botón mostraba "Mensaje
+  enviado correctamente" y los campos ni siquiera tenían `name`: toda consulta
+  hecha desde ahí se perdía y quien la escribió se quedaba esperando. Ahora
+  envía de verdad por el proveedor de correo, queda registrada en
+  `notifications_log` y —esto es lo importante— **solo confirma lo que salió**:
+  mientras el correo no esté conectado lo dice y ofrece WhatsApp, en vez de
+  mentir.
+- **Los números grandes eran falsos.** "43 años" cuando iban 45, "200+
+  productos" sin relación con el catálogo y "1000+ clientes" que nadie contó
+  nunca. Los cuatro salen ahora de la base y del calendario. Es de lo poco que
+  un visitante puede verificar solo, y un número inventado ahí desmiente todo
+  lo demás.
+
+**Un agujero cerrado de paso:** `parrafos` entra crudo al HTML de los correos
+—las plantillas propias mandan negritas adentro—, así que el mensaje del
+formulario de contacto habría llegado sin escapar a la bandeja de quien
+atiende. `escapar` pasó a ser público y el formulario lo usa, con tests sobre
+eso.
+
 ### Lo que falta para cerrar el contrato
 
 | # | Qué | Cláusula | Depende de |
 |---|---|---|---|
-| 1 | **SEO y publicación**: `app/sitemap.ts` y `app/robots.ts`, metadata dinámica en catálogo y ficha, datos estructurados (`Organization`, `LocalBusiness` por sucursal, `Product` con `offers`, `BreadcrumbList`), `opengraph-image.tsx`, y limpieza de los `"use client"` de más que quedan en páginas públicas (calculadora, contacto, nosotros). | 1.8 | Nada |
-| 2 | **Productos sugeridos**: la tabla `related_products` ya está creada, con tipos `complementario` y `similar`. Falta la carga desde la ficha de producto del panel y mostrarlos en la ficha pública y en el carrito, con respaldo automático por categoría cuando no hay ninguno cargado. | 1.3 | Nada |
-| 3 | **Guías escritas** (`/admin/ayuda`): paso a paso dentro del panel para gente que viene de un sistema de escritorio, más `docs/GUIAS/`. Se escriben con las pantallas ya terminadas. | 1.10 | Nada |
-| 4 | **`audit_log` transversal** de las acciones del panel. No lo pide el contrato; lo pide operar con varias personas cargando. | — | Nada |
-| 5 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Decisión de infraestructura (R5) y acceso al dominio |
-| 6 | **Capacitación presencial** y acompañamiento en la transición. | 1.10 | Fecha con el cliente |
+| 1 | **Productos sugeridos**: la tabla `related_products` ya está creada, con tipos `complementario` y `similar`. Falta la carga desde la ficha de producto del panel y mostrarlos en la ficha pública y en el carrito, con respaldo automático por categoría cuando no hay ninguno cargado. | 1.3 | Nada |
+| 2 | **Guías escritas** (`/admin/ayuda`): paso a paso dentro del panel para gente que viene de un sistema de escritorio, más `docs/GUIAS/`. Se escriben con las pantallas ya terminadas. | 1.10 | Nada |
+| 3 | **`audit_log` transversal** de las acciones del panel. No lo pide el contrato; lo pide operar con varias personas cargando. | — | Nada |
+| 4 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Decisión de infraestructura (R5) y acceso al dominio |
+| 5 | **Capacitación presencial** y acompañamiento en la transición. | 1.10 | Fecha con el cliente |
 
-La migración (1.9) ya no está en este cuadro: **el código está hecho y probado
+El SEO (1.8) sale del cuadro salvo la publicación en sí, que necesita el
+dominio. La migración (1.9) tampoco está: **el código está hecho y probado
 de punta a punta**. Lo que falta es el archivo del cliente, y está anotado como
 insumo pendiente.
 
@@ -369,7 +428,7 @@ ni pagos.
 | Capa | Estado | Destino |
 |---|---|---|
 | Diseño y componentes (`components/ui/*`, navbar, footer, cards) | ✅ Sirve | Se conserva |
-| 10 páginas públicas | 🟡 Maqueta con mock | Se reconectan a datos reales |
+| 10 páginas públicas | ✅ Server Components contra la base (11ª pasada) | — |
 | `lib/calculations.ts` (4 calculadoras, 170 líneas) | ✅ Lógica pura correcta | Se conserva tal cual |
 | `lib/budget-context.tsx` (carrito en memoria) | 🟡 Solo cliente, se pierde al recargar | Se reescribe con persistencia |
 | Panel admin (hoy 16 secciones) | ✅ Todo contra la base | — |

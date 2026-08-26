@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
 import { Search, Tag, Truck, Store, Headphones } from "lucide-react";
@@ -12,6 +13,8 @@ import {
   listarProductos,
   type OrdenCatalogo,
 } from "@/lib/dal/catalog";
+import { DatosEstructurados } from "@/components/datos-estructurados";
+import { migasJsonLd } from "@/lib/seo";
 
 interface Params {
   cat?: string;
@@ -21,6 +24,78 @@ interface Params {
   ofertas?: string;
 }
 
+/**
+ * Metadata por filtro.
+ *
+ * Sin esto, `/catalogo?cat=placas` y `/catalogo?buscar=fenolico` son para
+ * Google la misma página que `/catalogo` repetida cien veces, y el sitio
+ * compite consigo mismo. Cada categoría es una página propia con su título y
+ * su canónica; **la búsqueda y los ordenamientos no se indexan**, porque son
+ * combinaciones infinitas de las mismas fichas.
+ */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Params>;
+}): Promise<Metadata> {
+  const params = await searchParams;
+
+  const base: Metadata = {
+    keywords: [
+      "madera mar del plata",
+      "placas melamina",
+      "tirantes pino",
+      "machimbre",
+      "fenolicos",
+      "molduras",
+      "decks",
+      "construccion en seco",
+      "maderera",
+    ],
+  };
+
+  if (params.buscar || params.orden || params.ofertas || params.stock) {
+    return {
+      ...base,
+      title: params.buscar ? `Buscar "${params.buscar}"` : "Catálogo de productos",
+      robots: { index: false, follow: true },
+      alternates: { canonical: "/catalogo" },
+    };
+  }
+
+  if (params.cat && params.cat !== "todos") {
+    const categorias = await listarCategorias();
+    const categoria = categorias.find((c) => c.slug === params.cat);
+
+    if (categoria) {
+      const descripcion =
+        categoria.description ||
+        `${categoria.name} en Maderera Juan B. Justo, Mar del Plata. Precios y disponibilidad por sucursal.`;
+
+      return {
+        ...base,
+        title: `${categoria.name} en Mar del Plata`,
+        description: descripcion,
+        alternates: { canonical: `/catalogo?cat=${categoria.slug}` },
+        openGraph: { title: `${categoria.name} | Maderera Juan B. Justo`, description: descripcion },
+      };
+    }
+  }
+
+  return {
+    ...base,
+    title: "Catálogo de productos",
+    description:
+      "Explorá nuestro catálogo completo: techos, placas, pisos, molduras, ferretería, decks, construcción en seco y cubiertas. Stock disponible en Mar del Plata.",
+    alternates: { canonical: "/catalogo" },
+    openGraph: {
+      title: "Catálogo de productos",
+      description:
+        "Productos para construcción y carpintería, con stock consultable entre sucursales.",
+    },
+  };
+}
+
 export default async function CatalogoPage({
   searchParams,
 }: {
@@ -28,8 +103,22 @@ export default async function CatalogoPage({
 }) {
   const params = await searchParams;
 
+  const categoriaActual =
+    params.cat && params.cat !== "todos"
+      ? (await listarCategorias()).find((c) => c.slug === params.cat)
+      : undefined;
+
+  const migas = migasJsonLd([
+    { nombre: "Inicio", ruta: "/" },
+    { nombre: "Catálogo", ruta: "/catalogo" },
+    ...(categoriaActual
+      ? [{ nombre: categoriaActual.name, ruta: `/catalogo?cat=${categoriaActual.slug}` }]
+      : []),
+  ]);
+
   return (
     <div className="min-h-screen bg-brand-cream/40">
+      <DatosEstructurados datos={migas} />
       <Encabezado />
       <FranjaConfianza />
 

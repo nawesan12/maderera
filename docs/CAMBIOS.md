@@ -40,6 +40,8 @@ se notifica por escrito invocando la cláusula 5.3.
 | Casilla de correo y dominio verificado para el remitente | Que los avisos por correo salgan de verdad | — | Pendiente |
 | Exportaciones del sistema anterior en CSV | Usar la migración de datos (1.9), que ya está construida | — | Pendiente |
 | Fotos de productos y lista de precios vigente | Reemplazar los datos de desarrollo | — | Pendiente |
+| Fotos reales de las dos sucursales | Hoy la página muestra una placa de marca en vez de una foto ajena | — | Pendiente |
+| Confirmación de la historia de la empresa | La trayectoria de `/nosotros` viene del prototipo y no está verificada: el hito de 2010 mencionaba una sucursal en Av. Constitución que no es ninguna de las dos que operan. Ese se sacó; los demás siguen sin confirmar | — | Pendiente |
 | Acceso al dominio `mjbj.ar` | Publicación (1.8) | — | Pendiente |
 
 ### Qué pedir exactamente para la migración

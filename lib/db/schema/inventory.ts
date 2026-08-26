@@ -24,6 +24,19 @@ export const branches = pgTable(
     email: text(),
     hours: text(),
     mapUrl: text(),
+    /**
+     * Qué se hace en esta sucursal, uno por renglón.
+     *
+     * Vivía como una constante en la página pública, que es donde no sirve:
+     * cuando el aserradero suma un servicio hay que publicar el sitio de
+     * nuevo. Va como texto con saltos de línea y no como tabla aparte porque
+     * es una lista corta que se escribe de un tirón en un campo del panel.
+     */
+    servicios: text().notNull().default(""),
+    /** Lo que distingue a esta sucursal en dos o tres palabras, uno por renglón. */
+    destacados: text().notNull().default(""),
+    /** Foto del local. Mientras no esté, la página muestra una placa de marca. */
+    imagenUrl: text(),
     sortOrder: integer().notNull().default(0),
     active: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

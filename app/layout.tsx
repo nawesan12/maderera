@@ -46,10 +46,11 @@ export const metadata: Metadata = {
     title: "Maderera Juan B. Justo | Desde 1981 en Mar del Plata",
     description:
       "Más de 40 años proveyendo madera de calidad. Techos, placas, pisos, molduras, ferretería y más. Presupuestos sin cargo.",
-    images: [{ url: "/cropped-icon-180x180.png", width: 180, height: 180, alt: "Maderera Juan B. Justo" }],
+    // La imagen la genera `app/opengraph-image.tsx`: Next la resuelve sola y
+    // declararla acá a mano la pisaría con el favicon.
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Maderera Juan B. Justo | Desde 1981 en Mar del Plata",
     description: "Más de 40 años proveyendo madera de calidad en Mar del Plata. Presupuestos sin cargo.",
   },

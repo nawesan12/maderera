@@ -1,4 +1,4 @@
-import type { StockLevel } from "@/lib/products";
+import type { StockLevel } from "@/lib/stock-level";
 
 const config: Record<StockLevel, { color: string; label: string }> = {
   alto: { color: "bg-brand-green", label: "En stock" },

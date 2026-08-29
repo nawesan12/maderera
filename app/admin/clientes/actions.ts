@@ -12,6 +12,7 @@ import {
   quotes,
 } from "@/lib/db/schema";
 import { requireStaff, requireStaffRole } from "@/lib/dal/session";
+import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { parsearImporte } from "@/lib/formato";
 
 export interface EstadoCliente {
@@ -46,6 +47,7 @@ const clienteSchema = z.object({
   rubro: z.string().trim().max(80).optional(),
   asesor: z.string().trim().max(60).optional(),
   limiteCredito: z.string().default("0"),
+  priceListId: z.string().uuid().optional(),
   notas: z.string().trim().max(1000).optional(),
 });
 
@@ -53,7 +55,7 @@ export async function guardarCliente(
   _previo: EstadoCliente,
   formData: FormData,
 ): Promise<EstadoCliente> {
-  await requireStaff();
+  const usuario = await requireStaff();
 
   const parsed = clienteSchema.safeParse({
     id: (formData.get("id") as string) || undefined,
@@ -68,6 +70,7 @@ export async function guardarCliente(
     rubro: (formData.get("rubro") as string) || undefined,
     asesor: (formData.get("asesor") as string) || undefined,
     limiteCredito: (formData.get("limiteCredito") as string) || "0",
+    priceListId: (formData.get("priceListId") as string) || undefined,
     notas: (formData.get("notas") as string) || undefined,
   });
 
@@ -89,15 +92,35 @@ export async function guardarCliente(
     rubro: d.rubro || null,
     asesor: d.asesor || null,
     limiteCredito: (Number(d.limiteCredito.replace(/[^\d.-]/g, "")) || 0).toFixed(2),
+    // Null es la lista general: la ficha no la guarda para que un cambio de
+    // nombre o de default no deje al cliente atado a una lista que ya no es.
+    priceListId: d.priceListId ?? null,
     notas: d.notas || null,
     updatedAt: new Date(),
   };
 
-  if (d.id) {
-    await db.update(customers).set(campos).where(eq(customers.id, d.id));
+  let id = d.id;
+
+  if (id) {
+    await db.update(customers).set(campos).where(eq(customers.id, id));
   } else {
-    await db.insert(customers).values(campos);
+    const [creado] = await db
+      .insert(customers)
+      .values(campos)
+      .returning({ id: customers.id });
+    id = creado?.id;
   }
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: d.id ? "editar" : "crear",
+    entidad: "cliente",
+    entidadId: id ?? null,
+    descripcion: `${d.id ? "Editó" : "Dio de alta"} a ${d.nombre}`,
+    // El límite de crédito es el dato que después se discute: quedó registrado
+    // quién lo puso y en cuánto.
+    detalle: { limiteCredito: campos.limiteCredito, tipo: d.tipo },
+  });
 
   revalidatePath("/admin/clientes");
   return { ok: d.id ? "Cliente actualizado." : "Cliente creado." };
@@ -151,6 +174,15 @@ export async function registrarMovimiento(
     createdByUserId: usuario.userId,
   });
 
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: parsed.data.tipo === "pago" ? "cobrar" : "crear",
+    entidad: "cliente",
+    entidadId: parsed.data.customerId,
+    descripcion: `Cargó un movimiento de cuenta corriente: ${parsed.data.tipo} por ${monto}`,
+    detalle: { tipo: parsed.data.tipo, monto, detalleCarga: parsed.data.detalle },
+  });
+
   revalidatePath("/admin/clientes");
   return { ok: "Movimiento registrado." };
 }
@@ -179,7 +211,7 @@ export async function vincularCuentaWeb(
   _previo: EstadoCliente,
   formData: FormData,
 ): Promise<EstadoCliente> {
-  await requireStaffRole("admin", "vendedor");
+  const usuario = await requireStaffRole("admin", "vendedor");
 
   const parsed = vinculacionSchema.safeParse({
     customerId: formData.get("customerId"),
@@ -247,6 +279,18 @@ export async function vincularCuentaWeb(
       .update(addresses)
       .set({ customerId })
       .where(eq(addresses.customerId, cuentaWebId));
+  });
+
+  // Esta es la acción más delicada del panel: mueve pedidos, presupuestos y
+  // saldo de una ficha a otra. Si se hace sobre la persona equivocada, la
+  // bitácora es la única forma de saber qué se movió y quién lo movió.
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "editar",
+    entidad: "cliente",
+    entidadId: customerId,
+    descripcion: "Vinculó una cuenta web con la ficha del mostrador",
+    detalle: { customerId, cuentaWebId, userId },
   });
 
   revalidatePath("/admin/clientes");

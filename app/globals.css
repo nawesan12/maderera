@@ -713,6 +713,51 @@ input::placeholder, textarea::placeholder {
   color: var(--muted-foreground);
 }
 
+/* Tablas y código. Entraron con las guías del panel: media guía es "esto
+   significa aquello", y dos columnas se leen mucho mejor que una lista.
+   El `overflow-x` va sobre un contenedor propio para que una tabla ancha
+   ruede sola y no empuje el ancho de la página en el teléfono. */
+.nota-cuerpo table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1rem;
+}
+
+.nota-cuerpo th,
+.nota-cuerpo td {
+  border: 1px solid var(--border);
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.nota-cuerpo th {
+  background: var(--muted);
+  font-weight: 600;
+}
+
+.nota-cuerpo code {
+  border-radius: 0.3rem;
+  background: var(--muted);
+  padding: 0.1em 0.35em;
+  font-size: 0.92em;
+}
+
+.nota-cuerpo pre {
+  overflow-x: auto;
+  border-radius: 0.6rem;
+  background: var(--muted);
+  padding: 0.9rem 1rem;
+  line-height: 1.55;
+}
+
+.nota-cuerpo pre code {
+  background: none;
+  padding: 0;
+}
+
 /* Firmas del remito. Dos recuadros: el que se completa en pantalla desde el
    celular y el que queda en blanco para firmar el papel cuando se imprime. */
 .comprobante-hoja .firma-zona {

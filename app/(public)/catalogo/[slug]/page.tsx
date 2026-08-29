@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
 import { SelectorVariante } from "@/components/catalogo/selector-variante";
-import { obtenerProducto, productosRelacionados } from "@/lib/dal/catalog";
+import { obtenerProducto, productosSugeridos } from "@/lib/dal/catalog";
 import { combinedStockLevel } from "@/lib/stock-level";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd, productoJsonLd, urlAbsoluta } from "@/lib/seo";
@@ -59,7 +59,8 @@ export default async function ProductoPage({
 
   if (!producto) notFound();
 
-  const relacionados = await productosRelacionados(
+  const sugeridos = await productosSugeridos(
+    producto.id,
     producto.categorySlug,
     producto.slug,
   );
@@ -250,12 +251,34 @@ export default async function ProductoPage({
           </section>
         )}
 
-        {/* Relacionados */}
-        {relacionados.length > 0 && (
+        {/*
+          Sugeridos. Los complementarios van primero y solo si alguien los
+          cargó: son los que suben el ticket —el sellador del deck, los clavos
+          del machimbre— y los que le ahorran a la persona un segundo viaje.
+        */}
+        {sugeridos.complementarios.length > 0 && (
+          <section className="mt-14">
+            <div className="mb-5">
+              <h2 className="text-xl font-bold">También vas a necesitar</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Lo que se lleva junto con {producto.name}.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {sugeridos.complementarios.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {sugeridos.similares.length > 0 && (
           <section className="mt-14">
             <div className="mb-5 flex items-baseline justify-between gap-4">
               <h2 className="text-xl font-bold">
-                Otros productos de {producto.categoryName}
+                {sugeridos.similaresPorCategoria
+                  ? `Otros productos de ${producto.categoryName}`
+                  : "Alternativas"}
               </h2>
               <Link
                 href={`/catalogo?cat=${producto.categorySlug}`}
@@ -265,7 +288,7 @@ export default async function ProductoPage({
               </Link>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {relacionados.map((p) => (
+              {sugeridos.similares.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
             </div>

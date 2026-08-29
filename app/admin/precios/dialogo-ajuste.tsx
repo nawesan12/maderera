@@ -53,7 +53,7 @@ export function DialogoAjuste({
   categoriaActual: string;
 }) {
   const [abierto, setAbierto] = useState(false);
-  const [estado, accion, pendiente] = useAccionDeDialogo(
+  const [, accion, pendiente] = useAccionDeDialogo(
     ajustarPrecios,
     {} as EstadoPrecios,
     () => setAbierto(false),

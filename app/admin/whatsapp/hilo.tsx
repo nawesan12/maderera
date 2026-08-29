@@ -332,12 +332,10 @@ function Adjunto({ mensaje }: { mensaje: Mensaje }) {
   }
 
   if (mensaje.mediaTipo === "audio") {
-    // eslint-disable-next-line jsx-a11y/media-has-caption
     return <audio controls src={mensaje.mediaUrl} className="mb-1.5 w-64" />;
   }
 
   if (mensaje.mediaTipo === "video") {
-    // eslint-disable-next-line jsx-a11y/media-has-caption
     return (
       <video controls src={mensaje.mediaUrl} className="mb-1.5 max-h-64 rounded-lg" />
     );

@@ -106,6 +106,13 @@
       "when": 1787780346917,
       "tag": "0014_yielding_celestials",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787974271397,
+      "tag": "0015_narrow_scarecrow",
+      "breakpoints": true
     }
   ]
 }

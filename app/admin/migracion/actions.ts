@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { migrationRuns, type RechazoMigracion } from "@/lib/db/schema";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
@@ -317,7 +318,7 @@ export async function cerrarCorrida(
   mapeo: Mapeo,
   filas: string[][],
 ): Promise<CorridaCerrada> {
-  await permiso();
+  const usuario = await permiso();
 
   await db
     .update(migrationRuns)
@@ -333,6 +334,18 @@ export async function cerrarCorrida(
   revalidatePath("/admin/stock");
   revalidatePath("/admin/precios");
   revalidatePath("/catalogo");
+
+  // Se registra al cerrar y no lote por lote: una importación de diez mil filas
+  // llenaría la bitácora de cien renglones que dicen lo mismo. Lo que importa
+  // es que hubo una corrida de migración, de qué entidad y quién la corrió.
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "importar",
+    entidad: "migracion",
+    entidadId: runId,
+    descripcion: `Cerró una corrida de migración de ${entidad}`,
+    detalle: { runId, entidad, filas: filas.length },
+  });
 
   return { controles };
 }

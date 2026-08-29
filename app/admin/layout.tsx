@@ -1,6 +1,11 @@
+import { Suspense } from "react";
 import { AdminSidebar } from "@/components/admin/sidebar";
 import { BuscadorGlobal } from "@/components/admin/buscador-global";
 import { MenuUsuario } from "@/components/admin/menu-usuario";
+import {
+  ActivityBell,
+  ActivityBellSkeleton,
+} from "@/components/admin/activity-bell";
 import { requireStaff } from "@/lib/dal/session";
 import { conversacionesSinLeer } from "@/lib/dal/admin/whatsapp";
 
@@ -38,6 +43,9 @@ export default async function AdminLayout({
           <div className="flex flex-1 items-center gap-3 pl-12 lg:pl-0">
             <BuscadorGlobal />
           </div>
+          <Suspense fallback={<ActivityBellSkeleton />}>
+            <ActivityBell />
+          </Suspense>
           <MenuUsuario
             nombre={usuario.name}
             iniciales={iniciales(usuario.name)}

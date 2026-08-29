@@ -11,6 +11,7 @@ import {
   CalendarDays,
   Tags,
   Building2,
+  CircleQuestionMark,
   DatabaseZap,
   ClipboardList,
   FileText,
@@ -23,6 +24,7 @@ import {
   Scissors,
   Truck,
   HardHat,
+  History,
   Mail,
   Users,
   Wallet,
@@ -79,6 +81,7 @@ const secciones = [
       { href: "/admin/avisos", icon: Mail, label: "Avisos" },
       { href: "/admin/sucursales", icon: Building2, label: "Sucursales" },
       { href: "/admin/migracion", icon: DatabaseZap, label: "Migración" },
+      { href: "/admin/bitacora", icon: History, label: "Bitácora" },
     ],
   },
 ];
@@ -157,6 +160,24 @@ export function AdminSidebar({
           </div>
         ))}
       </nav>
+
+      {/* La ayuda va al pie y separada del resto: no es una sección del
+          negocio, es a dónde se va cuando algo no se entiende. */}
+      <Link
+        href="/admin/ayuda"
+        onClick={() => setAbierto(false)}
+        aria-current={pathname.startsWith("/admin/ayuda") ? "page" : undefined}
+        className={`mx-3 mb-1 flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-base transition-colors ${
+          pathname.startsWith("/admin/ayuda")
+            ? "nav-activa bg-muted font-medium text-foreground"
+            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+        }`}
+      >
+        <CircleQuestionMark
+          className={`h-5 w-5 ${pathname.startsWith("/admin/ayuda") ? "text-brand-orange" : ""}`}
+        />
+        Ayuda
+      </Link>
 
       <Link
         href="/"

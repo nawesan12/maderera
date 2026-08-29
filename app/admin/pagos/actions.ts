@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { datosBancarios, payments } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { acreditarPago } from "@/lib/pagos/acreditar";
 import { proveedorPorNombre } from "@/lib/pagos";
 import { notificarResultadoDePago } from "@/lib/notificaciones/avisos";
@@ -78,6 +79,19 @@ export async function conciliarTransferencia(
     await notificarResultadoDePago({ ...resultado, detalle: "aprobado" });
   }
 
+  // Acreditar una transferencia es la decisión de una persona mirando un
+  // comprobante: no hay proveedor externo que la confirme después. Sin
+  // registro, no queda constancia de quién dio por buena la plata.
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: aprueba ? "cobrar" : "anular",
+    entidad: "pago",
+    entidadId: pago.id,
+    descripcion: aprueba
+      ? "Acreditó una transferencia en la conciliación"
+      : `Rechazó una transferencia: ${parsed.data.motivo ?? "sin motivo"}`,
+  });
+
   revalidatePath("/admin/pagos");
   revalidatePath("/admin/pedidos");
 
@@ -99,7 +113,7 @@ export async function reconsultarCobro(
   _previo: EstadoAccionPago,
   formData: FormData,
 ): Promise<EstadoAccionPago> {
-  await requireStaff();
+  const usuario = await requireStaff();
 
   const pagoId = String(formData.get("pagoId") ?? "");
 
@@ -132,6 +146,16 @@ export async function reconsultarCobro(
 
     const resultado = await acreditarPago(pago.id, remoto);
 
+    if (resultado.cambio) {
+      await registrarEnBitacora({
+        sesion: usuario,
+        accion: "cambiar_estado",
+        entidad: "pago",
+        entidadId: pago.id,
+        descripcion: `Reconsultó un cobro a Mercado Pago y quedó ${resultado.estado}`,
+      });
+    }
+
     if (resultado.cambio && resultado.estado === "aprobado") {
       await notificarResultadoDePago({ ...resultado, detalle: "aprobado" });
     }
@@ -156,7 +180,7 @@ export async function guardarDatosBancarios(
   _previo: EstadoAccionPago,
   formData: FormData,
 ): Promise<EstadoAccionPago> {
-  await requireStaff();
+  const usuario = await requireStaff();
 
   const parsed = z
     .object({
@@ -204,6 +228,13 @@ export async function guardarDatosBancarios(
 
   revalidatePath("/admin/pagos");
   revalidatePath("/checkout");
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "editar",
+    entidad: "configuracion",
+    descripcion: "Cambió los datos bancarios para transferencias",
+  });
 
   return { ok: "Datos bancarios guardados." };
 }

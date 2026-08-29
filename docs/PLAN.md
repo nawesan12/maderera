@@ -2,7 +2,8 @@
 
 > Documento de trabajo interno del PRESTADOR. Traduce el contrato firmado
 > (`Contrato — Maderera Juan B. Justo.pdf`, 15 pp.) a un plan ejecutable.
-> Última actualización: 26/08/2026 (undécima pasada: SEO y publicación).
+> Última actualización: 29/08/2026 (duodécima pasada: sugeridos, bitácora,
+> sucursales y guías).
 
 ---
 
@@ -397,16 +398,56 @@ formulario de contacto habría llegado sin escapar a la bandeja de quien
 atiende. `escapar` pasó a ser público y el formulario lo usa, con tests sobre
 eso.
 
+**Duodécima pasada — sugeridos, bitácora, sucursales y guías (29/08/2026):**
+
+Los cuatro renglones que quedaban sin depender de nadie.
+
+- **Productos sugeridos** (1.3): se cargan desde la ficha del producto, en dos
+  listas separadas —complementarios y alternativas—, y se muestran en la ficha
+  pública y en el presupuesto del cliente. Los complementarios **no** tienen
+  respaldo automático: sugerir un complemento equivocado es peor que no sugerir
+  ninguno. Las alternativas sí caen a la categoría, porque ahí una sugerencia
+  aproximada sirve igual.
+- **`/admin/sucursales` contra la base**: la última maqueta del panel. Ahora la
+  ficha se edita —dirección, teléfono, WhatsApp, horario, mapa, servicios y
+  destacados— y las métricas del día salen de `orders`, `cutting_orders` e
+  `inventory`. Se borró `lib/dashboard-data.ts`, y con él el último dato del
+  negocio escrito a mano.
+- **`audit_log` transversal**: quién hizo qué, cuándo y sobre qué, con pantalla
+  propia en `/admin/bitacora` y la campana del panel leyendo de ahí. Enganchado
+  en lo que mueve plata o borra datos: estados de pedido, cancelaciones, cobros,
+  anulaciones, ajustes masivos de precio, importaciones, altas de cliente,
+  aprobaciones de profesional y vinculaciones de cuenta. **No** en el ajuste
+  rápido de stock ni en el precio individual: esos ya tienen su propia tabla con
+  más detalle, y registrarlos dos veces solo llenaría la bitácora de ruido.
+- **Guías escritas** (1.10): once guías en `docs/GUIAS/`, servidas dentro del
+  panel en `/admin/ayuda` con buscador por texto completo. Escritas para quien
+  viene de un sistema de escritorio: qué cambia, qué no se puede deshacer y
+  cuáles son los errores que aparecen de verdad.
+
+**Cuatro bugs que aparecieron en el camino:**
+
+1. **El diálogo de alta de cliente recibía las listas de precios y nunca las
+   mostraba**, y la acción tampoco guardaba `priceListId`. Un cliente con precio
+   especial había que corregirlo por consola.
+2. **El renderizador de Markdown hacía un párrafo por renglón.** Un texto
+   escrito a 80 columnas salía como cinco párrafos. Afectaba también al blog.
+3. **Una negrita partida en dos renglones no cerraba** y salían los asteriscos.
+4. **El código en línea no protegía su contenido**: escribir `` `**así**` ``
+   para explicar cómo se pone una negrita salía en negrita.
+
+Se sumaron tablas y bloques de código al Markdown, con tests. El lint quedó sin
+advertencias (había veinte).
+
 ### Lo que falta para cerrar el contrato
 
 | # | Qué | Cláusula | Depende de |
 |---|---|---|---|
-| 1 | **Productos sugeridos**: la tabla `related_products` ya está creada, con tipos `complementario` y `similar`. Falta la carga desde la ficha de producto del panel y mostrarlos en la ficha pública y en el carrito, con respaldo automático por categoría cuando no hay ninguno cargado. | 1.3 | Nada |
-| 2 | **Guías escritas** (`/admin/ayuda`): paso a paso dentro del panel para gente que viene de un sistema de escritorio, más `docs/GUIAS/`. Se escriben con las pantallas ya terminadas. | 1.10 | Nada |
-| 3 | **`audit_log` transversal** de las acciones del panel. No lo pide el contrato; lo pide operar con varias personas cargando. | — | Nada |
-| 4 | **`/admin/sucursales` contra la base**: es la única pantalla del panel que sigue siendo maqueta —lee `lib/dashboard-data.ts`, el mock del prototipo, con las direcciones y las métricas escritas a mano—. Falta la edición de la ficha (incluidos `servicios`, `destacados` e `imagenUrl`, que ya existen en la tabla) y las métricas reales por sucursal. Lo mismo `components/admin/activity-bell.tsx`. | — | Nada |
-| 5 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Decisión de infraestructura (R5) y acceso al dominio |
-| 6 | **Capacitación presencial** y acompañamiento en la transición. | 1.10 | Fecha con el cliente |
+| 1 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Decisión de infraestructura (R5) y acceso al dominio |
+| 2 | **Capacitación presencial** y acompañamiento en la transición. Las guías escritas ya están; esto es la sesión con la gente. | 1.10 | Fecha con el cliente |
+
+**No queda nada pendiente que dependa solo del PRESTADOR.** Los dos renglones
+que quedan necesitan una decisión o una fecha del cliente.
 
 El SEO (1.8) sale del cuadro salvo la publicación en sí, que necesita el
 dominio. La migración (1.9) tampoco está: **el código está hecho y probado
@@ -432,7 +473,7 @@ ni pagos.
 | 10 páginas públicas | ✅ Server Components contra la base (11ª pasada) | — |
 | `lib/calculations.ts` (4 calculadoras, 170 líneas) | ✅ Lógica pura correcta | Se conserva tal cual |
 | `lib/budget-context.tsx` (carrito en memoria) | 🟡 Solo cliente, se pierde al recargar | Se reescribe con persistencia |
-| Panel admin (hoy 17 secciones) | 🟡 Todo contra la base salvo `/admin/sucursales` | Se reconecta |
+| Panel admin (hoy 19 secciones) | ✅ Todo contra la base (12ª pasada) | — |
 | `app/admin/facturacion` | 🟡 918 líneas de maqueta completa (alta, IVA, impresión) | Se conecta a la base y a ARCA |
 | Tienda, checkout, pagos, envíos | ✅ Hecho (7ª pasada: cobros, remitos y seguimiento) | — |
 | Portal de clientes | ✅ Hecho (4ª y 7ª pasada) | — |

@@ -33,7 +33,7 @@ export function DialogoTransferencia({
   sucursales: { id: string; name: string }[];
 }) {
   const [abierto, setAbierto] = useState(false);
-  const [estado, accion, pendiente] = useAccionDeDialogo(
+  const [, accion, pendiente] = useAccionDeDialogo(
     transferirStock,
     estadoInicial,
     () => setAbierto(false),

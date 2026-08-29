@@ -220,6 +220,11 @@ export default async function ArcaPage() {
               madera va al 21 %— y desde ahí llega a la factura.
             </p>
 
+            <p className="mt-3 text-base">
+              <span className="text-muted-foreground">Condición del emisor: </span>
+              {CONDICIONES[emisor.condicionIva] ?? emisor.condicionIva}
+            </p>
+
             <table className="mt-3 w-full text-left">
               <thead>
                 <tr className="border-b text-sm uppercase tracking-[0.06em] text-muted-foreground">

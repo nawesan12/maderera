@@ -48,7 +48,7 @@ export function DialogoMovimiento({
 }) {
   const [abierto, setAbierto] = useState(false);
   const [tipo, setTipo] = useState("pago");
-  const [estado, accion, pendiente] = useAccionDeDialogo(
+  const [, accion, pendiente] = useAccionDeDialogo(
     registrarMovimiento,
     {} as EstadoCliente,
     () => setAbierto(false),

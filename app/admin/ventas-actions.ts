@@ -18,6 +18,7 @@ import { siguienteNumero } from "@/lib/dal/admin/ventas";
 import { avisarCambioDePedido } from "@/lib/whatsapp/avisos";
 import { notificarCambioDeEstado } from "@/lib/notificaciones/avisos";
 import { liberarReservas, reservarPedido } from "@/lib/inventario/reservas";
+import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 
 export interface EstadoVenta {
   error?: string;
@@ -96,6 +97,14 @@ export async function avanzarPedido(id: string): Promise<EstadoVenta> {
     });
   });
 
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "cambiar_estado",
+    entidad: "pedido",
+    entidadId: id,
+    descripcion: `${pedido.numero}: ${pedido.estado} → ${siguiente}`,
+  });
+
   refrescar();
 
   // Los avisos al cliente salen después de que el cambio quedó guardado, y por
@@ -146,6 +155,14 @@ export async function cancelarPedido(
     await liberarReservas(tx, id);
   });
 
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "anular",
+    entidad: "pedido",
+    entidadId: id,
+    descripcion: `Canceló el pedido${motivo ? `: ${motivo}` : ""}`,
+  });
+
   refrescar();
   revalidatePath("/admin/stock");
   return { ok: "Pedido cancelado. La mercadería reservada quedó disponible." };
@@ -164,7 +181,7 @@ export async function cambiarEstadoPresupuesto(
   id: string,
   estado: string,
 ): Promise<EstadoVenta> {
-  await requireStaff();
+  const usuario = await requireStaff();
 
   const parsed = estadoPresupuestoSchema.safeParse(estado);
   if (!parsed.success) return { error: "Ese estado no existe." };
@@ -173,6 +190,14 @@ export async function cambiarEstadoPresupuesto(
     .update(quotes)
     .set({ estado: parsed.data, updatedAt: new Date() })
     .where(eq(quotes.id, id));
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "cambiar_estado",
+    entidad: "presupuesto",
+    entidadId: id,
+    descripcion: `Pasó el presupuesto a ${parsed.data}`,
+  });
 
   refrescar();
   return { ok: "Presupuesto actualizado." };
@@ -270,6 +295,14 @@ export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
     await reservarPedido(tx, pedido.id);
   });
 
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "crear",
+    entidad: "pedido",
+    entidadId: quoteId,
+    descripcion: `Convirtió el presupuesto ${presupuesto.numero} en el pedido ${numero}`,
+  });
+
   refrescar();
   revalidatePath("/admin/stock");
   return { ok: `Se creó el pedido ${numero}.` };
@@ -313,6 +346,15 @@ export async function marcarPagado(id: string): Promise<EstadoVenta> {
         createdByUserId: usuario.userId,
       });
     }
+  });
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "cobrar",
+    entidad: "pedido",
+    entidadId: id,
+    descripcion: `Marcó ${pedido.numero} como cobrado (${pedido.medioPago ?? "sin medio"})`,
+    detalle: { total: pedido.total, medioPago: pedido.medioPago },
   });
 
   refrescar();

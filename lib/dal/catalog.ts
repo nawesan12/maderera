@@ -12,6 +12,7 @@ import {
   productImages,
   productVariants,
   products,
+  relatedProducts,
 } from "@/lib/db/schema";
 import { listaVigente } from "@/lib/dal/precios-sesion";
 import {
@@ -72,6 +73,15 @@ export interface FiltrosCatalogo {
   orden?: OrdenCatalogo;
   /** Solo los que están en oferta. */
   soloOfertas?: boolean;
+  /**
+   * Un conjunto puntual de productos, por id.
+   *
+   * Lo usan los sugeridos: el vendedor eligió cuáles van, así que no hay filtro
+   * que los describa. Se resuelven por acá y no con una consulta propia para que
+   * la tarjeta traiga el mismo precio, la misma oferta y el mismo stock que en
+   * el resto del catálogo.
+   */
+  ids?: string[];
 }
 
 /** Categorías con la cantidad real de productos activos. */
@@ -109,6 +119,13 @@ export async function listarProductos(
   filtros: FiltrosCatalogo = {},
 ): Promise<ProductoListado[]> {
   const condiciones = [eq(products.active, true)];
+
+  if (filtros.ids) {
+    // Sin esto, un array vacío se traduce a `in ()` y devolvería el catálogo
+    // entero en vez de nada.
+    if (filtros.ids.length === 0) return [];
+    condiciones.push(inArray(products.id, filtros.ids));
+  }
 
   if (filtros.categoria && filtros.categoria !== "todos") {
     condiciones.push(eq(categories.slug, filtros.categoria));
@@ -537,6 +554,137 @@ export async function productosRelacionados(
 ): Promise<ProductoListado[]> {
   const todos = await listarProductos({ categoria: categorySlug });
   return todos.filter((p) => p.slug !== excluirSlug).slice(0, limite);
+}
+
+export interface Sugeridos {
+  /** Lo que hace falta para usar el producto: los clavos del machimbre. */
+  complementarios: ProductoListado[];
+  /** La alternativa, cuando lo que se está mirando no convence o no hay stock. */
+  similares: ProductoListado[];
+  /** `true` cuando los similares salieron de la categoría y no de una carga. */
+  similaresPorCategoria: boolean;
+}
+
+/**
+ * Los productos sugeridos de una ficha (cláusula 1.3).
+ *
+ * Se cargan a mano desde el panel porque el criterio lo tiene el vendedor:
+ * ninguna heurística sabe que a un deck de grandis le corresponde ese fijador y
+ * no otro. Pero una ficha sin nada cargado no puede quedar vacía —son
+ * doscientos productos y la carga va a ser gradual—, así que los **similares**
+ * caen a otros de la misma categoría.
+ *
+ * Los complementarios no tienen respaldo automático: sugerir un complemento
+ * equivocado es peor que no sugerir ninguno. "También podés necesitar" al lado
+ * de algo que no sirve para este producto quema la confianza de todo el bloque.
+ *
+ * Los inactivos y los sin stock quedan afuera: `listarProductos` ya filtra por
+ * `active`, y acá se manda al fondo lo que no se puede comprar.
+ */
+export async function productosSugeridos(
+  productId: string,
+  categorySlug: string,
+  excluirSlug: string,
+  limite = 4,
+): Promise<Sugeridos> {
+  const vinculos = await db
+    .select({
+      relatedProductId: relatedProducts.relatedProductId,
+      tipo: relatedProducts.tipo,
+      orden: relatedProducts.orden,
+    })
+    .from(relatedProducts)
+    .where(eq(relatedProducts.productId, productId))
+    .orderBy(asc(relatedProducts.orden));
+
+  const idsComplementarios = vinculos
+    .filter((v) => v.tipo === "complementario")
+    .map((v) => v.relatedProductId);
+  const idsSimilares = vinculos
+    .filter((v) => v.tipo === "similar")
+    .map((v) => v.relatedProductId);
+
+  const [cargados, deCategoria] = await Promise.all([
+    listarProductos({ ids: [...idsComplementarios, ...idsSimilares] }),
+    idsSimilares.length === 0
+      ? listarProductos({ categoria: categorySlug })
+      : Promise.resolve([]),
+  ]);
+
+  /** Devuelve los productos en el orden en que los cargó el vendedor. */
+  const enOrden = (ids: string[]) =>
+    ids
+      .map((id) => cargados.find((p) => p.id === id))
+      .filter((p): p is ProductoListado => p !== undefined)
+      .slice(0, limite);
+
+  const similares = enOrden(idsSimilares);
+
+  return {
+    complementarios: enOrden(idsComplementarios),
+    similares:
+      similares.length > 0
+        ? similares
+        : deCategoria.filter((p) => p.slug !== excluirSlug).slice(0, limite),
+    similaresPorCategoria: idsSimilares.length === 0,
+  };
+}
+
+/**
+ * Complementos de lo que ya está en el carrito.
+ *
+ * El momento de acordarse del sellador es cuando el deck ya está en la lista,
+ * no cuando se estaba mirando la ficha. Por eso el bloque va también acá, y por
+ * eso solo muestra **complementarios**: ofrecer alternativas a esta altura es
+ * invitar a deshacer una decisión que la persona ya tomó.
+ *
+ * Se excluye lo que ya está en el carrito —sugerir algo que ya se agregó hace
+ * ver el bloque como ruido— y no hay respaldo por categoría: si nadie cargó
+ * complementos, no se muestra nada.
+ */
+export async function complementosDelCarrito(
+  variantIds: string[],
+  limite = 4,
+): Promise<ProductoListado[]> {
+  const ids = variantIds.filter(Boolean);
+  if (ids.length === 0) return [];
+
+  // De las variantes del carrito a sus productos, y de ahí a los complementos.
+  const enElCarrito = await db
+    .selectDistinct({ productId: productVariants.productId })
+    .from(productVariants)
+    .where(inArray(productVariants.id, ids));
+
+  const propios = enElCarrito.map((p) => p.productId);
+  if (propios.length === 0) return [];
+
+  const vinculos = await db
+    .select({ relatedProductId: relatedProducts.relatedProductId })
+    .from(relatedProducts)
+    .where(
+      and(
+        inArray(relatedProducts.productId, propios),
+        eq(relatedProducts.tipo, "complementario"),
+      ),
+    )
+    .orderBy(asc(relatedProducts.orden));
+
+  const yaEsta = new Set(propios);
+  const candidatos = [
+    ...new Set(
+      vinculos
+        .map((v) => v.relatedProductId)
+        .filter((id) => !yaEsta.has(id)),
+    ),
+  ];
+
+  if (candidatos.length === 0) return [];
+
+  const productos = await listarProductos({ ids: candidatos });
+
+  // Lo que no se puede comprar no se sugiere: mandar a alguien a una ficha sin
+  // stock desde su propio carrito es peor que no sugerir nada.
+  return productos.filter((p) => p.hayStock).slice(0, limite);
 }
 
 /**

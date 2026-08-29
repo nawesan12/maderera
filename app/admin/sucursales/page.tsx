@@ -1,89 +1,209 @@
-"use client";
+import type { Metadata } from "next";
+import Link from "next/link";
+import Image from "next/image";
+import {
+  Building2,
+  Clock,
+  DollarSign,
+  Mail,
+  MapPin,
+  Package,
+  PackageX,
+  Phone,
+  Scissors,
+  Truck,
+  Users,
+} from "lucide-react";
+import { EncabezadoPanel } from "@/components/admin/encabezado";
+import { formatearMonto } from "@/lib/formato";
+import {
+  sinSucursalAsignada,
+  sucursalesConMetricas,
+  type SucursalConMetricas,
+} from "@/lib/dal/admin/sucursales";
+import { EditorDeSucursal } from "./editor";
 
-import { motion } from "framer-motion";
-import { Building2, TrendingUp, Package, Truck, Scissors, Users, DollarSign, MapPin, Phone, Clock } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { sucursalMetricas } from "@/lib/dashboard-data";
+export const metadata: Metadata = { title: "Sucursales" };
 
-export default function AdminSucursalesPage() {
-  const sucursales = [
-    { ...sucursalMetricas.central, color: "brand-orange", address: "Av. Juan B. Justo 4153", phone: "(0223) 474-3328", hours: "Lun-Vie 8-16hs | Sáb 8-12hs" },
-    { ...sucursalMetricas.aserradero, color: "brand-green", address: "Canosa N°61", phone: "(0223) 483-0535", hours: "Lun-Vie 8-16hs | Sáb 8-12hs" },
-  ];
+/**
+ * Sucursales: la ficha que ve el público y los números del día.
+ *
+ * Era la última pantalla de maqueta del panel. Mostraba métricas inventadas y,
+ * peor, la dirección y el teléfono escritos en el código: el mismo dato que ya
+ * vivía en `branches` y alimentaba el sitio. Ahora la ficha se edita acá y el
+ * sitio público la refleja al guardar.
+ *
+ * Los números son del día, no del mes: esta pantalla se abre para saber cómo
+ * viene la jornada en cada local. El acumulado del mes está en el resumen.
+ */
+export default async function AdminSucursalesPage() {
+  const [sucursales, sueltos] = await Promise.all([
+    sucursalesConMetricas(),
+    sinSucursalAsignada(),
+  ]);
 
   return (
     <div className="space-y-6">
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-semibold tracking-tight">Sucursales</h1>
-        <p className="text-base text-muted-foreground">Resumen comparativo en tiempo real</p>
-      </motion.div>
+      <EncabezadoPanel
+        titulo="Sucursales"
+        detalle="Cómo viene el día en cada local, y la ficha que se publica en el sitio."
+      >
+        <Link
+          href="/sucursales"
+          target="_blank"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <Building2 className="h-5 w-5" />
+          Ver en el sitio
+        </Link>
+      </EncabezadoPanel>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        {sucursales.map((suc, si) => (
-          <motion.div
-            key={suc.nombre}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: si * 0.1, duration: 0.5 }}
-          >
-            <Card className="bg-card border-border overflow-hidden">
-              <div className={`p-5 ${suc.color === "brand-orange" ? "bg-gradient-to-r from-brand-orange/15 to-transparent" : "bg-gradient-to-r from-brand-green/15 to-transparent"} border-b border-border`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${suc.color === "brand-orange" ? "bg-brand-orange" : "bg-brand-green"} shadow-lg`}>
-                    <Building2 className="h-6 w-6 text-foreground" />
-                  </div>
-                  <div className="flex-1">
-                    <h2 className="text-xl font-bold text-foreground">{suc.nombre}</h2>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground mt-0.5">
-                      <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {suc.address}</span>
-                    </div>
-                  </div>
-                  <Badge className={`border-0 text-sm ${suc.color === "brand-orange" ? "bg-brand-orange/20 text-brand-orange" : "bg-brand-green/20 text-brand-green"}`}>
-                    Abierto
-                  </Badge>
-                </div>
-              </div>
-              <CardContent className="p-5">
-                {/* Contact info */}
-                <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
-                  <span className="flex items-center gap-1"><Phone className="h-4 w-4" /> {suc.phone}</span>
-                  <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {suc.hours}</span>
-                </div>
+      {sucursales.length === 0 && (
+        <p className="rounded-lg border border-dashed px-4 py-10 text-center text-base text-muted-foreground">
+          Todavía no hay sucursales cargadas.
+        </p>
+      )}
 
-                <Separator className="bg-muted mb-4" />
-
-                {/* Metrics grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { icon: DollarSign, label: "Ventas Hoy", value: suc.ventasHoy, color: "text-green-700" },
-                    { icon: Truck, label: "Pedidos Hoy", value: suc.pedidosHoy, color: "text-blue-700" },
-                    { icon: Scissors, label: "Cortes en Cola", value: suc.cortesEnCola, color: suc.cortesEnCola > 0 ? "text-amber-700" : "text-muted-foreground" },
-                    { icon: Users, label: "Clientes Atendidos", value: suc.clientesAtendidos, color: "text-brand-orange" },
-                    { icon: Package, label: "Valor Stock", value: suc.stockValor, color: "text-foreground" },
-                    { icon: Package, label: "Stock Bajo", value: suc.productosStockBajo, color: suc.productosStockBajo > 5 ? "text-red-700" : "text-amber-700" },
-                  ].map((metric, i) => (
-                    <motion.div
-                      key={metric.label}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: si * 0.1 + i * 0.04 + 0.2 }}
-                      className="p-3 rounded-xl bg-card border border-border hover:bg-muted/60 transition-colors"
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <metric.icon className="h-5 w-5 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground uppercase tracking-wider">{metric.label}</p>
-                      </div>
-                      <p className={`text-xl font-bold ${metric.color}`}>{metric.value}</p>
-                    </motion.div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+      <div className="grid gap-6 2xl:grid-cols-2">
+        {sucursales.map((suc) => (
+          <TarjetaSucursal key={suc.id} sucursal={suc} />
         ))}
       </div>
+
+      {(sueltos.pedidos > 0 || sueltos.cortes > 0) && (
+        <p className="rounded-lg border bg-muted/40 px-4 py-3 text-base text-muted-foreground">
+          Sin sucursal asignada:{" "}
+          <strong className="text-foreground">{sueltos.pedidos}</strong>{" "}
+          {sueltos.pedidos === 1 ? "pedido abierto" : "pedidos abiertos"} y{" "}
+          <strong className="text-foreground">{sueltos.cortes}</strong>{" "}
+          {sueltos.cortes === 1 ? "corte en cola" : "cortes en cola"}. No suman a
+          ninguna de las dos columnas de arriba.
+        </p>
+      )}
     </div>
+  );
+}
+
+function TarjetaSucursal({ sucursal }: { sucursal: SucursalConMetricas }) {
+  const metricas = [
+    {
+      icono: DollarSign,
+      etiqueta: "Vendido hoy",
+      valor: formatearMonto(sucursal.ventasHoy),
+    },
+    {
+      icono: Truck,
+      etiqueta: "Pedidos hoy",
+      valor: String(sucursal.pedidosHoy),
+      pie:
+        sucursal.pedidosAbiertos > 0
+          ? `${sucursal.pedidosAbiertos} sin entregar`
+          : undefined,
+    },
+    {
+      icono: Scissors,
+      etiqueta: "Cortes en cola",
+      valor: String(sucursal.cortesEnCola),
+      atencion: sucursal.cortesEnCola > 0,
+    },
+    {
+      icono: Users,
+      etiqueta: "Clientes atendidos",
+      valor: String(sucursal.clientesAtendidos),
+    },
+    {
+      icono: Package,
+      etiqueta: "Stock valorizado",
+      valor: formatearMonto(sucursal.stockValor),
+    },
+    {
+      icono: PackageX,
+      etiqueta: "Para reponer",
+      valor: String(sucursal.productosStockBajo),
+      atencion: sucursal.productosStockBajo > 0,
+    },
+  ];
+
+  return (
+    <article className="tarjeta overflow-hidden">
+      <header className="flex items-start gap-4 border-b p-5">
+        {sucursal.imagenUrl ? (
+          <Image
+            src={sucursal.imagenUrl}
+            alt=""
+            width={64}
+            height={64}
+            className="h-16 w-16 shrink-0 rounded-xl object-cover"
+          />
+        ) : (
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-brand-orange/12 text-brand-orange">
+            <Building2 className="h-7 w-7" />
+          </span>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-xl font-semibold">{sucursal.nombre}</h2>
+            {!sucursal.active && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground">
+                No se publica
+              </span>
+            )}
+          </div>
+
+          <ul className="mt-1.5 space-y-1 text-base text-muted-foreground">
+            {sucursal.direccion && (
+              <li className="flex items-start gap-1.5">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{sucursal.direccion}</span>
+              </li>
+            )}
+            {sucursal.telefono && (
+              <li className="flex items-center gap-1.5">
+                <Phone className="h-4 w-4 shrink-0" />
+                <span className="tabular">{sucursal.telefono}</span>
+              </li>
+            )}
+            {sucursal.horario && (
+              <li className="flex items-start gap-1.5">
+                <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{sucursal.horario}</span>
+              </li>
+            )}
+            {sucursal.email && (
+              <li className="flex items-center gap-1.5">
+                <Mail className="h-4 w-4 shrink-0" />
+                <span>{sucursal.email}</span>
+              </li>
+            )}
+          </ul>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-3">
+        {metricas.map((m) => (
+          <div key={m.etiqueta} className="bg-card p-4">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <m.icono className="h-4 w-4" />
+              <p className="text-sm">{m.etiqueta}</p>
+            </div>
+            <p
+              className={`tabular mt-1.5 text-xl font-semibold ${
+                m.atencion ? "text-brand-orange" : ""
+              }`}
+            >
+              {m.valor}
+            </p>
+            {m.pie && (
+              <p className="mt-0.5 text-sm text-muted-foreground">{m.pie}</p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="border-t p-5">
+        <EditorDeSucursal sucursal={sucursal} />
+      </div>
+    </article>
   );
 }

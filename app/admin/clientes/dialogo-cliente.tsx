@@ -42,7 +42,7 @@ export function DialogoCliente({
   listas: { id: string; name: string; isDefault: boolean }[];
 }) {
   const [abierto, setAbierto] = useState(false);
-  const [estado, accion, pendiente] = useAccionDeDialogo(
+  const [, accion, pendiente] = useAccionDeDialogo(
     guardarCliente,
     {} as EstadoCliente,
     () => setAbierto(false),
@@ -50,7 +50,18 @@ export function DialogoCliente({
 
   const [tipo, setTipo] = useState("particular");
   const [condicion, setCondicion] = useState("consumidor_final");
+  const [lista, setLista] = useState("");
 
+
+  // La lista de precios se elegía en ningún lado: el diálogo ya recibía
+  // `listas` y nunca las mostraba, así que un cliente con precio especial había
+  // que corregirlo por consola. La opción vacía es "la general".
+  const opcionesDeLista: Record<string, string> = {
+    "": "Lista general",
+    ...Object.fromEntries(
+      listas.filter((l) => !l.isDefault).map((l) => [l.id, l.name]),
+    ),
+  };
 
   // Un profesional casi siempre factura A: se propone, sin imponerlo.
   function cambiarTipo(valor: string) {
@@ -74,6 +85,7 @@ export function DialogoCliente({
         <form action={accion} className="space-y-4">
           <input type="hidden" name="tipo" value={tipo} />
           <input type="hidden" name="condicionIva" value={condicion} />
+          <input type="hidden" name="priceListId" value={lista} />
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
@@ -144,6 +156,28 @@ export function DialogoCliente({
             <div className="space-y-2">
               <Label htmlFor="asesor">Asesor</Label>
               <Input id="asesor" name="asesor" placeholder="Quién lo atiende" />
+            </div>
+            <div className="space-y-2">
+              <Label>Lista de precios</Label>
+              <Select
+                value={lista}
+                onValueChange={(v) => setLista(v ?? "")}
+                items={opcionesDeLista}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(opcionesDeLista).map(([valor, texto]) => (
+                    <SelectItem key={valor} value={valor}>
+                      {texto}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                Sin elegir, paga la lista general.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="limiteCredito">Límite de cuenta corriente</Label>

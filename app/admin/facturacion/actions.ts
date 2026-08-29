@@ -13,6 +13,7 @@ import {
   puntosVenta,
 } from "@/lib/db/schema";
 import { requireStaff, requireStaffRole } from "@/lib/dal/session";
+import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import {
   anularConNotaDeCredito,
   autorizarComprobante,
@@ -109,6 +110,14 @@ export async function facturarPedido(
   });
 
   if (resultado.error) return { error: resultado.error };
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "crear",
+    entidad: "factura",
+    entidadId: resultado.invoiceId ?? null,
+    descripcion: `Facturó el pedido ${datos.pedido.numero}`,
+  });
 
   refrescar();
   revalidatePath(`/admin/pedidos/${orderId.data}`);
@@ -218,6 +227,14 @@ export async function emitirManual(
 
   if (resultado.error) return { error: resultado.error };
 
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "crear",
+    entidad: "factura",
+    entidadId: resultado.invoiceId ?? null,
+    descripcion: `Emitió un comprobante manual a ${cabecera.data.receptorNombre ?? "consumidor final"}`,
+  });
+
   refrescar();
 
   if (resultado.invoiceId) {
@@ -238,13 +255,23 @@ export async function autorizar(
   _previo: EstadoFactura,
   formData: FormData,
 ): Promise<EstadoFactura> {
-  await requireStaff();
+  const usuario = await requireStaff();
 
   const id = z.string().uuid().safeParse(formData.get("id"));
   if (!id.success) return { error: "No encontramos el comprobante." };
 
   const resultado = await autorizarComprobante(id.data);
   refrescar(id.data);
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "cambiar_estado",
+    entidad: "factura",
+    entidadId: id.data,
+    descripcion: resultado.error
+      ? `Intentó autorizar un comprobante en ARCA y falló: ${resultado.error}`
+      : "Autorizó un comprobante en ARCA",
+  });
 
   // Con el CAE en la mano vale la pena mandar el definitivo: el que salió al
   // emitir decía que todavía no estaba autorizado.
@@ -285,6 +312,15 @@ export async function anular(
   );
 
   if (resultado.error) return { error: resultado.error };
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "anular",
+    entidad: "factura",
+    entidadId: parsed.data.id,
+    descripcion: `Anuló un comprobante con nota de crédito: ${parsed.data.motivo}`,
+    detalle: { notaDeCreditoId: resultado.invoiceId },
+  });
 
   refrescar(parsed.data.id);
   redirect(`/admin/facturacion/${resultado.invoiceId}`);
@@ -352,6 +388,15 @@ export async function registrarCobro(
     createdByUserId: usuario.userId,
   });
 
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "cobrar",
+    entidad: "factura",
+    entidadId: parsed.data.id,
+    descripcion: `Registró un cobro de ${monto.toFixed(2)} por ${parsed.data.medio}`,
+    detalle: { medio: parsed.data.medio, monto: monto.toFixed(2), referencia: parsed.data.referencia },
+  });
+
   refrescar(parsed.data.id);
   return { ok: "Cobro registrado." };
 }
@@ -364,7 +409,7 @@ export async function guardarDatosEmisor(
   _previo: EstadoFactura,
   formData: FormData,
 ): Promise<EstadoFactura> {
-  await requireStaffRole("admin");
+  const usuario = await requireStaffRole("admin");
 
   const parsed = z
     .object({
@@ -454,6 +499,13 @@ export async function guardarDatosEmisor(
     .where(eq(configuracionFiscal.id, config.id));
 
   revalidatePath("/admin/arca");
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "editar",
+    entidad: "configuracion",
+    descripcion: "Cambió los datos fiscales del emisor",
+  });
+
   return { ok: "Datos guardados." };
 }
 
@@ -461,7 +513,7 @@ export async function guardarPuntoVenta(
   _previo: EstadoFactura,
   formData: FormData,
 ): Promise<EstadoFactura> {
-  await requireStaffRole("admin");
+  const usuario = await requireStaffRole("admin");
 
   const parsed = z
     .object({
@@ -513,5 +565,12 @@ export async function guardarPuntoVenta(
   }
 
   revalidatePath("/admin/arca");
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "editar",
+    entidad: "configuracion",
+    descripcion: "Cambió un punto de venta",
+  });
+
   return { ok: "Punto de venta guardado." };
 }

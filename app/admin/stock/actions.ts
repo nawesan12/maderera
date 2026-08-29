@@ -5,8 +5,9 @@ import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { branches, inventory, inventoryMovements } from "@/lib/db/schema";
+import { inventory, inventoryMovements } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 
 export interface EstadoTransferencia {
   error?: string;
@@ -129,6 +130,19 @@ export async function transferirStock(
           : "No se pudo registrar la transferencia.",
     };
   }
+
+  // El ajuste rápido de stock no se registra acá: `inventory_movements` ya
+  // guarda cada uno con su cantidad y su autor, y son decenas por día. La
+  // transferencia sí, porque mueve mercadería entre locales y es lo que se
+  // discute cuando en un galpón falta lo que el sistema dice que está.
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "editar",
+    entidad: "stock",
+    entidadId: variantId,
+    descripcion: `Transfirió ${cantidad} entre sucursales${nota ? `: ${nota}` : ""}`,
+    detalle: { variantId, origenId, destinoId, cantidad },
+  });
 
   revalidatePath("/admin/stock");
   revalidatePath("/stock");

@@ -1,6 +1,11 @@
-import type { StockLevel } from "@/lib/products";
-
-export type { StockLevel };
+/**
+ * Los cuatro niveles que ve el público.
+ *
+ * Vivían en `lib/products.ts` junto al catálogo escrito a mano del prototipo.
+ * Ese archivo se borró: el catálogo sale de la base, y el tipo pertenece acá,
+ * que es donde está la función que lo calcula.
+ */
+export type StockLevel = "alto" | "medio" | "bajo" | "sin-stock";
 
 /**
  * Lo que se puede vender: el físico menos lo que ya tiene dueño.

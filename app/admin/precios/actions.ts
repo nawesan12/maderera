@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
@@ -14,6 +14,7 @@ import {
   products,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { leerCsv, type FilaImportada } from "@/lib/precios-csv";
 
 export interface EstadoPrecios {
@@ -272,6 +273,18 @@ export async function ajustarPrecios(
     }
   });
 
+  // El precio individual no se registra acá: `price_history` ya guarda cada
+  // cambio con su valor anterior, que es más detalle del que cabe en la
+  // bitácora. Lo que sí va son las operaciones masivas, porque son las que
+  // mueven cientos de precios de un saque y las que después nadie recuerda.
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "editar",
+    entidad: "precio",
+    descripcion: `Ajuste masivo del ${porcentaje > 0 ? "+" : ""}${porcentaje}% sobre ${tocados} precio${tocados === 1 ? "" : "s"}`,
+    detalle: { porcentaje, categoria, listaSlug, redondeo, motivo, loteId, tocados },
+  });
+
   refrescar();
 
   if (tocados === 0) {
@@ -522,6 +535,14 @@ export async function confirmarImportacion(
         }
       }
     }
+  });
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "importar",
+    entidad: "precio",
+    descripcion: `Importó una planilla: ${aplicados} precio${aplicados === 1 ? "" : "s"} cambiado${aplicados === 1 ? "" : "s"}`,
+    detalle: { loteId, aplicados, filas: cambios.data.length },
   });
 
   refrescar();

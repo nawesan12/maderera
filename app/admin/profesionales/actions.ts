@@ -13,6 +13,7 @@ import {
   volumeDiscounts,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { parsearImporte } from "@/lib/formato";
 import { variantesDeCuit } from "@/lib/cuit";
 import { notificarResolucionProfesional } from "@/lib/notificaciones/profesionales";
@@ -180,6 +181,16 @@ export async function aprobarSolicitud(
     }
   });
 
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "cambiar_estado",
+    entidad: "profesional",
+    entidadId: solicitud.id,
+    descripcion: `Aprobó a ${solicitud.nombre}${nombreLista ? ` con lista ${nombreLista}` : ""}`,
+    // El límite de cuenta corriente es plata que se presta: queda quién lo fijó.
+    detalle: { lista: nombreLista, limiteCredito: limite },
+  });
+
   refrescar();
 
   after(async () => {
@@ -232,6 +243,14 @@ export async function rechazarSolicitud(
 
   after(async () => {
     await notificarResolucionProfesional(parsed.data.id);
+  });
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "cambiar_estado",
+    entidad: "profesional",
+    entidadId: parsed.data.id,
+    descripcion: "Rechazó una solicitud de cuenta profesional",
   });
 
   return { ok: "Solicitud rechazada. Le avisamos por correo." };

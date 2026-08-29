@@ -9,12 +9,15 @@ import {
   Tags,
 } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { moneda, plural } from "@/components/admin/formato";
+import { moneda } from "@/components/admin/formato";
 import {
+  candidatosParaSugerir,
   listarCategoriasAdmin,
   obtenerProductoAdmin,
+  sugeridosDelProducto,
 } from "@/lib/dal/admin/products";
 import { FormularioProducto } from "../formulario";
+import { ProductosSugeridos } from "../sugeridos";
 
 export default async function EditarProductoPage({
   params,
@@ -22,9 +25,11 @@ export default async function EditarProductoPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [producto, categorias] = await Promise.all([
+  const [producto, categorias, sugeridos, candidatos] = await Promise.all([
     obtenerProductoAdmin(id),
     listarCategoriasAdmin(),
+    sugeridosDelProducto(id),
+    candidatosParaSugerir(id),
   ]);
 
   if (!producto) notFound();
@@ -174,6 +179,12 @@ export default async function EditarProductoPage({
           imagen: producto.imagen,
           variantes: producto.variantes,
         }}
+      />
+
+      <ProductosSugeridos
+        productId={producto.id}
+        cargados={sugeridos}
+        candidatos={candidatos}
       />
     </div>
   );

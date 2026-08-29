@@ -24,6 +24,8 @@ posibles:
 |---|---|---|---|---|
 | 22/08/2026 | PRESTADOR | Bandeja de WhatsApp con puesto de atención y avisos automáticos | Trabajo nuevo asumido | — |
 | 26/08/2026 | PRESTADOR | Acopio con remitos, firma digital desde el celular y descuento de stock por venta | Trabajo nuevo asumido | — |
+| 29/08/2026 | PRESTADOR | Bitácora de acciones del panel (`audit_log`), con pantalla de consulta y campana de actividad | Trabajo nuevo asumido | — |
+| 29/08/2026 | PRESTADOR | Exportación de la lista de piezas para el optimizador de la seccionadora, con formato configurable | Trabajo nuevo asumido | — |
 
 ## Insumos pendientes del cliente
 
@@ -43,6 +45,7 @@ se notifica por escrito invocando la cláusula 5.3.
 | Fotos reales de las dos sucursales | Hoy la página muestra una placa de marca en vez de una foto ajena | — | Pendiente |
 | Confirmación de la historia de la empresa | La trayectoria de `/nosotros` viene del prototipo y no está verificada: el hito de 2010 mencionaba una sucursal en Av. Constitución que no es ninguna de las dos que operan. Ese se sacó; los demás siguen sin confirmar | — | Pendiente |
 | Acceso al dominio `mjbj.ar` | Publicación (1.8) | — | Pendiente |
+| Relevamiento del taller: qué programa optimiza el corte, su versión, y **un archivo de trabajo real** | Ajustar el formato de exportación a la máquina. El mecanismo ya está hecho y se configura en pantalla; sin el archivo no se sabe a qué apuntarle | — | Pendiente |
 
 ### Qué pedir exactamente para la migración
 
@@ -68,3 +71,25 @@ Tres precisiones que evitan una vuelta entera:
   a correr la migración sin duplicar la cartera.
 - **El orden importa**: clientes antes que saldos, artículos antes que
   existencias.
+
+### Qué pedir exactamente para el corte
+
+La seccionadora no corta desde la plataforma: corta desde el programa que vino
+con la máquina, que es el que arma el patrón. Lo que la plataforma le entrega es
+la **lista de piezas**, para no volver a tipear medidas que ya están cargadas.
+
+Ese archivo ya se genera y su formato se configura en `/admin/cortes/formato`.
+Lo que falta para dejarlo fino es una visita corta al taller con esta lista:
+
+- **Qué programa usan para optimizar y qué versión.** Las habituales acá: Cut
+  Rite (Homag/Holzma), Ardis, Corte Certo, Optimik, o el propio de la máquina.
+- **Foto del menú «Importar»**, para ver qué extensiones acepta.
+- **Un archivo de trabajo real y una lista de piezas real, en un pendrive.** Es
+  lo que más vale: un ejemplo concreto define el formato mejor que cualquier
+  manual.
+- **Si la PC de la máquina está en red o si todo va por pendrive.** Decide si
+  más adelante conviene un agente local que deje el archivo solo en la carpeta,
+  en vez de copiarlo a mano.
+
+El cuestionario completo —máquina, software, proceso e infraestructura— está en
+`PLAN.md`, sección 9.2.

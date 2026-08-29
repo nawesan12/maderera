@@ -26,6 +26,26 @@ si todo es urgente, nada lo es.
 Cuando el corte nace de un pedido, quedan enganchados: desde la orden se llega
 al pedido y al revés.
 
+### Pasarle el trabajo a la máquina
+
+En la ficha del corte, el botón **Para la máquina** baja un archivo con el
+despiece: una fila por medida, con largo, ancho, cantidad, material y los
+cantos. Ese archivo se copia a la PC de la seccionadora y se importa en el
+programa que optimiza el corte, en vez de tipear las medidas de nuevo.
+
+**El sistema no corta ni arma el patrón.** Eso lo sigue haciendo el programa de
+la máquina, que es el que sabe de placas, sierra y desperdicio. Acá solo se le
+entrega la lista para que no haya que cargarla dos veces.
+
+Cómo sale ese archivo se define en **Cortes → Formato para la máquina**: qué
+columnas lleva y en qué orden, con qué separador, en milímetros o centímetros,
+cómo se escriben el "sí" y el "no". Se ve una vista previa de cómo va a quedar
+antes de guardar.
+
+Eso se ajusta **probando contra la máquina**: se exporta, se importa, se mira
+qué quedó corrido y se corrige. La primera vez lleva un rato; después queda
+fijo.
+
 ## WhatsApp
 
 *WhatsApp* es la bandeja de conversaciones con los clientes. Al costado de cada

@@ -2,8 +2,8 @@
 
 > Documento de trabajo interno del PRESTADOR. Traduce el contrato firmado
 > (`Contrato — Maderera Juan B. Justo.pdf`, 15 pp.) a un plan ejecutable.
-> Última actualización: 29/08/2026 (duodécima pasada: sugeridos, bitácora,
-> sucursales y guías).
+> Última actualización: 29/08/2026 (decimotercera pasada: seguridad del
+> seguimiento, exportación de cortes y gráfico de ventas).
 
 ---
 
@@ -439,6 +439,28 @@ Los cuatro renglones que quedaban sin depender de nadie.
 Se sumaron tablas y bloques de código al Markdown, con tests. El lint quedó sin
 advertencias (había veinte).
 
+**Decimotercera pasada — seguridad, cortes y gráfico (29/08/2026):**
+
+- **Se cerró una filtración de datos personales.** `/pedido/[numero]` era
+  pública, hacía la consulta suelta dentro del componente y filtraba solo por
+  número. El número es consecutivo y sin huecos —se dice por teléfono y va en el
+  remito—, así que recorrer la secuencia devolvía el nombre, el teléfono, la
+  dirección de entrega y la compra de cada cliente. Las dos acciones que salen
+  de esa página heredaban la suposición: se podía abrir el checkout de Mercado
+  Pago de un pedido ajeno, y colgarle un comprobante inventado a cualquier
+  pedido para que alguien lo diera por bueno en la conciliación. Ahora el número
+  identifica y `orders.publicToken` autoriza. Comprobante y remito ya estaban
+  bien.
+- **Exportación de cortes** (sección 9, nivel 1): botón "Para la máquina" en la
+  ficha del corte y pantalla de formato configurable. Ver 9.1.
+- **El gráfico de ventas no dibujaba nada.** Recharts 3.8 renderizaba los ejes
+  sin textos y las barras sin contenido, sin tirar un error: el panel mostraba
+  "$3.615.426 este mes" al lado de un recuadro vacío. Se reescribió a mano en
+  SVG, con el dato también como tabla para lector de pantalla, y se sacó la
+  dependencia.
+- **Ids de DOM duplicados** en tres componentes que se dibujan más de una vez
+  por pantalla: las etiquetas de un formulario enfocaban los campos del otro.
+
 ### Lo que falta para cerrar el contrato
 
 | # | Qué | Cláusula | Depende de |
@@ -722,7 +744,7 @@ Tres niveles posibles, de menor a mayor esfuerzo:
 
 | Nivel | Qué hace | Esfuerzo |
 |---|---|---|
-| **1. Exportación manual** | El operador aprieta "Exportar" en el admin y obtiene el archivo en el formato del optimizador. Lo abre a mano. | Bajo — días |
+| **1. Exportación manual** | ✅ **Hecho.** El operador aprieta "Para la máquina" en la ficha del corte y baja el archivo. Lo copia a la PC de la seccionadora y lo importa. El formato se configura en pantalla —columnas, orden, separador, unidad, decimal, sí/no, fin de línea— con vista previa armada por el mismo motor que genera el archivo. | Bajo — días |
 | **2. Agente local unidireccional** | El agente baja los cortes solo y los deja en la carpeta. El operador solo optimiza y corta. | Medio — 2 a 3 semanas |
 | **3. Ciclo cerrado** | Además vuelve el consumo real: descuento automático de stock de placas, desperdicio medido, estado "cortado" en el pedido. | Alto — 4+ semanas, depende de qué reporte la máquina |
 
@@ -772,10 +794,19 @@ Lo que hay que traerse. Sin esto no se puede ni estimar.
 
 ### 9.3 Después de la visita
 
-1. Con la lista de piezas de ejemplo en la mano, definir el formato de intercambio.
-2. Elegir nivel 1, 2 o 3 y presupuestar por separado.
-3. Recién ahí ajustar los campos de `cutting_items` si hicieran falta más (canto, veta,
-   material asociado a una variante de placa concreta).
+1. Con la lista de piezas de ejemplo en la mano, **ajustar el perfil de
+   exportación en `/admin/cortes/formato`** —columnas, orden, separador,
+   unidad— y probar importándolo en la máquina hasta que entre limpio. No hace
+   falta tocar código: por eso se hizo configurable.
+2. Elegir si se avanza al nivel 2 o 3 y presupuestarlo por separado.
+3. Recién ahí ajustar los campos de `cutting_items` si hicieran falta más
+   (material asociado a una variante de placa concreta, por ejemplo).
+
+**Lo que ya está construido y no se tira al avanzar:** el nivel 2 —el agente
+local que deja el archivo solo en la carpeta que el optimizador vigila— consume
+exactamente el mismo archivo que hoy se baja a mano. Lo que se agrega es el
+agente y un endpoint que le liste los cortes pendientes; el armado del archivo
+ya está hecho y probado.
 
 Mientras tanto, la Etapa 3 sigue como está: la cola de trabajo administrativa se construye
 igual y es la base sobre la que después se apoya la integración.

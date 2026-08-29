@@ -44,6 +44,8 @@ export interface EstadoDelPago {
 
 interface Props {
   numero: string;
+  /** Token del pedido: es lo que autoriza a pagarlo o a subirle un comprobante. */
+  token: string;
   total: number;
   medioPago: string | null;
   estadoPago: string;
@@ -56,6 +58,7 @@ const inicial: EstadoPago = {};
 
 export function BloquePago({
   numero,
+  token,
   total,
   medioPago,
   estadoPago,
@@ -131,13 +134,19 @@ export function BloquePago({
 
   if (medioPago === "transferencia") {
     return (
-      <TransferenciaBancaria numero={numero} total={total} banco={banco} />
+      <TransferenciaBancaria
+        numero={numero}
+        token={token}
+        total={total}
+        banco={banco}
+      />
     );
   }
 
   return (
     <PagoOnline
       numero={numero}
+      token={token}
       total={total}
       enVivo={enVivo}
       rechazado={cobro?.estado === "rechazado"}
@@ -148,12 +157,14 @@ export function BloquePago({
 
 function PagoOnline({
   numero,
+  token,
   total,
   enVivo,
   rechazado,
   motivo,
 }: {
   numero: string;
+  token: string;
   total: number;
   enVivo: boolean;
   rechazado: boolean;
@@ -194,6 +205,7 @@ function PagoOnline({
 
         <form action={accion}>
           <input type="hidden" name="numero" value={numero} />
+          <input type="hidden" name="token" value={token} />
           <Button
             type="submit"
             disabled={pendiente}
@@ -223,10 +235,12 @@ function PagoOnline({
 
 function TransferenciaBancaria({
   numero,
+  token,
   total,
   banco,
 }: {
   numero: string;
+  token: string;
   total: number;
   banco: DatosParaTransferir | null;
 }) {
@@ -295,6 +309,7 @@ function TransferenciaBancaria({
         ) : (
           <form action={accion} className="space-y-3">
             <input type="hidden" name="numero" value={numero} />
+            <input type="hidden" name="token" value={token} />
 
             <div>
               <Label htmlFor="comprobante" className="text-sm">

@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { orders } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
+import { pedidoAutorizado } from "@/lib/dal/seguimiento";
 import { clienteDeLaSesion, miSaldo } from "@/lib/dal/cuenta";
 import { guardarAdjunto } from "@/lib/almacenamiento";
 import {
@@ -35,13 +36,13 @@ export async function pagarPedido(
   formData: FormData,
 ): Promise<EstadoPago> {
   const numero = String(formData.get("numero") ?? "");
+  const token = String(formData.get("token") ?? "") || undefined;
   if (!numero) return { error: "Falta el número de pedido." };
 
-  const [pedido] = await db
-    .select({ id: orders.id, estadoPago: orders.estadoPago })
-    .from(orders)
-    .where(eq(orders.numero, numero))
-    .limit(1);
+  // El token es lo que autoriza. Sin esto, con solo probar números consecutivos
+  // se abría el checkout de Mercado Pago del pedido de cualquiera, con su
+  // detalle de ítems e importes adentro.
+  const pedido = await pedidoAutorizado(numero, token);
 
   if (!pedido) return { error: "No encontramos ese pedido." };
   if (pedido.estadoPago === "pagado") return { error: "Este pedido ya está pagado." };
@@ -128,6 +129,7 @@ export async function subirComprobante(
   formData: FormData,
 ): Promise<EstadoPago> {
   const numero = String(formData.get("numero") ?? "");
+  const token = String(formData.get("token") ?? "") || undefined;
   const archivo = formData.get("comprobante");
 
   if (!(archivo instanceof File) || archivo.size === 0) {
@@ -138,16 +140,10 @@ export async function subirComprobante(
     return { error: "Subí una imagen o un PDF." };
   }
 
-  const [pedido] = await db
-    .select({
-      id: orders.id,
-      total: orders.total,
-      customerId: orders.customerId,
-      estadoPago: orders.estadoPago,
-    })
-    .from(orders)
-    .where(eq(orders.numero, numero))
-    .limit(1);
+  // Igual que en `pagarPedido`: sin el token, cualquiera le colgaba un
+  // comprobante inventado al pedido de otro y lo dejaba esperando que alguien
+  // lo diera por bueno en la conciliación. Eso mueve plata.
+  const pedido = await pedidoAutorizado(numero, token);
 
   if (!pedido) return { error: "No encontramos ese pedido." };
   if (pedido.estadoPago === "pagado") return { error: "Este pedido ya está pagado." };

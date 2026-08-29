@@ -158,6 +158,7 @@ export async function notificarPedidoRecibido(orderId: string): Promise<void> {
       correo: plantillas.pedidoRecibido({
         nombre: pedido.contactoNombre.split(" ")[0],
         numero: pedido.numero,
+        token: pedido.publicToken,
         total: pedido.total,
         entrega:
           pedido.tipoEntrega === "retiro"
@@ -185,6 +186,7 @@ export async function notificarCambioDeEstado(
     const [pedido] = await db
       .select({
         numero: orders.numero,
+        token: orders.publicToken,
         nombre: orders.contactoNombre,
         email: orders.contactoEmail,
       })
@@ -208,6 +210,7 @@ export async function notificarCambioDeEstado(
       correo: plantillas.pedidoCambioDeEstado({
         nombre: pedido.nombre.split(" ")[0],
         numero: pedido.numero,
+        token: pedido.token,
         estado,
         asuntoPersonalizado: config?.asunto,
         encabezadoPersonalizado: config?.encabezado,
@@ -246,6 +249,7 @@ export async function notificarResultadoDePago(resultado: {
       const [pedido] = await db
         .select({
           numero: orders.numero,
+          token: orders.publicToken,
           nombre: orders.contactoNombre,
           email: orders.contactoEmail,
           total: orders.total,
@@ -272,6 +276,7 @@ export async function notificarResultadoDePago(resultado: {
           monto: pago?.monto ?? pedido.total,
           medio: pago?.medio ?? null,
           referencia: pedido.numero,
+          token: pedido.token,
           esDeuda: false,
         }),
       });
@@ -303,6 +308,7 @@ export async function notificarResultadoDePago(resultado: {
           monto: pago?.monto ?? 0,
           medio: pago?.medio ?? null,
           referencia: "Cuenta corriente",
+          token: null,
           esDeuda: true,
         }),
       });

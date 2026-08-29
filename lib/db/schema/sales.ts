@@ -154,6 +154,20 @@ export const orders = pgTable(
   {
     id: uuid().primaryKey().defaultRandom(),
     numero: text().notNull(),
+    /**
+     * Token de la página de seguimiento.
+     *
+     * El número de pedido es consecutivo y sin huecos —`PED-1000`, `PED-1001`,
+     * `PED-1002`— porque se dice por teléfono y va en el remito. Eso lo vuelve
+     * enumerable: con el número solo alcanzando para abrir `/pedido/…`,
+     * cualquiera recorría la secuencia y se llevaba el nombre, el teléfono, la
+     * dirección y la compra de **cada cliente de la maderera**.
+     *
+     * Así que el número identifica y el token autoriza. Quien tiene el enlace
+     * ve su pedido —es lo que hace falta para el checkout sin cuenta— y quien
+     * no lo tiene no ve nada, salvo que tenga sesión y el pedido sea suyo.
+     */
+    publicToken: uuid().notNull().defaultRandom(),
     customerId: uuid().references(() => customers.id, { onDelete: "set null" }),
     quoteId: uuid().references(() => quotes.id, { onDelete: "set null" }),
     contactoNombre: text().notNull(),

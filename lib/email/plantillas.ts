@@ -1,5 +1,11 @@
 import { formatearPrecio } from "@/lib/formato";
 import { urlBase } from "@/lib/pagos/config";
+import { enlaceDeSeguimiento } from "@/lib/seguimiento";
+
+/** El enlace de seguimiento, absoluto: en un correo no sirve uno relativo. */
+function urlAbsolutaDelPedido(numero: string, token: string): string {
+  return `${urlBase()}${enlaceDeSeguimiento(numero, token)}`;
+}
 
 /**
  * Plantillas de los correos.
@@ -219,6 +225,7 @@ export interface CorreoArmado {
 export function pedidoRecibido(datos: {
   nombre: string;
   numero: string;
+  token: string;
   total: number | string;
   entrega: string;
   lineas: LineaCorreo[];
@@ -238,7 +245,7 @@ export function pedidoRecibido(datos: {
     ],
     lineas: datos.lineas,
     total: datos.total,
-    cta: { texto: "Ver el pedido", url: `${urlBase()}/pedido/${datos.numero}` },
+    cta: { texto: "Ver el pedido", url: urlAbsolutaDelPedido(datos.numero, datos.token) },
     cierre:
       "Si algo no coincide, contestá este correo o escribinos por WhatsApp y lo corregimos antes de preparar la mercadería.",
   });
@@ -274,6 +281,7 @@ const TITULOS_ESTADO: Record<string, { titulo: string; texto: string }> = {
 export function pedidoCambioDeEstado(datos: {
   nombre: string;
   numero: string;
+  token: string;
   estado: string;
   asuntoPersonalizado?: string | null;
   encabezadoPersonalizado?: string | null;
@@ -289,7 +297,7 @@ export function pedidoCambioDeEstado(datos: {
     saludo: datos.nombre,
     parrafos: [base.texto],
     datos: [{ etiqueta: "Número de pedido", valor: datos.numero }],
-    cta: { texto: "Ver el pedido", url: `${urlBase()}/pedido/${datos.numero}` },
+    cta: { texto: "Ver el pedido", url: urlAbsolutaDelPedido(datos.numero, datos.token) },
   });
 
   return {
@@ -304,6 +312,8 @@ export function pagoAcreditado(datos: {
   monto: number | string;
   medio: string | null;
   referencia: string;
+  /** Token del pedido. Null cuando el pago fue a la cuenta corriente. */
+  token: string | null;
   esDeuda: boolean;
 }): CorreoArmado {
   const cuerpo = envolver({
@@ -320,9 +330,13 @@ export function pagoAcreditado(datos: {
       ...(datos.medio ? [{ etiqueta: "Medio", valor: datos.medio }] : []),
       { etiqueta: "Referencia", valor: datos.referencia },
     ],
-    cta: datos.esDeuda
-      ? { texto: "Ver mi cuenta", url: `${urlBase()}/mi-cuenta/cuenta-corriente` }
-      : { texto: "Ver el pedido", url: `${urlBase()}/pedido/${datos.referencia}` },
+    cta:
+      datos.esDeuda || !datos.token
+        ? { texto: "Ver mi cuenta", url: `${urlBase()}/mi-cuenta/cuenta-corriente` }
+        : {
+            texto: "Ver el pedido",
+            url: urlAbsolutaDelPedido(datos.referencia, datos.token),
+          },
   });
 
   return { asunto: `Pago recibido · ${formatearPrecio(datos.monto)}`, ...cuerpo };

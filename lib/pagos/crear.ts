@@ -10,6 +10,7 @@ import {
   orders,
   payments,
 } from "@/lib/db/schema";
+import { enlaceDeSeguimiento } from "@/lib/seguimiento";
 import { urlBase, urlWebhookPagos } from "./config";
 import { proveedorPagos } from "./index";
 
@@ -41,6 +42,7 @@ export async function iniciarPagoDePedido(
     .select({
       id: orders.id,
       numero: orders.numero,
+      publicToken: orders.publicToken,
       total: orders.total,
       estadoPago: orders.estadoPago,
       customerId: orders.customerId,
@@ -99,7 +101,8 @@ export async function iniciarPagoDePedido(
           }))
         : [{ titulo: `Pedido ${pedido.numero}`, cantidad: 1, precioUnitario: monto }],
     pagador: { nombre: pedido.contactoNombre, email: pedido.contactoEmail },
-    urlRetorno: `${urlBase()}/pedido/${pedido.numero}`,
+    // Con token: quien vuelve de Mercado Pago puede no tener sesión.
+    urlRetorno: `${urlBase()}${enlaceDeSeguimiento(pedido.numero, pedido.publicToken)}`,
     urlWebhook: urlWebhookPagos(),
   });
 

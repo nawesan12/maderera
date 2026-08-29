@@ -113,6 +113,13 @@
       "when": 1787974271397,
       "tag": "0015_narrow_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787977961767,
+      "tag": "0016_sloppy_iron_monger",
+      "breakpoints": true
     }
   ]
 }

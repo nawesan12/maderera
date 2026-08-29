@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
 import {
   ArrowRight,
   Check,
@@ -12,9 +11,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { db } from "@/lib/db";
-import { branches, orderItems, orders } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
+import { pedidoParaSeguimiento } from "@/lib/dal/seguimiento";
 import { cobroDelPedido, datosParaTransferir } from "@/lib/dal/pagos";
 import { cobrosEnVivo } from "@/lib/pagos";
 import { BloquePago } from "@/components/pagos/bloque-pago";
@@ -27,42 +25,23 @@ export const metadata: Metadata = {
 
 export default async function PedidoConfirmadoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ numero: string }>;
+  searchParams: Promise<{ t?: string }>;
 }) {
-  const { numero } = await params;
+  const [{ numero }, { t }] = await Promise.all([params, searchParams]);
 
-  const [pedido] = await db
-    .select({
-      id: orders.id,
-      numero: orders.numero,
-      cliente: orders.contactoNombre,
-      telefono: orders.contactoTelefono,
-      tipoEntrega: orders.tipoEntrega,
-      direccionEntrega: orders.direccionEntrega,
-      zonaEnvio: orders.zonaEnvio,
-      costoEnvio: orders.costoEnvio,
-      subtotal: orders.subtotal,
-      total: orders.total,
-      medioPago: orders.medioPago,
-      estadoPago: orders.estadoPago,
-      sucursal: branches.name,
-      sucursalDireccion: branches.address,
-      createdAt: orders.createdAt,
-    })
-    .from(orders)
-    .leftJoin(branches, eq(branches.id, orders.branchId))
-    .where(eq(orders.numero, numero))
-    .limit(1);
+  // La consulta vive en el DAL, con el control de acceso adentro. Antes estaba
+  // suelta acá y filtraba solo por número, que es consecutivo: alcanzaba con
+  // contar para leer el pedido de cualquiera.
+  const pedido = await pedidoParaSeguimiento(numero, t);
 
   if (!pedido) notFound();
 
-  const [items, sesion, cobro, banco] = await Promise.all([
-    db
-      .select()
-      .from(orderItems)
-      .where(eq(orderItems.orderId, pedido.id))
-      .orderBy(orderItems.orden),
+  const items = pedido.items;
+
+  const [sesion, cobro, banco] = await Promise.all([
     getSession(),
     cobroDelPedido(pedido.id),
     datosParaTransferir(),
@@ -168,6 +147,7 @@ export default async function PedidoConfirmadoPage({
         <div className="mt-4">
           <BloquePago
             numero={pedido.numero}
+            token={pedido.publicToken}
             total={Number(pedido.total)}
             medioPago={pedido.medioPago}
             estadoPago={pedido.estadoPago}

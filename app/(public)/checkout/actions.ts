@@ -20,6 +20,7 @@ import { obtenerCarrito } from "@/lib/dal/carrito";
 import { calcularEnvio, listarZonasDeEnvio } from "@/lib/dal/envios";
 import { creditoDisponible } from "@/lib/dal/cuenta";
 import { siguienteNumero } from "@/lib/dal/admin/ventas";
+import { enlaceDeSeguimiento } from "@/lib/seguimiento";
 import { notificarPedidoRecibido } from "@/lib/notificaciones/avisos";
 import { reservarPedido } from "@/lib/inventario/reservas";
 
@@ -162,6 +163,7 @@ export async function confirmarCompra(
   }
 
   let pedidoCreado: string | null = null;
+  let tokenCreado: string | null = null;
 
   await db.transaction(async (tx) => {
     const [pedido] = await tx
@@ -230,6 +232,7 @@ export async function confirmarCompra(
     await reservarPedido(tx, pedido.id);
 
     pedidoCreado = pedido.id;
+    tokenCreado = pedido.publicToken;
 
     await tx.delete(cartItems).where(eq(cartItems.cartId, carrito.id!));
     await tx
@@ -254,5 +257,7 @@ export async function confirmarCompra(
   // La redirección va acá y no en el cliente: apenas se vacía el carrito, la
   // página de checkout manda a /presupuesto por no tener ítems, y quien acaba de
   // comprar terminaba viendo un presupuesto vacío en lugar de su confirmación.
-  redirect(`/pedido/${numero}`);
+  // El token va en la URL: el número no autoriza nada. Quien compró sin cuenta
+  // llega a su pedido por este enlace y por el del correo, y por ningún otro.
+  redirect(enlaceDeSeguimiento(numero, tokenCreado!));
 }

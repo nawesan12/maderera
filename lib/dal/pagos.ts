@@ -2,6 +2,7 @@ import "server-only";
 
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { enlaceDeSeguimiento } from "@/lib/seguimiento";
 import {
   customers,
   datosBancarios,
@@ -104,6 +105,7 @@ export async function cobroSimulado(
       tipo: payments.tipo,
       proveedor: payments.proveedor,
       numeroPedido: orders.numero,
+      tokenPedido: orders.publicToken,
       cliente: customers.nombre,
       evento: events.titulo,
       eventoSlug: events.slug,
@@ -129,7 +131,7 @@ export async function cobroSimulado(
       : `Cuenta corriente${pago.cliente ? ` · ${pago.cliente}` : ""}`;
 
   const volverA = pago.numeroPedido
-    ? `/pedido/${pago.numeroPedido}`
+    ? enlaceDeSeguimiento(pago.numeroPedido, pago.tokenPedido!)
     : pago.eventoSlug
       ? `/eventos/${pago.eventoSlug}`
       : "/mi-cuenta/cuenta-corriente";

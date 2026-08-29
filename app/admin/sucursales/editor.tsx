@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useActionState } from "react";
+import { useActionState, useId, useState } from "react";
 import { ChevronDown, Loader2, Pencil } from "lucide-react";
 import { guardarSucursal, type EstadoSucursal } from "./actions";
 import type { SucursalConMetricas } from "@/lib/dal/admin/sucursales";
@@ -152,7 +151,10 @@ function Campo({
   tipo?: string;
   requerido?: boolean;
 }) {
-  const id = `${nombre}-campo`;
+  // Uno por sucursal: con un id armado del nombre del campo, los dos
+  // formularios de la pantalla compartían ids y las etiquetas del segundo
+  // enfocaban los campos del primero.
+  const id = useId();
 
   return (
     <div>
@@ -186,7 +188,7 @@ function Area({
   placeholder?: string;
   ayuda?: string;
 }) {
-  const id = `${nombre}-campo`;
+  const id = useId();
 
   return (
     <div>

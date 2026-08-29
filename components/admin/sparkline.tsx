@@ -8,6 +8,9 @@
  * Sin ejes ni grilla a propósito: acompaña al número, no lo reemplaza. Para leer
  * valores exactos está el gráfico de abajo.
  */
+
+import { useId } from "react";
+
 export function Sparkline({
   valores,
   color = "var(--sucursal-central)",
@@ -21,6 +24,12 @@ export function Sparkline({
   ancho?: number;
   alto?: number;
 }) {
+  // `useId` y no un id derivado de la etiqueta: dos sparklines con el mismo
+  // texto compartían el id del degradado, y el segundo terminaba pintado con el
+  // color del primero. Va antes del retorno temprano: los hooks se llaman
+  // siempre y en el mismo orden.
+  const id = useId();
+
   if (valores.length < 2) return null;
 
   const max = Math.max(...valores);
@@ -39,7 +48,6 @@ export function Sparkline({
   const linea = puntos.map(([x, y]) => `${x},${y}`).join(" ");
   const area = `${margen},${alto} ${linea} ${ancho - margen},${alto}`;
   const [ultimoX, ultimoY] = puntos[puntos.length - 1];
-  const id = `spark-${etiqueta.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
     <svg

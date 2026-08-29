@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Flame, Scissors } from "lucide-react";
+import { Flame, Scissors, Settings2 } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { estiloDeEstado } from "@/components/admin/etiqueta-estado";
 import {
@@ -44,7 +44,15 @@ export default async function CortesPage({
             ? `${plural(pendientes.length, "trabajo")} por hacer · ${Math.round(superficiePendiente)} m² de placa`
             : `${plural(cortes.length, "trabajo")} en total`
         }
-      />
+      >
+        <Link
+          href="/admin/cortes/formato"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <Settings2 className="h-5 w-5" />
+          Formato para la máquina
+        </Link>
+      </EncabezadoPanel>
 
       <BuscadorCortes busquedaActual={params.buscar ?? ""} />
 

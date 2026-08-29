@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+  boolean,
   index,
   integer,
   numeric,
@@ -305,6 +306,44 @@ export const cuttingItems = pgTable(
   },
   (t) => [index("cutting_items_order_idx").on(t.cuttingOrderId)],
 );
+
+/**
+ * Cómo se le arma el archivo a la máquina de corte.
+ *
+ * Una fila por perfil, editable desde el panel. Va a la base y no a una
+ * constante del código porque **todavía no vimos un archivo real del taller**:
+ * no sabemos qué programa usan para optimizar, ni qué columnas espera. Dejarlo
+ * escrito en el código obligaría a un deploy para acertarle, y va a haber que
+ * probar varias veces contra la máquina hasta que importe limpio.
+ *
+ * Es la misma decisión que se tomó con la migración desde el sistema anterior,
+ * y por la misma razón.
+ */
+export const cuttingExportProfiles = pgTable(
+  "cutting_export_profiles",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    nombre: text().notNull(),
+    /** Con qué programa se probó. Se completa después de la visita al taller. */
+    programa: text(),
+    separador: text().notNull().default(";"),
+    conEncabezado: boolean().notNull().default(true),
+    unidad: text().notNull().default("mm"),
+    decimal: text().notNull().default(","),
+    valorSi: text().notNull().default("Sí"),
+    valorNo: text().notNull().default("No"),
+    finDeLinea: text().notNull().default("crlf"),
+    /** Las columnas y su orden, como JSON: `[{clave, encabezado}]`. */
+    columnas: text().notNull(),
+    /** El que se usa cuando el operador aprieta "Exportar" sin elegir. */
+    porDefecto: boolean().notNull().default(false),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("cutting_export_profiles_nombre_idx").on(t.nombre)],
+);
+
+export type CuttingExportProfile = typeof cuttingExportProfiles.$inferSelect;
 
 /* -------------------------------------------------------------------------- */
 /* Relaciones                                                                  */

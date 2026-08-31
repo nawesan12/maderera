@@ -104,10 +104,13 @@ export function Hilo({
         </Link>
 
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-base font-medium">
-            {detalle.nombre}
+          {/* El `truncate` va sobre el nombre y no sobre el `h2`: puesto en el
+              contenedor recortaba también la píldora, que salía como
+              "Profes…". */}
+          <h2 className="flex items-center gap-2 text-base font-medium">
+            <span className="truncate">{detalle.nombre}</span>
             {detalle.clienteTipo === "profesional" && (
-              <span className="ml-2 rounded-full bg-brand-orange/12 px-2 py-0.5 text-sm font-semibold text-brand-orange-dark">
+              <span className="shrink-0 rounded-full bg-naranja-claro px-2 py-0.5 text-sm font-semibold text-acento-sobre-claro">
                 Profesional
               </span>
             )}

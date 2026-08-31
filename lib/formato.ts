@@ -192,3 +192,30 @@ export function parsearImporte(texto: string): number {
 
   return Number(limpio);
 }
+
+/**
+ * El nombre de pila, para saludar.
+ *
+ * Salta el título profesional. Las fichas del mostrador vienen cargadas como
+ * "Arq. Carolina Méndez" o "Ing. Silvia Roldán", y quedarse con la primera
+ * palabra saludaba "Hola, Arq.". Se veía en el portal, en el navbar y —lo peor—
+ * en las plantillas de WhatsApp, que son mensajes que salen para afuera.
+ *
+ * Si después del título no queda nada, devuelve el nombre entero: es preferible
+ * un saludo formal a uno vacío.
+ */
+const TITULOS = new Set([
+  "arq", "ing", "lic", "dr", "dra", "sr", "sra", "srta", "cont", "tec", "téc",
+  "prof", "mg", "esc", "cr", "cra",
+]);
+
+export function primerNombre(nombre: string): string {
+  const partes = nombre.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "";
+
+  const sinTitulo = partes.filter(
+    (p) => !TITULOS.has(p.replace(/\.$/, "").toLowerCase()),
+  );
+
+  return sinTitulo[0] ?? partes[0];
+}

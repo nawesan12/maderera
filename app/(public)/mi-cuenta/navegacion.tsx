@@ -74,10 +74,10 @@ export function NavegacionCuenta({
               <Link
                 href={seccion.href}
                 aria-current={activa ? "page" : undefined}
-                className={`relative flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-[0.95rem] transition-colors lg:w-full ${
+                className={`relative flex items-center gap-[11px] rounded-[10px] px-3 py-[11px] text-[15px] transition-colors lg:w-full ${
                   activa
-                    ? "font-medium text-brand-orange-dark"
-                    : "text-muted-foreground hover:bg-black/[0.03] hover:text-foreground"
+                    ? "font-semibold text-foreground"
+                    : "text-texto-2 hover:bg-black/[0.03] hover:text-foreground"
                 }`}
               >
                 {activa && (
@@ -85,16 +85,20 @@ export function NavegacionCuenta({
                   // lugar de aparecer de golpe: se ve de dónde vino el foco.
                   <motion.span
                     layoutId="cuenta-nav-activa"
-                    className="absolute inset-0 -z-10 rounded-xl bg-brand-orange/10 ring-1 ring-inset ring-brand-orange/25"
+                    className="absolute inset-0 -z-10 rounded-[10px] bg-card shadow-[inset_3px_0_0_0_var(--color-accion),0_1px_2px_rgb(60_50_40_/_0.06)]"
                     transition={{ type: "spring", stiffness: 380, damping: 32 }}
                   />
                 )}
-                <seccion.icono className="h-[1.15rem] w-[1.15rem] shrink-0" />
+                <seccion.icono
+                  className={`h-[18px] w-[18px] shrink-0 ${
+                    activa ? "text-acento-texto" : "text-texto-3"
+                  }`}
+                />
                 <span className="whitespace-nowrap">{seccion.titulo}</span>
 
                 {contador > 0 && (
                   <span
-                    className="tabular ml-auto flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-orange px-1.5 text-xs font-semibold text-white"
+                    className="tabular ml-auto flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-naranja-claro px-1.5 text-[12.5px] font-semibold text-acento-sobre-claro"
                     aria-label={`${contador} pendiente${contador === 1 ? "" : "s"}`}
                   >
                     {contador}

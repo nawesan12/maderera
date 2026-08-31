@@ -109,10 +109,10 @@ export default async function ResumenCuentaPage() {
               <p
                 className={`tabular mt-1 text-3xl font-semibold ${
                   resumen.saldo > 0
-                    ? "text-brand-orange-dark"
+                    ? "text-saldo-debe"
                     : resumen.saldo < 0
-                      ? "text-green-700"
-                      : ""
+                      ? "text-saldo-favor"
+                      : "text-saldo-cero"
                 }`}
               >
                 {formatearMonto(Math.abs(resumen.saldo))}

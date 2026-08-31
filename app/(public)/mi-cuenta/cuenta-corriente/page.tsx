@@ -67,10 +67,10 @@ export default async function CuentaCorrientePage({
             <p
               className={`tabular mt-1 text-3xl font-semibold ${
                 cuenta.saldo > 0
-                  ? "text-brand-orange-dark"
+                  ? "text-saldo-debe"
                   : cuenta.saldo < 0
-                    ? "text-green-700"
-                    : ""
+                    ? "text-saldo-favor"
+                    : "text-saldo-cero"
               }`}
             >
               {formatearMonto(Math.abs(cuenta.saldo))}

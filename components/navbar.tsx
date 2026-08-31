@@ -26,6 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useCarrito } from "@/lib/carrito-context";
+import { primerNombre } from "@/lib/formato";
 
 const productLinks = [
   { name: "Techos", href: "/catalogo?cat=techos", icon: Home, desc: "Tirantes, machimbres, aislantes" },
@@ -81,7 +82,7 @@ export function Navbar({ sesion }: { sesion?: SesionNavbar | null }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { cantidadItems } = useCarrito();
 
-  const primerNombre = sesion?.nombre.trim().split(/\s+/)[0] ?? "";
+  const nombreDePila = sesion ? primerNombre(sesion.nombre) : "";
   const destinoSesion = sesion ? (sesion.esStaff ? "/admin" : "/mi-cuenta") : "/ingresar";
   const IconoSesion = sesion?.esStaff ? LayoutDashboard : UserRound;
   const textoSesion = sesion
@@ -117,7 +118,7 @@ export function Navbar({ sesion }: { sesion?: SesionNavbar | null }) {
               className="flex items-center gap-[7px] font-medium text-white transition-colors hover:text-brand-orange-light"
             >
               <IconoSesion className="h-[13px] w-[13px] text-brand-orange" />
-              {sesion ? (sesion.esStaff ? "Panel" : `Hola, ${primerNombre}`) : "Ingresar"}
+              {sesion ? (sesion.esStaff ? "Panel" : `Hola, ${nombreDePila}`) : "Ingresar"}
             </Link>
           </div>
         </div>
@@ -310,7 +311,7 @@ export function Navbar({ sesion }: { sesion?: SesionNavbar | null }) {
                     {sesion
                       ? sesion.esStaff
                         ? "Ir al panel"
-                        : `Mi cuenta · ${primerNombre}`
+                        : `Mi cuenta · ${nombreDePila}`
                       : "Ingresar o crear cuenta"}
                   </Link>
 

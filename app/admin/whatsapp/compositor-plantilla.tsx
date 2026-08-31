@@ -5,6 +5,7 @@ import { AlertCircle, Loader2, Send, X } from "lucide-react";
 import { enviarPlantilla, type EstadoWhatsapp } from "./actions";
 import { previsualizar } from "@/lib/whatsapp/plantillas-base";
 import type { PlantillaAprobada } from "@/lib/whatsapp/tipos";
+import { primerNombre } from "@/lib/formato";
 
 const estadoInicial: EstadoWhatsapp = {};
 
@@ -46,7 +47,7 @@ export function CompositorPlantilla({
   // Lo que ya sabemos, en el orden en que las plantillas usan las variables:
   // primero el nombre, después el comprobante, después la sucursal.
   const sugeridos = useMemo(
-    () => [nombre.split(/\s+/)[0] ?? "", pedidoNumero, sucursal],
+    () => [primerNombre(nombre), pedidoNumero, sucursal],
     [nombre, pedidoNumero, sucursal],
   );
 

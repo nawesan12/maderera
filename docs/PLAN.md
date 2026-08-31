@@ -461,6 +461,20 @@ advertencias (había veinte).
 - **Ids de DOM duplicados** en tres componentes que se dibujan más de una vez
   por pantalla: las etiquetas de un formulario enfocaban los campos del otro.
 
+**Cuarta pasada — la banda de diseño, el aserradero y la máquina:**
+
+- **Rediseño completo de la interfaz**, aplicando el paquete de diseño de
+  `claude.ai/design` en cuatro tandas: tokens y chrome, tienda y contenido
+  público, panel entero, y formularios, diálogos y portal del cliente. El
+  detalle está en `docs/CAMBIOS.md`.
+- **Puesto del aserradero.** Rol `aserradero` y pantalla `/taller`: la cola de
+  corte sola en la pantalla, igual que `/atencion` para WhatsApp. El menú del
+  panel ahora se acota por rol; antes los tres roles veían las veinte secciones,
+  incluidas Cobros, Precios y Migración.
+- **Nivel 2 de la integración con la máquina** (ver 9.1): el agente de
+  `agente-taller/` deja los archivos de corte en la carpeta del optimizador sin
+  que nadie los baje a mano.
+
 ### Lo que falta para cerrar el contrato
 
 | # | Qué | Cláusula | Depende de |
@@ -745,7 +759,7 @@ Tres niveles posibles, de menor a mayor esfuerzo:
 | Nivel | Qué hace | Esfuerzo |
 |---|---|---|
 | **1. Exportación manual** | ✅ **Hecho.** El operador aprieta "Para la máquina" en la ficha del corte y baja el archivo. Lo copia a la PC de la seccionadora y lo importa. El formato se configura en pantalla —columnas, orden, separador, unidad, decimal, sí/no, fin de línea— con vista previa armada por el mismo motor que genera el archivo. | Bajo — días |
-| **2. Agente local unidireccional** | El agente baja los cortes solo y los deja en la carpeta. El operador solo optimiza y corta. | Medio — 2 a 3 semanas |
+| **2. Agente local unidireccional** | ✅ **Hecho.** El agente (`agente-taller/`) pregunta cada tanto por los cortes en cola, baja el archivo de cada uno y lo deja en la carpeta que el optimizador vigila. El operador solo optimiza y corta. Se pudo construir sin el relevamiento porque **no sabe nada del formato**: pide el archivo ya armado con el perfil configurado en pantalla. Lo que falta saber es la carpeta que vigila el programa de ellos, que es una variable de entorno. | Medio — hecho |
 | **3. Ciclo cerrado** | Además vuelve el consumo real: descuento automático de stock de placas, desperdicio medido, estado "cortado" en el pedido. | Alto — 4+ semanas, depende de qué reporte la máquina |
 
 El nivel 3 es el que tiene valor de negocio de verdad (stock de placas que se descuenta
@@ -798,15 +812,22 @@ Lo que hay que traerse. Sin esto no se puede ni estimar.
    exportación en `/admin/cortes/formato`** —columnas, orden, separador,
    unidad— y probar importándolo en la máquina hasta que entre limpio. No hace
    falta tocar código: por eso se hizo configurable.
-2. Elegir si se avanza al nivel 2 o 3 y presupuestarlo por separado.
-3. Recién ahí ajustar los campos de `cutting_items` si hicieran falta más
+2. Poner `MJBJ_CARPETA` en el agente apuntando a la carpeta que el optimizador
+   vigila, y dejarlo arrancando con la máquina. El nivel 2 ya está construido.
+3. Elegir si se avanza al nivel 3 —el ciclo cerrado— y presupuestarlo aparte,
+   que es lo único que depende de qué exporte el software de ellos.
+4. Recién ahí ajustar los campos de `cutting_items` si hicieran falta más
    (material asociado a una variante de placa concreta, por ejemplo).
 
-**Lo que ya está construido y no se tira al avanzar:** el nivel 2 —el agente
-local que deja el archivo solo en la carpeta que el optimizador vigila— consume
-exactamente el mismo archivo que hoy se baja a mano. Lo que se agrega es el
-agente y un endpoint que le liste los cortes pendientes; el armado del archivo
-ya está hecho y probado.
+**Lo que ya está construido y no se tira al avanzar:** el nivel 3 —el ciclo
+cerrado— reutiliza el archivo del nivel 1 y el agente del nivel 2 tal como
+están. Lo único que le falta es el camino de vuelta: qué reporta la máquina
+después de cortar, que es justamente lo que decide el relevamiento.
+
+Del relevamiento **ya no depende que el agente exista**, solo dos valores de
+configuración: la carpeta que vigila el optimizador y, si hiciera falta,
+retocar el perfil de formato desde `/admin/cortes/formato`. Ninguno de los dos
+requiere tocar código ni volver a desplegar.
 
 Mientras tanto, la Etapa 3 sigue como está: la cola de trabajo administrativa se construye
 igual y es la base sobre la que después se apoya la integración.

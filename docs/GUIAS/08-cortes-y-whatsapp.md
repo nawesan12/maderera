@@ -16,6 +16,19 @@ van en columnas separadas y no como texto libre porque son los números que
 después necesita la máquina para armar el patrón de corte. Escribirlas como
 "60x40 (x4)" obliga a volver a tipearlas.
 
+### La pantalla del taller
+
+Quien opera la seccionadora no trabaja dentro del panel: tiene su propia
+pantalla en **`/taller`**, que es la misma cola pero sola, sin el menú de la
+izquierda ni el buscador de arriba. Está pensada para dejarla abierta todo el
+día en la máquina.
+
+Se entra con un usuario de rol **aserradero**, y ese usuario no ve el resto del
+panel: ni precios, ni cobros, ni clientes. Sí entra a la ficha de cada corte y
+a la pantalla de formato, que son lo suyo.
+
+Es lo mismo que pasa con `/atencion` para quien contesta WhatsApp.
+
 ### Urgente
 
 El botón *Urgente* manda la orden al principio de la cola. Úselo con criterio:
@@ -45,6 +58,18 @@ antes de guardar.
 Eso se ajusta **probando contra la máquina**: se exporta, se importa, se mira
 qué quedó corrido y se corrige. La primera vez lleva un rato; después queda
 fijo.
+
+### Que los archivos lleguen solos
+
+Bajar el archivo y copiarlo a mano funciona, pero se puede evitar. Hay un
+programita —el *agente del taller*— que se instala en la PC de la máquina y
+hace eso solo: cada tanto pregunta qué hay en cola y deja los archivos en la
+carpeta que el optimizador vigila. El operario no baja nada: abre el
+optimizador y el trabajo ya está.
+
+Lo instala quien administra el sistema una sola vez. Si un día deja de
+aparecer un archivo, lo primero a mirar es que la PC tenga internet y que el
+trabajo esté **en cola** y con piezas cargadas.
 
 ## WhatsApp
 

@@ -22,7 +22,15 @@ A la izquierda está el menú, en tres bloques:
 - **Catálogo** — lo que se vende: productos, stock y precios.
 - **Administración** — lo demás: clientes, facturación, cobros, contenido.
 
-Arriba de todo hay un buscador y, al lado, la campana de actividad.
+**No todos ven lo mismo.** El menú muestra solo lo que corresponde al puesto de
+cada uno: quien atiende el mostrador no ve Cobros ni Migración, y quien opera
+la seccionadora directamente no entra al panel — tiene su propia pantalla en
+`/taller`. Si le falta algo que necesita, pídaselo a administración: es un
+cambio de un minuto, no un problema del sistema.
+
+Arriba de todo hay un buscador y, al lado, la campana de actividad. También el
+botón para pasar a **modo oscuro**, por si la pantalla del depósito o del
+taller molesta de noche.
 
 ## El buscador es más rápido que el menú
 

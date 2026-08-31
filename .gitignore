@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# El ejemplo sí va: el README arranca con `cp .env.example .env.local` y sin
+# esto quien clona el repo no tiene de dónde copiar. No lleva ningún secreto,
+# solo los valores de desarrollo local y la explicación de cada variable.
+!.env.example
 
 # vercel
 .vercel
@@ -47,3 +51,6 @@ next-env.d.ts
 
 # artefactos de las pruebas de navegador
 /.playwright-mcp
+
+# El registro local del agente del taller: es de cada máquina, no del repo.
+agente-taller/estado.json

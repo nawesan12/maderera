@@ -42,6 +42,15 @@ npm run staff:create -- --email vos@mjbj.com.ar --password Clave123 --name "Tu N
 npm run cliente:create -- --email <mail de un cliente sembrado> --password Clave123
 ```
 
+Los roles del panel son `admin`, `vendedor`, `deposito` y `aserradero`, y el
+menú lateral se acota a lo que cada uno usa. El aserradero no entra al panel:
+su pantalla es **`/taller`**, la cola de corte sola en la pantalla, igual que
+`/atencion` es la bandeja de WhatsApp sola en la pantalla.
+
+```bash
+npm run staff:create -- --email taller@mjbj.com.ar --password Clave123 --name "Nombre" --role aserradero
+```
+
 `cliente:create` vincula la cuenta web con una ficha ya sembrada, así el portal
 se ve con pedidos y cuenta corriente reales en vez de vacío.
 
@@ -98,6 +107,7 @@ que va a la máquina de corte. No hay tests de interfaz.
 | `docs/CAMBIOS.md` | Cambios de alcance e **insumos que faltan del cliente** |
 | `docs/ENTREGAS.md` | Bitácora de entregas |
 | `docs/GUIAS/` | Las guías de uso del panel. Se sirven dentro del sistema en `/admin/ayuda` |
+| `agente-taller/` | El agente que deja los archivos de corte en la carpeta del optimizador |
 
 Las guías se leen del disco: `next.config.ts` incluye la carpeta con
 `outputFileTracingIncludes` para que también estén en producción.

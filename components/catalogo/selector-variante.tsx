@@ -58,9 +58,9 @@ export function SelectorVariante({
     <div className="space-y-5">
       {variantes.length > 1 && (
         <div>
-          <p className="mb-2 text-sm font-semibold">
+          <p className="mb-2.5 text-[15px] font-semibold">
             Medida
-            <span className="ml-1.5 font-normal text-muted-foreground">
+            <span className="ml-1.5 font-normal text-texto-3">
               ({variantes.length} opciones)
             </span>
           </p>
@@ -76,19 +76,21 @@ export function SelectorVariante({
                   key={v.id}
                   onClick={() => setElegida(v)}
                   aria-pressed={activa}
-                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                  className={`rounded-[10px] px-3.5 py-2.5 text-left transition-colors ${
                     activa
-                      ? "border-brand-orange bg-brand-orange/10 font-medium text-brand-orange-dark"
-                      : "hover:border-brand-orange/40"
+                      ? "border-[1.5px] border-accion bg-naranja-claro font-semibold text-acento-texto"
+                      : agotada
+                        ? "border border-linea bg-chip text-texto-3"
+                        : "border border-linea bg-card hover:border-accion/40"
                   }`}
                 >
-                  <span className="flex items-center gap-1.5">
+                  <span className="tabular flex items-center gap-1.5 text-[14.5px]">
                     {activa && <Check className="h-3.5 w-3.5" />}
                     {v.label}
                   </span>
                   {agotada && (
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Sin stock
+                    <span className="mt-0.5 block text-[11.5px] text-texto-3">
+                      sin existencia
                     </span>
                   )}
                 </button>
@@ -99,12 +101,12 @@ export function SelectorVariante({
       )}
 
       {/* Precio de la medida elegida */}
-      <div className="rounded-xl bg-white p-4 shadow-sm">
-        <p className="text-3xl font-bold text-brand-gray">
+      <div className="rounded-[14px] border border-linea bg-card px-[22px] py-5 shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+        <p className="tabular text-4xl font-bold leading-none tracking-[-0.03em]">
           {formatearPrecio(elegida.precio)}
         </p>
-        <p className="text-xs text-muted-foreground">
-          por {formatearUnidad(unit)}
+        <p className="mt-1.5 text-[14.5px] text-texto-2">
+          por {formatearUnidad(unit)} · IVA incluido
           {elegida.material && ` · ${elegida.material}`}
           {elegida.color && ` · ${elegida.color}`}
         </p>
@@ -114,7 +116,7 @@ export function SelectorVariante({
           className="mt-1"
         />
 
-        <div className="mt-3 border-t pt-3">
+        <div className="mt-3.5 border-t border-linea-tenue pt-3.5">
           <Disponibilidad
             central={elegida.stockCentral}
             aserradero={elegida.stockAserradero}
@@ -143,21 +145,21 @@ export function SelectorVariante({
         </div>
       ) : (
         <>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center rounded-lg border">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-[50px] items-center overflow-hidden rounded-[10px] border border-linea bg-card">
               <button
                 onClick={() => setCantidad((c) => Math.max(1, c - 1))}
-                className="px-3.5 py-2.5 text-lg leading-none transition-colors hover:bg-muted"
+                className="h-full w-[46px] text-xl leading-none transition-colors hover:bg-chip"
                 aria-label="Quitar uno"
               >
                 −
               </button>
-              <span className="tabular w-12 text-center text-sm font-medium">
+              <span className="tabular w-[52px] text-center text-[17px] font-semibold">
                 {cantidad}
               </span>
               <button
                 onClick={() => setCantidad((c) => c + 1)}
-                className="px-3.5 py-2.5 text-lg leading-none transition-colors hover:bg-muted"
+                className="h-full w-[46px] text-xl leading-none transition-colors hover:bg-chip"
                 aria-label="Agregar uno"
               >
                 +
@@ -165,9 +167,8 @@ export function SelectorVariante({
             </div>
 
             <Button
-              size="lg"
               disabled={guardando}
-              className="flex-1 bg-brand-orange text-white hover:bg-brand-orange-dark"
+              className="h-[50px] flex-1 rounded-[10px] bg-accion text-base font-semibold text-white hover:bg-accion-hover"
               onClick={() =>
                 agregar({
                   variantId: elegida.id,
@@ -198,7 +199,7 @@ export function SelectorVariante({
         </>
       )}
 
-      <p className="text-center text-[11px] text-muted-foreground">
+      <p className="tabular text-center text-xs text-texto-3">
         Código {elegida.sku}
       </p>
     </div>

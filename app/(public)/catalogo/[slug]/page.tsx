@@ -8,7 +8,6 @@ import {
   Store,
   Truck,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
 import { SelectorVariante } from "@/components/catalogo/selector-variante";
@@ -105,26 +104,26 @@ export default async function ProductoPage({
       <DatosEstructurados datos={marcado} />
 
       {/* Breadcrumb */}
-      <div className="border-b bg-white">
-        <div className="contenedor py-3">
+      <div className="border-b border-linea-suave bg-card">
+        <div className="contenedor py-3.5">
           <nav
-            className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+            className="flex flex-wrap items-center gap-2 text-[13.5px] text-texto-3"
             aria-label="Ubicación"
           >
-            <Link href="/" className="transition-colors hover:text-brand-orange">
+            <Link href="/" className="transition-colors hover:text-acento-texto">
               Inicio
             </Link>
             <ChevronRight className="h-3 w-3" />
             <Link
               href="/catalogo"
-              className="transition-colors hover:text-brand-orange"
+              className="transition-colors hover:text-acento-texto"
             >
               Catálogo
             </Link>
             <ChevronRight className="h-3 w-3" />
             <Link
               href={`/catalogo?cat=${producto.categorySlug}`}
-              className="transition-colors hover:text-brand-orange"
+              className="transition-colors hover:text-acento-texto"
             >
               {producto.categoryName}
             </Link>
@@ -135,7 +134,7 @@ export default async function ProductoPage({
       </div>
 
       <div className="contenedor py-8">
-        <div className="grid gap-10 lg:grid-cols-2">
+        <div className="grid gap-9 lg:grid-cols-2 lg:items-start">
           <GaleriaProducto
             imagenes={producto.imagenes}
             nombre={producto.name}
@@ -143,16 +142,21 @@ export default async function ProductoPage({
           />
 
           <div>
-            <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-brand-orange">
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-acento-texto">
               {producto.subcategory ?? producto.categoryName}
             </p>
-            <h1 className="text-3xl font-bold leading-tight">{producto.name}</h1>
+            <h1 className="mt-2 text-[34px] font-bold leading-[1.15] tracking-[-0.03em]">
+              {producto.name}
+            </h1>
             {producto.brand && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                Marca <span className="font-medium">{producto.brand}</span>
+              <p className="mt-2 text-[15px] text-texto-2">
+                Marca{" "}
+                <span className="font-semibold text-foreground">
+                  {producto.brand}
+                </span>
               </p>
             )}
-            <p className="mt-4 leading-relaxed text-muted-foreground">
+            <p className="mt-3.5 max-w-[520px] text-base leading-relaxed text-texto-2">
               {producto.description}
             </p>
 
@@ -166,24 +170,24 @@ export default async function ProductoPage({
             </div>
 
             {/* Cómo lo recibe */}
-            <ul className="mt-6 grid gap-2.5 sm:grid-cols-2">
-              <li className="flex items-start gap-2.5 rounded-xl bg-white p-3.5 shadow-sm">
-                <Store className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
-                <span className="text-sm">
-                  <span className="block font-medium">Retiro sin cargo</span>
-                  <span className="text-muted-foreground">
-                    En Casa Central o Aserradero
-                  </span>
+            <ul className="mt-3.5 grid gap-3 sm:grid-cols-2">
+              <li className="rounded-xl border border-linea bg-card px-4 py-3.5">
+                <span className="flex items-center gap-2 text-[14.5px] font-semibold">
+                  <Store className="h-[18px] w-[18px] shrink-0 text-acento-texto" />
+                  Retiro sin cargo
                 </span>
+                <p className="mt-1.5 text-[13.5px] leading-snug text-texto-2">
+                  En Casa Central o en el Aserradero, con el número de pedido.
+                </p>
               </li>
-              <li className="flex items-start gap-2.5 rounded-xl bg-white p-3.5 shadow-sm">
-                <Truck className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
-                <span className="text-sm">
-                  <span className="block font-medium">Envío a domicilio</span>
-                  <span className="text-muted-foreground">
-                    Mar del Plata y zona
-                  </span>
+              <li className="rounded-xl border border-linea bg-card px-4 py-3.5">
+                <span className="flex items-center gap-2 text-[14.5px] font-semibold">
+                  <Truck className="h-[18px] w-[18px] shrink-0 text-acento-texto" />
+                  Envío a domicilio
                 </span>
+                <p className="mt-1.5 text-[13.5px] leading-snug text-texto-2">
+                  En Mar del Plata y zona. El costo se calcula al finalizar.
+                </p>
               </li>
             </ul>
 
@@ -191,21 +195,19 @@ export default async function ProductoPage({
               href={whatsapp}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-3 block"
+              className="mt-3 flex h-[50px] items-center justify-center gap-2.5 rounded-[10px] border border-verde-whatsapp/35 bg-verde-whatsapp/10 text-[15.5px] font-semibold text-verde-whatsapp transition-colors hover:bg-verde-whatsapp/20"
             >
-              <Button variant="outline" className="w-full">
-                <MessageCircle className="h-4 w-4" />
-                Consultar por WhatsApp
-              </Button>
+              <MessageCircle className="h-[18px] w-[18px]" />
+              Consultar por WhatsApp
             </a>
           </div>
         </div>
 
         {/* Ficha técnica */}
         {conMedidas.length > 0 && (
-          <section className="mt-14">
-            <h2 className="mb-4 flex items-center gap-2 text-xl font-bold">
-              <Ruler className="h-5 w-5 text-brand-orange" />
+          <section className="mt-11">
+            <h2 className="mb-3.5 flex items-center gap-2 text-2xl font-bold tracking-[-0.025em]">
+              <Ruler className="h-5 w-5 text-acento-texto" />
               Medidas disponibles
             </h2>
             <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
@@ -257,7 +259,7 @@ export default async function ProductoPage({
           del machimbre— y los que le ahorran a la persona un segundo viaje.
         */}
         {sugeridos.complementarios.length > 0 && (
-          <section className="mt-14">
+          <section className="mt-11">
             <div className="mb-5">
               <h2 className="text-xl font-bold">También vas a necesitar</h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
@@ -273,7 +275,7 @@ export default async function ProductoPage({
         )}
 
         {sugeridos.similares.length > 0 && (
-          <section className="mt-14">
+          <section className="mt-11">
             <div className="mb-5 flex items-baseline justify-between gap-4">
               <h2 className="text-xl font-bold">
                 {sugeridos.similaresPorCategoria

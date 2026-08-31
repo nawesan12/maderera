@@ -24,8 +24,18 @@ export interface CorteListado {
 
 export async function listarCortes(
   filtros: { busqueda?: string; estado?: string } = {},
+  /**
+   * Quién ya validó el acceso, cuando no es una sesión del panel.
+   *
+   * Lo usa el agente del taller, que se autentica con un token compartido y no
+   * tiene cookie: sin esto `requireStaff()` lo redirigiría a `/ingresar` en vez
+   * de responderle. Va como parámetro explícito y no como una variante suelta
+   * de la consulta, para que quien lea la firma vea que hay un segundo camino
+   * de autorización y dónde está.
+   */
+  autorizadoPor?: "agente-del-taller",
 ): Promise<CorteListado[]> {
-  await requireStaff();
+  if (!autorizadoPor) await requireStaff();
 
   const condiciones = [];
   if (filtros.estado && filtros.estado !== "todos") {
@@ -83,8 +93,11 @@ export async function listarCortes(
   }));
 }
 
-export async function obtenerCorte(id: string) {
-  await requireStaff();
+export async function obtenerCorte(
+  id: string,
+  autorizadoPor?: "agente-del-taller",
+) {
+  if (!autorizadoPor) await requireStaff();
 
   const [corte] = await db
     .select({

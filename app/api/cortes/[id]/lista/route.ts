@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/dal/session";
+import { agenteAutorizado } from "@/lib/cortes/agente";
 import { obtenerCorte } from "@/lib/dal/admin/cortes";
 import { perfilParaExportar } from "@/lib/dal/admin/cortes-exportacion";
 import { armarArchivoDeCorte, nombreDeArchivo } from "@/lib/cortes/formatos";
@@ -22,14 +23,19 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  await requireStaff();
+  // Dos caminos de entrada: alguien del panel con su sesión, o el agente del
+  // taller con su token. El agente no es un navegador y no tiene cookie.
+  const porAgente = agenteAutorizado(request);
+  if (!porAgente) await requireStaff();
+
+  const autorizadoPor = porAgente ? ("agente-del-taller" as const) : undefined;
 
   const { id } = await params;
   const perfilId = new URL(request.url).searchParams.get("perfil") ?? undefined;
 
   const [corte, perfil] = await Promise.all([
-    obtenerCorte(id),
-    perfilParaExportar(perfilId),
+    obtenerCorte(id, autorizadoPor),
+    perfilParaExportar(perfilId, autorizadoPor),
   ]);
 
   if (!corte) return new NextResponse("No encontrado", { status: 404 });

@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useCarrito } from "@/lib/carrito-context";
 import { actualizarPrecios } from "@/app/(public)/carrito-actions";
 import { formatearPrecio } from "@/lib/formato";
+import { PrecioSinImpuestos } from "@/components/precio-sin-impuestos";
 import { PedirPresupuesto, type SucursalElegible } from "./pedir";
 
 /**
@@ -59,13 +60,13 @@ export function VistaPresupuesto({
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-brand-cream/30">
+      <div className="min-h-screen bg-sitio-alt">
         <Encabezado cantidad={0} />
         <div className="contenedor py-16">
-          <Card className="mx-auto max-w-lg border-0 shadow-sm">
+          <Card className="mx-auto max-w-lg rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
             <CardContent className="p-12 text-center">
-              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-brand-orange/10">
-                <ShoppingCart className="h-9 w-9 text-brand-orange" />
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[18px] bg-naranja-claro">
+                <ShoppingCart className="h-9 w-9 text-acento-texto" />
               </div>
               <h2 className="mb-2 text-xl font-bold">
                 Tu presupuesto está vacío
@@ -76,7 +77,7 @@ export function VistaPresupuesto({
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Link href="/catalogo">
-                  <Button className="bg-brand-orange text-white hover:bg-brand-orange-dark">
+                  <Button className="h-11 rounded-[10px] bg-accion px-5 font-semibold text-white hover:bg-accion-hover">
                     Ver el catálogo
                   </Button>
                 </Link>
@@ -92,11 +93,11 @@ export function VistaPresupuesto({
   }
 
   return (
-    <div className="min-h-screen bg-brand-cream/30">
+    <div className="min-h-screen bg-sitio-alt">
       <Encabezado cantidad={items.length} />
 
-      <div className="contenedor py-8">
-        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="contenedor pb-[70px] pt-6">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_344px] lg:items-start">
           {/* Ítems */}
           <div>
             {listaDiferenciada && (
@@ -140,13 +141,13 @@ export function VistaPresupuesto({
               </div>
             )}
 
-            <Card className="border-0 shadow-sm">
+            <Card className="overflow-hidden rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
               <CardContent className="p-0">
-                <ul className="divide-y">
+                <ul className="divide-y divide-linea-tenue">
                   {items.map((item) => (
                     <li
                       key={item.id}
-                      className="flex flex-wrap items-center gap-4 p-4"
+                      className="flex flex-wrap items-center gap-3.5 px-5 py-4"
                     >
                       <div className="min-w-48 flex-1">
                         {item.slug ? (
@@ -159,13 +160,12 @@ export function VistaPresupuesto({
                         ) : (
                           <p className="font-medium">{item.descripcion}</p>
                         )}
-                        <p className="text-sm text-muted-foreground">
-                          {item.origen === "calculadora"
-                            ? "Calculado según tus medidas"
-                            : item.unidad.replace("_", " ")}
+                        <p className="tabular mt-0.5 text-[13px] text-texto-3">
+                          {item.unidad.replace("_", " ")}
                           {item.precioActual !== null &&
                             ` · ${formatearPrecio(String(item.precioActual))} por ${item.unidad.replace("_", " ")}`}
                         </p>
+                        <ChipOrigen origen={item.origen} />
 
                         {/* El descuento por volumen se muestra en el renglón que
                             lo generó: enterarse recién en el total no explica
@@ -182,29 +182,29 @@ export function VistaPresupuesto({
                         )}
                       </div>
 
-                      <div className="flex items-center rounded-full bg-muted">
+                      <div className="flex h-11 items-center overflow-hidden rounded-[9px] border border-linea bg-card">
                         <button
                           onClick={() => cambiar(item.id, item.cantidad - 1)}
                           disabled={guardando}
-                          className="flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-background disabled:opacity-50"
+                          className="flex h-full w-10 items-center justify-center transition-colors hover:bg-chip disabled:opacity-50"
                           aria-label={`Quitar uno de ${item.descripcion}`}
                         >
                           <Minus className="h-4 w-4" />
                         </button>
-                        <span className="tabular w-12 text-center text-sm font-medium">
+                        <span className="tabular w-11 text-center text-[15.5px] font-semibold">
                           {item.cantidad}
                         </span>
                         <button
                           onClick={() => cambiar(item.id, item.cantidad + 1)}
                           disabled={guardando}
-                          className="flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-background disabled:opacity-50"
+                          className="flex h-full w-10 items-center justify-center transition-colors hover:bg-chip disabled:opacity-50"
                           aria-label={`Agregar uno de ${item.descripcion}`}
                         >
                           <Plus className="h-4 w-4" />
                         </button>
                       </div>
 
-                      <p className="tabular w-28 text-right font-semibold">
+                      <p className="tabular w-[110px] text-right text-base font-semibold">
                         {item.subtotal > 0
                           ? formatearPrecio(String(item.subtotal))
                           : "A consultar"}
@@ -213,7 +213,7 @@ export function VistaPresupuesto({
                       <button
                         onClick={() => quitar(item.id)}
                         disabled={guardando}
-                        className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive disabled:opacity-50"
+                        className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[9px] border border-linea-suave text-texto-3 transition-colors hover:text-rojo-oferta disabled:opacity-50"
                         aria-label={`Sacar ${item.descripcion} del presupuesto`}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -224,19 +224,18 @@ export function VistaPresupuesto({
               </CardContent>
             </Card>
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5">
               <Link
                 href="/catalogo"
-                className="text-sm text-brand-orange hover:underline"
+                className="flex h-11 items-center rounded-[9px] border border-linea bg-card px-4 text-[14.5px] font-semibold transition-colors hover:bg-sitio-alt"
               >
-                Seguir agregando productos
+                Seguir agregando
               </Link>
               <Button
                 variant="ghost"
-                size="sm"
                 onClick={vaciar}
                 disabled={guardando}
-                className="text-muted-foreground hover:text-destructive"
+                className="h-11 rounded-[9px] px-4 text-[14.5px] text-texto-2 hover:text-destructive"
               >
                 Vaciar presupuesto
               </Button>
@@ -244,40 +243,47 @@ export function VistaPresupuesto({
           </div>
 
           {/* Resumen */}
-          <aside className="lg:sticky lg:top-24 lg:self-start">
-            <Card className="border-0 shadow-sm">
-              <CardContent className="p-6">
-                <h2 className="mb-4 font-semibold">Resumen</h2>
+          <aside className="flex flex-col gap-3 lg:sticky lg:top-[92px] lg:self-start">
+            <Card className="rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+              <CardContent className="p-5">
+                <h2 className="text-xs font-bold uppercase tracking-[0.1em] text-texto-3">
+                  Resumen
+                </h2>
 
-                <dl className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">
+                <dl className="mt-3.5 flex flex-col gap-2.5 text-[15px]">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-texto-2">
                       {items.length === 1 ? "1 producto" : `${items.length} productos`}
                     </dt>
-                    <dd className="tabular font-medium">
+                    <dd className="tabular font-semibold">
                       {formatearPrecio(String(subtotal))}
                     </dd>
                   </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <dt>Envío</dt>
-                    <dd>Se calcula al finalizar</dd>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-texto-2">Envío</dt>
+                    <dd className="text-sm text-texto-3">
+                      se calcula al finalizar
+                    </dd>
                   </div>
                 </dl>
 
-                <div className="mt-4 flex items-baseline justify-between border-t pt-4">
-                  <span className="font-semibold">Total estimado</span>
-                  <span className="tabular text-2xl font-bold">
+                <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-linea-suave pt-3">
+                  <span className="text-[17px] font-semibold">
+                    Total estimado
+                  </span>
+                  <span className="tabular text-[22px] font-bold tracking-[-0.02em]">
                     {formatearPrecio(String(subtotal))}
                   </span>
                 </div>
 
-                <div className="mt-6 space-y-2.5">
+                {/* Ley 27.743: el neto también acá, que es donde se mira el
+                    número que se va a pagar. */}
+                <PrecioSinImpuestos precioFinal={subtotal} className="mt-2" />
+
+                <div className="mt-4 space-y-2.5">
                   <Link href="/checkout" className="block">
-                    <Button
-                      className="w-full bg-brand-orange text-white hover:bg-brand-orange-dark"
-                      size="lg"
-                    >
-                      Finalizar compra
+                    <Button className="h-[52px] w-full rounded-[10px] bg-accion text-base font-semibold text-white hover:bg-accion-hover">
+                      Continuar con el pedido
                       <ArrowRight className="h-4 w-4" />
                     </Button>
                   </Link>
@@ -300,19 +306,37 @@ export function VistaPresupuesto({
                     rel="noopener noreferrer"
                     className="block"
                   >
-                    <Button variant="ghost" className="w-full" size="lg">
+                    <Button
+                      variant="ghost"
+                      className="h-11 w-full rounded-[10px] font-semibold"
+                    >
                       Pedirlo por WhatsApp
                     </Button>
                   </a>
                 </div>
 
-                <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+                <p className="mt-3.5 text-xs leading-relaxed text-texto-3">
                   Los precios pueden variar hasta confirmar el pedido. Para
                   cortes a medida y productos especiales te pasamos la cotización
                   por WhatsApp.
                 </p>
               </CardContent>
             </Card>
+
+            {/* El aviso solo tiene sentido para quien todavía no tiene la
+                cuenta: a un profesional aprobado la lista ya se le aplicó, y se
+                lo dice el cartel de arriba de la lista. */}
+            {!esProfesional && (
+              <section className="rounded-xl border border-[#f5d9b8] bg-naranja-claro px-[18px] py-4 dark:border-brand-orange/25">
+                <p className="text-[14.5px] font-semibold text-acento-texto">
+                  ¿Sos profesional?
+                </p>
+                <p className="mt-1.5 text-[13.5px] leading-normal text-acento-texto/85">
+                  Con cuenta habilitada este presupuesto sale con tu escala de
+                  descuento aplicada.
+                </p>
+              </section>
+            )}
           </aside>
         </div>
       </div>
@@ -320,17 +344,41 @@ export function VistaPresupuesto({
   );
 }
 
+/**
+ * Etiqueta de dónde salió cada renglón.
+ *
+ * Un ítem de la calculadora es una estimación a partir de medidas y uno del
+ * catálogo es un producto elegido: cuando hay que revisar el presupuesto,
+ * saber cuál es cuál cambia qué se mira.
+ */
+function ChipOrigen({ origen }: { origen: string }) {
+  const texto =
+    origen === "calculadora"
+      ? "De la calculadora"
+      : origen === "catalogo"
+        ? "Del catálogo"
+        : origen === "repetido"
+          ? "De un pedido anterior"
+          : "A medida";
+
+  return (
+    <span className="mt-1.5 inline-flex items-center rounded-md bg-naranja-claro px-2 py-0.5 text-[11.5px] font-medium text-acento-texto">
+      {texto}
+    </span>
+  );
+}
+
 function Encabezado({ cantidad }: { cantidad: number }) {
   return (
-    <div className="bg-brand-gray py-12 text-white">
-      <div className="contenedor">
-        <h1 className="text-3xl font-bold">Tu presupuesto</h1>
-        <p className="text-white/70">
-          {cantidad === 0
-            ? "Todavía no agregaste nada."
-            : `${cantidad === 1 ? "1 producto listo" : `${cantidad} productos listos`} para pedir.`}
-        </p>
-      </div>
+    <div className="contenedor pt-10">
+      <h1 className="text-[34px] font-bold tracking-[-0.03em]">
+        Tu presupuesto
+      </h1>
+      <p className="mt-1.5 text-base text-texto-2">
+        {cantidad === 0
+          ? "Todavía no agregaste nada."
+          : `${cantidad === 1 ? "1 ítem" : `${cantidad} ítems`} · los precios se confirman cuando te respondemos`}
+      </p>
     </div>
   );
 }

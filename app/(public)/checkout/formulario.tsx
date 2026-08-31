@@ -126,13 +126,14 @@ export function FormularioCheckout({
         )}
 
         {/* Datos */}
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <h2 className="mb-4 font-semibold">Tus datos</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+        <Card className="rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+          <CardContent className="px-6 py-[22px]">
+            <TituloPaso numero={1}>Tus datos</TituloPaso>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="nombre">Nombre y apellido</Label>
                 <Input
+                  className="h-12"
                   id="nombre"
                   name="nombre"
                   defaultValue={datosIniciales.nombre}
@@ -142,6 +143,7 @@ export function FormularioCheckout({
               <div className="space-y-2">
                 <Label htmlFor="telefono">Teléfono</Label>
                 <Input
+                  className="h-12"
                   id="telefono"
                   name="telefono"
                   inputMode="tel"
@@ -153,6 +155,7 @@ export function FormularioCheckout({
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="email">Correo</Label>
                 <Input
+                  className="h-12"
                   id="email"
                   name="email"
                   type="email"
@@ -168,11 +171,11 @@ export function FormularioCheckout({
         </Card>
 
         {/* Entrega */}
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <h2 className="mb-4 font-semibold">Cómo lo recibís</h2>
+        <Card className="rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+          <CardContent className="px-6 py-[22px]">
+            <TituloPaso numero={2}>Cómo lo recibís</TituloPaso>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <OpcionGrande
                 activa={entrega === "retiro"}
                 onClick={() => setEntrega("retiro")}
@@ -281,9 +284,9 @@ export function FormularioCheckout({
         </Card>
 
         {/* Pago */}
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <h2 className="mb-4 font-semibold">Cómo pagás</h2>
+        <Card className="rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+          <CardContent className="px-6 py-[22px]">
+            <TituloPaso numero={3}>Cómo pagás</TituloPaso>
             <div className="space-y-2">
               {MEDIOS.map((m) => (
                 <OpcionLista
@@ -324,26 +327,27 @@ export function FormularioCheckout({
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <div className="space-y-2">
-              <Label htmlFor="notas">Algo que tengamos que saber</Label>
-              <Textarea
-                id="notas"
-                name="notas"
-                rows={2}
-                placeholder="Horarios de entrega, referencias del lugar, medidas especiales…"
-              />
-            </div>
+        <Card className="rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+          <CardContent className="px-6 py-[22px]">
+            <TituloPaso numero={4}>Algo que tengamos que saber</TituloPaso>
+            <Textarea
+              id="notas"
+              name="notas"
+              rows={3}
+              className="mt-4 min-h-24"
+              placeholder="Horarios de entrega, referencias del lugar, medidas especiales…"
+            />
           </CardContent>
         </Card>
       </div>
 
       {/* Resumen */}
-      <aside className="lg:sticky lg:top-24 lg:self-start">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <h2 className="mb-4 font-semibold">Tu pedido</h2>
+      <aside className="lg:sticky lg:top-[92px] lg:self-start">
+        <Card className="rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+          <CardContent className="px-6 py-[22px]">
+            <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.1em] text-texto-3">
+              Tu pedido
+            </h2>
 
             <ul className="space-y-2.5 border-b pb-4">
               {items.map((item) => (
@@ -416,6 +420,33 @@ export function FormularioCheckout({
   );
 }
 
+/**
+ * Título de sección con su número.
+ *
+ * El checkout son cuatro pasos, y numerarlos dice cuántos faltan sin una barra
+ * de progreso aparte. El número va en monoespaciada como el resto de las
+ * cifras del sitio.
+ */
+function TituloPaso({
+  numero,
+  children,
+}: {
+  numero: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <h2 className="flex items-center gap-2.5 text-[19px] font-bold tracking-[-0.02em]">
+      <span
+        className="tabular flex h-[26px] w-[26px] items-center justify-center rounded-full bg-oscuro-marca text-[13px] text-white"
+        aria-hidden="true"
+      >
+        {numero}
+      </span>
+      {children}
+    </h2>
+  );
+}
+
 function OpcionGrande({
   activa,
   onClick,
@@ -434,18 +465,18 @@ function OpcionGrande({
       type="button"
       onClick={onClick}
       aria-pressed={activa}
-      className={`flex items-center gap-3 rounded-xl border p-4 text-left transition-colors ${
+      className={`flex items-center gap-3 rounded-xl p-4 text-left transition-colors ${
         activa
-          ? "border-brand-orange bg-brand-orange/5"
-          : "hover:border-brand-orange/40"
+          ? "border-[1.5px] border-accion bg-naranja-tenue"
+          : "border border-linea hover:border-accion/40"
       }`}
     >
       <Icono
-        className={`h-6 w-6 shrink-0 ${activa ? "text-brand-orange" : "text-muted-foreground"}`}
+        className={`h-6 w-6 shrink-0 ${activa ? "text-acento-texto" : "text-texto-3"}`}
       />
       <span>
         <span className="block font-medium">{titulo}</span>
-        <span className="block text-sm text-muted-foreground">{detalle}</span>
+        <span className="block text-[13.5px] text-texto-2">{detalle}</span>
       </span>
     </button>
   );
@@ -475,33 +506,33 @@ function OpcionLista({
       type="button"
       onClick={onClick}
       aria-pressed={activa}
-      className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+      className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
         activa
-          ? "border-brand-orange bg-brand-orange/5"
-          : "hover:border-brand-orange/40"
+          ? "border-[1.5px] border-accion bg-naranja-tenue"
+          : "border border-linea hover:border-accion/40"
       }`}
     >
       <span
-        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-          activa ? "border-brand-orange" : "border-muted-foreground/40"
+        className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full ${
+          activa
+            ? "border-[5px] border-accion"
+            : "border-2 border-texto-3/50"
         }`}
         aria-hidden="true"
-      >
-        {activa && <span className="h-2 w-2 rounded-full bg-brand-orange" />}
-      </span>
+      />
 
-      {Icono && <Icono className="h-5 w-5 shrink-0 text-muted-foreground" />}
+      {Icono && <Icono className="h-5 w-5 shrink-0 text-texto-3" />}
 
       <span className="min-w-0 flex-1">
         <span className="block font-medium">{titulo}</span>
         {detalle && (
-          <span className="block text-sm text-muted-foreground">{detalle}</span>
+          <span className="block text-[13.5px] text-texto-2">{detalle}</span>
         )}
         {extra && (
-          <span className="block text-sm text-muted-foreground">{extra}</span>
+          <span className="block text-[13.5px] text-texto-2">{extra}</span>
         )}
         {nota && (
-          <span className="block text-sm text-brand-orange">{nota}</span>
+          <span className="block text-[13.5px] text-acento-texto">{nota}</span>
         )}
       </span>
 

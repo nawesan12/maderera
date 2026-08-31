@@ -38,24 +38,26 @@ export default async function CheckoutPage() {
     ]);
 
   return (
-    <div className="min-h-screen bg-brand-cream/30">
-      <div className="bg-brand-gray py-10 text-white">
-        <div className="contenedor">
-          <Link
-            href="/presupuesto"
-            className="mb-3 inline-flex items-center gap-2 text-sm text-white/70 transition-colors hover:text-white"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Volver al presupuesto
-          </Link>
-          <h1 className="text-3xl font-bold">Finalizar compra</h1>
-          <p className="text-white/70">
-            Completá tus datos y elegí cómo lo querés recibir.
-          </p>
-        </div>
+    <div className="min-h-screen bg-sitio-alt">
+      {/* Sin banda oscura, igual que el presupuesto: el checkout es una sola
+          tarea y un encabezado grande le saca lugar al formulario. */}
+      <div className="contenedor pt-10">
+        <Link
+          href="/presupuesto"
+          className="inline-flex items-center gap-2 text-sm text-texto-2 transition-colors hover:text-acento-texto"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver al presupuesto
+        </Link>
+        <h1 className="mt-3 text-[34px] font-bold tracking-[-0.03em]">
+          Finalizar compra
+        </h1>
+        <p className="mt-1.5 text-base text-texto-2">
+          Tus datos, cómo lo recibís y cómo pagás. Nada más.
+        </p>
       </div>
 
-      <div className="contenedor py-8">
+      <div className="contenedor pb-[70px] pt-6">
         <FormularioCheckout
           items={carrito.items.map((i) => ({
             id: i.id,

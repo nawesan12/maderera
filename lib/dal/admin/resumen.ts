@@ -13,6 +13,7 @@ import {
   quotes,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { resolverPeriodo, type Periodo } from "@/lib/periodos";
 
 /** Primer día del mes, hace `atras` meses. */
 function inicioDeMes(atras = 0) {
@@ -33,87 +34,92 @@ const MESES = [
  * Las ventas cuentan pedidos no cancelados: un pedido cancelado nunca fue una
  * venta, y dejarlo sumando infla el mes sin que se note.
  */
-export async function metricasDelResumen() {
+export async function metricasDelResumen(periodo?: Periodo) {
   await requireStaff();
 
-  const desdeEsteMes = inicioDeMes(0);
-  const desdeMesPasado = inicioDeMes(1);
+  /*
+   * El período llega de la pantalla. Antes estaba clavado en "este mes" y la
+   * cabecera lo decía, pero no había forma de mirar otro: para saber cómo
+   * cerró el mes pasado había que esperar al primero del siguiente.
+   *
+   * La comparación es contra el mismo lapso anterior —mes contra mes, año
+   * contra año—, no contra treinta días fijos. Ver `lib/periodos.ts`.
+   */
+  const rango = periodo ?? resolverPeriodo("mes");
+  const desdeEsteMes = rango.desde;
+  const hastaEsteMes = rango.hasta;
   const noCancelado = sql`${orders.estado} <> 'cancelado'`;
 
-  const [
-    ventasMes,
-    ventasMesPasado,
-    presupuestosPendientes,
-    presupuestosRevision,
-    clientesActivos,
-    reposicion,
-    pedidosSinEntregar,
-    clientesConPedido,
-  ] = await Promise.all([
-    db
-      .select({ total: sql<string>`coalesce(sum(${orders.total}), 0)` })
-      .from(orders)
-      .where(and(gte(orders.createdAt, desdeEsteMes), noCancelado)),
-    db
-      .select({ total: sql<string>`coalesce(sum(${orders.total}), 0)` })
-      .from(orders)
-      .where(
-        and(
-          gte(orders.createdAt, desdeMesPasado),
-          sql`${orders.createdAt} < ${desdeEsteMes}`,
-          noCancelado,
-        ),
-      ),
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(quotes)
-      .where(sql`${quotes.estado} in ('pendiente', 'revision', 'enviado')`),
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(quotes)
-      .where(eq(quotes.estado, "revision")),
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(customers)
-      .where(eq(customers.active, true)),
-    db
-      .select({
-        branchSlug: branches.slug,
-        n: sql<number>`count(*)::int`,
-      })
-      .from(inventory)
-      .innerJoin(productVariants, eq(productVariants.id, inventory.variantId))
-      .innerJoin(products, eq(products.id, productVariants.productId))
-      .innerJoin(branches, eq(branches.id, inventory.branchId))
-      .where(
-        and(
-          eq(products.active, true),
-          eq(productVariants.active, true),
-          sql`${inventory.minQty} > 0`,
-          sql`${inventory.qty} <= ${inventory.minQty}`,
-        ),
-      )
-      .groupBy(branches.slug),
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(orders)
-      .where(sql`${orders.estado} not in ('entregado', 'cancelado')`),
-    // Clientes **distintos** con al menos un pedido en curso. No es lo mismo
-    // que la cantidad de pedidos sin entregar: uno solo puede tener tres, y
-    // partir la tarjeta de clientes con ese número diría algo falso.
-    db
-      .select({ n: sql<number>`count(distinct ${orders.customerId})::int` })
-      .from(orders)
-      .where(
-        and(
-          sql`${orders.estado} not in ('entregado', 'cancelado')`,
-          sql`${orders.customerId} is not null`,
-        ),
-      ),
-  ]);
+  const enElPeriodo = and(
+    desdeEsteMes ? gte(orders.createdAt, desdeEsteMes) : undefined,
+    hastaEsteMes ? sql`${orders.createdAt} < ${hastaEsteMes}` : undefined,
+    noCancelado,
+  );
 
-  const actual = Number(ventasMes[0]?.total ?? 0);
-  const previo = Number(ventasMesPasado[0]?.total ?? 0);
+  const enElAnterior = rango.anterior
+    ? and(
+        gte(orders.createdAt, rango.anterior.desde),
+        sql`${orders.createdAt} < ${rango.anterior.hasta}`,
+        noCancelado,
+      )
+    : sql`false`;
+
+  /*
+   * Cuatro consultas y no ocho.
+   *
+   * Las que tocaban la misma tabla se juntaron con `filter`: Postgres la
+   * recorre una vez y devuelve todas las columnas. Antes eran dos sumas sobre
+   * `orders` —el período y el anterior—, dos conteos sobre `quotes` y dos más
+   * sobre `orders`, cada una con su viaje y su conexión del pool. El resumen es
+   * la pantalla que más se abre del panel: es la primera que ve cada persona
+   * cada mañana.
+   */
+  const [pedidosAgregado, presupuestosAgregado, clientesActivos, reposicion] =
+    await Promise.all([
+      db
+        .select({
+          ventasPeriodo: sql<string>`coalesce(sum(${orders.total}) filter (where ${enElPeriodo}), 0)`,
+          ventasAnterior: sql<string>`coalesce(sum(${orders.total}) filter (where ${enElAnterior}), 0)`,
+          sinEntregar: sql<number>`(count(*) filter (where ${orders.estado} not in ('entregado', 'cancelado')))::int`,
+          // Clientes **distintos** con al menos un pedido en curso. No es lo
+          // mismo que la cantidad de pedidos sin entregar: uno solo puede tener
+          // tres, y partir la tarjeta de clientes con ese número diría algo
+          // falso.
+          clientesConPedido: sql<number>`(count(distinct ${orders.customerId}) filter (where ${orders.estado} not in ('entregado', 'cancelado') and ${orders.customerId} is not null))::int`,
+        })
+        .from(orders),
+      db
+        .select({
+          abiertos: sql<number>`(count(*) filter (where ${quotes.estado} in ('pendiente', 'revision', 'enviado')))::int`,
+          enRevision: sql<number>`(count(*) filter (where ${quotes.estado} = 'revision'))::int`,
+        })
+        .from(quotes),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(customers)
+        .where(eq(customers.active, true)),
+      db
+        .select({
+          branchSlug: branches.slug,
+          n: sql<number>`count(*)::int`,
+        })
+        .from(inventory)
+        .innerJoin(productVariants, eq(productVariants.id, inventory.variantId))
+        .innerJoin(products, eq(products.id, productVariants.productId))
+        .innerJoin(branches, eq(branches.id, inventory.branchId))
+        .where(
+          and(
+            eq(products.active, true),
+            eq(productVariants.active, true),
+            sql`${inventory.minQty} > 0`,
+            sql`${inventory.qty} <= ${inventory.minQty}`,
+          ),
+        )
+        .groupBy(branches.slug),
+    ]);
+
+  const actual = Number(pedidosAgregado[0]?.ventasPeriodo ?? 0);
+  const previo = Number(pedidosAgregado[0]?.ventasAnterior ?? 0);
   const variacion =
     previo > 0 ? Math.round(((actual - previo) / previo) * 1000) / 10 : null;
 
@@ -125,14 +131,14 @@ export async function metricasDelResumen() {
   return {
     ventasMes: actual,
     variacionVentas: variacion,
-    presupuestosPendientes: presupuestosPendientes[0]?.n ?? 0,
-    presupuestosRevision: presupuestosRevision[0]?.n ?? 0,
+    presupuestosPendientes: presupuestosAgregado[0]?.abiertos ?? 0,
+    presupuestosRevision: presupuestosAgregado[0]?.enRevision ?? 0,
     clientesActivos: clientesActivos[0]?.n ?? 0,
     reponer: reponerCentral + reponerAserradero,
     reponerCentral,
     reponerAserradero,
-    pedidosSinEntregar: pedidosSinEntregar[0]?.n ?? 0,
-    clientesConPedido: clientesConPedido[0]?.n ?? 0,
+    pedidosSinEntregar: pedidosAgregado[0]?.sinEntregar ?? 0,
+    clientesConPedido: pedidosAgregado[0]?.clientesConPedido ?? 0,
   };
 }
 

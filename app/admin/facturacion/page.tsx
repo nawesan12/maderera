@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { FilePlus2, Landmark, ReceiptText, TriangleAlert } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
+import { FiltroPeriodo } from "@/components/admin/filtro-periodo";
+import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
 import { AcentoEstado, EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, moneda, plural } from "@/lib/formato";
 import {
@@ -16,10 +18,16 @@ import {
 
 export const metadata: Metadata = { title: "Facturación" };
 
-export default async function FacturacionPage() {
+export default async function FacturacionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ periodo?: string }>;
+}) {
+  const periodo = resolverPeriodo(leerPeriodo((await searchParams).periodo));
+
   const [comprobantes, resumen, arca] = await Promise.all([
-    listarComprobantes(),
-    resumenFacturacion(),
+    listarComprobantes(periodo.desde ? { desde: periodo.desde } : {}),
+    resumenFacturacion(periodo),
     estadoArca(),
   ]);
 
@@ -36,8 +44,9 @@ export default async function FacturacionPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Facturación"
-        detalle="Comprobantes emitidos, su estado en ARCA y lo cobrado."
+        detalle={`Comprobantes emitidos, su estado en ARCA y lo cobrado · ${periodo.etiqueta.toLowerCase()}`}
       >
+        <FiltroPeriodo actual={periodo.clave} />
         <Link
           href="/admin/arca"
           className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import "server-only";
 
 import { asc, eq } from "drizzle-orm";
@@ -35,7 +36,13 @@ export async function listarZonasDeEnvio(): Promise<ZonaEnvio[]> {
  * datos estructurados que Google muestra al costado de la búsqueda. Un horario
  * distinto en cada lado es cómo llega alguien al local un sábado a la tarde.
  */
-export async function listarSucursalesPublicas() {
+/*
+ * Memoizada para toda la request: el pie del sitio la pide en cada página
+ * pública y encima cinco páginas la piden por su cuenta, así que sin esto son
+ * dos consultas idénticas por carga. Las sucursales no cambian entre el
+ * encabezado y el pie de la misma pantalla.
+ */
+export const listarSucursalesPublicas = cache(async () => {
   return db
     .select({
       id: branches.id,
@@ -54,4 +61,4 @@ export async function listarSucursalesPublicas() {
     .from(branches)
     .where(eq(branches.active, true))
     .orderBy(asc(branches.sortOrder));
-}
+});

@@ -1,6 +1,8 @@
 import "server-only";
 
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import { resolverPeriodo, type Periodo } from "@/lib/periodos";
 import { db } from "@/lib/db";
 import {
   customers,
@@ -84,47 +86,55 @@ export interface ResumenPagos {
   avisosConError: number;
 }
 
-export async function resumenPagos(): Promise<ResumenPagos> {
+export async function resumenPagos(periodo?: Periodo): Promise<ResumenPagos> {
   await requireStaff();
 
-  const inicioDeMes = new Date();
-  inicioDeMes.setDate(1);
-  inicioDeMes.setHours(0, 0, 0, 0);
+  const rango = periodo ?? resolverPeriodo("mes");
+  const desde = rango.desde;
+  const hasta = rango.hasta;
 
-  const [mes] = await db
+  /*
+   * Los tres números que salen de `payments` en una sola consulta, con
+   * `filter`, en vez de tres recorridas de la misma tabla. Postgres la lee una
+   * vez y reparte.
+   *
+   * "En revisión" no lleva el corte de fecha a propósito: es lo que está
+   * trabado *ahora*, y un cobro de hace dos meses esperando verificación sigue
+   * esperando aunque uno mire el mes actual. Filtrarlo por período lo haría
+   * desaparecer justo de la pantalla donde hay que resolverlo.
+   */
+  const enRango = (columna: AnyPgColumn) =>
+    sql`${desde ? sql`${columna} >= ${desde}` : sql`true`} and ${
+      hasta ? sql`${columna} < ${hasta}` : sql`true`
+    }`;
+
+  const [totales] = await db
     .select({
-      total: sql<string>`coalesce(sum(${payments.monto}), 0)`,
-      cantidad: sql<number>`count(*)::int`,
+      totalMes: sql<string>`coalesce(sum(${payments.monto}) filter (where ${payments.estado} = 'aprobado' and ${enRango(payments.acreditadoAt)}), 0)`,
+      cantidadMes: sql<number>`(count(*) filter (where ${payments.estado} = 'aprobado' and ${enRango(payments.acreditadoAt)}))::int`,
+      totalRevision: sql<string>`coalesce(sum(${payments.monto}) filter (where ${payments.estado} = 'en_revision'), 0)`,
+      cantidadRevision: sql<number>`(count(*) filter (where ${payments.estado} = 'en_revision'))::int`,
+      rechazados: sql<number>`(count(*) filter (where ${payments.estado} = 'rechazado' and ${enRango(payments.createdAt)}))::int`,
     })
-    .from(payments)
-    .where(
-      and(eq(payments.estado, "aprobado"), gte(payments.acreditadoAt, inicioDeMes)),
-    );
-
-  const [revision] = await db
-    .select({
-      total: sql<string>`coalesce(sum(${payments.monto}), 0)`,
-      cantidad: sql<number>`count(*)::int`,
-    })
-    .from(payments)
-    .where(eq(payments.estado, "en_revision"));
-
-  const [rechazados] = await db
-    .select({ cantidad: sql<number>`count(*)::int` })
-    .from(payments)
-    .where(
-      and(eq(payments.estado, "rechazado"), gte(payments.createdAt, inicioDeMes)),
-    );
+    .from(payments);
 
   const [errores] = await db
     .select({ cantidad: sql<number>`count(*)::int` })
     .from(paymentEvents)
     .where(
       and(
-        gte(paymentEvents.createdAt, inicioDeMes),
+        desde ? gte(paymentEvents.createdAt, desde) : undefined,
+        hasta ? lt(paymentEvents.createdAt, hasta) : undefined,
         sql`${paymentEvents.error} is not null`,
       ),
     );
+
+  const mes = { total: totales?.totalMes, cantidad: totales?.cantidadMes };
+  const revision = {
+    total: totales?.totalRevision,
+    cantidad: totales?.cantidadRevision,
+  };
+  const rechazados = { cantidad: totales?.rechazados };
 
   return {
     acreditadoMes: Number(mes?.total ?? 0),

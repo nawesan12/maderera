@@ -1,3 +1,4 @@
+import { cache } from "react";
 import "server-only";
 
 import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
@@ -84,8 +85,33 @@ export interface FiltrosCatalogo {
   ids?: string[];
 }
 
+/**
+ * Los productos en oferta, memoizados.
+ *
+ * El catálogo arma el panel de filtros dos veces —el cajón del teléfono y la
+ * columna del escritorio— y las dos necesitan cuántas ofertas hay. Sin esto son
+ * seis consultas por carga para el mismo número.
+ *
+ * Va como función sin argumentos y no como `listarProductos({ soloOfertas })`
+ * memoizada, porque `cache()` compara los argumentos por referencia y un objeto
+ * literal nuevo en cada llamada nunca acierta.
+ *
+ * **Es la lista y no un `count`** a propósito: "en oferta" no es que exista una
+ * variante rebajada, es que la rebaja esté en la variante más barata, y encima
+ * el precio depende de la lista de la sesión. Un conteo por SQL daría un número
+ * distinto del que después muestra la grilla.
+ */
+export const productosEnOferta = cache(() =>
+  listarProductos({ soloOfertas: true }),
+);
+
 /** Categorías con la cantidad real de productos activos. */
-export async function listarCategorias() {
+/*
+ * Memoizada: el catálogo arma el panel de filtros dos veces —una para el cajón
+ * del teléfono y otra para la columna del escritorio— y las dos piden las
+ * categorías.
+ */
+export const listarCategorias = cache(async () => {
   return db
     .select({
       id: categories.id,
@@ -105,7 +131,7 @@ export async function listarCategorias() {
     .where(eq(categories.active, true))
     .groupBy(categories.id)
     .orderBy(asc(categories.sortOrder));
-}
+});
 
 /**
  * Trae el catálogo ya filtrado desde la base.
@@ -707,22 +733,31 @@ export const ANIO_FUNDACION = 1981;
  * La hora se lee acá y no durante el render de la página, que es donde sería
  * una impureza.
  */
-export async function numerosDeLaEmpresa() {
-  const [[productos], [medidas], [sucursales], [rubros]] = await Promise.all([
-    db.select({ n: sql<number>`count(*)::int` }).from(products).where(eq(products.active, true)),
-    db.select({ n: sql<number>`count(*)::int` }).from(productVariants).where(eq(productVariants.active, true)),
-    db.select({ n: sql<number>`count(*)::int` }).from(branches).where(eq(branches.active, true)),
-    db.select({ n: sql<number>`count(*)::int` }).from(categories).where(eq(categories.active, true)),
-  ]);
+export const numerosDeLaEmpresa = cache(async () => {
+  /*
+   * Los cuatro conteos en una sola consulta y no en cuatro en paralelo.
+   *
+   * Paralelas no tardan más, pero son cuatro viajes y cuatro conexiones del
+   * pool por cada carga de la portada y de "Nosotros", que es de lo que más se
+   * pide. Contar cuatro tablas chicas es trabajo que Postgres hace de una.
+   */
+  const [fila] = await db
+    .select({
+      productos: sql<number>`(select count(*) from ${products} where ${products.active})::int`,
+      medidas: sql<number>`(select count(*) from ${productVariants} where ${productVariants.active})::int`,
+      sucursales: sql<number>`(select count(*) from ${branches} where ${branches.active})::int`,
+      rubros: sql<number>`(select count(*) from ${categories} where ${categories.active})::int`,
+    })
+    .from(sql`(select 1) as x`);
 
   return {
     anios: new Date().getFullYear() - ANIO_FUNDACION,
-    productos: productos?.n ?? 0,
-    medidas: medidas?.n ?? 0,
-    sucursales: sucursales?.n ?? 0,
-    rubros: rubros?.n ?? 0,
+    productos: fila?.productos ?? 0,
+    medidas: fila?.medidas ?? 0,
+    sucursales: fila?.sucursales ?? 0,
+    rubros: fila?.rubros ?? 0,
   };
-}
+});
 
 export async function datosDePortada() {
   const [categorias, todos] = await Promise.all([

@@ -8,6 +8,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
+import { FiltroPeriodo } from "@/components/admin/filtro-periodo";
+import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
 import {
   AcentoEstado,
   EtiquetaEstado,
@@ -45,10 +47,16 @@ const TIPOS: Record<string, string> = {
  * quisieron pagar y no pudieron —y a los que conviene llamar—. El resto es
  * historial.
  */
-export default async function PagosPage() {
+export default async function PagosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ periodo?: string }>;
+}) {
+  const periodo = resolverPeriodo(leerPeriodo((await searchParams).periodo));
+
   const [pagos, resumen, avisos, banco] = await Promise.all([
-    listarPagos(),
-    resumenPagos(),
+    listarPagos(periodo.desde ? { desde: periodo.desde } : {}),
+    resumenPagos(periodo),
     ultimosAvisos(8),
     obtenerDatosBancarios(),
   ]);
@@ -63,8 +71,9 @@ export default async function PagosPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Cobros"
-        detalle="La plata que entró, la que está por entrar y la que no pudo."
+        detalle={`La plata que entró, la que está por entrar y la que no pudo · ${periodo.etiqueta.toLowerCase()}`}
       >
+        <FiltroPeriodo actual={periodo.clave} />
         <Link
           href="/admin/facturacion"
           className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"

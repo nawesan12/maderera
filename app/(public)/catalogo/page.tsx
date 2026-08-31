@@ -10,6 +10,7 @@ import {
 } from "@/components/catalogo/filtros";
 import {
   listarCategorias,
+  productosEnOferta,
   listarProductos,
   type OrdenCatalogo,
 } from "@/lib/dal/catalog";
@@ -200,11 +201,15 @@ function FranjaConfianza() {
   );
 }
 
-/** El panel se arma una vez y se reusa en la barra móvil y en la columna. */
+/**
+ * El panel de filtros, que va en dos lugares: el cajón del teléfono y la
+ * columna del escritorio. Se arma dos veces —son dos árboles distintos— pero
+ * sus dos consultas están memoizadas, así que a la base se le pide una vez.
+ */
 async function armarPanel(params: Params) {
   const [categorias, ofertas] = await Promise.all([
     listarCategorias(),
-    listarProductos({ soloOfertas: true }),
+    productosEnOferta(),
   ]);
 
   return (

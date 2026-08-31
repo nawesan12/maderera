@@ -1,6 +1,7 @@
 import "server-only";
 
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { resolverPeriodo, type Periodo } from "@/lib/periodos";
 import { db } from "@/lib/db";
 import {
   branches,
@@ -182,12 +183,13 @@ export async function comprobanteDelCliente(
 }
 
 /** Números del mes, para la cabecera de la pantalla. */
-export async function resumenFacturacion() {
+export async function resumenFacturacion(periodo?: Periodo) {
   await requireStaff();
 
-  const inicioMes = new Date();
-  inicioMes.setDate(1);
-  inicioMes.setHours(0, 0, 0, 0);
+  // Sin período, el de siempre: este mes. El corte lo calcula `lib/periodos.ts`
+  // y no cada pantalla por su cuenta, para que "este mes" signifique lo mismo
+  // acá, en Cobros y en el Resumen.
+  const rango = periodo ?? resolverPeriodo("mes");
 
   const [mes] = await db
     .select({
@@ -198,7 +200,8 @@ export async function resumenFacturacion() {
     .from(invoices)
     .where(
       and(
-        gte(invoices.fechaEmision, inicioMes),
+        rango.desde ? gte(invoices.fechaEmision, rango.desde) : undefined,
+        rango.hasta ? lt(invoices.fechaEmision, rango.hasta) : undefined,
         sql`${invoices.estado} <> 'anulada'`,
         sql`${invoices.tipo}::text not like 'nota_credito%'`,
       ),

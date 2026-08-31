@@ -11,6 +11,8 @@ import {
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { GraficoVentas } from "@/components/admin/grafico-ventas";
 import { TarjetaIndicador } from "@/components/admin/tarjeta-indicador";
+import { FiltroPeriodo } from "@/components/admin/filtro-periodo";
+import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
 import { haceCuanto, moneda, plural } from "@/components/admin/formato";
 import {
   actividadReciente,
@@ -19,9 +21,15 @@ import {
   ventasPorSucursal,
 } from "@/lib/dal/admin/resumen";
 
-export default async function ResumenPage() {
+export default async function ResumenPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ periodo?: string }>;
+}) {
+  const periodo = resolverPeriodo(leerPeriodo((await searchParams).periodo));
+
   const [metricas, ventas, reponer, actividad] = await Promise.all([
-    metricasDelResumen(),
+    metricasDelResumen(periodo),
     ventasPorSucursal(),
     stockParaReponer(5),
     actividadReciente(),
@@ -31,16 +39,19 @@ export default async function ResumenPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Resumen</h1>
-        <p className="text-base text-muted-foreground">
-          Cómo viene el negocio este mes
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Resumen</h1>
+          <p className="text-base text-texto-2">
+            Cómo viene el negocio · {periodo.etiqueta.toLowerCase()}
+          </p>
+        </div>
+        <FiltroPeriodo actual={periodo.clave} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <TarjetaIndicador
-          etiqueta="Ventas del mes"
+          etiqueta={`Ventas · ${periodo.etiqueta.toLowerCase()}`}
           valor={moneda.format(metricas.ventasMes)}
           valorNumerico={metricas.ventasMes}
           formatoValor="moneda"
@@ -49,6 +60,7 @@ export default async function ResumenPage() {
               ? `${metricas.variacionVentas > 0 ? "+" : ""}${metricas.variacionVentas}%`
               : undefined
           }
+          comparadoCon="el período anterior"
           icono={TrendingUp}
           serie={totalPorMes}
           pie="Casa Central y Aserradero sumadas"

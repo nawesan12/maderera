@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { EncabezadoPublico } from "@/components/encabezado-publico";
 import {
   Calculator,
   Clock,
@@ -65,7 +66,7 @@ export default async function ContactoPage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-brand-cream/30">
+    <div className="min-h-screen bg-sitio-alt">
       <DatosEstructurados
         datos={migasJsonLd([
           { nombre: "Inicio", ruta: "/" },
@@ -73,15 +74,10 @@ export default async function ContactoPage() {
         ])}
       />
 
-      <section className="bg-brand-gray py-16 text-white">
-        <div className="contenedor">
-          <h1 className="text-4xl font-bold">Hablemos de tu proyecto</h1>
-          <p className="mt-3 max-w-2xl text-lg text-white/70">
-            Escribinos, llamanos o pasá por el local. Si ya sabés qué necesitás,
-            pedir el presupuesto directo suele ser más rápido.
-          </p>
-        </div>
-      </section>
+      <EncabezadoPublico
+        titulo="Contacto"
+        bajada="Escribinos, llamanos o pasá por el local. Te contestamos el mismo día hábil."
+      />
 
       <div className="contenedor grid gap-8 py-12 lg:grid-cols-[1fr_380px]">
         <FormularioContacto whatsapp={whatsapp.replace(/\D/g, "")} />

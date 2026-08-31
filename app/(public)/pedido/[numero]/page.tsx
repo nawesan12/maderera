@@ -52,7 +52,7 @@ export default async function PedidoConfirmadoPage({
   );
 
   return (
-    <div className="min-h-screen bg-brand-cream/30">
+    <div className="min-h-screen bg-sitio-alt">
       <div className="mx-auto px-6 max-w-2xl py-12">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-brand-green">

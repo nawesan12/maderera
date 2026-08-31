@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { EncabezadoPublico } from "@/components/encabezado-publico";
 import Image from "next/image";
 import { CalendarDays, MapPin, Users } from "lucide-react";
 import { eventosProximos } from "@/lib/dal/profesionales";
@@ -23,15 +24,11 @@ export default async function EventosPage() {
   const eventos = await eventosProximos();
 
   return (
-    <div className="min-h-screen bg-brand-cream/30">
-      <header className="bg-brand-gray py-12 text-white">
-        <div className="contenedor">
-          <h1 className="text-3xl font-bold">Capacitaciones y eventos</h1>
-          <p className="mt-2 max-w-2xl text-white/70">
-            Charlas técnicas, demostraciones y jornadas de trabajo con madera.
-          </p>
-        </div>
-      </header>
+    <div className="min-h-screen bg-sitio-alt">
+      <EncabezadoPublico
+        titulo="Capacitaciones y eventos"
+        bajada="Jornadas en la sucursal, con cupo limitado."
+      />
 
       <div className="contenedor py-10">
         {eventos.length === 0 ? (

@@ -234,7 +234,7 @@ function MedidorCredito({ saldo, limite }: { saldo: number; limite: number }) {
   const excedido = usado > limite;
 
   return (
-    <div className="border-t bg-brand-cream/40 px-5 py-4">
+    <div className="border-t bg-sitio-alt px-5 py-4">
       <div className="mb-1.5 flex items-baseline justify-between text-sm">
         <span className="text-muted-foreground">
           {excedido ? "Superaste tu límite" : "Disponible para comprar"}
@@ -340,7 +340,7 @@ function Bienvenida({ nombre }: { nombre: string }) {
           />
         </div>
 
-        <div className="flex flex-wrap gap-3 border-t bg-brand-cream/40 px-6 py-5">
+        <div className="flex flex-wrap gap-3 border-t bg-sitio-alt px-6 py-5">
           <Link
             href="/catalogo"
             className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-orange px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"

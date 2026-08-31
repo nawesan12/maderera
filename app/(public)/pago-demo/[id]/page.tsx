@@ -38,7 +38,7 @@ export default async function PagoDemoPage({
   const cerrado = pago.estado !== "iniciado" && pago.estado !== "pendiente";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-brand-cream/40 px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-sitio-alt px-4 py-12">
       <div className="w-full max-w-md">
         <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
           <ShieldOff className="mt-0.5 h-5 w-5 shrink-0" />

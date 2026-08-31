@@ -110,7 +110,7 @@ export default async function CuentaCorrientePage({
         </div>
 
         {cuenta.limiteCredito > 0 && (
-          <div className="border-t bg-brand-cream/40 px-6 py-4">
+          <div className="border-t bg-sitio-alt px-6 py-4">
             <div
               className="h-2.5 overflow-hidden rounded-full bg-black/10"
               role="img"

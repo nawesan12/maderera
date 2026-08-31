@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { EncabezadoPublico } from "@/components/encabezado-publico";
 import { Award, Shield, Truck, Users } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { ANIO_FUNDACION, numerosDeLaEmpresa } from "@/lib/dal/catalog";
@@ -87,21 +88,10 @@ export default async function NosotrosPage() {
         ])}
       />
 
-      <section className="relative overflow-hidden bg-brand-gray py-24">
-        <div className="contenedor relative z-10 animate-in text-center text-white fade-in slide-in-from-bottom-4 duration-700">
-          <p className="mb-6 inline-block rounded-full border border-brand-orange/30 bg-brand-orange/20 px-3 py-1 text-sm text-brand-orange">
-            Nuestra historia
-          </p>
-          <h1 className="mb-4 text-4xl font-bold sm:text-5xl">
-            Más de {numeros.anios} años construyendo{" "}
-            <span className="text-brand-orange">confianza</span>
-          </h1>
-          <p className="mx-auto max-w-2xl text-lg text-white/70">
-            Desde {ANIO_FUNDACION} somos una empresa familiar que creció junto a Mar
-            del Plata, proveyendo los mejores productos de la industria maderera.
-          </p>
-        </div>
-      </section>
+      <EncabezadoPublico
+        titulo="Nosotros"
+        bajada={`Desde ${ANIO_FUNDACION} en Mar del Plata: ${numeros.anios} años de empresa familiar que creció con la ciudad.`}
+      />
 
       <section className="py-16">
         <div className="contenedor">

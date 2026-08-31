@@ -154,7 +154,7 @@ export default async function DetallePresupuestoPage({
           ))}
         </ul>
 
-        <div className="flex items-baseline justify-between border-t bg-brand-cream/30 px-5 py-4">
+        <div className="flex items-baseline justify-between border-t bg-sitio-alt px-5 py-4">
           <span className="font-semibold">Total</span>
           <span className="tabular text-2xl font-bold">
             {formatearMonto(presupuesto.total)}

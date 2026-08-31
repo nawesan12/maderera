@@ -120,7 +120,7 @@ export default async function DetallePedidoPage({
             ))}
           </ul>
 
-          <dl className="space-y-2 border-t bg-brand-cream/30 px-5 py-4 text-sm">
+          <dl className="space-y-2 border-t bg-sitio-alt px-5 py-4 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Subtotal</dt>
               <dd className="tabular">{formatearMonto(pedido.subtotal)}</dd>
@@ -157,7 +157,7 @@ export default async function DetallePedidoPage({
             </h2>
 
             {pedido.enAcopio.length > 0 && (
-              <ul className="divide-y border-b bg-brand-cream/30">
+              <ul className="divide-y border-b bg-sitio-alt">
                 {pedido.enAcopio.map((renglon) => (
                   <li
                     key={renglon.orderItemId}

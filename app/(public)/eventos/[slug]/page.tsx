@@ -60,7 +60,7 @@ export default async function EventoPage({
   const { yaPaso } = evento;
 
   return (
-    <div className="min-h-screen bg-brand-cream/30">
+    <div className="min-h-screen bg-sitio-alt">
       <div className="mx-auto px-6 max-w-5xl py-8">
         <Link
           href="/eventos"

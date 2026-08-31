@@ -119,7 +119,7 @@ export function PagarDeuda({
       ) : (
         <div className="space-y-4 p-5">
           {banco ? (
-            <dl className="space-y-1.5 rounded-lg bg-brand-cream/50 p-4 text-sm">
+            <dl className="space-y-1.5 rounded-lg bg-sitio-alt p-4 text-sm">
               <Fila etiqueta="Titular" valor={banco.titular} />
               <Fila etiqueta="Banco" valor={banco.banco} />
               <Fila etiqueta="CBU" valor={banco.cbu} />

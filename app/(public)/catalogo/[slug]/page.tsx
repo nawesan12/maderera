@@ -100,7 +100,7 @@ export default async function ProductoPage({
   ];
 
   return (
-    <div className="min-h-screen bg-brand-cream/30">
+    <div className="min-h-screen bg-sitio-alt">
       <DatosEstructurados datos={marcado} />
 
       {/* Breadcrumb */}

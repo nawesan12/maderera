@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { PestanasAcceso } from "@/components/pestanas-acceso";
 import { redirect } from "next/navigation";
 import { ArrowLeft, MapPin, PackageSearch, Receipt, Ruler } from "lucide-react";
 import { getSession } from "@/lib/dal/session";
@@ -105,8 +106,8 @@ export default async function RegistroPage({
       </section>
 
       {/* Formulario */}
-      <section className="flex flex-col justify-center bg-brand-cream/40 px-4 py-12 sm:px-8">
-        <div className="mx-auto w-full max-w-md">
+      <section className="flex flex-col justify-center bg-sitio-alt px-4 py-12 sm:px-8">
+        <div className="mx-auto w-full max-w-[460px]">
           <Link
             href="/"
             className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-brand-orange lg:hidden"
@@ -115,19 +116,25 @@ export default async function RegistroPage({
             Volver al sitio
           </Link>
 
-          <div className="rounded-2xl border bg-white p-8 shadow-sm">
-            <div className="mb-6 flex flex-col items-center text-center">
+          <div className="rounded-2xl border border-linea bg-card px-[30px] py-7 shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+            <PestanasAcceso activa="registro" volver={volver} />
+
+            <div className="mb-5 mt-[22px] flex items-center gap-3">
               <Image
                 src="/cropped-icon-180x180.png"
-                alt="Maderera Juan B. Justo"
-                width={48}
-                height={48}
-                className="mb-4 rounded-xl"
+                alt=""
+                width={40}
+                height={40}
+                className="rounded-[10px]"
               />
-              <h1 className="text-xl font-semibold">Creá tu cuenta</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Es gratis y te toma un minuto
-              </p>
+              <div>
+                <h1 className="text-2xl font-bold tracking-[-0.025em]">
+                  Creá tu cuenta
+                </h1>
+                <p className="mt-0.5 text-[15px] text-texto-2">
+                  Con la cuenta web seguís tus pedidos y presupuestos.
+                </p>
+              </div>
             </div>
 
             <FormularioRegistro volver={volver} />

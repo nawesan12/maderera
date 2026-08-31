@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { EncabezadoPublico } from "@/components/encabezado-publico";
 import { Download, FileText, Lock } from "lucide-react";
 import {
   documentosReservados,
@@ -46,16 +47,11 @@ export default async function DocumentacionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-brand-cream/30">
-      <header className="bg-brand-gray py-12 text-white">
-        <div className="contenedor">
-          <h1 className="text-3xl font-bold">Documentación técnica</h1>
-          <p className="mt-2 max-w-2xl text-white/70">
-            Fichas de producto, tablas de carga e instructivos de colocación,
-            listos para adjuntar al pliego.
-          </p>
-        </div>
-      </header>
+    <div className="min-h-screen bg-sitio-alt">
+      <EncabezadoPublico
+        titulo="Documentación"
+        bajada="Fichas técnicas, tablas de carga e instructivos, listos para adjuntar al pliego."
+      />
 
       <div className="contenedor py-10">
         {!estado.aprobado && reservados > 0 && (

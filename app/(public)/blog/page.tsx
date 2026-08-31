@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { EncabezadoPublico } from "@/components/encabezado-publico";
 import Image from "next/image";
 import { BookOpen, Clock, Search } from "lucide-react";
 import {
@@ -39,19 +40,11 @@ export default async function BlogPage({
   const [principal, ...resto] = articulos;
 
   return (
-    <div className="min-h-screen bg-brand-cream/30">
-      <header className="bg-brand-gray py-12 text-white">
-        <div className="contenedor">
-          <div className="flex items-center gap-3">
-            <BookOpen className="h-8 w-8 text-brand-orange" />
-            <h1 className="text-3xl font-bold">Blog y novedades</h1>
-          </div>
-          <p className="mt-2 max-w-2xl text-white/70">
-            Guías y consejos del oficio: qué material conviene, cómo calcularlo y
-            cómo colocarlo.
-          </p>
-        </div>
-      </header>
+    <div className="min-h-screen bg-sitio-alt">
+      <EncabezadoPublico
+        titulo="Blog"
+        bajada="Guías y consejos del oficio: qué material conviene, cómo calcularlo y cómo colocarlo."
+      />
 
       <div className="contenedor py-8">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center">

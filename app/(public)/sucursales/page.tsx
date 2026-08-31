@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { EncabezadoPublico } from "@/components/encabezado-publico";
 import {
   Clock,
   Mail,
@@ -80,19 +81,14 @@ export default async function SucursalesPage() {
     <div className="min-h-screen">
       <DatosEstructurados datos={marcado} />
 
-      <div className="bg-brand-gray py-12 text-white">
-        <div className="contenedor">
-          <div className="mb-2 flex items-center gap-3">
-            <MapPin className="h-8 w-8 text-brand-orange" />
-            <h1 className="text-3xl font-bold">Nuestras sucursales</h1>
-          </div>
-          <p className="text-white/70">
-            {sucursales.length === 1
-              ? "Nuestra ubicación en Mar del Plata."
-              : `${sucursales.length} ubicaciones en Mar del Plata para brindarte el mejor servicio.`}
-          </p>
-        </div>
-      </div>
+      <EncabezadoPublico
+        titulo="Sucursales"
+        bajada={
+          sucursales.length === 1
+            ? "Nuestra ubicación en Mar del Plata."
+            : "Casa Central sobre Juan B. Justo y el Aserradero, con stock y corte propio."
+        }
+      />
 
       <div className="contenedor space-y-16 py-12">
         {sucursales.map((sucursal) => {
@@ -132,11 +128,19 @@ export default async function SucursalesPage() {
                   )}
 
                   <div className="relative p-6 lg:p-8">
-                    <p className="text-sm font-medium uppercase tracking-wider text-brand-orange">
-                      Maderera Juan B. Justo
-                    </p>
-                    <p className="text-3xl font-bold text-white">
+                    <span
+                      className="inline-block rounded-full px-4 py-2 text-lg font-bold tracking-[-0.01em] text-white"
+                      style={{
+                        backgroundColor:
+                          sucursal.slug === "aserradero"
+                            ? "var(--sucursal-aserradero)"
+                            : "var(--sucursal-central)",
+                      }}
+                    >
                       {sucursal.nombre}
+                    </span>
+                    <p className="mt-3 text-sm font-medium uppercase tracking-wider text-white/60">
+                      Maderera Juan B. Justo
                     </p>
                   </div>
                 </div>
@@ -232,6 +236,19 @@ export default async function SucursalesPage() {
                   {/* Anclas con estilo de botón: un <button> adentro de un <a>
                       es HTML inválido, y acá lo que se hace es navegar. */}
                   <div className="flex flex-wrap gap-3">
+                    {sucursal.telefono && (
+                      <a
+                        href={`tel:${sucursal.telefono.replace(/[^\d+]/g, "")}`}
+                        className={buttonVariants({
+                          className:
+                            "h-[46px] rounded-[9px] bg-accion px-[18px] text-[15px] font-semibold text-white hover:bg-accion-hover",
+                        })}
+                      >
+                        <Phone className="mr-2 h-4 w-4" />
+                        Llamar
+                      </a>
+                    )}
+
                     <a
                       href={comoLlegar}
                       target="_blank"

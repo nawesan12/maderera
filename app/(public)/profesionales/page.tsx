@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { EncabezadoPublico } from "@/components/encabezado-publico";
 import {
   ArrowRight,
   CalendarDays,
@@ -83,23 +84,14 @@ export default async function ProfesionalesPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="bg-brand-gray py-14 text-white">
-        <div className="contenedor">
-          <p className="text-sm font-semibold uppercase tracking-[0.12em] text-brand-orange">
-            Portal de profesionales
-          </p>
-          <h1 className="mt-2 max-w-3xl text-4xl font-bold leading-tight">
-            {estado.aprobado
-              ? `Hola ${(estado.nombre ?? "").split(" ")[0]}, tu acceso está activo`
-              : "Acompañamos tu obra de inicio a fin"}
-          </h1>
-          <p className="mt-3 max-w-2xl text-lg text-white/70">
-            {estado.aprobado
-              ? "Los precios del catálogo ya son los tuyos. Acá está todo lo que tenés habilitado."
-              : "Precios, financiación y respuesta rápida para arquitectos, constructoras, carpinteros y quienes viven de esto."}
-          </p>
-        </div>
-      </header>
+      <EncabezadoPublico
+        titulo="Portal Profesionales"
+        bajada={
+          estado.aprobado
+            ? `Hola ${(estado.nombre ?? "").split(" ")[0]}, tu acceso está activo. Los precios del catálogo ya son los tuyos.`
+            : "Precios por volumen, cuenta corriente y documentación reservada."
+        }
+      />
 
       <div className="contenedor py-12">
         {estado.aprobado ? (

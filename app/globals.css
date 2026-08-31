@@ -324,6 +324,62 @@ input::placeholder, textarea::placeholder {
 }
 
 /* ---------------------------------------------------------------------------
+   Paleta de estados — una sola fuente para todo el sistema.
+
+   Seis familias, y cada estado del negocio cae en una. Que un mismo estado se
+   vea igual en todas las pantallas es lo que hace que el color signifique algo:
+   si "listo" fuera verde en Pedidos y azul en el Resumen, habría que leer
+   siempre. El mapeo de estado a familia vive en
+   `components/admin/etiqueta-estado.tsx`, que es lo único que las usa.
+
+   El acento de tres de las familias queda por debajo de 3:1 contra el fondo del
+   panel, y es a propósito: "entregado" y "cancelado" no tienen que llamar la
+   atención. El color nunca va solo —siempre lo acompaña la etiqueta escrita—,
+   así que no es lo único que distingue el estado.
+
+   El modo oscuro no viene en la banda; está derivado conservando el rol de cada
+   color, no su valor: fondo apenas teñido y tinta clara del mismo tono.
+--------------------------------------------------------------------------- */
+
+.estado-espera   { --estado-fondo: #fdf0d5; --estado-tinta: #8a5a08; --estado-acento: #e0a020; }
+.estado-info     { --estado-fondo: #e2ebfb; --estado-tinta: #1d4ed8; --estado-acento: #3f6fd8; }
+.estado-marca    { --estado-fondo: #fdeada; --estado-tinta: #a8480a; --estado-acento: #f07316; }
+.estado-ok       { --estado-fondo: #dcf3e3; --estado-tinta: #186b39; --estado-acento: #2f7d4f; }
+.estado-problema { --estado-fondo: #fbe4e2; --estado-tinta: #b3261e; --estado-acento: #b3261e; }
+.estado-cerrado  { --estado-fondo: #ecebe8; --estado-tinta: #5c564e; --estado-acento: #c3bfb8; }
+
+.dark .estado-espera {
+  --estado-fondo: oklch(0.26 0.05 75);
+  --estado-tinta: oklch(0.78 0.11 75);
+  --estado-acento: oklch(0.72 0.13 75);
+}
+.dark .estado-info {
+  --estado-fondo: oklch(0.26 0.055 265);
+  --estado-tinta: oklch(0.78 0.11 265);
+  --estado-acento: oklch(0.68 0.14 265);
+}
+.dark .estado-marca {
+  --estado-fondo: oklch(0.26 0.05 45);
+  --estado-tinta: oklch(0.78 0.11 45);
+  --estado-acento: oklch(0.68 0.16 45);
+}
+.dark .estado-ok {
+  --estado-fondo: oklch(0.26 0.044 150);
+  --estado-tinta: oklch(0.78 0.10 150);
+  --estado-acento: oklch(0.68 0.13 150);
+}
+.dark .estado-problema {
+  --estado-fondo: oklch(0.26 0.05 25);
+  --estado-tinta: oklch(0.78 0.11 25);
+  --estado-acento: oklch(0.68 0.16 25);
+}
+.dark .estado-cerrado {
+  --estado-fondo: oklch(0.24 0.004 70);
+  --estado-tinta: oklch(0.75 0.01 70);
+  --estado-acento: oklch(0.45 0.008 70);
+}
+
+/* ---------------------------------------------------------------------------
    Panel de gestión — superficies y profundidad
 
    El panel es una herramienta que se usa muchas horas, así que sigue tres

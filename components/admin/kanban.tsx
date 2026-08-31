@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { claseDeFamilia } from "@/components/admin/etiqueta-estado";
 
 /**
  * Tablero por estados.
@@ -32,15 +33,19 @@ export function ColumnaTablero({
   titulo,
   cantidad,
   detalle,
-  acento,
+  estado,
   vacio,
   children,
 }: {
   titulo: string;
   cantidad: number;
   detalle?: string;
-  /** Clase de color de la franja superior, del sistema de estados. */
-  acento: string;
+  /**
+   * El estado que representa la columna. La franja de color sale de acá y no
+   * como clase suelta: quien llama dice qué es la columna, no de qué color
+   * pintarla, así que no hay forma de que dos pantallas la pinten distinto.
+   */
+  estado: string;
   vacio: string;
   children: React.ReactNode;
 }) {
@@ -56,7 +61,7 @@ export function ColumnaTablero({
     <section className="flex flex-col">
       <header className="tarjeta-cabecera rounded-t-xl bg-card px-4 pb-3 pt-3">
         <span
-          className={`mb-3 block h-1 w-10 rounded-full ${acento}`}
+          className={`${claseDeFamilia(estado)} mb-3 block h-[3px] w-[34px] rounded-full bg-[var(--estado-acento)]`}
           aria-hidden="true"
         />
         <div className="flex items-baseline gap-2">

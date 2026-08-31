@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Flame, Scissors, Settings2 } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { estiloDeEstado } from "@/components/admin/etiqueta-estado";
 import {
   ColumnaTablero,
   TarjetaTablero,
@@ -78,7 +77,7 @@ export default async function CortesPage({
                 detalle={
                   enColumna.length > 0 ? `${Math.round(metros)} m²` : undefined
                 }
-                acento={estiloDeEstado(columna.estado).acento}
+                estado={columna.estado}
                 vacio={columna.vacio}
               >
                 {enColumna.map((corte, i) => (

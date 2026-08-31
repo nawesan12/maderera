@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Package, Truck } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { estiloDeEstado } from "@/components/admin/etiqueta-estado";
 import {
   ColumnaTablero,
   TarjetaTablero,
@@ -85,7 +84,7 @@ export default async function PedidosPage({
                   detalle={
                     enColumna.length > 0 ? moneda.format(monto) : undefined
                   }
-                  acento={estiloDeEstado(columna.estado).acento}
+                  estado={columna.estado}
                   vacio={columna.vacio}
                 >
                   {enColumna.map((pedido) => (

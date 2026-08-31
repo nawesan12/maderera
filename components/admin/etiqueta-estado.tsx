@@ -1,82 +1,104 @@
 /**
  * Estados del sistema, en un solo lugar.
  *
- * Cada estado tiene una etiqueta y un color de acento. La etiqueta se lee; el
+ * Cada estado tiene una etiqueta y una familia de color. La etiqueta se lee; el
  * acento se escanea: es una franja al costado de la fila que permite ver de un
  * vistazo cuánto hay pendiente sin leer una sola palabra.
  *
  * Que el mismo estado se vea igual en todas las pantallas es lo que hace que el
  * color signifique algo. Si "listo" fuera verde en Pedidos y azul en el Resumen,
  * habría que leer siempre.
+ *
+ * **Las familias son seis y están definidas en `globals.css`.** Acá vive solo el
+ * mapeo de estado a familia, que es la decisión de negocio: qué cuenta como
+ * "espera acción" y qué como "cerrado" no es una elección de color.
+ *
+ * El color nunca va solo: siempre lo acompaña la etiqueta escrita. Por eso la
+ * franja de las familias que no piden atención es deliberadamente tenue.
  */
+
+type Familia =
+  /** Alguien tiene que hacer algo. */
+  | "espera"
+  /** Está avanzando y no hace falta intervenir. */
+  | "info"
+  /** En curso, con el color de la marca. */
+  | "marca"
+  /** Se resolvió bien. */
+  | "ok"
+  /** Algo salió mal y hay que mirarlo. */
+  | "problema"
+  /** Terminado o dado de baja: no tiene que llamar la atención. */
+  | "cerrado";
 
 interface Estilo {
   etiqueta: string;
-  /** Clases de la píldora. */
-  pildora: string;
-  /** Color de la franja lateral. */
-  acento: string;
+  familia: Familia;
   /** Si el estado todavía espera que alguien haga algo. */
   abierto: boolean;
 }
 
 const ESTADOS: Record<string, Estilo> = {
   // Presupuestos
-  pendiente: { etiqueta: "Pendiente", pildora: "bg-amber-100 text-amber-900", acento: "bg-amber-400", abierto: true },
-  revision: { etiqueta: "En revisión", pildora: "bg-blue-100 text-blue-900", acento: "bg-blue-500", abierto: true },
-  enviado: { etiqueta: "Enviado", pildora: "bg-brand-orange/15 text-brand-orange-dark", acento: "bg-brand-orange", abierto: true },
-  aceptado: { etiqueta: "Aceptado", pildora: "bg-green-100 text-green-900", acento: "bg-green-600", abierto: false },
-  rechazado: { etiqueta: "Rechazado", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: false },
-  vencido: { etiqueta: "Vencido", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: false },
+  pendiente: { etiqueta: "Pendiente", familia: "espera", abierto: true },
+  revision: { etiqueta: "En revisión", familia: "info", abierto: true },
+  enviado: { etiqueta: "Enviado", familia: "marca", abierto: true },
+  aceptado: { etiqueta: "Aceptado", familia: "ok", abierto: false },
+  rechazado: { etiqueta: "Rechazado", familia: "cerrado", abierto: false },
+  vencido: { etiqueta: "Vencido", familia: "cerrado", abierto: false },
 
   // Pedidos
-  preparando: { etiqueta: "Preparando", pildora: "bg-amber-100 text-amber-900", acento: "bg-amber-400", abierto: true },
-  listo: { etiqueta: "Listo", pildora: "bg-green-100 text-green-900", acento: "bg-green-600", abierto: true },
-  "en-camino": { etiqueta: "En camino", pildora: "bg-blue-100 text-blue-900", acento: "bg-blue-500", abierto: true },
-  entregado: { etiqueta: "Entregado", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: false },
-  cancelado: { etiqueta: "Cancelado", pildora: "bg-muted text-muted-foreground line-through", acento: "bg-border", abierto: false },
+  preparando: { etiqueta: "Preparando", familia: "espera", abierto: true },
+  listo: { etiqueta: "Listo", familia: "ok", abierto: true },
+  "en-camino": { etiqueta: "En camino", familia: "info", abierto: true },
+  entregado: { etiqueta: "Entregado", familia: "cerrado", abierto: false },
+  cancelado: { etiqueta: "Cancelado", familia: "cerrado", abierto: false },
 
   // Cortes
-  "en-cola": { etiqueta: "En cola", pildora: "bg-amber-100 text-amber-900", acento: "bg-amber-400", abierto: true },
-  "en-proceso": { etiqueta: "En la máquina", pildora: "bg-brand-orange/15 text-brand-orange-dark", acento: "bg-brand-orange", abierto: true },
-  terminado: { etiqueta: "Terminado", pildora: "bg-green-100 text-green-900", acento: "bg-green-600", abierto: true },
-  retirado: { etiqueta: "Retirado", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: false },
+  "en-cola": { etiqueta: "En cola", familia: "espera", abierto: true },
+  "en-proceso": { etiqueta: "En la máquina", familia: "marca", abierto: true },
+  terminado: { etiqueta: "Terminado", familia: "ok", abierto: true },
+  retirado: { etiqueta: "Retirado", familia: "cerrado", abierto: false },
 
   // Clientes
-  activo: { etiqueta: "Activo", pildora: "bg-green-100 text-green-900", acento: "bg-green-600", abierto: false },
-  moroso: { etiqueta: "Moroso", pildora: "bg-red-100 text-red-900", acento: "bg-red-600", abierto: true },
-  inactivo: { etiqueta: "Inactivo", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: false },
+  activo: { etiqueta: "Activo", familia: "ok", abierto: false },
+  moroso: { etiqueta: "Moroso", familia: "problema", abierto: true },
+  inactivo: { etiqueta: "Inactivo", familia: "cerrado", abierto: false },
 
   // Comprobantes
-  emitida: { etiqueta: "Emitida", pildora: "bg-amber-100 text-amber-900", acento: "bg-amber-400", abierto: true },
-  autorizada: { etiqueta: "Autorizada", pildora: "bg-green-100 text-green-900", acento: "bg-green-600", abierto: false },
-  anulada: { etiqueta: "Anulada", pildora: "bg-muted text-muted-foreground line-through", acento: "bg-border", abierto: false },
-  rechazada: { etiqueta: "Rechazada por ARCA", pildora: "bg-red-100 text-red-900", acento: "bg-red-600", abierto: true },
-  borrador: { etiqueta: "Borrador", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: true },
+  emitida: { etiqueta: "Emitida", familia: "info", abierto: true },
+  autorizada: { etiqueta: "Autorizada", familia: "ok", abierto: false },
+  anulada: { etiqueta: "Anulada", familia: "cerrado", abierto: false },
+  rechazada: { etiqueta: "Rechazada por ARCA", familia: "problema", abierto: true },
+  borrador: { etiqueta: "Borrador", familia: "espera", abierto: true },
 
   // Pagos y cuenta corriente
-  pagado: { etiqueta: "Pagado", pildora: "bg-green-100 text-green-900", acento: "bg-green-600", abierto: false },
-  parcial: { etiqueta: "Pago parcial", pildora: "bg-amber-100 text-amber-900", acento: "bg-amber-400", abierto: true },
-  compra: { etiqueta: "Compra", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: false },
-  pago: { etiqueta: "Pago", pildora: "bg-green-100 text-green-900", acento: "bg-green-600", abierto: false },
-  nota_credito: { etiqueta: "Nota de crédito", pildora: "bg-blue-100 text-blue-900", acento: "bg-blue-500", abierto: false },
-  nota_debito: { etiqueta: "Nota de débito", pildora: "bg-amber-100 text-amber-900", acento: "bg-amber-400", abierto: false },
-  ajuste: { etiqueta: "Ajuste", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: false },
+  pagado: { etiqueta: "Pagado", familia: "ok", abierto: false },
+  parcial: { etiqueta: "Pago parcial", familia: "espera", abierto: true },
+  compra: { etiqueta: "Compra", familia: "cerrado", abierto: false },
+  pago: { etiqueta: "Pago", familia: "ok", abierto: false },
+  nota_credito: { etiqueta: "Nota de crédito", familia: "info", abierto: false },
+  nota_debito: { etiqueta: "Nota de débito", familia: "espera", abierto: false },
+  ajuste: { etiqueta: "Ajuste", familia: "cerrado", abierto: false },
 
   // Cobros. "Iniciado" es el abandono de checkout: se generó el link y nadie
   // volvió. Se distingue del rechazo porque no hay nada que resolver.
-  iniciado: { etiqueta: "Sin pagar", pildora: "bg-muted text-muted-foreground", acento: "bg-border", abierto: false },
-  en_revision: { etiqueta: "A verificar", pildora: "bg-amber-100 text-amber-900", acento: "bg-amber-400", abierto: true },
-  aprobado: { etiqueta: "Acreditado", pildora: "bg-green-100 text-green-900", acento: "bg-green-600", abierto: false },
-  reintegrado: { etiqueta: "Reintegrado", pildora: "bg-blue-100 text-blue-900", acento: "bg-blue-500", abierto: false },
+  iniciado: { etiqueta: "Sin pagar", familia: "cerrado", abierto: false },
+  en_revision: { etiqueta: "A verificar", familia: "espera", abierto: true },
+  aprobado: { etiqueta: "Acreditado", familia: "ok", abierto: false },
+  reintegrado: { etiqueta: "Reintegrado", familia: "info", abierto: false },
 };
 
 const PREDETERMINADO: Estilo = {
   etiqueta: "",
-  pildora: "bg-muted text-muted-foreground",
-  acento: "bg-border",
+  familia: "cerrado",
   abierto: false,
 };
+
+/** Clase que define las tres variables de color de la familia. */
+export function claseDeFamilia(estado: string): string {
+  return `estado-${estiloDeEstado(estado).familia}`;
+}
 
 export function estiloDeEstado(estado: string): Estilo {
   const encontrado = ESTADOS[estado];
@@ -90,11 +112,11 @@ export function estiloDeEstado(estado: string): Estilo {
 }
 
 export function EtiquetaEstado({ estado }: { estado: string }) {
-  const { etiqueta, pildora } = estiloDeEstado(estado);
+  const { etiqueta } = estiloDeEstado(estado);
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-sm font-medium ${pildora}`}
+      className={`${claseDeFamilia(estado)} inline-flex shrink-0 items-center rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]`}
     >
       {etiqueta}
     </span>
@@ -106,11 +128,9 @@ export function EtiquetaEstado({ estado }: { estado: string }) {
  * Va dentro de un contenedor con `relative` y `overflow-hidden`.
  */
 export function AcentoEstado({ estado }: { estado: string }) {
-  const { acento } = estiloDeEstado(estado);
-
   return (
     <span
-      className={`absolute inset-y-0 left-0 w-1 ${acento}`}
+      className={`${claseDeFamilia(estado)} absolute inset-y-0 left-0 w-1 bg-[var(--estado-acento)]`}
       aria-hidden="true"
     />
   );

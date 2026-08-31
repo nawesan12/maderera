@@ -545,6 +545,23 @@ input::placeholder, textarea::placeholder {
   font-size: 1rem !important;
 }
 
+/* Los diálogos también, aunque no estén dentro de `.panel`.
+
+   Se montan en un portal colgado del `body`, así que ninguna regla que empiece
+   con `.panel` los alcanza: sus campos quedaban en 32px y 15px mientras el
+   resto del panel estaba en 40 y 16. Y son la pantalla donde se transfiere
+   stock, se ajustan precios y se carga un movimiento de cuenta —justo donde
+   menos conviene achicar el blanco al que hay que apuntar—. */
+[data-slot="dialog-content"]
+  :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]),
+[data-slot="dialog-content"] button:not([data-slot="dropdown-menu-item"]) {
+  min-height: 2.5rem;
+}
+
+[data-slot="dialog-content"] :is(input, textarea, select) {
+  font-size: 1rem !important;
+}
+
 /* Barra de acento del ítem activo del menú. */
 .nav-activa {
   box-shadow: inset 2px 0 0 0 var(--color-brand-orange);

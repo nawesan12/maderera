@@ -2,13 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
-  Calculator,
   ClipboardList,
   Clock,
   Headphones,
   MapPin,
   MessageCircle,
   Phone,
+  Scissors,
   Star,
   Tag,
   Truck,
@@ -21,6 +21,7 @@ import { ProductCard } from "@/components/product-card";
 import { datosDePortada, numerosDeLaEmpresa } from "@/lib/dal/catalog";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { listarArticulos, listarTestimonios } from "@/lib/dal/contenido";
+import { escalasDeVolumenPublicas } from "@/lib/dal/profesionales";
 
 /**
  * Los años de la empresa se leen al renderizar y no una vez al cargar el
@@ -29,13 +30,15 @@ import { listarArticulos, listarTestimonios } from "@/lib/dal/contenido";
  */
 
 export default async function HomePage() {
-  const [portada, sucursales, testimonios, notas, numeros] = await Promise.all([
-    datosDePortada(),
-    listarSucursalesPublicas(),
-    listarTestimonios(),
-    listarArticulos({ limite: 3 }),
-    numerosDeLaEmpresa(),
-  ]);
+  const [portada, sucursales, testimonios, notas, numeros, escalas] =
+    await Promise.all([
+      datosDePortada(),
+      listarSucursalesPublicas(),
+      listarTestimonios(),
+      listarArticulos({ limite: 3 }),
+      numerosDeLaEmpresa(),
+      escalasDeVolumenPublicas(),
+    ]);
 
   return (
     <div className="overflow-hidden">
@@ -49,11 +52,15 @@ export default async function HomePage() {
 
       {portada.ofertas.length > 0 && <Ofertas productos={portada.ofertas} />}
 
+      <BannerCorte />
+
       <Categorias categorias={portada.categorias} />
 
       <Destacados productos={portada.destacados} />
 
       <Herramientas />
+
+      <BannerProfesionales escalas={escalas} sucursales={sucursales} />
 
       <Historia
         anios={numeros.anios}
@@ -75,6 +82,32 @@ export default async function HomePage() {
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Encabezado de sección: título grande y una veta debajo.
+ *
+ * La barra repite el degradado de `.wood-divider` en chico. Se repite en cinco
+ * secciones, así que vive acá y no copiada en cada una.
+ */
+function TituloSeccion({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <h2 className="text-[34px] font-bold leading-tight tracking-[-0.03em]">
+        {children}
+      </h2>
+      <span
+        className="mt-3 block h-1 w-16 rounded-sm bg-[linear-gradient(90deg,var(--color-brand-orange),var(--color-brand-wood),var(--color-brand-orange))]"
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
+
 function FranjaBeneficios() {
   const beneficios = [
     { icono: Truck, texto: "Envíos en Mar del Plata y zona" },
@@ -84,12 +117,16 @@ function FranjaBeneficios() {
   ];
 
   return (
-    <section className="border-t border-white/5 bg-brand-gray py-4 text-white">
-      <ul className="contenedor flex flex-wrap items-center justify-center gap-x-10 gap-y-3">
+    <section className="bg-[#3a352f] text-white">
+      <ul className="contenedor grid grid-cols-2 gap-x-6 gap-y-4 py-5 lg:grid-cols-4">
         {beneficios.map((b) => (
-          <li key={b.texto} className="flex items-center gap-2.5 text-sm">
-            <b.icono className="h-4 w-4 shrink-0 text-brand-orange" />
-            <span className="text-white/80">{b.texto}</span>
+          <li key={b.texto} className="flex items-center gap-[11px]">
+            <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-brand-orange/15 text-brand-orange-light">
+              <b.icono className="h-[17px] w-[17px]" />
+            </span>
+            <span className="text-[14.5px] leading-[1.35] text-white/85">
+              {b.texto}
+            </span>
           </li>
         ))}
       </ul>
@@ -103,27 +140,19 @@ function Ofertas({
   productos: Awaited<ReturnType<typeof datosDePortada>>["ofertas"];
 }) {
   return (
-    <section className="bg-brand-cream/50 py-16">
+    <section className="bg-sitio-fondo pt-[66px]">
       <div className="contenedor">
-        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-brand-red">
-              <Tag className="h-4 w-4" />
-              Ofertas
-            </p>
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Precios que bajaron esta semana
-            </h2>
-          </div>
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <TituloSeccion>Ofertas</TituloSeccion>
           <Link
             href="/catalogo?ofertas=1"
-            className="text-sm font-medium text-brand-orange hover:underline"
+            className="text-[15px] font-semibold text-acento-texto hover:underline"
           >
-            Ver todas las ofertas
+            Ver todas las ofertas &rarr;
           </Link>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-7 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
           {productos.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
@@ -139,33 +168,26 @@ function Categorias({
   categorias: Awaited<ReturnType<typeof datosDePortada>>["categorias"];
 }) {
   return (
-    <section className="py-20">
+    <section className="bg-sitio-alt py-[66px]">
       <div className="contenedor">
-        <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
-              Catálogo
-            </p>
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Todo para tu obra
-            </h2>
-          </div>
-          <Link href="/catalogo">
-            <Button variant="outline" className="rounded-full">
-              Ver el catálogo completo
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <TituloSeccion>Categorías</TituloSeccion>
+          <Link
+            href="/catalogo"
+            className="text-[15px] font-semibold text-acento-texto hover:underline"
+          >
+            Ver el catálogo completo &rarr;
           </Link>
         </div>
 
         {/* Grilla pareja: con ocho categorías, hacer dos más grandes dejaba un
             hueco al final de la última fila. */}
-        <div className="grid auto-rows-[180px] grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="mt-7 grid auto-rows-[184px] grid-cols-2 gap-4 lg:grid-cols-4">
           {categorias.map((cat) => (
             <Link
               key={cat.slug}
               href={`/catalogo?cat=${cat.slug}`}
-              className="group relative overflow-hidden rounded-2xl"
+              className="group relative overflow-hidden rounded-[14px]"
             >
               {cat.image && (
                 <Image
@@ -176,10 +198,12 @@ function Categorias({
                   sizes="(max-width: 1024px) 50vw, 25vw"
                 />
               )}
-              <div className="absolute inset-0 bg-gradient-to-t from-brand-gray via-brand-gray/40 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 p-5">
-                <h3 className="text-lg font-bold text-white">{cat.name}</h3>
-                <p className="text-sm text-white/70">
+              <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(28_25_22_/_0.88)_0%,rgb(28_25_22_/_0.28)_52%,transparent_100%)]" />
+              <div className="absolute inset-x-4 bottom-3.5">
+                <h3 className="text-[18px] font-bold tracking-[-0.02em] text-white">
+                  {cat.name}
+                </h3>
+                <p className="tabular mt-0.5 text-[12.5px] text-white/70">
                   {cat.productCount === 1
                     ? "1 producto"
                     : `${cat.productCount} productos`}
@@ -201,26 +225,19 @@ function Destacados({
   if (productos.length === 0) return null;
 
   return (
-    <section className="bg-white py-16">
+    <section className="bg-sitio-fondo py-[66px]">
       <div className="contenedor">
-        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
-              Lo más pedido
-            </p>
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Los que más salen
-            </h2>
-          </div>
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <TituloSeccion>Los que más salen</TituloSeccion>
           <Link
             href="/catalogo"
-            className="text-sm font-medium text-brand-orange hover:underline"
+            className="text-[15px] font-semibold text-acento-texto hover:underline"
           >
-            Ver todo
+            Ver todo el catálogo &rarr;
           </Link>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-7 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
           {productos.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
@@ -230,21 +247,188 @@ function Destacados({
   );
 }
 
+/**
+ * Banner del corte a medida.
+ *
+ * El servicio del aserradero es lo que diferencia a la maderera de una
+ * ferretería, y hasta ahora solo aparecía como una tarjeta más entre las
+ * herramientas.
+ *
+ * El panel de la derecha es una veta dibujada, no una foto con leyenda de
+ * relleno: no hay imagen para este bloque en la base, y un recuadro que dice
+ * "foto acá" en producción se lee como algo que falló.
+ */
+function BannerCorte() {
+  return (
+    <section className="bg-sitio-fondo pt-11">
+      <div className="contenedor">
+        <div className="relative overflow-hidden rounded-2xl bg-oscuro-marca text-white">
+          <div
+            className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.08)_0_11px,transparent_11px_22px)]"
+            aria-hidden="true"
+          />
+          <div className="relative grid items-stretch md:grid-cols-[1.35fr_1fr]">
+            <div className="px-8 pb-10 pt-9 sm:px-10">
+              <span className="inline-flex items-center gap-2 rounded-full bg-brand-orange/20 px-3 py-[5px] text-[12.5px] font-semibold uppercase tracking-[0.06em] text-brand-orange-light">
+                <Scissors className="h-3.5 w-3.5" />
+                Servicio del aserradero
+              </span>
+              <h2 className="mt-4 text-[34px] font-bold leading-[1.1] tracking-[-0.03em]">
+                Corte a medida
+                <br />
+                mientras esperás
+              </h2>
+              <p className="mt-3 max-w-[420px] text-base leading-relaxed text-white/70">
+                Traé el despiece en milímetros y te lo cortamos en el día. Si
+                son más de 20 piezas, dejalo y lo pasás a buscar.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-2.5">
+                <Link
+                  href="/presupuesto"
+                  className="flex h-12 items-center rounded-[10px] bg-brand-orange px-[22px] text-[15.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
+                >
+                  Pedir un corte
+                </Link>
+                <Link
+                  href="/contacto"
+                  className="flex h-12 items-center rounded-[10px] border border-white/25 px-[22px] text-[15.5px] font-semibold text-white transition-colors hover:bg-white/10"
+                >
+                  Cómo mandar el despiece
+                </Link>
+              </div>
+            </div>
+            <div
+              className="relative hidden min-h-[230px] bg-[repeating-linear-gradient(-45deg,#3a352f_0_10px,#332f29_10px_20px)] md:block"
+              aria-hidden="true"
+            >
+              <Scissors className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 text-white/10" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Portal de profesionales y las dos sucursales.
+ *
+ * Las escalas salen de la base (`escalasDeVolumenPublicas`) y el umbral es por
+ * **cantidad**, no por importe: el diseño las dibujaba como "5% desde
+ * $500.000" y el modelo no tiene ese dato. Si no hay ninguna cargada, el
+ * bloque va sin la lista en vez de mostrar números de ejemplo — es una
+ * política comercial y publicarla mal es una promesa que hay que cumplir.
+ */
+function BannerProfesionales({
+  escalas,
+  sucursales,
+}: {
+  escalas: Awaited<ReturnType<typeof escalasDeVolumenPublicas>>;
+  sucursales: Awaited<ReturnType<typeof listarSucursalesPublicas>>;
+}) {
+  // La foto sale de la ficha de la sucursal si está cargada. Mientras no lo
+  // esté, va una veta dibujada: un recuadro vacío o una foto de stock que no es
+  // el local se leen peor que una superficie que no pretende ser una foto.
+  const foto = sucursales.find((s) => s.imagenUrl)?.imagenUrl ?? null;
+
+  return (
+    <section className="bg-sitio-fondo pb-[66px]">
+      <div className="contenedor">
+        <div className="grid gap-[18px] lg:grid-cols-2">
+          <article className="overflow-hidden rounded-2xl border border-linea bg-sitio-alt px-8 py-8 sm:px-[34px]">
+            <span className="inline-block rounded-full bg-naranja-claro px-[11px] py-[5px] text-xs font-bold uppercase tracking-[0.08em] text-acento-texto">
+              Portal profesionales
+            </span>
+            <h3 className="mt-3.5 text-[26px] font-bold tracking-[-0.025em]">
+              Precios por volumen
+            </h3>
+            <p className="mt-2 text-[15.5px] leading-relaxed text-texto-2">
+              Carpinteros, arquitectos y constructoras tienen escala de
+              descuento y cuenta corriente. Se solicita una vez y queda
+              habilitada.
+            </p>
+
+            {escalas.length > 0 && (
+              <ul className="mt-[18px] flex flex-col gap-[7px]">
+                {escalas.map((e) => (
+                  <li
+                    key={e.desdeCantidad}
+                    className="flex items-center gap-3 rounded-[9px] border border-linea-suave bg-card px-3 py-2.5"
+                  >
+                    <span className="tabular flex-1 text-[13.5px] text-texto-2">
+                      Desde {e.desdeCantidad} unidades
+                    </span>
+                    <span className="tabular text-[15px] font-semibold text-acento-texto">
+                      &minus;{e.porcentaje}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <Link
+              href="/profesionales"
+              className="mt-5 flex h-12 w-fit items-center rounded-[10px] bg-accion px-[22px] text-[15.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
+            >
+              Solicitar cuenta profesional
+            </Link>
+          </article>
+
+          <article className="relative min-h-[340px] overflow-hidden rounded-2xl bg-brand-wood-light">
+            {foto ? (
+              <Image
+                src={foto}
+                alt=""
+                fill
+                className="object-cover"
+                sizes="(max-width: 1024px) 100vw, 50vw"
+              />
+            ) : (
+              <div
+                className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,#e7dccd_0_9px,#ded1bf_9px_18px)]"
+                aria-hidden="true"
+              />
+            )}
+            <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(28_25_22_/_0.9),rgb(28_25_22_/_0.15)_60%,transparent)]" />
+            <div className="absolute inset-x-8 bottom-7 text-white">
+              <h3 className="text-[26px] font-bold tracking-[-0.025em]">
+                Dos sucursales en la ciudad
+              </h3>
+              <p className="mt-2 text-[15.5px] leading-snug text-white/80">
+                Casa Central sobre Juan B. Justo y el Aserradero, con corte y
+                stock propio.
+              </p>
+              <div className="mt-[18px] flex flex-wrap gap-2.5">
+                <Link
+                  href="/sucursales"
+                  className="flex h-[46px] items-center rounded-[10px] bg-white px-5 text-[15px] font-semibold text-oscuro-marca transition-colors hover:bg-white/90"
+                >
+                  Ver sucursales
+                </Link>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Herramientas() {
   const herramientas = [
     {
-      icono: Calculator,
-      titulo: "Calculadora de materiales",
+      icono: Scissors,
+      titulo: "Corte a medida",
       texto:
-        "Poné las medidas de tu obra y te decimos cuánto material necesitás, sin tener que estimarlo a ojo.",
-      href: "/calculadora",
-      cta: "Calcular",
+        "Mandanos el despiece en milímetros y te lo cortamos en el aserradero.",
+      href: "/presupuesto",
+      cta: "Pedir un corte",
     },
     {
       icono: ClipboardList,
       titulo: "Presupuesto online",
       texto:
-        "Armá tu lista y mandanosla cuando quieras. Te respondemos con el precio final y la disponibilidad.",
+        "Armá tu lista, pedí precio y seguí la respuesta desde tu cuenta.",
       href: "/presupuesto",
       cta: "Armar presupuesto",
     },
@@ -252,51 +436,42 @@ function Herramientas() {
       icono: Warehouse,
       titulo: "Consulta de stock",
       texto:
-        "Fijate si está disponible antes de venir. Se actualiza con lo que hay en las dos sucursales.",
+        "Mirá qué hay en Casa Central y en el Aserradero antes de venir.",
       href: "/stock",
-      cta: "Consultar stock",
+      cta: "Ver stock",
     },
   ];
 
   return (
-    <section className="bg-brand-cream/50 py-20">
+    <section className="bg-sitio-alt py-[66px]">
       <div className="contenedor">
-        <div className="mb-10 max-w-2xl">
-          <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
-            Herramientas
-          </p>
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Resolvé tu obra desde el celular
-          </h2>
-          <p className="mt-3 text-lg text-muted-foreground">
-            Tres herramientas para que no tengas que llamar ni acercarte para
-            saber cuánto necesitás, cuánto cuesta y si está disponible.
-          </p>
-        </div>
+        <TituloSeccion>Herramientas</TituloSeccion>
 
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="mt-7 grid gap-[18px] md:grid-cols-3">
           {herramientas.map((h) => (
-            <Card
+            <article
               key={h.titulo}
-              className="group relative overflow-hidden border-0 bg-white shadow-sm transition-shadow duration-300 hover:shadow-xl"
+              className="overflow-hidden rounded-[14px] border border-linea bg-card shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]"
             >
-              <span className="absolute inset-x-0 top-0 h-1 bg-brand-orange" />
-              <CardContent className="p-7">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-orange/10">
-                  <h.icono className="h-6 w-6 text-brand-orange" />
-                </div>
-                <h3 className="mb-2 text-lg font-bold">{h.titulo}</h3>
-                <p className="mb-5 text-sm leading-relaxed text-muted-foreground">
+              <span className="block h-1 bg-brand-orange" aria-hidden="true" />
+              <div className="px-[22px] pb-6 pt-[22px]">
+                <span className="flex h-[42px] w-[42px] items-center justify-center rounded-[11px] bg-naranja-claro text-acento-texto">
+                  <h.icono className="h-5 w-5" />
+                </span>
+                <h3 className="mt-4 text-xl font-bold tracking-[-0.02em]">
+                  {h.titulo}
+                </h3>
+                <p className="mt-[7px] text-[15px] leading-normal text-texto-2">
                   {h.texto}
                 </p>
-                <Link href={h.href}>
-                  <Button variant="outline" size="sm" className="rounded-full">
-                    {h.cta}
-                    <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                  </Button>
+                <Link
+                  href={h.href}
+                  className="mt-3.5 inline-block text-[15px] font-semibold text-acento-texto hover:underline"
+                >
+                  {h.cta} &rarr;
                 </Link>
-              </CardContent>
-            </Card>
+              </div>
+            </article>
           ))}
         </div>
       </div>
@@ -326,19 +501,16 @@ function Historia({
   ];
 
   return (
-    <section className="py-20">
+    <section className="bg-sitio-fondo py-[66px]">
       <div className="contenedor">
         <div className="grid items-center gap-14 lg:grid-cols-2">
           <div>
-            <p className="mb-3 text-sm font-semibold uppercase tracking-wider text-brand-orange">
-              Nuestra historia
-            </p>
-            <h2 className="mb-5 text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
-              Más de <span className="text-brand-orange">40 años</span>{" "}
+            <TituloSeccion className="mb-6">
+              Más de{" "}
+              <span className="text-acento-texto">{anios} años</span>{" "}
               construyendo confianza
-            </h2>
-            <div className="wood-divider mb-6 w-20" />
-            <p className="mb-8 text-lg leading-relaxed text-muted-foreground">
+            </TituloSeccion>
+            <p className="mb-8 text-lg leading-relaxed text-texto-2">
               Desde 1981, Maderera Juan B. Justo es sinónimo de calidad en Mar
               del Plata. Con dos sucursales, marca propia Moldava y un equipo
               apasionado por la madera, acompañamos cada proyecto de principio a
@@ -348,10 +520,10 @@ function Historia({
             <dl className="mb-8 grid grid-cols-2 gap-6 sm:grid-cols-4">
               {stats.map((s) => (
                 <div key={s.label}>
-                  <dd className="tabular text-3xl font-bold text-brand-orange">
+                  <dd className="tabular text-[30px] font-bold tracking-[-0.03em] text-acento-texto">
                     {s.valor}
                   </dd>
-                  <dt className="mt-1 text-xs uppercase tracking-wider text-muted-foreground">
+                  <dt className="mt-1 text-xs uppercase tracking-[0.07em] text-texto-3">
                     {s.label}
                   </dt>
                 </div>
@@ -395,22 +567,17 @@ function Testimonios({
   testimonios: Awaited<ReturnType<typeof listarTestimonios>>;
 }) {
   return (
-    <section className="bg-brand-cream py-20">
+    <section className="bg-sitio-alt py-[66px]">
       <div className="contenedor">
-        <div className="mb-10">
-          <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
-            Testimonios
-          </p>
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Lo que dicen nuestros clientes
-          </h2>
-        </div>
+        <TituloSeccion className="mb-7">
+          Lo que dicen nuestros clientes
+        </TituloSeccion>
 
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-[18px] md:grid-cols-2 lg:grid-cols-4">
           {testimonios.map((t) => (
             <Card
               key={t.id}
-              className="h-full border-0 bg-white shadow-sm transition-shadow duration-300 hover:shadow-xl"
+              className="h-full rounded-[14px] border border-linea bg-card shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]"
             >
               <CardContent className="p-6">
                 <div
@@ -452,23 +619,19 @@ function Sucursales({
   sucursales: Awaited<ReturnType<typeof listarSucursalesPublicas>>;
 }) {
   return (
-    <section className="py-20">
+    <section className="bg-sitio-fondo py-[66px]">
       <div className="contenedor">
-        <div className="mb-10 text-center">
-          <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
-            Ubicaciones
-          </p>
-          <h2 className="mb-3 text-3xl font-bold tracking-tight sm:text-4xl">
-            Nuestras sucursales
-          </h2>
-          <p className="mx-auto max-w-xl text-lg text-muted-foreground">
-            Dos puntos en Mar del Plata para retirar o pedir asesoramiento.
-          </p>
-        </div>
+        <TituloSeccion>Nuestras sucursales</TituloSeccion>
+        <p className="mb-7 mt-3 text-lg text-texto-2">
+          Dos puntos en Mar del Plata para retirar o pedir asesoramiento.
+        </p>
 
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid gap-[18px] md:grid-cols-2">
           {sucursales.map((s) => (
-            <Card key={s.id} className="overflow-hidden border-0 shadow-sm">
+            <Card
+              key={s.id}
+              className="overflow-hidden rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]"
+            >
               <CardContent className="p-7">
                 <h3 className="mb-3 text-xl font-bold">{s.nombre}</h3>
                 <ul className="space-y-2.5 text-sm">
@@ -520,29 +683,22 @@ function Blog({
   notas: Awaited<ReturnType<typeof listarArticulos>>;
 }) {
   return (
-    <section className="bg-brand-cream/50 py-20">
+    <section className="bg-sitio-alt py-[66px]">
       <div className="contenedor">
-        <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
-              Consejos
-            </p>
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Para que te salga bien
-            </h2>
-          </div>
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <TituloSeccion>Para que te salga bien</TituloSeccion>
           <Link
             href="/blog"
-            className="text-sm font-medium text-brand-orange hover:underline"
+            className="text-[15px] font-semibold text-acento-texto hover:underline"
           >
-            Ver todas las notas
+            Ver todas las notas &rarr;
           </Link>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="mt-7 grid gap-[18px] md:grid-cols-3">
           {notas.map((nota) => (
             <Link key={nota.slug} href={`/blog/${nota.slug}`} className="group">
-              <Card className="h-full overflow-hidden border-0 bg-white shadow-sm transition-shadow duration-300 hover:shadow-xl">
+              <Card className="h-full overflow-hidden rounded-[14px] border border-linea bg-card shadow-[0_1px_2px_rgb(60_50_40_/_0.05)] transition-[box-shadow,transform] duration-200 group-hover:-translate-y-[3px] group-hover:shadow-[0_14px_30px_-16px_rgb(60_50_40_/_0.34)]">
                 {nota.imagenUrl && (
                   <div className="relative aspect-[16/10] overflow-hidden">
                     <Image
@@ -576,7 +732,7 @@ function Blog({
 
 function CierreCta() {
   return (
-    <section className="relative overflow-hidden bg-brand-gray py-20 text-white">
+    <section className="relative overflow-hidden bg-oscuro-marca py-16 text-white">
       <div
         className="absolute inset-0 opacity-[0.06]"
         style={{
@@ -585,15 +741,16 @@ function CierreCta() {
         }}
         aria-hidden="true"
       />
-      <div className="contenedor relative text-center">
-        <h2 className="mb-4 text-3xl font-bold tracking-tight sm:text-5xl">
-          ¿Arrancamos tu proyecto?
-        </h2>
-        <p className="mx-auto mb-9 max-w-xl text-lg text-white/70">
-          Contanos qué necesitás y te pasamos el presupuesto sin cargo. Si no
-          sabés cuánto material lleva, lo calculamos juntos.
-        </p>
-        <div className="flex flex-wrap justify-center gap-4">
+      <div className="contenedor relative flex flex-wrap items-center justify-between gap-8">
+        <div>
+          <h2 className="text-4xl font-bold tracking-[-0.03em]">
+            ¿Arrancamos tu proyecto?
+          </h2>
+          <p className="mt-2.5 text-[17px] text-white/70">
+            Armá tu presupuesto online o escribinos y lo hacemos juntos.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
           <Link href="/catalogo">
             <Button
               size="lg"

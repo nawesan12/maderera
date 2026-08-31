@@ -16,6 +16,12 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "images.unsplash.com",
       },
+      // Las fotos "plus" de Unsplash salen por otro host. Sin declararlo,
+      // `next/image` no las sirve y la portada rompe en tiempo de pedido.
+      {
+        protocol: "https",
+        hostname: "plus.unsplash.com",
+      },
     ],
   },
 };

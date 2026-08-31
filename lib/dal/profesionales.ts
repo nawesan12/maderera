@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, asc, desc, eq, gte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   customers,
@@ -10,6 +10,7 @@ import {
   priceLists,
   professionalApplications,
   technicalDocuments,
+  volumeDiscounts,
 } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
@@ -129,6 +130,54 @@ export interface DocumentoTecnico {
  * filtrar en la pantalla ya sería haber leído lo que no corresponde, y basta un
  * descuido en el JSX para que se muestre.
  */
+export interface EscalaPublica {
+  /** A partir de cuántas unidades aplica. */
+  desdeCantidad: number;
+  /** Porcentaje de descuento sobre el precio de la lista. */
+  porcentaje: number;
+}
+
+/**
+ * Las escalas de descuento por volumen que se pueden anunciar en público.
+ *
+ * Solo las generales —sin variante ni categoría— de la lista profesional: una
+ * escala colgada de un producto o de un rubro es una condición particular y
+ * anunciarla como si valiera para todo el catálogo sería mentir.
+ *
+ * Devuelve lo que hay cargado, no un ejemplo. Si no hay ninguna, la portada
+ * muestra el bloque sin la lista en vez de inventar números: el descuento por
+ * volumen es una política comercial y publicarla mal es una promesa que
+ * después hay que cumplir en el mostrador.
+ *
+ * **El umbral es por cantidad, no por importe.** El diseño lo dibujaba como
+ * "5% desde $500.000"; el modelo no tiene ese dato y traducirlo a pesos sería
+ * una cifra inventada.
+ */
+export async function escalasDeVolumenPublicas(): Promise<EscalaPublica[]> {
+  const filas = await db
+    .select({
+      desdeCantidad: volumeDiscounts.desdeCantidad,
+      porcentaje: volumeDiscounts.porcentaje,
+    })
+    .from(volumeDiscounts)
+    .innerJoin(priceLists, eq(priceLists.id, volumeDiscounts.priceListId))
+    .where(
+      and(
+        eq(priceLists.slug, "profesional"),
+        eq(priceLists.active, true),
+        eq(volumeDiscounts.activo, true),
+        isNull(volumeDiscounts.variantId),
+        isNull(volumeDiscounts.categoryId),
+      ),
+    )
+    .orderBy(asc(volumeDiscounts.desdeCantidad));
+
+  return filas.map((f) => ({
+    desdeCantidad: Number(f.desdeCantidad),
+    porcentaje: Number(f.porcentaje),
+  }));
+}
+
 export async function documentosVisibles(): Promise<DocumentoTecnico[]> {
   const estado = await estadoProfesional();
 

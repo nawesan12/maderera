@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useState } from "react";
 
 /**
  * Ventas por sucursal, mes a mes.
@@ -73,7 +73,6 @@ function techo(maximo: number): number {
 
 export function GraficoVentas({ datos }: { datos: Punto[] }) {
   const [activo, setActivo] = useState<number | null>(null);
-  const idTabla = useId();
 
   if (datos.length === 0) {
     return (
@@ -108,14 +107,15 @@ export function GraficoVentas({ datos }: { datos: Punto[] }) {
         width="100%"
         height={ALTO}
         role="img"
-        aria-labelledby={idTabla}
+        /* La etiqueta va como `aria-label` y no como `<title>` dentro del SVG:
+           React 19 trata `<title>` como metadato del documento y lo iza al
+           `<head>`, y eso hacía que el servidor y el cliente armaran distinto
+           este subárbol. El error de hidratación tiraba abajo y regeneraba el
+           árbol entero en cada carga del resumen. Dice lo mismo. */
+        aria-label={`Ventas por sucursal de los últimos ${datos.length} meses. El detalle está en la tabla que sigue.`}
         className="overflow-visible"
         onMouseLeave={() => setActivo(null)}
       >
-        <title id={idTabla}>
-          Ventas por sucursal de los últimos {datos.length} meses. El detalle
-          está en la tabla que sigue.
-        </title>
 
         {/* Grilla y eje de valores */}
         {marcas.map((valor) => (

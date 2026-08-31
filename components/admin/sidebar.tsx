@@ -98,7 +98,7 @@ export function AdminSidebar({
     <>
       <Link
         href="/admin"
-        className="flex items-center gap-2.5 px-5 py-5"
+        className="flex items-center gap-2.5 px-[18px] pb-4 pt-[18px]"
         onClick={() => setAbierto(false)}
       >
         <Image
@@ -108,19 +108,19 @@ export function AdminSidebar({
           height={34}
           className="rounded-lg"
         />
-        <div className="leading-tight">
-          <p className="text-base font-semibold">Maderera JBJ</p>
-          <p className="text-sm text-muted-foreground">Panel de gestión</p>
+        <div className="leading-[1.25]">
+          <p className="text-[15px] font-semibold">Maderera JBJ</p>
+          <p className="text-[13px] text-texto-2">Panel de gestión</p>
         </div>
       </Link>
 
-      <nav className="flex-1 space-y-6 px-3 pb-4">
+      <nav className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-2.5 pb-3 pt-1">
         {secciones.map((seccion) => (
           <div key={seccion.titulo}>
-            <p className="px-2 pb-1.5 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+            <p className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-[0.09em] text-texto-3">
               {seccion.titulo}
             </p>
-            <div className="space-y-0.5">
+            <div className="flex flex-col gap-0.5">
               {seccion.items.map((item) => {
                 const activo =
                   item.href === "/admin"
@@ -133,10 +133,10 @@ export function AdminSidebar({
                     href={item.href}
                     onClick={() => setAbierto(false)}
                     aria-current={activo ? "page" : undefined}
-                    className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-base transition-colors ${
+                    className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[15px] transition-colors ${
                       activo
-                        ? "nav-activa bg-muted font-medium text-foreground"
-                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                        ? "nav-activa bg-card font-medium text-foreground shadow-[0_1px_2px_rgb(60_50_40_/_0.06)]"
+                        : "text-texto-2 hover:bg-hundida hover:text-foreground"
                     }`}
                   >
                     <item.icon
@@ -147,7 +147,7 @@ export function AdminSidebar({
                       item.contador === "whatsapp" &&
                       whatsappSinLeer > 0 && (
                         <span
-                          className="tabular ml-auto flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-green px-1.5 text-sm font-semibold text-white"
+                          className="tabular ml-auto flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-verde-whatsapp px-1.5 text-[13px] font-semibold text-white"
                           aria-label={`${whatsappSinLeer} conversaciones sin leer`}
                         >
                           {whatsappSinLeer}
@@ -167,10 +167,10 @@ export function AdminSidebar({
         href="/admin/ayuda"
         onClick={() => setAbierto(false)}
         aria-current={pathname.startsWith("/admin/ayuda") ? "page" : undefined}
-        className={`mx-3 mb-1 flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-base transition-colors ${
+        className={`mx-2.5 mb-1 flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[15px] transition-colors ${
           pathname.startsWith("/admin/ayuda")
-            ? "nav-activa bg-muted font-medium text-foreground"
-            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            ? "nav-activa bg-card font-medium text-foreground shadow-[0_1px_2px_rgb(60_50_40_/_0.06)]"
+            : "text-texto-2 hover:bg-hundida hover:text-foreground"
         }`}
       >
         <CircleQuestionMark
@@ -182,7 +182,7 @@ export function AdminSidebar({
       <Link
         href="/"
         target="_blank"
-        className="mx-3 mb-4 flex items-center justify-between rounded-lg px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        className="mx-2.5 mb-3 flex items-center justify-between rounded-lg px-2.5 py-2.5 text-sm text-texto-2 transition-colors hover:bg-hundida hover:text-foreground"
       >
         Ver el sitio público
         <ArrowUpRight className="h-4 w-4" />
@@ -193,7 +193,7 @@ export function AdminSidebar({
   return (
     <>
       {/* Escritorio */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r bg-sidebar lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-[244px] shrink-0 flex-col border-r border-linea bg-sidebar lg:flex">
         {contenido}
       </aside>
 
@@ -213,7 +213,7 @@ export function AdminSidebar({
             onClick={() => setAbierto(false)}
             aria-label="Cerrar menú"
           />
-          <aside className="relative flex h-full w-64 flex-col border-r bg-sidebar">
+          <aside className="relative flex h-full w-[244px] flex-col border-r border-linea bg-sidebar">
             <button
               onClick={() => setAbierto(false)}
               className="absolute right-3 top-4 rounded-lg p-1.5 text-muted-foreground hover:bg-muted"

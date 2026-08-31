@@ -6,6 +6,7 @@ import {
   ActivityBell,
   ActivityBellSkeleton,
 } from "@/components/admin/activity-bell";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { requireStaff } from "@/lib/dal/session";
 import { conversacionesSinLeer } from "@/lib/dal/admin/whatsapp";
 
@@ -39,20 +40,30 @@ export default async function AdminLayout({
     <div className="panel flex min-h-screen bg-background text-foreground">
       <AdminSidebar whatsappSinLeer={sinLeer} />
       <div className="flex min-h-screen flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b bg-background/85 px-4 backdrop-blur lg:px-8">
-          <div className="flex flex-1 items-center gap-3 pl-12 lg:pl-0">
+        <header className="sticky top-0 z-30 flex h-[60px] items-center gap-4 border-b border-linea bg-background/90 px-4 backdrop-blur-lg lg:px-7">
+          <div className="flex max-w-[420px] flex-1 items-center gap-3 pl-12 lg:pl-0">
             <BuscadorGlobal />
           </div>
-          <Suspense fallback={<ActivityBellSkeleton />}>
-            <ActivityBell />
-          </Suspense>
-          <MenuUsuario
-            nombre={usuario.name}
-            iniciales={iniciales(usuario.name)}
-            rol={etiquetaRol[usuario.staffRole!]}
-          />
+          <div className="ml-auto flex items-center gap-3.5">
+            {/* El interruptor de tema también acá: el único que había estaba en
+                el navbar público, así que quien entraba al panel en modo oscuro
+                no tenía desde dónde volver. */}
+            <ThemeToggle />
+            <Suspense fallback={<ActivityBellSkeleton />}>
+              <ActivityBell />
+            </Suspense>
+            <div className="border-l border-linea pl-3.5">
+              <MenuUsuario
+                nombre={usuario.name}
+                iniciales={iniciales(usuario.name)}
+                rol={etiquetaRol[usuario.staffRole!]}
+              />
+            </div>
+          </div>
         </header>
-        <main className="panel-fondo flex-1 px-4 py-8 lg:px-8">{children}</main>
+        <main className="panel-fondo flex-1 px-4 py-[26px] pb-10 lg:px-7">
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -302,7 +302,7 @@ export const ENTIDADES: DefinicionEntidad[] = [
         etiqueta: "Largo (mm)",
         tipo: "entero",
         alias: ["largo", "largomm", "longitud"],
-        ayuda: "Solo para que la calculadora de materiales pueda operar.",
+        ayuda: "Sale en la ficha técnica del producto, en Medidas disponibles.",
       },
       { clave: "anchoMm", etiqueta: "Ancho (mm)", tipo: "entero", alias: ["ancho", "anchomm"] },
       { clave: "espesorMm", etiqueta: "Espesor (mm)", tipo: "entero", alias: ["espesor", "espesormm", "alto", "altura"] },

@@ -31,6 +31,11 @@ export const metadata: Metadata = {
     "materiales construccion",
   ],
   alternates: { canonical: "/calculadora" },
+  /* Fuera del sitio: no está enlazada desde ninguna pantalla ni en el sitemap.
+     La ruta sigue viva para que no se rompa un enlace ya compartido, pero
+     `noindex` es lo que hace que efectivamente quede afuera: sin esto el
+     buscador la sigue mostrando y sería la única puerta de entrada. */
+  robots: { index: false, follow: true },
   openGraph: {
     title: "Calculadora de materiales",
     description:

@@ -28,7 +28,6 @@ const FIJAS: { ruta: string; prioridad: number; frecuencia: MetadataRoute.Sitema
   { ruta: "/catalogo", prioridad: 0.9, frecuencia: "daily" },
   { ruta: "/stock", prioridad: 0.8, frecuencia: "daily" },
   { ruta: "/sucursales", prioridad: 0.8, frecuencia: "monthly" },
-  { ruta: "/calculadora", prioridad: 0.7, frecuencia: "monthly" },
   { ruta: "/blog", prioridad: 0.7, frecuencia: "weekly" },
   { ruta: "/profesionales", prioridad: 0.7, frecuencia: "monthly" },
   { ruta: "/eventos", prioridad: 0.6, frecuencia: "weekly" },

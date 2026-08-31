@@ -165,12 +165,6 @@ export default async function NotaPage({
               >
                 Ver el catálogo
               </Link>
-              <Link
-                href="/calculadora"
-                className="inline-flex h-11 items-center rounded-lg border bg-white px-5 font-medium transition-colors hover:bg-muted"
-              >
-                Calcular materiales
-              </Link>
             </div>
           </div>
         </footer>

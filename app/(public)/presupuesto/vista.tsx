@@ -81,9 +81,6 @@ export function VistaPresupuesto({
                     Ver el catálogo
                   </Button>
                 </Link>
-                <Link href="/calculadora">
-                  <Button variant="outline">Calcular materiales</Button>
-                </Link>
               </div>
             </CardContent>
           </Card>

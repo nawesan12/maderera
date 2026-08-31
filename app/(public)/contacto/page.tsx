@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
 import {
-  Calculator,
   Clock,
   Mail,
   MapPin,
   MessageCircle,
   Package,
   Phone,
+  Scissors,
 } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { ajuste } from "@/lib/dal/contenido";
@@ -46,10 +46,10 @@ const ATAJOS = [
     detalle: "Armá la lista y te pasamos el precio con validez.",
   },
   {
-    href: "/calculadora",
-    icono: Calculator,
-    titulo: "Calcular materiales",
-    detalle: "Cuánta madera lleva un techo, un deck o un piso.",
+    href: "/presupuesto",
+    icono: Scissors,
+    titulo: "Pedir un corte a medida",
+    detalle: "Mandanos el despiece y lo cortamos en el aserradero.",
   },
   {
     href: "/stock",

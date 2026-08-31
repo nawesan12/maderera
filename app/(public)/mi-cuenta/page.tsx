@@ -1,10 +1,10 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Calculator,
   MessageCircle,
   PackageOpen,
   Receipt,
+  Scissors,
   ScrollText,
 } from "lucide-react";
 import { TarjetaPedido } from "@/components/cuenta/tarjeta-pedido";
@@ -276,10 +276,10 @@ function AccesosRapidos() {
       texto: "Todo el catálogo con precio y disponibilidad",
     },
     {
-      href: "/calculadora",
-      icono: Calculator,
-      titulo: "Calcular materiales",
-      texto: "Techos, decks, pisos y placas",
+      href: "/presupuesto",
+      icono: Scissors,
+      titulo: "Pedir un corte a medida",
+      texto: "Mandanos el despiece y lo cortamos en el aserradero",
     },
     {
       href: "/mi-cuenta/presupuestos",
@@ -326,7 +326,7 @@ function Bienvenida({ nombre }: { nombre: string }) {
           <Paso
             numero={1}
             titulo="Armá tu presupuesto"
-            texto="Sumá productos del catálogo o usá la calculadora de materiales."
+            texto="Sumá productos del catálogo o pedí un corte a medida."
           />
           <Paso
             numero={2}
@@ -349,11 +349,11 @@ function Bienvenida({ nombre }: { nombre: string }) {
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
-            href="/calculadora"
-            className="inline-flex h-11 items-center gap-2 rounded-lg border bg-white px-5 font-medium transition-colors hover:bg-muted"
+            href="/presupuesto"
+            className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea bg-card px-5 font-medium transition-colors hover:bg-sitio-alt"
           >
-            <Calculator className="h-4 w-4" />
-            Calcular materiales
+            <Scissors className="h-4 w-4" />
+            Pedir un corte a medida
           </Link>
         </div>
       </section>

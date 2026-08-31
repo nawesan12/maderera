@@ -33,16 +33,9 @@ export default async function MisPresupuestosPage() {
           Todavía no hay presupuestos
         </h1>
         <p className="mx-auto mt-1.5 max-w-sm text-muted-foreground">
-          Armá uno desde el catálogo o con la calculadora de materiales y te
-          pasamos el precio cerrado.
+          Armá uno desde el catálogo y te pasamos el precio cerrado.
         </p>
         <div className="mt-5 flex flex-wrap justify-center gap-3">
-          <Link
-            href="/calculadora"
-            className="inline-flex h-11 items-center rounded-lg bg-brand-orange px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
-          >
-            Calcular materiales
-          </Link>
           <Link
             href="/catalogo"
             className="inline-flex h-11 items-center rounded-lg border bg-white px-5 font-medium transition-colors hover:bg-muted"

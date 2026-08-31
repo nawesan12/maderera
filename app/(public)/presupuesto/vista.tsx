@@ -328,10 +328,10 @@ export function VistaPresupuesto({
                 lo dice el cartel de arriba de la lista. */}
             {!esProfesional && (
               <section className="rounded-xl border border-[#f5d9b8] bg-naranja-claro px-[18px] py-4 dark:border-brand-orange/25">
-                <p className="text-[14.5px] font-semibold text-acento-texto">
+                <p className="text-[14.5px] font-semibold text-acento-sobre-claro">
                   ¿Sos profesional?
                 </p>
-                <p className="mt-1.5 text-[13.5px] leading-normal text-acento-texto/85">
+                <p className="mt-1.5 text-[13.5px] leading-normal text-acento-sobre-claro">
                   Con cuenta habilitada este presupuesto sale con tu escala de
                   descuento aplicada.
                 </p>
@@ -362,7 +362,7 @@ function ChipOrigen({ origen }: { origen: string }) {
           : "A medida";
 
   return (
-    <span className="mt-1.5 inline-flex items-center rounded-md bg-naranja-claro px-2 py-0.5 text-[11.5px] font-medium text-acento-texto">
+    <span className="mt-1.5 inline-flex items-center rounded-md bg-naranja-claro px-2 py-0.5 text-[11.5px] font-medium text-acento-sobre-claro">
       {texto}
     </span>
   );

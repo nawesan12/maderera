@@ -84,6 +84,7 @@
   --color-accion: var(--accion);
   --color-accion-hover: var(--accion-hover);
   --color-acento-texto: var(--acento-texto);
+  --color-acento-sobre-claro: var(--acento-sobre-claro);
 }
 
 :root {
@@ -162,6 +163,10 @@
      claro coinciden; en oscuro no pueden: el tono que deja leer el blanco
      encima del botón (4.61:1) se queda en 4.08:1 como texto sobre la tarjeta. */
   --acento-texto: oklch(0.58 0.19 45);
+  /* Y un tercero, para cuando el naranja es texto **sobre** el naranja claro.
+     `--acento-texto` ahí da 3.95:1: está calculado contra blanco, y #fdeada no
+     es blanco. Este es el que trae la propia banda en su paleta de estados. */
+  --acento-sobre-claro: #a8480a;
 
   /* Saldo de cuenta corriente: el número no decía de qué lado estaba. */
   --saldo-debe: #b3261e;
@@ -236,6 +241,7 @@
   --accion-hover: oklch(0.50 0.18 42);
   /* Como texto sí hace falta aclararlo, o no llega sobre el fondo oscuro. */
   --acento-texto: oklch(0.63 0.15 48);
+  --acento-sobre-claro: oklch(0.705 0.12 50);
 
   --saldo-debe: oklch(0.68 0.18 28);
   --saldo-favor: oklch(0.68 0.14 150);

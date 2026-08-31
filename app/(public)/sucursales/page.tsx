@@ -128,13 +128,20 @@ export default async function SucursalesPage() {
                   )}
 
                   <div className="relative p-6 lg:p-8">
+                    {/* La tinta cambia con la sucursal porque el color de fondo
+                        cambia: sobre el naranja de Casa Central el blanco da
+                        3.08:1 y el texto oscuro 5.07:1; sobre el azul del
+                        Aserradero es al revés. Así la píldora conserva el color
+                        real de cada una en vez de inventarle otro. */}
                     <span
-                      className="inline-block rounded-full px-4 py-2 text-lg font-bold tracking-[-0.01em] text-white"
+                      className="inline-block rounded-full px-4 py-2 text-lg font-bold tracking-[-0.01em]"
                       style={{
                         backgroundColor:
                           sucursal.slug === "aserradero"
                             ? "var(--sucursal-aserradero)"
                             : "var(--sucursal-central)",
+                        color:
+                          sucursal.slug === "aserradero" ? "#fff" : "#26231f",
                       }}
                     >
                       {sucursal.nombre}

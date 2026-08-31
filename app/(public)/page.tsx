@@ -336,7 +336,7 @@ function BannerProfesionales({
       <div className="contenedor">
         <div className="grid gap-[18px] lg:grid-cols-2">
           <article className="overflow-hidden rounded-2xl border border-linea bg-sitio-alt px-8 py-8 sm:px-[34px]">
-            <span className="inline-block rounded-full bg-naranja-claro px-[11px] py-[5px] text-xs font-bold uppercase tracking-[0.08em] text-acento-texto">
+            <span className="inline-block rounded-full bg-naranja-claro px-[11px] py-[5px] text-xs font-bold uppercase tracking-[0.08em] text-acento-sobre-claro">
               Portal profesionales
             </span>
             <h3 className="mt-3.5 text-[26px] font-bold tracking-[-0.025em]">
@@ -385,7 +385,7 @@ function BannerProfesionales({
               />
             ) : (
               <div
-                className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,#e7dccd_0_9px,#ded1bf_9px_18px)]"
+                className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,#e7dccd_0_9px,#ded1bf_9px_18px)] dark:bg-[repeating-linear-gradient(-45deg,#3a352f_0_9px,#332f29_9px_18px)]"
                 aria-hidden="true"
               />
             )}

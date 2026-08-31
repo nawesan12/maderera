@@ -3,6 +3,9 @@ import "server-only";
 import { cache } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { inicioDelRol, type RolStaff } from "@/lib/roles";
+
+export { inicioDelRol, type RolStaff };
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -27,7 +30,7 @@ export interface SessionUser {
   name: string;
   email: string;
   role: "cliente" | "profesional" | "staff";
-  staffRole: "admin" | "vendedor" | "deposito" | null;
+  staffRole: RolStaff | null;
   priceListId: string | null;
 }
 
@@ -75,10 +78,10 @@ export const requireStaff = cache(async (): Promise<SessionUser> => {
 /** Exige un rol concreto dentro del panel. */
 export const requireStaffRole = cache(
   async (
-    ...allowed: ReadonlyArray<"admin" | "vendedor" | "deposito">
+    ...allowed: ReadonlyArray<RolStaff>
   ): Promise<SessionUser> => {
     const session = await requireStaff();
-    if (!allowed.includes(session.staffRole!)) redirect("/admin");
+    if (!allowed.includes(session.staffRole!)) redirect(inicioDelRol(session.staffRole));
     return session;
   },
 );

@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/sidebar";
 import { BuscadorGlobal } from "@/components/admin/buscador-global";
 import { MenuUsuario } from "@/components/admin/menu-usuario";
@@ -24,6 +26,7 @@ const etiquetaRol = {
   admin: "Administración",
   vendedor: "Ventas",
   deposito: "Depósito",
+  aserradero: "Aserradero",
 } as const;
 
 export default async function AdminLayout({
@@ -34,11 +37,25 @@ export default async function AdminLayout({
   // El proxy ya filtró a quien no tiene cookie, pero esta es la verificación que
   // cuenta: valida la sesión contra la base y exige rol de staff.
   const usuario = await requireStaff();
+
+  /*
+   * El aserradero tiene su propia pantalla y no navega el panel, con una
+   * excepción: todo lo que cuelga de `/admin/cortes` sí es suyo —la ficha de un
+   * trabajo y la pantalla de formato para la máquina—. Justamente el formato se
+   * ajusta a prueba y error parado frente a la seccionadora, así que dejarlo
+   * afuera de eso sería trabarlo en la única tarea para la que esa pantalla
+   * existe.
+   */
+  if (usuario.staffRole === "aserradero") {
+    const ruta = (await headers()).get("x-ruta") ?? "";
+    if (!ruta.startsWith("/admin/cortes")) redirect("/taller");
+  }
+
   const sinLeer = await conversacionesSinLeer();
 
   return (
     <div className="panel flex min-h-screen bg-background text-foreground">
-      <AdminSidebar whatsappSinLeer={sinLeer} />
+      <AdminSidebar whatsappSinLeer={sinLeer} rol={usuario.staffRole} />
       {/* `min-w-0` no es decorativo: sin él este hijo de flex no baja del ancho
           de su contenido, así que el `overflow-x` del tablero no recorta nada y
           el documento entero se estira. Con el menú lateral fijo y la barra

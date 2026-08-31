@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import { inicioDelRol, type RolStaff } from "@/lib/roles";
 import {
   ArrowUpRight,
   BookOpen,
@@ -43,61 +45,98 @@ import {
  * no se ve desde ninguna otra pantalla y el cliente está del otro lado
  * esperando. Ese contador sale de la base, no de una constante.
  */
-const secciones = [
+interface ItemNav {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  /** El único contador del menú; sale de la base. */
+  contador?: "whatsapp";
+  /** Quién ve esta sección. Sin declarar, la ven todos. */
+  roles?: readonly RolStaff[];
+}
+
+const secciones: { titulo: string; items: ItemNav[] }[] = [
   {
     titulo: "Operación",
     items: [
-      { href: "/admin", icon: LayoutDashboard, label: "Resumen" },
-      { href: "/admin/pedidos", icon: Truck, label: "Pedidos" },
+      { href: "/admin", icon: LayoutDashboard, label: "Resumen", roles: ["admin", "vendedor", "deposito"] },
+      { href: "/admin/pedidos", icon: Truck, label: "Pedidos", roles: ["admin", "vendedor", "deposito"] },
       {
         href: "/admin/whatsapp",
         icon: MessageCircle,
         label: "WhatsApp",
         contador: "whatsapp" as const,
+        roles: ["admin", "vendedor"],
       },
-      { href: "/admin/presupuestos", icon: ClipboardList, label: "Presupuestos" },
+      {
+        href: "/admin/presupuestos",
+        icon: ClipboardList,
+        label: "Presupuestos",
+        roles: ["admin", "vendedor"],
+      },
       { href: "/admin/cortes", icon: Scissors, label: "Cortes" },
     ],
   },
   {
     titulo: "Catálogo",
     items: [
-      { href: "/admin/productos", icon: Boxes, label: "Productos" },
-      { href: "/admin/stock", icon: Package, label: "Stock" },
-      { href: "/admin/precios", icon: Tags, label: "Precios" },
+      { href: "/admin/productos", icon: Boxes, label: "Productos", roles: ["admin", "vendedor"] },
+      { href: "/admin/stock", icon: Package, label: "Stock", roles: ["admin", "vendedor", "deposito"] },
+      { href: "/admin/precios", icon: Tags, label: "Precios", roles: ["admin"] },
     ],
   },
   {
     titulo: "Administración",
     items: [
-      { href: "/admin/clientes", icon: Users, label: "Clientes" },
-      { href: "/admin/profesionales", icon: HardHat, label: "Profesionales" },
-      { href: "/admin/documentacion", icon: BookOpen, label: "Documentación" },
-      { href: "/admin/contenido", icon: Newspaper, label: "Contenido" },
-      { href: "/admin/eventos", icon: CalendarDays, label: "Eventos" },
-      { href: "/admin/pagos", icon: Wallet, label: "Cobros" },
-      { href: "/admin/facturacion", icon: FileText, label: "Facturación" },
-      { href: "/admin/arca", icon: Landmark, label: "ARCA" },
-      { href: "/admin/avisos", icon: Mail, label: "Avisos" },
-      { href: "/admin/sucursales", icon: Building2, label: "Sucursales" },
-      { href: "/admin/migracion", icon: DatabaseZap, label: "Migración" },
-      { href: "/admin/bitacora", icon: History, label: "Bitácora" },
+      { href: "/admin/clientes", icon: Users, label: "Clientes", roles: ["admin", "vendedor"] },
+      { href: "/admin/profesionales", icon: HardHat, label: "Profesionales", roles: ["admin", "vendedor"] },
+      { href: "/admin/documentacion", icon: BookOpen, label: "Documentación", roles: ["admin", "vendedor"] },
+      { href: "/admin/contenido", icon: Newspaper, label: "Contenido", roles: ["admin"] },
+      { href: "/admin/eventos", icon: CalendarDays, label: "Eventos", roles: ["admin", "vendedor"] },
+      { href: "/admin/pagos", icon: Wallet, label: "Cobros", roles: ["admin"] },
+      { href: "/admin/facturacion", icon: FileText, label: "Facturación", roles: ["admin"] },
+      { href: "/admin/arca", icon: Landmark, label: "ARCA", roles: ["admin"] },
+      { href: "/admin/avisos", icon: Mail, label: "Avisos", roles: ["admin"] },
+      { href: "/admin/sucursales", icon: Building2, label: "Sucursales", roles: ["admin"] },
+      { href: "/admin/migracion", icon: DatabaseZap, label: "Migración", roles: ["admin"] },
+      { href: "/admin/bitacora", icon: History, label: "Bitácora", roles: ["admin"] },
     ],
   },
 ];
 
 export function AdminSidebar({
   whatsappSinLeer = 0,
+  rol,
 }: {
   whatsappSinLeer?: number;
+  /** Qué secciones se muestran. Sin rol, se muestran todas. */
+  rol?: RolStaff | null;
 }) {
   const pathname = usePathname();
   const [abierto, setAbierto] = useState(false);
 
+  /**
+   * El menú se acota por rol.
+   *
+   * No reemplaza al control de acceso —cada acción sigue validando la sesión en
+   * el servidor—, pero es lo que hace que quien opera la seccionadora no tenga
+   * a la vista Cobros, Precios ni Migración. Un menú con veinte secciones de
+   * las que solo tres son suyas no es un problema de permisos: es que no
+   * encuentra la que necesita.
+   */
+  const visibles = secciones
+    .map((seccion) => ({
+      ...seccion,
+      items: seccion.items.filter(
+        (item) => !item.roles || !rol || item.roles.includes(rol),
+      ),
+    }))
+    .filter((seccion) => seccion.items.length > 0);
+
   const contenido = (
     <>
       <Link
-        href="/admin"
+        href={inicioDelRol(rol ?? null)}
         className="flex items-center gap-2.5 px-[18px] pb-4 pt-[18px]"
         onClick={() => setAbierto(false)}
       >
@@ -115,7 +154,7 @@ export function AdminSidebar({
       </Link>
 
       <nav className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-2.5 pb-3 pt-1">
-        {secciones.map((seccion) => (
+        {visibles.map((seccion) => (
           <div key={seccion.titulo}>
             <p className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-[0.09em] text-texto-3">
               {seccion.titulo}

@@ -58,6 +58,32 @@
   --color-brand-cream: oklch(0.97 0.01 80);
   --color-brand-wood: oklch(0.45 0.08 65);
   --color-brand-wood-light: oklch(0.85 0.04 75);
+
+  /* Paleta de la banda de diseño. Se registran como colores del tema para poder
+     escribirlas como `bg-chip` o `border-linea` en vez de arrastrar el valor
+     crudo por los componentes: el valor vive en un solo lado y tiene su par
+     oscuro, que es lo que el prototipo no trae. */
+  --color-sitio-fondo: var(--sitio-fondo);
+  --color-sitio-alt: var(--sitio-fondo-alt);
+  --color-oscuro-marca: var(--oscuro-marca);
+  --color-hundida: var(--hundida);
+  --color-chip: var(--chip);
+  --color-linea: var(--linea);
+  --color-linea-suave: var(--linea-suave);
+  --color-linea-tenue: var(--linea-tenue);
+  --color-linea-hover: var(--linea-hover);
+  --color-texto-2: var(--texto-2);
+  --color-texto-3: var(--texto-3);
+  --color-naranja-claro: var(--naranja-claro);
+  --color-naranja-tenue: var(--naranja-tenue);
+  --color-verde-whatsapp: var(--verde-whatsapp);
+  --color-rojo-oferta: var(--rojo-oferta);
+  --color-saldo-debe: var(--saldo-debe);
+  --color-saldo-favor: var(--saldo-favor);
+  --color-saldo-cero: var(--saldo-cero);
+  --color-accion: var(--accion);
+  --color-accion-hover: var(--accion-hover);
+  --color-acento-texto: var(--acento-texto);
 }
 
 :root {
@@ -93,6 +119,54 @@
   --sidebar-accent-foreground: oklch(0.15 0.01 60);
   --sidebar-border: oklch(0.90 0.01 75);
   --sidebar-ring: oklch(0.68 0.19 48);
+
+  /* ---- Banda de diseño ---------------------------------------------------
+     Superficies planas y líneas visibles. El prototipo las trae como
+     hexadecimales sueltos y sin modo oscuro; acá entran una sola vez, con su
+     par en `.dark`, porque el tema es real: lo aplica un script en el `<head>`
+     antes del primer pintado y lo alterna el botón del navbar. */
+  --sitio-fondo: #ffffff;
+  /* La barra principal es traslúcida con desenfoque detrás. Va como token y no
+     como `bg-white/95` porque en oscuro el blanco no sirve. */
+  --chrome-fondo: rgb(255 255 255 / 0.95);
+  --sitio-fondo-alt: #faf7f2;
+  --oscuro-marca: #26231f;
+  --panel-fondo: #f3f2ef;
+  --hundida: #efedea;
+  --chip: #f4f1eb;
+
+  --linea: #dcd9d3;
+  --linea-suave: #e8e5e0;
+  --linea-tenue: #f2eee7;
+  --linea-hover: #dcd2c4;
+
+  --texto-2: #6b6660;
+  /* La banda lo pide en #8a7f72, que da 3.92:1 sobre blanco y 3.67:1 sobre el
+     fondo alterno — por debajo del mínimo, y no es texto decorativo: son las
+     bajadas del menú, el "desde", el precio tachado y el neto legal. Este es el
+     mismo tono un escalón más oscuro: 4.52:1 en el peor de los dos fondos. */
+  --texto-3: oklch(0.552 0.022 70);
+
+  --naranja-claro: #fdeada;
+  --naranja-tenue: #fdf5ec;
+  --verde-whatsapp: #2f7d4f;
+  --rojo-oferta: #a52a1a;
+
+  /* El naranja de marca sobre blanco da 3.08:1, insuficiente para texto. Los
+     botones usan este otro, que llega a 4.59:1 y se sigue leyendo como el mismo
+     color. Vive acá y no dentro de `.panel` porque el sitio público también lo
+     necesita: la CTA "Pedir Presupuesto" es este naranja, no el de marca. */
+  --accion: oklch(0.58 0.19 45);
+  --accion-hover: oklch(0.50 0.18 42);
+  /* El mismo naranja cuando se usa como texto y no como fondo de botón. En
+     claro coinciden; en oscuro no pueden: el tono que deja leer el blanco
+     encima del botón (4.61:1) se queda en 4.08:1 como texto sobre la tarjeta. */
+  --acento-texto: oklch(0.58 0.19 45);
+
+  /* Saldo de cuenta corriente: el número no decía de qué lado estaba. */
+  --saldo-debe: #b3261e;
+  --saldo-favor: #186b39;
+  --saldo-cero: #5c564e;
 }
 
 .dark {
@@ -127,6 +201,45 @@
   --sidebar-accent-foreground: oklch(0.96 0.005 80);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.68 0.19 48);
+
+  /* ---- Banda de diseño, en oscuro ----------------------------------------
+     Derivadas: el paquete de diseño es solo modo claro. Se respeta el rol de
+     cada token, no su valor —una superficie hundida sigue hundida— y las
+     líneas pasan a blanco translúcido, que es como ya funciona `--border`.
+     `--oscuro-marca` no se invierte: la barra superior y el pie son oscuros en
+     los dos temas a propósito. */
+  --sitio-fondo: oklch(0.18 0.01 60);
+  --chrome-fondo: oklch(0.18 0.01 60 / 0.95);
+  --sitio-fondo-alt: oklch(0.21 0.01 60);
+  --oscuro-marca: #26231f;
+  --panel-fondo: oklch(0.13 0.01 60);
+  --hundida: oklch(0.155 0.01 60);
+  --chip: oklch(0.25 0.01 60);
+
+  --linea: oklch(1 0 0 / 14%);
+  --linea-suave: oklch(1 0 0 / 10%);
+  --linea-tenue: oklch(1 0 0 / 7%);
+  --linea-hover: oklch(1 0 0 / 22%);
+
+  --texto-2: oklch(0.74 0.01 60);
+  --texto-3: oklch(0.62 0.012 65);
+
+  --naranja-claro: oklch(0.32 0.06 45);
+  --naranja-tenue: oklch(0.26 0.035 45);
+  --verde-whatsapp: oklch(0.64 0.12 150);
+  --rojo-oferta: oklch(0.64 0.17 30);
+
+  /* El fondo del botón no se aclara: el naranja de modo claro es el que deja
+     el texto blanco en 4.61:1, y subirlo lo tira a 3.09:1. Contra la tarjeta
+     oscura el botón igual se separa en 4.08:1. */
+  --accion: oklch(0.58 0.19 45);
+  --accion-hover: oklch(0.50 0.18 42);
+  /* Como texto sí hace falta aclararlo, o no llega sobre el fondo oscuro. */
+  --acento-texto: oklch(0.63 0.15 48);
+
+  --saldo-debe: oklch(0.68 0.18 28);
+  --saldo-favor: oklch(0.68 0.14 150);
+  --saldo-cero: oklch(0.68 0.01 60);
 }
 
 @layer base {
@@ -223,42 +336,36 @@ input::placeholder, textarea::placeholder {
   /* El gris de texto secundario llega a 8.8:1 sobre el fondo del panel. */
   --muted-foreground: oklch(0.40 0.012 60);
 
+  /* Radio corto: lectura más corporativa en una herramienta de trabajo. Pisa
+     `--radius` local, así que arrastra también a las utilidades de Tailwind
+     que lo derivan (`rounded-lg` y compañía) dentro del panel. */
+  --radius: 0.5rem;
+
   /* Bordes visibles: el token general queda en 1.35:1 sobre blanco, que a
-     efectos prácticos es invisible y hace que todo se sienta plano. */
+     efectos prácticos es invisible y hace que todo se sienta plano.
+     El `--linea` de la banda (#dcd9d3) da 1.38:1, o sea lo mismo, así que acá
+     adentro se conserva el valor medido: el panel lo usa gente que no ve de
+     cerca y es el único lugar donde eso se midió. En el sitio público, donde
+     la tarjeta además lleva sombra, vale el de la banda. */
   --linea: oklch(0.80 0.012 70);
   --linea-suave: oklch(0.88 0.01 72);
-
-  /* El naranja de marca sobre blanco da 3.08:1, insuficiente para texto. Los
-     botones usan este otro, que llega a 4.59:1 y se sigue leyendo como el
-     mismo color. */
-  --accion: oklch(0.58 0.19 45);
-  --accion-hover: oklch(0.50 0.18 42);
 }
 
-/* Fondo del panel: papel con grano y una veta apenas insinuada, para que las
-   tarjetas se apoyen sobre algo en lugar de flotar sobre un plano vacío. */
+/* En oscuro la línea no puede ser un gris claro fijo: sobre el fondo del panel
+   se convierte en un trazo brillante. Va translúcida, como `--border`. */
+.dark .panel {
+  --linea: oklch(1 0 0 / 18%);
+  --linea-suave: oklch(1 0 0 / 12%);
+}
+
+/* Fondo del panel: plano.
+
+   Antes llevaba grano, veta y dos degradados radiales para que las tarjetas se
+   apoyaran sobre algo. La banda lo baja a un plano liso porque la textura
+   competía con los datos: la jerarquía la dan las superficies, no el fondo. */
 .panel-fondo {
   position: relative;
-  background-color: var(--background);
-  background-image:
-    radial-gradient(
-      1100px 420px at 8% -8%,
-      oklch(0.68 0.19 48 / 0.05),
-      transparent 62%
-    ),
-    radial-gradient(
-      900px 500px at 100% 0%,
-      oklch(0.48 0.13 250 / 0.035),
-      transparent 60%
-    ),
-    repeating-linear-gradient(
-      180deg,
-      oklch(0.45 0.08 65 / 0.022) 0px,
-      oklch(0.45 0.08 65 / 0.022) 1px,
-      transparent 1px,
-      transparent 7px
-    ),
-    url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  background-color: var(--panel-fondo);
 }
 
 /* ---- Niveles de superficie ------------------------------------------------ */
@@ -266,52 +373,40 @@ input::placeholder, textarea::placeholder {
 /* Nivel 1 — contenido principal. Se levanta del fondo. */
 .tarjeta {
   background-color: var(--card);
-  border-radius: 0.875rem;
-  box-shadow:
-    0 0 0 1px var(--linea),
-    0 1px 2px oklch(0.3 0.02 60 / 0.05),
-    0 4px 12px -8px oklch(0.3 0.02 60 / 0.12);
+  border-radius: 0.5rem;
+  border: 1px solid var(--linea);
+  box-shadow: 0 1px 2px rgb(60 50 40 / 0.05);
   transition:
-    box-shadow 180ms ease,
-    transform 180ms ease;
+    box-shadow 220ms ease,
+    transform 220ms ease,
+    border-color 220ms ease;
 }
 
 /* Nivel 0 — auxiliar. Se hunde de verdad: la sombra interior desde arriba es lo
    que hace leer el plano por debajo del resto. Solo bajarle el tono lo deja
    gris, no hundido. */
 .tarjeta-hundida {
-  background-color: oklch(0.955 0.007 78);
-  border-radius: 0.875rem;
-  box-shadow:
-    inset 0 2px 5px oklch(0.35 0.02 60 / 0.09),
-    inset 0 1px 1px oklch(0.35 0.02 60 / 0.06),
-    inset 0 0 0 1px oklch(0.86 0.012 72);
+  background-color: var(--hundida);
+  border-radius: 0.5rem;
+  box-shadow: inset 0 2px 5px rgb(60 50 40 / 0.06);
 }
 
 /* Nivel 2 — pide una decisión. El borde de acento la separa del resto. */
 .tarjeta-atencion {
   background-color: var(--card);
-  border-radius: 0.875rem;
-  box-shadow:
-    0 0 0 1.5px oklch(0.68 0.19 48 / 0.45),
-    0 2px 4px oklch(0.68 0.19 48 / 0.08),
-    0 8px 20px -10px oklch(0.5 0.12 50 / 0.22);
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 1.5px rgb(240 115 22 / 0.45);
 }
 
 .tarjeta-activa:hover {
-  box-shadow:
-    0 0 0 1.5px oklch(0.68 0.19 48 / 0.45),
-    0 6px 18px -6px oklch(0.3 0.03 60 / 0.16);
-  transform: translateY(-1px);
+  box-shadow: 0 14px 30px -16px rgb(60 50 40 / 0.34);
+  border-color: var(--linea-hover);
+  transform: translateY(-3px);
 }
 
 /* Encabezado de una tarjeta: separa el título del contenido sin una línea dura. */
 .tarjeta-cabecera {
-  background-image: linear-gradient(
-    to bottom,
-    oklch(0.975 0.006 78),
-    transparent
-  );
+  background-image: linear-gradient(to bottom, var(--hundida), transparent);
   border-bottom: 1px solid var(--linea-suave);
 }
 
@@ -359,8 +454,12 @@ input::placeholder, textarea::placeholder {
   min-height: 2.5rem;
 }
 
+/* El `!important` no es capricho: la regla general de arriba
+   (`input, textarea, select { font-size: 15px !important }`) lo lleva, y sin
+   esto le gana por origen sin importar la especificidad. Los 16px del panel
+   estaban escritos pero nunca se aplicaban. */
 .panel :is(input, textarea, select) {
-  font-size: 1rem;
+  font-size: 1rem !important;
 }
 
 /* Barra de acento del ítem activo del menú. */

@@ -10,14 +10,21 @@ import { moneda } from "@/lib/formato";
  *
  * Sale de la misma función que usa la facturación, así que el neto que se
  * informa acá es exactamente el que después aparece en la factura.
+ *
+ * `compacto` es la variante de la tarjeta del catálogo, donde el dato compite
+ * por lugar con el precio. El diseño lo pedía a 8,5px; va a 10,5px, que es el
+ * piso en el que un dato obligatorio se sigue leyendo. A 8,5px la línea existe
+ * pero no cumple: informar es poder leerlo.
  */
 export function PrecioSinImpuestos({
   precioFinal,
   alicuota = 21,
+  compacto = false,
   className = "",
 }: {
   precioFinal: number | null;
   alicuota?: number;
+  compacto?: boolean;
   className?: string;
 }) {
   if (!precioFinal || precioFinal <= 0) return null;
@@ -25,7 +32,13 @@ export function PrecioSinImpuestos({
   const neto = sinImpuestosNacionales(precioFinal, alicuota);
 
   return (
-    <p className={`text-xs leading-tight text-muted-foreground ${className}`}>
+    <p
+      className={`leading-tight text-texto-3 ${
+        compacto
+          ? "overflow-hidden text-ellipsis whitespace-nowrap text-[10.5px]"
+          : "text-xs"
+      } ${className}`}
+    >
       Sin impuestos nacionales:{" "}
       <span className="tabular">{moneda.format(neto)}</span>
     </p>

@@ -93,7 +93,7 @@ export function CompositorPlantilla({
       </div>
 
       {plantillas.length === 0 ? (
-        <p className="rounded-lg bg-amber-50 px-3 py-2.5 text-base text-amber-900">
+        <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3 py-2.5 text-base text-[var(--estado-tinta)]">
           No hay plantillas aprobadas todavía. Hay que cargarlas en Meta y
           esperar la aprobación.
         </p>
@@ -135,7 +135,7 @@ export function CompositorPlantilla({
           {estado.error && (
             <p
               role="alert"
-              className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-base text-red-800"
+              className="estado-problema flex items-start gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base text-[var(--estado-tinta)]"
             >
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
               {estado.error}

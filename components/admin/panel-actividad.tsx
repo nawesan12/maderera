@@ -50,13 +50,21 @@ const ICONOS: Record<string, LucideIcon> = {
   sucursal: Building2,
 };
 
+/**
+ * El color del icono según de qué es el evento.
+ *
+ * Sale de las mismas familias que los estados en vez de tonos sueltos de
+ * Tailwind: así tiene su variante en modo oscuro sin repetir la paleta, y un
+ * evento de stock se ve del mismo color que un estado con problema, que es lo
+ * que efectivamente es.
+ */
 const COLORES: Record<string, string> = {
-  pedido: "bg-brand-orange/12 text-brand-orange",
-  presupuesto: "bg-blue-500/10 text-blue-700",
-  corte: "bg-amber-500/10 text-amber-700",
-  cliente: "bg-green-500/10 text-green-700",
-  precio: "bg-purple-500/10 text-purple-700",
-  stock: "bg-red-500/10 text-red-700",
+  pedido: "estado-marca bg-[var(--estado-fondo)] text-[var(--estado-tinta)]",
+  presupuesto: "estado-info bg-[var(--estado-fondo)] text-[var(--estado-tinta)]",
+  corte: "estado-espera bg-[var(--estado-fondo)] text-[var(--estado-tinta)]",
+  cliente: "estado-ok bg-[var(--estado-fondo)] text-[var(--estado-tinta)]",
+  precio: "estado-cerrado bg-[var(--estado-fondo)] text-[var(--estado-tinta)]",
+  stock: "estado-problema bg-[var(--estado-fondo)] text-[var(--estado-tinta)]",
 };
 
 export function PanelDeActividad({ eventos }: { eventos: EventoDeActividad[] }) {

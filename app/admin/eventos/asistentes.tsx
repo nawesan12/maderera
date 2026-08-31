@@ -9,9 +9,18 @@ import type { Asistente } from "@/lib/dal/admin/eventos";
 const inicial: EstadoEvento = {};
 
 const ESTADOS: Record<string, { texto: string; clase: string }> = {
-  reservada: { texto: "Sin pagar", clase: "bg-amber-100 text-amber-900" },
-  confirmada: { texto: "Confirmado", clase: "bg-green-100 text-green-900" },
-  asistio: { texto: "Vino", clase: "bg-green-100 text-green-900" },
+  reservada: {
+    texto: "Sin pagar",
+    clase: "estado-espera bg-[var(--estado-fondo)] text-[var(--estado-tinta)]",
+  },
+  confirmada: {
+    texto: "Confirmado",
+    clase: "estado-ok bg-[var(--estado-fondo)] text-[var(--estado-tinta)]",
+  },
+  asistio: {
+    texto: "Vino",
+    clase: "estado-ok bg-[var(--estado-fondo)] text-[var(--estado-tinta)]",
+  },
   ausente: { texto: "No vino", clase: "bg-muted text-muted-foreground" },
   cancelada: {
     texto: "Cancelada",

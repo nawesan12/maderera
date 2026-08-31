@@ -215,7 +215,7 @@ export function FormularioFacturaManual({
                       : previas.filter((_, indice) => indice !== i),
                   )
                 }
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-700"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                 aria-label={`Quitar el ítem ${i + 1}`}
               >
                 <Trash2 className="h-5 w-5" />
@@ -280,7 +280,7 @@ export function FormularioFacturaManual({
       {estado.error && (
         <p
           role="alert"
-          className="flex items-center gap-2 rounded-lg bg-red-50 px-3.5 py-2.5 text-base text-red-800"
+          className="estado-problema flex items-center gap-2 rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base text-[var(--estado-tinta)]"
         >
           <AlertCircle className="h-5 w-5 shrink-0" />
           {estado.error}

@@ -21,27 +21,25 @@ export function GrupoListado({
   if (cantidad === 0) return null;
 
   return (
-    <section className="mt-6">
-      <div className="mb-2.5 flex flex-wrap items-baseline gap-2.5">
+    <section className="mt-[22px]">
+      <div className="mb-[11px] flex flex-wrap items-baseline gap-2.5">
         <h2
-          className={`text-base font-semibold ${
-            destacado ? "" : "text-muted-foreground"
+          className={`text-[17px] font-semibold tracking-[-0.015em] ${
+            destacado ? "" : "text-texto-2"
           }`}
         >
           {titulo}
         </h2>
         <span
-          className={`tabular rounded-full px-2 py-0.5 text-sm font-medium ${
+          className={`tabular rounded-full px-2.5 py-0.5 text-[13px] font-semibold ${
             destacado
-              ? "bg-brand-orange/15 text-brand-orange-dark"
-              : "bg-muted text-muted-foreground"
+              ? "bg-brand-orange/15 text-brand-orange-dark dark:text-acento-texto"
+              : "bg-chip text-texto-2"
           }`}
         >
           {cantidad}
         </span>
-        {detalle && (
-          <span className="text-base text-muted-foreground">{detalle}</span>
-        )}
+        {detalle && <span className="text-sm text-texto-2">{detalle}</span>}
       </div>
       <div className="space-y-3">{children}</div>
     </section>

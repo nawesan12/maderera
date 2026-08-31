@@ -64,7 +64,7 @@ export default async function FichaPedidoPage({
             </h1>
             <EtiquetaEstado estado={pedido.estado} />
             {pedido.estadoPago !== "pagado" && (
-              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-sm font-medium text-amber-900">
+              <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]">
                 Sin cobrar
               </span>
             )}

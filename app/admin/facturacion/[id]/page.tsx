@@ -120,7 +120,7 @@ export default async function FichaComprobantePage({
 
       {/* Estado fiscal: es lo primero que hay que saber del comprobante */}
       {comprobante.cae ? (
-        <section className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-green-300 bg-green-50 px-5 py-3.5">
+        <section className="estado-ok flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-[var(--estado-tinta)]/30 bg-[var(--estado-fondo)] px-5 py-3.5">
           <ShieldCheck className="h-5 w-5 shrink-0 text-green-700" />
           <p className="text-base text-green-900">
             Autorizada por ARCA · <span className="tabular">CAE {comprobante.cae}</span>

@@ -140,10 +140,10 @@ function Tarjeta({
               <span
                 className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium ${
                   p.plazo.vencido
-                    ? "bg-red-100 text-red-900"
+                    ? "estado-problema bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
                     : p.plazo.urgente
                       ? "bg-brand-orange/15 text-brand-orange-dark"
-                      : "bg-blue-100 text-blue-900"
+                      : "estado-info bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
                 }`}
               >
                 <Timer className="h-4 w-4" />

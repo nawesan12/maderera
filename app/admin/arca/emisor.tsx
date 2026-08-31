@@ -186,7 +186,7 @@ export function FormularioEmisor({ emisor }: { emisor: DatosEmisor }) {
       {estado.error && (
         <p
           role="alert"
-          className="flex items-center gap-2 rounded-lg bg-red-50 px-3.5 py-2.5 text-base text-red-800"
+          className="estado-problema flex items-center gap-2 rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base text-[var(--estado-tinta)]"
         >
           <AlertCircle className="h-5 w-5 shrink-0" />
           {estado.error}
@@ -195,7 +195,7 @@ export function FormularioEmisor({ emisor }: { emisor: DatosEmisor }) {
       {estado.ok && (
         <p
           role="status"
-          className="flex items-center gap-2 rounded-lg bg-green-50 px-3.5 py-2.5 text-base text-green-900"
+          className="estado-ok flex items-center gap-2 rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base text-[var(--estado-tinta)]"
         >
           <Check className="h-5 w-5 shrink-0" />
           {estado.ok}

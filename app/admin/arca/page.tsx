@@ -363,7 +363,9 @@ function Paso({
     <li className="flex gap-3">
       <span
         className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-          hecho ? "bg-green-100 text-green-800" : "bg-muted text-muted-foreground"
+          hecho
+              ? "estado-ok bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
+              : "bg-chip text-texto-2"
         }`}
       >
         {hecho ? "✓" : "·"}

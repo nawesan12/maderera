@@ -51,7 +51,7 @@ export function BotonAutorizar({
       {estado.error && (
         <p
           role="alert"
-          className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-base text-red-800"
+          className="estado-problema flex items-start gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base text-[var(--estado-tinta)]"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
           {estado.error}
@@ -60,7 +60,7 @@ export function BotonAutorizar({
       {estado.ok && (
         <p
           role="status"
-          className="flex items-start gap-2 rounded-lg bg-green-50 px-3 py-2 text-base text-green-900"
+          className="estado-ok flex items-start gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base text-[var(--estado-tinta)]"
         >
           <Check className="mt-0.5 h-5 w-5 shrink-0" />
           {estado.ok}
@@ -165,7 +165,7 @@ export function AnularComprobante({ id }: { id: string }) {
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-base font-medium text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-700"
+        className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-base font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
       >
         <Undo2 className="h-5 w-5" />
         Anular con nota de crédito

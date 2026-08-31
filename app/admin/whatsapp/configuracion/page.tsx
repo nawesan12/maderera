@@ -134,7 +134,7 @@ export default async function ConfiguracionWhatsappPage() {
                   <span
                     className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
                       listo
-                        ? "bg-green-100 text-green-800"
+                        ? "estado-ok bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
                         : "bg-muted text-muted-foreground"
                     }`}
                   >

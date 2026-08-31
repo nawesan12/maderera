@@ -170,7 +170,7 @@ export function Hilo({
           className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-t px-4 py-2 text-sm ${
             ventanaAbierta
               ? "text-muted-foreground"
-              : "bg-amber-50 text-amber-900"
+              : "estado-espera bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
           }`}
         >
           <Clock className="h-4 w-4 shrink-0" />
@@ -222,7 +222,7 @@ export function Hilo({
           {estado.error && (
             <p
               role="alert"
-              className="mb-2 flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-base text-red-800"
+              className="estado-problema mb-2 flex items-start gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base text-[var(--estado-tinta)]"
             >
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
               {estado.error}

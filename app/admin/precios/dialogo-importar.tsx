@@ -145,7 +145,7 @@ export function DialogoImportar() {
             </div>
 
             {previa.problemas > 0 && (
-              <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-base text-amber-900">
+              <p className="estado-espera flex items-start gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2.5 text-base text-[var(--estado-tinta)]">
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                 Las filas con problemas se saltean. El resto se aplica igual.
               </p>

@@ -42,6 +42,8 @@ export default async function ResumenPage() {
         <TarjetaIndicador
           etiqueta="Ventas del mes"
           valor={moneda.format(metricas.ventasMes)}
+          valorNumerico={metricas.ventasMes}
+          formatoValor="moneda"
           variacion={
             metricas.variacionVentas !== null
               ? `${metricas.variacionVentas > 0 ? "+" : ""}${metricas.variacionVentas}%`
@@ -55,7 +57,21 @@ export default async function ResumenPage() {
         <TarjetaIndicador
           etiqueta="Presupuestos abiertos"
           valor={String(metricas.presupuestosPendientes)}
+          valorNumerico={metricas.presupuestosPendientes}
           icono={ClipboardList}
+          segmentos={[
+            {
+              titulo: "esperando respuesta",
+              valor:
+                metricas.presupuestosPendientes - metricas.presupuestosRevision,
+              color: "#e0a020",
+            },
+            {
+              titulo: "en revisión",
+              valor: metricas.presupuestosRevision,
+              color: "#3f6fd8",
+            },
+          ]}
           pie={
             metricas.presupuestosRevision > 0
               ? `${metricas.presupuestosRevision} en revisión ahora mismo`
@@ -65,13 +81,42 @@ export default async function ResumenPage() {
         <TarjetaIndicador
           etiqueta="Productos a reponer"
           valor={String(metricas.reponer)}
+          valorNumerico={metricas.reponer}
           icono={Package}
+          segmentos={[
+            {
+              titulo: "Casa Central",
+              valor: metricas.reponerCentral,
+              color: "var(--sucursal-central)",
+            },
+            {
+              titulo: "Aserradero",
+              valor: metricas.reponerAserradero,
+              color: "var(--sucursal-aserradero)",
+            },
+          ]}
           pie={`${metricas.reponerCentral} en Casa Central · ${metricas.reponerAserradero} en Aserradero`}
         />
         <TarjetaIndicador
           etiqueta="Clientes"
           valor={String(metricas.clientesActivos)}
+          valorNumerico={metricas.clientesActivos}
           icono={Users}
+          segmentos={[
+            {
+              titulo: "con pedido en curso",
+              valor: metricas.clientesConPedido,
+              color: "var(--sucursal-central)",
+            },
+            {
+              titulo: "al día",
+              valor: Math.max(
+                0,
+                metricas.clientesActivos - metricas.clientesConPedido,
+              ),
+              color: "#c3bfb8",
+            },
+          ]}
           pie={
             metricas.pedidosSinEntregar > 0
               ? `${plural(metricas.pedidosSinEntregar, "pedido")} sin entregar`

@@ -48,6 +48,7 @@ export async function metricasDelResumen() {
     clientesActivos,
     reposicion,
     pedidosSinEntregar,
+    clientesConPedido,
   ] = await Promise.all([
     db
       .select({ total: sql<string>`coalesce(sum(${orders.total}), 0)` })
@@ -97,6 +98,18 @@ export async function metricasDelResumen() {
       .select({ n: sql<number>`count(*)::int` })
       .from(orders)
       .where(sql`${orders.estado} not in ('entregado', 'cancelado')`),
+    // Clientes **distintos** con al menos un pedido en curso. No es lo mismo
+    // que la cantidad de pedidos sin entregar: uno solo puede tener tres, y
+    // partir la tarjeta de clientes con ese número diría algo falso.
+    db
+      .select({ n: sql<number>`count(distinct ${orders.customerId})::int` })
+      .from(orders)
+      .where(
+        and(
+          sql`${orders.estado} not in ('entregado', 'cancelado')`,
+          sql`${orders.customerId} is not null`,
+        ),
+      ),
   ]);
 
   const actual = Number(ventasMes[0]?.total ?? 0);
@@ -119,6 +132,7 @@ export async function metricasDelResumen() {
     reponerCentral,
     reponerAserradero,
     pedidosSinEntregar: pedidosSinEntregar[0]?.n ?? 0,
+    clientesConPedido: clientesConPedido[0]?.n ?? 0,
   };
 }
 

@@ -85,7 +85,7 @@ function FranjaBeneficios() {
 
   return (
     <section className="border-t border-white/5 bg-brand-gray py-4 text-white">
-      <ul className="container mx-auto flex flex-wrap items-center justify-center gap-x-10 gap-y-3 px-4">
+      <ul className="contenedor flex flex-wrap items-center justify-center gap-x-10 gap-y-3">
         {beneficios.map((b) => (
           <li key={b.texto} className="flex items-center gap-2.5 text-sm">
             <b.icono className="h-4 w-4 shrink-0 text-brand-orange" />
@@ -104,7 +104,7 @@ function Ofertas({
 }) {
   return (
     <section className="bg-brand-cream/50 py-16">
-      <div className="container mx-auto px-4">
+      <div className="contenedor">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-brand-red">
@@ -140,7 +140,7 @@ function Categorias({
 }) {
   return (
     <section className="py-20">
-      <div className="container mx-auto px-4">
+      <div className="contenedor">
         <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
@@ -202,7 +202,7 @@ function Destacados({
 
   return (
     <section className="bg-white py-16">
-      <div className="container mx-auto px-4">
+      <div className="contenedor">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
@@ -260,7 +260,7 @@ function Herramientas() {
 
   return (
     <section className="bg-brand-cream/50 py-20">
-      <div className="container mx-auto px-4">
+      <div className="contenedor">
         <div className="mb-10 max-w-2xl">
           <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
             Herramientas
@@ -327,7 +327,7 @@ function Historia({
 
   return (
     <section className="py-20">
-      <div className="container mx-auto px-4">
+      <div className="contenedor">
         <div className="grid items-center gap-14 lg:grid-cols-2">
           <div>
             <p className="mb-3 text-sm font-semibold uppercase tracking-wider text-brand-orange">
@@ -396,7 +396,7 @@ function Testimonios({
 }) {
   return (
     <section className="bg-brand-cream py-20">
-      <div className="container mx-auto px-4">
+      <div className="contenedor">
         <div className="mb-10">
           <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
             Testimonios
@@ -453,7 +453,7 @@ function Sucursales({
 }) {
   return (
     <section className="py-20">
-      <div className="container mx-auto px-4">
+      <div className="contenedor">
         <div className="mb-10 text-center">
           <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
             Ubicaciones
@@ -521,7 +521,7 @@ function Blog({
 }) {
   return (
     <section className="bg-brand-cream/50 py-20">
-      <div className="container mx-auto px-4">
+      <div className="contenedor">
         <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
@@ -585,7 +585,7 @@ function CierreCta() {
         }}
         aria-hidden="true"
       />
-      <div className="container relative mx-auto px-4 text-center">
+      <div className="contenedor relative text-center">
         <h2 className="mb-4 text-3xl font-bold tracking-tight sm:text-5xl">
           ¿Arrancamos tu proyecto?
         </h2>

@@ -50,7 +50,7 @@ export default async function PresupuestoPage() {
       />
 
       {complementos.length > 0 && (
-        <section className="container mx-auto px-4 pb-16">
+        <section className="contenedor pb-16">
           <div className="mb-5">
             <h2 className="text-xl font-bold">También vas a necesitar</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">

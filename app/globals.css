@@ -284,6 +284,27 @@ input::placeholder, textarea::placeholder {
   color: oklch(0.55 0 0 / 0.5);
 }
 
+/* Ancho del sitio público: 1200px con 24px de aire, como define la banda.
+
+   Reemplaza a `container mx-auto px-4`, que a 1280px dejaba el contenido casi
+   a sangre y a 1536px lo estiraba hasta ahí. El panel no lo usa: tiene su
+   propio layout y su menú lateral fijo.
+
+   No va dentro de `@layer components`: ahí la compilación de producción la
+   emite y Turbopack en desarrollo la descarta —la capa llega declarada y
+   vacía—, y una regla que anda en un lado y no en el otro no sirve. Fuera de
+   las capas gana siempre.
+
+   Por eso las páginas que ya traen un ancho propio más angosto —la nota del
+   blog, el detalle de un pedido, el portal— no la usan: llevan `mx-auto px-6`
+   con su `max-w-*`, que es explícito y no depende de quién le gana a quién. */
+.contenedor {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
 /* Wood grain inspired divider */
 .wood-divider {
   height: 4px;

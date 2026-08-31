@@ -61,7 +61,7 @@ export function VistaPresupuesto({
     return (
       <div className="min-h-screen bg-brand-cream/30">
         <Encabezado cantidad={0} />
-        <div className="container mx-auto px-4 py-16">
+        <div className="contenedor py-16">
           <Card className="mx-auto max-w-lg border-0 shadow-sm">
             <CardContent className="p-12 text-center">
               <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-brand-orange/10">
@@ -95,7 +95,7 @@ export function VistaPresupuesto({
     <div className="min-h-screen bg-brand-cream/30">
       <Encabezado cantidad={items.length} />
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="contenedor py-8">
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           {/* Ítems */}
           <div>
@@ -323,7 +323,7 @@ export function VistaPresupuesto({
 function Encabezado({ cantidad }: { cantidad: number }) {
   return (
     <div className="bg-brand-gray py-12 text-white">
-      <div className="container mx-auto px-4">
+      <div className="contenedor">
         <h1 className="text-3xl font-bold">Tu presupuesto</h1>
         <p className="text-white/70">
           {cantidad === 0

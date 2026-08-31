@@ -48,7 +48,7 @@ export default async function DocumentacionPage() {
   return (
     <div className="min-h-screen bg-brand-cream/30">
       <header className="bg-brand-gray py-12 text-white">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <h1 className="text-3xl font-bold">Documentación técnica</h1>
           <p className="mt-2 max-w-2xl text-white/70">
             Fichas de producto, tablas de carga e instructivos de colocación,
@@ -57,7 +57,7 @@ export default async function DocumentacionPage() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-10">
+      <div className="contenedor py-10">
         {!estado.aprobado && reservados > 0 && (
           <div className="mb-8 flex flex-wrap items-center gap-4 rounded-xl border border-brand-orange/20 bg-brand-orange/5 p-5">
             <Lock className="h-5 w-5 shrink-0 text-brand-orange" />

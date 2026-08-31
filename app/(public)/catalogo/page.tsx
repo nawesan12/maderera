@@ -122,7 +122,7 @@ export default async function CatalogoPage({
       <Encabezado />
       <FranjaConfianza />
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="contenedor py-8">
         <Suspense fallback={<div className="mb-6 h-11" />}>
           <Barra params={params} />
         </Suspense>
@@ -153,7 +153,7 @@ function Encabezado() {
         }}
         aria-hidden="true"
       />
-      <div className="container relative mx-auto px-4">
+      <div className="contenedor relative">
         <h1 className="text-4xl font-bold tracking-tight">Catálogo</h1>
         <p className="mt-2 max-w-xl text-white/70">
           Maderas, placas, molduras y todo lo que necesita tu obra, con precios
@@ -175,7 +175,7 @@ function FranjaConfianza() {
 
   return (
     <div className="border-b bg-white">
-      <ul className="container mx-auto flex flex-wrap justify-center gap-x-8 gap-y-2 px-4 py-3">
+      <ul className="contenedor flex flex-wrap justify-center gap-x-8 gap-y-2 py-3">
         {puntos.map((p) => (
           <li
             key={p.texto}

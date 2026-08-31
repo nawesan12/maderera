@@ -94,7 +94,7 @@ export function Navbar({ sesion }: { sesion?: SesionNavbar | null }) {
     <>
       {/* Barra superior. Siempre oscura, en los dos temas. */}
       <div className="hidden bg-oscuro-marca text-[12.5px] text-white/70 sm:block">
-        <div className="container mx-auto flex h-[38px] items-center gap-5 px-4">
+        <div className="contenedor flex h-[38px] items-center gap-5">
           <span className="flex items-center gap-[7px]">
             <Phone className="h-[13px] w-[13px] text-brand-orange" />
             <span className="tabular">(0223) 474-3328</span>
@@ -125,7 +125,7 @@ export function Navbar({ sesion }: { sesion?: SesionNavbar | null }) {
 
       {/* Barra principal */}
       <nav className="sticky top-0 z-50 border-b border-linea-suave bg-[var(--chrome-fondo)] backdrop-blur-[12px]">
-        <div className="container mx-auto flex h-[72px] items-center gap-6 px-4">
+        <div className="contenedor flex h-[72px] items-center gap-6">
           <Link href="/" className="group flex items-center gap-[11px]">
             <Image
               src="/cropped-icon-180x180.png"

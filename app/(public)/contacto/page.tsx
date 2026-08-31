@@ -74,7 +74,7 @@ export default async function ContactoPage() {
       />
 
       <section className="bg-brand-gray py-16 text-white">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <h1 className="text-4xl font-bold">Hablemos de tu proyecto</h1>
           <p className="mt-3 max-w-2xl text-lg text-white/70">
             Escribinos, llamanos o pasá por el local. Si ya sabés qué necesitás,
@@ -83,7 +83,7 @@ export default async function ContactoPage() {
         </div>
       </section>
 
-      <div className="container mx-auto grid gap-8 px-4 py-12 lg:grid-cols-[1fr_380px]">
+      <div className="contenedor grid gap-8 py-12 lg:grid-cols-[1fr_380px]">
         <FormularioContacto whatsapp={whatsapp.replace(/\D/g, "")} />
 
         <aside className="space-y-6">

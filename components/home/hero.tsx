@@ -43,7 +43,7 @@ export function Hero({
         <div className="absolute bottom-0 left-0 h-1/2 w-1/2 bg-gradient-to-tr from-brand-orange/20 to-transparent" />
       </div>
 
-      <div className="container relative z-10 mx-auto px-4">
+      <div className="contenedor relative z-10">
         <div className="max-w-4xl">
           <motion.div
             initial={{ opacity: 0, x: -20 }}

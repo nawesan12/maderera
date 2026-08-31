@@ -89,7 +89,7 @@ export default async function NotaPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(datosEstructurados) }}
       />
 
-      <article className="container mx-auto max-w-3xl px-4 py-8">
+      <article className="mx-auto px-6 max-w-3xl py-8">
         <Link
           href="/blog"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -177,7 +177,7 @@ export default async function NotaPage({
       </article>
 
       {relacionados.length > 0 && (
-        <section className="container mx-auto max-w-5xl px-4 pb-12">
+        <section className="mx-auto px-6 max-w-5xl pb-12">
           <h2 className="mb-4 text-xl font-bold tracking-tight">
             Seguí leyendo
           </h2>

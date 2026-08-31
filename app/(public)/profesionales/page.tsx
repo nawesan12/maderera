@@ -84,7 +84,7 @@ export default async function ProfesionalesPage() {
   return (
     <div className="min-h-screen">
       <header className="bg-brand-gray py-14 text-white">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <p className="text-sm font-semibold uppercase tracking-[0.12em] text-brand-orange">
             Portal de profesionales
           </p>
@@ -101,7 +101,7 @@ export default async function ProfesionalesPage() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-12">
+      <div className="contenedor py-12">
         {estado.aprobado ? (
           <PanelDelProfesional
             nombreLista={estado.nombreLista}

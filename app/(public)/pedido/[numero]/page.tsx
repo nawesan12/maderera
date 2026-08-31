@@ -53,7 +53,7 @@ export default async function PedidoConfirmadoPage({
 
   return (
     <div className="min-h-screen bg-brand-cream/30">
-      <div className="container mx-auto max-w-2xl px-4 py-12">
+      <div className="mx-auto px-6 max-w-2xl py-12">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-brand-green">
             <Check className="h-8 w-8 text-white" strokeWidth={3} />

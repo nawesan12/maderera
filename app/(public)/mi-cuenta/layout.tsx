@@ -30,7 +30,7 @@ export default async function CuentaLayout({
 
   return (
     <div className="min-h-screen bg-brand-cream/30">
-      <div className="container mx-auto max-w-6xl px-4 py-8 lg:py-10">
+      <div className="mx-auto px-6 max-w-6xl py-8 lg:py-10">
         <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-sm text-muted-foreground">Hola,</p>

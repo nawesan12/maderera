@@ -88,7 +88,7 @@ export default async function NosotrosPage() {
       />
 
       <section className="relative overflow-hidden bg-brand-gray py-24">
-        <div className="container relative z-10 mx-auto animate-in px-4 text-center text-white fade-in slide-in-from-bottom-4 duration-700">
+        <div className="contenedor relative z-10 animate-in text-center text-white fade-in slide-in-from-bottom-4 duration-700">
           <p className="mb-6 inline-block rounded-full border border-brand-orange/30 bg-brand-orange/20 px-3 py-1 text-sm text-brand-orange">
             Nuestra historia
           </p>
@@ -104,7 +104,7 @@ export default async function NosotrosPage() {
       </section>
 
       <section className="py-16">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {VALORES.map((valor) => (
               <div
@@ -123,7 +123,7 @@ export default async function NosotrosPage() {
       </section>
 
       <section className="bg-muted/50 py-16">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <h2 className="mb-12 text-center text-3xl font-bold">Nuestra trayectoria</h2>
           <ol className="mx-auto max-w-3xl">
             {TRAYECTORIA.map((hito, i) => (
@@ -147,7 +147,7 @@ export default async function NosotrosPage() {
       </section>
 
       <section className="py-16">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <div className="grid items-center gap-12 lg:grid-cols-2">
             <div>
               <p className="mb-4 inline-block rounded-full border border-brand-green/30 bg-brand-green/10 px-3 py-1 text-sm text-brand-green">
@@ -187,7 +187,7 @@ export default async function NosotrosPage() {
       </section>
 
       <section className="bg-brand-orange py-16 text-white">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <dl className="grid grid-cols-2 gap-8 text-center md:grid-cols-4">
             {cifras.map((cifra) => (
               <div key={cifra.etiqueta}>

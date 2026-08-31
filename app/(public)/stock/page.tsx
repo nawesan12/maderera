@@ -38,7 +38,7 @@ export default async function StockPage({
   return (
     <div className="min-h-screen">
       <div className="bg-brand-gray text-white py-12">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <div className="flex items-center gap-3 mb-2">
             <Warehouse className="h-8 w-8 text-brand-orange" />
             <h1 className="text-3xl font-bold">Stock entre Sucursales</h1>
@@ -49,7 +49,7 @@ export default async function StockPage({
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="contenedor py-8">
         <Suspense fallback={<Skeleton className="h-24 w-full" />}>
           <Resumen />
         </Suspense>

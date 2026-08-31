@@ -61,7 +61,7 @@ export default async function EventoPage({
 
   return (
     <div className="min-h-screen bg-brand-cream/30">
-      <div className="container mx-auto max-w-5xl px-4 py-8">
+      <div className="mx-auto px-6 max-w-5xl py-8">
         <Link
           href="/eventos"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"

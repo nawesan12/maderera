@@ -106,7 +106,7 @@ export default async function ProductoPage({
 
       {/* Breadcrumb */}
       <div className="border-b bg-white">
-        <div className="container mx-auto px-4 py-3">
+        <div className="contenedor py-3">
           <nav
             className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
             aria-label="Ubicación"
@@ -134,7 +134,7 @@ export default async function ProductoPage({
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="contenedor py-8">
         <div className="grid gap-10 lg:grid-cols-2">
           <GaleriaProducto
             imagenes={producto.imagenes}

@@ -81,7 +81,7 @@ export default async function SucursalesPage() {
       <DatosEstructurados datos={marcado} />
 
       <div className="bg-brand-gray py-12 text-white">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <div className="mb-2 flex items-center gap-3">
             <MapPin className="h-8 w-8 text-brand-orange" />
             <h1 className="text-3xl font-bold">Nuestras sucursales</h1>
@@ -94,7 +94,7 @@ export default async function SucursalesPage() {
         </div>
       </div>
 
-      <div className="container mx-auto space-y-16 px-4 py-12">
+      <div className="contenedor space-y-16 py-12">
         {sucursales.map((sucursal) => {
           const servicios = renglones(sucursal.servicios);
           const destacados = renglones(sucursal.destacados);

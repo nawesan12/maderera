@@ -25,7 +25,7 @@ export default async function EventosPage() {
   return (
     <div className="min-h-screen bg-brand-cream/30">
       <header className="bg-brand-gray py-12 text-white">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <h1 className="text-3xl font-bold">Capacitaciones y eventos</h1>
           <p className="mt-2 max-w-2xl text-white/70">
             Charlas técnicas, demostraciones y jornadas de trabajo con madera.
@@ -33,7 +33,7 @@ export default async function EventosPage() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-10">
+      <div className="contenedor py-10">
         {eventos.length === 0 ? (
           <div className="rounded-xl border border-dashed bg-white/60 px-6 py-16 text-center">
             <CalendarDays className="mx-auto h-10 w-10 text-muted-foreground/60" />

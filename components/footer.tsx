@@ -18,7 +18,7 @@ export async function Footer() {
   const principal = sucursales[0];
   return (
     <footer className="bg-oscuro-marca text-white/70">
-      <div className="container mx-auto px-4 pb-7 pt-[58px]">
+      <div className="contenedor pb-7 pt-[58px]">
         <div className="grid grid-cols-1 gap-[38px] md:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1.2fr]">
           {/* Brand */}
           <div>

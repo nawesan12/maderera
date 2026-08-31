@@ -41,7 +41,7 @@ export default async function BlogPage({
   return (
     <div className="min-h-screen bg-brand-cream/30">
       <header className="bg-brand-gray py-12 text-white">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <div className="flex items-center gap-3">
             <BookOpen className="h-8 w-8 text-brand-orange" />
             <h1 className="text-3xl font-bold">Blog y novedades</h1>
@@ -53,7 +53,7 @@ export default async function BlogPage({
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="contenedor py-8">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center">
           {/* Un `form` con GET y sin JavaScript: el buscador funciona igual
               antes de que hidrate la página, y el resultado queda en una URL

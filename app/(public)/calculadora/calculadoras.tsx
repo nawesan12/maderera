@@ -78,7 +78,7 @@ export function Calculadoras() {
   const [deckResult, setDeckResult] = useState<DeckResult | null>(null);
 
   return (
-    <div className="container mx-auto px-4 py-12">
+    <div className="contenedor py-12">
         <Tabs defaultValue="techos" className="space-y-8">
           <TabsList className="grid grid-cols-2 md:grid-cols-4 h-auto gap-3 bg-transparent p-0">
             {[

@@ -40,7 +40,7 @@ export default async function CheckoutPage() {
   return (
     <div className="min-h-screen bg-brand-cream/30">
       <div className="bg-brand-gray py-10 text-white">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <Link
             href="/presupuesto"
             className="mb-3 inline-flex items-center gap-2 text-sm text-white/70 transition-colors hover:text-white"
@@ -55,7 +55,7 @@ export default async function CheckoutPage() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="contenedor py-8">
         <FormularioCheckout
           items={carrito.items.map((i) => ({
             id: i.id,

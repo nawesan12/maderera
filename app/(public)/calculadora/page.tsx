@@ -49,7 +49,7 @@ export default function CalculadoraPage() {
       />
 
       <section className="bg-brand-gray py-16">
-        <div className="container mx-auto px-4">
+        <div className="contenedor">
           <p className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-brand-orange">
             <Calculator className="h-4 w-4" />
             Herramienta gratuita
@@ -67,7 +67,7 @@ export default function CalculadoraPage() {
       <Calculadoras />
 
       <section className="border-t bg-muted/30 py-12">
-        <div className="container mx-auto max-w-3xl px-4">
+        <div className="mx-auto px-6 max-w-3xl">
           <h2 className="mb-3 text-xl font-semibold">
             Cómo usar los resultados
           </h2>

@@ -48,7 +48,7 @@ export function AccionesCorte({
           aria-pressed={urgente}
           title={urgente ? "Quitar la urgencia" : "Marcar como urgente"}
           className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium transition-colors disabled:opacity-50 ${
-            compacto ? "flex-1 basis-0" : ""
+            compacto ? "min-w-0 flex-1 basis-0" : ""
           } ${
             urgente
               ? "bg-brand-orange/15 text-brand-orange-dark hover:bg-brand-orange/25"
@@ -64,7 +64,7 @@ export function AccionesCorte({
         <button
           onClick={() => accion(() => avanzarCorte(id))}
           disabled={pendiente}
-          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "flex-1 basis-0" : ""}`}
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         >
           {pendiente ? (
             <Loader2 className="h-5 w-5 animate-spin" />

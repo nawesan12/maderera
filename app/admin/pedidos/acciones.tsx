@@ -53,7 +53,7 @@ export function AccionesPedido({
         <button
           onClick={() => accion(() => marcarPagado(id))}
           disabled={pendiente}
-          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50 ${compacto ? "flex-1 basis-0" : ""}`}
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         >
           <Check className="h-5 w-5" />
           Cobrar
@@ -64,7 +64,7 @@ export function AccionesPedido({
         <button
           onClick={() => accion(() => avanzarPedido(id))}
           disabled={pendiente}
-          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "flex-1 basis-0" : ""}`}
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         >
           {pendiente ? (
             <Loader2 className="h-5 w-5 animate-spin" />

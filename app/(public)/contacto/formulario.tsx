@@ -153,11 +153,16 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
         </p>
       )}
 
+      {/* `sm:flex-1` y no `flex-1`: en fila reparte el ancho entre los dos
+          botones, pero apilados en teléfono el eje principal es el vertical y
+          `flex: 1 1 0%` les pone la altura de base en cero. Así el `h-12` se
+          perdía y el botón de enviar quedaba en 22px de alto en el celular. En
+          columna el ancho ya lo da el estirado del eje cruzado. */}
       <div className="flex flex-col gap-3 pt-1 sm:flex-row">
         <Button
           type="submit"
           disabled={enviando}
-          className="h-12 flex-1 rounded-full bg-brand-orange font-semibold text-white shadow-lg shadow-brand-orange/20 hover:bg-brand-orange-dark"
+          className="h-12 rounded-full bg-brand-orange font-semibold text-white shadow-lg shadow-brand-orange/20 hover:bg-brand-orange-dark sm:flex-1"
         >
           {enviando ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -171,7 +176,7 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
           href={`https://wa.me/${whatsapp}`}
           target="_blank"
           rel="noopener noreferrer"
-          className={`inline-flex h-12 flex-1 items-center justify-center rounded-full border font-medium transition-colors hover:bg-muted ${
+          className={`inline-flex h-12 items-center justify-center rounded-full border font-medium transition-colors hover:bg-muted sm:flex-1 ${
             estado.usarWhatsapp ? "border-brand-green text-brand-green" : ""
           }`}
         >

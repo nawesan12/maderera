@@ -700,6 +700,10 @@ escrito invocando 5.3.
 - [ ] Cuentas de Andreani / CDI, o la tabla de tarifas por zona
 - [ ] Acceso al dominio `mjbj.ar` (registrante y DNS)
 - [ ] Definición sobre WhatsApp Business API (ver R4)
+- [ ] **Confirmar el número de WhatsApp del negocio.** El ajuste guarda `542235903118` y
+      el código traía `5492235903118` como valor por defecto. Para un celular argentino el
+      `9` después del 54 no es opcional, así que el número guardado probablemente no reciba
+      los mensajes de los botones. Se corrige desde Contenido, sin tocar código.
 
 ---
 
@@ -713,7 +717,13 @@ escrito invocando 5.3.
    dejarlo explícito antes de que se asuma incluido.
 4. **Punto de venta electrónico**: ¿uno para toda la plataforma o uno por sucursal? Afecta
    la numeración fiscal y no se puede cambiar cómodamente después.
-5. **`cacheComponents`**: se decide al cerrar la Etapa 2.
+5. **`cacheComponents`**: se decide al cerrar la Etapa 2. **Por ahora queda apagado, y
+   hay una razón medida:** las 76 rutas del sitio son dinámicas porque el layout lee la
+   sesión y el presupuesto para armar el menú, y eso no va a cambiar —el menú tiene que
+   decir el nombre de quien entró—. Así que la ganancia no estaba en cachear la página
+   sino la consulta. Con `unstable_cache` etiquetado, la portada bajó de 11 a 7 consultas
+   por carga, el catálogo de 10 a 7, y sucursales y contacto de 2 a 0. Encender la bandera
+   es un cambio de comportamiento de todo el proyecto y no se hace a días de entregar.
 6. **Integración con las máquinas de corte**: alcance, arquitectura y ubicación en el
    cronograma (sección 9). Se define con el relevamiento del 21/08.
 

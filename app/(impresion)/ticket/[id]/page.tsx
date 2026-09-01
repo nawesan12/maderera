@@ -122,6 +122,21 @@ export default async function TicketPage({
           </span>
         </p>
 
+        {/*
+          * El descuento va como nota y no como "subtotal menos descuento".
+          * Los renglones de arriba ya están con el precio rebajado —tienen que
+          * estarlo, porque es lo que se cobró y lo que va a la factura—, así
+          * que poner un subtotal más alto dejaría un papel cuyas cuentas no
+          * cierran a la vista. Igual dice cuánto se ahorró, que es lo que el
+          * cliente quiere ver.
+          */}
+        {Number(pedido.descuento) > 0 && (
+          <p className="aviso">
+            Incluye {formatearMonto(pedido.descuento)} de descuento
+            {pedido.descuentoMotivo ? ` · ${pedido.descuentoMotivo}` : ""}
+          </p>
+        )}
+
         {pedido.estadoPago === "pendiente" && (
           <p className="aviso">Queda en cuenta corriente</p>
         )}

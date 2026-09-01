@@ -155,6 +155,13 @@
       "when": 1788287158949,
       "tag": "0021_simple_nicolaos",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788291734293,
+      "tag": "0022_striped_star_brand",
+      "breakpoints": true
     }
   ]
 }

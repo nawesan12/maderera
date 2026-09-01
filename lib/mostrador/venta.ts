@@ -14,6 +14,7 @@ import {
 } from "@/lib/db/schema";
 import {
   aCentavos,
+  aplicarDescuento,
   revisarVenta,
   totalDeLaVenta,
   type LineaDeVenta,
@@ -63,6 +64,9 @@ export interface VentaDeMostrador {
   contactoNombre: string;
   contactoTelefono?: string | null;
   medioPago: MedioDeMostrador;
+  /** Descuento pedido, en plata. Lo que se aplica puede diferir por centavos. */
+  descuento?: number;
+  descuentoMotivo?: string | null;
   notas?: string | null;
   usuarioId: string;
 }
@@ -74,6 +78,12 @@ export interface ResultadoVenta {
   total: number;
   /** Falso cuando la clave ya existía: se devuelve la venta que ya se hizo. */
   nueva: boolean;
+  /**
+   * Las líneas tal como quedaron, con el descuento ya repartido. El comprobante
+   * tiene que emitirse con estas y no con las de entrada: si no, la factura
+   * diría el precio de lista sobre una venta que se cobró con rebaja.
+   */
+  lineas: LineaDeVenta[];
 }
 
 export interface FalloVenta {
@@ -91,7 +101,21 @@ export async function registrarVentaDeMostrador(
   const problema = revisarVenta(venta.lineas, venta.medioPago, venta.customerId);
   if (problema) return { ok: false, error: problema };
 
-  const total = totalDeLaVenta(venta.lineas);
+  /*
+   * El descuento se reparte entre las líneas y no va como renglón aparte: la
+   * base imponible de la factura tiene que reflejar lo que se cobró por cada
+   * cosa. Las líneas que se guardan ya son las rebajadas, así que el pedido, el
+   * comprobante y el ticket parten todos del mismo número.
+   *
+   * `subtotal` guarda lo que valía antes del descuento, que es lo que el ticket
+   * necesita para poder mostrarlo.
+   */
+  const subtotal = totalDeLaVenta(venta.lineas);
+  const { lineas, descuento } = aplicarDescuento(
+    venta.lineas,
+    venta.descuento ?? 0,
+  );
+  const total = totalDeLaVenta(lineas);
 
   return db.transaction(async (tx) => {
     /*
@@ -121,6 +145,7 @@ export async function registrarVentaDeMostrador(
         numero: yaHecha.numero,
         total: Number(yaHecha.total),
         nueva: false,
+        lineas,
       };
     }
 
@@ -170,7 +195,9 @@ export async function registrarVentaDeMostrador(
         estado: "entregado",
         origen: "mostrador",
         tipoEntrega: "retiro",
-        subtotal: total.toFixed(2),
+        subtotal: subtotal.toFixed(2),
+        descuento: descuento.toFixed(2),
+        descuentoMotivo: descuento > 0 ? (venta.descuentoMotivo ?? null) : null,
         total: total.toFixed(2),
         medioPago: venta.medioPago,
         estadoPago: aCuenta ? "pendiente" : "pagado",
@@ -180,7 +207,7 @@ export async function registrarVentaDeMostrador(
       .returning({ id: orders.id });
 
     await tx.insert(orderItems).values(
-      venta.lineas.map((l, i) => ({
+      lineas.map((l, i) => ({
         orderId: pedido.id,
         variantId: l.variantId,
         descripcion: l.descripcion,
@@ -194,7 +221,7 @@ export async function registrarVentaDeMostrador(
 
     // Stock: solo las líneas que apuntan a una variante. Un flete o una
     // diferencia de precio no descuentan nada de ningún estante.
-    for (const l of venta.lineas) {
+    for (const l of lineas) {
       if (!l.variantId) continue;
       const unidades = Math.round(l.cantidad);
       if (unidades <= 0) continue;
@@ -263,6 +290,7 @@ export async function registrarVentaDeMostrador(
       numero,
       total,
       nueva: true,
+      lineas,
     };
   });
 }

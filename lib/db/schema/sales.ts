@@ -188,6 +188,16 @@ export const orders = pgTable(
     zonaEnvio: text(),
     costoEnvio: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
     subtotal: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    /**
+     * Descuento sobre el total, en plata.
+     *
+     * Se guarda aparte y no se deduce de `subtotal - total` porque en el medio
+     * está el costo de envío: `total = subtotal + envío − descuento`, y con dos
+     * incógnitas en una resta no se reconstruye ninguna.
+     */
+    descuento: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    /** Por qué se hizo. Un descuento sin motivo no se puede revisar después. */
+    descuentoMotivo: text(),
     total: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
     medioPago: medioPago(),
     estadoPago: estadoPago().notNull().default("pendiente"),

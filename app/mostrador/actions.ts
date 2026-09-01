@@ -59,6 +59,8 @@ const ventaSchema = z.object({
   comprobante: z.enum(["interno", "fiscal"]).default("interno"),
   /** CUIT tipeado en el momento, para facturar a alguien sin ficha. */
   cuit: z.string().nullable().optional(),
+  descuento: z.number().min(0).optional(),
+  descuentoMotivo: z.string().nullable().optional(),
   notas: z.string().nullable().optional(),
 });
 
@@ -266,7 +268,8 @@ export async function cobrarVenta(
       customerId: parsed.data.customerId,
       receptorNombre: parsed.data.contactoNombre,
       cuit: parsed.data.cuit ?? null,
-      lineas: parsed.data.lineas,
+      // Las de la venta, con el descuento ya repartido.
+      lineas: resultado.lineas,
       usuarioId: usuario.userId,
     });
     avisoFiscal = fiscal.autorizado ? undefined : fiscal.aviso;

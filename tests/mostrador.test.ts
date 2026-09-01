@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   aCentavos,
+  montoDelDescuento,
+  aplicarDescuento,
   revisarVenta,
   totalDeLaVenta,
   vuelto,
@@ -108,5 +110,72 @@ describe("vuelto", () => {
 
   it("no arrastra centavos fantasma", () => {
     expect(vuelto(0.3, 1)).toBe(0.7);
+  });
+});
+
+describe("descuento", () => {
+  it("calcula el porcentaje", () => {
+    expect(montoDelDescuento(100000, "porcentaje", 10)).toBe(10000);
+  });
+
+  it("toma el monto tal cual", () => {
+    expect(montoDelDescuento(100000, "monto", 7500)).toBe(7500);
+  });
+
+  it("no descuenta más que el total", () => {
+    // Tipear 200000 de descuento sobre una venta de 100000 no es un descuento,
+    // es un error; un total negativo sería plata que la maderera devuelve.
+    expect(montoDelDescuento(100000, "monto", 200000)).toBe(100000);
+    expect(montoDelDescuento(100000, "porcentaje", 150)).toBe(100000);
+  });
+
+  it("ignora valores que no descuentan nada", () => {
+    expect(montoDelDescuento(100000, "monto", 0)).toBe(0);
+    expect(montoDelDescuento(100000, "monto", -500)).toBe(0);
+    expect(montoDelDescuento(100000, "porcentaje", NaN)).toBe(0);
+  });
+});
+
+describe("cómo se reparte el descuento entre las líneas", () => {
+  it("baja cada precio en la misma proporción", () => {
+    const lineas = [
+      linea({ cantidad: 1, precioUnitario: 100000 }),
+      linea({ variantId: "v2", cantidad: 1, precioUnitario: 100000 }),
+    ];
+    const r = aplicarDescuento(lineas, 20000);
+    expect(r.lineas[0].precioUnitario).toBe(90000);
+    expect(r.lineas[1].precioUnitario).toBe(90000);
+    expect(r.descuento).toBe(20000);
+  });
+
+  it("lo que se cobra es siempre la suma de los renglones", () => {
+    // Tres líneas raras y un descuento que no divide redondo. Acá es donde un
+    // prorrateo que persigue un total exacto termina mostrando un total que no
+    // coincide con sus propios renglones.
+    const lineas = [
+      linea({ cantidad: 3, precioUnitario: 1333.33 }),
+      linea({ variantId: "v2", cantidad: 7, precioUnitario: 977.11 }),
+      linea({ variantId: "v3", cantidad: 1, precioUnitario: 45.05 }),
+    ];
+    const total = totalDeLaVenta(lineas);
+    const pedido = montoDelDescuento(total, "porcentaje", 13);
+    const r = aplicarDescuento(lineas, pedido);
+
+    // La identidad que tiene que valer siempre: subtotal − descuento = total.
+    expect(aCentavos(total - r.descuento)).toBe(totalDeLaVenta(r.lineas));
+    // Y el descuento real no se aleja del pedido más que unos centavos.
+    expect(Math.abs(r.descuento - pedido)).toBeLessThan(0.1);
+  });
+
+  it("no toca nada si no hay descuento", () => {
+    const lineas = [linea()];
+    expect(aplicarDescuento(lineas, 0)).toEqual({ lineas, descuento: 0 });
+  });
+
+  it("un descuento del total deja todo en cero", () => {
+    const lineas = [linea({ cantidad: 2, precioUnitario: 500 })];
+    const r = aplicarDescuento(lineas, 1000);
+    expect(totalDeLaVenta(r.lineas)).toBe(0);
+    expect(r.descuento).toBe(1000);
   });
 });

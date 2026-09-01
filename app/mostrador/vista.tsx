@@ -28,7 +28,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatearMonto, formatearPrecio } from "@/lib/formato";
-import { totalDeLaVenta, vuelto, type LineaDeVenta } from "@/lib/mostrador/importes";
+import {
+  montoDelDescuento,
+  totalDeLaVenta,
+  vuelto,
+  type LineaDeVenta,
+  type TipoDescuento,
+} from "@/lib/mostrador/importes";
 import type { MedioDeMostrador } from "@/lib/mostrador/importes";
 import {
   abrirCaja,
@@ -138,6 +144,9 @@ export function VistaMostrador({
   const [otrosPrecios, setOtrosPrecios] = useState<Record<string, number> | null>(null);
   const [comprobante, setComprobante] = useState<"interno" | "fiscal">("interno");
   const [cuit, setCuit] = useState("");
+  const [tipoDesc, setTipoDesc] = useState<TipoDescuento>("porcentaje");
+  const [valorDesc, setValorDesc] = useState("");
+  const [motivoDesc, setMotivoDesc] = useState("");
   const [letra, setLetra] = useState<string | null>(null);
   const [ultima, setUltima] = useState<{
     numero: string;
@@ -147,7 +156,12 @@ export function VistaMostrador({
   const [caja, setCaja] = useState(false);
   const [suelta, setSuelta] = useState<string | null>(null);
 
-  const total = useMemo(() => totalDeLaVenta(lineas), [lineas]);
+  const subtotal = useMemo(() => totalDeLaVenta(lineas), [lineas]);
+  const descuento = useMemo(
+    () => montoDelDescuento(subtotal, tipoDesc, Number(valorDesc)),
+    [subtotal, tipoDesc, valorDesc],
+  );
+  const total = useMemo(() => subtotal - descuento, [subtotal, descuento]);
   // Sin nada tipeado no hay vuelto que mostrar: `Number("")` es 0, y un vuelto
   // de $0 en pantalla antes de que el cliente saque la plata se lee como si ya
   // hubiera pagado justo.
@@ -191,6 +205,8 @@ export function VistaMostrador({
     setOtrosPrecios(null);
     setComprobante("interno");
     setCuit("");
+    setValorDesc("");
+    setMotivoDesc("");
   }
 
   /*
@@ -243,6 +259,8 @@ export function VistaMostrador({
         medioPago: medio,
         comprobante,
         cuit: cuit || null,
+        descuento,
+        descuentoMotivo: motivoDesc || null,
       });
 
       if (r.error) {
@@ -292,6 +310,14 @@ export function VistaMostrador({
 
         <aside className="flex w-[400px] shrink-0 flex-col border-l border-linea bg-card">
           <Cobro
+            subtotal={subtotal}
+            descuento={descuento}
+            tipoDesc={tipoDesc}
+            onTipoDesc={setTipoDesc}
+            valorDesc={valorDesc}
+            onValorDesc={setValorDesc}
+            motivoDesc={motivoDesc}
+            onMotivoDesc={setMotivoDesc}
             total={total}
             cliente={cliente}
             onCliente={alElegirCliente}
@@ -659,6 +685,14 @@ function Lineas({
 /* -------------------------------------------------------------------------- */
 
 function Cobro({
+  subtotal,
+  descuento,
+  tipoDesc,
+  onTipoDesc,
+  valorDesc,
+  onValorDesc,
+  motivoDesc,
+  onMotivoDesc,
   total,
   cliente,
   onCliente,
@@ -681,6 +715,14 @@ function Cobro({
   aviso,
   ultima,
 }: {
+  subtotal: number;
+  descuento: number;
+  tipoDesc: TipoDescuento;
+  onTipoDesc: (t: TipoDescuento) => void;
+  valorDesc: string;
+  onValorDesc: (v: string) => void;
+  motivoDesc: string;
+  onMotivoDesc: (v: string) => void;
   total: number;
   cliente: Cliente | null;
   onCliente: (c: Cliente | null) => void;
@@ -731,6 +773,40 @@ function Cobro({
               {texto}
             </button>
           ))}
+        </div>
+
+        <p className="mt-5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Descuento
+        </p>
+        <div className="mt-2.5 flex gap-2">
+          <div className="flex shrink-0 overflow-hidden rounded-lg border border-linea">
+            {(["porcentaje", "monto"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => onTipoDesc(t)}
+                className={`h-12 px-3.5 text-base font-medium transition-colors ${
+                  tipoDesc === t ? "bg-accion text-white" : "hover:bg-hundida"
+                }`}
+              >
+                {t === "porcentaje" ? "%" : "$"}
+              </button>
+            ))}
+          </div>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={valorDesc}
+            onChange={(e) => onValorDesc(e.target.value)}
+            placeholder="0"
+            className="tabular h-12 w-24 rounded-lg border border-linea bg-background px-3 text-right text-base"
+          />
+          <input
+            value={motivoDesc}
+            onChange={(e) => onMotivoDesc(e.target.value)}
+            placeholder="Motivo"
+            className="h-12 min-w-0 flex-1 rounded-lg border border-linea bg-background px-3 text-base"
+          />
         </div>
 
         <p className="mt-5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -876,6 +952,23 @@ function Cobro({
       </div>
 
       <div className="border-t border-linea p-4">
+        {descuento > 0 && (
+          <>
+            <p className="flex items-baseline justify-between text-base text-muted-foreground">
+              <span>Subtotal</span>
+              <span className="tabular">{formatearMonto(subtotal)}</span>
+            </p>
+            <p className="flex items-baseline justify-between text-base">
+              <span className="text-muted-foreground">
+                Descuento{motivoDesc ? ` · ${motivoDesc}` : ""}
+              </span>
+              <span className="tabular font-semibold text-saldo-favor">
+                −{formatearMonto(descuento)}
+              </span>
+            </p>
+          </>
+        )}
+
         <div className="flex items-baseline justify-between">
           <span className="text-lg font-semibold">Total</span>
           <span className="tabular text-[34px] font-bold leading-none tracking-tight">

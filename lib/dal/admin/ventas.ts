@@ -257,6 +257,8 @@ export async function obtenerPedido(id: string) {
       zonaEnvio: orders.zonaEnvio,
       costoEnvio: orders.costoEnvio,
       subtotal: orders.subtotal,
+      descuento: orders.descuento,
+      descuentoMotivo: orders.descuentoMotivo,
       total: orders.total,
       medioPago: orders.medioPago,
       estadoPago: orders.estadoPago,

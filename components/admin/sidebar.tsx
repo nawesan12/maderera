@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { inicioDelRol, type RolStaff } from "@/lib/roles";
+import { inicioDelRol, quienEntra, type RolStaff } from "@/lib/roles";
 import {
   ArrowUpRight,
   BookOpen,
@@ -53,28 +53,29 @@ interface ItemNav {
   label: string;
   /** El único contador del menú; sale de la base. */
   contador?: "whatsapp";
-  /** Quién ve esta sección. Sin declarar, la ven todos. */
-  roles?: readonly RolStaff[];
+  /*
+   * Quién la ve **no se declara acá**: sale de `ACCESO`, que es la misma lista
+   * que exigen las páginas. Tenerla en dos lugares fue justamente el problema:
+   * el menú escondía Precios y la página lo dejaba entrar igual.
+   */
 }
 
 const secciones: { titulo: string; items: ItemNav[] }[] = [
   {
     titulo: "Operación",
     items: [
-      { href: "/admin", icon: LayoutDashboard, label: "Resumen", roles: ["admin", "vendedor", "deposito"] },
-      { href: "/admin/pedidos", icon: Truck, label: "Pedidos", roles: ["admin", "vendedor", "deposito"] },
+      { href: "/admin", icon: LayoutDashboard, label: "Resumen" },
+      { href: "/admin/pedidos", icon: Truck, label: "Pedidos" },
       {
         href: "/admin/whatsapp",
         icon: MessageCircle,
         label: "WhatsApp",
         contador: "whatsapp" as const,
-        roles: ["admin", "vendedor"],
       },
       {
         href: "/admin/presupuestos",
         icon: ClipboardList,
         label: "Presupuestos",
-        roles: ["admin", "vendedor"],
       },
       { href: "/admin/cortes", icon: Scissors, label: "Cortes" },
       /*
@@ -86,34 +87,33 @@ const secciones: { titulo: string; items: ItemNav[] }[] = [
         href: "/mostrador",
         icon: Store,
         label: "Mostrador",
-        roles: ["admin", "vendedor"],
       },
     ],
   },
   {
     titulo: "Catálogo",
     items: [
-      { href: "/admin/productos", icon: Boxes, label: "Productos", roles: ["admin", "vendedor"] },
-      { href: "/admin/stock", icon: Package, label: "Stock", roles: ["admin", "vendedor", "deposito"] },
-      { href: "/admin/precios", icon: Tags, label: "Precios", roles: ["admin"] },
+      { href: "/admin/productos", icon: Boxes, label: "Productos" },
+      { href: "/admin/stock", icon: Package, label: "Stock" },
+      { href: "/admin/precios", icon: Tags, label: "Precios" },
     ],
   },
   {
     titulo: "Administración",
     items: [
-      { href: "/admin/clientes", icon: Users, label: "Clientes", roles: ["admin", "vendedor"] },
-      { href: "/admin/profesionales", icon: HardHat, label: "Profesionales", roles: ["admin", "vendedor"] },
-      { href: "/admin/documentacion", icon: BookOpen, label: "Documentación", roles: ["admin", "vendedor"] },
-      { href: "/admin/contenido", icon: Newspaper, label: "Contenido", roles: ["admin"] },
-      { href: "/admin/eventos", icon: CalendarDays, label: "Eventos", roles: ["admin", "vendedor"] },
-      { href: "/admin/pagos", icon: Wallet, label: "Cobros", roles: ["admin"] },
-      { href: "/admin/facturacion", icon: FileText, label: "Facturación", roles: ["admin"] },
-      { href: "/admin/arca", icon: Landmark, label: "ARCA", roles: ["admin"] },
-      { href: "/admin/avisos", icon: Mail, label: "Avisos", roles: ["admin"] },
-      { href: "/admin/caja", icon: Banknote, label: "Caja", roles: ["admin"] },
-      { href: "/admin/sucursales", icon: Building2, label: "Sucursales", roles: ["admin"] },
-      { href: "/admin/migracion", icon: DatabaseZap, label: "Migración", roles: ["admin"] },
-      { href: "/admin/bitacora", icon: History, label: "Bitácora", roles: ["admin"] },
+      { href: "/admin/clientes", icon: Users, label: "Clientes" },
+      { href: "/admin/profesionales", icon: HardHat, label: "Profesionales" },
+      { href: "/admin/documentacion", icon: BookOpen, label: "Documentación" },
+      { href: "/admin/contenido", icon: Newspaper, label: "Contenido" },
+      { href: "/admin/eventos", icon: CalendarDays, label: "Eventos" },
+      { href: "/admin/pagos", icon: Wallet, label: "Cobros" },
+      { href: "/admin/facturacion", icon: FileText, label: "Facturación" },
+      { href: "/admin/arca", icon: Landmark, label: "ARCA" },
+      { href: "/admin/avisos", icon: Mail, label: "Avisos" },
+      { href: "/admin/caja", icon: Banknote, label: "Caja" },
+      { href: "/admin/sucursales", icon: Building2, label: "Sucursales" },
+      { href: "/admin/migracion", icon: DatabaseZap, label: "Migración" },
+      { href: "/admin/bitacora", icon: History, label: "Bitácora" },
     ],
   },
 ];
@@ -142,7 +142,10 @@ export function AdminSidebar({
     .map((seccion) => ({
       ...seccion,
       items: seccion.items.filter(
-        (item) => !item.roles || !rol || item.roles.includes(rol),
+        (item) => {
+          const permitidos = quienEntra(item.href);
+          return !permitidos || !rol || permitidos.includes(rol);
+        },
       ),
     }))
     .filter((seccion) => seccion.items.length > 0);

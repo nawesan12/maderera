@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { degradar } from "@/lib/degradar";
 import { PanelNoDisponible } from "@/components/admin/panel-no-disponible";
+import { inicioDelRol, puedeEntrar } from "@/lib/roles";
 import { SaltarAlContenido } from "@/components/saltar-al-contenido";
 import { headers } from "next/headers";
 import { redirect, unstable_rethrow } from "next/navigation";
@@ -70,9 +71,22 @@ export default async function AdminLayout({
    * afuera de eso sería trabarlo en la única tarea para la que esa pantalla
    * existe.
    */
+  const ruta = (await headers()).get("x-ruta") ?? "";
+
   if (usuario.staffRole === "aserradero") {
-    const ruta = (await headers()).get("x-ruta") ?? "";
     if (!ruta.startsWith("/admin/cortes")) redirect("/taller");
+  } else if (ruta && !puedeEntrar(ruta, usuario.staffRole)) {
+    /*
+     * El control va acá y no en cada página, y sale de la misma lista que filtra
+     * el menú. Antes solo filtraba el menú: Precios, ARCA, Cobros y Caja se
+     * escondían de quien no era admin y se abrían igual tecleando la dirección.
+     * Un vendedor podía cambiar precios. Esconder no es controlar.
+     *
+     * Que sea un solo lugar es lo que evita que vuelva a pasar: una pantalla
+     * nueva no puede quedar con una regla en el menú y otra en la página,
+     * porque hay una sola regla.
+     */
+    redirect(inicioDelRol(usuario.staffRole));
   }
 
   // El contador de conversaciones sin leer es un adorno del menú: si falla, el

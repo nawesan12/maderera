@@ -11,7 +11,9 @@ import {
   Lock,
   NotebookPen,
   Plus,
+  FileText,
   Printer,
+  Receipt,
   Search,
   Trash2,
   UserRound,
@@ -32,6 +34,7 @@ import {
   buscarEnMostrador,
   cerrarCaja,
   cobrarVenta,
+  letraDelComprobante,
   preciosDelCliente,
   registrarMovimientoDeCaja,
 } from "./actions";
@@ -118,6 +121,9 @@ export function VistaMostrador({
   const [recibido, setRecibido] = useState("");
   const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [otrosPrecios, setOtrosPrecios] = useState<Record<string, number> | null>(null);
+  const [comprobante, setComprobante] = useState<"interno" | "fiscal">("interno");
+  const [cuit, setCuit] = useState("");
+  const [letra, setLetra] = useState<string | null>(null);
   const [ultima, setUltima] = useState<{ numero: string; orderId: string } | null>(null);
   const [caja, setCaja] = useState(false);
 
@@ -133,6 +139,29 @@ export function VistaMostrador({
     [medio, total, recibido],
   );
 
+  /*
+   * La letra no se rotula a mano: sale de quién emite y quién recibe. Si la
+   * maderera pasara a monotributo, todo lo que emite es C y esta pantalla lo
+   * dice sola, sin que nadie tenga que acordarse de cambiar un texto.
+   */
+  useEffect(() => {
+    if (comprobante !== "fiscal") return;
+
+    let vigente = true;
+    const t = setTimeout(async () => {
+      const r = await letraDelComprobante(cliente?.id ?? null, cuit || null);
+      if (vigente) setLetra(r.letra);
+    }, 150);
+    return () => {
+      vigente = false;
+      clearTimeout(t);
+    };
+  }, [comprobante, cliente, cuit]);
+
+  // Derivada y no guardada: al volver a "comprobante interno" la letra
+  // desaparece sola, sin un `setState` sincrónico adentro del efecto.
+  const letraVisible = comprobante === "fiscal" ? letra : null;
+
   function limpiar() {
     setLineas([]);
     setCliente(null);
@@ -140,6 +169,8 @@ export function VistaMostrador({
     setRecibido("");
     setClave(claveNueva());
     setOtrosPrecios(null);
+    setComprobante("interno");
+    setCuit("");
   }
 
   /*
@@ -190,6 +221,8 @@ export function VistaMostrador({
         customerId: cliente?.id ?? null,
         contactoNombre: cliente?.nombre ?? "Consumidor final",
         medioPago: medio,
+        comprobante,
+        cuit: cuit || null,
       });
 
       if (r.error) {
@@ -197,7 +230,13 @@ export function VistaMostrador({
         return;
       }
 
-      setAviso({ tipo: "ok", texto: r.ok ?? "Venta registrada." });
+      // El aviso del comprobante no es un error de la venta: la venta está
+      // hecha y lo que falta es el papel. Se muestra distinto a propósito.
+      setAviso(
+        r.avisoFiscal
+          ? { tipo: "error", texto: `${r.ok} ${r.avisoFiscal}` }
+          : { tipo: "ok", texto: r.ok ?? "Venta registrada." },
+      );
       if (r.numero && r.orderId) setUltima({ numero: r.numero, orderId: r.orderId });
       limpiar();
       router.refresh();
@@ -235,6 +274,11 @@ export function VistaMostrador({
             onCliente={alElegirCliente}
             otrosPrecios={Boolean(otrosPrecios)}
             onAplicarPrecios={aplicarPrecios}
+            comprobante={comprobante}
+            onComprobante={setComprobante}
+            cuit={cuit}
+            onCuit={setCuit}
+            letra={letraVisible}
             medio={medio}
             onMedio={setMedio}
             recibido={recibido}
@@ -548,6 +592,11 @@ function Cobro({
   onCliente,
   otrosPrecios,
   onAplicarPrecios,
+  comprobante,
+  onComprobante,
+  cuit,
+  onCuit,
+  letra,
   medio,
   onMedio,
   recibido,
@@ -565,6 +614,11 @@ function Cobro({
   onCliente: (c: Cliente | null) => void;
   otrosPrecios: boolean;
   onAplicarPrecios: () => void;
+  comprobante: "interno" | "fiscal";
+  onComprobante: (c: "interno" | "fiscal") => void;
+  cuit: string;
+  onCuit: (v: string) => void;
+  letra: string | null;
   medio: MedioDeMostrador;
   onMedio: (m: MedioDeMostrador) => void;
   recibido: string;
@@ -606,6 +660,52 @@ function Cobro({
             </button>
           ))}
         </div>
+
+        <p className="mt-5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Qué se lleva
+        </p>
+        <div className="mt-2.5 grid grid-cols-2 gap-2">
+          <button
+            onClick={() => onComprobante("interno")}
+            className={`inline-flex h-12 items-center justify-center gap-2 rounded-xl border text-base font-medium transition-colors ${
+              comprobante === "interno"
+                ? "border-accion bg-accion text-white"
+                : "border-linea hover:bg-hundida"
+            }`}
+          >
+            <Receipt className="h-4 w-4" />
+            Comprobante
+          </button>
+          <button
+            onClick={() => onComprobante("fiscal")}
+            className={`inline-flex h-12 items-center justify-center gap-2 rounded-xl border text-base font-medium transition-colors ${
+              comprobante === "fiscal"
+                ? "border-accion bg-accion text-white"
+                : "border-linea hover:bg-hundida"
+            }`}
+          >
+            <FileText className="h-4 w-4" />
+            {/* La letra la calcula el servidor con la condición de las dos
+                partes. Antes de que conteste se dice "Factura" a secas: mejor
+                eso que anunciar una letra que después cambia. */}
+            {letra ? `Factura ${letra}` : "Factura"}
+          </button>
+        </div>
+
+        {comprobante === "fiscal" && !cliente && (
+          <label className="mt-2.5 block">
+            <span className="text-base text-muted-foreground">
+              CUIT, si lo quiere a nombre de una empresa
+            </span>
+            <input
+              value={cuit}
+              onChange={(e) => onCuit(e.target.value)}
+              inputMode="numeric"
+              placeholder="Sin CUIT: sale a consumidor final"
+              className="tabular mt-1.5 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
+            />
+          </label>
+        )}
 
         {medio === "efectivo" && (
           <label className="mt-4 block">

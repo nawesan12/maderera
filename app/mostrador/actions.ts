@@ -11,6 +11,7 @@ import {
   registrarVentaDeMostrador,
   type MedioDeMostrador,
 } from "@/lib/mostrador/venta";
+import { emitirParaLaVenta, letraQueSaldria } from "@/lib/mostrador/comprobante";
 import {
   buscarClienteEnMostrador,
   buscarParaMostrador,
@@ -23,6 +24,12 @@ export interface EstadoMostrador {
   /** Número del pedido recién hecho, para poder ofrecer el comprobante. */
   numero?: string;
   orderId?: string;
+  invoiceId?: string;
+  /**
+   * Qué salió mal con el comprobante, sobre una venta que igual quedó hecha.
+   * Es distinto de `error`: la venta está, lo que falta es el papel.
+   */
+  avisoFiscal?: string;
 }
 
 const lineaSchema = z.object({
@@ -47,6 +54,10 @@ const ventaSchema = z.object({
     "transferencia",
     "cuenta_corriente",
   ]),
+  /** Qué papel se lleva el cliente. La letra no se elige: se deriva. */
+  comprobante: z.enum(["interno", "fiscal"]).default("interno"),
+  /** CUIT tipeado en el momento, para facturar a alguien sin ficha. */
+  cuit: z.string().nullable().optional(),
   notas: z.string().nullable().optional(),
 });
 
@@ -239,6 +250,28 @@ export async function cobrarVenta(
     });
   }
 
+  /*
+   * El comprobante va acá, fuera de la transacción de la venta y solo si la
+   * venta es nueva. La plata ya está en la caja: si ARCA no contesta, queda una
+   * venta sin comprobante —que se resuelve después desde Facturación— y no una
+   * venta deshecha, que no se resuelve nunca.
+   */
+  let avisoFiscal: string | undefined;
+  let invoiceId: string | undefined;
+
+  if (parsed.data.comprobante === "fiscal" && resultado.nueva) {
+    const fiscal = await emitirParaLaVenta({
+      orderId: resultado.orderId,
+      customerId: parsed.data.customerId,
+      receptorNombre: parsed.data.contactoNombre,
+      cuit: parsed.data.cuit ?? null,
+      lineas: parsed.data.lineas,
+      usuarioId: usuario.userId,
+    });
+    avisoFiscal = fiscal.autorizado ? undefined : fiscal.aviso;
+    invoiceId = fiscal.invoiceId;
+  }
+
   refrescar();
   return {
     ok: resultado.nueva
@@ -246,6 +279,8 @@ export async function cobrarVenta(
       : `Esa venta ya estaba registrada como ${resultado.numero}.`,
     numero: resultado.numero,
     orderId: resultado.orderId,
+    invoiceId,
+    avisoFiscal,
   };
 }
 
@@ -274,4 +309,13 @@ export async function preciosDelCliente(
 ) {
   await requireStaff();
   return preciosPara(variantIds, customerId);
+}
+
+/** Qué letra saldría con el cliente y el CUIT que hay en pantalla. */
+export async function letraDelComprobante(
+  customerId: string | null,
+  cuit: string | null,
+) {
+  await requireStaff();
+  return letraQueSaldria(customerId, cuit);
 }

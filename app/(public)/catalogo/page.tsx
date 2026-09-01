@@ -267,7 +267,7 @@ async function Resultados({ params }: { params: Params }) {
   const pagina = Math.max(1, Number(params.pagina) || 1);
   const whatsapp = await numeroWhatsapp();
 
-  const { productos, total, hayMas } = await paginaDeProductos(
+  const { productos, total, hayMas, topeAlcanzado } = await paginaDeProductos(
     {
       categoria: params.cat,
       busqueda: params.buscar,
@@ -321,23 +321,34 @@ async function Resultados({ params }: { params: Params }) {
         ))}
       </div>
 
-      {hayMas && (
+      {(hayMas || topeAlcanzado) && (
         <div className="mt-[26px] rounded-[14px] border border-dashed border-linea bg-card p-7 text-center">
           <p className="text-[15.5px] font-semibold">
             Viste{" "}
             <span className="tabular">{productos.length}</span> de{" "}
             <span className="tabular">{total}</span> productos
           </p>
-          {/* Un enlace y no un botón: la página siguiente es una dirección, se
-              puede compartir y funciona sin JavaScript. `scroll={false}` para
-              no volver arriba de todo después de haber bajado hasta el pie. */}
-          <Link
-            scroll={false}
-            href={`?${new URLSearchParams({ ...limpiar(params), pagina: String(pagina + 1) })}`}
-            className="mt-3.5 inline-flex h-12 items-center rounded-[10px] border border-linea px-[26px] text-[15px] font-semibold transition-colors hover:bg-sitio-alt"
-          >
-            Ver más productos
-          </Link>
+
+          {hayMas ? (
+            /* Un enlace y no un botón: la página siguiente es una dirección, se
+               puede compartir y funciona sin JavaScript. `scroll={false}` para
+               no volver arriba de todo después de haber bajado hasta el pie. */
+            <Link
+              scroll={false}
+              href={`?${new URLSearchParams({ ...limpiar(params), pagina: String(pagina + 1) })}`}
+              className="mt-3.5 inline-flex h-12 items-center rounded-[10px] border border-linea px-[26px] text-[15px] font-semibold transition-colors hover:bg-sitio-alt"
+            >
+              Ver más productos
+            </Link>
+          ) : (
+            /* Se llegó al techo de acumulación. Seguir agregando páginas a la
+               misma respuesta no ayuda a encontrar nada y sí hace una página
+               que en el celular no se puede abrir. */
+            <p className="mx-auto mt-2.5 max-w-md text-[15px] leading-relaxed text-texto-2">
+              Para ver el resto, elegí un rubro o buscá por nombre, marca o
+              medida. Si no lo encontrás, escribinos y lo buscamos nosotros.
+            </p>
+          )}
         </div>
       )}
     </div>

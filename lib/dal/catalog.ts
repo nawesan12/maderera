@@ -277,6 +277,14 @@ export async function listarProductos(
 export const POR_PAGINA = 24;
 
 /**
+ * Cuántas páginas de "ver más" se pueden acumular en una sola respuesta.
+ *
+ * Cinco son 120 productos, del orden de 745 KB de HTML medidos. Más que eso no
+ * lo lee nadie de corrido: a esa altura se busca o se filtra.
+ */
+export const TOPE_PAGINAS = 5;
+
+/**
  * Una página del catálogo, con el total para poder decir "viste N de M".
  *
  * **El recorte es acá y no en la consulta**, y eso es a propósito. Tres de los
@@ -292,18 +300,38 @@ export const POR_PAGINA = 24;
  * filtrado entero, que con este catálogo es barato. Si algún día son varios
  * miles, el trabajo es mover el precio de lista y la regla de oferta a la
  * consulta, y recién ahí paginar en SQL.
+ *
+ * **El tope no es decorativo.** Como "ver más" acumula, el número de página
+ * viene de la URL y nadie lo estaba acotando, cualquiera podía escribir
+ * `?pagina=9999` y hacer que el servidor armara el catálogo entero en una sola
+ * respuesta. Medido con 2025 productos: 250 KB en la primera página, 2,5 MB en
+ * la veinte, **10,4 MB con `pagina=9999`**. En un celular eso no es lento, es
+ * inusable. Con el tope, el techo de una respuesta queda en `TOPE_PAGINAS`
+ * páginas y de ahí en más la pantalla invita a filtrar, que es como se busca en
+ * un catálogo de ese tamaño.
  */
 export async function paginaDeProductos(
   filtros: FiltrosCatalogo = {},
   pagina = 1,
-): Promise<{ productos: ProductoListado[]; total: number; hayMas: boolean }> {
+): Promise<{
+  productos: ProductoListado[];
+  total: number;
+  hayMas: boolean;
+  topeAlcanzado: boolean;
+}> {
   const todos = await listarProductos(filtros);
-  const hasta = Math.max(1, pagina) * POR_PAGINA;
+  const pedida = Math.max(1, Math.floor(pagina) || 1);
+  const acotada = Math.min(pedida, TOPE_PAGINAS);
+  const hasta = acotada * POR_PAGINA;
+  const quedanAfuera = todos.length > hasta;
 
   return {
     productos: todos.slice(0, hasta),
     total: todos.length,
-    hayMas: todos.length > hasta,
+    // Hay más para ver *y* todavía se puede pedir otra página.
+    hayMas: quedanAfuera && acotada < TOPE_PAGINAS,
+    // Se llegó al techo y aun así quedó catálogo sin mostrar.
+    topeAlcanzado: quedanAfuera && acotada >= TOPE_PAGINAS,
   };
 }
 

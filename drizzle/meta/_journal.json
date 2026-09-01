@@ -134,6 +134,13 @@
       "when": 1788215815654,
       "tag": "0018_tranquil_ravenous",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788215816654,
+      "tag": "0019_busqueda_trigram",
+      "breakpoints": true
     }
   ]
 }

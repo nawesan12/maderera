@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Download, ImageOff, Tags } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
+import { recortar, VerTodo } from "@/components/admin/ver-mas";
 import { fechaHora, haceCuanto, moneda, plural } from "@/components/admin/formato";
 import { BuscadorProductos } from "@/app/admin/productos/buscador";
 import { listarCategoriasAdmin } from "@/lib/dal/admin/products";
@@ -28,7 +29,7 @@ const origenTexto: Record<string, string> = {
 export default async function PreciosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; cat?: string }>;
+  searchParams: Promise<{ buscar?: string; cat?: string; ver?: string }>;
 }) {
   const params = await searchParams;
 
@@ -105,9 +106,13 @@ export default async function PreciosPage({
               destacado
             >
               <Grilla
-                filas={sinPrecio}
+                filas={recortar(sinPrecio, params.ver === "todo").visibles}
                 generalId={general?.id}
                 profesionalId={profesional?.id}
+              />
+              <VerTodo
+                ocultas={recortar(sinPrecio, params.ver === "todo").ocultas}
+                params={params}
               />
             </GrupoListado>
 
@@ -118,17 +123,25 @@ export default async function PreciosPage({
               destacado
             >
               <Grilla
-                filas={desactualizados}
+                filas={recortar(desactualizados, params.ver === "todo").visibles}
                 generalId={general?.id}
                 profesionalId={profesional?.id}
+              />
+              <VerTodo
+                ocultas={recortar(desactualizados, params.ver === "todo").ocultas}
+                params={params}
               />
             </GrupoListado>
 
             <GrupoListado titulo="Actualizados" cantidad={alDia.length}>
               <Grilla
-                filas={alDia}
+                filas={recortar(alDia, params.ver === "todo").visibles}
                 generalId={general?.id}
                 profesionalId={profesional?.id}
+              />
+              <VerTodo
+                ocultas={recortar(alDia, params.ver === "todo").ocultas}
+                params={params}
               />
             </GrupoListado>
           </div>

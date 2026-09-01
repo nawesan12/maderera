@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ImageOff, Package, Plus, Star } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
+import { recortar, VerTodo } from "@/components/admin/ver-mas";
 import { moneda, plural } from "@/components/admin/formato";
 import {
   listarCategoriasAdmin,
@@ -14,7 +15,7 @@ import { BuscadorProductos } from "./buscador";
 export default async function AdminProductosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; cat?: string }>;
+  searchParams: Promise<{ buscar?: string; cat?: string; ver?: string }>;
 }) {
   const params = await searchParams;
   const [productos, categorias] = await Promise.all([
@@ -67,14 +68,22 @@ export default async function AdminProductosPage({
             detalle="Se ven vacíos en el catálogo"
             destacado
           >
-            <Grilla productos={sinFoto} />
+            <Grilla productos={recortar(sinFoto, params.ver === "todo").visibles} />
+            <VerTodo
+              ocultas={recortar(sinFoto, params.ver === "todo").ocultas}
+              params={params}
+            />
           </GrupoListado>
 
           <GrupoListado
             titulo={sinFoto.length > 0 ? "El resto del catálogo" : "Catálogo"}
             cantidad={resto.length}
           >
-            <Grilla productos={resto} />
+            <Grilla productos={recortar(resto, params.ver === "todo").visibles} />
+            <VerTodo
+              ocultas={recortar(resto, params.ver === "todo").ocultas}
+              params={params}
+            />
           </GrupoListado>
         </>
       )}

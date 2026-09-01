@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { ETIQUETAS } from "@/lib/cache-publico";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -20,6 +21,12 @@ export interface EstadoContenido {
 }
 
 function refrescar(slug?: string) {
+  // Los ajustes del sitio y los textos están cacheados entre visitas. `updateTag`
+  // expira la entrada en el acto, así que el cambio se ve al recargar y no
+  // cuando vence la red de seguridad.
+  updateTag(ETIQUETAS.ajustes);
+  updateTag(ETIQUETAS.contenido);
+
   revalidatePath("/admin/contenido");
   revalidatePath("/blog");
   revalidatePath("/");

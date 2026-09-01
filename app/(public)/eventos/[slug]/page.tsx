@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -49,10 +50,11 @@ export default async function EventoPage({
 
   if (!evento) notFound();
 
-  const [sesion, cliente, profesional] = await Promise.all([
+  const [sesion, cliente, profesional, whatsapp] = await Promise.all([
     getSession(),
     clienteDeLaSesion(),
     estadoProfesional(),
+    numeroWhatsapp(),
   ]);
 
   const lugares = evento.cupo > 0 ? evento.cupo - evento.inscriptos : null;
@@ -141,6 +143,7 @@ export default async function EventoPage({
               </div>
             ) : (
               <Anotarse
+                whatsapp={whatsapp}
                 eventId={evento.id}
                 slug={evento.slug}
                 precio={evento.precio}

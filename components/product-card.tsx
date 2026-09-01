@@ -25,14 +25,22 @@ import type { ProductoListado } from "@/lib/dal/catalog";
  * `height: 100%` no es decorativo: iguala las alturas dentro de la grilla para
  * que la fila de botones quede alineada entre tarjetas vecinas.
  */
-export function ProductCard({ product }: { product: ProductoListado }) {
+export function ProductCard({
+  product,
+  whatsapp,
+}: {
+  product: ProductoListado;
+  /** Número del negocio, en dígitos. Baja del servidor porque el dato es
+   *  editable desde el panel y esto es un componente de cliente. */
+  whatsapp: string;
+}) {
   const { agregar, guardando } = useCarrito();
 
   const sinPrecio = !product.precioDesde || Number(product.precioDesde) <= 0;
   const variasMedidas = product.labels.length > 1;
   const enOferta = product.descuento !== null;
 
-  const consulta = `https://wa.me/542235903118?text=${encodeURIComponent(
+  const consulta = `https://wa.me/${whatsapp}?text=${encodeURIComponent(
     `Hola! Quería consultar por ${product.name}.`,
   )}`;
 

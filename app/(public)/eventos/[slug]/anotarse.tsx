@@ -16,6 +16,7 @@ const inicial: EstadoInscripcion = {};
  * ya anotado, sin cupo, reservado para profesionales, o el formulario.
  */
 export function Anotarse({
+  whatsapp,
   eventId,
   slug,
   precio,
@@ -29,6 +30,8 @@ export function Anotarse({
   telefono,
   enVivo,
 }: {
+  /** Número del negocio, en dígitos: es editable desde el panel. */
+  whatsapp: string;
   eventId: string;
   slug: string;
   precio: number;
@@ -102,7 +105,7 @@ export function Anotarse({
           repetimos la fecha.
         </p>
         <a
-          href="https://wa.me/542235903118"
+          href={`https://wa.me/${whatsapp}`}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-4 inline-flex h-11 items-center rounded-lg border px-5 font-medium transition-colors hover:bg-muted"

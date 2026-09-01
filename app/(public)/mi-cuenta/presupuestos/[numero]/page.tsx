@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarClock, MessageCircle, Store } from "lucide-react";
@@ -28,6 +29,7 @@ export default async function DetallePresupuestoPage({
 }: {
   params: Promise<{ numero: string }>;
 }) {
+  const whatsapp = await enlaceWhatsapp();
   const { numero } = await params;
   const presupuesto = await miPresupuesto(numero);
 
@@ -184,7 +186,7 @@ export default async function DetallePresupuestoPage({
         </section>
       ) : (
         <a
-          href={`https://wa.me/542235903118?text=${mensaje}`}
+          href={`${whatsapp}?text=${mensaje}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 font-medium text-white transition-colors hover:bg-brand-green/90"

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
 import {
@@ -72,6 +73,7 @@ const BENEFICIOS = [
  * trae a alguien acá es siempre la misma: "¿esto para mí qué es?".
  */
 export default async function ProfesionalesPage() {
+  const whatsapp = await enlaceWhatsapp();
   const [estado, sesion, cliente, eventos, documentos, reservados] =
     await Promise.all([
       estadoProfesional(),
@@ -217,7 +219,7 @@ export default async function ProfesionalesPage() {
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
             <a
-              href="https://wa.me/542235903118"
+              href={whatsapp}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
@@ -323,7 +325,8 @@ function EstadoDeSolicitud({ fecha }: { fecha: Date }) {
   );
 }
 
-function SolicitudRechazada({ motivo }: { motivo: string | null }) {
+async function SolicitudRechazada({ motivo }: { motivo: string | null }) {
+  const whatsapp = await enlaceWhatsapp();
   return (
     <div className="rounded-xl border bg-white p-6">
       <h2 className="text-xl font-semibold">Sobre tu solicitud</h2>
@@ -336,7 +339,7 @@ function SolicitudRechazada({ motivo }: { motivo: string | null }) {
         resuelven hablando.
       </p>
       <a
-        href="https://wa.me/542235903118"
+        href={whatsapp}
         target="_blank"
         rel="noopener noreferrer"
         className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-5 font-medium text-white transition-colors hover:bg-brand-green/90"

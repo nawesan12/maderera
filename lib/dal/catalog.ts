@@ -1,6 +1,8 @@
 import { cache } from "react";
 import "server-only";
 
+import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
+
 import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { coincideBusqueda } from "@/lib/busqueda";
@@ -111,27 +113,33 @@ export const productosEnOferta = cache(() =>
  * del teléfono y otra para la columna del escritorio— y las dos piden las
  * categorías.
  */
-export const listarCategorias = cache(async () => {
-  return db
-    .select({
-      id: categories.id,
-      slug: categories.slug,
-      name: categories.name,
-      description: categories.description,
-      icon: categories.icon,
-      image: categories.image,
-      // El prototipo tenía este número escrito a mano y desactualizado.
-      productCount: count(products.id),
-    })
-    .from(categories)
-    .leftJoin(
-      products,
-      and(eq(products.categoryId, categories.id), eq(products.active, true)),
-    )
-    .where(eq(categories.active, true))
-    .groupBy(categories.id)
-    .orderBy(asc(categories.sortOrder));
-});
+export const listarCategorias = cache(
+  cachearPublico(
+    async () => {
+      return db
+        .select({
+          id: categories.id,
+          slug: categories.slug,
+          name: categories.name,
+          description: categories.description,
+          icon: categories.icon,
+          image: categories.image,
+          // El prototipo tenía este número escrito a mano y desactualizado.
+          productCount: count(products.id),
+        })
+        .from(categories)
+        .leftJoin(
+          products,
+          and(eq(products.categoryId, categories.id), eq(products.active, true)),
+        )
+        .where(eq(categories.active, true))
+        .groupBy(categories.id)
+        .orderBy(asc(categories.sortOrder));
+    },
+    ["categorias"],
+    ETIQUETAS.catalogo,
+  ),
+);
 
 /**
  * Trae el catálogo ya filtrado desde la base.

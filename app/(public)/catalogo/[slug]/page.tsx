@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { enlaceWhatsapp, numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -64,9 +65,12 @@ export default async function ProductoPage({
     producto.slug,
   );
 
-  const whatsapp = `https://wa.me/542235903118?text=${encodeURIComponent(
-    `Hola! Me interesa: ${producto.name}. ¿Podrían darme más información?`,
-  )}`;
+  const [whatsapp, numeroDelNegocio] = await Promise.all([
+    enlaceWhatsapp(
+      `Hola! Me interesa: ${producto.name}. ¿Podrían darme más información?`,
+    ),
+    numeroWhatsapp(),
+  ]);
 
   // Las medidas se arman de las variantes: si ninguna las tiene cargadas, la
   // ficha técnica no se muestra en lugar de quedar con guiones.
@@ -268,7 +272,7 @@ export default async function ProductoPage({
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {sugeridos.complementarios.map((p) => (
-                <ProductCard key={p.id} product={p} />
+                <ProductCard key={p.id} product={p} whatsapp={numeroDelNegocio} />
               ))}
             </div>
           </section>
@@ -291,7 +295,7 @@ export default async function ProductoPage({
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {sugeridos.similares.map((p) => (
-                <ProductCard key={p.id} product={p} />
+                <ProductCard key={p.id} product={p} whatsapp={numeroDelNegocio} />
               ))}
             </div>
           </section>

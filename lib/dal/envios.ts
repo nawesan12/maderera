@@ -5,6 +5,7 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { branches, shippingZones } from "@/lib/db/schema";
 import type { ZonaEnvio } from "@/lib/envios";
+import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 
 // El tipo y el cálculo viven en `lib/envios.ts`, sin `server-only`, para poder
 // probarlos. Se reexportan para que quien ya los importaba desde acá no cambie.
@@ -42,23 +43,29 @@ export async function listarZonasDeEnvio(): Promise<ZonaEnvio[]> {
  * dos consultas idénticas por carga. Las sucursales no cambian entre el
  * encabezado y el pie de la misma pantalla.
  */
-export const listarSucursalesPublicas = cache(async () => {
-  return db
-    .select({
-      id: branches.id,
-      slug: branches.slug,
-      nombre: branches.name,
-      direccion: branches.address,
-      horario: branches.hours,
-      telefono: branches.phone,
-      whatsapp: branches.whatsapp,
-      email: branches.email,
-      mapUrl: branches.mapUrl,
-      imagenUrl: branches.imagenUrl,
-      servicios: branches.servicios,
-      destacados: branches.destacados,
-    })
-    .from(branches)
-    .where(eq(branches.active, true))
-    .orderBy(asc(branches.sortOrder));
-});
+export const listarSucursalesPublicas = cache(
+  cachearPublico(
+    async () => {
+      return db
+        .select({
+          id: branches.id,
+          slug: branches.slug,
+          nombre: branches.name,
+          direccion: branches.address,
+          horario: branches.hours,
+          telefono: branches.phone,
+          whatsapp: branches.whatsapp,
+          email: branches.email,
+          mapUrl: branches.mapUrl,
+          imagenUrl: branches.imagenUrl,
+          servicios: branches.servicios,
+          destacados: branches.destacados,
+        })
+        .from(branches)
+        .where(eq(branches.active, true))
+        .orderBy(asc(branches.sortOrder));
+    },
+    ["sucursales-publicas"],
+    ETIQUETAS.sucursales,
+  ),
+);

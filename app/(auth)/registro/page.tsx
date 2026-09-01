@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Image from "next/image";
 import Link from "next/link";
 import { PestanasAcceso } from "@/components/pestanas-acceso";
@@ -48,6 +49,7 @@ export default async function RegistroPage({
 }: {
   searchParams: Promise<{ volver?: string }>;
 }) {
+  const whatsapp = await enlaceWhatsapp();
   const { volver } = await searchParams;
 
   // Quien ya entró no tiene nada que hacer acá.
@@ -157,7 +159,7 @@ export default async function RegistroPage({
           <p className="mt-6 text-center text-xs text-muted-foreground">
             ¿Comprás a cuenta corriente?{" "}
             <a
-              href="https://wa.me/542235903118"
+              href={whatsapp}
               className="font-medium text-brand-orange hover:underline"
             >
               Escribinos

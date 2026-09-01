@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { enlaceWhatsapp, numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -134,11 +135,13 @@ function FranjaBeneficios() {
   );
 }
 
-function Ofertas({
+async function Ofertas({
   productos,
 }: {
   productos: Awaited<ReturnType<typeof datosDePortada>>["ofertas"];
 }) {
+  const whatsapp = await numeroWhatsapp();
+
   return (
     <section className="bg-sitio-fondo pt-[66px]">
       <div className="contenedor">
@@ -154,7 +157,7 @@ function Ofertas({
 
         <div className="mt-7 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
           {productos.map((p) => (
-            <ProductCard key={p.id} product={p} />
+            <ProductCard key={p.id} product={p} whatsapp={whatsapp} />
           ))}
         </div>
       </div>
@@ -217,12 +220,14 @@ function Categorias({
   );
 }
 
-function Destacados({
+async function Destacados({
   productos,
 }: {
   productos: Awaited<ReturnType<typeof datosDePortada>>["destacados"];
 }) {
   if (productos.length === 0) return null;
+
+  const whatsapp = await numeroWhatsapp();
 
   return (
     <section className="bg-sitio-fondo py-[66px]">
@@ -239,7 +244,7 @@ function Destacados({
 
         <div className="mt-7 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
           {productos.map((p) => (
-            <ProductCard key={p.id} product={p} />
+            <ProductCard key={p.id} product={p} whatsapp={whatsapp} />
           ))}
         </div>
       </div>
@@ -648,25 +653,32 @@ function Sucursales({
                 </ul>
 
                 <div className="mt-5 flex flex-wrap gap-2.5">
-                  <a href="tel:+542234743328">
-                    <Button variant="outline" size="sm" className="rounded-full">
-                      <Phone className="mr-1.5 h-3.5 w-3.5" />
-                      Llamar
-                    </Button>
-                  </a>
-                  <a
-                    href="https://wa.me/542235903118"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Button
-                      size="sm"
-                      className="rounded-full bg-brand-green text-white hover:bg-brand-green/90"
+                  {/* El número sale de la sucursal de la tarjeta: estaba fijo
+                      en el de Casa Central, así que "Llamar" en la ficha del
+                      Aserradero discaba al otro local. */}
+                  {s.telefono && (
+                    <a href={`tel:${s.telefono.replace(/[^\d+]/g, "")}`}>
+                      <Button variant="outline" size="sm" className="rounded-full">
+                        <Phone className="mr-1.5 h-3.5 w-3.5" />
+                        Llamar
+                      </Button>
+                    </a>
+                  )}
+                  {s.whatsapp && (
+                    <a
+                      href={`https://wa.me/${s.whatsapp.replace(/\D/g, "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
-                      <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
-                      WhatsApp
-                    </Button>
-                  </a>
+                      <Button
+                        size="sm"
+                        className="rounded-full bg-brand-green text-white hover:bg-brand-green/90"
+                      >
+                        <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+                        WhatsApp
+                      </Button>
+                    </a>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -730,7 +742,8 @@ function Blog({
   );
 }
 
-function CierreCta() {
+async function CierreCta() {
+  const whatsapp = await enlaceWhatsapp();
   return (
     <section className="relative overflow-hidden bg-oscuro-marca py-16 text-white">
       <div
@@ -761,7 +774,7 @@ function CierreCta() {
             </Button>
           </Link>
           <a
-            href="https://wa.me/542235903118"
+            href={whatsapp}
             target="_blank"
             rel="noopener noreferrer"
           >

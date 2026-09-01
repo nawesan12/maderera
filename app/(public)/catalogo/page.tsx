@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import { Suspense } from "react";
 import Link from "next/link";
 import { Search, Tag, Truck, Store, Headphones } from "lucide-react";
@@ -264,6 +265,7 @@ async function Lateral({ params }: { params: Params }) {
 
 async function Resultados({ params }: { params: Params }) {
   const pagina = Math.max(1, Number(params.pagina) || 1);
+  const whatsapp = await numeroWhatsapp();
 
   const { productos, total, hayMas } = await paginaDeProductos(
     {
@@ -315,7 +317,7 @@ async function Resultados({ params }: { params: Params }) {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {productos.map((producto) => (
-          <ProductCard key={producto.id} product={producto} />
+          <ProductCard key={producto.id} product={producto} whatsapp={whatsapp} />
         ))}
       </div>
 

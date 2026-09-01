@@ -3,10 +3,15 @@
 import { motion } from "framer-motion";
 import { MessageCircle } from "lucide-react";
 
-export function WhatsAppButton() {
+/**
+ * El enlace baja por prop porque el número es editable desde el panel y esto
+ * es un componente de cliente: leerlo acá significaría volver a escribirlo a
+ * mano, que es exactamente lo que lo dejaba desactualizado.
+ */
+export function WhatsAppButton({ enlace }: { enlace: string }) {
   return (
     <motion.a
-      href="https://wa.me/5492235903118?text=Hola!%20Quisiera%20consultar%20sobre..."
+      href={enlace}
       target="_blank"
       rel="noopener noreferrer"
       className="fixed bottom-6 right-6 z-50 bg-[#25D366] text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:shadow-xl hover:scale-110 transition-all"

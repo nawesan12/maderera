@@ -10,6 +10,7 @@ import {
   testimonials,
 } from "@/lib/db/schema";
 import { coincideBusqueda } from "@/lib/busqueda";
+import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 
 /**
  * Contenido público del sitio.
@@ -188,19 +189,31 @@ export interface TestimonioPublico {
   iniciales: string | null;
 }
 
-export async function listarTestimonios(): Promise<TestimonioPublico[]> {
-  return db
-    .select({
-      id: testimonials.id,
-      nombre: testimonials.nombre,
-      rol: testimonials.rol,
-      texto: testimonials.texto,
-      iniciales: testimonials.iniciales,
-    })
-    .from(testimonials)
-    .where(eq(testimonials.activo, true))
-    .orderBy(asc(testimonials.orden));
-}
+export const listarTestimonios = cachearPublico(
+  async (): Promise<TestimonioPublico[]> => {
+    return db
+      .select({
+        id: testimonials.id,
+        nombre: testimonials.nombre,
+        rol: testimonials.rol,
+        texto: testimonials.texto,
+        iniciales: testimonials.iniciales,
+      })
+      .from(testimonials)
+      .where(eq(testimonials.activo, true))
+      .orderBy(asc(testimonials.orden));
+  },
+  ["testimonios-activos"],
+  ETIQUETAS.contenido,
+);
+
+/*
+ * `listarArticulos` queda deliberadamente fuera del caché compartido: recibe el
+ * texto de búsqueda del blog, y `unstable_cache` indexa por argumento. Cachearla
+ * guardaría una entrada por cada cosa que alguien escriba en el buscador, que es
+ * un caché que crece sin techo para ahorrar una consulta en la página menos
+ * visitada del sitio.
+ */
 
 /**
  * Ajustes del sitio, todos juntos.
@@ -209,14 +222,23 @@ export async function listarTestimonios(): Promise<TestimonioPublico[]> {
  * pantallas consultan dos o tres, así que una consulta por ajuste sería
  * gratuito de escribir y caro de correr.
  */
+/*
+ * Doble memoización a propósito: `cache()` de React evita repetirla dentro de
+ * una misma request, y `cachearPublico` la comparte entre visitas. Es la
+ * consulta que corre en absolutamente toda página del sitio.
+ */
 export const ajustesDelSitio = cache(
-  async (): Promise<Record<string, string>> => {
-    const filas = await db
-      .select({ clave: siteSettings.clave, valor: siteSettings.valor })
-      .from(siteSettings);
+  cachearPublico(
+    async (): Promise<Record<string, string>> => {
+      const filas = await db
+        .select({ clave: siteSettings.clave, valor: siteSettings.valor })
+        .from(siteSettings);
 
-    return Object.fromEntries(filas.map((f) => [f.clave, f.valor]));
-  },
+      return Object.fromEntries(filas.map((f) => [f.clave, f.valor]));
+    },
+    ["ajustes-del-sitio"],
+    ETIQUETAS.ajustes,
+  ),
 );
 
 export async function ajuste(clave: string, porDefecto = ""): Promise<string> {

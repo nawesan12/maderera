@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { ETIQUETAS } from "@/lib/cache-publico";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
@@ -327,6 +328,11 @@ export async function cerrarCorrida(
 
   const normalizadas = normalizarFilas(definicionDe(entidad), mapeo, filas);
   const controles = await informeDeIntegridad(entidad, normalizadas);
+
+  // La importación de productos crea categorías, y las categorías están
+  // cacheadas entre visitas porque las lee el menú del sitio. Sin esto, importar
+  // el catálogo viejo dejaba rubros nuevos invisibles hasta que venciera.
+  updateTag(ETIQUETAS.catalogo);
 
   revalidatePath("/admin/migracion");
   revalidatePath("/admin/clientes");

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import { Compass, MessageCircle, Search } from "lucide-react";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
 
@@ -14,7 +15,8 @@ import { EncabezadoPublico } from "@/components/encabezado-publico";
  * producto cambió de nombre (buscador), la página se movió (catálogo), o hace
  * falta preguntar (WhatsApp).
  */
-export default function NoEncontrado() {
+export default async function NoEncontrado() {
+  const whatsapp = await enlaceWhatsapp();
   return (
     <>
       <EncabezadoPublico
@@ -51,7 +53,7 @@ export default function NoEncontrado() {
           </Link>
 
           <a
-            href="https://wa.me/542235903118"
+            href={whatsapp}
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-[14px] border border-linea bg-card p-5 transition-colors hover:border-linea-hover"

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Image from "next/image";
 import Link from "next/link";
 import { PestanasAcceso } from "@/components/pestanas-acceso";
@@ -19,6 +20,7 @@ export default async function IngresarPage({
 }: {
   searchParams: Promise<{ volver?: string }>;
 }) {
+  const whatsapp = await enlaceWhatsapp();
   const { volver } = await searchParams;
 
   // Con la sesión abierta, esta pantalla no tiene sentido: va a donde
@@ -78,7 +80,7 @@ export default async function IngresarPage({
         <p className="mt-6 text-center text-xs text-muted-foreground">
           ¿Problemas para entrar? Escribinos al{" "}
           <a
-            href="https://wa.me/542235903118"
+            href={whatsapp}
             className="font-medium text-brand-orange hover:underline"
           >
             WhatsApp de Casa Central

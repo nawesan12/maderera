@@ -76,7 +76,21 @@ export interface SesionNavbar {
   esStaff: boolean;
 }
 
-export function Navbar({ sesion }: { sesion?: SesionNavbar | null }) {
+/**
+ * El teléfono y el horario bajan por prop desde el layout, que los lee de Casa
+ * Central. Estuvieron escritos a mano acá y por eso corregir el teléfono en el
+ * panel lo dejaba viejo en la barra superior de todas las páginas: el dato de
+ * contacto tiene una sola fuente, que es la ficha de la sucursal.
+ */
+export function Navbar({
+  sesion,
+  telefono,
+  horario,
+}: {
+  sesion?: SesionNavbar | null;
+  telefono?: string | null;
+  horario?: string | null;
+}) {
   const [productsOpen, setProductsOpen] = useState(false);
   const [masOpen, setMasOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -96,14 +110,21 @@ export function Navbar({ sesion }: { sesion?: SesionNavbar | null }) {
       {/* Barra superior. Siempre oscura, en los dos temas. */}
       <div className="hidden bg-oscuro-marca text-[12.5px] text-white/70 sm:block">
         <div className="contenedor flex h-[38px] items-center gap-5">
-          <span className="flex items-center gap-[7px]">
-            <Phone className="h-[13px] w-[13px] text-brand-orange" />
-            <span className="tabular">(0223) 474-3328</span>
-          </span>
-          <span className="hidden items-center gap-[7px] md:flex">
-            <Clock className="h-[13px] w-[13px] text-brand-orange" />
-            Lun-Vie 8:00-16:00 | Sáb 8:00-12:00
-          </span>
+          {telefono && (
+            <a
+              href={`tel:${telefono.replace(/[^\d+]/g, "")}`}
+              className="flex items-center gap-[7px] transition-colors hover:text-white"
+            >
+              <Phone className="h-[13px] w-[13px] text-brand-orange" />
+              <span className="tabular">{telefono}</span>
+            </a>
+          )}
+          {horario && (
+            <span className="hidden items-center gap-[7px] md:flex">
+              <Clock className="h-[13px] w-[13px] text-brand-orange" />
+              {horario}
+            </span>
+          )}
           <div className="ml-auto flex items-center gap-3.5">
             <Link href="/profesionales" className="font-medium text-white/80 transition-colors hover:text-white">
               Portal Profesionales

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import {
   ArrowRight,
   MessageCircle,
@@ -307,7 +308,8 @@ function AccesosRapidos() {
 }
 
 /** Primera visita: qué hacer, no un vacío con un ícono gris. */
-function Bienvenida({ nombre }: { nombre: string }) {
+async function Bienvenida({ nombre }: { nombre: string }) {
+  const whatsapp = await enlaceWhatsapp();
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-2xl border bg-white">
@@ -368,7 +370,7 @@ function Bienvenida({ nombre }: { nombre: string }) {
           esta cuenta web para que veas tu saldo y tu historial acá.
         </p>
         <a
-          href="https://wa.me/542235903118"
+          href={whatsapp}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-brand-green hover:underline"

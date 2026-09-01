@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { ETIQUETAS } from "@/lib/cache-publico";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -20,6 +21,12 @@ export interface EstadoSucursal {
  * apareciendo viejo en el pie es peor que no haberlo corregido.
  */
 function refrescar() {
+  // Las sucursales están cacheadas entre visitas porque las lee el pie de toda
+  // página del sitio. `updateTag` —y no `revalidateTag`— porque acá hace falta
+  // leer lo recién escrito: quien corrige un teléfono tiene que verlo corregido
+  // al volver, no en la visita siguiente. Sin esto tardaría hasta cinco minutos.
+  updateTag(ETIQUETAS.sucursales);
+
   revalidatePath("/admin/sucursales");
   revalidatePath("/sucursales");
   revalidatePath("/contacto");

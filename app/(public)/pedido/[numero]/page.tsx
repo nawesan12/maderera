@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -30,6 +31,7 @@ export default async function PedidoConfirmadoPage({
   params: Promise<{ numero: string }>;
   searchParams: Promise<{ t?: string }>;
 }) {
+  const whatsapp = await enlaceWhatsapp();
   const [{ numero }, { t }] = await Promise.all([params, searchParams]);
 
   // La consulta vive en el DAL, con el control de acceso adentro. Antes estaba
@@ -210,7 +212,7 @@ export default async function PedidoConfirmadoPage({
 
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <a
-            href={`https://wa.me/542235903118?text=${mensaje}`}
+            href={`${whatsapp}?text=${mensaje}`}
             target="_blank"
             rel="noopener noreferrer"
           >

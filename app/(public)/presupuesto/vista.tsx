@@ -30,10 +30,13 @@ export function VistaPresupuesto({
   sucursales,
   contacto,
   esProfesional,
+  whatsapp,
 }: {
   sucursales: SucursalElegible[];
   contacto: { nombre?: string | null; email?: string | null; telefono?: string | null };
   esProfesional: boolean;
+  /** Número del negocio, en dígitos: es editable desde el panel. */
+  whatsapp: string;
 }) {
   const {
     items,
@@ -298,7 +301,7 @@ export function VistaPresupuesto({
                   />
 
                   <a
-                    href={`https://wa.me/542235903118?text=${mensajeWhatsapp}`}
+                    href={`https://wa.me/${whatsapp}?text=${mensajeWhatsapp}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block"

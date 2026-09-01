@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -44,6 +45,7 @@ export default async function DetallePedidoPage({
 }: {
   params: Promise<{ numero: string }>;
 }) {
+  const whatsapp = await enlaceWhatsapp();
   const { numero } = await params;
   const pedido = await miPedido(numero);
 
@@ -318,7 +320,7 @@ export default async function DetallePedidoPage({
       <div className="flex flex-wrap gap-3">
         <VolverAPedir numero={pedido.numero} />
         <a
-          href={`https://wa.me/542235903118?text=${mensaje}`}
+          href={`${whatsapp}?text=${mensaje}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 font-medium text-white transition-colors hover:bg-brand-green/90"

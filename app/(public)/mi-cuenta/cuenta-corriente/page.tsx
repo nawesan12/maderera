@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { MessageCircle, Receipt } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
@@ -15,6 +16,7 @@ export default async function CuentaCorrientePage({
 }: {
   searchParams: Promise<{ pago?: string }>;
 }) {
+  const whatsapp = await enlaceWhatsapp();
   const [cuenta, banco, { pago }] = await Promise.all([
     miCuentaCorriente(),
     datosParaTransferir(),
@@ -34,7 +36,7 @@ export default async function CuentaCorrientePage({
           vemos.
         </p>
         <a
-          href="https://wa.me/542235903118"
+          href={whatsapp}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
@@ -235,7 +237,7 @@ export default async function CuentaCorrientePage({
       <p className="text-sm text-muted-foreground">
         ¿Ves algo que no cuadra?{" "}
         <a
-          href="https://wa.me/542235903118"
+          href={whatsapp}
           target="_blank"
           rel="noopener noreferrer"
           className="font-medium text-brand-orange hover:underline"

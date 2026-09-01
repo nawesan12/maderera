@@ -265,6 +265,40 @@ export async function listarProductos(
   return ordenar(resultado, filtros.orden ?? "relevancia");
 }
 
+/** Cuántos productos entran en una página del catálogo. */
+export const POR_PAGINA = 24;
+
+/**
+ * Una página del catálogo, con el total para poder decir "viste N de M".
+ *
+ * **El recorte es acá y no en la consulta**, y eso es a propósito. Tres de los
+ * filtros —disponibilidad, ofertas y el orden por precio— dependen de datos que
+ * se arman después de traer las filas: el stock combinado de las dos
+ * sucursales, y sobre todo el precio, que sale de la lista de la sesión y
+ * decide si un producto está en oferta. Un `limit` en SQL cortaría antes de que
+ * eso exista y devolvería páginas de tamaño equivocado, o peor, productos que
+ * el filtro después descarta.
+ *
+ * Lo que esto resuelve es lo que se medió: con 312 productos la grilla completa
+ * son del orden de 1,6 MB de HTML por carga. La base sigue leyendo el conjunto
+ * filtrado entero, que con este catálogo es barato. Si algún día son varios
+ * miles, el trabajo es mover el precio de lista y la regla de oferta a la
+ * consulta, y recién ahí paginar en SQL.
+ */
+export async function paginaDeProductos(
+  filtros: FiltrosCatalogo = {},
+  pagina = 1,
+): Promise<{ productos: ProductoListado[]; total: number; hayMas: boolean }> {
+  const todos = await listarProductos(filtros);
+  const hasta = Math.max(1, pagina) * POR_PAGINA;
+
+  return {
+    productos: todos.slice(0, hasta),
+    total: todos.length,
+    hayMas: todos.length > hasta,
+  };
+}
+
 /**
  * Ordena el listado.
  *

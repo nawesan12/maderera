@@ -11,7 +11,7 @@ import {
 import {
   listarCategorias,
   productosEnOferta,
-  listarProductos,
+  paginaDeProductos,
   type OrdenCatalogo,
 } from "@/lib/dal/catalog";
 import { DatosEstructurados } from "@/components/datos-estructurados";
@@ -23,6 +23,7 @@ interface Params {
   stock?: string;
   orden?: string;
   ofertas?: string;
+  pagina?: string;
 }
 
 /**
@@ -55,7 +56,21 @@ export async function generateMetadata({
     ],
   };
 
-  if (params.buscar || params.orden || params.ofertas || params.stock) {
+  /*
+   * Las páginas siguientes no se indexan.
+   *
+   * Cada una contiene a la anterior —"Ver más" agrega, no reemplaza—, así que
+   * indexarlas sería ofrecerle al buscador cinco versiones del mismo catálogo
+   * con la primera repetida en todas. La canónica apunta a la página uno, que
+   * es la que tiene que aparecer.
+   */
+  if (
+    params.buscar ||
+    params.orden ||
+    params.ofertas ||
+    params.stock ||
+    (params.pagina && params.pagina !== "1")
+  ) {
     return {
       ...base,
       title: params.buscar ? `Buscar "${params.buscar}"` : "Catálogo de productos",
@@ -248,13 +263,18 @@ async function Lateral({ params }: { params: Params }) {
 }
 
 async function Resultados({ params }: { params: Params }) {
-  const productos = await listarProductos({
-    categoria: params.cat,
-    busqueda: params.buscar,
-    stock: params.stock as never,
-    orden: (params.orden as OrdenCatalogo) ?? "relevancia",
-    soloOfertas: params.ofertas === "1",
-  });
+  const pagina = Math.max(1, Number(params.pagina) || 1);
+
+  const { productos, total, hayMas } = await paginaDeProductos(
+    {
+      categoria: params.cat,
+      busqueda: params.buscar,
+      stock: params.stock as never,
+      orden: (params.orden as OrdenCatalogo) ?? "relevancia",
+      soloOfertas: params.ofertas === "1",
+    },
+    pagina,
+  );
 
   if (productos.length === 0) {
     return (
@@ -281,10 +301,8 @@ async function Resultados({ params }: { params: Params }) {
   return (
     <div>
       <p className="mb-4 text-[15px] text-texto-2">
-        <span className="tabular font-semibold text-foreground">
-          {productos.length}
-        </span>{" "}
-        {productos.length === 1 ? "producto" : "productos"}
+        <span className="tabular font-semibold text-foreground">{total}</span>{" "}
+        {total === 1 ? "producto" : "productos"}
         {enOferta > 0 && (
           <>
             {" · "}
@@ -300,8 +318,37 @@ async function Resultados({ params }: { params: Params }) {
           <ProductCard key={producto.id} product={producto} />
         ))}
       </div>
+
+      {hayMas && (
+        <div className="mt-[26px] rounded-[14px] border border-dashed border-linea bg-card p-7 text-center">
+          <p className="text-[15.5px] font-semibold">
+            Viste{" "}
+            <span className="tabular">{productos.length}</span> de{" "}
+            <span className="tabular">{total}</span> productos
+          </p>
+          {/* Un enlace y no un botón: la página siguiente es una dirección, se
+              puede compartir y funciona sin JavaScript. `scroll={false}` para
+              no volver arriba de todo después de haber bajado hasta el pie. */}
+          <Link
+            scroll={false}
+            href={`?${new URLSearchParams({ ...limpiar(params), pagina: String(pagina + 1) })}`}
+            className="mt-3.5 inline-flex h-12 items-center rounded-[10px] border border-linea px-[26px] text-[15px] font-semibold transition-colors hover:bg-sitio-alt"
+          >
+            Ver más productos
+          </Link>
+        </div>
+      )}
     </div>
   );
+}
+
+/** Los filtros vigentes, sin los vacíos, para rearmar la URL. */
+function limpiar(params: Params): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(params).filter(
+      ([clave, valor]) => clave !== "pagina" && Boolean(valor),
+    ),
+  ) as Record<string, string>;
 }
 
 function GrillaCargando() {

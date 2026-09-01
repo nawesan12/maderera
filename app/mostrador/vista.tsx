@@ -10,6 +10,7 @@ import {
   Loader2,
   Lock,
   NotebookPen,
+  PenLine,
   Plus,
   FileText,
   Printer,
@@ -130,6 +131,7 @@ export function VistaMostrador({
     invoiceId?: string;
   } | null>(null);
   const [caja, setCaja] = useState(false);
+  const [suelta, setSuelta] = useState<string | null>(null);
 
   const total = useMemo(() => totalDeLaVenta(lineas), [lineas]);
   // Sin nada tipeado no hay vuelto que mostrar: `Number("")` es 0, y un vuelto
@@ -265,6 +267,7 @@ export function VistaMostrador({
             branchId={sucursal.id}
             customerId={cliente?.id ?? null}
             onElegir={(l) => setLineas((prev) => sumar(prev, l))}
+            onSuelta={setSuelta}
           />
           <Lineas
             lineas={lineas}
@@ -299,6 +302,17 @@ export function VistaMostrador({
           />
         </aside>
       </div>
+
+      {suelta !== null && (
+        <AltaAMano
+          descripcionInicial={suelta}
+          onCerrar={() => setSuelta(null)}
+          onAgregar={(l) => {
+            setLineas((prev) => [...prev, l]);
+            setSuelta(null);
+          }}
+        />
+      )}
 
       {caja && (
         <PanelDeCaja
@@ -384,10 +398,13 @@ function Buscador({
   branchId,
   customerId,
   onElegir,
+  onSuelta,
 }: {
   branchId: string;
   customerId: string | null;
   onElegir: (l: LineaDeVenta) => void;
+  /** Abre el alta a mano con el texto que ya se tipeó. */
+  onSuelta: (descripcion: string) => void;
 }) {
   const [texto, setTexto] = useState("");
   const [resultados, setResultados] = useState<
@@ -448,9 +465,21 @@ function Buscador({
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && visibles.length > 0) {
+            if (e.key === "Enter") {
               e.preventDefault();
-              elegir(visibles[0]);
+              if (visibles.length > 0) {
+                elegir(visibles[0]);
+              } else if (texto.trim().length >= 2 && !buscando) {
+                /*
+                 * Enter sobre algo que no está en el catálogo abre la carga a
+                 * mano con ese texto. En el mostrador se tipea "corte a
+                 * medida" o "flete centro" y se espera que pase algo; que no
+                 * pase nada obliga a buscar otro camino con alguien esperando
+                 * enfrente.
+                 */
+                onSuelta(texto.trim());
+                setTexto("");
+              }
             }
             if (e.key === "Escape") setTexto("");
           }}
@@ -459,6 +488,27 @@ function Buscador({
         />
         {buscando && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
+
+      {texto.trim().length >= 2 && visibles.length === 0 && !buscando && (
+        <div className="absolute inset-x-0 top-full z-20 mt-1.5 rounded-xl border border-linea bg-popover p-4 shadow-lg">
+          <p className="text-base text-muted-foreground">
+            No hay nada en el catálogo con «{texto.trim()}».
+          </p>
+          <button
+            onClick={() => {
+              onSuelta(texto.trim());
+              setTexto("");
+            }}
+            className="mt-2.5 inline-flex h-11 items-center gap-2 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida"
+          >
+            <PenLine className="h-4 w-4" />
+            Cargarlo a mano
+            <kbd className="rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">
+              Enter
+            </kbd>
+          </button>
+        </div>
+      )}
 
       {visibles.length > 0 && (
         <ul className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-[420px] overflow-y-auto rounded-xl border border-linea bg-popover shadow-lg">
@@ -511,7 +561,8 @@ function Lineas({
           Buscá un producto para empezar la venta
         </p>
         <p className="text-base text-muted-foreground">
-          Por nombre, por medida o pasando el código.
+          Por nombre, por medida o pasando el código. Lo que no esté —un corte,
+          un flete— se carga a mano desde el mismo buscador.
         </p>
       </div>
     );
@@ -1154,6 +1205,141 @@ function PanelDeCaja({
     </Dialog>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Carga de una línea que no está en el catálogo.
+ *
+ * Existe porque media venta de maderera no es un producto de la lista: un corte
+ * a medida, un flete, una diferencia por una placa marcada. Sin esto, eso se
+ * arregla afuera del sistema —a mano, en un papel— y la venta que queda
+ * registrada no es la que se hizo.
+ *
+ * La línea sale con `variantId` en nulo, que es lo que hace que no descuente
+ * stock de ningún estante: un flete no sale de una pila.
+ */
+function AltaAMano({
+  descripcionInicial,
+  onCerrar,
+  onAgregar,
+}: {
+  descripcionInicial: string;
+  onCerrar: () => void;
+  onAgregar: (l: LineaDeVenta) => void;
+}) {
+  const [descripcion, setDescripcion] = useState(descripcionInicial);
+  const [unidad, setUnidad] = useState("unidad");
+  const [cantidad, setCantidad] = useState("1");
+  const [precio, setPrecio] = useState("");
+
+  const valido =
+    descripcion.trim().length > 0 && Number(cantidad) > 0 && precio !== "" && Number(precio) >= 0;
+
+  function agregar() {
+    if (!valido) return;
+    onAgregar({
+      variantId: null,
+      descripcion: descripcion.trim(),
+      unidad: unidad.trim() || "unidad",
+      cantidad: Number(cantidad),
+      precioUnitario: Number(precio),
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={(abierto) => !abierto && onCerrar()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold tracking-tight">
+            Cargar a mano
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3.5">
+          <label className="block">
+            <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Qué es
+            </span>
+            <input
+              autoFocus
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              placeholder="Corte a medida, flete, diferencia…"
+              className="mt-1.5 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
+            />
+          </label>
+
+          <div className="flex gap-3">
+            <label className="flex-1">
+              <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Cantidad
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={cantidad}
+                onChange={(e) => setCantidad(e.target.value)}
+                className="tabular mt-1.5 h-12 w-full rounded-lg border border-linea bg-background px-3 text-right text-base"
+              />
+            </label>
+            <label className="flex-1">
+              <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Unidad
+              </span>
+              <input
+                value={unidad}
+                onChange={(e) => setUnidad(e.target.value)}
+                className="mt-1.5 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Precio por unidad
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={precio}
+              onChange={(e) => setPrecio(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  agregar();
+                }
+              }}
+              placeholder="0"
+              className="tabular mt-1.5 h-14 w-full rounded-lg border border-linea bg-background px-3 text-right text-2xl font-semibold"
+            />
+          </label>
+
+          {Number(cantidad) > 0 && precio !== "" && (
+            <p className="flex items-baseline justify-between text-lg">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="tabular font-bold">
+                {formatearMonto(Number(cantidad) * Number(precio))}
+              </span>
+            </p>
+          )}
+
+          <button
+            onClick={agregar}
+            disabled={!valido}
+            className="inline-flex h-14 w-full items-center justify-center rounded-xl bg-accion text-lg font-bold text-white transition-colors hover:bg-accion-hover disabled:opacity-40"
+          >
+            Agregar a la venta
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 
 function Dato({ titulo, valor }: { titulo: string; valor: number }) {
   return (

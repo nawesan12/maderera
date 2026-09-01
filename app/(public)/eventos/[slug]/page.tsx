@@ -19,7 +19,7 @@ export async function generateMetadata({
   const { slug } = await params;
   const evento = await eventoPorSlug(slug);
 
-  if (!evento) return { title: "Evento" };
+  if (!evento) return { title: "Evento no encontrado" };
 
   return {
     title: evento.titulo,

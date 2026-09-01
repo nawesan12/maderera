@@ -1,3 +1,4 @@
+import { cache } from "react";
 import "server-only";
 
 import { and, eq } from "drizzle-orm";
@@ -23,59 +24,67 @@ import { clienteDeLaSesion } from "@/lib/dal/cuenta";
  * sin token. Eso es lo que hace que un enlace viejo, de antes de que existiera
  * el token, siga funcionando para quien corresponde.
  */
-export async function pedidoParaSeguimiento(numero: string, token?: string) {
-  const [pedido] = await db
-    .select({
-      id: orders.id,
-      numero: orders.numero,
-      publicToken: orders.publicToken,
-      customerId: orders.customerId,
-      cliente: orders.contactoNombre,
-      telefono: orders.contactoTelefono,
-      tipoEntrega: orders.tipoEntrega,
-      direccionEntrega: orders.direccionEntrega,
-      zonaEnvio: orders.zonaEnvio,
-      costoEnvio: orders.costoEnvio,
-      subtotal: orders.subtotal,
-      total: orders.total,
-      medioPago: orders.medioPago,
-      estadoPago: orders.estadoPago,
-      estado: orders.estado,
-      sucursal: branches.name,
-      sucursalDireccion: branches.address,
-      createdAt: orders.createdAt,
-    })
-    .from(orders)
-    .leftJoin(branches, eq(branches.id, orders.branchId))
-    .where(eq(orders.numero, numero))
-    .limit(1);
+/*
+ * Memoizada por request: la pide el cuerpo de la página y también su
+ * `generateMetadata`, que necesita saber si el pedido existe para no titular
+ * "Pedido confirmado" una pantalla de no encontrado. Sin esto serían dos
+ * consultas idénticas por carga.
+ */
+export const pedidoParaSeguimiento = cache(
+  async (numero: string, token?: string) => {
+    const [pedido] = await db
+      .select({
+        id: orders.id,
+        numero: orders.numero,
+        publicToken: orders.publicToken,
+        customerId: orders.customerId,
+        cliente: orders.contactoNombre,
+        telefono: orders.contactoTelefono,
+        tipoEntrega: orders.tipoEntrega,
+        direccionEntrega: orders.direccionEntrega,
+        zonaEnvio: orders.zonaEnvio,
+        costoEnvio: orders.costoEnvio,
+        subtotal: orders.subtotal,
+        total: orders.total,
+        medioPago: orders.medioPago,
+        estadoPago: orders.estadoPago,
+        estado: orders.estado,
+        sucursal: branches.name,
+        sucursalDireccion: branches.address,
+        createdAt: orders.createdAt,
+      })
+      .from(orders)
+      .leftJoin(branches, eq(branches.id, orders.branchId))
+      .where(eq(orders.numero, numero))
+      .limit(1);
 
-  if (!pedido) return null;
+    if (!pedido) return null;
 
-  // Comparación de longitud fija sobre dos uuid. No se usa el token en el
-  // `where` para poder distinguir "no existe" de "no autorizado" y devolver lo
-  // mismo en los dos casos: un 404 distinto confirmaría qué números existen.
-  const conToken = Boolean(token) && token === pedido.publicToken;
+    // Comparación de longitud fija sobre dos uuid. No se usa el token en el
+    // `where` para poder distinguir "no existe" de "no autorizado" y devolver lo
+    // mismo en los dos casos: un 404 distinto confirmaría qué números existen.
+    const conToken = Boolean(token) && token === pedido.publicToken;
 
-  if (!conToken) {
-    const sesion = await getSession();
-    if (!sesion) return null;
+    if (!conToken) {
+      const sesion = await getSession();
+      if (!sesion) return null;
 
-    // El personal ve cualquiera: es su trabajo.
-    if (sesion.role !== "staff") {
-      const cliente = await clienteDeLaSesion();
-      if (!cliente || pedido.customerId !== cliente.id) return null;
+      // El personal ve cualquiera: es su trabajo.
+      if (sesion.role !== "staff") {
+        const cliente = await clienteDeLaSesion();
+        if (!cliente || pedido.customerId !== cliente.id) return null;
+      }
     }
-  }
 
-  const items = await db
-    .select()
-    .from(orderItems)
-    .where(eq(orderItems.orderId, pedido.id))
-    .orderBy(orderItems.orden);
+    const items = await db
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, pedido.id))
+      .orderBy(orderItems.orden);
 
-  return { ...pedido, items };
-}
+    return { ...pedido, items };
+  },
+);
 
 /**
  * Un pedido, solo si quien pregunta puede tocarlo.

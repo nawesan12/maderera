@@ -19,10 +19,27 @@ import { cobrosEnVivo } from "@/lib/pagos";
 import { BloquePago } from "@/components/pagos/bloque-pago";
 import { formatearPrecio } from "@/lib/formato";
 
-export const metadata: Metadata = {
-  title: "Pedido confirmado",
-  robots: { index: false, follow: false },
-};
+/*
+ * El título se resuelve consultando, y no como constante, porque esta ruta cae
+ * en no-encontrado cuando el número no existe o el enlace no trae token: con un
+ * título fijo la pestaña decía "Pedido confirmado" sobre la pantalla que avisa
+ * que no hay nada. La consulta está memoizada, así que no cuesta una de más.
+ */
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ numero: string }>;
+  searchParams: Promise<{ t?: string }>;
+}): Promise<Metadata> {
+  const [{ numero }, { t }] = await Promise.all([params, searchParams]);
+  const pedido = await pedidoParaSeguimiento(numero, t);
+
+  return {
+    title: pedido ? "Pedido confirmado" : "Pedido no encontrado",
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function PedidoConfirmadoPage({
   params,

@@ -57,7 +57,8 @@ export interface Carrito {
   listaDiferenciada: string | null;
 }
 
-const VACIO: Carrito = {
+/** El presupuesto vacío, canónico. También es el respaldo cuando la lectura falla. */
+export const CARRITO_VACIO: Carrito = {
   id: null,
   items: [],
   cantidadItems: 0,
@@ -80,7 +81,7 @@ export const obtenerCarrito = cache(async (): Promise<Carrito> => {
   const sesion = await getSession();
   const token = (await cookies()).get(COOKIE_CARRITO)?.value;
 
-  if (!sesion && !token) return VACIO;
+  if (!sesion && !token) return CARRITO_VACIO;
 
   const [carrito] = await db
     .select({ id: carts.id })
@@ -93,7 +94,7 @@ export const obtenerCarrito = cache(async (): Promise<Carrito> => {
     )
     .limit(1);
 
-  if (!carrito) return VACIO;
+  if (!carrito) return CARRITO_VACIO;
 
   const lista = await listaVigente();
 

@@ -1,7 +1,9 @@
 import { Suspense } from "react";
+import { degradar } from "@/lib/degradar";
+import { PanelNoDisponible } from "@/components/admin/panel-no-disponible";
 import { SaltarAlContenido } from "@/components/saltar-al-contenido";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/sidebar";
 import { BuscadorGlobal } from "@/components/admin/buscador-global";
 import { MenuUsuario } from "@/components/admin/menu-usuario";
@@ -37,7 +39,28 @@ export default async function AdminLayout({
 }) {
   // El proxy ya filtró a quien no tiene cookie, pero esta es la verificación que
   // cuenta: valida la sesión contra la base y exige rol de staff.
-  const usuario = await requireStaff();
+  /*
+   * `requireStaff` decide acceso, así que no se degrada: si no se puede saber
+   * quién entró, no se dibuja el panel. Pero se atrapa igual, y por una razón
+   * concreta: un error en un layout no lo agarra el `error.tsx` de su carpeta,
+   * sube hasta el global y reemplaza el documento entero por una pantalla sin
+   * marca ni forma de volver. Se comprobó apagando la base. Atrapándolo acá se
+   * falla igual de cerrado —no se muestra ni un dato— pero con una pantalla que
+   * explica y deja reintentar.
+   *
+   * La redirección de quien no tiene permiso viaja como excepción de Next, así
+   * que se relanza con `unstable_rethrow`: tragarla sí sería un agujero. Esa es
+   * la forma pública de hacerlo y cubre todas las excepciones de control de
+   * Next, no solo la redirección.
+   */
+  let usuario: Awaited<ReturnType<typeof requireStaff>>;
+  try {
+    usuario = await requireStaff();
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error("[panel] no se pudo resolver quién entró:", error);
+    return <PanelNoDisponible />;
+  }
 
   /*
    * El aserradero tiene su propia pantalla y no navega el panel, con una
@@ -52,7 +75,13 @@ export default async function AdminLayout({
     if (!ruta.startsWith("/admin/cortes")) redirect("/taller");
   }
 
-  const sinLeer = await conversacionesSinLeer();
+  // El contador de conversaciones sin leer es un adorno del menú: si falla, el
+  // panel tiene que abrirse igual y sin la pelotita.
+  const sinLeer = await degradar(
+    "las conversaciones sin leer",
+    conversacionesSinLeer,
+    0,
+  );
 
   return (
     <div className="panel flex min-h-screen bg-background text-foreground">

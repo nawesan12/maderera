@@ -28,6 +28,19 @@ export default function ErrorPublico({
 
   return (
     <div className="contenedor flex min-h-[60vh] flex-col items-center justify-center py-16 text-center">
+      {/* Una pantalla de error se sirve con 200: el documento ya empezó a
+          salir cuando aparece la falla, así que el límite de error se pinta del
+          lado del cliente sobre la silueta de carga. Sin esto, un buscador que
+          pase durante una caída se queda con esta página como buena.
+
+          React sube la etiqueta al `head` al pintarse, y ante dos `robots`
+          gana la más restrictiva, así que este `noindex` le gana al `index,
+          follow` de la página. Comprobado en el navegador.
+
+          El alcance es ese y no más: quien no ejecute JavaScript recibe el HTML
+          con la silueta de carga y el `index, follow`. Google sí lo ejecuta. */}
+      <meta name="robots" content="noindex, nofollow" />
+
       <span className="flex h-16 w-16 items-center justify-center rounded-[18px] bg-naranja-claro text-acento-sobre-claro">
         <TriangleAlert className="h-8 w-8" />
       </span>

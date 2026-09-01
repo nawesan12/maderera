@@ -6,28 +6,40 @@ import { Footer } from "@/components/footer";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { ScrollToTop } from "@/components/scroll-to-top";
 import { CarritoProvider } from "@/lib/carrito-context";
-import { obtenerCarrito } from "@/lib/dal/carrito";
+import { CARRITO_VACIO, obtenerCarrito } from "@/lib/dal/carrito";
 import { getSession } from "@/lib/dal/session";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { organizacionJsonLd, sitioWebJsonLd } from "@/lib/seo";
+import { degradar } from "@/lib/degradar";
 
 export default async function PublicLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const whatsapp = await enlaceWhatsapp();
   // El presupuesto se lee acá una sola vez y baja a toda la sección: así el
   // contador del menú y la página del presupuesto muestran siempre lo mismo.
   // La sesión va por el mismo camino: memoizada, y resuelta en el servidor para
   // que el menú no parpadee entre "Ingresar" y el nombre.
-  const [carrito, sesion, ajustes, sucursales] = await Promise.all([
-    obtenerCarrito(),
-    getSession(),
-    ajustesDelSitio(),
-    listarSucursalesPublicas(),
+  //
+  // Todo lo que es adorno del encabezado va envuelto en `degradar`: un error
+  // acá adentro no lo agarra el `error.tsx` de esta carpeta —sube hasta el
+  // global y reemplaza el documento entero—, así que el teléfono de la barra no
+  // puede tener el poder de dejar el sitio sin marca ni navegación.
+  //
+  // La sesión también va envuelta, y no es una excepción a la regla de que lo
+  // que decide acceso no se degrada: acá la sesión no decide nada. Se usa solo
+  // para poner el nombre en el menú. Quién puede ver qué lo resuelve cada
+  // página con su propio control, del lado del DAL. Si la lectura falla, el
+  // menú dice "Ingresar", que es el lado seguro: muestra de menos, no de más.
+  const [carrito, sesion, ajustes, sucursales, whatsapp] = await Promise.all([
+    degradar("el presupuesto", obtenerCarrito, CARRITO_VACIO),
+    degradar("la sesión del menú", getSession, null),
+    degradar("los ajustes del sitio", ajustesDelSitio, {}),
+    degradar("las sucursales", listarSucursalesPublicas, []),
+    degradar("el enlace de WhatsApp", () => enlaceWhatsapp(), ""),
   ]);
 
   // El teléfono y el horario de la barra superior salen de la primera sucursal

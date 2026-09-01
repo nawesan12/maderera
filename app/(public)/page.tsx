@@ -535,12 +535,14 @@ function Historia({
               ))}
             </dl>
 
-            <Link href="/nosotros">
-              <Button variant="outline" className="rounded-full">
-                Conocé nuestra historia
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+            <Button
+              render={<Link href="/nosotros" />}
+              variant="outline"
+              className="rounded-full"
+            >
+              Conocé nuestra historia
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </div>
 
           <div className="relative">
@@ -657,27 +659,33 @@ function Sucursales({
                       en el de Casa Central, así que "Llamar" en la ficha del
                       Aserradero discaba al otro local. */}
                   {s.telefono && (
-                    <a href={`tel:${s.telefono.replace(/[^\d+]/g, "")}`}>
-                      <Button variant="outline" size="sm" className="rounded-full">
-                        <Phone className="mr-1.5 h-3.5 w-3.5" />
-                        Llamar
-                      </Button>
-                    </a>
+                    <Button
+                      render={
+                        <a href={`tel:${s.telefono.replace(/[^\d+]/g, "")}`} />
+                      }
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full"
+                    >
+                      <Phone className="mr-1.5 h-3.5 w-3.5" />
+                      Llamar
+                    </Button>
                   )}
                   {s.whatsapp && (
-                    <a
-                      href={`https://wa.me/${s.whatsapp.replace(/\D/g, "")}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <Button
+                      render={
+                        <a
+                          href={`https://wa.me/${s.whatsapp.replace(/\D/g, "")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        />
+                      }
+                      size="sm"
+                      className="rounded-full bg-brand-green text-white hover:bg-brand-green/90"
                     >
-                      <Button
-                        size="sm"
-                        className="rounded-full bg-brand-green text-white hover:bg-brand-green/90"
-                      >
-                        <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
-                        WhatsApp
-                      </Button>
-                    </a>
+                      <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+                      WhatsApp
+                    </Button>
                   )}
                 </div>
               </CardContent>
@@ -764,28 +772,24 @@ async function CierreCta() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Link href="/catalogo">
-            <Button
-              size="lg"
-              className="h-14 rounded-full bg-brand-orange px-8 text-base font-semibold text-white hover:bg-brand-orange-dark"
-            >
-              Ver el catálogo
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-          <a
-            href={whatsapp}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Button
+            render={<Link href="/catalogo" />}
+            size="lg"
+            className="h-14 rounded-full bg-brand-orange px-8 text-base font-semibold text-white hover:bg-brand-orange-dark"
           >
-            <Button
-              size="lg"
-              className="h-14 rounded-full border-2 border-white/30 bg-white/10 px-8 text-base !text-white backdrop-blur-sm hover:bg-white/20"
-            >
-              <MessageCircle className="mr-2 h-5 w-5" />
-              Escribinos por WhatsApp
-            </Button>
-          </a>
+            Ver el catálogo
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Button>
+          <Button
+            render={
+              <a href={whatsapp} target="_blank" rel="noopener noreferrer" />
+            }
+            size="lg"
+            className="h-14 rounded-full border-2 border-white/30 bg-white/10 px-8 text-base !text-white backdrop-blur-sm hover:bg-white/20"
+          >
+            <MessageCircle className="mr-2 h-5 w-5" />
+            Escribinos por WhatsApp
+          </Button>
         </div>
       </div>
     </section>

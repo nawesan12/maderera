@@ -79,11 +79,12 @@ export function VistaPresupuesto({
                 digamos cuánto material necesitás.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
-                <Link href="/catalogo">
-                  <Button className="h-11 rounded-[10px] bg-accion px-5 font-semibold text-white hover:bg-accion-hover">
-                    Ver el catálogo
-                  </Button>
-                </Link>
+                <Button
+                  render={<Link href="/catalogo" />}
+                  className="h-11 rounded-[10px] bg-accion px-5 font-semibold text-white hover:bg-accion-hover"
+                >
+                  Ver el catálogo
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -281,12 +282,13 @@ export function VistaPresupuesto({
                 <PrecioSinImpuestos precioFinal={subtotal} className="mt-2" />
 
                 <div className="mt-4 space-y-2.5">
-                  <Link href="/checkout" className="block">
-                    <Button className="h-[52px] w-full rounded-[10px] bg-accion text-base font-semibold text-white hover:bg-accion-hover">
-                      Continuar con el pedido
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
+                  <Button
+                    render={<Link href="/checkout" />}
+                    className="h-[52px] w-full rounded-[10px] bg-accion text-base font-semibold text-white hover:bg-accion-hover"
+                  >
+                    Continuar con el pedido
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
 
                   {/* Dos caminos y los dos hacen falta: por escrito queda
                       registrado con número y cae en el panel; por WhatsApp es

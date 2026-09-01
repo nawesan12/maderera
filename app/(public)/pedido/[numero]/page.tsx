@@ -201,11 +201,12 @@ export default async function PedidoConfirmadoPage({
                   Así no tenés que anotar el número ni llamar para preguntar.
                 </span>
               </span>
-              <Link href="/registro">
-                <Button className="bg-brand-orange text-white hover:bg-brand-orange-dark">
-                  Crear cuenta
-                </Button>
-              </Link>
+              <Button
+                render={<Link href="/registro" />}
+                className="bg-brand-orange text-white hover:bg-brand-orange-dark"
+              >
+                Crear cuenta
+              </Button>
             </CardContent>
           </Card>
         )}
@@ -221,9 +222,9 @@ export default async function PedidoConfirmadoPage({
               Escribirnos por WhatsApp
             </Button>
           </a>
-          <Link href="/catalogo">
-            <Button variant="outline">Seguir comprando</Button>
-          </Link>
+          <Button render={<Link href="/catalogo" />} variant="outline">
+            Seguir comprando
+          </Button>
         </div>
       </div>
     </div>

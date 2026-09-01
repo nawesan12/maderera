@@ -141,6 +141,20 @@
       "when": 1788215816654,
       "tag": "0019_busqueda_trigram",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788287062932,
+      "tag": "0020_natural_anthem",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788287158949,
+      "tag": "0021_simple_nicolaos",
+      "breakpoints": true
     }
   ]
 }

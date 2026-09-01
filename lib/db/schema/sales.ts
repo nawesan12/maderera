@@ -139,6 +139,11 @@ export const medioPago = pgEnum("medio_pago", [
   "mercado_pago",
   "transferencia",
   "efectivo",
+  // Débito y crédito van separados a propósito: en el mostrador se rinden
+  // distinto —el débito acredita al otro día y el crédito según el plan— y
+  // juntarlos en "tarjeta" obligaría a desarmarlos después a mano.
+  "debito",
+  "credito",
   "cuenta_corriente",
 ]);
 
@@ -187,12 +192,27 @@ export const orders = pgTable(
     medioPago: medioPago(),
     estadoPago: estadoPago().notNull().default("pendiente"),
     notas: text(),
+    /**
+     * Clave que trae la pantalla del mostrador para que una venta no se cobre
+     * dos veces.
+     *
+     * En el mostrador el riesgo no es el reintento de un proveedor sino la
+     * mano: se toca "Cobrar", la pantalla tarda un segundo y se vuelve a tocar.
+     * Sin esto salen dos pedidos, se descuenta dos veces el stock y se le cobra
+     * dos veces al cliente que está parado ahí.
+     *
+     * La clave la genera el navegador al empezar la venta y viaja con ella. El
+     * índice único es la garantía real: dos envíos simultáneos no pueden
+     * insertar los dos, gane el que gane la carrera.
+     */
+    claveMostrador: text(),
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("orders_numero_idx").on(t.numero),
+    uniqueIndex("orders_clave_mostrador_idx").on(t.claveMostrador),
     index("orders_customer_idx").on(t.customerId),
     index("orders_estado_idx").on(t.estado),
     index("orders_created_idx").on(t.createdAt),

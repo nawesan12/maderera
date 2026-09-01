@@ -36,6 +36,11 @@ export const tipoPago = pgEnum("tipo_pago", [
 export const proveedorPago = pgEnum("proveedor_pago", [
   "mercado_pago",
   "transferencia",
+  // El mostrador cobra en mano. Entra al mismo lugar que el resto porque la
+  // pantalla de cobros tiene que mostrar la plata que entró y no la plata que
+  // entró por internet: una venta de $300.000 en efectivo es tan cobro como una
+  // aprobada por Mercado Pago.
+  "mostrador",
   "demo",
 ]);
 

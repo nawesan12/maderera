@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { SaltarAlContenido } from "@/components/saltar-al-contenido";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
@@ -55,6 +56,7 @@ export default async function PublicLayout({
 
   return (
     <CarritoProvider carrito={carrito}>
+      <SaltarAlContenido />
       <DatosEstructurados datos={marcado} />
       <Navbar
         sesion={
@@ -65,7 +67,9 @@ export default async function PublicLayout({
         telefono={principal?.telefono}
         horario={principal?.horario}
       />
-      <main className="flex-1">{children}</main>
+      <main id="contenido" className="flex-1">
+        {children}
+      </main>
       <Footer />
       <ScrollToTop />
       <Suspense fallback={null}>

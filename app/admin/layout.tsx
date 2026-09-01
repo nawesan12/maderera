@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { SaltarAlContenido } from "@/components/saltar-al-contenido";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/sidebar";
@@ -55,6 +56,7 @@ export default async function AdminLayout({
 
   return (
     <div className="panel flex min-h-screen bg-background text-foreground">
+      <SaltarAlContenido />
       <AdminSidebar whatsappSinLeer={sinLeer} rol={usuario.staffRole} />
       {/* `min-w-0` no es decorativo: sin él este hijo de flex no baja del ancho
           de su contenido, así que el `overflow-x` del tablero no recorta nada y
@@ -82,7 +84,7 @@ export default async function AdminLayout({
             </div>
           </div>
         </header>
-        <main className="panel-fondo flex-1 px-4 py-[26px] pb-10 lg:px-7">
+        <main id="contenido" className="panel-fondo flex-1 px-4 py-[26px] pb-10 lg:px-7">
           {children}
         </main>
       </div>

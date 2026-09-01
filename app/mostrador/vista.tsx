@@ -124,7 +124,11 @@ export function VistaMostrador({
   const [comprobante, setComprobante] = useState<"interno" | "fiscal">("interno");
   const [cuit, setCuit] = useState("");
   const [letra, setLetra] = useState<string | null>(null);
-  const [ultima, setUltima] = useState<{ numero: string; orderId: string } | null>(null);
+  const [ultima, setUltima] = useState<{
+    numero: string;
+    orderId: string;
+    invoiceId?: string;
+  } | null>(null);
   const [caja, setCaja] = useState(false);
 
   const total = useMemo(() => totalDeLaVenta(lineas), [lineas]);
@@ -237,7 +241,9 @@ export function VistaMostrador({
           ? { tipo: "error", texto: `${r.ok} ${r.avisoFiscal}` }
           : { tipo: "ok", texto: r.ok ?? "Venta registrada." },
       );
-      if (r.numero && r.orderId) setUltima({ numero: r.numero, orderId: r.orderId });
+      if (r.numero && r.orderId) {
+        setUltima({ numero: r.numero, orderId: r.orderId, invoiceId: r.invoiceId });
+      }
       limpiar();
       router.refresh();
     });
@@ -629,7 +635,7 @@ function Cobro({
   puede: boolean;
   onCobrar: () => void;
   aviso: { tipo: "ok" | "error"; texto: string } | null;
-  ultima: { numero: string; orderId: string } | null;
+  ultima: { numero: string; orderId: string; invoiceId?: string } | null;
 }) {
   const faltaCaja = medio === "efectivo" && !hayCaja;
   const faltaCliente = medio === "cuenta_corriente" && !cliente;
@@ -773,22 +779,32 @@ function Cobro({
 
         {ultima && (
           <div className="mt-3 flex flex-wrap gap-2">
+            {/* Si salió factura se imprime la factura, que es el papel que vale.
+                Si no, el ticket del pedido, que dice expresamente que no es un
+                comprobante fiscal. Las dos rutas piden ids distintos: la
+                primera el de la factura, la segunda el del pedido. */}
             <Link
-              href={`/comprobante/${ultima.orderId}`}
+              href={
+                ultima.invoiceId
+                  ? `/comprobante/${ultima.invoiceId}`
+                  : `/ticket/${ultima.orderId}`
+              }
               target="_blank"
               className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida"
             >
               <Printer className="h-4 w-4" />
               Imprimir {ultima.numero}
             </Link>
-            <Link
-              href={`/admin/facturacion?pedido=${ultima.orderId}`}
-              target="_blank"
-              className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida"
-            >
-              <Plus className="h-4 w-4" />
-              Facturar
-            </Link>
+            {!ultima.invoiceId && (
+              <Link
+                href={`/admin/facturacion?pedido=${ultima.orderId}`}
+                target="_blank"
+                className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida"
+              >
+                <Plus className="h-4 w-4" />
+                Facturar
+              </Link>
+            )}
           </div>
         )}
       </div>

@@ -1013,3 +1013,142 @@ input::placeholder, textarea::placeholder {
     margin: 12mm;
   }
 }
+
+/*
+ * Ticket del mostrador.
+ *
+ * Hoja propia, como el comprobante, y por la misma razón: lo que se ve en
+ * pantalla tiene que ser lo que sale de la impresora. Pero acá el papel es un
+ * rollo de 80 mm y no una A4, así que es una columna angosta, monoespaciada y
+ * sin un solo color: las térmicas imprimen en negro y nada más.
+ */
+.ticket-hoja {
+  min-height: 100vh;
+  background: #f4f4f5;
+  color: #1a1a1a;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ticket-hoja .barra {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  background: #1a1a1a;
+  padding: 0.75rem;
+}
+
+.ticket-hoja .boton-imprimir {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  background: oklch(0.68 0.19 48);
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.ticket-hoja .rollo {
+  width: 80mm;
+  margin: 1.5rem auto;
+  background: #fff;
+  padding: 6mm 5mm;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.08);
+}
+
+.ticket-hoja .cabecera {
+  text-align: center;
+}
+
+.ticket-hoja .razon {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Guiones y no un borde: una térmica los imprime igual y un borde de 1px a
+   veces sale desparejo. */
+.ticket-hoja .separador {
+  margin: 3mm 0;
+  border-top: 1px dashed #999;
+}
+
+.ticket-hoja .linea-datos {
+  display: flex;
+  justify-content: space-between;
+  gap: 4mm;
+}
+
+.ticket-hoja .items {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ticket-hoja .items td {
+  padding: 1mm 0;
+  vertical-align: top;
+}
+
+.ticket-hoja .descripcion .detalle {
+  display: block;
+  color: #555;
+}
+
+.ticket-hoja .items .importe {
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.ticket-hoja .total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ticket-hoja .aviso {
+  margin-top: 2mm;
+  text-align: center;
+  font-weight: 700;
+}
+
+.ticket-hoja .legal,
+.ticket-hoja .pie {
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.ticket-hoja .pie {
+  margin-top: 3mm;
+}
+
+@media print {
+  .ticket-hoja {
+    background: #fff;
+  }
+  .ticket-hoja .barra {
+    display: none;
+  }
+  .ticket-hoja .rollo {
+    /* `max-width` y no `width: auto`: si la impresora ignora el `@page` de
+       abajo —muchas térmicas viejas lo hacen— el ticket se estiraría al ancho
+       de la hoja y quedaría una línea de texto por renglón. Con el tope, sale
+       angosto igual. */
+    width: 100%;
+    max-width: 72mm;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+  @page {
+    size: 80mm auto;
+    margin: 4mm;
+  }
+}

@@ -27,7 +27,9 @@ import {
   Truck,
   HardHat,
   History,
+  Banknote,
   Mail,
+  Store,
   Users,
   Wallet,
   X,
@@ -75,6 +77,17 @@ const secciones: { titulo: string; items: ItemNav[] }[] = [
         roles: ["admin", "vendedor"],
       },
       { href: "/admin/cortes", icon: Scissors, label: "Cortes" },
+      /*
+       * El mostrador es una pantalla completa fuera del panel, como el taller.
+       * Va igual en el menú: es la única forma de llegar sin escribir la
+       * dirección, y quien atiende entra por acá cada mañana.
+       */
+      {
+        href: "/mostrador",
+        icon: Store,
+        label: "Mostrador",
+        roles: ["admin", "vendedor"],
+      },
     ],
   },
   {
@@ -97,6 +110,7 @@ const secciones: { titulo: string; items: ItemNav[] }[] = [
       { href: "/admin/facturacion", icon: FileText, label: "Facturación", roles: ["admin"] },
       { href: "/admin/arca", icon: Landmark, label: "ARCA", roles: ["admin"] },
       { href: "/admin/avisos", icon: Mail, label: "Avisos", roles: ["admin"] },
+      { href: "/admin/caja", icon: Banknote, label: "Caja", roles: ["admin"] },
       { href: "/admin/sucursales", icon: Building2, label: "Sucursales", roles: ["admin"] },
       { href: "/admin/migracion", icon: DatabaseZap, label: "Migración", roles: ["admin"] },
       { href: "/admin/bitacora", icon: History, label: "Bitácora", roles: ["admin"] },

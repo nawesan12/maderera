@@ -729,6 +729,35 @@ escrito invocando 5.3.
 
 ---
 
+## 7 bis. Punto de venta del mostrador
+
+Trabajo pedido el 1/9/2026 y construido. No estaba en el relevamiento original: el
+mostrador se atendía por fuera del sistema, y los pedidos solo nacían del checkout del
+sitio o de un presupuesto.
+
+**Qué quedó hecho.** `/mostrador`, a pantalla completa como el taller. Búsqueda por
+nombre, medida o código —devuelve variantes, que es lo que se cobra—, líneas con cantidad
+y precio editables, cliente o consumidor final, cinco medios de pago, vuelto, y turno de
+caja con apertura, ingresos, retiros y cierre con arqueo. Los cierres se revisan en
+`/admin/caja`. Al cobrar se elige entre comprobante interno y factura; la letra la deriva
+el sistema de la condición de las dos partes.
+
+**Tres decisiones que conviene tener presentes**, porque son de negocio y no de código:
+
+1. **El stock puede quedar negativo y la venta se hace igual.** La mercadería está sobre
+   el mostrador; si el sistema dice que no hay, el que está mal es el sistema. Queda el
+   movimiento, que es lo que después permite encontrar el error.
+2. **Efectivo exige caja abierta.** Una venta en efectivo que no cae en ninguna caja es
+   el agujero que la caja existe para tapar.
+3. **El comprobante va después de la venta.** Si ARCA no contesta queda una venta sin
+   comprobante —que se resuelve desde Facturación— y no una venta deshecha.
+
+**Lo que falta para usarlo en producción** es lo mismo que falta para facturar en
+general: el certificado de ARCA y al menos un punto de venta cargado. Sin eso el mostrador
+funciona y avisa que el comprobante no se pudo emitir.
+
+---
+
 ## 8. Definición de "entregado" (por semana)
 
 Para que el plazo de 5 días hábiles de 8.1 empiece a correr, cada viernes:

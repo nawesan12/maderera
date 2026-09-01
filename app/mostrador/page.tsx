@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/dal/session";
+import { inicioDelRol } from "@/lib/roles";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { movimientosDelTurno, turnoAbierto } from "@/lib/mostrador/caja";
 import { VistaMostrador } from "./vista";
@@ -29,6 +30,16 @@ export default async function MostradorPage({
   searchParams: Promise<{ sucursal?: string }>;
 }) {
   const usuario = await requireStaff();
+
+  /*
+   * El mostrador es de quien atiende. Depósito y aserradero tienen su propia
+   * pantalla y no cobran: dejarlos entrar acá sería darles una caja registradora
+   * que no les toca. Se los manda a donde sí trabajan.
+   */
+  if (usuario.staffRole && !["admin", "vendedor"].includes(usuario.staffRole)) {
+    redirect(inicioDelRol(usuario.staffRole));
+  }
+
   const { sucursal } = await searchParams;
 
   const sucursales = await listarSucursalesPublicas();

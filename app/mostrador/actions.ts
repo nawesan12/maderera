@@ -11,6 +11,7 @@ import {
   registrarVentaDeMostrador,
   type MedioDeMostrador,
 } from "@/lib/mostrador/venta";
+import { anularVentaDeMostrador } from "@/lib/mostrador/anular";
 import { emitirParaLaVenta, letraQueSaldria } from "@/lib/mostrador/comprobante";
 import {
   buscarClienteEnMostrador,
@@ -318,4 +319,37 @@ export async function letraDelComprobante(
 ) {
   await requireStaff();
   return letraQueSaldria(customerId, cuit);
+}
+
+/**
+ * Anula una venta del mostrador.
+ *
+ * Si la venta tenía factura, esto **no** emite la nota de crédito: avisa que
+ * hace falta y deja el enlace. Emitir un comprobante es una decisión de alguien,
+ * no un efecto secundario de tocar un botón acá.
+ */
+export async function anularVenta(
+  orderId: string,
+  motivo: string,
+): Promise<EstadoMostrador> {
+  const usuario = await requireStaff();
+
+  const r = await anularVentaDeMostrador(orderId, motivo, usuario.userId);
+  if (!r.ok) return { error: r.error };
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "anular",
+    entidad: "pedido",
+    entidadId: orderId,
+    descripcion: `Anuló una venta de mostrador: ${motivo.trim()}`,
+  });
+
+  refrescar();
+  return {
+    ok: "Venta anulada.",
+    avisoFiscal: r.facturaPendiente
+      ? "La venta tenía factura. Emitile la nota de crédito desde Facturación."
+      : undefined,
+  };
 }

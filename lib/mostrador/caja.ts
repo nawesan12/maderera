@@ -2,7 +2,13 @@ import "server-only";
 
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { branches, cashMovements, cashSessions, user } from "@/lib/db/schema";
+import {
+  branches,
+  cashMovements,
+  cashSessions,
+  orders,
+  user,
+} from "@/lib/db/schema";
 
 /**
  * El turno de caja del mostrador.
@@ -152,4 +158,35 @@ export async function sucursalesConCaja() {
     )
     .where(eq(branches.active, true))
     .orderBy(asc(branches.sortOrder));
+}
+
+/**
+ * Las ventas de mostrador de hoy en una sucursal.
+ *
+ * Es lo que quien atiende necesita ver para poder deshacer: el mostrador no
+ * tiene historial, tiene "lo que pasó hoy". Van también las anuladas, tachadas:
+ * esconderlas haría que el mismo error se anule dos veces.
+ */
+export async function ventasDeHoy(branchId: string) {
+  return db
+    .select({
+      id: orders.id,
+      numero: orders.numero,
+      cliente: orders.contactoNombre,
+      total: orders.total,
+      medioPago: orders.medioPago,
+      estado: orders.estado,
+      createdAt: orders.createdAt,
+    })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.branchId, branchId),
+        eq(orders.origen, "mostrador"),
+        sql`${orders.claveMostrador} is not null`,
+        sql`${orders.createdAt} >= date_trunc('day', now())`,
+      ),
+    )
+    .orderBy(desc(orders.createdAt))
+    .limit(40);
 }

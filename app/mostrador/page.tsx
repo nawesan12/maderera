@@ -3,7 +3,11 @@ import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/dal/session";
 import { inicioDelRol } from "@/lib/roles";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
-import { movimientosDelTurno, turnoAbierto } from "@/lib/mostrador/caja";
+import {
+  movimientosDelTurno,
+  turnoAbierto,
+  ventasDeHoy,
+} from "@/lib/mostrador/caja";
 import { VistaMostrador } from "./vista";
 
 export const metadata: Metadata = {
@@ -48,7 +52,10 @@ export default async function MostradorPage({
   const elegida =
     sucursales.find((s) => s.slug === sucursal) ?? sucursales[0];
 
-  const turno = await turnoAbierto(elegida.id);
+  const [turno, ventas] = await Promise.all([
+    turnoAbierto(elegida.id),
+    ventasDeHoy(elegida.id),
+  ]);
   const movimientos = turno ? await movimientosDelTurno(turno.id) : [];
 
   return (
@@ -65,6 +72,11 @@ export default async function MostradorPage({
         ...m,
         monto: Number(m.monto),
         createdAt: m.createdAt.toISOString(),
+      }))}
+      ventas={ventas.map((v) => ({
+        ...v,
+        total: Number(v.total),
+        createdAt: v.createdAt.toISOString(),
       }))}
     />
   );

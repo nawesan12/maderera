@@ -21,9 +21,21 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  // La ruta pedida, para que un layout de servidor pueda decidir con ella. Un
+  // layout no la recibe: solo ve sus `params`, y `/admin/cortes/formato` y
+  // `/admin/cobros` le llegan igual. El aserradero entra a lo primero y no a lo
+  // segundo, y esa decisión se toma con la ruta en la mano.
+  const cabeceras = new Headers(request.headers);
+  cabeceras.set("x-ruta", request.nextUrl.pathname);
+
+  return NextResponse.next({ request: { headers: cabeceras } });
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/atencion/:path*", "/mi-cuenta/:path*"],
+  matcher: [
+    "/admin/:path*",
+    "/atencion/:path*",
+    "/taller/:path*",
+    "/mi-cuenta/:path*",
+  ],
 };

@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import {
   ArrowRight,
-  Calculator,
   MessageCircle,
   PackageOpen,
   Receipt,
+  Scissors,
   ScrollText,
 } from "lucide-react";
 import { TarjetaPedido } from "@/components/cuenta/tarjeta-pedido";
@@ -109,10 +110,10 @@ export default async function ResumenCuentaPage() {
               <p
                 className={`tabular mt-1 text-3xl font-semibold ${
                   resumen.saldo > 0
-                    ? "text-brand-orange-dark"
+                    ? "text-saldo-debe"
                     : resumen.saldo < 0
-                      ? "text-green-700"
-                      : ""
+                      ? "text-saldo-favor"
+                      : "text-saldo-cero"
                 }`}
               >
                 {formatearMonto(Math.abs(resumen.saldo))}
@@ -234,7 +235,7 @@ function MedidorCredito({ saldo, limite }: { saldo: number; limite: number }) {
   const excedido = usado > limite;
 
   return (
-    <div className="border-t bg-brand-cream/40 px-5 py-4">
+    <div className="border-t bg-sitio-alt px-5 py-4">
       <div className="mb-1.5 flex items-baseline justify-between text-sm">
         <span className="text-muted-foreground">
           {excedido ? "Superaste tu límite" : "Disponible para comprar"}
@@ -276,10 +277,10 @@ function AccesosRapidos() {
       texto: "Todo el catálogo con precio y disponibilidad",
     },
     {
-      href: "/calculadora",
-      icono: Calculator,
-      titulo: "Calcular materiales",
-      texto: "Techos, decks, pisos y placas",
+      href: "/presupuesto",
+      icono: Scissors,
+      titulo: "Pedir un corte a medida",
+      texto: "Mandanos el despiece y lo cortamos en el aserradero",
     },
     {
       href: "/mi-cuenta/presupuestos",
@@ -307,7 +308,8 @@ function AccesosRapidos() {
 }
 
 /** Primera visita: qué hacer, no un vacío con un ícono gris. */
-function Bienvenida({ nombre }: { nombre: string }) {
+async function Bienvenida({ nombre }: { nombre: string }) {
+  const whatsapp = await enlaceWhatsapp();
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-2xl border bg-white">
@@ -326,7 +328,7 @@ function Bienvenida({ nombre }: { nombre: string }) {
           <Paso
             numero={1}
             titulo="Armá tu presupuesto"
-            texto="Sumá productos del catálogo o usá la calculadora de materiales."
+            texto="Sumá productos del catálogo o pedí un corte a medida."
           />
           <Paso
             numero={2}
@@ -340,7 +342,7 @@ function Bienvenida({ nombre }: { nombre: string }) {
           />
         </div>
 
-        <div className="flex flex-wrap gap-3 border-t bg-brand-cream/40 px-6 py-5">
+        <div className="flex flex-wrap gap-3 border-t bg-sitio-alt px-6 py-5">
           <Link
             href="/catalogo"
             className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-orange px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
@@ -349,11 +351,11 @@ function Bienvenida({ nombre }: { nombre: string }) {
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
-            href="/calculadora"
-            className="inline-flex h-11 items-center gap-2 rounded-lg border bg-white px-5 font-medium transition-colors hover:bg-muted"
+            href="/presupuesto"
+            className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea bg-card px-5 font-medium transition-colors hover:bg-sitio-alt"
           >
-            <Calculator className="h-4 w-4" />
-            Calcular materiales
+            <Scissors className="h-4 w-4" />
+            Pedir un corte a medida
           </Link>
         </div>
       </section>
@@ -368,7 +370,7 @@ function Bienvenida({ nombre }: { nombre: string }) {
           esta cuenta web para que veas tu saldo y tu historial acá.
         </p>
         <a
-          href="https://wa.me/542235903118"
+          href={whatsapp}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-brand-green hover:underline"

@@ -1,14 +1,27 @@
 import type { Metadata } from "next";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { MessageCircle, Receipt } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { miCuentaCorriente } from "@/lib/dal/cuenta";
+import { datosParaTransferir } from "@/lib/dal/pagos";
+import { cobrosEnVivo } from "@/lib/pagos";
+import { PagarDeuda } from "@/components/cuenta/pagar-deuda";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
 
 export const metadata: Metadata = { title: "Cuenta corriente" };
 
-export default async function CuentaCorrientePage() {
-  const cuenta = await miCuentaCorriente();
+export default async function CuentaCorrientePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pago?: string }>;
+}) {
+  const whatsapp = await enlaceWhatsapp();
+  const [cuenta, banco, { pago }] = await Promise.all([
+    miCuentaCorriente(),
+    datosParaTransferir(),
+    searchParams,
+  ]);
 
   if (cuenta.movimientos.length === 0 && cuenta.limiteCredito === 0) {
     return (
@@ -23,7 +36,7 @@ export default async function CuentaCorrientePage() {
           vemos.
         </p>
         <a
-          href="https://wa.me/542235903118"
+          href={whatsapp}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
@@ -56,10 +69,10 @@ export default async function CuentaCorrientePage() {
             <p
               className={`tabular mt-1 text-3xl font-semibold ${
                 cuenta.saldo > 0
-                  ? "text-brand-orange-dark"
+                  ? "text-saldo-debe"
                   : cuenta.saldo < 0
-                    ? "text-green-700"
-                    : ""
+                    ? "text-saldo-favor"
+                    : "text-saldo-cero"
               }`}
             >
               {formatearMonto(Math.abs(cuenta.saldo))}
@@ -99,7 +112,7 @@ export default async function CuentaCorrientePage() {
         </div>
 
         {cuenta.limiteCredito > 0 && (
-          <div className="border-t bg-brand-cream/40 px-6 py-4">
+          <div className="border-t bg-sitio-alt px-6 py-4">
             <div
               className="h-2.5 overflow-hidden rounded-full bg-black/10"
               role="img"
@@ -132,6 +145,32 @@ export default async function CuentaCorrientePage() {
           </div>
         )}
       </section>
+
+      {/* La vuelta desde la pasarela trae el resultado en la URL. El saldo de
+          arriba ya es el real: lo que falta es decir qué pasó, porque un pago
+          rechazado no cambia ningún número y sin este cartel parece que no pasó
+          nada. */}
+      {pago === "aprobado" && (
+        <p className="flex items-start gap-2 rounded-xl border border-brand-green/30 bg-brand-green/5 p-4">
+          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-green text-white">
+            ✓
+          </span>
+          Recibimos tu pago. El saldo de arriba ya lo tiene descontado.
+        </p>
+      )}
+
+      {pago === "rechazado" && (
+        <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive">
+          El pago no se aprobó. Podés intentar de nuevo con otro medio o
+          transferir.
+        </p>
+      )}
+
+      <PagarDeuda
+        saldo={cuenta.saldo}
+        banco={banco}
+        enVivo={cobrosEnVivo()}
+      />
 
       {/* Acá sí va tabla: son cifras que se comparan columna contra columna, y
           el saldo corrido solo se sigue si está alineado. */}
@@ -198,7 +237,7 @@ export default async function CuentaCorrientePage() {
       <p className="text-sm text-muted-foreground">
         ¿Ves algo que no cuadra?{" "}
         <a
-          href="https://wa.me/542235903118"
+          href={whatsapp}
           target="_blank"
           rel="noopener noreferrer"
           className="font-medium text-brand-orange hover:underline"

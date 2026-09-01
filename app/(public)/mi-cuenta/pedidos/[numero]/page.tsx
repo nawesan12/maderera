@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -13,6 +14,7 @@ import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_PEDIDO, ETAPAS_RETIRO, Pasos } from "@/components/admin/pasos";
 import { miPedido } from "@/lib/dal/cuenta";
 import {
+  fechaCorta,
   fechaHora,
   fechaLarga,
   formatearMonto,
@@ -43,6 +45,7 @@ export default async function DetallePedidoPage({
 }: {
   params: Promise<{ numero: string }>;
 }) {
+  const whatsapp = await enlaceWhatsapp();
   const { numero } = await params;
   const pedido = await miPedido(numero);
 
@@ -119,7 +122,7 @@ export default async function DetallePedidoPage({
             ))}
           </ul>
 
-          <dl className="space-y-2 border-t bg-brand-cream/30 px-5 py-4 text-sm">
+          <dl className="space-y-2 border-t bg-sitio-alt px-5 py-4 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Subtotal</dt>
               <dd className="tabular">{formatearMonto(pedido.subtotal)}</dd>
@@ -141,7 +144,78 @@ export default async function DetallePedidoPage({
           </dl>
         </section>
 
-        <div className="space-y-4">
+        {/* Acopio: lo retirado y lo que queda. Solo aparece si hubo algún
+            retiro parcial; en un pedido que se llevó entero de una vez sería
+            una tabla que repite la de arriba. */}
+        {pedido.entregas.length > 0 && (
+          <section className="overflow-hidden rounded-xl border bg-white lg:col-start-1">
+            <h2 className="border-b px-5 py-3.5 font-medium">
+              Retiros
+              {pedido.enAcopio.length > 0 && (
+                <span className="ml-2 text-sm font-normal text-brand-orange-dark">
+                  te queda mercadería en acopio
+                </span>
+              )}
+            </h2>
+
+            {pedido.enAcopio.length > 0 && (
+              <ul className="divide-y border-b bg-sitio-alt">
+                {pedido.enAcopio.map((renglon) => (
+                  <li
+                    key={renglon.orderItemId}
+                    className="flex items-baseline justify-between gap-4 px-5 py-3"
+                  >
+                    <span className="min-w-0">{renglon.descripcion}</span>
+                    <span className="tabular shrink-0 text-sm">
+                      <strong className="text-brand-orange-dark">
+                        {renglon.pendiente}
+                      </strong>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        de {renglon.pedido} {formatearUnidad(renglon.unidad)}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <ul className="divide-y">
+              {pedido.entregas.map((entrega) => (
+                <li
+                  key={entrega.id}
+                  className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-5 py-3"
+                >
+                  <span className="tabular font-medium">{entrega.numero}</span>
+                  <span className="min-w-0 flex-1 text-sm text-muted-foreground">
+                    {fechaCorta.format(entrega.createdAt)}
+                    {entrega.receptorNombre
+                      ? ` · retiró ${entrega.receptorNombre}`
+                      : ""}
+                    {entrega.estado === "anulada" ? " · anulado" : ""}
+                  </span>
+                  <span className="flex items-center gap-3">
+                    <Link
+                      href={`/remito/${entrega.id}`}
+                      target="_blank"
+                      className="text-sm font-medium text-brand-orange-dark hover:underline"
+                    >
+                      Ver remito
+                    </Link>
+                    <a
+                      href={`/api/remitos/${entrega.id}/pdf`}
+                      className="text-sm font-medium text-brand-orange-dark hover:underline"
+                    >
+                      PDF
+                    </a>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <div className="space-y-4 lg:col-start-2 lg:row-start-1">
           {/* Entrega */}
           <section className="rounded-xl border bg-white p-5">
             <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -246,7 +320,7 @@ export default async function DetallePedidoPage({
       <div className="flex flex-wrap gap-3">
         <VolverAPedir numero={pedido.numero} />
         <a
-          href={`https://wa.me/542235903118?text=${mensaje}`}
+          href={`${whatsapp}?text=${mensaje}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 font-medium text-white transition-colors hover:bg-brand-green/90"

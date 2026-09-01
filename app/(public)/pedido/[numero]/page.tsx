@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
 import {
   ArrowRight,
   Check,
@@ -12,63 +12,58 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { db } from "@/lib/db";
-import { branches, orderItems, orders } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
+import { pedidoParaSeguimiento } from "@/lib/dal/seguimiento";
+import { cobroDelPedido, datosParaTransferir } from "@/lib/dal/pagos";
+import { cobrosEnVivo } from "@/lib/pagos";
+import { BloquePago } from "@/components/pagos/bloque-pago";
 import { formatearPrecio } from "@/lib/formato";
 
-export const metadata: Metadata = {
-  title: "Pedido confirmado",
-  robots: { index: false, follow: false },
-};
+/*
+ * El título se resuelve consultando, y no como constante, porque esta ruta cae
+ * en no-encontrado cuando el número no existe o el enlace no trae token: con un
+ * título fijo la pestaña decía "Pedido confirmado" sobre la pantalla que avisa
+ * que no hay nada. La consulta está memoizada, así que no cuesta una de más.
+ */
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ numero: string }>;
+  searchParams: Promise<{ t?: string }>;
+}): Promise<Metadata> {
+  const [{ numero }, { t }] = await Promise.all([params, searchParams]);
+  const pedido = await pedidoParaSeguimiento(numero, t);
 
-const PROXIMO_PASO: Record<string, string> = {
-  mercado_pago:
-    "Te mandamos el link de pago por WhatsApp para que lo abones cuando quieras.",
-  transferencia:
-    "Te pasamos los datos bancarios por WhatsApp. El pedido se prepara al acreditarse.",
-  efectivo: "Abonás al retirar o cuando te lo entregamos.",
-  cuenta_corriente: "Lo cargamos a tu cuenta corriente.",
-};
+  return {
+    title: pedido ? "Pedido confirmado" : "Pedido no encontrado",
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function PedidoConfirmadoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ numero: string }>;
+  searchParams: Promise<{ t?: string }>;
 }) {
-  const { numero } = await params;
+  const whatsapp = await enlaceWhatsapp();
+  const [{ numero }, { t }] = await Promise.all([params, searchParams]);
 
-  const [pedido] = await db
-    .select({
-      id: orders.id,
-      numero: orders.numero,
-      cliente: orders.contactoNombre,
-      telefono: orders.contactoTelefono,
-      tipoEntrega: orders.tipoEntrega,
-      direccionEntrega: orders.direccionEntrega,
-      zonaEnvio: orders.zonaEnvio,
-      costoEnvio: orders.costoEnvio,
-      subtotal: orders.subtotal,
-      total: orders.total,
-      medioPago: orders.medioPago,
-      sucursal: branches.name,
-      sucursalDireccion: branches.address,
-      createdAt: orders.createdAt,
-    })
-    .from(orders)
-    .leftJoin(branches, eq(branches.id, orders.branchId))
-    .where(eq(orders.numero, numero))
-    .limit(1);
+  // La consulta vive en el DAL, con el control de acceso adentro. Antes estaba
+  // suelta acá y filtraba solo por número, que es consecutivo: alcanzaba con
+  // contar para leer el pedido de cualquiera.
+  const pedido = await pedidoParaSeguimiento(numero, t);
 
   if (!pedido) notFound();
 
-  const [items, sesion] = await Promise.all([
-    db
-      .select()
-      .from(orderItems)
-      .where(eq(orderItems.orderId, pedido.id))
-      .orderBy(orderItems.orden),
+  const items = pedido.items;
+
+  const [sesion, cobro, banco] = await Promise.all([
     getSession(),
+    cobroDelPedido(pedido.id),
+    datosParaTransferir(),
   ]);
 
   const mensaje = encodeURIComponent(
@@ -76,8 +71,8 @@ export default async function PedidoConfirmadoPage({
   );
 
   return (
-    <div className="min-h-screen bg-brand-cream/30">
-      <div className="container mx-auto max-w-2xl px-4 py-12">
+    <div className="min-h-screen bg-sitio-alt">
+      <div className="mx-auto px-6 max-w-2xl py-12">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-brand-green">
             <Check className="h-8 w-8 text-white" strokeWidth={3} />
@@ -134,7 +129,7 @@ export default async function PedidoConfirmadoPage({
           </CardContent>
         </Card>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4">
           <Card className="border-0 shadow-sm">
             <CardContent className="p-5">
               <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -164,18 +159,31 @@ export default async function PedidoConfirmadoPage({
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-5">
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Pago
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {pedido.medioPago
-                  ? PROXIMO_PASO[pedido.medioPago]
-                  : "Coordinamos el pago por WhatsApp."}
-              </p>
-            </CardContent>
-          </Card>
+        </div>
+
+        {/* El pago es lo primero que hay que resolver después de confirmar, así
+            que va entero y ancho, no como una tarjeta más de la grilla. */}
+        <div className="mt-4">
+          <BloquePago
+            numero={pedido.numero}
+            token={pedido.publicToken}
+            total={Number(pedido.total)}
+            medioPago={pedido.medioPago}
+            estadoPago={pedido.estadoPago}
+            cobro={
+              cobro
+                ? {
+                    estado: cobro.estado,
+                    proveedor: cobro.proveedor,
+                    monto: cobro.monto,
+                    comprobanteUrl: cobro.comprobanteUrl,
+                    motivoRechazo: cobro.motivoRechazo,
+                  }
+                : null
+            }
+            banco={banco}
+            enVivo={cobrosEnVivo()}
+          />
         </div>
 
         {/* Con sesión, el pedido ya vive en el portal y se puede seguir desde
@@ -210,18 +218,19 @@ export default async function PedidoConfirmadoPage({
                   Así no tenés que anotar el número ni llamar para preguntar.
                 </span>
               </span>
-              <Link href="/registro">
-                <Button className="bg-brand-orange text-white hover:bg-brand-orange-dark">
-                  Crear cuenta
-                </Button>
-              </Link>
+              <Button
+                render={<Link href="/registro" />}
+                className="bg-brand-orange text-white hover:bg-brand-orange-dark"
+              >
+                Crear cuenta
+              </Button>
             </CardContent>
           </Card>
         )}
 
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <a
-            href={`https://wa.me/542235903118?text=${mensaje}`}
+            href={`${whatsapp}?text=${mensaje}`}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -230,9 +239,9 @@ export default async function PedidoConfirmadoPage({
               Escribirnos por WhatsApp
             </Button>
           </a>
-          <Link href="/catalogo">
-            <Button variant="outline">Seguir comprando</Button>
-          </Link>
+          <Button render={<Link href="/catalogo" />} variant="outline">
+            Seguir comprando
+          </Button>
         </div>
       </div>
     </div>

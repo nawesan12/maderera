@@ -15,6 +15,7 @@ import {
   products,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { productoSchema } from "@/lib/validation/product";
 
 export interface EstadoFormulario {
@@ -249,6 +250,14 @@ export async function guardarProducto(
     }
   });
 
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: datos.id ? "editar" : "crear",
+    entidad: "producto",
+    entidadId: datos.id ?? null,
+    descripcion: `${datos.id ? "Editó" : "Cargó"} el producto ${datos.name}`,
+  });
+
   revalidatePath("/catalogo");
   revalidatePath("/stock");
   revalidatePath("/admin/productos");
@@ -257,12 +266,21 @@ export async function guardarProducto(
 
 /** Baja lógica: el producto desaparece del sitio pero queda en el historial. */
 export async function alternarActivo(id: string, activo: boolean) {
-  await requireStaff();
+  const usuario = await requireStaff();
 
-  await db
+  const [producto] = await db
     .update(products)
     .set({ active: activo, updatedAt: new Date() })
-    .where(eq(products.id, id));
+    .where(eq(products.id, id))
+    .returning({ nombre: products.name });
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: activo ? "editar" : "eliminar",
+    entidad: "producto",
+    entidadId: id,
+    descripcion: `${activo ? "Publicó" : "Dio de baja"} ${producto?.nombre ?? "un producto"}`,
+  });
 
   revalidatePath("/catalogo");
   revalidatePath("/admin/productos");

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Flame } from "lucide-react";
+import { ArrowLeft, Download, Flame } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_CORTE, Pasos } from "@/components/admin/pasos";
 import { fechaHora, plural } from "@/components/admin/formato";
@@ -68,11 +68,22 @@ export default async function FichaCortePage({
 
       <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
         <section className="tarjeta overflow-hidden">
-          <div className="flex items-baseline justify-between gap-3 px-5 py-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-4">
             <h2 className="text-base font-medium">Despiece</h2>
-            <p className="text-base text-muted-foreground">
-              {plural(corte.piezas.length, "medida")} · {totalPiezas} piezas
-            </p>
+            <div className="flex items-center gap-4">
+              <p className="text-base text-muted-foreground">
+                {plural(corte.piezas.length, "medida")} · {totalPiezas} piezas
+              </p>
+              {corte.piezas.length > 0 && (
+                <a
+                  href={`/api/cortes/${corte.id}/lista`}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+                >
+                  <Download className="h-4 w-4" />
+                  Para la máquina
+                </a>
+              )}
+            </div>
           </div>
 
           <table className="w-full border-t">

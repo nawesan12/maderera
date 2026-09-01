@@ -18,11 +18,19 @@ export const userRole = pgEnum("user_role", [
   "staff",
 ]);
 
-/** Qué puede hacer dentro del panel. Solo aplica a `userRole = staff`. */
+/**
+ * Qué puede hacer dentro del panel. Solo aplica a `userRole = staff`.
+ *
+ * `aserradero` es quien opera la seccionadora. No es un depósito con otro
+ * nombre: no toca stock ni pedidos, trabaja sobre la cola de cortes y baja el
+ * archivo para la máquina. Tiene rol propio porque el menú se acota por rol, y
+ * dejarlo como `deposito` le mostraría precios, cobros y clientes.
+ */
 export const staffRole = pgEnum("staff_role", [
   "admin",
   "vendedor",
   "deposito",
+  "aserradero",
 ]);
 
 /**

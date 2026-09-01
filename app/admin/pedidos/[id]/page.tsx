@@ -10,6 +10,11 @@ import {
 import { fechaHora, moneda } from "@/components/admin/formato";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { AccionesPedido } from "../acciones";
+import { pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
+import { BotonFacturar } from "./facturar";
+import { Entregas } from "./entregas";
+import { saldoDeAcopio } from "@/lib/entregas";
+import { remitosDelPedido } from "@/lib/dal/admin/entregas";
 
 const MEDIOS: Record<string, string> = {
   mercado_pago: "Mercado Pago",
@@ -27,6 +32,16 @@ export default async function FichaPedidoPage({
   const pedido = await obtenerPedido(id);
 
   if (!pedido) notFound();
+
+  // Si el pedido ya se facturó, el botón se reemplaza por el enlace al
+  // comprobante: dos facturas del mismo pedido obligan a anular una.
+  const datosFactura = await pedidoParaFacturar(id);
+  const facturado = datosFactura?.yaFacturado ?? null;
+
+  const [pendientes, remitos] = await Promise.all([
+    saldoDeAcopio(id),
+    remitosDelPedido(id),
+  ]);
 
   const etapas =
     pedido.tipoEntrega === "retiro" ? ETAPAS_RETIRO : ETAPAS_PEDIDO;
@@ -49,7 +64,7 @@ export default async function FichaPedidoPage({
             </h1>
             <EtiquetaEstado estado={pedido.estado} />
             {pedido.estadoPago !== "pagado" && (
-              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-sm font-medium text-amber-900">
+              <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]">
                 Sin cobrar
               </span>
             )}
@@ -61,12 +76,26 @@ export default async function FichaPedidoPage({
           </p>
         </div>
 
-        <AccionesPedido
-          id={pedido.id}
-          estado={pedido.estado}
-          estadoPago={pedido.estadoPago}
-          tipoEntrega={pedido.tipoEntrega}
-        />
+        <div className="flex flex-wrap items-start gap-2">
+          <BotonFacturar
+            orderId={pedido.id}
+            comprobante={
+              facturado
+                ? {
+                    id: facturado.id,
+                    numero: facturado.numero,
+                    tipo: facturado.tipo,
+                  }
+                : null
+            }
+          />
+          <AccionesPedido
+            id={pedido.id}
+            estado={pedido.estado}
+            estadoPago={pedido.estadoPago}
+            tipoEntrega={pedido.tipoEntrega}
+          />
+        </div>
       </div>
 
       {/* Recorrido */}
@@ -78,7 +107,9 @@ export default async function FichaPedidoPage({
         />
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      {/* `items-start` para que la tarjeta del detalle no se estire hasta la
+          altura de la columna lateral y deje un vacío abajo. */}
+      <div className="grid items-start gap-4 lg:grid-cols-[1fr_320px]">
         <section className="tarjeta overflow-hidden">
           <h2 className="px-5 py-4 text-base font-medium">Qué lleva</h2>
           <table className="w-full border-t">
@@ -147,7 +178,16 @@ export default async function FichaPedidoPage({
           </table>
         </section>
 
-        <aside className="space-y-4">
+        <div className="lg:col-start-1">
+          <Entregas
+            orderId={pedido.id}
+            tipoEntrega={pedido.tipoEntrega}
+            pendientes={pendientes}
+            remitos={remitos}
+          />
+        </div>
+
+        <aside className="space-y-4 lg:col-start-2 lg:row-start-1">
           <section className="tarjeta p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Entrega

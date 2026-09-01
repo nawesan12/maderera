@@ -29,7 +29,7 @@ export function AvisoCuentaWeb({
 
   if (estado.ok) {
     return (
-      <section className="flex items-center gap-2 rounded-xl bg-green-50 px-5 py-4 text-base text-green-900">
+      <section className="estado-ok flex items-center gap-2 rounded-xl bg-[var(--estado-fondo)] px-5 py-4 text-base text-[var(--estado-tinta)]">
         <Check className="h-5 w-5 shrink-0" />
         {estado.ok}
       </section>

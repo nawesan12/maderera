@@ -104,10 +104,13 @@ export function Hilo({
         </Link>
 
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-base font-medium">
-            {detalle.nombre}
+          {/* El `truncate` va sobre el nombre y no sobre el `h2`: puesto en el
+              contenedor recortaba también la píldora, que salía como
+              "Profes…". */}
+          <h2 className="flex items-center gap-2 text-base font-medium">
+            <span className="truncate">{detalle.nombre}</span>
             {detalle.clienteTipo === "profesional" && (
-              <span className="ml-2 rounded-full bg-brand-orange/12 px-2 py-0.5 text-sm font-semibold text-brand-orange-dark">
+              <span className="shrink-0 rounded-full bg-naranja-claro px-2 py-0.5 text-sm font-semibold text-acento-sobre-claro">
                 Profesional
               </span>
             )}
@@ -170,7 +173,7 @@ export function Hilo({
           className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-t px-4 py-2 text-sm ${
             ventanaAbierta
               ? "text-muted-foreground"
-              : "bg-amber-50 text-amber-900"
+              : "estado-espera bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
           }`}
         >
           <Clock className="h-4 w-4 shrink-0" />
@@ -222,7 +225,7 @@ export function Hilo({
           {estado.error && (
             <p
               role="alert"
-              className="mb-2 flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-base text-red-800"
+              className="estado-problema mb-2 flex items-start gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base text-[var(--estado-tinta)]"
             >
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
               {estado.error}
@@ -332,12 +335,10 @@ function Adjunto({ mensaje }: { mensaje: Mensaje }) {
   }
 
   if (mensaje.mediaTipo === "audio") {
-    // eslint-disable-next-line jsx-a11y/media-has-caption
     return <audio controls src={mensaje.mediaUrl} className="mb-1.5 w-64" />;
   }
 
   if (mensaje.mediaTipo === "video") {
-    // eslint-disable-next-line jsx-a11y/media-has-caption
     return (
       <video controls src={mensaje.mediaUrl} className="mb-1.5 max-h-64 rounded-lg" />
     );

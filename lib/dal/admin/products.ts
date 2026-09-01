@@ -1,6 +1,7 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { coincideBusqueda } from "@/lib/busqueda";
 import { db } from "@/lib/db";
 import {
@@ -12,6 +13,7 @@ import {
   productImages,
   productVariants,
   products,
+  relatedProducts,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 
@@ -271,4 +273,91 @@ export async function listarCategoriasAdmin() {
     .select({ id: categories.id, slug: categories.slug, name: categories.name })
     .from(categories)
     .orderBy(asc(categories.sortOrder));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Productos sugeridos                                                         */
+/* -------------------------------------------------------------------------- */
+
+export interface SugeridoCargado {
+  id: string;
+  relatedProductId: string;
+  nombre: string;
+  categoria: string;
+  imagen: string | null;
+  activo: boolean;
+  tipo: "complementario" | "similar";
+  orden: number;
+}
+
+/** Los sugeridos ya cargados de un producto, con lo justo para listarlos. */
+export async function sugeridosDelProducto(
+  productId: string,
+): Promise<SugeridoCargado[]> {
+  await requireStaff();
+
+  const sugerido = alias(products, "sugerido");
+
+  const filas = await db
+    .select({
+      id: relatedProducts.id,
+      relatedProductId: relatedProducts.relatedProductId,
+      nombre: sugerido.name,
+      categoria: categories.name,
+      activo: sugerido.active,
+      tipo: relatedProducts.tipo,
+      orden: relatedProducts.orden,
+    })
+    .from(relatedProducts)
+    .innerJoin(sugerido, eq(sugerido.id, relatedProducts.relatedProductId))
+    .leftJoin(categories, eq(categories.id, sugerido.categoryId))
+    .where(eq(relatedProducts.productId, productId))
+    .orderBy(asc(relatedProducts.tipo), asc(relatedProducts.orden));
+
+  if (filas.length === 0) return [];
+
+  const imagenes = await db
+    .select({ productId: productImages.productId, url: productImages.url })
+    .from(productImages)
+    .where(
+      inArray(
+        productImages.productId,
+        filas.map((f) => f.relatedProductId),
+      ),
+    )
+    .orderBy(asc(productImages.sortOrder));
+
+  const primera = new Map<string, string>();
+  for (const img of imagenes) {
+    if (!primera.has(img.productId)) primera.set(img.productId, img.url);
+  }
+
+  return filas.map((f) => ({
+    ...f,
+    categoria: f.categoria ?? "Sin categoría",
+    imagen: primera.get(f.relatedProductId) ?? null,
+  }));
+}
+
+/**
+ * Candidatos para el buscador de sugeridos.
+ *
+ * Devuelve nombre y categoría de todos los productos activos menos el propio.
+ * Son un par de cientos de filas de texto corto: se mandan enteras y el filtrado
+ * pasa en el navegador, que responde a cada tecla sin ida y vuelta al servidor.
+ * Con miles de productos esto habría que darlo vuelta.
+ */
+export async function candidatosParaSugerir(productId: string) {
+  await requireStaff();
+
+  return db
+    .select({
+      id: products.id,
+      nombre: products.name,
+      categoria: categories.name,
+    })
+    .from(products)
+    .leftJoin(categories, eq(categories.id, products.categoryId))
+    .where(and(eq(products.active, true), ne(products.id, productId)))
+    .orderBy(asc(products.name));
 }

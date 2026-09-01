@@ -1,192 +1,191 @@
-"use client";
-
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { Award, Users, Truck, Shield, Factory, MapPin } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { AnimatedCounter } from "@/components/animated-counter";
+import { EncabezadoPublico } from "@/components/encabezado-publico";
+import { Award, Shield, Truck, Users } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { ANIO_FUNDACION, numerosDeLaEmpresa } from "@/lib/dal/catalog";
+import { DatosEstructurados } from "@/components/datos-estructurados";
+import { migasJsonLd } from "@/lib/seo";
 
-const timeline = [
-  { year: "1981", title: "Fundación", desc: "Nace Maderera Juan B. Justo como una empresa familiar dedicada a la venta de maderas en bruto en Mar del Plata." },
-  { year: "1990", title: "Expansión a Techos", desc: "Incorporamos la elaboración de techos, machimbres y molduras. Ampliamos nuestro aserradero con tecnología moderna." },
-  { year: "2000", title: "Placas y Corte", desc: "Sumamos la línea de placas y tableros con servicio de corte a medida. Instalamos maquinaria de precisión." },
-  { year: "2005", title: "Marca Moldava", desc: "Creamos Moldava, nuestra marca propia de molduras y listonería en Pino Finger Joint, con distribución nacional." },
-  { year: "2010", title: "Nueva Sucursal", desc: "Apertura de la sucursal en Av. Constitución. Ampliamos la flota de entrega con vehículos propios." },
-  { year: "2015", title: "Ferretería y más", desc: "Incorporamos la sección de ferretería con herrajes, accesorios, lacas y todo para el acabado de tu proyecto." },
-  { year: "2020", title: "Construcción en Seco", desc: "Sumamos la línea completa de construcción en seco: placas de yeso, perfiles y aislantes." },
-  { year: "2026", title: "Transformación Digital", desc: "Lanzamos nuestra nueva plataforma web con calculadoras, presupuestador online y stock en tiempo real." },
+/**
+ * Quiénes somos.
+ *
+ * Era una página de cliente entera para animar la entrada de cada bloque. Las
+ * animaciones ahora son CSS (`tw-animate-css`), que hace lo mismo sin mandar
+ * framer-motion al navegador en una página que no tiene ni un botón.
+ *
+ * Los números grandes salen de la base y del calendario. Estaban escritos a
+ * mano y ya eran falsos: decía "43 años" cuando iban 45, y "200+ productos"
+ * sin relación con el catálogo. Es de lo poco que un visitante puede
+ * verificar solo, y un número inventado ahí desmiente todo lo demás.
+ */
+
+export const metadata: Metadata = {
+  title: "Quiénes somos — desde 1981",
+  description:
+    "Empresa familiar fundada en 1981 en Mar del Plata. Más de cuatro décadas proveyendo madera de calidad. Marca propia Moldava con distribución nacional.",
+  keywords: [
+    "maderera juan b justo historia",
+    "moldava molduras",
+    "empresa madera mar del plata",
+    "maderera desde 1981",
+  ],
+  alternates: { canonical: "/nosotros" },
+};
+
+/**
+ * La trayectoria, tal como la contaba el prototipo.
+ *
+ * PENDIENTE DE CONFIRMAR CON EL CLIENTE. Viene del prototipo y no está
+ * verificada. Ya se sacó un hito que era demostrablemente falso —"2010:
+ * apertura de la sucursal en Av. Constitución", que no es ninguna de las dos
+ * que opera—, pero el resto sigue sin confirmar y está anotado en
+ * `docs/CAMBIOS.md` como insumo pendiente. Los demás no se tocan: inventar la
+ * historia de otro es peor que no contarla.
+ */
+const TRAYECTORIA = [
+  { anio: "1981", titulo: "Fundación", detalle: "Nace Maderera Juan B. Justo como una empresa familiar dedicada a la venta de maderas en bruto en Mar del Plata." },
+  { anio: "1990", titulo: "Expansión a techos", detalle: "Incorporamos la elaboración de techos, machimbres y molduras. Ampliamos nuestro aserradero con tecnología moderna." },
+  { anio: "2000", titulo: "Placas y corte", detalle: "Sumamos la línea de placas y tableros con servicio de corte a medida. Instalamos maquinaria de precisión." },
+  { anio: "2005", titulo: "Marca Moldava", detalle: "Creamos Moldava, nuestra marca propia de molduras y listonería en pino finger joint, con distribución nacional." },
+  { anio: "2015", titulo: "Ferretería y más", detalle: "Incorporamos la sección de ferretería con herrajes, accesorios, lacas y todo para el acabado de tu proyecto." },
+  { anio: "2020", titulo: "Construcción en seco", detalle: "Sumamos la línea completa de construcción en seco: placas de yeso, perfiles y aislantes." },
+  { anio: "2026", titulo: "Tienda y gestión online", detalle: "Catálogo con stock por sucursal, calculadoras de materiales, presupuestos y cuenta corriente desde el sitio." },
 ];
 
-export default function NosotrosPage() {
+const VALORES = [
+  { icono: Award, titulo: "Calidad", detalle: "Seleccionamos los mejores materiales para garantizar resultados duraderos." },
+  { icono: Users, titulo: "Servicio", detalle: "Asesoramiento personalizado con un equipo que conoce cada producto." },
+  { icono: Truck, titulo: "Logística", detalle: "Entrega en obra con flota propia en Mar del Plata y alrededores." },
+  { icono: Shield, titulo: "Confianza", detalle: "Cuatro décadas respaldando a profesionales y particulares con seriedad." },
+];
+
+const MOLDAVA = [
+  "Producción propia con control de calidad",
+  "Pino finger joint de primera selección",
+  "Distribución nacional",
+  "Variedad de perfiles: zócalos, marcos, cornisas y más",
+  "Listos para pintar o lacar",
+];
+
+export default async function NosotrosPage() {
+  const numeros = await numerosDeLaEmpresa();
+
+  const cifras = [
+    { valor: `${numeros.anios}`, etiqueta: "Años de experiencia" },
+    { valor: `${numeros.sucursales}`, etiqueta: "Sucursales en Mar del Plata" },
+    { valor: `${numeros.medidas}`, etiqueta: "Medidas en catálogo" },
+    { valor: `${numeros.rubros}`, etiqueta: "Rubros" },
+  ];
+
   return (
     <div className="min-h-screen">
-      {/* Hero */}
-      <section className="relative py-24 overflow-hidden">
-        <div className="absolute inset-0">
-          <Image
-            src="https://images.unsplash.com/photo-1520333789090-1afc82db536a?w=1920&q=80"
-            alt="Maderera Juan B. Justo"
-            fill
-            className="object-cover"
-          />
-          <div className="absolute inset-0 bg-brand-gray/85" />
-        </div>
-        <div className="container mx-auto px-4 relative z-10 text-center text-white">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <Badge className="bg-brand-orange/20 text-brand-orange border-brand-orange/30 mb-6 text-sm">
-              Nuestra Historia
-            </Badge>
-            <h1 className="text-4xl sm:text-5xl font-bold mb-4">
-              Más de 40 años construyendo{" "}
-              <span className="text-brand-orange">confianza</span>
-            </h1>
-            <p className="text-lg text-white/70 max-w-2xl mx-auto">
-              Desde 1981, somos una empresa familiar que creció junto a Mar del Plata,
-              proveyendo los mejores productos de la industria maderera.
-            </p>
-          </motion.div>
-        </div>
-      </section>
+      <DatosEstructurados
+        datos={migasJsonLd([
+          { nombre: "Inicio", ruta: "/" },
+          { nombre: "Quiénes somos", ruta: "/nosotros" },
+        ])}
+      />
 
-      {/* Values */}
+      <EncabezadoPublico
+        titulo="Nosotros"
+        bajada={`Desde ${ANIO_FUNDACION} en Mar del Plata: ${numeros.anios} años de empresa familiar que creció con la ciudad.`}
+      />
+
       <section className="py-16">
-        <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              { icon: Award, title: "Calidad", desc: "Seleccionamos los mejores materiales para garantizar resultados duraderos." },
-              { icon: Users, title: "Servicio", desc: "Asesoramiento personalizado con un equipo que conoce cada producto." },
-              { icon: Truck, title: "Logística", desc: "Entrega en obra con flota propia en Mar del Plata y alrededores." },
-              { icon: Shield, title: "Confianza", desc: "43 años respaldando a profesionales y particulares con seriedad." },
-            ].map((value, i) => (
-              <motion.div
-                key={value.title}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
+        <div className="contenedor">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {VALORES.map((valor) => (
+              <div
+                key={valor.titulo}
+                className="h-full rounded-xl border bg-card p-6 text-center transition-shadow hover:shadow-lg"
               >
-                <Card className="h-full text-center hover:shadow-lg transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="w-14 h-14 bg-brand-orange/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <value.icon className="h-7 w-7 text-brand-orange" />
-                    </div>
-                    <h3 className="font-semibold mb-2">{value.title}</h3>
-                    <p className="text-sm text-muted-foreground">{value.desc}</p>
-                  </CardContent>
-                </Card>
-              </motion.div>
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-orange/10">
+                  <valor.icono className="h-7 w-7 text-brand-orange" />
+                </div>
+                <h2 className="mb-2 font-semibold">{valor.titulo}</h2>
+                <p className="text-sm text-muted-foreground">{valor.detalle}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Timeline */}
-      <section className="py-16 bg-muted/50">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">Nuestra Trayectoria</h2>
-          <div className="max-w-3xl mx-auto">
-            {timeline.map((item, i) => (
-              <motion.div
-                key={item.year}
-                className="flex gap-6 pb-10 last:pb-0"
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.08 }}
-              >
+      <section className="bg-muted/50 py-16">
+        <div className="contenedor">
+          <h2 className="mb-12 text-center text-3xl font-bold">Nuestra trayectoria</h2>
+          <ol className="mx-auto max-w-3xl">
+            {TRAYECTORIA.map((hito, i) => (
+              <li key={hito.anio} className="flex gap-6 pb-10 last:pb-0">
                 <div className="flex flex-col items-center">
-                  <div className="w-12 h-12 bg-brand-orange rounded-full flex items-center justify-center shrink-0">
-                    <span className="text-white font-bold text-xs">{item.year}</span>
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-orange">
+                    <span className="text-xs font-bold text-white">{hito.anio}</span>
                   </div>
-                  {i < timeline.length - 1 && <div className="w-0.5 flex-1 bg-brand-orange/20 mt-2" />}
+                  {i < TRAYECTORIA.length - 1 && (
+                    <div aria-hidden className="mt-2 w-0.5 flex-1 bg-brand-orange/20" />
+                  )}
                 </div>
                 <div className="pb-2">
-                  <h3 className="font-semibold text-lg">{item.title}</h3>
-                  <p className="text-sm text-muted-foreground">{item.desc}</p>
+                  <h3 className="text-lg font-semibold">{hito.titulo}</h3>
+                  <p className="text-sm text-muted-foreground">{hito.detalle}</p>
                 </div>
-              </motion.div>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
       </section>
 
-      {/* Moldava */}
       <section className="py-16">
-        <div className="container mx-auto px-4">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-            >
-              <Badge className="bg-brand-green/10 text-brand-green border-brand-green/30 mb-4">
-                Marca Propia
-              </Badge>
-              <h2 className="text-3xl font-bold mb-4">Moldava</h2>
-              <p className="text-muted-foreground mb-6">
-                Moldava es nuestra marca propia de molduras y listonería en Pino Finger Joint.
-                Con producción en nuestro aserradero de Mar del Plata, distribuimos a todo el país
-                con los más altos estándares de calidad.
+        <div className="contenedor">
+          <div className="grid items-center gap-12 lg:grid-cols-2">
+            <div>
+              <p className="mb-4 inline-block rounded-full border border-brand-green/30 bg-brand-green/10 px-3 py-1 text-sm text-brand-green">
+                Marca propia
               </p>
-              <ul className="space-y-3 mb-6">
-                {[
-                  "Producción propia con control de calidad",
-                  "Pino Finger Joint de primera selección",
-                  "Distribución nacional",
-                  "Variedad de perfiles: zócalos, marcos, cornisas y más",
-                  "Listos para pintar o lacar",
-                ].map((item) => (
+              <h2 className="mb-4 text-3xl font-bold">Moldava</h2>
+              <p className="mb-6 text-muted-foreground">
+                Moldava es nuestra marca propia de molduras y listonería en pino
+                finger joint. Con producción en nuestro aserradero de Mar del
+                Plata, distribuimos a todo el país con los más altos estándares
+                de calidad.
+              </p>
+              <ul className="mb-6 space-y-3">
+                {MOLDAVA.map((item) => (
                   <li key={item} className="flex items-center gap-2 text-sm">
-                    <div className="w-2 h-2 rounded-full bg-brand-green shrink-0" />
+                    <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-brand-green" />
                     {item}
                   </li>
                 ))}
               </ul>
-              <Link href="/catalogo?cat=molduras">
-                <Button className="bg-brand-orange hover:bg-brand-orange-dark text-white">
-                  Ver catálogo de molduras
-                </Button>
+              <Link href="/catalogo?cat=molduras" className={buttonVariants()}>
+                Ver catálogo de molduras
               </Link>
-            </motion.div>
-            <motion.div
-              className="relative h-80 lg:h-96 rounded-2xl overflow-hidden"
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-            >
+            </div>
+
+            <div className="relative h-80 overflow-hidden rounded-2xl bg-brand-gray lg:h-96">
               <Image
                 src="https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800&q=80"
                 alt="Molduras Moldava"
                 fill
+                sizes="(min-width: 1024px) 50vw, 100vw"
                 className="object-cover"
               />
-            </motion.div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Stats */}
-      <section className="py-16 bg-brand-orange text-white">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-            {[
-              { target: 43, suffix: "+", label: "Años de experiencia" },
-              { target: 2, suffix: "", label: "Sucursales en Mar del Plata" },
-              { target: 200, suffix: "+", label: "Productos en catálogo" },
-              { target: 1000, suffix: "+", label: "Clientes satisfechos" },
-            ].map((stat) => (
-              <div key={stat.label}>
-                <p className="text-4xl font-bold">
-                  <AnimatedCounter target={stat.target} suffix={stat.suffix} />
-                </p>
-                <p className="text-sm text-white/70 mt-1">{stat.label}</p>
+      <section className="bg-brand-orange py-16 text-white">
+        <div className="contenedor">
+          <dl className="grid grid-cols-2 gap-8 text-center md:grid-cols-4">
+            {cifras.map((cifra) => (
+              <div key={cifra.etiqueta}>
+                <dd className="tabular text-4xl font-bold">{cifra.valor}</dd>
+                <dt className="mt-1 text-sm text-white/70">{cifra.etiqueta}</dt>
               </div>
             ))}
-          </div>
+          </dl>
         </div>
       </section>
     </div>

@@ -58,6 +58,33 @@
   --color-brand-cream: oklch(0.97 0.01 80);
   --color-brand-wood: oklch(0.45 0.08 65);
   --color-brand-wood-light: oklch(0.85 0.04 75);
+
+  /* Paleta de la banda de diseño. Se registran como colores del tema para poder
+     escribirlas como `bg-chip` o `border-linea` en vez de arrastrar el valor
+     crudo por los componentes: el valor vive en un solo lado y tiene su par
+     oscuro, que es lo que el prototipo no trae. */
+  --color-sitio-fondo: var(--sitio-fondo);
+  --color-sitio-alt: var(--sitio-fondo-alt);
+  --color-oscuro-marca: var(--oscuro-marca);
+  --color-hundida: var(--hundida);
+  --color-chip: var(--chip);
+  --color-linea: var(--linea);
+  --color-linea-suave: var(--linea-suave);
+  --color-linea-tenue: var(--linea-tenue);
+  --color-linea-hover: var(--linea-hover);
+  --color-texto-2: var(--texto-2);
+  --color-texto-3: var(--texto-3);
+  --color-naranja-claro: var(--naranja-claro);
+  --color-naranja-tenue: var(--naranja-tenue);
+  --color-verde-whatsapp: var(--verde-whatsapp);
+  --color-rojo-oferta: var(--rojo-oferta);
+  --color-saldo-debe: var(--saldo-debe);
+  --color-saldo-favor: var(--saldo-favor);
+  --color-saldo-cero: var(--saldo-cero);
+  --color-accion: var(--accion);
+  --color-accion-hover: var(--accion-hover);
+  --color-acento-texto: var(--acento-texto);
+  --color-acento-sobre-claro: var(--acento-sobre-claro);
 }
 
 :root {
@@ -93,6 +120,58 @@
   --sidebar-accent-foreground: oklch(0.15 0.01 60);
   --sidebar-border: oklch(0.90 0.01 75);
   --sidebar-ring: oklch(0.68 0.19 48);
+
+  /* ---- Banda de diseño ---------------------------------------------------
+     Superficies planas y líneas visibles. El prototipo las trae como
+     hexadecimales sueltos y sin modo oscuro; acá entran una sola vez, con su
+     par en `.dark`, porque el tema es real: lo aplica un script en el `<head>`
+     antes del primer pintado y lo alterna el botón del navbar. */
+  --sitio-fondo: #ffffff;
+  /* La barra principal es traslúcida con desenfoque detrás. Va como token y no
+     como `bg-white/95` porque en oscuro el blanco no sirve. */
+  --chrome-fondo: rgb(255 255 255 / 0.95);
+  --sitio-fondo-alt: #faf7f2;
+  --oscuro-marca: #26231f;
+  --panel-fondo: #f3f2ef;
+  --hundida: #efedea;
+  --chip: #f4f1eb;
+
+  --linea: #dcd9d3;
+  --linea-suave: #e8e5e0;
+  --linea-tenue: #f2eee7;
+  --linea-hover: #dcd2c4;
+
+  --texto-2: #6b6660;
+  /* La banda lo pide en #8a7f72, que da 3.92:1 sobre blanco y 3.67:1 sobre el
+     fondo alterno — por debajo del mínimo, y no es texto decorativo: son las
+     bajadas del menú, el "desde", el precio tachado y el neto legal. Este es el
+     mismo tono un escalón más oscuro: 4.52:1 en el peor de los dos fondos. */
+  --texto-3: oklch(0.552 0.022 70);
+
+  --naranja-claro: #fdeada;
+  --naranja-tenue: #fdf5ec;
+  --verde-whatsapp: #2f7d4f;
+  --rojo-oferta: #a52a1a;
+
+  /* El naranja de marca sobre blanco da 3.08:1, insuficiente para texto. Los
+     botones usan este otro, que llega a 4.59:1 y se sigue leyendo como el mismo
+     color. Vive acá y no dentro de `.panel` porque el sitio público también lo
+     necesita: la CTA "Pedir Presupuesto" es este naranja, no el de marca. */
+  --accion: oklch(0.58 0.19 45);
+  --accion-hover: oklch(0.50 0.18 42);
+  /* El mismo naranja cuando se usa como texto y no como fondo de botón. En
+     claro coinciden; en oscuro no pueden: el tono que deja leer el blanco
+     encima del botón (4.61:1) se queda en 4.08:1 como texto sobre la tarjeta. */
+  --acento-texto: oklch(0.58 0.19 45);
+  /* Y un tercero, para cuando el naranja es texto **sobre** el naranja claro.
+     `--acento-texto` ahí da 3.95:1: está calculado contra blanco, y #fdeada no
+     es blanco. Este es el que trae la propia banda en su paleta de estados. */
+  --acento-sobre-claro: #a8480a;
+
+  /* Saldo de cuenta corriente: el número no decía de qué lado estaba. */
+  --saldo-debe: #b3261e;
+  --saldo-favor: #186b39;
+  --saldo-cero: #5c564e;
 }
 
 .dark {
@@ -127,6 +206,46 @@
   --sidebar-accent-foreground: oklch(0.96 0.005 80);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.68 0.19 48);
+
+  /* ---- Banda de diseño, en oscuro ----------------------------------------
+     Derivadas: el paquete de diseño es solo modo claro. Se respeta el rol de
+     cada token, no su valor —una superficie hundida sigue hundida— y las
+     líneas pasan a blanco translúcido, que es como ya funciona `--border`.
+     `--oscuro-marca` no se invierte: la barra superior y el pie son oscuros en
+     los dos temas a propósito. */
+  --sitio-fondo: oklch(0.18 0.01 60);
+  --chrome-fondo: oklch(0.18 0.01 60 / 0.95);
+  --sitio-fondo-alt: oklch(0.21 0.01 60);
+  --oscuro-marca: #26231f;
+  --panel-fondo: oklch(0.13 0.01 60);
+  --hundida: oklch(0.155 0.01 60);
+  --chip: oklch(0.25 0.01 60);
+
+  --linea: oklch(1 0 0 / 14%);
+  --linea-suave: oklch(1 0 0 / 10%);
+  --linea-tenue: oklch(1 0 0 / 7%);
+  --linea-hover: oklch(1 0 0 / 22%);
+
+  --texto-2: oklch(0.74 0.01 60);
+  --texto-3: oklch(0.62 0.012 65);
+
+  --naranja-claro: oklch(0.32 0.06 45);
+  --naranja-tenue: oklch(0.26 0.035 45);
+  --verde-whatsapp: oklch(0.64 0.12 150);
+  --rojo-oferta: oklch(0.64 0.17 30);
+
+  /* El fondo del botón no se aclara: el naranja de modo claro es el que deja
+     el texto blanco en 4.61:1, y subirlo lo tira a 3.09:1. Contra la tarjeta
+     oscura el botón igual se separa en 4.08:1. */
+  --accion: oklch(0.58 0.19 45);
+  --accion-hover: oklch(0.50 0.18 42);
+  /* Como texto sí hace falta aclararlo, o no llega sobre el fondo oscuro. */
+  --acento-texto: oklch(0.63 0.15 48);
+  --acento-sobre-claro: oklch(0.705 0.12 50);
+
+  --saldo-debe: oklch(0.68 0.18 28);
+  --saldo-favor: oklch(0.68 0.14 150);
+  --saldo-cero: oklch(0.68 0.01 60);
 }
 
 @layer base {
@@ -171,6 +290,27 @@ input::placeholder, textarea::placeholder {
   color: oklch(0.55 0 0 / 0.5);
 }
 
+/* Ancho del sitio público: 1200px con 24px de aire, como define la banda.
+
+   Reemplaza a `container mx-auto px-4`, que a 1280px dejaba el contenido casi
+   a sangre y a 1536px lo estiraba hasta ahí. El panel no lo usa: tiene su
+   propio layout y su menú lateral fijo.
+
+   No va dentro de `@layer components`: ahí la compilación de producción la
+   emite y Turbopack en desarrollo la descarta —la capa llega declarada y
+   vacía—, y una regla que anda en un lado y no en el otro no sirve. Fuera de
+   las capas gana siempre.
+
+   Por eso las páginas que ya traen un ancho propio más angosto —la nota del
+   blog, el detalle de un pedido, el portal— no la usan: llevan `mx-auto px-6`
+   con su `max-w-*`, que es explícito y no depende de quién le gana a quién. */
+.contenedor {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
 /* Wood grain inspired divider */
 .wood-divider {
   height: 4px;
@@ -181,6 +321,62 @@ input::placeholder, textarea::placeholder {
     oklch(0.68 0.19 48) 100%
   );
   border-radius: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Paleta de estados — una sola fuente para todo el sistema.
+
+   Seis familias, y cada estado del negocio cae en una. Que un mismo estado se
+   vea igual en todas las pantallas es lo que hace que el color signifique algo:
+   si "listo" fuera verde en Pedidos y azul en el Resumen, habría que leer
+   siempre. El mapeo de estado a familia vive en
+   `components/admin/etiqueta-estado.tsx`, que es lo único que las usa.
+
+   El acento de tres de las familias queda por debajo de 3:1 contra el fondo del
+   panel, y es a propósito: "entregado" y "cancelado" no tienen que llamar la
+   atención. El color nunca va solo —siempre lo acompaña la etiqueta escrita—,
+   así que no es lo único que distingue el estado.
+
+   El modo oscuro no viene en la banda; está derivado conservando el rol de cada
+   color, no su valor: fondo apenas teñido y tinta clara del mismo tono.
+--------------------------------------------------------------------------- */
+
+.estado-espera   { --estado-fondo: #fdf0d5; --estado-tinta: #8a5a08; --estado-acento: #e0a020; }
+.estado-info     { --estado-fondo: #e2ebfb; --estado-tinta: #1d4ed8; --estado-acento: #3f6fd8; }
+.estado-marca    { --estado-fondo: #fdeada; --estado-tinta: #a8480a; --estado-acento: #f07316; }
+.estado-ok       { --estado-fondo: #dcf3e3; --estado-tinta: #186b39; --estado-acento: #2f7d4f; }
+.estado-problema { --estado-fondo: #fbe4e2; --estado-tinta: #b3261e; --estado-acento: #b3261e; }
+.estado-cerrado  { --estado-fondo: #ecebe8; --estado-tinta: #5c564e; --estado-acento: #c3bfb8; }
+
+.dark .estado-espera {
+  --estado-fondo: oklch(0.26 0.05 75);
+  --estado-tinta: oklch(0.78 0.11 75);
+  --estado-acento: oklch(0.72 0.13 75);
+}
+.dark .estado-info {
+  --estado-fondo: oklch(0.26 0.055 265);
+  --estado-tinta: oklch(0.78 0.11 265);
+  --estado-acento: oklch(0.68 0.14 265);
+}
+.dark .estado-marca {
+  --estado-fondo: oklch(0.26 0.05 45);
+  --estado-tinta: oklch(0.78 0.11 45);
+  --estado-acento: oklch(0.68 0.16 45);
+}
+.dark .estado-ok {
+  --estado-fondo: oklch(0.26 0.044 150);
+  --estado-tinta: oklch(0.78 0.10 150);
+  --estado-acento: oklch(0.68 0.13 150);
+}
+.dark .estado-problema {
+  --estado-fondo: oklch(0.26 0.05 25);
+  --estado-tinta: oklch(0.78 0.11 25);
+  --estado-acento: oklch(0.68 0.16 25);
+}
+.dark .estado-cerrado {
+  --estado-fondo: oklch(0.24 0.004 70);
+  --estado-tinta: oklch(0.75 0.01 70);
+  --estado-acento: oklch(0.45 0.008 70);
 }
 
 /* ---------------------------------------------------------------------------
@@ -223,42 +419,36 @@ input::placeholder, textarea::placeholder {
   /* El gris de texto secundario llega a 8.8:1 sobre el fondo del panel. */
   --muted-foreground: oklch(0.40 0.012 60);
 
+  /* Radio corto: lectura más corporativa en una herramienta de trabajo. Pisa
+     `--radius` local, así que arrastra también a las utilidades de Tailwind
+     que lo derivan (`rounded-lg` y compañía) dentro del panel. */
+  --radius: 0.5rem;
+
   /* Bordes visibles: el token general queda en 1.35:1 sobre blanco, que a
-     efectos prácticos es invisible y hace que todo se sienta plano. */
+     efectos prácticos es invisible y hace que todo se sienta plano.
+     El `--linea` de la banda (#dcd9d3) da 1.38:1, o sea lo mismo, así que acá
+     adentro se conserva el valor medido: el panel lo usa gente que no ve de
+     cerca y es el único lugar donde eso se midió. En el sitio público, donde
+     la tarjeta además lleva sombra, vale el de la banda. */
   --linea: oklch(0.80 0.012 70);
   --linea-suave: oklch(0.88 0.01 72);
-
-  /* El naranja de marca sobre blanco da 3.08:1, insuficiente para texto. Los
-     botones usan este otro, que llega a 4.59:1 y se sigue leyendo como el
-     mismo color. */
-  --accion: oklch(0.58 0.19 45);
-  --accion-hover: oklch(0.50 0.18 42);
 }
 
-/* Fondo del panel: papel con grano y una veta apenas insinuada, para que las
-   tarjetas se apoyen sobre algo en lugar de flotar sobre un plano vacío. */
+/* En oscuro la línea no puede ser un gris claro fijo: sobre el fondo del panel
+   se convierte en un trazo brillante. Va translúcida, como `--border`. */
+.dark .panel {
+  --linea: oklch(1 0 0 / 18%);
+  --linea-suave: oklch(1 0 0 / 12%);
+}
+
+/* Fondo del panel: plano.
+
+   Antes llevaba grano, veta y dos degradados radiales para que las tarjetas se
+   apoyaran sobre algo. La banda lo baja a un plano liso porque la textura
+   competía con los datos: la jerarquía la dan las superficies, no el fondo. */
 .panel-fondo {
   position: relative;
-  background-color: var(--background);
-  background-image:
-    radial-gradient(
-      1100px 420px at 8% -8%,
-      oklch(0.68 0.19 48 / 0.05),
-      transparent 62%
-    ),
-    radial-gradient(
-      900px 500px at 100% 0%,
-      oklch(0.48 0.13 250 / 0.035),
-      transparent 60%
-    ),
-    repeating-linear-gradient(
-      180deg,
-      oklch(0.45 0.08 65 / 0.022) 0px,
-      oklch(0.45 0.08 65 / 0.022) 1px,
-      transparent 1px,
-      transparent 7px
-    ),
-    url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  background-color: var(--panel-fondo);
 }
 
 /* ---- Niveles de superficie ------------------------------------------------ */
@@ -266,52 +456,40 @@ input::placeholder, textarea::placeholder {
 /* Nivel 1 — contenido principal. Se levanta del fondo. */
 .tarjeta {
   background-color: var(--card);
-  border-radius: 0.875rem;
-  box-shadow:
-    0 0 0 1px var(--linea),
-    0 1px 2px oklch(0.3 0.02 60 / 0.05),
-    0 4px 12px -8px oklch(0.3 0.02 60 / 0.12);
+  border-radius: 0.5rem;
+  border: 1px solid var(--linea);
+  box-shadow: 0 1px 2px rgb(60 50 40 / 0.05);
   transition:
-    box-shadow 180ms ease,
-    transform 180ms ease;
+    box-shadow 220ms ease,
+    transform 220ms ease,
+    border-color 220ms ease;
 }
 
 /* Nivel 0 — auxiliar. Se hunde de verdad: la sombra interior desde arriba es lo
    que hace leer el plano por debajo del resto. Solo bajarle el tono lo deja
    gris, no hundido. */
 .tarjeta-hundida {
-  background-color: oklch(0.955 0.007 78);
-  border-radius: 0.875rem;
-  box-shadow:
-    inset 0 2px 5px oklch(0.35 0.02 60 / 0.09),
-    inset 0 1px 1px oklch(0.35 0.02 60 / 0.06),
-    inset 0 0 0 1px oklch(0.86 0.012 72);
+  background-color: var(--hundida);
+  border-radius: 0.5rem;
+  box-shadow: inset 0 2px 5px rgb(60 50 40 / 0.06);
 }
 
 /* Nivel 2 — pide una decisión. El borde de acento la separa del resto. */
 .tarjeta-atencion {
   background-color: var(--card);
-  border-radius: 0.875rem;
-  box-shadow:
-    0 0 0 1.5px oklch(0.68 0.19 48 / 0.45),
-    0 2px 4px oklch(0.68 0.19 48 / 0.08),
-    0 8px 20px -10px oklch(0.5 0.12 50 / 0.22);
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 1.5px rgb(240 115 22 / 0.45);
 }
 
 .tarjeta-activa:hover {
-  box-shadow:
-    0 0 0 1.5px oklch(0.68 0.19 48 / 0.45),
-    0 6px 18px -6px oklch(0.3 0.03 60 / 0.16);
-  transform: translateY(-1px);
+  box-shadow: 0 14px 30px -16px rgb(60 50 40 / 0.34);
+  border-color: var(--linea-hover);
+  transform: translateY(-3px);
 }
 
 /* Encabezado de una tarjeta: separa el título del contenido sin una línea dura. */
 .tarjeta-cabecera {
-  background-image: linear-gradient(
-    to bottom,
-    oklch(0.975 0.006 78),
-    transparent
-  );
+  background-image: linear-gradient(to bottom, var(--hundida), transparent);
   border-bottom: 1px solid var(--linea-suave);
 }
 
@@ -359,11 +537,618 @@ input::placeholder, textarea::placeholder {
   min-height: 2.5rem;
 }
 
+/* El `!important` no es capricho: la regla general de arriba
+   (`input, textarea, select { font-size: 15px !important }`) lo lleva, y sin
+   esto le gana por origen sin importar la especificidad. Los 16px del panel
+   estaban escritos pero nunca se aplicaban. */
 .panel :is(input, textarea, select) {
-  font-size: 1rem;
+  font-size: 1rem !important;
+}
+
+/* Los diálogos también, aunque no estén dentro de `.panel`.
+
+   Se montan en un portal colgado del `body`, así que ninguna regla que empiece
+   con `.panel` los alcanza: sus campos quedaban en 32px y 15px mientras el
+   resto del panel estaba en 40 y 16. Y son la pantalla donde se transfiere
+   stock, se ajustan precios y se carga un movimiento de cuenta —justo donde
+   menos conviene achicar el blanco al que hay que apuntar—. */
+[data-slot="dialog-content"]
+  :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]),
+[data-slot="dialog-content"] button:not([data-slot="dropdown-menu-item"]) {
+  min-height: 2.5rem;
+}
+
+[data-slot="dialog-content"] :is(input, textarea, select) {
+  font-size: 1rem !important;
 }
 
 /* Barra de acento del ítem activo del menú. */
 .nav-activa {
   box-shadow: inset 2px 0 0 0 var(--color-brand-orange);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Comprobantes impresos                                                       */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * El comprobante se imprime en A4 y se mira en pantalla antes de imprimir, así
+ * que tiene su propia hoja de estilos: tipografía más chica que el resto del
+ * panel, todo en blanco y negro salvo el acento de marca, y medidas en
+ * milímetros para que lo que se ve sea lo que sale de la impresora.
+ */
+
+.comprobante-hoja {
+  --tinta: #1a1a1a;
+  --tinta-suave: #666;
+  --linea: #e5e5e5;
+  background: #f4f4f5;
+  min-height: 100vh;
+  color: var(--tinta);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+.comprobante-hoja .barra {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  background: #1a1a1a;
+  padding: 0.75rem 1.5rem;
+}
+
+.comprobante-hoja .boton-imprimir {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  background: oklch(0.68 0.19 48);
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  transition: background-color 0.15s;
+}
+
+.comprobante-hoja .boton-imprimir:hover {
+  background: oklch(0.6 0.19 48);
+}
+
+.comprobante-hoja .hoja {
+  position: relative;
+  max-width: 210mm;
+  margin: 1.5rem auto;
+  background: #fff;
+  padding: 14mm 12mm;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.08);
+}
+
+.comprobante-hoja .marca-agua {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-32deg);
+  font-size: 5rem;
+  font-weight: 900;
+  letter-spacing: 0.5rem;
+  text-transform: uppercase;
+  color: rgb(0 0 0 / 0.06);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Cabecera: emisor | letra | numeración */
+.comprobante-hoja .cabecera {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1rem;
+  align-items: start;
+  border-bottom: 2px solid var(--tinta);
+  padding-bottom: 1rem;
+}
+
+.comprobante-hoja .razon {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.comprobante-hoja .fantasia {
+  font-size: 0.8rem;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .datos {
+  margin-top: 0.5rem;
+  font-size: 0.7rem;
+  line-height: 1.7;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .letra-caja {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.5rem;
+  border: 2px solid var(--tinta);
+  padding: 0.25rem 0.75rem;
+}
+
+.comprobante-hoja .letra {
+  font-size: 2.25rem;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.comprobante-hoja .codigo {
+  font-size: 0.55rem;
+  font-weight: 600;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .comprobante-datos {
+  text-align: right;
+}
+
+.comprobante-hoja .titulo {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.comprobante-hoja .numero {
+  font-family: var(--font-mono), monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.comprobante-hoja .comprobante-datos .datos {
+  text-align: right;
+}
+
+/* Receptor */
+.comprobante-hoja .receptor {
+  margin: 1rem 0;
+  border: 1px solid var(--linea);
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+}
+
+.comprobante-hoja .etiqueta {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .receptor-grilla {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 2rem;
+  margin-top: 0.6rem;
+}
+
+.comprobante-hoja .receptor-grilla span {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .receptor-grilla strong {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Detalle */
+.comprobante-hoja .detalle {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.comprobante-hoja .detalle th {
+  border-bottom: 1.5px solid var(--tinta);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+  text-align: left;
+}
+
+.comprobante-hoja .detalle td {
+  border-bottom: 1px solid var(--linea);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.78rem;
+  vertical-align: top;
+}
+
+.comprobante-hoja .der {
+  text-align: right;
+}
+
+.comprobante-hoja .mono {
+  font-family: var(--font-mono), monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Totales */
+.comprobante-hoja .totales {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.comprobante-hoja .totales-caja {
+  width: 17rem;
+}
+
+.comprobante-hoja .linea {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.2rem 0;
+  font-size: 0.8rem;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .total-final {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 0.4rem;
+  border-top: 2px solid oklch(0.68 0.19 48);
+  padding-top: 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.comprobante-hoja .observaciones {
+  margin-top: 1.25rem;
+  border-left: 3px solid var(--linea);
+  padding-left: 0.75rem;
+  font-size: 0.78rem;
+  color: var(--tinta-suave);
+}
+
+/* Pie fiscal */
+.comprobante-hoja .pie {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--linea);
+  padding-top: 1rem;
+}
+
+.comprobante-hoja .qr {
+  width: 26mm;
+  height: 26mm;
+  flex-shrink: 0;
+}
+
+.comprobante-hoja .qr svg {
+  width: 100%;
+  height: 100%;
+}
+
+.comprobante-hoja .cae p {
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.comprobante-hoja .chico {
+  font-size: 0.65rem;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .sin-cae {
+  width: 100%;
+  border: 1.5px dashed oklch(0.68 0.19 48);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.comprobante-hoja .leyenda {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 0.65rem;
+  color: var(--tinta-suave);
+}
+
+/**
+ * Cuerpo de una nota del blog.
+ *
+ * El HTML lo genera `lib/markdown.ts`, así que no lleva clases: los estilos van
+ * por etiqueta. Ancho de línea acotado a unos 70 caracteres, que es donde la
+ * lectura deja de cansar, y jerarquía marcada por espacio antes que por tamaño.
+ */
+.nota-cuerpo {
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  color: var(--foreground);
+}
+
+.nota-cuerpo > * + * {
+  margin-top: 1.15em;
+}
+
+.nota-cuerpo h2 {
+  margin-top: 2.25rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.nota-cuerpo h3 {
+  margin-top: 1.75rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.nota-cuerpo ul {
+  margin-left: 1.1rem;
+  list-style: disc;
+}
+
+.nota-cuerpo li + li {
+  margin-top: 0.4em;
+}
+
+.nota-cuerpo a {
+  color: oklch(0.52 0.18 40);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.nota-cuerpo blockquote {
+  border-left: 3px solid oklch(0.68 0.19 48);
+  padding-left: 1rem;
+  color: var(--muted-foreground);
+}
+
+/* Tablas y código. Entraron con las guías del panel: media guía es "esto
+   significa aquello", y dos columnas se leen mucho mejor que una lista.
+   El `overflow-x` va sobre un contenedor propio para que una tabla ancha
+   ruede sola y no empuje el ancho de la página en el teléfono. */
+.nota-cuerpo table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1rem;
+}
+
+.nota-cuerpo th,
+.nota-cuerpo td {
+  border: 1px solid var(--border);
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.nota-cuerpo th {
+  background: var(--muted);
+  font-weight: 600;
+}
+
+.nota-cuerpo code {
+  border-radius: 0.3rem;
+  background: var(--muted);
+  padding: 0.1em 0.35em;
+  font-size: 0.92em;
+}
+
+.nota-cuerpo pre {
+  overflow-x: auto;
+  border-radius: 0.6rem;
+  background: var(--muted);
+  padding: 0.9rem 1rem;
+  line-height: 1.55;
+}
+
+.nota-cuerpo pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Firmas del remito. Dos recuadros: el que se completa en pantalla desde el
+   celular y el que queda en blanco para firmar el papel cuando se imprime. */
+.comprobante-hoja .firma-zona {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.comprobante-hoja .firma-caja {
+  border-top: 1px solid var(--linea);
+  padding-top: 0.6rem;
+}
+
+.comprobante-hoja .firma-imagen {
+  display: block;
+  width: 100%;
+  max-width: 60mm;
+  height: 22mm;
+  object-fit: contain;
+  object-position: left bottom;
+}
+
+.comprobante-hoja .firma-vacia {
+  height: 22mm;
+  border-bottom: 1px solid var(--linea);
+}
+
+@media print {
+  .comprobante-hoja {
+    background: #fff;
+  }
+
+  .comprobante-hoja .no-imprimir {
+    display: none !important;
+  }
+
+  .comprobante-hoja .hoja {
+    margin: 0;
+    max-width: 100%;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  /* La marca de agua se imprime: es justamente lo que hay que ver en el papel
+     cuando el comprobante no está autorizado. */
+  .comprobante-hoja .marca-agua {
+    position: absolute;
+    color: rgb(0 0 0 / 0.08);
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}
+
+/*
+ * Ticket del mostrador.
+ *
+ * Hoja propia, como el comprobante, y por la misma razón: lo que se ve en
+ * pantalla tiene que ser lo que sale de la impresora. Pero acá el papel es un
+ * rollo de 80 mm y no una A4, así que es una columna angosta, monoespaciada y
+ * sin un solo color: las térmicas imprimen en negro y nada más.
+ */
+.ticket-hoja {
+  min-height: 100vh;
+  background: #f4f4f5;
+  color: #1a1a1a;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ticket-hoja .barra {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  background: #1a1a1a;
+  padding: 0.75rem;
+}
+
+.ticket-hoja .boton-imprimir {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  background: oklch(0.68 0.19 48);
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.ticket-hoja .rollo {
+  width: 80mm;
+  margin: 1.5rem auto;
+  background: #fff;
+  padding: 6mm 5mm;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.08);
+}
+
+.ticket-hoja .cabecera {
+  text-align: center;
+}
+
+.ticket-hoja .razon {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Guiones y no un borde: una térmica los imprime igual y un borde de 1px a
+   veces sale desparejo. */
+.ticket-hoja .separador {
+  margin: 3mm 0;
+  border-top: 1px dashed #999;
+}
+
+.ticket-hoja .linea-datos {
+  display: flex;
+  justify-content: space-between;
+  gap: 4mm;
+}
+
+.ticket-hoja .items {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ticket-hoja .items td {
+  padding: 1mm 0;
+  vertical-align: top;
+}
+
+.ticket-hoja .descripcion .detalle {
+  display: block;
+  color: #555;
+}
+
+.ticket-hoja .items .importe {
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.ticket-hoja .total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ticket-hoja .aviso {
+  margin-top: 2mm;
+  text-align: center;
+  font-weight: 700;
+}
+
+.ticket-hoja .legal,
+.ticket-hoja .pie {
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.ticket-hoja .pie {
+  margin-top: 3mm;
+}
+
+@media print {
+  .ticket-hoja {
+    background: #fff;
+  }
+  .ticket-hoja .barra {
+    display: none;
+  }
+  .ticket-hoja .rollo {
+    /* `max-width` y no `width: auto`: si la impresora ignora el `@page` de
+       abajo —muchas térmicas viejas lo hacen— el ticket se estiraría al ancho
+       de la hoja y quedaría una línea de texto por renglón. Con el tope, sale
+       angosto igual. */
+    width: 100%;
+    max-width: 72mm;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+  @page {
+    size: 80mm auto;
+    margin: 4mm;
+  }
 }

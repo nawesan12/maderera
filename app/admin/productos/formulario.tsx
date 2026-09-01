@@ -498,11 +498,9 @@ export function FormularioProducto({
             "Guardar producto"
           )}
         </Button>
-        <Link href="/admin/productos">
-          <Button type="button" variant="ghost">
-            Cancelar
-          </Button>
-        </Link>
+        <Button render={<Link href="/admin/productos" />} variant="ghost">
+          Cancelar
+        </Button>
       </div>
     </form>
   );

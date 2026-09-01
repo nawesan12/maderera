@@ -8,6 +8,8 @@ import {
   addresses,
   branches,
   customers,
+  deliveries,
+  invoices,
   orderItems,
   orderStatusHistory,
   orders,
@@ -15,6 +17,7 @@ import {
   quotes,
 } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
+import { saldoDeAcopio } from "@/lib/entregas";
 
 /**
  * Portal del cliente.
@@ -221,7 +224,7 @@ export async function miPedido(numero: string) {
 
   if (!pedido) return null;
 
-  const [items, historial] = await Promise.all([
+  const [items, historial, entregas] = await Promise.all([
     db
       .select()
       .from(orderItems)
@@ -237,9 +240,29 @@ export async function miPedido(numero: string) {
       .from(orderStatusHistory)
       .where(eq(orderStatusHistory.orderId, pedido.id))
       .orderBy(desc(orderStatusHistory.createdAt)),
+    // Los retiros ya hechos. El pedido está filtrado por dueño, así que sus
+    // remitos también lo están.
+    db
+      .select({
+        id: deliveries.id,
+        numero: deliveries.numero,
+        tipo: deliveries.tipo,
+        estado: deliveries.estado,
+        receptorNombre: deliveries.receptorNombre,
+        firmadoAt: deliveries.firmadoAt,
+        createdAt: deliveries.createdAt,
+      })
+      .from(deliveries)
+      .where(eq(deliveries.orderId, pedido.id))
+      .orderBy(desc(deliveries.createdAt)),
   ]);
 
-  return { ...pedido, items, historial };
+  // Lo que queda en acopio, renglón por renglón. Es la pregunta que un cliente
+  // de maderera se hace todo el tiempo: "¿cuánto me falta retirar?".
+  const acopio = await saldoDeAcopio(pedido.id);
+  const enAcopio = acopio.filter((a) => a.pendiente > 0.01);
+
+  return { ...pedido, items, historial, entregas, acopio, enAcopio };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -477,6 +500,54 @@ export async function creditoDisponible(
   }
 
   return { ...base, habilitado: true, motivo: null };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Comprobantes                                                                */
+/* -------------------------------------------------------------------------- */
+
+export interface ComprobantePropio {
+  id: string;
+  tipo: string;
+  puntoVenta: number;
+  numero: number;
+  estado: string;
+  total: number;
+  cae: string | null;
+  fechaEmision: Date;
+}
+
+/**
+ * Facturas y notas de crédito del cliente.
+ *
+ * Se muestran solo las que ya se emitieron: un borrador es trabajo interno del
+ * mostrador y todavía puede cambiar, así que no tiene por qué verlo el cliente.
+ */
+export async function misComprobantes(): Promise<ComprobantePropio[]> {
+  const cliente = await clienteDeLaSesion();
+  if (!cliente) return [];
+
+  const filas = await db
+    .select({
+      id: invoices.id,
+      tipo: invoices.tipo,
+      puntoVenta: invoices.puntoVenta,
+      numero: invoices.numero,
+      estado: invoices.estado,
+      total: invoices.total,
+      cae: invoices.cae,
+      fechaEmision: invoices.fechaEmision,
+    })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.customerId, cliente.id),
+        sql`${invoices.estado} <> 'borrador'`,
+      ),
+    )
+    .orderBy(desc(invoices.fechaEmision));
+
+  return filas.map((f) => ({ ...f, total: Number(f.total) }));
 }
 
 /* -------------------------------------------------------------------------- */

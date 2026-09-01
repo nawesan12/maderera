@@ -46,16 +46,27 @@ export const metadata: Metadata = {
     title: "Maderera Juan B. Justo | Desde 1981 en Mar del Plata",
     description:
       "Más de 40 años proveyendo madera de calidad. Techos, placas, pisos, molduras, ferretería y más. Presupuestos sin cargo.",
-    images: [{ url: "/cropped-icon-180x180.png", width: 180, height: 180, alt: "Maderera Juan B. Justo" }],
+    // La imagen la genera `app/opengraph-image.tsx`: Next la resuelve sola y
+    // declararla acá a mano la pisaría con el favicon.
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Maderera Juan B. Justo | Desde 1981 en Mar del Plata",
     description: "Más de 40 años proveyendo madera de calidad en Mar del Plata. Presupuestos sin cargo.",
   },
   robots: { index: true, follow: true },
   icons: { icon: "/cropped-icon-180x180.png", apple: "/cropped-icon-180x180.png" },
 };
+
+/**
+ * Aplica el tema guardado antes del primer pintado.
+ *
+ * Va como script bloqueante en el `<head>` y no en un efecto de React a
+ * propósito: un efecto corre después de que el navegador ya dibujó, así que
+ * quien eligió modo oscuro veía un destello blanco en cada navegación. Es la
+ * única excepción a "nada de scripts inline", y la paga bien.
+ */
+const APLICAR_TEMA = `try{if(localStorage.getItem("theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`;
 
 export default function RootLayout({
   children,
@@ -66,7 +77,11 @@ export default function RootLayout({
     <html
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: APLICAR_TEMA }} />
+      </head>
       <body className="min-h-full flex flex-col overflow-x-hidden">
         <TooltipProvider>
           {children}

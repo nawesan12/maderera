@@ -30,7 +30,19 @@ export interface FilaPrecio {
   brecha: number | null;
   /** Cuándo se tocó por última vez, para ver qué quedó viejo. */
   actualizado: Date | null;
+  /**
+   * Si el precio quedó viejo y conviene revisarlo.
+   *
+   * El criterio vive acá y no en la pantalla por dos razones: es una decisión
+   * de negocio —cada cuánto se considera desactualizado un precio— y depende de
+   * la hora actual, que leída durante el render de un Server Component es una
+   * impureza. Acá se calcula una sola vez, al armar los datos.
+   */
+  desactualizado: boolean;
 }
+
+/** Días sin cambios a partir de los cuales un precio entra en la lista a revisar. */
+export const DIAS_PARA_REVISAR = 60;
 
 export async function listarPrecios(
   filtros: { busqueda?: string; categoria?: string } = {},
@@ -40,6 +52,9 @@ export async function listarPrecios(
   const listas = await db.select().from(priceLists);
   const general = listas.find((l) => l.isDefault);
   const profesional = listas.find((l) => l.slug === "profesional");
+
+  const limiteDeRevision =
+    Date.now() - DIAS_PARA_REVISAR * 24 * 60 * 60 * 1000;
 
   const condiciones = [
     eq(products.active, true),
@@ -129,16 +144,20 @@ export async function listarPrecios(
       .map((x) => x.updatedAt)
       .filter((f): f is Date => f !== null);
 
+    const actualizado =
+      fechas.length > 0
+        ? new Date(Math.max(...fechas.map((f) => f.getTime())))
+        : null;
+
     return {
       ...fila,
       imagen: portadaPorProducto.get(fila.productId) ?? null,
       precioGeneral,
       precioProfesional,
       brecha: g > 0 && p > 0 ? Math.round((1 - p / g) * 1000) / 10 : null,
-      actualizado:
-        fechas.length > 0
-          ? new Date(Math.max(...fechas.map((f) => f.getTime())))
-          : null,
+      actualizado,
+      desactualizado:
+        g > 0 && (actualizado === null || actualizado.getTime() < limiteDeRevision),
     };
   });
 }

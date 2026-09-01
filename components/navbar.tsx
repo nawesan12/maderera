@@ -11,7 +11,6 @@ import {
   Clock,
   ChevronDown,
   ShoppingCart,
-  Calculator,
   Home,
   Layers,
   Grid3X3,
@@ -25,9 +24,9 @@ import {
   LayoutDashboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useCarrito } from "@/lib/carrito-context";
+import { primerNombre } from "@/lib/formato";
 
 const productLinks = [
   { name: "Techos", href: "/catalogo?cat=techos", icon: Home, desc: "Tirantes, machimbres, aislantes" },
@@ -40,15 +39,28 @@ const productLinks = [
   { name: "Cubiertas", href: "/catalogo?cat=cubiertas", icon: Umbrella, desc: "Chapas y tejas Curvin" },
 ];
 
-const navLinks = [
+/**
+ * La navegación, en dos listas explícitas.
+ *
+ * Antes era una sola lista recortada con `slice(1, 5)` y `slice(5)`, lo que
+ * ataba el menú al orden del arreglo: mover un elemento cambiaba en silencio
+ * qué quedaba a la vista y qué se escondía en "Más". Ahora cada grupo se
+ * declara.
+ *
+ * Calculadora y Stock salieron del chrome por pedido del cliente. Las rutas
+ * siguen existiendo y enlazadas desde el inicio y el presupuesto.
+ */
+const enlacesDirectos = [
   { name: "Catálogo", href: "/catalogo" },
-  { name: "Calculadora", href: "/calculadora" },
-  { name: "Stock", href: "/stock" },
   { name: "Sucursales", href: "/sucursales" },
-  { name: "Profesionales", href: "/profesionales" },
+];
+
+const enlacesMas = [
   { name: "Nosotros", href: "/nosotros" },
   { name: "Blog", href: "/blog" },
   { name: "Contacto", href: "/contacto" },
+  { name: "Documentación", href: "/documentacion" },
+  { name: "Eventos", href: "/eventos" },
 ];
 
 /**
@@ -64,273 +76,309 @@ export interface SesionNavbar {
   esStaff: boolean;
 }
 
-export function Navbar({ sesion }: { sesion?: SesionNavbar | null }) {
+/**
+ * El teléfono y el horario bajan por prop desde el layout, que los lee de Casa
+ * Central. Estuvieron escritos a mano acá y por eso corregir el teléfono en el
+ * panel lo dejaba viejo en la barra superior de todas las páginas: el dato de
+ * contacto tiene una sola fuente, que es la ficha de la sucursal.
+ */
+export function Navbar({
+  sesion,
+  telefono,
+  horario,
+}: {
+  sesion?: SesionNavbar | null;
+  telefono?: string | null;
+  horario?: string | null;
+}) {
   const [productsOpen, setProductsOpen] = useState(false);
+  const [masOpen, setMasOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { cantidadItems } = useCarrito();
 
-  const primerNombre = sesion?.nombre.trim().split(/\s+/)[0] ?? "";
+  const nombreDePila = sesion ? primerNombre(sesion.nombre) : "";
+  const destinoSesion = sesion ? (sesion.esStaff ? "/admin" : "/mi-cuenta") : "/ingresar";
+  const IconoSesion = sesion?.esStaff ? LayoutDashboard : UserRound;
+  const textoSesion = sesion
+    ? sesion.esStaff
+      ? "Ir al panel"
+      : "Mi cuenta"
+    : "Ingresar";
 
   return (
     <>
-      {/* Top bar - Dark, subtle */}
-      <div className="bg-brand-gray text-white/70 text-xs py-2 hidden sm:block">
-        <div className="container mx-auto px-4 flex items-center justify-between">
-          <div className="flex items-center gap-5">
-            <span className="flex items-center gap-1.5">
-              <Phone className="h-3 w-3 text-brand-orange" />
-              (0223) 474-3328
+      {/* Barra superior. Siempre oscura, en los dos temas. */}
+      <div className="hidden bg-oscuro-marca text-[12.5px] text-white/70 sm:block">
+        <div className="contenedor flex h-[38px] items-center gap-5">
+          {telefono && (
+            <a
+              href={`tel:${telefono.replace(/[^\d+]/g, "")}`}
+              className="flex items-center gap-[7px] transition-colors hover:text-white"
+            >
+              <Phone className="h-[13px] w-[13px] text-brand-orange" />
+              <span className="tabular">{telefono}</span>
+            </a>
+          )}
+          {horario && (
+            <span className="hidden items-center gap-[7px] md:flex">
+              <Clock className="h-[13px] w-[13px] text-brand-orange" />
+              {horario}
             </span>
-            <span className="flex items-center gap-1.5">
-              <Clock className="h-3 w-3 text-brand-orange" />
-              Lun-Vie 8:00-16:00 | Sáb 8:00-12:00
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link href="/profesionales" className="hover:text-white transition-colors font-medium">
+          )}
+          <div className="ml-auto flex items-center gap-3.5">
+            <Link href="/profesionales" className="font-medium text-white/80 transition-colors hover:text-white">
               Portal Profesionales
             </Link>
             <span className="text-white/20">|</span>
-            <Link href="/contacto" className="hover:text-white transition-colors">
+            <Link href="/contacto" className="transition-colors hover:text-white">
               Contacto
             </Link>
             <span className="text-white/20">|</span>
-            {sesion ? (
-              <Link
-                href={sesion.esStaff ? "/admin" : "/mi-cuenta"}
-                className="flex items-center gap-1.5 font-medium text-white/90 transition-colors hover:text-white"
-              >
-                {sesion.esStaff ? (
-                  <LayoutDashboard className="h-3 w-3 text-brand-orange" />
-                ) : (
-                  <UserRound className="h-3 w-3 text-brand-orange" />
-                )}
-                {sesion.esStaff ? "Panel" : `Hola, ${primerNombre}`}
-              </Link>
-            ) : (
-              <Link
-                href="/ingresar"
-                className="flex items-center gap-1.5 transition-colors hover:text-white"
-              >
-                <UserRound className="h-3 w-3 text-brand-orange" />
-                Ingresar
-              </Link>
-            )}
+            <Link
+              href={destinoSesion}
+              className="flex items-center gap-[7px] font-medium text-white transition-colors hover:text-brand-orange-light"
+            >
+              <IconoSesion className="h-[13px] w-[13px] text-brand-orange" />
+              {sesion ? (sesion.esStaff ? "Panel" : `Hola, ${nombreDePila}`) : "Ingresar"}
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* Main nav */}
-      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-xl border-b border-border/50">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between h-[72px]">
-            {/* Logo */}
-            <Link href="/" className="flex items-center gap-3 group">
-              <Image
-                src="/cropped-icon-180x180.png"
-                alt="Maderera Juan B. Justo"
-                width={44}
-                height={44}
-                className="rounded-xl group-hover:scale-105 transition-transform duration-300"
-              />
-              <div className="hidden sm:block">
-                <p className="font-bold text-foreground leading-tight text-[15px] tracking-tight">Maderera</p>
-                <p className="text-[11px] text-muted-foreground leading-tight tracking-wide uppercase">Juan B. Justo</p>
-              </div>
+      {/* Barra principal */}
+      <nav className="sticky top-0 z-50 border-b border-linea-suave bg-[var(--chrome-fondo)] backdrop-blur-[12px]">
+        <div className="contenedor flex h-[72px] items-center gap-6">
+          <Link href="/" className="group flex items-center gap-[11px]">
+            <Image
+              src="/cropped-icon-180x180.png"
+              alt="Maderera Juan B. Justo"
+              width={44}
+              height={44}
+              className="rounded-[11px] transition-transform duration-300 group-hover:scale-105"
+            />
+            <span className="hidden leading-[1.1] sm:block">
+              <span className="block text-[15px] font-bold tracking-tight text-foreground">Maderera</span>
+              <span className="block text-[11px] uppercase tracking-[0.11em] text-texto-3">Juan B. Justo</span>
+            </span>
+          </Link>
+
+          <div className="hidden items-center gap-0.5 lg:flex">
+            {/* Panel de productos */}
+            <div
+              className="relative"
+              onMouseEnter={() => setProductsOpen(true)}
+              onMouseLeave={() => setProductsOpen(false)}
+            >
+              <button
+                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[13px] text-[14.5px] font-medium transition-colors ${
+                  productsOpen ? "bg-sitio-alt text-acento-texto" : "text-foreground"
+                }`}
+                aria-expanded={productsOpen}
+              >
+                Productos
+                <ChevronDown
+                  className={`h-[15px] w-[15px] text-texto-3 transition-transform duration-200 ${
+                    productsOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              <AnimatePresence>
+                {productsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                    transition={{ duration: 0.18 }}
+                    className="absolute left-0 top-full z-[60] mt-2 w-[520px] max-w-[calc(100vw-2rem)] rounded-2xl border border-linea-suave bg-popover p-3 shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.4)]"
+                  >
+                    <div className="grid grid-cols-2 gap-1">
+                      {productLinks.map((link) => (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          className="group/item flex items-start gap-3 rounded-xl px-3 py-[11px] text-foreground transition-colors hover:bg-sitio-alt"
+                        >
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-sitio-alt text-acento-texto transition-colors group-hover/item:bg-naranja-claro">
+                            <link.icon className="h-[17px] w-[17px]" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-[14.5px] font-semibold">{link.name}</span>
+                            <span className="block text-[12.5px] leading-[1.35] text-texto-3">{link.desc}</span>
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                    <div className="mt-2 border-t border-linea-tenue pt-2">
+                      <Link
+                        href="/catalogo"
+                        className="flex items-center justify-between rounded-xl px-3 py-[11px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-naranja-tenue"
+                      >
+                        Ver catálogo completo
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {enlacesDirectos.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="flex h-10 items-center rounded-[9px] px-[13px] text-[14.5px] font-medium text-foreground transition-colors hover:bg-sitio-alt hover:text-acento-texto"
+              >
+                {link.name}
+              </Link>
+            ))}
+
+            <div
+              className="relative"
+              onMouseEnter={() => setMasOpen(true)}
+              onMouseLeave={() => setMasOpen(false)}
+            >
+              <button
+                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[13px] text-[14.5px] font-medium transition-colors ${
+                  masOpen ? "bg-sitio-alt text-acento-texto" : "text-texto-2"
+                }`}
+                aria-expanded={masOpen}
+              >
+                Más
+                <ChevronDown
+                  className={`h-[15px] w-[15px] text-texto-3 transition-transform duration-200 ${
+                    masOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              <AnimatePresence>
+                {masOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                    transition={{ duration: 0.18 }}
+                    className="absolute left-0 top-full z-[60] mt-2 w-[200px] rounded-xl border border-linea-suave bg-popover p-1.5 shadow-[0_18px_40px_-18px_rgb(60_50_40_/_0.4)]"
+                  >
+                    {enlacesMas.map((link) => (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        className="block rounded-[9px] px-[11px] py-[9px] text-[14.5px] text-foreground transition-colors hover:bg-sitio-alt hover:text-acento-texto"
+                      >
+                        {link.name}
+                      </Link>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Acciones */}
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
+
+            <Link
+              href={destinoSesion}
+              className={`hidden h-11 items-center gap-2 rounded-[11px] border border-linea px-[15px] text-[14.5px] font-semibold transition-colors hover:bg-sitio-alt md:flex ${
+                sesion ? "text-acento-texto" : "text-foreground"
+              }`}
+            >
+              <IconoSesion className="h-[18px] w-[18px]" />
+              <span>{textoSesion}</span>
             </Link>
 
-            {/* Desktop nav */}
-            <div className="hidden lg:flex items-center gap-0.5">
-              {/* Products mega dropdown */}
-              <div
-                className="relative"
-                onMouseEnter={() => setProductsOpen(true)}
-                onMouseLeave={() => setProductsOpen(false)}
-              >
-                <button className="flex items-center gap-1 px-3.5 py-2 text-sm font-medium text-foreground hover:text-brand-orange transition-colors rounded-lg">
-                  Productos
-                  <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${productsOpen ? "rotate-180" : ""}`} />
-                </button>
-                <AnimatePresence>
-                  {productsOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                      transition={{ duration: 0.18 }}
-                      className="absolute top-full left-1/2 -translate-x-1/2 w-[520px] bg-white rounded-2xl shadow-2xl border p-3 mt-2"
-                    >
-                      <div className="grid grid-cols-2 gap-1">
-                        {productLinks.map((link) => (
-                          <Link
-                            key={link.href}
-                            href={link.href}
-                            className="flex items-start gap-3 px-3 py-3 rounded-xl hover:bg-brand-cream text-foreground hover:text-brand-orange transition-colors group/item"
-                          >
-                            <div className="w-9 h-9 rounded-lg bg-brand-cream group-hover/item:bg-brand-orange/10 flex items-center justify-center shrink-0 mt-0.5 transition-colors">
-                              <link.icon className="h-4 w-4 text-brand-orange" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium">{link.name}</p>
-                              <p className="text-xs text-muted-foreground">{link.desc}</p>
-                            </div>
-                          </Link>
-                        ))}
-                      </div>
-                      <div className="border-t mt-2 pt-2">
-                        <Link
-                          href="/catalogo"
-                          className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-brand-orange/5 text-sm font-semibold text-brand-orange"
-                        >
-                          Ver catálogo completo
-                          <ArrowRight className="h-4 w-4" />
-                        </Link>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+            <Link
+              href="/presupuesto"
+              aria-label={
+                cantidadItems > 0
+                  ? `Tu presupuesto, ${cantidadItems} ${cantidadItems === 1 ? "ítem" : "ítems"}`
+                  : "Tu presupuesto"
+              }
+              className="relative flex h-10 w-10 items-center justify-center rounded-[11px] text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto"
+            >
+              <ShoppingCart className="h-[19px] w-[19px]" />
+              {cantidadItems > 0 && (
+                <span className="tabular absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-accion px-[5px] text-[11px] font-bold text-white">
+                  {cantidadItems}
+                </span>
+              )}
+            </Link>
 
-              {navLinks.slice(1, 5).map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="px-3.5 py-2 text-sm font-medium text-foreground hover:text-brand-orange transition-colors rounded-lg"
-                >
-                  {link.name}
-                </Link>
-              ))}
+            <Link
+              href="/presupuesto"
+              className="hidden h-11 items-center rounded-full bg-accion px-5 text-[15px] font-semibold text-white shadow-[0_4px_14px_-6px_rgb(194_87_15_/_0.6)] transition-colors hover:bg-accion-hover md:flex"
+            >
+              Pedir Presupuesto
+            </Link>
 
-              {/* More dropdown for secondary links */}
-              <div className="relative group">
-                <button className="flex items-center gap-1 px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-brand-orange transition-colors rounded-lg">
-                  Más
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-                <div className="absolute top-full right-0 w-48 bg-white rounded-xl shadow-xl border p-1.5 mt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                  {navLinks.slice(5).map((link) => (
+            {/* Menú del teléfono */}
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <SheetTrigger className="inline-flex h-10 w-10 items-center justify-center rounded-[11px] transition-colors hover:bg-sitio-alt lg:hidden">
+                <Menu className="h-5 w-5" />
+              </SheetTrigger>
+              <SheetContent side="right" className="w-80">
+                <div className="mt-8 flex flex-col gap-1">
+                  {/* La cuenta va arriba de todo en el teléfono: es lo que se
+                      busca cuando el pedido ya está hecho. */}
+                  <Link
+                    href={destinoSesion}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="mb-3 flex items-center gap-3 rounded-xl bg-sitio-alt px-3 py-3 text-sm font-medium"
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-naranja-claro">
+                      <IconoSesion className="h-4 w-4 text-acento-texto" />
+                    </span>
+                    {sesion
+                      ? sesion.esStaff
+                        ? "Ir al panel"
+                        : `Mi cuenta · ${nombreDePila}`
+                      : "Ingresar o crear cuenta"}
+                  </Link>
+
+                  <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
+                    Productos
+                  </p>
+                  {productLinks.map((link) => (
                     <Link
                       key={link.href}
                       href={link.href}
-                      className="block px-3 py-2 rounded-lg hover:bg-brand-cream text-sm text-foreground hover:text-brand-orange transition-colors"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-sitio-alt"
                     >
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-naranja-claro">
+                        <link.icon className="h-4 w-4 text-acento-texto" />
+                      </span>
                       {link.name}
                     </Link>
                   ))}
-                </div>
-              </div>
-            </div>
 
-            {/* Right side */}
-            <div className="flex items-center gap-1.5">
-              <ThemeToggle />
-              <Link href="/calculadora">
-                <Button variant="ghost" size="icon" className="hidden md:flex text-muted-foreground hover:text-brand-orange h-10 w-10 rounded-xl">
-                  <Calculator className="h-5 w-5" />
-                </Button>
-              </Link>
-              <Link
-                href={
-                  sesion ? (sesion.esStaff ? "/admin" : "/mi-cuenta") : "/ingresar"
-                }
-                aria-label={sesion ? "Mi cuenta" : "Ingresar"}
-              >
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-10 w-10 rounded-xl hover:text-brand-orange ${
-                    sesion ? "text-brand-orange" : "text-muted-foreground"
-                  }`}
-                >
-                  <UserRound className="h-5 w-5" />
-                </Button>
-              </Link>
-              <Link href="/presupuesto" className="relative">
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-brand-orange h-10 w-10 rounded-xl">
-                  <ShoppingCart className="h-5 w-5" />
-                  {cantidadItems > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 h-5 w-5 flex items-center justify-center text-[10px] font-bold bg-brand-orange text-white rounded-full">
-                      {cantidadItems}
-                    </span>
+                  <div className="my-3 border-t border-linea-tenue" />
+                  <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
+                    Navegación
+                  </p>
+                  {[...enlacesDirectos, { name: "Portal Profesionales", href: "/profesionales" }, ...enlacesMas].map(
+                    (link) => (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-sitio-alt"
+                      >
+                        {link.name}
+                      </Link>
+                    ),
                   )}
-                </Button>
-              </Link>
-              <Link href="/presupuesto" className="hidden md:block ml-1">
-                <Button className="bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full px-6 h-10 font-semibold shadow-md shadow-brand-orange/20">
-                  Pedir Presupuesto
-                </Button>
-              </Link>
 
-              {/* Mobile menu */}
-              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                <SheetTrigger className="lg:hidden inline-flex items-center justify-center rounded-xl text-sm font-medium h-10 w-10 hover:bg-muted transition-colors">
-                  <Menu className="h-5 w-5" />
-                </SheetTrigger>
-                <SheetContent side="right" className="w-80">
-                  <div className="flex flex-col gap-1 mt-8">
-                    {/* La cuenta va arriba de todo en el teléfono: es lo que se
-                        busca cuando el pedido ya está hecho. */}
-                    <Link
-                      href={
-                        sesion
-                          ? sesion.esStaff
-                            ? "/admin"
-                            : "/mi-cuenta"
-                          : "/ingresar"
-                      }
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="mb-3 flex items-center gap-3 rounded-xl bg-brand-cream px-3 py-3 text-sm font-medium"
-                    >
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-orange/10">
-                        <UserRound className="h-4 w-4 text-brand-orange" />
-                      </span>
-                      {sesion
-                        ? sesion.esStaff
-                          ? "Ir al panel"
-                          : `Mi cuenta · ${primerNombre}`
-                        : "Ingresar o crear cuenta"}
-                    </Link>
-
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.15em] px-3 mb-2">
-                      Productos
-                    </p>
-                    {productLinks.map((link) => (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-brand-cream text-sm"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-brand-orange/10 flex items-center justify-center">
-                          <link.icon className="h-4 w-4 text-brand-orange" />
-                        </div>
-                        {link.name}
-                      </Link>
-                    ))}
-                    <div className="border-t my-3" />
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.15em] px-3 mb-2">
-                      Navegación
-                    </p>
-                    {navLinks.map((link) => (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className="px-3 py-2.5 rounded-xl hover:bg-brand-cream text-sm font-medium"
-                      >
-                        {link.name}
-                      </Link>
-                    ))}
-                    <div className="border-t my-3" />
-                    <Link href="/presupuesto" onClick={() => setMobileMenuOpen(false)}>
-                      <Button className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full font-semibold">
-                        Pedir Presupuesto
-                      </Button>
-                    </Link>
-                  </div>
-                </SheetContent>
-              </Sheet>
-            </div>
+                  <div className="my-3 border-t border-linea-tenue" />
+                  <Link href="/presupuesto" onClick={() => setMobileMenuOpen(false)}>
+                    <Button className="w-full rounded-full bg-accion font-semibold text-white hover:bg-accion-hover">
+                      Pedir Presupuesto
+                    </Button>
+                  </Link>
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </nav>

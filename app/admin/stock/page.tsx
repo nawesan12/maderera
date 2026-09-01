@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ImageOff, Package } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
+import { recortar, VerTodo } from "@/components/admin/ver-mas";
 import { NivelStock } from "@/components/admin/nivel-stock";
 import { fechaHora, plural } from "@/components/admin/formato";
 import { BuscadorProductos } from "@/app/admin/productos/buscador";
@@ -29,7 +30,7 @@ const etiquetaMovimiento: Record<string, string> = {
 export default async function AdminStockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; cat?: string }>;
+  searchParams: Promise<{ buscar?: string; cat?: string; ver?: string }>;
 }) {
   const params = await searchParams;
 
@@ -51,6 +52,13 @@ export default async function AdminStockPage({
   const normales = filas.filter(
     (f) => !agotados.includes(f) && !reponer.includes(f),
   );
+
+  // Los tres grupos se recortan, incluidos los que piden atención: con
+  // trescientas variantes bajo el mínimo, el grupo urgente es el más largo.
+  const verTodo = params.ver === "todo";
+  const sinStock = recortar(agotados, verTodo);
+  const aReponer = recortar(reponer, verTodo);
+  const conStock = recortar(normales, verTodo);
 
   return (
     <div>
@@ -94,7 +102,8 @@ export default async function AdminStockPage({
               detalle="No hay en ninguna sucursal"
               destacado
             >
-              <Grilla filas={agotados} />
+              <Grilla filas={sinStock.visibles} />
+              <VerTodo ocultas={sinStock.ocultas} params={params} />
             </GrupoListado>
 
             <GrupoListado
@@ -103,11 +112,13 @@ export default async function AdminStockPage({
               detalle="Por debajo del mínimo"
               destacado
             >
-              <Grilla filas={reponer} />
+              <Grilla filas={aReponer.visibles} />
+              <VerTodo ocultas={aReponer.ocultas} params={params} />
             </GrupoListado>
 
             <GrupoListado titulo="Con stock" cantidad={normales.length}>
-              <Grilla filas={normales} />
+              <Grilla filas={conStock.visibles} />
+              <VerTodo ocultas={conStock.ocultas} params={params} />
             </GrupoListado>
           </div>
 
@@ -220,6 +231,7 @@ function TarjetaStock({ fila }: { fila: FilaStock }) {
             <NivelStock
               sucursal="Casa Central"
               cantidad={fila.qtyCentral}
+              reservado={fila.reservadoCentral}
               minimo={fila.minCentral}
               nivel={fila.nivelCentral}
               unidad={fila.unidad}
@@ -237,6 +249,7 @@ function TarjetaStock({ fila }: { fila: FilaStock }) {
             <NivelStock
               sucursal="Aserradero"
               cantidad={fila.qtyAserradero}
+              reservado={fila.reservadoAserradero}
               minimo={fila.minAserradero}
               nivel={fila.nivelAserradero}
               unidad={fila.unidad}

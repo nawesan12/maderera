@@ -13,6 +13,7 @@ import {
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { coincideBusqueda } from "@/lib/busqueda";
+import { estadoDelPlazo } from "@/lib/plazos";
 
 /* -------------------------------------------------------------------------- */
 /* Presupuestos                                                                */
@@ -33,6 +34,10 @@ export interface PresupuestoListado {
   createdAt: Date;
   validoHasta: Date | null;
   vencido: boolean;
+  /** Compromiso de respuesta, solo en los express del portal profesional. */
+  respondeHasta: Date | null;
+  /** Cómo se lee ese plazo: "Quedan 3 h", "Se pasó de hora". */
+  plazo: { texto: string; urgente: boolean; vencido: boolean } | null;
 }
 
 export async function listarPresupuestos(
@@ -76,6 +81,7 @@ export async function listarPresupuestos(
       asesor: quotes.asesor,
       createdAt: quotes.createdAt,
       validoHasta: quotes.validoHasta,
+      respondeHasta: quotes.respondeHasta,
       items: conteo.items,
     })
     .from(quotes)
@@ -83,9 +89,16 @@ export async function listarPresupuestos(
     .leftJoin(branches, eq(branches.id, quotes.branchId))
     .leftJoin(conteo, eq(conteo.quoteId, quotes.id))
     .where(condiciones.length > 0 ? and(...condiciones) : undefined)
-    .orderBy(desc(quotes.createdAt));
+    // Primero lo que tiene compromiso de respuesta y está más cerca de
+    // vencerlo. Ordenar solo por fecha de alta dejaba un express de hace tres
+    // horas debajo de una consulta suelta de hace dos.
+    .orderBy(
+      sql`case when ${quotes.respondeHasta} is null then 1 else 0 end`,
+      sql`${quotes.respondeHasta} asc nulls last`,
+      desc(quotes.createdAt),
+    );
 
-  const ahora = Date.now();
+  const ahora = new Date();
 
   return filas.map((f) => ({
     ...f,
@@ -93,8 +106,12 @@ export async function listarPresupuestos(
     items: f.items ?? 0,
     vencido:
       f.validoHasta !== null &&
-      f.validoHasta.getTime() < ahora &&
+      f.validoHasta.getTime() < ahora.getTime() &&
       !["aceptado", "rechazado"].includes(f.estado),
+    plazo:
+      f.respondeHasta && f.estado === "pendiente"
+        ? estadoDelPlazo(f.respondeHasta, ahora)
+        : null,
   }));
 }
 
@@ -240,6 +257,8 @@ export async function obtenerPedido(id: string) {
       zonaEnvio: orders.zonaEnvio,
       costoEnvio: orders.costoEnvio,
       subtotal: orders.subtotal,
+      descuento: orders.descuento,
+      descuentoMotivo: orders.descuentoMotivo,
       total: orders.total,
       medioPago: orders.medioPago,
       estadoPago: orders.estadoPago,

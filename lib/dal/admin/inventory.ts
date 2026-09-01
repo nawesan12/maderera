@@ -13,7 +13,7 @@ import {
   products,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
-import { stockLevel, type StockLevel } from "@/lib/stock-level";
+import { disponible, stockLevel, type StockLevel } from "@/lib/stock-level";
 
 export interface FilaStock {
   variantId: string;
@@ -27,6 +27,9 @@ export interface FilaStock {
   imagen: string | null;
   qtyCentral: number;
   qtyAserradero: number;
+  /** Comprometido en pedidos que todavía no se retiraron. */
+  reservadoCentral: number;
+  reservadoAserradero: number;
   minCentral: number;
   minAserradero: number;
   nivelCentral: StockLevel;
@@ -70,6 +73,7 @@ export async function listarStock(filtros: {
       unidad: products.unit,
       branchSlug: branches.slug,
       qty: inventory.qty,
+      reservado: inventory.reservado,
       minQty: inventory.minQty,
     })
     .from(productVariants)
@@ -120,6 +124,8 @@ export async function listarStock(filtros: {
       imagen: portadaPorProducto.get(fila.productId) ?? null,
       qtyCentral: 0,
       qtyAserradero: 0,
+      reservadoCentral: 0,
+      reservadoAserradero: 0,
       minCentral: 0,
       minAserradero: 0,
       nivelCentral: "sin-stock" as StockLevel,
@@ -127,16 +133,24 @@ export async function listarStock(filtros: {
       total: 0,
     };
 
+    // El nivel sale del disponible y no del físico: el panel tiene que ver lo
+    // mismo que ve la tienda, o cada uno dice una cosa distinta sobre el mismo
+    // producto.
     if (fila.branchSlug === "casa-central") {
       actual.qtyCentral = fila.qty ?? 0;
+      actual.reservadoCentral = fila.reservado ?? 0;
       actual.minCentral = fila.minQty ?? 0;
-      actual.nivelCentral = stockLevel(actual.qtyCentral, actual.minCentral);
+      actual.nivelCentral = stockLevel(
+        disponible(actual.qtyCentral, actual.reservadoCentral),
+        actual.minCentral,
+      );
     }
     if (fila.branchSlug === "aserradero") {
       actual.qtyAserradero = fila.qty ?? 0;
+      actual.reservadoAserradero = fila.reservado ?? 0;
       actual.minAserradero = fila.minQty ?? 0;
       actual.nivelAserradero = stockLevel(
-        actual.qtyAserradero,
+        disponible(actual.qtyAserradero, actual.reservadoAserradero),
         actual.minAserradero,
       );
     }
@@ -159,6 +173,7 @@ export async function alertasDeStock(limite = 8) {
       label: productVariants.label,
       branchName: branches.name,
       qty: inventory.qty,
+      reservado: inventory.reservado,
       minQty: inventory.minQty,
     })
     .from(inventory)
@@ -170,10 +185,12 @@ export async function alertasDeStock(limite = 8) {
         eq(products.active, true),
         eq(productVariants.active, true),
         sql`${inventory.minQty} > 0`,
-        sql`${inventory.qty} <= ${inventory.minQty}`,
+        // La alerta mira el disponible: si hay veinte placas y diecinueve están
+        // vendidas, hay que reponer aunque el físico se vea holgado.
+        sql`${inventory.qty} - ${inventory.reservado} <= ${inventory.minQty}`,
       ),
     )
-    .orderBy(asc(inventory.qty))
+    .orderBy(asc(sql`${inventory.qty} - ${inventory.reservado}`))
     .limit(limite);
 }
 

@@ -31,8 +31,12 @@ export function coincideBusqueda(
 
   const condicionesPorTermino = terminos.map((termino) => {
     const patron = `%${termino}%`;
+    // `f_unaccent` y no `unaccent` a secas: es el envoltorio IMMUTABLE sobre el
+    // que están construidos los índices GIN de trigramas (migración 0019).
+    // Llamar al original directamente devuelve lo mismo pero deja los índices
+    // sin usar, y la búsqueda vuelve a ser un barrido secuencial de la tabla.
     const porColumna = columnas.map(
-      (columna) => sql`unaccent(${columna}) ILIKE unaccent(${patron})`,
+      (columna) => sql`f_unaccent(${columna}) ILIKE f_unaccent(${patron})`,
     );
     return sql`(${sql.join(porColumna, sql` OR `)})`;
   });

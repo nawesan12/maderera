@@ -1,10 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { useState } from "react";
 import { Loader2, Percent } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAccionDeDialogo } from "@/components/admin/usar-accion";
 import {
   Dialog,
   DialogContent,
@@ -53,11 +52,11 @@ export function DialogoAjuste({
   categorias: { slug: string; name: string }[];
   categoriaActual: string;
 }) {
-  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
-  const [estado, accion, pendiente] = useActionState(
+  const [, accion, pendiente] = useAccionDeDialogo(
     ajustarPrecios,
     {} as EstadoPrecios,
+    () => setAbierto(false),
   );
 
   const [porcentaje, setPorcentaje] = useState("10");
@@ -65,14 +64,6 @@ export function DialogoAjuste({
   const [lista, setLista] = useState("ambas");
   const [redondeo, setRedondeo] = useState("centena");
 
-  useEffect(() => {
-    if (estado.ok) {
-      toast.success(estado.ok);
-      setAbierto(false);
-      router.refresh();
-    }
-    if (estado.error) toast.error(estado.error);
-  }, [estado, router]);
 
   const numero = Number(porcentaje.replace(",", "."));
   const valido = Number.isFinite(numero) && numero !== 0;

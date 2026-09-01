@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { verifySession } from "@/lib/dal/session";
 import { clienteDeLaSesion, resumenCuenta } from "@/lib/dal/cuenta";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, primerNombre } from "@/lib/formato";
 import { NavegacionCuenta } from "./navegacion";
 import { BotonSalir } from "./salir";
 
@@ -26,22 +26,24 @@ export default async function CuentaLayout({
   ]);
 
   const operaACuenta = resumen.limiteCredito > 0 || resumen.saldo !== 0;
-  const primerNombre = sesion.name.trim().split(/\s+/)[0];
+  const nombreDePila = primerNombre(sesion.name);
 
   return (
-    <div className="min-h-screen bg-brand-cream/30">
-      <div className="container mx-auto max-w-6xl px-4 py-8 lg:py-10">
-        <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div className="min-h-screen bg-sitio-alt">
+      <div className="mx-auto px-6 max-w-6xl py-8 lg:py-10">
+        <header className="mb-[26px] flex flex-wrap items-end justify-between gap-5">
           <div>
-            <p className="text-sm text-muted-foreground">Hola,</p>
-            <h1 className="text-3xl font-bold tracking-tight">
-              {primerNombre}
+            <p className="text-[15px] text-texto-3">Hola,</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-[38px] font-bold leading-[1.05] tracking-[-0.035em]">
+                {nombreDePila}
+              </h1>
               {cliente?.tipo === "profesional" && (
-                <span className="ml-3 align-middle rounded-full bg-brand-orange/12 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-brand-orange-dark">
+                <span className="rounded-full bg-naranja-claro px-[11px] py-[5px] text-[11.5px] font-bold uppercase tracking-[0.09em] text-acento-sobre-claro">
                   Profesional
                 </span>
               )}
-            </h1>
+            </div>
           </div>
           <BotonSalir />
         </header>
@@ -59,30 +61,30 @@ export default async function CuentaLayout({
           </p>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[15rem_1fr] lg:gap-8">
-          <aside className="lg:sticky lg:top-6 lg:self-start">
+        <div className="grid gap-[26px] lg:grid-cols-[236px_minmax(0,1fr)]">
+          <aside className="lg:sticky lg:top-[88px] lg:self-start">
             <NavegacionCuenta
               pedidosEnCurso={resumen.pedidosEnCurso}
               presupuestosAResponder={resumen.presupuestosAResponder}
               operaACuenta={operaACuenta}
               saldo={
                 operaACuenta && (
-                  <div className="mt-4 hidden rounded-xl border bg-white p-4 lg:block">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <div className="mt-4 hidden rounded-xl border border-linea bg-card p-4 lg:block">
+                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-texto-3">
                       Tu saldo
                     </p>
                     <p
                       className={`tabular mt-1 text-2xl font-semibold ${
                         resumen.saldo > 0
-                          ? "text-brand-orange-dark"
+                          ? "text-saldo-debe"
                           : resumen.saldo < 0
-                            ? "text-green-700"
-                            : ""
+                            ? "text-saldo-favor"
+                            : "text-saldo-cero"
                       }`}
                     >
                       {formatearMonto(Math.abs(resumen.saldo))}
                     </p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
+                    <p className="mt-0.5 text-sm text-texto-2">
                       {resumen.saldo > 0
                         ? "Pendiente de pago"
                         : resumen.saldo < 0

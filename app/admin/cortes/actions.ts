@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { cuttingOrders } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 
 export interface EstadoCorte {
   error?: string;
@@ -15,7 +16,7 @@ const ORDEN = ["en-cola", "en-proceso", "terminado", "retirado"] as const;
 
 /** Avanza el corte al siguiente paso de la cola. */
 export async function avanzarCorte(id: string): Promise<EstadoCorte> {
-  await requireStaff();
+  const usuario = await requireStaff();
 
   const [corte] = await db
     .select({ estado: cuttingOrders.estado, numero: cuttingOrders.numero })
@@ -32,6 +33,14 @@ export async function avanzarCorte(id: string): Promise<EstadoCorte> {
     .update(cuttingOrders)
     .set({ estado: siguiente, updatedAt: new Date() })
     .where(eq(cuttingOrders.id, id));
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "cambiar_estado",
+    entidad: "corte",
+    entidadId: id,
+    descripcion: `${corte.numero}: ${corte.estado} → ${siguiente}`,
+  });
 
   revalidatePath("/admin/cortes");
   revalidatePath("/admin");

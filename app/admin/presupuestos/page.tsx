@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, Timer } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import {
   AcentoEstado,
@@ -34,6 +34,7 @@ const ORIGEN: Record<string, string> = {
   calculadora: "Armado con la calculadora",
   mostrador: "Mostrador",
   telefono: "Por teléfono",
+  express: "Express de un profesional",
 };
 
 export default async function PresupuestosPage({
@@ -129,6 +130,24 @@ function Tarjeta({
             {p.vencido && (
               <span className="rounded-full bg-muted px-2.5 py-1 text-sm font-medium text-muted-foreground">
                 Vencido
+              </span>
+            )}
+
+            {/* El compromiso de 24 horas hábiles del portal profesional. Va al
+                lado del nombre y no en la letra chica: un SLA que hay que
+                buscar es un SLA que no se cumple. */}
+            {p.plazo && (
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium ${
+                  p.plazo.vencido
+                    ? "estado-problema bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
+                    : p.plazo.urgente
+                      ? "bg-brand-orange/15 text-brand-orange-dark"
+                      : "estado-info bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
+                }`}
+              >
+                <Timer className="h-4 w-4" />
+                {p.plazo.texto}
               </span>
             )}
           </div>

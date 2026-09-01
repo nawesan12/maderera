@@ -24,6 +24,19 @@ export const branches = pgTable(
     email: text(),
     hours: text(),
     mapUrl: text(),
+    /**
+     * Qué se hace en esta sucursal, uno por renglón.
+     *
+     * Vivía como una constante en la página pública, que es donde no sirve:
+     * cuando el aserradero suma un servicio hay que publicar el sitio de
+     * nuevo. Va como texto con saltos de línea y no como tabla aparte porque
+     * es una lista corta que se escribe de un tirón en un campo del panel.
+     */
+    servicios: text().notNull().default(""),
+    /** Lo que distingue a esta sucursal en dos o tres palabras, uno por renglón. */
+    destacados: text().notNull().default(""),
+    /** Foto del local. Mientras no esté, la página muestra una placa de marca. */
+    imagenUrl: text(),
     sortOrder: integer().notNull().default(0),
     active: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -49,6 +62,18 @@ export const inventory = pgTable(
       .notNull()
       .references(() => branches.id, { onDelete: "cascade" }),
     qty: integer().notNull().default(0),
+    /**
+     * Cantidad comprometida en pedidos confirmados que todavía no salieron del
+     * depósito.
+     *
+     * Existe porque en una maderera la mercadería se paga hoy y se retira en
+     * tres semanas. Sin esta columna, esas placas siguen figurando disponibles
+     * y el sitio las vende de nuevo: el físico está, pero ya tiene dueño.
+     *
+     * **Disponible = `qty − reservado`.** El físico solo cambia cuando algo
+     * entra o sale de verdad por la puerta.
+     */
+    reservado: integer().notNull().default(0),
     /** Umbral de reposición. Por debajo, el producto entra en las alertas del panel. */
     minQty: integer().notNull().default(0),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -100,6 +125,61 @@ export const inventoryMovements = pgTable(
   ],
 );
 
+/**
+ * Reservas de stock: mercadería vendida que todavía no salió del depósito.
+ *
+ * En una maderera se paga hoy y se retira en tres semanas. Sin registrar la
+ * reserva, esas placas siguen figurando disponibles y la tienda las vuelve a
+ * vender: el físico está, pero ya tiene dueño.
+ *
+ * **Esta tabla es la fuente de verdad**; `inventory.reservado` es la suma de
+ * las filas activas, mantenida en la misma transacción. Es la única cifra
+ * derivada que el proyecto guarda, y se guarda por una razón concreta: cada
+ * listado del catálogo público necesita el disponible de cada variante, y
+ * agregarlo en cada consulta convierte una lectura barata en una costosa.
+ * `recalcularReservado()` reconstruye la columna desde acá cuando haga falta
+ * comprobarlo.
+ *
+ * Se cuelga del renglón del pedido y no solo de la variante para poder
+ * consumirla de a partes: un acopio se retira en varias veces.
+ */
+export const estadoReserva = pgEnum("estado_reserva", [
+  "activa",
+  "consumida",
+  "liberada",
+]);
+
+export const stockReservations = pgTable(
+  "stock_reservations",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    orderId: uuid().notNull(),
+    orderItemId: uuid().notNull(),
+    variantId: uuid()
+      .notNull()
+      .references(() => productVariants.id, { onDelete: "restrict" }),
+    branchId: uuid()
+      .notNull()
+      .references(() => branches.id, { onDelete: "restrict" }),
+    /**
+     * Unidades reservadas, redondeadas hacia arriba.
+     *
+     * El inventario se lleva en enteros y una venta puede ser de 2,5 metros
+     * lineales. Reservar 3 es lo conservador: sobra medio metro en el papel,
+     * pero nunca se promete algo que no está.
+     */
+    cantidad: integer().notNull(),
+    estado: estadoReserva().notNull().default("activa"),
+    resueltoAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("stock_reservations_order_idx").on(t.orderId),
+    index("stock_reservations_item_idx").on(t.orderItemId),
+    index("stock_reservations_activa_idx").on(t.variantId, t.branchId, t.estado),
+  ],
+);
+
 export const branchesRelations = relations(branches, ({ many }) => ({
   inventory: many(inventory),
 }));
@@ -131,4 +211,5 @@ export const inventoryMovementsRelations = relations(
 
 export type Branch = typeof branches.$inferSelect;
 export type Inventory = typeof inventory.$inferSelect;
+export type StockReservation = typeof stockReservations.$inferSelect;
 export type InventoryMovement = typeof inventoryMovements.$inferSelect;

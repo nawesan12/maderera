@@ -21,9 +21,21 @@ export function BuscadorGlobal() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [texto, setTexto] = useState("");
   const [resultados, setResultados] = useState<ResultadoBusqueda[]>([]);
-  const [abierto, setAbierto] = useState(false);
+  /**
+   * Si el panel se cerró a mano (Escape, clic afuera, o al navegar).
+   *
+   * El panel abierto no es estado propio: se deriva de si hay algo que buscar.
+   * Guardarlo aparte obligaba a apagarlo desde un efecto cada vez que el texto
+   * se acortaba, que es un `setState` sincrónico dentro de un efecto —lo que
+   * React 19 marca como error— y además dejaba dos fuentes de verdad para la
+   * misma pregunta.
+   */
+  const [cerrado, setCerrado] = useState(false);
   const [resaltado, setResaltado] = useState(0);
   const [buscando, startTransition] = useTransition();
+
+  const hayQueBuscar = texto.trim().length >= 2;
+  const abierto = hayQueBuscar && !cerrado;
 
   // ⌘K / Ctrl+K enfoca el buscador desde cualquier parte del panel.
   useEffect(() => {
@@ -37,26 +49,25 @@ export function BuscadorGlobal() {
     return () => window.removeEventListener("keydown", atajo);
   }, []);
 
+  // Solo dispara la búsqueda. Con menos de dos letras no hace nada: el panel
+  // ya está cerrado porque `abierto` se deriva de la longitud del texto.
   useEffect(() => {
-    if (texto.trim().length < 2) {
-      setResultados([]);
-      setAbierto(false);
-      return;
-    }
+    if (texto.trim().length < 2) return;
+
     const timer = setTimeout(() => {
       startTransition(async () => {
         const encontrados = await buscarEnPanel(texto);
         setResultados(encontrados);
         setResaltado(0);
-        setAbierto(true);
       });
     }, 250);
+
     return () => clearTimeout(timer);
   }, [texto]);
 
   function ir(resultado: ResultadoBusqueda) {
-    setAbierto(false);
     setTexto("");
+    setCerrado(false);
     router.push(resultado.href);
   }
 
@@ -74,24 +85,29 @@ export function BuscadorGlobal() {
       e.preventDefault();
       ir(resultados[resaltado]);
     }
-    if (e.key === "Escape") setAbierto(false);
+    if (e.key === "Escape") setCerrado(true);
   }
 
   return (
-    <div className="relative w-full max-w-sm">
-      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+    <div className="relative w-full max-w-[420px]">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-texto-3" />
       <input
         ref={inputRef}
         value={texto}
-        onChange={(e) => setTexto(e.target.value)}
+        onChange={(e) => {
+          setTexto(e.target.value);
+          setCerrado(false);
+        }}
         onKeyDown={teclas}
-        onFocus={() => resultados.length > 0 && setAbierto(true)}
-        onBlur={() => setTimeout(() => setAbierto(false), 150)}
-        placeholder="Buscar productos…"
+        onFocus={() => setCerrado(false)}
+        // El retardo deja que el clic sobre un resultado llegue antes de que
+        // el panel se cierre; sin él, el blur lo desmonta primero.
+        onBlur={() => setTimeout(() => setCerrado(true), 150)}
+        placeholder="Buscar cliente, pedido, producto…"
         aria-label="Buscar en el panel"
-        className="h-11 w-full rounded-lg border bg-card pl-11 pr-14 text-base outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-orange/50"
+        className="h-10 w-full rounded-lg border border-linea bg-card pl-10 pr-14 text-[15px] outline-none transition-colors placeholder:text-texto-3 focus:border-accion/50"
       />
-      <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border px-1.5 py-0.5 text-sm text-muted-foreground sm:block">
+      <kbd className="tabular pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded-[5px] border border-linea px-1.5 py-0.5 text-xs text-texto-2 sm:block">
         ⌘K
       </kbd>
 

@@ -1,6 +1,10 @@
+import { cache } from "react";
 import "server-only";
 
-import { and, asc, count, eq, inArray } from "drizzle-orm";
+import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
+
+import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { coincideBusqueda } from "@/lib/busqueda";
 import { db } from "@/lib/db";
 import {
@@ -8,12 +12,18 @@ import {
   categories,
   inventory,
   priceListItems,
-  priceLists,
   productImages,
   productVariants,
   products,
+  relatedProducts,
 } from "@/lib/db/schema";
-import { combinedStockLevel, stockLevel, type StockLevel } from "@/lib/stock-level";
+import { listaVigente } from "@/lib/dal/precios-sesion";
+import {
+  combinedStockLevel,
+  disponible,
+  stockLevel,
+  type StockLevel,
+} from "@/lib/stock-level";
 
 /**
  * Consultas del catálogo público.
@@ -66,30 +76,70 @@ export interface FiltrosCatalogo {
   orden?: OrdenCatalogo;
   /** Solo los que están en oferta. */
   soloOfertas?: boolean;
+  /**
+   * Un conjunto puntual de productos, por id.
+   *
+   * Lo usan los sugeridos: el vendedor eligió cuáles van, así que no hay filtro
+   * que los describa. Se resuelven por acá y no con una consulta propia para que
+   * la tarjeta traiga el mismo precio, la misma oferta y el mismo stock que en
+   * el resto del catálogo.
+   */
+  ids?: string[];
 }
 
+/**
+ * Los productos en oferta, memoizados.
+ *
+ * El catálogo arma el panel de filtros dos veces —el cajón del teléfono y la
+ * columna del escritorio— y las dos necesitan cuántas ofertas hay. Sin esto son
+ * seis consultas por carga para el mismo número.
+ *
+ * Va como función sin argumentos y no como `listarProductos({ soloOfertas })`
+ * memoizada, porque `cache()` compara los argumentos por referencia y un objeto
+ * literal nuevo en cada llamada nunca acierta.
+ *
+ * **Es la lista y no un `count`** a propósito: "en oferta" no es que exista una
+ * variante rebajada, es que la rebaja esté en la variante más barata, y encima
+ * el precio depende de la lista de la sesión. Un conteo por SQL daría un número
+ * distinto del que después muestra la grilla.
+ */
+export const productosEnOferta = cache(() =>
+  listarProductos({ soloOfertas: true }),
+);
+
 /** Categorías con la cantidad real de productos activos. */
-export async function listarCategorias() {
-  return db
-    .select({
-      id: categories.id,
-      slug: categories.slug,
-      name: categories.name,
-      description: categories.description,
-      icon: categories.icon,
-      image: categories.image,
-      // El prototipo tenía este número escrito a mano y desactualizado.
-      productCount: count(products.id),
-    })
-    .from(categories)
-    .leftJoin(
-      products,
-      and(eq(products.categoryId, categories.id), eq(products.active, true)),
-    )
-    .where(eq(categories.active, true))
-    .groupBy(categories.id)
-    .orderBy(asc(categories.sortOrder));
-}
+/*
+ * Memoizada: el catálogo arma el panel de filtros dos veces —una para el cajón
+ * del teléfono y otra para la columna del escritorio— y las dos piden las
+ * categorías.
+ */
+export const listarCategorias = cache(
+  cachearPublico(
+    async () => {
+      return db
+        .select({
+          id: categories.id,
+          slug: categories.slug,
+          name: categories.name,
+          description: categories.description,
+          icon: categories.icon,
+          image: categories.image,
+          // El prototipo tenía este número escrito a mano y desactualizado.
+          productCount: count(products.id),
+        })
+        .from(categories)
+        .leftJoin(
+          products,
+          and(eq(products.categoryId, categories.id), eq(products.active, true)),
+        )
+        .where(eq(categories.active, true))
+        .groupBy(categories.id)
+        .orderBy(asc(categories.sortOrder));
+    },
+    ["categorias"],
+    ETIQUETAS.catalogo,
+  ),
+);
 
 /**
  * Trae el catálogo ya filtrado desde la base.
@@ -103,6 +153,13 @@ export async function listarProductos(
   filtros: FiltrosCatalogo = {},
 ): Promise<ProductoListado[]> {
   const condiciones = [eq(products.active, true)];
+
+  if (filtros.ids) {
+    // Sin esto, un array vacío se traduce a `in ()` y devolvería el catálogo
+    // entero en vez de nada.
+    if (filtros.ids.length === 0) return [];
+    condiciones.push(inArray(products.id, filtros.ids));
+  }
 
   if (filtros.categoria && filtros.categoria !== "todos") {
     condiciones.push(eq(categories.slug, filtros.categoria));
@@ -216,6 +273,68 @@ export async function listarProductos(
   return ordenar(resultado, filtros.orden ?? "relevancia");
 }
 
+/** Cuántos productos entran en una página del catálogo. */
+export const POR_PAGINA = 24;
+
+/**
+ * Cuántas páginas de "ver más" se pueden acumular en una sola respuesta.
+ *
+ * Cinco son 120 productos, del orden de 745 KB de HTML medidos. Más que eso no
+ * lo lee nadie de corrido: a esa altura se busca o se filtra.
+ */
+export const TOPE_PAGINAS = 5;
+
+/**
+ * Una página del catálogo, con el total para poder decir "viste N de M".
+ *
+ * **El recorte es acá y no en la consulta**, y eso es a propósito. Tres de los
+ * filtros —disponibilidad, ofertas y el orden por precio— dependen de datos que
+ * se arman después de traer las filas: el stock combinado de las dos
+ * sucursales, y sobre todo el precio, que sale de la lista de la sesión y
+ * decide si un producto está en oferta. Un `limit` en SQL cortaría antes de que
+ * eso exista y devolvería páginas de tamaño equivocado, o peor, productos que
+ * el filtro después descarta.
+ *
+ * Lo que esto resuelve es lo que se medió: con 312 productos la grilla completa
+ * son del orden de 1,6 MB de HTML por carga. La base sigue leyendo el conjunto
+ * filtrado entero, que con este catálogo es barato. Si algún día son varios
+ * miles, el trabajo es mover el precio de lista y la regla de oferta a la
+ * consulta, y recién ahí paginar en SQL.
+ *
+ * **El tope no es decorativo.** Como "ver más" acumula, el número de página
+ * viene de la URL y nadie lo estaba acotando, cualquiera podía escribir
+ * `?pagina=9999` y hacer que el servidor armara el catálogo entero en una sola
+ * respuesta. Medido con 2025 productos: 250 KB en la primera página, 2,5 MB en
+ * la veinte, **10,4 MB con `pagina=9999`**. En un celular eso no es lento, es
+ * inusable. Con el tope, el techo de una respuesta queda en `TOPE_PAGINAS`
+ * páginas y de ahí en más la pantalla invita a filtrar, que es como se busca en
+ * un catálogo de ese tamaño.
+ */
+export async function paginaDeProductos(
+  filtros: FiltrosCatalogo = {},
+  pagina = 1,
+): Promise<{
+  productos: ProductoListado[];
+  total: number;
+  hayMas: boolean;
+  topeAlcanzado: boolean;
+}> {
+  const todos = await listarProductos(filtros);
+  const pedida = Math.max(1, Math.floor(pagina) || 1);
+  const acotada = Math.min(pedida, TOPE_PAGINAS);
+  const hasta = acotada * POR_PAGINA;
+  const quedanAfuera = todos.length > hasta;
+
+  return {
+    productos: todos.slice(0, hasta),
+    total: todos.length,
+    // Hay más para ver *y* todavía se puede pedir otra página.
+    hayMas: quedanAfuera && acotada < TOPE_PAGINAS,
+    // Se llegó al techo y aun así quedó catálogo sin mostrar.
+    topeAlcanzado: quedanAfuera && acotada >= TOPE_PAGINAS,
+  };
+}
+
 /**
  * Ordena el listado.
  *
@@ -254,25 +373,27 @@ function ordenar(
 }
 
 /**
- * Id de la lista de precios pública.
+ * Variantes con su precio y su stock por sucursal.
  *
- * Se resuelve por separado y se usa para filtrar el join de precios. Hacerlo con
- * un LEFT JOIN contra `price_lists` no alcanza: las filas de la lista profesional
- * igual entran con su precio y terminan pisando al público. Es un error que no se
- * ve —la página muestra un número plausible— pero publica el precio mayorista.
+ * La lista se filtra en el join y no con un LEFT JOIN abierto contra
+ * `price_lists`: sin el filtro, las filas de la lista profesional entran con su
+ * precio y terminan pisando al público. Es un error que no se ve —la página
+ * muestra un número plausible— pero publica el precio mayorista.
+ *
+ * El precio sale de la lista que corresponde a quien está mirando —general para
+ * el público, la propia para un profesional aprobado— y **cae a la general
+ * cuando la lista alternativa no tiene ese producto cargado**. Sin ese respaldo,
+ * un profesional vería medio catálogo sin precio, que es peor que verlo al
+ * precio de público.
  */
-async function idListaGeneral(): Promise<string | null> {
-  const [lista] = await db
-    .select({ id: priceLists.id })
-    .from(priceLists)
-    .where(eq(priceLists.isDefault, true))
-    .limit(1);
-  return lista?.id ?? null;
-}
-
-/** Variantes con su precio de lista general y su stock por sucursal. */
 async function variantesConStockYPrecio(productIds: string[]) {
-  const listaGeneralId = await idListaGeneral();
+  const lista = await listaVigente();
+
+  // Dos joins con alias: uno a la lista vigente y otro a la general. Traer las
+  // dos filas en la misma consulta es lo que permite el respaldo sin una
+  // segunda vuelta a la base por cada producto sin precio propio.
+  const propia = alias(priceListItems, "precio_propio");
+  const general = alias(priceListItems, "precio_general");
 
   const filas = await db
     .select({
@@ -280,22 +401,35 @@ async function variantesConStockYPrecio(productIds: string[]) {
       variantId: productVariants.id,
       label: productVariants.label,
       sortOrder: productVariants.sortOrder,
-      precio: priceListItems.price,
-      precioAnterior: priceListItems.precioAnterior,
-      ofertaHasta: priceListItems.ofertaHasta,
+      precio: sql<string | null>`coalesce(${propia.price}, ${general.price})`,
+      precioAnterior: sql<string | null>`coalesce(${propia.precioAnterior}, ${general.precioAnterior})`,
+      // `sql<string>` y no `Date`: Drizzle solo convierte a Date las columnas
+      // que se seleccionan directo, no las que salen de una expresión. Tiparlo
+      // como Date compila y explota en tiempo de ejecución al llamar getTime().
+      ofertaHasta: sql<string | null>`coalesce(${propia.ofertaHasta}, ${general.ofertaHasta})`,
       branchSlug: branches.slug,
       qty: inventory.qty,
+      reservado: inventory.reservado,
       minQty: inventory.minQty,
     })
     .from(productVariants)
     .leftJoin(
-      priceListItems,
-      listaGeneralId
+      propia,
+      lista.id
         ? and(
-            eq(priceListItems.variantId, productVariants.id),
-            eq(priceListItems.priceListId, listaGeneralId),
+            eq(propia.variantId, productVariants.id),
+            eq(propia.priceListId, lista.id),
           )
-        : eq(priceListItems.variantId, productVariants.id),
+        : sql`false`,
+    )
+    .leftJoin(
+      general,
+      lista.generalId
+        ? and(
+            eq(general.variantId, productVariants.id),
+            eq(general.priceListId, lista.generalId),
+          )
+        : sql`false`,
     )
     .leftJoin(inventory, eq(inventory.variantId, productVariants.id))
     .leftJoin(branches, eq(branches.id, inventory.branchId))
@@ -337,14 +471,20 @@ async function variantesConStockYPrecio(productIds: string[]) {
     // La oferta vale solo si no venció: una promoción que quedó cargada de un
     // mes atrás no puede seguir mostrando un tachado.
     const vigente =
-      fila.ofertaHasta === null || fila.ofertaHasta.getTime() > ahora;
+      fila.ofertaHasta === null ||
+      new Date(fila.ofertaHasta).getTime() > ahora;
 
     if (fila.precioAnterior !== null && vigente) {
       actual.precioAnterior = fila.precioAnterior;
     }
 
     if (fila.branchSlug && fila.qty !== null && fila.minQty !== null) {
-      const nivel = stockLevel(fila.qty, fila.minQty);
+      // Disponible, no físico: lo comprometido en pedidos sin retirar no se
+      // puede volver a vender.
+      const nivel = stockLevel(
+        disponible(fila.qty, fila.reservado ?? 0),
+        fila.minQty,
+      );
       if (fila.branchSlug === "casa-central") actual.stockCentral = nivel;
       if (fila.branchSlug === "aserradero") actual.stockAserradero = nivel;
     }
@@ -408,7 +548,9 @@ export async function obtenerProducto(
 
   if (!fila) return null;
 
-  const listaGeneralId = await idListaGeneral();
+  const lista = await listaVigente();
+  const propia = alias(priceListItems, "precio_propio");
+  const general = alias(priceListItems, "precio_general");
 
   const [imagenes, variantesCrudas] = await Promise.all([
     db
@@ -427,20 +569,32 @@ export async function obtenerProducto(
         anchoMm: productVariants.anchoMm,
         espesorMm: productVariants.espesorMm,
         sortOrder: productVariants.sortOrder,
-        precio: priceListItems.price,
+        // Mismo respaldo que en el listado: la lista propia manda, la general
+        // cubre lo que esa lista no tenga cargado.
+        precio: sql<string | null>`coalesce(${propia.price}, ${general.price})`,
         branchSlug: branches.slug,
         qty: inventory.qty,
+        reservado: inventory.reservado,
         minQty: inventory.minQty,
       })
       .from(productVariants)
       .leftJoin(
-        priceListItems,
-        listaGeneralId
+        propia,
+        lista.id
           ? and(
-              eq(priceListItems.variantId, productVariants.id),
-              eq(priceListItems.priceListId, listaGeneralId),
+              eq(propia.variantId, productVariants.id),
+              eq(propia.priceListId, lista.id),
             )
-          : eq(priceListItems.variantId, productVariants.id),
+          : sql`false`,
+      )
+      .leftJoin(
+        general,
+        lista.generalId
+          ? and(
+              eq(general.variantId, productVariants.id),
+              eq(general.priceListId, lista.generalId),
+            )
+          : sql`false`,
       )
       .leftJoin(inventory, eq(inventory.variantId, productVariants.id))
       .leftJoin(branches, eq(branches.id, inventory.branchId))
@@ -473,7 +627,7 @@ export async function obtenerProducto(
     if (v.precio !== null) actual.precio = v.precio;
 
     if (v.branchSlug && v.qty !== null && v.minQty !== null) {
-      const nivel = stockLevel(v.qty, v.minQty);
+      const nivel = stockLevel(disponible(v.qty, v.reservado ?? 0), v.minQty);
       if (v.branchSlug === "casa-central") actual.stockCentral = nivel;
       if (v.branchSlug === "aserradero") actual.stockAserradero = nivel;
     }
@@ -498,12 +652,183 @@ export async function productosRelacionados(
   return todos.filter((p) => p.slug !== excluirSlug).slice(0, limite);
 }
 
+export interface Sugeridos {
+  /** Lo que hace falta para usar el producto: los clavos del machimbre. */
+  complementarios: ProductoListado[];
+  /** La alternativa, cuando lo que se está mirando no convence o no hay stock. */
+  similares: ProductoListado[];
+  /** `true` cuando los similares salieron de la categoría y no de una carga. */
+  similaresPorCategoria: boolean;
+}
+
+/**
+ * Los productos sugeridos de una ficha (cláusula 1.3).
+ *
+ * Se cargan a mano desde el panel porque el criterio lo tiene el vendedor:
+ * ninguna heurística sabe que a un deck de grandis le corresponde ese fijador y
+ * no otro. Pero una ficha sin nada cargado no puede quedar vacía —son
+ * doscientos productos y la carga va a ser gradual—, así que los **similares**
+ * caen a otros de la misma categoría.
+ *
+ * Los complementarios no tienen respaldo automático: sugerir un complemento
+ * equivocado es peor que no sugerir ninguno. "También podés necesitar" al lado
+ * de algo que no sirve para este producto quema la confianza de todo el bloque.
+ *
+ * Los inactivos y los sin stock quedan afuera: `listarProductos` ya filtra por
+ * `active`, y acá se manda al fondo lo que no se puede comprar.
+ */
+export async function productosSugeridos(
+  productId: string,
+  categorySlug: string,
+  excluirSlug: string,
+  limite = 4,
+): Promise<Sugeridos> {
+  const vinculos = await db
+    .select({
+      relatedProductId: relatedProducts.relatedProductId,
+      tipo: relatedProducts.tipo,
+      orden: relatedProducts.orden,
+    })
+    .from(relatedProducts)
+    .where(eq(relatedProducts.productId, productId))
+    .orderBy(asc(relatedProducts.orden));
+
+  const idsComplementarios = vinculos
+    .filter((v) => v.tipo === "complementario")
+    .map((v) => v.relatedProductId);
+  const idsSimilares = vinculos
+    .filter((v) => v.tipo === "similar")
+    .map((v) => v.relatedProductId);
+
+  const [cargados, deCategoria] = await Promise.all([
+    listarProductos({ ids: [...idsComplementarios, ...idsSimilares] }),
+    idsSimilares.length === 0
+      ? listarProductos({ categoria: categorySlug })
+      : Promise.resolve([]),
+  ]);
+
+  /** Devuelve los productos en el orden en que los cargó el vendedor. */
+  const enOrden = (ids: string[]) =>
+    ids
+      .map((id) => cargados.find((p) => p.id === id))
+      .filter((p): p is ProductoListado => p !== undefined)
+      .slice(0, limite);
+
+  const similares = enOrden(idsSimilares);
+
+  return {
+    complementarios: enOrden(idsComplementarios),
+    similares:
+      similares.length > 0
+        ? similares
+        : deCategoria.filter((p) => p.slug !== excluirSlug).slice(0, limite),
+    similaresPorCategoria: idsSimilares.length === 0,
+  };
+}
+
+/**
+ * Complementos de lo que ya está en el carrito.
+ *
+ * El momento de acordarse del sellador es cuando el deck ya está en la lista,
+ * no cuando se estaba mirando la ficha. Por eso el bloque va también acá, y por
+ * eso solo muestra **complementarios**: ofrecer alternativas a esta altura es
+ * invitar a deshacer una decisión que la persona ya tomó.
+ *
+ * Se excluye lo que ya está en el carrito —sugerir algo que ya se agregó hace
+ * ver el bloque como ruido— y no hay respaldo por categoría: si nadie cargó
+ * complementos, no se muestra nada.
+ */
+export async function complementosDelCarrito(
+  variantIds: string[],
+  limite = 4,
+): Promise<ProductoListado[]> {
+  const ids = variantIds.filter(Boolean);
+  if (ids.length === 0) return [];
+
+  // De las variantes del carrito a sus productos, y de ahí a los complementos.
+  const enElCarrito = await db
+    .selectDistinct({ productId: productVariants.productId })
+    .from(productVariants)
+    .where(inArray(productVariants.id, ids));
+
+  const propios = enElCarrito.map((p) => p.productId);
+  if (propios.length === 0) return [];
+
+  const vinculos = await db
+    .select({ relatedProductId: relatedProducts.relatedProductId })
+    .from(relatedProducts)
+    .where(
+      and(
+        inArray(relatedProducts.productId, propios),
+        eq(relatedProducts.tipo, "complementario"),
+      ),
+    )
+    .orderBy(asc(relatedProducts.orden));
+
+  const yaEsta = new Set(propios);
+  const candidatos = [
+    ...new Set(
+      vinculos
+        .map((v) => v.relatedProductId)
+        .filter((id) => !yaEsta.has(id)),
+    ),
+  ];
+
+  if (candidatos.length === 0) return [];
+
+  const productos = await listarProductos({ ids: candidatos });
+
+  // Lo que no se puede comprar no se sugiere: mandar a alguien a una ficha sin
+  // stock desde su propio carrito es peor que no sugerir nada.
+  return productos.filter((p) => p.hayStock).slice(0, limite);
+}
+
 /**
  * Todo lo que la portada necesita, en una sola pasada.
  *
  * Se resuelve acá y no en cada sección para no repetir la consulta de productos
  * tres veces: las ofertas, los destacados y los conteos salen del mismo listado.
  */
+/** Año en que abrió la maderera. Es la única fecha fija del sitio. */
+export const ANIO_FUNDACION = 1981;
+
+/**
+ * Los números que la página "Nosotros" muestra en grande.
+ *
+ * Salen de la base y del calendario, no de constantes: decían "43 años" en
+ * 2026 —eran 45— y "200+ productos" con un catálogo que tenía otra cantidad.
+ * Un número inventado en la página institucional es de las pocas cosas que un
+ * visitante puede verificar solo, y desmiente todo lo demás.
+ *
+ * La hora se lee acá y no durante el render de la página, que es donde sería
+ * una impureza.
+ */
+export const numerosDeLaEmpresa = cache(async () => {
+  /*
+   * Los cuatro conteos en una sola consulta y no en cuatro en paralelo.
+   *
+   * Paralelas no tardan más, pero son cuatro viajes y cuatro conexiones del
+   * pool por cada carga de la portada y de "Nosotros", que es de lo que más se
+   * pide. Contar cuatro tablas chicas es trabajo que Postgres hace de una.
+   */
+  const [fila] = await db
+    .select({
+      productos: sql<number>`(select count(*) from ${products} where ${products.active})::int`,
+      medidas: sql<number>`(select count(*) from ${productVariants} where ${productVariants.active})::int`,
+      sucursales: sql<number>`(select count(*) from ${branches} where ${branches.active})::int`,
+      rubros: sql<number>`(select count(*) from ${categories} where ${categories.active})::int`,
+    })
+    .from(sql`(select 1) as x`);
+
+  return {
+    anios: new Date().getFullYear() - ANIO_FUNDACION,
+    productos: fila?.productos ?? 0,
+    medidas: fila?.medidas ?? 0,
+    sucursales: fila?.sucursales ?? 0,
+    rubros: fila?.rubros ?? 0,
+  };
+});
+
 export async function datosDePortada() {
   const [categorias, todos] = await Promise.all([
     listarCategorias(),

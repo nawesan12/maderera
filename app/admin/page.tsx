@@ -11,6 +11,8 @@ import {
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { GraficoVentas } from "@/components/admin/grafico-ventas";
 import { TarjetaIndicador } from "@/components/admin/tarjeta-indicador";
+import { FiltroPeriodo } from "@/components/admin/filtro-periodo";
+import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
 import { haceCuanto, moneda, plural } from "@/components/admin/formato";
 import {
   actividadReciente,
@@ -19,9 +21,15 @@ import {
   ventasPorSucursal,
 } from "@/lib/dal/admin/resumen";
 
-export default async function ResumenPage() {
+export default async function ResumenPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ periodo?: string }>;
+}) {
+  const periodo = resolverPeriodo(leerPeriodo((await searchParams).periodo));
+
   const [metricas, ventas, reponer, actividad] = await Promise.all([
-    metricasDelResumen(),
+    metricasDelResumen(periodo),
     ventasPorSucursal(),
     stockParaReponer(5),
     actividadReciente(),
@@ -31,22 +39,28 @@ export default async function ResumenPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Resumen</h1>
-        <p className="text-base text-muted-foreground">
-          Cómo viene el negocio este mes
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Resumen</h1>
+          <p className="text-base text-texto-2">
+            Cómo viene el negocio · {periodo.etiqueta.toLowerCase()}
+          </p>
+        </div>
+        <FiltroPeriodo actual={periodo.clave} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <TarjetaIndicador
-          etiqueta="Ventas del mes"
+          etiqueta={`Ventas · ${periodo.etiqueta.toLowerCase()}`}
           valor={moneda.format(metricas.ventasMes)}
+          valorNumerico={metricas.ventasMes}
+          formatoValor="moneda"
           variacion={
             metricas.variacionVentas !== null
               ? `${metricas.variacionVentas > 0 ? "+" : ""}${metricas.variacionVentas}%`
               : undefined
           }
+          comparadoCon="el período anterior"
           icono={TrendingUp}
           serie={totalPorMes}
           pie="Casa Central y Aserradero sumadas"
@@ -55,7 +69,21 @@ export default async function ResumenPage() {
         <TarjetaIndicador
           etiqueta="Presupuestos abiertos"
           valor={String(metricas.presupuestosPendientes)}
+          valorNumerico={metricas.presupuestosPendientes}
           icono={ClipboardList}
+          segmentos={[
+            {
+              titulo: "esperando respuesta",
+              valor:
+                metricas.presupuestosPendientes - metricas.presupuestosRevision,
+              color: "#e0a020",
+            },
+            {
+              titulo: "en revisión",
+              valor: metricas.presupuestosRevision,
+              color: "#3f6fd8",
+            },
+          ]}
           pie={
             metricas.presupuestosRevision > 0
               ? `${metricas.presupuestosRevision} en revisión ahora mismo`
@@ -65,13 +93,42 @@ export default async function ResumenPage() {
         <TarjetaIndicador
           etiqueta="Productos a reponer"
           valor={String(metricas.reponer)}
+          valorNumerico={metricas.reponer}
           icono={Package}
+          segmentos={[
+            {
+              titulo: "Casa Central",
+              valor: metricas.reponerCentral,
+              color: "var(--sucursal-central)",
+            },
+            {
+              titulo: "Aserradero",
+              valor: metricas.reponerAserradero,
+              color: "var(--sucursal-aserradero)",
+            },
+          ]}
           pie={`${metricas.reponerCentral} en Casa Central · ${metricas.reponerAserradero} en Aserradero`}
         />
         <TarjetaIndicador
           etiqueta="Clientes"
           valor={String(metricas.clientesActivos)}
+          valorNumerico={metricas.clientesActivos}
           icono={Users}
+          segmentos={[
+            {
+              titulo: "con pedido en curso",
+              valor: metricas.clientesConPedido,
+              color: "var(--sucursal-central)",
+            },
+            {
+              titulo: "al día",
+              valor: Math.max(
+                0,
+                metricas.clientesActivos - metricas.clientesConPedido,
+              ),
+              color: "#c3bfb8",
+            },
+          ]}
           pie={
             metricas.pedidosSinEntregar > 0
               ? `${plural(metricas.pedidosSinEntregar, "pedido")} sin entregar`

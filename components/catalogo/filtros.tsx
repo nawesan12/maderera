@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { Search, SlidersHorizontal, Tag, X } from "lucide-react";
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -91,20 +92,23 @@ export function BarraCatalogo({
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           placeholder="Buscar en el catálogo…"
-          className="h-11 bg-white pl-10"
+          className="h-12 rounded-[10px] border-linea bg-card pl-10 text-[15px]"
           aria-label="Buscar productos"
         />
       </div>
 
       <div className="flex items-center gap-2">
-        <label htmlFor="orden" className="hidden text-sm text-muted-foreground sm:block">
+        <label
+          htmlFor="orden"
+          className="hidden text-[14.5px] text-texto-2 sm:block"
+        >
           Ordenar
         </label>
         <select
           id="orden"
           value={ordenActual}
           onChange={(e) => actualizar({ orden: e.target.value })}
-          className="h-11 rounded-lg border bg-white px-3 text-sm outline-none focus:border-brand-orange"
+          className="h-12 rounded-[10px] border border-linea bg-card px-3.5 text-[15px] outline-none focus:border-accion"
         >
           {ORDEN.map((o) => (
             <option key={o.valor} value={o.valor}>
@@ -115,7 +119,7 @@ export function BarraCatalogo({
       </div>
 
       <Sheet>
-        <SheetTrigger className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border bg-white px-4 text-sm font-medium lg:hidden">
+        <SheetTrigger className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] border border-linea bg-card px-4 text-[15px] font-medium lg:hidden">
           <SlidersHorizontal className="h-4 w-4" />
           Filtros
         </SheetTrigger>
@@ -157,19 +161,21 @@ export function PanelCategorias({
         <button
           onClick={() => actualizar({ ofertas: soloOfertas ? null : "1" })}
           aria-pressed={soloOfertas}
-          className={`mb-6 flex w-full items-center gap-2 rounded-xl px-3.5 py-3 text-sm font-semibold transition-colors ${
+          className={`mb-[22px] flex h-12 w-full items-center gap-2.5 rounded-[11px] px-3.5 text-[15px] font-bold transition-colors ${
             soloOfertas
-              ? "bg-brand-red text-white"
-              : "bg-brand-red/10 text-brand-red hover:bg-brand-red/20"
+              ? "bg-rojo-oferta text-white"
+              : "bg-[#fbe9e6] text-rojo-oferta hover:bg-[#f7dbd7] dark:bg-rojo-oferta/15 dark:hover:bg-rojo-oferta/25"
           }`}
         >
           <Tag className="h-4 w-4" />
           Ofertas
-          <span className="tabular ml-auto text-xs">{cantidadOfertas}</span>
+          <span className="tabular ml-auto text-[13.5px]">
+            {cantidadOfertas}
+          </span>
         </button>
       )}
 
-      <h2 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+      <h2 className="mb-2.5 text-[11.5px] font-bold uppercase tracking-[0.11em] text-texto-3">
         Categorías
       </h2>
       <ul className="space-y-0.5">
@@ -178,8 +184,8 @@ export function PanelCategorias({
             onClick={() => actualizar({ cat: null })}
             className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
               categoriaActual === "todos"
-                ? "bg-brand-orange font-medium text-white"
-                : "hover:bg-white"
+                ? "bg-accion font-semibold text-white"
+                : "text-texto-2 hover:bg-card"
             }`}
           >
             Todo el catálogo
@@ -191,8 +197,8 @@ export function PanelCategorias({
               onClick={() => actualizar({ cat: cat.slug })}
               className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm transition-colors ${
                 categoriaActual === cat.slug
-                  ? "bg-brand-orange font-medium text-white"
-                  : "hover:bg-white"
+                  ? "bg-accion font-semibold text-white"
+                  : "text-texto-2 hover:bg-card"
               }`}
             >
               <span className="text-left">{cat.name}</span>
@@ -200,7 +206,7 @@ export function PanelCategorias({
                 className={`tabular text-xs ${
                   categoriaActual === cat.slug
                     ? "text-white/80"
-                    : "text-muted-foreground"
+                    : "text-texto-3"
                 }`}
               >
                 {cat.productCount}
@@ -210,7 +216,7 @@ export function PanelCategorias({
         ))}
       </ul>
 
-      <h2 className="mb-2.5 mt-6 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+      <h2 className="mb-2.5 mt-[22px] text-[11.5px] font-bold uppercase tracking-[0.11em] text-texto-3">
         Disponibilidad
       </h2>
       <ul className="space-y-0.5">
@@ -220,8 +226,8 @@ export function PanelCategorias({
               onClick={() => actualizar({ stock: d.valor })}
               className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
                 stockActual === d.valor
-                  ? "bg-brand-orange font-medium text-white"
-                  : "hover:bg-white"
+                  ? "bg-accion font-semibold text-white"
+                  : "text-texto-2 hover:bg-card"
               }`}
             >
               {d.texto}
@@ -233,12 +239,27 @@ export function PanelCategorias({
       {hayFiltros && (
         <button
           onClick={limpiar}
-          className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-lg border bg-white py-2.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-linea bg-card py-2.5 text-xs text-texto-2 transition-colors hover:text-foreground"
         >
           <X className="h-3 w-3" />
           Limpiar filtros
         </button>
       )}
+
+      {/* El corte a medida es lo que resuelve la búsqueda que no encontró
+          nada, así que va acá y no escondido en otra página. */}
+      <div className="mt-[22px] rounded-xl bg-oscuro-marca p-4 text-white">
+        <p className="text-[15px] font-semibold">¿No encontrás la medida?</p>
+        <p className="mt-1.5 text-[13.5px] leading-normal text-white/70">
+          Lo cortamos en el aserradero. Mandanos el despiece y te cotizamos.
+        </p>
+        <Link
+          href="/presupuesto"
+          className="mt-3 flex h-[42px] items-center justify-center rounded-[9px] bg-brand-orange text-[14.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
+        >
+          Pedir corte a medida
+        </Link>
+      </div>
     </nav>
   );
 }

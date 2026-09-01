@@ -130,7 +130,7 @@ function AvisoCompacto({ estado }: { estado: EstadoConexion }) {
 
   if (!estado.conectado) {
     return (
-      <p className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-red-300 bg-red-50 px-3.5 py-2 text-base text-red-800">
+      <p className="estado-problema flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-[var(--estado-tinta)]/30 bg-[var(--estado-fondo)] px-3.5 py-2 text-base text-[var(--estado-tinta)]">
         <span className="font-medium">WhatsApp desconectado.</span>
         <span>{estado.detalle ?? "No se puede enviar ni recibir."}</span>
       </p>

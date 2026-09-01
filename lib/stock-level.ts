@@ -1,6 +1,26 @@
-import type { StockLevel } from "@/lib/products";
+/**
+ * Los cuatro niveles que ve el público.
+ *
+ * Vivían en `lib/products.ts` junto al catálogo escrito a mano del prototipo.
+ * Ese archivo se borró: el catálogo sale de la base, y el tipo pertenece acá,
+ * que es donde está la función que lo calcula.
+ */
+export type StockLevel = "alto" | "medio" | "bajo" | "sin-stock";
 
-export type { StockLevel };
+/**
+ * Lo que se puede vender: el físico menos lo que ya tiene dueño.
+ *
+ * El galpón puede tener veinte placas y no haber ninguna para vender si están
+ * todas comprometidas en pedidos que no se retiraron. Todo lo que mira el
+ * público —niveles de stock, tienda, buscador— tiene que salir de acá y no de
+ * `qty`, o se vende mercadería ajena.
+ *
+ * Nunca da negativo: si el reservado supera al físico —pasa cuando se entregó
+ * algo sin cargarlo— el disponible es cero, no un número rojo en la tienda.
+ */
+export function disponible(qty: number, reservado: number): number {
+  return Math.max(qty - reservado, 0);
+}
 
 /**
  * Traduce una cantidad real a los cuatro niveles que muestra el sitio público.

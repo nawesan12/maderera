@@ -32,6 +32,10 @@ interface ContextoCarrito {
   cantidadItems: number;
   subtotal: number;
   conPrecioDesactualizado: number;
+  /** Cuánto se ahorra por los descuentos por volumen de la lista aplicada. */
+  ahorroPorVolumen: number;
+  /** Nombre de la lista, cuando no es la general. */
+  listaDiferenciada: string | null;
   guardando: boolean;
   agregar: (item: ItemNuevo) => void;
   agregarLista: (items: ItemNuevo[]) => void;
@@ -102,6 +106,11 @@ export function CarritoProvider({
     cantidadItems: optimista.length,
     subtotal: optimista.reduce((s, i) => s + i.subtotal, 0),
     conPrecioDesactualizado: carrito.conPrecioDesactualizado,
+    // El ahorro y la lista no se recalculan del lado del cliente: el descuento
+    // depende de escalas que solo conoce el servidor. Al cambiar una cantidad,
+    // el `router.refresh()` trae el número correcto.
+    ahorroPorVolumen: carrito.ahorroPorVolumen,
+    listaDiferenciada: carrito.listaDiferenciada,
     guardando,
     agregar: (item) =>
       conAviso(() =>

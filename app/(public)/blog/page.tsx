@@ -1,163 +1,226 @@
-"use client";
-
-import { useState } from "react";
-import Image from "next/image";
+import type { Metadata } from "next";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { Search, BookOpen, Clock, ArrowRight } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { blogPosts } from "@/lib/products";
+import { EncabezadoPublico } from "@/components/encabezado-publico";
+import Image from "next/image";
+import { BookOpen, Clock, Search } from "lucide-react";
+import {
+  categoriasDelBlog,
+  listarArticulos,
+  type ArticuloListado,
+} from "@/lib/dal/contenido";
+import { fechaLarga } from "@/lib/formato";
 
-const allCategories = ["Todos", ...Array.from(new Set(blogPosts.map((p) => p.category)))];
+export const metadata: Metadata = {
+  title: "Blog y novedades",
+  description:
+    "Guías, consejos técnicos y novedades sobre maderas, placas, techos, decks y construcción en seco, escritas por Maderera Juan B. Justo.",
+  alternates: { canonical: "/blog" },
+};
 
-export default function BlogPage() {
-  const [search, setSearch] = useState("");
-  const [selectedCat, setSelectedCat] = useState("Todos");
+/**
+ * Blog.
+ *
+ * Era una pantalla de cliente entera que filtraba en memoria seis artículos
+ * escritos como constantes de TypeScript: publicar una nota costaba un deploy.
+ * Ahora es un Server Component y el filtro va por URL, que además es lo que
+ * permite compartir el enlace de una categoría y que Google la indexe.
+ */
+export default async function BlogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ categoria?: string; q?: string }>;
+}) {
+  const { categoria, q } = await searchParams;
 
-  const filtered = blogPosts.filter((post) => {
-    if (selectedCat !== "Todos" && post.category !== selectedCat) return false;
-    if (search && !post.title.toLowerCase().includes(search.toLowerCase()) && !post.excerpt.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const [articulos, categorias] = await Promise.all([
+    listarArticulos({ categoria, busqueda: q }),
+    categoriasDelBlog(),
+  ]);
+
+  const [principal, ...resto] = articulos;
 
   return (
-    <div className="min-h-screen">
-      <div className="bg-brand-gray text-white py-12">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center gap-3 mb-2">
-            <BookOpen className="h-8 w-8 text-brand-orange" />
-            <h1 className="text-3xl font-bold">Blog & Novedades</h1>
-          </div>
-          <p className="text-white/70">
-            Tips, guías y novedades del mundo de la madera y la construcción.
-          </p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-sitio-alt">
+      <EncabezadoPublico
+        titulo="Blog"
+        bajada="Guías y consejos del oficio: qué material conviene, cómo calcularlo y cómo colocarlo."
+      />
 
-      <div className="container mx-auto px-4 py-8">
-        {/* Search & filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-8">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar artículos..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
+      <div className="contenedor py-8">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center">
+          {/* Un `form` con GET y sin JavaScript: el buscador funciona igual
+              antes de que hidrate la página, y el resultado queda en una URL
+              que se puede compartir. */}
+          <form method="get" className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              name="q"
+              defaultValue={q ?? ""}
+              placeholder="Buscar artículos…"
+              aria-label="Buscar en el blog"
+              className="h-11 w-full rounded-lg border bg-white pl-10 pr-3 text-base"
             />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {allCategories.map((cat) => (
-              <Button
-                key={cat}
-                variant={selectedCat === cat ? "default" : "outline"}
-                size="sm"
-                className={selectedCat === cat ? "bg-brand-orange hover:bg-brand-orange-dark text-white" : ""}
-                onClick={() => setSelectedCat(cat)}
+            {categoria && (
+              <input type="hidden" name="categoria" value={categoria} />
+            )}
+          </form>
+
+          <div className="flex flex-wrap gap-2">
+            <Filtro href="/blog" activo={!categoria}>
+              Todos
+            </Filtro>
+            {categorias.map((c) => (
+              <Filtro
+                key={c.slug}
+                href={`/blog?categoria=${c.slug}`}
+                activo={categoria === c.slug}
               >
-                {cat}
-              </Button>
+                {c.nombre}
+              </Filtro>
             ))}
           </div>
         </div>
 
-        {/* Featured post */}
-        {filtered.length > 0 && (
-          <motion.div
-            className="mb-10"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <Link href={`/blog/${filtered[0].slug}`}>
-              <Card className="overflow-hidden group hover:shadow-lg transition-shadow">
-                <div className="grid md:grid-cols-2">
-                  <div className="relative h-64 md:h-auto overflow-hidden">
-                    <Image
-                      src={filtered[0].image}
-                      alt={filtered[0].title}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                  </div>
-                  <CardContent className="p-8 flex flex-col justify-center">
-                    <Badge className="w-fit bg-brand-orange border-0 text-white mb-3">
-                      {filtered[0].category}
-                    </Badge>
-                    <h2 className="text-2xl font-bold mb-3 group-hover:text-brand-orange transition-colors">
-                      {filtered[0].title}
-                    </h2>
-                    <p className="text-muted-foreground mb-4">{filtered[0].excerpt}</p>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
-                      <span>{filtered[0].date}</span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {filtered[0].readTime} lectura
-                      </span>
-                    </div>
-                    <Button variant="outline" className="w-fit">
-                      Leer artículo <ArrowRight className="h-4 w-4 ml-2" />
-                    </Button>
-                  </CardContent>
-                </div>
-              </Card>
-            </Link>
-          </motion.div>
-        )}
-
-        {/* Grid */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.slice(1).map((post, i) => (
-            <motion.div
-              key={post.id}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.05 }}
-            >
-              <Link href={`/blog/${post.slug}`}>
-                <Card className="group overflow-hidden hover:shadow-lg transition-all h-full">
-                  <div className="relative h-48 overflow-hidden">
-                    <Image
-                      src={post.image}
-                      alt={post.title}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <Badge className="absolute top-3 left-3 bg-brand-orange border-0 text-white text-xs">
-                      {post.category}
-                    </Badge>
-                  </div>
-                  <CardContent className="p-5">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                      <span>{post.date}</span>
-                      <span>·</span>
-                      <span>{post.readTime} lectura</span>
-                    </div>
-                    <h3 className="font-semibold mb-2 group-hover:text-brand-orange transition-colors line-clamp-2">
-                      {post.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground line-clamp-3">
-                      {post.excerpt}
-                    </p>
-                  </CardContent>
-                </Card>
+        {articulos.length === 0 ? (
+          <div className="rounded-xl border border-dashed bg-white/60 px-6 py-16 text-center">
+            <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/60" />
+            <h2 className="mt-4 text-xl font-semibold">
+              {q ? "Nada coincide con tu búsqueda" : "Todavía no hay artículos"}
+            </h2>
+            <p className="mx-auto mt-1.5 max-w-md text-muted-foreground">
+              {q
+                ? "Probá con otras palabras o mirá todas las notas."
+                : "Estamos preparando las primeras notas."}
+            </p>
+            {q && (
+              <Link
+                href="/blog"
+                className="mt-5 inline-flex h-11 items-center rounded-lg border bg-white px-5 font-medium transition-colors hover:bg-muted"
+              >
+                Ver todas
               </Link>
-            </motion.div>
-          ))}
-        </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {/* La primera nota va grande: en un blog con pocas entradas,
+                todas iguales se leen como una lista de enlaces. */}
+            {principal && !q && <Destacado articulo={principal} />}
 
-        {filtered.length === 0 && (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <BookOpen className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
-              <p className="text-muted-foreground">No se encontraron artículos.</p>
-            </CardContent>
-          </Card>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {(q ? articulos : resto).map((articulo) => (
+                <Tarjeta key={articulo.id} articulo={articulo} />
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
+  );
+}
+
+function Filtro({
+  href,
+  activo,
+  children,
+}: {
+  href: string;
+  activo: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={activo ? "page" : undefined}
+      className={`inline-flex h-11 items-center rounded-lg px-4 text-sm font-medium transition-colors ${
+        activo
+          ? "bg-brand-orange text-white"
+          : "border bg-white hover:bg-muted"
+      }`}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function Destacado({ articulo }: { articulo: ArticuloListado }) {
+  return (
+    <Link
+      href={`/blog/${articulo.slug}`}
+      className="grid overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-md md:grid-cols-2"
+    >
+      {articulo.imagenUrl && (
+        <div className="relative aspect-[16/10] bg-muted md:aspect-auto md:h-full">
+          <Image
+            src={articulo.imagenUrl}
+            alt=""
+            fill
+            sizes="(max-width: 768px) 100vw, 50vw"
+            className="object-cover"
+            priority
+          />
+        </div>
+      )}
+
+      <div className="flex flex-col justify-center p-6 md:p-8">
+        <Meta articulo={articulo} />
+        <h2 className="mt-2 text-2xl font-bold leading-tight">
+          {articulo.titulo}
+        </h2>
+        <p className="mt-2 text-muted-foreground">{articulo.resumen}</p>
+        <span className="mt-4 font-medium text-brand-orange-dark">
+          Leer la nota →
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+function Tarjeta({ articulo }: { articulo: ArticuloListado }) {
+  return (
+    <Link
+      href={`/blog/${articulo.slug}`}
+      className="flex h-full flex-col overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-md"
+    >
+      {articulo.imagenUrl && (
+        <div className="relative aspect-[16/9] bg-muted">
+          <Image
+            src={articulo.imagenUrl}
+            alt=""
+            fill
+            sizes="(max-width: 768px) 100vw, 33vw"
+            className="object-cover"
+          />
+        </div>
+      )}
+
+      <div className="flex flex-1 flex-col p-5">
+        <Meta articulo={articulo} />
+        <h2 className="mt-2 font-semibold leading-snug">{articulo.titulo}</h2>
+        <p className="mt-1 flex-1 text-sm text-muted-foreground">
+          {articulo.resumen}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
+function Meta({ articulo }: { articulo: ArticuloListado }) {
+  return (
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+      {articulo.categoria && (
+        <span className="rounded-full bg-brand-orange/10 px-2.5 py-0.5 font-medium text-brand-orange-dark">
+          {articulo.categoria}
+        </span>
+      )}
+      {articulo.publicadoAt && (
+        <span>{fechaLarga.format(articulo.publicadoAt)}</span>
+      )}
+      <span className="flex items-center gap-1.5">
+        <Clock className="h-3.5 w-3.5" />
+        {articulo.minutosLectura} min
+      </span>
+    </p>
   );
 }

@@ -3,10 +3,12 @@ import Link from "next/link";
 import { Download, ImageOff, Tags } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
+import { recortar, VerTodo } from "@/components/admin/ver-mas";
 import { fechaHora, haceCuanto, moneda, plural } from "@/components/admin/formato";
 import { BuscadorProductos } from "@/app/admin/productos/buscador";
 import { listarCategoriasAdmin } from "@/lib/dal/admin/products";
 import {
+  DIAS_PARA_REVISAR,
   historialDePrecios,
   listarListasDePrecios,
   listarPrecios,
@@ -23,12 +25,11 @@ const origenTexto: Record<string, string> = {
 };
 
 /** Un precio que no se toca hace más de dos meses probablemente quedó viejo. */
-const DIAS_PARA_REVISAR = 60;
 
 export default async function PreciosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; cat?: string }>;
+  searchParams: Promise<{ buscar?: string; cat?: string; ver?: string }>;
 }) {
   const params = await searchParams;
 
@@ -42,13 +43,10 @@ export default async function PreciosPage({
   const general = listas.find((l) => l.isDefault);
   const profesional = listas.find((l) => l.slug === "profesional");
 
-  const limite = Date.now() - DIAS_PARA_REVISAR * 24 * 60 * 60 * 1000;
+  // El criterio de "quedó viejo" lo resuelve el DAL: depende de la hora actual,
+  // y leerla durante el render de un Server Component es una impureza.
   const sinPrecio = filas.filter((f) => Number(f.precioGeneral) <= 0);
-  const desactualizados = filas.filter(
-    (f) =>
-      Number(f.precioGeneral) > 0 &&
-      (f.actualizado === null || f.actualizado.getTime() < limite),
-  );
+  const desactualizados = filas.filter((f) => f.desactualizado);
   const alDia = filas.filter(
     (f) => !sinPrecio.includes(f) && !desactualizados.includes(f),
   );
@@ -108,9 +106,13 @@ export default async function PreciosPage({
               destacado
             >
               <Grilla
-                filas={sinPrecio}
+                filas={recortar(sinPrecio, params.ver === "todo").visibles}
                 generalId={general?.id}
                 profesionalId={profesional?.id}
+              />
+              <VerTodo
+                ocultas={recortar(sinPrecio, params.ver === "todo").ocultas}
+                params={params}
               />
             </GrupoListado>
 
@@ -121,17 +123,25 @@ export default async function PreciosPage({
               destacado
             >
               <Grilla
-                filas={desactualizados}
+                filas={recortar(desactualizados, params.ver === "todo").visibles}
                 generalId={general?.id}
                 profesionalId={profesional?.id}
+              />
+              <VerTodo
+                ocultas={recortar(desactualizados, params.ver === "todo").ocultas}
+                params={params}
               />
             </GrupoListado>
 
             <GrupoListado titulo="Actualizados" cantidad={alDia.length}>
               <Grilla
-                filas={alDia}
+                filas={recortar(alDia, params.ver === "todo").visibles}
                 generalId={general?.id}
                 profesionalId={profesional?.id}
+              />
+              <VerTodo
+                ocultas={recortar(alDia, params.ver === "todo").ocultas}
+                params={params}
               />
             </GrupoListado>
           </div>

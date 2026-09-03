@@ -22,11 +22,21 @@ export async function GET(request: NextRequest) {
   const numero = (valor: number) => valor.toFixed(2).replace(".", ",");
   const texto = (valor: string | null) => `"${(valor ?? "").replace(/"/g, '""')}"`;
 
-  const encabezado = CORTES.find((c) => c.clave === corte)?.etiqueta ?? "Concepto";
+  const sinPrefijo = (CORTES.find((c) => c.clave === corte)?.etiqueta ?? "Concepto")
+    .replace("Por ", "");
+  const encabezado = sinPrefijo.charAt(0).toUpperCase() + sinPrefijo.slice(1);
+
+  /*
+   * Las operaciones son enteros y los importes llevan decimales. Exportar "2,00"
+   * donde va "2" obliga a quien abre la planilla a arreglar el formato de la
+   * columna antes de poder sumarla.
+   */
+  const entero = (valor: number) => String(Math.round(valor));
+  const cantidad = corte === "producto" ? numero : entero;
 
   const lineas = [
     [
-      texto(encabezado.replace("Por ", "")),
+      texto(encabezado),
       texto("Detalle"),
       texto(corte === "producto" ? "Unidades" : "Operaciones"),
       texto("Total"),
@@ -35,7 +45,7 @@ export async function GET(request: NextRequest) {
       [
         texto(f.etiqueta),
         texto(f.detalle),
-        numero(f.cantidad),
+        cantidad(f.cantidad),
         numero(f.total),
       ].join(";"),
     ),

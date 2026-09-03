@@ -105,6 +105,11 @@ const secciones: { titulo: string; items: ItemNav[] }[] = [
     titulo: "Compras",
     items: [
       { href: "/admin/proveedores", icon: Truck, label: "Proveedores" },
+      {
+        href: "/admin/compras/ordenes",
+        icon: ClipboardList,
+        label: "Órdenes de compra",
+      },
       { href: "/admin/recepciones", icon: PackagePlus, label: "Recepciones" },
       {
         href: "/admin/compras/facturas",

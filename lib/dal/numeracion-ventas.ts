@@ -1,7 +1,12 @@
 import "server-only";
 
 import { sql } from "drizzle-orm";
-import { cuttingOrders, orders, quotes } from "@/lib/db/schema";
+import {
+  cuttingOrders,
+  orders,
+  purchaseOrders,
+  quotes,
+} from "@/lib/db/schema";
 
 type Transaccion = Parameters<
   Parameters<typeof import("@/lib/db").db.transaction>[0]
@@ -59,11 +64,13 @@ type Transaccion = Parameters<
 const SERIE_PEDIDOS = 1_000_000_000_001;
 const SERIE_PRESUPUESTOS = 1_000_000_000_002;
 const SERIE_CORTES = 1_000_000_000_003;
+const SERIE_ORDENES_COMPRA = 1_000_000_000_004;
 
 export const CLAVES_DE_LOCK = {
   pedidos: SERIE_PEDIDOS,
   presupuestos: SERIE_PRESUPUESTOS,
   cortes: SERIE_CORTES,
+  ordenesDeCompra: SERIE_ORDENES_COMPRA,
 } as const;
 
 /**
@@ -103,6 +110,21 @@ export async function siguienteNumeroDePresupuesto(
     .where(sql`${quotes.numero} like ${`P-${anio}-%`}`);
 
   return `P-${anio}-${String((fila?.maximo ?? 0) + 1).padStart(4, "0")}`;
+}
+
+/** Siguiente `OC-n`, la serie de las órdenes de compra. */
+export async function siguienteNumeroDeOrdenDeCompra(
+  tx: Transaccion,
+): Promise<string> {
+  await tx.execute(sql`select pg_advisory_xact_lock(${SERIE_ORDENES_COMPRA})`);
+
+  const [fila] = await tx
+    .select({
+      maximo: sql<number>`coalesce(max(nullif(regexp_replace(${purchaseOrders.numero}, '\\D', '', 'g'), '')::bigint), 0)::int`,
+    })
+    .from(purchaseOrders);
+
+  return `OC-${Number(fila?.maximo ?? 0) + 1}`;
 }
 
 /** Siguiente `CRT-n`, la serie de las órdenes de corte del aserradero. */

@@ -8,6 +8,8 @@ import {
   goodsReceipts,
   inventory,
   inventoryMovements,
+  purchaseOrderItems,
+  purchaseOrders,
   supplierMovements,
   variantCosts,
 } from "@/lib/db/schema";
@@ -225,6 +227,8 @@ export async function confirmarRecepcion(
       })
       .where(eq(goodsReceipts.id, receiptId));
 
+    await actualizarOrden(tx, recepcion.purchaseOrderId, items);
+
     /*
      * La deuda con el proveedor sube por el total **con IVA**: es lo que hay
      * que pagarle. El costo que se promedió es el neto, que es otra cosa y por
@@ -248,6 +252,60 @@ export async function confirmarRecepcion(
 
     return { ok: true as const, lineas: conGastos.length, neto };
   });
+}
+
+/**
+ * Descuenta lo recibido de la orden de compra y recalcula su estado.
+ *
+ * `cantidadRecibida` es una suma guardada y se mantiene **acá, dentro de la
+ * misma transacción que confirma la recepción**: si se actualizara después, una
+ * caída entre las dos escrituras dejaría stock ingresado y la orden diciendo
+ * que todavía falta todo.
+ *
+ * El estado se deriva y no se elige: `completa` cuando ningún renglón queda
+ * corto, `parcial` en cuanto llegó algo. Dejarlo a criterio de quien carga
+ * garantiza que a los dos meses la mitad de las órdenes viejas sigan
+ * "enviadas".
+ */
+async function actualizarOrden(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  purchaseOrderId: string | null,
+  items: { purchaseOrderItemId: string | null; cantidad: string }[],
+) {
+  if (!purchaseOrderId) return;
+
+  for (const linea of items) {
+    if (!linea.purchaseOrderItemId) continue;
+
+    await tx
+      .update(purchaseOrderItems)
+      .set({
+        cantidadRecibida: sql`${purchaseOrderItems.cantidadRecibida} + ${linea.cantidad}`,
+      })
+      .where(eq(purchaseOrderItems.id, linea.purchaseOrderItemId));
+  }
+
+  const [resumen] = await tx
+    .select({
+      pedido: sql<string>`sum(${purchaseOrderItems.cantidad})`,
+      recibido: sql<string>`sum(${purchaseOrderItems.cantidadRecibida})`,
+      // Un renglón con menos de lo pedido alcanza para que la orden siga
+      // abierta, aunque el total sumado dé igual: pueden haber mandado de más
+      // de una cosa y de menos de otra.
+      cortos: sql<number>`count(*) filter (where ${purchaseOrderItems.cantidadRecibida} < ${purchaseOrderItems.cantidad})::int`,
+    })
+    .from(purchaseOrderItems)
+    .where(eq(purchaseOrderItems.purchaseOrderId, purchaseOrderId));
+
+  const recibido = Number(resumen?.recibido ?? 0);
+  const cortos = Number(resumen?.cortos ?? 0);
+
+  await tx
+    .update(purchaseOrders)
+    .set({
+      estado: cortos === 0 ? "completa" : recibido > 0 ? "parcial" : "enviada",
+    })
+    .where(eq(purchaseOrders.id, purchaseOrderId));
 }
 
 /**
@@ -341,6 +399,23 @@ export async function anularRecepcion(
           createdByUserId: usuarioId,
         });
       }
+    }
+
+    /*
+     * Lo recibido vuelve a estar pendiente en la orden. A diferencia del costo,
+     * esto **sí** se revierte: es una cantidad, no una mezcla, y dejarla
+     * descontada haría que la orden se viera completa cuando la mercadería se
+     * devolvió.
+     */
+    if (recepcion.purchaseOrderId && recepcion.estado === "confirmada") {
+      await actualizarOrden(
+        tx,
+        recepcion.purchaseOrderId,
+        items.map((i) => ({
+          purchaseOrderItemId: i.purchaseOrderItemId,
+          cantidad: (-Number(i.cantidad)).toFixed(4),
+        })),
+      );
     }
 
     await tx

@@ -157,6 +157,125 @@ export const supplierMovements = pgTable(
 );
 
 /* -------------------------------------------------------------------------- */
+/* Órdenes de compra                                                           */
+/* -------------------------------------------------------------------------- */
+
+export const estadoOrdenCompra = pgEnum("estado_orden_compra", [
+  "borrador",
+  /** Mandada al proveedor. Es lo que se está esperando. */
+  "enviada",
+  /** Llegó algo, pero no todo. */
+  "parcial",
+  "completa",
+  "anulada",
+]);
+
+/**
+ * Lo que se le pidió al proveedor.
+ *
+ * Existe por una pregunta que hoy no tiene respuesta en ningún lado: **qué
+ * está por llegar**. Sin eso, el encargado que ve tres placas en el estante no
+ * sabe si pedir más o si el camión sale mañana, y termina pidiendo de nuevo lo
+ * que ya venía en camino.
+ *
+ * El estado se deriva de lo recibido y no se elige a mano: `parcial` cuando
+ * llegó algo, `completa` cuando llegó todo. Dejarlo a criterio de quien carga
+ * garantiza que a los dos meses la mitad de las órdenes viejas sigan
+ * "enviadas".
+ */
+export const purchaseOrders = pgTable(
+  "purchase_orders",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+
+    numero: text().notNull(),
+
+    supplierId: uuid()
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "restrict" }),
+    branchId: uuid().notNull(),
+
+    estado: estadoOrdenCompra().notNull().default("borrador"),
+
+    /** Cuándo prometieron entregar. Es lo que se mira para reclamar. */
+    fechaPrometida: timestamp({ withTimezone: true }),
+
+    notas: text(),
+    enviadaAt: timestamp({ withTimezone: true }),
+
+    createdByUserId: text().references(() => user.id),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("purchase_orders_numero_idx").on(t.numero),
+    index("purchase_orders_supplier_idx").on(t.supplierId),
+    index("purchase_orders_estado_idx").on(t.estado),
+  ],
+);
+
+/**
+ * Cada renglón pedido, con cuánto llegó.
+ *
+ * `cantidadRecibida` es una **suma guardada**, algo que este proyecto evita por
+ * doctrina. Se justifica igual que `inventory.reservado`: sin ella, cada
+ * pantalla que quiera mostrar "faltan 12 de 40" tendría que recorrer todas las
+ * recepciones de esa orden, y la lista de lo pendiente es de las que más se
+ * miran. Se mantiene en la misma transacción que confirma la recepción.
+ */
+export const purchaseOrderItems = pgTable(
+  "purchase_order_items",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    purchaseOrderId: uuid()
+      .notNull()
+      .references(() => purchaseOrders.id, { onDelete: "cascade" }),
+
+    variantId: uuid().notNull(),
+    descripcion: text().notNull(),
+
+    cantidad: numeric({ precision: 14, scale: 4 }).notNull(),
+    cantidadRecibida: numeric({ precision: 14, scale: 4 })
+      .notNull()
+      .default("0"),
+
+    /** Lo pactado, neto. Puede no ser lo que después facturen. */
+    costoUnitario: numeric({ precision: 14, scale: 4 }).notNull(),
+    alicuotaIva: numeric({ precision: 5, scale: 2 }).notNull().default("21"),
+
+    orden: integer().notNull().default(0),
+  },
+  (t) => [index("purchase_order_items_order_idx").on(t.purchaseOrderId)],
+);
+
+export const purchaseOrdersRelations = relations(
+  purchaseOrders,
+  ({ one, many }) => ({
+    proveedor: one(suppliers, {
+      fields: [purchaseOrders.supplierId],
+      references: [suppliers.id],
+    }),
+    items: many(purchaseOrderItems),
+  }),
+);
+
+export const purchaseOrderItemsRelations = relations(
+  purchaseOrderItems,
+  ({ one }) => ({
+    orden: one(purchaseOrders, {
+      fields: [purchaseOrderItems.purchaseOrderId],
+      references: [purchaseOrders.id],
+    }),
+  }),
+);
+
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+
+/* -------------------------------------------------------------------------- */
 /* Recepciones                                                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -193,6 +312,17 @@ export const goodsReceipts = pgTable(
 
     /** Como lo numeró el proveedor: "0002-00034512". */
     numeroRemito: text(),
+
+    /**
+     * De qué orden de compra viene, si viene de alguna.
+     *
+     * Es opcional a propósito: la mitad de las entregas de una maderera llegan
+     * sin orden, pedidas por teléfono. Obligar a crear una orden para poder
+     * anotar lo que ya está en el patio sería trabar la carga por un formalismo.
+     */
+    purchaseOrderId: uuid().references(() => purchaseOrders.id, {
+      onDelete: "set null",
+    }),
 
     /** Cuándo entró de verdad, que puede no ser cuándo se cargó. */
     fecha: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -252,6 +382,11 @@ export const goodsReceiptItems = pgTable(
 
     /** Con qué IVA vino. Hace falta para el libro de compras. */
     alicuotaIva: numeric({ precision: 5, scale: 2 }).notNull().default("21"),
+
+    /** Qué renglón de la orden cubre, para poder descontarlo de lo pendiente. */
+    purchaseOrderItemId: uuid().references(() => purchaseOrderItems.id, {
+      onDelete: "set null",
+    }),
 
     /* ---- La cuenta, escrita al confirmar ---- */
 
@@ -413,6 +548,7 @@ export const suppliersRelations = relations(suppliers, ({ many }) => ({
   movimientos: many(supplierMovements),
   recepciones: many(goodsReceipts),
   facturas: many(purchaseInvoices),
+  ordenes: many(purchaseOrders),
 }));
 
 export const supplierMovementsRelations = relations(

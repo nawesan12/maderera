@@ -197,6 +197,13 @@
       "when": 1788478293527,
       "tag": "0027_facturas_de_compra",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788478767560,
+      "tag": "0028_ordenes_de_compra",
+      "breakpoints": true
     }
   ]
 }

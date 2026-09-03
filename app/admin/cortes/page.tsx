@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Settings2 } from "lucide-react";
+import { Plus, Settings2 } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { plural } from "@/components/admin/formato";
 import { listarCortes } from "@/lib/dal/admin/cortes";
@@ -32,6 +32,16 @@ export default async function CortesPage({
             : `${plural(cortes.length, "trabajo")} en total`
         }
       >
+        {/* Hasta acá el tablero sabía mover cortes pero no crearlos: los que
+            había los había puesto el sembrado de prueba. */}
+        <Link
+          href="/admin/cortes/nuevo"
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3.5 text-base font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          <Plus className="h-5 w-5" />
+          Nuevo corte
+        </Link>
+
         <Link
           href="/admin/cortes/formato"
           className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"

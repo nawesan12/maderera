@@ -292,14 +292,29 @@ export function FormularioPresupuesto({
         </p>
       )}
 
-      <Button
-        type="submit"
-        disabled={pendiente || lineas.length === 0}
-        className="h-11 px-6"
-      >
-        {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
-        Guardar presupuesto
-      </Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          type="submit"
+          disabled={pendiente || lineas.length === 0}
+          className="h-11 px-6"
+        >
+          {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
+          Guardar presupuesto
+        </Button>
+
+        {/* Quien llama muchas veces no pide un presupuesto: está comprando.
+            Esto le ahorra cargarlo, aceptarlo y convertirlo por separado. */}
+        <Button
+          type="submit"
+          name="convertir"
+          value="si"
+          variant="outline"
+          disabled={pendiente || lineas.length === 0}
+          className="h-11 px-6"
+        >
+          Guardar y pasar a pedido
+        </Button>
+      </div>
     </form>
   );
 }

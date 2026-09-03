@@ -447,6 +447,7 @@ export async function crearPresupuesto(
   validoHasta.setDate(validoHasta.getDate() + cabecera.data.diasValidez);
 
   let numero = "";
+  let quoteId = "";
 
   await db.transaction(async (tx) => {
     numero = await siguienteNumeroDePresupuesto(tx);
@@ -471,6 +472,8 @@ export async function crearPresupuesto(
       })
       .returning({ id: quotes.id });
 
+    quoteId = presupuesto.id;
+
     await tx.insert(quoteItems).values(
       lineas.map((linea, orden) => ({
         quoteId: presupuesto.id,
@@ -492,6 +495,27 @@ export async function crearPresupuesto(
     entidadId: numero,
     descripcion: `Cargó el presupuesto ${numero} para ${cabecera.data.contactoNombre}`,
   });
+
+  /*
+   * El atajo para la compra que ya está cerrada.
+   *
+   * Quien llama por teléfono muchas veces no está pidiendo un presupuesto:
+   * está comprando. Obligar a cargarlo, aceptarlo y recién ahí convertirlo son
+   * tres pantallas para una sola decisión que ya se tomó. Se convierte con la
+   * misma función que usa el botón del listado —no hay un segundo camino que
+   * pueda quedar desalineado— y eso reserva el stock, que es lo que importa.
+   */
+  if (formData.get("convertir") === "si") {
+    const conversion = await convertirEnPedido(quoteId);
+
+    if (conversion.error) {
+      return {
+        ok: `Se creó el presupuesto ${numero}, pero no se pudo pasar a pedido: ${conversion.error}`,
+      };
+    }
+
+    return { ok: `${conversion.ok} Salió del presupuesto ${numero}.` };
+  }
 
   refrescar();
   return { ok: `Se creó el presupuesto ${numero}.` };

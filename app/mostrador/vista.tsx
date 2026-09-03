@@ -1127,7 +1127,12 @@ function PanelDeCaja({
      */
     <Dialog open onOpenChange={(abierto) => !abierto && onCerrar()}>
       <DialogContent className="flex max-h-[calc(100vh-3rem)] w-full flex-col overflow-hidden p-0 sm:max-w-2xl">
-        <DialogHeader className="border-b border-linea px-5 py-3.5">
+        {/* `mx-0 mt-0` no es redundante: `DialogHeader` trae márgenes negativos
+            para desbordar el `p-5` que el diálogo tiene de fábrica, y este
+            diálogo lo anula con `p-0` porque su cuerpo scrollea aparte. Sin
+            esto, el encabezado se salía veinte píxeles por cada lado y el
+            título quedaba cortado contra el borde del panel. */}
+        <DialogHeader className="mx-0 mt-0 border-b border-linea px-5 py-3.5">
           <DialogTitle className="text-xl font-bold tracking-tight">
             Caja · {sucursal.nombre}
           </DialogTitle>

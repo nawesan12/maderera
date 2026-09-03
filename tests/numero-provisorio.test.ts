@@ -83,8 +83,8 @@ describe("documento del ticket", () => {
     contactoNombre: "Consumidor final",
     medioPago: "efectivo",
     lineas: [
-      { descripcion: "Fenólico 18mm", cantidad: 2, unidad: "unidad", precioUnitario: 99800 },
-      { descripcion: "Tornillos", cantidad: 10, unidad: "unidad", precioUnitario: 350 },
+      { variantId: "v1", descripcion: "Fenólico 18mm", cantidad: 2, unidad: "unidad", precioUnitario: 99800 },
+      { variantId: "v2", descripcion: "Tornillos", cantidad: 10, unidad: "unidad", precioUnitario: 350 },
     ],
   };
 
@@ -119,8 +119,8 @@ describe("documento del ticket", () => {
      * ahí el papel siempre gana.
      */
     const lineas = [
-      { descripcion: "Machimbre", cantidad: 2.5, unidad: "m2", precioUnitario: 33.33 },
-      { descripcion: "Tirante", cantidad: 3.7, unidad: "m", precioUnitario: 1234.56 },
+      { variantId: "v3", descripcion: "Machimbre", cantidad: 2.5, unidad: "m2", precioUnitario: 33.33 },
+      { variantId: "v4", descripcion: "Tirante", cantidad: 3.7, unidad: "m", precioUnitario: 1234.56 },
     ];
 
     const doc = documentoDeVenta({ ...venta, lineas }, contexto);

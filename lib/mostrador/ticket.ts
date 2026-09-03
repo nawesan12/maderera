@@ -8,7 +8,11 @@
  * dibuja el mismo componente.
  */
 
-import { aCentavos, totalDeLaVenta } from "./importes";
+import {
+  aCentavos,
+  totalDeLaVenta,
+  type LineaDeVenta,
+} from "./importes";
 
 export interface LineaDelTicket {
   descripcion: string;
@@ -61,12 +65,8 @@ export function documentoDeVenta(
     medioPago: string;
     descuento?: number;
     descuentoMotivo?: string | null;
-    lineas: {
-      descripcion: string;
-      cantidad: number;
-      unidad: string;
-      precioUnitario: number;
-    }[];
+    /** Las mismas líneas que se mandan a cobrar, sin recortar. */
+    lineas: LineaDeVenta[];
   },
   contexto: ContextoDelTicket,
 ): DocumentoTicket {

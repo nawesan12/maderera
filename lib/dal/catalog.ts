@@ -17,7 +17,7 @@ import {
   products,
   relatedProducts,
 } from "@/lib/db/schema";
-import { listaVigente } from "@/lib/dal/precios-sesion";
+import { listaVigente, type ListaVigente } from "@/lib/dal/precios-sesion";
 import {
   combinedStockLevel,
   disponible,
@@ -149,8 +149,9 @@ export const listarCategorias = cache(
  * fuga de datos: el visitante recibía el catálogo entero aunque mirara una sola
  * categoría.
  */
-export async function listarProductos(
-  filtros: FiltrosCatalogo = {},
+async function consultarProductos(
+  filtros: FiltrosCatalogo,
+  lista: Pick<ListaVigente, "id" | "generalId">,
 ): Promise<ProductoListado[]> {
   const condiciones = [eq(products.active, true)];
 
@@ -203,7 +204,7 @@ export async function listarProductos(
       .from(productImages)
       .where(inArray(productImages.productId, ids))
       .orderBy(asc(productImages.sortOrder)),
-    variantesConStockYPrecio(ids),
+    variantesConStockYPrecio(ids, lista),
   ]);
 
   const primeraImagen = new Map<string, string>();
@@ -271,6 +272,48 @@ export async function listarProductos(
   }
 
   return ordenar(resultado, filtros.orden ?? "relevancia");
+}
+
+/**
+ * El catálogo, cacheado **por lista de precios**.
+ *
+ * La regla de `precios-sesion.ts` es que un precio profesional no puede salir
+ * de un caché compartido, y sigue en pie: lo que se comparte acá es el
+ * resultado *para una lista determinada*, y la lista viaja en los argumentos,
+ * así que forma parte de la clave. Dos visitantes con la misma lista ven lo
+ * mismo porque **es** lo mismo; a uno con lista propia no se le puede servir la
+ * entrada de otro, porque su clave es otra.
+ *
+ * Lo que se resuelve fuera del caché, en cada pedido, es *qué lista le toca a
+ * quien mira*: eso sí depende de la sesión y por eso `listaVigente()` queda del
+ * lado de afuera.
+ *
+ * Lo que esto evita: el catálogo entero —productos, imágenes, variantes,
+ * precios y stock, tres consultas— se rehacía en cada visita a la portada y a
+ * cada página del catálogo, aunque nadie hubiera tocado un precio en semanas.
+ */
+const productosCacheados = cachearPublico(
+  consultarProductos,
+  ["catalogo", "productos"],
+  ETIQUETAS.catalogo,
+);
+
+/**
+ * Trae el catálogo ya filtrado.
+ *
+ * El prototipo mandaba el array completo al navegador y filtraba ahí. Con más
+ * de doscientos productos y varias variantes cada uno eso es un bundle enorme y
+ * una fuga de datos: el visitante recibía el catálogo entero aunque mirara una
+ * sola categoría.
+ */
+export async function listarProductos(
+  filtros: FiltrosCatalogo = {},
+): Promise<ProductoListado[]> {
+  const lista = await listaVigente();
+  return productosCacheados(filtros, {
+    id: lista.id,
+    generalId: lista.generalId,
+  });
 }
 
 /** Cuántos productos entran en una página del catálogo. */
@@ -386,8 +429,10 @@ function ordenar(
  * un profesional vería medio catálogo sin precio, que es peor que verlo al
  * precio de público.
  */
-async function variantesConStockYPrecio(productIds: string[]) {
-  const lista = await listaVigente();
+async function variantesConStockYPrecio(
+  productIds: string[],
+  lista: Pick<ListaVigente, "id" | "generalId">,
+) {
 
   // Dos joins con alias: uno a la lista vigente y otro a la general. Traer las
   // dos filas en la misma consulta es lo que permite el respaldo sin una

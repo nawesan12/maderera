@@ -139,7 +139,13 @@ export default async function ProductoPage({
       </div>
 
       <div className="contenedor py-8">
-        <div className="grid gap-9 lg:grid-cols-2 lg:items-start">
+        {/* `[&>*]:min-w-0` no es adorno: un hijo de grid arranca con
+            `min-width: auto`, así que se planta en el ancho mínimo de su
+            contenido y se niega a encoger. Con eso, la columna medía 380 px
+            dentro de una pista de 342 y empujaba el ancho del documento entero:
+            en el teléfono la página quedaba corrida y se podía arrastrar de
+            costado. Medido: 403 px de scroll en una pantalla de 390. */}
+        <div className="grid gap-9 lg:grid-cols-2 lg:items-start [&>*]:min-w-0">
           <GaleriaProducto
             imagenes={producto.imagenes}
             nombre={producto.name}

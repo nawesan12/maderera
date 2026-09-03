@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { APIError } from "better-auth/api";
 import { z } from "zod";
+import { encenderSenal } from "@/lib/senal-cliente";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
@@ -86,6 +87,9 @@ export async function registrarse(
 
     // El presupuesto que venía armando sin sesión se le pasa a la cuenta nueva.
     await adoptarCarritoAnonimo(alta.user.id);
+    // El encabezado se dibuja en el navegador porque el HTML viene del CDN:
+    // sin la señal prendida, no sabría que ahora hay un nombre que mostrar.
+    await encenderSenal();
   } catch (error) {
     if (error instanceof APIError) {
       // Better Auth avisa cuando el correo ya existe. Acá sí conviene decirlo:

@@ -96,7 +96,20 @@ export async function listarArticulos(
   filtros: { categoria?: string; busqueda?: string; limite?: number } = {},
 ): Promise<ArticuloListado[]> {
   if (filtros.busqueda) return consultarArticulos(filtros);
-  return articulosCacheados(filtros);
+  return (await articulosCacheados(filtros)).map(conFecha);
+}
+
+/**
+ * Devuelve la nota con `publicadoAt` hecho un `Date` de verdad.
+ *
+ * El caché guarda JSON, así que la fecha vuelve como texto aunque el tipo diga
+ * `Date`. Sin esto, la página de la nota rompe al formatearla —pasó, y en el
+ * build: "toISOString is not a function"—.
+ */
+function conFecha<T extends { publicadoAt: Date | null }>(fila: T): T {
+  return fila.publicadoAt
+    ? { ...fila, publicadoAt: new Date(fila.publicadoAt) }
+    : fila;
 }
 
 export interface ArticuloCompleto extends ArticuloListado {
@@ -105,8 +118,7 @@ export interface ArticuloCompleto extends ArticuloListado {
   metaDescripcion: string | null;
 }
 
-export const articuloPorSlug = cache(
-  cachearPublico(
+const articuloCacheado = cachearPublico(
   async (slug: string): Promise<ArticuloCompleto | null> => {
     const [fila] = await db
       .select({
@@ -139,7 +151,13 @@ export const articuloPorSlug = cache(
   },
   ["blog", "articulo"],
   ETIQUETAS.contenido,
-  ),
+);
+
+export const articuloPorSlug = cache(
+  async (slug: string): Promise<ArticuloCompleto | null> => {
+    const nota = await articuloCacheado(slug);
+    return nota ? conFecha(nota) : null;
+  },
 );
 
 /** Otras notas de la misma categoría, para el pie del artículo. */
@@ -182,11 +200,20 @@ async function consultarRelacionados(
   return listarArticulos({ limite });
 }
 
-export const articulosRelacionados = cachearPublico(
+const relacionadosCacheados = cachearPublico(
   consultarRelacionados,
   ["blog", "relacionados"],
   ETIQUETAS.contenido,
 );
+
+export async function articulosRelacionados(
+  slug: string,
+  categoriaSlug: string | null,
+  limite = 3,
+): Promise<ArticuloListado[]> {
+  const notas = await relacionadosCacheados(slug, categoriaSlug, limite);
+  return notas.map(conFecha);
+}
 
 export interface CategoriaBlog {
   slug: string;

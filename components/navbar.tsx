@@ -26,6 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useCarrito } from "@/lib/carrito-context";
+import { useEstado } from "@/lib/estado-context";
 import { primerNombre } from "@/lib/formato";
 
 const productLinks = [
@@ -64,12 +65,17 @@ const enlacesMas = [
 ];
 
 /**
- * Quién está navegando, resuelto en el servidor por el layout.
+ * Quién está navegando.
  *
- * Llega como prop en vez de consultarse acá con un hook de cliente para que el
- * primer render ya salga con el estado correcto: pedirla desde el navegador
- * hace que "Ingresar" parpadee un instante para quien ya tiene la sesión
- * abierta.
+ * Ya no llega del servidor: las páginas públicas se sirven del CDN, con el
+ * mismo HTML para todo el mundo, así que el nombre lo completa el navegador
+ * con `useEstado()`. El costo es visible y conocido —para quien tiene la
+ * sesión abierta, el menú dice "Ingresar" durante un instante antes de decir
+ * su nombre— y es lo que se paga a cambio de que la página no se arme en el
+ * servidor en cada visita.
+ *
+ * Mientras no se sabe, el menú muestra el lado de afuera. Es la opción segura:
+ * de más nunca, de menos por un momento.
  */
 export interface SesionNavbar {
   nombre: string;
@@ -83,11 +89,9 @@ export interface SesionNavbar {
  * contacto tiene una sola fuente, que es la ficha de la sucursal.
  */
 export function Navbar({
-  sesion,
   telefono,
   horario,
 }: {
-  sesion?: SesionNavbar | null;
   telefono?: string | null;
   horario?: string | null;
 }) {
@@ -95,6 +99,7 @@ export function Navbar({
   const [masOpen, setMasOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { cantidadItems } = useCarrito();
+  const { sesion } = useEstado();
 
   const nombreDePila = sesion ? primerNombre(sesion.nombre) : "";
   const destinoSesion = sesion ? (sesion.esStaff ? "/admin" : "/mi-cuenta") : "/ingresar";

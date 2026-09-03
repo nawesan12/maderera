@@ -17,6 +17,8 @@ import {
   vaciarCarrito,
 } from "@/app/(public)/carrito-actions";
 import type { Carrito, ItemCarrito } from "@/lib/dal/carrito";
+import { CARRITO_VACIO } from "@/lib/carrito-vacio";
+import { useEstado } from "@/lib/estado-context";
 
 export interface ItemNuevo {
   variantId?: string;
@@ -55,14 +57,32 @@ const Contexto = createContext<ContextoCarrito | undefined>(undefined);
  * roto y la gente vuelve a tocar el botón.
  */
 export function CarritoProvider({
-  carrito,
+  carrito: delServidor,
   children,
 }: {
-  carrito: Carrito;
+  /**
+   * El presupuesto ya resuelto. Lo pasan las pantallas que lo muestran entero
+   * —`/presupuesto`, `/checkout`—, que son dinámicas de todas formas porque
+   * eso es exactamente lo que tienen para mostrar.
+   *
+   * El resto del sitio no lo pasa: esas páginas se sirven del CDN, con el
+   * mismo HTML para todo el mundo, así que arrancan con el presupuesto vacío y
+   * el contador aparece cuando el navegador lo trae.
+   */
+  carrito?: Carrito;
   children: ReactNode;
 }) {
   const router = useRouter();
   const [guardando, startTransition] = useTransition();
+
+  // El contador lo trae `EstadoProvider`, en el mismo pedido que resuelve el
+  // nombre del menú: son la misma pregunta y no tiene sentido hacerla dos veces.
+  const { cantidadItems: traidos } = useEstado();
+
+  const carrito: Carrito = delServidor ?? {
+    ...CARRITO_VACIO,
+    cantidadItems: traidos,
+  };
 
   const [optimista, aplicar] = useOptimistic(
     carrito.items,
@@ -103,7 +123,10 @@ export function CarritoProvider({
 
   const valor: ContextoCarrito = {
     items: optimista,
-    cantidadItems: optimista.length,
+    // Cuando el presupuesto vino del servidor, el contador son los renglones
+    // que se están mostrando. Cuando se hidrató, no hay renglones —esas
+    // pantallas no los muestran— y el número es el que trajo el navegador.
+    cantidadItems: delServidor ? optimista.length : carrito.cantidadItems,
     subtotal: optimista.reduce((s, i) => s + i.subtotal, 0),
     conPrecioDesactualizado: carrito.conPrecioDesactualizado,
     // El ahorro y la lista no se recalculan del lado del cliente: el descuento

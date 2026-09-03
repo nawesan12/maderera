@@ -26,6 +26,14 @@ import { unstable_cache } from "next/cache";
  * mostrárselo al público.
  */
 
+/**
+ * **Lo que entra y sale de acá viaja como JSON.** Un `Date` guardado vuelve
+ * convertido en texto, y el `Date` del tipo es una mentira que TypeScript no
+ * puede ver: compila igual y explota al llamar `.toISOString()` o `.getTime()`
+ * sobre lo que ya es un string. Cada función que cachee fechas tiene que
+ * volver a armarlas al salir; hay ejemplos en `contenido.ts` y `profesionales.ts`.
+ */
+
 /** Cinco minutos: lo que se tolera ver desactualizado si falla la invalidación. */
 const RED_DE_SEGURIDAD = 300;
 

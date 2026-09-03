@@ -3,6 +3,7 @@ import { numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import { ProductCard } from "@/components/product-card";
 import { complementosDelCarrito } from "@/lib/dal/catalog";
 import { obtenerCarrito } from "@/lib/dal/carrito";
+import { CarritoProvider } from "@/lib/carrito-context";
 import { getSession } from "@/lib/dal/session";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
@@ -41,7 +42,11 @@ export default async function PresupuestoPage() {
   );
 
   return (
-    <>
+    // El presupuesto sí necesita el carrito entero y resuelto: es lo que la
+    // pantalla muestra. Esta página es dinámica por eso mismo, así que lo lee
+    // del servidor y lo baja por su cuenta, en vez de esperar a que el
+    // navegador lo traiga como hace el resto del sitio.
+    <CarritoProvider carrito={carrito}>
       <VistaPresupuesto
         sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
         contacto={{
@@ -68,6 +73,6 @@ export default async function PresupuestoPage() {
           </div>
         </section>
       )}
-    </>
+    </CarritoProvider>
   );
 }

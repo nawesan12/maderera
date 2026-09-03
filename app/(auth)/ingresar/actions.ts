@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { APIError } from "better-auth/api";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { encenderSenal } from "@/lib/senal-cliente";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { profiles } from "@/lib/db/schema";
@@ -43,6 +44,9 @@ export async function ingresar(
       headers: new Headers(),
     });
     userId = ingreso.user.id;
+    // El encabezado se dibuja en el navegador porque el HTML viene del CDN:
+    // sin la señal prendida, no sabría que ahora hay un nombre que mostrar.
+    await encenderSenal();
   } catch (error) {
     if (error instanceof APIError) {
       // El mensaje es deliberadamente vago: distinguir "no existe ese mail" de

@@ -272,11 +272,21 @@ async function consultarEventosProximos(): Promise<EventoPublico[]> {
   return filas.map((f) => ({ ...f, precio: Number(f.precio) }));
 }
 
-export const eventosProximos = cachearPublico(
+const eventosCacheados = cachearPublico(
   consultarEventosProximos,
   ["eventos-proximos"],
   ETIQUETAS.eventos,
 );
+
+export async function eventosProximos(): Promise<EventoPublico[]> {
+  // El caché guarda JSON: las fechas vuelven como texto aunque el tipo diga
+  // `Date`, y todo lo que las formatea o las compara con hoy espera un `Date`.
+  return (await eventosCacheados()).map((e) => ({
+    ...e,
+    inicia: new Date(e.inicia),
+    termina: e.termina ? new Date(e.termina) : null,
+  }));
+}
 
 export interface EventoConDetalle extends EventoPublico {
   descripcion: string | null;

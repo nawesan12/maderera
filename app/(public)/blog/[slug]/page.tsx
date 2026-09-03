@@ -6,9 +6,25 @@ import { ArrowLeft, Clock } from "lucide-react";
 import {
   articuloPorSlug,
   articulosRelacionados,
+  listarArticulos,
 } from "@/lib/dal/contenido";
 import { markdownAHtml, markdownATexto } from "@/lib/markdown";
 import { fechaLarga } from "@/lib/formato";
+
+/**
+ * Las notas se arman en el build y se guardan en el CDN.
+ *
+ * Una nota publicada es igual para todo el mundo y cambia cuando alguien la
+ * edita, que en un blog de una maderera es cada varias semanas. Sin esto,
+ * Next.js no tiene cómo saber qué slugs existen y arma cada una en el
+ * servidor, cada vez que alguien la abre.
+ *
+ * Una nota nueva no queda afuera: la primera visita la arma y la guarda.
+ */
+export async function generateStaticParams() {
+  const notas = await listarArticulos();
+  return notas.map((n) => ({ slug: n.slug }));
+}
 
 export async function generateMetadata({
   params,

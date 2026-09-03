@@ -6,8 +6,7 @@ import { Footer } from "@/components/footer";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { ScrollToTop } from "@/components/scroll-to-top";
 import { CarritoProvider } from "@/lib/carrito-context";
-import { CARRITO_VACIO, obtenerCarrito } from "@/lib/dal/carrito";
-import { getSession } from "@/lib/dal/session";
+import { EstadoProvider } from "@/lib/estado-context";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { DatosEstructurados } from "@/components/datos-estructurados";
@@ -19,24 +18,24 @@ export default async function PublicLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // El presupuesto se lee acá una sola vez y baja a toda la sección: así el
-  // contador del menú y la página del presupuesto muestran siempre lo mismo.
-  // La sesión va por el mismo camino: memoizada, y resuelta en el servidor para
-  // que el menú no parpadee entre "Ingresar" y el nombre.
+  // **Este layout no lee ni la sesión ni el presupuesto, y es a propósito.**
   //
-  // Todo lo que es adorno del encabezado va envuelto en `degradar`: un error
-  // acá adentro no lo agarra el `error.tsx` de esta carpeta —sube hasta el
-  // global y reemplaza el documento entero—, así que el teléfono de la barra no
-  // puede tener el poder de dejar el sitio sin marca ni navegación.
+  // Leerlos significa leer cookies, y una página que lee cookies se arma en el
+  // servidor en cada visita: no hay forma de guardarla en el CDN, porque el
+  // resultado es distinto para cada persona. Eso valía para todo el sitio
+  // —incluidas "Quiénes somos" y el blog, iguales para cualquiera— nada más que
+  // porque el menú de arriba tenía que decir un nombre.
   //
-  // La sesión también va envuelta, y no es una excepción a la regla de que lo
-  // que decide acceso no se degrada: acá la sesión no decide nada. Se usa solo
-  // para poner el nombre en el menú. Quién puede ver qué lo resuelve cada
-  // página con su propio control, del lado del DAL. Si la lectura falla, el
-  // menú dice "Ingresar", que es el lado seguro: muestra de menos, no de más.
-  const [carrito, sesion, ajustes, sucursales, whatsapp] = await Promise.all([
-    degradar("el presupuesto", obtenerCarrito, CARRITO_VACIO),
-    degradar("la sesión del menú", getSession, null),
+  // Ahora el nombre y el contador los completa el navegador (`EstadoProvider`),
+  // y solo cuando hay algo que completar. Lo que queda acá es lo que es igual
+  // para todo el mundo, cacheado entre visitas: los datos del negocio, las
+  // sucursales y el número de WhatsApp.
+  //
+  // Todo va envuelto en `degradar`: un error acá adentro no lo agarra el
+  // `error.tsx` de esta carpeta —sube hasta el global y reemplaza el documento
+  // entero—, así que el teléfono de la barra no puede tener el poder de dejar
+  // el sitio sin marca ni navegación.
+  const [ajustes, sucursales, whatsapp] = await Promise.all([
     degradar("los ajustes del sitio", ajustesDelSitio, {}),
     degradar("las sucursales", listarSucursalesPublicas, []),
     degradar("el enlace de WhatsApp", () => enlaceWhatsapp(), ""),
@@ -67,15 +66,11 @@ export default async function PublicLayout({
   ];
 
   return (
-    <CarritoProvider carrito={carrito}>
+    <EstadoProvider>
+    <CarritoProvider>
       <SaltarAlContenido />
       <DatosEstructurados datos={marcado} />
       <Navbar
-        sesion={
-          sesion
-            ? { nombre: sesion.name, esStaff: sesion.role === "staff" }
-            : null
-        }
         telefono={principal?.telefono}
         horario={principal?.horario}
       />
@@ -88,5 +83,6 @@ export default async function PublicLayout({
         <WhatsAppButton enlace={`${whatsapp}?text=${encodeURIComponent("Hola! Quisiera consultar sobre...")}`} />
       </Suspense>
     </CarritoProvider>
+    </EstadoProvider>
   );
 }

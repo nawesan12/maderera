@@ -16,6 +16,7 @@ import {
 } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
 import { listaVigente } from "@/lib/dal/precios-sesion";
+import { encenderSenal } from "@/lib/senal-cliente";
 import {
   descuentoPorVolumen,
   precioConDescuento,
@@ -57,16 +58,13 @@ export interface Carrito {
   listaDiferenciada: string | null;
 }
 
-/** El presupuesto vacío, canónico. También es el respaldo cuando la lectura falla. */
-export const CARRITO_VACIO: Carrito = {
-  id: null,
-  items: [],
-  cantidadItems: 0,
-  subtotal: 0,
-  conPrecioDesactualizado: 0,
-  ahorroPorVolumen: 0,
-  listaDiferenciada: null,
-};
+/*
+ * Se re-exporta desde acá, que es donde lo busca todo el mundo, pero la
+ * constante vive en `lib/carrito-vacio.ts`: este módulo es `server-only` y el
+ * proveedor del carrito, que corre en el navegador, también la necesita.
+ */
+export { CARRITO_VACIO } from "@/lib/carrito-vacio";
+import { CARRITO_VACIO } from "@/lib/carrito-vacio";
 
 /**
  * Carrito de quien está navegando.
@@ -373,6 +371,10 @@ export async function obtenerOCrearCarrito(): Promise<string> {
     .insert(carts)
     .values({ token })
     .returning({ id: carts.id });
+
+  // Desde acá hay algo que mostrar en el encabezado, y el HTML del sitio viene
+  // del CDN sin saberlo: la señal es lo que hace que el navegador lo pregunte.
+  await encenderSenal();
 
   return creado.id;
 }

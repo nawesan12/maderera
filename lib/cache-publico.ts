@@ -34,6 +34,7 @@ export const ETIQUETAS = {
   sucursales: "sucursales",
   catalogo: "catalogo",
   contenido: "contenido",
+  eventos: "eventos",
 } as const;
 
 export function cachearPublico<A extends unknown[], R>(

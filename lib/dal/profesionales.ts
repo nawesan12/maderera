@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { and, asc, desc, eq, gte, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 import {
   customers,
   events,
@@ -234,8 +235,17 @@ export interface EventoPublico {
   inscriptos: number;
 }
 
-/** Eventos publicados que todavía no pasaron. */
-export async function eventosProximos(): Promise<EventoPublico[]> {
+/**
+ * Eventos publicados que todavía no pasaron.
+ *
+ * Va al caché compartido aunque traiga el conteo de inscriptos, que sí cambia:
+ * el número de acá es para mostrar —"quedan tres lugares"—, y quien decide si
+ * hay lugar es `inscribir()`, que cuenta dentro de la transacción. Lo peor que
+ * puede pasar es que la pantalla diga un lugar de más por un rato; sobrevender
+ * no puede pasar. La inscripción invalida la etiqueta igual, así que el rato es
+ * corto.
+ */
+async function consultarEventosProximos(): Promise<EventoPublico[]> {
   const filas = await db
     .select({
       id: events.id,
@@ -261,6 +271,12 @@ export async function eventosProximos(): Promise<EventoPublico[]> {
 
   return filas.map((f) => ({ ...f, precio: Number(f.precio) }));
 }
+
+export const eventosProximos = cachearPublico(
+  consultarEventosProximos,
+  ["eventos-proximos"],
+  ETIQUETAS.eventos,
+);
 
 export interface EventoConDetalle extends EventoPublico {
   descripcion: string | null;

@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { ETIQUETAS } from "@/lib/cache-publico";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -65,6 +66,10 @@ export async function anotarse(
       esProfesional: profesional.aprobado,
     });
 
+    // La lista de eventos está cacheada entre visitas y trae el conteo de
+    // inscriptos: sin esto, quien acaba de anotarse seguiría viendo el cupo de
+    // antes de anotarse.
+    updateTag(ETIQUETAS.eventos);
     revalidatePath(`/eventos/${parsed.data.slug}`);
     revalidatePath("/eventos");
     revalidatePath("/admin/eventos");

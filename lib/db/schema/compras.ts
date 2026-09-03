@@ -156,8 +156,143 @@ export const supplierMovements = pgTable(
   ],
 );
 
+/* -------------------------------------------------------------------------- */
+/* Recepciones                                                                 */
+/* -------------------------------------------------------------------------- */
+
+export const estadoRecepcion = pgEnum("estado_recepcion", [
+  /** Se está cargando. No tocó el stock ni el costo todavía. */
+  "borrador",
+  "confirmada",
+  "anulada",
+]);
+
+/**
+ * La mercadería que entró, con el remito en la mano.
+ *
+ * Es el documento que ingresa stock **y** mueve el costo, y son dos cosas
+ * distintas que pasan juntas: el stock es físico y el costo es plata. Por eso
+ * la recepción tiene estado: mientras es borrador no tocó nada, y confirmar es
+ * el acto que mueve las dos cosas en una transacción.
+ *
+ * **La factura es otro documento.** Llega después, a veces por otro camino y
+ * con otro número, y a veces cubre tres remitos. Mezclarlas obligaría a esperar
+ * la factura para poder vender lo que ya está en el depósito.
+ */
+export const goodsReceipts = pgTable(
+  "goods_receipts",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+
+    supplierId: uuid()
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "restrict" }),
+
+    /** Adónde entró. El stock es por sucursal aunque el costo no lo sea. */
+    branchId: uuid().notNull(),
+
+    /** Como lo numeró el proveedor: "0002-00034512". */
+    numeroRemito: text(),
+
+    /** Cuándo entró de verdad, que puede no ser cuándo se cargó. */
+    fecha: timestamp({ withTimezone: true }).notNull().defaultNow(),
+
+    /**
+     * Flete y demás gastos de la entrega, netos.
+     *
+     * Se reparten entre las líneas en proporción a su valor: el flete de un
+     * camión con veinte tablas y un tornillo no se divide en dos.
+     */
+    gastos: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+
+    estado: estadoRecepcion().notNull().default("borrador"),
+    notas: text(),
+
+    confirmadaAt: timestamp({ withTimezone: true }),
+    confirmadaPor: text().references(() => user.id),
+
+    createdByUserId: text().references(() => user.id),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("goods_receipts_supplier_idx").on(t.supplierId),
+    index("goods_receipts_fecha_idx").on(t.fecha),
+    /*
+     * Un remito por proveedor. Es lo que impide cargar dos veces la misma
+     * entrega, que además de duplicar el stock **corrompe el costo promedio**,
+     * y el costo promedio no se puede revertir.
+     */
+    uniqueIndex("goods_receipts_remito_idx").on(t.supplierId, t.numeroRemito),
+  ],
+);
+
+/**
+ * Cada renglón de la recepción, con la cuenta del costo escrita.
+ *
+ * Guarda **los cuatro números que explican la mezcla**: cuánto había y a
+ * cuánto, cuánto costó lo que entró con los gastos adentro, y con qué costo
+ * quedó. Es lo que permite auditar una recepción de hace ocho meses sin rehacer
+ * toda la historia posterior, que es exactamente lo que no se puede hacer
+ * porque el promedio ponderado no es reversible.
+ */
+export const goodsReceiptItems = pgTable(
+  "goods_receipt_items",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    receiptId: uuid()
+      .notNull()
+      .references(() => goodsReceipts.id, { onDelete: "cascade" }),
+
+    variantId: uuid().notNull(),
+
+    cantidad: numeric({ precision: 14, scale: 4 }).notNull(),
+
+    /** Lo que facturó el proveedor por unidad, **neto**. */
+    costoUnitario: numeric({ precision: 14, scale: 4 }).notNull(),
+
+    /** Con qué IVA vino. Hace falta para el libro de compras. */
+    alicuotaIva: numeric({ precision: 5, scale: 2 }).notNull().default("21"),
+
+    /* ---- La cuenta, escrita al confirmar ---- */
+
+    /** El costo unitario con la parte de flete que le tocó. */
+    costoConGastos: numeric({ precision: 14, scale: 4 }),
+    cantidadAnterior: numeric({ precision: 14, scale: 4 }),
+    costoAnterior: numeric({ precision: 14, scale: 4 }),
+    costoResultante: numeric({ precision: 14, scale: 4 }),
+
+    orden: integer().notNull().default(0),
+  },
+  (t) => [index("goods_receipt_items_receipt_idx").on(t.receiptId)],
+);
+
+export const goodsReceiptsRelations = relations(
+  goodsReceipts,
+  ({ one, many }) => ({
+    proveedor: one(suppliers, {
+      fields: [goodsReceipts.supplierId],
+      references: [suppliers.id],
+    }),
+    items: many(goodsReceiptItems),
+  }),
+);
+
+export const goodsReceiptItemsRelations = relations(
+  goodsReceiptItems,
+  ({ one }) => ({
+    recepcion: one(goodsReceipts, {
+      fields: [goodsReceiptItems.receiptId],
+      references: [goodsReceipts.id],
+    }),
+  }),
+);
+
+export type GoodsReceipt = typeof goodsReceipts.$inferSelect;
+export type GoodsReceiptItem = typeof goodsReceiptItems.$inferSelect;
+
 export const suppliersRelations = relations(suppliers, ({ many }) => ({
   movimientos: many(supplierMovements),
+  recepciones: many(goodsReceipts),
 }));
 
 export const supplierMovementsRelations = relations(

@@ -273,6 +273,31 @@ export const orderItems = pgTable(
     cantidad: numeric({ precision: 12, scale: 2 }).notNull(),
     precioUnitario: numeric({ precision: 12, scale: 2 }).notNull(),
     subtotal: numeric({ precision: 12, scale: 2 }).notNull(),
+
+    /**
+     * El costo de la variante **en el momento de la venta**.
+     *
+     * Congelado acá además de estar en la variante, por la misma razón que el
+     * precio: el promedio ponderado se recalcula con cada recepción, y leer el
+     * costo de hoy para una venta de marzo reescribiría el margen de marzo cada
+     * vez que llega un camión.
+     *
+     * `null` en todo lo anterior al módulo de compras. No se rellena hacia
+     * atrás: el único valor posible sería el costo de hoy, y eso pintaría de
+     * margen inventado seis meses de ventas.
+     */
+    costoUnitario: numeric({ precision: 14, scale: 4 }),
+
+    /**
+     * La alícuota con la que se vendió esta línea.
+     *
+     * El margen es neto contra neto y el subtotal de arriba es **final**:
+     * compararlo con el costo sin desagregar infla el margen un 21 %
+     * sistemático. Y la constante 21 no alcanza porque la maderera vende
+     * algunos ítems al 10,5 %.
+     */
+    alicuotaIva: numeric({ precision: 5, scale: 2 }),
+
     orden: integer().notNull().default(0),
   },
   (t) => [index("order_items_order_idx").on(t.orderId)],

@@ -115,6 +115,19 @@ export const inventoryMovements = pgTable(
     note: text(),
     /** Agrupa las dos patas de una transferencia entre sucursales. */
     transferGroup: uuid(),
+
+    /**
+     * De qué documento salió este movimiento.
+     *
+     * Hasta acá el único rastro era `note`, texto libre: bastaba para una venta
+     * de mostrador —el número está en el texto— y no alcanza para una recepción
+     * de compra, donde la pregunta que se hace es "estas veinte tablas, ¿de qué
+     * remito vinieron?". Va como par tipo + id y no como FK a cada tabla porque
+     * van a ser varias —recepción, devolución, gasto— y una FK por documento
+     * sería una columna nula por cada tipo que no es este.
+     */
+    documentoTipo: text(),
+    documentoId: uuid(),
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
@@ -122,6 +135,7 @@ export const inventoryMovements = pgTable(
     index("inventory_movements_variant_idx").on(t.variantId),
     index("inventory_movements_branch_idx").on(t.branchId),
     index("inventory_movements_created_idx").on(t.createdAt),
+    index("inventory_movements_documento_idx").on(t.documentoTipo, t.documentoId),
   ],
 );
 

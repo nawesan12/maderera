@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { siguienteNumeroDePedido } from "@/lib/dal/numeracion-ventas";
 import { fechaAcotada } from "@/lib/mostrador/offline/numero-provisorio";
 import { turnoQueContiene } from "@/lib/mostrador/turno";
+import { costosParaCongelar } from "@/lib/compras/congelar";
 import {
   accountMovements,
   cashMovements,
@@ -240,17 +241,32 @@ export async function registrarVentaDeMostrador(
       })
       .returning({ id: orders.id });
 
+    /*
+     * El costo se congela en la línea, igual que el precio. El promedio
+     * ponderado se mueve con cada recepción: leer el de hoy para calcular el
+     * margen de una venta vieja lo reescribiría cada vez que llega un camión.
+     */
+    const costos = await costosParaCongelar(
+      tx,
+      lineas.map((l) => l.variantId).filter((v): v is string => Boolean(v)),
+    );
+
     await tx.insert(orderItems).values(
-      lineas.map((l, i) => ({
-        orderId: pedido.id,
-        variantId: l.variantId,
-        descripcion: l.descripcion,
-        unidad: l.unidad,
-        cantidad: l.cantidad.toFixed(2),
-        precioUnitario: l.precioUnitario.toFixed(2),
-        subtotal: aCentavos(l.cantidad * l.precioUnitario).toFixed(2),
-        orden: i,
-      })),
+      lineas.map((l, i) => {
+        const costo = l.variantId ? costos.get(l.variantId) : undefined;
+        return {
+          orderId: pedido.id,
+          variantId: l.variantId,
+          descripcion: l.descripcion,
+          unidad: l.unidad,
+          cantidad: l.cantidad.toFixed(2),
+          precioUnitario: l.precioUnitario.toFixed(2),
+          subtotal: aCentavos(l.cantidad * l.precioUnitario).toFixed(2),
+          costoUnitario: costo?.costoUnitario ?? null,
+          alicuotaIva: costo?.alicuotaIva ?? null,
+          orden: i,
+        };
+      }),
     );
 
     // Stock: solo las líneas que apuntan a una variante. Un flete o una

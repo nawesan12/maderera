@@ -18,6 +18,7 @@ import {
 import { getSession } from "@/lib/dal/session";
 import { obtenerCarrito } from "@/lib/dal/carrito";
 import { calcularEnvio, listarZonasDeEnvio } from "@/lib/dal/envios";
+import { costosParaCongelar } from "@/lib/compras/congelar";
 import { creditoDisponible } from "@/lib/dal/cuenta";
 import { siguienteNumeroDePedido } from "@/lib/dal/numeracion-ventas";
 import { enlaceDeSeguimiento } from "@/lib/seguimiento";
@@ -197,9 +198,16 @@ export async function confirmarCompra(
       })
       .returning();
 
+    // El costo del momento, congelado: ver `costosParaCongelar`.
+    const costos = await costosParaCongelar(
+      tx,
+      carrito.items.map((i) => i.variantId).filter((v): v is string => Boolean(v)),
+    );
+
     await tx.insert(orderItems).values(
       carrito.items.map((item, i) => {
         const precio = item.precioActual ?? item.precioUnitario ?? 0;
+        const costo = item.variantId ? costos.get(item.variantId) : undefined;
         return {
           orderId: pedido.id,
           variantId: item.variantId,
@@ -208,6 +216,8 @@ export async function confirmarCompra(
           cantidad: item.cantidad.toFixed(2),
           precioUnitario: precio.toFixed(2),
           subtotal: (precio * item.cantidad).toFixed(2),
+          costoUnitario: costo?.costoUnitario ?? null,
+          alicuotaIva: costo?.alicuotaIva ?? null,
           orden: i,
         };
       }),

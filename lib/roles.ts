@@ -61,6 +61,7 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
    * número que no se muestra en el mostrador.
    */
   "/admin/proveedores": ["admin"],
+  "/admin/recepciones": ["admin"],
   // Los reportes son los números del negocio: quién compra, cuánto se vende y
   // a qué margen. Es la misma sensibilidad que precios y cobros.
   "/admin/reportes": ["admin"],

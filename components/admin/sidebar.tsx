@@ -24,6 +24,7 @@ import {
   Newspaper,
   MessageCircle,
   Package,
+  PackagePlus,
   Scissors,
   Truck,
   HardHat,
@@ -103,6 +104,7 @@ const secciones: { titulo: string; items: ItemNav[] }[] = [
     titulo: "Compras",
     items: [
       { href: "/admin/proveedores", icon: Truck, label: "Proveedores" },
+      { href: "/admin/recepciones", icon: PackagePlus, label: "Recepciones" },
     ],
   },
   {

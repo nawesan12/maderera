@@ -176,6 +176,13 @@
       "when": 1788476186964,
       "tag": "0024_proveedores",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788476966328,
+      "tag": "0025_recepciones_y_costos",
+      "breakpoints": true
     }
   ]
 }

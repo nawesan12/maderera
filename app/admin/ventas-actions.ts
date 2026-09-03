@@ -14,6 +14,7 @@ import {
   quotes,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { costosParaCongelar } from "@/lib/compras/congelar";
 import {
   siguienteNumeroDePedido,
   siguienteNumeroDePresupuesto,
@@ -272,17 +273,28 @@ export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
       })
       .returning();
 
+    // El costo del momento, congelado: ver `costosParaCongelar`.
+    const costos = await costosParaCongelar(
+      tx,
+      items.map((i) => i.variantId).filter((v): v is string => Boolean(v)),
+    );
+
     await tx.insert(orderItems).values(
-      items.map((item) => ({
-        orderId: pedido.id,
-        variantId: item.variantId,
-        descripcion: item.descripcion,
-        unidad: item.unidad,
-        cantidad: item.cantidad,
-        precioUnitario: item.precioUnitario,
-        subtotal: item.subtotal,
-        orden: item.orden,
-      })),
+      items.map((item) => {
+        const costo = item.variantId ? costos.get(item.variantId) : undefined;
+        return {
+          orderId: pedido.id,
+          variantId: item.variantId,
+          descripcion: item.descripcion,
+          unidad: item.unidad,
+          cantidad: item.cantidad,
+          precioUnitario: item.precioUnitario,
+          subtotal: item.subtotal,
+          costoUnitario: costo?.costoUnitario ?? null,
+          alicuotaIva: costo?.alicuotaIva ?? null,
+          orden: item.orden,
+        };
+      }),
     );
 
     await tx.insert(orderStatusHistory).values({

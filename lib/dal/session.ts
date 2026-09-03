@@ -75,6 +75,23 @@ export const requireStaff = cache(async (): Promise<SessionUser> => {
   return session;
 });
 
+/**
+ * Como `requireStaff`, pero para los Route Handlers.
+ *
+ * `requireStaff` hace `redirect("/ingresar")`, que en una página es lo correcto
+ * y en un endpoint es un desastre: el `fetch` sigue la redirección y recibe el
+ * **HTML del login con status 200**. La cola de sincronización del mostrador
+ * daría por buena esa respuesta y borraría una venta que nunca se guardó.
+ *
+ * Devuelve `null` y el handler contesta 401, que es lo que la cola sabe leer:
+ * retener todo y pedir que alguien vuelva a entrar.
+ */
+export const staffOrNull = cache(async (): Promise<SessionUser | null> => {
+  const session = await getSession();
+  if (!session || session.role !== "staff" || !session.staffRole) return null;
+  return session;
+});
+
 /** Exige un rol concreto dentro del panel. */
 export const requireStaffRole = cache(
   async (

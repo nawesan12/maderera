@@ -186,6 +186,9 @@ export async function buscarClienteEnMostrador(texto: string) {
       condicionIva: customers.condicionIva,
       estado: customers.estado,
       limiteCredito: customers.limiteCredito,
+      // La lista que le toca: con ella, la pantalla puede resolver el precio
+      // desde la copia local sin volver a preguntar.
+      priceListId: customers.priceListId,
     })
     .from(customers)
     .where(

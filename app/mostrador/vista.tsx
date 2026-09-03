@@ -38,6 +38,10 @@ import {
 import type { MedioDeMostrador } from "@/lib/mostrador/importes";
 import type { RenglonDelCierre } from "@/lib/mostrador/caja";
 import {
+  useCopiaLocal,
+  type CopiaLista,
+} from "@/lib/mostrador/offline/use-copia-local";
+import {
   abrirCaja,
   buscarClientes,
   buscarEnMostrador,
@@ -99,6 +103,8 @@ interface Cliente {
   cuit: string | null;
   condicionIva: string;
   estado: string;
+  /** La lista de precios asignada, para resolver precios sin servidor. */
+  priceListId: string | null;
 }
 
 const MEDIOS: { valor: MedioDeMostrador; texto: string; Icono: typeof Banknote }[] = [
@@ -146,6 +152,16 @@ export function VistaMostrador({
 }) {
   const router = useRouter();
   const [enviando, empezar] = useTransition();
+
+  /*
+   * La copia local del catálogo.
+   *
+   * Se carga de IndexedDB apenas monta y se refresca por detrás. Mientras haya
+   * copia, buscar no toca el servidor —ni siquiera con internet—: es lo que
+   * hace que el buscador conteste en el acto, sin los 180 ms de espera más la
+   * ida y vuelta, y lo que permite seguir vendiendo cuando se corta.
+   */
+  const copia = useCopiaLocal(sucursal.id);
 
   const [lineas, setLineas] = useState<LineaDeVenta[]>([]);
   const [clave, setClave] = useState(claveNueva);
@@ -308,8 +324,10 @@ export function VistaMostrador({
       <div className="flex min-h-0 flex-1">
         <section className="flex min-w-0 flex-1 flex-col gap-3 p-4">
           <Buscador
+            copia={copia}
             branchId={sucursal.id}
             customerId={cliente?.id ?? null}
+            listaDelCliente={cliente?.priceListId ?? null}
             onElegir={(l) => setLineas((prev) => sumar(prev, l))}
             onSuelta={setSuelta}
           />
@@ -449,13 +467,18 @@ function BarraSuperior({
 /* -------------------------------------------------------------------------- */
 
 function Buscador({
+  copia,
   branchId,
   customerId,
+  listaDelCliente,
   onElegir,
   onSuelta,
 }: {
+  copia: CopiaLista;
   branchId: string;
   customerId: string | null;
+  /** La lista de precios del cliente elegido, para buscar sin servidor. */
+  listaDelCliente: string | null;
   onElegir: (l: LineaDeVenta) => void;
   /** Abre el alta a mano con el texto que ya se tipeó. */
   onSuelta: (descripcion: string) => void;
@@ -476,9 +499,25 @@ function Buscador({
   // Espera corta: quien tipea rápido no dispara una consulta por tecla. Todo
   // el estado se toca adentro del temporizador y nada sincrónicamente en el
   // efecto, que es lo que dispara renders en cascada.
+  /*
+   * Con copia local la búsqueda **se deriva del render**, no de un efecto.
+   *
+   * Buscar en memoria sobre unos miles de filas tarda menos que un cuadro de
+   * animación: meterlo en un efecto agregaría un render de más por tecla y la
+   * regla de hooks lo prohíbe con razón. Sin copia —la primera vez, o un
+   * navegador sin IndexedDB— se cae al servidor con la espera de siempre.
+   */
+  const hayCopia = copia.listo && copia.variantes > 0;
+
+  const locales = useMemo(() => {
+    const consulta = texto.trim();
+    if (!hayCopia || consulta.length < 2) return null;
+    return copia.buscar(consulta, customerId, listaDelCliente);
+  }, [texto, hayCopia, copia, customerId, listaDelCliente]);
+
   useEffect(() => {
     const consulta = texto.trim();
-    if (consulta.length < 2) return;
+    if (hayCopia || consulta.length < 2) return;
 
     const t = setTimeout(async () => {
       setBuscando(true);
@@ -488,14 +527,15 @@ function Buscador({
     }, 180);
 
     return () => clearTimeout(t);
-  }, [texto, branchId, customerId]);
+  }, [texto, branchId, customerId, hayCopia]);
 
   /*
    * Lo que se muestra se deriva del texto y no se guarda: así, al borrar el
    * campo la lista desaparece en el acto, sin esperar los 180 ms ni guardar un
    * estado que después hay que acordarse de limpiar.
    */
-  const visibles = texto.trim().length < 2 ? [] : resultados;
+  const visibles =
+    texto.trim().length < 2 ? [] : (locales ?? resultados);
 
   function elegir(r: (typeof resultados)[number]) {
     onElegir({

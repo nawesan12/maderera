@@ -19,6 +19,7 @@ import {
   Trash2,
   Undo2,
   UserRound,
+  WifiOff,
   X,
 } from "lucide-react";
 import {
@@ -41,6 +42,10 @@ import {
   useCopiaLocal,
   type CopiaLista,
 } from "@/lib/mostrador/offline/use-copia-local";
+import {
+  useConexion,
+  type EstadoConexion,
+} from "@/lib/mostrador/offline/use-conexion";
 import {
   abrirCaja,
   buscarClientes,
@@ -162,6 +167,9 @@ export function VistaMostrador({
    * ida y vuelta, y lo que permite seguir vendiendo cuando se corta.
    */
   const copia = useCopiaLocal(sucursal.id);
+
+  // La verdad sobre si hay servidor, medida y no adivinada.
+  const conexion = useConexion(sucursal.id);
 
   const [lineas, setLineas] = useState<LineaDeVenta[]>([]);
   const [clave, setClave] = useState(claveNueva);
@@ -314,6 +322,7 @@ export function VistaMostrador({
   return (
     <div className="panel flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <BarraSuperior
+        conexion={conexion}
         usuario={usuario}
         sucursales={sucursales}
         sucursal={sucursal}
@@ -413,12 +422,14 @@ function sumar(lineas: LineaDeVenta[], nueva: LineaDeVenta): LineaDeVenta[] {
 /* -------------------------------------------------------------------------- */
 
 function BarraSuperior({
+  conexion,
   usuario,
   sucursales,
   sucursal,
   turno,
   onCaja,
 }: {
+  conexion: EstadoConexion;
   usuario: { nombre: string };
   sucursales: Sucursal[];
   sucursal: Sucursal;
@@ -446,6 +457,26 @@ function BarraSuperior({
           </Link>
         ))}
       </div>
+
+      {/* El estado de conexión, medido con el latido y no con
+          `navigator.onLine`, que en un wifi sin salida a internet dice que sí.
+          Va acá arriba porque cambia lo que se puede hacer: sin servidor no se
+          abre ni se cierra caja, y el comprobante fiscal queda deshabilitado. */}
+      {!conexion.enLinea && (
+        <span className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-espera">
+          <WifiOff className="h-3.5 w-3.5" />
+          Sin conexión
+        </span>
+      )}
+
+      {conexion.desfasajeMin !== null && (
+        <span
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-problema"
+          title="La hora de esta máquina se usa para las ventas hechas sin conexión."
+        >
+          Reloj corrido {conexion.desfasajeMin} min
+        </span>
+      )}
 
       <button
         onClick={onCaja}

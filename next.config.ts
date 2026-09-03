@@ -10,6 +10,27 @@ const nextConfig: NextConfig = {
     "/admin/ayuda": ["./docs/GUIAS/**/*"],
     "/admin/ayuda/[slug]": ["./docs/GUIAS/**/*"],
   },
+  /**
+   * El ayudante del mostrador no se cachea nunca.
+   *
+   * Si el navegador guarda `/sw.js`, una corrección puede tardar días en
+   * llegar a la máquina del local: el worker viejo sigue sirviendo el shell
+   * viejo y no hay forma de forzarlo desde afuera. `Service-Worker-Allowed`
+   * es lo que le permite controlar todo el sitio aunque el archivo esté en la
+   * raíz de `public`.
+   */
+  async headers() {
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+    ];
+  },
   images: {
     /**
      * Cada ancho y cada calidad distintos son **una transformación aparte**, y

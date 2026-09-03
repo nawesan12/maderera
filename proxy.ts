@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
+import { SENAL_ESTADO } from "@/lib/senal-navegador";
 
 /**
  * En Next.js 16 el middleware se llama Proxy.
@@ -18,7 +19,12 @@ export function proxy(request: NextRequest) {
   if (!sessionCookie) {
     const url = new URL("/ingresar", request.url);
     url.searchParams.set("volver", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
+    const salida = NextResponse.redirect(url);
+    // Si quedó una señal prendida sin sesión detrás, se apaga acá: el sitio
+    // público la usa para decidir si preguntar por el encabezado, y una señal
+    // colgada es un pedido inútil en cada carga.
+    salida.cookies.delete(SENAL_ESTADO);
+    return salida;
   }
 
   // La ruta pedida, para que un layout de servidor pueda decidir con ella. Un
@@ -28,7 +34,26 @@ export function proxy(request: NextRequest) {
   const cabeceras = new Headers(request.headers);
   cabeceras.set("x-ruta", request.nextUrl.pathname);
 
-  return NextResponse.next({ request: { headers: cabeceras } });
+  const salida = NextResponse.next({ request: { headers: cabeceras } });
+
+  // La señal que hace que el sitio público pregunte por el encabezado.
+  //
+  // La prende el login, pero acá se vuelve a prender por las sesiones que ya
+  // estaban abiertas cuando esto se puso —para esas nunca hubo login que la
+  // encendiera— y por si se perdió sola: la cookie de sesión dura más. Sin
+  // esto, alguien con la sesión abierta veía "Ingresar" en el menú hasta
+  // volver a entrar. Cuesta una cabecera; no es una decisión de acceso.
+  if (!request.cookies.has(SENAL_ESTADO)) {
+    salida.cookies.set(SENAL_ESTADO, "1", {
+      httpOnly: false,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 60,
+      secure: process.env.NODE_ENV === "production",
+    });
+  }
+
+  return salida;
 }
 
 export const config = {

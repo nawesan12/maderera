@@ -31,6 +31,7 @@ import {
 import { formatearMonto, formatearPrecio } from "@/lib/formato";
 import {
   montoDelDescuento,
+  revisarVenta,
   totalDeLaVenta,
   vuelto,
   type LineaDeVenta,
@@ -46,6 +47,14 @@ import {
   useConexion,
   type EstadoConexion,
 } from "@/lib/mostrador/offline/use-conexion";
+import { useCaja } from "@/lib/mostrador/offline/use-caja";
+import {
+  useCola,
+  type EstadoCola,
+} from "@/lib/mostrador/offline/use-cola";
+import { encolarVenta } from "@/lib/mostrador/offline/cola";
+import { numeroProvisorio } from "@/lib/mostrador/offline/numero-provisorio";
+import { documentoDeVenta } from "@/lib/mostrador/ticket";
 import {
   abrirCaja,
   buscarClientes,
@@ -147,7 +156,7 @@ export function VistaMostrador({
   movimientos,
   ventas,
 }: {
-  usuario: { nombre: string };
+  usuario: { nombre: string; userId: string };
   sucursales: Sucursal[];
   sucursal: Sucursal;
   turno: Turno | null;
@@ -170,6 +179,14 @@ export function VistaMostrador({
 
   // La verdad sobre si hay servidor, medida y no adivinada.
   const conexion = useConexion(sucursal.id);
+  const { caja: cajaFisica, avanzar: avanzarContador } = useCaja();
+
+  /*
+   * La cola de ventas sin subir. Drena sola al volver la conexión; acá se usa
+   * para mostrar cuántas faltan, que es lo que quien atiende necesita ver antes
+   * de cerrar el turno.
+   */
+  const cola = useCola(conexion.enLinea);
 
   const [lineas, setLineas] = useState<LineaDeVenta[]>([]);
   const [clave, setClave] = useState(claveNueva);
@@ -186,11 +203,31 @@ export function VistaMostrador({
   const [letra, setLetra] = useState<string | null>(null);
   const [ultima, setUltima] = useState<{
     numero: string;
-    orderId: string;
+    /** Null mientras la venta sigue en la cola: todavía no existe del lado del servidor. */
+    orderId: string | null;
     invoiceId?: string;
+    /** Para imprimir el ticket local mientras no hay pedido. */
+    clave?: string;
   } | null>(null);
   const [caja, setCaja] = useState(false);
   const [suelta, setSuelta] = useState<string | null>(null);
+
+  /*
+   * Lo fijo del ticket. Sale de lo que la pantalla ya tiene, así que el papel
+   * se puede armar sin preguntarle nada a nadie.
+   */
+  const contextoDelTicket = useMemo(
+    () => ({
+      sucursal: {
+        nombre: sucursal.nombre,
+        direccion: null as string | null,
+        telefono: null as string | null,
+      },
+      emisor: { razonSocial: "Maderera Juan B. Justo", cuit: null as string | null },
+      whatsapp: null as string | null,
+    }),
+    [sucursal.nombre],
+  );
 
   const subtotal = useMemo(() => totalDeLaVenta(lineas), [lineas]);
   const descuento = useMemo(
@@ -231,6 +268,90 @@ export function VistaMostrador({
   // Derivada y no guardada: al volver a "comprobante interno" la letra
   // desaparece sola, sin un `setState` sincrónico adentro del efecto.
   const letraVisible = comprobante === "fiscal" ? letra : null;
+
+  /**
+   * El cobro cuando no hay servidor.
+   *
+   * Toma el número de la caja, arma el ticket con lo que hay en pantalla y
+   * guarda las dos cosas en la misma transacción local. No hay comprobante
+   * fiscal: eso necesita ARCA en línea, y la pantalla ya lo deshabilitó.
+   */
+  async function cobrarSinConexion() {
+    const problema = revisarVenta(lineas, medio, cliente?.id ?? null);
+
+    if (problema) {
+      setAviso({ tipo: "error", texto: problema });
+      return;
+    }
+
+    if (!cajaFisica) {
+      setAviso({
+        tipo: "error",
+        texto: "Esta máquina todavía no está vinculada a una caja. Conectate una vez para vincularla.",
+      });
+      return;
+    }
+
+    if (medio === "efectivo" && !turno) {
+      setAviso({
+        tipo: "error",
+        texto: "No hay caja abierta en esta sucursal. Abrila antes de cobrar en efectivo.",
+      });
+      return;
+    }
+
+    try {
+      const numero = numeroProvisorio(cajaFisica.codigo, cajaFisica.proximoNumero);
+      const cobradaAt = new Date().toISOString();
+
+      const ticket = documentoDeVenta(
+        {
+          numero,
+          provisorio: true,
+          cobradaAt,
+          contactoNombre: cliente?.nombre ?? "Consumidor final",
+          medioPago: medio,
+          descuento,
+          descuentoMotivo: motivoDesc || null,
+          lineas,
+        },
+        contextoDelTicket,
+      );
+
+      await encolarVenta(
+        {
+          clave,
+          numeroProvisorio: numero,
+          branchId: sucursal.id,
+          lineas,
+          customerId: cliente?.id ?? null,
+          contactoNombre: cliente?.nombre ?? "Consumidor final",
+          medioPago: medio,
+          comprobante: "interno",
+          cuit: cuit || null,
+          descuento,
+          descuentoMotivo: motivoDesc || null,
+          usuarioId: usuario.userId,
+          cobradaAt,
+        },
+        ticket,
+      );
+
+      await avanzarContador();
+
+      setUltima({ numero, orderId: null, invoiceId: undefined, clave });
+      setAviso({
+        tipo: "ok",
+        texto: `${numero} cobrada sin conexión. Se sube sola cuando vuelva internet.`,
+      });
+      limpiar();
+    } catch {
+      setAviso({
+        tipo: "error",
+        texto: "No se pudo guardar la venta en esta máquina. Anotala en papel y avisá.",
+      });
+    }
+  }
 
   function limpiar() {
     setLineas([]);
@@ -285,6 +406,21 @@ export function VistaMostrador({
 
   function cobrar() {
     setAviso(null);
+
+    /*
+     * Sin servidor, la venta se cobra igual y se guarda para subir después.
+     *
+     * Es la decisión que define todo este trabajo: la plata entra al cajón y la
+     * mercadería sale por la puerta, así que negarse a registrar la venta no la
+     * evita —solo la deja sin anotar—. El cliente se lleva un ticket con el
+     * número de la caja y el sistema se encarga del resto cuando vuelva la
+     * conexión.
+     */
+    if (!conexion.enLinea) {
+      void cobrarSinConexion();
+      return;
+    }
+
     empezar(async () => {
       const r = await cobrarVenta({
         clave,
@@ -323,6 +459,7 @@ export function VistaMostrador({
     <div className="panel flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <BarraSuperior
         conexion={conexion}
+        cola={cola}
         usuario={usuario}
         sucursales={sucursales}
         sucursal={sucursal}
@@ -423,6 +560,7 @@ function sumar(lineas: LineaDeVenta[], nueva: LineaDeVenta): LineaDeVenta[] {
 
 function BarraSuperior({
   conexion,
+  cola,
   usuario,
   sucursales,
   sucursal,
@@ -430,6 +568,7 @@ function BarraSuperior({
   onCaja,
 }: {
   conexion: EstadoConexion;
+  cola: EstadoCola;
   usuario: { nombre: string };
   sucursales: Sucursal[];
   sucursal: Sucursal;
@@ -466,6 +605,21 @@ function BarraSuperior({
         <span className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-espera">
           <WifiOff className="h-3.5 w-3.5" />
           Sin conexión
+        </span>
+      )}
+
+      {cola.sinSubir > 0 && (
+        <span
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-espera"
+          title="Se suben solas cuando vuelva la conexión."
+        >
+          {cola.sinSubir} sin subir
+        </span>
+      )}
+
+      {cola.atascadas > 0 && (
+        <span className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-problema">
+          {cola.atascadas} trabada{cola.atascadas > 1 ? "s" : ""}
         </span>
       )}
 
@@ -827,7 +981,13 @@ function Cobro({
   puede: boolean;
   onCobrar: () => void;
   aviso: { tipo: "ok" | "error"; texto: string } | null;
-  ultima: { numero: string; orderId: string; invoiceId?: string } | null;
+  ultima: {
+    numero: string;
+    /** Null mientras la venta está en la cola: el pedido todavía no existe. */
+    orderId: string | null;
+    invoiceId?: string;
+    clave?: string;
+  } | null;
 }) {
   const faltaCaja = medio === "efectivo" && !hayCaja;
   const faltaCliente = medio === "cuenta_corriente" && !cliente;
@@ -1013,7 +1173,14 @@ function Cobro({
               href={
                 ultima.invoiceId
                   ? `/comprobante/${ultima.invoiceId}`
-                  : `/ticket/${ultima.orderId}`
+                  : ultima.orderId
+                    ? `/ticket/${ultima.orderId}`
+                    : /*
+                       * Sin `orderId` la venta todavía está en la cola de esta
+                       * máquina: el pedido no existe del lado del servidor, así
+                       * que el papel se imprime desde lo guardado acá.
+                       */
+                      `/ticket/local?clave=${ultima.clave}`
               }
               target="_blank"
               className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida"

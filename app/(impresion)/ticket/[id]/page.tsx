@@ -4,22 +4,14 @@ import { requireStaff } from "@/lib/dal/session";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
-import { formatearMonto } from "@/lib/formato";
-import { BotonImprimir } from "./boton";
+import { TicketImpreso } from "@/components/impresion/ticket";
+import type { DocumentoTicket } from "@/lib/mostrador/ticket";
 
 export const metadata: Metadata = {
   title: "Ticket",
   robots: { index: false, follow: false },
 };
 
-const MEDIOS: Record<string, string> = {
-  efectivo: "Efectivo",
-  debito: "Débito",
-  credito: "Crédito",
-  transferencia: "Transferencia",
-  cuenta_corriente: "Cuenta corriente",
-  mercado_pago: "Mercado Pago",
-};
 
 /**
  * El papel que se lleva el cliente de una venta de mostrador.
@@ -55,110 +47,40 @@ export default async function TicketPage({
   const sucursal =
     sucursales.find((s) => s.nombre === pedido.sucursal) ?? sucursales[0] ?? null;
 
-  const fecha = new Date(pedido.createdAt).toLocaleString("es-AR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
+  /*
+   * El mismo documento y el mismo componente que usa el ticket local.
+   *
+   * Antes el JSX vivía acá y la versión offline habría sido una copia: dos
+   * papeles con el mismo nombre que se separan a la primera corrección. Ahora
+   * las dos entradas arman un `DocumentoTicket` y lo dibuja `TicketImpreso`.
+   */
+  const documento: DocumentoTicket = {
+    numero: pedido.numero,
+    provisorio: false,
+    numeroProvisorio: pedido.numeroProvisorio ?? null,
+    fecha: new Date(pedido.createdAt).toISOString(),
+    sucursal: {
+      nombre: sucursal?.nombre ?? pedido.sucursal ?? "",
+      direccion: sucursal?.direccion ?? null,
+      telefono: sucursal?.telefono ?? null,
+    },
+    emisor: { razonSocial: "Maderera Juan B. Justo", cuit: null },
+    cliente: pedido.empresa || pedido.cliente,
+    items: pedido.items.map((item) => ({
+      descripcion: item.descripcion,
+      cantidad: Number(item.cantidad),
+      unidad: item.unidad,
+      precioUnitario: Number(item.precioUnitario),
+      subtotal: Number(item.subtotal),
+    })),
+    subtotal: Number(pedido.subtotal ?? pedido.total),
+    descuento: Number(pedido.descuento ?? 0),
+    descuentoMotivo: pedido.descuentoMotivo ?? null,
+    total: Number(pedido.total),
+    medioPago: pedido.medioPago ?? null,
+    enCuentaCorriente: pedido.estadoPago === "pendiente",
+    whatsapp: ajustes.whatsapp_principal ?? null,
+  };
 
-  return (
-    <div className="ticket-hoja">
-      <div className="barra">
-        <BotonImprimir />
-      </div>
-
-      <div className="rollo">
-        <header className="cabecera">
-          <p className="razon">Maderera Juan B. Justo</p>
-          {sucursal && (
-            <>
-              <p>{sucursal.nombre}</p>
-              {sucursal.direccion && <p>{sucursal.direccion}</p>}
-              {sucursal.telefono && <p>{sucursal.telefono}</p>}
-            </>
-          )}
-        </header>
-
-        <div className="separador" />
-
-        <p className="linea-datos">
-          <span>{pedido.numero}</span>
-          <span>{fecha}</span>
-        </p>
-        <p className="linea-datos">
-          <span>Cliente</span>
-          <span>{pedido.empresa || pedido.cliente}</span>
-        </p>
-
-        <div className="separador" />
-
-        <table className="items">
-          <tbody>
-            {pedido.items.map((item) => (
-              <tr key={item.id}>
-                <td colSpan={2} className="descripcion">
-                  {item.descripcion}
-                  <span className="detalle">
-                    {Number(item.cantidad)} {item.unidad} ×{" "}
-                    {formatearMonto(item.precioUnitario)}
-                  </span>
-                </td>
-                <td className="importe">{formatearMonto(item.subtotal)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="separador" />
-
-        <p className="total">
-          <span>TOTAL</span>
-          <span>{formatearMonto(pedido.total)}</span>
-        </p>
-
-        <p className="linea-datos">
-          <span>Pago</span>
-          <span>
-            {pedido.medioPago ? (MEDIOS[pedido.medioPago] ?? pedido.medioPago) : "—"}
-          </span>
-        </p>
-
-        {/*
-          * El descuento va como nota y no como "subtotal menos descuento".
-          * Los renglones de arriba ya están con el precio rebajado —tienen que
-          * estarlo, porque es lo que se cobró y lo que va a la factura—, así
-          * que poner un subtotal más alto dejaría un papel cuyas cuentas no
-          * cierran a la vista. Igual dice cuánto se ahorró, que es lo que el
-          * cliente quiere ver.
-          */}
-        {Number(pedido.descuento) > 0 && (
-          <p className="aviso">
-            Incluye {formatearMonto(pedido.descuento)} de descuento
-            {pedido.descuentoMotivo ? ` · ${pedido.descuentoMotivo}` : ""}
-          </p>
-        )}
-
-        {pedido.estadoPago === "pendiente" && (
-          <p className="aviso">Queda en cuenta corriente</p>
-        )}
-
-        <div className="separador" />
-
-        {/* Lo que la ley 27.743 pide decir cuando no se emite factura: que esto
-            no es un comprobante fiscal. Decirlo chiquito abajo sería peor que
-            no decirlo. */}
-        <p className="legal">
-          Documento no válido como factura.
-          <br />
-          Precios finales con IVA incluido · Ley 27.743
-        </p>
-
-        {ajustes.whatsapp_principal && (
-          <p className="pie">
-            Consultas por WhatsApp:{" "}
-            {ajustes.whatsapp_principal.replace(/\D/g, "")}
-          </p>
-        )}
-      </div>
-    </div>
-  );
+  return <TicketImpreso documento={documento} />;
 }

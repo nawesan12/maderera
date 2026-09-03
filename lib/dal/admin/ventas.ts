@@ -244,6 +244,9 @@ export async function obtenerPedido(id: string) {
     .select({
       id: orders.id,
       numero: orders.numero,
+      // El número que se llevó el cliente si la venta se hizo sin conexión: es
+      // lo que le permite volver con ese papel y que se lo encuentren.
+      numeroProvisorio: orders.numeroProvisorio,
       cliente: orders.contactoNombre,
       email: orders.contactoEmail,
       telefono: orders.contactoTelefono,

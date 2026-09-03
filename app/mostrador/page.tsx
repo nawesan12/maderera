@@ -65,7 +65,7 @@ export default async function MostradorPage({
 
   return (
     <VistaMostrador
-      usuario={{ nombre: usuario.name }}
+      usuario={{ nombre: usuario.name, userId: usuario.userId }}
       sucursales={sucursales.map((s) => ({
         id: s.id,
         slug: s.slug,

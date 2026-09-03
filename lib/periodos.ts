@@ -119,3 +119,32 @@ export function resolverPeriodo(
     anterior: { desde: inicioDeMes(ahora, 1), hasta: desde },
   };
 }
+
+/**
+ * El período mensual de la URL, del estilo `2026-03`.
+ *
+ * Lo usan el libro IVA de ventas, el de compras y el cierre del mes. Estaba
+ * escrito dos veces —la página y su exportación— con la misma fórmula copiada,
+ * que es como una arregla un borde y la otra no.
+ *
+ * `hasta` incluye el último milisegundo del último día: un comprobante emitido
+ * a las 23:50 del 31 pertenece a ese mes.
+ */
+export function leerPeriodoMensual(
+  valor: string | null | undefined,
+  ahora: Date = new Date(),
+): { anio: number; mes: number; desde: Date; hasta: Date; clave: string } {
+  const [anioTexto, mesTexto] = (valor ?? "").split("-");
+
+  const anio = Number(anioTexto) || ahora.getFullYear();
+  const mesCrudo = Number(mesTexto) || ahora.getMonth() + 1;
+  const mes = Math.min(Math.max(mesCrudo, 1), 12);
+
+  return {
+    anio,
+    mes,
+    desde: new Date(anio, mes - 1, 1, 0, 0, 0, 0),
+    hasta: new Date(anio, mes, 0, 23, 59, 59, 999),
+    clave: `${anio}-${String(mes).padStart(2, "0")}`,
+  };
+}

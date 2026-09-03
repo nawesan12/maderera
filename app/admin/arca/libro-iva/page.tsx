@@ -4,6 +4,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { libroIvaVentas } from "@/lib/dal/admin/facturacion";
 import { fechaCorta, formatearCuit, moneda } from "@/lib/formato";
+import { leerPeriodoMensual } from "@/lib/periodos";
 import { nombreComprobante, numeroFormateado } from "@/lib/fiscal/comprobantes";
 
 export const metadata: Metadata = { title: "Libro IVA ventas" };
@@ -28,12 +29,9 @@ export default async function LibroIvaPage({
   const { periodo } = await searchParams;
 
   const hoy = new Date();
-  const [anioTexto, mesTexto] = (periodo ?? "").split("-");
-  const anio = Number(anioTexto) || hoy.getFullYear();
-  const mes = Number(mesTexto) || hoy.getMonth() + 1;
-
-  const desde = new Date(anio, mes - 1, 1, 0, 0, 0, 0);
-  const hasta = new Date(anio, mes, 0, 23, 59, 59, 999);
+  // La misma lectura que usa la exportación: estaba escrita dos veces con la
+  // fórmula copiada, que es como una arregla un borde y la otra no.
+  const { anio, mes, desde, hasta } = leerPeriodoMensual(periodo, hoy);
 
   const libro = await libroIvaVentas(desde, hasta);
 

@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { claveDeLock } from "@/lib/inventario/locks";
 import {
   branches,
   inventory,
@@ -33,11 +34,6 @@ import {
  */
 
 type Transaccion = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-/** Entero estable para el lock por variante y sucursal. */
-function claveDeLock(variantId: string, branchId: string) {
-  return sql`hashtext(${variantId + branchId})`;
-}
 
 /**
  * Sucursal a la que descontarle.

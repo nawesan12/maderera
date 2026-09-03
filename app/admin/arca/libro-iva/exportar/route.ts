@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { libroIvaVentas } from "@/lib/dal/admin/facturacion";
 import { requireStaff } from "@/lib/dal/session";
+import { leerPeriodoMensual } from "@/lib/periodos";
 import { nombreComprobante, numeroFormateado } from "@/lib/fiscal/comprobantes";
 
 /**
@@ -13,14 +14,9 @@ import { nombreComprobante, numeroFormateado } from "@/lib/fiscal/comprobantes";
 export async function GET(request: NextRequest) {
   await requireStaff();
 
-  const periodo = request.nextUrl.searchParams.get("periodo") ?? "";
-  const hoy = new Date();
-  const [anioTexto, mesTexto] = periodo.split("-");
-  const anio = Number(anioTexto) || hoy.getFullYear();
-  const mes = Number(mesTexto) || hoy.getMonth() + 1;
-
-  const desde = new Date(anio, mes - 1, 1, 0, 0, 0, 0);
-  const hasta = new Date(anio, mes, 0, 23, 59, 59, 999);
+  const { desde, hasta, clave } = leerPeriodoMensual(
+    request.nextUrl.searchParams.get("periodo"),
+  );
 
   const libro = await libroIvaVentas(desde, hasta);
 
@@ -86,7 +82,7 @@ export async function GET(request: NextRequest) {
   return new NextResponse(contenido, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="libro-iva-ventas-${anio}-${String(mes).padStart(2, "0")}.csv"`,
+      "Content-Disposition": `attachment; filename="libro-iva-ventas-${clave}.csv"`,
     },
   });
 }

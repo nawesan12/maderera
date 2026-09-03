@@ -55,6 +55,9 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/arca": ["admin"],
   "/admin/avisos": ["admin"],
   "/admin/caja": ["admin"],
+  // Los reportes son los números del negocio: quién compra, cuánto se vende y
+  // a qué margen. Es la misma sensibilidad que precios y cobros.
+  "/admin/reportes": ["admin"],
   "/admin/sucursales": ["admin"],
   "/admin/migracion": ["admin"],
   "/admin/bitacora": ["admin"],

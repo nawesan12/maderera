@@ -8,6 +8,7 @@ import type { LucideIcon } from "lucide-react";
 import { inicioDelRol, quienEntra, type RolStaff } from "@/lib/roles";
 import {
   ArrowUpRight,
+  BarChart3,
   BookOpen,
   Boxes,
   CalendarDays,
@@ -111,6 +112,7 @@ const secciones: { titulo: string; items: ItemNav[] }[] = [
       { href: "/admin/arca", icon: Landmark, label: "ARCA" },
       { href: "/admin/avisos", icon: Mail, label: "Avisos" },
       { href: "/admin/caja", icon: Banknote, label: "Caja" },
+      { href: "/admin/reportes", icon: BarChart3, label: "Reportes" },
       { href: "/admin/sucursales", icon: Building2, label: "Sucursales" },
       { href: "/admin/migracion", icon: DatabaseZap, label: "Migración" },
       { href: "/admin/bitacora", icon: History, label: "Bitácora" },

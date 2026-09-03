@@ -149,6 +149,41 @@ function moneda(valor: number): string {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Lo que se trae una sola vez al abrir                                        */
+/* -------------------------------------------------------------------------- */
+
+export interface EquipajeDelAsistente {
+  rubros: RubroDelAsistente[];
+  sucursales: DatoDelAsistente[];
+  envios: DatoDelAsistente[];
+  pagos: DatoDelAsistente[];
+}
+
+/**
+ * Todo lo que el asistente puede contestar sin volver a preguntar.
+ *
+ * Es una sola llamada, y solo cuando alguien **abre** el panel: quien nunca lo
+ * toca no cuesta nada. Con esto adentro, las preguntas que no dependen de quién
+ * mira —horarios, zonas de envío, formas de pago, rubros— se contestan en el
+ * navegador, sin volver al servidor.
+ *
+ * Lo que sí vuelve siempre es la búsqueda de productos, y no por descuido: el
+ * precio depende de la lista de quien está mirando, así que un catálogo
+ * precargado en el navegador sería justamente la forma de servirle a cualquiera
+ * el precio de un profesional.
+ */
+export async function equipajeDelAsistente(): Promise<EquipajeDelAsistente> {
+  const [rubros, sucursales, envios, pagos] = await Promise.all([
+    rubrosDelAsistente(),
+    datosDelAsistente("sucursales"),
+    datosDelAsistente("envios"),
+    datosDelAsistente("pagos"),
+  ]);
+
+  return { rubros, sucursales, envios, pagos };
+}
+
+/* -------------------------------------------------------------------------- */
 /* Preguntar con palabras propias                                             */
 /* -------------------------------------------------------------------------- */
 

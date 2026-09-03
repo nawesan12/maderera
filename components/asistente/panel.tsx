@@ -21,14 +21,14 @@ import {
   type PasoDelGuion,
 } from "@/lib/asistente/guion";
 import {
-  datosDelAsistente,
+  equipajeDelAsistente,
   preguntarAlAsistente,
   productosDelRubro,
-  rubrosDelAsistente,
   type DatoDelAsistente,
+  type EquipajeDelAsistente,
   type ProductoDelAsistente,
-  type RubroDelAsistente,
 } from "@/app/(public)/asistente-actions";
+import { responderLocal } from "@/lib/asistente/respuestas";
 import { formatearPrecio } from "@/lib/formato";
 import { useCarrito } from "@/lib/carrito-context";
 
@@ -65,7 +65,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
   const [renglones, setRenglones] = useState<Renglon[]>([
     { tipo: "asistente", texto: pasoPorId(PASO_INICIAL)!.mensaje },
   ]);
-  const [rubros, setRubros] = useState<RubroDelAsistente[]>([]);
+  const [equipaje, setEquipaje] = useState<EquipajeDelAsistente | null>(null);
   const [texto, setTexto] = useState("");
   const [trabajando, setTrabajando] = useState(false);
 
@@ -78,11 +78,18 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
 
   const finRef = useRef<HTMLDivElement>(null);
 
-  // Los rubros salen del catálogo y se piden una sola vez, cuando se abre.
+  /*
+   * Una sola llamada, y solo al abrir.
+   *
+   * Trae los rubros, los horarios, las zonas de envío y las formas de pago:
+   * todo lo que es igual para cualquiera. Con eso adentro, esas preguntas se
+   * contestan en el navegador y no vuelven a molestar al servidor. Quien nunca
+   * abre el panel no cuesta ni esta llamada.
+   */
   useEffect(() => {
-    if (!abierto || rubros.length > 0) return;
-    void rubrosDelAsistente().then(setRubros);
-  }, [abierto, rubros.length]);
+    if (!abierto || equipaje) return;
+    void equipajeDelAsistente().then(setEquipaje);
+  }, [abierto, equipaje]);
 
   useEffect(() => {
     finRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -106,11 +113,9 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     const accion = destino.accion;
     if (!accion) return;
 
-    if (accion.tipo === "dato") {
-      setTrabajando(true);
-      const items = await datosDelAsistente(accion.cual);
-      setTrabajando(false);
-      decir([{ tipo: "datos", items }]);
+    if (accion.tipo === "dato" && equipaje) {
+      // Ya están en el navegador desde que se abrió el panel.
+      decir([{ tipo: "datos", items: equipaje[accion.cual] }]);
     }
 
     if (accion.tipo === "categoria") {
@@ -125,7 +130,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     }
   }
 
-  async function elegirRubro(rubro: RubroDelAsistente) {
+  async function elegirRubro(rubro: EquipajeDelAsistente["rubros"][number]) {
     decir([{ tipo: "persona", texto: rubro.nombre }]);
     setTrabajando(true);
     const items = await productosDelRubro(rubro.slug);
@@ -157,16 +162,28 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     setTexto("");
     setTrabajando(true);
 
+    /*
+     * Lo que se puede contestar acá, se contesta acá.
+     *
+     * El motor de intención es lógica pura, así que corre igual en el
+     * navegador, y los datos del negocio ya bajaron al abrir. Preguntar el
+     * horario no tiene por qué costar una ida al servidor. Lo único que sí va
+     * es buscar productos: el precio depende de la lista de quien mira.
+     */
+    const local = equipaje ? responderLocal(consulta, equipaje) : null;
+
     const [respuesta] = await Promise.all([
-      preguntarAlAsistente(consulta),
-      new Promise((listo) => setTimeout(listo, 550)),
+      local ?? preguntarAlAsistente(consulta),
+      new Promise((listo) => setTimeout(listo, local ? 320 : 550)),
     ]);
 
     setTrabajando(false);
 
     const nuevos: Renglon[] = [{ tipo: "asistente", texto: respuesta.texto }];
-    if (respuesta.productos?.length) {
-      nuevos.push({ tipo: "productos", items: respuesta.productos });
+
+    const productos = "productos" in respuesta ? respuesta.productos : undefined;
+    if (productos?.length) {
+      nuevos.push({ tipo: "productos", items: productos });
     }
     if (respuesta.datos?.length) {
       nuevos.push({ tipo: "datos", items: respuesta.datos });
@@ -283,9 +300,9 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
           </Button>
         </div>
 
-        {enRubros && rubros.length > 0 && (
+        {enRubros && (equipaje?.rubros.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            {rubros.map((r) => (
+            {equipaje!.rubros.map((r) => (
               <button
                 key={r.slug}
                 type="button"

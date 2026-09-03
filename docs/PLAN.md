@@ -717,13 +717,25 @@ escrito invocando 5.3.
    dejarlo explícito antes de que se asuma incluido.
 4. **Punto de venta electrónico**: ¿uno para toda la plataforma o uno por sucursal? Afecta
    la numeración fiscal y no se puede cambiar cómodamente después.
-5. **`cacheComponents`**: se decide al cerrar la Etapa 2. **Por ahora queda apagado, y
-   hay una razón medida:** las 76 rutas del sitio son dinámicas porque el layout lee la
-   sesión y el presupuesto para armar el menú, y eso no va a cambiar —el menú tiene que
-   decir el nombre de quien entró—. Así que la ganancia no estaba en cachear la página
-   sino la consulta. Con `unstable_cache` etiquetado, la portada bajó de 11 a 7 consultas
-   por carga, el catálogo de 10 a 7, y sucursales y contacto de 2 a 0. Encender la bandera
-   es un cambio de comportamiento de todo el proyecto y no se hace a días de entregar.
+5. **`cacheComponents`**: sigue apagado, pero **el motivo que estaba escrito acá dejó de
+   ser cierto y conviene dejar asentado por qué**.
+
+   Decía que las rutas eran todas dinámicas porque el layout lee la sesión y el
+   presupuesto para el menú, y que *eso no iba a cambiar*. Cambió. El layout ya no lee
+   cookies: el nombre y el contador los completa el navegador, y solo cuando hay algo que
+   completar —una cookie señal sin datos, que el servidor apaga sola cuando ya no hay
+   nada—. Con eso, **«Quiénes somos», sucursales, contacto, la calculadora, eventos y cada
+   nota del blog se sirven del CDN**, verificado con `x-vercel-cache: HIT` y ~0,2 s contra
+   los ~0,5 s de antes.
+
+   Lo que **no** puede salir del CDN es el catálogo y la ficha de producto, y no por
+   pereza: el precio depende de la lista de quien mira. Documentación y el portal de
+   profesionales tampoco, por lo mismo. Ahí la ganancia sí es cachear la consulta, y ahora
+   el catálogo se cachea **por lista de precios** —la lista viaja en la clave— así que
+   una visita anónima no consulta la base ni una vez.
+
+   `cacheComponents` sigue sin encenderse porque ya no compra casi nada: lo que faltaba
+   era sacar las cookies del layout, y eso está hecho.
 6. **Integración con las máquinas de corte**: alcance, arquitectura y ubicación en el
    cronograma (sección 9). Se define con el relevamiento del 21/08.
 

@@ -55,6 +55,12 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/arca": ["admin"],
   "/admin/avisos": ["admin"],
   "/admin/caja": ["admin"],
+  /*
+   * Compras. Lo que se le paga a un proveedor y a qué costo entró cada tabla es
+   * tan sensible como los precios de venta: de ahí sale el margen, que es el
+   * número que no se muestra en el mostrador.
+   */
+  "/admin/proveedores": ["admin"],
   // Los reportes son los números del negocio: quién compra, cuánto se vende y
   // a qué margen. Es la misma sensibilidad que precios y cobros.
   "/admin/reportes": ["admin"],

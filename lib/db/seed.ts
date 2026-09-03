@@ -23,6 +23,8 @@ const {
   productImages,
   productVariants,
   products,
+  supplierMovements,
+  suppliers,
 } = schema;
 
 type UnitOfSale = (typeof schema.unitOfSale.enumValues)[number];
@@ -659,6 +661,82 @@ async function main() {
       );
       void j;
     }
+  }
+
+  /*
+   * Proveedores de demostración.
+   *
+   * Sin proveedores el módulo de compras se ve vacío y no se puede mostrar
+   * nada. Son los rubros reales de una maderera: aserradero, tableros,
+   * ferretería y adhesivos.
+   */
+  console.log("Proveedores…");
+
+  const PROVEEDORES = [
+    {
+      nombre: "Aserradero El Ombú",
+      razonSocial: "El Ombú S.R.L.",
+      cuit: "30-71234567-4",
+      rubro: "Madera aserrada",
+      contacto: "Raúl Giménez",
+      telefono: "0223 495-2210",
+      diasPago: 30,
+    },
+    {
+      nombre: "Tableros del Sur",
+      razonSocial: "Tableros del Sur S.A.",
+      cuit: "30-70998877-1",
+      rubro: "Melamina y MDF",
+      contacto: "Vanesa Ferrari",
+      telefono: "011 4750-3300",
+      diasPago: 45,
+    },
+    {
+      nombre: "Ferretería Industrial Costa",
+      cuit: "20-24567890-3",
+      rubro: "Herrajes y tornillería",
+      contacto: "Daniel Costa",
+      telefono: "0223 474-1188",
+      diasPago: 15,
+    },
+    {
+      nombre: "Adhesivos Marplatense",
+      razonSocial: "Adhesivos Marplatense S.R.L.",
+      cuit: "30-71455566-9",
+      rubro: "Colas y selladores",
+      contacto: "Silvia Pereyra",
+      telefono: "0223 480-9040",
+      diasPago: 0,
+    },
+  ];
+
+  for (const p of PROVEEDORES) {
+    const [creado] = await db
+      .insert(suppliers)
+      .values(p)
+      .onConflictDoNothing()
+      .returning({ id: suppliers.id });
+
+    if (!creado) continue;
+
+    // Una factura vieja y un pago parcial, para que la cuenta no arranque en
+    // cero y el saldo de la pantalla signifique algo.
+    const monto = 180_000 + Math.round(Math.random() * 900_000);
+    await db.insert(supplierMovements).values([
+      {
+        supplierId: creado.id,
+        tipo: "factura" as const,
+        monto: monto.toFixed(2),
+        referencia: `0003-${String(1200 + Math.round(Math.random() * 80)).padStart(8, "0")}`,
+        detalle: "Compra de mercadería",
+      },
+      {
+        supplierId: creado.id,
+        tipo: "pago" as const,
+        monto: (-Math.round(monto * 0.6)).toFixed(2),
+        detalle: "Pago a cuenta por transferencia",
+      },
+    ]);
   }
 
   console.log(

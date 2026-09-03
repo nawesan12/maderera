@@ -100,6 +100,12 @@ const secciones: { titulo: string; items: ItemNav[] }[] = [
     ],
   },
   {
+    titulo: "Compras",
+    items: [
+      { href: "/admin/proveedores", icon: Truck, label: "Proveedores" },
+    ],
+  },
+  {
     titulo: "Administración",
     items: [
       { href: "/admin/clientes", icon: Users, label: "Clientes" },

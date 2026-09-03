@@ -169,6 +169,13 @@
       "when": 1788473787224,
       "tag": "0023_open_tombstone",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788476186964,
+      "tag": "0024_proveedores",
+      "breakpoints": true
     }
   ]
 }

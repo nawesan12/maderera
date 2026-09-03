@@ -14,7 +14,10 @@ import {
   quotes,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
-import { siguienteNumeroDePedido } from "@/lib/dal/numeracion-ventas";
+import {
+  siguienteNumeroDePedido,
+  siguienteNumeroDePresupuesto,
+} from "@/lib/dal/numeracion-ventas";
 import { avisarCambioDePedido } from "@/lib/whatsapp/avisos";
 import { notificarCambioDeEstado } from "@/lib/notificaciones/avisos";
 import { liberarReservas, reservarPedido } from "@/lib/inventario/reservas";
@@ -363,4 +366,133 @@ export async function marcarPagado(id: string): Promise<EstadoVenta> {
 
   refrescar();
   return { ok: `${pedido.numero} quedó cobrado.` };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Alta de presupuesto desde el panel                                          */
+/* -------------------------------------------------------------------------- */
+
+/** Quince días, igual que los que nacen en el sitio. */
+const DIAS_DE_VALIDEZ = 15;
+
+const lineaPresupuesto = z.object({
+  variantId: z.string().uuid().nullable(),
+  descripcion: z.string().trim().min(1).max(300),
+  unidad: z.string().trim().max(30).default("unidad"),
+  cantidad: z.coerce.number().positive().max(1_000_000),
+  precioUnitario: z.coerce.number().min(0).max(100_000_000),
+});
+
+/**
+ * Carga un presupuesto a mano.
+ *
+ * Faltaba, y era el agujero más visible del circuito comercial: un presupuesto
+ * solo podía nacer del sitio. Quien atiende el teléfono —que es como llega la
+ * mitad del trabajo de una maderera— no tenía dónde cargarlo, y terminaba
+ * anotándolo en un papel que después nadie encontraba.
+ *
+ * El origen queda en `telefono`, que ya existía en el enum esperando esto.
+ */
+export async function crearPresupuesto(
+  _previo: EstadoVenta,
+  formData: FormData,
+): Promise<EstadoVenta> {
+  const usuario = await requireStaff();
+
+  const cabecera = z
+    .object({
+      customerId: z.string().uuid().optional(),
+      contactoNombre: z.string().trim().min(2, "Poné a nombre de quién va.").max(160),
+      contactoTelefono: z.string().trim().max(40).optional(),
+      contactoEmail: z.string().trim().email("Revisá el correo.").optional().or(z.literal("")),
+      branchId: z.string().uuid().optional(),
+      notas: z.string().trim().max(1000).optional(),
+      diasValidez: z.coerce.number().int().min(1).max(180).default(DIAS_DE_VALIDEZ),
+    })
+    .safeParse({
+      customerId: (formData.get("customerId") as string) || undefined,
+      contactoNombre: formData.get("contactoNombre"),
+      contactoTelefono: (formData.get("contactoTelefono") as string) || undefined,
+      contactoEmail: (formData.get("contactoEmail") as string) || undefined,
+      branchId: (formData.get("branchId") as string) || undefined,
+      notas: (formData.get("notas") as string) || undefined,
+      diasValidez: formData.get("diasValidez") || DIAS_DE_VALIDEZ,
+    });
+
+  if (!cabecera.success) {
+    return { error: cabecera.error.issues[0]?.message ?? "Revisá los datos." };
+  }
+
+  const crudas = formData.getAll("linea").map(String);
+  const lineas: z.infer<typeof lineaPresupuesto>[] = [];
+
+  for (const cruda of crudas) {
+    const parseada = lineaPresupuesto.safeParse(JSON.parse(cruda));
+    if (!parseada.success) {
+      return { error: "Hay una línea con datos incompletos." };
+    }
+    lineas.push(parseada.data);
+  }
+
+  if (lineas.length === 0) {
+    return { error: "Agregá al menos un producto." };
+  }
+
+  const subtotal = lineas.reduce(
+    (suma, l) => suma + l.cantidad * l.precioUnitario,
+    0,
+  );
+
+  const validoHasta = new Date();
+  validoHasta.setDate(validoHasta.getDate() + cabecera.data.diasValidez);
+
+  let numero = "";
+
+  await db.transaction(async (tx) => {
+    numero = await siguienteNumeroDePresupuesto(tx);
+
+    const [presupuesto] = await tx
+      .insert(quotes)
+      .values({
+        numero,
+        customerId: cabecera.data.customerId ?? null,
+        contactoNombre: cabecera.data.contactoNombre,
+        contactoEmail: cabecera.data.contactoEmail || null,
+        contactoTelefono: cabecera.data.contactoTelefono ?? null,
+        branchId: cabecera.data.branchId ?? null,
+        estado: "pendiente",
+        origen: "telefono",
+        subtotal: subtotal.toFixed(2),
+        total: subtotal.toFixed(2),
+        notas: cabecera.data.notas ?? null,
+        asesor: usuario.name,
+        validoHasta,
+        createdByUserId: usuario.userId,
+      })
+      .returning({ id: quotes.id });
+
+    await tx.insert(quoteItems).values(
+      lineas.map((linea, orden) => ({
+        quoteId: presupuesto.id,
+        variantId: linea.variantId,
+        descripcion: linea.descripcion,
+        unidad: linea.unidad,
+        cantidad: linea.cantidad.toFixed(2),
+        precioUnitario: linea.precioUnitario.toFixed(2),
+        subtotal: (linea.cantidad * linea.precioUnitario).toFixed(2),
+        orden,
+      })),
+    );
+  });
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "crear",
+    entidad: "presupuesto",
+    entidadId: numero,
+    descripcion: `Cargó el presupuesto ${numero} para ${cabecera.data.contactoNombre}`,
+  });
+
+  refrescar();
+  return { ok: `Se creó el presupuesto ${numero}.` };
 }

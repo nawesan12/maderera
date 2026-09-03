@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ClipboardList, Timer } from "lucide-react";
+import { ClipboardList, Plus, Timer } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
+import { Button } from "@/components/ui/button";
 import {
   AcentoEstado,
   EtiquetaEstado,
@@ -62,7 +63,14 @@ export default async function PresupuestosPage({
             ? `${plural(abiertos.length, "presupuesto")} esperando respuesta por ${moneda.format(montoAbierto)}`
             : `${plural(presupuestos.length, "presupuesto")} en total`
         }
-      />
+      >
+        {/* Lo que entra por teléfono se carga acá: hasta ahora un presupuesto
+            solo podía nacer del sitio. */}
+        <Button render={<Link href="/admin/presupuestos/nuevo" />}>
+          <Plus className="h-4 w-4" />
+          Nuevo presupuesto
+        </Button>
+      </EncabezadoPanel>
 
       <FiltroEstado
         ruta="/admin/presupuestos"

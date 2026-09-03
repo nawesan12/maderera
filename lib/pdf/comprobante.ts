@@ -53,6 +53,7 @@ export interface ComprobantePdf {
   receptorDomicilio: string | null;
   neto: string;
   iva21: string;
+  iva27?: string;
   iva105: string;
   exento: string;
   tributosTotal: string;
@@ -286,6 +287,14 @@ export async function comprobantePdf(
     }
     if (Number(comprobante.iva105) > 0) {
       filasTotales.push(["IVA 10,5%", moneda.format(Number(comprobante.iva105))]);
+    }
+    // La del 27 % es rara pero existe: luz, gas y telefonía a inscriptos. Si
+    // no se imprime, el papel no cuadra contra el total.
+    if (Number(comprobante.iva27 ?? 0) > 0) {
+      filasTotales.push([
+        "IVA 27%",
+        moneda.format(Number(comprobante.iva27)),
+      ]);
     }
   }
 

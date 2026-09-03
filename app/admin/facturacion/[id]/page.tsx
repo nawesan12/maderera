@@ -66,7 +66,10 @@ export default async function FichaComprobantePage({
   if (!comprobante) notFound();
 
   const discrimina = discriminaIva(comprobante.tipo);
-  const totalIva = Number(comprobante.iva21) + Number(comprobante.iva105);
+  const totalIva =
+    Number(comprobante.iva21) +
+    Number(comprobante.iva105) +
+    Number(comprobante.iva27);
   const anulada = comprobante.estado === "anulada";
 
   return (
@@ -216,6 +219,9 @@ export default async function FichaComprobantePage({
                   )}
                   {Number(comprobante.iva105) > 0 && (
                     <Fila etiqueta="IVA 10,5%" valor={moneda.format(Number(comprobante.iva105))} />
+                  )}
+                  {Number(comprobante.iva27) > 0 && (
+                    <Fila etiqueta="IVA 27%" valor={moneda.format(Number(comprobante.iva27))} />
                   )}
                   {Number(comprobante.exento) > 0 && (
                     <Fila etiqueta="Exento" valor={moneda.format(Number(comprobante.exento))} />

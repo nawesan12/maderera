@@ -25,6 +25,7 @@ import {
   MessageCircle,
   Package,
   PackagePlus,
+  ReceiptText,
   Scissors,
   Truck,
   HardHat,
@@ -105,6 +106,11 @@ const secciones: { titulo: string; items: ItemNav[] }[] = [
     items: [
       { href: "/admin/proveedores", icon: Truck, label: "Proveedores" },
       { href: "/admin/recepciones", icon: PackagePlus, label: "Recepciones" },
+      {
+        href: "/admin/compras/facturas",
+        icon: ReceiptText,
+        label: "Facturas de compra",
+      },
     ],
   },
   {

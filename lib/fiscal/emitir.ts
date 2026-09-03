@@ -173,6 +173,7 @@ export async function emitirComprobante(
 
   const iva21 = totales.ivaPorAlicuota.get(21)?.importe ?? 0;
   const iva105 = totales.ivaPorAlicuota.get(10.5)?.importe ?? 0;
+  const iva27 = totales.ivaPorAlicuota.get(27)?.importe ?? 0;
 
   try {
     const invoiceId = await db.transaction(async (tx) => {
@@ -195,6 +196,7 @@ export async function emitirComprobante(
           neto: totales.neto.toFixed(2),
           iva21: iva21.toFixed(2),
           iva105: iva105.toFixed(2),
+          iva27: iva27.toFixed(2),
           exento: totales.exento.toFixed(2),
           tributos: totalTributos.toFixed(2),
           total: total.toFixed(2),

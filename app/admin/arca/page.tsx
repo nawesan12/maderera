@@ -18,6 +18,8 @@ import {
   libroIvaVentas,
   resumenFacturacion,
 } from "@/lib/dal/admin/facturacion";
+import { libroIvaCompras } from "@/lib/dal/admin/compras-fiscal";
+import { daCreditoFiscal } from "@/lib/fiscal/comprobantes-compra";
 import { listarSucursales } from "@/lib/dal/admin/inventory";
 import { FormularioEmisor } from "./emisor";
 import { PuntosDeVenta } from "./puntos-venta";
@@ -58,7 +60,7 @@ export default async function ArcaPage() {
   finMes.setDate(0);
   finMes.setHours(23, 59, 59, 999);
 
-  const [emisor, estado, puntos, sucursales, resumen, libro] =
+  const [emisor, estado, puntos, sucursales, resumen, libro, compras] =
     await Promise.all([
       configuracionFiscalActual(),
       estadoArca(),
@@ -66,15 +68,28 @@ export default async function ArcaPage() {
       listarSucursales(),
       resumenFacturacion(),
       libroIvaVentas(inicioMes, finMes),
+      libroIvaCompras(inicioMes, finMes),
     ]);
 
   const listoParaFacturar = Boolean(emisor.cuit) && puntos.length > 0;
+
+  const debitoFiscal =
+    libro.totales.iva21 + libro.totales.iva105 + libro.totales.iva27;
+
+  /*
+   * Solo los comprobantes que discriminan IVA. La B y la C lo llevan adentro
+   * del precio y no dan crédito: sumarlas infla la posición contra un papel
+   * que no la respalda.
+   */
+  const creditoComputable = compras.filas
+    .filter((f) => daCreditoFiscal(f.tipo))
+    .reduce((s, f) => s + f.iva21 + f.iva105 + f.iva27, 0);
 
   return (
     <div className="space-y-8">
       <EncabezadoPanel
         titulo="ARCA"
-        detalle="Datos fiscales, puntos de venta, impuestos y el libro de IVA ventas."
+        detalle="Datos fiscales, puntos de venta, impuestos y los libros de IVA."
       />
 
       {/* Estado de la conexión */}
@@ -323,10 +338,64 @@ export default async function ArcaPage() {
 
         <div className="mt-4 grid gap-4 sm:grid-cols-4">
           <Total titulo="Neto gravado" valor={libro.totales.neto} />
-          <Total titulo="IVA débito fiscal" valor={libro.totales.iva21 + libro.totales.iva105} />
+          <Total
+            titulo="IVA débito fiscal"
+            valor={
+              libro.totales.iva21 + libro.totales.iva105 + libro.totales.iva27
+            }
+          />
           <Total titulo="Percepciones" valor={libro.totales.tributos} />
           <Total titulo="Total facturado" valor={libro.totales.total} destacado />
         </div>
+      </section>
+
+      {/*
+        * La posición del mes: débito menos crédito.
+        *
+        * Es la pregunta que sigue al libro de ventas y hasta acá no tenía
+        * respuesta en el sistema, porque el crédito fiscal no existía. **Solo
+        * se computa el de los comprobantes que discriminan IVA**: la B y la C
+        * lo llevan adentro del precio y no dan crédito, y sumarlas infla la
+        * posición contra un papel que no la respalda.
+        */}
+      <section className="tarjeta p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Compras del mes</h2>
+            <p className="mt-0.5 text-base text-muted-foreground">
+              {compras.filas.length > 0
+                ? `${compras.filas.length} comprobantes cargados.`
+                : "Todavía no hay comprobantes de compra cargados este mes."}
+            </p>
+          </div>
+
+          <Link
+            href="/admin/arca/libro-iva-compras"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+          >
+            Ver el libro de compras
+          </Link>
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-4">
+          <Total titulo="Neto de compras" valor={compras.totales.neto} />
+          <Total titulo="IVA crédito computable" valor={creditoComputable} />
+          <Total
+            titulo="Percepciones sufridas"
+            valor={compras.totales.percepciones}
+          />
+          <Total
+            titulo="Posición del mes"
+            valor={debitoFiscal - creditoComputable}
+            destacado
+          />
+        </div>
+
+        <p className="mt-3 text-base text-muted-foreground">
+          {debitoFiscal - creditoComputable >= 0
+            ? "Positivo: es lo que hay que depositar."
+            : "Negativo: queda saldo a favor para el mes que viene."}
+        </p>
       </section>
 
       {!listoParaFacturar && (

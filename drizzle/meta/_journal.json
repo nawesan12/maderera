@@ -183,6 +183,20 @@
       "when": 1788476966328,
       "tag": "0025_recepciones_y_costos",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788478238602,
+      "tag": "0026_iva_27",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788478293527,
+      "tag": "0027_facturas_de_compra",
+      "breakpoints": true
     }
   ]
 }

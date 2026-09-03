@@ -62,6 +62,7 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
    */
   "/admin/proveedores": ["admin"],
   "/admin/recepciones": ["admin"],
+  "/admin/compras": ["admin"],
   // Los reportes son los números del negocio: quién compra, cuánto se vende y
   // a qué margen. Es la misma sensibilidad que precios y cobros.
   "/admin/reportes": ["admin"],

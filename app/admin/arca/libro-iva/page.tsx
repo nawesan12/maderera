@@ -105,6 +105,7 @@ export default async function LibroIvaPage({
                   <th scope="col" className="px-3 py-3 text-right font-semibold">Neto</th>
                   <th scope="col" className="px-3 py-3 text-right font-semibold">IVA 21%</th>
                   <th scope="col" className="px-3 py-3 text-right font-semibold">IVA 10,5%</th>
+                  <th scope="col" className="px-3 py-3 text-right font-semibold">IVA 27%</th>
                   <th scope="col" className="px-3 py-3 text-right font-semibold">Exento</th>
                   <th scope="col" className="px-3 py-3 text-right font-semibold">Percep.</th>
                   <th scope="col" className="px-4 py-3 text-right font-semibold">Total</th>
@@ -136,6 +137,7 @@ export default async function LibroIvaPage({
                     <Importe valor={fila.neto} />
                     <Importe valor={fila.iva21} />
                     <Importe valor={fila.iva105} />
+                    <Importe valor={fila.iva27} />
                     <Importe valor={fila.exento} />
                     <Importe valor={fila.tributos} />
                     <td className="tabular whitespace-nowrap px-4 py-3 text-right text-base font-medium">
@@ -152,6 +154,7 @@ export default async function LibroIvaPage({
                   <Importe valor={libro.totales.neto} destacado />
                   <Importe valor={libro.totales.iva21} destacado />
                   <Importe valor={libro.totales.iva105} destacado />
+                  <Importe valor={libro.totales.iva27} destacado />
                   <Importe valor={libro.totales.exento} destacado />
                   <Importe valor={libro.totales.tributos} destacado />
                   <td className="tabular whitespace-nowrap px-4 py-3.5 text-right text-base">
@@ -167,7 +170,9 @@ export default async function LibroIvaPage({
       <p className="text-base text-muted-foreground">
         El IVA a declarar del período es{" "}
         <span className="tabular font-medium text-foreground">
-          {moneda.format(libro.totales.iva21 + libro.totales.iva105)}
+          {moneda.format(
+            libro.totales.iva21 + libro.totales.iva105 + libro.totales.iva27,
+          )}
         </span>
         .
       </p>

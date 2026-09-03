@@ -184,6 +184,16 @@ export const invoices = pgTable(
     neto: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
     iva21: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
     iva105: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    /**
+     * IVA al 27 %.
+     *
+     * Es la alícuota de los servicios de luz, gas y telefonía a responsables
+     * inscriptos. Hoy la maderera no la usa, pero `ALICUOTAS` la contempla y el
+     * mapeo a ARCA existe: sin esta columna, una línea al 27 % se guardaba en
+     * el renglón y **desaparecía del comprobante y del libro IVA**, que es la
+     * clase de agujero que se descubre en una fiscalización.
+     */
+    iva27: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
     exento: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
     /** Suma de percepciones y otros tributos que no son IVA. */
     tributos: numeric({ precision: 12, scale: 2 }).notNull().default("0"),

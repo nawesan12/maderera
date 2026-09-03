@@ -290,9 +290,129 @@ export const goodsReceiptItemsRelations = relations(
 export type GoodsReceipt = typeof goodsReceipts.$inferSelect;
 export type GoodsReceiptItem = typeof goodsReceiptItems.$inferSelect;
 
+/* -------------------------------------------------------------------------- */
+/* Facturas de compra                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Los comprobantes que **recibimos**, no los que emitimos.
+ *
+ * Enum propio y no el de ventas por dos razones concretas: acá llegan tipos que
+ * la maderera nunca emite —la M que ARCA le asigna a un proveedor observado, y
+ * el ticket de la ferretería de la esquina— y no llega ninguno de los que sí
+ * emite. Compartir el enum de ventas obligaría a agregarle valores que no
+ * puede tomar, y eso convierte una restricción real en decorado.
+ */
+export const tipoComprobanteCompra = pgEnum("tipo_comprobante_compra", [
+  "factura_a",
+  "factura_b",
+  "factura_c",
+  "factura_m",
+  "nota_credito_a",
+  "nota_credito_b",
+  "nota_credito_c",
+  "nota_debito_a",
+  "nota_debito_b",
+  "nota_debito_c",
+  "ticket",
+  "otro",
+]);
+
+/**
+ * Lo que nos facturó el proveedor.
+ *
+ * **Es la capa fiscal, no la de gestión.** La recepción dice qué entró al
+ * depósito y a qué costo; la factura dice qué crédito fiscal se puede computar
+ * y cuánto hay que pagar. Llegan por caminos distintos y a veces una factura
+ * cubre tres remitos, así que son dos documentos y no uno.
+ *
+ * El índice único sobre proveedor + tipo + punto de venta + número **es lo que
+ * impide computar dos veces el mismo crédito fiscal**, que es la forma más
+ * común de romper una posición de IVA: la factura llega por mail, alguien la
+ * carga, llega en papel, alguien la vuelve a cargar, y el IVA del mes sale
+ * mal por el doble de esa factura.
+ */
+export const purchaseInvoices = pgTable(
+  "purchase_invoices",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+
+    supplierId: uuid()
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "restrict" }),
+
+    tipo: tipoComprobanteCompra().notNull(),
+    puntoVenta: integer().notNull().default(0),
+    numero: integer().notNull().default(0),
+
+    fechaEmision: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** Vencimiento del pago. Sale de `suppliers.diasPago` y se puede corregir. */
+    fechaVencimiento: timestamp({ withTimezone: true }),
+
+    /**
+     * El CAE del proveedor.
+     *
+     * Se guarda para poder constatarlo contra ARCA más adelante. Hoy no se
+     * verifica: el webservice de constatación es otro servicio y el
+     * certificado autoriza servicio por servicio.
+     */
+    cae: text(),
+
+    /* Importes, **netos primero**: así es como factura un proveedor. */
+    neto: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    iva21: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    iva105: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    iva27: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    exento: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    /** Percepciones que nos hicieron: IVA, IIBB, ganancias. */
+    percepciones: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    total: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+
+    /** Si vino con un remito cargado, cuál. */
+    receiptId: uuid().references(() => goodsReceipts.id, {
+      onDelete: "set null",
+    }),
+
+    observaciones: text(),
+    createdByUserId: text().references(() => user.id),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("purchase_invoices_numeracion_idx").on(
+      t.supplierId,
+      t.tipo,
+      t.puntoVenta,
+      t.numero,
+    ),
+    index("purchase_invoices_fecha_idx").on(t.fechaEmision),
+    index("purchase_invoices_supplier_idx").on(t.supplierId),
+  ],
+);
+
+export const purchaseInvoicesRelations = relations(
+  purchaseInvoices,
+  ({ one }) => ({
+    proveedor: one(suppliers, {
+      fields: [purchaseInvoices.supplierId],
+      references: [suppliers.id],
+    }),
+    recepcion: one(goodsReceipts, {
+      fields: [purchaseInvoices.receiptId],
+      references: [goodsReceipts.id],
+    }),
+  }),
+);
+
+export type PurchaseInvoice = typeof purchaseInvoices.$inferSelect;
+
 export const suppliersRelations = relations(suppliers, ({ many }) => ({
   movimientos: many(supplierMovements),
   recepciones: many(goodsReceipts),
+  facturas: many(purchaseInvoices),
 }));
 
 export const supplierMovementsRelations = relations(

@@ -121,6 +121,7 @@ async function leerComprobante(id: string) {
       neto: invoices.neto,
       iva21: invoices.iva21,
       iva105: invoices.iva105,
+      iva27: invoices.iva27,
       exento: invoices.exento,
       tributosTotal: invoices.tributos,
       total: invoices.total,
@@ -195,7 +196,7 @@ export async function resumenFacturacion(periodo?: Periodo) {
     .select({
       cantidad: sql<number>`count(*)`,
       total: sql<string>`coalesce(sum(${invoices.total}), 0)`,
-      iva: sql<string>`coalesce(sum(${invoices.iva21} + ${invoices.iva105}), 0)`,
+      iva: sql<string>`coalesce(sum(${invoices.iva21} + ${invoices.iva105} + ${invoices.iva27}), 0)`,
     })
     .from(invoices)
     .where(
@@ -272,6 +273,7 @@ export async function libroIvaVentas(desde: Date, hasta: Date) {
       neto: invoices.neto,
       iva21: invoices.iva21,
       iva105: invoices.iva105,
+      iva27: invoices.iva27,
       exento: invoices.exento,
       tributos: invoices.tributos,
       total: invoices.total,
@@ -299,6 +301,7 @@ export async function libroIvaVentas(desde: Date, hasta: Date) {
       neto: signo * Number(f.neto),
       iva21: signo * Number(f.iva21),
       iva105: signo * Number(f.iva105),
+      iva27: signo * Number(f.iva27),
       exento: signo * Number(f.exento),
       tributos: signo * Number(f.tributos),
       total: signo * Number(f.total),
@@ -310,11 +313,12 @@ export async function libroIvaVentas(desde: Date, hasta: Date) {
       neto: acumulado.neto + fila.neto,
       iva21: acumulado.iva21 + fila.iva21,
       iva105: acumulado.iva105 + fila.iva105,
+      iva27: acumulado.iva27 + fila.iva27,
       exento: acumulado.exento + fila.exento,
       tributos: acumulado.tributos + fila.tributos,
       total: acumulado.total + fila.total,
     }),
-    { neto: 0, iva21: 0, iva105: 0, exento: 0, tributos: 0, total: 0 },
+    { neto: 0, iva21: 0, iva105: 0, iva27: 0, exento: 0, tributos: 0, total: 0 },
   );
 
   return { filas: conSigno, totales };

@@ -14,7 +14,7 @@ import {
   quotes,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
-import { siguienteNumero } from "@/lib/dal/admin/ventas";
+import { siguienteNumeroDePedido } from "@/lib/dal/numeracion-ventas";
 import { avisarCambioDePedido } from "@/lib/whatsapp/avisos";
 import { notificarCambioDeEstado } from "@/lib/notificaciones/avisos";
 import { liberarReservas, reservarPedido } from "@/lib/inventario/reservas";
@@ -243,9 +243,13 @@ export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
     return { error: "El presupuesto no tiene ítems." };
   }
 
-  const numero = await siguienteNumero("PED");
+  // Se asigna adentro de la transacción y se usa afuera, en el mensaje.
+  let numero = "";
 
   await db.transaction(async (tx) => {
+    // Adentro de la transacción, que es donde el lock de la serie protege algo.
+    numero = await siguienteNumeroDePedido(tx);
+
     const [pedido] = await tx
       .insert(orders)
       .values({

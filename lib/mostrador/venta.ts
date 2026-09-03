@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { siguienteNumeroDePedido } from "@/lib/dal/numeracion-ventas";
 import {
   accountMovements,
   cashMovements,
@@ -172,13 +173,9 @@ export async function registrarVentaDeMostrador(
       sesionId = turno.id;
     }
 
-    const [{ maximo }] = await tx
-      .select({
-        maximo: sql<number>`coalesce(max(nullif(regexp_replace(${orders.numero}, '\\D', '', 'g'), '')::bigint), 999)::int`,
-      })
-      .from(orders);
-
-    const numero = `PED-${maximo + 1}`;
+    // Con lock sobre la serie: dos cajas cobrando a la vez leían el mismo
+    // máximo y la segunda moría contra el índice único, con el cliente enfrente.
+    const numero = await siguienteNumeroDePedido(tx);
     const aCuenta = venta.medioPago === "cuenta_corriente";
 
     const [pedido] = await tx

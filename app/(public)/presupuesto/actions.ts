@@ -9,7 +9,7 @@ import { customers, quoteItems, quotes } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
 import { obtenerCarrito } from "@/lib/dal/carrito";
 import { estadoProfesional } from "@/lib/dal/profesionales";
-import { siguienteNumero } from "@/lib/dal/admin/ventas";
+import { siguienteNumeroDePresupuesto } from "@/lib/dal/numeracion-ventas";
 import { vencimientoExpress } from "@/lib/plazos";
 import { notificarPresupuestoRecibido } from "@/lib/notificaciones/presupuestos";
 
@@ -90,13 +90,17 @@ export async function pedirPresupuesto(
     customerId = porMail?.id ?? null;
   }
 
-  const numero = await siguienteNumero("P");
   const esExpress = profesional.aprobado;
+  // Se asigna adentro de la transacción y se usa afuera, en el mensaje.
+  let numero = "";
 
   const validoHasta = new Date();
   validoHasta.setDate(validoHasta.getDate() + DIAS_DE_VALIDEZ);
 
   await db.transaction(async (tx) => {
+    // Adentro de la transacción, que es donde el lock de la serie protege algo.
+    numero = await siguienteNumeroDePresupuesto(tx);
+
     const [presupuesto] = await tx
       .insert(quotes)
       .values({

@@ -311,38 +311,16 @@ export async function opcionesDeVenta() {
   return { clientes: listaClientes, sucursales: listaSucursales };
 }
 
-/**
- * Siguiente número de una serie.
+/*
+ * La numeración de pedidos y presupuestos se mudó a
+ * `lib/dal/numeracion-ventas.ts`, que toma lock sobre la serie y recibe la
+ * transacción.
  *
- * Toma el número más alto usado, no el registro más reciente: el pedido cargado
- * hace un rato puede tener un número menor que otro cargado antes, y ordenar por
- * fecha devuelve un número ya ocupado.
- *
- * Igual el índice único de `numero` es la garantía final. Si dos personas graban
- * al mismo tiempo, una de las dos falla y vuelve a intentar con el siguiente.
+ * Acá había una función que sacaba el número **antes** de abrir la transacción
+ * que insertaba la fila, y con un comentario que decía que si dos personas
+ * grababan a la vez "una de las dos falla y vuelve a intentar con el
+ * siguiente". El reintento no estaba escrito en ninguna parte: lo que pasaba de
+ * verdad era que la segunda venta moría contra el índice único, con un error
+ * crudo en la cara de quien estaba cobrando.
  */
-export async function siguienteNumero(
-  prefijo: "P" | "PED",
-): Promise<string> {
-  if (prefijo === "P") {
-    const anio = new Date().getFullYear();
-
-    const [fila] = await db
-      .select({
-        maximo: sql<number>`coalesce(max(nullif(regexp_replace(${quotes.numero}, '\\D', '', 'g'), '')::bigint % 10000), 0)::int`,
-      })
-      .from(quotes)
-      .where(sql`${quotes.numero} like ${`P-${anio}-%`}`);
-
-    return `P-${anio}-${String((fila?.maximo ?? 0) + 1).padStart(4, "0")}`;
-  }
-
-  const [fila] = await db
-    .select({
-      maximo: sql<number>`coalesce(max(nullif(regexp_replace(${orders.numero}, '\\D', '', 'g'), '')::bigint), 999)::int`,
-    })
-    .from(orders);
-
-  return `PED-${(fila?.maximo ?? 999) + 1}`;
-}
 

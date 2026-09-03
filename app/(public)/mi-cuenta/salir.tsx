@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { SENAL_ESTADO } from "@/lib/senal-navegador";
 
 export function BotonSalir() {
   const router = useRouter();
@@ -12,9 +13,13 @@ export function BotonSalir() {
   async function cerrarSesion() {
     setSaliendo(true);
     await authClient.signOut();
-    // `refresh()` además del `push` porque el navbar y el carrito se arman en
-    // el servidor con la sesión: sin esto seguirían mostrando a la persona
-    // adentro hasta la próxima navegación completa.
+
+    // El encabezado del sitio se completa en el navegador y solo pregunta si
+    // la señal está prendida. Apagarla acá es lo que hace que el menú vuelva a
+    // decir "Ingresar" en el acto; si no, seguiría preguntando —y recibiendo
+    // "no hay nada"— hasta que el servidor la apague por su cuenta.
+    document.cookie = `${SENAL_ESTADO}=; Max-Age=0; Path=/`;
+
     router.push("/");
     router.refresh();
   }

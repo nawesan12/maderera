@@ -19,7 +19,7 @@ import { getSession } from "@/lib/dal/session";
 import { obtenerCarrito } from "@/lib/dal/carrito";
 import { calcularEnvio, listarZonasDeEnvio } from "@/lib/dal/envios";
 import { creditoDisponible } from "@/lib/dal/cuenta";
-import { siguienteNumero } from "@/lib/dal/admin/ventas";
+import { siguienteNumeroDePedido } from "@/lib/dal/numeracion-ventas";
 import { enlaceDeSeguimiento } from "@/lib/seguimiento";
 import { notificarPedidoRecibido } from "@/lib/notificaciones/avisos";
 import { reservarPedido } from "@/lib/inventario/reservas";
@@ -122,7 +122,6 @@ export async function confirmarCompra(
   }
 
   const sesion = await getSession();
-  const numero = await siguienteNumero("PED");
 
   // Si quien compra ya es cliente, el pedido queda atado a su ficha.
   let customerId: string | null = null;
@@ -164,8 +163,16 @@ export async function confirmarCompra(
 
   let pedidoCreado: string | null = null;
   let tokenCreado: string | null = null;
+  // El número se asigna adentro de la transacción pero se usa afuera, para el
+  // enlace de seguimiento, así que sube por acá igual que el token.
+  let numeroCreado = "";
 
   await db.transaction(async (tx) => {
+    // Adentro de la transacción: el lock de la serie vive lo que vive la
+    // transacción, así que pedirlo antes no protegería el insert.
+    const numero = await siguienteNumeroDePedido(tx);
+    numeroCreado = numero;
+
     const [pedido] = await tx
       .insert(orders)
       .values({
@@ -259,7 +266,7 @@ export async function confirmarCompra(
   // comprar terminaba viendo un presupuesto vacío en lugar de su confirmación.
   // El token va en la URL: el número no autoriza nada. Quien compró sin cuenta
   // llega a su pedido por este enlace y por el del correo, y por ningún otro.
-  redirect(enlaceDeSeguimiento(numero, tokenCreado!));
+  redirect(enlaceDeSeguimiento(numeroCreado, tokenCreado!));
 }
 
 /**

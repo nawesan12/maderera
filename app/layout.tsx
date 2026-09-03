@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { urlSitio } from "@/lib/seo";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -36,12 +37,22 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Maderera Juan B. Justo" }],
   creator: "Maderera Juan B. Justo",
-  metadataBase: new URL("https://mjbj.ar"),
+  /*
+   * Sale de `urlSitio()` y no de una constante.
+   *
+   * Estaba fijo en `https://mjbj.ar`, que es el dominio al que el sitio va a
+   * mudarse pero que todavía no está publicado. Mientras tanto, todo lo que
+   * Next resuelve contra esta base —la tarjeta de vista previa al compartir el
+   * enlace por WhatsApp, la URL canónica, la imagen de OpenGraph— apuntaba a un
+   * dominio que no contesta. `lib/seo.ts` ya resolvía esto bien para el sitemap
+   * y el marcado; acá quedaba la última copia escrita a mano.
+   */
+  metadataBase: new URL(urlSitio()),
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     locale: "es_AR",
-    url: "https://mjbj.ar",
+    url: urlSitio(),
     siteName: "Maderera Juan B. Justo",
     title: "Maderera Juan B. Justo | Desde 1981 en Mar del Plata",
     description:

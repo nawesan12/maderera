@@ -3,6 +3,7 @@ import "server-only";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
+  accountMovements,
   configuracionFiscal,
   invoiceItems,
   invoiceTributos,
@@ -11,7 +12,9 @@ import {
 } from "@/lib/db/schema";
 import {
   letraQueCorresponde,
+  nombreComprobante,
   notaDeCredito,
+  numeroFormateado,
   tipoFactura,
   type CondicionIva,
   type TipoComprobante,
@@ -440,6 +443,33 @@ export async function anularConNotaDeCredito(
     .update(invoices)
     .set({ estado: "anulada", updatedAt: new Date() })
     .where(eq(invoices.id, invoiceId));
+
+  /*
+   * La nota de crédito le devuelve al cliente lo que la factura le había
+   * cargado.
+   *
+   * Antes la anulación existía solo del lado fiscal: el comprobante quedaba
+   * anulado y la cuenta corriente seguía mostrando la deuda de una factura que
+   * ya no existía. La reversión se anota como movimiento nuevo y no borrando
+   * el anterior, que es como trabaja toda la cuenta corriente de este sistema:
+   * el error tiene que quedar a la vista junto con su corrección.
+   *
+   * El asiento sale solo si la factura había cargado deuda, y eso pasa cuando
+   * no tiene pedido detrás —ver `emitirManual`—: si la deuda la había puesto
+   * un pedido, la devuelve la anulación del pedido y no esta.
+   */
+  if (original.customerId && !original.orderId) {
+    const etiqueta = `${nombreComprobante(original.tipo as TipoComprobante)} ${numeroFormateado(original.puntoVenta, original.numero)}`;
+
+    await db.insert(accountMovements).values({
+      customerId: original.customerId,
+      tipo: "nota_credito",
+      monto: (-Number(original.total)).toFixed(2),
+      detalle: `Anulación de ${etiqueta}: ${motivo}`,
+      referencia: etiqueta,
+      createdByUserId: userId ?? null,
+    });
+  }
 
   return resultado;
 }

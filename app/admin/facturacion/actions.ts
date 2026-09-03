@@ -7,11 +7,16 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
+  accountMovements,
+  cashMovements,
+  cashSessions,
   configuracionFiscal,
   invoicePayments,
   invoices,
+  orders,
   puntosVenta,
 } from "@/lib/db/schema";
+import { nombreComprobante, numeroFormateado } from "@/lib/fiscal/comprobantes";
 import { requireStaff, requireStaffRole } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import {
@@ -227,6 +232,45 @@ export async function emitirManual(
 
   if (resultado.error) return { error: resultado.error };
 
+  /*
+   * Una factura manual a un cliente con ficha le genera la deuda.
+   *
+   * Antes no: se emitía el comprobante y la cuenta corriente del cliente
+   * quedaba igual que antes, así que el sistema decía que no debía nada
+   * mientras el papel decía lo contrario. La deuda de un pedido sí se
+   * registraba —la carga el pedido, no el comprobante—, y por eso el agujero
+   * era justo el de la factura suelta.
+   *
+   * Solo cuando **no** hay pedido detrás: si la factura nace de uno, la deuda
+   * ya la manejó el pedido y anotarla acá la contaría dos veces.
+   */
+  if (cabecera.data.customerId && resultado.invoiceId) {
+    const [emitida] = await db
+      .select({
+        total: invoices.total,
+        tipo: invoices.tipo,
+        puntoVenta: invoices.puntoVenta,
+        numero: invoices.numero,
+        orderId: invoices.orderId,
+      })
+      .from(invoices)
+      .where(eq(invoices.id, resultado.invoiceId))
+      .limit(1);
+
+    if (emitida && !emitida.orderId) {
+      const etiqueta = `${nombreComprobante(emitida.tipo)} ${numeroFormateado(emitida.puntoVenta, emitida.numero)}`;
+
+      await db.insert(accountMovements).values({
+        customerId: cabecera.data.customerId,
+        tipo: "compra",
+        monto: Number(emitida.total).toFixed(2),
+        detalle: etiqueta,
+        referencia: etiqueta,
+        createdByUserId: usuario.userId,
+      });
+    }
+  }
+
   await registrarEnBitacora({
     sesion: usuario,
     accion: "crear",
@@ -370,7 +414,15 @@ export async function registrarCobro(
   }
 
   const [comprobante] = await db
-    .select({ id: invoices.id, estado: invoices.estado })
+    .select({
+      id: invoices.id,
+      estado: invoices.estado,
+      tipo: invoices.tipo,
+      puntoVenta: invoices.puntoVenta,
+      numero: invoices.numero,
+      customerId: invoices.customerId,
+      orderId: invoices.orderId,
+    })
     .from(invoices)
     .where(eq(invoices.id, parsed.data.id))
     .limit(1);
@@ -380,12 +432,79 @@ export async function registrarCobro(
     return { error: "El comprobante está anulado." };
   }
 
-  await db.insert(invoicePayments).values({
-    invoiceId: parsed.data.id,
-    medio: parsed.data.medio,
-    monto: monto.toFixed(2),
-    referencia: parsed.data.referencia ?? null,
-    createdByUserId: usuario.userId,
+  const etiqueta = `${nombreComprobante(comprobante.tipo)} ${numeroFormateado(comprobante.puntoVenta, comprobante.numero)}`;
+
+  /*
+   * El cobro impacta en los tres lados que tiene que impactar.
+   *
+   * Antes esto insertaba una fila en `invoice_payments` y nada más, y esa tabla
+   * era una isla: un cobro **en efectivo** de una factura no aparecía en el
+   * arqueo de caja, y un cobro de un cliente con cuenta corriente no le bajaba
+   * la deuda. Quien cerraba el turno contaba plata que el sistema no sabía que
+   * había entrado.
+   *
+   * Va todo en una transacción por el mismo motivo que la venta del mostrador:
+   * media registración es peor que ninguna.
+   */
+  const aviso = await db.transaction(async (tx) => {
+    await tx.insert(invoicePayments).values({
+      invoiceId: parsed.data.id,
+      medio: parsed.data.medio,
+      monto: monto.toFixed(2),
+      referencia: parsed.data.referencia ?? null,
+      createdByUserId: usuario.userId,
+    });
+
+    // Cancela deuda: negativo, igual que el cobro de un pedido.
+    if (comprobante.customerId && parsed.data.medio !== "cuenta_corriente") {
+      await tx.insert(accountMovements).values({
+        customerId: comprobante.customerId,
+        tipo: "pago",
+        monto: (-monto).toFixed(2),
+        detalle: `Cobro de ${etiqueta}`,
+        referencia: etiqueta,
+        createdByUserId: usuario.userId,
+      });
+    }
+
+    if (parsed.data.medio !== "efectivo") return null;
+
+    // La plata en mano entra a la caja abierta. Qué caja: la del pedido que
+    // originó la factura si lo hay; si no, la única abierta. Con varias
+    // abiertas y sin pedido no se puede adivinar, y adivinar mal descuadra un
+    // arqueo ajeno: se registra el cobro igual y se avisa.
+    const turnos = await tx
+      .select({ id: cashSessions.id, branchId: cashSessions.branchId })
+      .from(cashSessions)
+      .where(eq(cashSessions.estado, "abierta"));
+
+    let turno = turnos.length === 1 ? turnos[0] : undefined;
+
+    if (!turno && comprobante.orderId) {
+      const [pedido] = await tx
+        .select({ branchId: orders.branchId })
+        .from(orders)
+        .where(eq(orders.id, comprobante.orderId))
+        .limit(1);
+
+      turno = turnos.find((t) => t.branchId === pedido?.branchId);
+    }
+
+    if (!turno) {
+      return turnos.length === 0
+        ? "No hay ninguna caja abierta, así que no entró al arqueo."
+        : "Hay varias cajas abiertas y no se pudo saber a cuál entra: registralo a mano desde el mostrador.";
+    }
+
+    await tx.insert(cashMovements).values({
+      sessionId: turno.id,
+      tipo: "ingreso",
+      monto: monto.toFixed(2),
+      motivo: `Cobro de ${etiqueta}`,
+      creadoPor: usuario.userId,
+    });
+
+    return null;
   });
 
   await registrarEnBitacora({
@@ -398,7 +517,7 @@ export async function registrarCobro(
   });
 
   refrescar(parsed.data.id);
-  return { ok: "Cobro registrado." };
+  return { ok: aviso ? `Cobro registrado. ${aviso}` : "Cobro registrado." };
 }
 
 /* -------------------------------------------------------------------------- */

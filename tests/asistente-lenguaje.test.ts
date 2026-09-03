@@ -29,6 +29,14 @@ describe("consultaLimpia", () => {
     expect(consultaLimpia("¿cuánto sale el fenólico?")).toBe("fenolico");
   });
 
+  it("saca los números: la medida no va a la consulta del catálogo", () => {
+    // El catálogo busca por nombre, no por la medida de la variante. Mandarle
+    // "fenolico 18" no encuentra nada; el 18 se aplica después como filtro.
+    expect(consultaLimpia("tenés fenólico de 18?")).toBe("fenolico");
+    expect(consultaLimpia("placa 1830x2600")).toBe("placa");
+    expect(consultaLimpia("machimbre 12mm")).toBe("machimbre");
+  });
+
   it("no devuelve nada cuando no hay nada que buscar", () => {
     expect(consultaLimpia("hola buenas")).toBe("");
     expect(consultaLimpia("gracias!")).toBe("");

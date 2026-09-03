@@ -245,14 +245,32 @@ function leerRubro(texto: string): string | undefined {
   return mejor?.slug;
 }
 
-/** Lo que queda del texto cuando se le sacan las muletillas. */
+/**
+ * Lo que queda del texto cuando se le sacan las muletillas y los números.
+ *
+ * **Los números se van, y es la parte que importa.** La búsqueda del catálogo
+ * mira el nombre, la descripción, la marca y el rubro del producto, no las
+ * medidas de sus variantes: buscar «fenolico 18» no encuentra nada, porque el
+ * 18 no está en ninguna de esas columnas. El nombre va a la consulta y la
+ * medida se aplica después, como filtro sobre lo que volvió.
+ *
+ * Costó una prueba contra producción darse cuenta: el asistente contestaba
+ * "no lo encontré" y abajo mostraba el fenólico de 18 mm.
+ */
 export function consultaLimpia(texto: string): string {
   return normalizar(texto)
     // La puntuación se va acá y no en `normalizar`, que tiene que conservar la
     // coma y la equis para poder leer «2440x1220» y «1,5 m».
     .replace(/[.,;:!?]/g, " ")
     .split(/\s+/)
-    .filter((palabra) => palabra.length > 1 && !VACIAS.has(palabra))
+    .filter(
+      (palabra) =>
+        palabra.length > 1 &&
+        !VACIAS.has(palabra) &&
+        // "18", "18mm", "2440x1220": son medidas, no nombres.
+        !/^\d+(mm|cm|m)?$/.test(palabra) &&
+        !/^\d+[x×]\d+$/.test(palabra),
+    )
     .slice(0, 6)
     .join(" ")
     .trim();

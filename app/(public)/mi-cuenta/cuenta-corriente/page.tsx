@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
-import { MessageCircle, Receipt } from "lucide-react";
+import { MessageCircle, Printer, Receipt } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { miCuentaCorriente } from "@/lib/dal/cuenta";
+import { clienteDeLaSesion, miCuentaCorriente } from "@/lib/dal/cuenta";
 import { datosParaTransferir } from "@/lib/dal/pagos";
 import { cobrosEnVivo } from "@/lib/pagos";
 import { PagarDeuda } from "@/components/cuenta/pagar-deuda";
@@ -17,10 +17,11 @@ export default async function CuentaCorrientePage({
   searchParams: Promise<{ pago?: string }>;
 }) {
   const whatsapp = await enlaceWhatsapp();
-  const [cuenta, banco, { pago }] = await Promise.all([
+  const [cuenta, banco, { pago }, cliente] = await Promise.all([
     miCuentaCorriente(),
     datosParaTransferir(),
     searchParams,
+    clienteDeLaSesion(),
   ]);
 
   if (cuenta.movimientos.length === 0 && cuenta.limiteCredito === 0) {
@@ -57,7 +58,23 @@ export default async function CuentaCorrientePage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Cuenta corriente</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">Cuenta corriente</h1>
+
+        {/* El mismo resumen que imprime el panel. Que el cliente pueda sacarlo
+            solo evita el pedido por WhatsApp y la respuesta a mano. */}
+        {cliente && (
+          <a
+            href={`/cuenta/${cliente.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg border border-linea px-3.5 py-2 text-sm font-medium transition-colors hover:bg-chip"
+          >
+            <Printer className="h-4 w-4" />
+            Ver resumen imprimible
+          </a>
+        )}
+      </div>
 
       {/* Estado de la cuenta: saldo grande y el margen que queda, medido */}
       <section className="overflow-hidden rounded-xl border bg-card">

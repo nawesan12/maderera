@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MessageCircle } from "lucide-react";
+import { ArrowLeft, MessageCircle, Printer } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import {
   fechaCorta,
@@ -170,14 +170,28 @@ export default async function FichaClientePage({
         {/* Actividad */}
         <div className="space-y-4">
           <section className="tarjeta overflow-hidden">
-            <h2 className="flex items-baseline justify-between gap-3 px-5 py-4 text-base font-medium">
-              Movimientos de cuenta
-              {cliente.totalMovimientos > cliente.movimientos.length && (
-                <span className="text-base font-normal text-muted-foreground">
-                  últimos {cliente.movimientos.length} de{" "}
-                  <span className="tabular">{cliente.totalMovimientos}</span>
-                </span>
-              )}
+            <h2 className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-4 text-base font-medium">
+              <span className="flex items-baseline gap-3">
+                Movimientos de cuenta
+                {cliente.totalMovimientos > cliente.movimientos.length && (
+                  <span className="text-base font-normal text-muted-foreground">
+                    últimos {cliente.movimientos.length} de{" "}
+                    <span className="tabular">{cliente.totalMovimientos}</span>
+                  </span>
+                )}
+              </span>
+
+              {/* Esta lista muestra los últimos veinte. El resumen los trae
+                  todos, con el saldo acumulado y la antigüedad de la deuda: es
+                  lo que se le manda al cliente cuando pregunta cuánto debe. */}
+              <Link
+                href={`/cuenta/${cliente.id}`}
+                target="_blank"
+                className="inline-flex items-center gap-1.5 text-base font-normal text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Printer className="h-4 w-4" />
+                Resumen de cuenta
+              </Link>
             </h2>
             {cliente.movimientos.length === 0 ? (
               <p className="border-t px-5 py-8 text-center text-base text-muted-foreground">

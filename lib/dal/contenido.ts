@@ -36,7 +36,7 @@ export interface ArticuloListado {
   destacado: boolean;
 }
 
-export async function listarArticulos(
+async function consultarArticulos(
   filtros: { categoria?: string; busqueda?: string; limite?: number } = {},
 ): Promise<ArticuloListado[]> {
   const condiciones = [eq(blogPosts.estado, "publicado")];
@@ -77,6 +77,28 @@ export async function listarArticulos(
   return filtros.limite ? consulta.limit(filtros.limite) : consulta;
 }
 
+const articulosCacheados = cachearPublico(
+  consultarArticulos,
+  ["blog", "articulos"],
+  ETIQUETAS.contenido,
+);
+
+/**
+ * Las notas publicadas.
+ *
+ * El caché se aplica **solo cuando no hay término de búsqueda**. Cachear la
+ * búsqueda guardaría una entrada por cada cosa que alguien escriba en el
+ * buscador: un caché que crece sin techo para ahorrar una consulta. Sin texto
+ * —que es como se piden desde la portada y desde el blog— la combinación de
+ * categoría y límite es un puñado de claves, y esas sí valen la pena.
+ */
+export async function listarArticulos(
+  filtros: { categoria?: string; busqueda?: string; limite?: number } = {},
+): Promise<ArticuloListado[]> {
+  if (filtros.busqueda) return consultarArticulos(filtros);
+  return articulosCacheados(filtros);
+}
+
 export interface ArticuloCompleto extends ArticuloListado {
   contenido: string;
   metaTitulo: string | null;
@@ -84,6 +106,7 @@ export interface ArticuloCompleto extends ArticuloListado {
 }
 
 export const articuloPorSlug = cache(
+  cachearPublico(
   async (slug: string): Promise<ArticuloCompleto | null> => {
     const [fila] = await db
       .select({
@@ -114,10 +137,13 @@ export const articuloPorSlug = cache(
 
     return fila;
   },
+  ["blog", "articulo"],
+  ETIQUETAS.contenido,
+  ),
 );
 
 /** Otras notas de la misma categoría, para el pie del artículo. */
-export async function articulosRelacionados(
+async function consultarRelacionados(
   slug: string,
   categoriaSlug: string | null,
   limite = 3,
@@ -156,13 +182,20 @@ export async function articulosRelacionados(
   return listarArticulos({ limite });
 }
 
+export const articulosRelacionados = cachearPublico(
+  consultarRelacionados,
+  ["blog", "relacionados"],
+  ETIQUETAS.contenido,
+);
+
 export interface CategoriaBlog {
   slug: string;
   nombre: string;
   cantidad: number;
 }
 
-export async function categoriasDelBlog(): Promise<CategoriaBlog[]> {
+export const categoriasDelBlog = cachearPublico(
+  async function categoriasDelBlog(): Promise<CategoriaBlog[]> {
   const filas = await db
     .select({
       slug: blogCategories.slug,
@@ -179,7 +212,10 @@ export async function categoriasDelBlog(): Promise<CategoriaBlog[]> {
   // Las categorías sin notas publicadas no se muestran: un filtro que devuelve
   // cero resultados es un filtro que no debería estar.
   return filas.filter((f) => f.cantidad > 0);
-}
+  },
+  ["blog", "categorias"],
+  ETIQUETAS.contenido,
+);
 
 export interface TestimonioPublico {
   id: string;

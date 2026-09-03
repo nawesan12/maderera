@@ -848,7 +848,8 @@ export const ANIO_FUNDACION = 1981;
  * La hora se lee acá y no durante el render de la página, que es donde sería
  * una impureza.
  */
-export const numerosDeLaEmpresa = cache(async () => {
+export const numerosDeLaEmpresa = cache(
+  cachearPublico(async () => {
   /*
    * Los cuatro conteos en una sola consulta y no en cuatro en paralelo.
    *
@@ -872,7 +873,11 @@ export const numerosDeLaEmpresa = cache(async () => {
     sucursales: fila?.sucursales ?? 0,
     rubros: fila?.rubros ?? 0,
   };
-});
+  },
+  ["numeros-de-la-empresa"],
+  ETIQUETAS.catalogo,
+  ),
+);
 
 export async function datosDePortada() {
   const [categorias, todos] = await Promise.all([

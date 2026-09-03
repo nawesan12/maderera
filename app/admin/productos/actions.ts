@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { ETIQUETAS } from "@/lib/cache-publico";
 import { redirect } from "next/navigation";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -258,6 +259,11 @@ export async function guardarProducto(
     descripcion: `${datos.id ? "Editó" : "Cargó"} el producto ${datos.name}`,
   });
 
+  // El catálogo está cacheado entre visitas, con la lista de precios en la
+  // clave. `updateTag` —y no `revalidateTag`— porque quien acaba de tocar esto
+  // tiene que verlo aplicado al volver al sitio, no en la visita siguiente:
+  // sin esto, el cambio tardaría hasta cinco minutos en salir.
+  updateTag(ETIQUETAS.catalogo);
   revalidatePath("/catalogo");
   revalidatePath("/stock");
   revalidatePath("/admin/productos");
@@ -282,6 +288,9 @@ export async function alternarActivo(id: string, activo: boolean) {
     descripcion: `${activo ? "Publicó" : "Dio de baja"} ${producto?.nombre ?? "un producto"}`,
   });
 
+  // Publicar o dar de baja cambia qué se ve en el catálogo, así que invalida
+  // igual que la edición: ver más arriba por qué es `updateTag`.
+  updateTag(ETIQUETAS.catalogo);
   revalidatePath("/catalogo");
   revalidatePath("/admin/productos");
 }

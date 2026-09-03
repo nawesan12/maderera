@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { ETIQUETAS } from "@/lib/cache-publico";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { productImages } from "@/lib/db/schema";
@@ -16,6 +17,11 @@ export interface ResultadoImagen {
 function refrescar(productId?: string) {
   revalidatePath("/admin/productos");
   if (productId) revalidatePath(`/admin/productos/${productId}`);
+  // El catálogo está cacheado entre visitas, con la lista de precios en la
+  // clave. `updateTag` —y no `revalidateTag`— porque quien acaba de tocar esto
+  // tiene que verlo aplicado al volver al sitio, no en la visita siguiente:
+  // sin esto, el cambio tardaría hasta cinco minutos en salir.
+  updateTag(ETIQUETAS.catalogo);
   revalidatePath("/catalogo");
 }
 

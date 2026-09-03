@@ -12,7 +12,8 @@ import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 export { calcularEnvio, type ZonaEnvio } from "@/lib/envios";
 
 /** Zonas activas, ordenadas de más cerca a más lejos. */
-export async function listarZonasDeEnvio(): Promise<ZonaEnvio[]> {
+export const listarZonasDeEnvio = cachearPublico(
+  async function listarZonasDeEnvio(): Promise<ZonaEnvio[]> {
   const filas = await db
     .select()
     .from(shippingZones)
@@ -26,7 +27,10 @@ export async function listarZonasDeEnvio(): Promise<ZonaEnvio[]> {
     envioGratisDesde: Number(z.envioGratisDesde),
     demoraEstimada: z.demoraEstimada,
   }));
-}
+  },
+  ["zonas-de-envio"],
+  ETIQUETAS.sucursales,
+);
 
 /**
  * Las sucursales tal como las ve el público.

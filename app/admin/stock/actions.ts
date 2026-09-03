@@ -1,7 +1,8 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { ETIQUETAS } from "@/lib/cache-publico";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -145,6 +146,11 @@ export async function transferirStock(
   });
 
   revalidatePath("/admin/stock");
+  // El catálogo está cacheado entre visitas, con la lista de precios en la
+  // clave. `updateTag` —y no `revalidateTag`— porque quien acaba de tocar esto
+  // tiene que verlo aplicado al volver al sitio, no en la visita siguiente:
+  // sin esto, el cambio tardaría hasta cinco minutos en salir.
+  updateTag(ETIQUETAS.catalogo);
   revalidatePath("/stock");
   revalidatePath("/catalogo");
 

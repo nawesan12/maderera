@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { leer } from "@/lib/mostrador/offline/db";
 import type { DocumentoTicket } from "@/lib/mostrador/ticket";
@@ -16,7 +16,21 @@ import { TicketImpreso } from "@/components/impresion/ticket";
  *
  * Lee de IndexedDB y no del servidor, por lo mismo.
  */
+/**
+ * La página tiene que quedar prerenderizada para que el ayudante la guarde, y
+ * `useSearchParams` obliga a un borde de suspenso para eso: lo que se prerender
+ * es el envoltorio, y la clave se lee recién en el navegador. Sin esto el build
+ * falla y el papel no se podría imprimir sin internet, que es todo el punto.
+ */
 export default function TicketLocalPage() {
+  return (
+    <Suspense fallback={null}>
+      <Contenido />
+    </Suspense>
+  );
+}
+
+function Contenido() {
   const parametros = useSearchParams();
   const clave = parametros.get("clave");
 

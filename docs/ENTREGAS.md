@@ -17,6 +17,7 @@ Cada viernes, por cada entrega semanal:
 |---|---|---|---|---|---|
 | — | — | *Sin entregas formales todavía: el trabajo hecho hasta hoy se adelantó a la firma.* | — | — | — |
 | — | *(pendiente de envío)* | Publicación en Vercel con base Neon y datos de demostración. Sitio público servido desde el CDN. Reportes de ventas exportables, resumen de cuenta corriente con antigüedad de deuda, cierre Z por medio de pago. Alta de presupuestos y de órdenes de corte desde el panel. Asistente en el sitio. | https://mjbj.vercel.app | — | — |
+| — | *(pendiente de envío)* | El mostrador vende sin internet: se instala como aplicación, busca y cobra offline con un número provisorio por caja (`CAJA1-017`), imprime el ticket en el momento y sube las ventas solo cuando vuelve la conexión. El cierre de turno no deja cerrar con ventas colgadas. | https://mjbj.vercel.app | — | — |
 
 > La fila de arriba **todavía no es una entrega**: falta el mensaje al cliente,
 > que es lo que hace correr el plazo de la cláusula 8.1. Se completa la fecha

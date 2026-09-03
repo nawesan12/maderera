@@ -120,6 +120,16 @@ export async function turnosCerrados(limite = 30) {
       notas: cashSessions.notas,
       abiertaPor: user.name,
       esperado: sumaDe(),
+      /*
+       * Movimientos que entraron después del arqueo.
+       *
+       * Solo pueden venir de una venta hecha sin conexión que llegó tarde: cae
+       * en el turno que estaba abierto cuando se cobró, y eso corre el esperado
+       * de un turno que ya se contó. No se esconde, se marca: quien mira el
+       * historial tiene que saber que la diferencia de esa noche se calculó
+       * contra un número que después cambió.
+       */
+      tardios: sql<number>`count(*) filter (where ${cashMovements.createdAt} > ${cashSessions.cerradaAt})::int`,
     })
     .from(cashSessions)
     .innerJoin(branches, eq(branches.id, cashSessions.branchId))

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * ¿Hay servidor de verdad?
@@ -33,10 +33,30 @@ const TOPE_MS = 4_000;
 /** Más de esto y la hora de las ventas offline saldría mal. */
 const DESFASAJE_QUE_IMPORTA_MIN = 5;
 
-export function useConexion(branchId: string): EstadoConexion {
+/** Lo que la máquina cuenta de sí misma en cada latido. */
+export interface InformeDeCaja {
+  caja: { id: string; secreto: string } | null;
+  pendientes: number;
+}
+
+export function useConexion(
+  branchId: string,
+  /**
+   * Se lee **en el momento de latir**, no cuando se pasa: los pendientes
+   * cambian con cada venta y el latido tiene que contar los de ahora. Va por
+   * ref justamente para eso, y para que cambiar de dato no reinicie el
+   * intervalo cada vez que se cobra.
+   */
+  informe?: () => InformeDeCaja,
+): EstadoConexion {
   const [enLinea, setEnLinea] = useState(true);
   const [ultimoContacto, setUltimoContacto] = useState<Date | null>(null);
   const [desfasajeMin, setDesfasaje] = useState<number | null>(null);
+
+  const informeRef = useRef(informe);
+  useEffect(() => {
+    informeRef.current = informe;
+  }, [informe]);
 
   const latir = useCallback(async () => {
     // Salir del pulso sincrónico: si no, la primera llamada desde el efecto
@@ -52,7 +72,7 @@ export function useConexion(branchId: string): EstadoConexion {
       const respuesta = await fetch("/api/mostrador/latido", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ branchId }),
+        body: JSON.stringify({ branchId, ...informeRef.current?.() }),
         signal: AbortSignal.timeout(TOPE_MS),
       });
 

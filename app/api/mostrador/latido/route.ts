@@ -1,4 +1,5 @@
 import { turnoAbierto } from "@/lib/mostrador/caja";
+import { anotarLatido } from "@/lib/dal/admin/latido-caja";
 import { conStaff } from "../guardia";
 
 /**
@@ -17,6 +18,20 @@ export async function POST(request: Request) {
   return conStaff(async (usuario) => {
     const cuerpo = await request.json().catch(() => ({}));
     const branchId = typeof cuerpo?.branchId === "string" ? cuerpo.branchId : null;
+
+    /*
+     * Si la máquina está vinculada, aprovecha el latido para decir cuántas
+     * ventas tiene sin subir. Es el dato del que depende que el cierre de caja
+     * pueda frenarse antes de contar los billetes.
+     */
+    const caja = cuerpo?.caja;
+    if (
+      typeof caja?.id === "string" &&
+      typeof caja?.secreto === "string" &&
+      typeof cuerpo?.pendientes === "number"
+    ) {
+      await anotarLatido(caja.id, caja.secreto, cuerpo.pendientes);
+    }
 
     const turno = branchId ? await turnoAbierto(branchId) : null;
 

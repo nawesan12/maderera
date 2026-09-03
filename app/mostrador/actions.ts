@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { cashMovements, cashSessions } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
+import { cajasConPendientes } from "@/lib/dal/admin/cajas-fisicas";
 import {
   registrarVentaDeMostrador,
   type MedioDeMostrador,
@@ -169,6 +170,32 @@ export async function cerrarCaja(
 
   if (!Number.isFinite(contado) || contado < 0) {
     return { error: "Lo contado no puede ser negativo." };
+  }
+
+  /*
+   * No se cierra con ventas colgando.
+   *
+   * Si una caja del mostrador tiene ventas sin subir, la plata de esas ventas
+   * ya está en el cajón pero todavía no está en el turno. Cerrar ahora daría un
+   * sobrante que después, cuando vuelva la conexión, se convierte en un turno
+   * cerrado con el esperado corrido. Es un minuto de espera contra una noche de
+   * buscar una diferencia que nadie generó.
+   */
+  const [{ branchId }] = await db
+    .select({ branchId: cashSessions.branchId })
+    .from(cashSessions)
+    .where(eq(cashSessions.id, sessionId))
+    .limit(1);
+
+  const colgadas = await cajasConPendientes(branchId);
+
+  if (colgadas.length > 0) {
+    const detalle = colgadas
+      .map((c) => `${c.codigo} (${c.pendientes})`)
+      .join(", ");
+    return {
+      error: `Hay ventas sin subir en ${detalle}. Esperá a que la caja recupere conexión: esa plata está en el cajón pero todavía no en el turno.`,
+    };
   }
 
   const [{ esperado }] = await db

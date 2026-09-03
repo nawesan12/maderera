@@ -27,12 +27,16 @@ export interface ItemDeCola {
   /** Momento (epoch ms) a partir del cual se puede volver a intentar. */
   proximoIntentoAt: number;
   ultimoError: string | null;
-  resultado?: { numero: string; orderId: string; invoiceId?: string };
+  /**
+   * Lo que devolvió el servidor. `orderId` falta en los movimientos de caja:
+   * no generan pedido, y no hay nada que abrir después.
+   */
+  resultado?: { numero: string; orderId?: string; invoiceId?: string };
 }
 
 export type EventoDeCola =
   | { tipo: "enviando" }
-  | { tipo: "sincronizada"; numero: string; orderId: string; invoiceId?: string }
+  | { tipo: "sincronizada"; numero: string; orderId?: string; invoiceId?: string }
   /** Definitivo: Zod, reglas de negocio, una venta imposible. */
   | { tipo: "rechazada"; motivo: string }
   /** Transitorio: se cayó la red, la base tardó, el servidor devolvió 500. */

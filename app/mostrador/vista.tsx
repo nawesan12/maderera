@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -45,6 +45,7 @@ import {
 } from "@/lib/mostrador/offline/use-copia-local";
 import {
   useConexion,
+  type InformeDeCaja,
   type EstadoConexion,
 } from "@/lib/mostrador/offline/use-conexion";
 import { useCaja } from "@/lib/mostrador/offline/use-caja";
@@ -52,7 +53,11 @@ import {
   useCola,
   type EstadoCola,
 } from "@/lib/mostrador/offline/use-cola";
-import { encolarVenta } from "@/lib/mostrador/offline/cola";
+import {
+  encolarMovimiento,
+  encolarVenta,
+} from "@/lib/mostrador/offline/cola";
+import { VincularCaja } from "@/components/mostrador/vincular-caja";
 import { numeroProvisorio } from "@/lib/mostrador/offline/numero-provisorio";
 import { documentoDeVenta } from "@/lib/mostrador/ticket";
 import {
@@ -177,9 +182,24 @@ export function VistaMostrador({
    */
   const copia = useCopiaLocal(sucursal.id);
 
+  /*
+   * Lo que esta máquina cuenta de sí misma en cada latido.
+   *
+   * Va por ref y no por dependencia porque el orden de los hooks lo pide: el
+   * latido necesita saber cuántas ventas hay sin subir, y la cola necesita
+   * saber si hay conexión. Con la ref, cada uno lee del otro el valor del
+   * momento sin que ninguno tenga que existir antes.
+   */
+  const informeRef = useRef<InformeDeCaja>({ caja: null, pendientes: 0 });
+  const informe = useCallback(() => informeRef.current, []);
+
   // La verdad sobre si hay servidor, medida y no adivinada.
-  const conexion = useConexion(sucursal.id);
-  const { caja: cajaFisica, avanzar: avanzarContador } = useCaja();
+  const conexion = useConexion(sucursal.id, informe);
+  const {
+    caja: cajaFisica,
+    vincular: vincularCaja,
+    avanzar: avanzarContador,
+  } = useCaja();
 
   /*
    * La cola de ventas sin subir. Drena sola al volver la conexión; acá se usa
@@ -187,6 +207,17 @@ export function VistaMostrador({
    * de cerrar el turno.
    */
   const cola = useCola(conexion.enLinea);
+
+  useEffect(() => {
+    informeRef.current = {
+      caja: cajaFisica
+        ? { id: cajaFisica.id, secreto: cajaFisica.secreto }
+        : null,
+      // Las atascadas cuentan igual: esa plata está en el cajón y todavía no en
+      // el turno, que es exactamente lo que el cierre de caja tiene que saber.
+      pendientes: cola.sinSubir + cola.atascadas,
+    };
+  }, [cajaFisica, cola.sinSubir, cola.atascadas]);
 
   const [lineas, setLineas] = useState<LineaDeVenta[]>([]);
   const [clave, setClave] = useState(claveNueva);
@@ -467,6 +498,19 @@ export function VistaMostrador({
         onCaja={() => setCaja(true)}
       />
 
+      {/* Sin caja vinculada el mostrador vende igual mientras haya internet; lo
+          que no puede es cobrar cuando se corte. El cartel está arriba de todo
+          porque el momento de resolverlo es ahora, no cuando se caiga la red. */}
+      {!cajaFisica && (
+        <div className="px-4 pt-3">
+          <VincularCaja
+            branchId={sucursal.id}
+            enLinea={conexion.enLinea}
+            onVincular={vincularCaja}
+          />
+        </div>
+      )}
+
       <div className="flex min-h-0 flex-1">
         <section className="flex min-w-0 flex-1 flex-col gap-3 p-4">
           <Buscador
@@ -537,6 +581,8 @@ export function VistaMostrador({
           cierre={cierre}
           movimientos={movimientos}
           ventas={ventas}
+          enLinea={conexion.enLinea}
+          onEncolado={() => void cola.refrescar()}
           onCerrar={() => setCaja(false)}
         />
       )}
@@ -1335,6 +1381,8 @@ function PanelDeCaja({
   cierre,
   movimientos,
   ventas,
+  enLinea,
+  onEncolado,
   onCerrar,
 }: {
   sucursal: Sucursal;
@@ -1342,6 +1390,8 @@ function PanelDeCaja({
   cierre: RenglonDelCierre[];
   movimientos: Movimiento[];
   ventas: VentaDeHoy[];
+  enLinea: boolean;
+  onEncolado: () => void;
   onCerrar: () => void;
 }) {
   const router = useRouter();
@@ -1401,7 +1451,7 @@ function PanelDeCaja({
                 />
               </label>
               <button
-                disabled={trabajando || fondo === ""}
+                disabled={trabajando || fondo === "" || !enLinea}
                 onClick={() =>
                   empezar(async () => {
                     const r = await abrirCaja(sucursal.id, Number(fondo));
@@ -1416,6 +1466,16 @@ function PanelDeCaja({
               >
                 Abrir la caja
               </button>
+              {/* Abrir y cerrar caja son en línea, y no por comodidad: el
+                  índice único que garantiza un turno por sucursal vive en la
+                  base. Dos máquinas abriendo sin conexión terminarían con dos
+                  turnos y las ventas del día repartidas entre los dos. */}
+              {!enLinea && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Sin conexión no se puede abrir la caja. Se puede seguir
+                  vendiendo: las ventas entran al turno cuando vuelva.
+                </p>
+              )}
             </div>
           ) : (
             <>
@@ -1489,6 +1549,31 @@ function PanelDeCaja({
                       disabled={trabajando || monto === "" || !motivo.trim()}
                       onClick={() =>
                         empezar(async () => {
+                          /*
+                           * Sin conexión el movimiento se encola en vez de
+                           * perderse. La plata sale del cajón en el momento,
+                           * no cuando vuelve el wifi: si el retiro no queda
+                           * anotado, el arqueo de la noche muestra un faltante
+                           * que nadie va a poder explicar.
+                           */
+                          if (!enLinea) {
+                            await encolarMovimiento({
+                              clave: crypto.randomUUID(),
+                              branchId: sucursal.id,
+                              tipo: t,
+                              monto: Number(monto),
+                              motivo: motivo.trim(),
+                              hechoAt: new Date().toISOString(),
+                            });
+                            setAviso(
+                              `${t === "retiro" ? "Retiro" : "Ingreso"} anotado. Se sube cuando vuelva la conexión.`,
+                            );
+                            setMonto("");
+                            setMotivo("");
+                            onEncolado();
+                            return;
+                          }
+
                           const r = await registrarMovimientoDeCaja(
                             turno.id,
                             t,
@@ -1554,7 +1639,7 @@ function PanelDeCaja({
                 />
 
                 <button
-                  disabled={trabajando || contado === ""}
+                  disabled={trabajando || contado === "" || !enLinea}
                   onClick={() =>
                     empezar(async () => {
                       const r = await cerrarCaja(turno.id, Number(contado), notas);
@@ -1571,6 +1656,13 @@ function PanelDeCaja({
                   <Lock className="h-5 w-5" />
                   Cerrar el turno
                 </button>
+                {!enLinea && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Sin conexión no se puede cerrar. Además faltaría contar las
+                    ventas que todavía no subieron: esa plata está en el cajón
+                    pero no en el turno.
+                  </p>
+                )}
               </section>
 
               {movimientos.length > 0 && (

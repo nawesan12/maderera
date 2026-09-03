@@ -7,7 +7,14 @@ import {
   sucursalesConCaja,
   turnosCerrados,
 } from "@/lib/mostrador/caja";
+import {
+  listarCajasFisicas,
+  turnosParaAsignar,
+  ventasSinCaja,
+} from "@/lib/dal/admin/cajas-fisicas";
 import { formatearMonto, haceCuanto } from "@/lib/formato";
+import { CajasFisicas } from "./cajas-fisicas";
+import { VentasSueltas } from "./ventas-sueltas";
 
 export const metadata: Metadata = { title: "Caja" };
 
@@ -35,10 +42,38 @@ const MEDIOS: Record<string, string> = {
 export default async function CajaPage() {
   await requireStaff();
 
-  const [sucursales, cerrados] = await Promise.all([
+  const [sucursales, cerrados, cajas, sueltas] = await Promise.all([
     sucursalesConCaja(),
     turnosCerrados(),
+    listarCajasFisicas(),
+    ventasSinCaja(),
   ]);
+
+  /*
+   * Los turnos a los que se puede mandar una venta suelta. Se piden solo para
+   * las sucursales que efectivamente tienen alguna colgada: sin ventas sueltas
+   * —que es lo normal— esto no consulta nada.
+   */
+  const conSueltas = [...new Set(sueltas.map((v) => v.branchId))];
+  const turnos = (
+    await Promise.all(conSueltas.map((id) => turnosParaAsignar(id)))
+  ).flatMap((lista, i) =>
+    lista.map((t) => ({
+      id: t.id,
+      branchId: conSueltas[i],
+      etiqueta:
+        new Date(t.abiertaAt).toLocaleDateString("es-AR", {
+          day: "2-digit",
+          month: "2-digit",
+        }) +
+        " " +
+        new Date(t.abiertaAt).toLocaleTimeString("es-AR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }) +
+        (t.estado === "abierta" ? " (abierto)" : ""),
+    })),
+  );
 
   // Cuánto entró por cada medio en cada turno. El arqueo cuenta efectivo
   // —es lo único que puede faltar del cajón—, pero lo primero que se pregunta
@@ -84,6 +119,13 @@ export default async function CajaPage() {
           </article>
         ))}
       </section>
+
+      <VentasSueltas ventas={sueltas} turnos={turnos} />
+
+      <CajasFisicas
+        cajas={cajas}
+        sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
+      />
 
       <section className="tarjeta overflow-hidden">
         <header className="border-b border-linea px-5 py-3.5">
@@ -148,6 +190,18 @@ export default async function CajaPage() {
                         >
                           {diferencia === null ? "—" : formatearMonto(diferencia)}
                         </span>
+                        {/* El esperado cambió después del arqueo: entró una
+                            venta hecha sin conexión que pertenecía a este
+                            turno. La diferencia de esa noche se calculó contra
+                            otro número, y eso hay que poder verlo. */}
+                        {t.tardios > 0 && (
+                          <span
+                            className="mt-0.5 block text-sm text-muted-foreground"
+                            title="Entraron movimientos después del cierre, de ventas hechas sin conexión."
+                          >
+                            +{t.tardios} después del cierre
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ),

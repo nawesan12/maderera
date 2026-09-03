@@ -50,8 +50,36 @@ export interface VentaEncolada {
   cobradaAt: string;
 }
 
-interface FilaDeCola extends ItemDeCola {
-  venta: VentaEncolada;
+/** Un ingreso o un retiro de caja hecho sin conexión. */
+export interface MovimientoEncolado {
+  clave: string;
+  branchId: string;
+  tipo: "ingreso" | "retiro";
+  monto: number;
+  motivo: string;
+  /** ISO. El momento real, que es el que decide a qué turno pertenece. */
+  hechoAt: string;
+}
+
+/**
+ * La cola lleva dos cosas y no una.
+ *
+ * Las ventas son el motivo por el que existe, pero un retiro de caja hecho
+ * mientras no había internet tiene el mismo problema: la plata salió del cajón
+ * y el turno no se enteró. Van por la misma cola porque comparten todo lo
+ * difícil —el backoff, el lote, el drenador único, la distinción entre
+ * rechazada y reintentar— y se separan recién al mandarlas, que es lo único en
+ * lo que difieren.
+ */
+type FilaDeCola = ItemDeCola &
+  (
+    | { tipo?: "venta"; venta: VentaEncolada }
+    | { tipo: "movimiento"; movimiento: MovimientoEncolado }
+  );
+
+/** Las ventas viejas no llevaban `tipo`: sin él, es una venta. */
+function esVenta(fila: FilaDeCola): fila is ItemDeCola & { venta: VentaEncolada } {
+  return fila.tipo !== "movimiento";
 }
 
 const LOTE = 25;
@@ -61,12 +89,30 @@ export async function encolarVenta(
   venta: VentaEncolada,
   ticket: DocumentoTicket,
 ): Promise<void> {
-  const fila: FilaDeCola = { ...nuevoItem(venta.clave), venta };
+  const fila: FilaDeCola = { ...nuevoItem(venta.clave), tipo: "venta", venta };
 
   await guardarJunto(["cola", "tickets"], (store) => {
     store("cola").put(fila);
     store("tickets").put({ clave: venta.clave, documento: ticket });
   });
+}
+
+/**
+ * Encola un movimiento de caja.
+ *
+ * No lleva ticket: no hay papel que entregar. Lo que sí lleva es el momento en
+ * que pasó, porque de eso depende a qué turno va a caer cuando llegue.
+ */
+export async function encolarMovimiento(
+  movimiento: MovimientoEncolado,
+): Promise<void> {
+  const fila: FilaDeCola = {
+    ...nuevoItem(movimiento.clave),
+    tipo: "movimiento",
+    movimiento,
+  };
+
+  await guardarJunto(["cola"], (store) => store("cola").put(fila));
 }
 
 export async function leerCola(): Promise<FilaDeCola[]> {
@@ -134,24 +180,58 @@ export async function drenar(): Promise<ResultadoDrenaje | null> {
     let faltaSesion = false;
     let subidas = 0;
 
+    /*
+     * Los movimientos de caja van primero y de a uno.
+     *
+     * De a uno porque son pocos —un retiro por turno, no doscientos— y porque
+     * cada uno resuelve su propio turno del lado del servidor. Primero porque
+     * si el que falla es un retiro, las ventas no tienen por qué esperarlo.
+     */
+    for (const fila of listas) {
+      if (esVenta(fila)) continue;
+      const r = await subirMovimiento(fila.movimiento);
+
+      if (r === "sin_sesion") {
+        faltaSesion = true;
+        await aplicar(fila, { tipo: "sin_sesion" });
+      } else if (r === "ok") {
+        subidas += 1;
+        await aplicar(fila, { tipo: "sincronizada", numero: fila.clave });
+      } else if (r === "rechazado") {
+        await aplicar(fila, {
+          tipo: "rechazada",
+          motivo: "El servidor no aceptó el movimiento.",
+        });
+      } else {
+        await aplicar(fila, { tipo: "reintentar", motivo: r });
+      }
+    }
+
+    const ventas = listas.filter(esVenta);
+
+    if (ventas.length === 0) {
+      const r = resumir(await leerCola());
+      return { subidas, pendientes: r.pendientes, atascadas: r.atascadas, faltaSesion };
+    }
+
     try {
       const respuesta = await fetch("/api/mostrador/ventas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ventas: listas.map((f) => f.venta) }),
+        body: JSON.stringify({ ventas: ventas.map((f) => f.venta) }),
       });
 
       if (respuesta.status === 401) {
         faltaSesion = true;
-        for (const fila of listas) await aplicar(fila, { tipo: "sin_sesion" });
+        for (const fila of ventas) await aplicar(fila, { tipo: "sin_sesion" });
       } else if (!respuesta.ok) {
-        for (const fila of listas) {
+        for (const fila of ventas) {
           await aplicar(fila, { tipo: "reintentar", motivo: `El servidor contestó ${respuesta.status}.` });
         }
       } else {
         const datos = await respuesta.json();
 
-        for (const fila of listas) {
+        for (const fila of ventas) {
           const r = datos.resultados?.find(
             (x: { clave: string }) => x.clave === fila.clave,
           );
@@ -178,7 +258,7 @@ export async function drenar(): Promise<ResultadoDrenaje | null> {
         }
       }
     } catch {
-      for (const fila of listas) {
+      for (const fila of ventas) {
         await aplicar(fila, { tipo: "reintentar", motivo: "No hay conexión con el servidor." });
       }
     }
@@ -199,6 +279,45 @@ export async function drenar(): Promise<ResultadoDrenaje | null> {
     { ifAvailable: true },
     async (lock) => (lock ? correr() : null),
   );
+}
+
+/**
+ * Manda un movimiento de caja. Devuelve el motivo si hay que reintentar.
+ *
+ * Un 401 y un 400 no son lo mismo y por eso se distinguen: la sesión vencida se
+ * arregla volviendo a entrar y la cola retiene todo; un cuerpo mal formado va a
+ * fallar igual dentro de una hora, así que reintentarlo sería un bucle.
+ */
+async function subirMovimiento(
+  movimiento: MovimientoEncolado,
+): Promise<"ok" | "sin_sesion" | "rechazado" | string> {
+  try {
+    const respuesta = await fetch("/api/mostrador/caja/movimientos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(movimiento),
+    });
+
+    if (respuesta.status === 401) return "sin_sesion";
+    if (!respuesta.ok) return `El servidor contestó ${respuesta.status}.`;
+
+    const datos = await respuesta.json();
+
+    if (datos.error === "datos") return "rechazado";
+
+    /*
+     * Sin turno donde caer **no se descarta**: se reintenta. Puede que alguien
+     * esté por abrir la caja del día y el movimiento encuentre su lugar en
+     * cinco minutos. Tirarlo sería perder un retiro que ya se hizo.
+     */
+    if (datos.error === "sin_turno") {
+      return "Todavía no hay ningún turno de caja donde anotarlo.";
+    }
+
+    return datos.ok ? "ok" : "El servidor no confirmó el movimiento.";
+  } catch {
+    return "No hay conexión con el servidor.";
+  }
 }
 
 /**

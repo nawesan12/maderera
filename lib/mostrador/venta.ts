@@ -4,10 +4,10 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { siguienteNumeroDePedido } from "@/lib/dal/numeracion-ventas";
 import { fechaAcotada } from "@/lib/mostrador/offline/numero-provisorio";
+import { turnoQueContiene } from "@/lib/mostrador/turno";
 import {
   accountMovements,
   cashMovements,
-  cashSessions,
   inventory,
   inventoryMovements,
   orderItems,
@@ -166,26 +166,34 @@ export async function registrarVentaDeMostrador(
     }
 
     let sesionId: string | null = null;
+    const diferida = Boolean(venta.cobradaAt);
 
     if (venta.medioPago === "efectivo") {
-      const [turno] = await tx
-        .select({ id: cashSessions.id })
-        .from(cashSessions)
-        .where(
-          and(
-            eq(cashSessions.branchId, venta.branchId),
-            eq(cashSessions.estado, "abierta"),
-          ),
-        )
-        .limit(1);
+      /*
+       * El turno se busca por el momento del cobro, no por cuál está abierto
+       * ahora: una venta hecha sin internet a las 19:40 pertenece al turno de
+       * las 19:40, aunque llegue al servidor después del cierre.
+       */
+      const turno = await turnoQueContiene(
+        tx,
+        venta.branchId,
+        venta.cobradaAt ? fechaAcotada(venta.cobradaAt) : new Date(),
+      );
 
-      if (!turno) {
+      if (!turno && !diferida) {
         return {
           ok: false as const,
           error: "No hay caja abierta en esta sucursal. Abrila antes de cobrar en efectivo.",
         };
       }
-      sesionId = turno.id;
+
+      /*
+       * Una venta diferida sin turno donde caer **se guarda igual**. Rechazarla
+       * sería perder plata que ya se cobró y mercadería que ya se llevaron, por
+       * un turno que nadie abrió. Queda sin movimiento de caja y `/admin/caja`
+       * la muestra aparte para asignarla a mano.
+       */
+      sesionId = turno?.id ?? null;
     }
 
     // Con lock sobre la serie: dos cajas cobrando a la vez leían el mismo
@@ -280,6 +288,10 @@ export async function registrarVentaDeMostrador(
         motivo: numero,
         orderId: pedido.id,
         creadoPor: venta.usuarioId,
+        // La misma fecha que el pedido: si el movimiento dijera la hora de la
+        // sincronización, el listado del turno tendría la plata ordenada por
+        // cuándo volvió el wifi.
+        createdAt: venta.cobradaAt ? fechaAcotada(venta.cobradaAt) : undefined,
       });
     }
 

@@ -21,6 +21,8 @@ export interface ProductoDelAsistente {
   nombre: string;
   categoria: string;
   medida: string | null;
+  /** Todas las medidas del producto, para poder filtrar por espesor. */
+  medidas: string[];
   precioDesde: string | null;
   imagen: string | null;
   hayStock: boolean;
@@ -32,6 +34,7 @@ function aProducto(p: Awaited<ReturnType<typeof listarProductos>>[number]) {
     nombre: p.name,
     categoria: p.categoryName,
     medida: p.labels[0] ?? null,
+    medidas: p.labels,
     precioDesde: p.precioDesde,
     imagen: p.image,
     hayStock: p.hayStock,
@@ -279,18 +282,36 @@ export async function preguntarAlAsistente(
        * rubro, se muestra el rubro entero. Es lo que haría alguien del
        * mostrador: si no tiene exactamente eso, muestra lo que hay al lado.
        */
-      const consulta = [leido.consulta, leido.medida.espesorMm]
-        .filter(Boolean)
-        .join(" ")
-        .trim();
+      /*
+       * El espesor **no** va en la consulta de texto.
+       *
+       * La búsqueda del catálogo mira el nombre, la descripción, la marca y el
+       * rubro del producto, no las medidas de sus variantes: el «18» de
+       * «fenólico de 18» no coincide con ninguna de esas columnas y la búsqueda
+       * vuelve vacía. Pasó en la primera prueba contra producción — contestaba
+       * "no lo encontré" y abajo mostraba, primero de la lista, el fenólico de
+       * 18 mm.
+       *
+       * Así que se busca el producto por su nombre y el espesor se aplica
+       * después, contra las medidas que ya vienen en el resultado.
+       */
+      let productos =
+        leido.consulta.length >= 2
+          ? await buscarConElAsistente(leido.consulta)
+          : [];
 
-      let productos = consulta.length >= 2 ? await buscarConElAsistente(consulta) : [];
       let porRubro = false;
+      const espesor = leido.medida.espesorMm;
 
-      if (productos.length === 0 && leido.consulta.length >= 2) {
-        // Reintento sin la medida: «fenólico 18» puede no existir en 18 pero sí
-        // en otros espesores, y mostrarlos es más útil que un "no hay nada".
-        productos = await buscarConElAsistente(leido.consulta);
+      if (espesor && productos.length > 0) {
+        const conEsaMedida = productos.filter((p) =>
+          p.medidas.some((m) => new RegExp(`\\b${espesor}\\s*mm`, "i").test(m)),
+        );
+
+        // Si ninguno la tiene, se muestran igual los del producto: decirle "no
+        // hay" a quien preguntó por un fenólico, teniendo fenólicos en otros
+        // espesores, es perder una venta que el mostrador no perdería.
+        if (conEsaMedida.length > 0) productos = conEsaMedida;
       }
 
       if (productos.length === 0 && leido.rubro) {

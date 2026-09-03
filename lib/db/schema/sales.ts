@@ -216,6 +216,30 @@ export const orders = pgTable(
      * insertar los dos, gane el que gane la carrera.
      */
     claveMostrador: text(),
+
+    /**
+     * El número que se llevó el cliente cuando la venta se hizo sin internet.
+     *
+     * Del estilo `CAJA1-017`, asignado por la máquina. El `numero` definitivo
+     * lo pone el servidor al sincronizar, pero el papel que quedó en la mano
+     * dice este, y por eso se conserva: es la única forma de encontrar la venta
+     * cuando alguien vuelve con el ticket provisorio.
+     */
+    numeroProvisorio: text(),
+
+    /**
+     * La hora real en que se cobró, según el reloj del mostrador.
+     *
+     * `createdAt` se escribe con este valor **acotado** —nunca en el futuro,
+     * nunca más de siete días atrás— porque de ahí salen las ventas del día y
+     * el cierre de caja: si la conexión vuelve al otro día, las ventas de ayer
+     * aparecerían como de hoy y la caja no cerraría. El valor crudo queda acá
+     * para que un reloj mal puesto se pueda ver.
+     */
+    cobradaAt: timestamp({ withTimezone: true }),
+
+    /** Cuándo llegó al servidor. `null` significa que nació en línea. */
+    sincronizadaAt: timestamp({ withTimezone: true }),
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -223,6 +247,11 @@ export const orders = pgTable(
   (t) => [
     uniqueIndex("orders_numero_idx").on(t.numero),
     uniqueIndex("orders_clave_mostrador_idx").on(t.claveMostrador),
+    /*
+     * Segunda línea de defensa contra una caja que duplique su contador, y lo
+     * que permite buscar por el número que el cliente tiene en la mano.
+     */
+    uniqueIndex("orders_numero_provisorio_idx").on(t.numeroProvisorio),
     index("orders_customer_idx").on(t.customerId),
     index("orders_estado_idx").on(t.estado),
     index("orders_created_idx").on(t.createdAt),

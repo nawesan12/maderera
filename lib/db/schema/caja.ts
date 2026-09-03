@@ -1,6 +1,8 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  boolean,
   index,
+  integer,
   numeric,
   pgEnum,
   pgTable,
@@ -112,6 +114,15 @@ export const cashMovements = pgTable(
     motivo: text("motivo"),
     orderId: uuid("order_id").references(() => orders.id),
 
+    /**
+     * Clave de idempotencia, para los movimientos que se encolan sin conexión.
+     *
+     * Mismo patrón que `orders.claveMostrador`: el navegador la genera, el
+     * índice único impide que un reintento cargue dos veces el mismo ingreso.
+     * Los movimientos hechos en línea la dejan en null.
+     */
+    clave: text("clave"),
+
     creadoPor: text("creado_por").references(() => user.id),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -120,6 +131,7 @@ export const cashMovements = pgTable(
   (t) => [
     index("cash_movements_sesion_idx").on(t.sessionId),
     index("cash_movements_pedido_idx").on(t.orderId),
+    uniqueIndex("cash_movements_clave_idx").on(t.clave),
   ],
 );
 
@@ -141,3 +153,60 @@ export const cashMovementsRelations = relations(cashMovements, ({ one }) => ({
     references: [orders.id],
   }),
 }));
+
+/* -------------------------------------------------------------------------- */
+/* Cajas físicas                                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Cada máquina que vende en el mostrador.
+ *
+ * Existe por una sola razón: **el número provisorio de las ventas hechas sin
+ * internet**. Mientras no hay servidor, la venta necesita un identificador que
+ * el cliente se pueda llevar escrito, y ese identificador lo tiene que dar la
+ * máquina.
+ *
+ * **El código lo asigna el servidor, no el dispositivo.** Si cada máquina se
+ * autobautiza, dos terminan llamándose `CAJA1` y dos clientes se van con el
+ * mismo papel. La `claveMostrador` protege la base contra el duplicado; no
+ * protege el papel, que es sobre lo que la gente discute.
+ *
+ * `pendientes` lo reporta el latido de cada caja: es lo que permite que el
+ * cierre de turno avise "CAJA1 tiene 4 ventas sin subir" en vez de cerrar con
+ * una diferencia que va a aparecer después.
+ */
+export const posDevices = pgTable(
+  "pos_devices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+
+    /** Lo que se imprime en el ticket: "CAJA1". */
+    codigo: text("codigo").notNull(),
+    nombre: text("nombre"),
+
+    branchId: uuid("branch_id").references(() => branches.id),
+
+    /**
+     * Token opaco que guarda el navegador al vincularse.
+     *
+     * No autoriza nada por sí solo —la sesión sigue decidiendo quién entra—:
+     * sirve para que una máquina no pueda apropiarse del contador de otra.
+     */
+    secreto: text("secreto").notNull(),
+
+    activo: boolean("activo").notNull().default(true),
+
+    /** Última vez que esta caja dio señales de vida. */
+    ultimaVezAt: timestamp("ultima_vez_at", { withTimezone: true }),
+
+    /** Ventas sin subir que reportó en su último latido. */
+    pendientes: integer("pendientes").notNull().default(0),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("pos_devices_codigo_idx").on(t.codigo)],
+);
+
+export type PosDevice = typeof posDevices.$inferSelect;

@@ -3,6 +3,7 @@ import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { siguienteNumeroDePedido } from "@/lib/dal/numeracion-ventas";
+import { fechaAcotada } from "@/lib/mostrador/offline/numero-provisorio";
 import {
   accountMovements,
   cashMovements,
@@ -70,6 +71,20 @@ export interface VentaDeMostrador {
   descuentoMotivo?: string | null;
   notas?: string | null;
   usuarioId: string;
+
+  /* ---- Solo para las ventas que se hicieron sin conexión ---- */
+
+  /** El número que ya se llevó el cliente, del estilo `CAJA1-017`. */
+  numeroProvisorio?: string | null;
+
+  /**
+   * La hora real del mostrador.
+   *
+   * Se acota antes de escribirla: de esta fecha salen las ventas del día y el
+   * cierre de caja, y un reloj mal puesto mandaría la venta a un día donde
+   * nadie la va a buscar.
+   */
+  cobradaAt?: Date | null;
 }
 
 export interface ResultadoVenta {
@@ -183,6 +198,20 @@ export async function registrarVentaDeMostrador(
       .values({
         numero,
         claveMostrador: venta.clave,
+        numeroProvisorio: venta.numeroProvisorio ?? null,
+        cobradaAt: venta.cobradaAt ?? null,
+        // `null` significa que nació en línea; las diferidas llevan la marca.
+        sincronizadaAt: venta.cobradaAt ? new Date() : null,
+        /*
+         * La fecha de la venta es la del mostrador, acotada.
+         *
+         * `ventasDeHoy` y el cierre de caja filtran por `createdAt`: si la
+         * conexión vuelve al otro día, las ventas de ayer aparecerían como de
+         * hoy y la caja no cerraría.
+         */
+        createdAt: venta.cobradaAt
+          ? fechaAcotada(venta.cobradaAt)
+          : undefined,
         customerId: venta.customerId,
         contactoNombre: venta.contactoNombre,
         contactoTelefono: venta.contactoTelefono ?? null,

@@ -295,7 +295,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
               key={`${opcion.va}-${opcion.texto}`}
               type="button"
               onClick={() => void ir(opcion.va, opcion.texto)}
-              className="rounded-full bg-chip px-3.5 py-2 text-sm font-medium transition-colors hover:bg-chip-hover"
+              className="rounded-full bg-chip px-3.5 py-2 text-sm font-medium transition-colors hover:bg-linea"
             >
               {opcion.texto}
             </button>
@@ -310,7 +310,7 @@ function Renglon({ renglon }: { renglon: Renglon }) {
   if (renglon.tipo === "persona") {
     return (
       <div className="flex justify-end">
-        <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-acento px-3.5 py-2.5 text-[15px] text-white">
+        <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-accion px-3.5 py-2.5 text-[15px] text-white">
           {renglon.texto}
         </p>
       </div>

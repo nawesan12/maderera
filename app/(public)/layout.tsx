@@ -4,6 +4,7 @@ import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { WhatsAppButton } from "@/components/whatsapp-button";
+import { PanelDelAsistente } from "@/components/asistente/panel";
 import { ScrollToTop } from "@/components/scroll-to-top";
 import { CarritoProvider } from "@/lib/carrito-context";
 import { EstadoProvider } from "@/lib/estado-context";
@@ -81,6 +82,15 @@ export default async function PublicLayout({
       <ScrollToTop />
       <Suspense fallback={null}>
         <WhatsAppButton enlace={`${whatsapp}?text=${encodeURIComponent("Hola! Quisiera consultar sobre...")}`} />
+      </Suspense>
+
+      {/* El asistente va al lado del botón de WhatsApp y no encima: son dos
+          caminos distintos y quien quiere hablar con una persona tiene que
+          poder hacerlo sin pasar por acá. */}
+      <Suspense fallback={null}>
+        <PanelDelAsistente
+          enlaceWhatsapp={`${whatsapp}?text=${encodeURIComponent("Hola! Vengo del asistente de la web y quería consultar por...")}`}
+        />
       </Suspense>
     </CarritoProvider>
     </EstadoProvider>

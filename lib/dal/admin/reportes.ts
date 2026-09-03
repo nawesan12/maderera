@@ -32,6 +32,75 @@ export interface FilaDeReporte {
   detalle: string | null;
   cantidad: number;
   total: number;
+
+  /* ---- Margen ---- */
+
+  /**
+   * Lo vendido **sin IVA**.
+   *
+   * No es `total` menos un porcentaje fijo: se desagrega renglón por renglón
+   * con la alícuota de cada uno, porque la maderera vende algunos ítems al
+   * 10,5 % y la constante 21 desviaría el margen de esos casi diez puntos.
+   */
+  netoVenta: number;
+
+  /**
+   * Lo que costó, congelado en cada venta. `null` cuando ninguna línea del
+   * grupo tiene costo, que es todo lo anterior al módulo de compras.
+   */
+  costo: number | null;
+
+  /**
+   * Renglones sin costo conocido.
+   *
+   * Se cuentan y se muestran **aparte**, no se tratan como costo cero. Un cero
+   * daría 100 % de margen y mezclaría lo que no se sabe con lo que se sabe: el
+   * promedio resultante es exactamente el número sobre el que no se puede
+   * decidir nada.
+   */
+  lineasSinCosto: number;
+}
+
+/**
+ * El neto y el costo de cada pedido, en una sola pasada.
+ *
+ * Va como subconsulta agregada y no como join directo contra `order_items`:
+ * los reportes por cliente, vendedor, sucursal y canal agrupan **pedidos**, y
+ * unirlos a los renglones sin agregar primero multiplicaría cada pedido por su
+ * cantidad de líneas y el total saldría inflado.
+ */
+function margenesPorPedido() {
+  return db
+    .select({
+      orderId: orderItems.orderId,
+      neto: sql<string>`sum(${orderItems.subtotal} / (1 + coalesce(${orderItems.alicuotaIva}, 21) / 100))`.as(
+        "neto",
+      ),
+      costo: sql<
+        string | null
+      >`sum(${orderItems.cantidad} * ${orderItems.costoUnitario}) filter (where ${orderItems.costoUnitario} is not null)`.as(
+        "costo",
+      ),
+      sinCosto: sql<number>`count(*) filter (where ${orderItems.costoUnitario} is null)::int`.as(
+        "sin_costo",
+      ),
+    })
+    .from(orderItems)
+    .groupBy(orderItems.orderId)
+    .as("margenes");
+}
+
+/** Lo que devuelve la base para las columnas de margen, ya en números. */
+function leerMargen(f: {
+  netoVenta: string | null;
+  costo: string | null;
+  lineasSinCosto: number | null;
+}) {
+  return {
+    netoVenta: Number(f.netoVenta ?? 0),
+    costo: f.costo === null ? null : Number(f.costo),
+    lineasSinCosto: Number(f.lineasSinCosto ?? 0),
+  };
 }
 
 /** El filtro común: pedidos reales del período. */
@@ -58,6 +127,11 @@ export async function ventasPorProducto(
       detalle: sql<string | null>`max(${productVariants.label})`,
       cantidad: sql<string>`sum(${orderItems.cantidad})`,
       total: sql<string>`sum(${orderItems.subtotal})`,
+      netoVenta: sql<string>`sum(${orderItems.subtotal} / (1 + coalesce(${orderItems.alicuotaIva}, 21) / 100))`,
+      costo: sql<
+        string | null
+      >`sum(${orderItems.cantidad} * ${orderItems.costoUnitario}) filter (where ${orderItems.costoUnitario} is not null)`,
+      lineasSinCosto: sql<number>`count(*) filter (where ${orderItems.costoUnitario} is null)::int`,
     })
     .from(orderItems)
     .innerJoin(orders, eq(orders.id, orderItems.orderId))
@@ -74,6 +148,7 @@ export async function ventasPorProducto(
     detalle: f.detalle,
     cantidad: Number(f.cantidad),
     total: Number(f.total),
+    ...leerMargen(f),
   }));
 }
 
@@ -84,6 +159,7 @@ export async function ventasPorCliente(
 ): Promise<FilaDeReporte[]> {
   await requireStaff();
 
+  const margenes = margenesPorPedido();
   const filas = await db
     .select({
       clave: sql<string>`coalesce(${customers.id}::text, ${orders.contactoNombre})`,
@@ -91,8 +167,12 @@ export async function ventasPorCliente(
       detalle: customers.cuit,
       cantidad: sql<string>`count(*)`,
       total: sql<string>`sum(${orders.total})`,
+      netoVenta: sql<string>`sum(coalesce(margenes.neto, 0))`,
+      costo: sql<string | null>`sum(margenes.costo)`,
+      lineasSinCosto: sql<number>`coalesce(sum(margenes.sin_costo), 0)::int`,
     })
     .from(orders)
+    .leftJoin(margenes, eq(margenes.orderId, orders.id))
     .leftJoin(customers, eq(customers.id, orders.customerId))
     .where(enElPeriodo(periodo))
     .groupBy(sql`1`, sql`2`, customers.cuit)
@@ -105,6 +185,7 @@ export async function ventasPorCliente(
     detalle: f.detalle,
     cantidad: Number(f.cantidad),
     total: Number(f.total),
+    ...leerMargen(f),
   }));
 }
 
@@ -119,6 +200,7 @@ export async function ventasPorVendedor(
 ): Promise<FilaDeReporte[]> {
   await requireStaff();
 
+  const margenes = margenesPorPedido();
   const filas = await db
     .select({
       clave: user.id,
@@ -126,8 +208,12 @@ export async function ventasPorVendedor(
       detalle: sql<string | null>`null`,
       cantidad: sql<string>`count(*)`,
       total: sql<string>`sum(${orders.total})`,
+      netoVenta: sql<string>`sum(coalesce(margenes.neto, 0))`,
+      costo: sql<string | null>`sum(margenes.costo)`,
+      lineasSinCosto: sql<number>`coalesce(sum(margenes.sin_costo), 0)::int`,
     })
     .from(orders)
+    .leftJoin(margenes, eq(margenes.orderId, orders.id))
     .innerJoin(user, eq(user.id, orders.createdByUserId))
     .where(enElPeriodo(periodo))
     .groupBy(user.id, user.name)
@@ -139,6 +225,7 @@ export async function ventasPorVendedor(
     detalle: null,
     cantidad: Number(f.cantidad),
     total: Number(f.total),
+    ...leerMargen(f),
   }));
 }
 
@@ -148,6 +235,7 @@ export async function ventasPorSucursal(
 ): Promise<FilaDeReporte[]> {
   await requireStaff();
 
+  const margenes = margenesPorPedido();
   const filas = await db
     .select({
       clave: sql<string>`coalesce(${branches.id}::text, 'sin-sucursal')`,
@@ -155,8 +243,12 @@ export async function ventasPorSucursal(
       detalle: sql<string | null>`null`,
       cantidad: sql<string>`count(*)`,
       total: sql<string>`sum(${orders.total})`,
+      netoVenta: sql<string>`sum(coalesce(margenes.neto, 0))`,
+      costo: sql<string | null>`sum(margenes.costo)`,
+      lineasSinCosto: sql<number>`coalesce(sum(margenes.sin_costo), 0)::int`,
     })
     .from(orders)
+    .leftJoin(margenes, eq(margenes.orderId, orders.id))
     .leftJoin(branches, eq(branches.id, orders.branchId))
     .where(enElPeriodo(periodo))
     .groupBy(sql`1`, sql`2`)
@@ -168,6 +260,7 @@ export async function ventasPorSucursal(
     detalle: null,
     cantidad: Number(f.cantidad),
     total: Number(f.total),
+    ...leerMargen(f),
   }));
 }
 
@@ -177,6 +270,7 @@ export async function ventasPorCanal(
 ): Promise<FilaDeReporte[]> {
   await requireStaff();
 
+  const margenes = margenesPorPedido();
   const filas = await db
     .select({
       clave: orders.origen,
@@ -184,8 +278,12 @@ export async function ventasPorCanal(
       detalle: sql<string | null>`null`,
       cantidad: sql<string>`count(*)`,
       total: sql<string>`sum(${orders.total})`,
+      netoVenta: sql<string>`sum(coalesce(margenes.neto, 0))`,
+      costo: sql<string | null>`sum(margenes.costo)`,
+      lineasSinCosto: sql<number>`coalesce(sum(margenes.sin_costo), 0)::int`,
     })
     .from(orders)
+    .leftJoin(margenes, eq(margenes.orderId, orders.id))
     .where(enElPeriodo(periodo))
     .groupBy(orders.origen)
     .orderBy(desc(sql`sum(${orders.total})`));
@@ -196,6 +294,7 @@ export async function ventasPorCanal(
     detalle: null,
     cantidad: Number(f.cantidad),
     total: Number(f.total),
+    ...leerMargen(f),
   }));
 }
 

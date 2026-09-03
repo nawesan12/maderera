@@ -41,6 +41,21 @@ export default async function ReportesPage({
   const total = filas.reduce((suma, f) => suma + f.total, 0);
   const operaciones = filas.reduce((suma, f) => suma + f.cantidad, 0);
 
+  /*
+   * El margen del período, y cuántos renglones no lo tienen.
+   *
+   * **La serie de margen arranca el día que arrancó el módulo de compras.** No
+   * hay relleno hacia atrás: el único costo posible sería el de hoy, y eso
+   * pintaría de margen inventado seis meses de ventas. Los renglones sin costo
+   * se cuentan aparte y se dicen, para que nadie tome una decisión sobre un
+   * número que mezcla lo costeado con lo que no.
+   */
+  const costeado = filas.filter((f) => f.costo !== null);
+  const hayMargen = costeado.length > 0;
+  const netoTotal = costeado.reduce((s, f) => s + f.netoVenta, 0);
+  const costoTotal = costeado.reduce((s, f) => s + (f.costo ?? 0), 0);
+  const sinCosto = filas.reduce((s, f) => s + f.lineasSinCosto, 0);
+
   const etiquetaCorte =
     CORTES.find((c) => c.clave === corte)?.etiqueta ?? "Por producto";
 
@@ -75,6 +90,53 @@ export default async function ReportesPage({
         </Suspense>
       </div>
 
+      {hayMargen && (
+        <section className="grid gap-3 sm:grid-cols-3">
+          <article className="tarjeta p-4">
+            <p className="text-sm text-muted-foreground">Vendido sin IVA</p>
+            <p className="tabular mt-0.5 text-2xl font-bold">
+              {formatearMonto(netoTotal)}
+            </p>
+          </article>
+          <article className="tarjeta p-4">
+            <p className="text-sm text-muted-foreground">Costo de lo vendido</p>
+            <p className="tabular mt-0.5 text-2xl font-bold">
+              {formatearMonto(costoTotal)}
+            </p>
+          </article>
+          <article className="tarjeta p-4">
+            <p className="text-sm text-muted-foreground">Margen</p>
+            <p
+              className={`tabular mt-0.5 text-2xl font-bold ${
+                netoTotal - costoTotal < 0 ? "text-saldo-debe" : "text-saldo-favor"
+              }`}
+            >
+              {formatearMonto(netoTotal - costoTotal)}
+              {netoTotal > 0 && (
+                <span className="ml-2 text-base font-semibold text-muted-foreground">
+                  {(((netoTotal - costoTotal) / netoTotal) * 100).toFixed(1)}%
+                </span>
+              )}
+            </p>
+          </article>
+        </section>
+      )}
+
+      {sinCosto > 0 && (
+        /*
+         * No es una advertencia decorativa: sin esto, un margen calculado sobre
+         * la mitad de los renglones se lee como el margen del negocio. La serie
+         * arranca el día que arrancó el módulo de compras y no se rellena hacia
+         * atrás, porque el único costo posible sería el de hoy.
+         */
+        <p className="estado-espera rounded-xl bg-[var(--estado-fondo)] px-4 py-3 text-base">
+          {sinCosto} renglon{sinCosto > 1 ? "es" : ""} sin costo conocido
+          {hayMargen
+            ? ": quedan fuera del margen de arriba."
+            : ". El margen aparece cuando haya recepciones de compra cargadas."}
+        </p>
+      )}
+
       {filas.length === 0 ? (
         <div className="rounded-xl border border-dashed py-16 text-center">
           <p className="text-base font-medium">No hay ventas en este período</p>
@@ -94,6 +156,16 @@ export default async function ReportesPage({
                   {corte === "producto" ? "Unidades" : "Operaciones"}
                 </th>
                 <th className="px-5 py-2.5 text-right font-semibold">Total</th>
+                {hayMargen && (
+                  <>
+                    <th className="px-5 py-2.5 text-right font-semibold">
+                      Costo
+                    </th>
+                    <th className="px-5 py-2.5 text-right font-semibold">
+                      Margen
+                    </th>
+                  </>
+                )}
                 <th className="px-5 py-2.5 text-right font-semibold">
                   Participación
                 </th>
@@ -119,6 +191,54 @@ export default async function ReportesPage({
                     <td className="tabular px-5 py-3 text-right font-semibold">
                       {formatearMonto(f.total)}
                     </td>
+                    {hayMargen && (
+                      <>
+                        <td className="tabular px-5 py-3 text-right text-muted-foreground">
+                          {f.costo === null ? "—" : formatearMonto(f.costo)}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          {f.costo === null ? (
+                            <span className="text-sm text-muted-foreground">
+                              sin costo
+                            </span>
+                          ) : (
+                            (() => {
+                              /* Neto contra neto: el total lleva IVA adentro y
+                                 el costo no. Compararlos directo inflaría el
+                                 margen un 21 % sistemático. */
+                              const margen = f.netoVenta - f.costo;
+                              const pct =
+                                f.netoVenta > 0
+                                  ? (margen / f.netoVenta) * 100
+                                  : null;
+                              return (
+                                <>
+                                  <span
+                                    className={`tabular font-semibold ${
+                                      margen < 0
+                                        ? "text-saldo-debe"
+                                        : "text-saldo-favor"
+                                    }`}
+                                  >
+                                    {formatearMonto(margen)}
+                                  </span>
+                                  {pct !== null && (
+                                    <span className="tabular ml-2 text-sm text-muted-foreground">
+                                      {pct.toFixed(1)}%
+                                    </span>
+                                  )}
+                                  {f.lineasSinCosto > 0 && (
+                                    <span className="block text-sm text-muted-foreground">
+                                      {f.lineasSinCosto} sin costo
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()
+                          )}
+                        </td>
+                      </>
+                    )}
                     <td className="px-5 py-3">
                       {/* La barra vale más que el porcentaje solo: el ojo
                           encuentra al que se lleva la mitad sin leer números. */}

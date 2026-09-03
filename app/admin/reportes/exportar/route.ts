@@ -40,6 +40,10 @@ export async function GET(request: NextRequest) {
       texto("Detalle"),
       texto(corte === "producto" ? "Unidades" : "Operaciones"),
       texto("Total"),
+      texto("Neto sin IVA"),
+      texto("Costo"),
+      texto("Margen"),
+      texto("Renglones sin costo"),
     ].join(";"),
     ...filas.map((f) =>
       [
@@ -47,12 +51,34 @@ export async function GET(request: NextRequest) {
         texto(f.detalle),
         cantidad(f.cantidad),
         numero(f.total),
+        numero(f.netoVenta),
+        // Vacío y no cero: cero diría que costó nada, y el contador que abre
+        // esto tiene que poder distinguir "sin ganancia" de "no se sabe".
+        f.costo === null ? "" : numero(f.costo),
+        f.costo === null ? "" : numero(f.netoVenta - f.costo),
+        entero(f.lineasSinCosto),
       ].join(";"),
     ),
   ];
 
   const total = filas.reduce((suma, f) => suma + f.total, 0);
-  lineas.push([texto("Total"), texto(""), texto(""), numero(total)].join(";"));
+  const costeado = filas.filter((f) => f.costo !== null);
+  const netoTotal = costeado.reduce((s, f) => s + f.netoVenta, 0);
+  const costoTotal = costeado.reduce((s, f) => s + (f.costo ?? 0), 0);
+  const sinCosto = filas.reduce((s, f) => s + f.lineasSinCosto, 0);
+
+  lineas.push(
+    [
+      texto("Total"),
+      texto(""),
+      texto(""),
+      numero(total),
+      numero(netoTotal),
+      costeado.length === 0 ? "" : numero(costoTotal),
+      costeado.length === 0 ? "" : numero(netoTotal - costoTotal),
+      entero(sinCosto),
+    ].join(";"),
+  );
 
   // El BOM es lo que hace que Excel abra el archivo en UTF-8 y no rompa los
   // acentos. Sin él, "Melamínica" llega como "MelamÃ­nica".

@@ -18,6 +18,8 @@ const {
   cuttingItems,
   cuttingOrders,
   customers,
+  goodsReceiptItems,
+  goodsReceipts,
   orderItems,
   orderStatusHistory,
   orders,
@@ -28,6 +30,8 @@ const {
   quoteItems,
   quotes,
   shippingZones,
+  suppliers,
+  variantCosts,
 } = schema;
 
 const CLIENTES = [
@@ -272,6 +276,81 @@ async function main() {
 
   // Pedidos de meses anteriores, para que el gráfico del resumen muestre una
   // serie y no una sola barra. Son montos verosímiles, no calcados de nada.
+  /*
+   * Costos de demostración, y las recepciones que los generaron.
+   *
+   * Sin esto la pantalla de márgenes muestra "sin costo" en todo y no se puede
+   * enseñar. Los costos salen del precio de lista menos un margen verosímil por
+   * rubro: la madera se vende con menos margen que la ferretería.
+   */
+  console.log("Costos y recepciones…");
+
+  const [proveedor] = await db.select().from(suppliers).limit(1);
+
+  if (proveedor) {
+    const [recepcion] = await db
+      .insert(goodsReceipts)
+      .values({
+        supplierId: proveedor.id,
+        branchId: central.id,
+        numeroRemito: "0002-00034512",
+        estado: "confirmada",
+        confirmadaAt: new Date(),
+        fecha: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+      })
+      .onConflictDoNothing()
+      .returning({ id: goodsReceipts.id });
+
+    let orden = 0;
+
+    for (const v of variantes) {
+      const precio = Number(v.precio ?? 0);
+      if (precio <= 0) continue;
+
+      // El precio de lista es final; el costo es neto. Se desagrega el IVA
+      // antes de aplicar el margen, o el costo saldría un 21 % alto.
+      const neto = precio / 1.21;
+      const costo = Math.round(neto * (0.6 + (orden % 5) * 0.03) * 100) / 100;
+
+      await db
+        .insert(variantCosts)
+        .values({
+          variantId: v.id,
+          cantidadBase: "40.0000",
+          costoPromedio: costo.toFixed(4),
+        })
+        .onConflictDoNothing();
+
+      if (recepcion && orden < 8) {
+        await db.insert(goodsReceiptItems).values({
+          receiptId: recepcion.id,
+          variantId: v.id,
+          cantidad: "10.0000",
+          costoUnitario: costo.toFixed(4),
+          alicuotaIva: "21.00",
+          costoConGastos: costo.toFixed(4),
+          cantidadAnterior: "30.0000",
+          costoAnterior: costo.toFixed(4),
+          costoResultante: costo.toFixed(4),
+          orden,
+        });
+      }
+
+      orden += 1;
+    }
+  }
+
+  const costos = new Map(
+    (
+      await db
+        .select({
+          variantId: variantCosts.variantId,
+          costo: variantCosts.costoPromedio,
+        })
+        .from(variantCosts)
+    ).map((c) => [c.variantId, c.costo]),
+  );
+
   console.log("Historial de ventas…");
   const historico: { branchId: string; total: number; mesesAtras: number }[] = [];
 
@@ -297,7 +376,7 @@ async function main() {
     fecha.setMonth(fecha.getMonth() - registro.mesesAtras);
     fecha.setDate(5 + (secuencia % 20));
 
-    await db.insert(orders).values({
+    const [pedido] = await db.insert(orders).values({
       numero: `PED-${secuencia++}`,
       customerId: clientesCreados[secuencia % clientesCreados.length].id,
       contactoNombre:
@@ -312,7 +391,50 @@ async function main() {
       estadoPago: "pagado",
       createdAt: fecha,
       updatedAt: fecha,
-    });
+    }).returning({ id: orders.id });
+
+    /*
+     * Los históricos llevan renglones.
+     *
+     * Sin ellos el reporte por producto no ve nada de estos meses y el margen
+     * se calcula sobre seis pedidos: la demostración mostraría una serie de
+     * facturación sin nada detrás.
+     */
+    const elegidas = variantes
+      .filter((v) => Number(v.precio ?? 0) > 0)
+      .slice((secuencia * 3) % 20, ((secuencia * 3) % 20) + 3);
+
+    if (elegidas.length > 0) {
+      let restante = registro.total;
+
+      await db.insert(orderItems).values(
+        elegidas.map((v, i) => {
+          const precio = Number(v.precio);
+          const esUltima = i === elegidas.length - 1;
+          // La última absorbe el resto, así los renglones suman el total del
+          // pedido y el reporte por producto cuadra contra el de sucursal.
+          const subtotal = esUltima
+            ? restante
+            : Math.round((registro.total / elegidas.length) / precio) * precio;
+          restante -= subtotal;
+
+          const cantidad = Math.max(1, Math.round(subtotal / precio));
+
+          return {
+            orderId: pedido.id,
+            variantId: v.id,
+            descripcion: `${v.producto} — ${v.label}`,
+            unidad: v.unidad,
+            cantidad: cantidad.toFixed(2),
+            precioUnitario: precio.toFixed(2),
+            subtotal: subtotal.toFixed(2),
+            costoUnitario: costos.get(v.id) ?? null,
+            alicuotaIva: "21.00",
+            orden: i,
+          };
+        }),
+      );
+    }
   }
 
   console.log("Cortes…");

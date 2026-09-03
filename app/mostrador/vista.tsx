@@ -36,6 +36,7 @@ import {
   type TipoDescuento,
 } from "@/lib/mostrador/importes";
 import type { MedioDeMostrador } from "@/lib/mostrador/importes";
+import type { RenglonDelCierre } from "@/lib/mostrador/caja";
 import {
   abrirCaja,
   buscarClientes,
@@ -108,6 +109,15 @@ const MEDIOS: { valor: MedioDeMostrador; texto: string; Icono: typeof Banknote }
   { valor: "cuenta_corriente", texto: "Cuenta corriente", Icono: NotebookPen },
 ];
 
+/*
+ * El mismo nombre de cada medio, para el cierre del turno. Se deriva de
+ * `MEDIOS` y no se escribe de nuevo: dos listas del mismo dato terminan
+ * diciendo cosas distintas.
+ */
+const NOMBRE_DEL_MEDIO: Record<string, string> = Object.fromEntries(
+  MEDIOS.map((m) => [m.valor, m.texto]),
+);
+
 /** Una clave nueva por venta: es lo que impide que el doble toque cobre dos veces. */
 function claveNueva() {
   return crypto.randomUUID();
@@ -122,6 +132,7 @@ export function VistaMostrador({
   sucursales,
   sucursal,
   turno,
+  cierre,
   movimientos,
   ventas,
 }: {
@@ -129,6 +140,7 @@ export function VistaMostrador({
   sucursales: Sucursal[];
   sucursal: Sucursal;
   turno: Turno | null;
+  cierre: RenglonDelCierre[];
   movimientos: Movimiento[];
   ventas: VentaDeHoy[];
 }) {
@@ -358,6 +370,7 @@ export function VistaMostrador({
         <PanelDeCaja
           sucursal={sucursal}
           turno={turno}
+          cierre={cierre}
           movimientos={movimientos}
           ventas={ventas}
           onCerrar={() => setCaja(false)}
@@ -1081,12 +1094,14 @@ function BuscadorDeCliente({
 function PanelDeCaja({
   sucursal,
   turno,
+  cierre,
   movimientos,
   ventas,
   onCerrar,
 }: {
   sucursal: Sucursal;
   turno: Turno | null;
+  cierre: RenglonDelCierre[];
   movimientos: Movimiento[];
   ventas: VentaDeHoy[];
   onCerrar: () => void;
@@ -1174,6 +1189,36 @@ function PanelDeCaja({
                   {formatearMonto(turno.esperado)}
                 </span>
               </div>
+
+              {/* El cierre Z. Lo de arriba es el efectivo, que es lo único que
+                  puede faltar del cajón; esto es todo lo que se cobró en el
+                  turno, que es lo que hay que conciliar contra el posnet y el
+                  banco. */}
+              {cierre.length > 0 && (
+                <section className="mt-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    Cobrado en el turno
+                  </h3>
+                  <dl className="mt-2 divide-y divide-linea-tenue rounded-xl border border-linea">
+                    {cierre.map((r) => (
+                      <div
+                        key={r.medioPago}
+                        className="flex items-baseline justify-between gap-3 px-4 py-2.5"
+                      >
+                        <dt className="text-base">
+                          {NOMBRE_DEL_MEDIO[r.medioPago] ?? r.medioPago}
+                          <span className="ml-1.5 text-sm text-muted-foreground">
+                            ({r.cantidad})
+                          </span>
+                        </dt>
+                        <dd className="tabular font-semibold">
+                          {formatearMonto(r.total)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              )}
 
               <section className="mt-6">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">

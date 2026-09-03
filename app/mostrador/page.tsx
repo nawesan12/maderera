@@ -4,6 +4,7 @@ import { requireStaff } from "@/lib/dal/session";
 import { inicioDelRol } from "@/lib/roles";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import {
+  cierreDelTurno,
   movimientosDelTurno,
   turnoAbierto,
   ventasDeHoy,
@@ -57,6 +58,10 @@ export default async function MostradorPage({
     ventasDeHoy(elegida.id),
   ]);
   const movimientos = turno ? await movimientosDelTurno(turno.id) : [];
+  // El cierre Z: cuánto entró por cada medio en el turno. El arqueo cuenta
+  // efectivo, que es lo único que puede faltar del cajón; esto es lo otro que
+  // se pregunta al cerrar el día.
+  const cierre = turno ? await cierreDelTurno(turno.id) : [];
 
   return (
     <VistaMostrador
@@ -68,6 +73,7 @@ export default async function MostradorPage({
       }))}
       sucursal={{ id: elegida.id, slug: elegida.slug, nombre: elegida.nombre }}
       turno={turno}
+      cierre={cierre}
       movimientos={movimientos.map((m) => ({
         ...m,
         monto: Number(m.monto),

@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Banknote, Store } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
-import { sucursalesConCaja, turnosCerrados } from "@/lib/mostrador/caja";
+import {
+  cierresDeTurnos,
+  sucursalesConCaja,
+  turnosCerrados,
+} from "@/lib/mostrador/caja";
 import { formatearMonto, haceCuanto } from "@/lib/formato";
 
 export const metadata: Metadata = { title: "Caja" };
@@ -18,6 +22,16 @@ export const metadata: Metadata = { title: "Caja" };
  * ese día; corregirlo después con la calculadora en la mano es exactamente
  * cómo un descuadre deja de verse.
  */
+/** Cómo se lee cada medio en el cierre. */
+const MEDIOS: Record<string, string> = {
+  efectivo: "Efectivo",
+  debito: "Débito",
+  credito: "Crédito",
+  transferencia: "Transferencia",
+  cuenta_corriente: "Cuenta corriente",
+  mercado_pago: "Mercado Pago",
+};
+
 export default async function CajaPage() {
   await requireStaff();
 
@@ -25,6 +39,11 @@ export default async function CajaPage() {
     sucursalesConCaja(),
     turnosCerrados(),
   ]);
+
+  // Cuánto entró por cada medio en cada turno. El arqueo cuenta efectivo
+  // —es lo único que puede faltar del cajón—, pero lo primero que se pregunta
+  // al cerrar el día es cuánto se cobró con tarjeta y cuánto quedó a cuenta.
+  const cierres = await cierresDeTurnos(cerrados.map((t) => t.id));
 
   return (
     <div className="space-y-6">
@@ -91,11 +110,13 @@ export default async function CajaPage() {
               <tbody className="divide-y divide-linea">
                 {cerrados.map((t) => {
                   const esperado = Number(t.esperado);
+                  const cierre = cierres.get(t.id) ?? [];
                   const contado = t.contado === null ? null : Number(t.contado);
                   const diferencia = contado === null ? null : contado - esperado;
                   const cuadra = diferencia !== null && Math.abs(diferencia) < 0.01;
 
-                  return (
+                  return [
+                    (
                     <tr key={t.id}>
                       <td className="px-5 py-3">{t.sucursal}</td>
                       <td className="px-5 py-3 text-muted-foreground">{t.abiertaPor}</td>
@@ -129,7 +150,32 @@ export default async function CajaPage() {
                         </span>
                       </td>
                     </tr>
-                  );
+                  ),
+                  cierre.length > 0 && (
+                    <tr key={`${t.id}-cierre`} className="border-0">
+                      <td colSpan={6} className="px-5 pb-3 pt-0">
+                        <div className="flex flex-wrap gap-2">
+                          {cierre.map((r) => (
+                            <span
+                              key={r.medioPago}
+                              className="inline-flex items-baseline gap-1.5 rounded-full bg-muted px-3 py-1 text-sm"
+                            >
+                              <span className="text-muted-foreground">
+                                {MEDIOS[r.medioPago] ?? r.medioPago}
+                              </span>
+                              <span className="tabular font-semibold">
+                                {formatearMonto(r.total)}
+                              </span>
+                              <span className="text-muted-foreground">
+                                ({r.cantidad})
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ),
+                ];
                 })}
               </tbody>
             </table>

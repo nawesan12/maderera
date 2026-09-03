@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   branches,
@@ -189,4 +189,84 @@ export async function ventasDeHoy(branchId: string) {
     )
     .orderBy(desc(orders.createdAt))
     .limit(40);
+}
+
+/** Una fila del cierre Z: cuánto entró por cada medio. */
+export interface RenglonDelCierre {
+  medioPago: string;
+  cantidad: number;
+  total: number;
+}
+
+/**
+ * El cierre Z del turno: cuánto entró por cada medio de pago.
+ *
+ * El arqueo cuenta **efectivo**, y está bien que así sea: es la única plata que
+ * puede faltar del cajón. Pero un turno no es solo efectivo, y hasta acá no
+ * había forma de saber cuánto se cobró con débito, con transferencia o a
+ * cuenta corriente sin ir a mirar las ventas una por una. Eso es lo primero que
+ * pregunta quien cierra el día.
+ *
+ * Las ventas del turno se identifican por sucursal y ventana de tiempo: desde
+ * que se abrió hasta que se cerró, o hasta ahora si sigue abierto. Las anuladas
+ * quedan afuera —el pedido pasa a `cancelado` y su plata ya se revirtió—.
+ */
+export async function cierresDeTurnos(
+  sessionIds: string[],
+): Promise<Map<string, RenglonDelCierre[]>> {
+  if (sessionIds.length === 0) return new Map();
+
+  /*
+   * Una sola consulta para todos los turnos, con el join sobre la ventana de
+   * cada uno. La alternativa —una consulta por turno— parece más simple hasta
+   * que el historial tiene veinte filas y son veinte viajes a la base para
+   * dibujar una pantalla.
+   */
+  const filas = await db
+    .select({
+      sessionId: cashSessions.id,
+      medioPago: orders.medioPago,
+      cantidad: sql<number>`count(*)::int`,
+      total: sql<string>`coalesce(sum(${orders.total}), 0)`,
+    })
+    .from(cashSessions)
+    .innerJoin(
+      orders,
+      and(
+        eq(orders.branchId, cashSessions.branchId),
+        eq(orders.origen, "mostrador"),
+        sql`${orders.claveMostrador} is not null`,
+        sql`${orders.estado} <> 'cancelado'`,
+        gte(orders.createdAt, cashSessions.abiertaAt),
+        sql`(${cashSessions.cerradaAt} is null or ${orders.createdAt} <= ${cashSessions.cerradaAt})`,
+      ),
+    )
+    .where(inArray(cashSessions.id, sessionIds))
+    .groupBy(cashSessions.id, orders.medioPago);
+
+  const porTurno = new Map<string, RenglonDelCierre[]>();
+
+  for (const fila of filas) {
+    const renglones = porTurno.get(fila.sessionId) ?? [];
+    renglones.push({
+      medioPago: fila.medioPago ?? "sin especificar",
+      cantidad: Number(fila.cantidad),
+      total: Number(fila.total),
+    });
+    porTurno.set(fila.sessionId, renglones);
+  }
+
+  for (const renglones of porTurno.values()) {
+    renglones.sort((a, b) => b.total - a.total);
+  }
+
+  return porTurno;
+}
+
+/** El cierre de un turno solo. */
+export async function cierreDelTurno(
+  sessionId: string,
+): Promise<RenglonDelCierre[]> {
+  const cierres = await cierresDeTurnos([sessionId]);
+  return cierres.get(sessionId) ?? [];
 }

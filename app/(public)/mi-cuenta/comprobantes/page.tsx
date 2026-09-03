@@ -17,7 +17,7 @@ export default async function MisComprobantesPage() {
 
   if (comprobantes.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed bg-white/60 px-6 py-16 text-center">
+      <div className="rounded-2xl border border-dashed bg-card/60 px-6 py-16 text-center">
         <FileText className="mx-auto h-10 w-10 text-muted-foreground/60" />
         <h1 className="mt-4 text-xl font-semibold">Todavía no hay facturas</h1>
         <p className="mx-auto mt-1.5 max-w-sm text-muted-foreground">
@@ -26,7 +26,7 @@ export default async function MisComprobantesPage() {
         </p>
         <Link
           href="/mi-cuenta/pedidos"
-          className="mt-5 inline-flex h-11 items-center rounded-lg border bg-white px-5 font-medium transition-colors hover:bg-muted"
+          className="mt-5 inline-flex h-11 items-center rounded-lg border bg-card px-5 font-medium transition-colors hover:bg-muted"
         >
           Ver mis pedidos
         </Link>
@@ -55,7 +55,7 @@ export default async function MisComprobantesPage() {
           return (
             <article
               key={comprobante.id}
-              className="relative overflow-hidden rounded-xl border bg-white"
+              className="relative overflow-hidden rounded-xl border bg-card"
             >
               <AcentoEstado estado={comprobante.estado} />
 

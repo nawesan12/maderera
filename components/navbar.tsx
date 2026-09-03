@@ -318,7 +318,13 @@ export function Navbar({
                 <Menu className="h-5 w-5" />
               </SheetTrigger>
               <SheetContent side="right" className="w-80">
-                <div className="mt-8 flex flex-col gap-1">
+                {/* El panel es `h-full` y no crece: sin un hijo que pueda
+                    encoger y desbordar por su cuenta, la lista quedaba cortada
+                    abajo y no había forma de llegar a "Pedir Presupuesto" en
+                    una pantalla de teléfono. `min-h-0` es lo que habilita el
+                    encogido dentro de un contenedor flex; sin eso, el
+                    `overflow-y-auto` no tiene efecto. */}
+                <div className="mt-8 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pb-8">
                   {/* La cuenta va arriba de todo en el teléfono: es lo que se
                       busca cuando el pedido ya está hecho. */}
                   <Link

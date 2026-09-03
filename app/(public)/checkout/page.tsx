@@ -10,7 +10,9 @@ import {
   creditoDisponible,
   misDirecciones,
 } from "@/lib/dal/cuenta";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import { FormularioCheckout } from "./formulario";
+import { ACotizar } from "./a-cotizar";
 
 export const metadata: Metadata = {
   title: "Finalizar compra",
@@ -23,6 +25,30 @@ export default async function CheckoutPage() {
 
   // Sin nada en el presupuesto no hay nada que confirmar.
   if (carrito.items.length === 0) redirect("/presupuesto");
+
+  // Los productos sin precio se separan **antes** de armar el formulario. La
+  // acción que confirma el pedido los sigue rechazando —es la que decide, y no
+  // puede confiar en que la pantalla haya filtrado—, pero nadie llega hasta ahí
+  // para enterarse: si no hay nada con precio, esta página ni siquiera muestra
+  // campos que completar.
+  const aCotizar = carrito.items.filter(
+    (i) => (i.precioActual ?? i.precioUnitario ?? 0) <= 0,
+  );
+  const conPrecio = carrito.items.filter(
+    (i) => (i.precioActual ?? i.precioUnitario ?? 0) > 0,
+  );
+
+  const enlaceCotizacion =
+    aCotizar.length > 0
+      ? await enlaceWhatsapp(
+          `Hola! Quisiera cotizar:\n${aCotizar
+            .map(
+              (i) =>
+                `• ${i.descripcion} — ${i.cantidad} ${i.unidad.replace("_", " ")}`,
+            )
+            .join("\n")}`,
+        )
+      : "";
 
   const [zonas, sucursales, sesion, cliente, credito, direcciones] =
     await Promise.all([
@@ -57,9 +83,28 @@ export default async function CheckoutPage() {
         </p>
       </div>
 
-      <div className="contenedor pb-[70px] pt-6">
+      <div className="contenedor space-y-5 pb-[70px] pt-6">
+        {aCotizar.length > 0 && (
+          <div className="mx-auto max-w-[560px] lg:mx-0 lg:max-w-[560px]">
+            <ACotizar
+              items={aCotizar.map((i) => ({
+                id: i.id,
+                descripcion: i.descripcion,
+                unidad: i.unidad,
+                cantidad: i.cantidad,
+              }))}
+              enlace={enlaceCotizacion}
+              hayOtros={conPrecio.length > 0}
+            />
+          </div>
+        )}
+
+        {conPrecio.length > 0 && (
         <FormularioCheckout
-          items={carrito.items.map((i) => ({
+          // Solo los que tienen precio: el resumen de la derecha es lo que se
+          // va a cobrar, y listar ahí un producto sin importe deja un total que
+          // no cierra con lo que se ve.
+          items={conPrecio.map((i) => ({
             id: i.id,
             descripcion: i.descripcion,
             unidad: i.unidad,
@@ -88,6 +133,7 @@ export default async function CheckoutPage() {
             predeterminada: d.predeterminada,
           }))}
         />
+        )}
       </div>
     </div>
   );

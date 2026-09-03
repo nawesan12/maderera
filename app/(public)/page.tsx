@@ -556,7 +556,7 @@ function Historia({
                 sizes="(max-width: 1024px) 100vw, 50vw"
               />
             </div>
-            <div className="absolute -bottom-6 -left-6 max-w-[240px] rounded-2xl border bg-white p-6 shadow-2xl">
+            <div className="absolute -bottom-6 -left-6 max-w-[240px] rounded-2xl border bg-card p-6 shadow-2xl">
               <p className="mb-1 text-lg font-bold">Moldava</p>
               <p className="text-sm text-muted-foreground">
                 Nuestra marca propia de molduras, con distribución nacional.

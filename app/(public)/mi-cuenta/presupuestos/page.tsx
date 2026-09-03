@@ -27,7 +27,7 @@ export default async function MisPresupuestosPage() {
 
   if (presupuestos.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed bg-white/60 px-6 py-16 text-center">
+      <div className="rounded-2xl border border-dashed bg-card/60 px-6 py-16 text-center">
         <ScrollText className="mx-auto h-10 w-10 text-muted-foreground/60" />
         <h1 className="mt-4 text-xl font-semibold">
           Todavía no hay presupuestos
@@ -38,7 +38,7 @@ export default async function MisPresupuestosPage() {
         <div className="mt-5 flex flex-wrap justify-center gap-3">
           <Link
             href="/catalogo"
-            className="inline-flex h-11 items-center rounded-lg border bg-white px-5 font-medium transition-colors hover:bg-muted"
+            className="inline-flex h-11 items-center rounded-lg border bg-card px-5 font-medium transition-colors hover:bg-muted"
           >
             Ver el catálogo
           </Link>
@@ -63,7 +63,7 @@ export default async function MisPresupuestosPage() {
             {aResponder.map((p) => (
               <article
                 key={p.id}
-                className="rounded-xl border-2 border-brand-orange/35 bg-white p-5"
+                className="rounded-xl border-2 border-brand-orange/35 bg-card p-5"
               >
                 <Cabecera presupuesto={p} />
                 <div className="mt-4">
@@ -142,7 +142,7 @@ function Fila({ presupuesto }: { presupuesto: PresupuestoPropio }) {
   return (
     <Link
       href={`/mi-cuenta/presupuestos/${presupuesto.numero}`}
-      className="relative block overflow-hidden rounded-xl border bg-white p-5 pl-6 transition-shadow hover:shadow-md"
+      className="relative block overflow-hidden rounded-xl border bg-card p-5 pl-6 transition-shadow hover:shadow-md"
     >
       <AcentoEstado estado={presupuesto.estado} />
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">

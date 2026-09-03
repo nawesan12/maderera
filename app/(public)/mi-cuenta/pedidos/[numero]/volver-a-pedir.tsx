@@ -35,7 +35,7 @@ export function VolverAPedir({ numero }: { numero: string }) {
       <button
         type="submit"
         disabled={pendiente}
-        className="inline-flex h-11 items-center gap-2 rounded-lg border bg-white px-4 font-medium transition-colors hover:bg-muted disabled:opacity-60"
+        className="inline-flex h-11 items-center gap-2 rounded-lg border bg-card px-4 font-medium transition-colors hover:bg-muted disabled:opacity-60"
       >
         {pendiente ? (
           <Loader2 className="h-4 w-4 animate-spin" />

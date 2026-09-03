@@ -81,7 +81,7 @@ export default async function DetallePresupuestoPage({
       </header>
 
       {presupuesto.estado !== "rechazado" && (
-        <section className="rounded-xl border bg-white p-5">
+        <section className="rounded-xl border bg-card p-5">
           <Pasos
             etapas={ETAPAS_PRESUPUESTO}
             actual={presupuesto.estado}
@@ -99,7 +99,7 @@ export default async function DetallePresupuestoPage({
               ? "border-border bg-muted text-muted-foreground"
               : dias !== null && dias <= 3
                 ? "border-brand-orange/35 bg-brand-orange/[0.07]"
-                : "bg-white"
+                : "bg-card"
           }`}
         >
           <CalendarClock className="h-4 w-4 shrink-0" />
@@ -124,7 +124,7 @@ export default async function DetallePresupuestoPage({
         </p>
       )}
 
-      <section className="overflow-hidden rounded-xl border bg-white">
+      <section className="overflow-hidden rounded-xl border bg-card">
         <h2 className="border-b px-5 py-3.5 font-medium">
           Detalle
           <span className="ml-2 text-sm font-normal text-muted-foreground">
@@ -174,7 +174,7 @@ export default async function DetallePresupuestoPage({
       )}
 
       {esperaRespuesta ? (
-        <section className="rounded-xl border-2 border-brand-orange/35 bg-white p-5">
+        <section className="rounded-xl border-2 border-brand-orange/35 bg-card p-5">
           <h2 className="font-medium">¿Lo confirmamos?</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Si lo aceptás avisamos al vendedor y te contactamos para coordinar la

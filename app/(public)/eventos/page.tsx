@@ -32,7 +32,7 @@ export default async function EventosPage() {
 
       <div className="contenedor py-10">
         {eventos.length === 0 ? (
-          <div className="rounded-xl border border-dashed bg-white/60 px-6 py-16 text-center">
+          <div className="rounded-xl border border-dashed bg-card/60 px-6 py-16 text-center">
             <CalendarDays className="mx-auto h-10 w-10 text-muted-foreground/60" />
             <h2 className="mt-4 text-xl font-semibold">
               No hay eventos programados
@@ -54,7 +54,7 @@ export default async function EventosPage() {
                   <Link
                     href={`/eventos/${evento.slug}`}
                     prefetch={false}
-                    className="flex h-full flex-col overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-md"
+                    className="flex h-full flex-col overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md"
                   >
                     {evento.imagenUrl && (
                       <div className="relative aspect-[16/9] bg-muted">

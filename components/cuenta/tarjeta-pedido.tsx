@@ -29,7 +29,7 @@ export function TarjetaPedido({ pedido }: { pedido: PedidoPropio }) {
   return (
     <Link
       href={`/mi-cuenta/pedidos/${pedido.numero}`}
-      className="group relative block overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-md"
+      className="group relative block overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md"
     >
       <AcentoEstado estado={pedido.estado} />
 

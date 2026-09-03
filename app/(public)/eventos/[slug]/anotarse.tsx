@@ -60,7 +60,7 @@ export function Anotarse({
 
   if (yaAnotado) {
     return (
-      <div className="rounded-xl border bg-white p-5">
+      <div className="rounded-xl border bg-card p-5">
         <p className="flex items-start gap-2 font-medium">
           <Check className="mt-0.5 h-5 w-5 shrink-0 text-brand-green" />
           {estadoInscripcion === "reservada"
@@ -78,7 +78,7 @@ export function Anotarse({
 
   if (soloProfesionales && !esProfesional) {
     return (
-      <div className="rounded-xl border bg-white p-5">
+      <div className="rounded-xl border bg-card p-5">
         <p className="flex items-start gap-2 font-medium">
           <Lock className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
           Es para clientes profesionales
@@ -98,7 +98,7 @@ export function Anotarse({
 
   if (agotado) {
     return (
-      <div className="rounded-xl border bg-white p-5">
+      <div className="rounded-xl border bg-card p-5">
         <p className="font-medium">Se agotaron los lugares</p>
         <p className="mt-1 text-sm text-muted-foreground">
           Escribinos por WhatsApp y te avisamos si se libera alguno o si
@@ -117,7 +117,7 @@ export function Anotarse({
   }
 
   return (
-    <form action={accion} className="space-y-3 rounded-xl border bg-white p-5">
+    <form action={accion} className="space-y-3 rounded-xl border bg-card p-5">
       <input type="hidden" name="eventId" value={eventId} />
       <input type="hidden" name="slug" value={slug} />
 

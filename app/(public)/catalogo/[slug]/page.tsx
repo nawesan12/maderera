@@ -215,8 +215,12 @@ export default async function ProductoPage({
               <Ruler className="h-5 w-5 text-acento-texto" />
               Medidas disponibles
             </h2>
-            <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
-              <table className="w-full">
+            {/* Cinco columnas no entran en un teléfono: la tabla scrollea sola
+                en su caja en vez de cortarse contra el borde de la pantalla. El
+                fondo sale del token y no de `bg-white`, que en tema oscuro
+                dejaba texto claro sobre blanco. */}
+            <div className="overflow-x-auto rounded-2xl border border-linea bg-card shadow-sm">
+              <table className="w-full min-w-[560px]">
                 <thead>
                   <tr className="border-b bg-muted/40 text-left">
                     <th className="px-5 py-3 text-sm font-semibold">Medida</th>

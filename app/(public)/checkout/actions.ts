@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
@@ -260,4 +260,27 @@ export async function confirmarCompra(
   // El token va en la URL: el número no autoriza nada. Quien compró sin cuenta
   // llega a su pedido por este enlace y por el del correo, y por ningún otro.
   redirect(enlaceDeSeguimiento(numero, tokenCreado!));
+}
+
+/**
+ * Saca del presupuesto los productos que todavía no tienen precio cargado.
+ *
+ * Existe para que "seguir con el resto" sea un botón y no una tarea: antes, el
+ * único camino era volver al presupuesto y borrar a mano, uno por uno, los
+ * ítems que la pantalla anterior ya había identificado.
+ */
+export async function quitarLosQueSeCotizan(): Promise<void> {
+  const carrito = await obtenerCarrito();
+  if (!carrito.id) return;
+
+  const aQuitar = carrito.items
+    .filter((i) => (i.precioActual ?? i.precioUnitario ?? 0) <= 0)
+    .map((i) => i.id);
+
+  if (aQuitar.length === 0) return;
+
+  await db.delete(cartItems).where(inArray(cartItems.id, aQuitar));
+
+  revalidatePath("/checkout");
+  revalidatePath("/presupuesto");
 }

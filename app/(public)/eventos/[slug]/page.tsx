@@ -135,7 +135,7 @@ export default async function EventoPage({
 
           <aside className="lg:sticky lg:top-24 lg:self-start">
             {yaPaso ? (
-              <div className="rounded-xl border bg-white p-5">
+              <div className="rounded-xl border bg-card p-5">
                 <p className="font-medium">Este evento ya pasó</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Escribinos si te interesa que lo repitamos.

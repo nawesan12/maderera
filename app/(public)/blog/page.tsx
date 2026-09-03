@@ -59,7 +59,7 @@ export default async function BlogPage({
               defaultValue={q ?? ""}
               placeholder="Buscar artículos…"
               aria-label="Buscar en el blog"
-              className="h-11 w-full rounded-lg border bg-white pl-10 pr-3 text-base"
+              className="h-11 w-full rounded-lg border bg-card pl-10 pr-3 text-base"
             />
             {categoria && (
               <input type="hidden" name="categoria" value={categoria} />
@@ -83,7 +83,7 @@ export default async function BlogPage({
         </div>
 
         {articulos.length === 0 ? (
-          <div className="rounded-xl border border-dashed bg-white/60 px-6 py-16 text-center">
+          <div className="rounded-xl border border-dashed bg-card/60 px-6 py-16 text-center">
             <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/60" />
             <h2 className="mt-4 text-xl font-semibold">
               {q ? "Nada coincide con tu búsqueda" : "Todavía no hay artículos"}
@@ -96,7 +96,7 @@ export default async function BlogPage({
             {q && (
               <Link
                 href="/blog"
-                className="mt-5 inline-flex h-11 items-center rounded-lg border bg-white px-5 font-medium transition-colors hover:bg-muted"
+                className="mt-5 inline-flex h-11 items-center rounded-lg border bg-card px-5 font-medium transition-colors hover:bg-muted"
               >
                 Ver todas
               </Link>
@@ -136,7 +136,7 @@ function Filtro({
       className={`inline-flex h-11 items-center rounded-lg px-4 text-sm font-medium transition-colors ${
         activo
           ? "bg-brand-orange text-white"
-          : "border bg-white hover:bg-muted"
+          : "border bg-card hover:bg-muted"
       }`}
     >
       {children}
@@ -149,7 +149,7 @@ function Destacado({ articulo }: { articulo: ArticuloListado }) {
     <Link
       href={`/blog/${articulo.slug}`}
       prefetch={false}
-      className="grid overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-md md:grid-cols-2"
+      className="grid overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md md:grid-cols-2"
     >
       {articulo.imagenUrl && (
         <div className="relative aspect-[16/10] bg-muted md:aspect-auto md:h-full">
@@ -183,7 +183,7 @@ function Tarjeta({ articulo }: { articulo: ArticuloListado }) {
     <Link
       href={`/blog/${articulo.slug}`}
       prefetch={false}
-      className="flex h-full flex-col overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-md"
+      className="flex h-full flex-col overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md"
     >
       {articulo.imagenUrl && (
         <div className="relative aspect-[16/9] bg-muted">

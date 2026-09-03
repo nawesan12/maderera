@@ -100,7 +100,7 @@ function Tarjeta({
     <motion.article
       layout
       exit={{ opacity: 0, height: 0 }}
-      className={`rounded-xl border bg-white p-5 ${
+      className={`rounded-xl border bg-card p-5 ${
         direccion.predeterminada ? "border-brand-orange/40" : ""
       }`}
     >
@@ -188,7 +188,7 @@ function Formulario({
       action={accion}
       initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-4 rounded-xl border-2 border-brand-orange/35 bg-white p-5"
+      className="space-y-4 rounded-xl border-2 border-brand-orange/35 bg-card p-5"
     >
       {direccion && <input type="hidden" name="id" value={direccion.id} />}
 

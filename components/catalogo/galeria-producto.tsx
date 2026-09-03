@@ -35,7 +35,7 @@ export function GaleriaProducto({
 
   return (
     <div>
-      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-white shadow-sm">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-card shadow-sm">
         <Image
           src={imagenes[activa]}
           alt={`${nombre}${activa > 0 ? ` — foto ${activa + 1}` : ""}`}

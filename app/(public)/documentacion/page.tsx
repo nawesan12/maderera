@@ -72,7 +72,7 @@ export default async function DocumentacionPage() {
         )}
 
         {documentos.length === 0 ? (
-          <div className="rounded-xl border border-dashed bg-white/60 px-6 py-16 text-center">
+          <div className="rounded-xl border border-dashed bg-card/60 px-6 py-16 text-center">
             <FileText className="mx-auto h-10 w-10 text-muted-foreground/60" />
             <h2 className="mt-4 text-xl font-semibold">
               Todavía no hay documentación cargada
@@ -96,7 +96,7 @@ export default async function DocumentacionPage() {
                         href={doc.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-start gap-4 rounded-xl border bg-white p-4 transition-shadow hover:shadow-md"
+                        className="flex items-start gap-4 rounded-xl border bg-card p-4 transition-shadow hover:shadow-md"
                       >
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-orange/10">
                           <FileText className="h-5 w-5 text-brand-orange" />

@@ -36,7 +36,7 @@ export function FormularioDatos({
 
   return (
     <form action={accion} className="space-y-6">
-      <section className="rounded-xl border bg-white p-5">
+      <section className="rounded-xl border bg-card p-5">
         <h2 className="mb-4 font-medium">Contacto</h2>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -64,7 +64,7 @@ export function FormularioDatos({
         </div>
       </section>
 
-      <section className="rounded-xl border bg-white p-5">
+      <section className="rounded-xl border bg-card p-5">
         <h2 className="font-medium">Datos para facturar</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Con esto emitimos tu comprobante. Si comprás como consumidor final, no
@@ -101,7 +101,7 @@ export function FormularioDatos({
               id="condicionIva"
               name="condicionIva"
               defaultValue={condicionIva}
-              className="h-11 w-full rounded-lg border bg-white px-3 text-base sm:w-72"
+              className="h-11 w-full rounded-lg border bg-card px-3 text-base sm:w-72"
             >
               {CONDICIONES.map((c) => (
                 <option key={c.valor} value={c.valor}>

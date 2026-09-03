@@ -109,7 +109,7 @@ export default async function ProfesionalesPage() {
                 {BENEFICIOS.map((b) => (
                   <article
                     key={b.titulo}
-                    className="rounded-xl border bg-white p-5"
+                    className="rounded-xl border bg-card p-5"
                   >
                     <b.icono className="h-6 w-6 text-brand-orange" />
                     <h2 className="mt-3 font-semibold">{b.titulo}</h2>
@@ -136,7 +136,7 @@ export default async function ProfesionalesPage() {
               ) : estado.solicitud?.estado === "rechazada" ? (
                 <SolicitudRechazada motivo={estado.solicitud.motivoRechazo} />
               ) : (
-                <div className="rounded-xl border bg-white p-6">
+                <div className="rounded-xl border bg-card p-6">
                   <h2 className="text-xl font-semibold">Pedí tu acceso</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Lo revisa un asesor y te contestamos en menos de 24 horas
@@ -179,7 +179,7 @@ export default async function ProfesionalesPage() {
                     key={evento.id}
                     href={`/eventos/${evento.slug}`}
                     prefetch={false}
-                    className="rounded-xl border bg-white p-5 transition-shadow hover:shadow-md"
+                    className="rounded-xl border bg-card p-5 transition-shadow hover:shadow-md"
                   >
                     <p className="flex items-center gap-2 text-sm text-brand-orange-dark">
                       <CalendarDays className="h-4 w-4" />
@@ -230,7 +230,7 @@ export default async function ProfesionalesPage() {
             </a>
             <a
               href="tel:02234743328"
-              className="inline-flex h-11 items-center rounded-lg border bg-white px-5 font-medium transition-colors hover:bg-muted"
+              className="inline-flex h-11 items-center rounded-lg border bg-card px-5 font-medium transition-colors hover:bg-muted"
             >
               (0223) 474-3328
             </a>
@@ -288,7 +288,7 @@ function PanelDelProfesional({
         <Link
           key={a.href}
           href={a.href}
-          className="flex items-start gap-4 rounded-xl border bg-white p-5 transition-shadow hover:shadow-md"
+          className="flex items-start gap-4 rounded-xl border bg-card p-5 transition-shadow hover:shadow-md"
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-orange/10">
             <a.icono className="h-5 w-5 text-brand-orange" />
@@ -308,7 +308,7 @@ function PanelDelProfesional({
 
 function EstadoDeSolicitud({ fecha }: { fecha: Date }) {
   return (
-    <div className="rounded-xl border bg-white p-6">
+    <div className="rounded-xl border bg-card p-6">
       <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-orange/10">
         <Clock className="h-5 w-5 text-brand-orange" />
       </span>
@@ -329,7 +329,7 @@ function EstadoDeSolicitud({ fecha }: { fecha: Date }) {
 async function SolicitudRechazada({ motivo }: { motivo: string | null }) {
   const whatsapp = await enlaceWhatsapp();
   return (
-    <div className="rounded-xl border bg-white p-6">
+    <div className="rounded-xl border bg-card p-6">
       <h2 className="text-xl font-semibold">Sobre tu solicitud</h2>
       <p className="mt-1 text-muted-foreground">
         Por ahora no pudimos habilitarte el acceso.

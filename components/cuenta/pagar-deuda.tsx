@@ -49,7 +49,7 @@ export function PagarDeuda({
   if (saldo <= 0) return null;
 
   return (
-    <section className="overflow-hidden rounded-xl border bg-white">
+    <section className="overflow-hidden rounded-xl border bg-card">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-3.5">
         <h2 className="font-medium">Cancelar tu saldo</h2>
         <p className="text-sm text-muted-foreground">

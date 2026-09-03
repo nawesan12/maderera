@@ -88,13 +88,13 @@ export default async function DetallePedidoPage({
       </header>
 
       {/* Recorrido: la pregunta que trae acá es "¿cuánto falta?" */}
-      <section className="rounded-xl border bg-white p-5">
+      <section className="rounded-xl border bg-card p-5">
         <Pasos etapas={etapas} actual={pedido.estado} cancelado={cancelado} />
       </section>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
         {/* Productos */}
-        <section className="overflow-hidden rounded-xl border bg-white">
+        <section className="overflow-hidden rounded-xl border bg-card">
           <h2 className="border-b px-5 py-3.5 font-medium">
             Qué pediste
             <span className="ml-2 text-sm font-normal text-muted-foreground">
@@ -148,7 +148,7 @@ export default async function DetallePedidoPage({
             retiro parcial; en un pedido que se llevó entero de una vez sería
             una tabla que repite la de arriba. */}
         {pedido.entregas.length > 0 && (
-          <section className="overflow-hidden rounded-xl border bg-white lg:col-start-1">
+          <section className="overflow-hidden rounded-xl border bg-card lg:col-start-1">
             <h2 className="border-b px-5 py-3.5 font-medium">
               Retiros
               {pedido.enAcopio.length > 0 && (
@@ -217,7 +217,7 @@ export default async function DetallePedidoPage({
 
         <div className="space-y-4 lg:col-start-2 lg:row-start-1">
           {/* Entrega */}
-          <section className="rounded-xl border bg-white p-5">
+          <section className="rounded-xl border bg-card p-5">
             <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               {pedido.tipoEntrega === "retiro" ? (
                 <Store className="h-4 w-4" />
@@ -256,7 +256,7 @@ export default async function DetallePedidoPage({
           </section>
 
           {/* Pago */}
-          <section className="rounded-xl border bg-white p-5">
+          <section className="rounded-xl border bg-card p-5">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Pago
@@ -283,7 +283,7 @@ export default async function DetallePedidoPage({
 
       {/* Historial real, no una línea de tiempo inventada */}
       {pedido.historial.length > 0 && (
-        <section className="rounded-xl border bg-white p-5">
+        <section className="rounded-xl border bg-card p-5">
           <h2 className="mb-4 font-medium">Qué fue pasando</h2>
           <ol className="space-y-0">
             {pedido.historial.map((paso, i) => (

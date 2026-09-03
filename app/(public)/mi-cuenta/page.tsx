@@ -55,7 +55,7 @@ export default async function ResumenCuentaPage() {
               return (
                 <article
                   key={presupuesto.id}
-                  className="rounded-xl border-2 border-brand-orange/35 bg-white p-5"
+                  className="rounded-xl border-2 border-brand-orange/35 bg-card p-5"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                     <div>
@@ -101,7 +101,7 @@ export default async function ResumenCuentaPage() {
 
       {/* Cuenta corriente, con el crédito disponible medido */}
       {operaACuenta && (
-        <section className="overflow-hidden rounded-xl border bg-white">
+        <section className="overflow-hidden rounded-xl border bg-card">
           <div className="flex flex-wrap items-end justify-between gap-4 p-5">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -163,7 +163,7 @@ export default async function ResumenCuentaPage() {
                 <TarjetaPedido key={pedido.id} pedido={pedido} />
               ))
           ) : pedidos.length > 0 ? (
-            <p className="rounded-xl border border-dashed bg-white/60 px-5 py-6 text-center text-muted-foreground">
+            <p className="rounded-xl border border-dashed bg-card/60 px-5 py-6 text-center text-muted-foreground">
               No tenés pedidos en curso. El último fue{" "}
               <Link
                 href={`/mi-cuenta/pedidos/${pedidos[0].numero}`}
@@ -174,7 +174,7 @@ export default async function ResumenCuentaPage() {
               .
             </p>
           ) : (
-            <p className="rounded-xl border border-dashed bg-white/60 px-5 py-6 text-center text-muted-foreground">
+            <p className="rounded-xl border border-dashed bg-card/60 px-5 py-6 text-center text-muted-foreground">
               Todavía no hiciste ningún pedido.
             </p>
           )}
@@ -296,7 +296,7 @@ function AccesosRapidos() {
         <Link
           key={a.href}
           href={a.href}
-          className="group rounded-xl border bg-white p-4 transition-colors hover:border-brand-orange/40 hover:bg-brand-orange/[0.03]"
+          className="group rounded-xl border bg-card p-4 transition-colors hover:border-brand-orange/40 hover:bg-brand-orange/[0.03]"
         >
           <a.icono className="h-5 w-5 text-brand-orange" />
           <p className="mt-2.5 font-medium">{a.titulo}</p>
@@ -312,7 +312,7 @@ async function Bienvenida({ nombre }: { nombre: string }) {
   const whatsapp = await enlaceWhatsapp();
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-2xl border bg-white">
+      <section className="overflow-hidden rounded-2xl border bg-card">
         <div className="bg-brand-gray p-8 text-white">
           <h2 className="text-2xl font-bold">
             {nombre ? `Bienvenido, ${nombre.split(" ")[0]}` : "Bienvenido"}

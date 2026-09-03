@@ -25,7 +25,7 @@ export default async function CuentaCorrientePage({
 
   if (cuenta.movimientos.length === 0 && cuenta.limiteCredito === 0) {
     return (
-      <div className="rounded-2xl border border-dashed bg-white/60 px-6 py-16 text-center">
+      <div className="rounded-2xl border border-dashed bg-card/60 px-6 py-16 text-center">
         <Receipt className="mx-auto h-10 w-10 text-muted-foreground/60" />
         <h1 className="mt-4 text-xl font-semibold">
           No tenés cuenta corriente
@@ -60,7 +60,7 @@ export default async function CuentaCorrientePage({
       <h1 className="text-2xl font-bold tracking-tight">Cuenta corriente</h1>
 
       {/* Estado de la cuenta: saldo grande y el margen que queda, medido */}
-      <section className="overflow-hidden rounded-xl border bg-white">
+      <section className="overflow-hidden rounded-xl border bg-card">
         <div className="grid gap-6 p-6 sm:grid-cols-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -174,7 +174,7 @@ export default async function CuentaCorrientePage({
 
       {/* Acá sí va tabla: son cifras que se comparan columna contra columna, y
           el saldo corrido solo se sigue si está alineado. */}
-      <section className="overflow-hidden rounded-xl border bg-white">
+      <section className="overflow-hidden rounded-xl border bg-card">
         <h2 className="border-b px-5 py-3.5 font-medium">Movimientos</h2>
 
         {cuenta.movimientos.length === 0 ? (

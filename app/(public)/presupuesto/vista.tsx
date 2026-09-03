@@ -166,6 +166,15 @@ export function VistaPresupuesto({
                           {item.precioActual !== null &&
                             ` · ${formatearPrecio(String(item.precioActual))} por ${item.unidad.replace("_", " ")}`}
                         </p>
+                        {/* Que se cotiza a mano se dice acá, en el renglón, y
+                            no recién en el checkout: es lo que explica por qué
+                            este producto no suma al total. */}
+                        {(item.precioActual ?? item.precioUnitario ?? 0) <= 0 && (
+                          <p className="mt-1 inline-flex rounded-full bg-naranja-claro px-2 py-0.5 text-[12.5px] font-medium text-acento-texto">
+                            A cotizar
+                          </p>
+                        )}
+
                         <ChipOrigen origen={item.origen} />
 
                         {/* El descuento por volumen se muestra en el renglón que

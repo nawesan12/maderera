@@ -23,7 +23,7 @@ export default async function MisPedidosPage() {
 
   if (pedidos.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed bg-white/60 px-6 py-16 text-center">
+      <div className="rounded-2xl border border-dashed bg-card/60 px-6 py-16 text-center">
         <PackageOpen className="mx-auto h-10 w-10 text-muted-foreground/60" />
         <h1 className="mt-4 text-xl font-semibold">Todavía no hay pedidos</h1>
         <p className="mx-auto mt-1.5 max-w-sm text-muted-foreground">

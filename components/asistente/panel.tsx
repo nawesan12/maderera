@@ -6,8 +6,8 @@ import Link from "next/link";
 import {
   ArrowRight,
   Calculator,
-  Loader2,
   MessageCircle,
+  Plus,
   Search,
   Send,
   Sparkles,
@@ -21,8 +21,8 @@ import {
   type PasoDelGuion,
 } from "@/lib/asistente/guion";
 import {
-  buscarConElAsistente,
   datosDelAsistente,
+  preguntarAlAsistente,
   productosDelRubro,
   rubrosDelAsistente,
   type DatoDelAsistente,
@@ -30,6 +30,7 @@ import {
   type RubroDelAsistente,
 } from "@/app/(public)/asistente-actions";
 import { formatearPrecio } from "@/lib/formato";
+import { useCarrito } from "@/lib/carrito-context";
 
 /** Un renglón de la conversación. */
 type Renglon =
@@ -68,6 +69,13 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
   const [texto, setTexto] = useState("");
   const [trabajando, setTrabajando] = useState(false);
 
+  /** Lo que dejó la última respuesta escrita a mano: botones, calculadora, WhatsApp. */
+  const [extra, setExtra] = useState<{
+    sugerencias: { texto: string; va: string }[];
+    calculadora: string | null;
+    aPersona: boolean;
+  }>({ sugerencias: [], calculadora: null, aPersona: false });
+
   const finRef = useRef<HTMLDivElement>(null);
 
   // Los rubros salen del catálogo y se piden una sola vez, cuando se abre.
@@ -93,6 +101,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     setPaso(destino);
     decir([{ tipo: "asistente", texto: destino.mensaje }]);
     setTexto("");
+    setExtra({ sugerencias: [], calculadora: null, aPersona: false });
 
     const accion = destino.accion;
     if (!accion) return;
@@ -132,35 +141,57 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     );
   }
 
-  async function buscar() {
-    const consulta = texto.trim();
-    if (consulta.length < 2 || trabajando) return;
+  /**
+   * Lo que se escribe con palabras propias.
+   *
+   * El servidor lee la intención y contesta con el catálogo de verdad. La
+   * demora simulada es a propósito: la respuesta vuelve en menos de lo que
+   * tarda alguien en leer lo que acaba de escribir, y aparecer instantáneo se
+   * siente a formulario y no a conversación.
+   */
+  async function preguntar(consultaCruda?: string) {
+    const consulta = (consultaCruda ?? texto).trim();
+    if (consulta.length < 1 || trabajando) return;
 
     decir([{ tipo: "persona", texto: consulta }]);
     setTexto("");
     setTrabajando(true);
-    const items = await buscarConElAsistente(consulta);
+
+    const [respuesta] = await Promise.all([
+      preguntarAlAsistente(consulta),
+      new Promise((listo) => setTimeout(listo, 550)),
+    ]);
+
     setTrabajando(false);
 
-    decir(
-      items.length > 0
-        ? [{ tipo: "productos", items }]
-        : [
-            {
-              tipo: "vacio",
-              texto:
-                "No encontré nada con eso. Probá con otra palabra, o pasale la consulta a alguien del mostrador.",
-            },
-          ],
-    );
+    const nuevos: Renglon[] = [{ tipo: "asistente", texto: respuesta.texto }];
+    if (respuesta.productos?.length) {
+      nuevos.push({ tipo: "productos", items: respuesta.productos });
+    }
+    if (respuesta.datos?.length) {
+      nuevos.push({ tipo: "datos", items: respuesta.datos });
+    }
+
+    decir(nuevos);
+    setExtra({
+      sugerencias: respuesta.sugerencias ?? [],
+      calculadora: respuesta.calculadora ?? null,
+      aPersona: respuesta.aPersona ?? false,
+    });
   }
 
-  const buscando = paso.accion?.tipo === "buscar";
   const enRubros = paso.id === "rubros";
   const calculadora =
-    paso.accion?.tipo === "calculadora" ? CALCULADORAS[paso.accion.cual] : null;
-  const aWhatsapp = paso.accion?.tipo === "whatsapp";
+    extra.calculadora
+      ? CALCULADORAS[extra.calculadora]
+      : paso.accion?.tipo === "calculadora"
+        ? CALCULADORAS[paso.accion.cual]
+        : null;
+  const aWhatsapp = extra.aPersona || paso.accion?.tipo === "whatsapp";
   const irA = paso.accion?.tipo === "ir" ? paso.accion.ruta : null;
+
+  // Los botones del guion, más los que dejó la última respuesta escrita.
+  const opciones = [...extra.sugerencias, ...paso.opciones];
 
   if (!abierto) {
     return (
@@ -204,45 +235,53 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
           <Renglon key={i} renglon={renglon} />
         ))}
 
+        {/* Los tres puntitos de siempre. No es adorno: sin una señal de que
+            algo está pasando, medio segundo de espera se lee como que el botón
+            no anduvo y la gente vuelve a tocar. */}
         {trabajando && (
-          <p className="flex items-center gap-2 text-sm text-texto-3">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Buscando…
-          </p>
+          <div className="flex justify-start">
+            <p className="flex items-center gap-1 rounded-2xl rounded-bl-sm bg-card px-4 py-3 shadow-sm">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-texto-3 [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-texto-3 [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-texto-3" />
+              <span className="sr-only">Escribiendo…</span>
+            </p>
+          </div>
         )}
 
         <div ref={finRef} />
       </div>
 
       <div className="shrink-0 space-y-2.5 border-t border-linea px-4 py-3">
-        {buscando && (
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-texto-3" />
-              <Input
-                value={texto}
-                onChange={(e) => setTexto(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    void buscar();
-                  }
-                }}
-                placeholder="Fenólico 18, machimbre…"
-                className="pl-9"
-                autoFocus
-              />
-            </div>
-            <Button
-              type="button"
-              onClick={() => void buscar()}
-              disabled={texto.trim().length < 2 || trabajando}
-              aria-label="Buscar"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+        {/* La caja está siempre, no solo en el paso de buscar: se puede
+            preguntar cualquier cosa en cualquier momento, que es lo que
+            distingue una conversación de un formulario con botones. */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-texto-3" />
+            <Input
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void preguntar();
+                }
+              }}
+              placeholder="Escribime lo que necesitás…"
+              className="pl-9"
+              aria-label="Escribí tu consulta"
+            />
           </div>
-        )}
+          <Button
+            type="button"
+            onClick={() => void preguntar()}
+            disabled={texto.trim().length < 1 || trabajando}
+            aria-label="Enviar"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
 
         {enRubros && rubros.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
@@ -290,7 +329,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
         )}
 
         <div className="flex flex-wrap gap-1.5">
-          {paso.opciones.map((opcion) => (
+          {opciones.map((opcion) => (
             <button
               key={`${opcion.va}-${opcion.texto}`}
               type="button"
@@ -354,11 +393,11 @@ function Renglon({ renglon }: { renglon: Renglon }) {
   return (
     <ul className="space-y-1.5">
       {renglon.items.map((p) => (
-        <li key={p.slug}>
+        <li key={p.slug} className="flex items-stretch gap-1.5">
           <Link
             href={`/catalogo/${p.slug}`}
             prefetch={false}
-            className="flex items-center gap-3 rounded-xl bg-card p-2.5 shadow-sm transition-colors hover:bg-chip"
+            className="flex flex-1 items-center gap-3 rounded-xl bg-card p-2.5 shadow-sm transition-colors hover:bg-chip"
           >
             {p.imagen ? (
               <Image
@@ -390,8 +429,48 @@ function Renglon({ renglon }: { renglon: Renglon }) {
               )}
             </span>
           </Link>
+
+          {/* Se puede sumar al presupuesto sin salir de la conversación. Es la
+              diferencia entre un asistente que informa y uno que sirve para
+              algo: la persona ya dijo qué necesita, hacerla navegar hasta la
+              ficha para tocar otro botón es perderla en el camino. */}
+          <AgregarAlPresupuesto producto={p} />
         </li>
       ))}
     </ul>
+  );
+}
+
+function AgregarAlPresupuesto({ producto }: { producto: ProductoDelAsistente }) {
+  const { agregar, guardando } = useCarrito();
+  const [puesto, setPuesto] = useState(false);
+
+  // Sin precio no se puede presupuestar solo: eso se cotiza a mano.
+  const sinPrecio = !producto.precioDesde || Number(producto.precioDesde) <= 0;
+  if (sinPrecio) return null;
+
+  return (
+    <button
+      type="button"
+      disabled={guardando || puesto}
+      onClick={() => {
+        agregar({
+          descripcion: producto.medida
+            ? `${producto.nombre} — ${producto.medida}`
+            : producto.nombre,
+          cantidad: 1,
+          origen: "asistente",
+        });
+        setPuesto(true);
+      }}
+      aria-label={`Agregar ${producto.nombre} al presupuesto`}
+      className={`flex w-11 shrink-0 items-center justify-center rounded-xl shadow-sm transition-colors ${
+        puesto
+          ? "bg-brand-green/15 text-brand-green"
+          : "bg-card hover:bg-chip disabled:opacity-50"
+      }`}
+    >
+      {puesto ? "✓" : <Plus className="h-4 w-4" />}
+    </button>
   );
 }

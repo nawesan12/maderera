@@ -180,6 +180,7 @@ export default async function NotaPage({
               <Link
                 key={otro.id}
                 href={`/blog/${otro.slug}`}
+                prefetch={false}
                 className="rounded-xl border bg-white p-5 transition-shadow hover:shadow-md"
               >
                 <p className="text-sm text-muted-foreground">

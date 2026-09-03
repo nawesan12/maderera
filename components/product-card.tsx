@@ -24,6 +24,14 @@ import type { ProductoListado } from "@/lib/dal/catalog";
  *
  * `height: 100%` no es decorativo: iguala las alturas dentro de la grilla para
  * que la fila de botones quede alineada entre tarjetas vecinas.
+ *
+ * **Los enlaces al producto van con `prefetch={false}` a propósito.** La ficha
+ * del producto es una ruta dinámica —el precio depende de la lista de quien
+ * mira, ver `precios-sesion.ts`—, así que no se sirve del CDN: cada prefetch es
+ * una ejecución en el servidor y una vuelta a la base. Con veinticuatro
+ * tarjetas por página, scrollear el catálogo disparaba veinticuatro renders de
+ * páginas que nadie pidió. Se paga a cambio que la navegación al detalle deje
+ * de ser instantánea.
  */
 export function ProductCard({
   product,
@@ -48,6 +56,7 @@ export function ProductCard({
     <article className="group relative flex h-full flex-col overflow-hidden rounded-[14px] border border-linea bg-card shadow-[0_1px_2px_rgb(60_50_40_/_0.05)] transition-[box-shadow,transform,border-color] duration-200 hover:-translate-y-[3px] hover:border-linea-hover hover:shadow-[0_14px_30px_-16px_rgb(60_50_40_/_0.34)] motion-reduce:transform-none motion-reduce:transition-none">
       <Link
         href={`/catalogo/${product.slug}`}
+        prefetch={false}
         className="relative block aspect-[4/3] overflow-hidden bg-brand-wood-light/25"
       >
         {product.image ? (
@@ -86,6 +95,7 @@ export function ProductCard({
           </p>
           <Link
             href={`/catalogo/${product.slug}`}
+            prefetch={false}
             className="line-clamp-2 text-[15.5px] font-semibold leading-[1.32] tracking-[-0.01em] transition-colors hover:text-acento-texto"
           >
             {product.name}
@@ -146,6 +156,7 @@ export function ProductCard({
           {variasMedidas || sinPrecio ? (
             <Link
               href={`/catalogo/${product.slug}`}
+              prefetch={false}
               className={buttonVariants({
                 variant: "outline",
                 className:

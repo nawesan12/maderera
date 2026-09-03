@@ -190,6 +190,7 @@ function Categorias({
             <Link
               key={cat.slug}
               href={`/catalogo?cat=${cat.slug}`}
+              prefetch={false}
               className="group relative overflow-hidden rounded-[14px]"
             >
               {cat.image && (
@@ -717,7 +718,7 @@ function Blog({
 
         <div className="mt-7 grid gap-[18px] md:grid-cols-3">
           {notas.map((nota) => (
-            <Link key={nota.slug} href={`/blog/${nota.slug}`} className="group">
+            <Link key={nota.slug} prefetch={false} href={`/blog/${nota.slug}`} className="group">
               <Card className="h-full overflow-hidden rounded-[14px] border border-linea bg-card shadow-[0_1px_2px_rgb(60_50_40_/_0.05)] transition-[box-shadow,transform] duration-200 group-hover:-translate-y-[3px] group-hover:shadow-[0_14px_30px_-16px_rgb(60_50_40_/_0.34)]">
                 {nota.imagenUrl && (
                   <div className="relative aspect-[16/10] overflow-hidden">

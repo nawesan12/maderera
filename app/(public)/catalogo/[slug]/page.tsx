@@ -127,6 +127,7 @@ export default async function ProductoPage({
             <ChevronRight className="h-3 w-3" />
             <Link
               href={`/catalogo?cat=${producto.categorySlug}`}
+              prefetch={false}
               className="transition-colors hover:text-acento-texto"
             >
               {producto.categoryName}
@@ -288,6 +289,7 @@ export default async function ProductoPage({
               </h2>
               <Link
                 href={`/catalogo?cat=${producto.categorySlug}`}
+                prefetch={false}
                 className="text-sm font-medium text-brand-orange hover:underline"
               >
                 Ver todos

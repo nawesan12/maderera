@@ -148,6 +148,7 @@ function Destacado({ articulo }: { articulo: ArticuloListado }) {
   return (
     <Link
       href={`/blog/${articulo.slug}`}
+      prefetch={false}
       className="grid overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-md md:grid-cols-2"
     >
       {articulo.imagenUrl && (
@@ -181,6 +182,7 @@ function Tarjeta({ articulo }: { articulo: ArticuloListado }) {
   return (
     <Link
       href={`/blog/${articulo.slug}`}
+      prefetch={false}
       className="flex h-full flex-col overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-md"
     >
       {articulo.imagenUrl && (

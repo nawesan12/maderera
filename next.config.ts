@@ -11,6 +11,25 @@ const nextConfig: NextConfig = {
     "/admin/ayuda/[slug]": ["./docs/GUIAS/**/*"],
   },
   images: {
+    /**
+     * Cada ancho y cada calidad distintos son **una transformación aparte**, y
+     * la plataforma las cobra por unidad. Con los valores de fábrica —ocho
+     * anchos de pantalla, siete de bloque— una sola foto de producto puede
+     * generar quince archivos, y el catálogo tiene una foto por producto.
+     *
+     * Acá se recorta a los anchos que este diseño realmente pide: la grilla del
+     * catálogo es de cuatro columnas en escritorio y de una en teléfono, así
+     * que entre 640 y 1920 está todo cubierto. `imageSizes` queda con los tres
+     * tamaños que usan los avatares y las miniaturas.
+     *
+     * `minimumCacheTTL` sube de cuatro horas a treinta días: las URLs de las
+     * fotos son inmutables —Blob las guarda con nombre único y Unsplash tiene
+     * su propio identificador—, así que revalidar seguido no descubre nada
+     * nuevo y vuelve a pagar la transformación.
+     */
+    deviceSizes: [640, 828, 1200, 1920],
+    imageSizes: [96, 256, 384],
+    minimumCacheTTL: 2592000,
     remotePatterns: [
       {
         protocol: "https",

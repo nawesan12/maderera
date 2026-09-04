@@ -94,10 +94,15 @@ de seguimiento se autoriza con un token aparte (`lib/seguimiento.ts`).
 | `npm run db:generate` | Genera la migración a partir del esquema |
 | `npm run db:migrate` | Aplica las migraciones |
 | `npm run db:studio` | Explorador de la base |
+| `npm run db:seed` | Siembra el catálogo de demostración |
+| `npm run db:seed-ventas` | Clientes, pedidos, presupuestos y costos de demostración |
+| `npm run db:seed-retenciones` | Los regímenes de retención con sus alícuotas |
 
 Los tests cubren **solo lógica que mueve plata o que rompe algo físico**:
-importes, impuestos, plazos, firma de pagos, migración, y el armado del archivo
-que va a la máquina de corte. No hay tests de interfaz.
+importes, impuestos, plazos, firma de pagos, migración, el armado del archivo que
+va a la máquina de corte, el costo promedio ponderado, el cálculo de retenciones,
+el prorrateo de una nota de crédito parcial y el balanceo de los asientos. No hay
+tests de interfaz.
 
 ## Documentación
 

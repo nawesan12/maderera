@@ -42,6 +42,17 @@ export interface CopiaDelMostrador {
   precios: { priceListId: string; variantId: string; precio: number }[];
   stock: { branchId: string; variantId: string; qty: number }[];
   listas: { id: string; nombre: string; esGeneral: boolean }[];
+  /**
+   * Variantes que dejaron de estar disponibles desde el último delta.
+   *
+   * **Sin esto la copia local nunca se achica.** Una variante dada de baja
+   * simplemente dejaba de aparecer en el delta, así que se quedaba en el
+   * mostrador para siempre: salía en el buscador con precio "a definir" y sin
+   * stock, y quien atiende la podía cargar en una venta.
+   *
+   * Va vacío en la copia completa, donde el borrado lo hace el reemplazo.
+   */
+  bajas: string[];
   /** Marca de tiempo para pedir el próximo delta. */
   generadoAt: string;
 }
@@ -88,6 +99,32 @@ export async function copiaDelMostrador(
       ),
     )
     .orderBy(asc(productVariants.sortOrder));
+
+  /*
+   * Las bajas solo tienen sentido en un delta: en la copia completa el cliente
+   * reemplaza todo, así que lo que no viene desaparece solo. Eso además limpia
+   * lo que se borró de verdad, que no deja rastro en `updatedAt`.
+   */
+  const bajas = desde
+    ? (
+        await db
+          .select({ variantId: productVariants.id })
+          .from(productVariants)
+          .innerJoin(products, eq(products.id, productVariants.productId))
+          .where(
+            and(
+              or(
+                eq(productVariants.active, false),
+                eq(products.active, false),
+              ),
+              or(
+                gt(productVariants.updatedAt, desde),
+                gt(products.updatedAt, desde),
+              ),
+            ),
+          )
+      ).map((f) => f.variantId)
+    : [];
 
   const listasAlcanzables = await db
     .selectDistinct({ id: priceLists.id, nombre: priceLists.name, esGeneral: priceLists.isDefault })
@@ -145,6 +182,7 @@ export async function copiaDelMostrador(
     precios: filasPrecios.map((p) => ({ ...p, precio: Number(p.precio) })),
     stock: filasStock,
     listas: listasAlcanzables,
+    bajas,
     generadoAt: generadoAt.toISOString(),
   };
 }

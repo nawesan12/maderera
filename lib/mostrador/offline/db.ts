@@ -122,6 +122,47 @@ export async function guardarVarios<T>(almacen: Almacen, filas: T[]): Promise<vo
   await esperarTransaccion(tx);
 }
 
+/**
+ * Reemplaza el contenido entero de un almacén, en una sola transacción.
+ *
+ * Existe por un defecto concreto: `guardarVarios` solo escribe, así que una
+ * variante dada de baja —o borrada— **se quedaba en el mostrador para
+ * siempre**, apareciendo en el buscador con precio "a definir" y sin stock, y
+ * quien atiende la podía cargar en una venta. El delta no la volvía a mandar
+ * justamente porque ya no estaba, así que nada la sacaba.
+ *
+ * Vaciar y escribir van **en la misma transacción**: si se cortara en el
+ * medio, la máquina quedaría con el catálogo vacío, que es peor que tenerlo
+ * viejo. IndexedDB revierte las dos cosas juntas.
+ */
+export async function reemplazarTodo<T>(
+  almacen: Almacen,
+  filas: T[],
+): Promise<void> {
+  const db = await abrir();
+  const tx = db.transaction(almacen, "readwrite");
+  const store = tx.objectStore(almacen);
+
+  store.clear();
+  for (const fila of filas) store.put(fila);
+
+  await esperarTransaccion(tx);
+}
+
+/** Saca varias filas de una vez. Lo usa el delta con las bajas. */
+export async function borrarVarios(
+  almacen: Almacen,
+  claves: IDBValidKey[],
+): Promise<void> {
+  if (claves.length === 0) return;
+
+  const db = await abrir();
+  const tx = db.transaction(almacen, "readwrite");
+  const store = tx.objectStore(almacen);
+  for (const clave of claves) store.delete(clave);
+  await esperarTransaccion(tx);
+}
+
 export async function borrar(almacen: Almacen, clave: IDBValidKey): Promise<void> {
   const db = await abrir();
   const tx = db.transaction(almacen, "readwrite");

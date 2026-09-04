@@ -1,11 +1,13 @@
 "use client";
 
 import {
+  borrarVarios,
   guardarMeta,
   guardarVarios,
   hayAlmacenLocal,
   leerMeta,
   leerTodo,
+  reemplazarTodo,
 } from "./db";
 import { clavePrecio, type PreciosLocales } from "./precio-local";
 import type { ClienteLocal, VarianteLocal } from "./busqueda-local";
@@ -65,13 +67,47 @@ export async function sincronizarCatalogo(
 
   if (!catalogo || !padron) return null;
 
-  await guardarVarios("variantes", catalogo.variantes);
-  await guardarVarios(
-    "precios",
-    catalogo.precios.map((p: { priceListId: string; variantId: string; precio: number }) => p),
-  );
-  await guardarVarios("stock", catalogo.stock);
-  await guardarVarios("clientes", padron.clientes);
+  if (desdeCero) {
+    /*
+     * La copia completa **reemplaza**, no se suma.
+     *
+     * Es lo que limpia lo que desapareció del servidor sin dejar rastro: una
+     * fila borrada de verdad no tiene `updatedAt` que la delate, así que el
+     * delta no puede informarla. Antes esas filas se quedaban en el mostrador
+     * para siempre, saliendo en el buscador con precio "a definir".
+     */
+    await reemplazarTodo("variantes", catalogo.variantes);
+    await reemplazarTodo("precios", catalogo.precios);
+    await reemplazarTodo("stock", catalogo.stock);
+    await reemplazarTodo("clientes", padron.clientes);
+  } else {
+    await guardarVarios("variantes", catalogo.variantes);
+    await guardarVarios("precios", catalogo.precios);
+    await guardarVarios("stock", catalogo.stock);
+    await guardarVarios("clientes", padron.clientes);
+
+    /*
+     * Las bajas del delta: mercadería dada de baja desde la última
+     * sincronización. Se saca también su precio, que si no queda huérfano.
+     */
+    const bajas: string[] = catalogo.bajas ?? [];
+
+    if (bajas.length > 0) {
+      await borrarVarios("variantes", bajas);
+
+      const precios = await leerTodo<{ priceListId: string; variantId: string }>(
+        "precios",
+      );
+      const salen = new Set(bajas);
+
+      await borrarVarios(
+        "precios",
+        precios
+          .filter((p) => salen.has(p.variantId))
+          .map((p) => [p.priceListId, p.variantId] as IDBValidKey),
+      );
+    }
+  }
 
   await guardarMeta<EstadoCatalogo>("catalogo", {
     ultimaSincronizacion: catalogo.generadoAt,

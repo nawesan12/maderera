@@ -439,6 +439,18 @@ input::placeholder, textarea::placeholder {
 .dark .panel {
   --linea: oklch(1 0 0 / 18%);
   --linea-suave: oklch(1 0 0 / 12%);
+
+  /* El gris secundario vuelve al del tema oscuro.
+
+     `.panel` lo pisa con `oklch(0.40)`, que está calculado contra el fondo
+     claro del panel; adentro de `.dark` eso quedaba en **2.03:1 sobre la
+     tarjeta**, es decir gris oscuro sobre casi negro. Afectaba a todo el panel
+     —fechas, subtítulos, cabeceras de tabla, los "sin stock acá"— y este bloque
+     ya corregía `--linea` y `--linea-suave`: faltaba el tercero.
+
+     Medido: con este valor son 5.17:1 sobre la tarjeta y 5.53:1 sobre el fondo,
+     los dos por encima del 4.5:1 que pide texto normal. */
+  --muted-foreground: oklch(0.62 0.01 60);
 }
 
 /* Fondo del panel: plano.

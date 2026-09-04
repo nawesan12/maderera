@@ -204,6 +204,13 @@
       "when": 1788478767560,
       "tag": "0028_ordenes_de_compra",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788479543032,
+      "tag": "0029_retenciones",
+      "breakpoints": true
     }
   ]
 }

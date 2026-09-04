@@ -369,12 +369,20 @@ export default async function ArcaPage() {
             </p>
           </div>
 
-          <Link
-            href="/admin/arca/libro-iva-compras"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
-          >
-            Ver el libro de compras
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/admin/arca/retenciones"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+            >
+              Retenciones sufridas
+            </Link>
+            <Link
+              href="/admin/arca/libro-iva-compras"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+            >
+              Ver el libro de compras
+            </Link>
+          </div>
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-4">

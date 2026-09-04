@@ -11,7 +11,7 @@
  */
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as schema from "./schema";
 
 const {
@@ -711,10 +711,25 @@ async function main() {
   ];
 
   for (const p of PROVEEDORES) {
+    /*
+     * Sembrar de nuevo no puede duplicar la lista.
+     *
+     * `onConflictDoNothing` no alcanza: el único índice único de proveedores es
+     * el del código del sistema anterior, que en los de demostración es nulo,
+     * así que cada corrida insertaba cuatro filas más. Se busca por nombre, que
+     * es lo que hace única a la ficha en esta lista inventada.
+     */
+    const [existente] = await db
+      .select({ id: suppliers.id })
+      .from(suppliers)
+      .where(eq(suppliers.nombre, p.nombre))
+      .limit(1);
+
+    if (existente) continue;
+
     const [creado] = await db
       .insert(suppliers)
       .values(p)
-      .onConflictDoNothing()
       .returning({ id: suppliers.id });
 
     if (!creado) continue;

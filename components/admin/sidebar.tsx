@@ -116,6 +116,7 @@ const secciones: { titulo: string; items: ItemNav[] }[] = [
         icon: ReceiptText,
         label: "Facturas de compra",
       },
+      { href: "/admin/compras/pagos", icon: Wallet, label: "Pagos" },
     ],
   },
   {

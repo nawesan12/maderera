@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FileCheck2, Loader2 } from "lucide-react";
 import { formatearMonto } from "@/lib/formato";
-import { pagarAProveedor, type EstadoPago } from "./actions";
+import { pagarAProveedor, verAcumulado, type EstadoPago } from "./actions";
 
 interface Proveedor {
   id: string;
@@ -49,6 +49,39 @@ export function FormularioPago({
   const [medio, setMedio] = useState("transferencia");
   const [referencia, setReferencia] = useState("");
   const [bases, setBases] = useState<Record<string, string>>({});
+
+  /*
+   * Lo ya retenido este mes a este proveedor, por régimen.
+   *
+   * Se muestra antes de pagar porque **es lo que explica por qué esta vez
+   * retiene y la anterior no**: Ganancias mira el acumulado del mes, no cada
+   * pago suelto. Sin esto a la vista, que no retenga parece un error del
+   * sistema y alguien lo "corrige" a mano.
+   */
+  const [acumulado, setAcumulado] = useState<
+    Record<string, { base: number; retenido: number }>
+  >({});
+
+  useEffect(() => {
+    if (!supplierId) return;
+
+    let vivo = true;
+    void verAcumulado(supplierId).then((filas) => {
+      if (!vivo) return;
+      setAcumulado(
+        Object.fromEntries(
+          filas.map((f) => [
+            f.codigoRegimen,
+            { base: Number(f.base), retenido: Number(f.retenido) },
+          ]),
+        ),
+      );
+    });
+
+    return () => {
+      vivo = false;
+    };
+  }, [supplierId]);
 
   const proveedor = proveedores.find((p) => p.id === supplierId);
   const importe = Number(total || 0);
@@ -147,6 +180,13 @@ export function FormularioPago({
                   {r.minimoNoImponible > 0 &&
                     ` · mínimo ${formatearMonto(r.minimoNoImponible)} en el mes`}
                 </span>
+                {acumulado[r.codigo] && (
+                  <span className="block text-sm text-muted-foreground">
+                    Este mes ya lleva{" "}
+                    {formatearMonto(acumulado[r.codigo].base)} de base y{" "}
+                    {formatearMonto(acumulado[r.codigo].retenido)} retenidos.
+                  </span>
+                )}
                 <div className="mt-1 flex gap-2">
                   <input
                     type="number"

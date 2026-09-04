@@ -15,6 +15,8 @@ import { BotonFacturar } from "./facturar";
 import { Entregas } from "./entregas";
 import { saldoDeAcopio } from "@/lib/entregas";
 import { remitosDelPedido } from "@/lib/dal/admin/entregas";
+import { margenDeLinea } from "@/lib/compras/costo";
+import { requireStaff } from "@/lib/dal/session";
 
 const MEDIOS: Record<string, string> = {
   mercado_pago: "Mercado Pago",
@@ -29,9 +31,20 @@ export default async function FichaPedidoPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const pedido = await obtenerPedido(id);
+  const [usuario, pedido] = await Promise.all([
+    requireStaff(),
+    obtenerPedido(id),
+  ]);
 
   if (!pedido) notFound();
+
+  /*
+   * El margen es de administración, como los reportes: es el número que no se
+   * muestra en el mostrador. La pantalla la ven también vendedores y depósito.
+   */
+  const esAdmin = usuario.staffRole === "admin";
+
+  const margen = esAdmin ? calcularMargen(pedido.items) : null;
 
   // Si el pedido ya se facturó, el botón se reemplaza por el enlace al
   // comprobante: dos facturas del mismo pedido obligan a anular una.
@@ -176,6 +189,42 @@ export default async function FichaPedidoPage({
               </tr>
             </tfoot>
           </table>
+
+          {/*
+            * El margen de esta venta.
+            *
+            * Solo para administración: es el número que no se muestra en el
+            * mostrador. Y solo aparece si alguna línea tiene costo congelado;
+            * las anteriores al módulo de compras no lo tienen y se cuentan
+            * aparte en vez de promediarse como si hubieran costado cero.
+            */}
+          {esAdmin && margen && (
+            <div className="border-t bg-muted/40 px-5 py-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <div>
+                  <p className="text-base font-medium">Margen de esta venta</p>
+                  <p className="text-sm text-muted-foreground">
+                    {moneda.format(margen.neto)} netos menos{" "}
+                    {moneda.format(margen.costo)} de costo
+                    {margen.sinCosto > 0 &&
+                      ` · ${margen.sinCosto} renglones sin costo, fuera de la cuenta`}
+                  </p>
+                </div>
+                <p
+                  className={`tabular text-xl font-semibold ${
+                    margen.ganancia < 0 ? "text-saldo-debe" : "text-saldo-favor"
+                  }`}
+                >
+                  {moneda.format(margen.ganancia)}
+                  {margen.neto > 0 && (
+                    <span className="ml-2 text-base text-muted-foreground">
+                      {((margen.ganancia / margen.neto) * 100).toFixed(1)}%
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
         </section>
 
         <div className="lg:col-start-1">
@@ -287,4 +336,46 @@ export default async function FichaPedidoPage({
       </div>
     </div>
   );
+}
+
+/**
+ * El margen del pedido, sumando renglón por renglón.
+ *
+ * Se apoya en `margenDeLinea`, que compara **neto contra neto** con la alícuota
+ * de cada línea: el subtotal lleva IVA adentro y el costo no, y compararlos
+ * directo inflaría el margen un 21 % sistemático.
+ *
+ * Devuelve `null` si ninguna línea tiene costo, que es el caso de todo lo
+ * anterior al módulo de compras. Mostrar cero ahí diría que se vendió sin
+ * ganancia, que es distinto de no saberlo.
+ */
+function calcularMargen(
+  items: { subtotal: string; cantidad: string; alicuotaIva: string | null; costoUnitario: string | null }[],
+) {
+  let neto = 0;
+  let costo = 0;
+  let conCosto = 0;
+  let sinCosto = 0;
+
+  for (const item of items) {
+    const r = margenDeLinea({
+      subtotal: Number(item.subtotal),
+      cantidad: Number(item.cantidad),
+      alicuotaIva: Number(item.alicuotaIva ?? 21),
+      costoUnitario: item.costoUnitario === null ? null : Number(item.costoUnitario),
+    });
+
+    if (r.costoTotal === null) {
+      sinCosto += 1;
+      continue;
+    }
+
+    neto += r.netoVenta;
+    costo += r.costoTotal;
+    conCosto += 1;
+  }
+
+  if (conCosto === 0) return null;
+
+  return { neto, costo, ganancia: neto - costo, sinCosto };
 }

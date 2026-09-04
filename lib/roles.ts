@@ -62,7 +62,20 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
    */
   "/admin/proveedores": ["admin"],
   "/admin/recepciones": ["admin"],
+  /*
+   * Las de compras van **una por una y no solo el prefijo**.
+   *
+   * `puedeEntrar` toma la clave más larga que sea prefijo, así que
+   * `/admin/compras` alcanzaba para cerrar las páginas. Pero el menú filtra con
+   * `quienEntra`, que busca la ruta **exacta**: sin estas líneas devolvía `null`
+   * y le mostraba Pagos, Gastos y Facturas de compra a todo el personal, que al
+   * entrar rebotaba. Es justamente lo que advierte el comentario de arriba.
+   */
   "/admin/compras": ["admin"],
+  "/admin/compras/ordenes": ["admin"],
+  "/admin/compras/facturas": ["admin"],
+  "/admin/compras/pagos": ["admin"],
+  "/admin/compras/gastos": ["admin"],
   "/admin/cierre": ["admin"],
   // Los reportes son los números del negocio: quién compra, cuánto se vende y
   // a qué margen. Es la misma sensibilidad que precios y cobros.

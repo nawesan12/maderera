@@ -131,24 +131,3 @@ export async function loQueEstaPorLlegar(branchId?: string) {
     .where(and(...condiciones))
     .groupBy(purchaseOrderItems.variantId, purchaseOrderItems.descripcion);
 }
-
-/** Las órdenes vivas de un proveedor, para elegir al cargar una recepción. */
-export async function ordenesAbiertasDe(supplierId: string) {
-  await requireStaffRole("admin");
-
-  return db
-    .select({
-      id: purchaseOrders.id,
-      numero: purchaseOrders.numero,
-      fechaPrometida: purchaseOrders.fechaPrometida,
-    })
-    .from(purchaseOrders)
-    .where(
-      and(
-        eq(purchaseOrders.supplierId, supplierId),
-        sql`${purchaseOrders.estado} in ('enviada', 'parcial')`,
-      ),
-    )
-    .orderBy(desc(purchaseOrders.createdAt))
-    .limit(20);
-}

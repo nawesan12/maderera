@@ -162,13 +162,3 @@ export function revisarAcreditacion(
 export function esRectificativo(tipo: TipoComprobante): boolean {
   return tipo.startsWith("nota_credito") || tipo.startsWith("nota_debito");
 }
-
-/**
- * Una nota parcial **no anula el original**, ni siquiera cuando la suma llega
- * al 100 %.
- *
- * El estado "anulada" tiene consecuencias en el libro IVA y en la cuenta
- * corriente, y que aparezca por sumar centavos es imposible de explicar. Anular
- * es una decisión explícita de una persona.
- */
-export const NOTA_PARCIAL_NO_ANULA = true;

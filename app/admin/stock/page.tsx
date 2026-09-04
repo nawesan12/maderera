@@ -14,6 +14,7 @@ import {
   ultimosMovimientos,
   type FilaStock,
 } from "@/lib/dal/admin/inventory";
+import { loQueEstaPorLlegar } from "@/lib/dal/admin/ordenes-compra";
 import { AjusteRapido } from "./ajuste-rapido";
 import { DialogoTransferencia } from "./dialogo-transferencia";
 
@@ -34,12 +35,28 @@ export default async function AdminStockPage({
 }) {
   const params = await searchParams;
 
-  const [filas, categorias, sucursales, movimientos] = await Promise.all([
-    listarStock({ busqueda: params.buscar, categoria: params.cat }),
-    listarCategoriasAdmin(),
-    listarSucursales(),
-    ultimosMovimientos(8),
-  ]);
+  const [filas, categorias, sucursales, movimientos, enCamino] =
+    await Promise.all([
+      listarStock({ busqueda: params.buscar, categoria: params.cat }),
+      listarCategoriasAdmin(),
+      listarSucursales(),
+      ultimosMovimientos(8),
+      /*
+       * Lo que ya está pedido y todavía no llegó.
+       *
+       * Es la respuesta a "¿ya pedimos esto?" en el lugar donde la pregunta
+       * aparece. Sin esto, el encargado que ve tres placas en el estante pide
+       * de nuevo lo que ya viene en camino.
+       */
+      loQueEstaPorLlegar(),
+    ]);
+
+  const pedido = new Map(
+    enCamino.map((p) => [
+      p.variantId,
+      { cantidad: Number(p.pendiente), llega: p.proximaEntrega },
+    ]),
+  );
 
   // Tres grupos, en el orden en que se atienden: lo que no hay, lo que se está
   // por acabar y lo que está bien.
@@ -102,7 +119,7 @@ export default async function AdminStockPage({
               detalle="No hay en ninguna sucursal"
               destacado
             >
-              <Grilla filas={sinStock.visibles} />
+              <Grilla filas={sinStock.visibles} enCamino={pedido} />
               <VerTodo ocultas={sinStock.ocultas} params={params} />
             </GrupoListado>
 
@@ -112,12 +129,12 @@ export default async function AdminStockPage({
               detalle="Por debajo del mínimo"
               destacado
             >
-              <Grilla filas={aReponer.visibles} />
+              <Grilla filas={aReponer.visibles} enCamino={pedido} />
               <VerTodo ocultas={aReponer.ocultas} params={params} />
             </GrupoListado>
 
             <GrupoListado titulo="Con stock" cantidad={normales.length}>
-              <Grilla filas={conStock.visibles} />
+              <Grilla filas={conStock.visibles} enCamino={pedido} />
               <VerTodo ocultas={conStock.ocultas} params={params} />
             </GrupoListado>
           </div>
@@ -167,17 +184,34 @@ export default async function AdminStockPage({
   );
 }
 
-function Grilla({ filas }: { filas: FilaStock[] }) {
+/** `enCamino` es lo pedido y no recibido, por variante. Ver `loQueEstaPorLlegar`. */
+function Grilla({
+  filas,
+  enCamino,
+}: {
+  filas: FilaStock[];
+  enCamino: Map<string, { cantidad: number; llega: Date | null }>;
+}) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       {filas.map((fila) => (
-        <TarjetaStock key={fila.variantId} fila={fila} />
+        <TarjetaStock
+          key={fila.variantId}
+          fila={fila}
+          enCamino={enCamino.get(fila.variantId)}
+        />
       ))}
     </div>
   );
 }
 
-function TarjetaStock({ fila }: { fila: FilaStock }) {
+function TarjetaStock({
+  fila,
+  enCamino,
+}: {
+  fila: FilaStock;
+  enCamino?: { cantidad: number; llega: Date | null };
+}) {
   const necesitaAtencion =
     fila.total === 0 ||
     fila.nivelCentral === "bajo" ||
@@ -223,6 +257,20 @@ function TarjetaStock({ fila }: { fila: FilaStock }) {
           <p className="tabular shrink-0 text-right">
             <span className="block text-xl font-semibold">{fila.total}</span>
             <span className="block text-sm text-muted-foreground">total</span>
+            {/* Lo pedido va acá arriba, al lado del número que se mira para
+                decidir si hay que reponer. Puesto en cualquier otro lado sería
+                un dato que nadie cruza a tiempo. */}
+            {enCamino && (
+              <span className="estado-espera mt-1 block text-sm font-medium">
+                +{enCamino.cantidad} en camino
+                {enCamino.llega
+                  ? ` · ${new Date(enCamino.llega).toLocaleDateString("es-AR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                    })}`
+                  : ""}
+              </span>
+            )}
           </p>
         </div>
 

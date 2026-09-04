@@ -546,6 +546,31 @@ async function main() {
   const db = drizzle(pool, { schema, casing: "snake_case" });
 
   console.log("Limpiando tablas de catálogo…");
+
+  /*
+   * Los perfiles se guardan y se reponen.
+   *
+   * `TRUNCATE ... CASCADE` sobre las listas de precios arrastra a `profiles`,
+   * porque tiene una FK a ellas. El efecto era que **correr la siembra dejaba
+   * al administrador sin acceso al panel**: el usuario seguía existiendo y su
+   * rol de staff no, así que entraba y lo mandaba al sitio público sin decir
+   * por qué. Se descubrió así, después de sembrar.
+   *
+   * La lista de precios sí se pierde a propósito —se está regenerando— pero el
+   * rol y la ficha vuelven tal cual estaban.
+   */
+  const perfilesPrevios = await db.execute<{
+    user_id: string;
+    role: string;
+    staff_role: string | null;
+    razon_social: string | null;
+    cuit: string | null;
+    condicion_iva: string;
+    telefono: string | null;
+    rubro: string | null;
+    notas: string | null;
+  }>(sql`SELECT * FROM profiles`);
+
   await db.execute(sql`
     TRUNCATE TABLE
       ${priceListItems}, ${inventory}, ${productImages},
@@ -553,6 +578,22 @@ async function main() {
       ${priceLists}, ${branches}
     RESTART IDENTITY CASCADE
   `);
+
+  for (const perfil of perfilesPrevios.rows) {
+    await db.execute(sql`
+      INSERT INTO profiles (user_id, role, staff_role, razon_social, cuit,
+                            condicion_iva, telefono, rubro, notas)
+      VALUES (${perfil.user_id}, ${perfil.role}::user_role,
+              ${perfil.staff_role}::staff_role, ${perfil.razon_social},
+              ${perfil.cuit}, ${perfil.condicion_iva}::condicion_iva,
+              ${perfil.telefono}, ${perfil.rubro}, ${perfil.notas})
+      ON CONFLICT DO NOTHING
+    `);
+  }
+
+  if (perfilesPrevios.rows.length > 0) {
+    console.log(`  ${perfilesPrevios.rows.length} perfiles conservados`);
+  }
 
   console.log("Sucursales…");
   const branchRows = await db.insert(branches).values(SUCURSALES).returning();

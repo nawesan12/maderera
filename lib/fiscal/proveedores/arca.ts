@@ -3,13 +3,13 @@ import "server-only";
 import { XMLParser } from "fast-xml-parser";
 import { db } from "@/lib/db";
 import { arcaLog } from "@/lib/db/schema";
+import { esRectificativo } from "../notas";
 import {
   CODIGO_COMPROBANTE,
   desdeFechaArca,
   documentoReceptor,
   fechaArca,
   CONDICION_IVA_RECEPTOR,
-  esNotaDeCredito,
   type TipoComprobante,
 } from "../comprobantes";
 import { CODIGO_ALICUOTA_ARCA } from "../impuestos";
@@ -282,9 +282,16 @@ ${comprobante.tributos
   .join("\n")}
         </ar:Tributos>`;
 
-    // Una nota de crédito tiene que decir qué comprobante corrige.
+    /*
+     * Todo comprobante rectificativo tiene que decir cuál corrige.
+     *
+     * **Acá había un bug:** el filtro era `esNotaDeCredito`, así que una nota
+     * de débito salía sin `CbtesAsoc` y ARCA la rechaza. `esRectificativo`
+     * cubre las dos, y `tests/notas.test.ts` fija que sea más amplio que el
+     * predicado de nota de crédito para que no vuelvan a coincidir.
+     */
     const asociados =
-      comprobante.asociado && esNotaDeCredito(comprobante.tipo)
+      comprobante.asociado && esRectificativo(comprobante.tipo)
         ? `        <ar:CbtesAsoc>
           <ar:CbteAsoc>
             <ar:Tipo>${CODIGO_COMPROBANTE[comprobante.asociado.tipo]}</ar:Tipo>

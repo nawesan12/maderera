@@ -22,6 +22,7 @@ import {
   BotonAutorizar,
   FormularioCobro,
 } from "./acciones";
+import { NotasSobreElComprobante } from "./notas";
 
 const CONDICIONES: Record<string, string> = {
   responsable_inscripto: "Responsable inscripto",
@@ -371,9 +372,28 @@ export default async function FichaComprobantePage({
           )}
 
           {!anulada && comprobante.estado !== "borrador" && (
-            <section className="tarjeta p-5">
-              <AnularComprobante id={comprobante.id} />
-            </section>
+            <>
+              {/* Las notas van antes que anular a propósito: acreditar dos
+                  placas falladas es lo frecuente y anular la factura entera es
+                  la excepción. El orden empuja hacia la corrección más chica. */}
+              <section className="tarjeta p-5">
+                <NotasSobreElComprobante
+                  invoiceId={comprobante.id}
+                  items={comprobante.items.map((i) => ({
+                    id: i.id,
+                    descripcion: i.descripcion,
+                    cantidad: Number(i.cantidad),
+                    subtotal: Number(i.subtotal),
+                  }))}
+                  total={Number(comprobante.total)}
+                  acreditado={Number(comprobante.acreditado)}
+                />
+              </section>
+
+              <section className="tarjeta p-5">
+                <AnularComprobante id={comprobante.id} />
+              </section>
+            </>
           )}
         </div>
       </div>

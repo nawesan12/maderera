@@ -21,6 +21,8 @@ import { requireStaff, requireStaffRole } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import {
   anularConNotaDeCredito,
+  emitirNotaDeCredito,
+  emitirNotaDeDebito,
   autorizarComprobante,
   emitirComprobante,
   obtenerConfiguracionFiscal,
@@ -692,4 +694,108 @@ export async function guardarPuntoVenta(
   });
 
   return { ok: "Punto de venta guardado." };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Notas parciales y notas de débito                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Nota de crédito por parte de una factura.
+ *
+ * **No anula el original**, ni siquiera si la suma de las notas llega al 100 %:
+ * el estado "anulada" tiene consecuencias en el libro IVA y en la cuenta
+ * corriente, y que aparezca por sumar centavos es imposible de explicar. Para
+ * anular está el botón de anular, que es una decisión de una persona.
+ */
+export async function acreditarParcial(
+  invoiceId: string,
+  motivo: string,
+  parciales: { itemId: string; cantidad: number }[],
+): Promise<EstadoFactura> {
+  const usuario = await requireStaffRole("admin");
+
+  if (motivo.trim().length < 4) {
+    return { error: "Escribí el motivo de la nota de crédito." };
+  }
+
+  const conCantidad = parciales.filter((p) => p.cantidad > 0);
+  if (conCantidad.length === 0) {
+    return { error: "Poné qué cantidad se acredita de cada renglón." };
+  }
+
+  const resultado = await emitirNotaDeCredito(
+    invoiceId,
+    motivo.trim(),
+    usuario.userId,
+    { parciales: conCantidad, anularOriginal: false },
+  );
+
+  if (resultado.error) return { error: resultado.error };
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "crear",
+    entidad: "factura",
+    entidadId: invoiceId,
+    descripcion: `Emitió una nota de crédito parcial: ${motivo.trim()}`,
+    detalle: { notaDeCreditoId: resultado.invoiceId },
+  });
+
+  refrescar(invoiceId);
+  redirect(`/admin/facturacion/${resultado.invoiceId}`);
+}
+
+/**
+ * Nota de débito: le carga algo más al cliente sobre una factura ya emitida.
+ *
+ * Los casos reales de una maderera son intereses por mora y un flete que se
+ * olvidó de facturar. El importe se carga **final, con IVA adentro**, igual que
+ * en el resto del sistema de ventas.
+ */
+export async function debitar(
+  invoiceId: string,
+  motivo: string,
+  concepto: string,
+  importe: number,
+  alicuota: number,
+): Promise<EstadoFactura> {
+  const usuario = await requireStaffRole("admin");
+
+  if (motivo.trim().length < 4) {
+    return { error: "Escribí el motivo de la nota de débito." };
+  }
+  if (!concepto.trim()) return { error: "Poné el concepto." };
+  if (!Number.isFinite(importe) || importe <= 0) {
+    return { error: "El importe tiene que ser mayor a cero." };
+  }
+
+  const resultado = await emitirNotaDeDebito(
+    invoiceId,
+    motivo.trim(),
+    [
+      {
+        descripcion: concepto.trim(),
+        unidad: "unidad",
+        cantidad: 1,
+        precioFinalUnitario: importe,
+        alicuota,
+      },
+    ],
+    usuario.userId,
+  );
+
+  if (resultado.error) return { error: resultado.error };
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "crear",
+    entidad: "factura",
+    entidadId: invoiceId,
+    descripcion: `Emitió una nota de débito por ${concepto.trim()}: ${motivo.trim()}`,
+    detalle: { notaDeDebitoId: resultado.invoiceId },
+  });
+
+  refrescar(invoiceId);
+  redirect(`/admin/facturacion/${resultado.invoiceId}`);
 }

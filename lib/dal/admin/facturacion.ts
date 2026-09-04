@@ -129,6 +129,10 @@ async function leerComprobante(id: string) {
       caeVencimiento: invoices.caeVencimiento,
       observacionesArca: invoices.observacionesArca,
       comprobanteOrigenId: invoices.comprobanteOrigenId,
+      /* Cuánto ya se acreditó y cuánto se debitó: es lo que decide si se puede
+         emitir otra nota y por cuánto. */
+      acreditado: invoices.acreditado,
+      debitado: invoices.debitado,
       fechaEmision: invoices.fechaEmision,
       fechaVencimiento: invoices.fechaVencimiento,
       observaciones: invoices.observaciones,

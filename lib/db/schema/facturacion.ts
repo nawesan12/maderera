@@ -208,6 +208,20 @@ export const invoices = pgTable(
     /** Comprobante que corrige, en notas de crédito y débito. */
     comprobanteOrigenId: uuid(),
 
+    /**
+     * Cuánto de este comprobante ya se acreditó con notas de crédito.
+     *
+     * **Es una suma guardada, algo que este proyecto evita por doctrina.** Se
+     * justifica igual que `inventory.reservado`: sin ella, cada nota tendría
+     * que recorrer todas las anteriores bajo lock para saber cuánto queda. Y
+     * como aquella, lleva su verificador —`recalcularAcreditado()`— que la
+     * reconstruye desde las notas cuando haga falta comprobarla.
+     */
+    acreditado: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+
+    /** Lo mismo para las notas de débito, que suman en vez de restar. */
+    debitado: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+
     fechaEmision: timestamp({ withTimezone: true }).notNull().defaultNow(),
     /** Vencimiento del pago, no del comprobante. */
     fechaVencimiento: timestamp({ withTimezone: true }),
@@ -245,9 +259,23 @@ export const invoiceItems = pgTable(
     neto: numeric({ precision: 12, scale: 2 }).notNull(),
     iva: numeric({ precision: 12, scale: 2 }).notNull(),
     subtotal: numeric({ precision: 12, scale: 2 }).notNull(),
+
+    /**
+     * Qué renglón del comprobante original corrige este.
+     *
+     * Solo lo llevan las notas de crédito y débito parciales, y es lo que
+     * permite decir *qué* se acreditó: sin él, dos notas parciales sobre la
+     * misma factura son dos importes sueltos y nadie puede saber si la segunda
+     * corrige el mismo renglón que la primera.
+     */
+    invoiceItemOrigenId: uuid(),
+
     orden: integer().notNull().default(0),
   },
-  (t) => [index("invoice_items_invoice_idx").on(t.invoiceId)],
+  (t) => [
+    index("invoice_items_invoice_idx").on(t.invoiceId),
+    index("invoice_items_origen_idx").on(t.invoiceItemOrigenId),
+  ],
 );
 
 /**

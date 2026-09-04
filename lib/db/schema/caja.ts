@@ -51,6 +51,15 @@ export const tipoMovimientoCaja = pgEnum("tipo_movimiento_caja", [
   "ingreso",
   "retiro",
   "devolucion",
+  /**
+   * Plata que salió por un gasto concreto.
+   *
+   * Existe aparte de `retiro` porque un retiro es plata que se movió de lugar
+   * —al banco, a la caja fuerte— y un gasto es plata que se fue. Hasta acá los
+   * dos se anotaban como retiro y quedaban sin clasificar: al cierre del mes
+   * nadie podía decir cuánto se gastó en fletes.
+   */
+  "gasto",
 ]);
 
 export const cashSessions = pgTable(
@@ -113,6 +122,15 @@ export const cashMovements = pgTable(
 
     motivo: text("motivo"),
     orderId: uuid("order_id").references(() => orders.id),
+
+    /**
+     * El gasto que originó la salida, si la originó uno.
+     *
+     * Sin FK declarada: `gastos.ts` importa de acá y declararla al revés
+     * cerraría el ciclo entre los dos módulos. La integridad la da la
+     * transacción que escribe las dos filas juntas.
+     */
+    expenseId: uuid("expense_id"),
 
     /**
      * Clave de idempotencia, para los movimientos que se encolan sin conexión.

@@ -211,6 +211,20 @@
       "when": 1788479543032,
       "tag": "0029_retenciones",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788480651661,
+      "tag": "0030_gastos",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788480693995,
+      "tag": "0031_caja_gasto",
+      "breakpoints": true
     }
   ]
 }

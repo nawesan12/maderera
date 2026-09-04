@@ -1,6 +1,21 @@
 import type { NextConfig } from "next";
 
+/*
+ * Un identificador que cambia con cada build.
+ *
+ * Lo usa el ayudante del mostrador: se registra como `/sw.js?v=<esto>`, y sin
+ * eso el archivo nunca cambia byte a byte, no se reinstala nunca y el punto de
+ * venta se queda con el shell del día que se instaló.
+ *
+ * En Vercel sale del commit; en local, de la hora del build.
+ */
+const idDeBuild =
+  process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? `local-${Date.now()}`;
+
 const nextConfig: NextConfig = {
+  generateBuildId: () => idDeBuild,
+  env: { NEXT_PUBLIC_BUILD_ID: idDeBuild },
+
   /**
    * Las guías del panel se leen del disco en tiempo de pedido. Sin esto, el
    * empaquetado no las incluye —nada las importa, así que el rastreo de

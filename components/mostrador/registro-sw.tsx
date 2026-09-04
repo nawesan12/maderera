@@ -23,8 +23,17 @@ export function RegistroDelAyudante() {
 
     let vivo = true;
 
+    /*
+     * El id del build va en la dirección del script.
+     *
+     * Es lo que hace que cada deploy sea un ayudante distinto: sin esto el
+     * archivo no cambia nunca, el navegador no reinstala, y el mostrador se
+     * queda con el shell y los chunks del día que se instaló.
+     */
+    const version = process.env.NEXT_PUBLIC_BUILD_ID ?? "dev";
+
     void navigator.serviceWorker
-      .register("/sw.js", { scope: "/" })
+      .register(`/sw.js?v=${version}`, { scope: "/" })
       .then((registro) => {
         registro.addEventListener("updatefound", () => {
           const nuevo = registro.installing;
@@ -49,6 +58,34 @@ export function RegistroDelAyudante() {
     };
   }, []);
 
+  /**
+   * Pasar a la versión nueva.
+   *
+   * Recargar sola no alcanza: mientras haya un cliente controlado por el
+   * ayudante viejo, el nuevo se queda esperando. Hay que pedirle el relevo y
+   * recargar cuando efectivamente tomó el control.
+   */
+  function pasarALaNueva() {
+    const registro = navigator.serviceWorker;
+
+    // Si el relevo no llega, se recarga igual: quedarse mirando un botón que
+    // no hace nada es peor que recargar de más.
+    const porLasDudas = setTimeout(() => window.location.reload(), 2000);
+
+    registro.addEventListener(
+      "controllerchange",
+      () => {
+        clearTimeout(porLasDudas);
+        window.location.reload();
+      },
+      { once: true },
+    );
+
+    void registro.getRegistration().then((r) => {
+      (r?.waiting ?? r?.installing)?.postMessage("activar-ahora");
+    });
+  }
+
   if (!hayVersionNueva) return null;
 
   return (
@@ -57,7 +94,7 @@ export function RegistroDelAyudante() {
       <span className="text-sm">Hay una versión nueva.</span>
       <button
         type="button"
-        onClick={() => window.location.reload()}
+        onClick={pasarALaNueva}
         className="rounded-full bg-accion px-3 py-1 text-sm font-semibold text-white"
       >
         Recargar

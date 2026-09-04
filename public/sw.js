@@ -14,7 +14,23 @@
  * error.
  */
 
-const VERSION = "mjbj-mostrador-v1";
+/*
+ * La versión sale de la propia dirección del script: se registra como
+ * `/sw.js?v=<id del build>`.
+ *
+ * **Antes era una constante escrita a mano, y eso lo dejaba clavado.** Un
+ * archivo que no cambia byte a byte no dispara reinstalación, así que el
+ * mostrador seguía sirviendo el shell y los chunks del día que se instaló,
+ * para siempre. Se descubrió porque `/ticket/local` nunca llegó al caché: se
+ * agregó a la lista después de que el ayudante ya estuviera instalado, y no
+ * hubo una segunda instalación que lo trajera.
+ *
+ * Con el id del build adentro, cada deploy es un script distinto: se instala,
+ * y `activate` borra los cachés de la versión anterior.
+ */
+const VERSION =
+  "mjbj-mostrador-" +
+  (new URL(self.location.href).searchParams.get("v") || "dev");
 const SHELL = `${VERSION}-shell`;
 const ESTATICOS = `${VERSION}-estaticos`;
 
@@ -37,13 +53,41 @@ self.addEventListener("install", (evento) => {
       // `reload` evita que el propio caché HTTP devuelva una copia vieja justo
       // en el momento de guardar la buena.
       await Promise.allSettled(
-        IMPRESCINDIBLE.map((ruta) =>
-          fetch(ruta, { cache: "reload" }).then((r) => guardarSiSirve(cache, ruta, r)),
-        ),
+        IMPRESCINDIBLE.map(async (ruta) => {
+          const respuesta = await fetch(ruta, { cache: "reload" });
+          // Se lee el cuerpo antes de guardar: la copia va al caché y el
+          // original se usa para saber qué archivos hacen falta.
+          const html = await respuesta.clone().text();
+          await guardarSiSirve(cache, ruta, respuesta);
+          await guardarLoQuePide(html);
+        }),
       );
-      await self.skipWaiting();
+
+      /*
+       * **No se llama a `skipWaiting()` acá**, a propósito.
+       *
+       * Activar de una borraría los cachés de la versión anterior mientras la
+       * pantalla vieja sigue abierta, y si en ese momento se corta internet, un
+       * chunk que esa pantalla todavía no cargó ya no está en ningún lado. Peor
+       * si pasa en medio de un cobro.
+       *
+       * El ayudante nuevo espera. La pantalla avisa que hay versión nueva y
+       * quien atiende decide cuándo; ahí llega el mensaje de abajo.
+       */
     })(),
   );
+});
+
+/**
+ * La pantalla pide el relevo.
+ *
+ * Es la otra mitad del botón "Recargar": una recarga sola **no** activa al
+ * ayudante que está esperando —mientras haya un cliente controlado por el
+ * viejo, el nuevo sigue en espera— así que el botón avisa por acá y recién
+ * después recarga.
+ */
+self.addEventListener("message", (evento) => {
+  if (evento.data === "activar-ahora") self.skipWaiting();
 });
 
 self.addEventListener("activate", (evento) => {
@@ -107,7 +151,18 @@ async function primeroElCache(pedido) {
   const guardado = await cache.match(pedido);
   if (guardado) return guardado;
 
-  const respuesta = await fetch(pedido);
+  /*
+   * Con tope, igual que la navegación.
+   *
+   * Sin él, un archivo que no quedó guardado se queda esperando **para
+   * siempre** cuando no hay servidor: la pantalla no termina de cargar nunca y
+   * ni siquiera muestra un error. Se descubrió abriendo el ticket con el
+   * servidor apagado: la página quedaba colgada en blanco.
+   *
+   * Fallar rápido deja que el navegador muestre lo que sí tiene y que el resto
+   * dé error, que es algo con lo que se puede seguir trabajando.
+   */
+  const respuesta = await conTope(pedido);
   if (respuesta.ok) cache.put(pedido, respuesta.clone());
   return respuesta;
 }
@@ -126,13 +181,33 @@ async function soloRed(pedido) {
 async function primeroLaRed(evento, pedido) {
   const cache = await caches.open(SHELL);
 
+  /*
+   * La clave del caché es **la ruta sin el query**.
+   *
+   * El ticket local se abre como `/ticket/local?clave=<uuid de la venta>`, así
+   * que guardar por URL completa dejaría una entrada por cada venta impresa: el
+   * caché del shell crecería sin techo en la máquina que más se usa.
+   */
+  const clave = new URL(pedido.url).pathname;
+
   try {
     const preload = await evento.preloadResponse;
     const respuesta = preload || (await conTope(pedido));
-    await guardarSiSirve(cache, pedido.url, respuesta.clone());
+    await guardarSiSirve(cache, clave, respuesta.clone());
     return respuesta;
   } catch {
-    const guardado = (await cache.match(pedido)) || (await cache.match("/mostrador"));
+    /*
+     * `ignoreSearch` es lo que hace que el ticket salga.
+     *
+     * **Sin esto el papel no se imprimía justo el día que no hay internet**:
+     * `/ticket/local?clave=abc` no coincidía con el `/ticket/local` guardado, se
+     * caía al shell de `/mostrador`, y el botón "Imprimir" abría el punto de
+     * venta en vez del comprobante. Que la ruta sea fija y la clave viaje en el
+     * query fue una decisión para poder precachearla; faltaba la otra mitad.
+     */
+    const guardado =
+      (await cache.match(pedido, { ignoreSearch: true })) ||
+      (await cache.match("/mostrador"));
     if (guardado) return guardado;
 
     return new Response(
@@ -160,6 +235,36 @@ function conTope(pedido) {
  * en "iniciá sesión" aunque la sesión esté abierta. Es el error más fácil de
  * cometer acá y el más difícil de diagnosticar después.
  */
+/**
+ * Guarda los archivos que la página necesita para arrancar.
+ *
+ * Sin esto el HTML quedaba en el caché y **los chunks no**: al abrir sin
+ * internet, la pantalla cargaba y explotaba al hidratar, porque su JavaScript
+ * no estaba en ningún lado. Pasaba sobre todo con `/ticket/local`, que nadie
+ * visita mientras hay internet: se descubrió imprimiendo un ticket con el
+ * servidor apagado y encontrando "Se nos rompió algo".
+ *
+ * Se sacan del propio HTML: es la única fuente que sabe qué chunks le tocan a
+ * cada ruta, porque los nombres llevan hash y cambian en cada build.
+ */
+async function guardarLoQuePide(html) {
+  const cache = await caches.open(ESTATICOS);
+
+  const rutas = new Set(
+    [...html.matchAll(/["'](\/_next\/static\/[^"']+)["']/g)].map((m) => m[1]),
+  );
+
+  await Promise.allSettled(
+    [...rutas].map(async (ruta) => {
+      // Ya guardado por otra ruta imprescindible: no se pide de nuevo.
+      if (await cache.match(ruta)) return;
+
+      const respuesta = await fetch(ruta, { cache: "reload" });
+      if (respuesta.ok) await cache.put(ruta, respuesta);
+    }),
+  );
+}
+
 async function guardarSiSirve(cache, clave, respuesta) {
   const tipo = respuesta.headers.get("content-type") || "";
 

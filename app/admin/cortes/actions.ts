@@ -211,3 +211,46 @@ export async function crearCorte(
 
   return { ok: `Se cargó el corte ${numero}.` };
 }
+
+
+/**
+ * Carga las pasadas de sierra de un trabajo, que es lo que lo hace cobrable.
+ *
+ * Cuántas pasadas lleva un despiece lo decide el patrón que arma el optimizador
+ * de la seccionadora, no la plataforma: acá se anota lo que dio la máquina. Sin
+ * este número el corte no se puede cobrar, y hasta ahora no había dónde
+ * anotarlo —el importe se tipeaba de memoria en el mostrador—.
+ */
+export async function cargarPasadas(
+  id: string,
+  pasadas: number,
+): Promise<EstadoCorte> {
+  const usuario = await requireStaff();
+
+  const cantidad = Math.max(0, Math.floor(Number(pasadas) || 0));
+
+  const [corte] = await db
+    .select({ numero: cuttingOrders.numero, previas: cuttingOrders.pasadas })
+    .from(cuttingOrders)
+    .where(eq(cuttingOrders.id, id))
+    .limit(1);
+
+  if (!corte) return { error: "No encontramos la orden de corte." };
+
+  await db
+    .update(cuttingOrders)
+    .set({ pasadas: cantidad, updatedAt: new Date() })
+    .where(eq(cuttingOrders.id, id));
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "editar",
+    entidad: "corte",
+    entidadId: id,
+    descripcion: `${corte.numero}: ${corte.previas} → ${cantidad} pasadas`,
+  });
+
+  revalidatePath(`/admin/cortes/${id}`);
+  revalidatePath("/admin/cortes");
+  return { ok: "Pasadas cargadas." };
+}

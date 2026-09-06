@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Disponibilidad } from "@/components/catalogo/disponibilidad";
 import { useCarrito } from "@/lib/carrito-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
-import { PrecioSinImpuestos } from "@/components/precio-sin-impuestos";
+import { PrecioSecundario } from "@/components/precio";
+import { presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
 import type { VarianteDetalle } from "@/lib/dal/catalog";
 
 /**
@@ -22,15 +23,33 @@ export function SelectorVariante({
   unit,
   variantes,
   whatsapp,
+  alicuota = 21,
+  vista = "final",
+  aPedido = false,
 }: {
   productName: string;
   unit: string;
   variantes: VarianteDetalle[];
   whatsapp: string;
+  /** La del producto. Sin esto el neto informado se calcula siempre al 21 %. */
+  alicuota?: number;
+  /** Con IVA o sin IVA, según quién esté mirando. La resuelve el servidor. */
+  vista?: VistaDePrecio;
+  /**
+   * Se fabrica a pedido: no falta, se hace.
+   *
+   * Son los maquinados especiales del brief —escaleras a medida, tirantes en
+   * medidas que no vienen de origen—. Sin esto la ficha solo podía decir "no
+   * tenemos stock", que para este producto es directamente falso y espanta a
+   * quien justamente venía a encargarlo.
+   */
+  aPedido?: boolean;
 }) {
   const { agregar, guardando } = useCarrito();
   const [elegida, setElegida] = useState(variantes[0]);
   const [cantidad, setCantidad] = useState(1);
+
+  const mostrado = presentarPrecio(Number(elegida?.precio ?? 0), alicuota, vista);
 
   if (!elegida) {
     return (
@@ -102,17 +121,28 @@ export function SelectorVariante({
 
       {/* Precio de la medida elegida */}
       <div className="rounded-[14px] border border-linea bg-card px-[22px] py-5 shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
-        <p className="tabular text-4xl font-bold leading-none tracking-[-0.03em]">
-          {formatearPrecio(elegida.precio)}
+        <p className="flex items-baseline gap-2">
+          <span className="tabular text-4xl font-bold leading-none tracking-[-0.03em]">
+            {formatearPrecio(String(mostrado.principal))}
+          </span>
+          {mostrado.sufijo && (
+            <span className="text-base font-semibold text-texto-2">
+              {mostrado.sufijo}
+            </span>
+          )}
         </p>
         <p className="mt-1.5 text-[14.5px] text-texto-2">
-          por {formatearUnidad(unit)} · IVA incluido
+          por {formatearUnidad(unit)}
+          {vista === "final" && " · IVA incluido"}
           {elegida.material && ` · ${elegida.material}`}
           {elegida.color && ` · ${elegida.color}`}
+          {elegida.terminacion && ` · ${elegida.terminacion}`}
+          {elegida.calidad && ` · ${elegida.calidad}`}
         </p>
-        {/* Ley 27.743: el precio sin impuestos nacionales, junto al final. */}
-        <PrecioSinImpuestos
+        <PrecioSecundario
           precioFinal={Number(elegida.precio)}
+          alicuota={alicuota}
+          vista={vista}
           className="mt-1"
         />
 
@@ -127,9 +157,11 @@ export function SelectorVariante({
       {sinPrecio || sinStock ? (
         <div className="rounded-xl border border-dashed p-4 text-center">
           <p className="text-sm text-muted-foreground">
-            {sinPrecio
-              ? "Este producto se cotiza según la medida y el trabajo."
-              : "Ahora mismo no tenemos stock de esta medida."}
+            {aPedido
+              ? "Se fabrica a pedido, en nuestra planta. Escribinos con la medida y te pasamos el plazo."
+              : sinPrecio
+                ? "Este producto se cotiza según la medida y el trabajo."
+                : "Ahora mismo no tenemos stock de esta medida."}
           </p>
           <a
             href={whatsapp}

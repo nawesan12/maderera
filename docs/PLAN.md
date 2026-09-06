@@ -2,8 +2,8 @@
 
 > Documento de trabajo interno del PRESTADOR. Traduce el contrato firmado
 > (`Contrato — Maderera Juan B. Justo.pdf`, 15 pp.) a un plan ejecutable.
-> Última actualización: 29/08/2026 (decimotercera pasada: seguridad del
-> seguimiento, exportación de cortes y gráfico de ventas).
+> Última actualización: 05/09/2026 (el brief del cliente, aplicado de punta a
+> punta).
 
 ---
 
@@ -475,6 +475,94 @@ advertencias (había veinte).
   `agente-taller/` deja los archivos de corte en la carpeta del optimizador sin
   que nadie los baje a mano.
 
+> **Nota**: entre la decimocuarta pasada y esta se construyó y desplegó todo el
+> módulo de compras —proveedores con cuenta corriente, órdenes con recepción
+> parcial, costo promedio ponderado, libro IVA compras, retenciones, gastos y
+> cierre del mes con exportación de asientos— y el mostrador sin conexión. Nada
+> de eso estaba en el contrato y no quedó anotado acá en su momento; está en
+> `docs/ENTREGAS.md` y en el historial de commits.
+
+**Decimoquinta pasada — el brief del cliente (5/9/2026):**
+
+Llegó el relevamiento completo: 96 de 105 preguntas contestadas, en
+`brief.txt`. Es la primera vez que la plataforma corre con los datos y las
+reglas reales del negocio y no con los del prototipo.
+
+El brief hizo tres cosas distintas, y la segunda es la que más importó:
+
+- **Trajo el dato real.** CUIT, razón social, domicilio fiscal, los dos
+  teléfonos, los tres puntos de venta (15, 17 y 20), las ocho categorías con su
+  orden, las tres zonas de envío. Va en `lib/db/seed-negocio.ts`, idempotente y
+  versionado: cargarlo a mano una vez no se puede repetir ni revisar.
+- **Desmintió cosas que el sitio afirmaba.** Moldava no tiene "distribución
+  nacional" sino de la Provincia de Buenos Aires; no eran "más de 40 años" sino
+  45; los teléfonos publicados no eran de ninguna de las dos sucursales; el
+  aserradero está en **Diagonal** Canosa 61; la placa estándar de la calculadora
+  —1830 × 2820— no es ninguna de las cuatro medidas que existen en plaza; y el
+  machimbre lleva **20 %** de encastre, no el 8 % que calculaba el sistema.
+  También quedó claro que **la trayectoria de `/nosotros` sigue sin confirmar**:
+  el cuadro volvió en blanco, así que de los siete hitos quedaron los dos
+  verificables.
+- **Describió reglas que la plataforma no tenía**, y esa fue la mayor parte del
+  trabajo:
+
+  - **Precio con o sin IVA según quién mira.** Un profesional o un responsable
+    inscripto ve el neto grande con "+ IVA" al lado; el público sigue viendo el
+    final con el neto en letra chica, como exige la ley 27.743. Los precios
+    guardados no cambiaron: siguen siendo finales y siguen siendo lo que se
+    cobra.
+  - **Aviso al gremio** en catálogo y ficha: el precio diferenciado existía
+    desde la octava pasada y nada en pantalla decía que estuviera ahí.
+  - **Descuento por forma de pago** (−10 % de contado o transferencia), como
+    escala por monto y no como porcentaje único, aplicado en el checkout y en el
+    mostrador —incluso sin conexión—.
+  - **El corte de placas se cobra.** No se cobraba en ninguna parte: las tablas
+    no tenían una sola columna de importe y el número se tipeaba de memoria. Van
+    los cuatro precios del brief, por material y por lista, y las pasadas de
+    sierra se cargan después de optimizar, que es cuando se saben.
+  - **Envíos a cotizar.** El cliente contestó "depende" a las tres zonas; la
+    única forma de decirlo era dejar el costo en cero, que la pantalla mostraba
+    como "Sin cargo". Y se construyó `/admin/envios`, porque las zonas vivían
+    solo en el script de siembra.
+  - **Bloqueo de cuenta corriente por límite y por mora** en el mostrador y en
+    la facturación. Estaba **solo en el checkout web**: los dos caminos por los
+    que entra la mayor parte de la venta no verificaban nada. En el mostrador se
+    puede autorizar —hay alguien esperando— pero no pasar sin enterarse.
+  - **Fecha de necesidad** en los presupuestos, y compromiso de respuesta para
+    todos: antes solo lo tenían los profesionales aprobados.
+  - **Migración ampliada** a proveedores, histórico de ventas y comprobantes
+    emitidos, más **lectura directa de .xlsx** —el sistema viejo exporta a Excel
+    y los precios se actualizan con una planilla todas las semanas—.
+  - **Moldava como sección propia** (`/moldava`), que es lo que el brief pidió.
+
+**Las sucursales dejaron de ser datos.** Su ficha publicada —dirección,
+teléfono, horario, servicios— pasó de columnas editables a `lib/sucursales.ts`.
+Son dos locales que la maderera tiene desde hace décadas, y como columnas solo
+lograban que el domicilio del aserradero conviviera en tres versiones distintas
+en el mismo sitio. La tabla `branches` sigue: de su id cuelgan el stock, los
+pedidos, la caja, los remitos y los puntos de venta.
+
+**Cuatro defectos corregidos en el camino:**
+
+1. **Dos entradas del menú y del pie no filtraban nada.** `?cat=decks` y
+   `?cat=construccion-seco` no coincidían con los slugs reales y caían en "No
+   encontramos nada así".
+2. **La lectura de la planilla de precios había vuelto a partir por
+   renglones**, así que arrastraba el defecto que la migración ya había
+   corregido: un campo entre comillas con un salto de línea adentro partía el
+   registro en dos. Ahora las dos usan el mismo lector.
+3. **`PrecioSinImpuestos` calculaba siempre al 21 %**, sin mirar la alícuota
+   del producto. El dato que la ley obliga a publicar salía mal en todo lo que
+   no fuera 21.
+4. **El botón de cobrar del mostrador iba a pasar el evento del click como
+   "autorizado"**, lo que habría salteado el control de cuenta corriente en
+   cada venta. Se encontró al escribirlo.
+
+Tests: 435, contra los 392 de antes. Los nuevos cubren el lector de .xlsx —con
+un archivo armado byte a byte en el test—, la presentación del precio, el
+descuento por forma de pago, la tarifa de corte, los plazos con sábado y las
+cuatro calculadoras, que no tenían ninguno.
+
 ### Lo que falta para cerrar el contrato
 
 | # | Qué | Cláusula | Depende de |
@@ -711,12 +799,14 @@ escrito invocando 5.3.
 
 1. **Dónde se despliega** y quién paga la infraestructura (R5). Condiciona el cierre de S1.
 2. **WhatsApp: API real o disparo manual asistido** (R4). Condiciona S6.
-3. **Alcance de la migración**: ¿se migra el histórico completo de compras y saldos, o solo
-   el maestro de productos, clientes y saldos actuales? El contrato dice "productos, stock,
-   clientes y precios" (1.9) — el histórico de movimientos **no** está listado. Conviene
-   dejarlo explícito antes de que se asuma incluido.
-4. **Punto de venta electrónico**: ¿uno para toda la plataforma o uno por sucursal? Afecta
-   la numeración fiscal y no se puede cambiar cómodamente después.
+3. ~~**Alcance de la migración**~~ — **cerrada por el brief (5/9/2026)**: se migra
+   todo, incluido el histórico de ventas y los comprobantes emitidos, "desde
+   siempre". Excede la cláusula 1.9, que lista productos, stock, clientes y
+   precios; quedó anotado en `docs/CAMBIOS.md` y se hizo igual. Los dos
+   históricos van a tablas de solo lectura, no a `orders` ni a `invoices`.
+4. ~~**Punto de venta electrónico**~~ — **cerrada por el brief**: son **tres**,
+   los números 15, 17 y 20. Falta el último número emitido en cada uno, que es
+   lo que bloquea emitir el primer comprobante sin pisar la serie de ARCA.
 5. **`cacheComponents`**: sigue apagado, pero **el motivo que estaba escrito acá dejó de
    ser cierto y conviene dejar asentado por qué**.
 

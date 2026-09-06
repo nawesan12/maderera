@@ -61,3 +61,41 @@ Los **servicios** y los **destacados** van uno por renglón.
 
 El interruptor *Se muestra en el sitio público* saca la sucursal del sitio sin
 borrarla, para cuando un local está cerrado por reforma.
+
+
+## Avisos y promociones
+
+**Contenido → Avisos y promociones.** Es donde se anuncia una promoción sin
+que nadie toque el código: el 30 % con MODO los martes, el descuento por
+transferencia, una semana temática.
+
+Hay tres lugares:
+
+| Dónde | Qué es |
+|---|---|
+| **Franja de arriba de todo** | Una línea de texto sobre el encabezado, en todas las páginas. Para un aviso corto. |
+| **Portada, debajo del inicio** | El lugar grande. Si cargás varios, la portada los pasa solos, de a uno. |
+| **Arriba del catálogo** | Lo ve quien ya está buscando productos. |
+
+### Poné siempre la fecha de fin
+
+Es lo más importante de esta pantalla. Un banner con fecha de fin **se apaga
+solo**; sin ella queda anunciando en noviembre una promoción que terminó en
+septiembre, y eso termina con alguien reclamando en el mostrador un descuento
+que ya no existe.
+
+La fecha de inicio también sirve: se puede dejar cargada la promo del lunes el
+viernes anterior, y aparece sola.
+
+### La imagen es opcional
+
+Sin imagen el aviso sale sobre el naranja de la marca y se ve bien. Con una
+foto mal recortada, no. Si vas a subir una, que sea apaisada y de por lo menos
+1200 píxeles de ancho.
+
+### Un aviso tarda unos minutos en aparecer
+
+El sitio guarda una copia de las páginas para que carguen rápido. Al guardar se
+avisa que hay algo nuevo, pero puede tardar unos minutos en verse en todas las
+pantallas. Para una promoción de una semana no importa; si necesitás que salga
+al minuto, avisanos.

@@ -1,0 +1,1 @@
+ALTER TABLE "cutting_orders" ADD COLUMN "pasadas" integer DEFAULT 0 NOT NULL;

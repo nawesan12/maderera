@@ -6,7 +6,8 @@ import { ImageOff, Loader2, MessageCircle, Plus } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useCarrito } from "@/lib/carrito-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
-import { PrecioSinImpuestos } from "@/components/precio-sin-impuestos";
+import { PrecioSecundario } from "@/components/precio";
+import { presentarComparado, presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
 import type { ProductoListado } from "@/lib/dal/catalog";
 
 /**
@@ -36,13 +37,19 @@ import type { ProductoListado } from "@/lib/dal/catalog";
 export function ProductCard({
   product,
   whatsapp,
+  vista = "final",
 }: {
   product: ProductoListado;
   /** Número del negocio, en dígitos. Baja del servidor porque el dato es
    *  editable desde el panel y esto es un componente de cliente. */
   whatsapp: string;
+  /** Con IVA o sin IVA, según quién esté mirando. La resuelve el servidor. */
+  vista?: VistaDePrecio;
 }) {
   const { agregar, guardando } = useCarrito();
+
+  const alicuota = Number(product.alicuotaIva) || 21;
+  const mostrado = presentarPrecio(Number(product.precioDesde ?? 0), alicuota, vista);
 
   const sinPrecio = !product.precioDesde || Number(product.precioDesde) <= 0;
   const variasMedidas = product.labels.length > 1;
@@ -124,17 +131,31 @@ export function ProductCard({
                     enOferta ? "text-rojo-oferta" : "text-foreground"
                   }`}
                 >
-                  {formatearPrecio(product.precioDesde)}
+                  {formatearPrecio(String(mostrado.principal))}
                 </span>
+                {mostrado.sufijo && (
+                  <span className="text-[11.5px] font-semibold leading-none text-texto-3">
+                    {mostrado.sufijo}
+                  </span>
+                )}
                 {product.precioAnterior && (
                   <span className="tabular text-[12.5px] leading-none text-texto-3 line-through">
-                    {formatearPrecio(product.precioAnterior)}
+                    {formatearPrecio(
+                      String(
+                        presentarComparado(
+                          Number(product.precioAnterior),
+                          alicuota,
+                          vista,
+                        ),
+                      ),
+                    )}
                   </span>
                 )}
               </p>
-              {/* Ley 27.743: junto al precio final se informa el neto. */}
-              <PrecioSinImpuestos
+              <PrecioSecundario
                 precioFinal={Number(product.precioDesde)}
+                alicuota={alicuota}
+                vista={vista}
                 compacto
               />
             </>

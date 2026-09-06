@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { AlertCircle, Check, Clock, Loader2, Send } from "lucide-react";
 import { pedirPresupuesto, type EstadoPresupuesto } from "./actions";
+import { MOTIVOS_DE_COTIZACION } from "./motivos";
 
 const inicial: EstadoPresupuesto = {};
 
@@ -68,7 +69,7 @@ export function PedirPresupuesto({
         <p className="text-sm text-muted-foreground">
           {esProfesional
             ? "Te contestamos dentro de las 24 horas hábiles."
-            : "Te lo mandamos armado por correo."}
+            : "Te lo contestamos el mismo día, dentro del horario de atención."}
         </p>
       </div>
 
@@ -122,6 +123,48 @@ export function PedirPresupuesto({
         </div>
       )}
 
+      <fieldset>
+        <legend className="block text-sm font-medium">
+          ¿Alguno de estos aplica?
+        </legend>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Nos dice si lo puede resolver el mostrador o tiene que verlo
+          administración.
+        </p>
+        <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+          {MOTIVOS_DE_COTIZACION.map((motivo) => (
+            <label
+              key={motivo.valor}
+              className="flex items-start gap-2 text-sm leading-snug"
+            >
+              <input
+                type="checkbox"
+                name="motivos"
+                value={motivo.valor}
+                className="mt-0.5 h-4 w-4 accent-brand-orange"
+              />
+              {motivo.etiqueta}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div>
+        <label htmlFor="necesitaPara" className="block text-sm font-medium">
+          ¿Para cuándo lo necesitás?
+        </label>
+        <input
+          id="necesitaPara"
+          name="necesitaPara"
+          type="date"
+          className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
+        />
+        <p className="mt-1 text-sm text-muted-foreground">
+          No es obligatorio, pero nos ordena la cola: si hay una fecha de obra,
+          la tenemos en cuenta.
+        </p>
+      </div>
+
       <div>
         <label htmlFor="notas" className="block text-sm font-medium">
           Algo que tengamos que saber
@@ -130,7 +173,7 @@ export function PedirPresupuesto({
           id="notas"
           name="notas"
           rows={2}
-          placeholder="Medidas especiales, plazo de obra, forma de pago…"
+          placeholder="Medidas especiales, quién retira, forma de pago…"
           className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-base"
         />
       </div>

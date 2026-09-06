@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Download, ImageOff, Tags } from "lucide-react";
+import { Download, FileText, ImageOff, Percent, Tags } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
 import { recortar, VerTodo } from "@/components/admin/ver-mas";
@@ -75,7 +75,25 @@ export default async function PreciosPage({
           <Download className="h-5 w-5" />
           Exportar
         </a>
+        {/* El PDF es el que se le manda a un cliente: lleva membrete y fecha
+            de vigencia. El CSV es para trabajarlo y volver a subirlo. */}
+        <a
+          href={`${urlExportar}${urlExportar.includes("?") ? "&" : "?"}formato=pdf`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <FileText className="h-5 w-5" />
+          Lista en PDF
+        </a>
         <DialogoImportar />
+        <Link
+          href="/admin/precios/formas-de-pago"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <Percent className="h-5 w-5" />
+          Formas de pago
+        </Link>
         <DialogoAjuste
           categorias={categorias.map((c) => ({ slug: c.slug, name: c.name }))}
           categoriaActual={params.cat ?? "todos"}

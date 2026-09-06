@@ -1,6 +1,7 @@
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { escalasDePago } from "@/lib/dal/descuentos-pago";
 import { conStaff } from "../guardia";
 
 /**
@@ -12,10 +13,11 @@ import { conStaff } from "../guardia";
  */
 export async function GET() {
   return conStaff(async () => {
-    const [sucursales, emisor, ajustes] = await Promise.all([
+    const [sucursales, emisor, ajustes, escalas] = await Promise.all([
       listarSucursalesPublicas(),
       obtenerConfiguracionFiscal(),
       ajustesDelSitio(),
+      escalasDePago(),
     ]);
 
     return {
@@ -33,6 +35,15 @@ export async function GET() {
         domicilio: emisor?.domicilio ?? null,
       },
       whatsapp: ajustes.whatsapp_principal ?? null,
+      /*
+       * Los descuentos por forma de pago viajan acá para que el mostrador los
+       * aplique también sin conexión. El servidor los vuelve a calcular
+       * cuando la venta sube, así que una copia vieja en la caja no puede
+       * fijar un descuento que ya no existe: lo peor que pasa es que la
+       * pantalla muestre un número y el sistema corrija después, que es lo
+       * mismo que ya pasa con el precio.
+       */
+      escalasDePago: escalas,
     };
   });
 }

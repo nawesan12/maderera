@@ -16,7 +16,8 @@ import {
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
-import { leerCsv, type FilaImportada } from "@/lib/precios-csv";
+import { leerFilas, type FilaImportada } from "@/lib/precios-csv";
+import { leerPlanilla } from "@/lib/planilla";
 
 export interface EstadoPrecios {
   error?: string;
@@ -354,7 +355,14 @@ export async function previsualizarImportacion(
     };
   }
 
-  const leidas = leerCsv(await archivo.text());
+  const { filas, error: errorLectura } = leerPlanilla(
+    new Uint8Array(await archivo.arrayBuffer()),
+  );
+  if (errorLectura) {
+    return { filas: [], cambian: 0, iguales: 0, problemas: 0, error: errorLectura };
+  }
+
+  const leidas = leerFilas(filas);
   if (leidas.length === 0) {
     return {
       filas: [],

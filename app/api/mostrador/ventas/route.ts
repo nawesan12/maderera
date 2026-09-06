@@ -115,6 +115,15 @@ export async function POST(request: Request) {
         // venta es de Ana. El servidor igual valida que sea alguien real.
         usuarioId: venta.usuarioId ?? usuario.userId,
         cobradaAt: new Date(venta.cobradaAt),
+        /*
+         * Una venta de la cola ya sucedió: la plata está en el cajón y la
+         * mercadería salió por la puerta hace horas. Rechazarla ahora porque
+         * el cliente pasó el límite de cuenta corriente no deshace nada —solo
+         * deja la venta sin registrar y la caja sin cerrar—. Entra igual y el
+         * saldo pasado de límite queda a la vista en la ficha, que es donde
+         * hay que resolverlo.
+         */
+        autorizado: true,
       });
 
       if (!resultado.ok) {

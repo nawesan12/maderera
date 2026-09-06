@@ -23,6 +23,12 @@ import {
   type LineaDeVenta,
   type MedioDeMostrador,
 } from "./importes";
+import { escalasDePago } from "@/lib/dal/descuentos-pago";
+import { estadoDeCredito } from "@/lib/dal/credito";
+import {
+  descuentoPorMedioDePago,
+  montoDelDescuentoDePago,
+} from "@/lib/precios/medio-pago";
 
 export type { LineaDeVenta, MedioDeMostrador };
 
@@ -72,6 +78,15 @@ export interface VentaDeMostrador {
   descuentoMotivo?: string | null;
   notas?: string | null;
   usuarioId: string;
+  /**
+   * El vendedor confirmó que va igual, pese al aviso de cuenta corriente.
+   *
+   * Llega del navegador y eso está bien: es la decisión de una persona que
+   * está mirando la pantalla, no un dato que el sistema pueda deducir. Lo que
+   * no puede hacer es saltear un bloqueo no autorizable —una cuenta que nunca
+   * existió—, y eso se decide en el servidor.
+   */
+  autorizado?: boolean;
 
   /* ---- Solo para las ventas que se hicieron sin conexión ---- */
 
@@ -106,6 +121,14 @@ export interface ResultadoVenta {
 export interface FalloVenta {
   ok: false;
   error: string;
+  /**
+   * El fallo se puede saltear con la confirmación de un vendedor.
+   *
+   * La pantalla lo usa para ofrecer "seguir igual" en vez de un callejón sin
+   * salida. Va aparte del mensaje porque no todo bloqueo es autorizable: un
+   * cliente sin cuenta corriente habilitada no se destraba confirmando.
+   */
+  requiereAutorizacion?: boolean;
 }
 
 export async function registrarVentaDeMostrador(
@@ -128,11 +151,59 @@ export async function registrarVentaDeMostrador(
    * necesita para poder mostrarlo.
    */
   const subtotal = totalDeLaVenta(venta.lineas);
-  const { lineas, descuento } = aplicarDescuento(
-    venta.lineas,
-    venta.descuento ?? 0,
+
+  /*
+   * El descuento por forma de pago se resuelve acá, en el servidor, contra la
+   * base. La pantalla ya lo mostró —y lo muestra igual sin conexión, con la
+   * copia que baja `/api/mostrador/config`—, pero el número que vale es este:
+   * una caja que estuvo tres días sin conectarse tiene la escala de hace tres
+   * días.
+   *
+   * **Un descuento tipeado a mano gana sobre el automático.** Si el vendedor
+   * escribió un número es porque negoció algo puntual, y pisárselo con la
+   * escala general sería discutir con quien tiene al cliente enfrente. Lo que
+   * no se hace nunca es sumar los dos: eso convierte un 10 % pactado en un
+   * 20 % accidental.
+   */
+  const pedido = venta.descuento ?? 0;
+  const escala = descuentoPorMedioDePago(
+    await escalasDePago(),
+    venta.medioPago,
+    subtotal,
   );
+  const automatico = escala
+    ? montoDelDescuentoDePago(subtotal, escala.porcentaje)
+    : 0;
+
+  const aDescontar = pedido > 0 ? pedido : automatico;
+  const motivoAutomatico =
+    pedido > 0 ? null : (escala?.etiqueta || null);
+
+  const { lineas, descuento } = aplicarDescuento(venta.lineas, aDescontar);
   const total = totalDeLaVenta(lineas);
+
+  /*
+   * Cuenta corriente: límite y mora.
+   *
+   * Hasta acá el mostrador solo exigía que hubiera un cliente elegido. Un
+   * cliente con la cuenta vencida podía seguir llevando mercadería a cuenta
+   * indefinidamente, que es exactamente lo que el brief pide frenar.
+   *
+   * `autorizado` es la válvula: hay alguien esperando del otro lado del
+   * mostrador y la decisión de vender igual es del negocio, no del sistema.
+   * Lo que el sistema garantiza es que nadie lo haga **sin enterarse**.
+   */
+  if (venta.medioPago === "cuenta_corriente" && venta.customerId) {
+    const credito = await estadoDeCredito(venta.customerId, total);
+
+    if (!credito.puede && !(venta.autorizado && credito.autorizable)) {
+      return {
+        ok: false,
+        error: credito.motivo ?? "No se puede cargar a cuenta corriente.",
+        requiereAutorizacion: credito.autorizable,
+      };
+    }
+  }
 
   return db.transaction(async (tx) => {
     /*
@@ -232,7 +303,10 @@ export async function registrarVentaDeMostrador(
         tipoEntrega: "retiro",
         subtotal: subtotal.toFixed(2),
         descuento: descuento.toFixed(2),
-        descuentoMotivo: descuento > 0 ? (venta.descuentoMotivo ?? null) : null,
+        descuentoMotivo:
+          descuento > 0
+            ? (venta.descuentoMotivo ?? motivoAutomatico)
+            : null,
         total: total.toFixed(2),
         medioPago: venta.medioPago,
         estadoPago: aCuenta ? "pendiente" : "pagado",

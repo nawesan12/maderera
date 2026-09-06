@@ -34,8 +34,10 @@ export interface PresupuestoListado {
   createdAt: Date;
   validoHasta: Date | null;
   vencido: boolean;
-  /** Compromiso de respuesta, solo en los express del portal profesional. */
+  /** Compromiso de respuesta. Todos lo tienen; los express, más corto. */
   respondeHasta: Date | null;
+  /** Para cuándo lo necesita el cliente. Es lo que de verdad apura. */
+  necesitaPara: Date | null;
   /** Cómo se lee ese plazo: "Quedan 3 h", "Se pasó de hora". */
   plazo: { texto: string; urgente: boolean; vencido: boolean } | null;
 }
@@ -82,6 +84,7 @@ export async function listarPresupuestos(
       createdAt: quotes.createdAt,
       validoHasta: quotes.validoHasta,
       respondeHasta: quotes.respondeHasta,
+      necesitaPara: quotes.necesitaPara,
       items: conteo.items,
     })
     .from(quotes)
@@ -95,6 +98,9 @@ export async function listarPresupuestos(
     .orderBy(
       sql`case when ${quotes.respondeHasta} is null then 1 else 0 end`,
       sql`${quotes.respondeHasta} asc nulls last`,
+      // A igual compromiso de respuesta, primero el que tiene la obra más
+      // cerca. Es el dato que el cliente da y que nadie más puede deducir.
+      sql`${quotes.necesitaPara} asc nulls last`,
       desc(quotes.createdAt),
     );
 

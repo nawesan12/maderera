@@ -9,6 +9,8 @@ import { ScrollToTop } from "@/components/scroll-to-top";
 import { CarritoProvider } from "@/lib/carrito-context";
 import { EstadoProvider } from "@/lib/estado-context";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { bannersDe } from "@/lib/dal/banners";
+import { FranjaDeAviso } from "@/components/banner";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { organizacionJsonLd, sitioWebJsonLd } from "@/lib/seo";
@@ -36,10 +38,13 @@ export default async function PublicLayout({
   // `error.tsx` de esta carpeta —sube hasta el global y reemplaza el documento
   // entero—, así que el teléfono de la barra no puede tener el poder de dejar
   // el sitio sin marca ni navegación.
-  const [ajustes, sucursales, whatsapp] = await Promise.all([
+  const [ajustes, sucursales, whatsapp, avisos] = await Promise.all([
     degradar("los ajustes del sitio", ajustesDelSitio, {}),
     degradar("las sucursales", listarSucursalesPublicas, []),
     degradar("el enlace de WhatsApp", () => enlaceWhatsapp(), ""),
+    // Si los avisos fallan, el sitio se sirve sin ellos: una promoción no
+    // puede voltear el encabezado de todas las páginas.
+    degradar("los avisos", () => bannersDe("franja"), []),
   ]);
 
   // El teléfono y el horario de la barra superior salen de la primera sucursal
@@ -71,6 +76,9 @@ export default async function PublicLayout({
     <CarritoProvider>
       <SaltarAlContenido />
       <DatosEstructurados datos={marcado} />
+      {/* Arriba del encabezado: es donde se mira un aviso, y donde no tapa
+          nada. Se muestra uno solo aunque haya varios cargados. */}
+      {avisos[0] && <FranjaDeAviso banner={avisos[0]} />}
       <Navbar
         telefono={principal?.telefono}
         horario={principal?.horario}

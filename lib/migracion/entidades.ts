@@ -19,7 +19,14 @@
 import { cuitValido, soloDigitos } from "@/lib/cuit";
 import { interpretarNumero, normalizarEncabezado } from "@/lib/csv";
 
-export type ClaveEntidad = "clientes" | "productos" | "stock" | "saldos";
+export type ClaveEntidad =
+  | "clientes"
+  | "productos"
+  | "stock"
+  | "saldos"
+  | "proveedores"
+  | "ventas_historicas"
+  | "comprobantes_historicos";
 
 /**
  * Filas por lote.
@@ -37,7 +44,8 @@ export type TipoCampo =
   | "entero"
   | "cuit"
   | "email"
-  | "opcion";
+  | "opcion"
+  | "fecha";
 
 export interface OpcionCampo {
   valor: string;
@@ -123,7 +131,7 @@ const TIPOS_CLIENTE: OpcionCampo[] = [
 ];
 
 /* -------------------------------------------------------------------------- */
-/* Las cuatro entidades                                                        */
+/* Las siete entidades                                                         */
 /* -------------------------------------------------------------------------- */
 
 export const ENTIDADES: DefinicionEntidad[] = [
@@ -401,6 +409,240 @@ export const ENTIDADES: DefinicionEntidad[] = [
       },
     ],
   },
+  {
+    clave: "proveedores",
+    titulo: "Proveedores",
+    resumen:
+      "La cartera de proveedores con sus datos fiscales. Se puede correr en cualquier momento; no depende de nada.",
+    escribe:
+      "Crea o actualiza la ficha del proveedor y, si viene saldo, deja un movimiento de saldo inicial en su cuenta corriente.",
+    identidad:
+      "El código del sistema anterior, o el CUIT si no hay código. Volver a correr el archivo actualiza la ficha en vez de duplicarla.",
+    campos: [
+      {
+        clave: "codigo",
+        etiqueta: "Código del proveedor",
+        tipo: "texto",
+        alias: ["codigo", "cod", "codproveedor", "codigoproveedor", "nroproveedor", "idproveedor", "id"],
+        ayuda: "El del sistema viejo. Es lo que permite volver a subir el archivo sin duplicar la cartera.",
+      },
+      {
+        clave: "nombre",
+        etiqueta: "Nombre",
+        tipo: "texto",
+        requerido: true,
+        alias: ["nombre", "proveedor", "razonsocial", "nombreproveedor", "descripcion"],
+      },
+      {
+        clave: "cuit",
+        etiqueta: "CUIT",
+        tipo: "cuit",
+        alias: ["cuit", "cuil", "cuitcuil", "documento"],
+      },
+      {
+        clave: "condicionIva",
+        etiqueta: "Condición frente al IVA",
+        tipo: "opcion",
+        opciones: CONDICIONES_IVA,
+        porDefecto: "responsable_inscripto",
+        alias: ["condicioniva", "condicion", "iva", "situacioniva", "tipoiva", "categoria"],
+      },
+      {
+        clave: "email",
+        etiqueta: "Correo",
+        tipo: "email",
+        alias: ["email", "mail", "correo", "correoelectronico"],
+      },
+      {
+        clave: "telefono",
+        etiqueta: "Teléfono",
+        tipo: "texto",
+        alias: ["telefono", "tel", "celular", "movil", "contacto"],
+      },
+      {
+        clave: "direccion",
+        etiqueta: "Domicilio",
+        tipo: "texto",
+        alias: ["direccion", "domicilio", "calle", "domiciliofiscal"],
+      },
+      {
+        clave: "saldo",
+        etiqueta: "Saldo",
+        tipo: "numero",
+        alias: ["saldo", "saldoactual", "deuda", "saldocuentacorriente"],
+        ayuda: "Positivo es lo que le debemos al proveedor. Si viene vacío no se carga ningún movimiento.",
+      },
+      {
+        clave: "notas",
+        etiqueta: "Observaciones",
+        tipo: "texto",
+        alias: ["notas", "observaciones", "comentario", "detalle"],
+      },
+    ],
+  },
+  {
+    clave: "ventas_historicas",
+    titulo: "Histórico de ventas",
+    resumen:
+      "Las ventas del sistema anterior, para poder consultarlas. Se corre después de los clientes.",
+    escribe:
+      "Escribe en el archivo histórico, que es de solo lectura. No crea pedidos: no mueve stock ni entra en ninguna cola de trabajo.",
+    identidad:
+      "El número de comprobante del sistema viejo. Volver a correr el archivo actualiza la fila en vez de duplicarla.",
+    campos: [
+      {
+        clave: "comprobante",
+        etiqueta: "Número de comprobante",
+        tipo: "texto",
+        requerido: true,
+        alias: ["comprobante", "numero", "nrocomprobante", "numerocomprobante", "factura", "nrofactura", "documento", "nro"],
+        ayuda: "Cómo lo identificaba el sistema viejo. Es lo que evita cargar la misma venta dos veces.",
+      },
+      {
+        clave: "fecha",
+        etiqueta: "Fecha",
+        tipo: "fecha",
+        requerido: true,
+        alias: ["fecha", "fechacomprobante", "fechaventa", "fechaemision", "emision"],
+        ayuda: "Día/mes/año, como lo escribe el sistema viejo.",
+      },
+      {
+        clave: "codigoCliente",
+        etiqueta: "Código del cliente",
+        tipo: "texto",
+        alias: ["codigocliente", "codcliente", "cliente", "nrocliente", "idcliente", "codigo"],
+        ayuda: "El mismo con el que se migraron los clientes. Sin esto la venta queda sin ficha asociada.",
+      },
+      {
+        clave: "clienteNombre",
+        etiqueta: "Nombre del cliente",
+        tipo: "texto",
+        alias: [
+          "nombrecliente",
+          "razonsocial",
+          "cliente",
+          "nombre",
+          "apellidoynombre",
+        ],
+      },
+      {
+        clave: "total",
+        etiqueta: "Total",
+        tipo: "numero",
+        requerido: true,
+        alias: ["total", "importe", "importetotal", "monto", "totalventa"],
+      },
+      {
+        clave: "detalle",
+        etiqueta: "Detalle",
+        tipo: "texto",
+        alias: ["detalle", "descripcion", "concepto", "articulos", "observaciones"],
+        ayuda: "Se guarda tal como viene, sin partirlo en renglones.",
+      },
+      {
+        clave: "sucursal",
+        etiqueta: "Sucursal",
+        tipo: "texto",
+        alias: ["sucursal", "deposito", "local", "punto", "puntoventa"],
+      },
+      {
+        clave: "vendedor",
+        etiqueta: "Vendedor",
+        tipo: "texto",
+        alias: ["vendedor", "asesor", "usuario", "operador"],
+      },
+    ],
+  },
+  {
+    clave: "comprobantes_historicos",
+    titulo: "Comprobantes emitidos",
+    resumen:
+      "Las facturas y notas que ya emitió el sistema anterior. Se corre después de los clientes.",
+    escribe:
+      "Escribe en el archivo histórico. **No toca la numeración fiscal nueva**: los comprobantes que emita esta plataforma siguen su propia serie.",
+    identidad:
+      "Punto de venta, tipo y número. Volver a correr el archivo actualiza la fila en vez de duplicarla.",
+    campos: [
+      {
+        clave: "puntoVenta",
+        etiqueta: "Punto de venta",
+        tipo: "entero",
+        requerido: true,
+        alias: ["puntoventa", "ptovta", "pv", "punto", "sucursal", "boca"],
+      },
+      {
+        clave: "tipo",
+        etiqueta: "Tipo de comprobante",
+        tipo: "texto",
+        requerido: true,
+        alias: ["tipo", "tipocomprobante", "comprobante", "letra", "clase"],
+        ayuda: "Se guarda tal como lo escribe el sistema viejo (\"Factura A\", \"FA\", \"NC B\"). No se reinterpreta: es un dato fiscal ya registrado en ARCA.",
+      },
+      {
+        clave: "numero",
+        etiqueta: "Número",
+        tipo: "entero",
+        requerido: true,
+        alias: ["numero", "nro", "nrocomprobante", "numerocomprobante", "correlativo"],
+      },
+      {
+        clave: "fecha",
+        etiqueta: "Fecha de emisión",
+        tipo: "fecha",
+        requerido: true,
+        alias: ["fecha", "fechaemision", "emision", "fechacomprobante"],
+      },
+      {
+        clave: "codigoCliente",
+        etiqueta: "Código del cliente",
+        tipo: "texto",
+        alias: ["codigocliente", "codcliente", "nrocliente", "idcliente", "codigo"],
+      },
+      {
+        clave: "clienteNombre",
+        etiqueta: "Nombre del cliente",
+        tipo: "texto",
+        alias: ["nombrecliente", "razonsocial", "cliente", "nombre"],
+      },
+      {
+        clave: "clienteCuit",
+        etiqueta: "CUIT del cliente",
+        tipo: "cuit",
+        alias: ["cuit", "cuil", "cuitcliente", "documento"],
+      },
+      {
+        clave: "neto",
+        etiqueta: "Neto gravado",
+        tipo: "numero",
+        alias: ["neto", "netogravado", "gravado", "subtotal", "importeneto"],
+      },
+      {
+        clave: "iva",
+        etiqueta: "IVA",
+        tipo: "numero",
+        alias: ["iva", "importeiva", "ivainscripto", "impuesto"],
+      },
+      {
+        clave: "total",
+        etiqueta: "Total",
+        tipo: "numero",
+        requerido: true,
+        alias: ["total", "importetotal", "importe", "monto"],
+      },
+      {
+        clave: "cae",
+        etiqueta: "CAE",
+        tipo: "texto",
+        alias: ["cae", "caea", "codigoautorizacion", "autorizacion"],
+      },
+      {
+        clave: "caeVence",
+        etiqueta: "Vencimiento del CAE",
+        tipo: "fecha",
+        alias: ["caevence", "vencimientocae", "fechavencimientocae", "vtocae"],
+      },
+    ],
+  },
 ];
 
 export function definicionDe(clave: ClaveEntidad): DefinicionEntidad {
@@ -523,6 +765,49 @@ function interpretarEntero(bruto: string): string | null {
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Una fecha del sistema viejo a ISO.
+ *
+ * Los sistemas de escritorio argentinos escriben **día primero**: 03/09/2026
+ * es el 3 de septiembre, no el 9 de marzo. `new Date(texto)` lo lee al revés
+ * —asume formato de Estados Unidos— y el error es silencioso: la fecha entra,
+ * es válida, y está corrida siete meses. En un archivo histórico de veinte mil
+ * ventas eso no se descubre nunca.
+ *
+ * Se aceptan `d/m/aaaa`, `d-m-aaaa` y el ISO `aaaa-mm-dd` que ya viene bien.
+ * Devuelve `null` si no entiende, para que la fila se rechace con motivo en
+ * vez de entrar con una fecha inventada.
+ */
+export function interpretarFecha(texto: string): string | null {
+  const limpio = texto.trim().split(/[\sT]/)[0];
+  if (limpio === "") return null;
+
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(limpio);
+  const criollo = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(limpio);
+
+  let anio: number, mes: number, dia: number;
+  if (iso) {
+    [anio, mes, dia] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+  } else if (criollo) {
+    dia = Number(criollo[1]);
+    mes = Number(criollo[2]);
+    anio = Number(criollo[3]);
+    // Dos dígitos: 98 es 1998 y 26 es 2026. El corte en 70 es la convención
+    // habitual y acá alcanza: la maderera abrió en 1981.
+    if (anio < 100) anio += anio < 70 ? 2000 : 1900;
+  } else {
+    return null;
+  }
+
+  if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  // Rebota el 31 de febrero, que `Date` acomodaría al 3 de marzo sin avisar.
+  if (fecha.getUTCMonth() !== mes - 1 || fecha.getUTCDate() !== dia) return null;
+
+  return fecha.toISOString();
+}
+
 /** Lee un campo y devuelve el valor normalizado o el motivo del rechazo. */
 function leerCampo(
   campo: CampoDestino,
@@ -582,6 +867,17 @@ function leerCampo(
         return { valor: "", aviso: `El correo "${texto}" no parece válido. Se deja vacío.` };
       }
       return { valor: correo };
+    }
+
+    case "fecha": {
+      const fecha = interpretarFecha(texto);
+      if (fecha === null) {
+        return {
+          valor: "",
+          error: `${campo.etiqueta}: "${texto}" no es una fecha. Se espera día/mes/año.`,
+        };
+      }
+      return { valor: fecha };
     }
 
     case "opcion": {

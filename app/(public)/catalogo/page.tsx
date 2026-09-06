@@ -1,8 +1,15 @@
 import type { Metadata } from "next";
+import { vistaDePrecio } from "@/lib/dal/precios-sesion";
+import { getSession } from "@/lib/dal/session";
+import { AvisoGremio } from "@/components/catalogo/aviso-gremio";
+import { bannersDe } from "@/lib/dal/banners";
+import { Banner } from "@/components/banner";
+import { RailDeCategorias } from "@/components/catalogo/rail-categorias";
+import { FranjaBeneficios } from "@/components/franja-beneficios";
 import { numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import { Suspense } from "react";
 import Link from "next/link";
-import { Search, Tag, Truck, Store, Headphones } from "lucide-react";
+import { Search } from "lucide-react";
 import { ProductCard } from "@/components/product-card";
 import { ProductCardSkeleton } from "@/components/product-card-skeleton";
 import {
@@ -137,7 +144,7 @@ export default async function CatalogoPage({
     <div className="min-h-screen bg-sitio-alt">
       <DatosEstructurados datos={migas} />
       <Encabezado />
-      <FranjaConfianza />
+      <FranjaBeneficios tono="claro" />
 
       <div className="contenedor py-8">
         <Suspense fallback={<div className="mb-6 h-11" />}>
@@ -190,32 +197,6 @@ function Encabezado() {
   );
 }
 
-/** Lo que responde las dudas de siempre, antes de que haya que preguntarlas. */
-function FranjaConfianza() {
-  const puntos = [
-    { icono: Truck, texto: "Envíos en Mar del Plata y zona" },
-    { icono: Store, texto: "Retiro sin cargo en sucursal" },
-    { icono: Tag, texto: "Precios para profesionales" },
-    { icono: Headphones, texto: "Asesoramiento sin cargo" },
-  ];
-
-  return (
-    <div className="border-b border-linea-suave bg-card">
-      <ul className="contenedor grid grid-cols-2 gap-x-6 gap-y-3 py-4 lg:grid-cols-4">
-        {puntos.map((p) => (
-          <li key={p.texto} className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-naranja-claro text-acento-texto">
-              <p.icono className="h-4 w-4" />
-            </span>
-            <span className="text-sm leading-[1.35] text-texto-2">
-              {p.texto}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 /**
  * El panel de filtros, que va en dos lugares: el cajón del teléfono y la
@@ -266,6 +247,10 @@ async function Lateral({ params }: { params: Params }) {
 async function Resultados({ params }: { params: Params }) {
   const pagina = Math.max(1, Number(params.pagina) || 1);
   const whatsapp = await numeroWhatsapp();
+  const vista = await vistaDePrecio();
+  const sesion = await getSession();
+  const avisos = await bannersDe("catalogo");
+  const categorias = await listarCategorias();
 
   const { productos, total, hayMas, topeAlcanzado } = await paginaDeProductos(
     {
@@ -302,6 +287,34 @@ async function Resultados({ params }: { params: Params }) {
 
   return (
     <div>
+      {/* Al gremio hay que decirle que su precio existe y está detrás del
+          ingreso. A quien ya entró no: vería un cartel que no es cierto. */}
+      {/* La misma navegación de la portada, en la forma que corresponde acá.
+          Sin esto el catálogo se sentía otro sitio: la lista de categorías
+          quedaba escondida detrás de un botón en el teléfono. */}
+      <RailDeCategorias
+        categorias={categorias.map((c) => ({
+          slug: c.slug,
+          name: c.name,
+          productCount: c.productCount,
+        }))}
+        activa={params.cat ?? "todos"}
+      />
+
+      {avisos.length > 0 && (
+        <div className="mb-4 space-y-3">
+          {avisos.map((aviso) => (
+            <Banner key={aviso.id} banner={aviso} />
+          ))}
+        </div>
+      )}
+
+      {!sesion && (
+        <div className="mb-4">
+          <AvisoGremio />
+        </div>
+      )}
+
       <p className="mb-4 text-[15px] text-texto-2">
         <span className="tabular font-semibold text-foreground">{total}</span>{" "}
         {total === 1 ? "producto" : "productos"}
@@ -317,7 +330,7 @@ async function Resultados({ params }: { params: Params }) {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {productos.map((producto) => (
-          <ProductCard key={producto.id} product={producto} whatsapp={whatsapp} />
+          <ProductCard key={producto.id} product={producto} whatsapp={whatsapp} vista={vista} />
         ))}
       </div>
 

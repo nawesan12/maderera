@@ -10,7 +10,8 @@ import { getSession } from "@/lib/dal/session";
 import { obtenerCarrito } from "@/lib/dal/carrito";
 import { estadoProfesional } from "@/lib/dal/profesionales";
 import { siguienteNumeroDePresupuesto } from "@/lib/dal/numeracion-ventas";
-import { vencimientoExpress } from "@/lib/plazos";
+import { vencimientoDelDia, vencimientoExpress } from "@/lib/plazos";
+import { MOTIVOS_DE_COTIZACION } from "./motivos";
 import { notificarPresupuestoRecibido } from "@/lib/notificaciones/presupuestos";
 
 export interface EstadoPresupuesto {
@@ -26,8 +27,32 @@ const esquema = z.object({
   email: z.string().trim().email("Revisá el correo."),
   telefono: z.string().trim().min(6, "Dejanos un teléfono.").max(40),
   sucursalId: z.string().uuid().optional(),
+  /**
+   * Para cuándo lo necesita.
+   *
+   * El brief lo pone entre los datos mínimos que hay que pedirle al cliente,
+   * junto con las medidas, la cantidad y el material —esos tres ya vienen en
+   * los renglones del carrito—. Es lo que ordena la cola por lo que de verdad
+   * apura, que muchas veces no es lo que entró primero.
+   */
+  necesitaPara: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v ? new Date(`${v}T12:00:00`) : null))
+    .refine((d) => d === null || !Number.isNaN(d.getTime()), "Revisá la fecha."),
+  /**
+   * Qué hace que este pedido necesite una cotización especial.
+   *
+   * Los cuatro motivos son los que el brief lista: precios por volumen, fletes
+   * especiales, fabricación a pedido y obras completas. No son un adorno: son
+   * lo que decide si el presupuesto lo arma el mostrador o tiene que pasar por
+   * administración, y saberlo al entrar evita el ida y vuelta.
+   */
+  motivos: z.array(z.string().max(40)).max(6).default([]),
   notas: z.string().trim().max(800).optional(),
 });
+
 
 /** Cuánto vale un presupuesto antes de que los precios se muevan. */
 const DIAS_DE_VALIDEZ = 15;
@@ -57,6 +82,8 @@ export async function pedirPresupuesto(
     email: formData.get("email"),
     telefono: formData.get("telefono"),
     sucursalId: (formData.get("sucursalId") as string) || undefined,
+    necesitaPara: (formData.get("necesitaPara") as string) || undefined,
+    motivos: formData.getAll("motivos").map(String),
     notas: (formData.get("notas") as string) || undefined,
   });
 
@@ -114,9 +141,37 @@ export async function pedirPresupuesto(
         origen: esExpress ? "express" : "sitio",
         subtotal: carrito.subtotal.toFixed(2),
         total: carrito.subtotal.toFixed(2),
-        notas: datos.notas ?? null,
+        /*
+         * Los motivos van al principio de las notas y no en una columna
+         * propia: son cuatro casillas que el vendedor lee de un vistazo junto
+         * al resto de lo que aclaró el cliente. Una columna nueva obligaría a
+         * mostrarlas aparte en cinco pantallas para el mismo resultado.
+         */
+        notas: [
+          datos.motivos.length > 0
+            ? `Cotización especial: ${datos.motivos
+                .map(
+                  (m) =>
+                    MOTIVOS_DE_COTIZACION.find((o) => o.valor === m)?.etiqueta ?? m,
+                )
+                .join(" · ")}`
+            : null,
+          datos.notas,
+        ]
+          .filter(Boolean)
+          .join("\n") || null,
         validoHasta,
-        respondeHasta: esExpress ? vencimientoExpress() : null,
+        necesitaPara: parsed.data.necesitaPara,
+        /*
+         * Ahora **todos** los presupuestos entran con compromiso de respuesta.
+         *
+         * Antes solo lo tenían los profesionales aprobados, así que un pedido
+         * hecho desde el sitio no aparecía con urgencia en ninguna cola y
+         * podía quedar días sin contestar. El brief promete "mismo día" para
+         * cualquiera; el express del portal profesional sigue siendo el de
+         * 24 horas, que es la promesa más fuerte.
+         */
+        respondeHasta: esExpress ? vencimientoExpress() : vencimientoDelDia(),
         createdByUserId: sesion?.userId,
       })
       .returning({ id: quotes.id });

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { estadoDelPlazo, vencimientoExpress } from "@/lib/plazos";
+import { estadoDelPlazo, vencimientoDelDia, vencimientoExpress } from "@/lib/plazos";
 
 /**
- * El compromiso del portal profesional es responder en 24 horas, salteando el
- * fin de semana. Contarlo mal hace que el panel muestre en rojo cosas que
- * están a tiempo, y a los tres días nadie mira el indicador.
+ * Dos compromisos distintos: el express del portal profesional, a 24 horas, y
+ * el general del brief, que es **el mismo día**. Contarlos mal hace que el
+ * panel muestre en rojo cosas que están a tiempo, y a los tres días nadie mira
+ * el indicador.
+ *
+ * El sábado es media jornada de atención (8 a 12), no un día cerrado.
  */
 
 /** Lunes 24 de agosto de 2026, 10:00. */
@@ -18,15 +21,17 @@ describe("vencimientoExpress", () => {
     expect(r.getHours()).toBe(10);
   });
 
-  it("un pedido del viernes vence el lunes, no el sábado", () => {
+  it("un pedido del viernes a la tarde vence el sábado al mediodía", () => {
+    // El sábado se atiende de 8 a 12, así que las 24 horas caen dentro de una
+    // jornada real. Antes se corría al lunes: tres días para algo que en el
+    // local se contesta el sábado a la mañana.
     const viernes15 = new Date(2026, 7, 28, 15, 0, 0);
     const r = vencimientoExpress(viernes15);
-    expect(r.getDay()).toBe(1);
-    expect(r.getDate()).toBe(31);
-    expect(r.getHours()).toBe(15);
+    expect(r.getDay()).toBe(6);
+    expect(r.getHours()).toBe(12);
   });
 
-  it("un pedido del sábado vence el lunes", () => {
+  it("un pedido del sábado vence el lunes, porque el domingo está cerrado", () => {
     const sabado = new Date(2026, 7, 29, 10, 0, 0);
     const r = vencimientoExpress(sabado);
     expect(r.getDay()).toBe(1);
@@ -80,5 +85,35 @@ describe("estadoDelPlazo", () => {
   it("en minutos cuando falta menos de una hora", () => {
     const en20min = new Date(ahora.getTime() + 20 * 60_000);
     expect(estadoDelPlazo(en20min, ahora).texto).toBe("Quedan 20 min");
+  });
+});
+
+
+describe("vencimientoDelDia", () => {
+  it("vence al cierre del mismo día", () => {
+    const r = vencimientoDelDia(lunes10);
+    expect(r.getDate()).toBe(24);
+    expect(r.getHours()).toBe(16);
+  });
+
+  it("el sábado vence al mediodía", () => {
+    const sabado9 = new Date(2026, 7, 29, 9, 0, 0);
+    const r = vencimientoDelDia(sabado9);
+    expect(r.getDay()).toBe(6);
+    expect(r.getHours()).toBe(12);
+  });
+
+  it("después del cierre el compromiso pasa al día siguiente", () => {
+    // Prometer "hoy" a las once de la noche es prometer algo que ya no se
+    // puede cumplir.
+    const lunes23 = new Date(2026, 7, 24, 23, 0, 0);
+    const r = vencimientoDelDia(lunes23);
+    expect(r.getDate()).toBe(25);
+  });
+
+  it("un domingo se compromete para el lunes", () => {
+    const domingo = new Date(2026, 7, 30, 10, 0, 0);
+    const r = vencimientoDelDia(domingo);
+    expect(r.getDay()).toBe(1);
   });
 });

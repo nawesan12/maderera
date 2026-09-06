@@ -232,6 +232,55 @@
       "when": 1788481076411,
       "tag": "0032_notas_parciales",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788648352572,
+      "tag": "0033_massive_mandarin",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788648378777,
+      "tag": "0034_bumpy_pandemic",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788649176421,
+      "tag": "0035_redundant_yellowjacket",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788650171132,
+      "tag": "0036_brief_jackal",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788653378408,
+      "tag": "0037_sour_electro",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788654437371,
+      "tag": "0038_late_marvel_apes",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1788655288599,
+      "tag": "0039_majestic_dagger",
+      "breakpoints": true
     }
   ]
 }

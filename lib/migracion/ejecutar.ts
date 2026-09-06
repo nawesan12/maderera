@@ -14,6 +14,10 @@ import {
   priceLists,
   productVariants,
   products,
+  suppliers,
+  supplierMovements,
+  historicalSales,
+  historicalInvoices,
   type RechazoMigracion,
 } from "@/lib/db/schema";
 import { generarSlug } from "@/lib/validation/product";
@@ -39,6 +43,9 @@ import type { ClaveEntidad, FilaNormalizada } from "./entidades";
 
 /** Detalle con el que se reconoce un saldo ya migrado. No cambiarlo. */
 const REFERENCIA_SALDO = "SALDO-INICIAL";
+
+/** Lo mismo, del lado de los proveedores. */
+const REFERENCIA_SALDO_PROVEEDOR = "SALDO-INICIAL-PROV";
 
 export interface ResultadoLote {
   creados: number;
@@ -515,6 +522,225 @@ async function aplicarSaldos(
   }
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Proveedores                                                                 */
+/* -------------------------------------------------------------------------- */
+
+async function aplicarProveedores(
+  tx: Tx,
+  filas: FilaNormalizada[],
+  resultado: ResultadoLote,
+  userId: string,
+) {
+  for (const fila of filas) {
+    const d = fila.datos;
+
+    // Misma cascada que en clientes: código del sistema viejo, después CUIT,
+    // y recién al final el nombre. El código es lo único que sobrevive a que
+    // alguien corrija una razón social.
+    let proveedor: { id: string } | undefined;
+
+    if (d.codigo) {
+      [proveedor] = await tx
+        .select({ id: suppliers.id })
+        .from(suppliers)
+        .where(eq(suppliers.codigoLegacy, d.codigo))
+        .limit(1);
+    }
+
+    if (!proveedor && d.cuit) {
+      [proveedor] = await tx
+        .select({ id: suppliers.id })
+        .from(suppliers)
+        .where(eq(suppliers.cuit, d.cuit))
+        .limit(1);
+    }
+
+    if (!proveedor) {
+      [proveedor] = await tx
+        .select({ id: suppliers.id })
+        .from(suppliers)
+        .where(sql`lower(${suppliers.nombre}) = ${comparable(d.nombre)}`)
+        .limit(1);
+    }
+
+    const campos = {
+      nombre: d.nombre,
+      razonSocial: d.nombre,
+      cuit: d.cuit || null,
+      condicionIva: (d.condicionIva ||
+        "responsable_inscripto") as "responsable_inscripto",
+      email: d.email || null,
+      telefono: d.telefono || null,
+      direccion: d.direccion || null,
+      notas: d.notas || null,
+      codigoLegacy: d.codigo || null,
+    };
+
+    if (proveedor) {
+      await tx.update(suppliers).set(campos).where(eq(suppliers.id, proveedor.id));
+      resultado.actualizados++;
+    } else {
+      const [creado] = await tx
+        .insert(suppliers)
+        .values(campos)
+        .returning({ id: suppliers.id });
+      proveedor = creado;
+      resultado.creados++;
+    }
+
+    // El saldo es opcional y va aparte: la ficha se actualiza siempre, el
+    // movimiento se carga una sola vez. Es la misma protección que en los
+    // saldos de clientes, y por el mismo motivo —cargarlo dos veces duplica
+    // una deuda real—.
+    const saldo = Number(d.saldo || "0");
+    if (!proveedor || saldo === 0) continue;
+
+    const [yaMigrado] = await tx
+      .select({ id: supplierMovements.id })
+      .from(supplierMovements)
+      .where(
+        and(
+          eq(supplierMovements.supplierId, proveedor.id),
+          eq(supplierMovements.referencia, REFERENCIA_SALDO_PROVEEDOR),
+        ),
+      )
+      .limit(1);
+
+    if (yaMigrado) continue;
+
+    await tx.insert(supplierMovements).values({
+      supplierId: proveedor.id,
+      tipo: "ajuste",
+      monto: d.saldo,
+      detalle: "Saldo inicial migrado del sistema anterior",
+      referencia: REFERENCIA_SALDO_PROVEEDOR,
+      createdByUserId: userId,
+    });
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Archivo histórico                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Busca la ficha del cliente sin frenar la fila si no aparece.
+ *
+ * En el histórico, a diferencia de los saldos, que un cliente no exista no es
+ * motivo para rechazar la venta: el sistema viejo tiene bajas y fusiones que
+ * la cartera actual ya no refleja. La venta se guarda igual con el nombre y el
+ * código, que es lo que después permite reconciliarla a mano.
+ */
+async function fichaDelCliente(
+  tx: Tx,
+  codigo: string,
+  cuit: string,
+): Promise<string | null> {
+  if (codigo) {
+    const [porCodigo] = await tx
+      .select({ id: customers.id })
+      .from(customers)
+      .where(eq(customers.codigoLegacy, codigo))
+      .limit(1);
+    if (porCodigo) return porCodigo.id;
+  }
+
+  if (cuit) {
+    const [porCuit] = await tx
+      .select({ id: customers.id })
+      .from(customers)
+      .where(eq(customers.cuit, cuit))
+      .limit(1);
+    if (porCuit) return porCuit.id;
+  }
+
+  return null;
+}
+
+async function aplicarVentasHistoricas(
+  tx: Tx,
+  filas: FilaNormalizada[],
+  resultado: ResultadoLote,
+) {
+  for (const fila of filas) {
+    const d = fila.datos;
+    const customerId = await fichaDelCliente(tx, d.codigoCliente, "");
+
+    if (!customerId && d.codigoCliente) {
+      fila.avisos.push("No se encontró la ficha del cliente: la venta queda sin asociar.");
+    }
+
+    const valores = {
+      comprobanteLegacy: d.comprobante,
+      codigoClienteLegacy: d.codigoCliente || null,
+      customerId,
+      clienteNombre: d.clienteNombre || "",
+      fecha: new Date(d.fecha),
+      total: d.total,
+      detalle: d.detalle || "",
+      sucursal: d.sucursal || null,
+      vendedor: d.vendedor || null,
+    };
+
+    const [{ inserted } = { inserted: false }] = await tx
+      .insert(historicalSales)
+      .values(valores)
+      .onConflictDoUpdate({
+        target: historicalSales.comprobanteLegacy,
+        set: valores,
+      })
+      .returning({ inserted: sql<boolean>`(xmax = 0)` });
+
+    if (inserted) resultado.creados++;
+    else resultado.actualizados++;
+  }
+}
+
+async function aplicarComprobantesHistoricos(
+  tx: Tx,
+  filas: FilaNormalizada[],
+  resultado: ResultadoLote,
+) {
+  for (const fila of filas) {
+    const d = fila.datos;
+    const customerId = await fichaDelCliente(tx, d.codigoCliente, d.clienteCuit);
+
+    const valores = {
+      puntoVenta: Number(d.puntoVenta),
+      tipo: d.tipo,
+      numero: Number(d.numero),
+      codigoClienteLegacy: d.codigoCliente || null,
+      customerId,
+      clienteNombre: d.clienteNombre || "",
+      clienteCuit: d.clienteCuit || null,
+      fecha: new Date(d.fecha),
+      neto: d.neto || "0",
+      iva: d.iva || "0",
+      total: d.total,
+      cae: d.cae || null,
+      caeVence: d.caeVence ? new Date(d.caeVence) : null,
+    };
+
+    const [{ inserted } = { inserted: false }] = await tx
+      .insert(historicalInvoices)
+      .values(valores)
+      .onConflictDoUpdate({
+        target: [
+          historicalInvoices.puntoVenta,
+          historicalInvoices.tipo,
+          historicalInvoices.numero,
+        ],
+        set: valores,
+      })
+      .returning({ inserted: sql<boolean>`(xmax = 0)` });
+
+    if (inserted) resultado.creados++;
+    else resultado.actualizados++;
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Entrada                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -554,6 +780,12 @@ export async function aplicarLote(
         return aplicarStock(tx, validas, resultado, opciones.userId);
       case "saldos":
         return aplicarSaldos(tx, validas, resultado, opciones.userId);
+      case "proveedores":
+        return aplicarProveedores(tx, validas, resultado, opciones.userId);
+      case "ventas_historicas":
+        return aplicarVentasHistoricas(tx, validas, resultado);
+      case "comprobantes_historicos":
+        return aplicarComprobantesHistoricos(tx, validas, resultado);
     }
   });
 
@@ -651,6 +883,114 @@ export async function informeDeIntegridad(
         segunElArchivo: String(sinCuit),
         enElSistema: "—",
         ok: true,
+      },
+    ];
+  }
+
+  if (entidad === "proveedores") {
+    const conSaldo = validas.filter((f) => Number(f.datos.saldo || 0) !== 0);
+    const esperado = conSaldo.reduce((suma, f) => suma + Number(f.datos.saldo), 0);
+
+    const [{ fichas = 0 } = {}] = await db
+      .select({ fichas: sql<number>`count(*)::int` })
+      .from(suppliers)
+      .where(isNotNull(suppliers.codigoLegacy));
+
+    const [{ total = "0" } = {}] = await db
+      .select({ total: sql<string>`coalesce(sum(${supplierMovements.monto}), 0)` })
+      .from(supplierMovements)
+      .where(eq(supplierMovements.referencia, REFERENCIA_SALDO_PROVEEDOR));
+
+    return [
+      {
+        titulo: "Proveedores con código del sistema anterior",
+        detalle: "Los que se pueden volver a actualizar subiendo el archivo de nuevo.",
+        segunElArchivo: String(validas.filter((f) => f.datos.codigo).length),
+        enElSistema: String(fichas),
+        ok: fichas >= validas.filter((f) => f.datos.codigo).length,
+      },
+      {
+        titulo: "Suma de los saldos",
+        detalle:
+          "Tiene que dar igual. Una diferencia es un proveedor cuyo saldo no se cargó, y eso no lo muestra ningún contador de filas.",
+        segunElArchivo: esperado.toFixed(2),
+        enElSistema: Number(total).toFixed(2),
+        ok: Math.abs(esperado - Number(total)) < 0.01,
+      },
+    ];
+  }
+
+  if (entidad === "ventas_historicas") {
+    const esperado = validas.reduce((suma, f) => suma + Number(f.datos.total), 0);
+    const sinFicha = validas.filter((f) => !f.datos.codigoCliente).length;
+
+    const [{ cuantas = 0, total = "0" } = {}] = await db
+      .select({
+        cuantas: sql<number>`count(*)::int`,
+        total: sql<string>`coalesce(sum(${historicalSales.total}), 0)`,
+      })
+      .from(historicalSales);
+
+    return [
+      {
+        titulo: "Ventas en el archivo histórico",
+        detalle: "Puede ser mayor si ya se subieron otros años.",
+        segunElArchivo: String(validas.length),
+        enElSistema: String(cuantas),
+        ok: cuantas >= validas.length,
+      },
+      {
+        titulo: "Suma de los totales",
+        detalle:
+          "El del sistema incluye las corridas anteriores; el del archivo, solo esta.",
+        segunElArchivo: esperado.toFixed(2),
+        enElSistema: Number(total).toFixed(2),
+        ok: Number(total) >= esperado - 0.01,
+      },
+      {
+        titulo: "Ventas sin código de cliente",
+        detalle:
+          "Quedan en el histórico pero no aparecen en la ficha de nadie. Se reconcilian a mano.",
+        segunElArchivo: String(sinFicha),
+        enElSistema: "—",
+        ok: sinFicha === 0,
+      },
+    ];
+  }
+
+  if (entidad === "comprobantes_historicos") {
+    const esperado = validas.reduce((suma, f) => suma + Number(f.datos.total), 0);
+    const sinCae = validas.filter((f) => !f.datos.cae).length;
+
+    const [{ cuantos = 0, total = "0" } = {}] = await db
+      .select({
+        cuantos: sql<number>`count(*)::int`,
+        total: sql<string>`coalesce(sum(${historicalInvoices.total}), 0)`,
+      })
+      .from(historicalInvoices);
+
+    return [
+      {
+        titulo: "Comprobantes en el archivo histórico",
+        detalle: "Puede ser mayor si ya se subieron otros períodos.",
+        segunElArchivo: String(validas.length),
+        enElSistema: String(cuantos),
+        ok: cuantos >= validas.length,
+      },
+      {
+        titulo: "Suma de los totales",
+        detalle: "Es la cifra que el estudio contable va a querer cruzar.",
+        segunElArchivo: esperado.toFixed(2),
+        enElSistema: Number(total).toFixed(2),
+        ok: Number(total) >= esperado - 0.01,
+      },
+      {
+        titulo: "Comprobantes sin CAE",
+        detalle:
+          "Se guardan igual, pero un comprobante autorizado que llegó sin CAE es una columna que faltó mapear.",
+        segunElArchivo: String(sinCae),
+        enElSistema: "—",
+        ok: sinCae === 0,
       },
     ];
   }

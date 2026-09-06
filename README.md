@@ -16,6 +16,7 @@ npm install
 npm run db:up                  # Postgres en Docker, puerto 5433
 npm run db:migrate
 npm run db:seed                # catálogo, sucursales y listas de precios
+npm run db:seed-negocio        # los datos reales del negocio, del brief
 npm run dev
 ```
 
@@ -95,6 +96,7 @@ de seguimiento se autoriza con un token aparte (`lib/seguimiento.ts`).
 | `npm run db:migrate` | Aplica las migraciones |
 | `npm run db:studio` | Explorador de la base |
 | `npm run db:seed` | Siembra el catálogo de demostración |
+| `npm run db:seed-negocio` | Datos reales del cliente: emisor fiscal, puntos de venta, zonas de envío, descuentos por forma de pago y tarifas de corte |
 | `npm run db:seed-ventas` | Clientes, pedidos, presupuestos y costos de demostración |
 | `npm run db:seed-retenciones` | Los regímenes de retención con sus alícuotas |
 
@@ -110,12 +112,25 @@ tests de interfaz.
 |---|---|
 | `docs/PLAN.md` | El plan completo: estado, arquitectura, cronograma, riesgos y el relevamiento de las máquinas de corte |
 | `docs/CAMBIOS.md` | Cambios de alcance e **insumos que faltan del cliente** |
+| `docs/CLIENTE.md` | Con quién se habla, cuándo no se puede tocar el sistema, capacitación y competidores |
 | `docs/ENTREGAS.md` | Bitácora de entregas |
 | `docs/GUIAS/` | Las guías de uso del panel. Se sirven dentro del sistema en `/admin/ayuda` |
 | `agente-taller/` | El agente que deja los archivos de corte en la carpeta del optimizador |
 
 Las guías se leen del disco: `next.config.ts` incluye la carpeta con
 `outputFileTracingIncludes` para que también estén en producción.
+
+### Lo que no está en la base
+
+La ficha publicada de las dos sucursales —dirección, teléfono, horario,
+servicios— vive en **`lib/sucursales.ts`**, no en columnas. Son dos locales que
+la maderera tiene desde hace décadas: como datos editables solo conseguían que
+el domicilio del aserradero apareciera escrito de tres formas distintas en el
+mismo sitio. La tabla `branches` sigue existiendo y de su `id` cuelgan el stock,
+los pedidos, la caja, los remitos y los puntos de venta fiscales; el `slug` une
+la fila con su ficha.
+
+Lo mismo con el año de fundación y el alcance de Moldava, en `lib/empresa.ts`.
 
 ## Datos de desarrollo
 

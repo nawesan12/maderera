@@ -175,6 +175,7 @@ export default async function EditarProductoPage({
           brand: producto.brand ?? "",
           unit: producto.unit,
           featured: producto.featured,
+          aPedido: producto.aPedido,
           active: producto.active,
           imagen: producto.imagen,
           variantes: producto.variantes,

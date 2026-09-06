@@ -235,6 +235,7 @@ export async function listarPuntosVenta() {
       nombre: puntosVenta.nombre,
       modalidad: puntosVenta.modalidad,
       activo: puntosVenta.activo,
+      numeroInicial: puntosVenta.numeroInicial,
       branchId: puntosVenta.branchId,
       sucursal: branches.name,
     })

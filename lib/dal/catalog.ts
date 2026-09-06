@@ -18,6 +18,7 @@ import {
   relatedProducts,
 } from "@/lib/db/schema";
 import { listaVigente, type ListaVigente } from "@/lib/dal/precios-sesion";
+import { aniosDeTrayectoria } from "@/lib/empresa";
 import {
   combinedStockLevel,
   disponible,
@@ -47,6 +48,10 @@ export interface ProductoListado {
   subcategory: string | null;
   brand: string | null;
   unit: string;
+  /** Con qué alícuota se factura. La vitrina la necesita para desagregar bien. */
+  alicuotaIva: string;
+  /** Se fabrica a pedido: la ficha lo dice en vez de mostrarlo como agotado. */
+  aPedido: boolean;
   featured: boolean;
   categorySlug: string;
   categoryName: string;
@@ -76,6 +81,14 @@ export interface FiltrosCatalogo {
   orden?: OrdenCatalogo;
   /** Solo los que están en oferta. */
   soloOfertas?: boolean;
+  /**
+   * Solo los de una marca.
+   *
+   * Lo usa la sección de Moldava, que el cliente pidió como sección destacada
+   * propia. Se compara sin distinguir mayúsculas ni tildes por la misma razón
+   * que la búsqueda: la marca se carga a mano en cada producto.
+   */
+  marca?: string;
   /**
    * Un conjunto puntual de productos, por id.
    *
@@ -186,6 +199,8 @@ async function consultarProductos(
       subcategory: products.subcategory,
       brand: products.brand,
       unit: products.unit,
+      alicuotaIva: products.alicuotaIva,
+      aPedido: products.aPedido,
       featured: products.featured,
       categorySlug: categories.slug,
       categoryName: categories.name,
@@ -269,6 +284,13 @@ async function consultarProductos(
 
   if (filtros.soloOfertas) {
     resultado = resultado.filter((p) => p.descuento !== null);
+  }
+
+  if (filtros.marca) {
+    const buscada = filtros.marca.toLowerCase();
+    resultado = resultado.filter(
+      (p) => (p.brand ?? "").toLowerCase() === buscada,
+    );
   }
 
   return ordenar(resultado, filtros.orden ?? "relevancia");
@@ -546,6 +568,8 @@ export interface VarianteDetalle {
   label: string;
   material: string | null;
   color: string | null;
+  terminacion: string | null;
+  calidad: string | null;
   largoMm: number | null;
   anchoMm: number | null;
   espesorMm: number | null;
@@ -562,6 +586,10 @@ export interface ProductoDetalle {
   subcategory: string | null;
   brand: string | null;
   unit: string;
+  /** Con qué alícuota se factura. La vitrina la necesita para desagregar bien. */
+  alicuotaIva: string;
+  /** Se fabrica a pedido: la ficha lo dice en vez de mostrarlo como agotado. */
+  aPedido: boolean;
   featured: boolean;
   categorySlug: string;
   categoryName: string;
@@ -582,6 +610,8 @@ export async function obtenerProducto(
       subcategory: products.subcategory,
       brand: products.brand,
       unit: products.unit,
+      alicuotaIva: products.alicuotaIva,
+      aPedido: products.aPedido,
       featured: products.featured,
       categorySlug: categories.slug,
       categoryName: categories.name,
@@ -610,6 +640,8 @@ export async function obtenerProducto(
         label: productVariants.label,
         material: productVariants.material,
         color: productVariants.color,
+        terminacion: productVariants.terminacion,
+        calidad: productVariants.calidad,
         largoMm: productVariants.largoMm,
         anchoMm: productVariants.anchoMm,
         espesorMm: productVariants.espesorMm,
@@ -660,6 +692,8 @@ export async function obtenerProducto(
       label: v.label,
       material: v.material,
       color: v.color,
+      terminacion: v.terminacion,
+      calidad: v.calidad,
       largoMm: v.largoMm,
       anchoMm: v.anchoMm,
       espesorMm: v.espesorMm,
@@ -834,8 +868,12 @@ export async function complementosDelCarrito(
  * Se resuelve acá y no en cada sección para no repetir la consulta de productos
  * tres veces: las ofertas, los destacados y los conteos salen del mismo listado.
  */
-/** Año en que abrió la maderera. Es la única fecha fija del sitio. */
-export const ANIO_FUNDACION = 1981;
+/**
+ * El año de fundación vive en `lib/empresa.ts`, junto al resto de lo que el
+ * sitio afirma sobre la empresa. Se reexporta acá porque media docena de
+ * módulos ya lo importaban desde este archivo.
+ */
+export { ANIO_FUNDACION } from "@/lib/empresa";
 
 /**
  * Los números que la página "Nosotros" muestra en grande.
@@ -867,7 +905,7 @@ export const numerosDeLaEmpresa = cache(
     .from(sql`(select 1) as x`);
 
   return {
-    anios: new Date().getFullYear() - ANIO_FUNDACION,
+    anios: aniosDeTrayectoria(),
     productos: fila?.productos ?? 0,
     medidas: fila?.medidas ?? 0,
     sucursales: fila?.sucursales ?? 0,

@@ -5,14 +5,11 @@ import {
   ArrowRight,
   ClipboardList,
   Clock,
-  Headphones,
   MapPin,
   MessageCircle,
   Phone,
   Scissors,
   Star,
-  Tag,
-  Truck,
   Warehouse,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +20,10 @@ import { datosDePortada, numerosDeLaEmpresa } from "@/lib/dal/catalog";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { listarArticulos, listarTestimonios } from "@/lib/dal/contenido";
 import { escalasDeVolumenPublicas } from "@/lib/dal/profesionales";
+import { vistaDePrecio } from "@/lib/dal/precios-sesion";
+import { bannersDe } from "@/lib/dal/banners";
+import { SliderDePromos } from "@/components/home/slider-promos";
+import { FranjaBeneficios } from "@/components/franja-beneficios";
 
 /**
  * Los años de la empresa se leen al renderizar y no una vez al cargar el
@@ -31,7 +32,7 @@ import { escalasDeVolumenPublicas } from "@/lib/dal/profesionales";
  */
 
 export default async function HomePage() {
-  const [portada, sucursales, testimonios, notas, numeros, escalas] =
+  const [portada, sucursales, testimonios, notas, numeros, escalas, avisos] =
     await Promise.all([
       datosDePortada(),
       listarSucursalesPublicas(),
@@ -39,6 +40,7 @@ export default async function HomePage() {
       listarArticulos({ limite: 3 }),
       numerosDeLaEmpresa(),
       escalasDeVolumenPublicas(),
+      bannersDe("portada"),
     ]);
 
   return (
@@ -50,6 +52,14 @@ export default async function HomePage() {
       />
 
       <FranjaBeneficios />
+
+      {/* Las promociones, justo debajo de la franja: es lo primero que se mira
+          después del inicio, y antes de las ofertas del catálogo. */}
+      {avisos.length > 0 && (
+        <div className="contenedor mt-8">
+          <SliderDePromos banners={avisos} />
+        </div>
+      )}
 
       {portada.ofertas.length > 0 && <Ofertas productos={portada.ofertas} />}
 
@@ -109,31 +119,6 @@ function TituloSeccion({
   );
 }
 
-function FranjaBeneficios() {
-  const beneficios = [
-    { icono: Truck, texto: "Envíos en Mar del Plata y zona" },
-    { icono: Headphones, texto: "Asesoramiento sin cargo" },
-    { icono: Tag, texto: "Precios para profesionales" },
-    { icono: Clock, texto: "Más de 40 años en el rubro" },
-  ];
-
-  return (
-    <section className="bg-[#3a352f] text-white">
-      <ul className="contenedor grid grid-cols-2 gap-x-6 gap-y-4 py-5 lg:grid-cols-4">
-        {beneficios.map((b) => (
-          <li key={b.texto} className="flex items-center gap-[11px]">
-            <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-brand-orange/15 text-brand-orange-light">
-              <b.icono className="h-[17px] w-[17px]" />
-            </span>
-            <span className="text-[14.5px] leading-[1.35] text-white/85">
-              {b.texto}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 async function Ofertas({
   productos,
@@ -141,6 +126,7 @@ async function Ofertas({
   productos: Awaited<ReturnType<typeof datosDePortada>>["ofertas"];
 }) {
   const whatsapp = await numeroWhatsapp();
+  const vista = await vistaDePrecio();
 
   return (
     <section className="bg-sitio-fondo pt-[66px]">
@@ -157,7 +143,7 @@ async function Ofertas({
 
         <div className="mt-7 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
           {productos.map((p) => (
-            <ProductCard key={p.id} product={p} whatsapp={whatsapp} />
+            <ProductCard key={p.id} product={p} whatsapp={whatsapp} vista={vista} />
           ))}
         </div>
       </div>
@@ -229,6 +215,7 @@ async function Destacados({
   if (productos.length === 0) return null;
 
   const whatsapp = await numeroWhatsapp();
+  const vista = await vistaDePrecio();
 
   return (
     <section className="bg-sitio-fondo py-[66px]">
@@ -245,7 +232,7 @@ async function Destacados({
 
         <div className="mt-7 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
           {productos.map((p) => (
-            <ProductCard key={p.id} product={p} whatsapp={whatsapp} />
+            <ProductCard key={p.id} product={p} whatsapp={whatsapp} vista={vista} />
           ))}
         </div>
       </div>

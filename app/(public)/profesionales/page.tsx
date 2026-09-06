@@ -10,10 +10,12 @@ import {
   FileText,
   Lock,
   MessageCircle,
+  Download,
   Percent,
   Wallet,
 } from "lucide-react";
 import { getSession } from "@/lib/dal/session";
+import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import {
   documentosReservados,
@@ -21,7 +23,7 @@ import {
   estadoProfesional,
   eventosProximos,
 } from "@/lib/dal/profesionales";
-import { fechaLarga, formatearMonto } from "@/lib/formato";
+import { fechaLarga, formatearMonto, telefonoParaMarcar } from "@/lib/formato";
 import { FormularioProfesional } from "./formulario";
 
 export const metadata: Metadata = {
@@ -74,6 +76,9 @@ const BENEFICIOS = [
  */
 export default async function ProfesionalesPage() {
   const whatsapp = await enlaceWhatsapp();
+  /* El teléfono estaba escrito a mano —"(0223) 474-3328"— y no era el de
+     ninguna de las dos sucursales. Sale de `branches` como el resto del sitio. */
+  const [casaCentral] = await listarSucursalesPublicas();
   const [estado, sesion, cliente, eventos, documentos, reservados] =
     await Promise.all([
       estadoProfesional(),
@@ -228,12 +233,14 @@ export default async function ProfesionalesPage() {
               <MessageCircle className="h-4 w-4" />
               Escribir por WhatsApp
             </a>
-            <a
-              href="tel:02234743328"
-              className="inline-flex h-11 items-center rounded-lg border bg-card px-5 font-medium transition-colors hover:bg-muted"
-            >
-              (0223) 474-3328
-            </a>
+            {casaCentral?.telefono && (
+              <a
+                href={`tel:${telefonoParaMarcar(casaCentral.telefono)}`}
+                className="inline-flex h-11 items-center rounded-lg border bg-card px-5 font-medium transition-colors hover:bg-muted"
+              >
+                {casaCentral.telefono}
+              </a>
+            )}
           </div>
         </section>
       </div>
@@ -279,6 +286,14 @@ function PanelDelProfesional({
       icono: FileText,
       titulo: "Documentación técnica",
       detalle: `${documentos} documento${documentos === 1 ? "" : "s"} disponible${documentos === 1 ? "" : "s"}.`,
+    },
+    {
+      // Sale del servidor con la lista de quien pide: nunca hay forma de
+      // bajarse una lista que no es la propia.
+      href: "/mi-lista-de-precios",
+      icono: Download,
+      titulo: "Tu lista de precios en PDF",
+      detalle: "Con tus precios y la fecha de vigencia, para cotizar la obra.",
     },
   ];
 

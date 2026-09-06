@@ -17,6 +17,7 @@ import {
   puntosVenta,
 } from "@/lib/db/schema";
 import { nombreComprobante, numeroFormateado } from "@/lib/fiscal/comprobantes";
+import { estadoDeCredito } from "@/lib/dal/credito";
 import { requireStaff, requireStaffRole } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import {
@@ -434,6 +435,25 @@ export async function registrarCobro(
     return { error: "El comprobante está anulado." };
   }
 
+  /*
+   * Cargar un comprobante a cuenta corriente es venderle fiado a alguien, y
+   * hasta acá era lo único que movía plata sin ninguna verificación: se
+   * aceptaba el medio sin mirar el límite ni la mora.
+   *
+   * A diferencia del mostrador, acá no hay válvula de autorización: quien
+   * factura desde el panel tiene tiempo de resolverlo —cobrar de otra forma,
+   * pedir una autorización, o ampliarle el límite desde la ficha—. Un
+   * "seguir igual" a un click convertiría el control en un cartel.
+   */
+  if (parsed.data.medio === "cuenta_corriente" && comprobante.customerId) {
+    const credito = await estadoDeCredito(comprobante.customerId, monto);
+    if (!credito.puede) {
+      return {
+        error: `${credito.motivo ?? "No se puede cargar a cuenta corriente."} Cobralo de otra forma o revisá la ficha del cliente.`,
+      };
+    }
+  }
+
   const etiqueta = `${nombreComprobante(comprobante.tipo)} ${numeroFormateado(comprobante.puntoVenta, comprobante.numero)}`;
 
   /*
@@ -643,6 +663,7 @@ export async function guardarPuntoVenta(
       nombre: z.string().trim().min(2, "Poné un nombre.").max(80),
       branchId: z.string().uuid().optional(),
       activo: z.coerce.boolean().optional(),
+      numeroInicial: z.coerce.number().int().min(0).max(99_999_999),
     })
     .safeParse({
       id: (formData.get("id") as string) || undefined,
@@ -650,6 +671,7 @@ export async function guardarPuntoVenta(
       nombre: formData.get("nombre"),
       branchId: (formData.get("branchId") as string) || undefined,
       activo: formData.get("activo") !== "off",
+      numeroInicial: (formData.get("numeroInicial") as string) || 0,
     });
 
   if (!parsed.success) {
@@ -671,6 +693,7 @@ export async function guardarPuntoVenta(
           nombre: datos.nombre,
           branchId: datos.branchId ?? null,
           activo: Boolean(datos.activo),
+          numeroInicial: datos.numeroInicial,
         })
         .where(eq(puntosVenta.id, datos.id));
     } else {
@@ -679,6 +702,7 @@ export async function guardarPuntoVenta(
         nombre: datos.nombre,
         branchId: datos.branchId ?? null,
         activo: Boolean(datos.activo),
+        numeroInicial: datos.numeroInicial,
       });
     }
   } catch {

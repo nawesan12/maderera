@@ -224,7 +224,12 @@ export function VistaMostrador({
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [medio, setMedio] = useState<MedioDeMostrador>("efectivo");
   const [recibido, setRecibido] = useState("");
-  const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
+  const [aviso, setAviso] = useState<{
+    tipo: "ok" | "error";
+    texto: string;
+    /** Presente cuando el bloqueo se puede saltear con la decisión del vendedor. */
+    autorizar?: () => void;
+  } | null>(null);
   const [otrosPrecios, setOtrosPrecios] = useState<Record<string, number> | null>(null);
   const [comprobante, setComprobante] = useState<"interno" | "fiscal">("interno");
   const [cuit, setCuit] = useState("");
@@ -435,7 +440,7 @@ export function VistaMostrador({
     setOtrosPrecios(null);
   }
 
-  function cobrar() {
+  function cobrar(autorizado = false) {
     setAviso(null);
 
     /*
@@ -464,10 +469,17 @@ export function VistaMostrador({
         cuit: cuit || null,
         descuento,
         descuentoMotivo: motivoDesc || null,
+        autorizado,
       });
 
       if (r.error) {
-        setAviso({ tipo: "error", texto: r.error });
+        setAviso({
+          tipo: "error",
+          texto: r.error,
+          // Cuenta corriente frenada pero salvable: el vendedor decide. Sin
+          // esto el mostrador quedaría trabado con un cliente enfrente.
+          autorizar: r.requiereAutorizacion ? () => cobrar(true) : undefined,
+        });
         return;
       }
 
@@ -556,7 +568,7 @@ export function VistaMostrador({
             hayCaja={Boolean(turno)}
             enviando={enviando}
             puede={lineas.length > 0}
-            onCobrar={cobrar}
+            onCobrar={() => cobrar()}
             aviso={aviso}
             ultima={ultima}
           />
@@ -1026,7 +1038,7 @@ function Cobro({
   enviando: boolean;
   puede: boolean;
   onCobrar: () => void;
-  aviso: { tipo: "ok" | "error"; texto: string } | null;
+  aviso: { tipo: "ok" | "error"; texto: string; autorizar?: () => void } | null;
   ultima: {
     numero: string;
     /** Null mientras la venta está en la cola: el pedido todavía no existe. */
@@ -1200,13 +1212,23 @@ function Cobro({
         )}
 
         {aviso && (
-          <p
+          <div
             className={`mt-4 rounded-xl p-3.5 text-base ${
               aviso.tipo === "ok" ? "estado-ok" : "estado-problema"
             } bg-[var(--estado-fondo)] text-[var(--estado-tinta)]`}
           >
-            {aviso.texto}
-          </p>
+            <p>{aviso.texto}</p>
+            {aviso.autorizar && (
+              <button
+                type="button"
+                onClick={aviso.autorizar}
+                disabled={enviando}
+                className="mt-2.5 h-11 rounded-lg border border-current px-4 text-base font-semibold"
+              >
+                Cobrar igual, bajo mi responsabilidad
+              </button>
+            )}
+          </div>
         )}
 
         {ultima && (
@@ -1274,7 +1296,7 @@ function Cobro({
         </div>
 
         <button
-          onClick={onCobrar}
+          onClick={() => onCobrar()}
           disabled={!puede || enviando || faltaCaja || faltaCliente}
           className="mt-3.5 inline-flex h-16 w-full items-center justify-center gap-2.5 rounded-xl bg-accion text-xl font-bold text-white transition-colors hover:bg-accion-hover disabled:cursor-not-allowed disabled:opacity-40"
         >

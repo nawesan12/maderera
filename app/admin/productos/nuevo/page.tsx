@@ -29,6 +29,7 @@ export default async function NuevoProductoPage() {
           brand: "",
           unit: "unidad",
           featured: false,
+          aPedido: false,
           active: true,
           imagen: "",
           variantes: [],

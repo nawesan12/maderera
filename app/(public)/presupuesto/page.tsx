@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import { ProductCard } from "@/components/product-card";
 import { complementosDelCarrito } from "@/lib/dal/catalog";
+import { vistaDePrecio } from "@/lib/dal/precios-sesion";
 import { obtenerCarrito } from "@/lib/dal/carrito";
 import { CarritoProvider } from "@/lib/carrito-context";
 import { getSession } from "@/lib/dal/session";
@@ -25,7 +26,7 @@ export const metadata: Metadata = {
  * corresponde la cola express.
  */
 export default async function PresupuestoPage() {
-  const [sucursales, sesion, cliente, profesional, carrito, whatsapp] =
+  const [sucursales, sesion, cliente, profesional, carrito, whatsapp, vista] =
     await Promise.all([
       listarSucursalesPublicas(),
       getSession(),
@@ -33,6 +34,7 @@ export default async function PresupuestoPage() {
       estadoProfesional(),
       obtenerCarrito(),
       numeroWhatsapp(),
+      vistaDePrecio(),
     ]);
 
   const complementos = await complementosDelCarrito(
@@ -68,7 +70,7 @@ export default async function PresupuestoPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {complementos.map((p) => (
-              <ProductCard key={p.id} product={p} whatsapp={whatsapp} />
+              <ProductCard key={p.id} product={p} whatsapp={whatsapp} vista={vista} />
             ))}
           </div>
         </section>

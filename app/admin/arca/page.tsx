@@ -211,6 +211,7 @@ export default async function ArcaPage() {
               numero: p.numero,
               nombre: p.nombre,
               activo: p.activo,
+              numeroInicial: p.numeroInicial,
               branchId: p.branchId,
               sucursal: p.sucursal,
             }))}

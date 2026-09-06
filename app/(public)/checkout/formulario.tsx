@@ -18,7 +18,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatearPrecio } from "@/lib/formato";
-import { PrecioSinImpuestos } from "@/components/precio-sin-impuestos";
+import { PrecioSecundario } from "@/components/precio";
+import {
+  descuentoPorMedioDePago,
+  montoDelDescuentoDePago,
+  type EscalaDePago,
+} from "@/lib/precios/medio-pago";
 import { confirmarCompra, type EstadoCheckout } from "./actions";
 import type { ZonaEnvio } from "@/lib/dal/envios";
 
@@ -68,6 +73,7 @@ export function FormularioCheckout({
   datosIniciales,
   cuentaCorriente,
   direcciones,
+  escalasDePago,
 }: {
   items: ItemResumen[];
   subtotal: number;
@@ -80,6 +86,8 @@ export function FormularioCheckout({
     motivo: string | null;
   };
   direcciones: DireccionElegible[];
+  /** Descuentos por forma de pago. El servidor los vuelve a calcular al confirmar. */
+  escalasDePago: EscalaDePago[];
 }) {
   const [estado, accion, pendiente] = useActionState(
     confirmarCompra,
@@ -103,9 +111,22 @@ export function FormularioCheckout({
     zona !== undefined &&
     zona.envioGratisDesde > 0 &&
     subtotal >= zona.envioGratisDesde;
+  // Espeja `calcularEnvio`, que es lo que se cobra de verdad al confirmar.
   const costoEnvio =
-    entrega === "envio" && zona ? (envioGratis ? 0 : zona.costo) : 0;
-  const total = subtotal + costoEnvio;
+    entrega === "envio" && zona && !zona.aCotizar
+      ? envioGratis
+        ? 0
+        : zona.costo
+      : 0;
+
+  // El descuento va sobre la mercadería, no sobre el flete. Es el mismo
+  // cálculo que hace `confirmarCompra`; acá solo se muestra.
+  const escala = descuentoPorMedioDePago(escalasDePago, medioPago, subtotal);
+  const descuento = escala
+    ? montoDelDescuentoDePago(subtotal, escala.porcentaje)
+    : 0;
+
+  const total = subtotal - descuento + costoEnvio;
 
   return (
     <form action={accion} className="grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -219,12 +240,18 @@ export function FormularioCheckout({
                         titulo={z.nombre}
                         detalle={z.demoraEstimada ?? ""}
                         valor={
-                          gratis ? "Sin cargo" : formatearPrecio(String(z.costo))
+                          z.aCotizar
+                            ? "A cotizar"
+                            : gratis
+                              ? "Sin cargo"
+                              : formatearPrecio(String(z.costo))
                         }
                         nota={
-                          !gratis && z.envioGratisDesde > 0
-                            ? `Gratis desde ${formatearPrecio(String(z.envioGratisDesde))}`
-                            : undefined
+                          z.aCotizar
+                            ? "Te pasamos el costo del flete al confirmar"
+                            : !gratis && z.envioGratisDesde > 0
+                              ? `Gratis desde ${formatearPrecio(String(z.envioGratisDesde))}`
+                              : undefined
                         }
                       />
                     );
@@ -370,14 +397,24 @@ export function FormularioCheckout({
                 <dt className="text-muted-foreground">Subtotal</dt>
                 <dd className="tabular">{formatearPrecio(String(subtotal))}</dd>
               </div>
+              {escala && descuento > 0 && (
+                <div className="flex justify-between font-medium text-rojo-oferta">
+                  <dt>{escala.etiqueta || `Descuento ${escala.porcentaje}%`}</dt>
+                  <dd className="tabular">
+                    − {formatearPrecio(String(descuento))}
+                  </dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Envío</dt>
                 <dd className="tabular">
                   {entrega === "retiro"
                     ? "Retirás vos"
-                    : envioGratis
-                      ? "Sin cargo"
-                      : formatearPrecio(String(costoEnvio))}
+                    : zona?.aCotizar
+                      ? "A cotizar"
+                      : envioGratis
+                        ? "Sin cargo"
+                        : formatearPrecio(String(costoEnvio))}
                 </dd>
               </div>
             </dl>
@@ -391,7 +428,7 @@ export function FormularioCheckout({
 
             {/* Ley 27.743: se informa el neto junto al precio final, que es el
                 que efectivamente se cobra. */}
-            <PrecioSinImpuestos precioFinal={total} className="mt-1 text-right" />
+            <PrecioSecundario precioFinal={total} className="mt-1 text-right" />
 
             <Button
               type="submit"

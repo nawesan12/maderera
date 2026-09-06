@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useCarrito } from "@/lib/carrito-context";
+import { formatearPrecio, formatearUnidad } from "@/lib/formato";
 import {
   calculateRoof,
   calculateBoards,
@@ -20,25 +21,54 @@ import {
   type FloorResult,
   type DeckResult,
   type BoardPiece,
+  MEDIDAS_DE_PLACA,
+  ANCHO_DE_SIERRA_MM,
 } from "@/lib/calculations";
+import { buscarSugerencias } from "./actions";
+import type { Sugerencia } from "@/lib/dal/sugerencias";
 
-function ResultRow({ label, value, unit, onAdd }: { label: string; value: string | number; unit: string; onAdd?: () => void }) {
+function ResultRow({ label, value, unit, onAdd, sugerencia, nota }: {
+  label: string;
+  value: string | number;
+  unit: string;
+  onAdd?: () => void;
+  /** Qué producto del catálogo se encontró para este material. */
+  sugerencia?: Sugerencia;
+  /** Aclaración del renglón, como el "estimado" de los clavos. */
+  nota?: string;
+}) {
   return (
-    <div className="flex items-center justify-between py-3 border-b border-dashed last:border-0">
-      <div className="flex items-center gap-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-brand-orange shrink-0" />
-        <p className="text-sm font-medium">{label}</p>
+    <div className="py-3 border-b border-dashed last:border-0">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-brand-orange shrink-0" />
+          <p className="text-sm font-medium">{label}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-mono font-bold bg-brand-orange/10 text-brand-orange px-3 py-1 rounded-lg">
+            {value} {unit}
+          </span>
+          {onAdd && (
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-full text-brand-orange hover:text-white hover:bg-brand-orange" onClick={onAdd}>
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-mono font-bold bg-brand-orange/10 text-brand-orange px-3 py-1 rounded-lg">
-          {value} {unit}
-        </span>
-        {onAdd && (
-          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-full text-brand-orange hover:text-white hover:bg-brand-orange" onClick={onAdd}>
-            <Plus className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
+
+      {/* Qué producto del catálogo se va a agregar. Sin esto el "+" mete un
+          renglón de texto y nadie sabe qué terminó pidiendo. */}
+      {sugerencia && (
+        <p className="mt-1 pl-3.5 text-xs text-muted-foreground">
+          {sugerencia.descripcion}
+          {sugerencia.precio
+            ? ` · ${formatearPrecio(sugerencia.precio)} por ${formatearUnidad(sugerencia.unidad)}`
+            : " · precio a consultar"}
+          {!sugerencia.hayStock && " · sin stock, se encarga"}
+        </p>
+      )}
+
+      {nota && <p className="mt-1 pl-3.5 text-xs text-muted-foreground">{nota}</p>}
     </div>
   );
 }
@@ -54,6 +84,52 @@ function ResultRow({ label, value, unit, onAdd }: { label: string; value: string
 export function Calculadoras() {
   const { agregar } = useCarrito();
 
+  /*
+   * Lo que hay en el catálogo para cada material calculado.
+   *
+   * Se busca después de calcular: hasta que no se sabe qué material hace falta
+   * no hay nada que buscar. Un fallo de red no rompe la calculadora —queda sin
+   * sugerencias y las líneas entran como texto, que es exactamente como
+   * entraban antes—.
+   */
+  const [sugerencias, setSugerencias] = useState<Sugerencia[]>([]);
+
+  function pedirSugerencias(items: { busqueda: string }[]) {
+    void buscarSugerencias(items.map((i) => i.busqueda))
+      .then(setSugerencias)
+      .catch(() => setSugerencias([]));
+  }
+
+  /** Qué encontró el catálogo para este renglón. */
+  function sugerenciaDe(busqueda: string) {
+    return sugerencias.find((s) => s.busqueda === busqueda);
+  }
+
+  /**
+   * Agrega el renglón al presupuesto, con el producto del catálogo si lo hay.
+   *
+   * **Con `variantId` cuando se encontró, y como texto cuando no.** Sin el
+   * `variantId` el renglón entra sin precio y sin stock: así entraban todos
+   * antes, y por eso un techo calculado daba un presupuesto con total cero.
+   * Cuando el material no está cargado el texto se conserva igual, porque el
+   * material existe aunque el catálogo todavía no lo tenga.
+   */
+  function agregarDelCalculo(
+    item: { descripcion: string; busqueda: string },
+    cantidad: number,
+    unidad: string,
+  ) {
+    const encontrada = sugerenciaDe(item.busqueda);
+
+    agregar({
+      variantId: encontrada?.variantId,
+      descripcion: encontrada?.descripcion ?? item.descripcion,
+      cantidad,
+      unidad: encontrada?.unidad ?? unidad,
+      origen: "calculadora",
+    });
+  }
+
   // Roof
   const [roofLargo, setRoofLargo] = useState("");
   const [roofAncho, setRoofAncho] = useState("");
@@ -62,8 +138,14 @@ export function Calculadoras() {
 
   // Boards
   const [boardPieces, setBoardPieces] = useState<BoardPiece[]>([{ ancho: 0, largo: 0, cantidad: 1 }]);
-  const [boardPlacaAncho, setBoardPlacaAncho] = useState("1830");
-  const [boardPlacaLargo, setBoardPlacaLargo] = useState("2820");
+  /*
+   * La medida de placa se elige de las cuatro que existen en plaza, no se
+   * tipea. El valor por defecto era 1830 × 2820, que no es ninguna de ellas:
+   * quien calculaba con eso compraba placas que no se venden.
+   */
+  const [medidaPlaca, setMedidaPlaca] = useState(0);
+  const boardPlacaAncho = MEDIDAS_DE_PLACA[medidaPlaca].ancho;
+  const boardPlacaLargo = MEDIDAS_DE_PLACA[medidaPlaca].largo;
   const [boardResult, setBoardResult] = useState<BoardResult | null>(null);
 
   // Floor
@@ -155,7 +237,11 @@ export function Calculadoras() {
                   <Button
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     disabled={!roofLargo || !roofAncho}
-                    onClick={() => setRoofResult(calculateRoof(Number(roofLargo), Number(roofAncho), roofType))}
+                    onClick={() => {
+                      const r = calculateRoof(Number(roofLargo), Number(roofAncho), roofType);
+                      setRoofResult(r);
+                      pedirSugerencias([r.tirantes, r.machimbre, r.aislacion, r.membrana, r.clavos]);
+                    }}
                   >
                     <Calculator className="h-5 w-5 mr-2" />
                     Calcular Materiales
@@ -176,41 +262,47 @@ export function Calculadoras() {
                       label={roofResult.tirantes.descripcion}
                       value={roofResult.tirantes.cantidad}
                       unit={`unidades (${roofResult.tirantes.medida})`}
-                      onAdd={() => agregar({ descripcion: roofResult.tirantes.descripcion, cantidad: roofResult.tirantes.cantidad, unidad: "unidades", origen: "calculadora" })}
+                      onAdd={() => agregarDelCalculo(roofResult.tirantes, roofResult.tirantes.cantidad, "unidades")}
+                      sugerencia={sugerenciaDe(roofResult.tirantes.busqueda)}
                     />
                     <ResultRow
                       label={roofResult.machimbre.descripcion}
                       value={roofResult.machimbre.m2}
                       unit="m²"
-                      onAdd={() => agregar({ descripcion: roofResult.machimbre.descripcion, cantidad: roofResult.machimbre.m2, unidad: "m²", origen: "calculadora" })}
+                      onAdd={() => agregarDelCalculo(roofResult.machimbre, roofResult.machimbre.m2, "m²")}
+                      sugerencia={sugerenciaDe(roofResult.machimbre.busqueda)}
                     />
                     <ResultRow
                       label={roofResult.aislacion.descripcion}
                       value={roofResult.aislacion.rollos}
                       unit="rollos"
-                      onAdd={() => agregar({ descripcion: roofResult.aislacion.descripcion, cantidad: roofResult.aislacion.rollos, unidad: "rollos", origen: "calculadora" })}
+                      onAdd={() => agregarDelCalculo(roofResult.aislacion, roofResult.aislacion.rollos, "rollos")}
+                      sugerencia={sugerenciaDe(roofResult.aislacion.busqueda)}
                     />
                     <ResultRow
                       label={roofResult.membrana.descripcion}
                       value={roofResult.membrana.rollos}
                       unit="rollos"
-                      onAdd={() => agregar({ descripcion: roofResult.membrana.descripcion, cantidad: roofResult.membrana.rollos, unidad: "rollos", origen: "calculadora" })}
+                      onAdd={() => agregarDelCalculo(roofResult.membrana, roofResult.membrana.rollos, "rollos")}
+                      sugerencia={sugerenciaDe(roofResult.membrana.busqueda)}
                     />
                     <ResultRow
                       label={roofResult.clavos.descripcion}
                       value={roofResult.clavos.kg}
                       unit="kg"
-                      onAdd={() => agregar({ descripcion: roofResult.clavos.descripcion, cantidad: roofResult.clavos.kg, unidad: "kg", origen: "calculadora" })}
+                      onAdd={() => agregarDelCalculo(roofResult.clavos, roofResult.clavos.kg, "kg")}
+                      sugerencia={sugerenciaDe(roofResult.clavos.busqueda)}
+                      nota="La cantidad de clavos depende de la medida y del uso: confirmala en el mostrador."
                     />
                     <div className="pt-4 mt-2">
                       <Button
                         className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
                         onClick={() => {
-                          agregar({ descripcion: roofResult.tirantes.descripcion, cantidad: roofResult.tirantes.cantidad, unidad: "un", origen: "calculadora" });
-                          agregar({ descripcion: roofResult.machimbre.descripcion, cantidad: roofResult.machimbre.m2, unidad: "m²", origen: "calculadora" });
-                          agregar({ descripcion: roofResult.aislacion.descripcion, cantidad: roofResult.aislacion.rollos, unidad: "rollos", origen: "calculadora" });
-                          agregar({ descripcion: roofResult.membrana.descripcion, cantidad: roofResult.membrana.rollos, unidad: "rollos", origen: "calculadora" });
-                          agregar({ descripcion: roofResult.clavos.descripcion, cantidad: roofResult.clavos.kg, unidad: "kg", origen: "calculadora" });
+                          agregarDelCalculo(roofResult.tirantes, roofResult.tirantes.cantidad, "un");
+                          agregarDelCalculo(roofResult.machimbre, roofResult.machimbre.m2, "m²");
+                          agregarDelCalculo(roofResult.aislacion, roofResult.aislacion.rollos, "rollos");
+                          agregarDelCalculo(roofResult.membrana, roofResult.membrana.rollos, "rollos");
+                          agregarDelCalculo(roofResult.clavos, roofResult.clavos.kg, "kg");
                         }}
                       >
                         <ShoppingCart className="h-4 w-4 mr-2" />
@@ -239,14 +331,26 @@ export function Calculadoras() {
                   </div>
                 </div>
                 <CardContent className="p-6 space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Placa ancho (mm)</Label>
-                      <Input type="number" value={boardPlacaAncho} onChange={(e) => setBoardPlacaAncho(e.target.value)} className="h-12 rounded-xl border-border/60 text-base" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Placa largo (mm)</Label>
-                      <Input type="number" value={boardPlacaLargo} onChange={(e) => setBoardPlacaLargo(e.target.value)} className="h-12 rounded-xl border-border/60 text-base" />
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Medida de la placa</Label>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {MEDIDAS_DE_PLACA.map((m, i) => (
+                        <button
+                          key={`${m.ancho}x${m.largo}`}
+                          type="button"
+                          onClick={() => setMedidaPlaca(i)}
+                          className={`rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
+                            medidaPlaca === i
+                              ? "border-brand-orange bg-brand-orange/10"
+                              : "border-border/60 hover:bg-muted"
+                          }`}
+                        >
+                          <span className="block text-sm font-semibold">
+                            {(m.ancho / 1000).toFixed(2)} × {(m.largo / 1000).toFixed(2)} m
+                          </span>
+                          <span className="block text-xs text-muted-foreground">{m.usos}</span>
+                        </button>
+                      ))}
                     </div>
                   </div>
                   <Separator />
@@ -290,7 +394,10 @@ export function Calculadoras() {
                   </div>
                   <Button
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
-                    onClick={() => setBoardResult(calculateBoards(boardPieces.filter(p => p.ancho > 0 && p.largo > 0), Number(boardPlacaAncho), Number(boardPlacaLargo)))}
+                    onClick={() => {
+                      setBoardResult(calculateBoards(boardPieces.filter(p => p.ancho > 0 && p.largo > 0), boardPlacaAncho, boardPlacaLargo));
+                      pedirSugerencias([{ busqueda: "placa melamina" }]);
+                    }}
                   >
                     <Calculator className="h-5 w-5 mr-2" />
                     Calcular Placas
@@ -304,13 +411,13 @@ export function Calculadoras() {
                     <h3 className="text-lg font-bold text-white">Resultado</h3>
                   </div>
                   <CardContent className="p-6">
-                    <ResultRow label="Placas necesarias" value={boardResult.placasNecesarias} unit={`placas (${boardResult.placaDimension})`} />
+                    <ResultRow label="Placas necesarias" value={boardResult.placasNecesarias} unit={`placas (${boardResult.placaDimension})`} sugerencia={sugerenciaDe("placa melamina")} />
                     <ResultRow label="Aprovechamiento" value={`${boardResult.aprovechamiento}%`} unit="" />
-                    <ResultRow label="Desperdicio" value={`${boardResult.desperdicio}%`} unit="" />
+                    <ResultRow label="Desperdicio" value={`${boardResult.desperdicio}%`} unit="" nota={`Incluye los ${ANCHO_DE_SIERRA_MM} mm que se lleva la sierra en cada pasada.`} />
                     <div className="pt-4 mt-2">
                       <Button
                         className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
-                        onClick={() => agregar({ descripcion: `Placa Melamina ${boardResult.placaDimension}`, cantidad: boardResult.placasNecesarias, unidad: "placas", origen: "calculadora" })}
+                        onClick={() => agregarDelCalculo({ descripcion: `Placa ${boardResult.placaDimension}`, busqueda: "placa melamina" }, boardResult.placasNecesarias, "placas")}
                       >
                         <ShoppingCart className="h-4 w-4 mr-2" />
                         Agregar al presupuesto
@@ -357,7 +464,14 @@ export function Calculadoras() {
                   <Button
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     disabled={!floorLargo || !floorAncho}
-                    onClick={() => setFloorResult(calculateFloor(Number(floorLargo), Number(floorAncho)))}
+                    onClick={() => {
+                      setFloorResult(calculateFloor(Number(floorLargo), Number(floorAncho)));
+                      pedirSugerencias([
+                        { busqueda: "piso melaminico" },
+                        { busqueda: "zocalo" },
+                        { busqueda: "underlay" },
+                      ]);
+                    }}
                   >
                     <Calculator className="h-5 w-5 mr-2" />
                     Calcular Materiales
@@ -375,17 +489,17 @@ export function Calculadoras() {
                   </div>
                   <CardContent className="p-6">
                     <ResultRow label="Piso melamínico" value={floorResult.pisoM2} unit="m²" />
-                    <ResultRow label={`Cajas necesarias (${floorResult.m2PorCaja} m²/caja)`} value={floorResult.cajasNecesarias} unit="cajas" />
-                    <ResultRow label="Zócalos (3m c/u)" value={floorResult.zocalos} unit="unidades" />
+                    <ResultRow label={`Cajas necesarias (${floorResult.m2PorCaja} m²/caja)`} value={floorResult.cajasNecesarias} unit="cajas" sugerencia={sugerenciaDe("piso melaminico")} />
+                    <ResultRow label="Zócalos (3m c/u)" value={floorResult.zocalos} unit="unidades" sugerencia={sugerenciaDe("zocalo")} />
                     <ResultRow label="Metros lineales de zócalo" value={floorResult.zocaloML} unit="ml" />
-                    <ResultRow label="Underlay / foam" value={floorResult.underlayM2} unit="m²" />
+                    <ResultRow label="Underlay / foam" value={floorResult.underlayM2} unit="m²" sugerencia={sugerenciaDe("underlay")} />
                     <div className="pt-4 mt-2">
                       <Button
                         className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
                         onClick={() => {
-                          agregar({ descripcion: "Piso Melamínico Decno Flooring", cantidad: floorResult.cajasNecesarias, unidad: "cajas", origen: "calculadora" });
-                          agregar({ descripcion: "Zócalo Moldava 7cm", cantidad: floorResult.zocalos, unidad: "unidades", origen: "calculadora" });
-                          agregar({ descripcion: "Underlay Foam 2mm", cantidad: floorResult.underlayM2, unidad: "m²", origen: "calculadora" });
+                          agregarDelCalculo({ descripcion: "Piso Melamínico Decno Flooring", busqueda: "piso melaminico" }, floorResult.cajasNecesarias, "cajas");
+                          agregarDelCalculo({ descripcion: "Zócalo Moldava 7cm", busqueda: "zocalo" }, floorResult.zocalos, "unidades");
+                          agregarDelCalculo({ descripcion: "Underlay Foam 2mm", busqueda: "underlay" }, floorResult.underlayM2, "m²");
                         }}
                       >
                         <ShoppingCart className="h-4 w-4 mr-2" />
@@ -455,7 +569,11 @@ export function Calculadoras() {
                   <Button
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     disabled={!deckLargo || !deckAncho}
-                    onClick={() => setDeckResult(calculateDeck(Number(deckLargo), Number(deckAncho), deckMaterial))}
+                    onClick={() => {
+                      const r = calculateDeck(Number(deckLargo), Number(deckAncho), deckMaterial);
+                      setDeckResult(r);
+                      pedirSugerencias([r.tablasDeck, r.estructura, r.tornillos, r.protector]);
+                    }}
                   >
                     <Calculator className="h-4 w-4 mr-2" />
                     Calcular Materiales
@@ -472,21 +590,21 @@ export function Calculadoras() {
                     </Badge>
                   </div>
                   <CardContent className="p-6">
-                    <ResultRow label={deckResult.tablasDeck.descripcion} value={deckResult.tablasDeck.m2} unit="m²" />
-                    <ResultRow label="Alfajías / estructura" value={deckResult.estructura.tirantes} unit={`un (${deckResult.estructura.medida})`} />
-                    <ResultRow label={deckResult.tornillos.descripcion} value={deckResult.tornillos.cantidad} unit="unidades" />
+                    <ResultRow label={deckResult.tablasDeck.descripcion} value={deckResult.tablasDeck.m2} unit="m²" sugerencia={sugerenciaDe(deckResult.tablasDeck.busqueda)} />
+                    <ResultRow label="Alfajías / estructura" value={deckResult.estructura.tirantes} unit={`un (${deckResult.estructura.medida})`} sugerencia={sugerenciaDe(deckResult.estructura.busqueda)} />
+                    <ResultRow label={deckResult.tornillos.descripcion} value={deckResult.tornillos.cantidad} unit="unidades" sugerencia={sugerenciaDe(deckResult.tornillos.busqueda)} />
                     {deckResult.protector.litros > 0 && (
-                      <ResultRow label={deckResult.protector.descripcion} value={deckResult.protector.litros} unit="litros" />
+                      <ResultRow label={deckResult.protector.descripcion} value={deckResult.protector.litros} unit="litros" sugerencia={sugerenciaDe(deckResult.protector.busqueda)} />
                     )}
                     <div className="pt-4 mt-2">
                       <Button
                         className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
                         onClick={() => {
-                          agregar({ descripcion: deckResult.tablasDeck.descripcion, cantidad: deckResult.tablasDeck.m2, unidad: "m²", origen: "calculadora" });
-                          agregar({ descripcion: "Alfajía para deck", cantidad: deckResult.estructura.tirantes, unidad: "unidades", origen: "calculadora" });
-                          agregar({ descripcion: deckResult.tornillos.descripcion, cantidad: deckResult.tornillos.cantidad, unidad: "unidades", origen: "calculadora" });
+                          agregarDelCalculo(deckResult.tablasDeck, deckResult.tablasDeck.m2, "m²");
+                          agregarDelCalculo(deckResult.estructura, deckResult.estructura.tirantes, "unidades");
+                          agregarDelCalculo(deckResult.tornillos, deckResult.tornillos.cantidad, "unidades");
                           if (deckResult.protector.litros > 0) {
-                            agregar({ descripcion: deckResult.protector.descripcion, cantidad: deckResult.protector.litros, unidad: "litros", origen: "calculadora" });
+                            agregarDelCalculo(deckResult.protector, deckResult.protector.litros, "litros");
                           }
                         }}
                       >

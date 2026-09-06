@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Settings2 } from "lucide-react";
+import { DollarSign, Plus, Settings2 } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { plural } from "@/components/admin/formato";
 import { listarCortes } from "@/lib/dal/admin/cortes";
@@ -48,6 +48,14 @@ export default async function CortesPage({
         >
           <Settings2 className="h-5 w-5" />
           Formato para la máquina
+        </Link>
+
+        <Link
+          href="/admin/cortes/tarifas"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <DollarSign className="h-5 w-5" />
+          Tarifas
         </Link>
       </EncabezadoPanel>
 

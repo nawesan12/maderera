@@ -181,7 +181,17 @@ export function Entregas({
                   etiqueta="Quién retira"
                   ayuda="Puede no ser el titular: el flete, un oficial."
                 />
-                <Campo nombre="receptorDocumento" etiqueta="Documento" />
+                <Campo
+                  nombre="receptorDocumento"
+                  etiqueta={
+                    tipoEntrega === "retiro" ? "Documento (obligatorio)" : "Documento"
+                  }
+                  ayuda={
+                    tipoEntrega === "retiro"
+                      ? "Sin el documento la firma no identifica a nadie."
+                      : undefined
+                  }
+                />
 
                 {tipoEntrega === "envio" && (
                   <>

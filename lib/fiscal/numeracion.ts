@@ -1,7 +1,7 @@
 import "server-only";
 
 import { and, eq, sql } from "drizzle-orm";
-import { invoices } from "@/lib/db/schema";
+import { invoices, puntosVenta } from "@/lib/db/schema";
 import type { TipoComprobante } from "./comprobantes";
 
 type Transaccion = Parameters<
@@ -25,6 +25,19 @@ type Transaccion = Parameters<
  *
  * `pg_advisory_xact_lock` se libera solo al terminar la transacción, con commit
  * o con rollback, así que no hay forma de quedarse con el lock tomado.
+ *
+ * 3. **Arrancar desde donde quedó el sistema anterior.** Esta base nace vacía,
+ *    pero ARCA viene contando desde hace años en los puntos de venta 15, 17 y
+ *    20. Sin ese piso, el primer comprobante saldría número 1 y quedaría
+ *    rechazado o —peor— duplicaría una numeración ya usada. El piso se carga
+ *    por punto de venta en `/admin/arca` y es `puntos_venta.numeroInicial`.
+ *
+ *    El piso **no distingue por tipo de comprobante**, y es a propósito: lo
+ *    que se carga es el último número emitido en ese punto de venta, sin
+ *    entrar en si era una A o una nota de crédito. Empezar todos los tipos por
+ *    encima de ese número es conservador —puede dejar un hueco al principio de
+ *    una serie que nunca se usó— y eso es exactamente lo que conviene: un
+ *    hueco no rompe nada, un número repetido sí.
  */
 export async function siguienteNumeroComprobante(
   tx: Transaccion,
@@ -45,7 +58,17 @@ export async function siguienteNumeroComprobante(
       and(eq(invoices.puntoVenta, puntoVenta), eq(invoices.tipo, tipo)),
     );
 
-  return Number(fila?.maximo ?? 0) + 1;
+  const [punto] = await tx
+    .select({ numeroInicial: puntosVenta.numeroInicial })
+    .from(puntosVenta)
+    .where(eq(puntosVenta.numero, puntoVenta))
+    .limit(1);
+
+  // Gana el mayor: una vez que esta base emitió por encima del piso, el piso
+  // deja de importar y manda el correlativo propio.
+  const desde = Math.max(Number(fila?.maximo ?? 0), Number(punto?.numeroInicial ?? 0));
+
+  return desde + 1;
 }
 
 /**

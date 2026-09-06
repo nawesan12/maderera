@@ -85,6 +85,17 @@ export const shippingZones = pgTable(
     /** Códigos postales o localidades que cubre, separados por coma. */
     cobertura: text().notNull().default(""),
     costo: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    /**
+     * La zona no tiene tarifa fija: el flete se cotiza caso por caso.
+     *
+     * Existe porque el cliente contestó "depende" al costo y al plazo de las
+     * tres zonas —según el volumen sale en camión propio o por comisionista—.
+     * Sin esto la única forma de expresarlo era dejar `costo` en cero, que la
+     * pantalla muestra como "Sin cargo": exactamente lo contrario de lo que
+     * pasa, y la clase de error que se descubre cuando alguien reclama que le
+     * cobraron un envío que decía gratis.
+     */
+    aCotizar: boolean().notNull().default(false),
     /** A partir de este monto el envío no se cobra. Cero desactiva la promoción. */
     envioGratisDesde: numeric({ precision: 12, scale: 2 })
       .notNull()

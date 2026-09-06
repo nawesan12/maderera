@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BookOpen, MessageSquareQuote, Settings2, Star } from "lucide-react";
+import { BookOpen, Megaphone, MessageSquareQuote, Settings2, Star } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta } from "@/lib/formato";
@@ -42,8 +42,15 @@ export default async function ContenidoPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Contenido"
-        detalle="El blog, los testimonios y los textos que se pueden cambiar sin tocar el código."
+        detalle="El blog, los avisos, los testimonios y los textos que se pueden cambiar sin tocar el código."
       >
+        <Link
+          href="/admin/contenido/banners"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <Megaphone className="h-5 w-5" />
+          Avisos y promociones
+        </Link>
         <Link
           href="/blog"
           target="_blank"

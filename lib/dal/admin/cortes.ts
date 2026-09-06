@@ -12,6 +12,8 @@ export interface CorteListado {
   cliente: string;
   material: string;
   placas: number;
+  /** Pasadas de sierra medidas al optimizar. Cero es «todavía no se midió». */
+  pasadas: number;
   estado: string;
   urgente: boolean;
   sucursal: string | null;
@@ -70,6 +72,7 @@ export async function listarCortes(
       cliente: cuttingOrders.contactoNombre,
       material: cuttingOrders.materialDescripcion,
       placas: cuttingOrders.placas,
+      pasadas: cuttingOrders.pasadas,
       estado: cuttingOrders.estado,
       urgente: cuttingOrders.urgente,
       notas: cuttingOrders.notas,
@@ -106,8 +109,12 @@ export async function obtenerCorte(
       cliente: cuttingOrders.contactoNombre,
       customerId: cuttingOrders.customerId,
       empresa: customers.razonSocial,
+      // La lista del cliente decide la tarifa del corte: un mayorista paga
+      // $996 la pasada donde el público paga $1.200.
+      priceListId: customers.priceListId,
       material: cuttingOrders.materialDescripcion,
       placas: cuttingOrders.placas,
+      pasadas: cuttingOrders.pasadas,
       estado: cuttingOrders.estado,
       urgente: cuttingOrders.urgente,
       notas: cuttingOrders.notas,

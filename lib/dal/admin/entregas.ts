@@ -2,6 +2,7 @@ import "server-only";
 
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { sucursalPublicada } from "@/lib/sucursales";
 import {
   branches,
   deliveries,
@@ -127,7 +128,7 @@ export async function remitoCompleto(
       clienteDireccion: orders.direccionEntrega,
       customerId: orders.customerId,
       sucursal: branches.name,
-      sucursalDireccion: branches.address,
+      sucursalSlug: branches.slug,
       transportista: shipments.transportista,
       numeroSeguimiento: shipments.numeroSeguimiento,
     })
@@ -154,6 +155,10 @@ export async function remitoCompleto(
 
   return {
     ...remito,
+    // La dirección de la sucursal sale de la ficha publicada, no de la fila.
+    sucursalDireccion: remito.sucursalSlug
+      ? (sucursalPublicada(remito.sucursalSlug)?.direccion ?? null)
+      : null,
     lineas: lineas.map((l) => ({
       descripcion: l.descripcion,
       unidad: l.unidad,

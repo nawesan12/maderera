@@ -10,6 +10,7 @@ import {
   creditoDisponible,
   misDirecciones,
 } from "@/lib/dal/cuenta";
+import { escalasDePago } from "@/lib/dal/descuentos-pago";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import { FormularioCheckout } from "./formulario";
 import { ACotizar } from "./a-cotizar";
@@ -112,6 +113,7 @@ export default async function CheckoutPage() {
             subtotal: i.subtotal,
           }))}
           subtotal={carrito.subtotal}
+          escalasDePago={await escalasDePago()}
           zonas={zonas}
           sucursales={sucursales}
           datosIniciales={{

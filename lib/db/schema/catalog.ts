@@ -71,6 +71,15 @@ export const products = pgTable(
      */
     alicuotaIva: numeric({ precision: 4, scale: 2 }).notNull().default("21"),
     featured: boolean().notNull().default(false),
+    /**
+     * Se fabrica a pedido: no tiene stock y no debería mostrarse como agotado.
+     *
+     * Son los maquinados especiales del brief —escaleras a medida, tirantes en
+     * medidas que no vienen de origen y se elaboran en planta—. Sin esta marca
+     * la ficha solo puede decir "sin stock", que para este producto es falso:
+     * no falta, se hace.
+     */
+    aPedido: boolean().notNull().default(false),
     active: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -104,6 +113,17 @@ export const productVariants = pgTable(
     espesorMm: integer(),
     material: text(),
     color: text(),
+    /**
+     * Terminación de la pieza: laqueada, cruda, cepillada, melamínica.
+     *
+     * Del brief, a "qué variantes cambian el precio de un mismo producto":
+     * espesor, medida, color, tipo o calidad, marca, largo y **terminación**.
+     * Las primeras cinco ya estaban; estas dos faltaban y terminaban metidas
+     * dentro del `label`, donde no se pueden filtrar ni comparar.
+     */
+    terminacion: text(),
+    /** Tipo o calidad: primera, segunda, estándar, premium. */
+    calidad: text(),
     sortOrder: integer().notNull().default(0),
     active: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

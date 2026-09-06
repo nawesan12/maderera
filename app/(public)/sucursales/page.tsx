@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { telefonoParaMarcar } from "@/lib/formato";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
 import {
   Clock,
@@ -29,24 +30,40 @@ import { migasJsonLd, sucursalJsonLd } from "@/lib/seo";
  * sábado cambia, cambia en los cuatro lugares a la vez.
  */
 
-export const metadata: Metadata = {
-  title: "Sucursales en Mar del Plata",
-  description:
-    "Dos sucursales en Mar del Plata: Casa Central en Av. Juan B. Justo 4153 y Aserradero en Canosa 61. Horarios, servicios y contacto directo.",
-  keywords: [
-    "maderera mar del plata",
-    "sucursales maderera",
-    "juan b justo 4153",
-    "canosa 61",
-    "madera mar del plata direccion",
-  ],
-  alternates: { canonical: "/sucursales" },
-  openGraph: {
-    title: "Sucursales | Maderera Juan B. Justo — Mar del Plata",
-    description:
-      "Casa Central y Aserradero. Lunes a viernes de 8 a 16, sábados de 8 a 12.",
-  },
-};
+/**
+ * La metadata también sale de `branches`.
+ *
+ * Estaba escrita a mano y ya se había desincronizado del cuerpo de la página:
+ * decía "Canosa 61" cuando la dirección real es **Diagonal** Canosa 61, y
+ * fijaba el horario del sábado en el texto. Google compara el texto de la
+ * página con el marcado para decidir si le cree a la ficha del negocio, así
+ * que dos direcciones distintas para el mismo local es exactamente lo que no
+ * conviene publicar.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const sucursales = await listarSucursalesPublicas();
+  const detalle = sucursales
+    .map((s) => `${s.nombre} en ${s.direccion}`)
+    .join(" y ");
+
+  return {
+    title: "Sucursales en Mar del Plata",
+    description: sucursales.length
+      ? `Nuestras sucursales en Mar del Plata: ${detalle}. Horarios, servicios y contacto directo.`
+      : "Nuestras sucursales en Mar del Plata. Horarios, servicios y contacto directo.",
+    keywords: [
+      "maderera mar del plata",
+      "sucursales maderera",
+      "madera mar del plata direccion",
+      ...sucursales.map((s) => s.direccion.toLowerCase()),
+    ],
+    alternates: { canonical: "/sucursales" },
+    openGraph: {
+      title: "Sucursales | Maderera Juan B. Justo — Mar del Plata",
+      description: sucursales.map((s) => s.nombre).join(" y ") || "Nuestras sucursales",
+    },
+  };
+}
 
 /** "a\nb\nc" -> ["a", "b", "c"], sin renglones vacíos. */
 function renglones(texto: string): string[] {
@@ -182,7 +199,7 @@ export default async function SucursalesPage() {
                           <dt className="sr-only">Teléfono</dt>
                           <dd>
                             <a
-                              href={`tel:${sucursal.telefono.replace(/[^\d+]/g, "")}`}
+                              href={`tel:${telefonoParaMarcar(sucursal.telefono)}`}
                               className="hover:text-brand-orange"
                             >
                               {sucursal.telefono}
@@ -245,7 +262,7 @@ export default async function SucursalesPage() {
                   <div className="flex flex-wrap gap-3">
                     {sucursal.telefono && (
                       <a
-                        href={`tel:${sucursal.telefono.replace(/[^\d+]/g, "")}`}
+                        href={`tel:${telefonoParaMarcar(sucursal.telefono)}`}
                         className={buttonVariants({
                           className:
                             "h-[46px] rounded-[9px] bg-accion px-[18px] text-[15px] font-semibold text-white hover:bg-accion-hover",

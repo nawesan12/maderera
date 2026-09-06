@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { ANIO_FUNDACION, numerosDeLaEmpresa } from "@/lib/dal/catalog";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd } from "@/lib/seo";
+import { ALCANCE_MOLDAVA, masDeAnios } from "@/lib/empresa";
 
 /**
  * Quiénes somos.
@@ -24,7 +25,7 @@ import { migasJsonLd } from "@/lib/seo";
 export const metadata: Metadata = {
   title: "Quiénes somos — desde 1981",
   description:
-    "Empresa familiar fundada en 1981 en Mar del Plata. Más de cuatro décadas proveyendo madera de calidad. Marca propia Moldava con distribución nacional.",
+    `Empresa familiar fundada en ${ANIO_FUNDACION} en Mar del Plata. ${masDeAnios()} proveyendo madera de calidad. Marca propia Moldava, con entrega en ${ALCANCE_MOLDAVA}.`,
   keywords: [
     "maderera juan b justo historia",
     "moldava molduras",
@@ -35,22 +36,22 @@ export const metadata: Metadata = {
 };
 
 /**
- * La trayectoria, tal como la contaba el prototipo.
+ * La trayectoria: solo lo que el cliente confirmó.
  *
- * PENDIENTE DE CONFIRMAR CON EL CLIENTE. Viene del prototipo y no está
- * verificada. Ya se sacó un hito que era demostrablemente falso —"2010:
- * apertura de la sucursal en Av. Constitución", que no es ninguna de las dos
- * que opera—, pero el resto sigue sin confirmar y está anotado en
- * `docs/CAMBIOS.md` como insumo pendiente. Los demás no se tocan: inventar la
- * historia de otro es peor que no contarla.
+ * El brief del 5/9/2026 pedía los hitos y **volvió con el cuadro en blanco**:
+ * la única fila tenía el año 1981 y la columna "qué pasó" vacía. Así que de
+ * los siete hitos que traía el prototipo quedan los dos verificables —el año
+ * de apertura, que el cliente sí confirmó, y la puesta en marcha de esta
+ * plataforma, que es de este año y nos consta—.
+ *
+ * Los cinco intermedios (1990, 2000, 2005, 2015, 2020) se sacaron por la misma
+ * regla que ya se aplicó al hito falso de 2010 —"apertura en Av. Constitución",
+ * que no es ninguna de las dos sucursales que opera—: inventar la historia de
+ * otro es peor que no contarla. Vuelven en cuanto el cliente los mande; está
+ * anotado en `docs/CAMBIOS.md`.
  */
 const TRAYECTORIA = [
-  { anio: "1981", titulo: "Fundación", detalle: "Nace Maderera Juan B. Justo como una empresa familiar dedicada a la venta de maderas en bruto en Mar del Plata." },
-  { anio: "1990", titulo: "Expansión a techos", detalle: "Incorporamos la elaboración de techos, machimbres y molduras. Ampliamos nuestro aserradero con tecnología moderna." },
-  { anio: "2000", titulo: "Placas y corte", detalle: "Sumamos la línea de placas y tableros con servicio de corte a medida. Instalamos maquinaria de precisión." },
-  { anio: "2005", titulo: "Marca Moldava", detalle: "Creamos Moldava, nuestra marca propia de molduras y listonería en pino finger joint, con distribución nacional." },
-  { anio: "2015", titulo: "Ferretería y más", detalle: "Incorporamos la sección de ferretería con herrajes, accesorios, lacas y todo para el acabado de tu proyecto." },
-  { anio: "2020", titulo: "Construcción en seco", detalle: "Sumamos la línea completa de construcción en seco: placas de yeso, perfiles y aislantes." },
+  { anio: String(ANIO_FUNDACION), titulo: "Fundación", detalle: "Abre Maderera Juan B. Justo en Mar del Plata, como empresa familiar." },
   { anio: "2026", titulo: "Tienda y gestión online", detalle: "Catálogo con stock por sucursal, calculadoras de materiales, presupuestos y cuenta corriente desde el sitio." },
 ];
 
@@ -58,15 +59,15 @@ const VALORES = [
   { icono: Award, titulo: "Calidad", detalle: "Seleccionamos los mejores materiales para garantizar resultados duraderos." },
   { icono: Users, titulo: "Servicio", detalle: "Asesoramiento personalizado con un equipo que conoce cada producto." },
   { icono: Truck, titulo: "Logística", detalle: "Entrega en obra con flota propia en Mar del Plata y alrededores." },
-  { icono: Shield, titulo: "Confianza", detalle: "Cuatro décadas respaldando a profesionales y particulares con seriedad." },
+  { icono: Shield, titulo: "Confianza", detalle: `${masDeAnios()} respaldando a profesionales y particulares con seriedad.` },
 ];
 
 const MOLDAVA = [
-  "Producción propia con control de calidad",
-  "Pino finger joint de primera selección",
-  "Distribución nacional",
-  "Variedad de perfiles: zócalos, marcos, cornisas y más",
-  "Listos para pintar o lacar",
+  "Pino finger joint, sin nudos",
+  "El dentado y pegado elimina las imperfecciones de la madera",
+  "Piezas uniformes de 3,05 m de largo estándar",
+  "Línea completa: zócalos, marcos, cornisas y listonería",
+  `Venta mayorista en ${ALCANCE_MOLDAVA}, con entrega en puerta`,
 ];
 
 export default async function NosotrosPage() {
@@ -145,10 +146,13 @@ export default async function NosotrosPage() {
               </p>
               <h2 className="mb-4 text-3xl font-bold">Moldava</h2>
               <p className="mb-6 text-muted-foreground">
-                Moldava es nuestra marca propia de molduras y listonería en pino
-                finger joint. Con producción en nuestro aserradero de Mar del
-                Plata, distribuimos a todo el país con los más altos estándares
-                de calidad.
+                Moldava es nuestra línea propia de molduras y listonería en
+                pino finger joint, nacida en el proceso productivo de la
+                maderera. El sistema Finger Joint elimina las imperfecciones de
+                la madera y la vuelve a ensamblar por dentado y pegado, así que
+                cada pieza sale uniforme y de 3,05 m de largo estándar. La
+                vendemos a consumidor final y a mayoristas de {ALCANCE_MOLDAVA},
+                con entrega en puerta y coordinación de envíos.
               </p>
               <ul className="mb-6 space-y-3">
                 {MOLDAVA.map((item) => (

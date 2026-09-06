@@ -8,14 +8,19 @@ import {
 } from "@/lib/dal/admin/migracion";
 import { AsistenteMigracion } from "./asistente";
 
+import type { ClaveEntidad } from "@/lib/migracion/entidades";
+
 export const metadata = { title: "Migración de datos · Panel" };
 
-const ETIQUETA_ENTIDAD = {
+const ETIQUETA_ENTIDAD: Record<ClaveEntidad, string> = {
   clientes: "Clientes",
   productos: "Productos y medidas",
   stock: "Existencias",
   saldos: "Saldos de cuenta corriente",
-} as const;
+  proveedores: "Proveedores",
+  ventas_historicas: "Histórico de ventas",
+  comprobantes_historicos: "Comprobantes emitidos",
+};
 
 const ETIQUETA_ESTADO = {
   en_curso: "Quedó a medias",

@@ -40,16 +40,33 @@ const buttonVariants = cva(
   }
 )
 
+/**
+ * Cuando el botón se dibuja como otra cosa, deja de ser un botón nativo.
+ *
+ * Base UI asume `nativeButton` verdadero y, si le pasás un `render` con un
+ * `<Link>`, avisa por consola en cada dibujado: la portada tiraba cinco
+ * errores solo por los enlaces con forma de botón. No es ruido — el aviso dice
+ * algo cierto: un `<a>` con semántica de botón se comporta distinto con el
+ * teclado y con el lector de pantalla.
+ *
+ * Se resuelve acá y no en los once lugares que lo usan: `render` significa
+ * "esto no es un `<button>`", así que el valor se deriva en vez de pedirlo.
+ * Quien necesite lo contrario lo pasa explícito y gana.
+ */
 function Button({
   className,
   variant = "default",
   size = "default",
+  render,
+  nativeButton,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      render={render}
+      nativeButton={nativeButton ?? (render ? false : undefined)}
       {...props}
     />
   )

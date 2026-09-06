@@ -27,6 +27,9 @@ const FIJAS: { ruta: string; prioridad: number; frecuencia: MetadataRoute.Sitema
   { ruta: "/", prioridad: 1, frecuencia: "weekly" },
   { ruta: "/catalogo", prioridad: 0.9, frecuencia: "daily" },
   { ruta: "/stock", prioridad: 0.8, frecuencia: "daily" },
+  // La línea propia: es la página por la que llega un mayorista de la
+  // provincia que busca molduras finger joint, no la maderera de al lado.
+  { ruta: "/moldava", prioridad: 0.8, frecuencia: "monthly" },
   { ruta: "/sucursales", prioridad: 0.8, frecuencia: "monthly" },
   { ruta: "/blog", prioridad: 0.7, frecuencia: "weekly" },
   { ruta: "/profesionales", prioridad: 0.7, frecuencia: "monthly" },
@@ -34,6 +37,7 @@ const FIJAS: { ruta: string; prioridad: number; frecuencia: MetadataRoute.Sitema
   { ruta: "/documentacion", prioridad: 0.5, frecuencia: "monthly" },
   { ruta: "/nosotros", prioridad: 0.5, frecuencia: "yearly" },
   { ruta: "/contacto", prioridad: 0.5, frecuencia: "yearly" },
+  { ruta: "/cambios-y-devoluciones", prioridad: 0.4, frecuencia: "yearly" },
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

@@ -29,6 +29,23 @@ posibles:
 | 31/08/2026 | PRESTADOR | Rediseño completo de la interfaz según el paquete de diseño: tokens, tienda, contenido público, panel y portal del cliente | Trabajo nuevo asumido | — |
 | 31/08/2026 | PRESTADOR | Puesto del aserradero (`/taller`), rol propio y menú del panel acotado por rol | Trabajo nuevo asumido | — |
 | 31/08/2026 | PRESTADOR | Agente local que deja los archivos de corte en la carpeta del optimizador (nivel 2 de 9.1) | Trabajo nuevo asumido | — |
+| 05/09/2026 | CLIENTE (brief) | Descuento por pagar de contado o por transferencia, con escala por monto | Incluido (8.4) | — |
+| 05/09/2026 | CLIENTE (brief) | Cobro del corte de placas, por pasada y por material, con precio mayorista propio | Incluido (8.4) | — |
+| 05/09/2026 | CLIENTE (brief) | Precios sin IVA para el gremio, y aviso al mayorista de que entre con su usuario | Incluido (8.4) | — |
+| 05/09/2026 | CLIENTE (brief) | Moldava como sección destacada propia | Incluido (8.4) | — |
+| 05/09/2026 | CLIENTE (brief) | Migrar además proveedores, histórico de ventas y comprobantes emitidos | **Fuera de 1.9** — la cláusula lista productos, stock, clientes y precios. Se hizo igual | — |
+| 05/09/2026 | PRESTADOR | Lectura de planillas .xlsx en la migración y en la importación semanal de precios | Trabajo nuevo asumido | — |
+| 05/09/2026 | PRESTADOR | Bloqueo de cuenta corriente por límite y por deuda vencida en mostrador y facturación | Trabajo nuevo asumido | — |
+| 05/09/2026 | PRESTADOR | Pantalla de zonas de envío, que existían en el modelo y no se podían editar | Trabajo nuevo asumido | — |
+| 05/09/2026 | PRESTADOR | Pantallas para editar las tarifas de corte y los descuentos por forma de pago | Trabajo nuevo asumido | — |
+| 05/09/2026 | PRESTADOR | Página de cambios y devoluciones: el sitio no tenía ninguna página legal | Trabajo nuevo asumido | — |
+| 05/09/2026 | CLIENTE (brief) | La calculadora sugiere productos del catálogo, con precio y stock | Incluido (8.4) | — |
+| 05/09/2026 | CLIENTE (brief) | Lista de precios descargable en PDF, con la lista de cada profesional | Incluido (8.4) | — |
+| 05/09/2026 | CLIENTE (brief) | Motivos de cotización especial en el pedido de presupuesto | Incluido (8.4) | — |
+| 05/09/2026 | CLIENTE (brief) | Terminación y tipo/calidad como atributos de variante | Incluido (8.4) | — |
+| 05/09/2026 | CLIENTE (brief) | Documento obligatorio de quien retira, en el remito de acopio | Incluido (8.4) | — |
+| 05/09/2026 | PRESTADOR | Avisos y promociones: banners con vigencia en franja, portada y catálogo, con carrusel | Trabajo nuevo asumido | — |
+| 05/09/2026 | PRESTADOR | El catálogo dejó de sentirse otro sitio: misma franja de beneficios y barra de categorías que la portada | Trabajo nuevo asumido | — |
 
 ## Insumos pendientes del cliente
 
@@ -46,7 +63,17 @@ se notifica por escrito invocando la cláusula 5.3.
 | Exportaciones del sistema anterior en CSV | Usar la migración de datos (1.9), que ya está construida | — | Pendiente |
 | Fotos de productos y lista de precios vigente | Reemplazar los datos de desarrollo | — | Pendiente |
 | Fotos reales de las dos sucursales | Hoy la página muestra una placa de marca en vez de una foto ajena | — | Pendiente |
-| Confirmación de la historia de la empresa | La trayectoria de `/nosotros` viene del prototipo y no está verificada: el hito de 2010 mencionaba una sucursal en Av. Constitución que no es ninguna de las dos que operan. Ese se sacó; los demás siguen sin confirmar | — | Pendiente |
+| **Los hitos de la trayectoria** | El brief pedía el cuadro «año / qué pasó» y volvió con una sola fila —1981— y la columna del hecho vacía. Los cinco hitos intermedios que traía el prototipo se sacaron: no se inventa la historia de otro. `/nosotros` muestra hoy solo 1981 y 2026 | 05/09/2026 | Pendiente |
+| **Último número emitido en los puntos de venta 15, 17 y 20** | **Bloquea emitir el primer comprobante.** La plataforma numera desde `puntos_venta.numeroInicial`; en cero arranca en 1 y pisa una serie que ARCA viene contando hace años. Un salto de numeración fiscal no se corrige después. Se carga en `/admin/arca` | 05/09/2026 | Pendiente |
+| **Desde qué monto aplica el −15 %** por volumen | El brief dice «si son compras de mayor volumen se hace un -15%» sin decir desde cuánto. Está cargado el −10 % de contado y transferencia; el escalón del 15 % entra como una fila más en `payment_discounts` | 05/09/2026 | Pendiente |
+| **Alícuota de percepción de Ingresos Brutos** | Quedó en cero y `percibeIibb` apagado: percibir de más es plata que después hay que devolverle a cada cliente. La confirma el contador (Nigro) | 05/09/2026 | Pendiente |
+| **Texto del testimonio de Ezequiel** (Wood Framer) | El brief da el contacto —223 528-7248— pero no el texto. **Los cuatro testimonios del prototipo ya se ocultaron**: eran personas inventadas con nombre, cargo y frase entre comillas, y publicar una recomendación firmada por alguien que no existe no es un dato provisorio, es una afirmación falsa. La sección de la portada no se muestra hasta que haya uno real | 05/09/2026 | Pendiente |
+| **Los seis artículos del blog** | Están publicados con el autor «Maderera Juan B. Justo» y los escribió el prototipo, no el cliente. El brief dice que quién escribe los textos está «a definir» y propone otros cinco temas (Wood Frame, mobiliario, construcción eficiente, pymes, el poder del servicio). **No se tocaron**: bajarlos dejaría el blog vacío y esa es una decisión comercial. Se despublican desde Contenido cambiando el estado a borrador | 05/09/2026 | Pendiente |
+| **Revisión del texto de cambios y devoluciones** | La página nueva dice lo que el brief describe —se mira caso por caso y se resuelve por WhatsApp— en vez de inventar un plazo fijo. El propio cliente escribió «aceptamos sugerencias»: conviene que lo lea antes del lanzamiento | 05/09/2026 | Pendiente |
+| **Definición del correo: `mjbj.ar` o `mjbj.com.ar`** | El dominio del plan es `.ar` y los correos del brief son `.com.ar`; la propia clienta escribió «capaz que tema de mail deberíamos reveerlo». Define el remitente verificado de los avisos y el marcado de Google | 05/09/2026 | Pendiente |
+| **Desperdicio aceptable por material** en placas | El brief dice «depende del material» sin dar los porcentajes. La calculadora ya descuenta los 5 mm de sierra por pasada, que sí los dio, y aplica un único margen de seguridad del 12 % sobre eso | 05/09/2026 | Pendiente |
+| **Pendiente de techo y solape de membrana** | El brief preguntaba por el solape y no lo contestó. Se aplica el 10 cm que trae impreso el rollo —que es especificación del material, no un supuesto— y una pendiente del 15 % heredada del prototipo | 05/09/2026 | Pendiente |
+| **¿La calculadora vuelve al menú?** | Salió del menú por pedido del cliente, pero el brief contestó en detalle las cuatro fórmulas y trata la herramienta como viva. Las fórmulas ya se corrigieron; volver a enlazarla es una decisión suya y no se revirtió sola | 05/09/2026 | Pendiente |
 | Acceso al dominio `mjbj.ar` | Publicación (1.8) | — | Pendiente |
 | Relevamiento del taller: qué programa optimiza el corte, su versión, y **un archivo de trabajo real** | Ajustar el formato de exportación a la máquina. El mecanismo ya está hecho y se configura en pantalla; sin el archivo no se sabe a qué apuntarle | — | Pendiente |
 | Ruta de la carpeta que vigila el optimizador, y si esa PC puede salir a internet | Poner en marcha el agente del taller, que ya está construido. Es una variable de entorno, no código | — | Pendiente |
@@ -55,9 +82,10 @@ se notifica por escrito invocando la cláusula 5.3.
 ### Qué pedir exactamente para la migración
 
 El sistema anterior es **ISIS ERP Manager** (Quality Soft Argentina), sobre SQL
-Server. No tiene una exportación única: **cada listado exporta su propia grilla
-a Excel**. Así que no hay que pedir "un dump", hay que pedir cuatro archivos, y
-cada uno se sube por separado en `/admin/migracion`:
+Server. Soporte: Acosta Pablo, 223 541-1225. No tiene una exportación única:
+**cada listado exporta su propia grilla a Excel**. Así que no hay que pedir "un
+dump", hay que pedir **siete archivos**, y cada uno se sube por separado en
+`/admin/migracion`:
 
 | Archivo | De qué listado sale | Qué columnas conviene que tenga |
 |---|---|---|
@@ -65,17 +93,30 @@ cada uno se sube por separado en `/admin/migracion`:
 | Artículos | Listado de artículos con precios | Código, descripción, rubro, medida, unidad, precio de lista, precio profesional |
 | Existencias | Informe de stock por depósito | Código, depósito, existencia, stock mínimo |
 | Cuentas corrientes | Resumen de saldos al día del corte | Código de cliente, nombre, saldo |
+| Proveedores | Listado de proveedores | Código, razón social, CUIT, condición IVA, correo, teléfono, domicilio, saldo |
+| Histórico de ventas | Listado de ventas del período | Número de comprobante, fecha, código de cliente, total, detalle, sucursal, vendedor |
+| Comprobantes emitidos | Listado de comprobantes | Punto de venta, tipo, número, fecha, cliente, CUIT, neto, IVA, total, CAE |
 
-Tres precisiones que evitan una vuelta entera:
+Cuatro precisiones que evitan una vuelta entera:
 
-- **Guardados como CSV, no como .xlsx.** En Excel: «Guardar como» → «CSV UTF-8».
-  Si llega un .xlsx, la pantalla lo detecta y lo dice, pero es un viaje perdido.
+- **El .xlsx se lee directamente.** Ya no hace falta pasarlo a CSV: se sube tal
+  como lo exporta el sistema. El CSV también sirve.
 - **Los nombres de las columnas no importan**: el asistente pregunta cuál es
   cuál. Lo que importa es que **estén** las de la tabla, sobre todo el **código
-  de cliente**, que es lo que ata cada saldo a su ficha y lo que permite volver
-  a correr la migración sin duplicar la cartera.
-- **El orden importa**: clientes antes que saldos, artículos antes que
-  existencias.
+  de cliente**, que es lo que ata cada saldo, cada venta y cada comprobante a su
+  ficha, y lo que permite volver a correr la migración sin duplicar la cartera.
+- **El orden importa**: clientes antes que saldos, antes que el histórico y los
+  comprobantes; artículos antes que existencias.
+- **El histórico va por año.** El tope por archivo es de 100.000 filas y 8 MB;
+  con 300 a 700 pedidos por mes, un archivo por año entra cómodo y, si algo
+  sale mal, se vuelve a subir solo ese año.
+
+**El histórico de ventas y los comprobantes emitidos van a un archivo aparte,
+de solo lectura.** No entran a `orders` ni a `invoices`, y es deliberado: un
+pedido viejo cargado como pedido dispararía reservas de stock por mercadería
+entregada hace años, y un comprobante viejo contaminaría el correlativo de los
+comprobantes nuevos. Se migran para poder consultarlos, que es la pregunta real
+—"¿qué le vendimos a este cliente en 2019?"—.
 
 ### Qué pedir exactamente para el corte
 

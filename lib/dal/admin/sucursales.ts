@@ -12,6 +12,7 @@ import {
   productVariants,
   products,
 } from "@/lib/db/schema";
+import { sucursalPublicada } from "@/lib/sucursales";
 import { requireStaff } from "@/lib/dal/session";
 
 /** Medianoche de hoy, para separar "hoy" de "ayer" en hora local. */
@@ -27,13 +28,7 @@ export interface SucursalConMetricas {
   nombre: string;
   direccion: string;
   telefono: string | null;
-  whatsapp: string | null;
-  email: string | null;
   horario: string | null;
-  mapUrl: string | null;
-  imagenUrl: string | null;
-  servicios: string;
-  destacados: string;
   sortOrder: number;
   active: boolean;
   /** Importe vendido hoy: pedidos no cancelados con fecha de hoy. */
@@ -136,15 +131,11 @@ export async function sucursalesConMetricas(): Promise<SucursalConMetricas[]> {
     id: f.id,
     slug: f.slug,
     nombre: f.name,
-    direccion: f.address,
-    telefono: f.phone,
-    whatsapp: f.whatsapp,
-    email: f.email,
-    horario: f.hours,
-    mapUrl: f.mapUrl,
-    imagenUrl: f.imagenUrl,
-    servicios: f.servicios,
-    destacados: f.destacados,
+    // La ficha publicada sale de `lib/sucursales.ts`, no de la fila: acá se
+    // muestra para que quien mira los números vea de qué local se trata.
+    direccion: sucursalPublicada(f.slug)?.direccion ?? "",
+    telefono: sucursalPublicada(f.slug)?.telefono ?? null,
+    horario: sucursalPublicada(f.slug)?.horario ?? null,
     sortOrder: f.sortOrder,
     active: f.active,
     ventasHoy: Number(ventas.find((v) => v.branchId === f.id)?.total ?? 0),

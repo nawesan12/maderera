@@ -53,13 +53,19 @@ type Paso = "entidad" | "archivo" | "mapeo" | "previa" | "corriendo" | "informe"
 
 const INSTRUCCIONES: Record<ClaveEntidad, string> = {
   clientes:
-    "En el sistema anterior: abrí el listado de Clientes, exportá la grilla a Excel y guardá el archivo como CSV UTF-8.",
+    "En el sistema anterior: abrí el listado de Clientes, exportá la grilla a Excel.",
   productos:
-    "En el sistema anterior: abrí el listado de Artículos con las columnas de rubro y precios a la vista, exportá la grilla y guardala como CSV UTF-8.",
+    "En el sistema anterior: abrí el listado de Artículos con las columnas de rubro y precios a la vista, exportá la grilla.",
   stock:
-    "En el sistema anterior: abrí el informe de existencias por depósito, exportá la grilla y guardala como CSV UTF-8. Los productos tienen que estar migrados antes.",
+    "En el sistema anterior: abrí el informe de existencias por depósito, exportá la grilla. Los productos tienen que estar migrados antes.",
   saldos:
-    "En el sistema anterior: abrí el resumen de cuentas corrientes al día del corte, exportá la grilla y guardala como CSV UTF-8. Los clientes tienen que estar migrados antes.",
+    "En el sistema anterior: abrí el resumen de cuentas corrientes al día del corte y exportá la grilla. Los clientes tienen que estar migrados antes.",
+  proveedores:
+    "En el sistema anterior: abrí el listado de Proveedores con los datos fiscales a la vista y exportá la grilla.",
+  ventas_historicas:
+    "En el sistema anterior: abrí el listado de ventas del período que quieras traer y exportá la grilla. Los clientes tienen que estar migrados antes, así cada venta queda colgada de su ficha. Si son muchos años, conviene un archivo por año.",
+  comprobantes_historicos:
+    "En el sistema anterior: abrí el listado de comprobantes emitidos —con punto de venta, tipo, número y CAE a la vista— y exportá la grilla. Los clientes tienen que estar migrados antes.",
 };
 
 interface Totales {
@@ -286,12 +292,12 @@ export function AsistenteMigracion() {
             {leyendo ? "Leyendo el archivo…" : "Elegí el archivo o arrastralo acá"}
           </span>
           <span className="text-sm text-muted-foreground">
-            .csv exportado del sistema anterior · hasta 8 MB
+            Planilla exportada del sistema anterior (.xlsx o .csv) · hasta 8 MB
           </span>
           <input
             ref={inputRef}
             type="file"
-            accept=".csv,text/csv,text/plain"
+            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="sr-only"
             disabled={leyendo}
             onChange={(e) => {

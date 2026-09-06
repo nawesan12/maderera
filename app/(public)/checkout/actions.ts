@@ -20,6 +20,11 @@ import { obtenerCarrito } from "@/lib/dal/carrito";
 import { calcularEnvio, listarZonasDeEnvio } from "@/lib/dal/envios";
 import { costosParaCongelar } from "@/lib/compras/congelar";
 import { creditoDisponible } from "@/lib/dal/cuenta";
+import { escalasDePago } from "@/lib/dal/descuentos-pago";
+import {
+  descuentoPorMedioDePago,
+  montoDelDescuentoDePago,
+} from "@/lib/precios/medio-pago";
 import { siguienteNumeroDePedido } from "@/lib/dal/numeracion-ventas";
 import { enlaceDeSeguimiento } from "@/lib/seguimiento";
 import { notificarPedidoRecibido } from "@/lib/notificaciones/avisos";
@@ -119,7 +124,15 @@ export async function confirmarCompra(
     if (!zona) return { error: "Esa zona de envío ya no está disponible." };
 
     costoEnvio = calcularEnvio(zona, carrito.subtotal);
-    nombreZona = zona.nombre;
+    /*
+     * En una zona a cotizar el nombre lleva la aclaración pegada.
+     *
+     * `zonaEnvio` es texto y es lo que se lee en el tablero de pedidos, en el
+     * remito y en el aviso al cliente. Sin la marca, un pedido con el flete en
+     * cero se lee como "envío sin cargo" y sale a la calle sin que nadie
+     * cotice nada.
+     */
+    nombreZona = zona.aCotizar ? `${zona.nombre} (flete a cotizar)` : zona.nombre;
   }
 
   const sesion = await getSession();
@@ -145,7 +158,25 @@ export async function confirmarCompra(
     customerId = porMail?.id ?? null;
   }
 
-  const total = carrito.subtotal + costoEnvio;
+  /*
+   * Descuento por medio de pago.
+   *
+   * Se resuelve en el servidor, contra la base, y **sobre la mercadería sin el
+   * flete**: descontarle un 10 % al envío sería regalar plata que se le paga a
+   * un tercero. El formulario muestra el mismo número, pero lo que se guarda
+   * es esto: el medio de pago viaja en un radio button y el porcentaje no
+   * puede salir de ahí.
+   */
+  const escala = descuentoPorMedioDePago(
+    await escalasDePago(),
+    datos.medioPago,
+    carrito.subtotal,
+  );
+  const descuento = escala
+    ? montoDelDescuentoDePago(carrito.subtotal, escala.porcentaje)
+    : 0;
+
+  const total = carrito.subtotal - descuento + costoEnvio;
 
   // La cuenta corriente se verifica acá y no solo en la pantalla: el formulario
   // puede mandar cualquier medio de pago, y "comprar sin pagar" era literalmente
@@ -190,6 +221,7 @@ export async function confirmarCompra(
         zonaEnvio: nombreZona,
         costoEnvio: costoEnvio.toFixed(2),
         subtotal: carrito.subtotal.toFixed(2),
+        descuento: descuento.toFixed(2),
         total: total.toFixed(2),
         medioPago: datos.medioPago,
         estadoPago: "pendiente",

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { telefonoParaMarcar } from "@/lib/formato";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
 import {
   Clock,
@@ -118,7 +119,7 @@ export default async function ContactoPage() {
                     <Phone className="h-4 w-4 shrink-0 text-brand-orange" />
                     <dd>
                       <a
-                        href={`tel:${sucursal.telefono.replace(/[^\d+]/g, "")}`}
+                        href={`tel:${telefonoParaMarcar(sucursal.telefono)}`}
                         className="hover:text-brand-orange"
                       >
                         {sucursal.telefono}

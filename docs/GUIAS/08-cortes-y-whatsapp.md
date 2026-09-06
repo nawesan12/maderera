@@ -39,6 +39,34 @@ si todo es urgente, nada lo es.
 Cuando el corte nace de un pedido, quedan enganchados: desde la orden se llega
 al pedido y al revés.
 
+### Cobrar el corte
+
+El corte se cobra **por pasada de sierra**, y el precio depende del material y
+de si el cliente es mayorista:
+
+| Material | Público | Mayorista |
+|---|---|---|
+| Placas | $ 1.200 | $ 996 |
+| Tableros de madera | $ 1.400 | $ 1.162 |
+
+**Cuántas pasadas lleva el trabajo lo dice la máquina, no el sistema.** El
+patrón de corte lo arma el optimizador de la seccionadora, así que el número se
+carga a mano en la ficha del corte, en «Pasadas de sierra», **después de
+optimizar**. Recién ahí la ficha muestra el importe.
+
+Mientras el campo esté en cero la ficha dice «el corte todavía no se puede
+cobrar». Eso es a propósito: es preferible que falte el dato a que el sistema
+invente un mínimo.
+
+Los precios se editan en **Cortes → Tarifas**. El material es texto libre y no
+un desplegable de productos: la tarifa no depende de la placa concreta sino de
+**contra qué corta la sierra**. Una melamina y un MDF cobran igual; un tablero
+de madera, no.
+
+Si el material no tiene tarifa cargada, la ficha lo avisa con el nombre exacto
+que hay que dar de alta. Una lista de precios sin tarifa propia cae a la de
+público, igual que el precio del catálogo.
+
 ### Pasarle el trabajo a la máquina
 
 En la ficha del corte, el botón **Para la máquina** baja un archivo con el

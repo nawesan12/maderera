@@ -13,6 +13,9 @@ import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
 import { SelectorVariante } from "@/components/catalogo/selector-variante";
 import { obtenerProducto, productosSugeridos } from "@/lib/dal/catalog";
+import { vistaDePrecio } from "@/lib/dal/precios-sesion";
+import { getSession } from "@/lib/dal/session";
+import { AvisoGremio } from "@/components/catalogo/aviso-gremio";
 import { combinedStockLevel } from "@/lib/stock-level";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd, productoJsonLd, urlAbsoluta } from "@/lib/seo";
@@ -65,12 +68,15 @@ export default async function ProductoPage({
     producto.slug,
   );
 
-  const [whatsapp, numeroDelNegocio] = await Promise.all([
+  const [whatsapp, numeroDelNegocio, vista] = await Promise.all([
     enlaceWhatsapp(
       `Hola! Me interesa: ${producto.name}. ¿Podrían darme más información?`,
     ),
     numeroWhatsapp(),
+    vistaDePrecio(),
   ]);
+
+  const sesion = await getSession();
 
   // Las medidas se arman de las variantes: si ninguna las tiene cargadas, la
   // ficha técnica no se muestra en lugar de quedar con guiones.
@@ -177,8 +183,17 @@ export default async function ProductoPage({
                 unit={producto.unit}
                 variantes={producto.variantes}
                 whatsapp={whatsapp}
+                alicuota={Number(producto.alicuotaIva) || 21}
+                vista={vista}
+                aPedido={producto.aPedido}
               />
             </div>
+
+            {!sesion && (
+              <div className="mt-3.5">
+                <AvisoGremio />
+              </div>
+            )}
 
             {/* Cómo lo recibe */}
             <ul className="mt-3.5 grid gap-3 sm:grid-cols-2">
@@ -283,7 +298,7 @@ export default async function ProductoPage({
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {sugeridos.complementarios.map((p) => (
-                <ProductCard key={p.id} product={p} whatsapp={numeroDelNegocio} />
+                <ProductCard key={p.id} product={p} whatsapp={numeroDelNegocio} vista={vista} />
               ))}
             </div>
           </section>
@@ -307,7 +322,7 @@ export default async function ProductoPage({
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {sugeridos.similares.map((p) => (
-                <ProductCard key={p.id} product={p} whatsapp={numeroDelNegocio} />
+                <ProductCard key={p.id} product={p} whatsapp={numeroDelNegocio} vista={vista} />
               ))}
             </div>
           </section>

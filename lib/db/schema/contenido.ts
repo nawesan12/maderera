@@ -140,3 +140,74 @@ export type BlogPost = typeof blogPosts.$inferSelect;
 export type BlogCategory = typeof blogCategories.$inferSelect;
 export type Testimonial = typeof testimonials.$inferSelect;
 export type SiteSetting = typeof siteSettings.$inferSelect;
+
+
+/* -------------------------------------------------------------------------- */
+/* Banners                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Dónde puede aparecer un banner.
+ *
+ * Son lugares concretos y contados, no un sistema de "zonas" configurable: un
+ * espacio publicitario que se puede poner en cualquier parte termina con seis
+ * banners peleándose la portada. Cada ubicación tiene un tamaño y un rol.
+ */
+export const ubicacionBanner = pgEnum("ubicacion_banner", [
+  /** La franja de texto de arriba de todo. Sin imagen: es un aviso corto. */
+  "franja",
+  /** Debajo del hero de la portada, ancho completo. El lugar de la promoción. */
+  "portada",
+  /** Arriba del listado del catálogo. */
+  "catalogo",
+]);
+
+/**
+ * Los banners de promoción.
+ *
+ * **Por qué hacía falta.** La maderera cambia precios todas las semanas, tiene
+ * promociones con MODO y con tarjetas bancarizadas y no bancarizadas, y hace
+ * descuentos por pagar de contado. Nada de eso se podía anunciar: el sitio no
+ * tenía un solo lugar donde poner un aviso, así que una promoción vigente por
+ * quince días exigía un despliegue —o directamente no se anunciaba—.
+ *
+ * **La vigencia es lo que hace que sirva.** Un banner con fecha de fin se
+ * apaga solo. Sin eso, el "30 % los martes con MODO" se queda tres meses
+ * después de que terminó la promoción, y eso es peor que no haberlo puesto:
+ * alguien llega al mostrador a reclamar un descuento que no existe.
+ */
+export const banners = pgTable(
+  "banners",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    ubicacion: ubicacionBanner().notNull(),
+    /**
+     * El chip de arriba del título: "Promoción", "Nuevo", "-15%".
+     *
+     * Es lo que hace que un banner se lea como una promoción y no como un
+     * cartel institucional. Corto —dos o tres palabras—: más largo deja de ser
+     * una etiqueta y compite con el título.
+     */
+    etiqueta: text().notNull().default(""),
+    titulo: text().notNull(),
+    bajada: text().notNull().default(""),
+    /** A dónde lleva. Vacío lo deja sin enlace. */
+    enlace: text(),
+    textoEnlace: text().notNull().default(""),
+    /**
+     * La imagen de fondo. Opcional: un banner de texto sobre el color de marca
+     * se ve mejor que una foto mal recortada, y es lo que el equipo va a poder
+     * armar solo desde el celular.
+     */
+    imagenUrl: text(),
+    /** Desde cuándo se muestra. Vacío es "ya". */
+    desde: timestamp({ withTimezone: true }),
+    /** Hasta cuándo. Vacío es "hasta que lo apaguen". */
+    hasta: timestamp({ withTimezone: true }),
+    orden: integer().notNull().default(0),
+    activo: boolean().notNull().default(true),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("banners_ubicacion_idx").on(t.ubicacion, t.activo, t.orden)],
+);

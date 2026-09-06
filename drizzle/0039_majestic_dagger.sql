@@ -1,0 +1,1 @@
+ALTER TABLE "banners" ADD COLUMN "etiqueta" text DEFAULT '' NOT NULL;

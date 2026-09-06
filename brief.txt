@@ -1,0 +1,184 @@
+BRIEF · PLATAFORMA DIGITAL — MADERERA JUAN B. JUSTO
+5/9/2026
+
+01 · RESPONSABLES Y DECISIONES
+- Razón social y CUIT: MADERERA JUAN B JUSTO SRL 30589445259
+- Domicilio fiscal: AV JUAN B JUSTO 4153 , MAR DEL PLATA, BUENOS AIRES
+- Responsable del proyecto: nombre, cargo y celular: LOLE, PROFESIONAL INDEPENDIENTE ESTRATEGA EN ORDEN, COMUNICACION Y VENTAS: 223 3 458217
+- Suplente cuando esa persona no está: LEO , RESPONSABLE DE LA FIRMA: 223 5 051535
+- ¿Quién decide en cada frente?:
+   Frente | Nombre | Contacto
+   Diseño y contenido | LOLE | 2233458217
+   Precios y stock | LOLE | 2233458217
+   Facturación y fiscal | LOLE | 2233458217
+   Sistemas y accesos | LOLE | 2233458217
+- ¿Cómo preferís que nos comuniquemos?: WhatsApp, Reunión semanal fija, Grupo con el equipo
+- ¿Cada cuánto pueden revisar entregas?: 1 vez por semana
+
+02 · EL NEGOCIO HOY
+- Sucursales:
+   Sucursal | Dirección | Teléfono | Horario
+   Casa Central | AV JUAN B JUSTO 4153 | 2235903118 | 8 A 16HS
+   Aserradero | DIAGONAL CANOSA 61 | 2235060817 | 8 A 16HS
+- Hitos para la línea de tiempo:
+   Año | Qué pasó
+   1981 | 
+- Marca Moldava: qué es y qué productos abarca: Moldava es una co creaciòn de Maderera Juan B Justo que naciò en el proceso productivo de crear una propia linea de molduras y listoneria en Pino Finger (pino sin nudos). A travès del sistema Finger Joint se eliminan las imperfecciones  de la madera y se ensambla la misma en un proceso de pegamento y dentado de a misma, elaborando de largo estandar piezas uniformes de 3.05 mts de largo. Se comercializa a consumidores finales y a clientes mayoristas de toda la Provincia de Buenos Aires la linea completa, con entrega en puerta y coordinaciòn de envios y entregas 
+- ¿Cómo debe presentarse Moldava en el sitio?: Sección destacada propia
+- Tres razones por las que un cliente los elige y no va a la competencia: Diversidad de materiales en un sòlo lugar lo que permite resolver todo en un lugar para reformas y construcciòn, permitiendo ahorrar tiempo y dinero a quien nos elija. 
+Soluciones diversas como servicios de cortes a medida de placas, pegados de tapacantos y coordinaciòn de logistica y distribucion. 
+Capacidad de resoluciòn y facilidades de pago asi como tambien diversas y actualizadas posibilidades constante de las mismas. 
+- Competidores locales:
+   Competidor | Qué hace mejor | Sitio web
+   Plasticos San Francisco en placas | Solo se dedica a placas y es representante de FAPLAC una marca muy impuesta en el rubro de mobiliario | https://sanfrancisco.ar/
+   Aserradero Jeske | Tiene aserradero propio lo que le permite ofrecer directo desde Misiones la madera y las placas de fenolicos a un precio muy, muy por debajo de la plaza de Mar del plata | https://aserraderojeske.com.ar/
+- Pedidos por mes (aproximado): 300 a 700
+- ¿Qué porcentaje de las ventas es a profesionales?: 40 a 60%
+- Ticket promedio aproximado: muy fluctuante entre consumidores finales, gremio y constructoras. Depende de si las constructoras / constructores movieron màs, elevan mucho el ticket promedio
+
+03 · CATÁLOGO Y PRODUCTOS
+- ¿Qué categorías arrancan con contenido cargado el primer día?: Placas, Construcción en Seco, Molduras, Decks, Techos
+- Cantidad de productos y responsable por categoría:
+   Categoría | Productos aprox. | Responsable
+   Techos | 10 | 
+   Placas | 50 | 
+   Pisos | 10 | 
+   Molduras | 50 | 
+   Ferretería | 1000 | 
+   Decks | 6 | 
+   Construcción en Seco | 10 | 
+   Cubiertas |  | 
+- ¿Con qué unidades venden?: Unidad, Metro lineal, Metro cuadrado, Placa
+- ¿Qué variantes cambian el precio de un mismo producto?: Espesor, Medida, Color, Tipo o calidad, Marca, Largo, Terminación
+- ¿Los precios se muestran al público?: Sí, todos
+- Si es parcial: ¿cuáles sí y cuáles no?: Creo que a los clientes Mayoristas/gremio/constructoras deberia aclararseles que deben entrar con un usuario para que les muestre su precio especial / diferente que tienen
+- ¿Los precios se muestran con IVA?: Ambos, según tipo de cliente
+- Productos que NO deben aparecer online: ninguno
+- ¿Cada cuánto cambian los precios?: Semanal
+- ¿Cómo prefieren actualizarlos?: Subiendo una planilla Excel
+
+04 · STOCK Y MIGRACIÓN
+- Versión de Quality Software y contacto de soporte: Acosta Pablo 2235411225
+- ¿En qué formatos puede exportar el sistema actual?: Excel, Solo PDF
+- ¿Qué datos hay que migrar?: Productos, Precios, Clientes, Cuentas corrientes, Histórico de ventas, Proveedores, Comprobantes emitidos
+- Del histórico de ventas, ¿desde cuándo conservarlo?: Todo
+- ¿Cada cuánto se carga el stock hoy?: Al momento de cada venta
+- ¿Quién carga el stock y en qué momento del día?: Ingresos de compra en administracion se carga, manualmente con remito de proveedor y el sistema en cada factura descuenta el stock salvo que sea factura acopio, que descuenta stock a la emision de un remito. Hay traslados de mercaderia de una sucursal a la otra y eso tambien debe tenerse en cuenta. 
+- Productos que se fabrican a pedido y no tienen stock: Maquinados en especial como por ejemplo, escaleras a medida, medidas de tirantes en especifico que no recibimos de origen y elaboramos en planta
+
+05 · TIENDA, ENVÍOS Y PAGOS
+- ¿Qué categorías se venden online desde el primer día?: Placas, Pisos, Molduras, Decks, Techos, Ferretería, Construcción en Seco
+- Zonas de envío:
+   Zona | Transporte | Costo | Plazo
+   Mar del Plata | propios o si son cosas pequeñas podemos adicionar algun  | depende | dependiendo del producto
+   Tandil | ver comicionista o camion propio dependiendo volumen  | depende | dependiendo del producto
+   Necochea | ver comicionista o camion propio dependiendo volumen  | depende  | dependiendo del producto
+- Productos que no se envían por tamaño o peso: ninguno
+- Retiro en sucursal: tiempo de preparación: Depende del producto
+- Medios de pago a habilitar: Mercado Pago (tarjeta), Mercado Pago (cuotas), Transferencia bancaria, Cuenta corriente
+- ¿La cuenta de Mercado Pago está a nombre de la empresa?: Sí
+- ¿Quién administra Mercado Pago?: El sector administrativo
+- ¿Hay recargos o descuentos según el pago?: Descuento por transferencia, Descuento por efectivo
+- Porcentajes de esos recargos o descuentos: depende del monto de la compra. Si pagan de contado/transferencia hay un -10% (si son compras de mayor volumen se hace un -15%) >Hay promociones con APP MODO y tarjetas bancarizadas y no bancarizadas. 
+- ¿Monto mínimo de compra online?: Sin mínimo
+- Política de cambios y devoluciones tal como quieren publicarla: Aceptamos sugerencias! al momento chequeamos los tiempos desde que retiraron la mercaderia, depende de la mercaderia hay que chequear si hay por lo que quiere cambiar ya que las unidades de medidas son muy distintas y el stock es variable cada dia. Creo que deberian comunicarse al whats app directo en ese caso y en el caso de pedido de devolucion del dinero o desconocimiento de compra
+
+06 · CALCULADORAS DE MATERIALES
+- ¿Existen planillas con las fórmulas que usan hoy?: Sí, las adjuntamos
+- Si están en la cabeza de alguien: ¿de quién?: Lole, Leo, Martin
+- Techos: separación de tirantes, rendimiento del machimbre por m², solape de membrana y clavos por m²: >>>Para techos la separaciòn recomendada es c/60cm . Si es entre Piso c/40 cm. as medidas de espesor y ancho para tiranteria de techo tambièn es asesorable según dimension y carga de los mismos. El rendimiento del machimbre se calcula por encastre siempre un +20%. Los clavos son de diversas medidas y se sacan dependiendo de la cantidad de madera que compre y DEL USO QUE LE QUIERAN DAR, depende cada tipo
+- Placas: medidas estándar que manejan y desperdicio aceptable al optimizar cortes: 1.83x2.75 mts Placas de Melamina, Enchapados, MDF 
+1.83x2.60 mts Placas de Melamina y Enchapados, Fibro Plus, MDF, 
+1.22x2.44 mts Fenolicos, OSB, tableros de madera
+1.22x3.05 mts Tableros de madera
+
+Las placas pueden cortarse en fracciones varias dependiendo del tipo de placa y los mm a tener en cuenta por cada pasada de maquina en cortes es de 5mm
+- ¿El resultado sugiere productos del catálogo?: Cantidades y sugerencia opcional
+- ¿Qué desperdicio suman por seguridad?: Depende del material
+
+07 · PRESUPUESTOS Y CORTES
+- ¿Qué situaciones requieren cotización especial?: Precios por volumen, Fletes especiales, Fabricación a pedido, Obras completas
+- ¿Cómo cobran el corte de placas?: Según el material
+- Precio actual del corte y mínimos: $1200 todas menos los tableros de madera: $ 1400 para consumidor final. Mayoristas cortes de placas: $ 996 final c/pasada y en tableros $ 1162
+- ¿En cuánto tiempo responden un presupuesto?: Mismo día
+- WhatsApp y email donde deben llegar los presupuestos: 223 5 903118 - madererajuanbjusto@gmail.com - info@mjbj.com.ar (capaz que tema de mail deberiamos reveerlo)
+- Datos mínimos que hay que pedirle al cliente: Medidas exactas, Cantidad, Material, Fecha de necesidad
+- ¿Quién atiende la cola de cortes y en qué horario?: de Lunes a Viernes de 8 a 16hs y los Sabados de 8 a 12hs . Sucursal depende de què material sea podrian elegir para retirar. 
+
+08 · CLIENTES Y PROFESIONALES
+- Requisitos para ser cliente profesional: Aprobación manual
+- ¿Cómo funciona el precio profesional?: Se negocia caso por caso
+- Cuenta corriente: plazo de pago: Depende del cliente
+- Límite de crédito típico y qué pasa al vencer: depende del cliente, al vencer se bloquea la posibilidad de facturacion en cuenta corriente
+- ¿Quién autoriza abrir una cuenta corriente?: Administración
+- Firma digital de acopio: qué debe registrar cada retiro: Saldo restante, Producto y cantidad, Fecha y hora, Quién retira (DNI), Firma en pantalla
+- Eventos y capacitaciones por año: 1 o 2
+- Cupos típicos y si se cobran: si se cobran y a veces son gratuitos 1 o 2  por año seguro. 
+- Documentación técnica descargable para profesionales: Listas de precios PDF
+
+09 · FACTURACIÓN ARCA
+- Condición ante ARCA: Responsable Inscripto
+- ¿Qué comprobantes emiten hoy?: Factura A, Notas de crédito, Notas de débito, Remitos
+- Puntos de venta y numeración a continuar:
+   Punto de venta | Tipo | Último número
+   15 |  | 
+   17 |  | 
+   20 |  | 
+- ¿Con qué facturan hoy?: Quality Software
+- ¿Quién factura en el día a día?: Punto de venta en caja Juan B Justo, Canosa y el sector de ventas on line
+- ¿Tienen certificados digitales de ARCA generados?: Sí, vigentes
+- Contador o estudio: nombre, teléfono y email: Nigro Juan Carlos y Angelo: 2234483877
+- ¿Aplican regímenes especiales?: Convenio multilateral, Percepción IIBB
+
+10 · CONTENIDO Y MATERIAL
+- ¿Tienen el logo en vectorial?: Sí (AI, EPS o SVG)
+- Fotos de producto: ¿en qué estado están?: Tenemos la mayoría, buenas
+- Si faltan fotos, ¿quién las produce?: Alguien del equipo con celular
+- ¿Qué otras fotos existen?: Sucursales, Aserradero, Equipo trabajando, Obras terminadas
+- ¿Quién escribe los textos del sitio?: A definir
+- Tres clientes dispuestos a dar testimonio:
+   Cliente | Rubro | Contacto
+   Ezequiel  | Wood Framer | 2235287248
+- Blog: ¿con qué frecuencia pueden publicar?: Cuando haya algo que contar
+- Cinco temas para arrancar el blog: Wood Frame
+Mobiliario (espacios que generen sensaciones)
+Construcciòn eficiente
+Empresas familiares (Pymes)
+El poder del servicio
+
+- ¿Tienen fichas técnicas de proveedores en digital?: No
+
+11 · IDENTIDAD Y ESTILO
+- Tres sitios que les gusten y por qué:
+   Sitio | Qué les gusta
+   Serymat | Me parece super clara y prolija, sencilla de comprender y ver lo que estoy buscando
+   San Francisco Plasticos | como competidor para aprender
+   Materiales San Pablo: https://sanpablomateriales.com.ar/ | como llama la atencion de colores y estimulos que provee
+- Sitios que no quieren parecerse en nada:
+   Sitio | Qué rechazan
+   Imepho | poca claridad visual para encontrar de forma simple lo que quiero
+   Aserradero las 3 marias de Orionhttps://www.las3mariasdeorion.com/ | Se percibe la baja calidad del sitio
+- ¿Qué elementos de marca se conservan?: Logo, Colores actuales
+- Tono de la comunicación: Cercano y directo
+- ¿Qué tiene que sentir alguien que entra por primera vez?: Que es fácil comprar, Confianza y trayectoria, Que hay stock y precio ya
+- ¿El logo se mantiene?: Ajustes menores
+
+12 · ACCESOS Y EQUIPO
+- Accesos a entregar:
+   Acceso | Quién lo tiene | Fecha de entrega
+   Dominio mjbj.ar | Administracion | 15/09/26
+   Hosting actual | Administraciòn | 15/09/26
+   Quality Software | Administracion | 30/10/26
+   Mercado Pago | Administracion | 30/09/26
+   ARCA (clave fiscal) | Administracion | 30/09/26
+   Casilla de correo | Administracion | 30/09/26
+   Redes sociales | Lole y Leo | 15/09/26
+   Google Business | Lole | 15/09/26
+- ¿Cuántas personas van a usar el panel de gestión?: 3 a 5
+- Comodidad del equipo con la tecnología: Se maneja
+- Capacitación: ¿cómo la prefieren?: Presencial en sucursal
+- Días y horarios posibles para capacitar: Los 2 primeros Sàbados de c/mes de 8 a 10 am.
+- Horarios en los que NO se puede tocar el sistema: Temporada alta, Mañana (8 a 12), Mediodía (12 a 15)
+- ¿Alguien del equipo se resiste al cambio de sistema?: no
+
+Completado : 96 de 105 preguntas.

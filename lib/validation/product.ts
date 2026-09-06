@@ -50,6 +50,8 @@ export const varianteSchema = z.object({
   espesorMm: enteroOpcional,
   material: z.string().trim().max(80).optional(),
   color: z.string().trim().max(80).optional(),
+  terminacion: z.string().trim().max(80).optional(),
+  calidad: z.string().trim().max(80).optional(),
   precioGeneral: precio,
   precioProfesional: precio,
   stockCentral: enteroOpcional,
@@ -76,6 +78,7 @@ export const productoSchema = z.object({
   brand: z.string().trim().max(80).optional(),
   unit: z.enum(unidades),
   featured: z.boolean().default(false),
+  aPedido: z.boolean().default(false),
   active: z.boolean().default(true),
   imagen: z.string().trim().url("La imagen tiene que ser una URL.").or(z.literal("")),
   variantes: z

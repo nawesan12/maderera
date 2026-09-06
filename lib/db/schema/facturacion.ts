@@ -108,6 +108,18 @@ export const puntosVenta = pgTable(
     branchId: uuid().references(() => branches.id, { onDelete: "set null" }),
     /** Modalidad habilitada en ARCA. Los webservices exigen "webservice". */
     modalidad: text().notNull().default("webservice"),
+    /**
+     * Último número ya emitido en el sistema anterior, para seguir la serie.
+     *
+     * El correlativo sale de `max(invoices.numero)` de esta base, que arranca
+     * vacía: sin este piso el primer comprobante saldría número 1 cuando ARCA
+     * viene contando desde hace años en este punto de venta. Un salto de
+     * numeración en una serie fiscal no se corrige después.
+     *
+     * Cero significa "arranca de cero", que es lo correcto para un punto de
+     * venta nuevo.
+     */
+    numeroInicial: integer().notNull().default(0),
     activo: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },

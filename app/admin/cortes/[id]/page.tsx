@@ -5,7 +5,11 @@ import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_CORTE, Pasos } from "@/components/admin/pasos";
 import { fechaHora, plural } from "@/components/admin/formato";
 import { obtenerCorte } from "@/lib/dal/admin/cortes";
+import { tarifasDeCorte } from "@/lib/dal/cortes-tarifas";
+import { cargoPorCorte, tarifaDeCorte } from "@/lib/cortes/tarifa";
+import { formatearMonto } from "@/lib/formato";
 import { AccionesCorte } from "../acciones";
+import { CargarPasadas } from "../pasadas";
 
 export default async function FichaCortePage({
   params,
@@ -18,6 +22,15 @@ export default async function FichaCortePage({
   if (!corte) notFound();
 
   const totalPiezas = corte.piezas.reduce((s, p) => s + p.cantidad, 0);
+
+  // La tarifa depende del material y de la lista de quien encarga: un mayorista
+  // paga $996 la pasada donde el público paga $1.200.
+  const tarifa = tarifaDeCorte(
+    await tarifasDeCorte(),
+    corte.material,
+    corte.priceListId ?? null,
+  );
+  const cargo = cargoPorCorte(tarifa, corte.pasadas);
   const superficie =
     corte.piezas.reduce(
       (s, p) => s + (p.largoMm * p.anchoMm * p.cantidad) / 1_000_000,
@@ -156,6 +169,34 @@ export default async function FichaCortePage({
             <p className="mt-1 text-base text-muted-foreground">
               {plural(corte.placas, "placa")} a cortar
             </p>
+
+            {/*
+              El corte se cobra por pasada de sierra, y cuántas lleva el
+              trabajo lo resuelve el optimizador de la máquina, no la
+              plataforma. Por eso el número lo carga quien opera, después de
+              optimizar; hasta entonces el cargo no se inventa.
+            */}
+            <div className="mt-3 border-t pt-3">
+              {corte.pasadas > 0 ? (
+                <>
+                  <p className="text-base">
+                    <span className="tabular font-medium">{corte.pasadas}</span>{" "}
+                    {corte.pasadas === 1 ? "pasada" : "pasadas"} de sierra
+                  </p>
+                  <p className="mt-1 text-base text-muted-foreground">
+                    {tarifa
+                      ? `${formatearMonto(tarifa.precioPorPasada)} por pasada · ${formatearMonto(cargo)} en total`
+                      : `No hay tarifa cargada para "${corte.material}". Se configura en Cortes.`}
+                  </p>
+                </>
+              ) : (
+                <p className="text-base text-muted-foreground">
+                  Sin pasadas cargadas: el corte todavía no se puede cobrar.
+                </p>
+              )}
+
+              <CargarPasadas id={corte.id} actuales={corte.pasadas} />
+            </div>
           </section>
 
           {corte.notas && (

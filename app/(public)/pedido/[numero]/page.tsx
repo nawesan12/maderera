@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { sucursalPublicada } from "@/lib/sucursales";
 import {
   ArrowRight,
   Check,
@@ -141,7 +142,7 @@ export default async function PedidoConfirmadoPage({
                   <span>
                     Retirás en {pedido.sucursal}
                     <span className="block text-muted-foreground">
-                      {pedido.sucursalDireccion}
+                      {sucursalPublicada(pedido.sucursalSlug ?? "")?.direccion}
                     </span>
                   </span>
                 </p>

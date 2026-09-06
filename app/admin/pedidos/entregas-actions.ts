@@ -41,6 +41,19 @@ export async function prepararRemito(
       tipo: z.enum(["retiro", "envio"]),
       receptorNombre: z.string().trim().max(120).optional(),
       receptorDocumento: z.string().trim().max(30).optional(),
+      /*
+       * En un retiro el documento es obligatorio.
+       *
+       * El brief lo pone entre lo que cada retiro tiene que registrar, junto
+       * con el saldo restante, el producto, la fecha y la firma. Y tiene una
+       * razón concreta: en un acopio la mercadería la retira quien mande el
+       * cliente —el flete, un oficial— y la firma sola no dice quién fue. Si
+       * después aparece un faltante, el remito firmado por "Juan" no
+       * identifica a nadie.
+       *
+       * En un envío no se pide: la recibe quien esté en la obra y el respaldo
+       * es el remito del transportista.
+       */
       transportista: z.string().trim().max(80).optional(),
       numeroSeguimiento: z.string().trim().max(60).optional(),
       notas: z.string().trim().max(400).optional(),
@@ -56,6 +69,17 @@ export async function prepararRemito(
         (formData.get("numeroSeguimiento") as string) || undefined,
       notas: (formData.get("notas") as string) || undefined,
     });
+
+  if (
+    parsed.success &&
+    parsed.data.tipo === "retiro" &&
+    !parsed.data.receptorDocumento
+  ) {
+    return {
+      error:
+        "Falta el documento de quien retira. En un retiro es obligatorio: la firma sola no identifica a nadie.",
+    };
+  }
 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };

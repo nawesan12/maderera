@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "cutting_rates_material_general_idx" ON "cutting_rates" USING btree ("material") WHERE "cutting_rates"."price_list_id" is null;

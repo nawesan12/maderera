@@ -12,6 +12,7 @@ export interface PuntoVentaListado {
   nombre: string;
   activo: boolean;
   branchId: string | null;
+  numeroInicial: number;
   sucursal: string | null;
 }
 
@@ -64,6 +65,21 @@ export function PuntosDeVenta({
                     ? `Sucursal ${punto.sucursal}`
                     : "Para toda la empresa"}
                 </p>
+                {/* Sin el último número emitido, el primer comprobante sale
+                    número 1 y pisa una serie que ARCA viene contando. Es lo
+                    único de esta pantalla que no se puede corregir después. */}
+                {punto.numeroInicial > 0 ? (
+                  <p className="mt-1 text-base text-muted-foreground">
+                    Sigue desde el{" "}
+                    <span className="tabular">
+                      {String(punto.numeroInicial).padStart(8, "0")}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="mt-1 text-base text-[var(--estado-tinta,#8a5a08)]">
+                    Falta el último número emitido en el sistema anterior
+                  </p>
+                )}
               </div>
 
               <button
@@ -167,6 +183,30 @@ function Formulario({
         El número tiene que ser el mismo que habilitaste en ARCA con modalidad
         Webservices. Si no coincide, los comprobantes se rechazan.
       </p>
+
+      <div>
+        <label
+          htmlFor="numeroInicial"
+          className="mb-1.5 block text-base font-medium"
+        >
+          Último número emitido en el sistema anterior
+        </label>
+        <input
+          id="numeroInicial"
+          name="numeroInicial"
+          type="number"
+          min={0}
+          defaultValue={punto?.numeroInicial ?? 0}
+          className="h-10 w-full rounded-lg border bg-background px-3 text-base sm:w-56"
+        />
+        <p className="mt-1.5 text-base text-muted-foreground">
+          El sistema numera desde el siguiente. Es lo que evita que el primer
+          comprobante salga con el número 1 y choque con una serie que ARCA ya
+          tiene registrada. Se saca del último comprobante emitido en Quality
+          Software para este punto de venta; cero es correcto solo si el punto
+          de venta es nuevo.
+        </p>
+      </div>
 
       <div>
         <label htmlFor="branchId" className="mb-1.5 block text-base font-medium">

@@ -32,6 +32,13 @@ export interface EstadoMostrador {
    * Es distinto de `error`: la venta está, lo que falta es el papel.
    */
   avisoFiscal?: string;
+  /**
+   * La venta se frenó por cuenta corriente, pero se puede confirmar igual.
+   *
+   * La pantalla ofrece "Cobrar igual" en vez de dejar al vendedor sin salida
+   * con un cliente enfrente. Reenvía la misma venta con `autorizado`.
+   */
+  requiereAutorizacion?: boolean;
 }
 
 const lineaSchema = z.object({
@@ -63,6 +70,8 @@ const ventaSchema = z.object({
   descuento: z.number().min(0).optional(),
   descuentoMotivo: z.string().nullable().optional(),
   notas: z.string().nullable().optional(),
+  /** El vendedor ya vio el aviso de cuenta corriente y decidió seguir. */
+  autorizado: z.boolean().optional(),
 });
 
 function refrescar() {
@@ -267,7 +276,12 @@ export async function cobrarVenta(
     usuarioId: usuario.userId,
   });
 
-  if (!resultado.ok) return { error: resultado.error };
+  if (!resultado.ok) {
+    return {
+      error: resultado.error,
+      requiereAutorizacion: resultado.requiereAutorizacion,
+    };
+  }
 
   // Solo se registra la venta nueva. Si la clave ya existía es el segundo toque
   // del mismo botón, y anotarlo dos veces en la bitácora contaría dos ventas.

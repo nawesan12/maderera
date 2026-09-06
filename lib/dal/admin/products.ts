@@ -243,6 +243,8 @@ export async function obtenerProductoAdmin(id: string) {
       espesorMm: v.espesorMm,
       material: v.material ?? "",
       color: v.color ?? "",
+      terminacion: v.terminacion ?? "",
+      calidad: v.calidad ?? "",
       precioGeneral:
         precios.find(
           (p) => p.variantId === v.id && p.priceListId === listaGeneral?.id,

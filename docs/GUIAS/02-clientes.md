@@ -26,6 +26,29 @@ Es cuánta deuda puede tener antes de que el sistema deje de aceptarle compras a
 cuenta. **En cero significa que no opera a cuenta**: paga siempre al contado.
 Este número lo fija administración y queda registrado quién lo puso.
 
+### Cuándo se le corta la cuenta
+
+El sistema frena una venta a cuenta corriente por tres motivos, y los tres se
+verifican **en la tienda, en el mostrador y al cobrar una factura**:
+
+1. **No tiene cuenta habilitada** (el límite está en cero).
+2. **La ficha está marcada como morosa.** Es el interruptor manual de
+   administración.
+3. **Tiene deuda de más de 30 días.** Este es nuevo: antes la antigüedad de la
+   deuda se mostraba en el resumen y no frenaba nada.
+
+En el mostrador el aviso trae un botón **«Cobrar igual, bajo mi
+responsabilidad»**: hay un cliente parado del otro lado y la decisión es del
+negocio. Lo que el sistema garantiza es que nadie lo haga sin enterarse; queda
+en la bitácora.
+
+Al cobrar una factura desde Facturación **no hay ese botón**: ahí hay tiempo de
+resolverlo —cobrar de otra forma o ampliarle el límite desde la ficha—.
+
+Una venta que se hizo **sin conexión** entra igual cuando la caja recupera
+internet, aunque el cliente esté pasado. La plata ya está en el cajón y la
+mercadería salió: rechazarla no la deshace, solo la dejaría sin registrar.
+
 ## La cuenta corriente
 
 La solapa de cuenta corriente muestra el saldo movimiento por movimiento, con el

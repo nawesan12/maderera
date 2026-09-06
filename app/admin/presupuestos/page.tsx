@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardList, Plus, Timer } from "lucide-react";
+import { CalendarClock, ClipboardList, Plus, Timer } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { Button } from "@/components/ui/button";
 import {
@@ -141,9 +141,9 @@ function Tarjeta({
               </span>
             )}
 
-            {/* El compromiso de 24 horas hábiles del portal profesional. Va al
-                lado del nombre y no en la letra chica: un SLA que hay que
-                buscar es un SLA que no se cumple. */}
+            {/* El compromiso de respuesta —el mismo día, o 24 horas hábiles si
+                es express—. Va al lado del nombre y no en la letra chica: un
+                plazo que hay que buscar es un plazo que no se cumple. */}
             {p.plazo && (
               <span
                 className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium ${
@@ -156,6 +156,16 @@ function Tarjeta({
               >
                 <Timer className="h-4 w-4" />
                 {p.plazo.texto}
+              </span>
+            )}
+
+            {/* Para cuándo lo necesita la obra. Es distinto del plazo de
+                respuesta —eso es cuándo contestamos nosotros— y es lo que
+                decide qué se arma primero cuando hay tres esperando. */}
+            {p.necesitaPara && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-sm font-medium text-muted-foreground">
+                <CalendarClock className="h-4 w-4" />
+                Lo necesita el {fechaCorta.format(p.necesitaPara)}
               </span>
             )}
           </div>

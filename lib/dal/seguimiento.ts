@@ -50,7 +50,7 @@ export const pedidoParaSeguimiento = cache(
         estadoPago: orders.estadoPago,
         estado: orders.estado,
         sucursal: branches.name,
-        sucursalDireccion: branches.address,
+        sucursalSlug: branches.slug,
         createdAt: orders.createdAt,
       })
       .from(orders)

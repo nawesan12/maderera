@@ -81,6 +81,12 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   // a qué margen. Es la misma sensibilidad que precios y cobros.
   "/admin/reportes": ["admin"],
   "/admin/sucursales": ["admin"],
+  // Una tarifa de envío es un precio: no la cambia quien atiende el mostrador.
+  "/admin/envios": ["admin"],
+  // Las dos reglas que fijan cuánto entra por caja: tarifa de corte y
+  // descuento por forma de pago. Son precios, no operación.
+  "/admin/cortes/tarifas": ["admin"],
+  "/admin/precios/formas-de-pago": ["admin"],
   "/admin/migracion": ["admin"],
   "/admin/bitacora": ["admin"],
 };

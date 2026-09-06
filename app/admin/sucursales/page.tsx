@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
 import {
   Building2,
   Clock,
   DollarSign,
-  Mail,
   MapPin,
   Package,
   PackageX,
@@ -21,7 +19,6 @@ import {
   sucursalesConMetricas,
   type SucursalConMetricas,
 } from "@/lib/dal/admin/sucursales";
-import { EditorDeSucursal } from "./editor";
 
 export const metadata: Metadata = { title: "Sucursales" };
 
@@ -127,19 +124,9 @@ function TarjetaSucursal({ sucursal }: { sucursal: SucursalConMetricas }) {
   return (
     <article className="tarjeta overflow-hidden">
       <header className="flex items-start gap-4 border-b p-5">
-        {sucursal.imagenUrl ? (
-          <Image
-            src={sucursal.imagenUrl}
-            alt=""
-            width={64}
-            height={64}
-            className="h-16 w-16 shrink-0 rounded-xl object-cover"
-          />
-        ) : (
-          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-brand-orange/12 text-brand-orange">
-            <Building2 className="h-7 w-7" />
-          </span>
-        )}
+        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-brand-orange/12 text-brand-orange">
+          <Building2 className="h-7 w-7" />
+        </span>
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -170,12 +157,6 @@ function TarjetaSucursal({ sucursal }: { sucursal: SucursalConMetricas }) {
                 <span>{sucursal.horario}</span>
               </li>
             )}
-            {sucursal.email && (
-              <li className="flex items-center gap-1.5">
-                <Mail className="h-4 w-4 shrink-0" />
-                <span>{sucursal.email}</span>
-              </li>
-            )}
           </ul>
         </div>
       </header>
@@ -201,9 +182,13 @@ function TarjetaSucursal({ sucursal }: { sucursal: SucursalConMetricas }) {
         ))}
       </div>
 
-      <div className="border-t p-5">
-        <EditorDeSucursal sucursal={sucursal} />
-      </div>
+      {/*
+        La ficha publicada ya no se edita desde acá.
+        Dirección, teléfono, horario y servicios viven en `lib/sucursales.ts`:
+        son dos locales de siempre y su domicilio no es un dato operativo.
+        Esta pantalla quedó para lo que sí cambia todos los días, que son los
+        números de la jornada.
+      */}
     </article>
   );
 }

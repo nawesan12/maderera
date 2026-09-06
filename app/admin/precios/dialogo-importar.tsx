@@ -115,12 +115,12 @@ export function DialogoImportar() {
                 Elegí la planilla o arrastrala acá
               </span>
               <span className="text-sm text-muted-foreground">
-                Archivo .csv guardado desde Excel · hasta 5 MB
+                Planilla de Excel (.xlsx) o .csv · hasta 5 MB
               </span>
               <input
                 ref={inputRef}
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="sr-only"
                 onChange={(e) => {
                   const archivo = e.target.files?.[0];

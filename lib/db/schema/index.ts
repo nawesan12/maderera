@@ -20,3 +20,4 @@ export * from "./compras";
 export * from "./costos";
 export * from "./retenciones";
 export * from "./gastos";
+export * from "./comercial";

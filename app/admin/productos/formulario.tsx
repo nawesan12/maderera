@@ -32,6 +32,8 @@ export interface VarianteForm {
   espesorMm: number | null;
   material: string;
   color: string;
+  terminacion: string;
+  calidad: string;
   precioGeneral: string;
   precioProfesional: string;
   stockCentral: number;
@@ -50,6 +52,7 @@ export interface ProductoForm {
   brand: string;
   unit: string;
   featured: boolean;
+  aPedido: boolean;
   active: boolean;
   imagen: string;
   variantes: VarianteForm[];
@@ -75,6 +78,8 @@ const varianteVacia = (): VarianteForm => ({
   espesorMm: null,
   material: "",
   color: "",
+  terminacion: "",
+  calidad: "",
   precioGeneral: "0",
   precioProfesional: "0",
   stockCentral: 0,
@@ -280,7 +285,7 @@ export function FormularioProducto({
 
           <input type="hidden" name="imagen" value={inicial.imagen} />
 
-          <div className="flex gap-8 pt-2">
+          <div className="flex flex-wrap gap-8 pt-2">
             <label className="flex items-center gap-2 text-base text-foreground">
               <Switch name="featured" defaultChecked={inicial.featured} />
               Destacado
@@ -289,7 +294,16 @@ export function FormularioProducto({
               <Switch name="active" defaultChecked={inicial.active} />
               Visible en el sitio
             </label>
+            <label className="flex items-center gap-2 text-base text-foreground">
+              <Switch name="aPedido" defaultChecked={inicial.aPedido} />
+              Se fabrica a pedido
+            </label>
           </div>
+          <p className="text-sm text-muted-foreground">
+            «Se fabrica a pedido» es para los maquinados especiales: escaleras a
+            medida, tirantes que no vienen de origen. La ficha deja de decir
+            «sin stock» y pasa a ofrecer encargarlo.
+          </p>
         </CardContent>
       </Card>
 
@@ -423,6 +437,26 @@ export function FormularioProducto({
                     value={variante.color}
                     onChange={(e) => actualizarVariante(i, "color", e.target.value)}
                     placeholder="Blanco"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm">Terminación</Label>
+                  <Input
+                    value={variante.terminacion}
+                    onChange={(e) =>
+                      actualizarVariante(i, "terminacion", e.target.value)
+                    }
+                    placeholder="Cepillada, laqueada, cruda…"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm">Tipo o calidad</Label>
+                  <Input
+                    value={variante.calidad}
+                    onChange={(e) =>
+                      actualizarVariante(i, "calidad", e.target.value)
+                    }
+                    placeholder="Primera, segunda, premium…"
                   />
                 </div>
               </div>

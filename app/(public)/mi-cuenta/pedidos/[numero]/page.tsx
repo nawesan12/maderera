@@ -13,6 +13,7 @@ import {
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_PEDIDO, ETAPAS_RETIRO, Pasos } from "@/components/admin/pasos";
 import { miPedido } from "@/lib/dal/cuenta";
+import { sucursalPublicada } from "@/lib/sucursales";
 import {
   fechaCorta,
   fechaHora,
@@ -48,6 +49,9 @@ export default async function DetallePedidoPage({
   const whatsapp = await enlaceWhatsapp();
   const { numero } = await params;
   const pedido = await miPedido(numero);
+  const ficha = pedido?.sucursalSlug
+    ? sucursalPublicada(pedido.sucursalSlug)
+    : undefined;
 
   // El DAL ya filtró por dueño: si no vuelve nada, o no existe o no es suyo, y
   // las dos cosas se contestan igual. Decir "existe pero no es tuyo" confirma
@@ -230,16 +234,16 @@ export default async function DetallePedidoPage({
             {pedido.tipoEntrega === "retiro" ? (
               <>
                 <p className="font-medium">{pedido.sucursal ?? "Sucursal"}</p>
-                {pedido.sucursalDireccion && (
+                {ficha?.direccion && (
                   <p className="mt-0.5 flex items-start gap-1.5 text-sm text-muted-foreground">
                     <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    {pedido.sucursalDireccion}
+                    {ficha.direccion}
                   </p>
                 )}
-                {pedido.sucursalHorario && (
+                {ficha?.horario && (
                   <p className="mt-1 flex items-start gap-1.5 text-sm text-muted-foreground">
                     <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    {pedido.sucursalHorario}
+                    {ficha.horario}
                   </p>
                 )}
               </>

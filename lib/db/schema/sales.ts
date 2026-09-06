@@ -72,6 +72,16 @@ export const quotes = pgTable(
      * SLA que nadie ve es un SLA que no se cumple.
      */
     respondeHasta: timestamp({ withTimezone: true }),
+    /**
+     * Para cuándo lo necesita el cliente.
+     *
+     * El brief lo pone entre los datos mínimos que hay que pedir, junto con
+     * las medidas, la cantidad y el material. No es lo mismo que
+     * `respondeHasta`: eso es cuándo contestamos nosotros, esto es cuándo lo
+     * necesita la obra. Ordena la cola por lo que de verdad apura, que muchas
+     * veces no es lo que entró primero.
+     */
+    necesitaPara: timestamp({ withTimezone: true }),
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -81,6 +91,7 @@ export const quotes = pgTable(
     index("quotes_customer_idx").on(t.customerId),
     index("quotes_estado_idx").on(t.estado),
     index("quotes_created_idx").on(t.createdAt),
+    index("quotes_necesita_idx").on(t.necesitaPara),
   ],
 );
 
@@ -350,6 +361,18 @@ export const cuttingOrders = pgTable(
     }),
     materialDescripcion: text().notNull(),
     placas: integer().notNull().default(1),
+    /**
+     * Pasadas de sierra del trabajo, para poder cobrarlo.
+     *
+     * El corte se cobra **por pasada** (del brief: $1.200 la placa, $1.400 el
+     * tablero de madera, con precio propio para mayoristas). Cuántas pasadas
+     * lleva un despiece no lo sabe la plataforma: lo resuelve el optimizador de
+     * la seccionadora al armar el patrón. Así que lo carga quien opera, después
+     * de optimizar, y recién ahí el cargo es real.
+     *
+     * Cero significa "todavía no se midió", no "sale gratis".
+     */
+    pasadas: integer().notNull().default(0),
     estado: estadoCorte().notNull().default("en-cola"),
     urgente: integer().notNull().default(0),
     notas: text(),

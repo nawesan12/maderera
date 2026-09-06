@@ -58,6 +58,7 @@ describe("costo de envío", () => {
     costo: 15000,
     envioGratisDesde: 200000,
     demoraEstimada: null,
+    aCotizar: false,
   };
 
   it("cobra la tarifa de la zona", () => {
@@ -71,5 +72,11 @@ describe("costo de envío", () => {
 
   it("con la promoción desactivada siempre cobra", () => {
     expect(calcularEnvio({ ...zona, envioGratisDesde: 0 }, 9_000_000)).toBe(15000);
+  });
+
+  it("una zona a cotizar no cobra nada, ni siquiera su tarifa", () => {
+    // El flete se cotiza aparte. Cobrar la tarifa cargada sería cobrar un
+    // número que nadie confirmó.
+    expect(calcularEnvio({ ...zona, aCotizar: true }, 100000)).toBe(0);
   });
 });

@@ -496,45 +496,17 @@ const CATALOGO: CategorySeed[] = [
   },
 ];
 
+/*
+ * Las sucursales, reducidas a lo que la base necesita saber.
+ *
+ * La ficha que se publica —dirección, teléfono, horario, servicios— vive en
+ * `lib/sucursales.ts` y no en columnas: son dos locales de siempre, y tenerlos
+ * editables solo conseguía que el domicilio del aserradero apareciera escrito
+ * de tres formas distintas en el mismo sitio.
+ */
 const SUCURSALES = [
-  {
-    slug: "casa-central",
-    name: "Casa Central",
-    address: "Av. Juan B. Justo 4153, Mar del Plata",
-    phone: "(0223) 474-3328",
-    whatsapp: "+542235903118",
-    email: "info@mjbj.com.ar",
-    hours: "Lun a Vie 8:00-16:00 · Sáb 8:00-12:00",
-    servicios: [
-      "Servicio de corte de placas a medida con precisión",
-      "Amplio stock de molduras y listonería Moldava",
-      "Fenólicos, tablas y puntales para obra",
-      "Exhibición de vestidores, placares y muebles de cocina",
-      "Asesoramiento personalizado para tu proyecto",
-      "Melaminas, MDF y terciados con servicio de fraccionamiento",
-    ].join("\n"),
-    destacados: ["Showroom de muebles", "Corte CNC", "Retiro en sucursal"].join("\n"),
-    sortOrder: 0,
-  },
-  {
-    slug: "aserradero",
-    name: "Aserradero",
-    address: "Canosa 61, Mar del Plata",
-    phone: "(0223) 483-0535",
-    whatsapp: "+542235060817",
-    email: "info@aserradero.mjbj.com.ar",
-    hours: "Lun a Vie 8:00-16:00 · Sáb 8:00-12:00",
-    servicios: [
-      "Planta de fabricación con tecnología moderna",
-      "Stock permanente de techos, escaleras y decks",
-      "Machimbres en pino, saligna y grandis",
-      "Molduras marca Moldava — producción propia",
-      "Ferretería: lacas, diluyentes, selladores y más",
-      "Maderas en bruto y elaboradas a medida",
-    ].join("\n"),
-    destacados: ["Fábrica propia", "Madera a medida", "Ferretería completa"].join("\n"),
-    sortOrder: 1,
-  },
+  { slug: "casa-central", name: "Casa Central", sortOrder: 0 },
+  { slug: "aserradero", name: "Aserradero", sortOrder: 1 },
 ];
 
 async function main() {

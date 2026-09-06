@@ -16,7 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useCarrito } from "@/lib/carrito-context";
 import { actualizarPrecios } from "@/app/(public)/carrito-actions";
 import { formatearPrecio } from "@/lib/formato";
-import { PrecioSinImpuestos } from "@/components/precio-sin-impuestos";
+import { PrecioSecundario } from "@/components/precio";
 import { PedirPresupuesto, type SucursalElegible } from "./pedir";
 
 /**
@@ -288,7 +288,7 @@ export function VistaPresupuesto({
 
                 {/* Ley 27.743: el neto también acá, que es donde se mira el
                     número que se va a pagar. */}
-                <PrecioSinImpuestos precioFinal={subtotal} className="mt-2" />
+                <PrecioSecundario precioFinal={subtotal} className="mt-2" />
 
                 <div className="mt-4 space-y-2.5">
                   <Button

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { telefonoParaMarcar } from "@/lib/formato";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Image from "next/image";
 import { Phone, Mail, MapPin, Clock } from "lucide-react";
@@ -64,8 +65,8 @@ export async function Footer() {
                 ["Pisos", "/catalogo?cat=pisos"],
                 ["Molduras", "/catalogo?cat=molduras"],
                 ["Ferretería", "/catalogo?cat=ferreteria"],
-                ["Decks y Escaleras", "/catalogo?cat=decks"],
-                ["Construcción en Seco", "/catalogo?cat=construccion-seco"],
+                ["Decks y Escaleras", "/catalogo?cat=decks-y-escaleras"],
+                ["Construcción en Seco", "/catalogo?cat=construccion-en-seco"],
                 ["Cubiertas", "/catalogo?cat=cubiertas"],
               ].map(([name, href]) => (
                 <li key={href}>
@@ -86,9 +87,11 @@ export async function Footer() {
                 ["Pedir Presupuesto", "/presupuesto"],
                 ["Portal Profesionales", "/profesionales"],
                 ["Sucursales", "/sucursales"],
+                ["Moldava", "/moldava"],
                 ["Quiénes Somos", "/nosotros"],
                 ["Blog", "/blog"],
                 ["Contacto", "/contacto"],
+                ["Cambios y devoluciones", "/cambios-y-devoluciones"],
               ].map(([name, href]) => (
                 <li key={href}>
                   <Link href={href} className="transition-colors hover:text-brand-orange-light">
@@ -116,7 +119,7 @@ export async function Footer() {
                 <li className="flex items-center gap-2">
                   <Phone className="h-4 w-4 shrink-0 text-brand-orange" />
                   <a
-                    href={`tel:${principal.telefono.replace(/[^\d+]/g, "")}`}
+                    href={`tel:${telefonoParaMarcar(principal.telefono)}`}
                     className="tabular hover:text-white"
                   >
                     {principal.telefono}

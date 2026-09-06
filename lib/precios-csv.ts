@@ -1,21 +1,22 @@
 /**
  * Planilla de precios: generación y lectura.
  *
- * El formato es CSV y no .xlsx a propósito. Excel abre y guarda CSV sin
- * plugins, el archivo se puede revisar con cualquier cosa, y evita meter una
- * dependencia de lectura de binarios en el camino de subida de archivos.
+ * **Lo que se descarga es un CSV; lo que se sube puede ser CSV o .xlsx.** La
+ * asimetría es a propósito: el archivo que generamos conviene que sea texto
+ * —se revisa con cualquier cosa y no depende de Excel—, pero el que sube el
+ * cliente es el que él tenga. Los precios se actualizan todas las semanas, y
+ * pedir "guardalo como CSV UTF-8" cincuenta veces por año es un paso manual
+ * que se termina saltando.
  *
- * Las particularidades de Excel en español —separador `;`, coma decimal, BOM
- * UTF-8 y comillas— las resuelve `lib/csv.ts`, que es el mismo lector que usa
- * la migración desde el sistema anterior.
+ * Este módulo ya no lee el archivo: recibe la grilla ya partida. De eso se
+ * encarga `lib/planilla.ts`, que es el mismo camino por el que entra la
+ * migración —mismo manejo de separador, comillas, Windows-1252 y coma
+ * decimal—. Antes había acá una segunda copia que partía por renglones, y por
+ * eso arrastraba el defecto que la migración ya había corregido: un campo
+ * entre comillas con un salto de línea adentro partía el registro en dos.
  */
 
-import {
-  detectarSeparador,
-  interpretarNumero,
-  normalizarEncabezado,
-  partirLinea,
-} from "./csv";
+import { interpretarNumero, normalizarEncabezado } from "./csv";
 
 export const COLUMNAS = [
   "SKU",
@@ -84,19 +85,13 @@ export interface FilaImportada {
   error?: string;
 }
 
-/** Lee la planilla subida y devuelve una fila por línea, con sus errores. */
-export function leerCsv(contenido: string): FilaImportada[] {
-  const texto = contenido.replace(/^﻿/, "");
-  const lineas = texto
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+/** Lee la planilla ya partida y devuelve una fila por renglón, con sus errores. */
+export function leerFilas(grilla: string[][]): FilaImportada[] {
+  const lineas = grilla.filter((fila) => fila.some((c) => c.trim() !== ""));
 
   if (lineas.length === 0) return [];
 
-  const encabezado = lineas[0];
-  const separador = detectarSeparador(encabezado);
-  const columnas = partirLinea(encabezado, separador).map(normalizarEncabezado);
+  const columnas = lineas[0].map(normalizarEncabezado);
 
   const iSku = columnas.findIndex((c) => c.includes("sku"));
   const iGeneral = columnas.findIndex(
@@ -116,8 +111,7 @@ export function leerCsv(contenido: string): FilaImportada[] {
     ];
   }
 
-  return lineas.slice(1).map((linea, i) => {
-    const campos = partirLinea(linea, separador);
+  return lineas.slice(1).map((campos, i) => {
     const sku = (campos[iSku] ?? "").trim();
 
     if (!sku) {

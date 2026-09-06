@@ -211,8 +211,7 @@ export async function miPedido(numero: string) {
       total: orders.total,
       notas: orders.notas,
       sucursal: branches.name,
-      sucursalDireccion: branches.address,
-      sucursalHorario: branches.hours,
+      sucursalSlug: branches.slug,
       createdAt: orders.createdAt,
     })
     .from(orders)

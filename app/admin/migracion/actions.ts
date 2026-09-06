@@ -7,12 +7,7 @@ import { db } from "@/lib/db";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { migrationRuns, type RechazoMigracion } from "@/lib/db/schema";
 import { requireStaffRole } from "@/lib/dal/session";
-import {
-  decodificarPlanilla,
-  detectarSeparador,
-  formatoBinario,
-  partirPlanilla,
-} from "@/lib/csv";
+import { leerPlanilla } from "@/lib/planilla";
 import {
   automapear,
   definicionDe,
@@ -37,13 +32,16 @@ import {
 const permiso = () => requireStaffRole("admin");
 
 const MAX_BYTES = 8 * 1024 * 1024;
-const MAX_FILAS = 20_000;
-
-const NOMBRE_BINARIO = {
-  xlsx: "un archivo de Excel (.xlsx)",
-  xls: "un archivo de Excel viejo (.xls)",
-  pdf: "un PDF",
-} as const;
+/*
+ * El tope por archivo.
+ *
+ * Estaba en 20.000 pensando en el maestro de artículos. El histórico de ventas
+ * es otra escala —el cliente hace entre 300 y 700 pedidos por mes y quiere
+ * traerlo entero—, así que 20.000 obligaría a partir a mano cada año. El lote
+ * de 200 filas por transacción es lo que hace que el número grande no importe:
+ * se sube en tandas igual, solo que las parte la pantalla.
+ */
+const MAX_FILAS = 100_000;
 
 export interface ArchivoAnalizado {
   error?: string;
@@ -73,22 +71,14 @@ export async function analizarArchivo(
 
   if (archivo.size > MAX_BYTES) {
     return {
-      error: "El archivo pasa los 8 MB. Exportalo en partes —por rubro, o por letra— y subilas de a una.",
+      error: "El archivo pasa los 8 MB. Exportalo en partes —por rubro, por letra, o por año si son ventas— y subilas de a una.",
     };
   }
 
   const bytes = new Uint8Array(await archivo.arrayBuffer());
 
-  const binario = formatoBinario(bytes);
-  if (binario) {
-    return {
-      error: `Esto es ${NOMBRE_BINARIO[binario]} y hace falta un CSV. Abrilo en Excel y usá «Guardar como» eligiendo «CSV UTF-8 (delimitado por comas)».`,
-    };
-  }
-
-  const { texto, codificacion } = decodificarPlanilla(bytes);
-  const separador = detectarSeparador(texto);
-  const filas = partirPlanilla(texto, separador);
+  const { filas, codificacion, error } = leerPlanilla(bytes);
+  if (error) return { error };
 
   if (filas.length < 2) {
     return {

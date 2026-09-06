@@ -14,6 +14,7 @@
     "db:push": "node --env-file=.env.local node_modules/.bin/drizzle-kit push",
     "db:studio": "node --env-file=.env.local node_modules/.bin/drizzle-kit studio",
     "db:seed": "tsx --env-file=.env.local lib/db/seed.ts",
+    "db:seed-negocio": "tsx --env-file=.env.local lib/db/seed-negocio.ts",
     "staff:create": "tsx --env-file=.env.local lib/db/create-staff.ts",
     "cliente:create": "tsx --env-file=.env.local lib/db/create-cliente.ts",
     "db:seed-ventas": "tsx --env-file=.env.local lib/db/seed-ventas.ts",

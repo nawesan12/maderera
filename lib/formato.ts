@@ -219,3 +219,15 @@ export function primerNombre(nombre: string): string {
 
   return sinTitulo[0] ?? partes[0];
 }
+
+/**
+ * Un teléfono listo para un enlace `tel:`.
+ *
+ * Deja solo dígitos y el `+` inicial: "(0223) 474-3328" queda "02234743328".
+ * Estaba repetido como `.replace(/[^\d+]/g, "")` en el menú, el pie, contacto,
+ * sucursales y el portal de profesionales, que es la clase de duplicación que
+ * después hace que uno de los cinco quede sin arreglar.
+ */
+export function telefonoParaMarcar(telefono: string): string {
+  return telefono.replace(/[^\d+]/g, "");
+}

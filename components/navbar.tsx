@@ -27,16 +27,16 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useCarrito } from "@/lib/carrito-context";
 import { useEstado } from "@/lib/estado-context";
-import { primerNombre } from "@/lib/formato";
+import { primerNombre, telefonoParaMarcar } from "@/lib/formato";
 
 const productLinks = [
   { name: "Techos", href: "/catalogo?cat=techos", icon: Home, desc: "Tirantes, machimbres, aislantes" },
   { name: "Placas", href: "/catalogo?cat=placas", icon: Layers, desc: "Melaminas, MDF, fenólicos" },
   { name: "Pisos", href: "/catalogo?cat=pisos", icon: Grid3X3, desc: "Melamínicos Decno Flooring" },
-  { name: "Molduras", href: "/catalogo?cat=molduras", icon: Minus, desc: "Marca Moldava - Finger Joint" },
+  { name: "Molduras", href: "/catalogo?cat=molduras", icon: Minus, desc: "Línea propia Moldava — Finger Joint" },
   { name: "Ferretería", href: "/catalogo?cat=ferreteria", icon: Wrench, desc: "Herrajes y accesorios" },
-  { name: "Decks y Escaleras", href: "/catalogo?cat=decks", icon: Footprints, desc: "Madera y PVC" },
-  { name: "Construcción en Seco", href: "/catalogo?cat=construccion-seco", icon: Building, desc: "Durlock, perfiles, aislantes" },
+  { name: "Decks y Escaleras", href: "/catalogo?cat=decks-y-escaleras", icon: Footprints, desc: "Madera y PVC" },
+  { name: "Construcción en Seco", href: "/catalogo?cat=construccion-en-seco", icon: Building, desc: "Durlock, perfiles, aislantes" },
   { name: "Cubiertas", href: "/catalogo?cat=cubiertas", icon: Umbrella, desc: "Chapas y tejas Curvin" },
 ];
 
@@ -57,6 +57,7 @@ const enlacesDirectos = [
 ];
 
 const enlacesMas = [
+  { name: "Moldava", href: "/moldava" },
   { name: "Nosotros", href: "/nosotros" },
   { name: "Blog", href: "/blog" },
   { name: "Contacto", href: "/contacto" },
@@ -117,7 +118,7 @@ export function Navbar({
         <div className="contenedor flex h-[38px] items-center gap-5">
           {telefono && (
             <a
-              href={`tel:${telefono.replace(/[^\d+]/g, "")}`}
+              href={`tel:${telefonoParaMarcar(telefono)}`}
               className="flex items-center gap-[7px] transition-colors hover:text-white"
             >
               <Phone className="h-[13px] w-[13px] text-brand-orange" />

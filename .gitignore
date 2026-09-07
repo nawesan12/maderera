@@ -54,3 +54,14 @@ next-env.d.ts
 
 # El registro local del agente del taller: es de cada máquina, no del repo.
 agente-taller/estado.json
+
+# Capturas sueltas de la verificación con Playwright. `.playwright-mcp` ya está
+# arriba, pero un nombre de archivo relativo cae en la raíz del repo y no ahí:
+# así se commitearon tres megas de PNG por accidente. `portada.png` ya está
+# versionada y no la afecta.
+/barrido-*.json
+/page-*.png
+/rol-*.png
+/guia-*.png
+/mapa-*.png
+/consola-*.png

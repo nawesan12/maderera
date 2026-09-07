@@ -1,0 +1,790 @@
+<meta charset="utf-8">
+<title>Consola de la demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Literata:opsz,wght@7..72,400;7..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+  :root {
+    --naranja:      oklch(0.62 0.18 46);
+    --naranja-vivo: oklch(0.68 0.19 48);
+    --madera:       oklch(0.45 0.08 65);
+    --verde:        oklch(0.48 0.11 148);
+    --azul:         oklch(0.50 0.12 250);
+    --rojo:         oklch(0.50 0.18 28);
+
+    --papel:        oklch(0.988 0.004 85);
+    --tarjeta:      oklch(1 0 0);
+    --crema:        oklch(0.963 0.013 82);
+    --hundido:      oklch(0.945 0.010 80);
+
+    --tinta:        oklch(0.21 0.012 60);
+    --tinta-media:  oklch(0.44 0.016 62);
+    --tinta-suave:  oklch(0.57 0.014 65);
+
+    --linea:        oklch(0.90 0.008 72);
+    --linea-firme:  oklch(0.82 0.012 70);
+
+    --sombra: 0 1px 2px oklch(0.30 0.02 60 / 0.06), 0 6px 18px oklch(0.30 0.02 60 / 0.05);
+    --sombra-alta: 0 2px 4px oklch(0.30 0.02 60 / 0.08), 0 12px 30px oklch(0.30 0.02 60 / 0.10);
+
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --texto: "Literata", Georgia, "Times New Roman", serif;
+    --dato: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --naranja:      oklch(0.75 0.16 50);
+      --naranja-vivo: oklch(0.79 0.15 52);
+      --madera:       oklch(0.72 0.06 70);
+      --verde:        oklch(0.74 0.13 150);
+      --azul:         oklch(0.72 0.11 250);
+      --rojo:         oklch(0.70 0.16 28);
+      --papel:        oklch(0.170 0.009 62);
+      --tarjeta:      oklch(0.222 0.010 62);
+      --crema:        oklch(0.255 0.011 64);
+      --hundido:      oklch(0.200 0.009 62);
+      --tinta:        oklch(0.950 0.006 82);
+      --tinta-media:  oklch(0.77 0.012 75);
+      --tinta-suave:  oklch(0.64 0.012 70);
+      --linea:        oklch(0.32 0.010 64);
+      --linea-firme:  oklch(0.44 0.012 66);
+      --sombra: 0 1px 2px oklch(0 0 0 / 0.4), 0 6px 18px oklch(0 0 0 / 0.3);
+      --sombra-alta: 0 2px 6px oklch(0 0 0 / 0.5), 0 14px 32px oklch(0 0 0 / 0.42);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --naranja:      oklch(0.75 0.16 50);
+    --naranja-vivo: oklch(0.79 0.15 52);
+    --madera:       oklch(0.72 0.06 70);
+    --verde:        oklch(0.74 0.13 150);
+    --azul:         oklch(0.72 0.11 250);
+    --rojo:         oklch(0.70 0.16 28);
+    --papel:        oklch(0.170 0.009 62);
+    --tarjeta:      oklch(0.222 0.010 62);
+    --crema:        oklch(0.255 0.011 64);
+    --hundido:      oklch(0.200 0.009 62);
+    --tinta:        oklch(0.950 0.006 82);
+    --tinta-media:  oklch(0.77 0.012 75);
+    --tinta-suave:  oklch(0.64 0.012 70);
+    --linea:        oklch(0.32 0.010 64);
+    --linea-firme:  oklch(0.44 0.012 66);
+    --sombra: 0 1px 2px oklch(0 0 0 / 0.4), 0 6px 18px oklch(0 0 0 / 0.3);
+    --sombra-alta: 0 2px 6px oklch(0 0 0 / 0.5), 0 14px 32px oklch(0 0 0 / 0.42);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0; background: var(--papel); color: var(--tinta);
+    font-family: var(--texto); font-size: 16px; line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .marco { max-width: 1180px; margin: 0 auto; padding: 0 20px 90px; }
+  .marco.solo-tapa { padding-bottom: 0; }
+
+  h1, h2, h3 { font-family: var(--display); font-weight: 700; line-height: 1.14; margin: 0; letter-spacing: -0.018em; text-wrap: balance; }
+  h1 { font-size: clamp(2rem, 5vw, 2.9rem); }
+  h2 { font-size: clamp(1.25rem, 2.6vw, 1.6rem); }
+  h3 { font-size: 0.95rem; }
+  p { margin: 0; }
+  code { font-family: var(--dato); font-size: 0.85em; font-variant-ligatures: none; }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--naranja-vivo); outline-offset: 3px; border-radius: 6px; }
+
+  .rotulo { font-family: var(--display); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--madera); }
+
+  /* ---------- Tapa ---------- */
+  .tapa { padding: 40px 0 22px; }
+  .tapa .rotulo { display: block; margin-bottom: 10px; }
+  .tapa p.sub { color: var(--tinta-media); margin-top: 12px; max-width: 62ch; }
+
+  /* ---------- Barra de sesiones ---------- */
+  .sesiones {
+    position: sticky; top: 0; z-index: 40;
+    background: color-mix(in oklab, var(--papel) 94%, transparent);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--linea); border-bottom: 1px solid var(--linea-firme);
+    margin-bottom: 32px;
+  }
+  .sesiones .interior {
+    max-width: 1180px; margin: 0 auto; padding: 12px 20px;
+    display: flex; gap: 8px; align-items: center; overflow-x: auto; scrollbar-width: thin;
+  }
+  .sesiones .titulo-barra {
+    font-family: var(--display); font-size: 0.68rem; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--tinta-suave);
+    white-space: nowrap; padding-right: 4px;
+  }
+  .usuario {
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    border: 1px solid var(--linea-firme); border-radius: 999px;
+    background: var(--tarjeta); padding: 5px 6px 5px 12px;
+    font-family: var(--display); font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; color: var(--tinta);
+    border-left: 4px solid var(--marca);
+    transition: box-shadow .12s ease, transform .12s ease;
+  }
+  .usuario:hover { box-shadow: var(--sombra); transform: translateY(-1px); }
+  .usuario:active { transform: translateY(0); }
+  .usuario .mail { font-family: var(--dato); font-weight: 400; font-size: 0.74rem; color: var(--tinta-suave); }
+  .usuario .copiar {
+    font-family: var(--dato); font-size: 0.66rem; letter-spacing: 0.04em;
+    background: var(--hundido); border-radius: 999px; padding: 3px 8px; color: var(--tinta-media);
+  }
+  .usuario.hecho .copiar { background: color-mix(in oklab, var(--verde) 22%, transparent); color: var(--verde); }
+  .abrir-login {
+    flex-shrink: 0; text-decoration: none;
+    font-family: var(--display); font-size: 0.8rem; font-weight: 600;
+    background: var(--tinta); color: var(--papel);
+    padding: 9px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .abrir-login:hover { background: var(--naranja); }
+  /*
+   * La clave va a la vista y aparte del correo. Cuando el botón copiaba las dos
+   * juntas separadas por un tabulador, pegarlas en el campo del correo metía
+   * todo ahí y el formulario contestaba que el correo no era válido — que se
+   * lee como "la clave está mal" y manda a buscar un problema que no existe.
+   */
+  .clave-comun {
+    flex-shrink: 0; display: flex; align-items: baseline; gap: 8px; cursor: pointer;
+    border: 1px dashed var(--linea-firme); background: var(--hundido);
+    border-radius: 999px; padding: 7px 14px; color: var(--tinta);
+  }
+  .clave-comun:hover { border-style: solid; border-color: var(--naranja); }
+  .clave-comun .et {
+    font-family: var(--display); font-size: 0.64rem; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--tinta-suave);
+  }
+  .clave-comun .val { font-family: var(--dato); font-size: 0.86rem; font-weight: 600; }
+  .clave-comun.hecho { border-style: solid; border-color: var(--verde); }
+
+  /* ---------- Actos ---------- */
+  .acto { margin-bottom: 44px; }
+  .acto > header {
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    border-bottom: 2px solid var(--linea-firme); padding-bottom: 10px; margin-bottom: 6px;
+  }
+  .acto > header .num {
+    font-family: var(--display); font-weight: 700; font-size: 1.6rem;
+    color: var(--naranja); line-height: 1; font-variant-numeric: tabular-nums; min-width: 22px;
+  }
+  .acto > header .con {
+    margin-left: auto; font-family: var(--dato); font-size: 0.72rem;
+    color: var(--sesion, var(--tinta-suave)); white-space: nowrap;
+    border: 1px solid color-mix(in oklab, var(--sesion, var(--tinta-suave)) 40%, transparent);
+    background: color-mix(in oklab, var(--sesion, var(--tinta-suave)) 12%, transparent);
+    padding: 3px 10px; border-radius: 999px;
+  }
+  .acto > .idea { color: var(--tinta-media); font-size: 0.92rem; margin-bottom: 16px; max-width: 66ch; }
+
+  /* ---------- Tarjetas-enlace ---------- */
+  .rejilla { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(288px, 1fr)); }
+
+  a.ir {
+    display: flex; flex-direction: column; gap: 5px;
+    padding: 14px 16px 15px; border-radius: 11px;
+    background: var(--tarjeta); border: 1px solid var(--linea);
+    box-shadow: var(--sombra); text-decoration: none; color: inherit;
+    border-left: 4px solid var(--marca, var(--linea-firme));
+    transition: box-shadow .13s ease, transform .13s ease, border-color .13s ease;
+  }
+  a.ir:hover { box-shadow: var(--sombra-alta); transform: translateY(-2px); border-color: var(--linea-firme); }
+  a.ir:active { transform: translateY(0); }
+  a.ir .nombre {
+    font-family: var(--display); font-weight: 600; font-size: 0.98rem;
+    display: flex; align-items: center; gap: 7px;
+  }
+  a.ir .nombre::after { content: "↗"; font-size: 0.78em; color: var(--tinta-suave); margin-left: auto; }
+  a.ir:hover .nombre::after { color: var(--naranja); }
+  a.ir .ruta { font-family: var(--dato); font-size: 0.75rem; color: var(--naranja); word-break: break-all; line-height: 1.35; }
+  a.ir .decir { font-size: 0.86rem; color: var(--tinta-media); line-height: 1.42; margin-top: 2px; }
+
+  a.ir.ancha { grid-column: 1 / -1; }
+
+  /* ---------- Avisos ---------- */
+  .nota {
+    grid-column: 1 / -1; display: flex; gap: 10px; align-items: flex-start;
+    padding: 11px 15px; border-radius: 10px; font-size: 0.88rem; color: var(--tinta-media);
+    background: color-mix(in oklab, var(--naranja) 8%, transparent);
+    border-left: 3px solid var(--naranja);
+  }
+  .nota.cuidado { background: color-mix(in oklab, var(--rojo) 8%, transparent); border-left-color: var(--rojo); }
+  .nota.listo { background: color-mix(in oklab, var(--verde) 9%, transparent); border-left-color: var(--verde); }
+  .nota b { color: var(--tinta); }
+
+  /* ---------- Preparación ---------- */
+  .previa {
+    background: var(--crema); border: 1px solid var(--linea-firme); border-radius: 13px;
+    padding: 20px 22px 22px; margin-bottom: 40px;
+  }
+  .previa h2 { margin-bottom: 12px; font-size: 1.15rem; }
+  .previa ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+  .previa li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; font-size: 0.92rem; color: var(--tinta-media); line-height: 1.45; }
+  .previa li::before { content: "☐"; font-family: var(--dato); color: var(--tinta-suave); line-height: 1.5; }
+  .previa li b { color: var(--tinta); font-family: var(--display); font-weight: 600; }
+
+  /* ---------- Índice ---------- */
+  .bloque { margin-bottom: 30px; }
+  .bloque > .encabezado { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .bloque > .encabezado h3 { font-size: 1.08rem; }
+  .bloque > .encabezado .quien-ve { font-family: var(--dato); font-size: 0.72rem; color: var(--tinta-suave); }
+  .bloque > p.pie-bloque { font-size: 0.86rem; color: var(--tinta-suave); margin-bottom: 11px; }
+
+  .fichas { display: grid; gap: 7px; grid-template-columns: repeat(auto-fill, minmax(224px, 1fr)); }
+  a.ficha {
+    display: block; padding: 9px 12px; border-radius: 9px; text-decoration: none;
+    background: var(--tarjeta); border: 1px solid var(--linea); color: inherit;
+    transition: border-color .12s ease, background .12s ease;
+  }
+  a.ficha:hover { border-color: var(--naranja); background: color-mix(in oklab, var(--naranja) 5%, var(--tarjeta)); }
+  a.ficha .r { display: block; font-family: var(--dato); font-size: 0.76rem; font-weight: 600; color: var(--naranja); word-break: break-all; }
+  a.ficha .q { display: block; font-size: 0.82rem; color: var(--tinta-media); margin-top: 1px; line-height: 1.35; }
+
+  /* ---------- Pedidos ---------- */
+  .pedidos { display: grid; gap: 8px; }
+  .pedido-fila {
+    display: grid; grid-template-columns: auto 1fr; gap: 4px 16px;
+    padding: 13px 16px; border-radius: 10px; background: var(--tarjeta);
+    border: 1px solid var(--linea); border-left: 4px solid var(--madera);
+  }
+  .pedido-fila.urge { border-left-color: var(--rojo); }
+  .pedido-fila .qq { font-family: var(--display); font-weight: 600; font-size: 0.94rem; }
+  .pedido-fila .pp { grid-column: 2; font-size: 0.88rem; color: var(--tinta-media); }
+  @media (max-width: 660px) { .pedido-fila { grid-template-columns: 1fr; } .pedido-fila .pp { grid-column: 1; } }
+
+  #aviso-copia {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(14px);
+    background: var(--tinta); color: var(--papel); padding: 11px 20px; border-radius: 999px;
+    font-family: var(--display); font-size: 0.86rem; font-weight: 600;
+    opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; z-index: 60;
+  }
+  #aviso-copia.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  footer.pie { border-top: 1px solid var(--linea); margin-top: 34px; padding-top: 18px; font-size: 0.84rem; color: var(--tinta-suave); }
+  footer.pie p { margin-bottom: 5px; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="marco solo-tapa">
+  <header class="tapa">
+    <span class="rotulo">Maderera Juan B. Justo · uso interno</span>
+    <h1>Consola de la demo</h1>
+    <p class="sub">
+      Todo abre en una pestaña nueva. Tocá un usuario para copiar su correo —la
+      clave es <code>Demo1234</code> en las cinco— y después cada tarjeta te lleva
+      a la pantalla.
+    </p>
+  </header>
+</div>
+
+<div class="sesiones">
+  <div class="interior">
+    <a class="abrir-login" href="https://mjbj.vercel.app/ingresar" target="_blank" rel="noopener">Abrir el ingreso ↗</a>
+    <button class="clave-comun" data-copiar="Demo1234" title="Copiar la contraseña">
+      <span class="et">clave de todos</span><span class="val">Demo1234</span>
+    </button>
+    <span class="titulo-barra">Copiar correo</span>
+
+    <button class="usuario" style="--marca: var(--naranja)" data-copiar="admin@mjbj.com.ar">
+      Admin <span class="mail">admin@</span> <span class="copiar">copiar</span>
+    </button>
+    <button class="usuario" style="--marca: var(--madera)" data-copiar="vendedor@mjbj.com.ar">
+      Ventas <span class="mail">vendedor@</span> <span class="copiar">copiar</span>
+    </button>
+    <button class="usuario" style="--marca: var(--verde)" data-copiar="deposito@mjbj.com.ar">
+      Depósito <span class="mail">deposito@</span> <span class="copiar">copiar</span>
+    </button>
+    <button class="usuario" style="--marca: var(--tinta-media)" data-copiar="taller@mjbj.com.ar">
+      Aserradero <span class="mail">taller@</span> <span class="copiar">copiar</span>
+    </button>
+    <button class="usuario" style="--marca: var(--azul)" data-copiar="roberto@rfconstrucciones.com.ar">
+      Cliente <span class="mail">roberto@</span> <span class="copiar">copiar</span>
+    </button>
+
+  </div>
+</div>
+
+<div class="marco">
+
+  <div class="previa">
+    <h2>Antes de arrancar</h2>
+    <ul>
+      <li><span><b>Tres ventanas, no tres pestañas.</b> La sesión es una sola por navegador: entrar como vendedor te tira la de admin. Una ventana normal para <code>admin@</code>, una de incógnito para <code>vendedor@</code>, otra para el sitio sin sesión.</span></li>
+      <li><span><b>Vinculá <code>CAJA1</code> y abrí el turno</b> en el mostrador. Sin turno abierto no se puede cobrar en efectivo.</span></li>
+      <li><span><b>Mandate el enlace de firma al celular ahora.</b> Está en el acto 6 y no se tipea.</span></li>
+      <li><span><b>Probá cortar el wifi y volver</b>, o usá el modo avión de la laptop.</span></li>
+      <li><span><b>Dejá el panel en modo claro.</b> En un local con ventanas el oscuro se ve peor.</span></li>
+    </ul>
+  </div>
+
+  <!-- ============ ACTO 1 ============ -->
+  <section class="acto" style="--sesion: var(--tinta-suave)">
+    <header><span class="num">1</span><h2>El cliente que no los conoce</h2><span class="con">sin sesión</span></header>
+    <p class="idea">Todo lo que se ve acá sale de la base. Si mañana cambian un precio en el panel, cambia acá.</p>
+    <div class="rejilla">
+      <a class="ir" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/" target="_blank" rel="noopener">
+        <span class="nombre">La portada</span><span class="ruta">/</span>
+        <span class="decir">Franja del 10 % por transferencia, «los que más salen» con precio y stock, y las escalas por volumen −3/−5/−8 %.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/catalogo" target="_blank" rel="noopener">
+        <span class="nombre">Catálogo</span><span class="ruta">/catalogo</span>
+        <span class="decir">Filtrá y ordená: los filtros viajan en la dirección, el link se manda por WhatsApp.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/catalogo/melamina-blanca" target="_blank" rel="noopener">
+        <span class="nombre">Ficha de producto</span><span class="ruta">/catalogo/melamina-blanca</span>
+        <span class="decir">Variantes por medida y espesor. Abajo, sugeridos: complementarios y alternativas.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/stock" target="_blank" rel="noopener">
+        <span class="nombre">Consulta de stock</span><span class="ruta">/stock</span>
+        <span class="decir">Qué hay en Casa Central y qué en el Aserradero, separado.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/calculadora" target="_blank" rel="noopener">
+        <span class="nombre">Calculadora</span><span class="ruta">/calculadora</span>
+        <span class="decir">Hacé un techo: el 20 % de encastre y los 5 mm de sierra son datos que dieron ellos.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/checkout" target="_blank" rel="noopener">
+        <span class="nombre">Checkout</span><span class="ruta">/checkout</span>
+        <span class="decir">Retiro o envío, tres zonas a cotizar, y el total que baja 10 % con transferencia.</span>
+      </a>
+      <a class="ir" style="--marca: var(--verde)" href="https://mjbj.vercel.app/pedido/PED-1207?t=d4654bc4-c95a-493e-a916-bec5b5871202" target="_blank" rel="noopener">
+        <span class="nombre">Seguimiento — con llave</span><span class="ruta">/pedido/PED-1207?t=d4654bc4…</span>
+        <span class="decir">El recorrido del pedido sin haberse registrado.</span>
+      </a>
+      <a class="ir" style="--marca: var(--rojo)" href="https://mjbj.vercel.app/pedido/PED-1207" target="_blank" rel="noopener">
+        <span class="nombre">El mismo, sin llave</span><span class="ruta">/pedido/PED-1207</span>
+        <span class="decir">«Pedido no encontrado», aunque exista. Los números son consecutivos: si alcanzara con el número, se leería la cartera entera.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/moldava" target="_blank" rel="noopener">
+        <span class="nombre">Moldava</span><span class="ruta">/moldava</span>
+        <span class="decir">La marca propia, con sección aparte. Fue pedido de ellos.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/nosotros" target="_blank" rel="noopener">
+        <span class="nombre">Quiénes somos</span><span class="ruta">/nosotros</span>
+        <span class="decir">Dos hitos, 1981 y 2026: el cuadro de trayectoria volvió en blanco y no se inventa la historia de otro.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/sucursales" target="_blank" rel="noopener">
+        <span class="nombre">Sucursales</span><span class="ruta">/sucursales</span>
+        <span class="decir">Las dos, con horarios y servicios reales.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/cambios-y-devoluciones" target="_blank" rel="noopener">
+        <span class="nombre">Cambios y devoluciones</span><span class="ruta">/cambios-y-devoluciones</span>
+        <span class="decir">La única página legal del sitio. Conviene que la lean antes del lanzamiento.</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- ============ ACTO 2 ============ -->
+  <section class="acto" style="--sesion: var(--azul)">
+    <header><span class="num">2</span><h2>El profesional</h2><span class="con">roberto@</span></header>
+    <p class="idea">Entre el 40 y el 60 % de las ventas son a profesionales. No es un extra: es medio sistema.</p>
+    <div class="rejilla">
+      <div class="nota"><span><b>Entrá como Roberto antes de seguir.</b> Tocá «Cliente» arriba para copiar la clave y abrí el ingreso.</span></div>
+
+      <a class="ir" href="https://mjbj.vercel.app/profesionales" target="_blank" rel="noopener">
+        <span class="nombre">El portal, desde afuera</span><span class="ruta">/profesionales</span>
+        <span class="decir">Qué se ofrece y el formulario de alta con validación de CUIT. Mostralo sin sesión primero.</span>
+      </a>
+      <a class="ir" style="--marca: var(--azul)" href="https://mjbj.vercel.app/mi-cuenta" target="_blank" rel="noopener">
+        <span class="nombre">Su cuenta</span><span class="ruta">/mi-cuenta</span>
+        <span class="decir">Lo que espera respuesta, arriba de todo.</span>
+      </a>
+      <a class="ir" style="--marca: var(--azul)" href="https://mjbj.vercel.app/mi-cuenta/pedidos" target="_blank" rel="noopener">
+        <span class="nombre">Sus pedidos</span><span class="ruta">/mi-cuenta/pedidos</span>
+        <span class="decir">Con el recorrido a la vista. Abrí uno y usá «Volver a pedir»: carga todo a precios de hoy.</span>
+      </a>
+      <a class="ir" style="--marca: var(--azul)" href="https://mjbj.vercel.app/mi-cuenta/presupuestos" target="_blank" rel="noopener">
+        <span class="nombre">Sus presupuestos</span><span class="ruta">/mi-cuenta/presupuestos</span>
+        <span class="decir">Los acepta o los rechaza desde acá. Aceptado, cae como pedido en el tablero del panel.</span>
+      </a>
+      <a class="ir" style="--marca: var(--azul)" href="https://mjbj.vercel.app/mi-cuenta/cuenta-corriente" target="_blank" rel="noopener">
+        <span class="nombre">Su cuenta corriente</span><span class="ruta">/mi-cuenta/cuenta-corriente</span>
+        <span class="decir">Saldo movimiento por movimiento, y el botón para pagar la deuda online.</span>
+      </a>
+      <a class="ir" style="--marca: var(--azul)" href="https://mjbj.vercel.app/mi-lista-de-precios" target="_blank" rel="noopener">
+        <span class="nombre">Su lista de precios</span><span class="ruta">/mi-lista-de-precios</span>
+        <span class="decir">En PDF, la suya y no la general. <b>Es una lista propia, no un descuento parejo.</b></span>
+      </a>
+      <a class="ir" style="--marca: var(--azul)" href="https://mjbj.vercel.app/catalogo/melamina-blanca" target="_blank" rel="noopener">
+        <span class="nombre">La misma ficha, con su sesión</span><span class="ruta">/catalogo/melamina-blanca</span>
+        <span class="decir">Compará el precio con el que mostraste en el acto 1. Es el momento que se entiende solo.</span>
+      </a>
+      <a class="ir" style="--marca: var(--azul)" href="https://mjbj.vercel.app/mi-cuenta/comprobantes" target="_blank" rel="noopener">
+        <span class="nombre">Sus comprobantes</span><span class="ruta">/mi-cuenta/comprobantes</span>
+        <span class="decir">Sus facturas, descargables. Hoy vacío: todavía no se emitió ninguna.</span>
+      </a>
+      <a class="ir" style="--marca: var(--azul)" href="https://mjbj.vercel.app/mi-cuenta/direcciones" target="_blank" rel="noopener">
+        <span class="nombre">Sus direcciones</span><span class="ruta">/mi-cuenta/direcciones</span>
+        <span class="decir">Direcciones de entrega guardadas, para no dictarlas cada vez.</span>
+      </a>
+      <a class="ir" style="--marca: var(--azul)" href="https://mjbj.vercel.app/mi-cuenta/datos" target="_blank" rel="noopener">
+        <span class="nombre">Sus datos fiscales</span><span class="ruta">/mi-cuenta/datos</span>
+        <span class="decir">Razón social, CUIT y condición de IVA. Es lo que sale impreso en la factura.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/eventos" target="_blank" rel="noopener">
+        <span class="nombre">Eventos</span><span class="ruta">/eventos</span>
+        <span class="decir">Dos capacitaciones con cupo. La de corte es solo para profesionales aprobados.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/eventos/wood-frame-experiencia" target="_blank" rel="noopener">
+        <span class="nombre">Wood Frame Experiencia</span><span class="ruta">/eventos/wood-frame-experiencia</span>
+        <span class="decir">Cupo 30, tres anotados. Inscribite ahí mismo para mostrar que el cupo baja.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/documentacion" target="_blank" rel="noopener">
+        <span class="nombre">Documentación técnica</span><span class="ruta">/documentacion</span>
+        <span class="decir">Fichas descargables. La tabla de cargas es solo para profesionales: mostrala con y sin sesión.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/registro" target="_blank" rel="noopener">
+        <span class="nombre">Crear cuenta</span><span class="ruta">/registro</span>
+        <span class="decir">Quien se registra queda siempre como cliente. <b>Nadie se vuelve administrador desde el sitio.</b></span>
+      </a>
+    </div>
+  </section>
+
+  <!-- ============ ACTO 3 ============ -->
+  <section class="acto" style="--sesion: var(--madera)">
+    <header><span class="num">3</span><h2>El mostrador</h2><span class="con">vendedor@</span></header>
+    <p class="idea">Lo que van a usar todos los días, y lo único que sigue andando cuando se cae internet.</p>
+    <div class="rejilla">
+      <a class="ir ancha" style="--marca: var(--madera)" href="https://mjbj.vercel.app/mostrador" target="_blank" rel="noopener">
+        <span class="nombre">El punto de venta</span><span class="ruta">/mostrador</span>
+        <span class="decir">Buscá «melamina», cargá dos renglones y uno a mano (un flete). Efectivo aplica el 10 % solo. Cobrá e imprimí. <b>Después cortá el wifi y hacé otra venta entera:</b> sale con número provisorio <code>CAJA1-018</code> y sube sola al volver.</span>
+      </a>
+      <div class="nota listo"><span><b>Es el momento más fuerte de la demo.</b> El sistema no le cree a «hay wifi»: el modo de falla real es el wifi conectado sin salida a internet, donde la computadora dice que sí y miente.</span></div>
+      <a class="ir" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/admin/caja" target="_blank" rel="noopener">
+        <span class="nombre">Caja y cierre de turno</span><span class="ruta">/admin/caja</span>
+        <span class="decir">Con <code>admin@</code>. Arqueo del efectivo y cierre por medio de pago. No deja cerrar con ventas colgadas.</span>
+      </a>
+      <a class="ir" href="https://mjbj.vercel.app/ticket/local" target="_blank" rel="noopener">
+        <span class="nombre">El ticket</span><span class="ruta">/ticket/local</span>
+        <span class="decir">El comprobante que sale de la caja, tal como se imprime.</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- ============ ACTO 4 ============ -->
+  <section class="acto" style="--sesion: var(--madera)">
+    <header><span class="num">4</span><h2>El día del vendedor</h2><span class="con">vendedor@</span></header>
+    <p class="idea">Acá se ve el panel filtrado por puesto. Que noten que el menú es más corto que el del admin.</p>
+    <div class="rejilla">
+      <a class="ir" style="--marca: var(--madera)" href="https://mjbj.vercel.app/admin" target="_blank" rel="noopener">
+        <span class="nombre">Resumen</span><span class="ruta">/admin</span>
+        <span class="decir">Señalá el menú: no están Precios, Cobros, Facturación ni Compras.</span>
+      </a>
+      <a class="ir" style="--marca: var(--rojo)" href="https://mjbj.vercel.app/admin/precios" target="_blank" rel="noopener">
+        <span class="nombre">Probá entrar a Precios</span><span class="ruta">/admin/precios</span>
+        <span class="decir">Con el vendedor, lo devuelve al resumen. <b>Esconder no es controlar:</b> el menú no lo muestra y además la página no abre.</span>
+      </a>
+      <a class="ir" style="--marca: var(--madera)" href="https://mjbj.vercel.app/admin/pedidos" target="_blank" rel="noopener">
+        <span class="nombre">Pedidos</span><span class="ruta">/admin/pedidos</span>
+        <span class="decir">Tablero por etapa. Movés uno y el cliente recibe el aviso.</span>
+      </a>
+      <a class="ir" style="--marca: var(--madera)" href="https://mjbj.vercel.app/admin/presupuestos" target="_blank" rel="noopener">
+        <span class="nombre">Presupuestos</span><span class="ruta">/admin/presupuestos</span>
+        <span class="decir">Abrí <code>P-2026-0419</code> y convertilo en pedido: copia los precios que el cliente aceptó.</span>
+      </a>
+      <a class="ir" style="--marca: var(--madera)" href="https://mjbj.vercel.app/admin/whatsapp" target="_blank" rel="noopener">
+        <span class="nombre">Bandeja de WhatsApp</span><span class="ruta">/admin/whatsapp</span>
+        <span class="decir">Al costado, el saldo del cliente y sus últimos pedidos: son las dos cosas que se preguntan por WhatsApp.</span>
+      </a>
+      <a class="ir" style="--marca: var(--madera)" href="https://mjbj.vercel.app/atencion" target="_blank" rel="noopener">
+        <span class="nombre">Puesto de atención</span><span class="ruta">/atencion</span>
+        <span class="decir">La misma bandeja a pantalla completa, para quien se dedica a contestar.</span>
+      </a>
+      <a class="ir" style="--marca: var(--madera)" href="https://mjbj.vercel.app/admin/clientes" target="_blank" rel="noopener">
+        <span class="nombre">Clientes</span><span class="ruta">/admin/clientes</span>
+        <span class="decir">Ficha con saldo de cuenta corriente, pedidos y límite de crédito.</span>
+      </a>
+      <a class="ir" style="--marca: var(--madera)" href="https://mjbj.vercel.app/admin/profesionales" target="_blank" rel="noopener">
+        <span class="nombre">Profesionales</span><span class="ruta">/admin/profesionales</span>
+        <span class="decir">Aprobá a <b>Ezequiel Barrios (Wood Framer)</b>: lista de precios y límite, las dos decisiones caras en un formulario.</span>
+      </a>
+      <a class="ir" style="--marca: var(--madera)" href="https://mjbj.vercel.app/admin/eventos" target="_blank" rel="noopener">
+        <span class="nombre">Eventos</span><span class="ruta">/admin/eventos</span>
+        <span class="decir">Cupo e inscriptos. Sobrevender una capacitación es gente parada en la puerta.</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- ============ ACTO 5 ============ -->
+  <section class="acto" style="--sesion: var(--tinta-media)">
+    <header><span class="num">5</span><h2>El aserradero</h2><span class="con">taller@</span></header>
+    <p class="idea">El puesto que nadie espera que esté contemplado. Entrá con <code>taller@</code>: no cae en el panel.</p>
+    <div class="rejilla">
+      <a class="ir ancha" style="--marca: var(--tinta-media)" href="https://mjbj.vercel.app/taller" target="_blank" rel="noopener">
+        <span class="nombre">La cola de corte</span><span class="ruta">/taller</span>
+        <span class="decir">Arriba, cuántos trabajos y cuántos metros cuadrados. Abrí <code>CRT-457</code> y pasalo a terminado. Arranca acá y no en el resumen a propósito: el resumen muestra ventas del mes y él no puede hacer nada con eso.</span>
+      </a>
+      <a class="ir" style="--marca: var(--tinta-media)" href="https://mjbj.vercel.app/admin/cortes/592a40cb-77cc-44ba-bee4-1e35c0af73d7" target="_blank" rel="noopener">
+        <span class="nombre">Ficha de un corte</span><span class="ruta">/admin/cortes/592a40cb…</span>
+        <span class="decir">El despiece en milímetros, y el botón que baja la lista de piezas para el optimizador.</span>
+      </a>
+      <a class="ir" style="--marca: var(--tinta-media)" href="https://mjbj.vercel.app/admin/cortes/formato" target="_blank" rel="noopener">
+        <span class="nombre">Formato para la máquina</span><span class="ruta">/admin/cortes/formato</span>
+        <span class="decir">Separador, columnas y unidades. La plataforma <b>no corta</b>: le entrega la lista de piezas para no volver a tipear medidas.</span>
+      </a>
+      <a class="ir" style="--marca: var(--rojo)" href="https://mjbj.vercel.app/admin/cortes/tarifas" target="_blank" rel="noopener">
+        <span class="nombre">Probá entrar a Tarifas</span><span class="ruta">/admin/cortes/tarifas</span>
+        <span class="decir">Con el aserradero lo devuelve a su pantalla: la tarifa por pasada es un precio, no una regulación de la máquina.</span>
+      </a>
+      <div class="nota"><span><b>Acá pedís la visita al taller:</b> qué programa optimiza el corte, qué versión, y un archivo de trabajo real en un pendrive.</span></div>
+    </div>
+  </section>
+
+  <!-- ============ ACTO 6 ============ -->
+  <section class="acto" style="--sesion: var(--madera)">
+    <header><span class="num">6</span><h2>La entrega</h2><span class="con">vendedor@ + celular</span></header>
+    <p class="idea">Corto y se ve muy bien, porque termina con alguien de ellos firmando con el dedo.</p>
+    <div class="rejilla">
+      <a class="ir" style="--marca: var(--madera)" href="https://mjbj.vercel.app/admin/pedidos/28c051f9-e658-4ee7-9f35-037e18484ff2" target="_blank" rel="noopener">
+        <span class="nombre">PED-1205, con su remito</span><span class="ruta">/admin/pedidos/28c051f9…</span>
+        <span class="decir">Abajo está <b>REM-0002</b>, preparado y esperando firma. Al crear un retiro el sistema exige el documento de quien retira.</span>
+      </a>
+      <a class="ir ancha" style="--marca: var(--verde)" href="https://mjbj.vercel.app/firmar/oIyr0C4s3zIiSV63dAwjjn_yF5O27c1P" target="_blank" rel="noopener">
+        <span class="nombre">Firmar REM-0002 — abrilo en el celular</span><span class="ruta">/firmar/oIyr0C4s3zIiSV63dAwjjn_yF5O27c1P</span>
+        <span class="decir">Pasáselo a alguien de ellos para que firme: es mucho mejor que firmar vos. Queda la fecha, la hora y desde dónde se firmó — eso es lo que reemplaza al papel, no el dibujo.</span>
+      </a>
+      <button class="usuario" style="--marca: var(--verde); border-radius: 11px; padding: 12px 16px; grid-column: 1 / -1; justify-content: flex-start"
+              data-copiar="https://mjbj.vercel.app/firmar/oIyr0C4s3zIiSV63dAwjjn_yF5O27c1P">
+        Copiar el enlace de firma para mandármelo al celular <span class="copiar">copiar</span>
+      </button>
+      <a class="ir" href="https://mjbj.vercel.app/remito/6028064c-eb67-41dd-9f10-3aa5fad7f0cc" target="_blank" rel="noopener">
+        <span class="nombre">REM-0001, ya entregado</span><span class="ruta">/remito/6028064c…</span>
+        <span class="decir">El remito impreso de uno que ya se firmó, para mostrar cómo queda la constancia.</span>
+      </a>
+      <div class="nota cuidado"><span><b>Se firma una sola vez.</b> Si querés practicarlo antes, avisame y te dejo otro remito preparado: este, firmado, no vuelve atrás.</span></div>
+    </div>
+  </section>
+
+  <!-- ============ ACTO 7 ============ -->
+  <section class="acto" style="--sesion: var(--naranja)">
+    <header><span class="num">7</span><h2>La trastienda</h2><span class="con">admin@</span></header>
+    <p class="idea">Todo lo que solo ve administración. Es la parte que le importa a quien firma.</p>
+    <div class="rejilla">
+      <a class="ir" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/admin/precios" target="_blank" rel="noopener">
+        <span class="nombre">Precios</span><span class="ruta">/admin/precios</span>
+        <span class="decir">Edición en línea, ajuste masivo por porcentaje e importación del Excel del proveedor con vista previa antes de aplicar.</span>
+      </a>
+      <a class="ir" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/admin/facturacion" target="_blank" rel="noopener">
+        <span class="nombre">Facturación</span><span class="ruta">/admin/facturacion</span>
+        <span class="decir">Emití desde un pedido: sale con QR y el formato de ARCA. En modo demostración.</span>
+      </a>
+      <a class="ir ancha" style="--marca: var(--rojo)" href="https://mjbj.vercel.app/admin/arca" target="_blank" rel="noopener">
+        <span class="nombre">ARCA — el pedido más importante del día</span><span class="ruta">/admin/arca</span>
+        <span class="decir">Los tres puntos de venta, 15, 17 y 20, con el número inicial <b>en cero</b>. Sin el último número emitido de cada uno, la plataforma numeraría desde 1 y pisaría una serie que ARCA viene contando hace años. Están enfrente: pedíselo ahí mismo, o que llamen al contador Nigro.</span>
+      </a>
+      <a class="ir" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/admin/arca/libro-iva" target="_blank" rel="noopener">
+        <span class="nombre">Libro IVA ventas</span><span class="ruta">/admin/arca/libro-iva</span>
+        <span class="decir">Lo que hoy arma el estudio a mano.</span>
+      </a>
+      <a class="ir" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/admin/pagos" target="_blank" rel="noopener">
+        <span class="nombre">Cobros</span><span class="ruta">/admin/pagos</span>
+        <span class="decir">Acreditar pagos y revisar transferencias con comprobante adjunto.</span>
+      </a>
+      <a class="ir ancha" style="--marca: var(--verde)" href="https://mjbj.vercel.app/admin/compras/ordenes" target="_blank" rel="noopener">
+        <span class="nombre">Compras — recibí OC-0001 en vivo</span><span class="ruta">/admin/compras/ordenes</span>
+        <span class="decir">40 melaminas y 30 MDF de Tableros del Sur, enviada y esperando. <b>La dejé sin recibir a propósito:</b> recibila delante de ellos y después mostrá el stock subido y el margen en Reportes. Recibir mueve dos cosas distintas a la vez: el stock, que es físico, y el costo promedio ponderado, que es plata.</span>
+      </a>
+      <a class="ir" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/admin/stock" target="_blank" rel="noopener">
+        <span class="nombre">Stock</span><span class="ruta">/admin/stock</span>
+        <span class="decir">Después de recibir, abrí acá y mostrá que subió. Disponible = físico − reservado.</span>
+      </a>
+      <a class="ir" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/admin/reportes" target="_blank" rel="noopener">
+        <span class="nombre">Reportes</span><span class="ruta">/admin/reportes</span>
+        <span class="decir">Ventas por período, sucursal, vendedor y producto, con margen. Todo exportable.</span>
+      </a>
+      <a class="ir" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/admin/cierre" target="_blank" rel="noopener">
+        <span class="nombre">Cierre del mes</span><span class="ruta">/admin/cierre</span>
+        <span class="decir">Exportación de asientos, para que el contador no vuelva a cargar lo que el sistema ya sabe.</span>
+      </a>
+      <a class="ir ancha" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/admin/migracion" target="_blank" rel="noopener">
+        <span class="nombre">Migración desde ISIS</span><span class="ruta">/admin/migracion</span>
+        <span class="decir">Se sube el Excel y el asistente pregunta cuál columna es cuál, con vista previa e informe de integridad. <b>Pedí las siete exportaciones hoy, no el acceso a Quality Software:</b> el acceso lo prometieron para el 30/10 y no hace falta.</span>
+      </a>
+      <a class="ir" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/admin/contenido" target="_blank" rel="noopener">
+        <span class="nombre">Contenido del sitio</span><span class="ruta">/admin/contenido</span>
+        <span class="decir">Cambiá un texto de la portada y abrí el sitio al lado para mostrar que cambió.</span>
+      </a>
+      <a class="ir" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/admin/bitacora" target="_blank" rel="noopener">
+        <span class="nombre">Bitácora</span><span class="ruta">/admin/bitacora</span>
+        <span class="decir">Todo lo que acabás de hacer en la demo, con nombre y hora. Es la respuesta a «¿quién cambió este precio?».</span>
+      </a>
+      <a class="ir" style="--marca: var(--naranja)" href="https://mjbj.vercel.app/admin/ayuda" target="_blank" rel="noopener">
+        <span class="nombre">Las guías escritas</span><span class="ruta">/admin/ayuda</span>
+        <span class="decir">Trece guías, del presupuesto al cierre del mes, adentro del sistema.</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- ============ ACTO 8 ============ -->
+  <section class="acto" style="--sesion: var(--rojo)">
+    <header><span class="num">8</span><h2>Lo que te tienen que dar</h2><span class="con">cerrá con esto</span></header>
+    <p class="idea">Están enfrente, y hoy es el día más barato para conseguir cada una de estas cosas.</p>
+    <div class="pedidos">
+      <div class="pedido-fila urge"><span class="qq">El último número emitido</span><span class="pp">En los puntos 15, 17 y 20. <b>Es lo único que bloquea facturar.</b> Lo tiene el contador Nigro o el sistema viejo.</span></div>
+      <div class="pedido-fila urge"><span class="qq">Las siete exportaciones</span><span class="pp">Clientes, artículos, existencias, cuentas corrientes, proveedores, histórico de ventas y comprobantes. En Excel, como salen. El histórico, un archivo por año.</span></div>
+      <div class="pedido-fila"><span class="qq">Fotos y lista de precios</span><span class="pp">Hoy hay tres fotos genéricas repartidas entre veinticinco productos con precios inventados. Es lo que más se nota y lo más fácil de arreglar.</span></div>
+      <div class="pedido-fila"><span class="qq">Los hitos de la trayectoria</span><span class="pp">El cuadro «año / qué pasó» volvió con una sola fila. Con cinco renglones, «Quiénes somos» queda lista.</span></div>
+      <div class="pedido-fila"><span class="qq">Desde qué monto el −15 %</span><span class="pp">Dijeron «si son compras de mayor volumen se hace un −15 %» sin decir desde cuánto. El −10 % de contado ya está cargado.</span></div>
+      <div class="pedido-fila"><span class="qq">La alícuota de IIBB</span><span class="pp">Quedó en cero y la percepción apagada. Percibir de más es plata que después hay que devolverle a cada cliente. La confirma el contador.</span></div>
+      <div class="pedido-fila"><span class="qq">El testimonio de Ezequiel</span><span class="pp">Tienen el contacto pero no el texto. Los cuatro del prototipo se ocultaron: eran personas inventadas con nombre y frase entre comillas.</span></div>
+      <div class="pedido-fila"><span class="qq">Dominio y correo</span><span class="pp">Acceso a <code>mjbj.ar</code>, y si el correo va <code>.ar</code> o <code>.com.ar</code>. Define el remitente de todos los avisos.</span></div>
+      <div class="pedido-fila"><span class="qq">Las credenciales</span><span class="pp">Certificado ARCA, Mercado Pago, alta del número en WhatsApp Business y la casilla de correo: los cuatro servicios que hoy están en modo demostración.</span></div>
+      <div class="pedido-fila"><span class="qq">La visita al taller</span><span class="pp">Qué programa optimiza el corte, qué versión, y un archivo de trabajo real en un pendrive. Media hora parados frente a la máquina.</span></div>
+    </div>
+  </section>
+
+  <!-- ============ ÍNDICE ============ -->
+  <section class="acto">
+    <header><span class="num">·</span><h2>Todas las vistas</h2><span class="con">por si preguntan</span></header>
+    <p class="idea">El sistema entero, clicable, por si alguien pregunta «¿y esto dónde está?».</p>
+
+    <div class="bloque">
+      <div class="encabezado"><h3>El sitio</h3><span class="quien-ve">sin sesión</span></div>
+      <div class="fichas">
+        <a class="ficha" href="https://mjbj.vercel.app/" target="_blank" rel="noopener"><span class="r">/</span><span class="q">Portada</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/catalogo" target="_blank" rel="noopener"><span class="r">/catalogo</span><span class="q">Tienda con filtros</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/catalogo/melamina-blanca" target="_blank" rel="noopener"><span class="r">/catalogo/melamina-blanca</span><span class="q">Ficha con variantes y sugeridos</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/stock" target="_blank" rel="noopener"><span class="r">/stock</span><span class="q">Disponibilidad por sucursal</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/checkout" target="_blank" rel="noopener"><span class="r">/checkout</span><span class="q">Retiro o envío</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/presupuesto" target="_blank" rel="noopener"><span class="r">/presupuesto</span><span class="q">Pedir presupuesto</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/calculadora" target="_blank" rel="noopener"><span class="r">/calculadora</span><span class="q">Techo, deck, placas, machimbre</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/moldava" target="_blank" rel="noopener"><span class="r">/moldava</span><span class="q">La marca propia</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/nosotros" target="_blank" rel="noopener"><span class="r">/nosotros</span><span class="q">Trayectoria</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/sucursales" target="_blank" rel="noopener"><span class="r">/sucursales</span><span class="q">Las dos, con horarios</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/blog" target="_blank" rel="noopener"><span class="r">/blog</span><span class="q">Seis notas</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/blog/como-elegir-machimbre-para-techo" target="_blank" rel="noopener"><span class="r">/blog/[nota]</span><span class="q">Una nota abierta</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/profesionales" target="_blank" rel="noopener"><span class="r">/profesionales</span><span class="q">Portal y alta del gremio</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/documentacion" target="_blank" rel="noopener"><span class="r">/documentacion</span><span class="q">Fichas técnicas</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/eventos" target="_blank" rel="noopener"><span class="r">/eventos</span><span class="q">Capacitaciones con cupo</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/eventos/wood-frame-experiencia" target="_blank" rel="noopener"><span class="r">/eventos/[evento]</span><span class="q">Ficha e inscripción</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/contacto" target="_blank" rel="noopener"><span class="r">/contacto</span><span class="q">Formulario y datos</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/cambios-y-devoluciones" target="_blank" rel="noopener"><span class="r">/cambios-y-devoluciones</span><span class="q">La página legal</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/ingresar" target="_blank" rel="noopener"><span class="r">/ingresar</span><span class="q">Entrar</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/registro" target="_blank" rel="noopener"><span class="r">/registro</span><span class="q">Crear cuenta de cliente</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/pedido/PED-1207?t=d4654bc4-c95a-493e-a916-bec5b5871202" target="_blank" rel="noopener"><span class="r">/pedido/[nº]?t=</span><span class="q">Seguimiento sin cuenta</span></a>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <div class="encabezado"><h3>La cuenta del cliente</h3><span class="quien-ve">roberto@rfconstrucciones.com.ar</span></div>
+      <p class="pie-bloque">Un cliente profesional, con lista propia, cuenta corriente con saldo y pedidos reales.</p>
+      <div class="fichas">
+        <a class="ficha" href="https://mjbj.vercel.app/mi-cuenta" target="_blank" rel="noopener"><span class="r">/mi-cuenta</span><span class="q">Lo que espera respuesta</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/mi-cuenta/pedidos" target="_blank" rel="noopener"><span class="r">/mi-cuenta/pedidos</span><span class="q">Con el recorrido y «volver a pedir»</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/mi-cuenta/presupuestos" target="_blank" rel="noopener"><span class="r">/mi-cuenta/presupuestos</span><span class="q">Aceptar o rechazar</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/mi-cuenta/cuenta-corriente" target="_blank" rel="noopener"><span class="r">/mi-cuenta/cuenta-corriente</span><span class="q">Saldo corrido y pago de deuda</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/mi-cuenta/comprobantes" target="_blank" rel="noopener"><span class="r">/mi-cuenta/comprobantes</span><span class="q">Sus facturas</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/mi-cuenta/direcciones" target="_blank" rel="noopener"><span class="r">/mi-cuenta/direcciones</span><span class="q">Direcciones guardadas</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/mi-cuenta/datos" target="_blank" rel="noopener"><span class="r">/mi-cuenta/datos</span><span class="q">Datos fiscales</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/mi-lista-de-precios" target="_blank" rel="noopener"><span class="r">/mi-lista-de-precios</span><span class="q">Su lista, en PDF</span></a>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <div class="encabezado"><h3>El panel</h3><span class="quien-ve">admin@ abre las 34</span></div>
+      <div class="fichas">
+        <a class="ficha" href="https://mjbj.vercel.app/admin" target="_blank" rel="noopener"><span class="r">/admin</span><span class="q">Resumen del negocio</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/pedidos" target="_blank" rel="noopener"><span class="r">/admin/pedidos</span><span class="q">Tablero por etapa</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/whatsapp" target="_blank" rel="noopener"><span class="r">/admin/whatsapp</span><span class="q">Bandeja con contexto</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/presupuestos" target="_blank" rel="noopener"><span class="r">/admin/presupuestos</span><span class="q">Por lo que espera</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/cortes" target="_blank" rel="noopener"><span class="r">/admin/cortes</span><span class="q">Cola y despiece</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/cortes/formato" target="_blank" rel="noopener"><span class="r">/admin/cortes/formato</span><span class="q">Formato del optimizador</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/cortes/tarifas" target="_blank" rel="noopener"><span class="r">/admin/cortes/tarifas</span><span class="q">Precio por pasada</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/productos" target="_blank" rel="noopener"><span class="r">/admin/productos</span><span class="q">ABM con variantes y fotos</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/stock" target="_blank" rel="noopener"><span class="r">/admin/stock</span><span class="q">Por sucursal, con transferencias</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/precios" target="_blank" rel="noopener"><span class="r">/admin/precios</span><span class="q">Ajuste masivo e importación</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/precios/formas-de-pago" target="_blank" rel="noopener"><span class="r">/admin/precios/formas-de-pago</span><span class="q">Descuentos por medio de pago</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/clientes" target="_blank" rel="noopener"><span class="r">/admin/clientes</span><span class="q">Fichas con cuenta corriente</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/profesionales" target="_blank" rel="noopener"><span class="r">/admin/profesionales</span><span class="q">Solicitudes y escalas</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/documentacion" target="_blank" rel="noopener"><span class="r">/admin/documentacion</span><span class="q">Carga de fichas técnicas</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/eventos" target="_blank" rel="noopener"><span class="r">/admin/eventos</span><span class="q">Cupo e inscriptos</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/contenido" target="_blank" rel="noopener"><span class="r">/admin/contenido</span><span class="q">Textos, blog, testimonios</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/contenido/banners" target="_blank" rel="noopener"><span class="r">/admin/contenido/banners</span><span class="q">Avisos con vigencia</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/pagos" target="_blank" rel="noopener"><span class="r">/admin/pagos</span><span class="q">Cobros y transferencias</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/facturacion" target="_blank" rel="noopener"><span class="r">/admin/facturacion</span><span class="q">Emisión y notas de crédito</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/arca" target="_blank" rel="noopener"><span class="r">/admin/arca</span><span class="q">Puntos de venta y numeración</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/arca/libro-iva" target="_blank" rel="noopener"><span class="r">/admin/arca/libro-iva</span><span class="q">Libro IVA ventas</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/arca/libro-iva-compras" target="_blank" rel="noopener"><span class="r">/admin/arca/libro-iva-compras</span><span class="q">Libro IVA compras</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/arca/retenciones" target="_blank" rel="noopener"><span class="r">/admin/arca/retenciones</span><span class="q">Sufridas y practicadas</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/avisos" target="_blank" rel="noopener"><span class="r">/admin/avisos</span><span class="q">Avisos por correo</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/caja" target="_blank" rel="noopener"><span class="r">/admin/caja</span><span class="q">Cajas, turnos y arqueo</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/proveedores" target="_blank" rel="noopener"><span class="r">/admin/proveedores</span><span class="q">Con cuenta corriente</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/compras/ordenes" target="_blank" rel="noopener"><span class="r">/admin/compras/ordenes</span><span class="q">Lo que está por llegar</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/recepciones" target="_blank" rel="noopener"><span class="r">/admin/recepciones</span><span class="q">Ingreso y costo ponderado</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/compras/facturas" target="_blank" rel="noopener"><span class="r">/admin/compras/facturas</span><span class="q">Facturas de compra</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/compras/pagos" target="_blank" rel="noopener"><span class="r">/admin/compras/pagos</span><span class="q">Pagos con retenciones</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/compras/gastos" target="_blank" rel="noopener"><span class="r">/admin/compras/gastos</span><span class="q">Gastos por categoría</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/reportes" target="_blank" rel="noopener"><span class="r">/admin/reportes</span><span class="q">Ventas y márgenes</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/cierre" target="_blank" rel="noopener"><span class="r">/admin/cierre</span><span class="q">Cierre del mes y asientos</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/sucursales" target="_blank" rel="noopener"><span class="r">/admin/sucursales</span><span class="q">Ficha y métricas del día</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/envios" target="_blank" rel="noopener"><span class="r">/admin/envios</span><span class="q">Zonas y tarifas</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/migracion" target="_blank" rel="noopener"><span class="r">/admin/migracion</span><span class="q">Asistente de importación</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/bitacora" target="_blank" rel="noopener"><span class="r">/admin/bitacora</span><span class="q">Quién hizo qué y cuándo</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/admin/ayuda" target="_blank" rel="noopener"><span class="r">/admin/ayuda</span><span class="q">Las trece guías</span></a>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <div class="encabezado"><h3>Puestos e impresión</h3><span class="quien-ve">fuera del menú</span></div>
+      <div class="fichas">
+        <a class="ficha" href="https://mjbj.vercel.app/mostrador" target="_blank" rel="noopener"><span class="r">/mostrador</span><span class="q">Punto de venta, anda sin internet</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/taller" target="_blank" rel="noopener"><span class="r">/taller</span><span class="q">Cola de corte a pantalla completa</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/atencion" target="_blank" rel="noopener"><span class="r">/atencion</span><span class="q">WhatsApp a pantalla completa</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/firmar/oIyr0C4s3zIiSV63dAwjjn_yF5O27c1P" target="_blank" rel="noopener"><span class="r">/firmar/[token]</span><span class="q">Firma en el celular — REM-0002</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/remito/6028064c-eb67-41dd-9f10-3aa5fad7f0cc" target="_blank" rel="noopener"><span class="r">/remito/[id]</span><span class="q">Remito impreso — REM-0001</span></a>
+        <a class="ficha" href="https://mjbj.vercel.app/ticket/local" target="_blank" rel="noopener"><span class="r">/ticket/local</span><span class="q">Ticket del mostrador</span></a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="pie">
+    <p>Maderera Juan B. Justo · consola de la demostración del 7 de septiembre de 2026</p>
+    <p>Los enlaces con llave —seguimiento y firma— son de la base de demostración y dejan de servir cuando se cargue la base real.</p>
+  </footer>
+</div>
+
+<div id="aviso-copia" role="status" aria-live="polite"></div>
+
+<script>
+  const aviso = document.getElementById("aviso-copia");
+  let temporizador;
+
+  function avisar(texto) {
+    aviso.textContent = texto;
+    aviso.classList.add("visible");
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => aviso.classList.remove("visible"), 1800);
+  }
+
+  document.querySelectorAll("[data-copiar]").forEach((boton) => {
+    boton.addEventListener("click", async () => {
+      const valor = boton.dataset.copiar;
+      try {
+        await navigator.clipboard.writeText(valor);
+      } catch {
+        // Sin permiso de portapapeles, la salida de siempre: un campo temporal
+        // seleccionado. Copiar a mano es peor que esto, pero es mejor que nada.
+        const campo = document.createElement("textarea");
+        campo.value = valor;
+        campo.style.cssText = "position:fixed;left:-9999px";
+        document.body.appendChild(campo);
+        campo.select();
+        document.execCommand("copy");
+        campo.remove();
+      }
+      const etiqueta = boton.querySelector(".copiar");
+      if (etiqueta) {
+        const antes = etiqueta.textContent;
+        etiqueta.textContent = "copiado";
+        setTimeout(() => { etiqueta.textContent = antes; }, 1800);
+      }
+      boton.classList.add("hecho");
+      setTimeout(() => boton.classList.remove("hecho"), 1800);
+      avisar(valor.startsWith("http") ? "Enlace copiado" : `Copiado: ${valor}`);
+    });
+  });
+</script>

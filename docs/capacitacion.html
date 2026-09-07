@@ -1,0 +1,748 @@
+<meta charset="utf-8">
+<title>Quién ve qué</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+  :root {
+    --naranja:      oklch(0.62 0.18 46);
+    --naranja-vivo: oklch(0.68 0.19 48);
+    --madera:       oklch(0.45 0.08 65);
+    --verde:        oklch(0.48 0.11 148);
+    --rojo:         oklch(0.50 0.18 28);
+
+    --papel:        oklch(0.988 0.004 85);
+    --tarjeta:      oklch(1 0 0);
+    --crema:        oklch(0.963 0.013 82);
+    --hundido:      oklch(0.945 0.010 80);
+
+    --tinta:        oklch(0.21 0.012 60);
+    --tinta-media:  oklch(0.44 0.016 62);
+    --tinta-suave:  oklch(0.57 0.014 65);
+
+    --linea:        oklch(0.90 0.008 72);
+    --linea-firme:  oklch(0.82 0.012 70);
+
+    --sombra: 0 1px 2px oklch(0.30 0.02 60 / 0.06), 0 8px 24px oklch(0.30 0.02 60 / 0.05);
+
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --texto: "Literata", Georgia, "Times New Roman", serif;
+    --dato: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --naranja:      oklch(0.74 0.16 50);
+      --naranja-vivo: oklch(0.78 0.15 52);
+      --madera:       oklch(0.70 0.06 70);
+      --verde:        oklch(0.72 0.13 150);
+      --rojo:         oklch(0.68 0.16 28);
+
+      --papel:        oklch(0.175 0.009 62);
+      --tarjeta:      oklch(0.222 0.010 62);
+      --crema:        oklch(0.255 0.011 64);
+      --hundido:      oklch(0.205 0.009 62);
+
+      --tinta:        oklch(0.945 0.006 82);
+      --tinta-media:  oklch(0.76 0.012 75);
+      --tinta-suave:  oklch(0.63 0.012 70);
+
+      --linea:        oklch(0.32 0.010 64);
+      --linea-firme:  oklch(0.42 0.012 66);
+
+      --sombra: 0 1px 2px oklch(0 0 0 / 0.4), 0 8px 24px oklch(0 0 0 / 0.3);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --naranja:      oklch(0.74 0.16 50);
+    --naranja-vivo: oklch(0.78 0.15 52);
+    --madera:       oklch(0.70 0.06 70);
+    --verde:        oklch(0.72 0.13 150);
+    --rojo:         oklch(0.68 0.16 28);
+
+    --papel:        oklch(0.175 0.009 62);
+    --tarjeta:      oklch(0.222 0.010 62);
+    --crema:        oklch(0.255 0.011 64);
+    --hundido:      oklch(0.205 0.009 62);
+
+    --tinta:        oklch(0.945 0.006 82);
+    --tinta-media:  oklch(0.76 0.012 75);
+    --tinta-suave:  oklch(0.63 0.012 70);
+
+    --linea:        oklch(0.32 0.010 64);
+    --linea-firme:  oklch(0.42 0.012 66);
+
+    --sombra: 0 1px 2px oklch(0 0 0 / 0.4), 0 8px 24px oklch(0 0 0 / 0.3);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--papel);
+    color: var(--tinta);
+    font-family: var(--texto);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .envoltura { max-width: 1120px; margin: 0 auto; padding: 0 24px 96px; }
+  .envoltura.solo-tapa { padding-bottom: 0; }
+  .prosa { max-width: 66ch; }
+
+  h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; line-height: 1.12; text-wrap: balance; margin: 0; letter-spacing: -0.018em; }
+  h1 { font-size: clamp(2.4rem, 6vw, 3.6rem); }
+  h2 { font-size: clamp(1.5rem, 3.2vw, 2rem); }
+  h3 { font-size: 1.22rem; letter-spacing: -0.012em; }
+  h4 { font-size: 0.95rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  p { margin: 0 0 1em; }
+  p:last-child { margin-bottom: 0; }
+  a { color: var(--naranja); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--naranja-vivo); outline-offset: 3px; border-radius: 3px; }
+
+  code, .mono { font-family: var(--dato); font-size: 0.86em; font-variant-ligatures: none; }
+
+  .rotulo {
+    font-family: var(--display); font-size: 0.76rem; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--madera);
+  }
+
+  /* ---------- Cabecera ---------- */
+
+  .tapa { border-bottom: 3px solid var(--tinta); margin-bottom: 0; padding: 56px 0 34px; }
+  .tapa .rotulo { display: block; margin-bottom: 14px; }
+  .tapa p { color: var(--tinta-media); font-size: 1.12rem; max-width: 60ch; margin-top: 18px; }
+  .sello {
+    display: inline-flex; align-items: baseline; gap: 10px; margin-top: 22px;
+    font-family: var(--dato); font-size: 0.8rem; color: var(--tinta-suave);
+  }
+  .sello b { color: var(--tinta); font-weight: 600; }
+
+  /* ---------- Navegación ---------- */
+
+  nav.saltos {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in oklab, var(--papel) 92%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--linea);
+    margin-bottom: 52px;
+  }
+  nav.saltos ul {
+    max-width: 1120px; margin: 0 auto; padding: 0 24px; list-style: none;
+    display: flex; gap: 4px; overflow-x: auto; scrollbar-width: thin;
+  }
+  nav.saltos a {
+    display: block; padding: 13px 12px; white-space: nowrap;
+    font-family: var(--display); font-size: 0.86rem; font-weight: 600;
+    color: var(--tinta-media); text-decoration: none;
+    border-bottom: 2px solid transparent;
+  }
+  nav.saltos a:hover { color: var(--tinta); border-bottom-color: var(--linea-firme); }
+
+  section { margin-bottom: 72px; scroll-margin-top: 72px; }
+  section > h2 { margin-bottom: 6px; }
+  section > h2 + .bajada { color: var(--tinta-media); margin-bottom: 30px; max-width: 62ch; }
+
+  /* ---------- Credenciales ---------- */
+
+  .llaves { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); }
+  .llave {
+    background: var(--tarjeta); border: 1px solid var(--linea); border-radius: 12px;
+    padding: 18px 20px 20px; box-shadow: var(--sombra);
+    border-top: 3px solid var(--marca, var(--madera));
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .llave .puesto { font-family: var(--display); font-weight: 700; font-size: 1.06rem; color: var(--marca, var(--tinta)); }
+  .llave .oficio { font-size: 0.92rem; color: var(--tinta-media); line-height: 1.45; }
+  .llave dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: baseline; }
+  .llave dt { font-family: var(--display); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tinta-suave); }
+  .llave dd { margin: 0; font-family: var(--dato); font-size: 0.82rem; word-break: break-all; }
+
+  .aviso-clave {
+    margin-top: 22px; padding: 14px 18px; border-radius: 10px;
+    background: var(--crema); border-left: 3px solid var(--naranja);
+    font-size: 0.95rem; color: var(--tinta-media);
+  }
+  .aviso-clave b { color: var(--tinta); }
+
+  /* ---------- Matriz ---------- */
+
+  .marco-tabla { overflow-x: auto; border: 1px solid var(--linea); border-radius: 12px; background: var(--tarjeta); box-shadow: var(--sombra); }
+  table.matriz { border-collapse: collapse; width: 100%; min-width: 620px; font-family: var(--display); font-size: 0.9rem; }
+  table.matriz th, table.matriz td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--linea); }
+  table.matriz thead th {
+    position: sticky; top: 0; background: var(--hundido);
+    font-size: 0.72rem; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--tinta-media); font-weight: 600; border-bottom: 2px solid var(--linea-firme);
+  }
+  table.matriz tbody th { font-weight: 500; color: var(--tinta); }
+  table.matriz tbody th .ruta { display: block; font-family: var(--dato); font-size: 0.72rem; color: var(--tinta-suave); margin-top: 1px; }
+  table.matriz td { text-align: center; width: 82px; }
+  table.matriz tr.grupo th {
+    background: var(--hundido); font-family: var(--display); font-size: 0.7rem;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--madera); font-weight: 600;
+  }
+  table.matriz tbody tr:last-child th, table.matriz tbody tr:last-child td { border-bottom: 0; }
+
+  .si, .no { display: inline-block; font-family: var(--dato); font-size: 0.95rem; line-height: 1; }
+  .si { color: var(--verde); font-weight: 600; }
+  .no { color: var(--tinta-suave); opacity: 0.55; }
+  td.plata { background: color-mix(in oklab, var(--naranja) 7%, transparent); }
+
+  .leyenda { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 14px; font-size: 0.86rem; color: var(--tinta-media); }
+  .leyenda span { display: inline-flex; align-items: center; gap: 7px; }
+  .muestra { width: 15px; height: 15px; border-radius: 4px; border: 1px solid var(--linea-firme); display: inline-block; }
+
+  /* ---------- Fichas de rol ---------- */
+
+  .rol {
+    background: var(--tarjeta); border: 1px solid var(--linea); border-radius: 14px;
+    box-shadow: var(--sombra); overflow: hidden; margin-bottom: 22px;
+  }
+  .rol > header {
+    padding: 20px 24px; background: var(--crema);
+    border-bottom: 1px solid var(--linea); border-left: 5px solid var(--marca);
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px;
+  }
+  .rol > header h3 { color: var(--marca); }
+  .rol > header .quien { font-family: var(--dato); font-size: 0.8rem; color: var(--tinta-media); }
+  .rol > header .arranca { margin-left: auto; font-size: 0.86rem; color: var(--tinta-media); }
+  .rol > header .arranca code { color: var(--tinta); }
+  .rol .cuerpo { padding: 22px 24px 24px; display: grid; gap: 26px; grid-template-columns: 1fr; }
+  @media (min-width: 760px) { .rol .cuerpo { grid-template-columns: 1.25fr 1fr; } }
+
+  .rol h4 { color: var(--tinta-suave); margin-bottom: 10px; }
+  .rol ul { margin: 0; padding-left: 1.15em; }
+  .rol li { margin-bottom: 7px; }
+  .rol li:last-child { margin-bottom: 0; }
+  .rol .porque { font-size: 0.94rem; color: var(--tinta-media); }
+  .rol .porque strong { color: var(--tinta); font-weight: 600; }
+
+  .fuera { background: var(--hundido); border-radius: 10px; padding: 16px 18px; }
+  .fuera h4 { margin-bottom: 8px; }
+  .fuera ul { list-style: none; padding: 0; }
+  .fuera li { font-size: 0.93rem; color: var(--tinta-media); padding-left: 20px; position: relative; }
+  .fuera li::before { content: "×"; position: absolute; left: 3px; color: var(--rojo); font-family: var(--dato); font-weight: 600; }
+
+  /* ---------- Puestos ---------- */
+
+  .puestos { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(272px, 1fr)); }
+  .puesto-card {
+    border: 1px solid var(--linea); border-radius: 12px; padding: 18px 20px;
+    background: var(--tarjeta); box-shadow: var(--sombra);
+  }
+  .puesto-card .ruta-grande { font-family: var(--dato); font-size: 1rem; font-weight: 600; color: var(--naranja); display: block; margin-bottom: 8px; }
+  .puesto-card h3 { font-size: 1.05rem; margin-bottom: 6px; }
+  .puesto-card p { font-size: 0.94rem; color: var(--tinta-media); }
+  .puesto-card .quienes { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--linea-firme); font-size: 0.86rem; color: var(--tinta-suave); }
+  .puesto-card .quienes b { color: var(--tinta-media); font-weight: 600; }
+
+  /* ---------- Demostración / pendientes ---------- */
+
+  .listado { display: grid; gap: 12px; }
+  .item {
+    display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; align-items: baseline;
+    padding: 15px 18px; border-radius: 10px; background: var(--tarjeta);
+    border: 1px solid var(--linea);
+  }
+  .item .nombre { font-family: var(--display); font-weight: 600; grid-column: 1; }
+  .item .detalle { grid-column: 2; font-size: 0.94rem; color: var(--tinta-media); }
+  @media (max-width: 620px) { .item { grid-template-columns: 1fr; } .item .detalle { grid-column: 1; } }
+
+  .item.traba { border-left: 4px solid var(--rojo); }
+  .item.demo { border-left: 4px solid var(--naranja); }
+
+  footer.pie {
+    border-top: 1px solid var(--linea); margin-top: 20px; padding-top: 24px;
+    font-size: 0.88rem; color: var(--tinta-suave);
+  }
+  footer.pie p { margin-bottom: 0.5em; }
+
+  @media print {
+    nav.saltos { display: none; }
+    body { font-size: 11pt; background: #fff; }
+    section { break-inside: auto; margin-bottom: 34px; }
+    .rol, .llave, .puesto-card, .item { break-inside: avoid; box-shadow: none; }
+    .marco-tabla { overflow: visible; }
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="envoltura solo-tapa">
+  <header class="tapa">
+    <span class="rotulo">Maderera Juan B. Justo · Capacitación</span>
+    <h1>Quién ve qué</h1>
+    <p>
+      Cinco usuarios, cinco pantallas de arranque distintas. Cada puesto abre el
+      sistema y ve solo lo suyo: no es que el menú esconda cosas, es que las
+      páginas no se abren. Esta hoja dice qué le toca a cada uno y con qué clave
+      entra.
+    </p>
+    <span class="sello">
+      <b>mjbj.vercel.app</b> · datos de demostración · 7 de septiembre de 2026
+    </span>
+  </header>
+</div>
+
+<nav class="saltos" aria-label="Secciones">
+  <ul>
+    <li><a href="#claves">Las claves</a></li>
+    <li><a href="#matriz">La tabla completa</a></li>
+    <li><a href="#puestos">Ventas</a></li>
+    <li><a href="#deposito">Depósito</a></li>
+    <li><a href="#aserradero">Aserradero</a></li>
+    <li><a href="#admin">Administración</a></li>
+    <li><a href="#cliente">El cliente</a></li>
+    <li><a href="#pantallas">Pantallas de puesto</a></li>
+    <li><a href="#demostracion">Qué es de mentira</a></li>
+  </ul>
+</nav>
+
+<div class="envoltura">
+
+  <!-- ================= CLAVES ================= -->
+  <section id="claves">
+    <h2>Las claves</h2>
+    <p class="bajada">
+      Todas entran por <code>mjbj.vercel.app/ingresar</code>. La contraseña es la
+      misma en las cinco porque son de demostración.
+    </p>
+
+    <div class="llaves">
+      <div class="llave" style="--marca: var(--naranja)">
+        <span class="puesto">Administración</span>
+        <span class="oficio">Ve y toca todo: precios, cobros, facturación, compras y los números del negocio.</span>
+        <dl>
+          <dt>Usuario</dt><dd>admin@mjbj.com.ar</dd>
+          <dt>Clave</dt><dd>Demo1234</dd>
+          <dt>Abre en</dt><dd>/admin</dd>
+        </dl>
+      </div>
+
+      <div class="llave" style="--marca: var(--madera)">
+        <span class="puesto">Ventas</span>
+        <span class="oficio">Atiende el mostrador y el WhatsApp. Vende, cobra en caja y arma presupuestos.</span>
+        <dl>
+          <dt>Usuario</dt><dd>vendedor@mjbj.com.ar</dd>
+          <dt>Clave</dt><dd>Demo1234</dd>
+          <dt>Abre en</dt><dd>/admin</dd>
+        </dl>
+      </div>
+
+      <div class="llave" style="--marca: var(--verde)">
+        <span class="puesto">Depósito</span>
+        <span class="oficio">Prepara los pedidos y mueve el stock. No ve precios ni clientes.</span>
+        <dl>
+          <dt>Usuario</dt><dd>deposito@mjbj.com.ar</dd>
+          <dt>Clave</dt><dd>Demo1234</dd>
+          <dt>Abre en</dt><dd>/admin</dd>
+        </dl>
+      </div>
+
+      <div class="llave" style="--marca: var(--tinta-media)">
+        <span class="puesto">Aserradero</span>
+        <span class="oficio">Opera la seccionadora. No entra al panel: tiene la cola de corte sola en la pantalla.</span>
+        <dl>
+          <dt>Usuario</dt><dd>taller@mjbj.com.ar</dd>
+          <dt>Clave</dt><dd>Demo1234</dd>
+          <dt>Abre en</dt><dd>/taller</dd>
+        </dl>
+      </div>
+
+      <div class="llave" style="--marca: var(--naranja-vivo)">
+        <span class="puesto">Cliente profesional</span>
+        <span class="oficio">Roberto Fernández, de RF Construcciones. Tiene lista propia y cuenta corriente con saldo.</span>
+        <dl>
+          <dt>Usuario</dt><dd>roberto@rfconstrucciones.com.ar</dd>
+          <dt>Clave</dt><dd>Demo1234</dd>
+          <dt>Abre en</dt><dd>/mi-cuenta</dd>
+        </dl>
+      </div>
+    </div>
+
+    <p class="aviso-clave">
+      <b>Estas cinco son de demostración y se dan de baja el día del lanzamiento.</b>
+      En el sistema de verdad cada persona tiene la suya y no hay usuario compartido:
+      todo lo que se carga queda a nombre de quien lo cargó, así que prestar la clave
+      es prestar la firma. Las altas las hace administración.
+    </p>
+  </section>
+
+  <!-- ================= MATRIZ ================= -->
+  <section id="matriz">
+    <h2>La tabla completa</h2>
+    <p class="bajada">
+      Las 34 pantallas del sistema y quién abre cada una. Está verificada contra el
+      sistema andando: se entró con los cuatro usuarios y se probó pantalla por
+      pantalla, incluso tecleando la dirección a mano.
+    </p>
+
+    <div class="marco-tabla">
+      <table class="matriz">
+        <thead>
+          <tr>
+            <th scope="col">Pantalla</th>
+            <th scope="col">Admin.</th>
+            <th scope="col">Ventas</th>
+            <th scope="col">Depós.</th>
+            <th scope="col">Aserr.</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="grupo"><th colspan="5" scope="colgroup">Operación</th></tr>
+          <tr><th scope="row">Resumen<span class="ruta">/admin</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Pedidos<span class="ruta">/admin/pedidos</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">WhatsApp<span class="ruta">/admin/whatsapp</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Presupuestos<span class="ruta">/admin/presupuestos</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Cortes<span class="ruta">/admin/cortes</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="si">✓</span></td></tr>
+          <tr><th scope="row">Mostrador<span class="ruta">/mostrador</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+
+          <tr class="grupo"><th colspan="5" scope="colgroup">Catálogo</th></tr>
+          <tr><th scope="row">Productos<span class="ruta">/admin/productos</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Stock<span class="ruta">/admin/stock</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Precios<span class="ruta">/admin/precios</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+
+          <tr class="grupo"><th colspan="5" scope="colgroup">Compras — a qué costo entró cada cosa</th></tr>
+          <tr><th scope="row">Proveedores<span class="ruta">/admin/proveedores</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+          <tr><th scope="row">Órdenes de compra<span class="ruta">/admin/compras/ordenes</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+          <tr><th scope="row">Recepciones<span class="ruta">/admin/recepciones</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+          <tr><th scope="row">Facturas de compra<span class="ruta">/admin/compras/facturas</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+          <tr><th scope="row">Pagos a proveedor<span class="ruta">/admin/compras/pagos</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+          <tr><th scope="row">Gastos<span class="ruta">/admin/compras/gastos</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+
+          <tr class="grupo"><th colspan="5" scope="colgroup">Administración</th></tr>
+          <tr><th scope="row">Clientes<span class="ruta">/admin/clientes</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Profesionales<span class="ruta">/admin/profesionales</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Documentación técnica<span class="ruta">/admin/documentacion</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Eventos<span class="ruta">/admin/eventos</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Contenido del sitio<span class="ruta">/admin/contenido</span></th><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Cobros<span class="ruta">/admin/pagos</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+          <tr><th scope="row">Facturación<span class="ruta">/admin/facturacion</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+          <tr><th scope="row">ARCA<span class="ruta">/admin/arca</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+          <tr><th scope="row">Caja<span class="ruta">/admin/caja</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+          <tr><th scope="row">Avisos<span class="ruta">/admin/avisos</span></th><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Reportes<span class="ruta">/admin/reportes</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+          <tr><th scope="row">Cierre del mes<span class="ruta">/admin/cierre</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+          <tr><th scope="row">Sucursales<span class="ruta">/admin/sucursales</span></th><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Envíos<span class="ruta">/admin/envios</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+          <tr><th scope="row">Migración<span class="ruta">/admin/migracion</span></th><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Bitácora<span class="ruta">/admin/bitacora</span></th><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Guías de uso<span class="ruta">/admin/ayuda</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="no">—</span></td></tr>
+
+          <tr class="grupo"><th colspan="5" scope="colgroup">Pantallas de puesto, fuera del menú</th></tr>
+          <tr><th scope="row">Atención por WhatsApp<span class="ruta">/atencion</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr>
+          <tr><th scope="row">Cola de corte<span class="ruta">/taller</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="si">✓</span></td></tr>
+          <tr><th scope="row">Formato para la máquina<span class="ruta">/admin/cortes/formato</span></th><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="si">✓</span></td><td><span class="si">✓</span></td></tr>
+          <tr><th scope="row">Tarifa del corte<span class="ruta">/admin/cortes/tarifas</span></th><td class="plata"><span class="si">✓</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td><td class="plata"><span class="no">—</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="leyenda">
+      <span><span class="si">✓</span> abre</span>
+      <span><span class="no">—</span> no abre: lo devuelve a su pantalla</span>
+      <span><span class="muestra" style="background: color-mix(in oklab, var(--naranja) 7%, transparent)"></span> toca plata o define un precio</span>
+    </div>
+  </section>
+
+  <!-- ================= VENTAS ================= -->
+  <section id="puestos">
+    <h2>Ventas</h2>
+    <p class="bajada">Es el puesto que más se usa y el que más pantallas tiene. Todo lo que pasa de cara al cliente.</p>
+
+    <article class="rol" style="--marca: var(--madera)">
+      <header>
+        <h3>Ventas</h3>
+        <span class="quien">vendedor@mjbj.com.ar</span>
+        <span class="arranca">Arranca en <code>/admin</code></span>
+      </header>
+      <div class="cuerpo">
+        <div>
+          <h4>El día</h4>
+          <ul>
+            <li><strong>Mostrador.</strong> Buscar el producto, cobrar y sacar el ticket. La caja hay que abrirla al empezar el turno y cerrarla al terminar.</li>
+            <li><strong>WhatsApp.</strong> Contestar desde la bandeja, con el saldo del cliente y sus últimos pedidos al costado. Si se dedica todo el día a esto, <code>/atencion</code>.</li>
+            <li><strong>Presupuestos.</strong> Armarlos y mandarlos. Cuando el cliente lo acepta, se convierte en pedido con los precios que aceptó, aunque la lista haya subido.</li>
+            <li><strong>Pedidos.</strong> Moverlos de etapa en el tablero, hasta la entrega y el remito firmado.</li>
+            <li><strong>Clientes y profesionales.</strong> Alta de fichas, y aprobar a un profesional asignándole lista de precios y límite de cuenta corriente.</li>
+          </ul>
+        </div>
+        <div class="fuera">
+          <h4>No abre</h4>
+          <ul>
+            <li>Precios y formas de pago</li>
+            <li>Cobros y Facturación</li>
+            <li>ARCA y Caja</li>
+            <li>Todo Compras y los Reportes</li>
+            <li>Sucursales, Envíos y Migración</li>
+            <li>Contenido y Bitácora</li>
+          </ul>
+          <p class="porque" style="margin-top: 12px">
+            <strong>Por qué.</strong> Ahí está el margen: a cuánto compramos y a
+            cuánto vendemos. Vender no necesita ese número, y el que atiende el
+            mostrador no tiene por qué cargar con él.
+          </p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= DEPÓSITO ================= -->
+  <section id="deposito">
+    <h2>Depósito</h2>
+    <p class="bajada">Seis pantallas y ninguna más. Es a propósito: quien prepara pedidos no necesita el resto y no tiene que perder tiempo buscándolo.</p>
+
+    <article class="rol" style="--marca: var(--verde)">
+      <header>
+        <h3>Depósito</h3>
+        <span class="quien">deposito@mjbj.com.ar</span>
+        <span class="arranca">Arranca en <code>/admin</code></span>
+      </header>
+      <div class="cuerpo">
+        <div>
+          <h4>El día</h4>
+          <ul>
+            <li><strong>Pedidos.</strong> Ver qué hay que preparar y pasarlo a listo cuando está armado.</li>
+            <li><strong>Stock.</strong> Ajustar lo que se contó, transferir entre Casa Central y el Aserradero, y mirar qué está por debajo del mínimo.</li>
+            <li><strong>Cortes.</strong> Ver la cola, para saber qué placa se va a mover.</li>
+          </ul>
+          <p class="porque" style="margin-top: 14px">
+            El stock que muestra el sistema es <strong>físico menos reservado</strong>:
+            lo que hay menos lo que ya está comprometido en un pedido. Por eso el
+            número puede ser más bajo que lo que se ve en el estante, y está bien
+            que lo sea.
+          </p>
+        </div>
+        <div class="fuera">
+          <h4>No abre</h4>
+          <ul>
+            <li>El mostrador y la caja</li>
+            <li>WhatsApp y Presupuestos</li>
+            <li>Clientes y Productos</li>
+            <li>Precios y todo lo de plata</li>
+          </ul>
+          <p class="porque" style="margin-top: 12px">
+            <strong>Por qué.</strong> El mostrador es una caja registradora.
+            Depósito no cobra, así que no la tiene: si entra, el sistema lo
+            devuelve al resumen.
+          </p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= ASERRADERO ================= -->
+  <section id="aserradero">
+    <h2>Aserradero</h2>
+    <p class="bajada">El único puesto que no entra al panel. Tiene su propia pantalla y esa pantalla es todo el sistema para él.</p>
+
+    <article class="rol" style="--marca: var(--tinta-media)">
+      <header>
+        <h3>Aserradero</h3>
+        <span class="quien">taller@mjbj.com.ar</span>
+        <span class="arranca">Arranca en <code>/taller</code></span>
+      </header>
+      <div class="cuerpo">
+        <div>
+          <h4>El día</h4>
+          <ul>
+            <li><strong>La cola de corte, sola en la pantalla.</strong> Sin menú y sin buscador: es una pestaña que queda abierta todo el día en la PC del taller.</li>
+            <li><strong>Abrir un trabajo</strong> para ver el despiece en milímetros y pasarlo de en cola, a en proceso, a listo.</li>
+            <li><strong>Bajar la lista de piezas</strong> para el optimizador de la seccionadora, en el formato que la máquina acepta.</li>
+            <li><strong>Ajustar ese formato</strong> en <code>/admin/cortes/formato</code>, que es la única pantalla del panel que abre — porque el formato se ajusta a prueba y error parado frente a la máquina.</li>
+          </ul>
+        </div>
+        <div class="fuera">
+          <h4>No abre</h4>
+          <ul>
+            <li>Todo el panel, salvo la carpeta de Cortes</li>
+            <li>La tarifa del corte, que es un precio</li>
+            <li>El mostrador y la bandeja de WhatsApp</li>
+          </ul>
+          <p class="porque" style="margin-top: 12px">
+            <strong>Por qué arranca en <code>/taller</code> y no en el resumen.</strong>
+            El resumen muestra las ventas del mes. No es lo suyo y no puede hacer
+            nada con eso.
+          </p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= ADMIN ================= -->
+  <section id="admin">
+    <h2>Administración</h2>
+    <p class="bajada">Ve las 34 pantallas. Es el único puesto que decide precios y el único que mueve plata.</p>
+
+    <article class="rol" style="--marca: var(--naranja)">
+      <header>
+        <h3>Administración</h3>
+        <span class="quien">admin@mjbj.com.ar</span>
+        <span class="arranca">Arranca en <code>/admin</code></span>
+      </header>
+      <div class="cuerpo">
+        <div>
+          <h4>Lo que solo hace este puesto</h4>
+          <ul>
+            <li><strong>Precios.</strong> Edición en línea, ajuste masivo por porcentaje e importación de la planilla semanal, con vista previa antes de aplicar. Todo cambio queda con fecha y autor.</li>
+            <li><strong>Facturación y ARCA.</strong> Emitir A, B y C desde un pedido, notas de crédito, libro IVA y la numeración de los tres puntos de venta.</li>
+            <li><strong>Cobros y Caja.</strong> Acreditar pagos, revisar transferencias con comprobante y cerrar el turno de cada caja.</li>
+            <li><strong>Compras.</strong> Proveedores, órdenes, recepciones que mueven el costo promedio ponderado, facturas de compra, pagos con retención y gastos.</li>
+            <li><strong>Reportes y Cierre del mes,</strong> con márgenes y la exportación de asientos para el contador.</li>
+            <li><strong>Bitácora.</strong> Quién hizo qué y cuándo. Es la respuesta a «¿quién cambió este precio?».</li>
+          </ul>
+        </div>
+        <div class="fuera" style="background: var(--crema)">
+          <h4 style="color: var(--madera)">Dos cosas que conviene saber</h4>
+          <p class="porque">
+            <strong>Nadie se vuelve administrador desde el sitio.</strong> Quien se
+            registra en la tienda queda siempre como cliente. Las altas del personal
+            las hace administración, una por una.
+          </p>
+          <p class="porque" style="margin-top: 10px">
+            <strong>La cuenta web de un cliente no se une sola a su ficha.</strong>
+            Aunque el correo coincida. La une el vendedor desde la ficha, a mano,
+            y hay un motivo: sin eso, cualquiera podría registrarse con el correo
+            de un tercero y quedarse con su cuenta corriente.
+          </p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= CLIENTE ================= -->
+  <section id="cliente">
+    <h2>El cliente, del otro lado</h2>
+    <p class="bajada">Lo que ve un profesional cuando entra a su cuenta. Sirve para explicarle por teléfono dónde mirar.</p>
+
+    <article class="rol" style="--marca: var(--naranja-vivo)">
+      <header>
+        <h3>Cliente profesional</h3>
+        <span class="quien">roberto@rfconstrucciones.com.ar</span>
+        <span class="arranca">Arranca en <code>/mi-cuenta</code></span>
+      </header>
+      <div class="cuerpo">
+        <div>
+          <h4>Qué puede hacer solo</h4>
+          <ul>
+            <li><strong>Seguir sus pedidos</strong> con el recorrido a la vista, sin llamar a preguntar.</li>
+            <li><strong>Aceptar o rechazar un presupuesto</strong> desde el sitio. Aceptado, cae como pedido en el tablero.</li>
+            <li><strong>Ver su cuenta corriente</strong> con el saldo movimiento por movimiento, y pagar la deuda online.</li>
+            <li><strong>Volver a pedir</strong> un pedido anterior entero, a precios de hoy. En una maderera la compra se repite.</li>
+            <li><strong>Bajar su lista de precios en PDF,</strong> la suya, con los precios que le corresponden.</li>
+            <li><strong>Anotarse a un evento</strong> y descargar la documentación técnica reservada.</li>
+          </ul>
+        </div>
+        <div class="fuera">
+          <h4>Lo que ve distinto que el público</h4>
+          <ul style="list-style: none; padding: 0">
+            <li style="padding-left: 0">Precios de la lista profesional, no la general</li>
+            <li style="padding-left: 0">Escalas por cantidad: −3 %, −5 % y −8 %</li>
+            <li style="padding-left: 0">Tarifa de corte más baja</li>
+            <li style="padding-left: 0">Cuenta corriente como forma de pago</li>
+          </ul>
+          <p class="porque" style="margin-top: 12px">
+            Todo eso sale de la lista que tiene asignada la ficha. Cambiarle la
+            lista cambia lo que ve en el mismo momento.
+          </p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= PANTALLAS DE PUESTO ================= -->
+  <section id="pantallas">
+    <h2>Las cinco pantallas que no están en el menú</h2>
+    <p class="bajada">
+      Se abren tecleando la dirección o desde un enlace. Son las que alguien deja
+      abiertas todo el día, y por eso no tienen menú lateral: necesitan el alto
+      entero de la pantalla.
+    </p>
+
+    <div class="puestos">
+      <div class="puesto-card">
+        <code class="ruta-grande">/mostrador</code>
+        <h3>El punto de venta</h3>
+        <p>Buscar, cobrar, imprimir. Se instala como aplicación y <b>vende sin internet</b>: guarda la venta con un número provisorio y la sube sola cuando vuelve la conexión.</p>
+        <p class="quienes"><b>Entran:</b> Administración y Ventas</p>
+      </div>
+
+      <div class="puesto-card">
+        <code class="ruta-grande">/taller</code>
+        <h3>La cola de corte</h3>
+        <p>El tablero de trabajos por hacer, sin nada alrededor. Es la misma cola que ve el panel en Cortes, pero sola en la pantalla.</p>
+        <p class="quienes"><b>Entran:</b> los cuatro puestos</p>
+      </div>
+
+      <div class="puesto-card">
+        <code class="ruta-grande">/atencion</code>
+        <h3>El puesto de WhatsApp</h3>
+        <p>La bandeja a pantalla completa, para quien se dedica a contestar. Los mensajes ocupan todo el alto.</p>
+        <p class="quienes"><b>Entran:</b> Administración y Ventas</p>
+      </div>
+
+      <div class="puesto-card">
+        <code class="ruta-grande">/firmar/…</code>
+        <h3>La firma del remito</h3>
+        <p>Se abre en el celular de quien retira y firma con el dedo. Queda guardada la fecha, la hora y desde dónde se firmó: eso es lo que reemplaza al papel.</p>
+        <p class="quienes"><b>Entra:</b> quien tenga el enlace, sin cuenta</p>
+      </div>
+
+      <div class="puesto-card">
+        <code class="ruta-grande">/admin/ayuda</code>
+        <h3>Las guías escritas</h3>
+        <p>Trece guías, del presupuesto al cierre del mes, en el idioma del mostrador. Están dentro del sistema, así que se leen sin buscar un papel.</p>
+        <p class="quienes"><b>Entran:</b> Administración, Ventas y Depósito</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DEMOSTRACIÓN ================= -->
+  <section id="demostracion">
+    <h2>Qué es de mentira todavía</h2>
+    <p class="bajada">
+      Cuatro servicios funcionan en modo demostración porque faltan credenciales
+      que tramita la maderera. El camino que recorren por dentro es el mismo que
+      el real: cuando lleguen las claves, se conectan y nada más cambia.
+    </p>
+
+    <div class="listado">
+      <div class="item demo">
+        <span class="nombre">ARCA</span>
+        <span class="detalle">Los comprobantes se emiten y se imprimen con QR, pero <b>no tienen valor fiscal</b>: falta el certificado digital y el punto de venta habilitado en modalidad Webservices.</span>
+      </div>
+      <div class="item demo">
+        <span class="nombre">Mercado Pago</span>
+        <span class="detalle">El cobro online recorre el circuito entero con un proveedor de prueba. Falta la credencial de producción.</span>
+      </div>
+      <div class="item demo">
+        <span class="nombre">WhatsApp</span>
+        <span class="detalle">La bandeja y los avisos automáticos andan contra un proveedor de demostración. Falta dar de alta el número en la API de WhatsApp Business.</span>
+      </div>
+      <div class="item demo">
+        <span class="nombre">Correo</span>
+        <span class="detalle">Los avisos se arman y quedan registrados, pero no salen. Falta la casilla y el dominio verificado del remitente.</span>
+      </div>
+      <div class="item traba">
+        <span class="nombre">Y lo que traba</span>
+        <span class="detalle"><b>El último número emitido en los puntos de venta 15, 17 y 20.</b> Sin ese dato la plataforma numeraría desde 1 y pisaría una serie que ARCA viene contando hace años. Un salto de numeración fiscal no se corrige después. Se carga en <code>/admin/arca</code> y es lo primero que hay que conseguir.</span>
+      </div>
+    </div>
+
+    <p class="aviso-clave" style="margin-top: 26px">
+      <b>El catálogo que se ve es de desarrollo.</b> Veinticinco productos, precios
+      inventados y tres fotos genéricas repartidas entre todos. Se reemplaza entero
+      cuando llegue la exportación del sistema anterior y las fotos reales — la
+      pantalla de Migración ya está hecha y esperando el archivo.
+    </p>
+  </section>
+
+  <footer class="pie">
+    <p>Maderera Juan B. Justo · plataforma de gestión · guía de capacitación por puesto</p>
+    <p>Verificada contra el sistema andando el 7 de septiembre de 2026, entrando con los cinco usuarios.</p>
+  </footer>
+</div>

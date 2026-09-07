@@ -46,6 +46,8 @@ posibles:
 | 05/09/2026 | CLIENTE (brief) | Documento obligatorio de quien retira, en el remito de acopio | Incluido (8.4) | — |
 | 05/09/2026 | PRESTADOR | Avisos y promociones: banners con vigencia en franja, portada y catálogo, con carrusel | Trabajo nuevo asumido | — |
 | 05/09/2026 | PRESTADOR | El catálogo dejó de sentirse otro sitio: misma franja de beneficios y barra de categorías que la portada | Trabajo nuevo asumido | — |
+| 07/09/2026 | PRESTADOR | Datos de demostración para la visita: cajas del mostrador, eventos, documentación técnica, remitos, solicitudes de profesionales, escalas por volumen, sugeridos, órdenes de compra y gastos (`db:seed-demo`) | Trabajo nuevo asumido | — |
+| 07/09/2026 | PRESTADOR | Guía de capacitación por puesto y consola de la demostración, las dos en HTML (`docs/capacitacion.html`, `docs/mapa-demo.html`) | Trabajo nuevo asumido | — |
 
 ## Insumos pendientes del cliente
 
@@ -78,6 +80,38 @@ se notifica por escrito invocando la cláusula 5.3.
 | Relevamiento del taller: qué programa optimiza el corte, su versión, y **un archivo de trabajo real** | Ajustar el formato de exportación a la máquina. El mecanismo ya está hecho y se configura en pantalla; sin el archivo no se sabe a qué apuntarle | — | Pendiente |
 | Ruta de la carpeta que vigila el optimizador, y si esa PC puede salir a internet | Poner en marcha el agente del taller, que ya está construido. Es una variable de entorno, no código | — | Pendiente |
 | Escalas de descuento por volumen para la lista profesional | El banner de profesionales de la portada muestra las escalas leyéndolas de la base. Sin ninguna cargada, sale sin la lista en vez de inventar números. Se cargan desde `/admin/profesionales` | — | Pendiente |
+
+## Tres agujeros de acceso, cerrados el 7/9/2026
+
+Aparecieron preparando la demostración, entrando a producción con un usuario de
+cada rol y tecleando las direcciones a mano. Los tres son de la misma familia
+que el que se cerró el 1/9: **una regla escrita en dos lugares, y uno de los dos
+quedó atrás.**
+
+| Qué abría de más | Quién | Por qué |
+|---|---|---|
+| `/atencion`, la bandeja de WhatsApp a pantalla completa, con las conversaciones de los clientes y su saldo al costado | Depósito y aserradero | Vive fuera de `/admin`, así que el layout del panel no la cubría, y la página solo pedía ser personal. `/admin/whatsapp`, que es la misma bandeja, sí rebotaba |
+| `GET /api/mostrador/clientes` y `/catalogo`: el padrón entero con CUIT, domicilio y límite de crédito, y las dos listas de precios | Depósito y aserradero | La página `/mostrador` los rebotaba bien, pero la guardia de sus endpoints aceptaba cualquier rol de staff |
+| `/admin/cortes/tarifas`, el precio por pasada del corte | Aserradero | La excepción que le abre `/admin/cortes` era un `else if` y esa rama no consultaba `ACCESO` en absoluto |
+
+**Cómo quedaron.** Las tres rutas se declaran ahora en `ACCESO` —`/atencion`,
+`/taller` y `/admin/cortes`— y la página y la API preguntan ahí en vez de
+escribir el par cada una por su lado. La excepción del aserradero acota y no
+habilita: lo saca de todo lo que no cuelga de `/admin/cortes`, y después decide
+la lista igual que para los demás. Hay tests nuevos en `tests/acceso.test.ts`.
+
+**La lección, otra vez la misma:** una ruta que vive fuera de `/admin` no está
+cubierta por el layout que aplica la lista, así que hay que declararla igual. Es
+lo que dice el comentario de `lib/roles.ts` y lo que las tres se saltearon.
+
+## Un defecto de la firma del remito, corregido el 7/9/2026
+
+Cargar un remito de retiro obliga a poner el documento de quien retira —"la
+firma sola no identifica a nadie"—, pero la pantalla de firma lo pedía como
+opcional, con el campo vacío, y guardaba lo que llegara. **Firmar sin
+completarlo borraba el dato justo cuando el remito pasaba a ser la constancia.**
+Ahora la pizarra propone el documento ya cargado y la firma sin documento no
+pisa el guardado.
 
 ### Qué pedir exactamente para la migración
 

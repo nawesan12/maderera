@@ -221,7 +221,11 @@ export async function drenar(): Promise<ResultadoDrenaje | null> {
         body: JSON.stringify({ ventas: ventas.map((f) => f.venta) }),
       });
 
-      if (respuesta.status === 401) {
+      // El 403 va con el 401 y no con el resto: los dos significan "esta sesión
+      // no puede subir", y los dos se arreglan con alguien entrando, no con el
+      // tiempo. Dejarlo caer en el `reintentar` de abajo sería un bucle que no
+      // termina nunca, con las ventas retenidas igual.
+      if (respuesta.status === 401 || respuesta.status === 403) {
         faltaSesion = true;
         for (const fila of ventas) await aplicar(fila, { tipo: "sin_sesion" });
       } else if (!respuesta.ok) {
@@ -286,7 +290,9 @@ export async function drenar(): Promise<ResultadoDrenaje | null> {
  *
  * Un 401 y un 400 no son lo mismo y por eso se distinguen: la sesión vencida se
  * arregla volviendo a entrar y la cola retiene todo; un cuerpo mal formado va a
- * fallar igual dentro de una hora, así que reintentarlo sería un bucle.
+ * fallar igual dentro de una hora, así que reintentarlo sería un bucle. El 403
+ * —sesión válida, pero de un puesto que no es el mostrador— se trata como el
+ * 401: también lo destraba alguien entrando, aunque tenga que ser otra persona.
  */
 async function subirMovimiento(
   movimiento: MovimientoEncolado,
@@ -298,7 +304,7 @@ async function subirMovimiento(
       body: JSON.stringify(movimiento),
     });
 
-    if (respuesta.status === 401) return "sin_sesion";
+    if (respuesta.status === 401 || respuesta.status === 403) return "sin_sesion";
     if (!respuesta.ok) return `El servidor contestó ${respuesta.status}.`;
 
     const datos = await respuesta.json();

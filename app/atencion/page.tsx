@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Minimize2 } from "lucide-react";
-import { requireStaff } from "@/lib/dal/session";
+import { requireStaffRole } from "@/lib/dal/session";
 import { conversacionesSinLeer } from "@/lib/dal/admin/whatsapp";
 import { VistaWhatsapp } from "@/app/admin/whatsapp/vista";
 
@@ -22,13 +22,21 @@ export const metadata: Metadata = {
  * cabecera, y lo que se busca acá es justamente que no estén; anidarla adentro
  * habría obligado a esconderlos con CSS, que es la clase de arreglo que después
  * se rompe sin que nadie sepa por qué.
+ *
+ * **Y por eso mismo el permiso se pide acá.** Vivir afuera significa que el
+ * layout de `/admin` —que es quien aplica `ACCESO`— no la cubre. Con
+ * `requireStaff()` a secas alcanzaba con ser personal: `/admin/whatsapp`
+ * rebotaba a depósito y al aserradero, y esta pantalla, que es la misma bandeja
+ * con los mismos datos, les abría. El par sale de `ACCESO["/atencion"]` y no de
+ * una decisión tomada acá, para que las dos entradas a la bandeja no puedan
+ * volver a separarse.
  */
 export default async function AtencionPage({
   searchParams,
 }: {
   searchParams: Promise<{ chat?: string; filtro?: string }>;
 }) {
-  const usuario = await requireStaff();
+  const usuario = await requireStaffRole("admin", "vendedor");
   const { chat, filtro } = await searchParams;
   const sinLeer = await conversacionesSinLeer();
 

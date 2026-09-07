@@ -42,6 +42,20 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/whatsapp": ["admin", "vendedor"],
   "/admin/presupuestos": ["admin", "vendedor"],
   "/mostrador": ["admin", "vendedor"],
+  /*
+   * Las otras dos pantallas de puesto fijo. Como el mostrador, viven **fuera
+   * de `/admin`** para no arrastrar el menú lateral, y justamente por eso el
+   * layout del panel no las cubre: hay que declararlas igual, porque esta lista
+   * es la fuente única y una ruta que no está acá queda librada a lo que decida
+   * su propia página.
+   *
+   * `/atencion` es la misma bandeja que `/admin/whatsapp` a pantalla completa,
+   * así que le corresponde el mismo par. Se comprobó que no era así: con un
+   * usuario de depósito, `/admin/whatsapp` rebotaba y `/atencion` abría, con
+   * las conversaciones de los clientes y su saldo al costado.
+   */
+  "/atencion": ["admin", "vendedor"],
+  "/taller": ["admin", "vendedor", "deposito", "aserradero"],
   "/admin/productos": ["admin", "vendedor"],
   "/admin/stock": ["admin", "vendedor", "deposito"],
   "/admin/precios": ["admin"],

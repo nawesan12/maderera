@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/dal/session";
-import { inicioDelRol } from "@/lib/roles";
+import { inicioDelRol, puedeEntrar } from "@/lib/roles";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import {
   cierreDelTurno,
@@ -40,8 +40,13 @@ export default async function MostradorPage({
    * El mostrador es de quien atiende. Depósito y aserradero tienen su propia
    * pantalla y no cobran: dejarlos entrar acá sería darles una caja registradora
    * que no les toca. Se los manda a donde sí trabajan.
+   *
+   * El par sale de `ACCESO` y no está escrito acá: los endpoints de la copia
+   * local usan esa misma lista, y cuando la pantalla y la API deciden cada una
+   * por su cuenta es cuando una se queda atrás. Pasó: la página rebotaba y
+   * `/api/mostrador/clientes` entregaba el padrón igual.
    */
-  if (usuario.staffRole && !["admin", "vendedor"].includes(usuario.staffRole)) {
+  if (!puedeEntrar("/mostrador", usuario.staffRole)) {
     redirect(inicioDelRol(usuario.staffRole));
   }
 

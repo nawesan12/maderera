@@ -71,8 +71,45 @@ describe("acceso a las secciones del panel", () => {
     expect(puedeEntrar("/admin/pagos-especiales", "vendedor")).toBe(true);
   });
 
+  /*
+   * Las tres pantallas de puesto fijo viven fuera de `/admin`, así que el layout
+   * del panel —que es quien aplica esta lista— no las cubre y cada página tiene
+   * que pedirla por su cuenta. El día que no lo hizo, el agujero fue exactamente
+   * este: `/admin/whatsapp` rebotaba al depósito y `/atencion`, que es la misma
+   * bandeja con los mismos datos, le abría.
+   */
+  it("la bandeja a pantalla completa es de los mismos que la del panel", () => {
+    expect(quienEntra("/atencion")).toEqual(quienEntra("/admin/whatsapp"));
+
+    for (const rol of ["deposito", "aserradero"] as const) {
+      expect(puedeEntrar("/atencion", rol)).toBe(false);
+    }
+    expect(puedeEntrar("/atencion", "vendedor")).toBe(true);
+    expect(puedeEntrar("/atencion", "admin")).toBe(true);
+  });
+
+  it("el taller lo ve todo el personal y el mostrador no", () => {
+    for (const rol of ["admin", "vendedor", "deposito", "aserradero"] as const) {
+      expect(puedeEntrar("/taller", rol)).toBe(true);
+    }
+    // La misma lista que usan la página del mostrador y los endpoints de su
+    // copia local, que llevan el padrón de clientes y las dos listas de precios.
+    expect(puedeEntrar("/mostrador", "aserradero")).toBe(false);
+    expect(puedeEntrar("/mostrador", "deposito")).toBe(false);
+  });
+
+  it("ninguna pantalla de puesto fijo quedó sin declarar", () => {
+    // Están afuera de `/admin` y no salen en el menú: si alguna se agrega y no
+    // se declara, `quienEntra` devuelve null y la abre todo el personal.
+    for (const ruta of ["/mostrador", "/atencion", "/taller"]) {
+      expect(quienEntra(ruta)).not.toBeNull();
+    }
+  });
+
   it("sin rol no entra a ningún lado", () => {
     expect(puedeEntrar("/admin", null)).toBe(false);
     expect(puedeEntrar("/admin/pedidos", null)).toBe(false);
+    expect(puedeEntrar("/atencion", null)).toBe(false);
+    expect(puedeEntrar("/mostrador", null)).toBe(false);
   });
 });

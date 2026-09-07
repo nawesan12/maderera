@@ -292,7 +292,15 @@ export async function registrarFirma(opciones: {
       firmadoAt: new Date(),
       firmadoIp: opciones.ip,
       receptorNombre: opciones.receptorNombre,
-      receptorDocumento: opciones.receptorDocumento ?? null,
+      /*
+       * Sin documento en el formulario **no se pisa el guardado**. Drizzle
+       * omite del `set` lo que llega `undefined`, y esa diferencia con `null`
+       * es todo el arreglo: crear un retiro exige el documento —"la firma sola
+       * no identifica a nadie", dice esa validación— y firmar con el campo
+       * vacío lo borraba, así que el dato que el mostrador estaba obligado a
+       * pedir desaparecía justo cuando el remito pasaba a ser la constancia.
+       */
+      receptorDocumento: opciones.receptorDocumento || undefined,
       entregadoAt: new Date(),
       updatedAt: new Date(),
     })

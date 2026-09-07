@@ -102,7 +102,11 @@ export default async function FirmarPage({
         ) : (
           <>
             <section className="rounded-xl border bg-white p-5">
-              <Pizarra token={token} nombreSugerido={remito.receptorNombre} />
+              <Pizarra
+                token={token}
+                nombreSugerido={remito.receptorNombre}
+                documentoSugerido={remito.receptorDocumento}
+              />
             </section>
 
             <p className="text-center text-sm text-muted-foreground">

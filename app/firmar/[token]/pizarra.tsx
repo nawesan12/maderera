@@ -25,9 +25,11 @@ const inicial: EstadoFirma = {};
 export function Pizarra({
   token,
   nombreSugerido,
+  documentoSugerido,
 }: {
   token: string;
   nombreSugerido: string | null;
+  documentoSugerido: string | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dibujando = useRef(false);
@@ -158,11 +160,15 @@ export function Pizarra({
 
       <div>
         <label htmlFor="receptorDocumento" className="block font-medium">
-          DNI <span className="font-normal text-muted-foreground">(opcional)</span>
+          DNI{" "}
+          <span className="font-normal text-muted-foreground">
+            {documentoSugerido ? "confirmá que es el tuyo" : "(opcional)"}
+          </span>
         </label>
         <input
           id="receptorDocumento"
           name="receptorDocumento"
+          defaultValue={documentoSugerido ?? ""}
           inputMode="numeric"
           className="tabular mt-1 h-12 w-full rounded-lg border bg-background px-3 text-base"
         />

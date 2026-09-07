@@ -1,0 +1,289 @@
+[
+  {
+    "r": "/admin",
+    "http": 200,
+    "fin": "/admin",
+    "kb": 113,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/pedidos",
+    "http": 200,
+    "fin": "/admin/pedidos",
+    "kb": 88,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/whatsapp",
+    "http": 200,
+    "fin": "/admin/whatsapp",
+    "kb": 91,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/presupuestos",
+    "http": 200,
+    "fin": "/admin/presupuestos",
+    "kb": 100,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/cortes",
+    "http": 200,
+    "fin": "/admin/cortes",
+    "kb": 96,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/cortes/formato",
+    "http": 200,
+    "fin": "/admin/cortes/formato",
+    "kb": 64,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/cortes/tarifas",
+    "http": 200,
+    "fin": "/admin/cortes/tarifas",
+    "kb": 75,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/productos",
+    "http": 200,
+    "fin": "/admin/productos",
+    "kb": 162,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/stock",
+    "http": 200,
+    "fin": "/admin/stock",
+    "kb": 389,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/precios",
+    "http": 200,
+    "fin": "/admin/precios",
+    "kb": 208,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/precios/formas-de-pago",
+    "http": 200,
+    "fin": "/admin/precios/formas-de-pago",
+    "kb": 72,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/clientes",
+    "http": 200,
+    "fin": "/admin/clientes",
+    "kb": 99,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/profesionales",
+    "http": 200,
+    "fin": "/admin/profesionales",
+    "kb": 82,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/documentacion",
+    "http": 200,
+    "fin": "/admin/documentacion",
+    "kb": 76,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/contenido",
+    "http": 200,
+    "fin": "/admin/contenido",
+    "kb": 123,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/contenido/banners",
+    "http": 200,
+    "fin": "/admin/contenido/banners",
+    "kb": 97,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/eventos",
+    "http": 200,
+    "fin": "/admin/eventos",
+    "kb": 79,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/pagos",
+    "http": 200,
+    "fin": "/admin/pagos",
+    "kb": 76,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/facturacion",
+    "http": 200,
+    "fin": "/admin/facturacion",
+    "kb": 70,
+    "s": "VACIO"
+  },
+  {
+    "r": "/admin/arca",
+    "http": 200,
+    "fin": "/admin/arca",
+    "kb": 95,
+    "s": "VACIO"
+  },
+  {
+    "r": "/admin/arca/libro-iva",
+    "http": 200,
+    "fin": "/admin/arca/libro-iva",
+    "kb": 67,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/arca/libro-iva-compras",
+    "http": 200,
+    "fin": "/admin/arca/libro-iva-compras",
+    "kb": 64,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/arca/retenciones",
+    "http": 200,
+    "fin": "/admin/arca/retenciones",
+    "kb": 66,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/avisos",
+    "http": 200,
+    "fin": "/admin/avisos",
+    "kb": 104,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/caja",
+    "http": 200,
+    "fin": "/admin/caja",
+    "kb": 76,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/proveedores",
+    "http": 200,
+    "fin": "/admin/proveedores",
+    "kb": 72,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/recepciones",
+    "http": 200,
+    "fin": "/admin/recepciones",
+    "kb": 61,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/compras/ordenes",
+    "http": 200,
+    "fin": "/admin/compras/ordenes",
+    "kb": 66,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/compras/facturas",
+    "http": 200,
+    "fin": "/admin/compras/facturas",
+    "kb": 63,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/compras/pagos",
+    "http": 200,
+    "fin": "/admin/compras/pagos",
+    "kb": 68,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/compras/gastos",
+    "http": 200,
+    "fin": "/admin/compras/gastos",
+    "kb": 71,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/cierre",
+    "http": 200,
+    "fin": "/admin/cierre",
+    "kb": 68,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/reportes",
+    "http": 200,
+    "fin": "/admin/reportes",
+    "kb": 82,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/sucursales",
+    "http": 200,
+    "fin": "/admin/sucursales",
+    "kb": 87,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/envios",
+    "http": 200,
+    "fin": "/admin/envios",
+    "kb": 88,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/migracion",
+    "http": 200,
+    "fin": "/admin/migracion",
+    "kb": 69,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/bitacora",
+    "http": 200,
+    "fin": "/admin/bitacora",
+    "kb": 75,
+    "s": "ok"
+  },
+  {
+    "r": "/admin/ayuda",
+    "http": 200,
+    "fin": "/admin/ayuda",
+    "kb": 76,
+    "s": "ok"
+  },
+  {
+    "r": "/mostrador",
+    "http": 200,
+    "fin": "/mostrador",
+    "kb": 28,
+    "s": "ok"
+  },
+  {
+    "r": "/taller",
+    "http": 200,
+    "fin": "/taller",
+    "kb": 53,
+    "s": "ok"
+  },
+  {
+    "r": "/atencion",
+    "http": 200,
+    "fin": "/atencion",
+    "kb": 47,
+    "s": "ok"
+  }
+]

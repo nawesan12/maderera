@@ -73,9 +73,19 @@ export default async function AdminLayout({
    */
   const ruta = (await headers()).get("x-ruta") ?? "";
 
-  if (usuario.staffRole === "aserradero") {
-    if (!ruta.startsWith("/admin/cortes")) redirect("/taller");
-  } else if (ruta && !puedeEntrar(ruta, usuario.staffRole)) {
+  /*
+   * La excepción del aserradero **acota, no habilita**: le abre la puerta de
+   * `/admin/cortes` y después la lista decide igual que para todos. Cuando era
+   * un `else if`, esa rama no consultaba `ACCESO` en absoluto y se llevaba
+   * puesta `/admin/cortes/tarifas`, que está declarada solo para el admin
+   * porque una tarifa de corte es un precio: fija cuánto entra por caja. El
+   * operario de la seccionadora podía cambiarla.
+   */
+  if (usuario.staffRole === "aserradero" && !ruta.startsWith("/admin/cortes")) {
+    redirect("/taller");
+  }
+
+  if (ruta && !puedeEntrar(ruta, usuario.staffRole)) {
     /*
      * El control va acá y no en cada página, y sale de la misma lista que filtra
      * el menú. Antes solo filtraba el menú: Precios, ARCA, Cobros y Caja se

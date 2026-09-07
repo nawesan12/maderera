@@ -41,6 +41,17 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/pedidos": ["admin", "vendedor", "deposito"],
   "/admin/whatsapp": ["admin", "vendedor"],
   "/admin/presupuestos": ["admin", "vendedor"],
+  /*
+   * Los cortes los ve todo el personal, **incluido el aserradero**, que es el
+   * único rol que no tiene el panel detrás: la ficha de un trabajo y el formato
+   * para la máquina son suyos y se ajustan parados frente a la seccionadora.
+   *
+   * Hay que declararlo y no dejarlo heredar de `/admin`, que excluye al
+   * aserradero. Adentro de esta carpeta manda la clave más larga, y por eso
+   * `/admin/cortes/tarifas` sigue siendo solo del admin: el precio por pasada
+   * fija cuánto entra por caja, y eso no es regular la máquina.
+   */
+  "/admin/cortes": ["admin", "vendedor", "deposito", "aserradero"],
   "/mostrador": ["admin", "vendedor"],
   /*
    * Las otras dos pantallas de puesto fijo. Como el mostrador, viven **fuera

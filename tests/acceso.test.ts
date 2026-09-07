@@ -106,6 +106,20 @@ describe("acceso a las secciones del panel", () => {
     }
   });
 
+  it("al aserradero le abre los cortes pero no la tarifa del corte", () => {
+    /*
+     * El layout le deja pasar todo lo que cuelga de `/admin/cortes` —la ficha
+     * de un trabajo y el formato para la máquina, que se ajusta parado frente
+     * a la seccionadora—, pero la lista sigue mandando adentro de esa carpeta.
+     * La tarifa por pasada es un precio, no una regulación de la máquina.
+     */
+    expect(puedeEntrar("/admin/cortes", "aserradero")).toBe(true);
+    expect(puedeEntrar("/admin/cortes/abc-123", "aserradero")).toBe(true);
+    expect(puedeEntrar("/admin/cortes/formato", "aserradero")).toBe(true);
+    expect(puedeEntrar("/admin/cortes/tarifas", "aserradero")).toBe(false);
+    expect(puedeEntrar("/admin/cortes/tarifas", "vendedor")).toBe(false);
+  });
+
   it("sin rol no entra a ningún lado", () => {
     expect(puedeEntrar("/admin", null)).toBe(false);
     expect(puedeEntrar("/admin/pedidos", null)).toBe(false);

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ACCESO, puedeEntrar, quienEntra } from "@/lib/roles";
+import {
+  ACCESO,
+  puedeEntrar,
+  quienEntra,
+  rolTrasAprobarProfesional,
+} from "@/lib/roles";
 
 /**
  * Quién entra a cada sección del panel.
@@ -125,5 +130,26 @@ describe("acceso a las secciones del panel", () => {
     expect(puedeEntrar("/admin/pedidos", null)).toBe(false);
     expect(puedeEntrar("/atencion", null)).toBe(false);
     expect(puedeEntrar("/mostrador", null)).toBe(false);
+  });
+});
+
+/**
+ * Apareció probando el alta de profesionales: alguien del equipo manda el
+ * formulario público para ver cómo quedó, se aprueba la solicitud, y el rol
+ * `profesional` le pisa el `staff`. Queda afuera del panel sin ninguna pista.
+ */
+describe("rol después de aprobar una solicitud profesional", () => {
+  it("al personal no le toca el rol", () => {
+    expect(rolTrasAprobarProfesional("staff")).toBeNull();
+  });
+
+  it("a un cliente lo pasa a profesional", () => {
+    expect(rolTrasAprobarProfesional("cliente")).toBe("profesional");
+    expect(rolTrasAprobarProfesional("profesional")).toBe("profesional");
+  });
+
+  it("una cuenta sin rol cargado queda como profesional", () => {
+    expect(rolTrasAprobarProfesional(null)).toBe("profesional");
+    expect(rolTrasAprobarProfesional(undefined)).toBe("profesional");
   });
 });

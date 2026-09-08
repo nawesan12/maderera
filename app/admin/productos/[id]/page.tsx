@@ -13,6 +13,7 @@ import { moneda } from "@/components/admin/formato";
 import {
   candidatosParaSugerir,
   listarCategoriasAdmin,
+  listarRubrosAdmin,
   obtenerProductoAdmin,
   sugeridosDelProducto,
 } from "@/lib/dal/admin/products";
@@ -25,12 +26,14 @@ export default async function EditarProductoPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [producto, categorias, sugeridos, candidatos] = await Promise.all([
-    obtenerProductoAdmin(id),
-    listarCategoriasAdmin(),
-    sugeridosDelProducto(id),
-    candidatosParaSugerir(id),
-  ]);
+  const [producto, categorias, rubros, sugeridos, candidatos] =
+    await Promise.all([
+      obtenerProductoAdmin(id),
+      listarCategoriasAdmin(),
+      listarRubrosAdmin(),
+      sugeridosDelProducto(id),
+      candidatosParaSugerir(id),
+    ]);
 
   if (!producto) notFound();
 
@@ -164,6 +167,7 @@ export default async function EditarProductoPage({
 
       <FormularioProducto
         categorias={categorias}
+        rubros={rubros}
         galeria={producto.galeria}
         inicial={{
           id: producto.id,
@@ -171,6 +175,7 @@ export default async function EditarProductoPage({
           slug: producto.slug,
           categoryId: producto.categoryId,
           subcategory: producto.subcategory ?? "",
+          subcategoryId: producto.subcategoryId ?? "",
           description: producto.description,
           brand: producto.brand ?? "",
           unit: producto.unit,

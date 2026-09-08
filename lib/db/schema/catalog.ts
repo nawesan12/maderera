@@ -21,6 +21,14 @@ export const unitOfSale = pgEnum("unit_of_sale", [
   "unidad",
   "metro_lineal",
   "metro_cuadrado",
+  /**
+   * La tabla de deck.
+   *
+   * El deck se vendía por metro cuadrado y la clienta lo cambió: cada tabla con
+   * su medida y su precio. Cobrar por m² obligaba a alguien a convertir a
+   * tablas enteras en el mostrador, y esa cuenta salía distinta cada vez.
+   */
+  "tabla",
   "placa",
   "rollo",
   "par",
@@ -47,6 +55,41 @@ export const categories = pgTable(
   (t) => [uniqueIndex("categories_slug_idx").on(t.slug)],
 );
 
+/**
+ * Los rubros de adentro de una categoría.
+ *
+ * Existían como `products.subcategory`, texto libre escrito a mano en cada
+ * producto. Con eso no se puede navegar: dos productos del mismo rubro escritos
+ * distinto —"Colas vinílicas" y "colas vinilicas"— son dos rubros para el
+ * sistema y ninguno para quien busca.
+ *
+ * La clienta trajo los 43 rubros con los que la ferretería ya trabajaba en el
+ * sitio anterior. Ferretería sola son ~1000 SKUs según el brief: sin un nivel
+ * más de navegación, esa categoría es una grilla de mil productos donde nadie
+ * encuentra un tarugo.
+ */
+export const subcategories = pgTable(
+  "subcategories",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    categoryId: uuid()
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+    slug: text().notNull(),
+    name: text().notNull(),
+    sortOrder: integer().notNull().default(0),
+    active: boolean().notNull().default(true),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // El slug es único dentro de la categoría y no en toda la tabla: "membranas"
+    // puede existir en Ferretería y en Techos, y son rubros distintos.
+    uniqueIndex("subcategories_categoria_slug_idx").on(t.categoryId, t.slug),
+    index("subcategories_categoria_idx").on(t.categoryId),
+  ],
+);
+
 export const products = pgTable(
   "products",
   {
@@ -56,7 +99,18 @@ export const products = pgTable(
     categoryId: uuid()
       .notNull()
       .references(() => categories.id, { onDelete: "restrict" }),
+    /**
+     * El rubro, como texto.
+     *
+     * Se conserva junto a `subcategoryId` porque es de donde salieron los
+     * rubros al migrarlos, y porque un producto puede estar cargado con un
+     * rubro que todavía no existe como fila. La navegación usa la relación; el
+     * texto queda como respaldo de lo que alguien escribió.
+     */
     subcategory: text(),
+    subcategoryId: uuid().references(() => subcategories.id, {
+      onDelete: "set null",
+    }),
     description: text().notNull().default(""),
     /** Marca propia del cliente (Moldava) o de terceros. */
     brand: text(),
@@ -87,6 +141,7 @@ export const products = pgTable(
   (t) => [
     uniqueIndex("products_slug_idx").on(t.slug),
     index("products_category_idx").on(t.categoryId),
+    index("products_subcategory_idx").on(t.subcategoryId),
   ],
 );
 
@@ -219,6 +274,7 @@ export const productImagesRelations = relations(productImages, ({ one }) => ({
 }));
 
 export type Category = typeof categories.$inferSelect;
+export type Subcategory = typeof subcategories.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type ProductVariant = typeof productVariants.$inferSelect;
 export type ProductImage = typeof productImages.$inferSelect;

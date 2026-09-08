@@ -10,6 +10,7 @@ import {
   Package,
   Receipt,
   ScrollText,
+  Star,
   UserRound,
 } from "lucide-react";
 
@@ -33,6 +34,7 @@ const SECCIONES = [
     titulo: "Cuenta corriente",
     icono: Receipt,
   },
+  { href: "/mi-cuenta/resenas", titulo: "Reseñas", icono: Star },
   { href: "/mi-cuenta/direcciones", titulo: "Direcciones", icono: MapPin },
   { href: "/mi-cuenta/datos", titulo: "Mis datos", icono: UserRound },
 ] as const;

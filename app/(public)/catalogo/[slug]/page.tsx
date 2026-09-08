@@ -18,6 +18,8 @@ import { getSession } from "@/lib/dal/session";
 import { AvisoGremio } from "@/components/catalogo/aviso-gremio";
 import { combinedStockLevel } from "@/lib/stock-level";
 import { DatosEstructurados } from "@/components/datos-estructurados";
+import { resenasDelProducto, resumenDeResenas } from "@/lib/dal/resenas";
+import { ResenasDelProducto } from "@/components/catalogo/resenas";
 import { migasJsonLd, productoJsonLd, urlAbsoluta } from "@/lib/seo";
 
 export async function generateMetadata({
@@ -68,13 +70,16 @@ export default async function ProductoPage({
     producto.slug,
   );
 
-  const [whatsapp, numeroDelNegocio, vista] = await Promise.all([
-    enlaceWhatsapp(
-      `Hola! Me interesa: ${producto.name}. ¿Podrían darme más información?`,
-    ),
-    numeroWhatsapp(),
-    vistaDePrecio(),
-  ]);
+  const [whatsapp, numeroDelNegocio, vista, resenas, resumenResenas] =
+    await Promise.all([
+      enlaceWhatsapp(
+        `Hola! Me interesa: ${producto.name}. ¿Podrían darme más información?`,
+      ),
+      numeroWhatsapp(),
+      vistaDePrecio(),
+      resenasDelProducto(producto.id),
+      resumenDeResenas(producto.id),
+    ]);
 
   const sesion = await getSession();
 
@@ -94,6 +99,7 @@ export default async function ProductoPage({
       brand: producto.brand,
       categoryName: producto.categoryName,
       imagenes: producto.imagenes,
+      resenas: resumenResenas,
       variantes: producto.variantes.map((v) => ({
         sku: v.sku,
         label: v.label,
@@ -282,6 +288,8 @@ export default async function ProductoPage({
             </div>
           </section>
         )}
+
+        <ResenasDelProducto resenas={resenas} resumen={resumenResenas} />
 
         {/*
           Sugeridos. Los complementarios van primero y solo si alguien los

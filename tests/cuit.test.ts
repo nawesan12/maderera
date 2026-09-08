@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { cuitValido, digitoVerificador, formatearCuitLargo } from "@/lib/cuit";
+import {
+  cuitValido,
+  digitoVerificador,
+  dniValido,
+  documentoValido,
+  formatearCuitLargo,
+} from "@/lib/cuit";
 
 /**
  * El CUIT lo tipea gente en el mostrador y en el alta de profesionales. Un
@@ -62,5 +68,50 @@ describe("formatearCuitLargo", () => {
 
   it("deja intacto lo que no parece un CUIT", () => {
     expect(formatearCuitLargo("123")).toBe("123");
+  });
+});
+
+/**
+ * El DNI entró cuando el CUIT dejó de ser obligatorio en el alta de
+ * profesionales. No tiene dígito verificador, así que lo único que se puede
+ * exigir es la forma.
+ */
+describe("dniValido", () => {
+  it("acepta siete y ocho dígitos", () => {
+    expect(dniValido("28987654")).toBe(true);
+    expect(dniValido("5123456")).toBe(true);
+  });
+
+  it("acepta los separadores que usa la gente", () => {
+    expect(dniValido("28.987.654")).toBe(true);
+  });
+
+  it("rechaza lo que no tiene largo de documento", () => {
+    expect(dniValido("123456")).toBe(false);
+    expect(dniValido("123456789")).toBe(false);
+    expect(dniValido("")).toBe(false);
+    expect(dniValido(null)).toBe(false);
+  });
+
+  it("rechaza el relleno de dígitos repetidos", () => {
+    expect(dniValido("00000000")).toBe(false);
+    expect(dniValido("1111111")).toBe(false);
+  });
+});
+
+/**
+ * El número se valida contra el tipo con el que se presentó. Sin esto, un DNI
+ * tipeado en el campo del CUIT pasaría, que es justo el error que el alta de
+ * profesionales tiene que atrapar.
+ */
+describe("documentoValido", () => {
+  it("exige CUIT cuando el tipo es CUIT", () => {
+    expect(documentoValido("cuit", "30-71234567-1")).toBe(true);
+    expect(documentoValido("cuit", "28987654")).toBe(false);
+  });
+
+  it("exige DNI cuando el tipo es DNI", () => {
+    expect(documentoValido("dni", "28987654")).toBe(true);
+    expect(documentoValido("dni", "30712345671")).toBe(false);
   });
 });

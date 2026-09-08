@@ -364,12 +364,12 @@ const CATALOGO: CategorySeed[] = [
         name: "Deck Grandis",
         subcategory: "Decks",
         description:
-          "Tabla de deck en eucalipto grandis tratado, ranurada antideslizante. Se vende por metro cuadrado.",
-        unit: "metro_cuadrado",
+          "Tabla de deck en eucalipto grandis tratado, ranurada antideslizante. Se vende por tabla.",
+        unit: "tabla",
         featured: true,
         image: IMG.madera,
         variants: [
-          { sku: "DEC-GRA-2490", label: '1" x 4" x 2.40m', largoMm: 2400, anchoMm: 100, espesorMm: 25, material: "Eucalipto Grandis", precio: 74500, descuentoProfesional: 0.15, stockCentral: 0, stockAserradero: 180, minCentral: 0, minAserradero: 40 },
+          { sku: "DEC-GRA-2490", label: '1" x 4" x 2.40m', largoMm: 2400, anchoMm: 100, espesorMm: 25, material: "Eucalipto Grandis", precio: 17880, descuentoProfesional: 0.15, stockCentral: 0, stockAserradero: 180, minCentral: 0, minAserradero: 40 },
         ],
       },
       {
@@ -377,12 +377,12 @@ const CATALOGO: CategorySeed[] = [
         name: "Deck PVC",
         subcategory: "Decks",
         description:
-          "Deck sintético de PVC, sin mantenimiento, resistente a la intemperie marina.",
-        unit: "metro_cuadrado",
+          "Deck sintético de PVC, sin mantenimiento, resistente a la intemperie marina. Se vende por tabla.",
+        unit: "tabla",
         image: IMG.madera,
         variants: [
-          { sku: "DEC-PVC-GRI", label: "Gris — 2.90m", largoMm: 2900, anchoMm: 140, espesorMm: 22, color: "Gris", precio: 118000, descuentoProfesional: 0.15, stockCentral: 0, stockAserradero: 65, minCentral: 0, minAserradero: 20 },
-          { sku: "DEC-PVC-MAD", label: "Símil madera — 2.90m", largoMm: 2900, anchoMm: 140, espesorMm: 22, color: "Símil madera", precio: 124500, descuentoProfesional: 0.15, stockCentral: 0, stockAserradero: 28, minCentral: 0, minAserradero: 20 },
+          { sku: "DEC-PVC-GRI", label: "Gris — 2.90m", largoMm: 2900, anchoMm: 140, espesorMm: 22, color: "Gris", precio: 47900, descuentoProfesional: 0.15, stockCentral: 0, stockAserradero: 65, minCentral: 0, minAserradero: 20 },
+          { sku: "DEC-PVC-MAD", label: "Símil madera — 2.90m", largoMm: 2900, anchoMm: 140, espesorMm: 22, color: "Símil madera", precio: 50550, descuentoProfesional: 0.15, stockCentral: 0, stockAserradero: 28, minCentral: 0, minAserradero: 20 },
         ],
       },
       {

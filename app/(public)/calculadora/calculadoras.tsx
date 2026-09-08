@@ -16,6 +16,7 @@ import {
   calculateBoards,
   calculateFloor,
   calculateDeck,
+  type ParametrosDeCalculo,
   type RoofResult,
   type BoardResult,
   type FloorResult,
@@ -81,7 +82,11 @@ function ResultRow({ label, value, unit, onAdd, sugerencia, nota }: {
  * encabezado y la metadata no viajan al navegador. La lógica de cálculo vive
  * en `lib/calculations.ts` y no acá.
  */
-export function Calculadoras() {
+export function Calculadoras({
+  parametros,
+}: {
+  parametros: ParametrosDeCalculo;
+}) {
   const { agregar } = useCarrito();
 
   /*
@@ -238,7 +243,7 @@ export function Calculadoras() {
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     disabled={!roofLargo || !roofAncho}
                     onClick={() => {
-                      const r = calculateRoof(Number(roofLargo), Number(roofAncho), roofType);
+                      const r = calculateRoof(Number(roofLargo), Number(roofAncho), roofType, parametros);
                       setRoofResult(r);
                       pedirSugerencias([r.tirantes, r.machimbre, r.aislacion, r.membrana, r.clavos]);
                     }}
@@ -395,7 +400,7 @@ export function Calculadoras() {
                   <Button
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     onClick={() => {
-                      setBoardResult(calculateBoards(boardPieces.filter(p => p.ancho > 0 && p.largo > 0), boardPlacaAncho, boardPlacaLargo));
+                      setBoardResult(calculateBoards(boardPieces.filter(p => p.ancho > 0 && p.largo > 0), boardPlacaAncho, boardPlacaLargo, parametros.anchoSierraMm, parametros.margenSeguridad));
                       pedirSugerencias([{ busqueda: "placa melamina" }]);
                     }}
                   >
@@ -465,7 +470,7 @@ export function Calculadoras() {
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     disabled={!floorLargo || !floorAncho}
                     onClick={() => {
-                      setFloorResult(calculateFloor(Number(floorLargo), Number(floorAncho)));
+                      setFloorResult(calculateFloor(Number(floorLargo), Number(floorAncho), undefined, parametros.separacionPisoM));
                       pedirSugerencias([
                         { busqueda: "piso melaminico" },
                         { busqueda: "zocalo" },
@@ -570,7 +575,7 @@ export function Calculadoras() {
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     disabled={!deckLargo || !deckAncho}
                     onClick={() => {
-                      const r = calculateDeck(Number(deckLargo), Number(deckAncho), deckMaterial);
+                      const r = calculateDeck(Number(deckLargo), Number(deckAncho), deckMaterial, parametros.deck[deckMaterial], parametros.margenSeguridad, parametros.separacionPisoM);
                       setDeckResult(r);
                       pedirSugerencias([r.tablasDeck, r.estructura, r.tornillos, r.protector]);
                     }}
@@ -590,7 +595,8 @@ export function Calculadoras() {
                     </Badge>
                   </div>
                   <CardContent className="p-6">
-                    <ResultRow label={deckResult.tablasDeck.descripcion} value={deckResult.tablasDeck.m2} unit="m²" sugerencia={sugerenciaDe(deckResult.tablasDeck.busqueda)} />
+                    <ResultRow label={deckResult.tablasDeck.descripcion} value={deckResult.tablasDeck.tablas} unit={`tablas de ${deckResult.tablasDeck.medida}`} sugerencia={sugerenciaDe(deckResult.tablasDeck.busqueda)} />
+                    <ResultRow label="Superficie a cubrir (con desperdicio)" value={deckResult.tablasDeck.m2} unit="m²" />
                     <ResultRow label="Alfajías / estructura" value={deckResult.estructura.tirantes} unit={`un (${deckResult.estructura.medida})`} sugerencia={sugerenciaDe(deckResult.estructura.busqueda)} />
                     <ResultRow label={deckResult.tornillos.descripcion} value={deckResult.tornillos.cantidad} unit="unidades" sugerencia={sugerenciaDe(deckResult.tornillos.busqueda)} />
                     {deckResult.protector.litros > 0 && (
@@ -600,7 +606,9 @@ export function Calculadoras() {
                       <Button
                         className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
                         onClick={() => {
-                          agregarDelCalculo(deckResult.tablasDeck, deckResult.tablasDeck.m2, "m²");
+                          // Se agrega en tablas y no en m²: la tabla es lo que
+                          // se saca del galpón y lo que tiene precio propio.
+                          agregarDelCalculo(deckResult.tablasDeck, deckResult.tablasDeck.tablas, "tablas");
                           agregarDelCalculo(deckResult.estructura, deckResult.estructura.tirantes, "unidades");
                           agregarDelCalculo(deckResult.tornillos, deckResult.tornillos.cantidad, "unidades");
                           if (deckResult.protector.litros > 0) {

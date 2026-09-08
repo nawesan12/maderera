@@ -21,6 +21,7 @@ import { formatearPrecio } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
 import {
   descuentoPorMedioDePago,
+  mediosHabilitados,
   montoDelDescuentoDePago,
   type EscalaDePago,
 } from "@/lib/precios/medio-pago";
@@ -58,6 +59,12 @@ const MEDIOS = [
     icono: Banknote,
   },
   {
+    valor: "debito",
+    titulo: "Tarjeta de débito",
+    detalle: "Al retirar o contra entrega",
+    icono: CreditCard,
+  },
+  {
     valor: "efectivo",
     titulo: "Efectivo",
     detalle: "Al retirar o contra entrega",
@@ -74,6 +81,7 @@ export function FormularioCheckout({
   cuentaCorriente,
   direcciones,
   escalasDePago,
+  precioMayorista,
 }: {
   items: ItemResumen[];
   subtotal: number;
@@ -88,6 +96,13 @@ export function FormularioCheckout({
   direcciones: DireccionElegible[];
   /** Descuentos por forma de pago. El servidor los vuelve a calcular al confirmar. */
   escalasDePago: EscalaDePago[];
+  /**
+   * Si los precios que se están mostrando son los de una lista diferenciada.
+   *
+   * Cuando lo son, la tarjeta de crédito y Mercado Pago no se ofrecen: el
+   * precio mayorista es de contado. `confirmarCompra` lo vuelve a verificar.
+   */
+  precioMayorista: boolean;
 }) {
   const [estado, accion, pendiente] = useActionState(
     confirmarCompra,
@@ -97,7 +112,12 @@ export function FormularioCheckout({
   const [entrega, setEntrega] = useState<"retiro" | "envio">("retiro");
   const [sucursalId, setSucursalId] = useState(sucursales[0]?.id ?? "");
   const [zonaId, setZonaId] = useState(zonas[0]?.id ?? "");
-  const [medioPago, setMedioPago] = useState("mercado_pago");
+  const medios = mediosHabilitados(MEDIOS, precioMayorista);
+  // Tipado como string y no como la unión de `MEDIOS`: la cuenta corriente es
+  // una opción más de esta pantalla y no sale de esa lista.
+  const [medioPago, setMedioPago] = useState<string>(
+    medios[0]?.valor ?? "transferencia",
+  );
 
   // Dirección guardada elegida. Arranca en la predeterminada, que es el caso
   // habitual: se compra para el mismo lugar de siempre.
@@ -314,8 +334,15 @@ export function FormularioCheckout({
         <Card className="rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
           <CardContent className="px-6 py-[22px]">
             <TituloPaso numero={3}>Cómo pagás</TituloPaso>
+            {precioMayorista && (
+              <p className="mb-3 rounded-[10px] bg-chip px-3.5 py-2.5 text-[13px] leading-relaxed text-texto-2">
+                Estás viendo tu precio de profesional, que es de contado: se paga
+                por transferencia, débito o efectivo. En cuotas con tarjeta corre
+                el precio de catálogo.
+              </p>
+            )}
             <div className="space-y-2">
-              {MEDIOS.map((m) => (
+              {medios.map((m) => (
                 <OpcionLista
                   key={m.valor}
                   activa={medioPago === m.valor}

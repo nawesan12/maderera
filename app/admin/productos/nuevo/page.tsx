@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { listarCategoriasAdmin } from "@/lib/dal/admin/products";
+import {
+  listarCategoriasAdmin,
+  listarRubrosAdmin,
+} from "@/lib/dal/admin/products";
 import { FormularioProducto } from "../formulario";
 
 export default async function NuevoProductoPage() {
-  const categorias = await listarCategoriasAdmin();
+  const [categorias, rubros] = await Promise.all([
+    listarCategoriasAdmin(),
+    listarRubrosAdmin(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -20,11 +26,13 @@ export default async function NuevoProductoPage() {
 
       <FormularioProducto
         categorias={categorias}
+        rubros={rubros}
         inicial={{
           name: "",
           slug: "",
           categoryId: categorias[0]?.id ?? "",
           subcategory: "",
+          subcategoryId: "",
           description: "",
           brand: "",
           unit: "unidad",

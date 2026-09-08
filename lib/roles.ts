@@ -70,6 +70,13 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/productos": ["admin", "vendedor"],
   "/admin/stock": ["admin", "vendedor", "deposito"],
   "/admin/precios": ["admin"],
+  /*
+   * Los parámetros de las calculadoras solo los toca el admin, por el mismo
+   * motivo que los precios: un desperdicio mal cargado le hace comprar de menos
+   * a alguien que está por techar una casa, y eso se descubre con el techo a
+   * medio hacer.
+   */
+  "/admin/calculadoras": ["admin"],
   "/admin/clientes": ["admin", "vendedor"],
   "/admin/profesionales": ["admin", "vendedor"],
   "/admin/documentacion": ["admin", "vendedor"],
@@ -146,4 +153,23 @@ export function puedeEntrar(ruta: string, rol: RolStaff | null): boolean {
   // Sin regla declarada entra todo el personal: una sección nueva no queda
   // trabada por olvido, pero tampoco abierta sin que se note en esta lista.
   return mejor ? mejor.includes(rol) : true;
+}
+
+/**
+ * Qué rol le queda a una cuenta web cuando se le aprueba el acceso profesional.
+ *
+ * Devuelve `null` cuando no hay que tocarlo.
+ *
+ * **El personal conserva su rol.** Apareció probando el alta: alguien del
+ * equipo manda el formulario público para ver cómo quedó, se aprueba la
+ * solicitud, y el rol `profesional` le pisa el `staff` con el que entra al
+ * panel. Queda afuera del sistema sin ninguna pista de por qué.
+ *
+ * La lista de precios se le asigna igual —un empleado puede comprar con precio
+ * de profesional—; lo que no cambia es por qué puerta entra.
+ */
+export function rolTrasAprobarProfesional(
+  rolActual: string | null | undefined,
+): "profesional" | null {
+  return rolActual === "staff" ? null : "profesional";
 }

@@ -35,8 +35,23 @@ export const rubroProfesional = pgEnum("rubro_profesional", [
   "carpintero",
   "disenador",
   "instalador",
+  "woodframer",
   "otro",
 ]);
+
+/**
+ * Con qué documento se identifica quien pide el acceso.
+ *
+ * Era CUIT y nada más. La clienta pidió que el CUIT deje de ser obligatorio
+ * porque frena a los carpinteros y colocadores que trabajan con DNI, y que el
+ * formulario acepte los dos.
+ *
+ * **No es lo mismo para facturar.** Sin CUIT no hay factura A ni precio neto
+ * sin IVA: `vistaDePrecio()` muestra "+ IVA" solo a responsables inscriptos.
+ * Alguien que se anota con DNI entra al portal y tiene su lista, pero a los
+ * efectos fiscales es consumidor final hasta que traiga el CUIT.
+ */
+export const tipoDocumento = pgEnum("tipo_documento", ["dni", "cuit"]);
 
 export const estadoSolicitud = pgEnum("estado_solicitud", [
   "pendiente",
@@ -54,22 +69,39 @@ export const professionalApplications = pgTable(
     customerId: uuid().references(() => customers.id, { onDelete: "set null" }),
     nombre: text().notNull(),
     razonSocial: text(),
+    /** Con cuál de los dos documentos se identificó. */
+    documentoTipo: tipoDocumento().notNull().default("cuit"),
+    /** El número tal cual se identificó, solo dígitos. Es el dato de verdad. */
+    documentoNumero: text().notNull(),
     /**
-     * CUIT, solo dígitos.
+     * CUIT, solo dígitos. Nulo cuando la persona se identificó con DNI.
+     *
+     * Es la proyección de `documentoNumero` cuando el documento es CUIT, y se
+     * guarda aparte porque la vinculación con la ficha de cliente y todo lo
+     * fiscal es por CUIT y no por un documento genérico: `aprobarSolicitud`
+     * busca el `customers` existente por acá.
      *
      * Se valida el dígito verificador antes de guardar (`lib/cuit.ts`). No dice
      * si existe —eso solo lo sabe ARCA— pero atrapa los errores de tipeo, que
      * son la enorme mayoría y terminan en una factura rechazada.
      */
-    cuit: text().notNull(),
+    cuit: text(),
     email: text().notNull(),
     telefono: text().notNull(),
     rubro: rubroProfesional().notNull().default("otro"),
-    /** Matrícula profesional, cuando el rubro la tiene. */
+    /**
+     * Matrícula profesional, cuando el rubro la tiene.
+     *
+     * Ya no se pide en el formulario —la clienta la sacó— pero la columna queda:
+     * hay solicitudes cargadas que la tienen y borrarla perdería ese dato.
+     */
     matricula: text(),
     /** Qué compra y cuánto: es lo que el vendedor mira para decidir. */
     volumenEstimado: text(),
+    /** Dónde trabaja. Salió del formulario junto con la matrícula. */
     localidad: text(),
+    /** Instagram, web o donde muestre el trabajo. Reemplazó a `localidad`. */
+    redSocial: text(),
     mensaje: text(),
     estado: estadoSolicitud().notNull().default("pendiente"),
     /** Por qué se rechazó. Se le manda al solicitante. */
@@ -82,6 +114,7 @@ export const professionalApplications = pgTable(
   (t) => [
     index("professional_applications_estado_idx").on(t.estado),
     index("professional_applications_cuit_idx").on(t.cuit),
+    index("professional_applications_documento_idx").on(t.documentoNumero),
     index("professional_applications_created_idx").on(t.createdAt),
   ],
 );

@@ -11,6 +11,7 @@ import {
   BarChart3,
   BookOpen,
   Boxes,
+  Calculator,
   CalendarCheck,
   CalendarDays,
   Tags,
@@ -102,6 +103,7 @@ const secciones: { titulo: string; items: ItemNav[] }[] = [
       { href: "/admin/productos", icon: Boxes, label: "Productos" },
       { href: "/admin/stock", icon: Package, label: "Stock" },
       { href: "/admin/precios", icon: Tags, label: "Precios" },
+      { href: "/admin/calculadoras", icon: Calculator, label: "Calculadoras" },
     ],
   },
   {

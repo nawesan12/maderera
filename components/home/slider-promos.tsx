@@ -28,15 +28,44 @@ const DURACION = 7000;
  * accesibilidad para cualquier cosa que se mueva sola.
  *
  * Con un solo aviso no dibuja controles: sería un carrusel de uno.
+ *
+ * **El hero es el primer slide.** La clienta pidió que la portada abra con un
+ * slider a todo el ancho, "cosa de que sea lo primero que se ve". Antes eran
+ * dos bloques apilados: el hero a sangre y, más abajo y dentro del contenedor,
+ * un carrusel de promociones que casi nadie llegaba a ver. Ahora la promoción
+ * está donde mira la gente, y el hero sigue siendo lo primero.
  */
-export function SliderDePromos({ banners }: { banners: BannerPublicado[] }) {
+export function SliderDePromos({
+  hero,
+  banners,
+}: {
+  /** El hero, que entra como primer slide. */
+  hero: React.ReactNode;
+  banners: BannerPublicado[];
+}) {
+  /*
+   * Una sola lista de slides: el hero y las promociones.
+   *
+   * Los controles cuentan sobre esta lista y no sobre `banners`, que es lo que
+   * hace que los puntos, las flechas y el autoplay traten al hero como un
+   * slide más en vez de como una excepción con la que hay que tener cuidado en
+   * cinco lugares distintos.
+   */
+  const slides = [
+    { clave: "hero", titulo: "Maderera Juan B. Justo", contenido: hero },
+    ...banners.map((banner) => ({
+      clave: banner.id,
+      titulo: banner.titulo,
+      contenido: <Banner banner={banner} alto />,
+    })),
+  ];
   const pista = useRef<HTMLDivElement>(null);
   const [actual, setActual] = useState(0);
   const [enPausa, setEnPausa] = useState(false);
   const [detenidoAMano, setDetenidoAMano] = useState(false);
   const [avance, setAvance] = useState(0);
 
-  const varios = banners.length > 1;
+  const varios = slides.length > 1;
 
   const irA = useCallback((indice: number) => {
     const contenedor = pista.current;
@@ -51,13 +80,13 @@ export function SliderDePromos({ banners }: { banners: BannerPublicado[] }) {
   const mover = useCallback(
     (paso: number) => {
       setActual((previo) => {
-        const siguiente = (previo + paso + banners.length) % banners.length;
+        const siguiente = (previo + paso + slides.length) % slides.length;
         irA(siguiente);
         return siguiente;
       });
       setAvance(0);
     },
-    [banners.length, irA],
+    [slides.length, irA],
   );
 
   // Se detiene si la pestaña no está a la vista: sin esto vuelve al frente
@@ -135,16 +164,22 @@ export function SliderDePromos({ banners }: { banners: BannerPublicado[] }) {
         onScroll={alDesplazar}
         className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {banners.map((banner, i) => (
+        {slides.map((slide, i) => (
           <div
-            key={banner.id}
+            key={slide.clave}
             role="group"
-            aria-roledescription="promoción"
-            aria-label={`${i + 1} de ${banners.length}`}
-            aria-hidden={varios && i !== actual}
-            className="w-full shrink-0 snap-start"
+            aria-roledescription="diapositiva"
+            aria-label={`${i + 1} de ${slides.length}`}
+            // El hero nunca se oculta a los lectores de pantalla: lleva el h1
+            // de la página, y esconderlo cuando el carrusel avanza dejaría la
+            // portada sin encabezado.
+            aria-hidden={varios && i !== actual && slide.clave !== "hero"}
+            // `[&>*]:h-full` empareja las alturas: el hero es más alto que un
+            // banner, y sin esto los banners dejan una franja de fondo abajo
+            // que hace saltar la página cada vez que el carrusel avanza.
+            className="w-full shrink-0 snap-start [&>*]:h-full"
           >
-            <Banner banner={banner} alto prioridad={i === 0} />
+            {slide.contenido}
           </div>
         ))}
       </div>
@@ -155,16 +190,16 @@ export function SliderDePromos({ banners }: { banners: BannerPublicado[] }) {
           <Flecha lado="derecha" onClick={() => mover(1)} />
 
           <div className="mt-3.5 flex items-center justify-center gap-2">
-            {banners.map((banner, i) => (
+            {slides.map((slide, i) => (
               <button
-                key={banner.id}
+                key={slide.clave}
                 type="button"
                 onClick={() => {
                   setActual(i);
                   irA(i);
                   setAvance(0);
                 }}
-                aria-label={`Ver "${banner.titulo}"`}
+                aria-label={`Ver "${slide.titulo}"`}
                 aria-current={i === actual}
                 className={`h-1.5 overflow-hidden rounded-full transition-all ${
                   i === actual ? "w-10 bg-linea" : "w-1.5 bg-linea hover:bg-texto-3"

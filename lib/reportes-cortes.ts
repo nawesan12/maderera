@@ -8,6 +8,7 @@
  */
 export type CorteDelReporte =
   | "producto"
+  | "rubro"
   | "cliente"
   | "vendedor"
   | "sucursal"
@@ -15,6 +16,12 @@ export type CorteDelReporte =
 
 export const CORTES: { clave: CorteDelReporte; etiqueta: string }[] = [
   { clave: "producto", etiqueta: "Por producto" },
+  /*
+   * Es el que la clienta lleva hoy en Excel: cuánta utilidad deja cada rubro.
+   * Va segundo, pegado al de producto, porque son el mismo dato a dos alturas
+   * y es el que se mira todos los meses.
+   */
+  { clave: "rubro", etiqueta: "Por rubro" },
   { clave: "cliente", etiqueta: "Por cliente" },
   { clave: "vendedor", etiqueta: "Por vendedor" },
   { clave: "sucursal", etiqueta: "Por sucursal" },

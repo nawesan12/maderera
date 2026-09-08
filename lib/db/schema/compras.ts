@@ -12,6 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
+import { productVariants } from "./catalog";
 import { condicionIva } from "./profiles";
 
 /**
@@ -563,3 +564,93 @@ export const supplierMovementsRelations = relations(
 
 export type Supplier = typeof suppliers.$inferSelect;
 export type SupplierMovement = typeof supplierMovements.$inferSelect;
+
+
+/**
+ * Cómo viene la lista de precios de cada proveedor.
+ *
+ * De las notas de la clienta: *"siempre los proveedores les envían PDFs
+ * dispersos, Excels, todos distintos, etc. eso rompería el flujo al subir los
+ * cambios de precios al sistema"*.
+ *
+ * Tiene razón, y el problema no es leer el archivo —eso ya lo hace
+ * `lib/planilla.ts`— sino que la importación de precios espera **una** planilla
+ * con columnas fijas y matchea por el SKU propio. Un proveedor manda su código,
+ * otro pone el precio en la cuarta columna y otro trae el neto en vez del
+ * final.
+ *
+ * El perfil guarda ese acuerdo una vez: qué columna es cada cosa, y si el
+ * precio que manda es final o hay que sumarle IVA. Es el mismo patrón que el
+ * formato de exportación de la seccionadora, y por el mismo motivo: no se puede
+ * escribir de memoria el formato de cada proveedor, pero sí se puede construir
+ * el mecanismo y dejar que alguien lo defina en pantalla la primera vez.
+ *
+ * **El PDF queda afuera.** `lib/planilla.ts` lee CSV y .xlsx y rechaza PDF a
+ * propósito: extraer una tabla de un PDF es adivinar, y adivinar precios de
+ * compra es la peor clase de error silencioso. Esos hay que pasarlos a
+ * planilla.
+ */
+export const supplierPriceProfiles = pgTable(
+  "supplier_price_profiles",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    supplierId: uuid()
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    nombre: text().notNull().default("Lista de precios"),
+    /**
+     * Qué columna del archivo es cada campo, por nombre de encabezado.
+     *
+     * Se guarda el nombre y no el número de columna: el proveedor agrega una
+     * columna en el medio y el número deja de servir, pero "Codigo" sigue
+     * llamándose "Codigo".
+     */
+    columnaCodigo: text().notNull(),
+    columnaPrecio: text().notNull(),
+    /** Opcional: sirve para que la vista previa muestre de qué producto habla. */
+    columnaDescripcion: text(),
+    /**
+     * Si el precio de la planilla viene sin IVA.
+     *
+     * Importa: los precios del sistema se guardan finales con IVA incluido, y
+     * cargar un neto como si fuera final deja toda la lista un 21 % barata.
+     */
+    precioEsNeto: boolean().notNull().default(false),
+    /** Qué porcentaje se le suma al costo para llegar al precio de venta. */
+    margenPorcentaje: numeric({ precision: 5, scale: 2 }).notNull().default("0"),
+    activo: boolean().notNull().default(true),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("supplier_price_profiles_proveedor_idx").on(t.supplierId)],
+);
+
+/**
+ * El código con el que cada proveedor llama a una de nuestras variantes.
+ *
+ * Es lo que permite que la segunda importación no haya que mapearla de nuevo.
+ * Sin esto, el match tiene que ser por SKU propio —que el proveedor no
+ * conoce— o por nombre, que nunca coincide.
+ */
+export const supplierVariantCodes = pgTable(
+  "supplier_variant_codes",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    supplierId: uuid()
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    variantId: uuid()
+      .notNull()
+      .references(() => productVariants.id, { onDelete: "cascade" }),
+    /** Tal cual lo escribe el proveedor en su planilla. */
+    codigo: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("supplier_variant_codes_idx").on(t.supplierId, t.codigo),
+    index("supplier_variant_codes_variante_idx").on(t.variantId),
+  ],
+);
+
+export type SupplierPriceProfile = typeof supplierPriceProfiles.$inferSelect;
+export type SupplierVariantCode = typeof supplierVariantCodes.$inferSelect;

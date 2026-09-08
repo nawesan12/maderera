@@ -89,7 +89,6 @@ export async function Footer() {
                 ["Sucursales", "/sucursales"],
                 ["Moldava", "/moldava"],
                 ["Quiénes Somos", "/nosotros"],
-                ["Blog", "/blog"],
                 ["Contacto", "/contacto"],
                 ["Cambios y devoluciones", "/cambios-y-devoluciones"],
               ].map(([name, href]) => (

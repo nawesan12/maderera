@@ -23,8 +23,10 @@ import { creditoDisponible } from "@/lib/dal/cuenta";
 import { escalasDePago } from "@/lib/dal/descuentos-pago";
 import {
   descuentoPorMedioDePago,
+  medioPermitido,
   montoDelDescuentoDePago,
 } from "@/lib/precios/medio-pago";
+import { listaVigente } from "@/lib/dal/precios-sesion";
 import { siguienteNumeroDePedido } from "@/lib/dal/numeracion-ventas";
 import { enlaceDeSeguimiento } from "@/lib/seguimiento";
 import { notificarPedidoRecibido } from "@/lib/notificaciones/avisos";
@@ -52,6 +54,7 @@ const checkoutSchema = z
     medioPago: z.enum([
       "mercado_pago",
       "transferencia",
+      "debito",
       "efectivo",
       "cuenta_corriente",
     ]),
@@ -167,6 +170,27 @@ export async function confirmarCompra(
    * es esto: el medio de pago viaja en un radio button y el porcentaje no
    * puede salir de ahí.
    */
+  /*
+   * El precio mayorista es de contado.
+   *
+   * De la clienta: con transferencia o débito, nunca en cuotas. El formulario
+   * ya no ofrece los otros medios, pero esto se verifica acá porque el medio
+   * viaja en un campo del formulario: sin este control, cambiar un radio button
+   * desde el navegador compraría a precio de profesional pagando en cuotas.
+   *
+   * El carrito ya está valuado con la lista de la sesión, así que rechazar es
+   * lo correcto: recalcular en silencio a precio de catálogo le cobraría más de
+   * lo que la pantalla le mostró.
+   */
+  const lista = await listaVigente();
+
+  if (!medioPermitido(datos.medioPago, lista.esDiferenciada)) {
+    return {
+      error:
+        "Tu precio de profesional es de contado: pagá por transferencia, débito o efectivo.",
+    };
+  }
+
   const escala = descuentoPorMedioDePago(
     await escalasDePago(),
     datos.medioPago,

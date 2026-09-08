@@ -83,6 +83,25 @@ export const MEDIDAS_DE_PLACA = [
   { ancho: 1220, largo: 3050, usos: "Tableros de madera" },
 ] as const;
 
+/**
+ * Todos los parámetros que las cuatro calculadoras aceptan por argumento.
+ *
+ * Vive acá y no en el DAL porque lo usan las dos puntas: el servidor lo lee de
+ * la base y la isla de cliente lo recibe como prop. Este archivo no importa
+ * nada, así que se puede compartir sin arrastrar la base al navegador.
+ */
+export interface ParametrosDeCalculo {
+  mermaMachimbre: number;
+  factorPendiente: number;
+  margenSeguridad: number;
+  anchoSierraMm: number;
+  rindeRolloMembrana: number;
+  rindeRolloAislacion: number;
+  separacionTechoM: number;
+  separacionPisoM: number;
+  deck: { grandis: MedidaDeTabla; pvc: MedidaDeTabla };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Techos                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -101,6 +120,28 @@ export interface ItemCalculado {
   /** Con qué buscar este material en el catálogo. */
   busqueda: string;
 }
+
+/**
+ * Los cuatro números del techo que se editan desde el panel.
+ *
+ * Van por argumento y no leídos de la base: este archivo es puro y con tests, y
+ * eso es lo que permite probar las fórmulas sin levantar nada.
+ */
+export interface ParametrosDeTecho {
+  factorPendiente: number;
+  separacionTechoM: number;
+  mermaMachimbre: number;
+  rindeRolloAislacion: number;
+  rindeRolloMembrana: number;
+}
+
+export const PARAMETROS_DE_TECHO: ParametrosDeTecho = {
+  factorPendiente: FACTOR_PENDIENTE,
+  separacionTechoM: SEPARACION_TIRANTES_TECHO,
+  mermaMachimbre: MERMA_MACHIMBRE,
+  rindeRolloAislacion: RINDE_ROLLO_AISLACION,
+  rindeRolloMembrana: RINDE_ROLLO_MEMBRANA,
+};
 
 export interface RoofResult {
   tirantes: { cantidad: number; medida: string } & ItemCalculado;
@@ -122,9 +163,10 @@ export function calculateRoof(
   largo: number,
   ancho: number,
   tiranteType: "pino" | "saligna" = "pino",
+  p: ParametrosDeTecho = PARAMETROS_DE_TECHO,
 ): RoofResult {
-  const superficieReal = largo * ancho * (1 + FACTOR_PENDIENTE);
-  const cantTirantes = Math.ceil(ancho / SEPARACION_TIRANTES_TECHO) + 1;
+  const superficieReal = largo * ancho * (1 + p.factorPendiente);
+  const cantTirantes = Math.ceil(ancho / p.separacionTechoM) + 1;
   const tirMedida = tiranteType === "pino" ? '2" x 6"' : '3" x 6"';
 
   return {
@@ -135,17 +177,17 @@ export function calculateRoof(
       busqueda: `tirante ${tiranteType}`,
     },
     machimbre: {
-      m2: Math.ceil(superficieReal * (1 + MERMA_MACHIMBRE)),
+      m2: Math.ceil(superficieReal * (1 + p.mermaMachimbre)),
       descripcion: 'Machimbre Pino 1/2" x 4"',
       busqueda: "machimbre pino",
     },
     aislacion: {
-      rollos: Math.ceil(superficieReal / RINDE_ROLLO_AISLACION),
+      rollos: Math.ceil(superficieReal / p.rindeRolloAislacion),
       descripcion: "Lana de Vidrio 50mm (rollo 1.2m x 18m)",
       busqueda: "lana vidrio",
     },
     membrana: {
-      rollos: Math.ceil(superficieReal / RINDE_ROLLO_MEMBRANA),
+      rollos: Math.ceil(superficieReal / p.rindeRolloMembrana),
       descripcion: "Membrana Asfáltica 4mm x 1m x 10m",
       busqueda: "membrana asfaltica",
     },
@@ -194,6 +236,8 @@ export function calculateBoards(
   piezas: BoardPiece[],
   placaAncho: number = MEDIDAS_DE_PLACA[0].ancho,
   placaLargo: number = MEDIDAS_DE_PLACA[0].largo,
+  anchoSierraMm: number = ANCHO_DE_SIERRA_MM,
+  margen: number = MARGEN_DE_SEGURIDAD,
 ): BoardResult {
   const areaPlaca = placaAncho * placaLargo;
 
@@ -203,13 +247,13 @@ export function calculateBoards(
   for (const pieza of piezas) {
     areaUtil += pieza.ancho * pieza.largo * pieza.cantidad;
     areaConSierra +=
-      (pieza.ancho + ANCHO_DE_SIERRA_MM) *
-      (pieza.largo + ANCHO_DE_SIERRA_MM) *
+      (pieza.ancho + anchoSierraMm) *
+      (pieza.largo + anchoSierraMm) *
       pieza.cantidad;
   }
 
   const placasReales = Math.ceil(
-    (areaConSierra / areaPlaca) * (1 + MARGEN_DE_SEGURIDAD),
+    (areaConSierra / areaPlaca) * (1 + margen),
   );
   const placasNecesarias = Math.max(piezas.length > 0 ? 1 : 0, placasReales);
 
@@ -250,6 +294,7 @@ export function calculateFloor(
   largo: number,
   ancho: number,
   perimetro?: number,
+  separacionPisoM: number = SEPARACION_TIRANTES_PISO,
 ): FloorResult {
   const superficie = largo * ancho;
   const pisoM2 = Math.ceil(superficie * 1.1); // 10 % de desperdicio
@@ -269,7 +314,7 @@ export function calculateFloor(
     zocalos,
     zocaloML,
     underlayM2: pisoM2,
-    tirantesDeEntrepiso: Math.ceil(ancho / SEPARACION_TIRANTES_PISO) + 1,
+    tirantesDeEntrepiso: Math.ceil(ancho / separacionPisoM) + 1,
   };
 }
 
@@ -277,8 +322,56 @@ export function calculateFloor(
 /* Deck                                                                        */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Redondeo para arriba que no se deja engañar por el punto flotante.
+ *
+ * `13.44 / 0.24` da 56,00000000000001 en JavaScript, y `Math.ceil` lo convierte
+ * en 57. Es una tabla de más en cada cálculo que da exacto, y en el mostrador
+ * eso es plata que alguien paga de más por un error de representación.
+ *
+ * La tolerancia es de una millonésima: cualquier resto real de material es
+ * órdenes de magnitud más grande, así que no tapa un redondeo legítimo.
+ */
+function techoJusto(valor: number): number {
+  return Math.ceil(Number(valor.toFixed(6)));
+}
+
+/**
+ * Las medidas de tabla de deck que se venden.
+ *
+ * El deck se vendía por metro cuadrado y la clienta lo cambió a venta por
+ * tabla: *"cosa de que cada tabla y sus medidas tengan sus precios y no pierdan
+ * plata, que no tenga que intervenir un humano"*.
+ *
+ * Ahí está el motivo real. Cobrar por m² obliga a alguien a convertir la
+ * superficie a tablas enteras y a decidir qué hacer con el resto, y esa cuenta
+ * la hacía una persona en el mostrador, distinto cada vez. La tabla es lo que
+ * se saca del galpón: es lo que hay que cobrar.
+ *
+ * Son los valores por defecto. Se editan en `/admin/calculadoras` y llegan acá
+ * por argumento, porque este archivo no toca la base.
+ */
+export const MEDIDA_DECK_POR_DEFECTO = {
+  // Las medidas de las tablas que hay cargadas: 1" x 4" x 2,40 m el grandis y
+  // 2,90 m x 14 cm el de PVC. Se editan en `/admin/calculadoras` cuando cambie
+  // lo que se compra.
+  grandis: { largoM: 2.4, anchoM: 0.1 },
+  pvc: { largoM: 2.9, anchoM: 0.14 },
+} as const;
+
+export interface MedidaDeTabla {
+  largoM: number;
+  anchoM: number;
+}
+
 export interface DeckResult {
-  tablasDeck: { m2: number } & ItemCalculado;
+  /**
+   * Lo que se compra: tablas enteras.
+   *
+   * `m2` queda para mostrar la superficie cubierta, que es lo que la persona
+   * midió y reconoce; lo que entra al presupuesto es `tablas`.
+   */
+  tablasDeck: { tablas: number; m2: number; medida: string } & ItemCalculado;
   estructura: { tirantes: number; medida: string } & ItemCalculado;
   tornillos: { cantidad: number } & ItemCalculado;
   protector: { litros: number } & ItemCalculado;
@@ -288,16 +381,31 @@ export function calculateDeck(
   largo: number,
   ancho: number,
   material: "grandis" | "pvc" = "grandis",
+  medidaTabla: MedidaDeTabla = MEDIDA_DECK_POR_DEFECTO[material],
+  margen: number = MARGEN_DE_SEGURIDAD,
+  separacionPisoM: number = SEPARACION_TIRANTES_PISO,
 ): DeckResult {
   const superficie = largo * ancho;
-  const m2Deck = Math.ceil(superficie * (1 + MARGEN_DE_SEGURIDAD));
+  const m2Deck = superficie * (1 + margen);
+
+  /*
+   * Tablas enteras, redondeando para arriba.
+   *
+   * Media tabla no se vende ni se compra: quien necesita 20,4 tablas se lleva
+   * 21. Redondear para abajo deja un deck sin terminar, que es el error que no
+   * se puede cometer.
+   */
+  const areaTabla = medidaTabla.largoM * medidaTabla.anchoM;
+  const tablas = areaTabla > 0 ? techoJusto(m2Deck / areaTabla) : 0;
 
   // Alfajías cada 40 cm, igual que los tirantes de entrepiso.
-  const cantAlfajias = Math.ceil(largo / SEPARACION_TIRANTES_PISO) + 1;
+  const cantAlfajias = Math.ceil(largo / separacionPisoM) + 1;
 
   return {
     tablasDeck: {
-      m2: m2Deck,
+      tablas,
+      m2: Math.ceil(m2Deck),
+      medida: `${medidaTabla.largoM} m x ${Math.round(medidaTabla.anchoM * 100)} cm`,
       descripcion:
         material === "grandis"
           ? 'Tabla Deck Grandis 1" x 5"'

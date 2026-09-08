@@ -108,4 +108,55 @@ describe("deck", () => {
   it("el PVC no lleva protector", () => {
     expect(calculateDeck(4, 3, "pvc").protector.litros).toBe(0);
   });
+
+  /*
+   * La clienta pidió pasar el deck de metro cuadrado a tabla: cada tabla tiene
+   * su medida y su precio, y así nadie tiene que convertir a mano en el
+   * mostrador.
+   */
+  it("devuelve tablas enteras y no metros cuadrados", () => {
+    // 4 × 3 = 12 m², con el 12 % de margen son 13,44 m². La tabla de grandis
+    // que hay cargada mide 2,40 m × 10 cm = 0,24 m²: 13,44 / 0,24 = 56 justas.
+    expect(calculateDeck(4, 3).tablasDeck.tablas).toBe(56);
+  });
+
+  it("redondea para arriba: media tabla no se vende", () => {
+    // 4 × 3,1 = 12,4 m² → 13,888 m² con margen; sobre 0,24 son 57,87 tablas.
+    // Redondear para abajo deja el deck sin terminar.
+    expect(calculateDeck(4, 3.1).tablasDeck.tablas).toBe(58);
+  });
+
+  it("usa la medida de tabla que se le pase", () => {
+    const anchas = calculateDeck(4, 3, "grandis", { largoM: 3, anchoM: 0.28 });
+    const angostas = calculateDeck(4, 3, "grandis", { largoM: 3, anchoM: 0.14 });
+
+    // El doble de ancho, la mitad de tablas.
+    expect(anchas.tablasDeck.tablas).toBe(16);
+    expect(angostas.tablasDeck.tablas).toBe(32);
+    expect(anchas.tablasDeck.medida).toBe("3 m x 28 cm");
+  });
+
+  it("el margen de desperdicio llega por argumento", () => {
+    // Sin margen, 12 m² sobre 0,24 son 50 tablas justas.
+    expect(calculateDeck(4, 3, "grandis", undefined, 0).tablasDeck.tablas).toBe(
+      50,
+    );
+  });
+
+  /*
+   * El caso que apareció escribiendo estos tests: 13,44 / 0,24 da
+   * 56,00000000000001 en punto flotante, y redondear para arriba vendía una
+   * tabla de más en cada cálculo que daba exacto.
+   */
+  it("no cobra una tabla de más cuando la cuenta da justa", () => {
+    expect(calculateDeck(4, 3).tablasDeck.tablas).toBe(56);
+    expect(calculateDeck(4, 3, "grandis", undefined, 0).tablasDeck.tablas).toBe(
+      50,
+    );
+  });
+
+  it("no divide por cero si la medida viene vacía", () => {
+    const r = calculateDeck(4, 3, "grandis", { largoM: 0, anchoM: 0 });
+    expect(r.tablasDeck.tablas).toBe(0);
+  });
 });

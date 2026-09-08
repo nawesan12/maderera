@@ -1,8 +1,14 @@
 import "server-only";
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { suppliers, supplierMovements } from "@/lib/db/schema";
+import {
+  productVariants,
+  suppliers,
+  supplierMovements,
+  supplierPriceProfiles,
+  supplierVariantCodes,
+} from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { coincideBusqueda } from "@/lib/busqueda";
 
@@ -163,4 +169,121 @@ export async function proveedoresParaElegir() {
     .from(suppliers)
     .where(and(eq(suppliers.active, true), eq(suppliers.estado, "activo")))
     .orderBy(asc(suppliers.nombre));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Lista de precios del proveedor                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * El perfil que dice cómo viene la planilla de este proveedor.
+ *
+ * Devuelve `null` si todavía no se definió: la primera importación es la que lo
+ * crea, y hasta entonces no hay nada que suponer.
+ */
+export async function perfilDelProveedor(supplierId: string) {
+  await requireStaff();
+
+  const [fila] = await db
+    .select()
+    .from(supplierPriceProfiles)
+    .where(
+      and(
+        eq(supplierPriceProfiles.supplierId, supplierId),
+        eq(supplierPriceProfiles.activo, true),
+      ),
+    )
+    .limit(1);
+
+  return fila ?? null;
+}
+
+export interface CodigoResuelto {
+  codigo: string;
+  variantId: string | null;
+  sku: string | null;
+  descripcion: string | null;
+}
+
+/**
+ * A qué variante nuestra corresponde cada código del proveedor.
+ *
+ * Se resuelve en dos pasos y en este orden: primero por el código que ya se
+ * guardó para ese proveedor —que es lo que hace que la segunda importación no
+ * haya que mapearla— y después por SKU propio, para el caso en que el
+ * proveedor use el mismo código que nosotros.
+ *
+ * Lo que no aparea queda como `variantId: null` y la pantalla lo muestra: un
+ * código que no se pudo aparear es un producto que no se va a actualizar, y
+ * enterarse después es enterarse por el margen.
+ */
+export async function resolverCodigos(
+  supplierId: string,
+  codigos: string[],
+): Promise<CodigoResuelto[]> {
+  await requireStaff();
+
+  const unicos = [...new Set(codigos.map((c) => c.trim()).filter(Boolean))];
+  if (unicos.length === 0) return [];
+
+  const [guardados, porSku] = await Promise.all([
+    db
+      .select({
+        codigo: supplierVariantCodes.codigo,
+        variantId: supplierVariantCodes.variantId,
+        sku: productVariants.sku,
+        label: productVariants.label,
+      })
+      .from(supplierVariantCodes)
+      .innerJoin(
+        productVariants,
+        eq(productVariants.id, supplierVariantCodes.variantId),
+      )
+      .where(
+        and(
+          eq(supplierVariantCodes.supplierId, supplierId),
+          inArray(supplierVariantCodes.codigo, unicos),
+        ),
+      ),
+    db
+      .select({
+        sku: productVariants.sku,
+        variantId: productVariants.id,
+        label: productVariants.label,
+      })
+      .from(productVariants)
+      .where(
+        and(
+          eq(productVariants.active, true),
+          inArray(productVariants.sku, unicos),
+        ),
+      ),
+  ]);
+
+  const porCodigo = new Map(guardados.map((g) => [g.codigo, g]));
+  const porSkuMapa = new Map(porSku.map((v) => [v.sku, v]));
+
+  return unicos.map((codigo) => {
+    const guardado = porCodigo.get(codigo);
+    if (guardado) {
+      return {
+        codigo,
+        variantId: guardado.variantId,
+        sku: guardado.sku,
+        descripcion: guardado.label,
+      };
+    }
+
+    const propio = porSkuMapa.get(codigo);
+    if (propio) {
+      return {
+        codigo,
+        variantId: propio.variantId,
+        sku: propio.sku,
+        descripcion: propio.label,
+      };
+    }
+
+    return { codigo, variantId: null, sku: null, descripcion: null };
+  });
 }

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/dal/session";
 import { inicioDelRol, puedeEntrar } from "@/lib/roles";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
+import { listaDelCliente } from "@/lib/mostrador/buscar";
 import {
   cierreDelTurno,
   movimientosDelTurno,
@@ -58,9 +59,12 @@ export default async function MostradorPage({
   const elegida =
     sucursales.find((s) => s.slug === sucursal) ?? sucursales[0];
 
-  const [turno, ventas] = await Promise.all([
+  const [turno, ventas, listaGeneral] = await Promise.all([
     turnoAbierto(elegida.id),
     ventasDeHoy(elegida.id),
+    // Cuál es la lista general: con eso la pantalla sabe si el cliente elegido
+    // compra con precio de profesional, que es de contado y no admite crédito.
+    listaDelCliente(null).then((l) => l.generalId),
   ]);
   const movimientos = turno ? await movimientosDelTurno(turno.id) : [];
   // El cierre Z: cuánto entró por cada medio en el turno. El arqueo cuenta
@@ -71,6 +75,7 @@ export default async function MostradorPage({
   return (
     <VistaMostrador
       usuario={{ nombre: usuario.name, userId: usuario.userId }}
+      listaGeneral={listaGeneral}
       sucursales={sucursales.map((s) => ({
         id: s.id,
         slug: s.slug,

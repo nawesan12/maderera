@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import { haySenal } from "@/lib/senal-navegador";
 
 export interface SesionDelEncabezado {
@@ -53,6 +54,21 @@ export function EstadoProvider({
 }) {
   const [traido, setTraido] = useState<Estado | null>(null);
 
+  /*
+   * La ruta entra como dependencia para que el contador se vuelva a pedir en
+   * cada navegación.
+   *
+   * El provider vive en el layout, así que se monta una sola vez: sin esto, el
+   * efecto corría al entrar al sitio y nunca más. Alguien que vaciaba el
+   * presupuesto y seguía navegando veía el ícono del carrito con el número
+   * viejo hasta recargar la página entera, y lo mismo pasaba cuando la sesión
+   * vencía por detrás.
+   *
+   * No agrega tráfico para quien no tiene nada: sin la cookie señal —que es
+   * casi todo el mundo— el efecto sale antes de pedir nada.
+   */
+  const ruta = usePathname();
+
   useEffect(() => {
     // Sin señal no hay nada que traer, y preguntarlo sería justamente el pedido
     // que todo esto existe para evitar.
@@ -77,7 +93,7 @@ export function EstadoProvider({
     return () => {
       vigente = false;
     };
-  }, [inicial]);
+  }, [inicial, ruta]);
 
   return (
     <Contexto.Provider value={inicial ?? traido ?? NADA}>

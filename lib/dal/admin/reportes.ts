@@ -4,6 +4,7 @@ import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   branches,
+  categories,
   customers,
   orderItems,
   orders,
@@ -12,6 +13,7 @@ import {
   user,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { plural } from "@/lib/formato";
 import type { Periodo } from "@/lib/periodos";
 import type { CorteDelReporte } from "@/lib/reportes-cortes";
 
@@ -146,6 +148,60 @@ export async function ventasPorProducto(
     clave: f.clave,
     etiqueta: f.etiqueta,
     detalle: f.detalle,
+    cantidad: Number(f.cantidad),
+    total: Number(f.total),
+    ...leerMargen(f),
+  }));
+}
+
+/**
+ * Qué se vendió, por rubro del catálogo.
+ *
+ * Es el reporte que la clienta lleva hoy en Excel: *"de cada rubro cuánta
+ * utilidad hay, qué porcentaje dejan las materias que se maquinan"*. Estaban
+ * los cortes por producto, por cliente, por vendedor, por sucursal y por
+ * canal, y justo el que usan todos los meses no estaba.
+ *
+ * Corta por **categoría**, que es lo que ellos llaman rubro en la conversación
+ * del negocio. Los renglones sin producto asociado —texto suelto de un
+ * presupuesto— caen en "Sin categoría" en vez de desaparecer: son ventas
+ * igual, y esconderlas haría que la suma del reporte no cierre con la del mes.
+ */
+export async function ventasPorCategoria(
+  periodo: Periodo,
+  tope = 50,
+): Promise<FilaDeReporte[]> {
+  await requireStaff();
+
+  const filas = await db
+    .select({
+      clave: sql<string>`coalesce(${categories.id}::text, 'sin-categoria')`,
+      etiqueta: sql<string>`coalesce(${categories.name}, 'Sin categoría')`,
+      detalle: sql<string | null>`count(distinct ${products.id})::text`,
+      cantidad: sql<string>`sum(${orderItems.cantidad})`,
+      total: sql<string>`sum(${orderItems.subtotal})`,
+      netoVenta: sql<string>`sum(${orderItems.subtotal} / (1 + coalesce(${orderItems.alicuotaIva}, 21) / 100))`,
+      costo: sql<
+        string | null
+      >`sum(${orderItems.cantidad} * ${orderItems.costoUnitario}) filter (where ${orderItems.costoUnitario} is not null)`,
+      lineasSinCosto: sql<number>`count(*) filter (where ${orderItems.costoUnitario} is null)::int`,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orders.id, orderItems.orderId))
+    .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+    .leftJoin(products, eq(products.id, productVariants.productId))
+    .leftJoin(categories, eq(categories.id, products.categoryId))
+    .where(enElPeriodo(periodo))
+    .groupBy(sql`1`, sql`2`)
+    .orderBy(desc(sql`sum(${orderItems.subtotal})`))
+    .limit(tope);
+
+  return filas.map((f) => ({
+    clave: f.clave,
+    etiqueta: f.etiqueta,
+    // Cuántos productos distintos del rubro se vendieron: es lo que distingue
+    // un rubro que factura por uno solo de otro que mueve variedad.
+    detalle: f.detalle ? plural(Number(f.detalle), "producto") : null,
     cantidad: Number(f.cantidad),
     total: Number(f.total),
     ...leerMargen(f),
@@ -314,6 +370,7 @@ export async function reporteDeVentas(
   corte: CorteDelReporte,
   periodo: Periodo,
 ): Promise<FilaDeReporte[]> {
+  if (corte === "rubro") return ventasPorCategoria(periodo);
   if (corte === "cliente") return ventasPorCliente(periodo);
   if (corte === "vendedor") return ventasPorVendedor(periodo);
   if (corte === "sucursal") return ventasPorSucursal(periodo);

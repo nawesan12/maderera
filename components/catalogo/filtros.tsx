@@ -47,6 +47,12 @@ function useFiltros(rutaBase = "/catalogo") {
         params.set(clave, valor);
       }
     }
+
+    // Cambiar un filtro vuelve a la primera página. El "ver más" acumula
+    // páginas en la URL, así que sin esto alguien que venía scrolleando
+    // Ferretería y toca Placas recibe tres páginas de Placas de una, o una
+    // grilla vacía si la categoría nueva tiene menos productos.
+    params.delete("pagina");
     startTransition(() => {
       router.replace(params.size > 0 ? `${rutaBase}?${params}` : rutaBase, {
         scroll: false,
@@ -135,6 +141,8 @@ export function BarraCatalogo({
 export function PanelCategorias({
   categorias,
   categoriaActual,
+  rubros,
+  rubroActual,
   stockActual,
   soloOfertas,
   cantidadOfertas,
@@ -142,6 +150,9 @@ export function PanelCategorias({
 }: {
   categorias: CategoriaFiltro[];
   categoriaActual: string;
+  /** Los rubros de la categoría elegida. Vacío si no hay ninguna elegida. */
+  rubros: CategoriaFiltro[];
+  rubroActual: string;
   stockActual: string;
   soloOfertas: boolean;
   cantidadOfertas: number;
@@ -151,6 +162,7 @@ export function PanelCategorias({
 
   const hayFiltros =
     categoriaActual !== "todos" ||
+    rubroActual !== "todos" ||
     stockActual !== "todos" ||
     soloOfertas ||
     hayBusqueda;
@@ -194,7 +206,10 @@ export function PanelCategorias({
         {categorias.map((cat) => (
           <li key={cat.slug}>
             <button
-              onClick={() => actualizar({ cat: cat.slug })}
+              // Cambiar de categoría limpia el rubro: los rubros son de adentro
+              // de una categoría, y arrastrar "Tornillos" a Placas dejaría la
+              // grilla vacía sin que se entienda por qué.
+              onClick={() => actualizar({ cat: cat.slug, rubro: null })}
               className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm transition-colors ${
                 categoriaActual === cat.slug
                   ? "bg-accion font-semibold text-white"
@@ -215,6 +230,49 @@ export function PanelCategorias({
           </li>
         ))}
       </ul>
+
+      {rubros.length > 0 && (
+        <>
+          <h2 className="mb-2.5 mt-[22px] text-[11.5px] font-bold uppercase tracking-[0.11em] text-texto-3">
+            Rubro
+          </h2>
+          <ul className="space-y-0.5">
+            <li>
+              <button
+                onClick={() => actualizar({ rubro: null })}
+                className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                  rubroActual === "todos"
+                    ? "bg-accion font-semibold text-white"
+                    : "text-texto-2 hover:bg-card"
+                }`}
+              >
+                Todos los rubros
+              </button>
+            </li>
+            {rubros.map((r) => (
+              <li key={r.slug}>
+                <button
+                  onClick={() => actualizar({ rubro: r.slug })}
+                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm transition-colors ${
+                    rubroActual === r.slug
+                      ? "bg-accion font-semibold text-white"
+                      : "text-texto-2 hover:bg-card"
+                  }`}
+                >
+                  <span className="text-left">{r.name}</span>
+                  <span
+                    className={`tabular text-xs ${
+                      rubroActual === r.slug ? "text-white/80" : "text-texto-3"
+                    }`}
+                  >
+                    {r.productCount}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <h2 className="mb-2.5 mt-[22px] text-[11.5px] font-bold uppercase tracking-[0.11em] text-texto-3">
         Disponibilidad

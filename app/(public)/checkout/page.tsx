@@ -11,6 +11,7 @@ import {
   misDirecciones,
 } from "@/lib/dal/cuenta";
 import { escalasDePago } from "@/lib/dal/descuentos-pago";
+import { listaVigente } from "@/lib/dal/precios-sesion";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import { FormularioCheckout } from "./formulario";
 import { ACotizar } from "./a-cotizar";
@@ -51,7 +52,7 @@ export default async function CheckoutPage() {
         )
       : "";
 
-  const [zonas, sucursales, sesion, cliente, credito, direcciones] =
+  const [zonas, sucursales, sesion, cliente, credito, direcciones, lista] =
     await Promise.all([
       listarZonasDeEnvio(),
       listarSucursalesPublicas(),
@@ -62,6 +63,7 @@ export default async function CheckoutPage() {
       // verificar con el total final.
       creditoDisponible(carrito.subtotal),
       misDirecciones(),
+      listaVigente(),
     ]);
 
   return (
@@ -114,6 +116,9 @@ export default async function CheckoutPage() {
           }))}
           subtotal={carrito.subtotal}
           escalasDePago={await escalasDePago()}
+          // El precio mayorista es de contado: con una lista diferenciada no se
+          // ofrecen ni crédito ni Mercado Pago.
+          precioMayorista={lista.esDiferenciada}
           zonas={zonas}
           sucursales={sucursales}
           datosIniciales={{

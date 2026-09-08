@@ -25,6 +25,7 @@ const RUBROS: Record<string, string> = {
   constructora: "Constructora",
   carpintero: "Carpintería",
   disenador: "Diseño de interiores",
+  woodframer: "Wood frame",
   instalador: "Instalación",
   otro: "Otro",
 };
@@ -176,14 +177,29 @@ function Fila({
             )}
           </p>
           <p className="tabular text-base text-muted-foreground">
-            {formatearCuitLargo(solicitud.cuit)} ·{" "}
-            {RUBROS[solicitud.rubro] ?? solicitud.rubro}
+            {solicitud.documentoTipo === "cuit"
+              ? `CUIT ${formatearCuitLargo(solicitud.documentoNumero)}`
+              : `DNI ${solicitud.documentoNumero}`}{" "}
+            · {RUBROS[solicitud.rubro] ?? solicitud.rubro}
             {solicitud.localidad ? ` · ${solicitud.localidad}` : ""}
           </p>
           <p className="text-base text-muted-foreground">
             {solicitud.email} · {solicitud.telefono}
             {solicitud.matricula ? ` · matrícula ${solicitud.matricula}` : ""}
           </p>
+
+          {solicitud.redSocial && (
+            <p className="text-base text-muted-foreground">
+              {solicitud.redSocial}
+            </p>
+          )}
+
+          {solicitud.documentoTipo === "dni" && (
+            <p className="mt-1 text-base text-brand-orange">
+              Sin CUIT: la ficha se crea como consumidor final y no se le puede
+              facturar A.
+            </p>
+          )}
 
           {solicitud.volumenEstimado && (
             <p className="mt-1 text-base">

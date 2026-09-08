@@ -254,12 +254,18 @@ de crédito a mano. Ahora más de un punto significa separador de miles; el caso
 ambiguo de un solo punto sigue leyéndose como decimal, que es lo que evitó el
 defecto de los $528.300.
 
-**Novena pasada — contenido editable (26/08/2026, en curso):**
+**Novena pasada — contenido editable (26/08/2026):**
+
+> **El blog y los testimonios se borraron el 7/9/2026**, por pedido de la
+> clienta. Lo que sigue describe cómo estaban construidos y queda como
+> registro; de esa pasada sobreviven `site_settings` y el conversor de
+> Markdown, que ahora usan las guías del panel. Lo que la gente opina sobre los
+> productos salió a `product_reviews`, con compra verificada detrás.
 
 - **Blog contra la base** (cláusula 1.2): `blog_posts`, `blog_categories`,
   `testimonials` y `site_settings`. Las seis notas y los cuatro testimonios
   vivían en `lib/products.ts` como constantes de TypeScript, así que publicar
-  una nota costaba un deploy. Ahora se escriben desde `/admin/contenido`, con
+  una nota costaba un deploy. Se escribían desde `/admin/contenido`, con
   editor de Markdown y vista previa al lado.
 - **El listado y la nota son Server Components.** Eran pantallas de cliente
   enteras que filtraban en memoria; ahora el filtro va por URL, que además es lo
@@ -639,7 +645,7 @@ y sirve como maqueta de referencia para el resto.
 - **Toda mutación pasa por Server Action** que primero llama `verifySession()` y valida el
   input con Zod. Nada de confiar en lo que manda el cliente (data-security.md).
 - **DTOs explícitos**: nunca devolver una fila entera al cliente; seleccionar columnas.
-- **`use cache` solo en lo público** (catálogo, blog, institucionales) con `cacheTag` por
+- **`use cache` solo en lo público** (catálogo e institucionales) con `cacheTag` por
   entidad, e invalidación con `updateTag()` al editar desde el admin. Todo lo que sea
   precio-para-profesional, stock, cuenta corriente o panel: request-time, bajo `<Suspense>`.
 - **`cacheComponents: true`** se evalúa al final de la Etapa 2, no antes: cambia el modelo
@@ -679,7 +685,8 @@ FISCAL          invoices · invoice_items                (A/B/C, NC, ND)
 
 PROFESIONALES   events · event_registrations · technical_documents
 
-CONTENIDO       blog_posts · blog_categories · testimonials · site_settings
+CONTENIDO       product_reviews · site_settings · banners
+                (blog_posts, blog_categories y testimonials: borradas el 7/9/2026)
 
 SISTEMA         notifications_log · audit_log
 ```
@@ -815,7 +822,7 @@ escrito invocando 5.3.
    cookies: el nombre y el contador los completa el navegador, y solo cuando hay algo que
    completar —una cookie señal sin datos, que el servidor apaga sola cuando ya no hay
    nada—. Con eso, **«Quiénes somos», sucursales, contacto, la calculadora, eventos y cada
-   nota del blog se sirven del CDN**, verificado con `x-vercel-cache: HIT` y ~0,2 s contra
+   sucursal se sirven del CDN**, verificado con `x-vercel-cache: HIT` y ~0,2 s contra
    los ~0,5 s de antes.
 
    Lo que **no** puede salir del CDN es el catálogo y la ficha de producto, y no por
@@ -857,6 +864,67 @@ el sistema de la condición de las dos partes.
 **Lo que falta para usarlo en producción** es lo mismo que falta para facturar en
 general: el certificado de ARCA y al menos un punto de venta cargado. Sin eso el mostrador
 funciona y avisa que el comprobante no se pudo emitir.
+
+---
+
+## 7 ter. La segunda tanda de la clienta (7/9/2026)
+
+Después del brief llegó una lista de veinte pedidos sobre lo que ya estaba
+desplegado (`notas.md`). No es un relevamiento nuevo: es la devolución de
+alguien que usó el sitio. Lo que entró:
+
+**El sitio público.** El hero dejó de ser un bloque aparte y es el primer slide
+de un carrusel a todo el ancho —"que sea lo primero que se ve"—. Moldava subió
+del menú «Más» a la barra principal y su acceso mayorista pasó del pie de la
+página al encabezado. «Productos» del navbar es un enlace y no un desplegable
+que solo abría al pasar por encima, y el header ofrece crear cuenta a quien no
+entró. El asistente dejó de usar el ícono de chispas: ahora tiene un personaje
+propio, que además es más honesto —ese asistente es un guion con respuestas
+escritas, no un modelo de lenguaje—.
+
+**Tres cosas que cambiaron cómo se vende.**
+
+1. **El deck se vende por tabla.** Se cobraba por metro cuadrado, y eso obligaba
+   a alguien del mostrador a convertir a tablas enteras y decidir qué hacer con
+   el resto: la cuenta salía distinta cada vez. Ahora la unidad es la tabla, con
+   su medida y su precio, y la calculadora devuelve tablas enteras.
+2. **El precio mayorista es de contado.** Con lista diferenciada, el checkout
+   ofrece transferencia, débito, efectivo y cuenta corriente, y nada más. Se
+   resolvió bloqueando los medios y no recalculando el precio al final:
+   mostrarle un número a alguien y subírselo cuando ya decidió comprar es peor
+   que no ofrecerle esa forma de pago.
+3. **Las opiniones son de compra verificada.** Solo reseña quien tiene un pedido
+   entregado con ese producto, y nada se publica sin que alguien lo lea. Es lo
+   que reemplazó a los testimonios: el problema de los cuatro del prototipo no
+   era que estuvieran mal escritos, era que no había forma de que fueran
+   ciertos.
+
+**El catálogo ganó un nivel.** Las subcategorías eran texto libre escrito en
+cada producto —dos productos del mismo rubro con una tilde de diferencia eran
+dos rubros— y ahora son una tabla con filtro navegable. Se cargaron los 43
+rubros de ferretería que la clienta trajo del sitio anterior. Están vacíos y no
+se muestran hasta que haya productos: el brief da ~1000 SKUs para esa categoría
+sola, y sin este nivel es una grilla donde no se encuentra un tarugo.
+
+**Dos pantallas nuevas en el panel.** `/admin/calculadoras` trae a la superficie
+los números con los que calculan las cuatro calculadoras —y de paso destraba
+tres insumos que estaban esperando que la clienta los diera, porque ya no
+necesitan un despliegue—. `/admin/productos/candidatos` lista los productos que
+podrían darse de baja; **no da de baja nada solo**, y eso es deliberado: un
+artículo de temporada que no se vende en trece meses y vuelve a venderse en el
+catorce desaparecería del catálogo sin que nadie se entere.
+
+**El blog salió del sitio.** Las seis notas las había escrito el prototipo y
+estaban publicadas con la maderera como autora. Se respaldaron fuera del repo
+antes de borrar las tablas, y `/blog` y cada nota redirigen a la portada con
+301: estaban en el sitemap y pueden haberse compartido.
+
+**Una decisión que se revirtió a pedido.** `lib/stock-level.ts` decía que el
+número exacto de stock no se muestra nunca, porque expone información
+comercial. La clienta lo quiere como promoción. Se acotó al único nivel donde
+promociona algo —"¡Quedan 3!" cuando queda poco— y el comentario del código se
+corrigió: un comentario que afirma lo contrario de lo que hace el código es peor
+que no tenerlo.
 
 ---
 

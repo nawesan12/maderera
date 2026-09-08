@@ -20,6 +20,7 @@ import {
   listarCategorias,
   productosEnOferta,
   paginaDeProductos,
+  rubrosDeCategoria,
   type OrdenCatalogo,
 } from "@/lib/dal/catalog";
 import { DatosEstructurados } from "@/components/datos-estructurados";
@@ -27,6 +28,8 @@ import { migasJsonLd } from "@/lib/seo";
 
 interface Params {
   cat?: string;
+  /** El rubro dentro de la categoría. Solo tiene sentido junto con `cat`. */
+  rubro?: string;
   buscar?: string;
   stock?: string;
   orden?: string;
@@ -204,9 +207,14 @@ function Encabezado() {
  * sus dos consultas están memoizadas, así que a la base se le pide una vez.
  */
 async function armarPanel(params: Params) {
-  const [categorias, ofertas] = await Promise.all([
+  const [categorias, ofertas, rubros] = await Promise.all([
     listarCategorias(),
     productosEnOferta(),
+    // Los rubros son de adentro de una categoría: sin una elegida no hay qué
+    // listar, y mostrar los de todas mezclados no ayuda a nadie.
+    params.cat && params.cat !== "todos"
+      ? rubrosDeCategoria(params.cat)
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -216,6 +224,8 @@ async function armarPanel(params: Params) {
         name: c.name,
         productCount: c.productCount,
       }))}
+      rubros={rubros}
+      rubroActual={params.rubro ?? "todos"}
       categoriaActual={params.cat ?? "todos"}
       stockActual={params.stock ?? "todos"}
       soloOfertas={params.ofertas === "1"}
@@ -255,6 +265,7 @@ async function Resultados({ params }: { params: Params }) {
   const { productos, total, hayMas, topeAlcanzado } = await paginaDeProductos(
     {
       categoria: params.cat,
+      subcategoria: params.rubro,
       busqueda: params.buscar,
       stock: params.stock as never,
       orden: (params.orden as OrdenCatalogo) ?? "relevancia",

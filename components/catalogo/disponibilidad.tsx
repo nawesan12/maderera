@@ -10,14 +10,22 @@ import { combinedStockLevel } from "@/lib/stock-level";
  *
  * Dónde retirarlo se resuelve en el checkout, que es cuando la sucursal
  * empieza a importar.
+ *
+ * **Cuando quedan pocas, dice cuántas.** Lo pidió la clienta como promoción:
+ * "quedan 3" apura a quien está decidiendo mucho más que "quedan pocas". El
+ * número aparece solo en ese nivel y no en los otros dos: con stock alto no
+ * promociona nada y sí le dice a la competencia cuánto hay en el galpón.
  */
 export function Disponibilidad({
   central,
   aserradero,
+  cantidad,
   compacto = false,
 }: {
   central: StockLevel;
   aserradero: StockLevel;
+  /** Unidades disponibles. Solo se muestra si quedan pocas. */
+  cantidad?: number;
   compacto?: boolean;
 }) {
   const nivel = combinedStockLevel([central, aserradero]);
@@ -31,7 +39,10 @@ export function Disponibilidad({
     },
     bajo: {
       punto: "bg-brand-orange",
-      texto: "Quedan pocas",
+      texto:
+        cantidad !== undefined && cantidad > 0
+          ? `¡Quedan ${cantidad}!`
+          : "Quedan pocas",
       color: "text-brand-orange",
     },
     "sin-stock": {

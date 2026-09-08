@@ -67,12 +67,16 @@ export function Banner({
       <span aria-hidden className="grain-overlay absolute inset-0" />
 
       <span
-        className={`relative flex flex-col items-start justify-end gap-3 ${
+        className={`relative flex h-full flex-col items-start gap-3 ${
           alto
-            // En pantalla grande deja lugar a las flechas del carrusel: sin
-            // ese margen, la de la izquierda queda encima del título.
-            ? "min-h-[300px] px-7 py-8 sm:min-h-[340px] sm:px-20 sm:py-10 lg:min-h-[380px]"
-            : "px-6 py-6 sm:px-8"
+            // Centrado y a toda la altura porque en la portada comparte
+            // carrusel con el hero, que es más alto: pegado abajo, el texto
+            // quedaba flotando con medio banner vacío arriba.
+            //
+            // El margen lateral grande deja lugar a las flechas del carrusel:
+            // sin él, la de la izquierda queda encima del título.
+            ? "justify-center min-h-[300px] px-7 py-8 sm:min-h-[340px] sm:px-20 sm:py-10 lg:min-h-[380px]"
+            : "justify-end px-6 py-6 sm:px-8"
         }`}
       >
         {banner.etiqueta && (

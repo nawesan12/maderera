@@ -9,7 +9,6 @@ import {
   MessageCircle,
   Phone,
   Scissors,
-  Star,
   Warehouse,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,10 +17,10 @@ import { Hero } from "@/components/home/hero";
 import { ProductCard } from "@/components/product-card";
 import { datosDePortada, numerosDeLaEmpresa } from "@/lib/dal/catalog";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
-import { listarArticulos, listarTestimonios } from "@/lib/dal/contenido";
 import { escalasDeVolumenPublicas } from "@/lib/dal/profesionales";
 import { vistaDePrecio } from "@/lib/dal/precios-sesion";
 import { bannersDe } from "@/lib/dal/banners";
+import { ALCANCE_MOLDAVA } from "@/lib/empresa";
 import { SliderDePromos } from "@/components/home/slider-promos";
 import { FranjaBeneficios } from "@/components/franja-beneficios";
 
@@ -32,34 +31,37 @@ import { FranjaBeneficios } from "@/components/franja-beneficios";
  */
 
 export default async function HomePage() {
-  const [portada, sucursales, testimonios, notas, numeros, escalas, avisos] =
-    await Promise.all([
-      datosDePortada(),
-      listarSucursalesPublicas(),
-      listarTestimonios(),
-      listarArticulos({ limite: 3 }),
-      numerosDeLaEmpresa(),
-      escalasDeVolumenPublicas(),
-      bannersDe("portada"),
-    ]);
+  const [portada, sucursales, numeros, escalas, avisos] = await Promise.all([
+    datosDePortada(),
+    listarSucursalesPublicas(),
+    numerosDeLaEmpresa(),
+    escalasDeVolumenPublicas(),
+    bannersDe("portada"),
+  ]);
 
   return (
     <div className="overflow-hidden">
-      <Hero
-        productos={portada.totalProductos}
-        sucursales={sucursales.length}
-        anios={numeros.anios}
+      {/*
+        El hero y las promociones, en un solo carrusel a todo el ancho.
+        La clienta lo pidió así: "que el hero esté integrado en el slider, que
+        sea todo un slider enorme que ocupe todo el ancho, cosa de que sea lo
+        primero que se ve".
+
+        Antes eran dos bloques separados —el hero a sangre y, más abajo y
+        metido en el contenedor, un carrusel que casi nadie bajaba a ver—.
+      */}
+      <SliderDePromos
+        banners={avisos}
+        hero={
+          <Hero
+            productos={portada.totalProductos}
+            sucursales={sucursales.length}
+            anios={numeros.anios}
+          />
+        }
       />
 
       <FranjaBeneficios />
-
-      {/* Las promociones, justo debajo de la franja: es lo primero que se mira
-          después del inicio, y antes de las ofertas del catálogo. */}
-      {avisos.length > 0 && (
-        <div className="contenedor mt-8">
-          <SliderDePromos banners={avisos} />
-        </div>
-      )}
 
       {portada.ofertas.length > 0 && <Ofertas productos={portada.ofertas} />}
 
@@ -80,11 +82,9 @@ export default async function HomePage() {
         rubros={numeros.rubros}
       />
 
-      {testimonios.length > 0 && <Testimonios testimonios={testimonios} />}
 
       <Sucursales sucursales={sucursales} />
 
-      {notas.length > 0 && <Blog notas={notas} />}
 
       <CierreCta />
     </div>
@@ -545,63 +545,15 @@ function Historia({
             </div>
             <div className="absolute -bottom-6 -left-6 max-w-[240px] rounded-2xl border bg-card p-6 shadow-2xl">
               <p className="mb-1 text-lg font-bold">Moldava</p>
+              {/* Decía "distribución nacional", que venía del prototipo. El
+                  alcance real es el que dio la clienta y vive en
+                  `lib/empresa.ts`: la Provincia de Buenos Aires. */}
               <p className="text-sm text-muted-foreground">
-                Nuestra marca propia de molduras, con distribución nacional.
+                Nuestra marca propia de molduras, con entrega en puerta en{" "}
+                {ALCANCE_MOLDAVA}.
               </p>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Testimonios({
-  testimonios,
-}: {
-  testimonios: Awaited<ReturnType<typeof listarTestimonios>>;
-}) {
-  return (
-    <section className="bg-sitio-alt py-[66px]">
-      <div className="contenedor">
-        <TituloSeccion className="mb-7">
-          Lo que dicen nuestros clientes
-        </TituloSeccion>
-
-        <div className="grid gap-[18px] md:grid-cols-2 lg:grid-cols-4">
-          {testimonios.map((t) => (
-            <Card
-              key={t.id}
-              className="h-full rounded-[14px] border border-linea bg-card shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]"
-            >
-              <CardContent className="p-6">
-                <div
-                  className="mb-4 flex gap-0.5"
-                  role="img"
-                  aria-label="5 de 5 estrellas"
-                >
-                  {Array.from({ length: 5 }).map((_, j) => (
-                    <Star
-                      key={j}
-                      className="h-4 w-4 fill-brand-orange text-brand-orange"
-                    />
-                  ))}
-                </div>
-                <p className="mb-6 text-sm leading-relaxed text-foreground/80">
-                  &ldquo;{t.texto}&rdquo;
-                </p>
-                <div className="flex items-center gap-3 border-t border-border/50 pt-4">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-gray text-sm font-bold text-white">
-                    {t.iniciales ?? t.nombre.slice(0, 2).toUpperCase()}
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold">{t.nombre}</p>
-                    <p className="text-xs text-muted-foreground">{t.rol}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
         </div>
       </div>
     </section>
@@ -678,59 +630,6 @@ function Sucursales({
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Blog({
-  notas,
-}: {
-  notas: Awaited<ReturnType<typeof listarArticulos>>;
-}) {
-  return (
-    <section className="bg-sitio-alt py-[66px]">
-      <div className="contenedor">
-        <div className="flex flex-wrap items-end justify-between gap-6">
-          <TituloSeccion>Para que te salga bien</TituloSeccion>
-          <Link
-            href="/blog"
-            className="text-[15px] font-semibold text-acento-texto hover:underline"
-          >
-            Ver todas las notas &rarr;
-          </Link>
-        </div>
-
-        <div className="mt-7 grid gap-[18px] md:grid-cols-3">
-          {notas.map((nota) => (
-            <Link key={nota.slug} prefetch={false} href={`/blog/${nota.slug}`} className="group">
-              <Card className="h-full overflow-hidden rounded-[14px] border border-linea bg-card shadow-[0_1px_2px_rgb(60_50_40_/_0.05)] transition-[box-shadow,transform] duration-200 group-hover:-translate-y-[3px] group-hover:shadow-[0_14px_30px_-16px_rgb(60_50_40_/_0.34)]">
-                {nota.imagenUrl && (
-                  <div className="relative aspect-[16/10] overflow-hidden">
-                    <Image
-                      src={nota.imagenUrl}
-                      alt=""
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                    />
-                  </div>
-                )}
-                <CardContent className="p-5">
-                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-orange">
-                    {nota.categoria} · {nota.minutosLectura} min
-                  </p>
-                  <h3 className="mb-2 line-clamp-2 font-bold leading-snug transition-colors group-hover:text-brand-orange">
-                    {nota.titulo}
-                  </h3>
-                  <p className="line-clamp-2 text-sm text-muted-foreground">
-                    {nota.resumen}
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
           ))}
         </div>
       </div>

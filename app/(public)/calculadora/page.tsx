@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Calculator } from "lucide-react";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd } from "@/lib/seo";
+import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
 import { Calculadoras } from "./calculadoras";
 
 /**
@@ -43,7 +44,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function CalculadoraPage() {
+export default async function CalculadoraPage() {
+  // Los parámetros se editan en `/admin/calculadoras`. Bajan como props para
+  // que las fórmulas —puras y con tests— los reciban por argumento.
+  const parametros = await parametrosDeCalculo();
+
   return (
     <div className="min-h-screen">
       <DatosEstructurados
@@ -69,7 +74,7 @@ export default function CalculadoraPage() {
         </div>
       </section>
 
-      <Calculadoras />
+      <Calculadoras parametros={parametros} />
 
       <section className="border-t bg-muted/30 py-12">
         <div className="mx-auto px-6 max-w-3xl">

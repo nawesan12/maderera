@@ -85,6 +85,37 @@ export default async function MoldavaPage() {
       />
 
       <div className="contenedor space-y-14 py-12">
+        {/* El acceso mayorista, arriba de todo.
+
+            Estaba al final de la página, en un bloque discreto: quien viene a
+            Moldava buscando precio por volumen es justo el visitante que la
+            clienta quiere captar, y le hacía falta bajar la página entera para
+            encontrar cómo. */}
+        <section className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] border border-linea bg-card p-6">
+          <div>
+            <h2 className="text-lg font-bold">¿Comprás por volumen?</h2>
+            <p className="mt-1 text-[15px] text-texto-2">
+              Entrega en puerta en {ALCANCE_MOLDAVA}, con precio mayorista.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/profesionales"
+              className="inline-flex h-11 items-center rounded-[10px] bg-accion px-5 font-semibold text-white transition-colors hover:bg-accion-hover"
+            >
+              Pedir cuenta mayorista
+            </Link>
+            <a
+              href={whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-11 items-center rounded-[10px] border border-linea bg-card px-5 font-semibold transition-colors hover:bg-muted"
+            >
+              Consultar por WhatsApp
+            </a>
+          </div>
+        </section>
+
         <section className="grid gap-4 sm:grid-cols-3">
           {PROCESO.map((paso) => (
             <article
@@ -136,11 +167,11 @@ export default async function MoldavaPage() {
         </section>
 
         <section className="rounded-[14px] border border-linea bg-chip p-8 text-center">
-          <h2 className="text-xl font-bold">¿Comprás por volumen?</h2>
+          <h2 className="text-xl font-bold">Armamos tu cotización</h2>
           <p className="mx-auto mt-2 max-w-xl text-[15px] leading-relaxed text-texto-2">
             La línea completa se entrega en puerta en {ALCANCE_MOLDAVA}, con
-            coordinación de envíos. Escribinos y armamos la cotización con tu
-            lista de precios.
+            coordinación de envíos. Escribinos y la armamos con tu lista de
+            precios.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
             <a
@@ -151,12 +182,6 @@ export default async function MoldavaPage() {
             >
               Consultar por WhatsApp
             </a>
-            <Link
-              href="/profesionales"
-              className="inline-flex h-11 items-center rounded-[10px] border border-linea bg-card px-5 font-semibold transition-colors hover:bg-muted"
-            >
-              Cuenta mayorista
-            </Link>
           </div>
         </section>
       </div>

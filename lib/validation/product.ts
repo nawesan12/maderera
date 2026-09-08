@@ -74,6 +74,11 @@ export const productoSchema = z.object({
     ),
   categoryId: z.string().uuid("Elegí una categoría."),
   subcategory: z.string().trim().max(80).optional(),
+  /**
+   * El rubro elegido. Vacío es "sin rubro", no un error: hay productos que no
+   * entran en ninguno y forzarlos a uno inventado ensucia la navegación.
+   */
+  subcategoryId: z.string().uuid().optional().or(z.literal("")),
   description: z.string().trim().max(2000).default(""),
   brand: z.string().trim().max(80).optional(),
   unit: z.enum(unidades),

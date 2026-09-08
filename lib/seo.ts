@@ -203,6 +203,15 @@ export interface ProductoSeo {
     precio: string | null;
     disponibilidad: StockLevel;
   }[];
+  /**
+   * Promedio y cantidad de reseñas publicadas, si hay alguna.
+   *
+   * Va al marcado porque es lo que hace aparecer las estrellas en el resultado
+   * de búsqueda. **Solo si existen de verdad**: declarar un `aggregateRating`
+   * sin reseñas detrás es una penalización de Google y, antes que eso, una
+   * afirmación falsa sobre lo que opina la gente.
+   */
+  resenas?: { promedio: number; cantidad: number } | null;
 }
 
 /**
@@ -245,6 +254,17 @@ export function productoJsonLd(producto: ProductoSeo): JsonLd {
     ...(producto.brand ? { brand: { "@type": "Brand", name: producto.brand } } : {}),
     ...(producto.imagenes.length
       ? { image: producto.imagenes.map((i) => (i.startsWith("http") ? i : urlAbsoluta(i))) }
+      : {}),
+    ...(producto.resenas && producto.resenas.cantidad > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: producto.resenas.promedio.toFixed(1),
+            reviewCount: producto.resenas.cantidad,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        }
       : {}),
     ...(ofertas.length === 0
       ? {}

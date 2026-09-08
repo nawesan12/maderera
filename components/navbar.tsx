@@ -53,13 +53,15 @@ const productLinks = [
  */
 const enlacesDirectos = [
   { name: "Catálogo", href: "/catalogo" },
+  // Moldava salió de "Más" a la barra: es la marca propia, y la clienta pidió
+  // darle mucha más presencia. Escondida detrás de un desplegable no la
+  // encontraba nadie.
+  { name: "Moldava", href: "/moldava" },
   { name: "Sucursales", href: "/sucursales" },
 ];
 
 const enlacesMas = [
-  { name: "Moldava", href: "/moldava" },
   { name: "Nosotros", href: "/nosotros" },
-  { name: "Blog", href: "/blog" },
   { name: "Contacto", href: "/contacto" },
   { name: "Documentación", href: "/documentacion" },
   { name: "Eventos", href: "/eventos" },
@@ -175,7 +177,13 @@ export function Navbar({
               onMouseEnter={() => setProductsOpen(true)}
               onMouseLeave={() => setProductsOpen(false)}
             >
-              <button
+              {/* Es un enlace y no un botón: antes solo abría el desplegable
+                  al pasar por encima, así que en un teléfono —donde no hay
+                  hover— "Productos" no llevaba a ninguna parte. La clienta
+                  pidió darle más presencia al catálogo; empezar por hacerlo
+                  clicable es lo mínimo. */}
+              <Link
+                href="/catalogo"
                 className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[13px] text-[14.5px] font-medium transition-colors ${
                   productsOpen ? "bg-sitio-alt text-acento-texto" : "text-foreground"
                 }`}
@@ -187,7 +195,7 @@ export function Navbar({
                     productsOpen ? "rotate-180" : ""
                   }`}
                 />
-              </button>
+              </Link>
               <AnimatePresence>
                 {productsOpen && (
                   <motion.div
@@ -293,6 +301,19 @@ export function Navbar({
               <IconoSesion className="h-[18px] w-[18px]" />
               <span>{textoSesion}</span>
             </Link>
+
+            {/* Crear cuenta, solo a quien no entró. La clienta pidió promover
+                más el registro: en el escritorio no había ni un enlace, solo
+                "Ingresar", que a quien todavía no tiene cuenta no le dice que
+                pueda hacerse una. */}
+            {!sesion && (
+              <Link
+                href="/registro"
+                className="hidden h-11 items-center whitespace-nowrap rounded-[11px] px-[13px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-sitio-alt lg:flex"
+              >
+                Crear cuenta
+              </Link>
+            )}
 
             <Link
               href="/presupuesto"

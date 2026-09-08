@@ -19,20 +19,22 @@
  */
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import * as schema from "./schema";
+import { generarSlug } from "@/lib/validation/product";
 
 const {
   branches,
   categories,
-  testimonials,
   configuracionFiscal,
   cuttingRates,
   paymentDiscounts,
   priceLists,
+  products,
   puntosVenta,
   shippingZones,
   siteSettings,
+  subcategories,
 } = schema;
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -86,6 +88,151 @@ const CATEGORIAS = [
   { slug: "ferreteria", orden: 6 },
   { slug: "cubiertas", orden: 7 },
 ];
+
+
+/**
+ * Los rubros de adentro de cada categoría.
+ *
+ * Los 43 de ferretería los trajo la clienta: son con los que la ferretería ya
+ * trabajaba en el sitio anterior. El brief da ~1000 SKUs para esa categoría
+ * sola, así que sin este nivel de navegación Ferretería es una grilla de mil
+ * productos donde no se encuentra un tarugo.
+ *
+ * Los de placas salen del pedido de "linkear las placas / melaminas /
+ * enchapados / tableros / fenólicos / chapadur / terciados / mdf / ranurados":
+ * eran nombres sueltos escritos en `products.subcategory` y ahora son filtros
+ * navegables.
+ *
+ * Se siembran aunque todavía no tengan productos. No aparecen en el panel del
+ * catálogo hasta que alguno los use —`rubrosDeCategoria` solo devuelve los que
+ * tienen algo cargado—, así que la lista completa espera sin ensuciar nada.
+ */
+const RUBROS: Record<string, string[]> = {
+  ferreteria: [
+    "Accesorios para cortinería",
+    "Adhesivos",
+    "Aceites",
+    "Aguarrás",
+    "Barnices",
+    "Bisagras",
+    "Bulonería",
+    "Cerraduras",
+    "Cintas",
+    "Clavos",
+    "Colas vinílicas",
+    "Correderas",
+    "Diluyentes",
+    "Discos para sierra",
+    "Escuadras",
+    "Fijación para tirantería",
+    "Insecticidas",
+    "Ganchos",
+    "Herramientas varias",
+    "Hojas para sierra",
+    "Lacas poliuretánicas",
+    "Lijas",
+    "Manijas",
+    "Masillas",
+    "Mechas",
+    "Membranas",
+    "Ménsulas",
+    "Niveles",
+    "Pasadores",
+    "Perfiles y complementos",
+    "Pinceles",
+    "Pistones",
+    "Prensas y precintos",
+    "Rieles",
+    "Removedores",
+    "Rodillos",
+    "Selladores",
+    "Sierras",
+    "Soportes",
+    "Tapacantos",
+    "Tarugos",
+    "Topes",
+    "Tornillos",
+    // Los dos que ya venían cargados como texto en los productos sembrados.
+    "Herrajes",
+    "Pinturas y lacas",
+  ],
+  placas: [
+    "Melaminas",
+    "MDF",
+    "Fenólicos",
+    "Terciados",
+    "Enchapados",
+    "Chapadur",
+    "Ranurados",
+    "Tableros",
+    "Placas",
+  ],
+  molduras: ["Cornisas", "Marcos", "Zócalos", "Terminaciones"],
+  pisos: ["Pisos flotantes", "Machimbres", "Terminaciones", "Zócalos"],
+  techos: ["Chapas", "Tejados metálicos", "Aislaciones", "Machimbres", "Tirantería"],
+  cubiertas: ["Chapas", "Aislantes", "Accesorios", "Tejados metálicos"],
+  "decks-y-escaleras": ["Decks", "Escaleras", "Accesorios"],
+  "construccion-en-seco": ["Placas", "Perfilería", "Aislantes", "Accesorios"],
+};
+
+/**
+ * Siembra los rubros y engancha los productos que ya los nombraban.
+ *
+ * El enganche va por el texto que ya tenía cada producto en
+ * `products.subcategory`, comparado sin distinguir mayúsculas ni tildes: es de
+ * donde salieron los nombres, y hacerlo a mano para doscientos productos es
+ * pedir que quede a medias.
+ */
+async function sembrarRubros() {
+  let creados = 0;
+  let enganchados = 0;
+
+  for (const [slugCategoria, nombres] of Object.entries(RUBROS)) {
+    const [categoria] = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.slug, slugCategoria))
+      .limit(1);
+
+    if (!categoria) {
+      console.log(`  · Falta la categoría ${slugCategoria}, se saltea.`);
+      continue;
+    }
+
+    for (const [orden, nombre] of nombres.entries()) {
+      const slug = generarSlug(nombre);
+
+      const [fila] = await db
+        .insert(subcategories)
+        .values({ categoryId: categoria.id, slug, name: nombre, sortOrder: orden })
+        .onConflictDoUpdate({
+          target: [subcategories.categoryId, subcategories.slug],
+          set: { name: nombre, sortOrder: orden, updatedAt: new Date() },
+        })
+        .returning({ id: subcategories.id });
+
+      creados += 1;
+
+      // Los productos de esa categoría que ya nombraban el rubro como texto.
+      const { rowCount } = await db
+        .update(products)
+        .set({ subcategoryId: fila.id })
+        .where(
+          and(
+            eq(products.categoryId, categoria.id),
+            isNull(products.subcategoryId),
+            sql`lower(unaccent(${products.subcategory})) = lower(unaccent(${nombre}))`,
+          ),
+        );
+
+      enganchados += rowCount ?? 0;
+    }
+  }
+
+  console.log(
+    `· Rubros: ${creados} cargados, ${enganchados} productos enganchados.`,
+  );
+}
 
 /**
  * Las tres zonas del brief, las tres a cotizar.
@@ -174,6 +321,9 @@ async function main() {
       .set({ sortOrder: categoria.orden })
       .where(eq(categories.slug, categoria.slug));
   }
+
+  console.log("Rubros de cada categoría…");
+  await sembrarRubros();
 
   console.log("Zonas de envío…");
   for (const zona of ZONAS) {
@@ -293,52 +443,15 @@ async function main() {
     }
   }
 
-  /*
-   * Los testimonios sembrados son de personas inventadas.
-   *
-   * "Arq. Carolina Méndez", "Roberto Fernández", "Martín Pérez" e "Ing. Laura
-   * Gómez" vienen del prototipo, con nombre, cargo y una frase entre comillas.
-   * Publicar una recomendación firmada por alguien que no existe es distinto
-   * de tener un catálogo con precios de prueba: no es un dato provisorio, es
-   * una afirmación falsa sobre una persona.
-   *
-   * Se **ocultan**, no se borran: si alguno resulta ser real se vuelve a
-   * activar desde Contenido. El único testimonio ofrecido en el brief es el de
-   * Ezequiel (Wood Framer), y llegó sin el texto: está anotado como pendiente
-   * en `docs/CAMBIOS.md`.
-   */
-  console.log("Testimonios del prototipo…");
-  const inventados = [
-    "Arq. Carolina Méndez",
-    "Roberto Fernández",
-    "Martín Pérez",
-    "Ing. Laura Gómez",
-  ];
-
-  let ocultados = 0;
-  for (const nombre of inventados) {
-    const resultado = await db
-      .update(testimonials)
-      .set({ activo: false })
-      .where(eq(testimonials.nombre, nombre))
-      .returning({ id: testimonials.id });
-    ocultados += resultado.length;
-  }
-  if (ocultados > 0) {
-    console.warn(
-      `  · ${ocultados} testimonio(s) de personas inventadas, ocultos. ` +
-        "El sitio no muestra ninguno hasta que haya uno real.",
-    );
-  }
-
   console.log("\nListo.");
   console.log(
     "\nFalta que el cliente confirme, y hasta entonces no se puede facturar:\n" +
       "  · El último número emitido en los puntos de venta 15, 17 y 20.\n" +
       "  · Desde qué monto aplica el 15 % por volumen.\n" +
       "  · La alícuota de percepción de Ingresos Brutos.\n" +
-      "  · El texto del testimonio de Ezequiel (Wood Framer, 223 528-7248):\n" +
-      "    los cuatro que había eran de personas inventadas y quedaron ocultos.",
+      "  · Nada del contenido: los testimonios salieron del sitio junto con el\n" +
+      "    blog, y lo que opinan los clientes ahora sale de las reseñas de\n" +
+      "    compra verificada.",
   );
   await pool.end();
 }

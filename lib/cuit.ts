@@ -81,3 +81,31 @@ export function variantesDeCuit(cuit: string): string[] {
 
   return [digitos, formatearCuitLargo(digitos)];
 }
+
+/**
+ * Validación de DNI.
+ *
+ * Entró cuando el CUIT dejó de ser obligatorio en el alta de profesionales: hay
+ * carpinteros y colocadores que trabajan con DNI y el formulario los frenaba.
+ *
+ * No hay dígito verificador que chequear, así que lo único que se puede exigir
+ * es la forma: siete u ocho dígitos. Los documentos viejos tienen siete y los
+ * emitidos desde los años setenta, ocho. Se rechaza el relleno de dígitos
+ * repetidos por el mismo motivo que en el CUIT.
+ */
+export function dniValido(dni: string | null | undefined): boolean {
+  if (!dni) return false;
+
+  const digitos = soloDigitos(dni);
+  if (digitos.length < 7 || digitos.length > 8) return false;
+
+  return !/^(\d)\1+$/.test(digitos);
+}
+
+/** Valida el número contra el tipo de documento con el que se presentó. */
+export function documentoValido(
+  tipo: "dni" | "cuit",
+  numero: string | null | undefined,
+): boolean {
+  return tipo === "cuit" ? cuitValido(numero) : dniValido(numero);
+}

@@ -150,6 +150,7 @@ export function SelectorVariante({
           <Disponibilidad
             central={elegida.stockCentral}
             aserradero={elegida.stockAserradero}
+            cantidad={elegida.disponibles}
           />
         </div>
       </div>

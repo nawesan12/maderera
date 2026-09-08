@@ -154,6 +154,7 @@ function claveNueva() {
 
 export function VistaMostrador({
   usuario,
+  listaGeneral,
   sucursales,
   sucursal,
   turno,
@@ -162,6 +163,8 @@ export function VistaMostrador({
   ventas,
 }: {
   usuario: { nombre: string; userId: string };
+  /** La lista de precios general. Lo que no sea esta es precio diferenciado. */
+  listaGeneral: string | null;
   sucursales: Sucursal[];
   sucursal: Sucursal;
   turno: Turno | null;
@@ -542,6 +545,7 @@ export function VistaMostrador({
 
         <aside className="flex w-[400px] shrink-0 flex-col border-l border-linea bg-card">
           <Cobro
+            listaGeneral={listaGeneral}
             subtotal={subtotal}
             descuento={descuento}
             tipoDesc={tipoDesc}
@@ -1001,6 +1005,7 @@ function Cobro({
   letra,
   medio,
   onMedio,
+  listaGeneral,
   recibido,
   onRecibido,
   cambio,
@@ -1031,6 +1036,8 @@ function Cobro({
   letra: string | null;
   medio: MedioDeMostrador;
   onMedio: (m: MedioDeMostrador) => void;
+  /** La lista general: lo que no sea esta es precio de profesional. */
+  listaGeneral: string | null;
   recibido: string;
   onRecibido: (v: string) => void;
   cambio: number | null;
@@ -1050,6 +1057,17 @@ function Cobro({
   const faltaCaja = medio === "efectivo" && !hayCaja;
   const faltaCliente = medio === "cuenta_corriente" && !cliente;
 
+  /*
+   * El precio de profesional es de contado.
+   *
+   * `registrarVentaDeMostrador` lo rechaza igual, pero enterarse al cobrar es
+   * tarde: hay alguien esperando enfrente y ya se cargó toda la venta. Acá el
+   * crédito se apaga apenas se elige el cliente, y el cartel dice cuál es la
+   * salida —cobrar a consumidor final, que es precio de catálogo—.
+   */
+  const precioProfesional =
+    cliente?.priceListId != null && cliente.priceListId !== listaGeneral;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-b border-linea p-4">
@@ -1061,21 +1079,40 @@ function Cobro({
           Cómo paga
         </p>
         <div className="mt-2.5 grid grid-cols-2 gap-2">
-          {MEDIOS.map(({ valor, texto, Icono }) => (
-            <button
-              key={valor}
-              onClick={() => onMedio(valor)}
-              className={`inline-flex h-12 items-center justify-center gap-2 rounded-xl border text-base font-medium transition-colors ${
-                medio === valor
-                  ? "border-accion bg-accion text-white"
-                  : "border-linea hover:bg-hundida"
-              } ${valor === "cuenta_corriente" ? "col-span-2" : ""}`}
-            >
-              <Icono className="h-4 w-4" />
-              {texto}
-            </button>
-          ))}
+          {MEDIOS.map(({ valor, texto, Icono }) => {
+            const bloqueado = precioProfesional && valor === "credito";
+
+            return (
+              <button
+                key={valor}
+                onClick={() => !bloqueado && onMedio(valor)}
+                disabled={bloqueado}
+                title={
+                  bloqueado
+                    ? "El precio de profesional es de contado. Cobrá por transferencia, débito o efectivo, o pasá la venta a consumidor final."
+                    : undefined
+                }
+                className={`inline-flex h-12 items-center justify-center gap-2 rounded-xl border text-base font-medium transition-colors ${
+                  medio === valor
+                    ? "border-accion bg-accion text-white"
+                    : "border-linea hover:bg-hundida"
+                } ${valor === "cuenta_corriente" ? "col-span-2" : ""} ${
+                  bloqueado ? "cursor-not-allowed opacity-40 hover:bg-transparent" : ""
+                }`}
+              >
+                <Icono className="h-4 w-4" />
+                {texto}
+              </button>
+            );
+          })}
         </div>
+
+        {precioProfesional && (
+          <p className="mt-2 rounded-lg bg-hundida px-3 py-2 text-sm text-muted-foreground">
+            Precio de profesional: es de contado. En cuotas con tarjeta corre el
+            precio de catálogo, así que la venta va a consumidor final.
+          </p>
+        )}
 
         <p className="mt-5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Descuento

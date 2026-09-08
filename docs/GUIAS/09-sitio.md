@@ -10,8 +10,9 @@ Estas cosas se cambian desde el panel y el sitio las refleja apenas guarda:
 
 | Qué | Dónde |
 |---|---|
-| Notas del blog, categorías y testimonios | *Contenido* |
+| Reseñas de los clientes: publicarlas o rechazarlas | *Contenido* |
 | Textos sueltos del sitio | *Contenido → Ajustes* |
+| Avisos y promociones de la portada | *Contenido → Avisos y promociones* |
 | Dirección, teléfono, horario y servicios de cada local | *Sucursales* |
 | Documentación técnica para profesionales | *Documentación* |
 | Eventos y capacitaciones | *Eventos* |
@@ -20,31 +21,27 @@ Estas cosas se cambian desde el panel y el sitio las refleja apenas guarda:
 Si algo de esta lista está mal en el sitio, se corrige acá. No hace falta pedir
 nada.
 
-## Las notas del blog
+## Las reseñas de los clientes
 
-El editor usa un formato simple:
+En la ficha de cada producto, quien lo compró y **ya lo recibió** puede dejar
+una reseña con estrellas y un texto. Nadie más: no hay forma de reseñar algo
+que no se compró, y por eso al lado de cada una dice "compra verificada".
 
-```
-## Un título
-### Un subtítulo
-**negrita** y *cursiva*
-- un renglón de lista
-[el texto del enlace](https://la-direccion)
-```
+**Ninguna se publica sola.** Caen en *Contenido → Reseñas* esperando que
+alguien las mire, y ahí se **publica** o se **rechaza**. El motivo del rechazo
+es opcional y queda guardado, por si después hay que explicarlo.
 
-A la derecha se ve cómo va a quedar, mientras escribe.
+Conviene revisarlas seguido. No es por censurar una mala opinión —una reseña de
+tres estrellas que explica por qué es más creíble que cinco de cinco—: es
+porque el texto sale firmado en la ficha del producto, y el día que entre un
+insulto o el teléfono de un competidor va a estar ahí hasta que alguien lo vea.
 
-Cada nota tiene:
+El promedio de estrellas aparece en la ficha y también es lo que hace que
+Google muestre las estrellitas en el resultado de búsqueda.
 
-- **Resumen** — lo que se lee en la tarjeta del listado y en el resultado de
-  Google. Si lo deja vacío, el sistema lo completa con las primeras líneas.
-- **Destacado** — la manda a la portada.
-- **Publicar / Despublicar** — mientras está en borrador, no se ve en el sitio.
-
-**La dirección de la nota se calcula del título al crearla y no cambia
-después**, aunque después corrija el título. Es a propósito: una dirección que
-se compartió y que Google ya indexó no puede cambiar porque se arregló una
-palabra. Si de verdad necesita otra dirección, cree la nota de nuevo.
+> **El blog salió del sitio.** Hasta el 7/9/2026 había seis notas; se sacaron
+> por pedido de la clienta. Las direcciones viejas redirigen a la portada, así
+> que un enlace compartido no queda roto.
 
 ## Las sucursales
 

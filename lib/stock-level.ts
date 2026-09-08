@@ -26,8 +26,14 @@ export function disponible(qty: number, reservado: number): number {
  * Traduce una cantidad real a los cuatro niveles que muestra el sitio público.
  *
  * El negocio guarda cantidades; el visitante ve "En stock / Stock limitado / Poco
- * stock / Sin stock". Mostrar el número exacto expondría información comercial
- * (cuánto compró el cliente, cuánto le queda a la competencia por vender).
+ * stock / Sin stock". El número exacto expone información comercial —cuánto
+ * compró el cliente, cuánto le queda a la competencia por vender— así que la
+ * regla general sigue siendo no mostrarlo.
+ *
+ * **La excepción es el nivel `bajo`**, y la pidió la clienta: ahí la ficha dice
+ * "¡Quedan 3!" porque apura a quien está decidiendo. En ese nivel el dato ya no
+ * es un secreto útil —queda poco, y eso se ve igual— y sí es un argumento de
+ * venta. En `medio` y `alto` no se muestra: ahí no promociona nada.
  *
  * El umbral de reposición (`minQty`) lo define cada sucursal por producto: 3 placas
  * de fenólico pueden ser "poco" y 3 rollos de membrana pueden ser "de sobra".

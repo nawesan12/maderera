@@ -1,4 +1,3 @@
-import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -11,104 +10,89 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { customers } from "./customers";
+import { products } from "./catalog";
+import { orders } from "./sales";
+
 /**
- * Contenido editable del sitio: blog, testimonios y ajustes generales.
+ * Contenido editable del sitio: reseñas, ajustes y avisos.
  *
- * El blog es una obligación del contrato (cláusula 1.2) y, sobre todo, la
- * herramienta de posicionamiento del sitio: "cómo elegir machimbre para techo"
- * es lo que alguien busca antes de saber que necesita una maderera.
+ * **El blog y los testimonios salieron el 7/9/2026**, por pedido de la clienta.
+ * Las seis notas las había escrito el prototipo y estaban publicadas con la
+ * maderera como autora; los cuatro testimonios eran personas inventadas y ya
+ * estaban ocultos. El contenido del blog quedó respaldado fuera del repo antes
+ * de borrarlo.
  *
- * Estaba escrito a mano en `lib/products.ts` —seis artículos como constantes de
- * TypeScript—, lo que significaba un deploy por cada nota publicada. Nadie
- * escribe un blog así.
+ * Lo que la gente opina sobre los productos ahora sale de las reseñas de
+ * compra verificada: es el mismo dato sin el problema de tener que conseguir a
+ * alguien que lo firme.
  */
 
-export const estadoPublicacion = pgEnum("estado_publicacion", [
-  "borrador",
-  "publicado",
-  "archivado",
+/**
+ * En qué estado está una reseña.
+ *
+ * Nace pendiente y alguien de la casa la publica o la rechaza. No se publica
+ * sola: una reseña es un texto de un tercero que aparece firmado en el sitio,
+ * y el día que entre un insulto o el teléfono de un competidor va a estar ahí
+ * hasta que alguien lo vea.
+ */
+export const estadoResena = pgEnum("estado_resena", [
+  "pendiente",
+  "publicada",
+  "rechazada",
 ]);
 
-export const blogCategories = pgTable(
-  "blog_categories",
+/**
+ * Reseñas de producto, de compra verificada.
+ *
+ * La clienta pidió "agregar reseñas". Lo que existía eran testimonios cargados
+ * a mano desde el panel, y los cuatro que traía el prototipo están ocultos
+ * porque eran personas inventadas.
+ *
+ * **Solo puede reseñar quien compró.** Cada fila apunta al pedido entregado que
+ * la habilita, y esa es toda la diferencia entre una reseña y un formulario de
+ * comentarios: sin el pedido detrás, la primera reseña falsa la escribe
+ * cualquiera con un navegador, y la segunda la escribe la competencia.
+ *
+ * El índice único sobre (pedido, producto) impide dos reseñas del mismo
+ * producto en la misma compra. Se puede reseñar otra vez si se vuelve a
+ * comprar, que es razonable: es otra experiencia.
+ */
+export const productReviews = pgTable(
+  "product_reviews",
   {
     id: uuid().primaryKey().defaultRandom(),
-    slug: text().notNull(),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    /** Quién la escribió. Se conserva para poder contestarle. */
+    customerId: uuid()
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    /** El pedido entregado que la habilita. Es lo que la hace verificada. */
+    orderId: uuid()
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    /** De 1 a 5. Se valida antes de guardar. */
+    estrellas: integer().notNull(),
+    texto: text().notNull().default(""),
+    /** Con qué nombre se publica. Se copia del cliente al crear la reseña. */
     nombre: text().notNull(),
-    descripcion: text(),
-    orden: integer().notNull().default(0),
-    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [uniqueIndex("blog_categories_slug_idx").on(t.slug)],
-);
-
-export const blogPosts = pgTable(
-  "blog_posts",
-  {
-    id: uuid().primaryKey().defaultRandom(),
-    slug: text().notNull(),
-    titulo: text().notNull(),
-    /** Resumen para la tarjeta del listado y la descripción de la página. */
-    resumen: text().notNull().default(""),
-    /** Cuerpo en Markdown acotado: encabezados, listas, negritas y enlaces. */
-    contenido: text().notNull().default(""),
-    imagenUrl: text(),
-    categoryId: uuid().references(() => blogCategories.id, {
-      onDelete: "set null",
-    }),
-    autor: text(),
-    estado: estadoPublicacion().notNull().default("borrador"),
-    /**
-     * Cuándo se publicó.
-     *
-     * Va aparte de `createdAt` porque una nota se escribe hoy y se publica el
-     * martes, y la fecha que se muestra —y la que ordena el listado— es la de
-     * publicación.
-     */
-    publicadoAt: timestamp({ withTimezone: true }),
-    /**
-     * Minutos de lectura, calculados al guardar.
-     *
-     * Se guarda en vez de derivarse en cada render: es un número que no cambia
-     * salvo que se edite la nota, y contar palabras en cada visita al listado
-     * es trabajo repetido para nada.
-     */
-    minutosLectura: integer().notNull().default(1),
-    /** Metadatos de posicionamiento, cuando conviene que difieran del título. */
-    metaTitulo: text(),
-    metaDescripcion: text(),
-    destacado: boolean().notNull().default(false),
+    estado: estadoResena().notNull().default("pendiente"),
+    /** Por qué se rechazó. Queda para poder explicarlo. */
+    motivoRechazo: text(),
+    resueltoPor: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("blog_posts_slug_idx").on(t.slug),
-    index("blog_posts_estado_idx").on(t.estado, t.publicadoAt),
-    index("blog_posts_categoria_idx").on(t.categoryId),
+    uniqueIndex("product_reviews_pedido_producto_idx").on(t.orderId, t.productId),
+    index("product_reviews_producto_idx").on(t.productId, t.estado),
+    index("product_reviews_estado_idx").on(t.estado, t.createdAt),
   ],
 );
 
-/**
- * Testimonios de clientes.
- *
- * En la base y no como constante porque son personas reales: si alguien pide
- * que saquen el suyo, tiene que poder salir sin un deploy.
- */
-export const testimonials = pgTable(
-  "testimonials",
-  {
-    id: uuid().primaryKey().defaultRandom(),
-    nombre: text().notNull(),
-    rol: text(),
-    texto: text().notNull(),
-    /** Iniciales para el avatar, cuando no hay foto. */
-    iniciales: text(),
-    orden: integer().notNull().default(0),
-    activo: boolean().notNull().default(true),
-    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("testimonials_activo_idx").on(t.activo, t.orden)],
-);
+export type ProductReview = typeof productReviews.$inferSelect;
 
 /**
  * Ajustes del sitio, como pares clave-valor.
@@ -125,20 +109,6 @@ export const siteSettings = pgTable("site_settings", {
   updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
 
-export const blogPostsRelations = relations(blogPosts, ({ one }) => ({
-  categoria: one(blogCategories, {
-    fields: [blogPosts.categoryId],
-    references: [blogCategories.id],
-  }),
-}));
-
-export const blogCategoriesRelations = relations(blogCategories, ({ many }) => ({
-  posts: many(blogPosts),
-}));
-
-export type BlogPost = typeof blogPosts.$inferSelect;
-export type BlogCategory = typeof blogCategories.$inferSelect;
-export type Testimonial = typeof testimonials.$inferSelect;
 export type SiteSetting = typeof siteSettings.$inferSelect;
 
 

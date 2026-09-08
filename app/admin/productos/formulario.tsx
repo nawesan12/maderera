@@ -48,6 +48,7 @@ export interface ProductoForm {
   slug: string;
   categoryId: string;
   subcategory: string;
+  subcategoryId: string;
   description: string;
   brand: string;
   unit: string;
@@ -93,10 +94,13 @@ const estadoInicial: EstadoFormulario = {};
 export function FormularioProducto({
   inicial,
   categorias,
+  rubros,
   galeria = [],
 }: {
   inicial: ProductoForm;
   categorias: { id: string; name: string }[];
+  /** Todos los rubros; el select muestra los de la categoría elegida. */
+  rubros: { id: string; categoryId: string; name: string; active: boolean }[];
   galeria?: ImagenProducto[];
 }) {
   const [estado, accion, pendiente] = useActionState(
@@ -109,6 +113,21 @@ export function FormularioProducto({
   const [slugTocado, setSlugTocado] = useState(Boolean(inicial.id));
   const [unidad, setUnidad] = useState(inicial.unit);
   const [categoria, setCategoria] = useState(inicial.categoryId);
+  const [rubro, setRubro] = useState(inicial.subcategoryId);
+
+  const rubrosDeLaCategoria = rubros.filter((r) => r.categoryId === categoria);
+
+  /*
+   * El rubro que realmente vale, calculado en el render.
+   *
+   * Cambiar de categoría deja el rubro anterior sin sentido, porque pertenece a
+   * otra. Se resuelve derivándolo en vez de sincronizarlo con un efecto: un
+   * `setState` dentro de un efecto encadena un render de más y, sobre todo,
+   * deja un instante en el que el campo oculto todavía manda el rubro viejo.
+   */
+  const rubroValido = rubrosDeLaCategoria.some((r) => r.id === rubro)
+    ? rubro
+    : "";
   const [variantes, setVariantes] = useState<VarianteForm[]>(
     inicial.variantes.length > 0 ? inicial.variantes : [varianteVacia()],
   );
@@ -231,13 +250,36 @@ export function FormularioProducto({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="subcategory">Subcategoría</Label>
-              <Input
-                id="subcategory"
-                name="subcategory"
-                defaultValue={inicial.subcategory}
-                placeholder="Tirantería, Melaminas…"
-              />
+              <Label>Rubro</Label>
+              {/* El valor viaja en un campo oculto: `Select` no es un
+                  `<select>` nativo y no se envía solo con el formulario. */}
+              <input type="hidden" name="subcategoryId" value={rubroValido} />
+              <Select
+                value={rubroValido}
+                onValueChange={(v) => setRubro(v ?? "")}
+                items={Object.fromEntries([
+                  ["", "Sin rubro"],
+                  ...rubrosDeLaCategoria.map((r) => [r.id, r.name]),
+                ])}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sin rubro" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin rubro</SelectItem>
+                  {rubrosDeLaCategoria.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                      {r.active ? "" : " (dado de baja)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {rubrosDeLaCategoria.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Esta categoría todavía no tiene rubros cargados.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

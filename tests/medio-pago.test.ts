@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   descuentoPorMedioDePago,
+  medioPermitido,
+  mediosHabilitados,
   montoDelDescuentoDePago,
   type EscalaDePago,
 } from "@/lib/precios/medio-pago";
@@ -57,5 +59,48 @@ describe("montoDelDescuentoDePago", () => {
 
   it("no descuenta sobre un total en cero", () => {
     expect(montoDelDescuentoDePago(0, 10)).toBe(0);
+  });
+});
+
+/**
+ * El precio mayorista es de contado. De la clienta: transferencia o débito, y
+ * nunca crédito en cuotas. Quien paga de otra forma va a precio de catálogo.
+ */
+describe("mediosHabilitados", () => {
+  const MEDIOS = [
+    { valor: "mercado_pago" },
+    { valor: "transferencia" },
+    { valor: "debito" },
+    { valor: "efectivo" },
+  ] as const;
+
+  it("no toca nada cuando el precio es el de catálogo", () => {
+    expect(mediosHabilitados(MEDIOS, false)).toHaveLength(4);
+  });
+
+  it("saca la tarjeta en cuotas cuando el precio es mayorista", () => {
+    const valores = mediosHabilitados(MEDIOS, true).map((m) => m.valor);
+
+    expect(valores).toEqual(["transferencia", "debito", "efectivo"]);
+    expect(valores).not.toContain("mercado_pago");
+  });
+});
+
+describe("medioPermitido", () => {
+  it("deja pasar cualquier medio a precio de catálogo", () => {
+    expect(medioPermitido("mercado_pago", false)).toBe(true);
+    expect(medioPermitido("credito", false)).toBe(true);
+  });
+
+  it("con precio mayorista solo admite los de contado", () => {
+    expect(medioPermitido("transferencia", true)).toBe(true);
+    expect(medioPermitido("debito", true)).toBe(true);
+    expect(medioPermitido("efectivo", true)).toBe(true);
+    expect(medioPermitido("cuenta_corriente", true)).toBe(true);
+  });
+
+  it("con precio mayorista rechaza el crédito y Mercado Pago", () => {
+    expect(medioPermitido("credito", true)).toBe(false);
+    expect(medioPermitido("mercado_pago", true)).toBe(false);
   });
 });

@@ -16,6 +16,7 @@ import {
   productVariants,
   products,
   relatedProducts,
+  subcategories,
 } from "@/lib/db/schema";
 import { listaVigente, type ListaVigente } from "@/lib/dal/precios-sesion";
 import { aniosDeTrayectoria } from "@/lib/empresa";
@@ -46,6 +47,9 @@ export interface ProductoListado {
   name: string;
   description: string;
   subcategory: string | null;
+  /** Slug del rubro, para poder enlazar al filtro desde la tarjeta. */
+  subcategorySlug: string | null;
+  subcategoryName: string | null;
   brand: string | null;
   unit: string;
   /** Con qué alícuota se factura. La vitrina la necesita para desagregar bien. */
@@ -76,6 +80,13 @@ export type OrdenCatalogo =
 
 export interface FiltrosCatalogo {
   categoria?: string;
+  /**
+   * El rubro dentro de la categoría, por slug.
+   *
+   * Ferretería son ~1000 SKUs según el brief: sin este nivel, esa categoría es
+   * una grilla donde no se encuentra un tarugo.
+   */
+  subcategoria?: string;
   busqueda?: string;
   stock?: "todos" | "en-stock" | "casa-central" | "aserradero";
   orden?: OrdenCatalogo;
@@ -155,6 +166,43 @@ export const listarCategorias = cache(
 );
 
 /**
+ * Los rubros de una categoría, con cuántos productos activos tiene cada uno.
+ *
+ * Devuelve solo los que tienen algo cargado: un rubro vacío en el panel de
+ * filtros es un enlace a una grilla sin resultados. Los 43 de ferretería van a
+ * ir apareciendo a medida que se carguen los productos, sin que nadie tenga que
+ * activarlos a mano.
+ */
+export const rubrosDeCategoria = cache(
+  cachearPublico(
+    async (categoria: string) => {
+      return db
+        .select({
+          slug: subcategories.slug,
+          name: subcategories.name,
+          productCount: count(products.id),
+        })
+        .from(subcategories)
+        .innerJoin(categories, eq(categories.id, subcategories.categoryId))
+        .innerJoin(
+          products,
+          and(
+            eq(products.subcategoryId, subcategories.id),
+            eq(products.active, true),
+          ),
+        )
+        .where(
+          and(eq(categories.slug, categoria), eq(subcategories.active, true)),
+        )
+        .groupBy(subcategories.id)
+        .orderBy(asc(subcategories.sortOrder), asc(subcategories.name));
+    },
+    ["subcategorias"],
+    ETIQUETAS.catalogo,
+  ),
+);
+
+/**
  * Trae el catálogo ya filtrado desde la base.
  *
  * El prototipo mandaba el array completo al navegador y filtraba ahí. Con más de
@@ -177,6 +225,10 @@ async function consultarProductos(
 
   if (filtros.categoria && filtros.categoria !== "todos") {
     condiciones.push(eq(categories.slug, filtros.categoria));
+  }
+
+  if (filtros.subcategoria && filtros.subcategoria !== "todos") {
+    condiciones.push(eq(subcategories.slug, filtros.subcategoria));
   }
 
   if (filtros.busqueda) {
@@ -204,9 +256,14 @@ async function consultarProductos(
       featured: products.featured,
       categorySlug: categories.slug,
       categoryName: categories.name,
+      subcategorySlug: subcategories.slug,
+      subcategoryName: subcategories.name,
     })
     .from(products)
     .innerJoin(categories, eq(categories.id, products.categoryId))
+    // `left` y no `inner`: hay productos sin rubro asignado, y con un inner join
+    // desaparecerían del catálogo.
+    .leftJoin(subcategories, eq(subcategories.id, products.subcategoryId))
     .where(and(...condiciones))
     .orderBy(asc(categories.sortOrder), asc(products.name));
 
@@ -576,6 +633,14 @@ export interface VarianteDetalle {
   precio: string | null;
   stockCentral: StockLevel;
   stockAserradero: StockLevel;
+  /**
+   * Cuántas unidades quedan entre las dos sucursales.
+   *
+   * La ficha lo muestra **solo cuando el nivel es bajo**, como promoción. Con
+   * stock alto el número no promociona nada y sí le dice a la competencia
+   * cuánto hay en el galpón, así que ahí sigue sin verse.
+   */
+  disponibles: number;
 }
 
 export interface ProductoDetalle {
@@ -584,6 +649,9 @@ export interface ProductoDetalle {
   name: string;
   description: string;
   subcategory: string | null;
+  /** Slug del rubro, para poder enlazar al filtro desde la tarjeta. */
+  subcategorySlug: string | null;
+  subcategoryName: string | null;
   brand: string | null;
   unit: string;
   /** Con qué alícuota se factura. La vitrina la necesita para desagregar bien. */
@@ -615,9 +683,12 @@ export async function obtenerProducto(
       featured: products.featured,
       categorySlug: categories.slug,
       categoryName: categories.name,
+      subcategorySlug: subcategories.slug,
+      subcategoryName: subcategories.name,
     })
     .from(products)
     .innerJoin(categories, eq(categories.id, products.categoryId))
+    .leftJoin(subcategories, eq(subcategories.id, products.subcategoryId))
     .where(and(eq(products.slug, slug), eq(products.active, true)))
     .limit(1);
 
@@ -700,15 +771,20 @@ export async function obtenerProducto(
       precio: null,
       stockCentral: "sin-stock" as StockLevel,
       stockAserradero: "sin-stock" as StockLevel,
+      disponibles: 0,
     };
 
     // El join ya restringe el precio a la lista general.
     if (v.precio !== null) actual.precio = v.precio;
 
     if (v.branchSlug && v.qty !== null && v.minQty !== null) {
-      const nivel = stockLevel(disponible(v.qty, v.reservado ?? 0), v.minQty);
+      const libre = disponible(v.qty, v.reservado ?? 0);
+      const nivel = stockLevel(libre, v.minQty);
       if (v.branchSlug === "casa-central") actual.stockCentral = nivel;
       if (v.branchSlug === "aserradero") actual.stockAserradero = nivel;
+      // Suma de las dos sucursales: es lo que se puede llevar hoy, sin importar
+      // de qué galpón salga.
+      actual.disponibles += libre;
     }
 
     porVariante.set(v.id, actual);

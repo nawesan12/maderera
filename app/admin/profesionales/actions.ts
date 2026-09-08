@@ -13,6 +13,7 @@ import {
   volumeDiscounts,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { rolTrasAprobarProfesional } from "@/lib/roles";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { parsearImporte } from "@/lib/formato";
 import { variantesDeCuit } from "@/lib/cuit";
@@ -88,16 +89,22 @@ export async function aprobarSolicitud(
   await db.transaction(async (tx) => {
     // Ficha existente por CUIT, comparando solo dígitos: en el mostrador se
     // carga con guiones y en el formulario sin ellos.
-    const [existente] = await tx
-      .select({ id: customers.id })
-      .from(customers)
-      .where(
-        and(
-          eq(customers.active, true),
-          inArray(customers.cuit, variantesDeCuit(solicitud.cuit)),
-        ),
-      )
-      .limit(1);
+    //
+    // Desde que el CUIT es opcional puede no haberlo, y entonces no se busca
+    // nada: enganchar por DNI contra `customers.cuit` aparearía la ficha
+    // equivocada, que es exactamente el problema que esta búsqueda evita.
+    const [existente] = solicitud.cuit
+      ? await tx
+          .select({ id: customers.id })
+          .from(customers)
+          .where(
+            and(
+              eq(customers.active, true),
+              inArray(customers.cuit, variantesDeCuit(solicitud.cuit)),
+            ),
+          )
+          .limit(1)
+      : [];
 
     const datosComerciales = {
       tipo: "profesional" as const,
@@ -132,9 +139,14 @@ export async function aprobarSolicitud(
           nombre: solicitud.razonSocial || solicitud.nombre,
           razonSocial: solicitud.razonSocial,
           cuit: solicitud.cuit,
-          // Un profesional factura A salvo que diga lo contrario; se corrige
-          // desde la ficha si no es el caso.
-          condicionIva: "responsable_inscripto",
+          // Un profesional con CUIT factura A salvo que diga lo contrario; se
+          // corrige desde la ficha si no es el caso. Con DNI no hay factura A
+          // posible, así que entra como consumidor final: ponerlo inscripto
+          // haría que el catálogo le muestre precios netos que no le
+          // corresponden y que la factura salga con la letra equivocada.
+          condicionIva: solicitud.cuit
+            ? "responsable_inscripto"
+            : "consumidor_final",
           email: solicitud.email,
           telefono: solicitud.telefono,
           userId: solicitud.userId,
@@ -146,12 +158,21 @@ export async function aprobarSolicitud(
     }
 
     // La cuenta web, si la tiene: es lo que hace que el catálogo le muestre los
-    // precios nuevos sin que nadie toque nada más.
+    // precios nuevos sin que nadie toque nada más. Quién conserva su rol lo
+    // decide `rolTrasAprobarProfesional`, que está en `lib/roles.ts` con su test.
     if (solicitud.userId) {
+      const [perfil] = await tx
+        .select({ role: profiles.role })
+        .from(profiles)
+        .where(eq(profiles.userId, solicitud.userId))
+        .limit(1);
+
+      const rolNuevo = rolTrasAprobarProfesional(perfil?.role);
+
       await tx
         .update(profiles)
         .set({
-          role: "profesional",
+          ...(rolNuevo ? { role: rolNuevo } : {}),
           priceListId: parsed.data.priceListId ?? null,
           updatedAt: new Date(),
         })

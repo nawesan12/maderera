@@ -10,6 +10,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -119,3 +120,56 @@ export const cuttingRates = pgTable(
     index("cutting_rates_activo_idx").on(t.activo),
   ],
 );
+
+
+/**
+ * Los parámetros de las calculadoras de materiales.
+ *
+ * Vivían como constantes en `lib/calculations.ts`, cada una con el comentario
+ * de dónde salía. Tres de ellas el brief no las contestó y quedaron anotadas en
+ * `docs/CAMBIOS.md` como insumo pendiente: el desperdicio por material, la
+ * pendiente del techo y el solape de la membrana.
+ *
+ * Traerlas a una pantalla cierra ese pendiente sin esperar un despliegue: la
+ * clienta las carga cuando las tenga. **Las fórmulas siguen siendo funciones
+ * puras y sin base**; los valores llegan por argumento desde el DAL, que es lo
+ * que permite seguir probándolas.
+ *
+ * Es una fila única: son los parámetros del negocio, no una lista.
+ */
+export const calculatorSettings = pgTable("calculator_settings", {
+  id: uuid().primaryKey().defaultRandom(),
+  /** Merma del machimbre por encastre. Del brief: 20 %. */
+  mermaMachimbre: numeric({ precision: 5, scale: 4 }).notNull().default("0.2"),
+  /** Pendiente del techo sobre la superficie en planta. Sin confirmar. */
+  factorPendiente: numeric({ precision: 5, scale: 4 }).notNull().default("0.15"),
+  /** Margen de seguridad sobre el material, además de lo de la sierra. */
+  margenSeguridad: numeric({ precision: 5, scale: 4 }).notNull().default("0.12"),
+  /** Lo que se come la sierra por pasada. Del brief: 5 mm. */
+  anchoSierraMm: integer().notNull().default(5),
+  /** Cuánto rinde un rollo de membrana ya descontado el solape, en m². */
+  rindeRolloMembrana: numeric({ precision: 6, scale: 2 })
+    .notNull()
+    .default("9"),
+  /** Rollo de lana de vidrio de 1,2 m × 18 m. */
+  rindeRolloAislacion: numeric({ precision: 6, scale: 2 })
+    .notNull()
+    .default("21.6"),
+  /** Separación entre tirantes de techo, en metros. Del brief: 60 cm. */
+  separacionTechoM: numeric({ precision: 4, scale: 2 }).notNull().default("0.6"),
+  /** Separación entre tirantes de entrepiso, en metros. Del brief: 40 cm. */
+  separacionPisoM: numeric({ precision: 4, scale: 2 }).notNull().default("0.4"),
+  /** Medida de la tabla de deck de madera, en metros. */
+  deckGrandisLargoM: numeric({ precision: 5, scale: 2 })
+    .notNull()
+    .default("2.40"),
+  deckGrandisAnchoM: numeric({ precision: 5, scale: 3 })
+    .notNull()
+    .default("0.100"),
+  /** Medida de la tabla de deck de PVC, en metros. */
+  deckPvcLargoM: numeric({ precision: 5, scale: 2 }).notNull().default("2.90"),
+  deckPvcAnchoM: numeric({ precision: 5, scale: 3 }).notNull().default("0.140"),
+  updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+export type CalculatorSettings = typeof calculatorSettings.$inferSelect;

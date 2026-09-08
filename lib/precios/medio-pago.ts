@@ -57,3 +57,44 @@ export function montoDelDescuentoDePago(
   if (total <= 0 || porcentaje <= 0) return 0;
   return Math.round(total * Math.min(porcentaje, TOPE)) / 100;
 }
+
+/**
+ * Con qué se puede pagar el precio mayorista.
+ *
+ * De la clienta: *"El precio mayorista es sí o sí con transferencia o débito.
+ * NO CRÉDITO EN CUOTAS. Si no, si paga de otra forma usa precio de catálogo
+ * final"*.
+ *
+ * Se resuelve **bloqueando los medios y no cambiando la lista**. La alternativa
+ * era mostrar el precio mayorista y recalcularlo al final si eligió crédito,
+ * pero eso es subirle el precio a alguien después de que decidió comprar, sobre
+ * una pantalla que ya le mostró otro número. Que directamente no aparezca el
+ * medio es más honesto y no necesita explicación.
+ *
+ * El efectivo entra porque es contado —es el mismo caso que la transferencia, y
+ * ya tiene su propio descuento cargado—, y la cuenta corriente porque no es una
+ * forma de financiarse con la tarjeta sino el acuerdo comercial que el mayorista
+ * ya tiene con la casa.
+ */
+const MEDIOS_MAYORISTA = new Set([
+  "transferencia",
+  "debito",
+  "efectivo",
+  "cuenta_corriente",
+]);
+
+export function mediosHabilitados<T extends { valor: string }>(
+  medios: readonly T[],
+  precioMayorista: boolean,
+): T[] {
+  if (!precioMayorista) return [...medios];
+  return medios.filter((m) => MEDIOS_MAYORISTA.has(m.valor));
+}
+
+/** Si ese medio puede pagar el precio que se le mostró. */
+export function medioPermitido(
+  medio: string,
+  precioMayorista: boolean,
+): boolean {
+  return !precioMayorista || MEDIOS_MAYORISTA.has(medio);
+}

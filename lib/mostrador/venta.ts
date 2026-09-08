@@ -27,8 +27,10 @@ import { escalasDePago } from "@/lib/dal/descuentos-pago";
 import { estadoDeCredito } from "@/lib/dal/credito";
 import {
   descuentoPorMedioDePago,
+  medioPermitido,
   montoDelDescuentoDePago,
 } from "@/lib/precios/medio-pago";
+import { listaDelCliente } from "@/lib/mostrador/buscar";
 
 export type { LineaDeVenta, MedioDeMostrador };
 
@@ -140,6 +142,32 @@ export async function registrarVentaDeMostrador(
   // formulario ya validó es confiar en el navegador de otro.
   const problema = revisarVenta(venta.lineas, venta.medioPago, venta.customerId);
   if (problema) return { ok: false, error: problema };
+
+  /*
+   * El precio de profesional es de contado.
+   *
+   * De la clienta: con transferencia o débito, nunca en cuotas. Acá el chequeo
+   * no se puede hacer en `importes.ts` porque depende de qué lista tiene el
+   * cliente, que es una consulta.
+   *
+   * No hay válvula de autorización como en la cuenta corriente, y a propósito:
+   * la salida existe y es más simple: se cobra a consumidor final, que es
+   * precio de catálogo, que es exactamente lo que la regla dice que corresponde
+   * cuando se paga de otra forma.
+   */
+  if (venta.customerId) {
+    const lista = await listaDelCliente(venta.customerId);
+    const diferenciada = lista.id !== null && lista.id !== lista.generalId;
+
+    if (diferenciada && !medioPermitido(venta.medioPago, true)) {
+      return {
+        ok: false,
+        error:
+          "Este cliente tiene precio de profesional, que es de contado. Cobrá por " +
+          "transferencia, débito o efectivo, o pasá la venta a consumidor final.",
+      };
+    }
+  }
 
   /*
    * El descuento se reparte entre las líneas y no va como renglón aparte: la

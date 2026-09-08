@@ -10,9 +10,9 @@ import {
   Plus,
   Search,
   Send,
-  Sparkles,
   X,
 } from "lucide-react";
+import { PersonajeAsistente } from "@/components/asistente/personaje";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -218,7 +218,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
         aria-label="Abrir el asistente"
         className="fixed bottom-6 right-[5.5rem] z-50 flex h-14 w-14 items-center justify-center rounded-full bg-accion text-white shadow-lg transition-all hover:scale-110 hover:shadow-xl"
       >
-        <Sparkles className="h-6 w-6" />
+        <PersonajeAsistente className="h-7 w-7" />
       </button>
     );
   }
@@ -231,7 +231,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     >
       <header className="flex shrink-0 items-center gap-3 border-b border-linea px-4 py-3">
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-naranja-claro">
-          <Sparkles className="h-4 w-4 text-acento-texto" />
+          <PersonajeAsistente className="h-5 w-5 text-acento-texto" />
         </span>
         <div className="flex-1">
           <p className="font-semibold leading-tight">Te ayudo a encontrar</p>

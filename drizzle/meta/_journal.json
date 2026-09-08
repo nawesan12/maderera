@@ -281,6 +281,48 @@
       "when": 1788655288599,
       "tag": "0039_majestic_dagger",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1788825710935,
+      "tag": "0040_aspiring_zaladane",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788826344907,
+      "tag": "0041_romantic_psynapse",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1788827169334,
+      "tag": "0042_kind_jackpot",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1788827681716,
+      "tag": "0043_aberrant_jubilee",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1788829166126,
+      "tag": "0044_warm_solo",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1788831032216,
+      "tag": "0045_wandering_betty_ross",
+      "breakpoints": true
     }
   ]
 }

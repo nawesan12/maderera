@@ -157,12 +157,14 @@ const SENALES: { intencion: Intencion; palabras: string[]; peso?: number }[] = [
  * búsqueda por texto lo cubre igual.
  */
 const RUBROS: { slug: string; palabras: string[] }[] = [
-  { slug: "placas", palabras: ["placa", "placas", "melamina", "melaminico", "mdf", "fenolico", "aglomerado", "terciado"] },
+  { slug: "placas", palabras: ["placa", "placas", "melamina", "melaminico", "mdf", "fenolico", "aglomerado", "terciado", "terciados", "chapadur", "enchapado", "enchapados", "ranurado", "ranurados", "osb", "fibrofacil", "tablero", "tableros"] },
   { slug: "techos", palabras: ["techo", "techos", "tirante", "tirantes", "machimbre", "cabreada"] },
   { slug: "pisos", palabras: ["piso", "pisos", "flotante", "zocalo", "zocalos", "parquet"] },
   { slug: "molduras", palabras: ["moldura", "molduras", "marco", "cornisa", "varilla"] },
   { slug: "ferreteria", palabras: ["tornillo", "tornillos", "bisagra", "bisagras", "clavo", "clavos", "cola", "laca", "herraje", "corredera"] },
-  { slug: "decks", palabras: ["deck", "decks", "escalera", "escaleras", "grandis"] },
+  // El slug del catálogo es `decks-y-escaleras`; decía `decks` y no apuntaba a
+  // ninguna categoría, así que el atajo nunca funcionó.
+  { slug: "decks-y-escaleras", palabras: ["deck", "decks", "escalera", "escaleras", "grandis"] },
   { slug: "construccion-en-seco", palabras: ["durlock", "yeso", "montante", "solera", "lana de vidrio", "construccion en seco"] },
   { slug: "cubiertas", palabras: ["chapa", "chapas", "cubierta", "cubiertas", "curvin", "teja", "tejas"] },
 ];

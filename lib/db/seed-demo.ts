@@ -357,27 +357,36 @@ const SOLICITUDES = [
   {
     nombre: "Ezequiel Barrios",
     razonSocial: "Wood Framer",
+    documentoTipo: "cuit" as const,
+    documentoNumero: "20315678903",
     cuit: "20315678903",
     email: "ezequiel@woodframer.com.ar",
     telefono: "2235287248",
-    rubro: "constructora" as const,
+    rubro: "woodframer" as const,
     volumenEstimado: "Entre 8 y 12 viviendas por año en sistema Wood Frame.",
     localidad: "Mar del Plata",
+    redSocial: "@woodframer.mdq",
     mensaje:
       "Trabajamos con ustedes hace tres años comprando por mostrador. Queremos la " +
       "lista de profesionales y cuenta corriente para poder pedir sin ir hasta el local.",
     horas: 20,
   },
   {
+    // Con DNI a propósito: es el caso que el formulario acepta desde que el
+    // CUIT dejó de ser obligatorio, y el que hace aparecer en el panel el aviso
+    // de que esa ficha no puede recibir factura A.
     nombre: "Valeria Sosa",
     razonSocial: "Sosa Carpintería de Obra",
-    cuit: "27289876541",
+    documentoTipo: "dni" as const,
+    documentoNumero: "28987654",
+    cuit: null,
     email: "valeria@sosacarpinteria.com.ar",
     telefono: "2234109876",
     rubro: "carpintero" as const,
     matricula: null,
     volumenEstimado: "Placas y tapacantos, unas 40 placas por mes.",
     localidad: "Mar del Plata",
+    redSocial: "@sosacarpinteria",
     mensaje: "Necesito precio de melamina cortada y saber si hacen entrega en Batán.",
     horas: 52,
   },
@@ -396,7 +405,7 @@ async function sembrarSolicitudes() {
     const [previa] = await db
       .select({ id: professionalApplications.id })
       .from(professionalApplications)
-      .where(eq(professionalApplications.cuit, s.cuit))
+      .where(eq(professionalApplications.documentoNumero, s.documentoNumero))
       .limit(1);
 
     if (previa) {

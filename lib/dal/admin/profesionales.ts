@@ -17,13 +17,17 @@ export interface SolicitudListada {
   id: string;
   nombre: string;
   razonSocial: string | null;
-  cuit: string;
+  documentoTipo: "dni" | "cuit";
+  documentoNumero: string;
+  /** Nulo cuando se identificó con DNI. */
+  cuit: string | null;
   email: string;
   telefono: string;
   rubro: string;
   matricula: string | null;
   volumenEstimado: string | null;
   localidad: string | null;
+  redSocial: string | null;
   mensaje: string | null;
   estado: "pendiente" | "aprobada" | "rechazada";
   motivoRechazo: string | null;
@@ -42,6 +46,8 @@ export async function listarSolicitudes(): Promise<SolicitudListada[]> {
       id: professionalApplications.id,
       nombre: professionalApplications.nombre,
       razonSocial: professionalApplications.razonSocial,
+      documentoTipo: professionalApplications.documentoTipo,
+      documentoNumero: professionalApplications.documentoNumero,
       cuit: professionalApplications.cuit,
       email: professionalApplications.email,
       telefono: professionalApplications.telefono,
@@ -49,6 +55,7 @@ export async function listarSolicitudes(): Promise<SolicitudListada[]> {
       matricula: professionalApplications.matricula,
       volumenEstimado: professionalApplications.volumenEstimado,
       localidad: professionalApplications.localidad,
+      redSocial: professionalApplications.redSocial,
       mensaje: professionalApplications.mensaje,
       estado: professionalApplications.estado,
       motivoRechazo: professionalApplications.motivoRechazo,
@@ -65,7 +72,10 @@ export async function listarSolicitudes(): Promise<SolicitudListada[]> {
   // Fichas que ya existen con ese CUIT. Es el dato que decide si aprobar crea
   // una ficha nueva o marca la que ya compra en el mostrador: duplicar un
   // cliente parte su cuenta corriente en dos.
-  const cuits = [...new Set(filas.map((f) => f.cuit))];
+  //
+  // Las solicitudes con DNI quedan afuera: `customers.cuit` guarda CUIT, y
+  // aparear un DNI contra esa columna traería la ficha de otra persona.
+  const cuits = [...new Set(filas.map((f) => f.cuit).filter((c) => c !== null))];
 
   // Se busca por las dos formas en que puede estar guardado —con guiones y sin
   // ellos— en vez de normalizar con `regexp_replace` dentro de la consulta: así
@@ -86,7 +96,7 @@ export async function listarSolicitudes(): Promise<SolicitudListada[]> {
 
   return filas.map((f) => ({
     ...f,
-    clienteExistente: porCuit.get(f.cuit) ?? null,
+    clienteExistente: f.cuit ? (porCuit.get(f.cuit) ?? null) : null,
   }));
 }
 

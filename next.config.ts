@@ -34,6 +34,21 @@ const nextConfig: NextConfig = {
    * es lo que le permite controlar todo el sitio aunque el archivo esté en la
    * raíz de `public`.
    */
+  /**
+   * El blog salió del sitio el 7/9/2026, por pedido de la clienta.
+   *
+   * Las seis notas estaban en el sitemap y pueden estar indexadas, además de
+   * compartidas por WhatsApp. Un 404 pierde ese tráfico y deja un enlace roto
+   * en cualquier lado donde alguien lo haya pegado; un 301 lo manda a la
+   * portada, que es lo más cerca que quedó de lo que la persona buscaba.
+   */
+  async redirects() {
+    return [
+      { source: "/blog", destination: "/", permanent: true },
+      { source: "/blog/:slug", destination: "/", permanent: true },
+    ];
+  },
+
   async headers() {
     return [
       {

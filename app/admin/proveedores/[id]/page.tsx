@@ -3,7 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
-import { obtenerProveedor } from "@/lib/dal/admin/proveedores";
+import {
+  obtenerProveedor,
+  perfilDelProveedor,
+} from "@/lib/dal/admin/proveedores";
+import { ImportadorDeLista } from "../lista-precios/importador";
 import { formatearMonto } from "@/lib/formato";
 import { FormularioProveedor } from "../formulario";
 import { CuentaDelProveedor } from "./cuenta";
@@ -26,7 +30,10 @@ export default async function ProveedorPage({
   await requireStaffRole("admin");
 
   const { id } = await params;
-  const proveedor = await obtenerProveedor(id);
+  const [proveedor, perfil] = await Promise.all([
+    obtenerProveedor(id),
+    perfilDelProveedor(id),
+  ]);
 
   if (!proveedor) notFound();
 
@@ -118,6 +125,21 @@ export default async function ProveedorPage({
           />
         </div>
       </details>
+
+      <ImportadorDeLista
+        supplierId={id}
+        perfil={
+          perfil
+            ? {
+                columnaCodigo: perfil.columnaCodigo,
+                columnaPrecio: perfil.columnaPrecio,
+                columnaDescripcion: perfil.columnaDescripcion,
+                precioEsNeto: perfil.precioEsNeto,
+                margenPorcentaje: perfil.margenPorcentaje,
+              }
+            : null
+        }
+      />
     </div>
   );
 }

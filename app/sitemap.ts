@@ -3,7 +3,6 @@ import { urlAbsoluta } from "@/lib/seo";
 import {
   rutasDeCategorias,
   rutasDeEventos,
-  rutasDelBlog,
   rutasDelCatalogo,
 } from "@/lib/dal/sitemap";
 
@@ -31,7 +30,6 @@ const FIJAS: { ruta: string; prioridad: number; frecuencia: MetadataRoute.Sitema
   // provincia que busca molduras finger joint, no la maderera de al lado.
   { ruta: "/moldava", prioridad: 0.8, frecuencia: "monthly" },
   { ruta: "/sucursales", prioridad: 0.8, frecuencia: "monthly" },
-  { ruta: "/blog", prioridad: 0.7, frecuencia: "weekly" },
   { ruta: "/profesionales", prioridad: 0.7, frecuencia: "monthly" },
   { ruta: "/eventos", prioridad: 0.6, frecuencia: "weekly" },
   { ruta: "/documentacion", prioridad: 0.5, frecuencia: "monthly" },
@@ -41,10 +39,9 @@ const FIJAS: { ruta: string; prioridad: number; frecuencia: MetadataRoute.Sitema
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [productos, categorias, blog, eventos] = await Promise.all([
+  const [productos, categorias, eventos] = await Promise.all([
     rutasDelCatalogo(),
     rutasDeCategorias(),
-    rutasDelBlog(),
     rutasDeEventos(),
   ]);
 
@@ -68,12 +65,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: p.actualizada,
       changeFrequency: "weekly" as const,
       priority: 0.7,
-    })),
-    ...blog.map((b) => ({
-      url: urlAbsoluta(b.ruta),
-      lastModified: b.actualizada,
-      changeFrequency: "monthly" as const,
-      priority: 0.6,
     })),
     ...eventos.map((e) => ({
       url: urlAbsoluta(e.ruta),

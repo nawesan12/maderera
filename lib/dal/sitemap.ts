@@ -3,8 +3,6 @@ import "server-only";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
-  blogCategories,
-  blogPosts,
   categories,
   events,
   products,
@@ -61,40 +59,6 @@ export async function rutasDeCategorias(): Promise<RutaSitemap[]> {
     ruta: `/catalogo?cat=${f.slug}`,
     actualizada: new Date(f.actualizada),
   }));
-}
-
-export async function rutasDelBlog(): Promise<RutaSitemap[]> {
-  const [notas, categoriasDelBlog] = await Promise.all([
-    db
-      .select({
-        slug: blogPosts.slug,
-        actualizada: blogPosts.updatedAt,
-      })
-      .from(blogPosts)
-      .where(eq(blogPosts.estado, "publicado")),
-    db
-      .select({
-        slug: blogCategories.slug,
-        actualizada: sql<Date>`max(${blogPosts.updatedAt})`,
-      })
-      .from(blogCategories)
-      .innerJoin(
-        blogPosts,
-        and(
-          eq(blogPosts.categoryId, blogCategories.id),
-          eq(blogPosts.estado, "publicado"),
-        ),
-      )
-      .groupBy(blogCategories.slug),
-  ]);
-
-  return [
-    ...notas.map((f) => ({ ruta: `/blog/${f.slug}`, actualizada: f.actualizada })),
-    ...categoriasDelBlog.map((f) => ({
-      ruta: `/blog?categoria=${f.slug}`,
-      actualizada: new Date(f.actualizada),
-    })),
-  ];
 }
 
 /**

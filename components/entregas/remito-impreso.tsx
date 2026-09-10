@@ -109,6 +109,22 @@ export function RemitoImpreso({
                 </strong>
               </div>
             )}
+            {/* Si lo que sale está pago o no: quien entrega tiene que saberlo
+                sin ir a buscar la factura. Sin importes, a propósito. */}
+            <div>
+              <span>Condición de pago</span>
+              <strong>
+                {remito.estadoPago === "pagado"
+                  ? "Pagado"
+                  : remito.estadoPago === "parcial"
+                    ? "Pagado en parte · resto en cuenta corriente"
+                    : remito.estadoPago === "pendiente"
+                      ? remito.medioPago === "cuenta_corriente"
+                        ? "Cuenta corriente"
+                        : "Pendiente de pago"
+                      : "—"}
+              </strong>
+            </div>
           </div>
         </section>
 

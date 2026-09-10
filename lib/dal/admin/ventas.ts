@@ -6,10 +6,14 @@ import {
   branches,
   customers,
   orderItems,
+  orderPayments,
   orderStatusHistory,
   orders,
+  productVariants,
+  products,
   quoteItems,
   quotes,
+  sellers,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { coincideBusqueda } from "@/lib/busqueda";
@@ -43,13 +47,18 @@ export interface PresupuestoListado {
 }
 
 export async function listarPresupuestos(
-  filtros: { busqueda?: string; estado?: string } = {},
+  filtros: { busqueda?: string; estado?: string; sucursal?: string } = {},
 ): Promise<PresupuestoListado[]> {
   await requireStaff();
 
   const condiciones = [];
   if (filtros.estado && filtros.estado !== "todos") {
     condiciones.push(eq(quotes.estado, filtros.estado as never));
+  }
+  // "Los presupuestos que se hacen en la central más los que se hacen en
+  // Canosa tienen que estar distinguidos": el corte es por sucursal.
+  if (filtros.sucursal && filtros.sucursal !== "todos") {
+    condiciones.push(eq(branches.slug, filtros.sucursal));
   }
   if (filtros.busqueda) {
     const coincidencia = coincideBusqueda(filtros.busqueda, [
@@ -123,7 +132,18 @@ export async function listarPresupuestos(
 
 export async function obtenerPresupuesto(id: string) {
   await requireStaff();
+  return consultarPresupuesto(id);
+}
 
+/**
+ * La consulta sola, sin exigir personal.
+ *
+ * La usa la descarga del PDF, que también sirve al dueño del presupuesto desde
+ * su cuenta: la ruta verifica quién pide —staff, o el cliente al que apunta
+ * `customerId`— antes de llamar acá. No usar desde una pantalla sin ese
+ * control.
+ */
+export async function consultarPresupuesto(id: string) {
   const [presupuesto] = await db
     .select({
       id: quotes.id,
@@ -133,7 +153,16 @@ export async function obtenerPresupuesto(id: string) {
       telefono: quotes.contactoTelefono,
       empresa: customers.razonSocial,
       customerId: quotes.customerId,
+      // Lo que el presupuesto impreso dice del cliente: el código del sistema
+      // viejo (el "Cod.Cli" al que están acostumbrados), la condición de IVA
+      // que decide si el papel discrimina, y el domicilio.
+      clienteCodigo: customers.codigoLegacy,
+      clienteCuit: customers.cuit,
+      clienteCondicionIva: customers.condicionIva,
+      clienteDireccion: customers.direccion,
       sucursal: branches.name,
+      sucursalSlug: branches.slug,
+      vendedor: sellers.nombre,
       estado: quotes.estado,
       origen: quotes.origen,
       subtotal: quotes.subtotal,
@@ -146,19 +175,39 @@ export async function obtenerPresupuesto(id: string) {
     .from(quotes)
     .leftJoin(customers, eq(customers.id, quotes.customerId))
     .leftJoin(branches, eq(branches.id, quotes.branchId))
+    .leftJoin(sellers, eq(sellers.id, quotes.sellerId))
     .where(eq(quotes.id, id))
     .limit(1);
 
   if (!presupuesto) return null;
 
+  // La alícuota sale del producto para poder desagregar el IVA en el PDF de un
+  // responsable inscripto. Las líneas de texto libre no tienen producto y caen
+  // al 21 al imprimir.
   const items = await db
-    .select()
+    .select({
+      id: quoteItems.id,
+      variantId: quoteItems.variantId,
+      descripcion: quoteItems.descripcion,
+      unidad: quoteItems.unidad,
+      cantidad: quoteItems.cantidad,
+      precioUnitario: quoteItems.precioUnitario,
+      subtotal: quoteItems.subtotal,
+      orden: quoteItems.orden,
+      alicuotaIva: products.alicuotaIva,
+    })
     .from(quoteItems)
+    .leftJoin(productVariants, eq(productVariants.id, quoteItems.variantId))
+    .leftJoin(products, eq(products.id, productVariants.productId))
     .where(eq(quoteItems.quoteId, id))
     .orderBy(asc(quoteItems.orden));
 
   return { ...presupuesto, items };
 }
+
+export type PresupuestoCompleto = NonNullable<
+  Awaited<ReturnType<typeof consultarPresupuesto>>
+>;
 
 /* -------------------------------------------------------------------------- */
 /* Pedidos                                                                     */
@@ -282,7 +331,7 @@ export async function obtenerPedido(id: string) {
 
   if (!pedido) return null;
 
-  const [items, historial] = await Promise.all([
+  const [items, historial, pagos] = await Promise.all([
     db
       .select()
       .from(orderItems)
@@ -293,9 +342,21 @@ export async function obtenerPedido(id: string) {
       .from(orderStatusHistory)
       .where(eq(orderStatusHistory.orderId, id))
       .orderBy(desc(orderStatusHistory.createdAt)),
+    // El detalle de cómo se pagó, con lote y cupón. Vacío en las ventas
+    // anteriores a `order_payments`: ahí `medioPago` cuenta la historia entera.
+    db
+      .select({
+        medio: orderPayments.medio,
+        importe: orderPayments.importe,
+        nroLote: orderPayments.nroLote,
+        nroCupon: orderPayments.nroCupon,
+        tarjeta: orderPayments.tarjeta,
+      })
+      .from(orderPayments)
+      .where(eq(orderPayments.orderId, id)),
   ]);
 
-  return { ...pedido, items, historial };
+  return { ...pedido, items, historial, pagos };
 }
 
 /** Clientes y sucursales para los formularios de alta. */

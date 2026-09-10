@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import {
   accountMovements,
+  customers,
   orderItems,
   orderStatusHistory,
   orders,
@@ -269,6 +270,8 @@ export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
         subtotal: presupuesto.subtotal,
         total: presupuesto.total,
         notas: presupuesto.notas,
+        // El pedido hereda el vendedor del presupuesto que el cliente aceptó.
+        sellerId: presupuesto.sellerId,
         createdByUserId: usuario.userId,
       })
       .returning();
@@ -418,6 +421,7 @@ export async function crearPresupuesto(
       contactoTelefono: z.string().trim().max(40).optional(),
       contactoEmail: z.string().trim().email("Revisá el correo.").optional().or(z.literal("")),
       branchId: z.string().uuid().optional(),
+      sellerId: z.string().uuid().optional(),
       notas: z.string().trim().max(1000).optional(),
       diasValidez: z.coerce.number().int().min(1).max(180).default(DIAS_DE_VALIDEZ),
     })
@@ -427,6 +431,7 @@ export async function crearPresupuesto(
       contactoTelefono: (formData.get("contactoTelefono") as string) || undefined,
       contactoEmail: (formData.get("contactoEmail") as string) || undefined,
       branchId: (formData.get("branchId") as string) || undefined,
+      sellerId: (formData.get("sellerId") as string) || undefined,
       notas: (formData.get("notas") as string) || undefined,
       diasValidez: formData.get("diasValidez") || DIAS_DE_VALIDEZ,
     });
@@ -458,6 +463,17 @@ export async function crearPresupuesto(
   const validoHasta = new Date();
   validoHasta.setDate(validoHasta.getDate() + cabecera.data.diasValidez);
 
+  // El vendedor de la operación: el que se eligió, o el asignado al cliente.
+  let sellerId = cabecera.data.sellerId ?? null;
+  if (!sellerId && cabecera.data.customerId) {
+    const [ficha] = await db
+      .select({ sellerId: customers.sellerId })
+      .from(customers)
+      .where(eq(customers.id, cabecera.data.customerId))
+      .limit(1);
+    sellerId = ficha?.sellerId ?? null;
+  }
+
   let numero = "";
   let quoteId = "";
 
@@ -479,6 +495,7 @@ export async function crearPresupuesto(
         total: subtotal.toFixed(2),
         notas: cabecera.data.notas ?? null,
         asesor: usuario.name,
+        sellerId,
         validoHasta,
         createdByUserId: usuario.userId,
       })

@@ -116,6 +116,78 @@ export interface EntregaCreada {
 }
 
 /**
+ * Remito de constancia para una venta que ya salió por el mostrador.
+ *
+ * La clienta: "si la persona viene a retirar algo, sea un corte o lo que sea,
+ * se emite un remito". En la venta común del mostrador la mercadería ya cruzó
+ * la puerta y el stock ya se descontó **al cobrar**; lo que falta es el papel.
+ * Este remito documenta exactamente eso y **no toca el inventario**: usar
+ * `crearEntrega` acá descontaría el mismo tirante dos veces.
+ *
+ * Nace "entregada" —la entrega ya ocurrió— y con lo pendiente del pedido, que
+ * en una venta recién cobrada es todo.
+ */
+export async function remitoDeConstancia(opciones: {
+  orderId: string;
+  receptorNombre?: string | null;
+  usuarioId?: string;
+}): Promise<EntregaCreada> {
+  const [pedido] = await db
+    .select({ id: orders.id, branchId: orders.branchId, estado: orders.estado })
+    .from(orders)
+    .where(eq(orders.id, opciones.orderId))
+    .limit(1);
+
+  if (!pedido) throw new ErrorDeEntrega("El pedido no existe.");
+  if (pedido.estado === "cancelado") {
+    throw new ErrorDeEntrega("El pedido está cancelado.");
+  }
+  if (pedido.estado !== "entregado") {
+    throw new ErrorDeEntrega(
+      "Este pedido todavía tiene mercadería en depósito: registrá el retiro desde la ficha del pedido, que es lo que descuenta el stock.",
+    );
+  }
+
+  const pendientes = await saldoDeAcopio(opciones.orderId);
+  const lineas = pendientes.filter((p) => p.pendiente > 0);
+
+  if (lineas.length === 0) {
+    throw new ErrorDeEntrega("Esta venta ya tiene su remito emitido.");
+  }
+
+  const firmaToken = randomBytes(24).toString("base64url");
+
+  return db.transaction(async (tx) => {
+    const numero = await siguienteNumeroRemito(tx);
+
+    const [entrega] = await tx
+      .insert(deliveries)
+      .values({
+        numero,
+        orderId: opciones.orderId,
+        branchId: pedido.branchId,
+        tipo: "retiro",
+        estado: "entregada",
+        receptorNombre: opciones.receptorNombre ?? null,
+        firmaToken,
+        createdByUserId: opciones.usuarioId,
+      })
+      .returning({ id: deliveries.id });
+
+    await tx.insert(deliveryItems).values(
+      lineas.map((linea, i) => ({
+        deliveryId: entrega.id,
+        orderItemId: linea.orderItemId,
+        cantidad: linea.pendiente.toFixed(2),
+        orden: i,
+      })),
+    );
+
+    return { id: entrega.id, numero, firmaToken, pedidoCompleto: true };
+  });
+}
+
+/**
  * Prepara un remito y saca la mercadería del depósito.
  *
  * Todo en una transacción: el remito, sus líneas, el descuento de stock y el

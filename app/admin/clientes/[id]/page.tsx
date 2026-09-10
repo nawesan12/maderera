@@ -151,7 +151,12 @@ export default async function FichaClientePage({
               <Dato etiqueta="Correo" valor={cliente.email ?? "—"} />
               <Dato etiqueta="Teléfono" valor={cliente.telefono ?? "—"} tabular />
               <Dato etiqueta="Domicilio" valor={cliente.direccion ?? "—"} />
-              <Dato etiqueta="Asesor" valor={cliente.asesor ?? "—"} />
+              {/* El vendedor asignado; `asesor` es el texto que dejó la
+                  migración y se muestra solo si no hay uno de verdad. */}
+              <Dato
+                etiqueta="Vendedor"
+                valor={cliente.vendedor ?? cliente.asesor ?? "—"}
+              />
               {/* Saber si entra al sitio cambia cómo se lo atiende: a quien
                   tiene cuenta se lo puede mandar a mirar el estado solo. */}
               <Dato

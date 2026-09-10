@@ -323,6 +323,41 @@
       "when": 1788831032216,
       "tag": "0045_wandering_betty_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1789009841595,
+      "tag": "0046_green_korath",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789010323758,
+      "tag": "0047_organic_dragon_lord",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1789011947840,
+      "tag": "0048_conscious_solo",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1789012385758,
+      "tag": "0049_slippery_professor_monster",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1789013350765,
+      "tag": "0050_condemned_metal_master",
+      "breakpoints": true
     }
   ]
 }

@@ -12,6 +12,7 @@ import {
   historialDePrecios,
   listarListasDePrecios,
   listarPrecios,
+  rubrosParaAjuste,
   type FilaPrecio,
 } from "@/lib/dal/admin/precios";
 import { DialogoAjuste } from "./dialogo-ajuste";
@@ -33,11 +34,12 @@ export default async function PreciosPage({
 }) {
   const params = await searchParams;
 
-  const [filas, categorias, listas, historial] = await Promise.all([
+  const [filas, categorias, listas, historial, rubros] = await Promise.all([
     listarPrecios({ busqueda: params.buscar, categoria: params.cat }),
     listarCategoriasAdmin(),
     listarListasDePrecios(),
     historialDePrecios(10),
+    rubrosParaAjuste(),
   ]);
 
   const general = listas.find((l) => l.isDefault);
@@ -94,9 +96,17 @@ export default async function PreciosPage({
           <Percent className="h-5 w-5" />
           Formas de pago
         </Link>
+        <Link
+          href="/admin/precios/listas"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <Tags className="h-5 w-5" />
+          Listas
+        </Link>
         <DialogoAjuste
           categorias={categorias.map((c) => ({ slug: c.slug, name: c.name }))}
           categoriaActual={params.cat ?? "todos"}
+          rubros={rubros}
         />
       </EncabezadoPanel>
 

@@ -10,8 +10,12 @@
 
 import {
   aCentavos,
+  importePorMedio,
+  normalizarPagos,
   totalDeLaVenta,
   type LineaDeVenta,
+  type MedioDeMostrador,
+  type PagoDeVenta,
 } from "./importes";
 
 export interface LineaDelTicket {
@@ -40,7 +44,23 @@ export interface DocumentoTicket {
   descuentoMotivo: string | null;
   total: number;
   medioPago: string | null;
+  /**
+   * Cómo se pagó, renglón por renglón, con lote y cupón para las tarjetas.
+   * Con un solo renglón el papel dice "Pago: Débito", como siempre; con más,
+   * lista cada uno con su importe.
+   */
+  pagos: {
+    medio: string;
+    importe: number;
+    tarjeta: string | null;
+    nroLote: string | null;
+    nroCupon: string | null;
+  }[];
   enCuentaCorriente: boolean;
+  /** Cuánto quedó en el libro: en un pago partido no es el total. */
+  importeEnCuenta: number;
+  /** La mercadería queda en depósito: el papel lo tiene que gritar. */
+  acopio: boolean;
   whatsapp: string | null;
 }
 
@@ -63,6 +83,8 @@ export function documentoDeVenta(
     cobradaAt: string;
     contactoNombre: string;
     medioPago: string;
+    pagos?: PagoDeVenta[];
+    acopio?: boolean;
     descuento?: number;
     descuentoMotivo?: string | null;
     /** Las mismas líneas que se mandan a cobrar, sin recortar. */
@@ -85,6 +107,16 @@ export function documentoDeVenta(
    */
   const subtotal = totalDeLaVenta(venta.lineas);
   const descuento = aCentavos(venta.descuento ?? 0);
+  const total = aCentavos(subtotal - descuento);
+
+  // La misma normalización que el cobro: el papel y la venta no pueden
+  // contarse los pagos distinto.
+  const pagos = normalizarPagos(
+    venta.pagos,
+    venta.medioPago as MedioDeMostrador,
+    total,
+  );
+  const importeEnCuenta = importePorMedio(pagos, "cuenta_corriente");
 
   return {
     numero: venta.numero,
@@ -98,9 +130,18 @@ export function documentoDeVenta(
     subtotal,
     descuento,
     descuentoMotivo: venta.descuentoMotivo ?? null,
-    total: aCentavos(subtotal - descuento),
+    total,
     medioPago: venta.medioPago,
-    enCuentaCorriente: venta.medioPago === "cuenta_corriente",
+    pagos: pagos.map((p) => ({
+      medio: p.medio,
+      importe: p.importe,
+      tarjeta: p.tarjeta ?? null,
+      nroLote: p.nroLote ?? null,
+      nroCupon: p.nroCupon ?? null,
+    })),
+    enCuentaCorriente: importeEnCuenta > 0,
+    importeEnCuenta,
+    acopio: venta.acopio ?? false,
     whatsapp: contexto.whatsapp,
   };
 }

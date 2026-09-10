@@ -21,3 +21,4 @@ export * from "./costos";
 export * from "./retenciones";
 export * from "./gastos";
 export * from "./comercial";
+export * from "./cheques";

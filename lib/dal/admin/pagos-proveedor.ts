@@ -1,14 +1,15 @@
 import "server-only";
 
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
+  purchaseInvoices,
   regimenesRetencion,
   retencionesPracticadas,
   supplierPayments,
   suppliers,
 } from "@/lib/db/schema";
-import { requireStaffRole } from "@/lib/dal/session";
+import { requireStaff, requireStaffRole } from "@/lib/dal/session";
 
 /** Los pagos hechos, con lo retenido en cada uno. */
 export async function listarPagosAProveedores(limite = 60) {
@@ -53,6 +54,52 @@ export async function listarPagosAProveedores(limite = 60) {
 }
 
 /** Los regímenes activos, para elegir al pagar. */
+/**
+ * Las facturas del proveedor con saldo por imputar.
+ *
+ * El saldo es lo facturado menos lo ya imputado en pagos anteriores. Es lo que
+ * el formulario de pago muestra para responder "estoy pagando estas facturas",
+ * que es como se paga de verdad: contra papeles, no contra un número global.
+ */
+export async function facturasConSaldo(supplierId: string) {
+  await requireStaff();
+
+  const filas = await db
+    .select({
+      id: purchaseInvoices.id,
+      puntoVenta: purchaseInvoices.puntoVenta,
+      numero: purchaseInvoices.numero,
+      tipo: purchaseInvoices.tipo,
+      fechaEmision: purchaseInvoices.fechaEmision,
+      total: purchaseInvoices.total,
+      imputado: sql<string>`coalesce((
+        select sum(a.importe)
+        from supplier_payment_allocations a
+        where a.purchase_invoice_id = ${purchaseInvoices.id}
+      ), 0)`,
+    })
+    .from(purchaseInvoices)
+    .where(eq(purchaseInvoices.supplierId, supplierId))
+    .orderBy(asc(purchaseInvoices.fechaEmision));
+
+  return filas
+    .map((f) => {
+      const total = Number(f.total);
+      const imputado = Number(f.imputado);
+      return {
+        id: f.id,
+        // Como se lee en el papel: "0003-00001234".
+        numero: `${String(f.puntoVenta).padStart(4, "0")}-${String(f.numero).padStart(8, "0")}`,
+        tipo: f.tipo,
+        fechaEmision: f.fechaEmision,
+        total,
+        imputado,
+        saldo: Math.round((total - imputado) * 100) / 100,
+      };
+    })
+    .filter((f) => f.saldo > 0.009);
+}
+
 export async function regimenesActivos() {
   await requireStaffRole("admin");
 

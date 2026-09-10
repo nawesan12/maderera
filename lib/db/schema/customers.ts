@@ -30,6 +30,34 @@ export const estadoCliente = pgEnum("estado_cliente", [
   "inactivo",
 ]);
 
+/**
+ * Los vendedores de la casa.
+ *
+ * La clienta: "hay clientes que se cargan con un vendedor asignado (o sea que
+ * hay vendedores, y vendedores de calle)". Hasta ahora el vendedor era el
+ * campo de texto `asesor`, y "Gabriela" y "GABRIELA" eran dos personas
+ * distintas para cualquier reporte.
+ *
+ * Tabla propia y **no** una FK a `user`: el vendedor de calle no opera el
+ * sistema —vende, y otro carga—. El día que uno tenga usuario se pueden
+ * vincular, pero la entidad existe aunque nunca lo tenga.
+ */
+export const tipoVendedor = pgEnum("tipo_vendedor", ["salon", "calle"]);
+
+export const sellers = pgTable(
+  "sellers",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    nombre: text().notNull(),
+    tipo: tipoVendedor().notNull().default("salon"),
+    activo: boolean().notNull().default(true),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("sellers_nombre_idx").on(t.nombre)],
+);
+
+export type Seller = typeof sellers.$inferSelect;
+
 export const customers = pgTable(
   "customers",
   {
@@ -51,6 +79,8 @@ export const customers = pgTable(
     }),
     /** Tope de cuenta corriente. Cero significa que no opera a cuenta. */
     limiteCredito: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    /** El vendedor asignado. `asesor` queda como texto legado de la migración. */
+    sellerId: uuid().references(() => sellers.id, { onDelete: "set null" }),
     asesor: text(),
     notas: text(),
     /**

@@ -33,6 +33,18 @@ export const priceLists = pgTable(
     slug: text().notNull(),
     name: text().notNull(),
     isDefault: boolean().notNull().default(false),
+    /**
+     * Lista derivada: sus precios salen de la general, ajustados este
+     * porcentaje (−5 es "cinco por ciento más barata"). Nulo la deja como
+     * siempre —solo ítems propios—.
+     *
+     * Es el "manejo global de precios especiales por porcentaje ajustable"
+     * que pidió la clienta: la lista constructora arranca como −N % de la
+     * general sin duplicar miles de filas, y un ítem propio cargado a mano
+     * **pisa** al derivado, para la excepción puntual. La precedencia queda:
+     * ítem propio → derivado por porcentaje → precio general.
+     */
+    porcentajeSobreGeneral: numeric({ precision: 6, scale: 2 }),
     active: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },

@@ -18,6 +18,7 @@ export const tarifasDeCorte = cache(async (): Promise<TarifaDeCorte[]> => {
       material: cuttingRates.material,
       priceListId: cuttingRates.priceListId,
       precioPorPasada: cuttingRates.precioPorPasada,
+      precioPorMetroCanto: cuttingRates.precioPorMetroCanto,
     })
     .from(cuttingRates)
     .where(eq(cuttingRates.activo, true))
@@ -27,5 +28,6 @@ export const tarifasDeCorte = cache(async (): Promise<TarifaDeCorte[]> => {
     material: f.material,
     priceListId: f.priceListId,
     precioPorPasada: Number(f.precioPorPasada),
+    precioPorMetroCanto: Number(f.precioPorMetroCanto),
   }));
 });

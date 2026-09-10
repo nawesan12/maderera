@@ -14,6 +14,7 @@ import {
   listarListasParaClientes,
   type ClienteListado,
 } from "@/lib/dal/admin/clientes";
+import { vendedoresActivos } from "@/lib/dal/admin/vendedores";
 import { BuscadorClientes } from "./buscador";
 import { DialogoCliente } from "./dialogo-cliente";
 
@@ -24,9 +25,10 @@ export default async function ClientesPage({
 }) {
   const params = await searchParams;
 
-  const [clientes, listas] = await Promise.all([
+  const [clientes, listas, vendedores] = await Promise.all([
     listarClientes({ busqueda: params.buscar, tipo: params.tipo }),
     listarListasParaClientes(),
+    vendedoresActivos(),
   ]);
 
   // Quien debe plata va primero: es a quien hay que llamar.
@@ -44,7 +46,13 @@ export default async function ClientesPage({
             : plural(clientes.length, "cliente")
         }
       >
-        <DialogoCliente listas={listas} />
+        <Link
+          href="/admin/clientes/vendedores"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          Vendedores
+        </Link>
+        <DialogoCliente listas={listas} vendedores={vendedores} />
       </EncabezadoPanel>
 
       <BuscadorClientes

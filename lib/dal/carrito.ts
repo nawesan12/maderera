@@ -138,9 +138,10 @@ export const obtenerCarrito = cache(async (): Promise<Carrito> => {
       slug: products.slug,
       categoryId: products.categoryId,
       // Mismo respaldo que el catálogo: la lista propia manda y la general
-      // cubre lo que no tenga cargado. Si el carrito usara otra fuente que la
-      // ficha de producto, el precio cambiaría al agregar al carrito.
-      precioActual: sql<string | null>`coalesce(${propia.price}, ${general.price})`,
+      // —con el factor de una lista derivada— cubre lo que no tenga cargado.
+      // Si el carrito usara otra fuente que la ficha de producto, el precio
+      // cambiaría al agregar al carrito.
+      precioActual: sql<string | null>`coalesce(${propia.price}, round((${general.price} * ${lista.factorDerivado ?? 1})::numeric, 2))`,
     })
     .from(cartItems)
     .leftJoin(productVariants, eq(productVariants.id, cartItems.variantId))

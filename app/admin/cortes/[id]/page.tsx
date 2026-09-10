@@ -1,12 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Download, Flame } from "lucide-react";
+import { ArrowLeft, Download, Flame, Tags } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_CORTE, Pasos } from "@/components/admin/pasos";
 import { fechaHora, plural } from "@/components/admin/formato";
 import { obtenerCorte } from "@/lib/dal/admin/cortes";
 import { tarifasDeCorte } from "@/lib/dal/cortes-tarifas";
-import { cargoPorCorte, tarifaDeCorte } from "@/lib/cortes/tarifa";
+import {
+  cargoPorCorte,
+  cargoPorTapacanto,
+  metrosDeTapacanto,
+  tarifaDeCorte,
+} from "@/lib/cortes/tarifa";
 import { formatearMonto } from "@/lib/formato";
 import { AccionesCorte } from "../acciones";
 import { CargarPasadas } from "../pasadas";
@@ -31,6 +36,10 @@ export default async function FichaCortePage({
     corte.priceListId ?? null,
   );
   const cargo = cargoPorCorte(tarifa, corte.pasadas);
+  // Los metros de tapacanto salen del despiece, con la cuenta de la planilla
+  // del taller; el pegado se cobra aparte del corte.
+  const metrosCanto = metrosDeTapacanto(corte.piezas);
+  const cargoCanto = cargoPorTapacanto(tarifa, metrosCanto);
   const superficie =
     corte.piezas.reduce(
       (s, p) => s + (p.largoMm * p.anchoMm * p.cantidad) / 1_000_000,
@@ -88,13 +97,26 @@ export default async function FichaCortePage({
                 {plural(corte.piezas.length, "medida")} · {totalPiezas} piezas
               </p>
               {corte.piezas.length > 0 && (
-                <a
-                  href={`/api/cortes/${corte.id}/lista`}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
-                >
-                  <Download className="h-4 w-4" />
-                  Para la máquina
-                </a>
+                <>
+                  {/* Una etiqueta por pieza, con los lados con canto marcados,
+                      para pegarla al apilar: es lo que evita que el pegado se
+                      haga en el lado equivocado. */}
+                  <Link
+                    href={`/etiquetas/${corte.id}`}
+                    target="_blank"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+                  >
+                    <Tags className="h-4 w-4" />
+                    Etiquetas
+                  </Link>
+                  <a
+                    href={`/api/cortes/${corte.id}/lista`}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+                  >
+                    <Download className="h-4 w-4" />
+                    Para la máquina
+                  </a>
+                </>
               )}
             </div>
           </div>
@@ -135,8 +157,13 @@ export default async function FichaCortePage({
                   <td className="px-5 py-3.5 text-base text-muted-foreground">
                     {[
                       pieza.respetaVeta === 1 ? "Respeta veta" : null,
-                      pieza.cantoLargo === 1 ? "Canto al largo" : null,
-                      pieza.cantoAncho === 1 ? "Canto al ancho" : null,
+                      pieza.cantoLargo > 0
+                        ? `Canto al largo${pieza.cantoLargo === 2 ? " ×2" : ""}`
+                        : null,
+                      pieza.cantoAncho > 0
+                        ? `Canto al ancho${pieza.cantoAncho === 2 ? " ×2" : ""}`
+                        : null,
+                      pieza.aclaracion,
                       pieza.etiqueta,
                     ]
                       .filter(Boolean)
@@ -169,6 +196,30 @@ export default async function FichaCortePage({
             <p className="mt-1 text-base text-muted-foreground">
               {plural(corte.placas, "placa")} a cortar
             </p>
+            {corte.cantoDescripcion && (
+              <p className="mt-1 text-base text-muted-foreground">
+                Tapacanto: {corte.cantoDescripcion}
+              </p>
+            )}
+
+            {/* El pegado de tapacanto se cobra aparte del corte, por metro
+                lineal. Los metros salen del despiece: no hay nada que medir a
+                mano. */}
+            {metrosCanto > 0 && (
+              <div className="mt-3 border-t pt-3">
+                <p className="text-base">
+                  <span className="tabular font-medium">
+                    {metrosCanto.toFixed(2)} m
+                  </span>{" "}
+                  de tapacanto a pegar
+                </p>
+                <p className="mt-1 text-base text-muted-foreground">
+                  {cargoCanto > 0
+                    ? `${formatearMonto(tarifa?.precioPorMetroCanto ?? 0)} el metro · ${formatearMonto(cargoCanto)} en total`
+                    : "Sin precio de pegado para este material. Se carga en Cortes → Tarifas."}
+                </p>
+              </div>
+            )}
 
             {/*
               El corte se cobra por pasada de sierra, y cuántas lleva el

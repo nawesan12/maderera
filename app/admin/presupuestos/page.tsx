@@ -38,15 +38,22 @@ const ORIGEN: Record<string, string> = {
   express: "Express de un profesional",
 };
 
+const SUCURSALES_FILTRO = {
+  todos: "Las dos sucursales",
+  "casa-central": "Casa Central",
+  aserradero: "Aserradero (Canosa)",
+};
+
 export default async function PresupuestosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; estado?: string }>;
+  searchParams: Promise<{ buscar?: string; estado?: string; sucursal?: string }>;
 }) {
   const params = await searchParams;
   const presupuestos = await listarPresupuestos({
     busqueda: params.buscar,
     estado: params.estado,
+    sucursal: params.sucursal,
   });
 
   // Lo que espera una respuesta va arriba y separado: es lo que hay que atender.
@@ -78,6 +85,12 @@ export default async function PresupuestosPage({
         estadoActual={params.estado ?? "todos"}
         busquedaActual={params.buscar ?? ""}
         placeholder="Buscar por número, cliente o empresa…"
+        extra={{
+          parametro: "sucursal",
+          etiqueta: "Filtrar por sucursal",
+          opciones: SUCURSALES_FILTRO,
+          actual: params.sucursal ?? "todos",
+        }}
       />
 
       {presupuestos.length === 0 ? (
@@ -185,6 +198,14 @@ function Tarjeta({
             <span>{plural(p.items, "ítem")}</span>
             <span aria-hidden="true">·</span>
             <span>{ORIGEN[p.origen] ?? p.origen}</span>
+            {/* De qué sucursal salió: la central y Canosa presupuestan las
+                dos, y la clienta pidió que se distingan. */}
+            {p.sucursal && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="font-medium text-foreground">{p.sucursal}</span>
+              </>
+            )}
             <span aria-hidden="true">·</span>
             <span>{haceCuanto(p.createdAt)}</span>
             {p.validoHasta && !p.vencido && (

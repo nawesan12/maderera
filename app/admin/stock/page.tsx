@@ -87,6 +87,14 @@ export default async function AdminStockPage({
             : `${plural(filas.length, "medida")} en inventario`
         }
       >
+        {/* El cruce de stock y ventas vive en su propio reporte: acá se mira
+            cuánto hay, allá qué conviene comprar. */}
+        <Link
+          href="/admin/reportes/reposicion"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          Qué reponer
+        </Link>
         <DialogoTransferencia
           variantes={filas.map((f) => ({
             id: f.variantId,

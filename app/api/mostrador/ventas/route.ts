@@ -43,6 +43,27 @@ const ventaSchema = z.object({
     "transferencia",
     "cuenta_corriente",
   ]),
+  /** Cómo se pagó si se partió en varios medios. Vacío = todo por medioPago. */
+  pagos: z
+    .array(
+      z.object({
+        medio: z.enum([
+          "efectivo",
+          "debito",
+          "credito",
+          "transferencia",
+          "cuenta_corriente",
+        ]),
+        importe: z.number().positive(),
+        nroLote: z.string().max(20).nullable().optional(),
+        nroCupon: z.string().max(20).nullable().optional(),
+        tarjeta: z.string().max(40).nullable().optional(),
+      }),
+    )
+    .max(4)
+    .optional(),
+  /** La venta quedó en acopio: reservar en vez de entregar al sincronizar. */
+  acopio: z.boolean().optional(),
   comprobante: z.enum(["interno", "fiscal"]).default("interno"),
   cuit: z.string().nullable().optional(),
   descuento: z.number().min(0).optional(),

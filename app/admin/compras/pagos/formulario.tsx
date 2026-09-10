@@ -4,7 +4,13 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FileCheck2, Loader2 } from "lucide-react";
 import { formatearMonto } from "@/lib/formato";
-import { pagarAProveedor, verAcumulado, type EstadoPago } from "./actions";
+import {
+  pagarAProveedor,
+  verAcumulado,
+  verChequesEnCartera,
+  verFacturasConSaldo,
+  type EstadoPago,
+} from "./actions";
 
 interface Proveedor {
   id: string;
@@ -22,16 +28,54 @@ interface Regimen {
   minimoNoImponible: number;
 }
 
+interface FacturaConSaldo {
+  id: string;
+  numero: string;
+  tipo: string;
+  fechaEmision: Date | string | null;
+  total: number;
+  saldo: number;
+}
+
+interface ChequeDeCartera {
+  id: string;
+  numero: string;
+  banco: string | null;
+  fechaPago: Date | string;
+  importe: number;
+  cliente: string | null;
+}
+
+/** Un renglón de "con qué sale la plata". Los importes se tipean. */
+interface ParteUI {
+  medio: "transferencia" | "efectivo" | "cheque" | "echeq";
+  importe: string;
+  referencia: string;
+  /** Vacío es "cheque nuevo"; un id es un cheque de la cartera que se endosa. */
+  chequeId: string;
+  numero: string;
+  banco: string;
+  fechaPago: string;
+}
+
+const parteVacia = (medio: ParteUI["medio"] = "transferencia"): ParteUI => ({
+  medio,
+  importe: "",
+  referencia: "",
+  chequeId: "",
+  numero: "",
+  banco: "",
+  fechaPago: "",
+});
+
 /**
  * Pagarle a un proveedor.
  *
- * Se carga **lo que se le imputa a la deuda**, no lo que sale del banco: lo
- * segundo lo calcula el sistema restando las retenciones. Pedir los dos números
- * invita a que no coincidan, y después no hay forma de saber cuál era el bueno.
- *
- * Las bases de retención arrancan en el importe del pago porque es el caso
- * normal —se retiene sobre lo que se paga— y se corrigen cuando el régimen mira
- * otra cosa, como el de IVA, que mira el IVA de la factura.
+ * El proceso real: se eligen **las facturas que se están pagando**, se decide
+ * **con qué sale la plata** —una transferencia, dos cheques a fecha, un
+ * endoso— y las retenciones se calculan sobre eso. La pantalla sigue ese
+ * orden. El importe que se carga es lo que se imputa a la deuda; lo que sale
+ * del banco lo calcula el sistema restando las retenciones.
  */
 export function FormularioPago({
   proveedores,
@@ -50,14 +94,12 @@ export function FormularioPago({
   const [referencia, setReferencia] = useState("");
   const [bases, setBases] = useState<Record<string, string>>({});
 
-  /*
-   * Lo ya retenido este mes a este proveedor, por régimen.
-   *
-   * Se muestra antes de pagar porque **es lo que explica por qué esta vez
-   * retiene y la anterior no**: Ganancias mira el acumulado del mes, no cada
-   * pago suelto. Sin esto a la vista, que no retenga parece un error del
-   * sistema y alguien lo "corrige" a mano.
-   */
+  const [facturas, setFacturas] = useState<FacturaConSaldo[]>([]);
+  const [imputado, setImputado] = useState<Record<string, string>>({});
+
+  const [partes, setPartes] = useState<ParteUI[] | null>(null);
+  const [cartera, setCartera] = useState<ChequeDeCartera[]>([]);
+
   const [acumulado, setAcumulado] = useState<
     Record<string, { base: number; retenido: number }>
   >({});
@@ -77,14 +119,58 @@ export function FormularioPago({
         ),
       );
     });
+    // Las facturas abiertas del proveedor: es contra lo que se paga.
+    void verFacturasConSaldo(supplierId).then((filas) => {
+      if (!vivo) return;
+      setFacturas(filas);
+      setImputado({});
+    });
 
     return () => {
       vivo = false;
     };
   }, [supplierId]);
 
+  useEffect(() => {
+    let vivo = true;
+    void verChequesEnCartera().then((filas) => {
+      if (vivo) setCartera(filas);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
   const proveedor = proveedores.find((p) => p.id === supplierId);
   const importe = Number(total || 0);
+  const sumaImputada = Object.values(imputado).reduce(
+    (s, v) => s + (Number(v) || 0),
+    0,
+  );
+  const sumaPartes = (partes ?? []).reduce(
+    (s, p) => s + (Number(p.importe) || 0),
+    0,
+  );
+  const hayRetenciones = Object.values(bases).some((b) => Number(b) > 0);
+
+  /** Reparte el total entre las facturas más viejas, como se paga de verdad. */
+  function repartirEntreFacturas() {
+    let resto = importe;
+    const nuevo: Record<string, string> = {};
+    for (const f of facturas) {
+      if (resto <= 0) break;
+      const cubre = Math.min(f.saldo, resto);
+      nuevo[f.id] = cubre.toFixed(2);
+      resto = Math.round((resto - cubre) * 100) / 100;
+    }
+    setImputado(nuevo);
+  }
+
+  function actualizarParte(i: number, cambios: Partial<ParteUI>) {
+    setPartes((prev) =>
+      prev ? prev.map((p, j) => (j === i ? { ...p, ...cambios } : p)) : prev,
+    );
+  }
 
   if (proveedores.length === 0) {
     return (
@@ -137,7 +223,20 @@ export function FormularioPago({
           <span className="text-sm font-medium">Medio</span>
           <select
             value={medio}
-            onChange={(e) => setMedio(e.target.value)}
+            onChange={(e) => {
+              const elegido = e.target.value;
+              setMedio(elegido);
+              // Un cheque necesita sus datos —número, banco, fecha de pago—,
+              // así que elegirlo abre el detalle con un renglón ya armado.
+              if ((elegido === "cheque" || elegido === "echeq") && !partes) {
+                setPartes([
+                  {
+                    ...parteVacia(elegido as ParteUI["medio"]),
+                    importe: total,
+                  },
+                ]);
+              }
+            }}
             className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
           >
             <option value="transferencia">Transferencia</option>
@@ -156,6 +255,252 @@ export function FormularioPago({
             className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
           />
         </label>
+      </div>
+
+      {/* Qué facturas cubre. Es la relación pago↔factura que pidió la
+          clienta: después, cada factura sabe si está paga entera o en parte. */}
+      {facturas.length > 0 && (
+        <div className="border-t border-linea pt-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Qué facturas paga
+            </h3>
+            {importe > 0 && (
+              <button
+                type="button"
+                onClick={repartirEntreFacturas}
+                className="text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Repartir {formatearMonto(importe)} entre las más viejas
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Opcional: sin elegir ninguna queda como pago a cuenta y se imputa
+            después desde la factura.
+          </p>
+
+          <ul className="mt-3 space-y-2">
+            {facturas.map((f) => (
+              <li key={f.id} className="flex flex-wrap items-center gap-3">
+                <span className="tabular min-w-36 text-base font-medium">
+                  {f.numero}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {f.saldo < f.total
+                    ? `quedan ${formatearMonto(f.saldo)} de ${formatearMonto(f.total)}`
+                    : formatearMonto(f.total)}
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={imputado[f.id] ?? ""}
+                  onChange={(e) =>
+                    setImputado((prev) => ({ ...prev, [f.id]: e.target.value }))
+                  }
+                  placeholder="0"
+                  className="tabular h-10 w-32 rounded-lg border border-linea bg-card px-3 text-right text-base"
+                />
+              </li>
+            ))}
+          </ul>
+
+          {sumaImputada > 0 && (
+            <p
+              className={`mt-2 text-sm font-medium ${
+                sumaImputada - importe > 0.01
+                  ? "text-saldo-debe"
+                  : "text-muted-foreground"
+              }`}
+            >
+              Imputado: {formatearMonto(sumaImputada)} de{" "}
+              {formatearMonto(importe)}
+              {sumaImputada - importe > 0.01 && " — suma más que el pago"}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Con qué sale la plata: la transferencia más los cheques a fecha. Cada
+          cheque queda en la cartera con su vencimiento. */}
+      <div className="border-t border-linea pt-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Con qué sale
+          </h3>
+          {partes === null ? (
+            <button
+              type="button"
+              onClick={() =>
+                setPartes([
+                  { ...parteVacia(medio as ParteUI["medio"]), importe: total },
+                ])
+              }
+              className="text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              Partir en varios medios o detallar cheques
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPartes(null)}
+              className="text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              Un solo medio, sin detalle
+            </button>
+          )}
+        </div>
+
+        {partes === null ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Sale todo por {medio === "echeq" ? "e-Cheq" : medio}.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-3">
+            {partes.map((parte, i) => (
+              <div
+                key={i}
+                className="space-y-2 rounded-lg border border-linea p-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={parte.medio}
+                    onChange={(e) =>
+                      actualizarParte(i, {
+                        medio: e.target.value as ParteUI["medio"],
+                        chequeId: "",
+                      })
+                    }
+                    className="h-10 rounded-lg border border-linea bg-card px-2 text-base"
+                  >
+                    <option value="transferencia">Transferencia</option>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="echeq">e-Cheq</option>
+                  </select>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={parte.importe}
+                    onChange={(e) => actualizarParte(i, { importe: e.target.value })}
+                    placeholder="Importe"
+                    className="tabular h-10 w-32 rounded-lg border border-linea bg-card px-3 text-right text-base"
+                  />
+                  {parte.medio === "transferencia" && (
+                    <input
+                      value={parte.referencia}
+                      onChange={(e) =>
+                        actualizarParte(i, { referencia: e.target.value })
+                      }
+                      placeholder="N.º de operación"
+                      className="h-10 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base"
+                    />
+                  )}
+                  {partes.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPartes(partes.filter((_, j) => j !== i))
+                      }
+                      aria-label="Sacar este renglón"
+                      className="h-10 w-9 rounded-lg border border-linea text-muted-foreground hover:bg-hundida"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                {(parte.medio === "cheque" || parte.medio === "echeq") && (
+                  <div className="space-y-2">
+                    {cartera.length > 0 && parte.medio === "cheque" && (
+                      <select
+                        value={parte.chequeId}
+                        onChange={(e) => {
+                          const elegido = cartera.find(
+                            (c) => c.id === e.target.value,
+                          );
+                          actualizarParte(i, {
+                            chequeId: e.target.value,
+                            // El importe del endoso es el del cheque: no se
+                            // endosa medio cheque.
+                            ...(elegido
+                              ? { importe: String(elegido.importe) }
+                              : {}),
+                          });
+                        }}
+                        className="h-10 w-full rounded-lg border border-linea bg-card px-2 text-base"
+                      >
+                        <option value="">Cheque nuevo (propio)</option>
+                        {cartera.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            Endosar {c.numero}
+                            {c.banco ? ` · ${c.banco}` : ""} ·{" "}
+                            {formatearMonto(c.importe)}
+                            {c.cliente ? ` · de ${c.cliente}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {!parte.chequeId && (
+                      <div className="grid grid-cols-3 gap-2">
+                        <input
+                          value={parte.numero}
+                          onChange={(e) =>
+                            actualizarParte(i, { numero: e.target.value })
+                          }
+                          placeholder="N.º de cheque"
+                          className="tabular h-10 rounded-lg border border-linea bg-card px-2.5 text-base"
+                        />
+                        <input
+                          value={parte.banco}
+                          onChange={(e) =>
+                            actualizarParte(i, { banco: e.target.value })
+                          }
+                          placeholder="Banco"
+                          className="h-10 rounded-lg border border-linea bg-card px-2.5 text-base"
+                        />
+                        <label className="block">
+                          <input
+                            type="date"
+                            value={parte.fechaPago}
+                            onChange={(e) =>
+                              actualizarParte(i, { fechaPago: e.target.value })
+                            }
+                            aria-label="Fecha de pago del cheque"
+                            className="tabular h-10 w-full rounded-lg border border-linea bg-card px-2.5 text-base"
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {partes.length < 6 && (
+                <button
+                  type="button"
+                  onClick={() => setPartes([...partes, parteVacia()])}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  + Otro renglón
+                </button>
+              )}
+              <p className="text-sm text-muted-foreground">
+                Suman {formatearMonto(sumaPartes)}
+                {hayRetenciones
+                  ? " — tienen que dar lo que sale del banco, ya sin retenciones"
+                  : importe > 0 && Math.abs(sumaPartes - importe) > 0.01
+                    ? ` de ${formatearMonto(importe)}`
+                    : ""}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {regimenes.length > 0 && (
@@ -258,17 +603,49 @@ export function FormularioPago({
                     base: Number(bases[g.id] ?? 0),
                   }))
                   .filter((g) => g.base > 0),
+                imputaciones: Object.entries(imputado)
+                  .map(([purchaseInvoiceId, v]) => ({
+                    purchaseInvoiceId,
+                    importe: Number(v) || 0,
+                  }))
+                  .filter((x) => x.importe > 0),
+                partes:
+                  partes === null
+                    ? undefined
+                    : partes
+                        .filter((p) => Number(p.importe) > 0)
+                        .map((p) => ({
+                          medio: p.medio,
+                          importe: Number(p.importe),
+                          referencia: p.referencia || null,
+                          chequeId: p.chequeId || null,
+                          cheque:
+                            !p.chequeId &&
+                            (p.medio === "cheque" || p.medio === "echeq")
+                              ? {
+                                  tipo:
+                                    p.medio === "echeq"
+                                      ? ("echeq" as const)
+                                      : ("fisico" as const),
+                                  numero: p.numero,
+                                  banco: p.banco || null,
+                                  fechaPago: new Date(`${p.fechaPago}T12:00:00`),
+                                }
+                              : null,
+                        })),
               });
               setEstado(r);
               if (r.ok) {
                 setTotal("");
                 setReferencia("");
                 setBases({});
+                setImputado({});
+                setPartes(null);
                 router.refresh();
               }
             })
           }
-          disabled={enCurso || importe <= 0}
+          disabled={enCurso || importe <= 0 || sumaImputada - importe > 0.01}
           className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}

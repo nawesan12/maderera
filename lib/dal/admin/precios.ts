@@ -10,6 +10,7 @@ import {
   priceLists,
   productVariants,
   products,
+  subcategories,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { coincideBusqueda } from "@/lib/busqueda";
@@ -190,4 +191,25 @@ export async function historialDePrecios(limite = 40) {
 export async function listarListasDePrecios() {
   await requireStaff();
   return db.select().from(priceLists).orderBy(desc(priceLists.isDefault));
+}
+
+/**
+ * Los rubros activos con su categoría, para el corte del ajuste masivo.
+ *
+ * La clienta pidió ajustar "por rubro y subrubro": dentro de Ferretería, tocar
+ * solo Tornillos sin arrastrar el resto.
+ */
+export async function rubrosParaAjuste() {
+  await requireStaff();
+
+  return db
+    .select({
+      slug: subcategories.slug,
+      name: subcategories.name,
+      categorySlug: categories.slug,
+    })
+    .from(subcategories)
+    .innerJoin(categories, eq(categories.id, subcategories.categoryId))
+    .where(eq(subcategories.active, true))
+    .orderBy(asc(subcategories.sortOrder), asc(subcategories.name));
 }

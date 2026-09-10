@@ -52,6 +52,10 @@ export interface ProductoForm {
   description: string;
   brand: string;
   unit: string;
+  /** "21", "10.5" o "0". */
+  alicuotaIva: string;
+  /** Recargo por elaboración sobre el costo, en %. Vacío: no se elabora. */
+  recargoElaboracionPct: string;
   featured: boolean;
   aPedido: boolean;
   active: boolean;
@@ -110,7 +114,9 @@ export function FormularioProducto({
 
   const [nombre, setNombre] = useState(inicial.name);
   const [slug, setSlug] = useState(inicial.slug);
-  const [slugTocado, setSlugTocado] = useState(Boolean(inicial.id));
+  // Al editar, el slug queda fijo: la URL pública ya está indexada y
+  // compartida. Solo el alta lo deriva del nombre.
+  const slugFijo = Boolean(inicial.id);
   const [unidad, setUnidad] = useState(inicial.unit);
   const [categoria, setCategoria] = useState(inicial.categoryId);
   const [rubro, setRubro] = useState(inicial.subcategoryId);
@@ -132,10 +138,10 @@ export function FormularioProducto({
     inicial.variantes.length > 0 ? inicial.variantes : [varianteVacia()],
   );
 
-  // Mientras nadie edite el slug a mano, sigue al nombre.
+  // En el alta el slug sigue al nombre; al editar no se toca.
   function cambiarNombre(valor: string) {
     setNombre(valor);
-    if (!slugTocado) setSlug(generarSlug(valor));
+    if (!slugFijo) setSlug(generarSlug(valor));
   }
 
   function actualizarVariante(
@@ -212,20 +218,12 @@ export function FormularioProducto({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="slug">Dirección web</Label>
-              <Input
-                id="slug"
-                name="slug"
-                value={slug}
-                onChange={(e) => {
-                  setSlugTocado(true);
-                  setSlug(e.target.value);
-                }}
-                required
-              />
-              <p className="text-sm text-muted-foreground">/catalogo/{slug || "…"}</p>
-            </div>
+            {/* La "dirección web" salió del formulario a pedido de la
+                clienta: el slug se genera solo desde el nombre en el alta y
+                no se regenera al editar —la URL publicada ya está indexada—.
+                Viaja oculto; si choca con otro producto, el alta lo
+                desambigua sola. */}
+            <input type="hidden" name="slug" value={slug} />
 
             <div className="space-y-2">
               <Label>Categoría</Label>
@@ -312,6 +310,46 @@ export function FormularioProducto({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* La clienta pidió "tipos de IVA" en productos. El campo existía
+                en la base desde el primer schema y el formulario nunca lo
+                ofreció, así que todo el catálogo quedaba al 21. */}
+            <div className="space-y-2">
+              <Label htmlFor="alicuotaIva">IVA</Label>
+              <select
+                id="alicuotaIva"
+                name="alicuotaIva"
+                defaultValue={inicial.alicuotaIva || "21"}
+                className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-base"
+              >
+                <option value="21">21 % — general</option>
+                <option value="10.5">10,5 % — reducida</option>
+                <option value="0">Exento</option>
+              </select>
+              <p className="text-sm text-muted-foreground">
+                Los precios siguen siendo finales; esto decide cómo se
+                desagrega en la factura.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="recargoElaboracionPct">
+                Recargo por elaboración
+              </Label>
+              <Input
+                id="recargoElaboracionPct"
+                name="recargoElaboracionPct"
+                defaultValue={inicial.recargoElaboracionPct}
+                inputMode="decimal"
+                placeholder="0"
+              />
+              <p className="text-sm text-muted-foreground">
+                % sobre el costo por maquinarlo en planta. Lo usa el ajuste de
+                precios con base «costo con elaboración».
+              </p>
             </div>
           </div>
 

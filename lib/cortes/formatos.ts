@@ -175,10 +175,16 @@ export function armarArchivoDeCorte(
         return pieza.etiqueta ?? "";
       case "veta":
         return pieza.respetaVeta === 1 ? si : no;
+      /*
+       * Los cantos ahora van 0/1/2 (lados con tapacanto por medida). El "No"
+       * del perfil sigue valiendo para cero y el "Sí" para un lado, que es lo
+       * que los perfiles ya configurados esperan; dos lados sale como "2",
+       * que es como lo escribe la propia planilla del taller.
+       */
       case "cantoLargo":
-        return pieza.cantoLargo === 1 ? si : no;
+        return pieza.cantoLargo >= 2 ? "2" : pieza.cantoLargo === 1 ? si : no;
       case "cantoAncho":
-        return pieza.cantoAncho === 1 ? si : no;
+        return pieza.cantoAncho >= 2 ? "2" : pieza.cantoAncho === 1 ? si : no;
       case "numero":
         return corte.numero;
       case "cliente":

@@ -124,6 +124,16 @@ export const products = pgTable(
      * comprobante.
      */
     alicuotaIva: numeric({ precision: 4, scale: 2 }).notNull().default("21"),
+    /**
+     * Recargo por elaboración, en porcentaje sobre el costo.
+     *
+     * De la clienta: "hay costo con elaboración y sin elaboración". El costo
+     * promedio que lleva `variant_costs` es el de compra; lo que se maquina en
+     * planta —cepillado, corte a medida— cuesta además este porcentaje. El
+     * ajuste masivo de precios lo usa cuando la base elegida es "costo con
+     * elaboración". Nulo o cero: el producto no se elabora.
+     */
+    recargoElaboracionPct: numeric({ precision: 6, scale: 2 }),
     featured: boolean().notNull().default(false),
     /**
      * Se fabrica a pedido: no tiene stock y no debería mostrarse como agotado.

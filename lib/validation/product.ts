@@ -82,6 +82,14 @@ export const productoSchema = z.object({
   description: z.string().trim().max(2000).default(""),
   brand: z.string().trim().max(80).optional(),
   unit: z.enum(unidades),
+  /**
+   * La alícuota de IVA del producto. Las tres que existen en el rubro: la
+   * general, la reducida y el exento. Decide cómo se desagrega el precio final
+   * en la factura y en el neto que la ley obliga a publicar.
+   */
+  alicuotaIva: z.enum(["21", "10.5", "0"]).default("21"),
+  /** Recargo por elaboración sobre el costo, en %. Vacío: no se elabora. */
+  recargoElaboracionPct: z.coerce.number().min(0).max(500).optional(),
   featured: z.boolean().default(false),
   aPedido: z.boolean().default(false),
   active: z.boolean().default(true),

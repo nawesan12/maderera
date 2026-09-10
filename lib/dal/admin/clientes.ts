@@ -8,6 +8,7 @@ import {
   orders,
   priceLists,
   quotes,
+  sellers,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { coincideBusqueda } from "@/lib/busqueda";
@@ -122,6 +123,17 @@ export async function obtenerCliente(id: string) {
 
   if (!cliente) return null;
 
+  // El nombre del vendedor asignado. `asesor` queda como texto legado.
+  const vendedor = cliente.sellerId
+    ? (
+        await db
+          .select({ nombre: sellers.nombre })
+          .from(sellers)
+          .where(eq(sellers.id, cliente.sellerId))
+          .limit(1)
+      )[0]?.nombre ?? null
+    : null;
+
   const [movimientos, pedidosDelCliente, presupuestosDelCliente, totales] =
     await Promise.all([
       db
@@ -172,6 +184,7 @@ export async function obtenerCliente(id: string) {
 
   return {
     ...cliente,
+    vendedor,
     cuentaWebSinVincular: await buscarCuentaWebSinVincular(cliente),
     saldo,
     movimientos,

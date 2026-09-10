@@ -120,6 +120,15 @@ export async function listarFacturasDeCompra(limite = 60) {
       supplierId: purchaseInvoices.supplierId,
       neto: purchaseInvoices.neto,
       total: purchaseInvoices.total,
+      /**
+       * Lo que ya se le imputó en pagos. Es lo que responde "¿esta factura
+       * está paga, a medias o sin tocar?" —el pedido de la clienta—.
+       */
+      pagado: sql<string>`coalesce((
+        select sum(a.importe)
+        from supplier_payment_allocations a
+        where a.purchase_invoice_id = ${purchaseInvoices.id}
+      ), 0)`,
     })
     .from(purchaseInvoices)
     .innerJoin(suppliers, eq(suppliers.id, purchaseInvoices.supplierId))

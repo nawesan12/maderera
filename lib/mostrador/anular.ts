@@ -6,13 +6,17 @@ import {
   accountMovements,
   cashMovements,
   cashSessions,
+  deliveries,
   inventory,
   inventoryMovements,
   invoices,
   orderItems,
+  orderPayments,
   orders,
   payments,
+  stockReservations,
 } from "@/lib/db/schema";
+import { liberarReservas } from "@/lib/inventario/reservas";
 
 /**
  * Anula una venta de mostrador.
@@ -81,6 +85,61 @@ export async function anularVentaDeMostrador(
       .where(eq(orderItems.orderId, orderId));
 
     /*
+     * Cómo se pagó de verdad. Las ventas nuevas tienen el detalle en
+     * `order_payments`; las viejas no, y ahí el medio único del pedido cuenta
+     * la historia completa.
+     */
+    const detalleDePagos = await tx
+      .select({ medio: orderPayments.medio, importe: orderPayments.importe })
+      .from(orderPayments)
+      .where(eq(orderPayments.orderId, orderId));
+
+    const parte = (medio: string) =>
+      detalleDePagos.length > 0
+        ? detalleDePagos
+            .filter((p) => p.medio === medio)
+            .reduce((s, p) => s + Number(p.importe), 0)
+        : pedido.medioPago === medio
+          ? total
+          : 0;
+
+    const parteEfectivo = parte("efectivo");
+    const parteCuenta = parte("cuenta_corriente");
+
+    /*
+     * Una venta en acopio no descontó stock: lo reservó. Y si ya tuvo retiros
+     * parciales, deshacerla acá dejaría los remitos apuntando a una venta que
+     * no existe: eso se maneja desde la ficha del pedido, retiro por retiro.
+     */
+    const reservas = await tx
+      .select({ id: stockReservations.id })
+      .from(stockReservations)
+      .where(
+        and(
+          eq(stockReservations.orderId, orderId),
+          eq(stockReservations.estado, "activa"),
+        ),
+      )
+      .limit(1);
+    const enAcopio = reservas.length > 0;
+
+    const [retiro] = await tx
+      .select({ id: deliveries.id })
+      .from(deliveries)
+      .where(
+        and(eq(deliveries.orderId, orderId), sql`${deliveries.estado} <> 'anulada'`),
+      )
+      .limit(1);
+
+    if (retiro) {
+      return {
+        ok: false as const,
+        error:
+          "Esta venta ya tiene retiros con remito. Anulá o revisá las entregas desde la ficha del pedido.",
+      };
+    }
+
+    /*
      * **Todo lo que puede rechazar la anulación va antes de la primera
      * escritura.** Salir de una transacción de Drizzle con un `return` la
      * confirma; solo una excepción la revierte. Con el control de la caja
@@ -90,7 +149,7 @@ export async function anularVentaDeMostrador(
      */
     let sesionId: string | null = null;
 
-    if (pedido.medioPago === "efectivo" && pedido.branchId) {
+    if (parteEfectivo > 0 && pedido.branchId) {
       const [turno] = await tx
         .select({ id: cashSessions.id })
         .from(cashSessions)
@@ -117,38 +176,44 @@ export async function anularVentaDeMostrador(
       sesionId = turno.id;
     }
 
-    // 1. El stock vuelve al estante del que salió.
-    for (const item of items) {
-      if (!item.variantId || !pedido.branchId) continue;
-      const unidades = Math.round(Number(item.cantidad));
-      if (unidades <= 0) continue;
+    // 1. El stock vuelve. Si la venta fue en acopio nunca salió del estante:
+    //    lo que se deshace es la reserva.
+    if (enAcopio) {
+      await liberarReservas(tx, orderId);
+    } else {
+      for (const item of items) {
+        if (!item.variantId || !pedido.branchId) continue;
+        const unidades = Math.round(Number(item.cantidad));
+        if (unidades <= 0) continue;
 
-      await tx
-        .update(inventory)
-        .set({ qty: sql`${inventory.qty} + ${unidades}`, updatedAt: new Date() })
-        .where(
-          and(
-            eq(inventory.variantId, item.variantId),
-            eq(inventory.branchId, pedido.branchId),
-          ),
-        );
+        await tx
+          .update(inventory)
+          .set({ qty: sql`${inventory.qty} + ${unidades}`, updatedAt: new Date() })
+          .where(
+            and(
+              eq(inventory.variantId, item.variantId),
+              eq(inventory.branchId, pedido.branchId),
+            ),
+          );
 
-      await tx.insert(inventoryMovements).values({
-        variantId: item.variantId,
-        branchId: pedido.branchId,
-        type: "devolucion",
-        qty: unidades,
-        note: `Anulación ${pedido.numero}`,
-        createdByUserId: usuarioId,
-      });
+        await tx.insert(inventoryMovements).values({
+          variantId: item.variantId,
+          branchId: pedido.branchId,
+          type: "devolucion",
+          qty: unidades,
+          note: `Anulación ${pedido.numero}`,
+          createdByUserId: usuarioId,
+        });
+      }
     }
 
-    // 2. La plata sale de la caja si es que había entrado ahí.
+    // 2. La plata sale de la caja si es que había entrado ahí: solo la parte
+    //    en efectivo, que es lo único que está en el cajón.
     if (sesionId) {
       await tx.insert(cashMovements).values({
         sessionId: sesionId,
         tipo: "devolucion",
-        monto: (-total).toFixed(2),
+        monto: (-parteEfectivo).toFixed(2),
         motivo: `Anulación ${pedido.numero}: ${motivo.trim()}`,
         orderId: pedido.id,
         creadoPor: usuarioId,
@@ -156,11 +221,11 @@ export async function anularVentaDeMostrador(
     }
 
     // 3. La deuda se cancela con otro asiento, no borrando el original.
-    if (pedido.medioPago === "cuenta_corriente" && pedido.customerId) {
+    if (parteCuenta > 0 && pedido.customerId) {
       await tx.insert(accountMovements).values({
         customerId: pedido.customerId,
         tipo: "nota_credito",
-        monto: (-total).toFixed(2),
+        monto: (-parteCuenta).toFixed(2),
         detalle: `Anulación de la venta ${pedido.numero}: ${motivo.trim()}`,
         referencia: pedido.numero,
         createdByUserId: usuarioId,

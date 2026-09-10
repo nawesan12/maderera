@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { Download } from "lucide-react";
+import Link from "next/link";
+import { Download, ShoppingCart } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { FiltroPeriodo } from "@/components/admin/filtro-periodo";
 import { formatearMonto, plural } from "@/components/admin/formato";
@@ -72,6 +73,13 @@ export default async function ReportesPage({
             : "Sin ventas en el período elegido"
         }
       >
+        <Link
+          href="/admin/reportes/reposicion"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <ShoppingCart className="h-5 w-5" />
+          Reposición
+        </Link>
         <a
           href={`/admin/reportes/exportar?${parametros}`}
           className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"

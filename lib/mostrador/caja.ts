@@ -6,6 +6,7 @@ import {
   branches,
   cashMovements,
   cashSessions,
+  orderPayments,
   orders,
   user,
 } from "@/lib/db/schema";
@@ -232,12 +233,20 @@ export async function cierresDeTurnos(
    * que el historial tiene veinte filas y son veinte viajes a la base para
    * dibujar una pantalla.
    */
+  /*
+   * El detalle sale de `order_payments`, que es donde una venta partida dice
+   * cuánto entró por cada medio. Las ventas anteriores a esa tabla no tienen
+   * renglones y caen al medio único del pedido: el `left join` con `coalesce`
+   * resuelve las dos épocas en una consulta.
+   */
   const filas = await db
     .select({
       sessionId: cashSessions.id,
-      medioPago: orders.medioPago,
-      cantidad: sql<number>`count(*)::int`,
-      total: sql<string>`coalesce(sum(${orders.total}), 0)`,
+      medioPago: sql<
+        string | null
+      >`coalesce(${orderPayments.medio}::text, ${orders.medioPago}::text)`,
+      cantidad: sql<number>`count(distinct ${orders.id})::int`,
+      total: sql<string>`coalesce(sum(coalesce(${orderPayments.importe}, ${orders.total})), 0)`,
     })
     .from(cashSessions)
     .innerJoin(
@@ -251,8 +260,12 @@ export async function cierresDeTurnos(
         sql`(${cashSessions.cerradaAt} is null or ${orders.createdAt} <= ${cashSessions.cerradaAt})`,
       ),
     )
+    .leftJoin(orderPayments, eq(orderPayments.orderId, orders.id))
     .where(inArray(cashSessions.id, sessionIds))
-    .groupBy(cashSessions.id, orders.medioPago);
+    .groupBy(
+      cashSessions.id,
+      sql`coalesce(${orderPayments.medio}::text, ${orders.medioPago}::text)`,
+    );
 
   const porTurno = new Map<string, RenglonDelCierre[]>();
 

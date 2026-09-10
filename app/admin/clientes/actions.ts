@@ -46,6 +46,7 @@ const clienteSchema = z.object({
   direccion: z.string().trim().max(200).optional(),
   rubro: z.string().trim().max(80).optional(),
   asesor: z.string().trim().max(60).optional(),
+  sellerId: z.string().uuid().optional(),
   limiteCredito: z.string().default("0"),
   priceListId: z.string().uuid().optional(),
   notas: z.string().trim().max(1000).optional(),
@@ -69,6 +70,7 @@ export async function guardarCliente(
     direccion: (formData.get("direccion") as string) || undefined,
     rubro: (formData.get("rubro") as string) || undefined,
     asesor: (formData.get("asesor") as string) || undefined,
+    sellerId: (formData.get("sellerId") as string) || undefined,
     limiteCredito: (formData.get("limiteCredito") as string) || "0",
     priceListId: (formData.get("priceListId") as string) || undefined,
     notas: (formData.get("notas") as string) || undefined,
@@ -91,6 +93,8 @@ export async function guardarCliente(
     direccion: d.direccion || null,
     rubro: d.rubro || null,
     asesor: d.asesor || null,
+    // El vendedor asignado. Null es "sin asignar".
+    sellerId: d.sellerId ?? null,
     limiteCredito: (Number(d.limiteCredito.replace(/[^\d.-]/g, "")) || 0).toFixed(2),
     // Null es la lista general: la ficha no la guarda para que un cambio de
     // nombre o de default no deje al cliente atado a una lista que ya no es.

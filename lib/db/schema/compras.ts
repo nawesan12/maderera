@@ -78,6 +78,15 @@ export const suppliers = pgTable(
     aliasCbu: text(),
 
     estado: estadoProveedor().notNull().default("activo"),
+    /**
+     * Convenios vigentes con este proveedor, por escrito.
+     *
+     * La clienta: "que se detalle… los convenios, así queda todo por escrito".
+     * Es prosa —"nos guarda precio de lista por 15 días", "flete sin cargo
+     * desde 50 placas"— y no filas: cada convenio es distinto del anterior.
+     * Las condiciones repetibles van en `supplier_terms`.
+     */
+    convenios: text(),
     notas: text(),
 
     /**
@@ -100,6 +109,49 @@ export const suppliers = pgTable(
     uniqueIndex("suppliers_codigo_legacy_idx").on(t.codigoLegacy),
   ],
 );
+
+/**
+ * Con qué acepta cobrar un proveedor. Modalidades bancarias y de caja; lo que
+ * no entra acá no es una modalidad, es otra conversación.
+ */
+export const modalidadDePago = pgEnum("modalidad_de_pago", [
+  "transferencia",
+  "cheque",
+  "echeq",
+  "efectivo",
+  "otro",
+]);
+
+/**
+ * Las condiciones de pago que ofrece un proveedor, una por renglón.
+ *
+ * De la clienta: "los proveedores tienen distintas formas de pago, y a veces
+ * por condiciones de pago tienen bonificaciones… que quede todo por escrito".
+ * Hasta ahora esto vivía en la cabeza de quien paga o en una nota de texto:
+ * "transferencia a 30 días 5 % de bonificación" y "echeq a 60 sin descuento"
+ * son dos filas de esta tabla, y el formulario de pago las puede mostrar.
+ */
+export const supplierTerms = pgTable(
+  "supplier_terms",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    supplierId: uuid()
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    modalidad: modalidadDePago().notNull(),
+    /** A cuántos días. Cero es contado / contra entrega. */
+    plazoDias: integer().notNull().default(0),
+    /** Bonificación que otorga por pagar así, en %. Cero: sin descuento. */
+    bonificacionPct: numeric({ precision: 6, scale: 2 }).notNull().default("0"),
+    /** La letra: topes, desde qué monto, qué banco pide. */
+    detalle: text(),
+    activo: boolean().notNull().default(true),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("supplier_terms_supplier_idx").on(t.supplierId)],
+);
+
+export type SupplierTerm = typeof supplierTerms.$inferSelect;
 
 export const tipoMovimientoProveedor = pgEnum("tipo_movimiento_proveedor", [
   /** Nos facturó: la deuda sube. */

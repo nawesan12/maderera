@@ -3,9 +3,13 @@ import "server-only";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
+  cheques,
+  purchaseInvoices,
   regimenesRetencion,
   retencionesPracticadas,
   supplierMovements,
+  supplierPaymentAllocations,
+  supplierPaymentParts,
   supplierPayments,
   suppliers,
 } from "@/lib/db/schema";
@@ -40,6 +44,33 @@ export interface EntradaDePago {
   notas?: string | null;
   fecha?: Date;
   retenciones: RetencionAAplicar[];
+  /**
+   * A qué facturas se aplica este pago. La suma no puede superar el total ni
+   * el saldo de cada factura. Vacío: pago a cuenta, sin imputar —se puede
+   * imputar después—.
+   */
+  imputaciones?: { purchaseInvoiceId: string; importe: number }[];
+  /**
+   * Con qué se paga, renglón por renglón, cuando sale por más de un medio.
+   * La suma tiene que dar **el neto** (lo que sale del banco, ya sin
+   * retenciones). Un renglón de cheque o trae los datos de uno nuevo —se da
+   * de alta en la cartera, ya entregado— o el id de uno recibido que se
+   * endosa. Vacío: un solo medio, el de `medio`, como siempre.
+   */
+  partes?: {
+    medio: string;
+    importe: number;
+    referencia?: string | null;
+    /** Cheque nuevo que sale con este renglón. */
+    cheque?: {
+      tipo: "fisico" | "echeq";
+      numero: string;
+      banco?: string | null;
+      fechaPago: Date;
+    } | null;
+    /** Cheque de la cartera (recibido) que se endosa. */
+    chequeId?: string | null;
+  }[];
   usuarioId: string;
 }
 
@@ -190,6 +221,123 @@ export async function registrarPagoAProveedor(
       .update(supplierPayments)
       .set({ neto: neto.toFixed(2) })
       .where(eq(supplierPayments.id, pago.id));
+
+    /*
+     * Las imputaciones: qué facturas cubre este pago. Cada una se valida
+     * contra su saldo real —lo facturado menos lo ya imputado— dentro de la
+     * transacción: dos pagos simultáneos no pueden cubrir dos veces la misma
+     * factura sin que el segundo lo vea.
+     */
+    for (const imputacion of entrada.imputaciones ?? []) {
+      if (!(imputacion.importe > 0)) continue;
+
+      const [factura] = await tx
+        .select({
+          id: purchaseInvoices.id,
+          total: purchaseInvoices.total,
+          supplierId: purchaseInvoices.supplierId,
+          numero: purchaseInvoices.numero,
+          imputado: sql<string>`coalesce((
+            select sum(a.importe)
+            from supplier_payment_allocations a
+            where a.purchase_invoice_id = ${purchaseInvoices.id}
+          ), 0)`,
+        })
+        .from(purchaseInvoices)
+        .where(eq(purchaseInvoices.id, imputacion.purchaseInvoiceId))
+        .limit(1);
+
+      if (!factura || factura.supplierId !== entrada.supplierId) {
+        throw new Error("Una de las facturas no es de este proveedor.");
+      }
+
+      const saldo = aCentavos(Number(factura.total) - Number(factura.imputado));
+      if (imputacion.importe - saldo > 0.01) {
+        throw new Error(
+          `A la factura ${factura.numero} le quedan $${saldo.toFixed(2)} y se le están imputando $${imputacion.importe.toFixed(2)}.`,
+        );
+      }
+
+      await tx.insert(supplierPaymentAllocations).values({
+        paymentId: pago.id,
+        purchaseInvoiceId: imputacion.purchaseInvoiceId,
+        importe: imputacion.importe.toFixed(2),
+      });
+    }
+
+    const sumaImputada = aCentavos(
+      (entrada.imputaciones ?? []).reduce((s, i) => s + Math.max(i.importe, 0), 0),
+    );
+    if (sumaImputada - entrada.total > 0.01) {
+      throw new Error("Las facturas imputadas suman más que el pago.");
+    }
+
+    /*
+     * Las partes: con qué salió la plata. Suman el neto —lo que de verdad se
+     * fue del banco o del cajón—, y cada cheque queda en la cartera: los
+     * nuevos nacen entregados, los recibidos que se endosan cambian de estado.
+     */
+    const partes = (entrada.partes ?? []).filter((p) => p.importe > 0);
+    if (partes.length > 0) {
+      const sumaPartes = aCentavos(partes.reduce((s, p) => s + p.importe, 0));
+      if (Math.abs(sumaPartes - neto) > 0.01) {
+        throw new Error(
+          `Las partes del pago suman $${sumaPartes.toFixed(2)} y el neto a pagar es $${neto.toFixed(2)}.`,
+        );
+      }
+
+      for (const parte of partes) {
+        let chequeId: string | null = null;
+
+        if (parte.chequeId) {
+          // Endoso: el cheque tiene que estar en cartera, y de ahí sale.
+          const [enCartera] = await tx
+            .select({ id: cheques.id, importe: cheques.importe })
+            .from(cheques)
+            .where(and(eq(cheques.id, parte.chequeId), eq(cheques.estado, "cartera")))
+            .limit(1);
+
+          if (!enCartera) {
+            throw new Error("Uno de los cheques elegidos ya no está en cartera.");
+          }
+          if (Math.abs(Number(enCartera.importe) - parte.importe) > 0.01) {
+            throw new Error(
+              "El importe del renglón no coincide con el del cheque endosado.",
+            );
+          }
+
+          await tx
+            .update(cheques)
+            .set({ estado: "entregado", updatedAt: new Date() })
+            .where(eq(cheques.id, parte.chequeId));
+          chequeId = parte.chequeId;
+        } else if (parte.cheque) {
+          const [nuevo] = await tx
+            .insert(cheques)
+            .values({
+              sentido: "entregado",
+              tipo: parte.cheque.tipo,
+              numero: parte.cheque.numero,
+              banco: parte.cheque.banco ?? null,
+              fechaPago: parte.cheque.fechaPago,
+              importe: parte.importe.toFixed(2),
+              estado: "entregado",
+              notas: `Pago a ${proveedor.nombre}`,
+              createdByUserId: entrada.usuarioId,
+            })
+            .returning({ id: cheques.id });
+          chequeId = nuevo.id;
+        }
+
+        await tx.insert(supplierPaymentParts).values({
+          paymentId: pago.id,
+          medio: parte.medio,
+          importe: parte.importe.toFixed(2),
+          referencia: parte.referencia ?? null,
+          chequeId,
+        });
+      }
+    }
 
     /*
      * **Un solo movimiento, por el total.** La deuda baja por lo pagado más lo

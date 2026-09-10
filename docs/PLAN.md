@@ -928,6 +928,50 @@ que no tenerlo.
 
 ---
 
+## 7 quater. La tercera tanda de la clienta (9/9/2026)
+
+Veintidós renglones nuevos en `notas.md`, esta vez casi todos del panel: es la
+devolución de alguien que ya opera el sistema y extraña los circuitos de su
+ERP. Vinieron con tres insumos que son la especificación del proceso real: el
+presupuesto impreso del sistema actual (Serymat Atlántica), la planilla de
+cortes del taller —cantos por lado en 0/1/2 y metros de tapacanto sumados— y el
+documento de promociones bancarias con sus vigencias.
+
+**El criterio de toda la tanda**: cada pantalla encarna el proceso, no la
+tabla. El detalle pedido por pedido está en `docs/CAMBIOS.md` (filas del
+9/9/2026); lo grande:
+
+- **El sitio** ganó la sección de medios de pago y promociones bancarias
+  (editables, con vigencia que las apaga solas), el logo y el menú que pidió la
+  clienta, y Profesionales en la barra.
+- **La venta** tiene vendedores de verdad (de salón y de calle) que la ficha
+  asigna, los papeles heredan y el reporte agrupa; presupuestos por sucursal y
+  en PDF con el modelo del papel que hoy imprimen; y un mostrador que emite
+  presupuesto sin cobrar, remito al retirar con la condición de pago, venta en
+  acopio que reserva en lugar de entregar, y pago partido con lote y cupón —con
+  la caja y el cierre Z leyendo lo que de verdad entró por cada medio—.
+- **El corte** habla el idioma de la planilla del taller: cantos 0/1/2 por
+  medida, aclaraciones, metros de tapacanto calculados y cobrados por tarifa
+  propia, y etiquetas por pieza con el croquis del canto para pegar al apilar.
+- **Los precios** suman la lista constructora, derivada de la general por un
+  porcentaje ajustable (ítem propio > derivado > general), y el ajuste masivo
+  corta por rubro y elige su base: precio vigente o costo, con o sin
+  elaboración.
+- **Las compras** cierran el circuito: condiciones de pago del proveedor por
+  escrito, pagos imputados a facturas (cada factura sabe si está paga, a
+  medias o sin tocar), pago en varias partes y cartera de cheques en los dos
+  sentidos, ordenada por lo que vence.
+
+**Un pedido se rechazó**: marcar pagos y gastos "en blanco / en negro". Un
+registro de operaciones no declaradas no se construye; la distinción legítima
+—gasto con o sin factura— ya existe. Queda para conversarlo con la clienta.
+
+Migraciones 0046–0050. Tests: 495. Pendiente de esta tanda: correr las
+migraciones y los seeds contra la base local (el puerto 5433 estaba ocupado
+por otro proyecto) y contra producción antes del deploy.
+
+---
+
 ## 8. Definición de "entregado" (por semana)
 
 Para que el plazo de 5 días hábiles de 8.1 empiece a correr, cada viernes:

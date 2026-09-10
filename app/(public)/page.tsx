@@ -20,6 +20,8 @@ import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { escalasDeVolumenPublicas } from "@/lib/dal/profesionales";
 import { vistaDePrecio } from "@/lib/dal/precios-sesion";
 import { bannersDe } from "@/lib/dal/banners";
+import { promosVigentes, type PromoVigente } from "@/lib/dal/contenido";
+import { escalasDePago } from "@/lib/dal/descuentos-pago";
 import { ALCANCE_MOLDAVA } from "@/lib/empresa";
 import { SliderDePromos } from "@/components/home/slider-promos";
 import { FranjaBeneficios } from "@/components/franja-beneficios";
@@ -31,13 +33,16 @@ import { FranjaBeneficios } from "@/components/franja-beneficios";
  */
 
 export default async function HomePage() {
-  const [portada, sucursales, numeros, escalas, avisos] = await Promise.all([
-    datosDePortada(),
-    listarSucursalesPublicas(),
-    numerosDeLaEmpresa(),
-    escalasDeVolumenPublicas(),
-    bannersDe("portada"),
-  ]);
+  const [portada, sucursales, numeros, escalas, avisos, promos, escalasPago] =
+    await Promise.all([
+      datosDePortada(),
+      listarSucursalesPublicas(),
+      numerosDeLaEmpresa(),
+      escalasDeVolumenPublicas(),
+      bannersDe("portada"),
+      promosVigentes(),
+      escalasDePago(),
+    ]);
 
   return (
     <div className="overflow-hidden">
@@ -66,6 +71,8 @@ export default async function HomePage() {
       {portada.ofertas.length > 0 && <Ofertas productos={portada.ofertas} />}
 
       <BannerCorte />
+
+      <MediosDePago promos={promos} escalasPago={escalasPago} />
 
       <Categorias categorias={portada.categorias} />
 
@@ -298,6 +305,94 @@ function BannerCorte() {
             </div>
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Medios de pago y promociones bancarias.
+ *
+ * La clienta pidió que el inicio los muestre, y trajo la lista real: cada
+ * promoción con su banco, sus condiciones y **su vigencia**. Las filas salen de
+ * `bank_promotions` y las vencidas no llegan acá: la consulta las filtra, así
+ * que nadie reclama en el mostrador un reintegro que terminó el mes pasado.
+ *
+ * El descuento de contado va aparte y destacado porque no vence: sale de las
+ * mismas escalas que cobra el checkout (`paymentDiscounts`), no de un texto
+ * escrito acá. Si las escalas de contado no coinciden entre sí, la franja no se
+ * muestra antes que prometer un número que la caja después no aplica.
+ */
+function MediosDePago({
+  promos,
+  escalasPago,
+}: {
+  promos: PromoVigente[];
+  escalasPago: Awaited<ReturnType<typeof escalasDePago>>;
+}) {
+  const CONTADO = ["efectivo", "transferencia", "debito"];
+  const base = CONTADO.map(
+    (medio) =>
+      escalasPago
+        .filter((e) => e.medio === medio && e.desdeMonto === 0)
+        .sort((a, b) => b.porcentaje - a.porcentaje)[0]?.porcentaje ?? 0,
+  );
+  const contadoPct =
+    base[0] > 0 && base.every((p) => p === base[0]) ? base[0] : 0;
+
+  if (promos.length === 0 && contadoPct === 0) return null;
+
+  return (
+    <section className="bg-sitio-fondo pt-11 pb-3">
+      <div className="contenedor">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <TituloSeccion>Medios de pago y promociones</TituloSeccion>
+        </div>
+
+        {contadoPct > 0 && (
+          <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-oscuro-marca px-7 py-5 text-white">
+            <span className="tabular text-[30px] font-extrabold tracking-[-0.02em] text-brand-orange-light">
+              &minus;{contadoPct}%
+            </span>
+            <div>
+              <p className="text-[17px] font-semibold leading-snug">
+                Pagando de contado, todos los días
+              </p>
+              <p className="text-[14px] text-white/70">
+                Efectivo, transferencia o débito. Se aplica solo en el checkout
+                y en el mostrador.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {promos.length > 0 && (
+          <div className="mt-[18px] grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
+            {promos.map((p) => (
+              <article
+                key={p.id}
+                className="flex flex-col rounded-2xl border border-linea bg-card px-5 py-[18px]"
+              >
+                <span className="text-xs font-bold uppercase tracking-[0.08em] text-acento-texto">
+                  {p.medio}
+                </span>
+                <h3 className="mt-1.5 text-[17px] font-bold leading-snug tracking-[-0.01em]">
+                  {p.titulo}
+                </h3>
+                {p.detalle && (
+                  <p className="mt-2 text-[13.5px] leading-relaxed text-texto-2">
+                    {p.detalle}
+                  </p>
+                )}
+                <p className="mt-auto pt-3 text-[12.5px] font-medium text-texto-2">
+                  {p.dias}
+                  {p.dias && p.vigenciaHasta && " · "}
+                  {p.vigenciaHasta && `Hasta el ${p.vigenciaHasta}`}
+                </p>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

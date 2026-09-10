@@ -12,7 +12,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { customers } from "./customers";
-import { suppliers } from "./compras";
+import { purchaseInvoices, suppliers } from "./compras";
+import { cheques } from "./cheques";
 
 /**
  * Retenciones: las que practicamos y las que nos practican.
@@ -108,6 +109,67 @@ export const supplierPayments = pgTable(
     index("supplier_payments_fecha_idx").on(t.fecha),
   ],
 );
+
+/**
+ * A qué facturas se imputa un pago a proveedor.
+ *
+ * De la clienta: "en pagos a proveedores poder relacionar con las facturas y
+ * ver si pagó el total o pagó parcial". Hasta ahora el saldo se llevaba por
+ * suma de movimientos y ninguna factura sabía cuánto le habían pagado. Un
+ * pago puede cubrir varias facturas y una factura puede cobrarse en varios
+ * pagos: por eso es una tabla y no una FK.
+ *
+ * Los pagos anteriores a esta tabla quedan sin imputar; se pueden imputar
+ * después desde la factura, y el saldo global no cambia por eso.
+ */
+export const supplierPaymentAllocations = pgTable(
+  "supplier_payment_allocations",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    paymentId: uuid()
+      .notNull()
+      .references(() => supplierPayments.id, { onDelete: "cascade" }),
+    purchaseInvoiceId: uuid()
+      .notNull()
+      .references(() => purchaseInvoices.id, { onDelete: "restrict" }),
+    importe: numeric({ precision: 12, scale: 2 }).notNull(),
+  },
+  (t) => [
+    index("supplier_payment_allocations_payment_idx").on(t.paymentId),
+    index("supplier_payment_allocations_invoice_idx").on(t.purchaseInvoiceId),
+  ],
+);
+
+export type SupplierPaymentAllocation =
+  typeof supplierPaymentAllocations.$inferSelect;
+
+/**
+ * Con qué se pagó, renglón por renglón.
+ *
+ * "Poder adjuntar varias formas de pago para las facturas": el pago real a un
+ * proveedor suele ser una transferencia más dos cheques a fecha. El `medio`
+ * único de `supplier_payments` queda como el principal, para las pantallas y
+ * los pagos viejos; el detalle vive acá, y un renglón de cheque apunta al
+ * cheque de la cartera.
+ */
+export const supplierPaymentParts = pgTable(
+  "supplier_payment_parts",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    paymentId: uuid()
+      .notNull()
+      .references(() => supplierPayments.id, { onDelete: "cascade" }),
+    /** transferencia | cheque | echeq | efectivo — el mismo texto del pago. */
+    medio: text().notNull(),
+    importe: numeric({ precision: 12, scale: 2 }).notNull(),
+    referencia: text(),
+    /** El cheque de la cartera que salió con este renglón, si es cheque. */
+    chequeId: uuid().references(() => cheques.id, { onDelete: "set null" }),
+  },
+  (t) => [index("supplier_payment_parts_payment_idx").on(t.paymentId)],
+);
+
+export type SupplierPaymentPart = typeof supplierPaymentParts.$inferSelect;
 
 /**
  * Una retención practicada: el certificado que se le entrega al proveedor.

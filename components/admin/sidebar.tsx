@@ -122,6 +122,7 @@ const secciones: { titulo: string; items: ItemNav[] }[] = [
         label: "Facturas de compra",
       },
       { href: "/admin/compras/pagos", icon: Wallet, label: "Pagos" },
+      { href: "/admin/cheques", icon: Banknote, label: "Cheques" },
       { href: "/admin/compras/gastos", icon: Receipt, label: "Gastos" },
     ],
   },

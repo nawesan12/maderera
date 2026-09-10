@@ -4,9 +4,11 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
+  condicionesDelProveedor,
   obtenerProveedor,
   perfilDelProveedor,
 } from "@/lib/dal/admin/proveedores";
+import { CondicionesDelProveedor } from "./condiciones";
 import { ImportadorDeLista } from "../lista-precios/importador";
 import { formatearMonto } from "@/lib/formato";
 import { FormularioProveedor } from "../formulario";
@@ -30,9 +32,10 @@ export default async function ProveedorPage({
   await requireStaffRole("admin");
 
   const { id } = await params;
-  const [proveedor, perfil] = await Promise.all([
+  const [proveedor, perfil, condiciones] = await Promise.all([
     obtenerProveedor(id),
     perfilDelProveedor(id),
+    condicionesDelProveedor(id),
   ]);
 
   if (!proveedor) notFound();
@@ -98,6 +101,12 @@ export default async function ProveedorPage({
       <CuentaDelProveedor
         supplierId={proveedor.id}
         movimientos={proveedor.movimientos}
+      />
+
+      <CondicionesDelProveedor
+        supplierId={proveedor.id}
+        condiciones={condiciones}
+        convenios={proveedor.convenios}
       />
 
       <details className="tarjeta p-5">

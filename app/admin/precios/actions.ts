@@ -13,6 +13,8 @@ import {
   priceLists,
   productVariants,
   products,
+  subcategories,
+  variantCosts,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
@@ -159,7 +161,20 @@ const ajusteSchema = z.object({
     .max(500, "Un aumento mayor a 500% seguramente sea un error de tipeo.")
     .refine((v) => v !== 0, "Poné un porcentaje distinto de cero."),
   categoria: z.string().optional(),
+  /** El rubro dentro de la categoría. La clienta pidió poder cortar ahí. */
+  rubro: z.string().optional(),
   listaSlug: z.enum(["ambas", "general", "profesional"]).default("ambas"),
+  /**
+   * Sobre qué se calcula el porcentaje ("elegir sobre qué peso se hace el
+   * cambio de precio"):
+   *
+   * - `precio`: el vigente, como siempre. El porcentaje es el aumento.
+   * - `costo`: el costo promedio ponderado. El porcentaje pasa a ser el
+   *   **margen**: precio nuevo = costo × (1 + margen).
+   * - `costo_elaborado`: ídem, con el recargo de elaboración del producto
+   *   aplicado antes del margen.
+   */
+  base: z.enum(["precio", "costo", "costo_elaborado"]).default("precio"),
   redondeo: z.enum(["ninguno", "decena", "centena", "mil"]).default("ninguno"),
   motivo: z.string().trim().max(200).optional(),
 });
@@ -190,7 +205,9 @@ export async function ajustarPrecios(
   const parsed = ajusteSchema.safeParse({
     porcentaje: formData.get("porcentaje"),
     categoria: (formData.get("categoria") as string) || undefined,
+    rubro: (formData.get("rubro") as string) || undefined,
     listaSlug: formData.get("listaSlug") ?? "ambas",
+    base: formData.get("base") ?? "precio",
     redondeo: formData.get("redondeo") ?? "ninguno",
     motivo: (formData.get("motivo") as string) || undefined,
   });
@@ -199,11 +216,13 @@ export async function ajustarPrecios(
     return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
   }
 
-  const { porcentaje, categoria, listaSlug, redondeo, motivo } = parsed.data;
+  const { porcentaje, categoria, rubro, listaSlug, base, redondeo, motivo } =
+    parsed.data;
   const factor = 1 + porcentaje / 100;
   const loteId = randomUUID();
 
   let tocados = 0;
+  let sinCosto = 0;
 
   await db.transaction(async (tx) => {
     const listas = await tx.select().from(priceLists);
@@ -221,17 +240,45 @@ export async function ajustarPrecios(
     if (categoria && categoria !== "todos") {
       condiciones.push(eq(categories.slug, categoria));
     }
+    if (rubro && rubro !== "todos") {
+      condiciones.push(eq(subcategories.slug, rubro));
+    }
 
     const variantes = await tx
-      .select({ id: productVariants.id })
+      .select({
+        id: productVariants.id,
+        costo: variantCosts.costoPromedio,
+        recargoElaboracion: products.recargoElaboracionPct,
+      })
       .from(productVariants)
       .innerJoin(products, eq(products.id, productVariants.productId))
       .innerJoin(categories, eq(categories.id, products.categoryId))
+      .leftJoin(subcategories, eq(subcategories.id, products.subcategoryId))
+      .leftJoin(variantCosts, eq(variantCosts.variantId, productVariants.id))
       .where(and(...condiciones));
 
     if (variantes.length === 0) return;
 
     const ids = variantes.map((v) => v.id);
+
+    /*
+     * La base por variante cuando se parte del costo. El costo promedio es de
+     * compra; "con elaboración" le aplica el recargo del producto antes del
+     * margen. Sin costo cargado no hay de dónde calcular: esa variante se
+     * saltea y se avisa, en vez de dejarla en cero.
+     */
+    const basePorVariante = new Map<string, number>();
+    if (base !== "precio") {
+      for (const v of variantes) {
+        const costo = Number(v.costo ?? 0);
+        if (!(costo > 0)) continue;
+        const recargo =
+          base === "costo_elaborado"
+            ? 1 + Number(v.recargoElaboracion ?? 0) / 100
+            : 1;
+        basePorVariante.set(v.id, Math.round(costo * recargo * 100) / 100);
+      }
+    }
 
     for (const lista of objetivo) {
       const actuales = await tx
@@ -248,12 +295,23 @@ export async function ajustarPrecios(
         );
 
       for (const actual of actuales) {
-        const base = Number(actual.price);
-        // Un producto sin precio cargado no se ajusta: multiplicar cero por
-        // cualquier porcentaje sigue dando cero y solo ensucia el historial.
-        if (!Number.isFinite(base) || base <= 0) continue;
+        let baseDeCalculo: number;
 
-        const nuevo = ajustar(base, factor, redondeo).toFixed(2);
+        if (base === "precio") {
+          baseDeCalculo = Number(actual.price);
+          // Un producto sin precio cargado no se ajusta: multiplicar cero por
+          // cualquier porcentaje sigue dando cero y solo ensucia el historial.
+          if (!Number.isFinite(baseDeCalculo) || baseDeCalculo <= 0) continue;
+        } else {
+          const delCosto = basePorVariante.get(actual.variantId);
+          if (!delCosto) {
+            sinCosto++;
+            continue;
+          }
+          baseDeCalculo = delCosto;
+        }
+
+        const nuevo = ajustar(baseDeCalculo, factor, redondeo).toFixed(2);
         const { anterior, cambio } = await aplicarPrecio(
           tx,
           actual.variantId,
@@ -271,7 +329,9 @@ export async function ajustarPrecios(
             origen: "ajuste_masivo",
             motivo:
               motivo ??
-              `${porcentaje > 0 ? "Aumento" : "Baja"} del ${Math.abs(porcentaje)}%`,
+              (base === "precio"
+                ? `${porcentaje > 0 ? "Aumento" : "Baja"} del ${Math.abs(porcentaje)}%`
+                : `Recalculado desde el costo${base === "costo_elaborado" ? " con elaboración" : ""} + ${porcentaje}% de margen`),
             loteId,
             userId: usuario.userId,
           });
@@ -288,18 +348,27 @@ export async function ajustarPrecios(
     sesion: usuario,
     accion: "editar",
     entidad: "precio",
-    descripcion: `Ajuste masivo del ${porcentaje > 0 ? "+" : ""}${porcentaje}% sobre ${tocados} precio${tocados === 1 ? "" : "s"}`,
-    detalle: { porcentaje, categoria, listaSlug, redondeo, motivo, loteId, tocados },
+    descripcion: `Ajuste masivo del ${porcentaje > 0 ? "+" : ""}${porcentaje}% sobre ${tocados} precio${tocados === 1 ? "" : "s"}${base !== "precio" ? " (desde costo)" : ""}`,
+    detalle: { porcentaje, categoria, rubro, listaSlug, base, redondeo, motivo, loteId, tocados, sinCosto },
   });
 
   refrescar();
 
   if (tocados === 0) {
-    return { error: "No se encontraron precios para ajustar con ese filtro." };
+    return {
+      error:
+        base === "precio"
+          ? "No se encontraron precios para ajustar con ese filtro."
+          : "Ninguno de esos productos tiene costo cargado, así que no hay de dónde calcular.",
+    };
   }
 
   return {
-    ok: `Se actualizaron ${tocados} precio${tocados === 1 ? "" : "s"}.`,
+    ok:
+      `Se actualizaron ${tocados} precio${tocados === 1 ? "" : "s"}.` +
+      (sinCosto > 0
+        ? ` ${sinCosto} quedaron igual porque no tienen costo cargado.`
+        : ""),
   };
 }
 

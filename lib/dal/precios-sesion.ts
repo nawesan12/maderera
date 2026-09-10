@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, priceLists, profiles } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
+import { factorDeLista } from "@/lib/precios/derivada";
 
 /**
  * Qué lista de precios corresponde a quien está mirando.
@@ -38,6 +39,15 @@ export interface ListaVigente {
   nombre: string | null;
   /** Verdadero cuando no es la general: la pantalla lo puede decir. */
   esDiferenciada: boolean;
+  /**
+   * Multiplicador sobre el precio general cuando la lista es derivada
+   * (`porcentajeSobreGeneral`): −5 % da 0,95. Uno para las listas comunes.
+   *
+   * Con esto el respaldo tiene tres escalones: ítem propio de la lista →
+   * general por este factor → general tal cual (factor 1). Las consultas lo
+   * aplican dentro del `coalesce`, así que un factor 1 deja todo como estaba.
+   */
+  factorDerivado: number;
 }
 
 export const listaVigente = cache(async (): Promise<ListaVigente> => {
@@ -56,6 +66,7 @@ export const listaVigente = cache(async (): Promise<ListaVigente> => {
       generalId,
       nombre: general?.nombre ?? null,
       esDiferenciada: false,
+      factorDerivado: 1,
     };
   }
 
@@ -77,13 +88,18 @@ export const listaVigente = cache(async (): Promise<ListaVigente> => {
       generalId,
       nombre: general?.nombre ?? null,
       esDiferenciada: false,
+      factorDerivado: 1,
     };
   }
 
   // Una lista dada de baja no se aplica: se cae a la general en vez de dejar el
   // catálogo sin precios.
   const [propia] = await db
-    .select({ id: priceLists.id, nombre: priceLists.name })
+    .select({
+      id: priceLists.id,
+      nombre: priceLists.name,
+      porcentajeSobreGeneral: priceLists.porcentajeSobreGeneral,
+    })
     .from(priceLists)
     .where(and(eq(priceLists.id, elegida), eq(priceLists.active, true)))
     .limit(1);
@@ -94,6 +110,7 @@ export const listaVigente = cache(async (): Promise<ListaVigente> => {
       generalId,
       nombre: general?.nombre ?? null,
       esDiferenciada: false,
+      factorDerivado: 1,
     };
   }
 
@@ -102,6 +119,7 @@ export const listaVigente = cache(async (): Promise<ListaVigente> => {
     generalId,
     nombre: propia.nombre,
     esDiferenciada: true,
+    factorDerivado: factorDeLista(propia.porcentajeSobreGeneral),
   };
 });
 

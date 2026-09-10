@@ -86,6 +86,7 @@ export default async function TarifasDeCortePage() {
                 material: tarifa.material,
                 priceListId: tarifa.priceListId,
                 precioPorPasada: tarifa.precioPorPasada,
+                precioPorMetroCanto: tarifa.precioPorMetroCanto,
                 activo: tarifa.activo,
               }}
               listas={opciones}

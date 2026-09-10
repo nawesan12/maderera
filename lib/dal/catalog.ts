@@ -212,7 +212,7 @@ export const rubrosDeCategoria = cache(
  */
 async function consultarProductos(
   filtros: FiltrosCatalogo,
-  lista: Pick<ListaVigente, "id" | "generalId">,
+  lista: Pick<ListaVigente, "id" | "generalId" | "factorDerivado">,
 ): Promise<ProductoListado[]> {
   const condiciones = [eq(products.active, true)];
 
@@ -392,6 +392,9 @@ export async function listarProductos(
   return productosCacheados(filtros, {
     id: lista.id,
     generalId: lista.generalId,
+    // En la clave del caché a propósito: si la clienta ajusta el porcentaje de
+    // una lista derivada, el factor cambia y el caché viejo deja de servirse.
+    factorDerivado: lista.factorDerivado,
   });
 }
 
@@ -510,7 +513,7 @@ function ordenar(
  */
 async function variantesConStockYPrecio(
   productIds: string[],
-  lista: Pick<ListaVigente, "id" | "generalId">,
+  lista: Pick<ListaVigente, "id" | "generalId" | "factorDerivado">,
 ) {
 
   // Dos joins con alias: uno a la lista vigente y otro a la general. Traer las
@@ -519,14 +522,18 @@ async function variantesConStockYPrecio(
   const propia = alias(priceListItems, "precio_propio");
   const general = alias(priceListItems, "precio_general");
 
+  // El factor de una lista derivada (la constructora, −N % de la general).
+  // Con factor 1 la expresión devuelve el precio general tal cual.
+  const factor = lista.factorDerivado ?? 1;
+
   const filas = await db
     .select({
       productId: productVariants.productId,
       variantId: productVariants.id,
       label: productVariants.label,
       sortOrder: productVariants.sortOrder,
-      precio: sql<string | null>`coalesce(${propia.price}, ${general.price})`,
-      precioAnterior: sql<string | null>`coalesce(${propia.precioAnterior}, ${general.precioAnterior})`,
+      precio: sql<string | null>`coalesce(${propia.price}, round((${general.price} * ${factor})::numeric, 2))`,
+      precioAnterior: sql<string | null>`coalesce(${propia.precioAnterior}, round((${general.precioAnterior} * ${factor})::numeric, 2))`,
       // `sql<string>` y no `Date`: Drizzle solo convierte a Date las columnas
       // que se seleccionan directo, no las que salen de una expresión. Tiparlo
       // como Date compila y explota en tiempo de ejecución al llamar getTime().
@@ -718,8 +725,8 @@ export async function obtenerProducto(
         espesorMm: productVariants.espesorMm,
         sortOrder: productVariants.sortOrder,
         // Mismo respaldo que en el listado: la lista propia manda, la general
-        // cubre lo que esa lista no tenga cargado.
-        precio: sql<string | null>`coalesce(${propia.price}, ${general.price})`,
+        // —con el factor de una lista derivada— cubre lo que falte.
+        precio: sql<string | null>`coalesce(${propia.price}, round((${general.price} * ${lista.factorDerivado ?? 1})::numeric, 2))`,
         branchSlug: branches.slug,
         qty: inventory.qty,
         reservado: inventory.reservado,

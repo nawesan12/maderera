@@ -223,6 +223,18 @@ export async function confirmarCompra(
   // enlace de seguimiento, así que sube por acá igual que el token.
   let numeroCreado = "";
 
+  // El vendedor asignado a la ficha, si la hay: la compra web de un cliente de
+  // cartera sigue siendo una venta de su vendedor de calle.
+  let sellerId: string | null = null;
+  if (customerId) {
+    const [ficha] = await db
+      .select({ sellerId: customers.sellerId })
+      .from(customers)
+      .where(eq(customers.id, customerId))
+      .limit(1);
+    sellerId = ficha?.sellerId ?? null;
+  }
+
   await db.transaction(async (tx) => {
     // Adentro de la transacción: el lock de la serie vive lo que vive la
     // transacción, así que pedirlo antes no protegería el insert.
@@ -250,6 +262,7 @@ export async function confirmarCompra(
         medioPago: datos.medioPago,
         estadoPago: "pendiente",
         notas: datos.notas ?? null,
+        sellerId,
         createdByUserId: sesion?.userId,
       })
       .returning();

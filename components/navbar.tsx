@@ -57,6 +57,10 @@ const enlacesDirectos = [
   // darle mucha más presencia. Escondida detrás de un desplegable no la
   // encontraba nadie.
   { name: "Moldava", href: "/moldava" },
+  // Profesionales también sube a la barra (tercera tanda): estaba solo en la
+  // barra superior, que en el teléfono ni existe, y la clienta pidió que la
+  // cuenta profesional se encuentre sin buscarla.
+  { name: "Profesionales", href: "/profesionales" },
   { name: "Sucursales", href: "/sucursales" },
 ];
 
@@ -156,17 +160,19 @@ export function Navbar({
       {/* Barra principal */}
       <nav className="sticky top-0 z-50 border-b border-linea-suave bg-[var(--chrome-fondo)] backdrop-blur-[12px]">
         <div className="contenedor flex h-[72px] items-center gap-6">
-          <Link href="/" className="group flex items-center gap-[11px]">
+          {/* El logo, más grande y con el nombre siempre a la vista: la
+              clienta pidió que tenga más presencia y que nunca se pierda. */}
+          <Link href="/" className="group flex items-center gap-3">
             <Image
               src="/cropped-icon-180x180.png"
               alt="Maderera Juan B. Justo"
-              width={44}
-              height={44}
-              className="rounded-[11px] transition-transform duration-300 group-hover:scale-105"
+              width={54}
+              height={54}
+              className="rounded-[13px] transition-transform duration-300 group-hover:scale-105"
             />
-            <span className="hidden leading-[1.1] sm:block">
-              <span className="block text-[15px] font-bold tracking-tight text-foreground">Maderera</span>
-              <span className="block text-[11px] uppercase tracking-[0.11em] text-texto-3">Juan B. Justo</span>
+            <span className="leading-[1.1]">
+              <span className="block text-[17px] font-extrabold tracking-tight text-foreground">Maderera</span>
+              <span className="block text-[12px] font-semibold uppercase tracking-[0.11em] text-texto-3">Juan B. Justo</span>
             </span>
           </Link>
 
@@ -184,7 +190,7 @@ export function Navbar({
                   clicable es lo mínimo. */}
               <Link
                 href="/catalogo"
-                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[13px] text-[14.5px] font-medium transition-colors ${
+                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
                   productsOpen ? "bg-sitio-alt text-acento-texto" : "text-foreground"
                 }`}
                 aria-expanded={productsOpen}
@@ -236,11 +242,13 @@ export function Navbar({
               </AnimatePresence>
             </div>
 
+            {/* En imprenta mayúscula y con más cuerpo, por pedido de la
+                clienta: "que todas las del menú sean en imprenta mayúsculas". */}
             {enlacesDirectos.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="flex h-10 items-center rounded-[9px] px-[13px] text-[14.5px] font-medium text-foreground transition-colors hover:bg-sitio-alt hover:text-acento-texto"
+                className="flex h-10 items-center rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] text-foreground transition-colors hover:bg-sitio-alt hover:text-acento-texto"
               >
                 {link.name}
               </Link>
@@ -252,7 +260,7 @@ export function Navbar({
               onMouseLeave={() => setMasOpen(false)}
             >
               <button
-                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[13px] text-[14.5px] font-medium transition-colors ${
+                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
                   masOpen ? "bg-sitio-alt text-acento-texto" : "text-texto-2"
                 }`}
                 aria-expanded={masOpen}
@@ -305,11 +313,12 @@ export function Navbar({
             {/* Crear cuenta, solo a quien no entró. La clienta pidió promover
                 más el registro: en el escritorio no había ni un enlace, solo
                 "Ingresar", que a quien todavía no tiene cuenta no le dice que
-                pueda hacerse una. */}
+                pueda hacerse una. Desde `xl` y no `lg`: con Profesionales en la
+                barra, en 1024 px ya no entran las dos cosas. */}
             {!sesion && (
               <Link
                 href="/registro"
-                className="hidden h-11 items-center whitespace-nowrap rounded-[11px] px-[13px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-sitio-alt lg:flex"
+                className="hidden h-11 items-center whitespace-nowrap rounded-[11px] px-[13px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-sitio-alt xl:flex"
               >
                 Crear cuenta
               </Link>
@@ -390,7 +399,7 @@ export function Navbar({
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Navegación
                   </p>
-                  {[...enlacesDirectos, { name: "Portal Profesionales", href: "/profesionales" }, ...enlacesMas].map(
+                  {[...enlacesDirectos, ...enlacesMas].map(
                     (link) => (
                       <Link
                         key={link.href}

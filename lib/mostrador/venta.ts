@@ -9,19 +9,27 @@ import { costosParaCongelar } from "@/lib/compras/congelar";
 import {
   accountMovements,
   cashMovements,
+  customers,
   inventory,
   inventoryMovements,
   orderItems,
+  orderPayments,
   orders,
   payments,
 } from "@/lib/db/schema";
+import { reservarPedido } from "@/lib/inventario/reservas";
 import {
   aCentavos,
   aplicarDescuento,
+  importePorMedio,
+  medioPrincipal,
+  normalizarPagos,
+  revisarPagos,
   revisarVenta,
   totalDeLaVenta,
   type LineaDeVenta,
   type MedioDeMostrador,
+  type PagoDeVenta,
 } from "./importes";
 import { escalasDePago } from "@/lib/dal/descuentos-pago";
 import { estadoDeCredito } from "@/lib/dal/credito";
@@ -32,7 +40,7 @@ import {
 } from "@/lib/precios/medio-pago";
 import { listaDelCliente } from "@/lib/mostrador/buscar";
 
-export type { LineaDeVenta, MedioDeMostrador };
+export type { LineaDeVenta, MedioDeMostrador, PagoDeVenta };
 
 /**
  * La única función que registra una venta de mostrador.
@@ -75,6 +83,22 @@ export interface VentaDeMostrador {
   contactoNombre: string;
   contactoTelefono?: string | null;
   medioPago: MedioDeMostrador;
+  /**
+   * Cómo se pagó, renglón por renglón, con lote y cupón para las tarjetas.
+   *
+   * Vacío o ausente significa "todo por `medioPago`", que es como cobran las
+   * ventas viejas y las de la cola sin conexión. Si viene, la suma tiene que
+   * dar el total al centavo y `medioPago` pasa a ser el de mayor importe.
+   */
+  pagos?: PagoDeVenta[];
+  /**
+   * La venta queda en acopio: se cobra y la mercadería no se lleva.
+   *
+   * El pedido nace "listo" en vez de "entregado", el stock se **reserva** en
+   * lugar de descontarse, y los retiros parciales salen después con sus
+   * remitos, que es el circuito de acopio que ya existe.
+   */
+  acopio?: boolean;
   /** Descuento pedido, en plata. Lo que se aplica puede diferir por centavos. */
   descuento?: number;
   descuentoMotivo?: string | null;
@@ -159,7 +183,13 @@ export async function registrarVentaDeMostrador(
     const lista = await listaDelCliente(venta.customerId);
     const diferenciada = lista.id !== null && lista.id !== lista.generalId;
 
-    if (diferenciada && !medioPermitido(venta.medioPago, true)) {
+    // Con pago partido, **cada** medio tiene que estar permitido: pagar la
+    // mitad con crédito es pagar con crédito.
+    const medios = [
+      venta.medioPago,
+      ...(venta.pagos ?? []).map((p) => p.medio),
+    ];
+    if (diferenciada && medios.some((m) => !medioPermitido(m, true))) {
       return {
         ok: false,
         error:
@@ -211,6 +241,18 @@ export async function registrarVentaDeMostrador(
   const total = totalDeLaVenta(lineas);
 
   /*
+   * Cómo se pagó, en su forma única. Una venta sin detalle de pagos —las
+   * viejas, las de la cola sin conexión— es un solo pago por el total.
+   */
+  const pagos = normalizarPagos(venta.pagos, venta.medioPago, total);
+  const problemaDePagos = revisarPagos(pagos, total, venta.customerId);
+  if (problemaDePagos) return { ok: false, error: problemaDePagos };
+
+  const medioPago = medioPrincipal(pagos);
+  const parteEfectivo = importePorMedio(pagos, "efectivo");
+  const parteCuenta = importePorMedio(pagos, "cuenta_corriente");
+
+  /*
    * Cuenta corriente: límite y mora.
    *
    * Hasta acá el mostrador solo exigía que hubiera un cliente elegido. Un
@@ -220,9 +262,12 @@ export async function registrarVentaDeMostrador(
    * `autorizado` es la válvula: hay alguien esperando del otro lado del
    * mostrador y la decisión de vender igual es del negocio, no del sistema.
    * Lo que el sistema garantiza es que nadie lo haga **sin enterarse**.
+   *
+   * Con pago partido se evalúa solo la parte que va al libro: lo que se pagó
+   * de contado no es deuda.
    */
-  if (venta.medioPago === "cuenta_corriente" && venta.customerId) {
-    const credito = await estadoDeCredito(venta.customerId, total);
+  if (parteCuenta > 0 && venta.customerId) {
+    const credito = await estadoDeCredito(venta.customerId, parteCuenta);
 
     if (!credito.puede && !(venta.autorizado && credito.autorizable)) {
       return {
@@ -231,6 +276,18 @@ export async function registrarVentaDeMostrador(
         requiereAutorizacion: credito.autorizable,
       };
     }
+  }
+
+  // El vendedor asignado a la ficha: la venta del mostrador de un cliente de
+  // cartera sigue siendo una venta de su vendedor.
+  let sellerId: string | null = null;
+  if (venta.customerId) {
+    const [ficha] = await db
+      .select({ sellerId: customers.sellerId })
+      .from(customers)
+      .where(eq(customers.id, venta.customerId))
+      .limit(1);
+    sellerId = ficha?.sellerId ?? null;
   }
 
   return db.transaction(async (tx) => {
@@ -268,7 +325,7 @@ export async function registrarVentaDeMostrador(
     let sesionId: string | null = null;
     const diferida = Boolean(venta.cobradaAt);
 
-    if (venta.medioPago === "efectivo") {
+    if (parteEfectivo > 0) {
       /*
        * El turno se busca por el momento del cobro, no por cuál está abierto
        * ahora: una venta hecha sin internet a las 19:40 pertenece al turno de
@@ -299,7 +356,6 @@ export async function registrarVentaDeMostrador(
     // Con lock sobre la serie: dos cajas cobrando a la vez leían el mismo
     // máximo y la segunda moría contra el índice único, con el cliente enfrente.
     const numero = await siguienteNumeroDePedido(tx);
-    const aCuenta = venta.medioPago === "cuenta_corriente";
 
     const [pedido] = await tx
       .insert(orders)
@@ -324,9 +380,12 @@ export async function registrarVentaDeMostrador(
         contactoNombre: venta.contactoNombre,
         contactoTelefono: venta.contactoTelefono ?? null,
         branchId: venta.branchId,
-        // Se cobra y se lleva: el pedido nace entregado. Pasarlo por "pendiente"
-        // y "listo" sería inventar un recorrido que en el mostrador no existe.
-        estado: "entregado",
+        /*
+         * Se cobra y se lleva: el pedido nace entregado. La excepción es el
+         * acopio, que nace "listo": la mercadería queda en el depósito
+         * esperando los retiros, y cada retiro sale con su remito.
+         */
+        estado: venta.acopio ? "listo" : "entregado",
         origen: "mostrador",
         tipoEntrega: "retiro",
         subtotal: subtotal.toFixed(2),
@@ -336,12 +395,35 @@ export async function registrarVentaDeMostrador(
             ? (venta.descuentoMotivo ?? motivoAutomatico)
             : null,
         total: total.toFixed(2),
-        medioPago: venta.medioPago,
-        estadoPago: aCuenta ? "pendiente" : "pagado",
+        medioPago,
+        /*
+         * Lo que fue a cuenta corriente sigue debiéndose: todo a cuenta es
+         * "pendiente", una parte es "parcial", nada es "pagado".
+         */
+        estadoPago:
+          parteCuenta >= total - 0.009
+            ? "pendiente"
+            : parteCuenta > 0
+              ? "parcial"
+              : "pagado",
+        sellerId,
         notas: venta.notas ?? null,
         createdByUserId: venta.usuarioId,
       })
       .returning({ id: orders.id });
+
+    // El detalle de cómo se pagó, con lote y cupón. Siempre, aun con un solo
+    // pago: el cierre Z y la conciliación leen de acá.
+    await tx.insert(orderPayments).values(
+      pagos.map((p) => ({
+        orderId: pedido.id,
+        medio: p.medio,
+        importe: p.importe.toFixed(2),
+        nroLote: p.nroLote || null,
+        nroCupon: p.nroCupon || null,
+        tarjeta: p.tarjeta || null,
+      })),
+    );
 
     /*
      * El costo se congela en la línea, igual que el precio. El promedio
@@ -371,38 +453,49 @@ export async function registrarVentaDeMostrador(
       }),
     );
 
-    // Stock: solo las líneas que apuntan a una variante. Un flete o una
-    // diferencia de precio no descuentan nada de ningún estante.
-    for (const l of lineas) {
-      if (!l.variantId) continue;
-      const unidades = Math.round(l.cantidad);
-      if (unidades <= 0) continue;
+    if (venta.acopio) {
+      /*
+       * En acopio la mercadería no sale: se **reserva**, con la misma función
+       * que usa un pedido confirmado. El movimiento `venta` lo genera cada
+       * retiro parcial, que es cuando de verdad cruza la puerta.
+       */
+      await reservarPedido(tx, pedido.id);
+    } else {
+      // Stock: solo las líneas que apuntan a una variante. Un flete o una
+      // diferencia de precio no descuentan nada de ningún estante.
+      for (const l of lineas) {
+        if (!l.variantId) continue;
+        const unidades = Math.round(l.cantidad);
+        if (unidades <= 0) continue;
 
-      await tx
-        .update(inventory)
-        .set({ qty: sql`${inventory.qty} - ${unidades}`, updatedAt: new Date() })
-        .where(
-          and(
-            eq(inventory.variantId, l.variantId),
-            eq(inventory.branchId, venta.branchId),
-          ),
-        );
+        await tx
+          .update(inventory)
+          .set({ qty: sql`${inventory.qty} - ${unidades}`, updatedAt: new Date() })
+          .where(
+            and(
+              eq(inventory.variantId, l.variantId),
+              eq(inventory.branchId, venta.branchId),
+            ),
+          );
 
-      await tx.insert(inventoryMovements).values({
-        variantId: l.variantId,
-        branchId: venta.branchId,
-        type: "venta",
-        qty: -unidades,
-        note: `Mostrador ${numero}`,
-        createdByUserId: venta.usuarioId,
-      });
+        await tx.insert(inventoryMovements).values({
+          variantId: l.variantId,
+          branchId: venta.branchId,
+          type: "venta",
+          qty: -unidades,
+          note: `Mostrador ${numero}`,
+          createdByUserId: venta.usuarioId,
+        });
+      }
     }
 
-    if (sesionId) {
+    if (sesionId && parteEfectivo > 0) {
+      // Al cajón entra solo la parte en efectivo: en una venta partida, lo que
+      // fue por débito no está en la caja y el arqueo no lo puede esperar.
       await tx.insert(cashMovements).values({
         sessionId: sesionId,
         tipo: "venta",
-        monto: total.toFixed(2),
+        monto: parteEfectivo.toFixed(2),
         motivo: numero,
         orderId: pedido.id,
         creadoPor: venta.usuarioId,
@@ -413,26 +506,29 @@ export async function registrarVentaDeMostrador(
       });
     }
 
-    if (aCuenta && venta.customerId) {
+    if (parteCuenta > 0 && venta.customerId) {
       // Positivo es lo que el cliente debe, igual que en el resto del libro.
       await tx.insert(accountMovements).values({
         customerId: venta.customerId,
         tipo: "compra",
-        monto: total.toFixed(2),
+        monto: parteCuenta.toFixed(2),
         detalle: `Venta de mostrador ${numero}`,
         referencia: numero,
         createdByUserId: venta.usuarioId,
       });
-    } else {
-      // La plata entró: queda anotada donde se mira la plata que entró, sin
-      // importar por qué canal.
+    }
+
+    // La plata que entró queda anotada donde se mira la plata que entró, sin
+    // importar por qué canal. Un renglón por cada pago que no sea deuda.
+    for (const pago of pagos) {
+      if (pago.medio === "cuenta_corriente") continue;
       await tx.insert(payments).values({
         orderId: pedido.id,
         customerId: venta.customerId,
         tipo: "pedido",
         proveedor: "mostrador",
-        medio: venta.medioPago,
-        monto: total.toFixed(2),
+        medio: pago.medio,
+        monto: pago.importe.toFixed(2),
         estado: "aprobado",
         conciliadoPor: venta.usuarioId,
         conciliadoAt: new Date(),

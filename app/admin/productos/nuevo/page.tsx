@@ -36,6 +36,8 @@ export default async function NuevoProductoPage() {
           description: "",
           brand: "",
           unit: "unidad",
+          alicuotaIva: "21",
+          recargoElaboracionPct: "",
           featured: false,
           aPedido: false,
           active: true,

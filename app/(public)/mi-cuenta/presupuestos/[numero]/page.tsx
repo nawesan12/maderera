@@ -75,9 +75,18 @@ export default async function DetallePresupuestoPage({
             )}
           </p>
         </div>
-        <span className="tabular text-3xl font-bold">
-          {formatearMonto(presupuesto.total)}
-        </span>
+        <div className="flex flex-col items-end gap-2">
+          <span className="tabular text-3xl font-bold">
+            {formatearMonto(presupuesto.total)}
+          </span>
+          {/* El papel para guardar o reenviar: mismo PDF que imprime la casa. */}
+          <a
+            href={`/api/presupuestos/${presupuesto.id}/pdf`}
+            className="text-sm font-medium text-acento-texto hover:underline"
+          >
+            Descargar en PDF
+          </a>
+        </div>
       </header>
 
       {presupuesto.estado !== "rechazado" && (

@@ -99,6 +99,17 @@ export const cuttingRates = pgTable(
     }),
     /** Precio final, con IVA incluido, como todo el catálogo. */
     precioPorPasada: numeric({ precision: 12, scale: 2 }).notNull(),
+    /**
+     * Precio del metro lineal de tapacanto pegado, final con IVA.
+     *
+     * El pegado es un servicio aparte del corte —la planilla del taller pide
+     * los cantos por medida y suma los metros totales— y hasta ahora no se
+     * cobraba en ninguna parte. Cero significa que ese material no lleva o no
+     * se cobra.
+     */
+    precioPorMetroCanto: numeric({ precision: 12, scale: 2 })
+      .notNull()
+      .default("0"),
     activo: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

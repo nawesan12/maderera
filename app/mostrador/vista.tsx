@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Banknote,
+  ClipboardList,
   CreditCard,
   Landmark,
   Loader2,
@@ -67,6 +68,8 @@ import {
   anularVenta,
   cerrarCaja,
   cobrarVenta,
+  emitirPresupuestoDeMostrador,
+  emitirRemitoDeVenta,
   letraDelComprobante,
   preciosDelCliente,
   registrarMovimientoDeCaja,
@@ -144,6 +147,15 @@ const NOMBRE_DEL_MEDIO: Record<string, string> = Object.fromEntries(
 );
 
 /** Una clave nueva por venta: es lo que impide que el doble toque cobre dos veces. */
+/** Un renglón del pago partido, con los importes como texto porque se tipean. */
+interface ParteDePago {
+  medio: MedioDeMostrador;
+  importe: string;
+  nroLote: string;
+  nroCupon: string;
+  tarjeta: string;
+}
+
 function claveNueva() {
   return crypto.randomUUID();
 }
@@ -247,9 +259,33 @@ export function VistaMostrador({
     invoiceId?: string;
     /** Para imprimir el ticket local mientras no hay pedido. */
     clave?: string;
+    /** La venta quedó en acopio: el remito sale con cada retiro, no acá. */
+    acopio?: boolean;
+    /** El remito ya emitido para esta venta, para reimprimirlo. */
+    remitoId?: string;
   } | null>(null);
   const [caja, setCaja] = useState(false);
   const [suelta, setSuelta] = useState<string | null>(null);
+
+  /*
+   * La venta queda en acopio: se cobra y la mercadería no se lleva. El stock
+   * se reserva y cada retiro sale después con su remito, desde la ficha del
+   * pedido.
+   */
+  const [acopio, setAcopio] = useState(false);
+
+  /*
+   * Los datos de la terminal para un pago con tarjeta: lote, cupón y qué
+   * tarjeta. Son el "código de que se pagó con qué" que pide el contador.
+   */
+  const [tarjeta, setTarjeta] = useState({ nroLote: "", nroCupon: "", marca: "" });
+
+  /*
+   * El pago partido: null es "todo por el medio elegido", que es la venta de
+   * siempre. Activado, cada renglón dice medio e importe y la suma tiene que
+   * dar el total al centavo.
+   */
+  const [partes, setPartes] = useState<ParteDePago[] | null>(null);
 
   /*
    * Lo fijo del ticket. Sale de lo que la pantalla ya tiene, así que el papel
@@ -284,6 +320,50 @@ export function VistaMostrador({
         : null,
     [medio, total, recibido],
   );
+
+  // Cuánto falta repartir cuando el pago está partido. Cero es "listo".
+  const restanteDePartes = useMemo(() => {
+    if (!partes) return 0;
+    const suma = partes.reduce((s, p) => s + (Number(p.importe) || 0), 0);
+    return Math.round((total - suma) * 100) / 100;
+  }, [partes, total]);
+
+  /**
+   * El detalle de pagos que viaja con la venta.
+   *
+   * Sin partir y sin tarjeta no se manda nada: el servidor arma el pago único
+   * solo, y las ventas viejas de la cola siguen entrando igual.
+   */
+  function pagosDeLaVenta() {
+    if (partes) {
+      return partes
+        .filter((p) => (Number(p.importe) || 0) > 0)
+        .map((p) => ({
+          medio: p.medio,
+          importe: Number(p.importe),
+          nroLote: p.nroLote.trim() || null,
+          nroCupon: p.nroCupon.trim() || null,
+          tarjeta: p.tarjeta.trim() || null,
+        }));
+    }
+
+    if (
+      (medio === "debito" || medio === "credito") &&
+      (tarjeta.nroLote.trim() || tarjeta.nroCupon.trim() || tarjeta.marca.trim())
+    ) {
+      return [
+        {
+          medio,
+          importe: total,
+          nroLote: tarjeta.nroLote.trim() || null,
+          nroCupon: tarjeta.nroCupon.trim() || null,
+          tarjeta: tarjeta.marca.trim() || null,
+        },
+      ];
+    }
+
+    return undefined;
+  }
 
   /*
    * La letra no se rotula a mano: sale de quién emite y quién recibe. Si la
@@ -343,6 +423,8 @@ export function VistaMostrador({
       const numero = numeroProvisorio(cajaFisica.codigo, cajaFisica.proximoNumero);
       const cobradaAt = new Date().toISOString();
 
+      const pagos = pagosDeLaVenta();
+
       const ticket = documentoDeVenta(
         {
           numero,
@@ -350,6 +432,8 @@ export function VistaMostrador({
           cobradaAt,
           contactoNombre: cliente?.nombre ?? "Consumidor final",
           medioPago: medio,
+          pagos,
+          acopio,
           descuento,
           descuentoMotivo: motivoDesc || null,
           lineas,
@@ -366,6 +450,8 @@ export function VistaMostrador({
           customerId: cliente?.id ?? null,
           contactoNombre: cliente?.nombre ?? "Consumidor final",
           medioPago: medio,
+          pagos,
+          acopio,
           comprobante: "interno",
           cuit: cuit || null,
           descuento,
@@ -403,6 +489,9 @@ export function VistaMostrador({
     setCuit("");
     setValorDesc("");
     setMotivoDesc("");
+    setAcopio(false);
+    setTarjeta({ nroLote: "", nroCupon: "", marca: "" });
+    setPartes(null);
   }
 
   /*
@@ -446,6 +535,18 @@ export function VistaMostrador({
   function cobrar(autorizado = false) {
     setAviso(null);
 
+    // Con el pago partido, la suma tiene que dar el total antes de cobrar.
+    if (partes && Math.abs(restanteDePartes) > 0.01) {
+      setAviso({
+        tipo: "error",
+        texto:
+          restanteDePartes > 0
+            ? `Faltan repartir ${formatearMonto(restanteDePartes)} entre los pagos.`
+            : `Los pagos se pasan por ${formatearMonto(-restanteDePartes)}.`,
+      });
+      return;
+    }
+
     /*
      * Sin servidor, la venta se cobra igual y se guarda para subir después.
      *
@@ -468,6 +569,8 @@ export function VistaMostrador({
         customerId: cliente?.id ?? null,
         contactoNombre: cliente?.nombre ?? "Consumidor final",
         medioPago: medio,
+        pagos: pagosDeLaVenta(),
+        acopio,
         comprobante,
         cuit: cuit || null,
         descuento,
@@ -494,10 +597,61 @@ export function VistaMostrador({
           : { tipo: "ok", texto: r.ok ?? "Venta registrada." },
       );
       if (r.numero && r.orderId) {
-        setUltima({ numero: r.numero, orderId: r.orderId, invoiceId: r.invoiceId });
+        setUltima({
+          numero: r.numero,
+          orderId: r.orderId,
+          invoiceId: r.invoiceId,
+          acopio,
+        });
       }
       limpiar();
       router.refresh();
+    });
+  }
+
+  /**
+   * El remito de lo que se acaba de llevar. Solo constancia: el stock ya se
+   * movió al cobrar. Abre la hoja de impresión apenas el servidor lo numera.
+   */
+  function emitirRemito() {
+    if (!ultima?.orderId) return;
+    const orderId = ultima.orderId;
+
+    empezar(async () => {
+      const r = await emitirRemitoDeVenta(orderId);
+      if (r.error) {
+        setAviso({ tipo: "error", texto: r.error });
+        return;
+      }
+      if (r.remitoId) {
+        setUltima((previa) =>
+          previa ? { ...previa, remitoId: r.remitoId } : previa,
+        );
+        window.open(`/remito/${r.remitoId}`, "_blank");
+      }
+    });
+  }
+
+  /**
+   * El presupuesto con lo que hay cargado, sin cobrar. Queda en la cola del
+   * panel con origen "mostrador" y el papel sale en PDF.
+   */
+  function emitirPresupuesto() {
+    if (lineas.length === 0) return;
+
+    empezar(async () => {
+      const r = await emitirPresupuestoDeMostrador({
+        branchId: sucursal.id,
+        lineas,
+        customerId: cliente?.id ?? null,
+        contactoNombre: cliente?.nombre ?? "Consumidor final",
+      });
+      if (r.error) {
+        setAviso({ tipo: "error", texto: r.error });
+        return;
+      }
+      setAviso({ tipo: "ok", texto: r.ok ?? "Presupuesto emitido." });
+      if (r.quoteId) window.open(`/api/presupuestos/${r.quoteId}/pdf`, "_blank");
     });
   }
 
@@ -575,6 +729,16 @@ export function VistaMostrador({
             onCobrar={() => cobrar()}
             aviso={aviso}
             ultima={ultima}
+            acopio={acopio}
+            onAcopio={setAcopio}
+            tarjeta={tarjeta}
+            onTarjeta={setTarjeta}
+            partes={partes}
+            onPartes={setPartes}
+            restante={restanteDePartes}
+            enLinea={conexion.enLinea}
+            onRemito={emitirRemito}
+            onPresupuesto={emitirPresupuesto}
           />
         </aside>
       </div>
@@ -1015,6 +1179,16 @@ function Cobro({
   onCobrar,
   aviso,
   ultima,
+  acopio,
+  onAcopio,
+  tarjeta,
+  onTarjeta,
+  partes,
+  onPartes,
+  restante,
+  enLinea,
+  onRemito,
+  onPresupuesto,
 }: {
   subtotal: number;
   descuento: number;
@@ -1052,7 +1226,20 @@ function Cobro({
     orderId: string | null;
     invoiceId?: string;
     clave?: string;
+    acopio?: boolean;
+    remitoId?: string;
   } | null;
+  acopio: boolean;
+  onAcopio: (v: boolean) => void;
+  tarjeta: { nroLote: string; nroCupon: string; marca: string };
+  onTarjeta: (v: { nroLote: string; nroCupon: string; marca: string }) => void;
+  partes: ParteDePago[] | null;
+  onPartes: (v: ParteDePago[] | null) => void;
+  /** Lo que falta repartir en el pago partido. Cero es "cierra". */
+  restante: number;
+  enLinea: boolean;
+  onRemito: () => void;
+  onPresupuesto: () => void;
 }) {
   const faltaCaja = medio === "efectivo" && !hayCaja;
   const faltaCliente = medio === "cuenta_corriente" && !cliente;
@@ -1113,6 +1300,217 @@ function Cobro({
             precio de catálogo, así que la venta va a consumidor final.
           </p>
         )}
+
+        {/* El lote y el cupón de la terminal, cuando se paga con tarjeta y el
+            pago no está partido (partido, van por renglón). Son el dato fiscal
+            que después pide el contador; se pueden dejar vacíos. */}
+        {!partes && (medio === "debito" || medio === "credito") && (
+          <div className="mt-2.5 grid grid-cols-3 gap-2">
+            <input
+              value={tarjeta.marca}
+              onChange={(e) => onTarjeta({ ...tarjeta, marca: e.target.value })}
+              placeholder="Tarjeta"
+              className="h-11 rounded-lg border border-linea bg-background px-2.5 text-base"
+            />
+            <input
+              value={tarjeta.nroLote}
+              onChange={(e) => onTarjeta({ ...tarjeta, nroLote: e.target.value })}
+              inputMode="numeric"
+              placeholder="Lote"
+              className="tabular h-11 rounded-lg border border-linea bg-background px-2.5 text-base"
+            />
+            <input
+              value={tarjeta.nroCupon}
+              onChange={(e) => onTarjeta({ ...tarjeta, nroCupon: e.target.value })}
+              inputMode="numeric"
+              placeholder="Cupón"
+              className="tabular h-11 rounded-lg border border-linea bg-background px-2.5 text-base"
+            />
+          </div>
+        )}
+
+        {/* El pago partido: mitad efectivo, mitad débito es una venta de todos
+            los días. Cada renglón lleva su medio y su importe, y con tarjeta,
+            su lote y cupón. */}
+        {partes === null ? (
+          <button
+            type="button"
+            onClick={() =>
+              onPartes([
+                { medio, importe: "", nroLote: "", nroCupon: "", tarjeta: "" },
+                {
+                  medio: medio === "efectivo" ? "debito" : "efectivo",
+                  importe: "",
+                  nroLote: "",
+                  nroCupon: "",
+                  tarjeta: "",
+                },
+              ])
+            }
+            className="mt-2.5 text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Partir el pago en más de un medio
+          </button>
+        ) : (
+          <div className="mt-3 space-y-2 rounded-xl border border-linea p-3">
+            {partes.map((parte, i) => (
+              <div key={i} className="space-y-1.5">
+                <div className="flex gap-2">
+                  <select
+                    value={parte.medio}
+                    onChange={(e) =>
+                      onPartes(
+                        partes.map((p, j) =>
+                          j === i
+                            ? { ...p, medio: e.target.value as MedioDeMostrador }
+                            : p,
+                        ),
+                      )
+                    }
+                    className="h-11 min-w-0 flex-1 rounded-lg border border-linea bg-background px-2 text-base"
+                  >
+                    {MEDIOS.map(({ valor, texto }) => (
+                      <option key={valor} value={valor}>
+                        {texto}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={parte.importe}
+                    onChange={(e) =>
+                      onPartes(
+                        partes.map((p, j) =>
+                          j === i ? { ...p, importe: e.target.value } : p,
+                        ),
+                      )
+                    }
+                    placeholder="0"
+                    className="tabular h-11 w-28 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
+                  />
+                  {partes.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => onPartes(partes.filter((_, j) => j !== i))}
+                      aria-label="Sacar este pago"
+                      className="h-11 w-9 shrink-0 rounded-lg border border-linea text-muted-foreground hover:bg-hundida"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                {(parte.medio === "debito" || parte.medio === "credito") && (
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      value={parte.tarjeta}
+                      onChange={(e) =>
+                        onPartes(
+                          partes.map((p, j) =>
+                            j === i ? { ...p, tarjeta: e.target.value } : p,
+                          ),
+                        )
+                      }
+                      placeholder="Tarjeta"
+                      className="h-10 rounded-lg border border-linea bg-background px-2.5 text-sm"
+                    />
+                    <input
+                      value={parte.nroLote}
+                      onChange={(e) =>
+                        onPartes(
+                          partes.map((p, j) =>
+                            j === i ? { ...p, nroLote: e.target.value } : p,
+                          ),
+                        )
+                      }
+                      inputMode="numeric"
+                      placeholder="Lote"
+                      className="tabular h-10 rounded-lg border border-linea bg-background px-2.5 text-sm"
+                    />
+                    <input
+                      value={parte.nroCupon}
+                      onChange={(e) =>
+                        onPartes(
+                          partes.map((p, j) =>
+                            j === i ? { ...p, nroCupon: e.target.value } : p,
+                          ),
+                        )
+                      }
+                      inputMode="numeric"
+                      placeholder="Cupón"
+                      className="tabular h-10 rounded-lg border border-linea bg-background px-2.5 text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <div className="flex items-center justify-between pt-1">
+              <div className="flex gap-3">
+                {partes.length < 4 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onPartes([
+                        ...partes,
+                        {
+                          medio: "efectivo",
+                          importe: "",
+                          nroLote: "",
+                          nroCupon: "",
+                          tarjeta: "",
+                        },
+                      ])
+                    }
+                    className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    + Otro pago
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onPartes(null)}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Un solo medio
+                </button>
+              </div>
+              <span
+                className={`tabular text-sm font-semibold ${
+                  Math.abs(restante) > 0.01
+                    ? "text-destructive"
+                    : "text-saldo-favor"
+                }`}
+              >
+                {Math.abs(restante) > 0.01
+                  ? restante > 0
+                    ? `Faltan ${formatearMonto(restante)}`
+                    : `Sobran ${formatearMonto(-restante)}`
+                  : "Cierra justo"}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* La venta que se cobra y no se lleva: queda en acopio, el stock se
+            reserva y cada retiro sale después con su remito desde la ficha del
+            pedido. */}
+        <label className="mt-3 flex items-center gap-2.5 rounded-xl border border-linea px-3 py-2.5 text-base">
+          <input
+            type="checkbox"
+            checked={acopio}
+            onChange={(e) => onAcopio(e.target.checked)}
+            className="h-4.5 w-4.5 accent-accion"
+          />
+          <span>
+            Queda en acopio
+            <span className="block text-sm text-muted-foreground">
+              Se cobra ahora; la mercadería queda en depósito y se retira en
+              partes.
+            </span>
+          </span>
+        </label>
 
         <p className="mt-5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Descuento
@@ -1303,6 +1701,40 @@ function Cobro({
                 Facturar
               </Link>
             )}
+
+            {/* El remito del retiro: qué se llevó y si pagó. En un acopio no
+                se llevó nada todavía; el retiro se registra en la ficha del
+                pedido, que es lo que descuenta el stock. */}
+            {ultima.orderId &&
+              (ultima.acopio ? (
+                <Link
+                  href={`/admin/pedidos/${ultima.orderId}`}
+                  target="_blank"
+                  className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida"
+                >
+                  <FileText className="h-4 w-4" />
+                  Registrar retiro
+                </Link>
+              ) : ultima.remitoId ? (
+                <Link
+                  href={`/remito/${ultima.remitoId}`}
+                  target="_blank"
+                  className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida"
+                >
+                  <Printer className="h-4 w-4" />
+                  Remito
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onRemito}
+                  disabled={enviando}
+                  className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida disabled:opacity-50"
+                >
+                  <FileText className="h-4 w-4" />
+                  Emitir remito
+                </button>
+              ))}
           </div>
         )}
       </div>
@@ -1334,14 +1766,37 @@ function Cobro({
 
         <button
           onClick={() => onCobrar()}
-          disabled={!puede || enviando || faltaCaja || faltaCliente}
+          disabled={
+            !puede ||
+            enviando ||
+            faltaCaja ||
+            faltaCliente ||
+            (partes !== null && Math.abs(restante) > 0.01)
+          }
           className="mt-3.5 inline-flex h-16 w-full items-center justify-center gap-2.5 rounded-xl bg-accion text-xl font-bold text-white transition-colors hover:bg-accion-hover disabled:cursor-not-allowed disabled:opacity-40"
         >
           {enviando ? (
             <Loader2 className="h-6 w-6 animate-spin" />
           ) : (
-            <>Cobrar</>
+            <>{acopio ? "Cobrar y dejar en acopio" : "Cobrar"}</>
           )}
+        </button>
+
+        {/* El papel para quien pregunta un precio y se va a pensarlo: mismo
+            carro, sin cobrar. Necesita servidor porque numera y arma el PDF. */}
+        <button
+          type="button"
+          onClick={onPresupuesto}
+          disabled={!puede || enviando || !enLinea}
+          title={
+            !enLinea
+              ? "Sin conexión no se puede numerar el presupuesto."
+              : undefined
+          }
+          className="mt-2 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-linea text-base font-medium transition-colors hover:bg-hundida disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ClipboardList className="h-4 w-4" />
+          Emitir presupuesto sin cobrar
         </button>
       </div>
     </div>

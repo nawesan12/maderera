@@ -78,7 +78,21 @@ export default async function TicketPage({
     descuentoMotivo: pedido.descuentoMotivo ?? null,
     total: Number(pedido.total),
     medioPago: pedido.medioPago ?? null,
-    enCuentaCorriente: pedido.estadoPago === "pendiente",
+    pagos: pedido.pagos.map((p) => ({
+      medio: p.medio,
+      importe: Number(p.importe),
+      tarjeta: p.tarjeta,
+      nroLote: p.nroLote,
+      nroCupon: p.nroCupon,
+    })),
+    enCuentaCorriente:
+      pedido.estadoPago === "pendiente" || pedido.estadoPago === "parcial",
+    importeEnCuenta: pedido.pagos
+      .filter((p) => p.medio === "cuenta_corriente")
+      .reduce((s, p) => s + Number(p.importe), 0),
+    // Una venta de mostrador que quedó "listo" es un acopio: se cobró y la
+    // mercadería espera los retiros.
+    acopio: pedido.origen === "mostrador" && pedido.estado === "listo",
     whatsapp: ajustes.whatsapp_principal ?? null,
   };
 

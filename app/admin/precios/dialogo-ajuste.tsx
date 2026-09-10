@@ -45,12 +45,20 @@ const LISTAS = {
   profesional: "Solo lista profesional",
 };
 
+const BASES = {
+  precio: "El precio vigente",
+  costo: "El costo promedio",
+  costo_elaborado: "El costo con elaboración",
+};
+
 export function DialogoAjuste({
   categorias,
   categoriaActual,
+  rubros = [],
 }: {
   categorias: { slug: string; name: string }[];
   categoriaActual: string;
+  rubros?: { slug: string; name: string; categorySlug: string }[];
 }) {
   const [abierto, setAbierto] = useState(false);
   const [, accion, pendiente] = useAccionDeDialogo(
@@ -61,16 +69,31 @@ export function DialogoAjuste({
 
   const [porcentaje, setPorcentaje] = useState("10");
   const [categoria, setCategoria] = useState(categoriaActual);
+  const [rubro, setRubro] = useState("todos");
+  const [base, setBase] = useState("precio");
   const [lista, setLista] = useState("ambas");
   const [redondeo, setRedondeo] = useState("centena");
 
-
   const numero = Number(porcentaje.replace(",", "."));
   const valido = Number.isFinite(numero) && numero !== 0;
+
+  // Los rubros son de la categoría elegida; cambiar de categoría deja el
+  // rubro anterior sin sentido, así que se deriva y no se sincroniza.
+  const rubrosDeLaCategoria =
+    categoria === "todos"
+      ? []
+      : rubros.filter((r) => r.categorySlug === categoria);
+  const rubroValido = rubrosDeLaCategoria.some((r) => r.slug === rubro)
+    ? rubro
+    : "todos";
+
   const alcance =
     categoria === "todos"
       ? "todo el catálogo"
-      : (categorias.find((c) => c.slug === categoria)?.name ?? categoria);
+      : rubroValido !== "todos"
+        ? (rubrosDeLaCategoria.find((r) => r.slug === rubroValido)?.name ??
+          rubroValido)
+        : (categorias.find((c) => c.slug === categoria)?.name ?? categoria);
 
   return (
     <Dialog open={abierto} onOpenChange={setAbierto}>
@@ -85,52 +108,116 @@ export function DialogoAjuste({
 
         <form action={accion} className="space-y-4">
           <input type="hidden" name="categoria" value={categoria} />
+          <input type="hidden" name="rubro" value={rubroValido} />
+          <input type="hidden" name="base" value={base} />
           <input type="hidden" name="listaSlug" value={lista} />
           <input type="hidden" name="redondeo" value={redondeo} />
 
-          <div className="space-y-2">
-            <Label htmlFor="porcentaje">Porcentaje</Label>
-            <div className="relative">
-              <Input
-                id="porcentaje"
-                name="porcentaje"
-                value={porcentaje}
-                onChange={(e) => setPorcentaje(e.target.value)}
-                inputMode="decimal"
-                className="pr-9"
-                required
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                %
-              </span>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="porcentaje">
+                {base === "precio" ? "Porcentaje" : "Margen"}
+              </Label>
+              <div className="relative">
+                <Input
+                  id="porcentaje"
+                  name="porcentaje"
+                  value={porcentaje}
+                  onChange={(e) => setPorcentaje(e.target.value)}
+                  inputMode="decimal"
+                  className="pr-9"
+                  required
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  %
+                </span>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Para bajar precios, poné un número negativo.
-            </p>
+
+            <div className="space-y-2">
+              <Label>Sobre qué se calcula</Label>
+              <Select
+                value={base}
+                onValueChange={(v) => v && setBase(v)}
+                items={BASES}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(BASES).map(([valor, texto]) => (
+                    <SelectItem key={valor} value={valor}>
+                      {texto}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Qué productos</Label>
-            <Select
-              value={categoria}
-              onValueChange={(v) => v && setCategoria(v)}
-              items={{
-                todos: "Todo el catálogo",
-                ...Object.fromEntries(categorias.map((c) => [c.slug, c.name])),
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todo el catálogo</SelectItem>
-                {categorias.map((c) => (
-                  <SelectItem key={c.slug} value={c.slug}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <p className="text-sm text-muted-foreground">
+            {base === "precio"
+              ? "El porcentaje sube o baja el precio vigente. Para bajar, número negativo."
+              : base === "costo"
+                ? "El precio nuevo sale del costo promedio más ese margen. Sin costo cargado, el producto queda igual."
+                : "Como el costo promedio, pero con el recargo de elaboración de cada producto aplicado antes del margen."}
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Qué productos</Label>
+              <Select
+                value={categoria}
+                onValueChange={(v) => v && setCategoria(v)}
+                items={{
+                  todos: "Todo el catálogo",
+                  ...Object.fromEntries(categorias.map((c) => [c.slug, c.name])),
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todo el catálogo</SelectItem>
+                  {categorias.map((c) => (
+                    <SelectItem key={c.slug} value={c.slug}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* El corte por rubro que pidió la clienta: dentro de Ferretería,
+                tocar solo Tornillos. Aparece con la categoría elegida. */}
+            <div className="space-y-2">
+              <Label>Qué rubro</Label>
+              <Select
+                value={rubroValido}
+                onValueChange={(v) => setRubro(v ?? "todos")}
+                items={{
+                  todos: "Todos los rubros",
+                  ...Object.fromEntries(
+                    rubrosDeLaCategoria.map((r) => [r.slug, r.name]),
+                  ),
+                }}
+              >
+                <SelectTrigger
+                  className="w-full"
+                  disabled={rubrosDeLaCategoria.length === 0}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos los rubros</SelectItem>
+                  {rubrosDeLaCategoria.map((r) => (
+                    <SelectItem key={r.slug} value={r.slug}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -189,10 +276,20 @@ export function DialogoAjuste({
 
           {valido && (
             <p className="rounded-lg bg-muted px-3 py-2.5 text-base">
-              {numero > 0 ? "Aumentar" : "Bajar"}{" "}
-              <strong className="tabular">{Math.abs(numero)}%</strong> en{" "}
-              <strong>{alcance}</strong>. Un precio de{" "}
-              <span className="tabular">$100.000</span> pasa a{" "}
+              {base === "precio" ? (
+                <>
+                  {numero > 0 ? "Aumentar" : "Bajar"}{" "}
+                  <strong className="tabular">{Math.abs(numero)}%</strong> en{" "}
+                  <strong>{alcance}</strong>. Un precio de{" "}
+                  <span className="tabular">$100.000</span> pasa a{" "}
+                </>
+              ) : (
+                <>
+                  Recalcular <strong>{alcance}</strong> desde el costo con{" "}
+                  <strong className="tabular">{numero}%</strong> de margen. Un
+                  costo de <span className="tabular">$100.000</span> queda en{" "}
+                </>
+              )}
               <span className="tabular font-medium">
                 {new Intl.NumberFormat("es-AR", {
                   style: "currency",

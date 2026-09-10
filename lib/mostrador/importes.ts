@@ -86,6 +86,89 @@ export function vuelto(total: number, recibido: number): number | null {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Pagos                                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Un renglón de cómo se pagó.
+ *
+ * La compra que se paga mitad en efectivo y mitad con débito existe todos los
+ * días en un mostrador, y hasta ahora se guardaba como un solo medio con la
+ * caja cerrando con una diferencia inventada. El lote y el cupón son el pedido
+ * fiscal de la clienta: "el código de que se pagó con qué".
+ */
+export interface PagoDeVenta {
+  medio: MedioDeMostrador;
+  importe: number;
+  /** Nro de lote del cierre de la terminal. Solo tarjetas. */
+  nroLote?: string | null;
+  /** Nro de cupón o valor. Solo tarjetas. */
+  nroCupon?: string | null;
+  /** Qué tarjeta o banco: "Visa Galicia", "Naranja". */
+  tarjeta?: string | null;
+}
+
+/**
+ * Los pagos que efectivamente valen: sin renglones vacíos, y con la venta de
+ * un solo medio expresada igual que la partida. Todo lo que sigue —la caja, el
+ * ticket, el cierre Z— lee de esta forma única.
+ */
+export function normalizarPagos(
+  pagos: PagoDeVenta[] | undefined,
+  medioPago: MedioDeMostrador,
+  total: number,
+): PagoDeVenta[] {
+  const conImporte = (pagos ?? []).filter(
+    (p) => Number.isFinite(p.importe) && p.importe > 0,
+  );
+  if (conImporte.length === 0) return [{ medio: medioPago, importe: total }];
+  return conImporte.map((p) => ({ ...p, importe: aCentavos(p.importe) }));
+}
+
+/**
+ * Qué le falta a una venta partida en varios pagos, o `null` si está bien.
+ *
+ * La suma tiene que dar el total al centavo: un pago de más es plata que el
+ * cliente no debía, uno de menos es una venta que dice cobrada y no lo está.
+ */
+export function revisarPagos(
+  pagos: PagoDeVenta[],
+  total: number,
+  customerId: string | null,
+): string | null {
+  if (pagos.length > 4) {
+    return "Una venta no puede partirse en más de cuatro pagos.";
+  }
+
+  const suma = aCentavos(pagos.reduce((s, p) => s + p.importe, 0));
+  if (Math.abs(suma - total) > 0.01) {
+    return `Los pagos suman ${suma.toFixed(2)} y la venta es de ${total.toFixed(2)}.`;
+  }
+
+  if (pagos.some((p) => p.medio === "cuenta_corriente") && !customerId) {
+    return "Para cargar a cuenta corriente hace falta elegir el cliente.";
+  }
+
+  return null;
+}
+
+/** El medio por el que entró más plata. Es lo que guarda `orders.medioPago`. */
+export function medioPrincipal(pagos: PagoDeVenta[]): MedioDeMostrador {
+  return pagos.reduce((mayor, p) => (p.importe > mayor.importe ? p : mayor))
+    .medio;
+}
+
+/** Cuánto entró por un medio dado. */
+export function importePorMedio(
+  pagos: PagoDeVenta[],
+  medio: MedioDeMostrador,
+): number {
+  return aCentavos(
+    pagos.filter((p) => p.medio === medio).reduce((s, p) => s + p.importe, 0),
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Descuento                                                                   */
 /* -------------------------------------------------------------------------- */
 

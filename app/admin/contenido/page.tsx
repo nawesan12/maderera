@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Megaphone, Settings2 } from "lucide-react";
+import { Landmark, Megaphone, Settings2 } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { listarAjustes, listarResenas } from "@/lib/dal/admin/contenido";
 import { Ajustes } from "./secciones";
@@ -38,6 +38,13 @@ export default async function ContenidoPage() {
         >
           <Megaphone className="h-5 w-5" />
           Avisos y promociones
+        </Link>
+        <Link
+          href="/admin/contenido/promociones"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <Landmark className="h-5 w-5" />
+          Promociones bancarias
         </Link>
       </EncabezadoPanel>
 

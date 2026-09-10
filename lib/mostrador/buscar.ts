@@ -13,6 +13,7 @@ import {
   products,
 } from "@/lib/db/schema";
 import { coincideBusqueda } from "@/lib/busqueda";
+import { factorDeLista } from "@/lib/precios/derivada";
 
 /**
  * La búsqueda del mostrador.
@@ -48,9 +49,12 @@ export interface ResultadoDeMostrador {
  * elegido en pantalla y no desde la sesión: en el mostrador quien tiene la
  * sesión es quien atiende, no quien compra.
  */
-export async function listaDelCliente(
-  customerId: string | null,
-): Promise<{ id: string | null; generalId: string | null }> {
+export async function listaDelCliente(customerId: string | null): Promise<{
+  id: string | null;
+  generalId: string | null;
+  /** Multiplicador de una lista derivada (la constructora). Uno si no lo es. */
+  factorDerivado: number;
+}> {
   const [general] = await db
     .select({ id: priceLists.id })
     .from(priceLists)
@@ -59,15 +63,25 @@ export async function listaDelCliente(
 
   const generalId = general?.id ?? null;
 
-  if (!customerId) return { id: generalId, generalId };
+  if (!customerId) return { id: generalId, generalId, factorDerivado: 1 };
 
   const [cliente] = await db
-    .select({ priceListId: customers.priceListId })
+    .select({
+      priceListId: customers.priceListId,
+      porcentaje: priceLists.porcentajeSobreGeneral,
+    })
     .from(customers)
+    .leftJoin(priceLists, eq(priceLists.id, customers.priceListId))
     .where(eq(customers.id, customerId))
     .limit(1);
 
-  return { id: cliente?.priceListId ?? generalId, generalId };
+  return {
+    id: cliente?.priceListId ?? generalId,
+    generalId,
+    factorDerivado: cliente?.priceListId
+      ? factorDeLista(cliente.porcentaje)
+      : 1,
+  };
 }
 
 export async function buscarParaMostrador(
@@ -113,7 +127,7 @@ export async function buscarParaMostrador(
       producto: products.name,
       medida: productVariants.label,
       unidad: products.unit,
-      precio: sql<string | null>`coalesce(${propia.price}, ${general.price})`,
+      precio: sql<string | null>`coalesce(${propia.price}, round((${general.price} * ${lista.factorDerivado})::numeric, 2))`,
       stock: sql<number>`coalesce(${inventory.qty}, 0)`,
       // Lo que coincide por código va primero: es lo más específico que alguien
       // puede tipear.
@@ -224,7 +238,7 @@ export async function preciosPara(
   const filas = await db
     .select({
       variantId: productVariants.id,
-      precio: sql<string | null>`coalesce(${propia.price}, ${general.price})`,
+      precio: sql<string | null>`coalesce(${propia.price}, round((${general.price} * ${lista.factorDerivado})::numeric, 2))`,
     })
     .from(productVariants)
     .leftJoin(

@@ -12,7 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { branches } from "./inventory";
-import { customers } from "./customers";
+import { customers, sellers } from "./customers";
 import { productVariants } from "./catalog";
 
 /* -------------------------------------------------------------------------- */
@@ -62,6 +62,8 @@ export const quotes = pgTable(
     total: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
     notas: text(),
     asesor: text(),
+    /** El vendedor de la operación. Se hereda del cliente y se puede cambiar. */
+    sellerId: uuid().references(() => sellers.id, { onDelete: "set null" }),
     /** Hasta cuándo vale. Los precios se mueven y un presupuesto viejo no obliga. */
     validoHasta: timestamp({ withTimezone: true }),
     /**
@@ -212,6 +214,8 @@ export const orders = pgTable(
     total: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
     medioPago: medioPago(),
     estadoPago: estadoPago().notNull().default("pendiente"),
+    /** El vendedor de la operación. Se hereda del cliente y se puede cambiar. */
+    sellerId: uuid().references(() => sellers.id, { onDelete: "set null" }),
     notas: text(),
     /**
      * Clave que trae la pantalla del mostrador para que una venta no se cobre
@@ -335,6 +339,41 @@ export const orderStatusHistory = pgTable(
   (t) => [index("order_status_history_order_idx").on(t.orderId)],
 );
 
+/**
+ * Cómo se pagó una venta, renglón por renglón.
+ *
+ * Dos pedidos de la clienta en uno. "Fiscalmente les piden el código de que se
+ * pagó con qué: nro de lote, nro de valor" —el cupón de la tarjeta— y "poder
+ * adjuntar varias formas de pago": la compra que se paga mitad en efectivo y
+ * mitad con débito hoy se guarda como un solo `medioPago` y la caja cierra con
+ * una diferencia inventada.
+ *
+ * `orders.medioPago` sigue existiendo como el medio principal —el de mayor
+ * importe— porque todo el cierre de caja y los reportes históricos leen de ahí.
+ * Esta tabla es el detalle; para una venta de un solo pago dicen lo mismo.
+ */
+export const orderPayments = pgTable(
+  "order_payments",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    orderId: uuid()
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    medio: medioPago().notNull(),
+    importe: numeric({ precision: 12, scale: 2 }).notNull(),
+    /** Nro de lote del cierre de la terminal. Solo tarjetas. */
+    nroLote: text(),
+    /** Nro de cupón o valor. Solo tarjetas. */
+    nroCupon: text(),
+    /** Qué tarjeta o banco: "Visa Galicia", "Naranja". Texto libre. */
+    tarjeta: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("order_payments_order_idx").on(t.orderId)],
+);
+
+export type OrderPayment = typeof orderPayments.$inferSelect;
+
 /* -------------------------------------------------------------------------- */
 /* Cortes de placa                                                             */
 /* -------------------------------------------------------------------------- */
@@ -373,6 +412,14 @@ export const cuttingOrders = pgTable(
      * Cero significa "todavía no se midió", no "sale gratis".
      */
     pasadas: integer().notNull().default(0),
+    /**
+     * Qué tapacanto lleva el trabajo: color y espesor ("blanco 0,45 mm").
+     *
+     * Va a nivel del trabajo porque el canto es uno para todo el despiece; la
+     * excepción puntual se anota en la aclaración de la pieza, igual que en la
+     * planilla que el taller usa hoy.
+     */
+    cantoDescripcion: text(),
     estado: estadoCorte().notNull().default("en-cola"),
     urgente: integer().notNull().default(0),
     notas: text(),
@@ -406,8 +453,17 @@ export const cuttingItems = pgTable(
     cantidad: integer().notNull().default(1),
     /** Si la veta tiene que correr en un sentido, no se puede rotar la pieza. */
     respetaVeta: integer().notNull().default(0),
+    /**
+     * Cuántos lados de esa medida llevan tapacanto: 0, 1 o 2.
+     *
+     * Así carga la planilla real del taller ("puede ser 0, 1 si lleva canto un
+     * solo lado, o 2 si lleva ambos"). Antes era un sí/no y una pieza con canto
+     * en los dos largos no se podía decir.
+     */
     cantoLargo: integer().notNull().default(0),
     cantoAncho: integer().notNull().default(0),
+    /** Excepción puntual de la pieza: otro color o espesor de canto. */
+    aclaracion: text(),
     etiqueta: text(),
     orden: integer().notNull().default(0),
   },

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileDown } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, moneda } from "@/components/admin/formato";
 import { obtenerPresupuesto } from "@/lib/dal/admin/ventas";
@@ -40,7 +40,18 @@ export default async function FichaPresupuestoPage({
             {p.sucursal && ` · ${p.sucursal}`}
           </p>
         </div>
-        <AccionesPresupuesto id={p.id} estado={p.estado} />
+        <div className="flex flex-wrap items-center gap-2">
+          {/* El papel que se le manda al cliente, con el modelo del sistema
+              viejo: número, vendedor, condición de IVA y datos bancarios. */}
+          <a
+            href={`/api/presupuestos/${p.id}/pdf`}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+          >
+            <FileDown className="h-5 w-5" />
+            Descargar PDF
+          </a>
+          <AccionesPresupuesto id={p.id} estado={p.estado} />
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">

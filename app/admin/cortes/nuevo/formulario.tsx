@@ -10,14 +10,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { crearCorte } from "../actions";
 import { buscarClientes, buscarEnMostrador } from "@/app/mostrador/actions";
+import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 
 interface Pieza {
   largoMm: number;
   anchoMm: number;
   cantidad: number;
   respetaVeta: boolean;
-  cantoLargo: boolean;
-  cantoAncho: boolean;
+  /** Cuántos lados de cada medida llevan tapacanto: 0, 1 o 2. */
+  cantoLargo: number;
+  cantoAncho: number;
+  /** Excepción puntual: otro color o espesor de canto para esta pieza. */
+  aclaracion: string;
   etiqueta: string;
 }
 
@@ -26,8 +30,9 @@ const piezaVacia = (): Pieza => ({
   anchoMm: 0,
   cantidad: 1,
   respetaVeta: false,
-  cantoLargo: false,
-  cantoAncho: false,
+  cantoLargo: 0,
+  cantoAncho: 0,
+  aclaracion: "",
   etiqueta: "",
 });
 
@@ -55,8 +60,15 @@ export function FormularioCorte({
     (s, p) => s + (p.largoMm / 1000) * (p.anchoMm / 1000) * p.cantidad,
     0,
   );
+  // Los metros de tapacanto, con la misma cuenta que la ficha y la planilla
+  // del taller. Verlos mientras se carga es lo que atrapa el canto olvidado.
+  const metrosCanto = metrosDeTapacanto(validas);
 
-  function actualizar(indice: number, campo: keyof Pieza, valor: string | boolean) {
+  function actualizar(
+    indice: number,
+    campo: keyof Pieza,
+    valor: string | boolean,
+  ) {
     setPiezas((previas) =>
       previas.map((p, i) =>
         i === indice
@@ -65,7 +77,7 @@ export function FormularioCorte({
               [campo]:
                 typeof valor === "boolean"
                   ? valor
-                  : campo === "etiqueta"
+                  : campo === "etiqueta" || campo === "aclaracion"
                     ? valor
                     : Number(valor),
             }
@@ -157,6 +169,19 @@ export function FormularioCorte({
               />
             </div>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cantoDescripcion">Tapacanto del trabajo</Label>
+            <Input
+              id="cantoDescripcion"
+              name="cantoDescripcion"
+              placeholder="Blanco 0,45 mm — vacío si no lleva"
+            />
+            <p className="text-sm text-muted-foreground">
+              El color y el espesor del canto, una vez para todo el despiece. La
+              excepción de una pieza va en su aclaración.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -168,6 +193,8 @@ export function FormularioCorte({
               <p className="text-sm text-muted-foreground">
                 {totalPiezas} {totalPiezas === 1 ? "pieza" : "piezas"} ·{" "}
                 {m2.toFixed(2)} m²
+                {metrosCanto > 0 &&
+                  ` · ${metrosCanto.toFixed(2)} m de tapacanto`}
               </p>
             )}
           </div>
@@ -241,7 +268,7 @@ export function FormularioCorte({
                   )}
                 </div>
 
-                <div className="flex flex-wrap gap-5">
+                <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
                   <label className="flex items-center gap-2 text-sm">
                     <Checkbox
                       checked={p.respetaVeta}
@@ -251,24 +278,50 @@ export function FormularioCorte({
                     />
                     Respeta la veta
                   </label>
+
+                  {/* Los cantos van 0/1/2 por medida, como la planilla del
+                      taller: "2" es canto en los dos lados de esa medida. */}
                   <label className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={p.cantoLargo}
-                      onCheckedChange={(v) =>
-                        actualizar(i, "cantoLargo", v === true)
-                      }
-                    />
                     Canto en el largo
+                    <select
+                      value={p.cantoLargo}
+                      onChange={(e) => actualizar(i, "cantoLargo", e.target.value)}
+                      className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                      aria-label="Lados con canto en el largo"
+                    >
+                      <option value={0}>No</option>
+                      <option value={1}>1 lado</option>
+                      <option value={2}>2 lados</option>
+                    </select>
                   </label>
                   <label className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={p.cantoAncho}
-                      onCheckedChange={(v) =>
-                        actualizar(i, "cantoAncho", v === true)
-                      }
-                    />
                     Canto en el ancho
+                    <select
+                      value={p.cantoAncho}
+                      onChange={(e) => actualizar(i, "cantoAncho", e.target.value)}
+                      className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                      aria-label="Lados con canto en el ancho"
+                    >
+                      <option value={0}>No</option>
+                      <option value={1}>1 lado</option>
+                      <option value={2}>2 lados</option>
+                    </select>
                   </label>
+
+                  {(p.cantoLargo > 0 || p.cantoAncho > 0) && (
+                    <div className="min-w-44 flex-1 space-y-1">
+                      <Label className="text-xs text-muted-foreground">
+                        Aclaración del canto
+                      </Label>
+                      <Input
+                        value={p.aclaracion}
+                        onChange={(e) =>
+                          actualizar(i, "aclaracion", e.target.value)
+                        }
+                        placeholder="Otro color o espesor, solo si difiere"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

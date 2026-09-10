@@ -22,6 +22,8 @@ export interface TarifaDeCorte {
   /** Nula significa "para cualquier lista": es el precio de público. */
   priceListId: string | null;
   precioPorPasada: number;
+  /** El metro lineal de tapacanto pegado. Cero es "no se cobra". */
+  precioPorMetroCanto: number;
 }
 
 /** Deja el material comparable: sin tildes, sin espacios de más, en minúsculas. */
@@ -70,4 +72,49 @@ export function cargoPorCorte(
 ): number {
   if (!tarifa || pasadas <= 0) return 0;
   return Math.round(tarifa.precioPorPasada * Math.floor(pasadas) * 100) / 100;
+}
+
+export interface PiezaConCanto {
+  largoMm: number;
+  anchoMm: number;
+  cantidad: number;
+  /** Cuántos lados de cada medida llevan canto: 0, 1 o 2. */
+  cantoLargo: number;
+  cantoAncho: number;
+}
+
+/**
+ * Los metros lineales de tapacanto de un despiece.
+ *
+ * Es la cuenta de la planilla del taller: por cada pieza, el largo por sus
+ * lados con canto más el ancho por los suyos, por la cantidad. Los valores de
+ * canto se acotan a 0–2 antes de multiplicar: un 3 tipeado no es "tres lados",
+ * es un error, y silenciarlo multiplicando cobraría metros que no existen.
+ */
+export function metrosDeTapacanto(piezas: PiezaConCanto[]): number {
+  const acotar = (n: number) => Math.min(Math.max(Math.trunc(n) || 0, 0), 2);
+
+  const mm = piezas.reduce((suma, p) => {
+    const cantidad = Math.max(Math.trunc(p.cantidad) || 0, 0);
+    return (
+      suma +
+      cantidad *
+        (acotar(p.cantoLargo) * (p.largoMm || 0) +
+          acotar(p.cantoAncho) * (p.anchoMm || 0))
+    );
+  }, 0);
+
+  return Math.round((mm / 1000) * 100) / 100;
+}
+
+/**
+ * Lo que se cobra por el pegado. Aparte del corte: son dos servicios y la
+ * ficha los muestra por separado, que es como se explica el número.
+ */
+export function cargoPorTapacanto(
+  tarifa: TarifaDeCorte | null,
+  metros: number,
+): number {
+  if (!tarifa || metros <= 0 || tarifa.precioPorMetroCanto <= 0) return 0;
+  return Math.round(tarifa.precioPorMetroCanto * metros * 100) / 100;
 }

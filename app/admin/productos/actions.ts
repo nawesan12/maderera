@@ -38,6 +38,9 @@ function parsearFormulario(formData: FormData) {
     description: formData.get("description") ?? "",
     brand: (formData.get("brand") as string) || undefined,
     unit: formData.get("unit"),
+    alicuotaIva: (formData.get("alicuotaIva") as string) || "21",
+    recargoElaboracionPct:
+      (formData.get("recargoElaboracionPct") as string) || undefined,
     featured: formData.get("featured") === "on",
     aPedido: formData.get("aPedido") === "on",
     active: formData.get("active") === "on",
@@ -63,7 +66,12 @@ export async function guardarProducto(
 
   const datos = parsed.data;
 
-  // El slug viaja en la URL pública, así que dos productos no pueden compartirlo.
+  /*
+   * El slug viaja en la URL pública, así que dos productos no pueden
+   * compartirlo. Ya no es un campo visible —salió del formulario a pedido de
+   * la clienta—, así que un choque en el alta se resuelve solo con un sufijo
+   * en vez de pedirle a alguien que edite un dato que no ve.
+   */
   const [choque] = await db
     .select({ id: products.id })
     .from(products)
@@ -71,10 +79,35 @@ export async function guardarProducto(
     .limit(1);
 
   if (choque && choque.id !== datos.id) {
-    return {
-      error: "Ya hay otro producto con esa dirección web. Cambiá el nombre o el slug.",
-      campo: "slug",
-    };
+    if (datos.id) {
+      // Editando no se regenera: sería cambiar una URL publicada.
+      return {
+        error: "Ya hay otro producto con ese nombre en la misma dirección web.",
+        campo: "name",
+      };
+    }
+
+    let sufijo = 2;
+    let candidato = `${datos.slug}-${sufijo}`;
+    // Diez intentos alcanzan para cualquier catálogo real; más repeticiones
+    // del mismo nombre son un error de carga que conviene ver.
+    while (sufijo <= 10) {
+      const [ocupado] = await db
+        .select({ id: products.id })
+        .from(products)
+        .where(eq(products.slug, candidato))
+        .limit(1);
+      if (!ocupado) break;
+      sufijo += 1;
+      candidato = `${datos.slug}-${sufijo}`;
+    }
+    if (sufijo > 10) {
+      return {
+        error: "Ya hay demasiados productos con ese mismo nombre. Revisá si no está duplicado.",
+        campo: "name",
+      };
+    }
+    datos.slug = candidato;
   }
 
   let productoId = datos.id;
@@ -103,6 +136,13 @@ export async function guardarProducto(
       description: datos.description,
       brand: datos.brand || null,
       unit: datos.unit,
+      // Ahora sí editable: el campo existía en la base desde el schema
+      // inicial y el formulario nunca lo mandaba, así que todo quedaba al 21.
+      alicuotaIva: datos.alicuotaIva,
+      recargoElaboracionPct:
+        datos.recargoElaboracionPct && datos.recargoElaboracionPct > 0
+          ? datos.recargoElaboracionPct.toFixed(2)
+          : null,
       featured: datos.featured,
       aPedido: datos.aPedido,
       active: datos.active,

@@ -102,14 +102,50 @@ export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
           <span>{formatearMonto(documento.total)}</span>
         </p>
 
-        <p className="linea-datos">
-          <span>Pago</span>
-          <span>
-            {documento.medioPago
-              ? (MEDIOS[documento.medioPago] ?? documento.medioPago)
-              : "—"}
-          </span>
-        </p>
+        {/*
+          * Cómo se pagó. Con un solo pago es la línea de siempre; partido, va
+          * un renglón por medio con su importe. El lote y el cupón de la
+          * tarjeta salen debajo: son el dato que después pide el contador.
+          */}
+        {documento.pagos.length > 1 ? (
+          documento.pagos.map((pago, i) => (
+            <p key={i} className="linea-datos">
+              <span>
+                {MEDIOS[pago.medio] ?? pago.medio}
+                {pago.tarjeta ? ` ${pago.tarjeta}` : ""}
+              </span>
+              <span>{formatearMonto(pago.importe)}</span>
+            </p>
+          ))
+        ) : (
+          <p className="linea-datos">
+            <span>Pago</span>
+            <span>
+              {documento.medioPago
+                ? (MEDIOS[documento.medioPago] ?? documento.medioPago)
+                : "—"}
+              {documento.pagos[0]?.tarjeta
+                ? ` ${documento.pagos[0].tarjeta}`
+                : ""}
+            </span>
+          </p>
+        )}
+
+        {documento.pagos.some((p) => p.nroLote || p.nroCupon) && (
+          <p className="aviso">
+            {documento.pagos
+              .filter((p) => p.nroLote || p.nroCupon)
+              .map((p) =>
+                [
+                  p.nroLote ? `Lote ${p.nroLote}` : null,
+                  p.nroCupon ? `Cupón ${p.nroCupon}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
+              )
+              .join(" / ")}
+          </p>
+        )}
 
         {/*
           * El descuento va como nota y no como "subtotal menos descuento".
@@ -127,7 +163,24 @@ export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
         )}
 
         {documento.enCuentaCorriente && (
-          <p className="aviso">Queda en cuenta corriente</p>
+          <p className="aviso">
+            {documento.importeEnCuenta > 0 &&
+            documento.importeEnCuenta < documento.total
+              ? `Quedan ${formatearMonto(documento.importeEnCuenta)} en cuenta corriente`
+              : "Queda en cuenta corriente"}
+          </p>
+        )}
+
+        {/*
+          * El acopio se dice en el papel, fuerte: es la diferencia entre "me
+          * llevo esto" y "esto queda acá y lo retiro en partes". Cada retiro
+          * sale después con su remito.
+          */}
+        {documento.acopio && (
+          <p className="aviso">
+            MERCADERÍA EN ACOPIO. Queda en depósito; cada retiro sale con su
+            remito.
+          </p>
         )}
 
         <div className="separador" />

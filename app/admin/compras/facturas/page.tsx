@@ -69,6 +69,7 @@ export default async function FacturasDeCompraPage() {
                   <th className="px-5 py-2.5 font-semibold">Vence</th>
                   <th className="px-5 py-2.5 text-right font-semibold">Neto</th>
                   <th className="px-5 py-2.5 text-right font-semibold">Total</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Pago</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-linea">
@@ -103,6 +104,34 @@ export default async function FacturasDeCompraPage() {
                     </td>
                     <td className="tabular px-5 py-3 text-right font-semibold">
                       {formatearMonto(Number(f.total))}
+                    </td>
+                    {/* Si está paga, a medias o sin tocar: sale de lo imputado
+                        en los pagos, no de un estado que alguien marque. */}
+                    <td className="px-5 py-3 text-right">
+                      {(() => {
+                        const pagado = Number(f.pagado);
+                        const total = Number(f.total);
+                        if (pagado >= total - 0.01) {
+                          return (
+                            <span className="font-medium text-saldo-favor">
+                              Pagada
+                            </span>
+                          );
+                        }
+                        if (pagado > 0) {
+                          return (
+                            <span className="tabular text-sm text-muted-foreground">
+                              {formatearMonto(pagado)} de{" "}
+                              {formatearMonto(total)}
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="text-sm text-muted-foreground">
+                            Sin imputar
+                          </span>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))}

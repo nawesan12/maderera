@@ -38,8 +38,10 @@ const TIPOS = {
 
 export function DialogoCliente({
   listas,
+  vendedores = [],
 }: {
   listas: { id: string; name: string; isDefault: boolean }[];
+  vendedores?: { id: string; nombre: string; tipo: "salon" | "calle" }[];
 }) {
   const [abierto, setAbierto] = useState(false);
   const [, accion, pendiente] = useAccionDeDialogo(
@@ -51,6 +53,19 @@ export function DialogoCliente({
   const [tipo, setTipo] = useState("particular");
   const [condicion, setCondicion] = useState("consumidor_final");
   const [lista, setLista] = useState("");
+  const [vendedor, setVendedor] = useState("");
+
+  // El vendedor asignado dejó de ser texto libre: "Gabriela" y "GABRIELA" eran
+  // dos personas para el reporte. La opción vacía es "sin asignar".
+  const opcionesDeVendedor: Record<string, string> = {
+    "": "Sin asignar",
+    ...Object.fromEntries(
+      vendedores.map((v) => [
+        v.id,
+        v.tipo === "calle" ? `${v.nombre} (calle)` : v.nombre,
+      ]),
+    ),
+  };
 
 
   // La lista de precios se elegía en ningún lado: el diálogo ya recibía
@@ -86,6 +101,7 @@ export function DialogoCliente({
           <input type="hidden" name="tipo" value={tipo} />
           <input type="hidden" name="condicionIva" value={condicion} />
           <input type="hidden" name="priceListId" value={lista} />
+          <input type="hidden" name="sellerId" value={vendedor} />
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
@@ -154,8 +170,26 @@ export function DialogoCliente({
               <Input id="direccion" name="direccion" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="asesor">Asesor</Label>
-              <Input id="asesor" name="asesor" placeholder="Quién lo atiende" />
+              <Label>Vendedor asignado</Label>
+              <Select
+                value={vendedor}
+                onValueChange={(v) => setVendedor(v ?? "")}
+                items={opcionesDeVendedor}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(opcionesDeVendedor).map(([valor, texto]) => (
+                    <SelectItem key={valor} value={valor}>
+                      {texto}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                Quién lo atiende. Se administran en Clientes → Vendedores.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Lista de precios</Label>

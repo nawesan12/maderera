@@ -17,12 +17,24 @@ export function FiltroEstado({
   estadoActual,
   busquedaActual,
   placeholder,
+  extra,
 }: {
   ruta: string;
   estados: Record<string, string>;
   estadoActual: string;
   busquedaActual: string;
   placeholder: string;
+  /**
+   * Un segundo grupo de botones, para cortar por otra cosa además del estado
+   * (la sucursal en presupuestos, por ejemplo). Mismo comportamiento: el valor
+   * "todos" limpia el parámetro.
+   */
+  extra?: {
+    parametro: string;
+    etiqueta: string;
+    opciones: Record<string, string>;
+    actual: string;
+  };
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -81,6 +93,32 @@ export function FiltroEstado({
           );
         })}
       </div>
+
+      {extra && (
+        <div
+          className="flex flex-wrap gap-1.5"
+          role="group"
+          aria-label={extra.etiqueta}
+        >
+          {Object.entries(extra.opciones).map(([valor, etiqueta]) => {
+            const activo = extra.actual === valor;
+            return (
+              <button
+                key={valor}
+                onClick={() => actualizar({ [extra.parametro]: valor })}
+                aria-pressed={activo}
+                className={`h-10 rounded-lg px-3 text-base font-medium transition-colors ${
+                  activo
+                    ? "boton-accion"
+                    : "border text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                {etiqueta}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

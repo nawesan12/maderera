@@ -20,6 +20,8 @@ const esquema = z.object({
   /** Vacío significa "para cualquier lista": es la tarifa de público. */
   priceListId: z.string().uuid().nullable(),
   precioPorPasada: z.string().min(1, "Poné el precio por pasada."),
+  /** Vacío o cero: el pegado no se cobra para ese material. */
+  precioPorMetroCanto: z.string().default(""),
   activo: z.boolean(),
 });
 
@@ -34,6 +36,7 @@ export async function guardarTarifaDeCorte(
     material: formData.get("material"),
     priceListId: (formData.get("priceListId") as string) || null,
     precioPorPasada: (formData.get("precioPorPasada") as string) || "",
+    precioPorMetroCanto: (formData.get("precioPorMetroCanto") as string) || "",
     activo: formData.get("activo") === "on",
   });
 
@@ -51,10 +54,20 @@ export async function guardarTarifaDeCorte(
     return { error: "El precio por pasada tiene que ser mayor a cero." };
   }
 
+  // El del canto puede ser cero —material que no lleva pegado—, negativo no.
+  const precioCanto = datos.precioPorMetroCanto.trim()
+    ? parsearImporte(datos.precioPorMetroCanto)
+    : 0;
+
+  if (!Number.isFinite(precioCanto) || precioCanto < 0) {
+    return { error: "El precio del metro de tapacanto no puede ser negativo." };
+  }
+
   const valores = {
     material: datos.material,
     priceListId: datos.priceListId,
     precioPorPasada: precio.toFixed(2),
+    precioPorMetroCanto: precioCanto.toFixed(2),
     activo: datos.activo,
     updatedAt: new Date(),
   };

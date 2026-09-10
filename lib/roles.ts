@@ -108,6 +108,8 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/compras/facturas": ["admin"],
   "/admin/compras/pagos": ["admin"],
   "/admin/compras/gastos": ["admin"],
+  // La cartera de cheques es plata en juego: mismo criterio que Pagos.
+  "/admin/cheques": ["admin"],
   "/admin/cierre": ["admin"],
   // Los reportes son los números del negocio: quién compra, cuánto se vende y
   // a qué margen. Es la misma sensibilidad que precios y cobros.

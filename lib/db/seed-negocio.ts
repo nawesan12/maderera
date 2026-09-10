@@ -404,6 +404,19 @@ async function main() {
       });
   }
 
+  console.log("Lista constructora…");
+  /*
+   * La tercera lista que pidió la clienta ("agregar precio constructora").
+   * Nace **derivada de la general**: sin porcentaje cargado se comporta igual
+   * que la general, y el número lo pone la clienta desde Precios. Los ítems
+   * propios que se carguen a mano la pisan, como en cualquier lista.
+   */
+  await db
+    .insert(priceLists)
+    .values({ slug: "constructora", name: "Lista constructora" })
+    // El porcentaje no se pisa: lo ajusta la clienta desde el panel.
+    .onConflictDoNothing({ target: priceLists.slug });
+
   console.log("Tarifas de corte…");
   const listas = await db
     .select({ id: priceLists.id, slug: priceLists.slug })

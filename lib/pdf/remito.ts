@@ -112,7 +112,42 @@ export async function remitoPdf(
 
   // Destinatario
   let cursor = Math.min(finEmisor, yCaja) - mm(8);
-  const altoCaja2 = mm(20);
+
+  const columna = (A4.ancho - MARGEN * 2) / 2;
+  const datos: [string, string][] = [
+    ["Cliente", remito.clienteNombre],
+    ["Retira", remito.receptorNombre || "—"],
+    ["Domicilio de entrega", remito.clienteDireccion || "—"],
+    ["Documento", remito.receptorDocumento || "—"],
+  ];
+
+  if (remito.transportista) {
+    datos.push([
+      "Transporte",
+      `${remito.transportista}${remito.numeroSeguimiento ? ` · ${remito.numeroSeguimiento}` : ""}`,
+    ]);
+  }
+
+  /*
+   * Si lo que sale está pago. La clienta lo pidió en el remito: quien entrega
+   * tiene que saber si esta mercadería ya se cobró o si el que retira debe
+   * pasar por la caja. Sin importes, que van en la factura.
+   */
+  const CONDICION: Record<string, string> = {
+    pagado: "Pagado",
+    parcial: "Pagado en parte · resto en cuenta corriente",
+    pendiente:
+      remito.medioPago === "cuenta_corriente"
+        ? "Cuenta corriente"
+        : "Pendiente de pago",
+    reintegrado: "Reintegrado",
+    rechazado: "Pago rechazado",
+  };
+  datos.push(["Condición de pago", CONDICION[remito.estadoPago] ?? "—"]);
+
+  // La caja crece con sus filas: con la condición de pago pueden ser tres.
+  const filasDeDatos = Math.ceil(datos.length / 2);
+  const altoCaja2 = 26 + filasDeDatos * 20 + 4;
 
   recuadro(hoja, {
     x: MARGEN,
@@ -130,21 +165,6 @@ export async function remitoPdf(
     fuente: hoja.negrita,
     color: TINTA_SUAVE,
   });
-
-  const columna = (A4.ancho - MARGEN * 2) / 2;
-  const datos: [string, string][] = [
-    ["Cliente", remito.clienteNombre],
-    ["Retira", remito.receptorNombre || "—"],
-    ["Domicilio de entrega", remito.clienteDireccion || "—"],
-    ["Documento", remito.receptorDocumento || "—"],
-  ];
-
-  if (remito.transportista) {
-    datos.push([
-      "Transporte",
-      `${remito.transportista}${remito.numeroSeguimiento ? ` · ${remito.numeroSeguimiento}` : ""}`,
-    ]);
-  }
 
   datos.forEach(([etiqueta, valor], i) => {
     const x = MARGEN + 8 + (i % 2) * columna;

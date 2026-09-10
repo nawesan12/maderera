@@ -11,6 +11,7 @@ export interface TarifaEditable {
   material: string;
   priceListId: string | null;
   precioPorPasada: string;
+  precioPorMetroCanto: string;
   activo: boolean;
 }
 
@@ -35,7 +36,7 @@ export function EditorDeTarifa({
     <form action={guardar} className="rounded-xl border bg-card p-5">
       {tarifa && <input type="hidden" name="id" value={tarifa.id} />}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <div>
           <label htmlFor={`${id}-material`} className="block text-base font-medium">
             Material
@@ -83,6 +84,22 @@ export function EditorDeTarifa({
             placeholder="1.200"
             className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
           />
+        </div>
+
+        <div>
+          <label htmlFor={`${id}-canto`} className="block text-base font-medium">
+            Metro de tapacanto
+          </label>
+          <input
+            id={`${id}-canto`}
+            name="precioPorMetroCanto"
+            defaultValue={tarifa?.precioPorMetroCanto ?? ""}
+            placeholder="0 si no se cobra"
+            className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
+          />
+          <p className="mt-1 text-sm text-muted-foreground">
+            El pegado, por metro lineal. Los metros salen del despiece.
+          </p>
         </div>
       </div>
 

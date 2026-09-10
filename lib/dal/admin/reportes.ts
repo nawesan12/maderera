@@ -10,6 +10,7 @@ import {
   orders,
   productVariants,
   products,
+  sellers,
   user,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
@@ -248,8 +249,11 @@ export async function ventasPorCliente(
 /**
  * Quién vendió.
  *
- * Solo cuenta lo que tiene autor: el checkout del sitio no lo atiende nadie, y
- * sumarlo a un vendedor sería regalarle ventas que no hizo.
+ * Agrupa por el **vendedor asignado** a la venta (`orders.sellerId`) y, si no
+ * hay, por quien la cargó en el sistema: el vendedor de calle vende y otro
+ * tipea, y sumarle esa venta al que tipeó infla el ranking equivocado. Lo que
+ * no tiene ni vendedor ni autor —el checkout del sitio— queda afuera: no lo
+ * atendió nadie.
  */
 export async function ventasPorVendedor(
   periodo: Periodo,
@@ -259,9 +263,9 @@ export async function ventasPorVendedor(
   const margenes = margenesPorPedido();
   const filas = await db
     .select({
-      clave: user.id,
-      etiqueta: user.name,
-      detalle: sql<string | null>`null`,
+      clave: sql<string>`coalesce(${sellers.id}::text, ${user.id})`,
+      etiqueta: sql<string>`coalesce(${sellers.nombre}, ${user.name})`,
+      detalle: sql<string | null>`case when ${sellers.id} is null then 'Cargó la venta' else null end`,
       cantidad: sql<string>`count(*)`,
       total: sql<string>`sum(${orders.total})`,
       netoVenta: sql<string>`sum(coalesce(margenes.neto, 0))`,
@@ -270,15 +274,21 @@ export async function ventasPorVendedor(
     })
     .from(orders)
     .leftJoin(margenes, eq(margenes.orderId, orders.id))
-    .innerJoin(user, eq(user.id, orders.createdByUserId))
-    .where(enElPeriodo(periodo))
-    .groupBy(user.id, user.name)
+    .leftJoin(sellers, eq(sellers.id, orders.sellerId))
+    .leftJoin(user, eq(user.id, orders.createdByUserId))
+    .where(
+      and(
+        enElPeriodo(periodo),
+        sql`(${sellers.id} is not null or ${user.id} is not null)`,
+      ),
+    )
+    .groupBy(sql`1`, sql`2`, sellers.id)
     .orderBy(desc(sql`sum(${orders.total})`));
 
   return filas.map((f) => ({
     clave: f.clave,
     etiqueta: f.etiqueta,
-    detalle: null,
+    detalle: f.detalle,
     cantidad: Number(f.cantidad),
     total: Number(f.total),
     ...leerMargen(f),

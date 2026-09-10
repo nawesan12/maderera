@@ -1,8 +1,9 @@
 import "server-only";
 
 import { cache } from "react";
+import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { siteSettings } from "@/lib/db/schema";
+import { bankPromotions, siteSettings } from "@/lib/db/schema";
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 
 /**
@@ -50,3 +51,61 @@ export async function ajuste(clave: string, porDefecto = ""): Promise<string> {
   const ajustes = await ajustesDelSitio();
   return ajustes[clave] || porDefecto;
 }
+
+export interface PromoVigente {
+  id: string;
+  medio: string;
+  titulo: string;
+  detalle: string;
+  dias: string;
+  /** Ya formateada para mostrar. Vacía es "hasta nuevo aviso". */
+  vigenciaHasta: string;
+}
+
+/**
+ * Las promociones bancarias que están vigentes.
+ *
+ * **La vigencia se resuelve en la consulta**, igual que en los banners: una
+ * promo vencida que se filtra en pantalla igual viajó al navegador y con caché
+ * de por medio puede sobrevivir a su fecha. Acá no sale de la base, así que el
+ * "15 % de reintegro" desaparece de la portada solo el día que vence.
+ */
+export const promosVigentes = cachearPublico(
+  async (): Promise<PromoVigente[]> => {
+    const ahora = new Date();
+
+    const filas = await db
+      .select({
+        id: bankPromotions.id,
+        medio: bankPromotions.medio,
+        titulo: bankPromotions.titulo,
+        detalle: bankPromotions.detalle,
+        dias: bankPromotions.dias,
+        vigenciaHasta: bankPromotions.vigenciaHasta,
+      })
+      .from(bankPromotions)
+      .where(
+        and(
+          eq(bankPromotions.activo, true),
+          or(
+            isNull(bankPromotions.vigenciaHasta),
+            sql`${bankPromotions.vigenciaHasta} >= ${ahora}`,
+          ),
+        ),
+      )
+      .orderBy(asc(bankPromotions.orden), asc(bankPromotions.createdAt));
+
+    return filas.map((f) => ({
+      ...f,
+      vigenciaHasta: f.vigenciaHasta
+        ? f.vigenciaHasta.toLocaleDateString("es-AR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "2-digit",
+          })
+        : "",
+    }));
+  },
+  ["promos-bancarias"],
+  ETIQUETAS.contenido,
+);

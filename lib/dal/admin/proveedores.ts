@@ -7,6 +7,7 @@ import {
   suppliers,
   supplierMovements,
   supplierPriceProfiles,
+  supplierTerms,
   supplierVariantCodes,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
@@ -155,6 +156,30 @@ export async function obtenerProveedor(id: string) {
 }
 
 /** Para los selectores: nombre y poco más. */
+/**
+ * Las condiciones de pago que ofrece un proveedor, por escrito.
+ *
+ * "Transferencia a 30 días, 5 % de bonificación" es una fila; el formulario
+ * de pago las muestra para que la bonificación no dependa de que alguien se
+ * acuerde.
+ */
+export async function condicionesDelProveedor(supplierId: string) {
+  await requireStaff();
+
+  return db
+    .select({
+      id: supplierTerms.id,
+      modalidad: supplierTerms.modalidad,
+      plazoDias: supplierTerms.plazoDias,
+      bonificacionPct: supplierTerms.bonificacionPct,
+      detalle: supplierTerms.detalle,
+      activo: supplierTerms.activo,
+    })
+    .from(supplierTerms)
+    .where(eq(supplierTerms.supplierId, supplierId))
+    .orderBy(asc(supplierTerms.plazoDias), asc(supplierTerms.modalidad));
+}
+
 export async function proveedoresParaElegir() {
   await requireStaff();
 

@@ -88,6 +88,9 @@ export interface RemitoCompleto {
   clienteNombre: string;
   clienteDireccion: string | null;
   customerId: string | null;
+  /** Del pedido: si lo que sale está pago, a cuenta o pendiente. */
+  estadoPago: string;
+  medioPago: string | null;
   sucursal: string | null;
   sucursalDireccion: string | null;
   transportista: string | null;
@@ -127,6 +130,10 @@ export async function remitoCompleto(
       clienteNombre: orders.contactoNombre,
       clienteDireccion: orders.direccionEntrega,
       customerId: orders.customerId,
+      // Si la mercadería que sale está paga o no: la clienta lo pidió en el
+      // remito. Sin importes —eso va en la factura—, solo la condición.
+      estadoPago: orders.estadoPago,
+      medioPago: orders.medioPago,
       sucursal: branches.name,
       sucursalSlug: branches.slug,
       transportista: shipments.transportista,

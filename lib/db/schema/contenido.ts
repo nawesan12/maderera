@@ -146,6 +146,44 @@ export const ubicacionBanner = pgEnum("ubicacion_banner", [
  * después de que terminó la promoción, y eso es peor que no haberlo puesto:
  * alguien llega al mostrador a reclamar un descuento que no existe.
  */
+/**
+ * Las promociones bancarias y por medio de pago.
+ *
+ * **Por qué es una tabla y no texto en la portada.** La clienta pidió que el
+ * inicio muestre los medios de pago y las promociones de los bancos, y trajo
+ * la lista real: BNA con MODO, Point de Mercado Pago, Clover del Hipotecario,
+ * Tarjeta Fava, Naranja, Clipper. Cada una tiene **su propia vigencia** —"hasta
+ * el 31/01/27", "hasta el 22/10/26", "hasta nuevo aviso"— y esas fechas
+ * cambian todos los meses. Como texto fijo, la portada anunciaría en noviembre
+ * el reintegro que venció en octubre, y ese reclamo llega al mostrador.
+ *
+ * Distinto de `banners`: el banner es un cartel libre que rota; esto es la
+ * grilla estable de "con qué me conviene pagar", con un renglón por medio.
+ */
+export const bankPromotions = pgTable(
+  "bank_promotions",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    /** Con qué se paga: "Banco Nación", "Mercado Pago", "Tarjeta Fava"… */
+    medio: text().notNull(),
+    /** El gancho en una línea: "12 cuotas sin interés con MODO BNA". */
+    titulo: text().notNull(),
+    /** La letra del beneficio: condiciones, topes, qué tarjetas entran. */
+    detalle: text().notNull().default(""),
+    /** Qué días corre: "Todos los días", "Sólo jueves". Vacío no muestra nada. */
+    dias: text().notNull().default(""),
+    /** Hasta cuándo. Vacía es "hasta nuevo aviso" y no vence sola. */
+    vigenciaHasta: timestamp({ withTimezone: true }),
+    orden: integer().notNull().default(0),
+    activo: boolean().notNull().default(true),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("bank_promotions_activo_idx").on(t.activo, t.orden)],
+);
+
+export type BankPromotion = typeof bankPromotions.$inferSelect;
+
 export const banners = pgTable(
   "banners",
   {

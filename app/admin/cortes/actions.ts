@@ -94,8 +94,11 @@ const pieza = z.object({
   anchoMm: z.coerce.number().int().positive().max(10_000),
   cantidad: z.coerce.number().int().positive().max(999),
   respetaVeta: z.boolean().default(false),
-  cantoLargo: z.boolean().default(false),
-  cantoAncho: z.boolean().default(false),
+  // Cuántos lados de cada medida llevan canto: 0, 1 o 2, como la planilla del
+  // taller. `coerce` traga los `true`/`false` que mande una pantalla vieja.
+  cantoLargo: z.coerce.number().int().min(0).max(2).default(0),
+  cantoAncho: z.coerce.number().int().min(0).max(2).default(0),
+  aclaracion: z.string().trim().max(120).optional(),
   etiqueta: z.string().trim().max(80).optional(),
 });
 
@@ -129,6 +132,7 @@ export async function crearCorte(
         .min(2, "Falta decir qué placa se corta.")
         .max(200),
       placas: z.coerce.number().int().positive().max(999).default(1),
+      cantoDescripcion: z.string().trim().max(120).optional(),
       urgente: z.coerce.boolean().default(false),
       notas: z.string().trim().max(1000).optional(),
     })
@@ -139,6 +143,7 @@ export async function crearCorte(
       variantId: (formData.get("variantId") as string) || undefined,
       materialDescripcion: formData.get("materialDescripcion"),
       placas: formData.get("placas") || 1,
+      cantoDescripcion: (formData.get("cantoDescripcion") as string) || undefined,
       urgente: formData.get("urgente") === "si",
       notas: (formData.get("notas") as string) || undefined,
     });
@@ -176,6 +181,7 @@ export async function crearCorte(
         variantId: cabecera.data.variantId ?? null,
         materialDescripcion: cabecera.data.materialDescripcion,
         placas: cabecera.data.placas,
+        cantoDescripcion: cabecera.data.cantoDescripcion ?? null,
         estado: "en-cola",
         urgente: cabecera.data.urgente ? 1 : 0,
         notas: cabecera.data.notas ?? null,
@@ -190,8 +196,9 @@ export async function crearCorte(
         anchoMm: p.anchoMm,
         cantidad: p.cantidad,
         respetaVeta: p.respetaVeta ? 1 : 0,
-        cantoLargo: p.cantoLargo ? 1 : 0,
-        cantoAncho: p.cantoAncho ? 1 : 0,
+        cantoLargo: p.cantoLargo,
+        cantoAncho: p.cantoAncho,
+        aclaracion: p.aclaracion ?? null,
         etiqueta: p.etiqueta ?? null,
         orden,
       })),

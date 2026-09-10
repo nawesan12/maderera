@@ -115,6 +115,7 @@ export async function obtenerCorte(
       material: cuttingOrders.materialDescripcion,
       placas: cuttingOrders.placas,
       pasadas: cuttingOrders.pasadas,
+      cantoDescripcion: cuttingOrders.cantoDescripcion,
       estado: cuttingOrders.estado,
       urgente: cuttingOrders.urgente,
       notas: cuttingOrders.notas,

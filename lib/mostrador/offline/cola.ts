@@ -40,6 +40,16 @@ export interface VentaEncolada {
   contactoNombre: string;
   contactoTelefono?: string | null;
   medioPago: string;
+  /** Cómo se pagó si se partió en varios medios. Vacío = todo por medioPago. */
+  pagos?: {
+    medio: string;
+    importe: number;
+    nroLote?: string | null;
+    nroCupon?: string | null;
+    tarjeta?: string | null;
+  }[];
+  /** La mercadería queda en acopio: al sincronizar se reserva, no se entrega. */
+  acopio?: boolean;
   comprobante: "interno" | "fiscal";
   cuit?: string | null;
   descuento?: number;

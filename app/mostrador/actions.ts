@@ -14,6 +14,9 @@ import {
 } from "@/lib/mostrador/venta";
 import { anularVentaDeMostrador } from "@/lib/mostrador/anular";
 import { emitirParaLaVenta, letraQueSaldria } from "@/lib/mostrador/comprobante";
+import { ErrorDeEntrega, remitoDeConstancia } from "@/lib/entregas";
+import { siguienteNumeroDePresupuesto } from "@/lib/dal/numeracion-ventas";
+import { customers, quoteItems, quotes } from "@/lib/db/schema";
 import {
   buscarClienteEnMostrador,
   buscarParaMostrador,
@@ -49,6 +52,21 @@ const lineaSchema = z.object({
   precioUnitario: z.number().min(0),
 });
 
+const pagoSchema = z.object({
+  medio: z.enum([
+    "efectivo",
+    "debito",
+    "credito",
+    "transferencia",
+    "cuenta_corriente",
+  ]),
+  importe: z.number().positive(),
+  /** Lote y cupón de la terminal: el "código de que se pagó con qué". */
+  nroLote: z.string().max(20).nullable().optional(),
+  nroCupon: z.string().max(20).nullable().optional(),
+  tarjeta: z.string().max(40).nullable().optional(),
+});
+
 const ventaSchema = z.object({
   clave: z.string().uuid(),
   branchId: z.string().uuid(),
@@ -63,6 +81,10 @@ const ventaSchema = z.object({
     "transferencia",
     "cuenta_corriente",
   ]),
+  /** Cómo se pagó, si se partió en más de un medio. Vacío = todo por medioPago. */
+  pagos: z.array(pagoSchema).max(4).optional(),
+  /** La venta queda en acopio: se cobra, el stock se reserva y no se entrega. */
+  acopio: z.boolean().optional(),
   /** Qué papel se lleva el cliente. La letra no se elige: se deriva. */
   comprobante: z.enum(["interno", "fiscal"]).default("interno"),
   /** CUIT tipeado en el momento, para facturar a alguien sin ficha. */
@@ -372,6 +394,153 @@ export async function letraDelComprobante(
  * hace falta y deja el enlace. Emitir un comprobante es una decisión de alguien,
  * no un efecto secundario de tocar un botón acá.
  */
+/* -------------------------------------------------------------------------- */
+/* Remito y presupuesto                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Emite el remito de una venta que acaba de salir por el mostrador.
+ *
+ * Es el papel del retiro: qué se llevó la persona y si pagó. El stock no se
+ * toca —ya se descontó al cobrar—; para un acopio, el retiro se registra desde
+ * la ficha del pedido, que es lo que descuenta.
+ */
+export async function emitirRemitoDeVenta(
+  orderId: string,
+  receptorNombre?: string | null,
+): Promise<EstadoMostrador & { remitoId?: string; remitoNumero?: string }> {
+  const usuario = await requireStaff();
+
+  try {
+    const remito = await remitoDeConstancia({
+      orderId,
+      receptorNombre,
+      usuarioId: usuario.userId,
+    });
+
+    await registrarEnBitacora({
+      sesion: usuario,
+      accion: "crear",
+      entidad: "remito",
+      entidadId: remito.id,
+      descripcion: `Remito ${remito.numero} emitido desde el mostrador`,
+    });
+
+    refrescar();
+    return {
+      ok: `Remito ${remito.numero} emitido.`,
+      remitoId: remito.id,
+      remitoNumero: remito.numero,
+    };
+  } catch (error) {
+    if (error instanceof ErrorDeEntrega) return { error: error.message };
+    throw error;
+  }
+}
+
+const presupuestoMostradorSchema = z.object({
+  branchId: z.string().uuid(),
+  lineas: z.array(lineaSchema).min(1),
+  customerId: z.string().uuid().nullable(),
+  contactoNombre: z.string().min(1),
+  contactoTelefono: z.string().nullable().optional(),
+  notas: z.string().max(1000).nullable().optional(),
+});
+
+/** Cuántos días vale un presupuesto de mostrador. Igual que los del panel. */
+const DIAS_DE_VALIDEZ_MOSTRADOR = 15;
+
+/**
+ * Arma un presupuesto con lo que hay cargado en el mostrador, sin cobrar.
+ *
+ * Es el pedido 82 de la clienta: quien pregunta un precio en el salón se lleva
+ * el papel, con los mismos renglones que ya estaban tipeados para la venta. No
+ * mueve stock ni caja; queda en la cola de presupuestos con origen "mostrador".
+ */
+export async function emitirPresupuestoDeMostrador(
+  datos: z.input<typeof presupuestoMostradorSchema>,
+): Promise<EstadoMostrador & { quoteId?: string }> {
+  const usuario = await requireStaff();
+
+  const parsed = presupuestoMostradorSchema.safeParse(datos);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Datos incompletos." };
+  }
+
+  const d = parsed.data;
+  const subtotal = d.lineas.reduce(
+    (suma, l) => suma + Math.round(l.cantidad * l.precioUnitario * 100) / 100,
+    0,
+  );
+
+  // El vendedor asignado al cliente, si lo hay: el papel lo nombra.
+  let sellerId: string | null = null;
+  if (d.customerId) {
+    const [ficha] = await db
+      .select({ sellerId: customers.sellerId })
+      .from(customers)
+      .where(eq(customers.id, d.customerId))
+      .limit(1);
+    sellerId = ficha?.sellerId ?? null;
+  }
+
+  const validoHasta = new Date();
+  validoHasta.setDate(validoHasta.getDate() + DIAS_DE_VALIDEZ_MOSTRADOR);
+
+  let numero = "";
+  let quoteId = "";
+
+  await db.transaction(async (tx) => {
+    numero = await siguienteNumeroDePresupuesto(tx);
+
+    const [presupuesto] = await tx
+      .insert(quotes)
+      .values({
+        numero,
+        customerId: d.customerId,
+        contactoNombre: d.contactoNombre,
+        contactoTelefono: d.contactoTelefono ?? null,
+        branchId: d.branchId,
+        estado: "enviado",
+        origen: "mostrador",
+        subtotal: subtotal.toFixed(2),
+        total: subtotal.toFixed(2),
+        notas: d.notas ?? null,
+        asesor: usuario.name,
+        sellerId,
+        validoHasta,
+        createdByUserId: usuario.userId,
+      })
+      .returning({ id: quotes.id });
+
+    quoteId = presupuesto.id;
+
+    await tx.insert(quoteItems).values(
+      d.lineas.map((linea, orden) => ({
+        quoteId: presupuesto.id,
+        variantId: linea.variantId,
+        descripcion: linea.descripcion,
+        unidad: linea.unidad,
+        cantidad: linea.cantidad.toFixed(2),
+        precioUnitario: linea.precioUnitario.toFixed(2),
+        subtotal: (Math.round(linea.cantidad * linea.precioUnitario * 100) / 100).toFixed(2),
+        orden,
+      })),
+    );
+  });
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "crear",
+    entidad: "presupuesto",
+    entidadId: numero,
+    descripcion: `Presupuesto ${numero} emitido desde el mostrador para ${d.contactoNombre}`,
+  });
+
+  revalidatePath("/admin/presupuestos");
+  return { ok: `Presupuesto ${numero} emitido.`, quoteId };
+}
+
 export async function anularVenta(
   orderId: string,
   motivo: string,

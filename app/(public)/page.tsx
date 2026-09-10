@@ -330,15 +330,36 @@ function MediosDePago({
   promos: PromoVigente[];
   escalasPago: Awaited<ReturnType<typeof escalasDePago>>;
 }) {
-  const CONTADO = ["efectivo", "transferencia", "debito"];
-  const base = CONTADO.map(
-    (medio) =>
-      escalasPago
-        .filter((e) => e.medio === medio && e.desdeMonto === 0)
-        .sort((a, b) => b.porcentaje - a.porcentaje)[0]?.porcentaje ?? 0,
-  );
+  /*
+   * El descuento de contado, con los medios que de verdad lo tienen cargado.
+   * Si las escalas difieren entre sí no se anuncia un número único: mejor
+   * ninguna franja que una que la caja después no aplica.
+   */
+  const NOMBRES: Record<string, string> = {
+    efectivo: "efectivo",
+    transferencia: "transferencia",
+    debito: "débito",
+  };
+  const conDescuento = Object.keys(NOMBRES)
+    .map((medio) => ({
+      medio,
+      pct:
+        escalasPago
+          .filter((e) => e.medio === medio && e.desdeMonto === 0)
+          .sort((a, b) => b.porcentaje - a.porcentaje)[0]?.porcentaje ?? 0,
+    }))
+    .filter((m) => m.pct > 0);
   const contadoPct =
-    base[0] > 0 && base.every((p) => p === base[0]) ? base[0] : 0;
+    conDescuento.length > 0 &&
+    conDescuento.every((m) => m.pct === conDescuento[0].pct)
+      ? conDescuento[0].pct
+      : 0;
+  // "efectivo o transferencia", "efectivo, transferencia o débito".
+  const nombres = conDescuento.map((m) => NOMBRES[m.medio]);
+  const mediosDeContado =
+    nombres.length > 1
+      ? `${nombres.slice(0, -1).join(", ")} o ${nombres[nombres.length - 1]}`
+      : (nombres[0] ?? "");
 
   if (promos.length === 0 && contadoPct === 0) return null;
 
@@ -359,8 +380,9 @@ function MediosDePago({
                 Pagando de contado, todos los días
               </p>
               <p className="text-[14px] text-white/70">
-                Efectivo, transferencia o débito. Se aplica solo en el checkout
-                y en el mostrador.
+                {mediosDeContado.charAt(0).toUpperCase() +
+                  mediosDeContado.slice(1)}
+                . Se aplica solo en el checkout y en el mostrador.
               </p>
             </div>
           </div>

@@ -40,14 +40,34 @@ const estadoInicial = {} as { error?: string; ok?: string };
 
 export function FormularioCorte({
   sucursales,
+  desdePedido,
 }: {
   sucursales: { id: string; nombre: string }[];
+  /**
+   * El pedido del que sale este corte, cuando se entra desde su ficha.
+   *
+   * Viene resuelto del servidor y no como un id suelto en el URL: el cliente y
+   * la sucursal ya están decididos por el pedido, y volver a pedirlos sería
+   * hacer tipear de nuevo algo que el sistema ya sabe —y arriesgar que quede
+   * un corte a nombre de otro—.
+   */
+  desdePedido?: {
+    id: string;
+    numero: string;
+    branchId: string | null;
+    cliente: { id: string; nombre: string; razonSocial: string | null } | null;
+    contactoNombre: string;
+  };
 }) {
   const [estado, accion, pendiente] = useActionState(crearCorte, estadoInicial);
 
-  const [sucursal, setSucursal] = useState(sucursales[0]?.id ?? "");
-  const [cliente, setCliente] = useState<{ id: string; nombre: string; razonSocial: string | null } | null>(null);
-  const [nombre, setNombre] = useState("");
+  const [sucursal, setSucursal] = useState(
+    desdePedido?.branchId ?? sucursales[0]?.id ?? "",
+  );
+  const [cliente, setCliente] = useState<{ id: string; nombre: string; razonSocial: string | null } | null>(
+    desdePedido?.cliente ?? null,
+  );
+  const [nombre, setNombre] = useState(desdePedido?.contactoNombre ?? "");
   const [placa, setPlaca] = useState<{ variantId: string; descripcion: string } | null>(null);
   const [material, setMaterial] = useState("");
   const [piezas, setPiezas] = useState<Pieza[]>([piezaVacia()]);
@@ -89,6 +109,9 @@ export function FormularioCorte({
   return (
     <form action={accion} className="space-y-5">
       <input type="hidden" name="branchId" value={sucursal} />
+      {desdePedido && (
+        <input type="hidden" name="orderId" value={desdePedido.id} />
+      )}
       {cliente && <input type="hidden" name="customerId" value={cliente.id} />}
       {placa && <input type="hidden" name="variantId" value={placa.variantId} />}
       {validas.map((p, i) => (

@@ -107,3 +107,36 @@ Cuando el gasto es en efectivo, además de anotarse **sale de la caja**: se
 descuenta del turno que estaba abierto en ese momento. Si no había ninguno, el
 gasto se anota igual y el arqueo va a mostrar la diferencia, que es mejor que no
 tener el gasto en ningún lado.
+
+**El mes se elige arriba.** La pantalla muestra un mes por vez —el total, el
+desglose por categoría y la lista, los tres del mismo mes— y se cambia con el
+selector del encabezado. Para ver lo de agosto no hay que exportar nada.
+
+## En blanco y en negro
+
+Los gastos, los pagos a proveedores y los cheques llevan el **circuito** por el
+que salieron. Son dos botones y por omisión queda «En blanco», que es la
+mayoría.
+
+No es un detalle decorativo: en Gastos, arriba de la lista, están **los dos
+totales del mes por separado**, y los botones de «En blanco / En negro / Los
+dos» acotan la lista. El total mezclado no sirve para decidir en ninguno de los
+dos circuitos.
+
+Un cheque que sale en un pago **hereda el circuito del pago**: salió con esa
+plata y por esa vía, no es una decisión aparte.
+
+Ojo con no confundirlo con **«con factura / sin factura»**, que aparece al lado
+en la lista de gastos y es otra cosa: puede haber gasto con factura en
+cualquiera de los dos circuitos.
+
+## Pagar una factura que vence
+
+No hace falta arrancar de cero en Pagos. En **Facturas de compra**, el botón
+«Sin pagar» del encabezado deja solo las que deben algo, y cada una tiene su
+botón **Pagar**: el formulario se abre con el proveedor ya elegido y esa factura
+imputada por su saldo. Lo que queda por hacer es elegir el medio y confirmar.
+
+Los **certificados de retención** de cada pago se bajan desde la misma tabla de
+Pagos, haciendo clic en su número. Antes solo se podían imprimir en el momento
+de registrar el pago.

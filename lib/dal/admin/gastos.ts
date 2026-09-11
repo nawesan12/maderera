@@ -28,6 +28,8 @@ export interface EntradaDeGasto {
   descripcion: string;
   importe: number;
   medio: "efectivo" | "transferencia" | "debito" | "credito" | "cheque";
+  /** Por qué circuito de facturación salió. Ver `lib/db/schema/circuito.ts`. */
+  circuito?: "blanco" | "negro";
   branchId?: string | null;
   supplierId?: string | null;
   purchaseInvoiceId?: string | null;
@@ -66,6 +68,7 @@ export async function registrarGasto(
         descripcion: entrada.descripcion.trim(),
         importe: entrada.importe.toFixed(2),
         medio: entrada.medio,
+        circuito: entrada.circuito ?? "blanco",
         branchId: entrada.branchId ?? null,
         supplierId: entrada.supplierId ?? null,
         purchaseInvoiceId: entrada.purchaseInvoiceId ?? null,
@@ -108,7 +111,25 @@ export async function registrarGasto(
   });
 }
 
-export async function listarGastos(limite = 60) {
+/**
+ * Los gastos de un período.
+ *
+ * **El período es obligatorio y antes no existía.** La pantalla calculaba el
+ * mes, escribía "Gastos de septiembre" en el encabezado, se lo pasaba al
+ * desglose por categoría… y a esta consulta no, que devolvía los últimos
+ * sesenta sin mirar la fecha. Total del mes y lista de abajo hablaban de cosas
+ * distintas bajo el mismo título, que es la peor forma de estar mal: nada
+ * parece roto.
+ */
+export async function listarGastos({
+  desde,
+  hasta,
+  limite = 200,
+}: {
+  desde: Date;
+  hasta: Date;
+  limite?: number;
+}) {
   await requireStaffRole("admin");
 
   return db
@@ -119,8 +140,14 @@ export async function listarGastos(limite = 60) {
       descripcion: expenses.descripcion,
       importe: expenses.importe,
       medio: expenses.medio,
+      circuito: expenses.circuito,
+      /* Si tiene factura detrás. Es otra pregunta que la del circuito —puede
+         haber factura en cualquiera de los dos— y la pantalla no la mostraba
+         nunca, aunque la columna existía desde que se hizo el módulo. */
+      conFactura: sql<boolean>`${expenses.purchaseInvoiceId} is not null`,
       sucursal: branches.name,
       proveedor: suppliers.nombre,
+      supplierId: expenses.supplierId,
       notas: expenses.notas,
       /* Si tocó la caja: es lo que explica por qué el arqueo dio distinto. */
       enCaja: sql<boolean>`exists (
@@ -131,6 +158,7 @@ export async function listarGastos(limite = 60) {
     .from(expenses)
     .leftJoin(branches, eq(branches.id, expenses.branchId))
     .leftJoin(suppliers, eq(suppliers.id, expenses.supplierId))
+    .where(and(gte(expenses.fecha, desde), sql`${expenses.fecha} <= ${hasta}`))
     .orderBy(desc(expenses.fecha))
     .limit(limite);
 }
@@ -173,4 +201,25 @@ export async function sucursalesParaGasto() {
     )
     .where(eq(branches.active, true))
     .orderBy(branches.sortOrder);
+}
+
+/**
+ * Cuánto salió por cada circuito en el período.
+ *
+ * Va aparte del desglose por categoría porque contesta otra pregunta, y las
+ * dos se miran juntas: "gasté $2.400.000 en septiembre" no sirve para decidir
+ * nada si la mitad salió por un circuito y la mitad por el otro.
+ */
+export async function gastosPorCircuito(desde: Date, hasta: Date) {
+  await requireStaffRole("admin");
+
+  return db
+    .select({
+      circuito: expenses.circuito,
+      cantidad: sql<number>`count(*)::int`,
+      total: sql<string>`sum(${expenses.importe})`,
+    })
+    .from(expenses)
+    .where(and(gte(expenses.fecha, desde), sql`${expenses.fecha} <= ${hasta}`))
+    .groupBy(expenses.circuito);
 }

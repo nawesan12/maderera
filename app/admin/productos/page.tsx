@@ -79,6 +79,7 @@ export default async function AdminProductosPage({
             cantidad={sinFoto.length}
             detalle="Se ven vacíos en el catálogo"
             destacado
+            vacio={<p className="px-1 text-base text-texto-2">Todos tienen foto.</p>}
           >
             <Grilla productos={recortar(sinFoto, params.ver === "todo").visibles} />
             <VerTodo

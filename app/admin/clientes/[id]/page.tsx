@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MessageCircle, Printer } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
+import { enlaceDeWhatsapp } from "@/lib/formato";
 import {
   fechaCorta,
   formatearCuit,
@@ -33,10 +34,16 @@ export default async function FichaClientePage({
   const excedido = limite > 0 && cliente.saldo > limite;
   const usoLimite = limite > 0 ? Math.min((cliente.saldo / limite) * 100, 100) : 0;
 
+  /*
+   * El enlace sale de `enlaceDeWhatsapp` y ya no se arma acá: esta línea ponía
+   * `54` sin el nueve de celular, así que abría una conversación con un número
+   * que no existe.
+   */
   const whatsapp = cliente.telefono
-    ? `https://wa.me/54${cliente.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(
+    ? enlaceDeWhatsapp(
+        cliente.telefono,
         `Hola ${cliente.nombre}, te escribimos de Maderera Juan B. Justo.`,
-      )}`
+      )
     : null;
 
   return (
@@ -156,6 +163,7 @@ export default async function FichaClientePage({
               <Dato
                 etiqueta="Vendedor"
                 valor={cliente.vendedor ?? cliente.asesor ?? "—"}
+                href={cliente.vendedor ? "/admin/clientes/vendedores" : undefined}
               />
               {/* Saber si entra al sitio cambia cómo se lo atiende: a quien
                   tiene cuenta se lo puede mandar a mirar el estado solo. */}
@@ -204,30 +212,53 @@ export default async function FichaClientePage({
               </p>
             ) : (
               <ul className="divide-y border-t">
-                {cliente.movimientos.map((m) => (
-                  <li
-                    key={m.id}
-                    className="flex items-center justify-between gap-4 px-5 py-3.5"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <EtiquetaEstado estado={m.tipo} />
-                        <span className="text-base">{m.detalle ?? ""}</span>
-                      </div>
-                      <p className="mt-0.5 text-sm text-muted-foreground">
-                        {fechaCorta.format(m.createdAt)}
-                      </p>
-                    </div>
-                    <span
-                      className={`tabular shrink-0 text-base font-medium ${
-                        Number(m.monto) > 0 ? "" : "text-green-700"
-                      }`}
-                    >
-                      {Number(m.monto) > 0 ? "+" : ""}
-                      {moneda.format(Number(m.monto))}
-                    </span>
-                  </li>
-                ))}
+                {cliente.movimientos.map((m) => {
+                  const cuerpo = (
+                    <>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <EtiquetaEstado estado={m.tipo} />
+                          <span className="text-base">{m.detalle ?? ""}</span>
+                        </span>
+                        <span className="mt-0.5 block text-sm text-muted-foreground">
+                          {fechaCorta.format(m.createdAt)}
+                          {m.referencia && (
+                            <span className="tabular"> · {m.referencia}</span>
+                          )}
+                        </span>
+                      </span>
+                      <span
+                        className={`tabular shrink-0 text-base font-medium ${
+                          Number(m.monto) > 0 ? "" : "text-green-700"
+                        }`}
+                      >
+                        {Number(m.monto) > 0 ? "+" : ""}
+                        {moneda.format(Number(m.monto))}
+                      </span>
+                    </>
+                  );
+
+                  /* Un movimiento que salió de un pedido abre ese pedido:
+                     "¿de dónde salió este cargo de $84.000?" es la pregunta
+                     que se hace mirando esta lista, casi siempre con el
+                     cliente esperando la respuesta. */
+                  return (
+                    <li key={m.id}>
+                      {m.pedidoId ? (
+                        <Link
+                          href={`/admin/pedidos/${m.pedidoId}`}
+                          className="flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-muted/40"
+                        >
+                          {cuerpo}
+                        </Link>
+                      ) : (
+                        <span className="flex items-center justify-between gap-4 px-5 py-3.5">
+                          {cuerpo}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
@@ -242,6 +273,7 @@ export default async function FichaClientePage({
                 estado: p.estado,
                 total: p.total,
                 fecha: p.createdAt,
+                href: `/admin/pedidos/${p.id}`,
               }))}
             />
             <Listado
@@ -253,6 +285,7 @@ export default async function FichaClientePage({
                 estado: p.estado,
                 total: p.total,
                 fecha: p.createdAt,
+                href: `/admin/presupuestos/${p.id}`,
               }))}
             />
           </div>
@@ -266,19 +299,38 @@ function Dato({
   etiqueta,
   valor,
   tabular = false,
+  href,
 }: {
   etiqueta: string;
   valor: string;
   tabular?: boolean;
+  /** Cuando el dato es otra ficha del sistema y no un texto suelto. */
+  href?: string;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="shrink-0 text-muted-foreground">{etiqueta}</dt>
-      <dd className={`text-right ${tabular ? "tabular" : ""}`}>{valor}</dd>
+      <dd className={`text-right ${tabular ? "tabular" : ""}`}>
+        {href ? (
+          <Link href={href} className="hover:text-brand-orange hover:underline">
+            {valor}
+          </Link>
+        ) : (
+          valor
+        )}
+      </dd>
     </div>
   );
 }
 
+/**
+ * Los pedidos y presupuestos del cliente.
+ *
+ * **Cada fila es un enlace.** Era la pantalla que más se abre —el cliente está
+ * del otro lado del teléfono preguntando por lo suyo— y era un callejón sin
+ * salida: mostraba los números y no dejaba abrir ninguno, teniendo el id a
+ * mano. Había que anotar el número en un papel, ir a Pedidos y buscarlo.
+ */
 function Listado({
   titulo,
   vacio,
@@ -292,6 +344,7 @@ function Listado({
     estado: string;
     total: string;
     fecha: Date;
+    href: string;
   }[];
 }) {
   return (
@@ -304,17 +357,22 @@ function Listado({
       ) : (
         <ul className="divide-y border-t">
           {filas.map((fila) => (
-            <li key={fila.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="tabular text-base">{fila.numero}</p>
-                <p className="text-sm text-muted-foreground">
-                  {fechaCorta.format(fila.fecha)}
-                </p>
-              </div>
-              <span className="tabular text-base">
-                {moneda.format(Number(fila.total))}
-              </span>
-              <EtiquetaEstado estado={fila.estado} />
+            <li key={fila.id}>
+              <Link
+                href={fila.href}
+                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="tabular block text-base">{fila.numero}</span>
+                  <span className="block text-sm text-muted-foreground">
+                    {fechaCorta.format(fila.fecha)}
+                  </span>
+                </span>
+                <span className="tabular text-base">
+                  {moneda.format(Number(fila.total))}
+                </span>
+                <EtiquetaEstado estado={fila.estado} />
+              </Link>
             </li>
           ))}
         </ul>

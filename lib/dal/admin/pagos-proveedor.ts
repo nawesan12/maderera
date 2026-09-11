@@ -20,6 +20,16 @@ export async function listarPagosAProveedores(limite = 60) {
       paymentId: retencionesPracticadas.paymentId,
       total: sql<string>`sum(${retencionesPracticadas.importe})`.as("retenido"),
       cantidad: sql<number>`count(*)::int`.as("certificados"),
+      /*
+       * Los números de los certificados, para poder bajarlos desde la tabla.
+       *
+       * La pantalla los contaba —"2 certificados"— y no daba forma de abrirlos,
+       * aunque la ruta que los imprime existe: solo se enlazaba en el momento de
+       * crear el pago. Después de cerrar esa pantalla, el PDF del comprobante
+       * que el proveedor necesita para computarse la retención no se podía
+       * volver a sacar de ningún lado.
+       */
+      numeros: sql<string[]>`array_agg(${retencionesPracticadas.numero} order by ${retencionesPracticadas.numero})`.as("numeros_certificado"),
     })
     .from(retencionesPracticadas)
     .groupBy(retencionesPracticadas.paymentId)
@@ -32,11 +42,13 @@ export async function listarPagosAProveedores(limite = 60) {
       total: supplierPayments.total,
       neto: supplierPayments.neto,
       medio: supplierPayments.medio,
+      circuito: supplierPayments.circuito,
       referencia: supplierPayments.referencia,
       proveedor: suppliers.nombre,
       supplierId: supplierPayments.supplierId,
       retenido: retenido.total,
       certificados: retenido.cantidad,
+      numerosCertificado: retenido.numeros,
     })
     .from(supplierPayments)
     .innerJoin(suppliers, eq(suppliers.id, supplierPayments.supplierId))
@@ -50,6 +62,7 @@ export async function listarPagosAProveedores(limite = 60) {
     neto: Number(f.neto),
     retenido: Number(f.retenido ?? 0),
     certificados: Number(f.certificados ?? 0),
+    numerosCertificado: f.numerosCertificado ?? [],
   }));
 }
 

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   branches,
@@ -52,7 +52,16 @@ export async function listarPresupuestos(
   await requireStaff();
 
   const condiciones = [];
-  if (filtros.estado && filtros.estado !== "todos") {
+  /*
+   * "Abiertos" no es un estado de la tabla sino los tres que todavía esperan
+   * algo —pendiente, en revisión y enviado—. Está acá y no solo en la pantalla
+   * porque es el número que muestra la tarjeta del resumen: si el filtro no
+   * existiera, hacer clic en "4 presupuestos abiertos" abriría una lista de
+   * treinta, y una tarjeta que lleva a otra cosa deja de creerse.
+   */
+  if (filtros.estado === "abiertos") {
+    condiciones.push(inArray(quotes.estado, ["pendiente", "revision", "enviado"]));
+  } else if (filtros.estado && filtros.estado !== "todos") {
     condiciones.push(eq(quotes.estado, filtros.estado as never));
   }
   // "Los presupuestos que se hacen en la central más los que se hacen en
@@ -306,6 +315,8 @@ export async function obtenerPedido(id: string) {
       email: orders.contactoEmail,
       telefono: orders.contactoTelefono,
       empresa: customers.razonSocial,
+      // Para poder abrir un corte ya apuntado a la sucursal del pedido.
+      branchId: orders.branchId,
       customerId: orders.customerId,
       sucursal: branches.name,
       estado: orders.estado,

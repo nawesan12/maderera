@@ -434,6 +434,14 @@ export interface UmbralesDeBaja {
   mesesSinVender: number;
 }
 
+/**
+ * El valor de siempre, y el que se usa si nadie tocó nada.
+ *
+ * Ya no es *el* umbral: el número real lo guarda `mesesSinVenderParaBaja()` y
+ * se edita en la pantalla de candidatos. Quedó acá porque sigue siendo el
+ * arranque razonable —una temporada completa más un margen— y porque hay que
+ * tener a qué volver si el guardado trae basura.
+ */
 export const UMBRALES_DE_BAJA: UmbralesDeBaja = { mesesSinVender: 12 };
 
 /**
@@ -453,6 +461,10 @@ export const UMBRALES_DE_BAJA: UmbralesDeBaja = { mesesSinVender: 12 };
  * ninguna venta en `mesesSinVender`, sin stock en ninguna sucursal, o sin
  * precio cargado en ninguna medida —que en la práctica es un producto que no
  * se puede comprar—.
+ *
+ * El umbral llega por parámetro y la pantalla lo saca de `site_settings`: la
+ * clienta pidió "según parámetros", y un parámetro que exige un despliegue
+ * para cambiarlo no es un parámetro.
  */
 export async function candidatosDeBaja(
   umbrales: UmbralesDeBaja = UMBRALES_DE_BAJA,

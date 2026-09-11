@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, FileCheck2 } from "lucide-react";
+import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
   creditoPorRetenciones,
@@ -58,13 +59,21 @@ export default async function RetencionesSufridasPage({
           <ArrowLeft className="h-4 w-4" />
           ARCA
         </Link>
-        <h1 className="mt-2 text-[26px] font-bold tracking-tight">
-          Retenciones sufridas
-        </h1>
-        <p className="mt-1 text-base text-muted-foreground">
-          Los certificados que nos entregan los clientes. Bajan lo que deben y
-          se computan como crédito contra el impuesto.
-        </p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-[26px] font-bold tracking-tight">
+              Retenciones sufridas
+            </h1>
+            <p className="mt-1 text-base text-muted-foreground">
+              Los certificados que nos entregan los clientes. Bajan lo que deben
+              y se computan como crédito contra el impuesto.
+            </p>
+          </div>
+          {/* El mes se leía del URL y se escribía en las tarjetas de crédito,
+              pero no había con qué cambiarlo: para ver el mes anterior había
+              que teclear la dirección. */}
+          <SelectorDeMes actual={periodo.clave} />
+        </div>
       </div>
 
       {credito.length > 0 && (

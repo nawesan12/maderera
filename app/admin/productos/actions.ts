@@ -41,6 +41,7 @@ function parsearFormulario(formData: FormData) {
     alicuotaIva: (formData.get("alicuotaIva") as string) || "21",
     recargoElaboracionPct:
       (formData.get("recargoElaboracionPct") as string) || undefined,
+    imputacion: (formData.get("imputacion") as string) || undefined,
     featured: formData.get("featured") === "on",
     aPedido: formData.get("aPedido") === "on",
     active: formData.get("active") === "on",
@@ -139,6 +140,7 @@ export async function guardarProducto(
       // Ahora sí editable: el campo existía en la base desde el schema
       // inicial y el formulario nunca lo mandaba, así que todo quedaba al 21.
       alicuotaIva: datos.alicuotaIva,
+      imputacion: datos.imputacion ?? null,
       recargoElaboracionPct:
         datos.recargoElaboracionPct && datos.recargoElaboracionPct > 0
           ? datos.recargoElaboracionPct.toFixed(2)

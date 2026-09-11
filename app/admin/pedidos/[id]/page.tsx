@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MapPin, Store, Truck } from "lucide-react";
+import { MapPin, Scissors, Store, Truck } from "lucide-react";
+import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import {
   ETAPAS_PEDIDO,
@@ -15,6 +16,7 @@ import { BotonFacturar } from "./facturar";
 import { Entregas } from "./entregas";
 import { saldoDeAcopio } from "@/lib/entregas";
 import { remitosDelPedido } from "@/lib/dal/admin/entregas";
+import { cortesDelPedido } from "@/lib/dal/admin/cortes";
 import { margenDeLinea } from "@/lib/compras/costo";
 import { requireStaff } from "@/lib/dal/session";
 
@@ -51,9 +53,10 @@ export default async function FichaPedidoPage({
   const datosFactura = await pedidoParaFacturar(id);
   const facturado = datosFactura?.yaFacturado ?? null;
 
-  const [pendientes, remitos] = await Promise.all([
+  const [pendientes, remitos, cortes] = await Promise.all([
     saldoDeAcopio(id),
     remitosDelPedido(id),
+    cortesDelPedido(id),
   ]);
 
   const etapas =
@@ -61,55 +64,50 @@ export default async function FichaPedidoPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/admin/pedidos"
-        className="inline-flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-5 w-5" />
-        Volver a pedidos
-      </Link>
-
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {pedido.cliente}
-            </h1>
+      <EncabezadoFicha
+        volverA="/admin/pedidos"
+        volverTexto="Volver a pedidos"
+        titulo={pedido.cliente}
+        estado={
+          <>
             <EtiquetaEstado estado={pedido.estado} />
             {pedido.estadoPago !== "pagado" && (
               <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]">
                 Sin cobrar
               </span>
             )}
-          </div>
-          <p className="mt-0.5 text-base text-muted-foreground">
+          </>
+        }
+        detalle={
+          <>
             <span className="tabular">{pedido.numero}</span>
             {pedido.empresa && ` · ${pedido.empresa}`}
             {` · ${fechaHora.format(pedido.createdAt)}`}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-start gap-2">
-          <BotonFacturar
-            orderId={pedido.id}
-            comprobante={
-              facturado
-                ? {
-                    id: facturado.id,
-                    numero: facturado.numero,
-                    tipo: facturado.tipo,
-                  }
-                : null
-            }
-          />
-          <AccionesPedido
-            id={pedido.id}
-            estado={pedido.estado}
-            estadoPago={pedido.estadoPago}
-            tipoEntrega={pedido.tipoEntrega}
-          />
-        </div>
-      </div>
+          </>
+        }
+        acciones={
+          <>
+            <BotonFacturar
+              orderId={pedido.id}
+              comprobante={
+                facturado
+                  ? {
+                      id: facturado.id,
+                      numero: facturado.numero,
+                      tipo: facturado.tipo,
+                    }
+                  : null
+              }
+            />
+            <AccionesPedido
+              id={pedido.id}
+              estado={pedido.estado}
+              estadoPago={pedido.estadoPago}
+              tipoEntrega={pedido.tipoEntrega}
+            />
+          </>
+        }
+      />
 
       {/* Recorrido */}
       <section className="tarjeta p-5">
@@ -224,6 +222,56 @@ export default async function FichaPedidoPage({
                 </p>
               </div>
             </div>
+          )}
+        </section>
+
+        {/* El corte, en la ficha del pedido.
+
+            Es la pregunta de todos los días en una maderera con seccionadora:
+            "el pedido está listo menos el corte". Antes no se podía contestar
+            desde acá —la columna que ata las dos cosas existía en la base y no
+            la escribía nadie—, así que el corte se cargaba suelto y el pedido
+            no sabía que estaba esperando. */}
+        <section className="tarjeta p-5 lg:col-start-1">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Corte
+            </h2>
+            <Link
+              href={`/admin/cortes/nuevo?pedido=${pedido.id}`}
+              className="text-base text-brand-orange hover:underline"
+            >
+              Mandar a cortar
+            </Link>
+          </div>
+
+          {cortes.length === 0 ? (
+            <p className="text-base text-muted-foreground">
+              Este pedido no tiene ningún corte cargado.
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {cortes.map((c) => (
+                <li key={c.id}>
+                  <Link
+                    href={`/admin/cortes/${c.id}`}
+                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/50"
+                  >
+                    <Scissors
+                      className="h-5 w-5 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="tabular block text-base">{c.numero}</span>
+                      <span className="block text-sm text-muted-foreground">
+                        {c.material}
+                      </span>
+                    </span>
+                    <EtiquetaEstado estado={c.estado} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
 

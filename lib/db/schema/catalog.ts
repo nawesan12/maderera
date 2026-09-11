@@ -134,6 +134,21 @@ export const products = pgTable(
      * elaboración". Nulo o cero: el producto no se elabora.
      */
     recargoElaboracionPct: numeric({ precision: 6, scale: 2 }),
+    /**
+     * A qué cuenta imputa este producto en el sistema contable.
+     *
+     * De las notas de la clienta: "en productos agregar subrubros, tipos de
+     * IVA, imputaciones, código SKU". Las otras tres existían; esta no.
+     *
+     * **Es texto libre y no una tabla de cuentas**, a propósito y por ahora: el
+     * plan de cuentas lo maneja el contador y todavía no lo dio. Modelar un
+     * plan entero —con jerarquía, códigos y validaciones— para descubrir
+     * después que usan otro esquema es trabajo que hay que tirar. Un texto con
+     * la lista de lo ya usado como sugerencia deja cargar desde hoy y no
+     * condiciona lo que venga: cuando llegue el plan real, esta columna es de
+     * dónde se migra.
+     */
+    imputacion: text(),
     featured: boolean().notNull().default(false),
     /**
      * Se fabrica a pedido: no tiene stock y no debería mostrarse como agotado.
@@ -152,6 +167,7 @@ export const products = pgTable(
     uniqueIndex("products_slug_idx").on(t.slug),
     index("products_category_idx").on(t.categoryId),
     index("products_subcategory_idx").on(t.subcategoryId),
+    index("products_imputacion_idx").on(t.imputacion),
   ],
 );
 

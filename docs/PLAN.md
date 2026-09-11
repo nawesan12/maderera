@@ -972,6 +972,59 @@ por otro proyecto) y contra producción antes del deploy.
 
 ---
 
+## 7 quinquies. Cuarta pasada del panel (11/9/2026)
+
+No trajo módulos nuevos: trajo **el tejido entre los que ya estaban**. El
+diagnóstico fue recorrer las 63 pantallas de `/admin` y contestar dos preguntas
+por cada una —¿en qué acción termina? ¿a dónde lleva cada dato?—.
+
+De unos doce puentes del circuito real existían siete. **Los cinco que
+faltaban** eran los que más duelen: la ficha del cliente no dejaba abrir sus
+propios pedidos; `cuttingOrders.orderId` estaba en la base sin que nadie lo
+escribiera, así que pedido y corte no se conocían; el buscador ⌘K prometía
+clientes y pedidos y buscaba solo productos; una factura de compra impaga no
+ofrecía pagarla; y la cartera de cheques no tenía un solo enlace.
+
+**El resumen pasó de "cómo viene el negocio" a "qué hay que hacer hoy"**, con
+conteos que ya se calculaban y vivían encerrados en su pantalla. Los contadores
+del menú se suman solo donde el número sale de la base —el criterio de no
+inventar badges se mantiene—.
+
+Aparecieron tres defectos que no se veían leyendo el código:
+
+- **Gastos** mostraba un mes en el encabezado y otro en la tabla, y no había
+  con qué cambiar el mes. Igual en Retenciones sufridas.
+- **Filtrar en Stock o en Precios** expulsaba a Productos: la ruta del buscador
+  compartido estaba escrita fija.
+- **Sucursales** decía en un comentario que la ficha se editaba ahí. No hay ni
+  hubo formulario: los datos son constantes a propósito (`lib/sucursales.ts`).
+  Lo que sí faltaba era que sus seis métricas llevaran a algún lado.
+
+**El «blanco / negro» se construyó**, corrigiendo el rechazo de la tanda
+anterior. El pedido no era llevar un registro de evasión sino seguir por
+separado lo que se factura por otra vía o contra otra cuenta; las etiquetas son
+las que usa el equipo. Está en gastos, pagos a proveedores y cheques, con
+filtro y totales separados (migración 0051).
+
+Y por pedido directo: **textura en todas las superficies del panel** y **barra
+lateral oscura en los dos temas**, con el contraste medido en pantalla.
+
+**Los parciales de `notas.md` que quedaban**, cerrados en la misma pasada: el
+umbral de baja se edita en pantalla (notas 3), la imputación contable existe
+como campo (84), los reportes separan lo elaborado de lo bruto (4), el remito
+dice si es entrega total o parcial y qué queda en acopio (76), el mostrador
+tiene selector de tipo de operación (79), Caja lista lo emitido por cada caja y
+operadora (81), y el catálogo tiene franja de marcas con su filtro (57).
+
+**Dos de ellos quedaron a medias a propósito y están anotados como insumo
+pendiente**: el plan de cuentas real para las imputaciones, y qué otros "tipos
+de factura" quiere la clienta en el mostrador —la nota dice "etc etc etc" y los
+tipos fiscales no se eligen a mano—.
+
+Migraciones 0051 y 0052. Tests: 505.
+
+---
+
 ## 8. Definición de "entregado" (por semana)
 
 Para que el plazo de 5 días hábiles de 8.1 empiece a correr, cada viernes:

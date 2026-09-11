@@ -1,5 +1,14 @@
 import Link from "next/link";
-import { Building2, Users } from "lucide-react";
+import {
+  Building2,
+  ClipboardList,
+  Eye,
+  MessageCircle,
+  Printer,
+  Users,
+} from "lucide-react";
+import { AccionesRapidas } from "@/components/admin/acciones-rapidas";
+import { enlaceDeWhatsapp } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { GrupoListado } from "@/components/admin/grupo";
@@ -85,7 +94,15 @@ export default async function ClientesPage({
             </div>
           </GrupoListado>
 
-          <GrupoListado titulo="Al día" cantidad={alDia.length}>
+          <GrupoListado
+            titulo="Al día"
+            cantidad={alDia.length}
+            vacio={
+              <p className="px-1 text-base text-texto-2">
+                Ninguno sin deuda.
+              </p>
+            }
+          >
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {alDia.map((c) => (
                 <TarjetaCliente key={c.id} cliente={c} />
@@ -149,7 +166,47 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
           </p>
         </div>
 
-        <EtiquetaEstado estado={cliente.estado} />
+        <span className="flex shrink-0 items-start gap-1.5">
+          <EtiquetaEstado estado={cliente.estado} />
+          {/*
+            Lo que se hace con un cliente sin entrar a su ficha.
+
+            Entrar al detalle está bien cuando hay algo que mirar; está de más
+            cuando uno ya sabe qué quiere hacer —llamarlo, pasarle un
+            presupuesto, ver qué debe— y la tarjeta se lo está diciendo.
+          */}
+          <AccionesRapidas
+            etiqueta={`Acciones de ${cliente.nombre}`}
+            acciones={[
+              {
+                texto: "Ver la ficha",
+                icono: <Eye className="h-4 w-4" aria-hidden="true" />,
+                href: `/admin/clientes/${cliente.id}`,
+              },
+              {
+                texto: "Nuevo presupuesto",
+                icono: <ClipboardList className="h-4 w-4" aria-hidden="true" />,
+                href: `/admin/presupuestos/nuevo?cliente=${cliente.id}`,
+              },
+              {
+                texto: "Escribirle por WhatsApp",
+                icono: <MessageCircle className="h-4 w-4" aria-hidden="true" />,
+                href: cliente.telefono
+                  ? enlaceDeWhatsapp(
+                      cliente.telefono,
+                      `Hola ${cliente.nombre}, te escribimos de Maderera Juan B. Justo.`,
+                    )
+                  : undefined,
+                deshabilitada: !cliente.telefono,
+              },
+              {
+                texto: "Resumen de cuenta",
+                icono: <Printer className="h-4 w-4" aria-hidden="true" />,
+                href: `/cuenta/${cliente.id}`,
+              },
+            ]}
+          />
+        </span>
       </div>
 
       <dl className="mt-4 grid grid-cols-2 gap-3 border-t pt-3">

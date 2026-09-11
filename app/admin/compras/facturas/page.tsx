@@ -9,7 +9,10 @@ import {
   nombreComprobanteCompra,
   numeroDeCompra,
 } from "@/lib/fiscal/comprobantes-compra";
+import { EncabezadoPanel } from "@/components/admin/encabezado";
+import { Vacio } from "@/components/admin/vacio";
 import { CargarFactura } from "./cargar";
+import { FiltroDePago } from "./filtro";
 
 export const metadata: Metadata = { title: "Facturas de compra" };
 
@@ -21,43 +24,80 @@ export const metadata: Metadata = { title: "Facturas de compra" };
  * se puede computar. Llegan por caminos distintos y a veces una factura cubre
  * tres remitos.
  */
-export default async function FacturasDeCompraPage() {
+export default async function FacturasDeCompraPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pago?: string }>;
+}) {
   await requireStaffRole("admin");
 
-  const [facturas, proveedores] = await Promise.all([
+  const { pago = "todas" } = await searchParams;
+
+  const [todas, proveedores] = await Promise.all([
     listarFacturasDeCompra(),
     proveedoresParaElegir(),
   ]);
 
+  /*
+   * El filtro se aplica acá y no en la consulta a propósito: "pagada" no es una
+   * columna sino la comparación entre el total y lo imputado en pagos, que la
+   * consulta ya trae. Repetir esa resta en SQL sería tener la misma regla
+   * escrita en dos lugares, que es de donde salen las contradicciones entre lo
+   * que dice una pantalla y lo que dice la otra.
+   */
+  const saldo = (f: (typeof todas)[number]) =>
+    Number(f.total) - Number(f.pagado);
+
+  const facturas =
+    pago === "pendiente"
+      ? todas.filter((f) => saldo(f) > 0.01)
+      : pago === "pagadas"
+        ? todas.filter((f) => saldo(f) <= 0.01)
+        : todas;
+
+  const adeudado = todas
+    .filter((f) => saldo(f) > 0.01)
+    .reduce((s, f) => s + saldo(f), 0);
+
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-[26px] font-bold tracking-tight">
-            Facturas de compra
-          </h1>
-          <p className="mt-1 text-base text-muted-foreground">
-            Lo que nos facturaron. De acá sale el crédito fiscal del mes.
-          </p>
-        </div>
+      <EncabezadoPanel
+        titulo="Facturas de compra"
+        detalle={
+          adeudado > 0
+            ? `Lo que nos facturaron. Quedan ${formatearMonto(adeudado)} sin pagar.`
+            : "Lo que nos facturaron. No queda nada sin pagar."
+        }
+      >
         <Link
           href="/admin/arca/libro-iva-compras"
           className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-linea px-4 text-base font-medium hover:bg-hundida"
         >
           Libro IVA compras
         </Link>
-      </header>
+      </EncabezadoPanel>
+
+      <FiltroDePago actual={pago} />
 
       <CargarFactura proveedores={proveedores} />
 
       <section className="tarjeta overflow-hidden">
         {facturas.length === 0 ? (
-          <div className="px-5 py-14 text-center">
-            <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-3 text-base text-muted-foreground">
-              Todavía no se cargó ninguna factura de compra.
-            </p>
-          </div>
+          <Vacio
+            icono={FileText}
+            titulo={
+              pago === "pendiente"
+                ? "No queda ninguna factura sin pagar"
+                : pago === "pagadas"
+                  ? "Todavía no hay ninguna factura pagada del todo"
+                  : "Todavía no se cargó ninguna factura de compra"
+            }
+            detalle={
+              pago === "todas"
+                ? "Se cargan con el formulario de arriba, a medida que llegan."
+                : undefined
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-base">
@@ -70,6 +110,9 @@ export default async function FacturasDeCompraPage() {
                   <th className="px-5 py-2.5 text-right font-semibold">Neto</th>
                   <th className="px-5 py-2.5 text-right font-semibold">Total</th>
                   <th className="px-5 py-2.5 text-right font-semibold">Pago</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">
+                    <span className="sr-only">Acciones</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-linea">
@@ -132,6 +175,24 @@ export default async function FacturasDeCompraPage() {
                           </span>
                         );
                       })()}
+                    </td>
+                    {/*
+                      La acción que la fila estaba pidiendo.
+
+                      La pantalla ya sabía cuáles estaban impagas y no ofrecía
+                      nada: había que ir a Pagos por el menú y volver a elegir
+                      el proveedor a mano. Ahora el formulario llega con el
+                      proveedor puesto y esta factura imputada por su saldo.
+                    */}
+                    <td className="px-5 py-3 text-right">
+                      {saldo(f) > 0.01 && (
+                        <Link
+                          href={`/admin/compras/pagos?proveedor=${f.supplierId}&factura=${f.id}`}
+                          className="inline-flex h-10 items-center rounded-lg border border-linea px-3 text-base font-medium hover:bg-hundida"
+                        >
+                          Pagar
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}

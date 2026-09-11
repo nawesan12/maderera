@@ -17,6 +17,7 @@ import {
   obtenerProductoAdmin,
   sugeridosDelProducto,
 } from "@/lib/dal/admin/products";
+import { imputacionesUsadas } from "@/lib/dal/admin/parametros-catalogo";
 import { FormularioProducto } from "../formulario";
 import { ProductosSugeridos } from "../sugeridos";
 
@@ -26,13 +27,14 @@ export default async function EditarProductoPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [producto, categorias, rubros, sugeridos, candidatos] =
+  const [producto, categorias, rubros, sugeridos, candidatos, imputaciones] =
     await Promise.all([
       obtenerProductoAdmin(id),
       listarCategoriasAdmin(),
       listarRubrosAdmin(),
       sugeridosDelProducto(id),
       candidatosParaSugerir(id),
+      imputacionesUsadas(),
     ]);
 
   if (!producto) notFound();
@@ -168,6 +170,7 @@ export default async function EditarProductoPage({
       <FormularioProducto
         categorias={categorias}
         rubros={rubros}
+        imputaciones={imputaciones}
         galeria={producto.galeria}
         inicial={{
           id: producto.id,
@@ -183,6 +186,7 @@ export default async function EditarProductoPage({
           recargoElaboracionPct: producto.recargoElaboracionPct
             ? String(Number(producto.recargoElaboracionPct))
             : "",
+          imputacion: producto.imputacion ?? "",
           featured: producto.featured,
           aPedido: producto.aPedido,
           active: producto.active,

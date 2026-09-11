@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
+import { obtenerCliente } from "@/lib/dal/admin/clientes";
 import { requireStaff } from "@/lib/dal/session";
 import { FormularioPresupuesto } from "./formulario";
 
@@ -13,9 +14,20 @@ export const metadata = { title: "Nuevo presupuesto" };
  * hasta acá un presupuesto solo podía nacer del sitio: quien atendía lo
  * anotaba en un papel.
  */
-export default async function NuevoPresupuestoPage() {
+export default async function NuevoPresupuestoPage({
+  searchParams,
+}: {
+  /* `cliente` llega desde la lista o la ficha de clientes: el presupuesto
+     telefónico casi siempre empieza por saber a quién es. */
+  searchParams: Promise<{ cliente?: string }>;
+}) {
   const usuario = await requireStaff();
-  const sucursales = await listarSucursalesPublicas();
+  const { cliente: clienteId } = await searchParams;
+
+  const [sucursales, cliente] = await Promise.all([
+    listarSucursalesPublicas(),
+    clienteId ? obtenerCliente(clienteId) : Promise.resolve(null),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -38,6 +50,15 @@ export default async function NuevoPresupuestoPage() {
       <FormularioPresupuesto
         sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
         asesor={usuario.name}
+        clienteInicial={
+          cliente
+            ? {
+                id: cliente.id,
+                nombre: cliente.nombre,
+                razonSocial: cliente.razonSocial,
+              }
+            : undefined
+        }
       />
     </div>
   );

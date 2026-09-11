@@ -8,6 +8,7 @@ import {
 } from "@/lib/dal/admin/pagos-proveedor";
 import { listarProveedores } from "@/lib/dal/admin/proveedores";
 import { formatearMonto } from "@/lib/formato";
+import { ETIQUETA_CIRCUITO } from "@/lib/db/schema/circuito";
 import { FormularioPago } from "./formulario";
 
 export const metadata: Metadata = { title: "Pagos a proveedores" };
@@ -21,8 +22,19 @@ export const metadata: Metadata = { title: "Pagos a proveedores" };
  * banco y lo retenido. Mostrar solo la transferencia haría que el saldo del
  * proveedor no cuadre contra la suma de los pagos.
  */
-export default async function PagosPage() {
+export default async function PagosPage({
+  searchParams,
+}: {
+  /*
+   * `proveedor` y `factura` llegan desde la pantalla de facturas de compra,
+   * para que pagar una factura vencida sea un botón y no un recorrido.
+   */
+  searchParams: Promise<{ proveedor?: string; factura?: string }>;
+}) {
   await requireStaffRole("admin");
+
+  const { proveedor: proveedorInicial, factura: facturaInicial } =
+    await searchParams;
 
   const [pagos, proveedores, regimenes] = await Promise.all([
     listarPagosAProveedores(),
@@ -69,6 +81,8 @@ export default async function PagosPage() {
           alicuota: Number(r.alicuota),
           minimoNoImponible: Number(r.minimoNoImponible),
         }))}
+        proveedorInicial={proveedorInicial}
+        facturaInicial={facturaInicial}
       />
 
       <section className="tarjeta overflow-hidden">
@@ -109,11 +123,18 @@ export default async function PagosPage() {
                       >
                         {p.proveedor}
                       </Link>
-                      {p.certificados > 0 && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-sm text-muted-foreground">
-                          <FileCheck2 className="h-3.5 w-3.5" />
-                          {p.certificados} certificado
-                          {p.certificados > 1 ? "s" : ""}
+                      {p.numerosCertificado.length > 0 && (
+                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                          <FileCheck2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          {p.numerosCertificado.map((numero) => (
+                            <a
+                              key={numero}
+                              href={`/admin/compras/pagos/certificado/${encodeURIComponent(numero)}`}
+                              className="tabular hover:text-brand-orange hover:underline"
+                            >
+                              {numero}
+                            </a>
+                          ))}
                         </span>
                       )}
                     </td>
@@ -124,6 +145,11 @@ export default async function PagosPage() {
                           {p.referencia}
                         </span>
                       )}
+                      {/* Por qué circuito salió: el mismo dato que separa los
+                          totales de gastos. Ver lib/db/schema/circuito.ts. */}
+                      <span className="block text-sm">
+                        {ETIQUETA_CIRCUITO[p.circuito] ?? p.circuito}
+                      </span>
                     </td>
                     <td className="tabular px-5 py-3 text-right font-semibold">
                       {formatearMonto(p.total)}

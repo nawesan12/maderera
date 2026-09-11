@@ -8,11 +8,17 @@ import {
   turnosCerrados,
 } from "@/lib/mostrador/caja";
 import {
+  emitidoPorCaja,
   listarCajasFisicas,
   turnosParaAsignar,
   ventasSinCaja,
 } from "@/lib/dal/admin/cajas-fisicas";
 import { formatearMonto, haceCuanto } from "@/lib/formato";
+import { EncabezadoPanel } from "@/components/admin/encabezado";
+import { SelectorDeMes } from "@/components/admin/selector-de-mes";
+import { Vacio } from "@/components/admin/vacio";
+import { leerPeriodoMensual } from "@/lib/periodos";
+import { nombreComprobante } from "@/lib/fiscal/comprobantes";
 import { CajasFisicas } from "./cajas-fisicas";
 import { VentasSueltas } from "./ventas-sueltas";
 
@@ -39,14 +45,22 @@ const MEDIOS: Record<string, string> = {
   mercado_pago: "Mercado Pago",
 };
 
-export default async function CajaPage() {
+export default async function CajaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ periodo?: string }>;
+}) {
   await requireStaff();
 
-  const [sucursales, cerrados, cajas, sueltas] = await Promise.all([
+  const { periodo: crudo } = await searchParams;
+  const periodo = leerPeriodoMensual(crudo, new Date());
+
+  const [sucursales, cerrados, cajas, sueltas, emitido] = await Promise.all([
     sucursalesConCaja(),
     turnosCerrados(),
     listarCajasFisicas(),
     ventasSinCaja(),
+    emitidoPorCaja(periodo.desde, periodo.hasta),
   ]);
 
   /*
@@ -82,12 +96,12 @@ export default async function CajaPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-[26px] font-bold tracking-tight">Caja</h1>
-        <p className="mt-1 text-base text-muted-foreground">
-          Los turnos del mostrador, lo que debería haber y lo que se contó.
-        </p>
-      </header>
+      <EncabezadoPanel
+        titulo="Caja"
+        detalle="Los turnos del mostrador, lo que debería haber y lo que se contó."
+      >
+        <SelectorDeMes actual={periodo.clave} />
+      </EncabezadoPanel>
 
       <section className="grid gap-3 sm:grid-cols-2">
         {sucursales.map((s) => (
@@ -231,6 +245,113 @@ export default async function CajaPage() {
                   ),
                 ];
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/*
+        Lo que emitió cada caja.
+
+        El pedido de la clienta: "que en cada equipo los comprobantes, remitos,
+        lo que se emita la operadora de la caja, pueda levantarlos sin
+        problema". Reimprimir ya se podía, pero **había que saber el id**, y
+        para eso había que encontrar la venta en el listado general de pedidos,
+        que no dice de qué caja salió ni quién la cobró.
+
+        El número provisorio va al lado del definitivo porque es el que trae el
+        cliente escrito en el ticket cuando la venta se cobró sin internet.
+      */}
+      <section className="tarjeta overflow-hidden">
+        <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-linea px-5 py-4">
+          <h2 className="text-base font-semibold">
+            Emitido en el mostrador
+          </h2>
+          <p className="text-base text-muted-foreground">
+            Para reimprimir desde cualquier equipo
+          </p>
+        </div>
+
+        {emitido.length === 0 ? (
+          <Vacio
+            icono={Store}
+            titulo="No se emitió nada en el mes elegido"
+            detalle="Cambiá el mes de arriba para ver otro."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[820px] text-base">
+              <thead>
+                <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
+                  <th className="px-5 py-2.5 font-semibold">Cuándo</th>
+                  <th className="px-5 py-2.5 font-semibold">Venta</th>
+                  <th className="px-5 py-2.5 font-semibold">Quién cobró</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Total</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">
+                    Papeles
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-linea">
+                {emitido.map((v) => (
+                  <tr key={v.orderId}>
+                    <td className="tabular px-5 py-3 text-muted-foreground">
+                      {v.createdAt.toLocaleDateString("es-AR")}
+                      <span className="block text-sm">
+                        {v.createdAt.toLocaleTimeString("es-AR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <Link
+                        href={`/admin/pedidos/${v.orderId}`}
+                        className="tabular font-medium hover:text-brand-orange hover:underline"
+                      >
+                        {v.numero}
+                      </Link>
+                      <span className="block text-sm text-muted-foreground">
+                        {v.cliente}
+                        {v.numeroProvisorio && (
+                          <span className="tabular"> · ticket {v.numeroProvisorio}</span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {v.operadora ?? "—"}
+                      <span className="block text-sm">{v.sucursal ?? ""}</span>
+                    </td>
+                    <td className="tabular px-5 py-3 text-right font-semibold">
+                      {formatearMonto(Number(v.total))}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <span className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-sm">
+                        <a
+                          href={`/ticket/${v.orderId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-brand-orange hover:underline"
+                        >
+                          Ticket
+                        </a>
+                        {v.invoiceId && (
+                          <Link
+                            href={`/admin/facturacion/${v.invoiceId}`}
+                            className="hover:text-brand-orange hover:underline"
+                          >
+                            {nombreComprobante(v.invoiceTipo!)}{" "}
+                            <span className="tabular">
+                              {String(v.invoicePuntoVenta).padStart(4, "0")}-
+                              {String(v.invoiceNumero).padStart(8, "0")}
+                            </span>
+                          </Link>
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

@@ -77,7 +77,17 @@ export async function remitoPdf(
   });
 
   let y = A4.alto - MARGEN - 10;
-  escribir(hoja, "Remito de entrega", {
+  /*
+   * Completo o de acopio.
+   *
+   * Lo pidió la clienta con esas palabras: "puede ser completo o de acopio".
+   * Quien recibe el papel tiene que poder leer de un vistazo si se lleva todo
+   * el pedido o si le queda mercadería guardada en la maderera, porque es la
+   * discusión que aparece tres meses después. Antes los dos casos salían con
+   * el mismo título y la única pista era contar los renglones.
+   */
+  const deAcopio = remito.pendientes.length > 0;
+  escribir(hoja, deAcopio ? "Remito de entrega parcial" : "Remito de entrega total", {
     x: derecha,
     y,
     tamano: 11,
@@ -230,6 +240,42 @@ export async function remitoPdf(
 
     cursor -= Math.max(alto, 12) + 4;
     linea(hoja, cursor + 8);
+  }
+
+  /*
+   * Lo que queda en acopio, renglón por renglón.
+   *
+   * No alcanza con decir "entrega parcial": la pregunta que se hace el cliente
+   * al leerlo es *qué* le queda, y si el papel no lo dice hay que llamar. Van
+   * sin importes, como el resto del remito.
+   */
+  if (deAcopio) {
+    cursor -= mm(7);
+    escribir(hoja, "QUEDA EN ACOPIO", {
+      x: MARGEN,
+      y: cursor,
+      tamano: 6,
+      fuente: hoja.negrita,
+      color: TINTA_SUAVE,
+    });
+    cursor -= 12;
+
+    for (const p of remito.pendientes) {
+      escribir(hoja, `${p.pendiente} ${p.unidad} · ${p.descripcion}`, {
+        x: MARGEN,
+        y: cursor,
+        tamano: 8,
+      });
+      cursor -= 11;
+    }
+
+    cursor -= 2;
+    escribir(
+      hoja,
+      "Esta mercadería queda guardada en la maderera a nombre del cliente y se retira contra este remito.",
+      { x: MARGEN, y: cursor, tamano: 7, color: TINTA_SUAVE },
+    );
+    cursor -= 6;
   }
 
   if (remito.notas) {

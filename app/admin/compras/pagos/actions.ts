@@ -23,6 +23,9 @@ const esquema = z.object({
   supplierId: z.string().uuid("Elegí el proveedor."),
   total: z.coerce.number().positive("El pago tiene que ser mayor a cero."),
   medio: z.enum(["transferencia", "efectivo", "cheque", "echeq"]),
+  /* Por qué circuito de facturación sale el pago. Ver
+     `lib/db/schema/circuito.ts`. Por omisión, el habitual. */
+  circuito: z.enum(["blanco", "negro"]).default("blanco"),
   referencia: z
     .string()
     .trim()
@@ -100,6 +103,7 @@ export async function pagarAProveedor(
       supplierId: d.supplierId,
       total: d.total,
       medio: d.medio,
+      circuito: d.circuito,
       referencia: d.referencia,
       notas: d.notas,
       retenciones: d.retenciones.filter((r) => r.base > 0),

@@ -126,21 +126,45 @@ const secciones: { titulo: string; items: ItemNav[] }[] = [
       { href: "/admin/compras/gastos", icon: Receipt, label: "Gastos" },
     ],
   },
+  /*
+   * Ventas tiene grupo propio, y antes no.
+   *
+   * "Administración" juntaba dieciséis ítems que eran cuatro cosas distintas:
+   * la cobranza, el trato con el cliente, el sitio y la configuración. La
+   * asimetría se notaba al lado de Compras, que sí tiene su grupo con los siete
+   * pasos en orden cronológico, mientras que el circuito de venta quedaba
+   * partido entre Operación (presupuesto y pedido) y ese cajón (factura y
+   * cobro).
+   *
+   * El orden de adentro es el del circuito, no el alfabético: se factura,
+   * se cobra, entra a la caja, se declara y se cierra el mes.
+   */
   {
-    titulo: "Administración",
+    titulo: "Ventas",
     items: [
       { href: "/admin/clientes", icon: Users, label: "Clientes" },
       { href: "/admin/profesionales", icon: HardHat, label: "Profesionales" },
-      { href: "/admin/documentacion", icon: BookOpen, label: "Documentación" },
+      { href: "/admin/facturacion", icon: FileText, label: "Facturación" },
+      { href: "/admin/pagos", icon: Wallet, label: "Cobros" },
+      { href: "/admin/caja", icon: Banknote, label: "Caja" },
+      { href: "/admin/arca", icon: Landmark, label: "ARCA" },
+      { href: "/admin/cierre", icon: CalendarCheck, label: "Cierre del mes" },
+    ],
+  },
+  {
+    titulo: "Sitio",
+    items: [
       { href: "/admin/contenido", icon: Newspaper, label: "Contenido" },
       { href: "/admin/eventos", icon: CalendarDays, label: "Eventos" },
-      { href: "/admin/pagos", icon: Wallet, label: "Cobros" },
-      { href: "/admin/facturacion", icon: FileText, label: "Facturación" },
-      { href: "/admin/arca", icon: Landmark, label: "ARCA" },
+      { href: "/admin/documentacion", icon: BookOpen, label: "Documentación" },
       { href: "/admin/avisos", icon: Mail, label: "Avisos" },
-      { href: "/admin/caja", icon: Banknote, label: "Caja" },
+    ],
+  },
+  /* Lo que se toca de vez en cuando: reglas, datos del negocio y rastros. */
+  {
+    titulo: "Ajustes",
+    items: [
       { href: "/admin/reportes", icon: BarChart3, label: "Reportes" },
-      { href: "/admin/cierre", icon: CalendarCheck, label: "Cierre del mes" },
       { href: "/admin/sucursales", icon: Building2, label: "Sucursales" },
       { href: "/admin/envios", icon: MapPin, label: "Envíos" },
       { href: "/admin/migracion", icon: DatabaseZap, label: "Migración" },
@@ -197,14 +221,14 @@ export function AdminSidebar({
         />
         <div className="leading-[1.25]">
           <p className="text-[15px] font-semibold">Maderera JBJ</p>
-          <p className="text-[13px] text-texto-2">Panel de gestión</p>
+          <p className="text-[13px] text-sidebar-foreground/65">Panel de gestión</p>
         </div>
       </Link>
 
       <nav className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-2.5 pb-3 pt-1">
         {visibles.map((seccion) => (
           <div key={seccion.titulo}>
-            <p className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-[0.09em] text-texto-3">
+            <p className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-[0.09em] text-sidebar-foreground/50">
               {seccion.titulo}
             </p>
             <div className="flex flex-col gap-0.5">
@@ -222,8 +246,8 @@ export function AdminSidebar({
                     aria-current={activo ? "page" : undefined}
                     className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[15px] transition-colors ${
                       activo
-                        ? "nav-activa bg-card font-medium text-foreground shadow-[0_1px_2px_rgb(60_50_40_/_0.06)]"
-                        : "text-texto-2 hover:bg-hundida hover:text-foreground"
+                        ? "nav-activa bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
                     }`}
                   >
                     <item.icon
@@ -256,8 +280,8 @@ export function AdminSidebar({
         aria-current={pathname.startsWith("/admin/ayuda") ? "page" : undefined}
         className={`mx-2.5 mb-1 flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[15px] transition-colors ${
           pathname.startsWith("/admin/ayuda")
-            ? "nav-activa bg-card font-medium text-foreground shadow-[0_1px_2px_rgb(60_50_40_/_0.06)]"
-            : "text-texto-2 hover:bg-hundida hover:text-foreground"
+            ? "nav-activa bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
         }`}
       >
         <CircleQuestionMark
@@ -269,7 +293,7 @@ export function AdminSidebar({
       <Link
         href="/"
         target="_blank"
-        className="mx-2.5 mb-3 flex items-center justify-between rounded-lg px-2.5 py-2.5 text-sm text-texto-2 transition-colors hover:bg-hundida hover:text-foreground"
+        className="mx-2.5 mb-3 flex items-center justify-between rounded-lg px-2.5 py-2.5 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
       >
         Ver el sitio público
         <ArrowUpRight className="h-4 w-4" />
@@ -280,7 +304,7 @@ export function AdminSidebar({
   return (
     <>
       {/* Escritorio */}
-      <aside className="sticky top-0 hidden h-screen w-[244px] shrink-0 flex-col border-r border-linea bg-sidebar lg:flex">
+      <aside className="textura sticky top-0 hidden h-screen w-[244px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex">
         {contenido}
       </aside>
 
@@ -300,10 +324,10 @@ export function AdminSidebar({
             onClick={() => setAbierto(false)}
             aria-label="Cerrar menú"
           />
-          <aside className="relative flex h-full w-[244px] flex-col border-r border-linea bg-sidebar">
+          <aside className="textura relative flex h-full w-[244px] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
             <button
               onClick={() => setAbierto(false)}
-              className="absolute right-3 top-4 rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+              className="absolute right-3 top-4 rounded-lg p-1.5 text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
               aria-label="Cerrar menú"
             >
               <X className="h-5 w-5" />

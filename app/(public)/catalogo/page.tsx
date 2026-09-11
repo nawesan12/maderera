@@ -18,6 +18,7 @@ import {
 } from "@/components/catalogo/filtros";
 import {
   listarCategorias,
+  marcasDelCatalogo,
   productosEnOferta,
   paginaDeProductos,
   rubrosDeCategoria,
@@ -34,6 +35,11 @@ interface Params {
   stock?: string;
   orden?: string;
   ofertas?: string;
+  /**
+   * La marca. El filtro existía en el DAL desde hace tiempo y la página ni
+   * siquiera leía el parámetro, así que no había forma de llegar a él.
+   */
+  marca?: string;
   pagina?: string;
 }
 
@@ -261,6 +267,14 @@ async function Resultados({ params }: { params: Params }) {
   const sesion = await getSession();
   const avisos = await bannersDe("catalogo");
   const categorias = await listarCategorias();
+  /*
+   * Las marcas de lo que se está mirando: con una categoría elegida, las de
+   * esa categoría; sin ninguna, las del catálogo entero. Mostrar las marcas de
+   * ferretería mientras alguien mira placas no ayuda a nadie.
+   */
+  const marcas = await marcasDelCatalogo(
+    params.cat && params.cat !== "todos" ? params.cat : undefined,
+  );
 
   const { productos, total, hayMas, topeAlcanzado } = await paginaDeProductos(
     {
@@ -270,6 +284,7 @@ async function Resultados({ params }: { params: Params }) {
       stock: params.stock as never,
       orden: (params.orden as OrdenCatalogo) ?? "relevancia",
       soloOfertas: params.ofertas === "1",
+      marca: params.marca,
     },
     pagina,
   );
@@ -311,6 +326,43 @@ async function Resultados({ params }: { params: Params }) {
         }))}
         activa={params.cat ?? "todos"}
       />
+
+      {/*
+        Las marcas que trabajan.
+
+        La clienta pidió darles lugar y mandó la plancha de logos del sitio
+        anterior. Van por nombre hasta que lleguen los logos sueltos: una
+        imagen con todos juntos no se puede cortar en enlaces, y un logo que no
+        lleva a ningún lado es una figurita.
+      */}
+      {marcas.length > 1 && (
+        <nav aria-label="Marcas" className="mb-4 flex flex-wrap gap-2">
+          {marcas.map((m) => {
+            const activa = params.marca === m.nombre;
+            return (
+              <Link
+                key={m.nombre}
+                href={
+                  activa
+                    ? `/catalogo?${new URLSearchParams(limpiar({ ...params, marca: undefined }))}`
+                    : `/catalogo?${new URLSearchParams(limpiar({ ...params, marca: m.nombre }))}`
+                }
+                aria-current={activa ? "true" : undefined}
+                className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition-colors ${
+                  activa
+                    ? "bg-accion text-white"
+                    : "bg-chip text-texto-2 hover:text-texto-1"
+                }`}
+              >
+                {m.nombre}
+                <span className="tabular text-xs font-normal opacity-70">
+                  {m.productCount}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+      )}
 
       {avisos.length > 0 && (
         <div className="mb-4 space-y-3">

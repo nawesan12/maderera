@@ -66,6 +66,18 @@ WhatsApp, si tiene el dato cargado.
 Cancelar pide un motivo y **libera la mercadería reservada**, que vuelve a estar
 disponible para vender. El stock físico no se toca: nunca salió del galpón.
 
+### Mandar a cortar
+
+En la ficha del pedido hay un recuadro **Corte** con el botón **Mandar a
+cortar**. Se usa ese y no el alta suelta de *Cortes*, por un motivo concreto: el
+corte queda **atado al pedido**, así que después se ve desde las dos puntas —en
+el pedido figura que hay un corte esperando, y en el corte figura de qué pedido
+salió—. El formulario se abre con el cliente y la sucursal ya puestos.
+
+Un corte cargado suelto sigue funcionando, pero el pedido no se entera, y
+entonces «está listo menos el corte» vuelve a ser algo que hay que recordar de
+memoria.
+
 ## Cobrar
 
 En la ficha del pedido, **Marcar como cobrado**. Si el pedido era a cuenta

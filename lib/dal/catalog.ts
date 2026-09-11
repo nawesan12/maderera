@@ -3,7 +3,7 @@ import "server-only";
 
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 
-import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { coincideBusqueda } from "@/lib/busqueda";
 import { db } from "@/lib/db";
@@ -161,6 +161,50 @@ export const listarCategorias = cache(
         .orderBy(asc(categories.sortOrder));
     },
     ["categorias"],
+    ETIQUETAS.catalogo,
+  ),
+);
+
+/**
+ * Las marcas del catálogo, o las de una categoría.
+ *
+ * La clienta mandó la plancha de logos que tenía el sitio anterior
+ * (`marcas-ferreteria.jpg`) pidiendo darles lugar. **Los logos sueltos todavía
+ * no están** —esa imagen es una sola con todos juntos—, así que la franja se
+ * arma con los nombres, que ya viven en `products.brand`. Cuando lleguen los
+ * archivos se les agrega la imagen y la lista no cambia.
+ *
+ * Cada marca lleva al catálogo filtrado por ella. Ese filtro existía en el DAL
+ * desde hacía tiempo y **no había forma de llegar a él**: la página ni siquiera
+ * leía el parámetro.
+ */
+export const marcasDelCatalogo = cache(
+  cachearPublico(
+    async (categoria?: string) => {
+      return db
+        .select({
+          nombre: products.brand,
+          productCount: count(products.id),
+        })
+        .from(products)
+        .innerJoin(categories, eq(categories.id, products.categoryId))
+        .where(
+          and(
+            eq(products.active, true),
+            isNotNull(products.brand),
+            ne(products.brand, ""),
+            categoria ? eq(categories.slug, categoria) : undefined,
+          ),
+        )
+        .groupBy(products.brand)
+        .orderBy(desc(count(products.id)), asc(products.brand))
+        // `brand` es nullable en el tipo aunque el `where` ya lo descarta:
+        // se estrecha acá para que quien la use no arrastre el `null`.
+        .then((filas) =>
+          filas.map((f) => ({ nombre: f.nombre ?? "", productCount: f.productCount })),
+        );
+    },
+    ["marcas"],
     ETIQUETAS.catalogo,
   ),
 );

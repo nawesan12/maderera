@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { History, ShieldCheck } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
+import { rutaDeEntidad } from "@/lib/dal/admin/rutas-entidad";
 import { fechaHora, haceCuanto } from "@/lib/formato";
 import {
   listarBitacora,
@@ -207,9 +208,24 @@ export default async function BitacoraPage({
               >
                 {ACCIONES[fila.accion as AccionAuditoria] ?? fila.accion}
               </span>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground">
-                {fila.entidad}
-              </span>
+              {/* El chip lleva a la cosa auditada. Esta pantalla se abre
+                  cuando algo no cuadra, o sea justo cuando uno quiere ir a
+                  mirarla. */}
+              {(() => {
+                const ruta = rutaDeEntidad(fila.entidad, fila.entidadId);
+                const clases =
+                  "rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground";
+                return ruta ? (
+                  <Link
+                    href={ruta}
+                    className={`${clases} transition-colors hover:bg-brand-orange/12 hover:text-brand-orange-dark`}
+                  >
+                    {fila.entidad}
+                  </Link>
+                ) : (
+                  <span className={clases}>{fila.entidad}</span>
+                );
+              })()}
             </li>
           ))}
         </ul>

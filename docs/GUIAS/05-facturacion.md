@@ -68,3 +68,23 @@ correo al cliente, automáticamente, apenas queda emitido.
 Pasa. El comprobante queda en borrador y se puede reintentar la autorización
 desde su ficha con el botón *Autorizar*. Los intentos, con su respuesta, quedan
 registrados: si después hay que reclamar, está la constancia.
+
+## El remito dice si falta algo
+
+Un remito sale rotulado **«entrega total»** o **«entrega parcial»**. Cuando es
+parcial, el papel imprime además **qué queda en acopio**, renglón por renglón,
+con la leyenda de que esa mercadería queda guardada a nombre del cliente.
+
+Se calcula **al momento de ese remito**, no al de hoy: si se reimprime un remito
+de marzo, dice lo mismo que decía en marzo aunque el pedido ya se haya entregado
+entero. Un documento que cambia cada vez que se imprime no es un documento.
+
+## Reimprimir lo que emitió otra caja
+
+En **Caja**, abajo, está **Emitido en el mostrador**: qué se vendió, en qué
+sucursal, quién lo cobró y por cuánto, con el ticket y el comprobante fiscal
+para abrir desde cualquier equipo.
+
+Si la venta se cobró sin internet, al lado del número definitivo aparece el
+**número provisorio** —el `CAJA1-017` que quedó impreso—, que es el que trae el
+cliente cuando vuelve a reclamar algo.

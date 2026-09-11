@@ -7,9 +7,10 @@ services:
       POSTGRES_USER: mjbj
       POSTGRES_PASSWORD: mjbj
       POSTGRES_DB: mjbj
-    # 5432 lo ocupa un Postgres nativo del sistema, así que este proyecto usa 5433.
+    # 5432 lo ocupa un Postgres nativo del sistema y 5433 el Postgres de otro
+    # proyecto que corre en paralelo en esta máquina, así que este usa 5434.
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - mjbj-pgdata:/var/lib/postgresql/data
     healthcheck:

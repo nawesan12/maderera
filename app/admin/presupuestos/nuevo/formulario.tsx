@@ -43,9 +43,18 @@ const estadoInicial = {} as { error?: string; ok?: string };
 export function FormularioPresupuesto({
   sucursales,
   asesor,
+  clienteInicial,
 }: {
   sucursales: { id: string; nombre: string }[];
   asesor: string;
+  /**
+   * Con quién arranca, cuando se llega desde la ficha o la lista de clientes.
+   *
+   * Viene resuelto del servidor y no como un id suelto: el formulario no tiene
+   * por qué saber buscarlo, y así el nombre ya está escrito en el primer
+   * pintado en vez de aparecer medio segundo después.
+   */
+  clienteInicial?: ClienteElegido;
 }) {
   const [estado, accion, pendiente] = useActionState(
     crearPresupuesto,
@@ -53,8 +62,12 @@ export function FormularioPresupuesto({
   );
 
   const [sucursal, setSucursal] = useState(sucursales[0]?.id ?? "");
-  const [cliente, setCliente] = useState<ClienteElegido | null>(null);
-  const [nombre, setNombre] = useState("");
+  const [cliente, setCliente] = useState<ClienteElegido | null>(
+    clienteInicial ?? null,
+  );
+  const [nombre, setNombre] = useState(
+    clienteInicial ? (clienteInicial.razonSocial ?? clienteInicial.nombre) : "",
+  );
   const [lineas, setLineas] = useState<Linea[]>([]);
 
   const total = lineas.reduce(

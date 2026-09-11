@@ -35,6 +35,9 @@ import {
 
 export interface FilaDeReposicion {
   variantId: string;
+  /** Para abrir la ficha desde el reporte: señalar un producto sin dejar
+      entrar a él era el paso que faltaba. */
+  productId: string;
   producto: string;
   medida: string;
   sku: string | null;
@@ -84,6 +87,7 @@ export async function reporteDeReposicion(opciones: {
   const stock = await db
     .select({
       variantId: productVariants.id,
+      productId: products.id,
       producto: products.name,
       medida: productVariants.label,
       sku: productVariants.sku,
@@ -103,6 +107,9 @@ export async function reporteDeReposicion(opciones: {
     .where(and(...condiciones))
     .groupBy(
       productVariants.id,
+      // `products.id` va acá porque va en el select: Postgres no deja
+      // seleccionar una columna que no esté agrupada ni agregada.
+      products.id,
       products.name,
       productVariants.label,
       productVariants.sku,
@@ -171,6 +178,7 @@ export async function reporteDeReposicion(opciones: {
 
       return {
         variantId: s.variantId,
+        productId: s.productId,
         producto: s.producto,
         medida: s.medida,
         sku: s.sku,

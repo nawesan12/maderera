@@ -1,14 +1,16 @@
 import "server-only";
 
 import { randomBytes } from "node:crypto";
-import { and, asc, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   branches,
   cashMovements,
   cashSessions,
+  invoices,
   orders,
   posDevices,
+  user,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 
@@ -164,4 +166,55 @@ export async function turnosParaAsignar(branchId: string) {
     .where(eq(cashSessions.branchId, branchId))
     .orderBy(desc(cashSessions.abiertaAt))
     .limit(10);
+}
+
+/**
+ * Qué emitió cada caja, para poder levantarlo desde otro equipo.
+ *
+ * El pedido de la clienta: *"que en cada equipo los comprobantes / remitos /
+ * lo que se emita la operadora de la caja pueda levantarlos sin problema"*.
+ *
+ * Lo sincronizado ya se reimprimía por id, pero **había que saber el id**, y
+ * eso significaba encontrar la venta en el listado general de pedidos, que no
+ * dice de qué caja salió ni quién la cobró. Acá está por caja y por persona,
+ * que es como lo busca quien atiende: "lo cobró Marina en la CAJA2, hace un
+ * rato".
+ *
+ * Incluye el `numeroProvisorio` —el "CAJA1-017" que quedó impreso en el ticket
+ * cuando se cobró sin internet—, porque es el número que trae el cliente en la
+ * mano cuando vuelve a reclamar algo.
+ */
+export async function emitidoPorCaja(desde: Date, hasta: Date) {
+  await requireStaff();
+
+  return db
+    .select({
+      orderId: orders.id,
+      numero: orders.numero,
+      numeroProvisorio: orders.numeroProvisorio,
+      cliente: orders.contactoNombre,
+      total: orders.total,
+      medioPago: orders.medioPago,
+      createdAt: orders.createdAt,
+      sucursal: branches.name,
+      operadora: user.name,
+      /* Si además salió comprobante fiscal, para ofrecer los dos papeles. */
+      invoiceId: invoices.id,
+      invoicePuntoVenta: invoices.puntoVenta,
+      invoiceNumero: invoices.numero,
+      invoiceTipo: invoices.tipo,
+    })
+    .from(orders)
+    .leftJoin(branches, eq(branches.id, orders.branchId))
+    .leftJoin(user, eq(user.id, orders.createdByUserId))
+    .leftJoin(invoices, eq(invoices.orderId, orders.id))
+    .where(
+      and(
+        eq(orders.origen, "mostrador"),
+        gte(orders.createdAt, desde),
+        sql`${orders.createdAt} <= ${hasta}`,
+      ),
+    )
+    .orderBy(desc(orders.createdAt))
+    .limit(200);
 }

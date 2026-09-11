@@ -30,6 +30,9 @@ const esquema = z.object({
   descripcion: z.string().trim().min(2, "Poné en qué se gastó.").max(200),
   importe: z.coerce.number().positive("El importe tiene que ser mayor a cero."),
   medio: z.enum(["efectivo", "transferencia", "debito", "credito", "cheque"]),
+  /* Por omisión "blanco": es la mayoría, y quien no elija nada tiene que caer
+     en el caso normal y no en el excepcional. */
+  circuito: z.enum(["blanco", "negro"]).default("blanco"),
   branchId: z
     .string()
     .optional()
@@ -64,6 +67,7 @@ export async function cargarGasto(
     descripcion: d.descripcion,
     importe: d.importe,
     medio: d.medio,
+    circuito: d.circuito,
     branchId: d.branchId,
     supplierId: d.supplierId,
     notas: d.notas,
@@ -76,7 +80,7 @@ export async function cargarGasto(
     sesion: usuario,
     accion: "crear",
     entidad: "gasto",
-    descripcion: `Anotó un gasto de ${formatearMonto(d.importe)} en ${d.categoria}: ${d.descripcion}`,
+    descripcion: `Anotó un gasto de ${formatearMonto(d.importe)} en ${d.categoria} (${d.circuito === "negro" ? "en negro" : "en blanco"}): ${d.descripcion}`,
   });
 
   revalidatePath("/admin/compras/gastos");

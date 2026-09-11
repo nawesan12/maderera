@@ -1,8 +1,9 @@
 import "server-only";
 
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { sucursalPublicada } from "@/lib/sucursales";
+import { saldoAlRemito } from "@/lib/entregas";
 import {
   branches,
   deliveries,
@@ -54,12 +55,25 @@ export async function remitosDelPedido(
 
   if (filas.length === 0) return [];
 
+  /*
+   * Acotado a los remitos de este pedido.
+   *
+   * Antes traía **todas** las filas de `delivery_items` de la base y filtraba
+   * en memoria: con un pedido de tres remitos alcanzaba, y con dos años de
+   * operación la ficha de cualquier pedido empieza a barrer la tabla entera.
+   */
   const conteos = await db
     .select({
       deliveryId: deliveryItems.deliveryId,
       cantidad: deliveryItems.cantidad,
     })
-    .from(deliveryItems);
+    .from(deliveryItems)
+    .where(
+      inArray(
+        deliveryItems.deliveryId,
+        filas.map((f) => f.id),
+      ),
+    );
 
   const porRemito = new Map<string, number>();
   for (const c of conteos) {
@@ -99,6 +113,19 @@ export interface RemitoCompleto {
     descripcion: string;
     unidad: string;
     cantidad: number;
+  }[];
+  /**
+   * Lo que quedó en acopio en el momento de este remito.
+   *
+   * Es lo que convierte el papel en "remito completo" o "remito de acopio",
+   * que fue el pedido de la clienta: quien lo recibe tiene que poder leer si
+   * se lleva todo o si le queda mercadería en la maderera. Vacío: se entregó
+   * el pedido entero.
+   */
+  pendientes: {
+    descripcion: string;
+    unidad: string;
+    pendiente: number;
   }[];
 }
 
@@ -148,17 +175,22 @@ export async function remitoCompleto(
 
   if (!remito) return null;
 
-  const lineas = await db
-    .select({
-      descripcion: orderItems.descripcion,
-      unidad: orderItems.unidad,
-      cantidad: deliveryItems.cantidad,
-      orden: deliveryItems.orden,
-    })
-    .from(deliveryItems)
-    .innerJoin(orderItems, eq(orderItems.id, deliveryItems.orderItemId))
-    .where(eq(deliveryItems.deliveryId, deliveryId))
-    .orderBy(deliveryItems.orden);
+  const [lineas, pendientes] = await Promise.all([
+    db
+      .select({
+        descripcion: orderItems.descripcion,
+        unidad: orderItems.unidad,
+        cantidad: deliveryItems.cantidad,
+        orden: deliveryItems.orden,
+      })
+      .from(deliveryItems)
+      .innerJoin(orderItems, eq(orderItems.id, deliveryItems.orderItemId))
+      .where(eq(deliveryItems.deliveryId, deliveryId))
+      .orderBy(deliveryItems.orden),
+    // Lo que quedaba **en ese momento**, no lo que queda hoy: un remito
+    // reimpreso tiene que decir lo mismo que dijo el día que se firmó.
+    saldoAlRemito(remito.pedidoId, deliveryId),
+  ]);
 
   return {
     ...remito,
@@ -170,6 +202,11 @@ export async function remitoCompleto(
       descripcion: l.descripcion,
       unidad: l.unidad,
       cantidad: Number(l.cantidad),
+    })),
+    pendientes: pendientes.map((p) => ({
+      descripcion: p.descripcion,
+      unidad: p.unidad,
+      pendiente: p.pendiente,
     })),
   };
 }

@@ -44,6 +44,32 @@ export function formatearMonto(valor: string | number | null): string {
   return moneda.format(numero);
 }
 
+/**
+ * Un importe de la base, listo para meter en un campo editable.
+ *
+ * No es lo mismo que `formatearMonto`: ese arma "$ 44.992,56" para leer, y eso
+ * adentro de un `<input type="number">` no entra. Acá hace falta el número
+ * pelado, con punto decimal y **como mucho dos decimales**.
+ *
+ * Existe porque los costos se guardan en `numeric(12,4)` —un costo promedio
+ * ponderado necesita esa precisión para no derivar redondeo tras redondeo— y
+ * el driver los devuelve tal cual: el campo mostraba `44992.5600`, que hay que
+ * leer dos veces para saber si dice cuarenta y cuatro mil o cuatro millones, y
+ * que invita a borrar de más al corregirlo.
+ *
+ * El cero de más también se saca: `19200.0000` es `19200`, no `19200.00`.
+ */
+export function importeParaEditar(valor: string | number | null): string {
+  if (valor === null || valor === "") return "";
+
+  const numero = typeof valor === "string" ? Number(valor) : valor;
+  if (!Number.isFinite(numero)) return "";
+
+  // `toFixed` y no un redondeo a mano: con dos decimales el error de coma
+  // flotante no llega a cambiar el centavo.
+  return String(Number(numero.toFixed(2)));
+}
+
 /* -------------------------------------------------------------------------- */
 /* Fechas                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -230,4 +256,39 @@ export function primerNombre(nombre: string): string {
  */
 export function telefonoParaMarcar(telefono: string): string {
   return telefono.replace(/[^\d+]/g, "");
+}
+
+/**
+ * El número como lo quiere `wa.me`: internacional, sin signos, con el 9.
+ *
+ * **El 9 es el detalle que rompe todo.** Argentina exige `54` + `9` + área +
+ * número para los celulares; sin el nueve, WhatsApp abre una conversación con
+ * un número que no existe y el aviso nunca llega. Los teléfonos se cargan como
+ * los dicta la gente —"0223 15-5544332", "223 554-4332"— así que hay que sacar
+ * el cero de larga distancia y el quince, que son notación local y no parte del
+ * número.
+ *
+ * Estaba escrito en dos lugares y en los dos mal de distinta manera: la ficha
+ * del cliente ponía `54` sin el nueve, y la lista no ponía prefijo ninguno. Es
+ * la misma clase de error que este proyecto ya tuvo con las reglas de acceso:
+ * una regla en dos lados y uno de los dos atrasado.
+ */
+export function whatsappDestino(telefono: string): string {
+  let n = telefono.replace(/\D/g, "");
+
+  if (n.startsWith("549")) return n;
+  // Ya trae el país pero no el nueve de celular.
+  if (n.startsWith("54")) return `549${n.slice(2)}`;
+
+  // Notación local: el 0 de larga distancia y el 15 del celular no viajan.
+  if (n.startsWith("0")) n = n.slice(1);
+  n = n.replace(/^(\d{2,4})15(\d{6,8})$/, "$1$2");
+
+  return `549${n}`;
+}
+
+/** El enlace completo, con el mensaje ya escrito si se le pasa uno. */
+export function enlaceDeWhatsapp(telefono: string, mensaje?: string): string {
+  const base = `https://wa.me/${whatsappDestino(telefono)}`;
+  return mensaje ? `${base}?text=${encodeURIComponent(mensaje)}` : base;
 }

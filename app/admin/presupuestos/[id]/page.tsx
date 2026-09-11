@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, FileDown } from "lucide-react";
+import { FileDown } from "lucide-react";
+import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, moneda } from "@/components/admin/formato";
 import { obtenerPresupuesto } from "@/lib/dal/admin/ventas";
@@ -18,41 +19,33 @@ export default async function FichaPresupuestoPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/admin/presupuestos"
-        className="inline-flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-5 w-5" />
-        Volver a presupuestos
-      </Link>
-
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="tabular text-2xl font-semibold tracking-tight">
-              {p.numero}
-            </h1>
-            <EtiquetaEstado estado={p.estado} />
-          </div>
-          <p className="mt-0.5 text-base text-muted-foreground">
+      <EncabezadoFicha
+        volverA="/admin/presupuestos"
+        volverTexto="Volver a presupuestos"
+        titulo={p.numero}
+        estado={<EtiquetaEstado estado={p.estado} />}
+        detalle={
+          <>
             {fechaCorta.format(p.createdAt)}
             {p.validoHasta && ` · vale hasta ${fechaCorta.format(p.validoHasta)}`}
             {p.sucursal && ` · ${p.sucursal}`}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* El papel que se le manda al cliente, con el modelo del sistema
-              viejo: número, vendedor, condición de IVA y datos bancarios. */}
-          <a
-            href={`/api/presupuestos/${p.id}/pdf`}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
-          >
-            <FileDown className="h-5 w-5" />
-            Descargar PDF
-          </a>
-          <AccionesPresupuesto id={p.id} estado={p.estado} />
-        </div>
-      </div>
+          </>
+        }
+        acciones={
+          <>
+            {/* El papel que se le manda al cliente, con el modelo del sistema
+                viejo: número, vendedor, condición de IVA y datos bancarios. */}
+            <a
+              href={`/api/presupuestos/${p.id}/pdf`}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+            >
+              <FileDown className="h-5 w-5" />
+              Descargar PDF
+            </a>
+            <AccionesPresupuesto id={p.id} estado={p.estado} />
+          </>
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <section className="tarjeta overflow-hidden">

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   branches,
@@ -157,4 +157,37 @@ export async function buscarParaRecibir(texto: string) {
     .where(and(eq(productVariants.active, true), porTexto))
     .orderBy(products.name)
     .limit(20);
+}
+
+/**
+ * Las mismas variantes, buscadas por id en vez de por texto.
+ *
+ * Existe para poder abrir una orden de compra **con los renglones ya puestos**
+ * desde el reporte de reposición. El reporte dice qué comprar y cuánto; sin
+ * esto había que volver a buscar a mano, uno por uno, los cuarenta productos
+ * que el propio sistema acababa de señalar —que es exactamente el trabajo que
+ * el reporte existe para ahorrar—.
+ */
+export async function variantesParaPedir(ids: string[]) {
+  await requireStaffRole("admin");
+
+  // El tope es el mismo que muestra el reporte en pantalla. Sin él, una URL
+  // armada a mano podría pedir la tabla entera en una sola consulta.
+  const acotados = ids.filter(Boolean).slice(0, 40);
+  if (acotados.length === 0) return [];
+
+  return db
+    .select({
+      variantId: productVariants.id,
+      producto: products.name,
+      variante: productVariants.label,
+      sku: productVariants.sku,
+      unidad: products.unit,
+      alicuotaIva: products.alicuotaIva,
+      costoActual: variantCosts.costoPromedio,
+    })
+    .from(productVariants)
+    .innerJoin(products, eq(products.id, productVariants.productId))
+    .leftJoin(variantCosts, eq(variantCosts.variantId, productVariants.id))
+    .where(inArray(productVariants.id, acotados));
 }

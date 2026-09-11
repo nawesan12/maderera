@@ -656,7 +656,7 @@ export function VistaMostrador({
   }
 
   return (
-    <div className="panel flex h-screen flex-col overflow-hidden bg-background text-foreground">
+    <div className="panel textura flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <BarraSuperior
         conexion={conexion}
         cola={cola}
@@ -1493,24 +1493,82 @@ function Cobro({
           </div>
         )}
 
-        {/* La venta que se cobra y no se lleva: queda en acopio, el stock se
-            reserva y cada retiro sale después con su remito desde la ficha del
-            pedido. */}
-        <label className="mt-3 flex items-center gap-2.5 rounded-xl border border-linea px-3 py-2.5 text-base">
-          <input
-            type="checkbox"
-            checked={acopio}
-            onChange={(e) => onAcopio(e.target.checked)}
-            className="h-4.5 w-4.5 accent-accion"
-          />
-          <span>
-            Queda en acopio
-            <span className="block text-sm text-muted-foreground">
-              Se cobra ahora; la mercadería queda en depósito y se retira en
-              partes.
-            </span>
-          </span>
-        </label>
+        {/*
+          Qué clase de operación es.
+
+          La clienta pidió "más tipos de factura, como de acopio, cuenta
+          corriente, contado". Leído de cerca, no son tipos de comprobante
+          fiscal —esos los decide la condición de IVA del cliente y no se
+          eligen— sino **tres formas distintas de vender**, y las tres ya
+          existían repartidas en controles que no se miraban juntos: un
+          checkbox acá, un medio de pago allá.
+
+          Puestas en un solo lugar se elige una vez y la pantalla se acomoda:
+          contado deja el medio como está, cuenta corriente lo fija, y acopio
+          reserva en vez de entregar. El botón de cobrar y el papel que sale
+          después dicen cuál fue.
+        */}
+        <p className="mt-5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Tipo de operación
+        </p>
+        <div
+          className="mt-2.5 grid grid-cols-3 gap-2"
+          role="group"
+          aria-label="Tipo de operación"
+        >
+          {(
+            [
+              {
+                clave: "contado",
+                texto: "Contado",
+                detalle: "Paga y se lo lleva",
+              },
+              {
+                clave: "cuenta",
+                texto: "Cuenta corriente",
+                detalle: "Se lo lleva y queda anotado",
+              },
+              {
+                clave: "acopio",
+                texto: "Acopio",
+                detalle: "Paga y lo retira después",
+              },
+            ] as const
+          ).map((t) => {
+            const activo =
+              t.clave === "acopio"
+                ? acopio
+                : t.clave === "cuenta"
+                  ? !acopio && medio === "cuenta_corriente"
+                  : !acopio && medio !== "cuenta_corriente";
+            return (
+              <button
+                key={t.clave}
+                type="button"
+                aria-pressed={activo}
+                onClick={() => {
+                  if (t.clave === "acopio") {
+                    onAcopio(true);
+                    return;
+                  }
+                  onAcopio(false);
+                  if (t.clave === "cuenta") onMedio("cuenta_corriente");
+                  else if (medio === "cuenta_corriente") onMedio("efectivo");
+                }}
+                className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                  activo
+                    ? "border-accion bg-accion/10"
+                    : "border-linea hover:bg-hundida"
+                }`}
+              >
+                <span className="block text-base font-medium">{t.texto}</span>
+                <span className="block text-sm text-muted-foreground">
+                  {t.detalle}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
         <p className="mt-5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Descuento

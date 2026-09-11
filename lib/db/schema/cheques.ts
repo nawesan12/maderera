@@ -10,6 +10,7 @@ import {
 import { customers } from "./customers";
 import { orderPayments } from "./sales";
 import { user } from "./auth";
+import { circuito } from "./circuito";
 
 /**
  * La cartera de cheques.
@@ -69,6 +70,14 @@ export const cheques = pgTable(
     orderPaymentId: uuid().references(() => orderPayments.id, {
       onDelete: "set null",
     }),
+    /**
+     * Por qué circuito va el cheque. Ver `circuito.ts`.
+     *
+     * Un cheque es plata que entra o sale, así que le corresponde igual que al
+     * pago: si no, la cartera suma los dos circuitos en un solo total y deja de
+     * contestar "cuánto tengo que cubrir esta semana" para cada uno.
+     */
+    circuito: circuito().notNull().default("blanco"),
     notas: text(),
     createdByUserId: text().references(() => user.id),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -78,6 +87,7 @@ export const cheques = pgTable(
     index("cheques_estado_idx").on(t.estado, t.fechaPago),
     index("cheques_fecha_pago_idx").on(t.fechaPago),
     index("cheques_customer_idx").on(t.customerId),
+    index("cheques_circuito_idx").on(t.circuito, t.fechaPago),
   ],
 );
 

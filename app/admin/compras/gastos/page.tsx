@@ -1,8 +1,15 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Receipt } from "lucide-react";
+import { EncabezadoPanel } from "@/components/admin/encabezado";
+import { SelectorDeMes } from "@/components/admin/selector-de-mes";
+import { Vacio } from "@/components/admin/vacio";
+import { ETIQUETA_CIRCUITO } from "@/lib/db/schema/circuito";
+import { FiltroDeCircuito } from "./filtro";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
   gastosPorCategoria,
+  gastosPorCircuito,
   listarGastos,
   sucursalesParaGasto,
 } from "@/lib/dal/admin/gastos";
@@ -37,19 +44,24 @@ const CATEGORIAS: Record<string, string> = {
 export default async function GastosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<{ periodo?: string; circuito?: string }>;
 }) {
   await requireStaffRole("admin");
 
-  const { periodo: crudo } = await searchParams;
+  const { periodo: crudo, circuito = "todos" } = await searchParams;
   const periodo = leerPeriodoMensual(crudo, new Date());
 
-  const [gastos, porCategoria, sucursales, proveedores] = await Promise.all([
-    listarGastos(),
-    gastosPorCategoria(periodo.desde, periodo.hasta),
-    sucursalesParaGasto(),
-    proveedoresParaElegir(),
-  ]);
+  const [todos, porCategoria, porCircuito, sucursales, proveedores] =
+    await Promise.all([
+      listarGastos({ desde: periodo.desde, hasta: periodo.hasta }),
+      gastosPorCategoria(periodo.desde, periodo.hasta),
+      gastosPorCircuito(periodo.desde, periodo.hasta),
+      sucursalesParaGasto(),
+      proveedoresParaElegir(),
+    ]);
+
+  const gastos =
+    circuito === "todos" ? todos : todos.filter((g) => g.circuito === circuito);
 
   const etiqueta = new Date(periodo.anio, periodo.mes - 1, 1).toLocaleDateString(
     "es-AR",
@@ -59,14 +71,44 @@ export default async function GastosPage({
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-[26px] font-bold tracking-tight">Gastos</h1>
-        <p className="mt-1 text-base text-muted-foreground">
-          {total > 0
+      <EncabezadoPanel
+        titulo="Gastos"
+        detalle={
+          total > 0
             ? `${formatearMonto(total)} en ${etiqueta}.`
-            : `Sin gastos anotados en ${etiqueta}.`}
-        </p>
-      </header>
+            : `Sin gastos anotados en ${etiqueta}.`
+        }
+      >
+        <SelectorDeMes actual={periodo.clave} />
+      </EncabezadoPanel>
+
+      <FiltroDeCircuito actual={circuito} />
+
+      {/* Los dos circuitos, uno al lado del otro.
+
+          Es el número por el que se pidió la columna: el total del mes sumado
+          no contesta nada si la mitad salió por cada lado. */}
+      {porCircuito.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(["blanco", "negro"] as const).map((c) => {
+            const fila = porCircuito.find((x) => x.circuito === c);
+            return (
+              <article key={c} className="tarjeta p-4">
+                <p className="text-sm text-muted-foreground">
+                  {ETIQUETA_CIRCUITO[c]} · {etiqueta}
+                </p>
+                <p className="tabular mt-0.5 text-2xl font-bold">
+                  {formatearMonto(Number(fila?.total ?? 0))}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {fila?.cantidad ?? 0} gasto
+                  {(fila?.cantidad ?? 0) === 1 ? "" : "s"}
+                </p>
+              </article>
+            );
+          })}
+        </div>
+      )}
 
       {porCategoria.length > 0 && (
         <section className="tarjeta overflow-hidden">
@@ -115,12 +157,11 @@ export default async function GastosPage({
 
       <section className="tarjeta overflow-hidden">
         {gastos.length === 0 ? (
-          <div className="px-5 py-14 text-center">
-            <Receipt className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-3 text-base text-muted-foreground">
-              Todavía no se anotó ningún gasto.
-            </p>
-          </div>
+          <Vacio
+            icono={Receipt}
+            titulo={`Sin gastos en ${etiqueta}`}
+            detalle="Los gastos de otro mes se miran cambiando el mes de arriba."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-base">
@@ -130,6 +171,7 @@ export default async function GastosPage({
                   <th className="px-5 py-2.5 font-semibold">Categoría</th>
                   <th className="px-5 py-2.5 font-semibold">En qué</th>
                   <th className="px-5 py-2.5 font-semibold">Medio</th>
+                  <th className="px-5 py-2.5 font-semibold">Circuito</th>
                   <th className="px-5 py-2.5 text-right font-semibold">
                     Importe
                   </th>
@@ -147,8 +189,18 @@ export default async function GastosPage({
                     <td className="px-5 py-3">
                       {g.descripcion}
                       {g.proveedor && (
-                        <span className="block text-sm text-muted-foreground">
+                        /* El gasto suele ser la punta del ovillo: "esto se lo
+                           pagamos a Maderas del Sur, ¿qué más le debemos?" */
+                        <Link
+                          href={`/admin/proveedores/${g.supplierId}`}
+                          className="block text-sm text-muted-foreground hover:text-brand-orange hover:underline"
+                        >
                           {g.proveedor}
+                        </Link>
+                      )}
+                      {g.sucursal && (
+                        <span className="block text-sm text-muted-foreground">
+                          {g.sucursal}
                         </span>
                       )}
                     </td>
@@ -157,6 +209,22 @@ export default async function GastosPage({
                       {g.enCaja && (
                         <span className="block text-sm">salió de la caja</span>
                       )}
+                    </td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-sm font-medium ${
+                          g.circuito === "negro"
+                            ? "bg-chip text-texto-2"
+                            : "bg-naranja-claro text-acento-sobre-claro"
+                        }`}
+                      >
+                        {ETIQUETA_CIRCUITO[g.circuito] ?? g.circuito}
+                      </span>
+                      {/* Con factura o sin factura: es otra pregunta, y la
+                          columna estaba en la base sin mostrarse nunca. */}
+                      <span className="mt-0.5 block text-sm text-muted-foreground">
+                        {g.conFactura ? "con factura" : "sin factura"}
+                      </span>
                     </td>
                     <td className="tabular px-5 py-3 text-right font-semibold">
                       {formatearMonto(Number(g.importe))}

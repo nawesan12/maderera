@@ -23,6 +23,9 @@ import { AccionesPresupuesto } from "./acciones";
 
 const ESTADOS = {
   todos: "Todos",
+  // Los tres que todavía esperan algo, juntos. Es a donde lleva la tarjeta
+  // "Presupuestos abiertos" del resumen.
+  abiertos: "Abiertos",
   pendiente: "Pendientes",
   revision: "En revisión",
   enviado: "Enviados",
@@ -116,7 +119,15 @@ export default async function PresupuestosPage({
             ))}
           </GrupoListado>
 
-          <GrupoListado titulo="Cerrados" cantidad={cerrados.length}>
+          <GrupoListado
+            titulo="Cerrados"
+            cantidad={cerrados.length}
+            vacio={
+              <p className="px-1 text-base text-texto-2">
+                Ninguno cerrado todavía.
+              </p>
+            }
+          >
             {cerrados.map((p) => (
               <Tarjeta key={p.id} presupuesto={p} apagado />
             ))}

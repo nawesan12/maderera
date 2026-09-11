@@ -40,6 +40,21 @@ placas de fenólico pueden ser "poco" y tres rollos de membrana pueden ser "de
 sobra". Cuando la cantidad baja del mínimo, el producto aparece en *Hay que
 reponer*, en el resumen.
 
+## Qué comprar: el reporte de reposición
+
+En *Ajustes → Reportes → Reposición* (o desde **Stock**, arriba). Cruza lo que
+se vendió en el período con lo que hay hoy y dice **cuántos días de venta cubre
+el stock** y cuánto habría que comprar para llegar a la cobertura que se elija.
+
+Lo importante es que **no termina en el número**. Arriba del grupo «Para
+comprar» hay un botón **Generar orden de compra**: abre una orden nueva con
+todos esos renglones y la cantidad sugerida ya cargada. Queda por elegir el
+proveedor y revisar los costos — la orden nace en borrador, así que no cuenta
+como «en camino» hasta que se marque como enviada.
+
+Cada producto del reporte se abre con un clic, y también sale en **CSV** y en
+**PDF** para llevarlo a una reunión.
+
 ## Transferir entre sucursales
 
 Desde *Stock*, botón **Transferir**. Se elige origen, destino y cantidad. La

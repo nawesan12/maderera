@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Search, Trash2 } from "lucide-react";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, importeParaEditar } from "@/lib/formato";
 import {
   buscarParaPedir,
   crearOrdenDeCompra,
@@ -37,9 +37,18 @@ interface Linea {
 export function FormularioOrden({
   proveedores,
   sucursales,
+  renglonesIniciales,
 }: {
   proveedores: { id: string; nombre: string }[];
   sucursales: { id: string; nombre: string }[];
+  /**
+   * Con qué arranca la orden, cuando se llega desde el reporte de reposición.
+   *
+   * Vienen resueltos del servidor —descripción, costo y alícuota incluidos— y
+   * no como ids sueltos: el formulario no tiene por qué saber consultarlos, y
+   * así la orden ya nace cargada en el primer pintado.
+   */
+  renglonesIniciales?: Linea[];
 }) {
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoOrden>({});
@@ -49,7 +58,7 @@ export function FormularioOrden({
   const [branchId, setBranchId] = useState(sucursales[0]?.id ?? "");
   const [fechaPrometida, setFecha] = useState("");
   const [notas, setNotas] = useState("");
-  const [lineas, setLineas] = useState<Linea[]>([]);
+  const [lineas, setLineas] = useState<Linea[]>(renglonesIniciales ?? []);
 
   const [texto, setTexto] = useState("");
   const [hallazgos, setHallazgos] = useState<Hallazgo[]>([]);
@@ -75,7 +84,7 @@ export function FormularioOrden({
               variantId: h.variantId,
               descripcion: [h.producto, h.variante].filter(Boolean).join(" "),
               cantidad: "1",
-              costoUnitario: h.costoActual ?? "",
+              costoUnitario: importeParaEditar(h.costoActual),
               alicuotaIva: h.alicuotaIva,
             },
           ],

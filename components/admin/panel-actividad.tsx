@@ -31,6 +31,8 @@ export interface EventoDeActividad {
   entidad: string;
   descripcion: string;
   fecha: Date;
+  /** A dónde lleva el renglón, si la entidad tiene pantalla. */
+  href?: string | null;
 }
 
 /**
@@ -105,19 +107,38 @@ export function PanelDeActividad({ eventos }: { eventos: EventoDeActividad[] }) 
             const color =
               COLORES[evento.entidad] ?? "bg-muted text-muted-foreground";
 
-            return (
-              <div key={evento.id} className="flex items-start gap-3 rounded-lg p-3">
+            const cuerpo = (
+              <>
                 <span
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${color}`}
                 >
-                  <Icono className="h-4 w-4" />
+                  <Icono className="h-4 w-4" aria-hidden="true" />
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-base leading-relaxed">{evento.descripcion}</p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-base leading-relaxed">
+                    {evento.descripcion}
+                  </span>
+                  <span className="mt-0.5 block text-sm text-muted-foreground">
                     {evento.usuario} · {haceCuanto(new Date(evento.fecha))}
-                  </p>
-                </div>
+                  </span>
+                </span>
+              </>
+            );
+
+            /* El renglón abre lo que se tocó. Antes era un `div`: se leía
+               "Marcó PED-0231 como cobrado" y no se podía ir a mirarlo. */
+            return evento.href ? (
+              <Link
+                key={evento.id}
+                href={evento.href}
+                onClick={() => setAbierto(false)}
+                className="flex items-start gap-3 rounded-lg p-3 transition-colors hover:bg-muted/60"
+              >
+                {cuerpo}
+              </Link>
+            ) : (
+              <div key={evento.id} className="flex items-start gap-3 rounded-lg p-3">
+                {cuerpo}
               </div>
             );
           })}

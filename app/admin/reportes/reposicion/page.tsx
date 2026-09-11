@@ -192,6 +192,36 @@ export default async function ReposicionPage({
             detalle={`Cubrir ${objetivo} días al ritmo de venta del período`}
             destacado
           >
+            {/*
+              La acción para la que existe el reporte.
+
+              `notas.md` lo pide con todas las letras: "tiene que ser
+              accionable para tomar buenas acciones de compra". Sin esto el
+              reporte terminaba en un número y el trabajo —buscar cuarenta
+              productos uno por uno en el formulario de la orden— quedaba
+              entero del otro lado.
+
+              Nace en borrador y sin proveedor: la máquina sugiere qué y
+              cuánto, la persona decide a quién y a qué precio.
+            */}
+            {paraComprar.length > 0 && (
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <Link
+                  href={`/admin/compras/ordenes/nueva?sugeridos=${paraComprar
+                    .slice(0, 40)
+                    .map((f) => `${f.variantId}:${f.sugerido}`)
+                    .join(",")}`}
+                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-opacity hover:opacity-90"
+                >
+                  <ShoppingCart className="h-5 w-5" aria-hidden="true" />
+                  Generar orden de compra
+                </Link>
+                <span className="text-base text-muted-foreground">
+                  Con {Math.min(paraComprar.length, 40)} renglones y la cantidad
+                  sugerida. Nace en borrador.
+                </span>
+              </div>
+            )}
             <Tabla filas={paraComprar} conSugerido />
           </GrupoListado>
 
@@ -280,7 +310,15 @@ function Tabla({
           {filas.map((f) => (
             <tr key={f.variantId} className="border-b last:border-0">
               <td className="px-5 py-3">
-                <p className="text-base font-medium">{f.producto}</p>
+                {/* Señalar un producto y no dejar abrirlo era el paso que
+                    faltaba: el reporte dice "comprá 12 de esto" y había que
+                    ir a buscarlo al listado para ver de qué se trata. */}
+                <Link
+                  href={`/admin/productos/${f.productId}`}
+                  className="text-base font-medium hover:text-brand-orange hover:underline"
+                >
+                  {f.producto}
+                </Link>
                 <p className="text-sm text-muted-foreground">
                   {f.medida}
                   {f.sku ? ` · ${f.sku}` : ""}

@@ -136,9 +136,27 @@ export async function obtenerCliente(id: string) {
 
   const [movimientos, pedidosDelCliente, presupuestosDelCliente, totales] =
     await Promise.all([
+      /*
+       * Los movimientos, con el pedido que los originó resuelto.
+       *
+       * `referencia` guarda el número del comprobante como texto —"PED-1201"—,
+       * así que el enlace no sale de una clave foránea: se busca el pedido por
+       * su número. Es un `left join`, y tiene que serlo: hay movimientos que no
+       * vienen de un pedido (un ajuste a mano, un pago suelto) y esos se siguen
+       * mostrando, solo que sin enlace.
+       */
       db
-        .select()
+        .select({
+          id: accountMovements.id,
+          tipo: accountMovements.tipo,
+          monto: accountMovements.monto,
+          detalle: accountMovements.detalle,
+          referencia: accountMovements.referencia,
+          createdAt: accountMovements.createdAt,
+          pedidoId: orders.id,
+        })
         .from(accountMovements)
+        .leftJoin(orders, eq(orders.numero, accountMovements.referencia))
         .where(eq(accountMovements.customerId, id))
         .orderBy(desc(accountMovements.createdAt))
         .limit(20),

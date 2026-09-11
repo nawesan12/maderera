@@ -86,3 +86,19 @@ presupuestos, movimientos y direcciones de una ficha a la otra.
 
 Es la acción más delicada del panel. Queda registrada en la bitácora con su
 nombre.
+
+
+## La ficha del cliente, con el cliente al teléfono
+
+Es la pantalla que más se abre y la que contesta casi todo sin colgar:
+
+- **Sus pedidos y presupuestos** están abajo, y **cada uno se abre con un
+  clic**. No hace falta anotar el número e ir a buscarlo a *Pedidos*.
+- **Los movimientos de cuenta** muestran de qué comprobante salió cada uno, y
+  los que vienen de un pedido llevan a ese pedido: es la respuesta a «¿de dónde
+  salió este cargo?».
+- El **vendedor asignado** lleva a la lista de vendedores.
+- El botón de **WhatsApp** abre la conversación con esa persona.
+
+Si el cliente da un número de pedido o de comprobante por teléfono, más rápido
+todavía: **Ctrl+K** y pegarlo.

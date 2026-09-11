@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Search, Trash2 } from "lucide-react";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, importeParaEditar } from "@/lib/formato";
 import {
   buscarMercaderia,
   crearRecepcion,
@@ -92,7 +92,7 @@ export function FormularioRecepcion({
               // Arranca en el costo que ya tenía: la mayoría de las veces el
               // remito repite el costo anterior, y lo que se corrige es la
               // excepción.
-              costoUnitario: h.costoActual ?? "",
+              costoUnitario: importeParaEditar(h.costoActual),
               alicuotaIva: h.alicuotaIva,
               costoActual: h.costoActual === null ? null : Number(h.costoActual),
             },

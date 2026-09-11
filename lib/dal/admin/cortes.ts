@@ -2,7 +2,13 @@ import "server-only";
 
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { branches, cuttingItems, cuttingOrders, customers } from "@/lib/db/schema";
+import {
+  branches,
+  cuttingItems,
+  cuttingOrders,
+  customers,
+  orders,
+} from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { coincideBusqueda } from "@/lib/busqueda";
 
@@ -108,6 +114,10 @@ export async function obtenerCorte(
       numero: cuttingOrders.numero,
       cliente: cuttingOrders.contactoNombre,
       customerId: cuttingOrders.customerId,
+      // De qué pedido salió, si salió de uno. Lo que permite volver desde la
+      // ficha del corte a la venta que lo pidió.
+      orderId: cuttingOrders.orderId,
+      pedidoNumero: orders.numero,
       empresa: customers.razonSocial,
       // La lista del cliente decide la tarifa del corte: un mayorista paga
       // $996 la pasada donde el público paga $1.200.
@@ -124,6 +134,7 @@ export async function obtenerCorte(
     })
     .from(cuttingOrders)
     .leftJoin(customers, eq(customers.id, cuttingOrders.customerId))
+    .leftJoin(orders, eq(orders.id, cuttingOrders.orderId))
     .leftJoin(branches, eq(branches.id, cuttingOrders.branchId))
     .where(eq(cuttingOrders.id, id))
     .limit(1);
@@ -137,4 +148,29 @@ export async function obtenerCorte(
     .orderBy(asc(cuttingItems.orden));
 
   return { ...corte, urgente: corte.urgente === 1, piezas };
+}
+
+/**
+ * Los cortes que salieron de un pedido.
+ *
+ * Es la mitad que faltaba del puente: desde el pedido, saber si hay algo
+ * esperando la seccionadora. Sin esto, un pedido podía figurar "listo" con el
+ * corte todavía sin hacer, y nadie se enteraba hasta que el cliente venía a
+ * retirarlo.
+ */
+export async function cortesDelPedido(orderId: string) {
+  await requireStaff();
+
+  return db
+    .select({
+      id: cuttingOrders.id,
+      numero: cuttingOrders.numero,
+      material: cuttingOrders.materialDescripcion,
+      estado: cuttingOrders.estado,
+      urgente: cuttingOrders.urgente,
+      createdAt: cuttingOrders.createdAt,
+    })
+    .from(cuttingOrders)
+    .where(eq(cuttingOrders.orderId, orderId))
+    .orderBy(desc(cuttingOrders.createdAt));
 }

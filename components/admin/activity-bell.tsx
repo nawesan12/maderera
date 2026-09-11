@@ -1,5 +1,6 @@
 import { Bell } from "lucide-react";
 import { actividadReciente } from "@/lib/dal/admin/auditoria";
+import { rutaDeEntidad } from "@/lib/dal/admin/rutas-entidad";
 import { PanelDeActividad } from "./panel-actividad";
 
 /**
@@ -25,6 +26,9 @@ export async function ActivityBell() {
         entidad: e.entidad,
         descripcion: e.descripcion,
         fecha: e.createdAt,
+        // La ruta se resuelve acá, en el servidor: el panel es un componente
+        // de cliente y no tiene por qué conocer el mapa de rutas del sistema.
+        href: rutaDeEntidad(e.entidad, e.entidadId),
       }))}
     />
   );

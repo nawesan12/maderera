@@ -56,6 +56,8 @@ export interface ProductoForm {
   alicuotaIva: string;
   /** Recargo por elaboración sobre el costo, en %. Vacío: no se elabora. */
   recargoElaboracionPct: string;
+  /** A qué cuenta contable imputa. Texto libre. */
+  imputacion: string;
   featured: boolean;
   aPedido: boolean;
   active: boolean;
@@ -97,12 +99,15 @@ const estadoInicial: EstadoFormulario = {};
 
 export function FormularioProducto({
   inicial,
+  imputaciones = [],
   categorias,
   rubros,
   galeria = [],
 }: {
   inicial: ProductoForm;
   categorias: { id: string; name: string }[];
+  /** Las imputaciones ya cargadas, como sugerencia del campo. */
+  imputaciones?: string[];
   /** Todos los rubros; el select muestra los de la categoría elegida. */
   rubros: { id: string; categoryId: string; name: string; active: boolean }[];
   galeria?: ImagenProducto[];
@@ -332,6 +337,35 @@ export function FormularioProducto({
               <p className="text-sm text-muted-foreground">
                 Los precios siguen siendo finales; esto decide cómo se
                 desagrega en la factura.
+              </p>
+            </div>
+
+            {/*
+              La imputación contable, que pidió la clienta junto con subrubros,
+              IVA y SKU. Las otras tres existían; esta no.
+
+              Va como texto con sugerencias y no como lista cerrada porque el
+              plan de cuentas lo maneja el contador y todavía no lo dio. El
+              `datalist` es lo que evita que la misma cuenta se escriba de tres
+              maneras: propone lo ya usado sin impedir cargar una nueva.
+            */}
+            <div className="space-y-2">
+              <Label htmlFor="imputacion">Imputación contable</Label>
+              <Input
+                id="imputacion"
+                name="imputacion"
+                list="imputaciones-cargadas"
+                defaultValue={inicial.imputacion}
+                placeholder="Mercaderías"
+              />
+              <datalist id="imputaciones-cargadas">
+                {imputaciones.map((i) => (
+                  <option key={i} value={i} />
+                ))}
+              </datalist>
+              <p className="text-sm text-muted-foreground">
+                A qué cuenta va este producto. Se escribe libre: cuando esté el
+                plan de cuentas del contador, se pasa a una lista.
               </p>
             </div>
 

@@ -115,8 +115,20 @@ export function Entregas({
 
       {remitos.length > 0 && (
         <ul className="divide-y border-t">
-          {remitos.map((remito) => (
-            <FilaRemito key={remito.id} remito={remito} orderId={orderId} />
+          {remitos.map((remito, i) => (
+            <FilaRemito
+              key={remito.id}
+              remito={remito}
+              orderId={orderId}
+              /*
+               * Un remito dejó acopio si después de él quedaba algo: o porque
+               * hubo otro remito más nuevo —la lista viene del más nuevo al
+               * más viejo, así que cualquiera que no sea el primero—, o porque
+               * todavía hoy queda pendiente. Sale de lo que ya está en
+               * pantalla y no pide otra consulta.
+               */
+              dejaAcopio={i > 0 || pendientes.length > 0}
+            />
           ))}
         </ul>
       )}
@@ -246,15 +258,26 @@ export function Entregas({
 function FilaRemito({
   remito,
   orderId,
+  dejaAcopio,
 }: {
   remito: RemitoListado;
   orderId: string;
+  /** Si después de este remito quedaba mercadería guardada. */
+  dejaAcopio: boolean;
 }) {
   const [estado, anular, anulando] = useActionState(anularRemito, inicial);
 
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
-      <span className="tabular min-w-[6rem] font-medium">{remito.numero}</span>
+      <span className="min-w-[6rem]">
+        <span className="tabular block font-medium">{remito.numero}</span>
+        {/* Completo o de acopio: la misma distinción que sale impresa en el
+            PDF. Acá se deduce sin otra consulta —si después hubo otro remito,
+            o si todavía queda algo pendiente, este dejó acopio—. */}
+        <span className="block text-sm text-muted-foreground">
+          {dejaAcopio ? "Entrega parcial" : "Entrega total"}
+        </span>
+      </span>
 
       <span className="min-w-[12rem] flex-1 text-base text-muted-foreground">
         {remito.tipo === "envio" ? (

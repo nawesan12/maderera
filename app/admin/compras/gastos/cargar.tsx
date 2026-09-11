@@ -41,6 +41,7 @@ export function CargarGasto({
   const [descripcion, setDescripcion] = useState("");
   const [importe, setImporte] = useState("");
   const [medio, setMedio] = useState("efectivo");
+  const [circuito, setCircuito] = useState<"blanco" | "negro">("blanco");
   const [branchId, setBranchId] = useState(sucursales[0]?.id ?? "");
   const [supplierId, setSupplierId] = useState("");
 
@@ -137,6 +138,38 @@ export function CargarGasto({
           </label>
         )}
 
+        {/*
+          Por qué circuito sale el gasto.
+
+          Va como dos botones y no como desplegable: son dos opciones, se elige
+          en todos los gastos, y hay que poder ver cuál quedó puesta sin abrir
+          nada. Las palabras son las que usa el equipo.
+        */}
+        <label className="block">
+          <span className="text-sm font-medium">Circuito</span>
+          <div
+            className="mt-1 flex gap-1.5"
+            role="group"
+            aria-label="Circuito de facturación"
+          >
+            {(["blanco", "negro"] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCircuito(c)}
+                aria-pressed={circuito === c}
+                className={`h-11 flex-1 rounded-lg text-base font-medium transition-colors ${
+                  circuito === c
+                    ? "boton-accion"
+                    : "border border-linea text-muted-foreground hover:bg-hundida"
+                }`}
+              >
+                {c === "blanco" ? "En blanco" : "En negro"}
+              </button>
+            ))}
+          </div>
+        </label>
+
         <label className="block">
           <span className="text-sm font-medium">Proveedor (opcional)</span>
           <select
@@ -178,6 +211,7 @@ export function CargarGasto({
                 descripcion,
                 importe: Number(importe || 0),
                 medio: medio as "efectivo",
+                circuito,
                 branchId: enEfectivo ? branchId : undefined,
                 supplierId: supplierId || undefined,
               });

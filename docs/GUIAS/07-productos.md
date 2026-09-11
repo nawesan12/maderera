@@ -66,3 +66,28 @@ ya tiene cargado. Es el momento en que uno se acuerda del sellador.
 El botón *Dar de baja* saca el producto del sitio pero **no lo borra**: sigue en
 los pedidos y las facturas viejas, que es donde tiene que seguir. Un producto no
 se borra nunca.
+
+## Imputación contable
+
+Junto al IVA y al recargo por elaboración hay un campo **Imputación contable**:
+a qué cuenta va ese producto. Se escribe libre y el campo propone las que ya se
+usaron, para que la misma cuenta no termine escrita de tres maneras
+—«Mercaderías», «mercaderias» y «Mercadería» son una sola para una persona y
+tres para un reporte—.
+
+Cuando el contador dé el plan de cuentas, esto pasa a ser una lista cerrada y lo
+cargado hasta entonces es de donde se migra.
+
+## Cuándo se da de baja un producto
+
+En **Productos → Candidatos a baja**. La lista junta tres cosas: los que no se
+venden hace mucho, los que no tienen stock en ninguna sucursal y los que no
+tienen precio cargado.
+
+**Nada se da de baja solo, y es a propósito.** Un artículo de temporada que no se
+vende en trece meses y vuelve a venderse en el catorce desaparecería del catálogo
+sin que nadie se entere; con la lista, alguien mira y decide en dos minutos.
+
+Arriba, a la derecha, se elige **desde cuántos meses sin venta** se señala un
+producto. Cambiarlo cambia la lista para todo el equipo y queda anotado en la
+bitácora.

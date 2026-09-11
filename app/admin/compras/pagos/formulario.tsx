@@ -80,17 +80,33 @@ const parteVacia = (medio: ParteUI["medio"] = "transferencia"): ParteUI => ({
 export function FormularioPago({
   proveedores,
   regimenes,
+  proveedorInicial,
+  facturaInicial,
 }: {
   proveedores: Proveedor[];
   regimenes: Regimen[];
+  /**
+   * Con quién arranca el formulario, cuando se llega desde una factura impaga.
+   *
+   * Sin esto el pago siempre empezaba en `proveedores[0]` —el primero de la
+   * lista, alfabético, casi nunca el que se quiere pagar—. Se veía la factura
+   * vencida en su pantalla, se apretaba Pagos, y había que volver a buscar el
+   * proveedor a mano para que recién ahí aparecieran sus facturas abiertas.
+   */
+  proveedorInicial?: string;
+  /** Qué factura viene a pagarse: se marca sola al cargar las del proveedor. */
+  facturaInicial?: string;
 }) {
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoPago>({});
   const [enCurso, empezar] = useTransition();
 
-  const [supplierId, setSupplierId] = useState(proveedores[0]?.id ?? "");
+  const [supplierId, setSupplierId] = useState(
+    proveedorInicial ?? proveedores[0]?.id ?? "",
+  );
   const [total, setTotal] = useState("");
   const [medio, setMedio] = useState("transferencia");
+  const [circuito, setCircuito] = useState<"blanco" | "negro">("blanco");
   const [referencia, setReferencia] = useState("");
   const [bases, setBases] = useState<Record<string, string>>({});
 
@@ -123,12 +139,24 @@ export function FormularioPago({
     void verFacturasConSaldo(supplierId).then((filas) => {
       if (!vivo) return;
       setFacturas(filas);
-      setImputado({});
+      /*
+       * Si se llegó desde una factura, viene ya imputada por su saldo entero.
+       * Es el caso normal —se paga lo que se debe— y deja el importe listo
+       * para corregir si se paga una parte, en vez de obligar a tipearlo.
+       */
+      const objetivo = filas.find((f) => f.id === facturaInicial);
+      setImputado(
+        objetivo ? { [objetivo.id]: String(objetivo.saldo) } : {},
+      );
+      if (objetivo) setTotal(String(objetivo.saldo));
     });
 
     return () => {
       vivo = false;
     };
+    // `facturaInicial` viene del URL y no cambia mientras la pantalla vive:
+    // meterlo en las dependencias solo agregaría ruido a la lectura.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supplierId]);
 
   useEffect(() => {
@@ -254,6 +282,33 @@ export function FormularioPago({
             placeholder="N.º de operación"
             className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
           />
+        </label>
+
+        {/* Por qué circuito sale el pago. Los cheques que se emitan en él lo
+            heredan: salen con esa plata y por esa vía. */}
+        <label className="block">
+          <span className="text-sm font-medium">Circuito</span>
+          <div
+            className="mt-1 flex gap-1.5"
+            role="group"
+            aria-label="Circuito de facturación"
+          >
+            {(["blanco", "negro"] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCircuito(c)}
+                aria-pressed={circuito === c}
+                className={`h-11 flex-1 rounded-lg text-base font-medium transition-colors ${
+                  circuito === c
+                    ? "boton-accion"
+                    : "border border-linea text-muted-foreground hover:bg-hundida"
+                }`}
+              >
+                {c === "blanco" ? "En blanco" : "En negro"}
+              </button>
+            ))}
+          </div>
         </label>
       </div>
 
@@ -596,6 +651,7 @@ export function FormularioPago({
                 supplierId,
                 total: importe,
                 medio: medio as "transferencia",
+                circuito,
                 referencia,
                 retenciones: regimenes
                   .map((g) => ({

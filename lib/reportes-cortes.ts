@@ -9,6 +9,7 @@
 export type CorteDelReporte =
   | "producto"
   | "rubro"
+  | "elaboracion"
   | "cliente"
   | "vendedor"
   | "sucursal"
@@ -22,6 +23,14 @@ export const CORTES: { clave: CorteDelReporte; etiqueta: string }[] = [
    * y es el que se mira todos los meses.
    */
   { clave: "rubro", etiqueta: "Por rubro" },
+  /*
+   * La otra mitad de la frase de la clienta: "de cada rubro cuánta utilidad
+   * hay, **qué porcentaje dejan las materias que se maquinan**". El corte por
+   * rubro contestaba la primera parte; esta contesta la segunda, que es la que
+   * decide si conviene seguir maquinando en planta o vender la madera en
+   * bruto.
+   */
+  { clave: "elaboracion", etiqueta: "Elaborado vs. bruto" },
   { clave: "cliente", etiqueta: "Por cliente" },
   { clave: "vendedor", etiqueta: "Por vendedor" },
   { clave: "sucursal", etiqueta: "Por sucursal" },

@@ -13,6 +13,7 @@ import {
 import { user } from "./auth";
 import { customers } from "./customers";
 import { purchaseInvoices, suppliers } from "./compras";
+import { circuito } from "./circuito";
 import { cheques } from "./cheques";
 
 /**
@@ -101,12 +102,16 @@ export const supplierPayments = pgTable(
     referencia: text(),
     notas: text(),
 
+    /** Por qué circuito de facturación salió el pago. Ver `circuito.ts`. */
+    circuito: circuito().notNull().default("blanco"),
+
     createdByUserId: text().references(() => user.id),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("supplier_payments_supplier_idx").on(t.supplierId),
     index("supplier_payments_fecha_idx").on(t.fecha),
+    index("supplier_payments_circuito_idx").on(t.circuito, t.fecha),
   ],
 );
 

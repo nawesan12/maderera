@@ -4,12 +4,14 @@ import {
   listarCategoriasAdmin,
   listarRubrosAdmin,
 } from "@/lib/dal/admin/products";
+import { imputacionesUsadas } from "@/lib/dal/admin/parametros-catalogo";
 import { FormularioProducto } from "../formulario";
 
 export default async function NuevoProductoPage() {
-  const [categorias, rubros] = await Promise.all([
+  const [categorias, rubros, imputaciones] = await Promise.all([
     listarCategoriasAdmin(),
     listarRubrosAdmin(),
+    imputacionesUsadas(),
   ]);
 
   return (
@@ -27,6 +29,7 @@ export default async function NuevoProductoPage() {
       <FormularioProducto
         categorias={categorias}
         rubros={rubros}
+        imputaciones={imputaciones}
         inicial={{
           name: "",
           slug: "",
@@ -38,6 +41,7 @@ export default async function NuevoProductoPage() {
           unit: "unidad",
           alicuotaIva: "21",
           recargoElaboracionPct: "",
+          imputacion: "",
           featured: false,
           aPedido: false,
           active: true,

@@ -41,7 +41,7 @@ export default async function AtencionPage({
   const sinLeer = await conversacionesSinLeer();
 
   return (
-    <div className="panel flex h-screen flex-col overflow-hidden bg-background text-foreground">
+    <div className="panel textura flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
         <Link href="/admin" className="flex items-center gap-2.5">
           <Image

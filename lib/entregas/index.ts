@@ -445,3 +445,55 @@ export async function anularEntrega(
     });
   });
 }
+
+/**
+ * Qué quedaba en acopio en el momento de este remito.
+ *
+ * `saldoDeAcopio` contesta "qué falta entregar **hoy**", que es lo que sirve en
+ * la ficha del pedido. Un remito impreso necesita otra cosa: **qué faltaba
+ * cuando se firmó**. Si se reimprime un remito de marzo, tiene que decir lo
+ * mismo que dijo en marzo, aunque desde entonces se haya entregado el resto.
+ *
+ * La diferencia es el `created_at <=`: se cuentan solo las entregas hasta esa,
+ * inclusive. Un documento que cambia de contenido cada vez que se imprime no
+ * es un documento.
+ */
+export async function saldoAlRemito(
+  orderId: string,
+  deliveryId: string,
+): Promise<RenglonPendiente[]> {
+  const filas = await db
+    .select({
+      orderItemId: orderItems.id,
+      descripcion: orderItems.descripcion,
+      unidad: orderItems.unidad,
+      pedido: orderItems.cantidad,
+      orden: orderItems.orden,
+      entregado: sql<string>`coalesce((
+        select sum(di.cantidad)
+        from delivery_items di
+        join deliveries d on d.id = di.delivery_id
+        where di.order_item_id = order_items.id
+          and d.estado <> 'anulada'
+          and d.created_at <= (select created_at from deliveries where id = ${deliveryId})
+      ), 0)`,
+    })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId))
+    .orderBy(orderItems.orden);
+
+  return filas
+    .map((f) => {
+      const pedido = Number(f.pedido);
+      const entregado = Number(f.entregado);
+      return {
+        orderItemId: f.orderItemId,
+        descripcion: f.descripcion,
+        unidad: f.unidad,
+        pedido,
+        entregado,
+        pendiente: Math.max(0, pedido - entregado),
+      };
+    })
+    .filter((f) => f.pendiente > 0);
+}

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Banknote } from "lucide-react";
+import { ETIQUETA_CIRCUITO } from "@/lib/db/schema/circuito";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
 import { fechaCorta, moneda, plural } from "@/components/admin/formato";
@@ -99,7 +101,15 @@ export default async function ChequesPage() {
             ))}
           </GrupoListado>
 
-          <GrupoListado titulo="Terminados" cantidad={terminados.length}>
+          <GrupoListado
+            titulo="Terminados"
+            cantidad={terminados.length}
+            vacio={
+              <p className="px-1 text-base text-texto-2">
+                Ninguno acreditado ni rechazado todavía.
+              </p>
+            }
+          >
             {terminados.map((c) => (
               <Tarjeta key={c.id} cheque={c} dias={null} apagado />
             ))}
@@ -152,11 +162,39 @@ function Tarjeta({
             {ESTADOS[c.estado] ?? c.estado}
             {c.tipo === "echeq" && " · e-Cheq"}
           </span>
+          {/* El circuito, porque la cartera tiene que poder contestar "cuánto
+              hay que cubrir esta semana" para cada uno por separado. */}
+          <span className="rounded-full bg-chip px-2.5 py-1 text-sm font-medium text-texto-2">
+            {ETIQUETA_CIRCUITO[c.circuito] ?? c.circuito}
+          </span>
         </div>
+        {/*
+          De quién vino y a quién fue, enlazados.
+
+          La pantalla no tenía un solo enlace, teniendo las dos puntas en la
+          base. El momento en que hace falta es el peor posible: un cheque
+          rebotado y alguien preguntando de qué cliente era.
+        */}
         <p className="mt-1 text-base text-muted-foreground">
-          {[c.banco, c.librador, c.cliente ? `de ${c.cliente}` : null, c.notas]
-            .filter(Boolean)
-            .join(" · ") || "Sin datos del banco"}
+          {[c.banco, c.librador].filter(Boolean).join(" · ") ||
+            "Sin datos del banco"}
+          {c.cliente && (
+            <>
+              {" · de "}
+              {c.customerId ? (
+                <Link
+                  href={`/admin/clientes/${c.customerId}`}
+                  className="hover:text-brand-orange hover:underline"
+                >
+                  {c.cliente}
+                </Link>
+              ) : (
+                c.cliente
+              )}
+            </>
+          )}
+          {c.proveedor && ` · entregado a ${c.proveedor}`}
+          {c.notas && ` · ${c.notas}`}
         </p>
       </div>
 

@@ -123,6 +123,17 @@ export async function crearCorte(
   const cabecera = z
     .object({
       customerId: z.string().uuid().optional(),
+      /*
+       * De qué pedido salió este corte, si salió de uno.
+       *
+       * La columna existía en la tabla desde el principio y **no la escribía
+       * ni la leía nadie**. Sin ella, "el pedido de Gómez está listo menos el
+       * corte" no se puede contestar desde ninguna de las dos puntas: en el
+       * pedido no figura que hay un corte pendiente, y en el corte no figura a
+       * qué pedido pertenece. En una maderera con seccionadora esa es la
+       * pregunta de todos los días.
+       */
+      orderId: z.string().uuid().optional(),
       contactoNombre: z.string().trim().min(2, "Poné para quién es.").max(160),
       branchId: z.string().uuid().optional(),
       variantId: z.string().uuid().optional(),
@@ -138,6 +149,7 @@ export async function crearCorte(
     })
     .safeParse({
       customerId: (formData.get("customerId") as string) || undefined,
+      orderId: (formData.get("orderId") as string) || undefined,
       contactoNombre: formData.get("contactoNombre"),
       branchId: (formData.get("branchId") as string) || undefined,
       variantId: (formData.get("variantId") as string) || undefined,
@@ -176,6 +188,7 @@ export async function crearCorte(
       .values({
         numero,
         customerId: cabecera.data.customerId ?? null,
+        orderId: cabecera.data.orderId ?? null,
         contactoNombre: cabecera.data.contactoNombre,
         branchId: cabecera.data.branchId ?? null,
         variantId: cabecera.data.variantId ?? null,

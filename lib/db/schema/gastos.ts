@@ -11,6 +11,7 @@ import {
 import { user } from "./auth";
 import { branches } from "./inventory";
 import { purchaseInvoices, suppliers } from "./compras";
+import { circuito } from "./circuito";
 
 /**
  * Los gastos del negocio.
@@ -61,6 +62,15 @@ export const expenses = pgTable(
 
     medio: medioGasto().notNull().default("efectivo"),
 
+    /**
+     * Por qué circuito salió. Ver `circuito.ts`.
+     *
+     * Por omisión, "blanco": es la mayoría, y el valor por omisión de una
+     * columna nueva tiene que ser el que deja los datos viejos diciendo la
+     * verdad. Todo lo anotado hasta hoy fue por el circuito habitual.
+     */
+    circuito: circuito().notNull().default("blanco"),
+
     branchId: uuid().references(() => branches.id),
     supplierId: uuid().references(() => suppliers.id, { onDelete: "set null" }),
 
@@ -83,6 +93,7 @@ export const expenses = pgTable(
     index("expenses_fecha_idx").on(t.fecha),
     index("expenses_categoria_idx").on(t.categoria),
     index("expenses_supplier_idx").on(t.supplierId),
+    index("expenses_circuito_idx").on(t.circuito, t.fecha),
   ],
 );
 

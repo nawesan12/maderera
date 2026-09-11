@@ -3,7 +3,6 @@ import {
   ArrowRight,
   ClipboardList,
   Package,
-  Scissors,
   TrendingUp,
   Truck,
   Users,
@@ -20,6 +19,7 @@ import {
   stockParaReponer,
   ventasPorSucursal,
 } from "@/lib/dal/admin/resumen";
+import { trabajoPendiente } from "@/lib/dal/admin/pendientes";
 
 export default async function ResumenPage({
   searchParams,
@@ -28,11 +28,12 @@ export default async function ResumenPage({
 }) {
   const periodo = resolverPeriodo(leerPeriodo((await searchParams).periodo));
 
-  const [metricas, ventas, reponer, actividad] = await Promise.all([
+  const [metricas, ventas, reponer, actividad, pendientes] = await Promise.all([
     metricasDelResumen(periodo),
     ventasPorSucursal(),
     stockParaReponer(5),
     actividadReciente(),
+    trabajoPendiente(),
   ]);
 
   const totalPorMes = ventas.map((m) => m.central + m.aserradero);
@@ -49,6 +50,47 @@ export default async function ResumenPage({
         <FiltroPeriodo actual={periodo.clave} />
       </div>
 
+      {pendientes.length > 0 && (
+        <section className="tarjeta-atencion overflow-hidden">
+          <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pb-3 pt-4">
+            <h2 className="text-lg font-medium">Para hoy</h2>
+            <p className="text-base text-muted-foreground">
+              Lo que está esperando que alguien lo toque
+            </p>
+          </div>
+          <ul className="grid border-t border-linea-suave sm:grid-cols-2 xl:grid-cols-3">
+            {pendientes.map((p) => (
+              <li key={p.clave} className="border-b border-r border-linea-suave">
+                <Link
+                  href={p.href}
+                  className="flex h-full items-center gap-3 px-5 py-3.5 transition-colors hover:bg-muted/40"
+                >
+                  <span
+                    className={`tabular shrink-0 text-[26px] font-semibold leading-none ${
+                      p.urgente ? "text-brand-orange" : "text-texto-2"
+                    }`}
+                  >
+                    {p.cantidad}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base">{p.texto}</span>
+                    {p.detalle && (
+                      <span className="block text-sm text-muted-foreground">
+                        {p.detalle}
+                      </span>
+                    )}
+                  </span>
+                  <ArrowRight
+                    className="h-5 w-5 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <TarjetaIndicador
           etiqueta={`Ventas · ${periodo.etiqueta.toLowerCase()}`}
@@ -64,6 +106,7 @@ export default async function ResumenPage({
           icono={TrendingUp}
           serie={totalPorMes}
           pie="Casa Central y Aserradero sumadas"
+          href="/admin/reportes"
           destacado
         />
         <TarjetaIndicador
@@ -89,6 +132,7 @@ export default async function ResumenPage({
               ? `${metricas.presupuestosRevision} en revisión ahora mismo`
               : "Ninguno en revisión"
           }
+          href="/admin/presupuestos?estado=abiertos"
         />
         <TarjetaIndicador
           etiqueta="Productos a reponer"
@@ -108,6 +152,7 @@ export default async function ResumenPage({
             },
           ]}
           pie={`${metricas.reponerCentral} en Casa Central · ${metricas.reponerAserradero} en Aserradero`}
+          href="/admin/stock"
         />
         <TarjetaIndicador
           etiqueta="Clientes"
@@ -134,6 +179,7 @@ export default async function ResumenPage({
               ? `${plural(metricas.pedidosSinEntregar, "pedido")} sin entregar`
               : "Todos los pedidos entregados"
           }
+          href="/admin/clientes"
         />
       </div>
 
@@ -169,35 +215,28 @@ export default async function ResumenPage({
           ) : (
             <ul className="space-y-1.5">
               {reponer.map((r) => (
-                <li
-                  key={`${r.variantId}-${r.sucursal}`}
-                  className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/50"
-                >
-                  <div className="min-w-0">
-                    <p className="text-base">{r.producto}</p>
-                    <p className="text-sm text-muted-foreground">{r.medida}</p>
-                    <p className="text-sm text-muted-foreground">{r.sucursal}</p>
-                  </div>
-                  <span className="tabular shrink-0 text-base font-medium text-brand-orange">
-                    {r.qty}
-                    <span className="text-muted-foreground">/{r.minQty}</span>
-                  </span>
+                <li key={`${r.variantId}-${r.sucursal}`}>
+                  <Link
+                    href={`/admin/productos/${r.productId}`}
+                    className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-base">{r.producto}</span>
+                      <span className="block text-sm text-muted-foreground">
+                        {r.medida}
+                      </span>
+                      <span className="block text-sm text-muted-foreground">
+                        {r.sucursal}
+                      </span>
+                    </span>
+                    <span className="tabular shrink-0 text-base font-medium text-brand-orange">
+                      {r.qty}
+                      <span className="text-muted-foreground">/{r.minQty}</span>
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>
-          )}
-
-          {actividad.cortesEnCola > 0 && (
-            <Link
-              href="/admin/cortes"
-              className="mt-4 flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-base transition-colors hover:bg-muted/50"
-            >
-              <span className="flex items-center gap-2">
-                <Scissors className="h-5 w-5 text-muted-foreground" />
-                {plural(actividad.cortesEnCola, "corte")} en la cola
-              </span>
-              <ArrowRight className="h-5 w-5 text-muted-foreground" />
-            </Link>
           )}
         </section>
       </div>
@@ -226,6 +265,7 @@ export default async function ResumenPage({
             detalle: `${p.numero} · ${p.tipoEntrega === "envio" ? "Envío" : "Retiro"} · ${haceCuanto(p.createdAt)}`,
             valor: moneda.format(Number(p.total)),
             estado: p.estado,
+            href: `/admin/pedidos/${p.id}`,
             icono: p.tipoEntrega === "envio",
           }))}
         />

@@ -112,13 +112,24 @@
   --chart-4: oklch(0.22 0.01 60);
   --chart-5: oklch(0.78 0.14 50);
   --radius: 0.75rem;
-  --sidebar: oklch(0.98 0.005 80);
-  --sidebar-foreground: oklch(0.15 0.01 60);
+  /* La barra del panel es oscura en los dos temas, como la barra y el pie del
+     sitio (`--oscuro-marca`).
+
+     El motivo es de lectura, no de gusto: la barra es el marco y el contenido
+     es lo que se mira. Cuando los dos son claros, el ojo tiene que buscar el
+     borde para saber dónde empieza cada cosa, y en una pantalla de tabla ancha
+     ese borde queda lejos. Con la barra oscura, la separación no depende de
+     una línea de un píxel.
+
+     Y queda igual en oscuro: una barra que se aclara al cambiar de tema
+     invierte la jerarquía justo cuando el resto se apaga. */
+  --sidebar: oklch(0.185 0.008 60);
+  --sidebar-foreground: oklch(0.93 0.006 80);
   --sidebar-primary: oklch(0.68 0.19 48);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.95 0.01 75);
-  --sidebar-accent-foreground: oklch(0.15 0.01 60);
-  --sidebar-border: oklch(0.90 0.01 75);
+  --sidebar-accent: oklch(0.26 0.012 60);
+  --sidebar-accent-foreground: oklch(0.97 0.005 80);
+  --sidebar-border: oklch(1 0 0 / 11%);
   --sidebar-ring: oklch(0.68 0.19 48);
 
   /* ---- Banda de diseño ---------------------------------------------------
@@ -135,6 +146,19 @@
   --panel-fondo: #f3f2ef;
   --hundida: #efedea;
   --chip: #f4f1eb;
+
+  /* Grano del panel.
+
+     Va como data-URI y no como archivo para que no dependa de una segunda
+     petición: el fondo tiene que estar puesto en el primer pintado o se ve el
+     salto. Es el mismo dibujo en los dos temas y solo cambia la fuerza, porque
+     una superficie oscura se traga el grano que sobre una clara ya se nota.
+
+     Dos niveles, y la diferencia importa: el fondo puede permitirse más grano
+     porque no lleva datos encima; una tarjeta lleva números que hay que
+     comparar en columna, y ahí el grano compite. */
+  --textura-fondo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.1'/%3E%3C/svg%3E");
+  --textura-superficie: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.055'/%3E%3C/svg%3E");
 
   --linea: #dcd9d3;
   --linea-suave: #e8e5e0;
@@ -198,13 +222,15 @@
   --chart-3: oklch(0.45 0.20 28);
   --chart-4: oklch(0.78 0.14 50);
   --chart-5: oklch(0.22 0.01 60);
-  --sidebar: oklch(0.18 0.01 60);
+  /* En oscuro se separa apenas del fondo del panel (0.13) para que el borde
+     siga existiendo sin una línea dura. Ver el comentario del tema claro. */
+  --sidebar: oklch(0.185 0.008 60);
   --sidebar-foreground: oklch(0.96 0.005 80);
   --sidebar-primary: oklch(0.68 0.19 48);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.24 0.01 60);
+  --sidebar-accent: oklch(0.26 0.012 60);
   --sidebar-accent-foreground: oklch(0.96 0.005 80);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-border: oklch(1 0 0 / 11%);
   --sidebar-ring: oklch(0.68 0.19 48);
 
   /* ---- Banda de diseño, en oscuro ----------------------------------------
@@ -220,6 +246,12 @@
   --panel-fondo: oklch(0.13 0.01 60);
   --hundida: oklch(0.155 0.01 60);
   --chip: oklch(0.25 0.01 60);
+
+  /* Más fuerte que en claro: el grano es gris medio, y sobre un fondo casi
+     negro rinde bastante menos que sobre uno casi blanco. Medido a ojo sobre
+     las dos pantallas, no copiado del valor del tema claro. */
+  --textura-fondo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.11'/%3E%3C/svg%3E");
+  --textura-superficie: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.065'/%3E%3C/svg%3E");
 
   --linea: oklch(1 0 0 / 14%);
   --linea-suave: oklch(1 0 0 / 10%);
@@ -453,14 +485,123 @@ input::placeholder, textarea::placeholder {
   --muted-foreground: oklch(0.62 0.01 60);
 }
 
-/* Fondo del panel: plano.
+/* Fondo del panel: con grano.
 
-   Antes llevaba grano, veta y dos degradados radiales para que las tarjetas se
-   apoyaran sobre algo. La banda lo baja a un plano liso porque la textura
-   competía con los datos: la jerarquía la dan las superficies, no el fondo. */
+   Llevó grano, veta y dos degradados radiales; la banda de diseño lo dejó
+   plano porque *esa* textura competía con los datos. El grano vuelve, pero
+   solo el grano: ni veta ni degradados. La diferencia es que un ruido parejo
+   y finito da materia sin dibujar nada, mientras que una veta tiene dirección
+   y una mancha radial tiene centro, y las dos cosas discuten con la
+   distribución de la pantalla.
+
+   `.textura` se aplica también a las superficies. Van todas por la misma clase
+   para que la fuerza se ajuste en un solo lugar: es la clase de valor que se
+   toca tres veces mirando la pantalla, y no conviene tenerlo repetido. */
 .panel-fondo {
   position: relative;
   background-color: var(--panel-fondo);
+  background-image: var(--textura-fondo);
+  /* El tamaño va fijo: un SVG sin `width`/`height` propios se estira al
+     tamaño del elemento, y entonces el grano de una tarjeta chica y el de una
+     pantalla entera no tendrían el mismo grosor. */
+  background-size: 180px 180px;
+  background-repeat: repeat;
+}
+
+/* La textura de las superficies, para lo que no es una de las tarjetas de
+   abajo: el encabezado del panel, la barra lateral, un panel suelto. */
+.textura {
+  background-image: var(--textura-superficie);
+  background-size: 180px 180px;
+  background-repeat: repeat;
+}
+
+/* ---- Barras de scroll ------------------------------------------------------ */
+
+/*
+ * El scroll del panel, discreto.
+ *
+ * La barra que pone el sistema es gris claro, ancha y con flechas: en una
+ * pantalla con textura y superficies apenas separadas, es el elemento de más
+ * contraste de todos, y no dice nada. Queda peor desde que la barra lateral es
+ * oscura, porque ahí aparece una franja clara pegada al borde.
+ *
+ * Se afina y se pinta con los tokens de cada zona. Dos sintaxis y no una:
+ * `scrollbar-width`/`scrollbar-color` es el estándar, `::-webkit-scrollbar` es
+ * lo que entiende Safari, que es el navegador del escritorio de la maderera.
+ *
+ * **No se esconde**: una barra invisible deja sin saber si algo sigue más
+ * abajo, y estas son listas largas de verdad.
+ */
+/* La barra de la ventana entra igual: es la que se ve siempre, y dejarla con
+   el gris del sistema al lado de una barra lateral oscura era justamente lo
+   que se veía mal. */
+html,
+.panel {
+  scrollbar-width: thin;
+  scrollbar-color: var(--barra-scroll) transparent;
+}
+
+:root {
+  --barra-scroll: oklch(0 0 0 / 18%);
+  --barra-scroll-activa: oklch(0 0 0 / 32%);
+}
+
+.dark {
+  --barra-scroll: oklch(1 0 0 / 16%);
+  --barra-scroll-activa: oklch(1 0 0 / 30%);
+}
+
+html::-webkit-scrollbar,
+.panel ::-webkit-scrollbar,
+.panel::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html::-webkit-scrollbar-track,
+.panel ::-webkit-scrollbar-track,
+.panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html::-webkit-scrollbar-thumb,
+.panel ::-webkit-scrollbar-thumb,
+.panel::-webkit-scrollbar-thumb {
+  background-color: var(--barra-scroll);
+  /* El borde transparente deja aire a los costados: sin él la barra toca el
+     contenido y se lee como parte de la tabla. */
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+.panel ::-webkit-scrollbar-thumb:hover,
+.panel::-webkit-scrollbar-thumb:hover {
+  background-color: var(--barra-scroll-activa);
+}
+
+.panel ::-webkit-scrollbar-corner,
+.panel::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* La barra lateral es oscura en los dos temas, así que su scroll también va
+   claro en los dos. Si heredara el del tema, en modo claro sería una franja
+   negra sobre un fondo casi negro: invisible justo donde el menú es largo. */
+aside.textura {
+  scrollbar-color: oklch(1 0 0 / 18%) transparent;
+}
+
+aside.textura ::-webkit-scrollbar-thumb,
+aside.textura *::-webkit-scrollbar-thumb {
+  background-color: oklch(1 0 0 / 18%);
+}
+
+aside.textura ::-webkit-scrollbar-thumb:hover,
+aside.textura *::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(1 0 0 / 34%);
 }
 
 /* ---- Niveles de superficie ------------------------------------------------ */
@@ -468,6 +609,8 @@ input::placeholder, textarea::placeholder {
 /* Nivel 1 — contenido principal. Se levanta del fondo. */
 .tarjeta {
   background-color: var(--card);
+  background-image: var(--textura-superficie);
+  background-size: 180px 180px;
   border-radius: 0.5rem;
   border: 1px solid var(--linea);
   box-shadow: 0 1px 2px rgb(60 50 40 / 0.05);
@@ -482,6 +625,8 @@ input::placeholder, textarea::placeholder {
    gris, no hundido. */
 .tarjeta-hundida {
   background-color: var(--hundida);
+  background-image: var(--textura-superficie);
+  background-size: 180px 180px;
   border-radius: 0.5rem;
   box-shadow: inset 0 2px 5px rgb(60 50 40 / 0.06);
 }
@@ -489,6 +634,8 @@ input::placeholder, textarea::placeholder {
 /* Nivel 2 — pide una decisión. El borde de acento la separa del resto. */
 .tarjeta-atencion {
   background-color: var(--card);
+  background-image: var(--textura-superficie);
+  background-size: 180px 180px;
   border-radius: 0.5rem;
   box-shadow: 0 0 0 1.5px rgb(240 115 22 / 0.45);
 }
@@ -501,7 +648,13 @@ input::placeholder, textarea::placeholder {
 
 /* Encabezado de una tarjeta: separa el título del contenido sin una línea dura. */
 .tarjeta-cabecera {
-  background-image: linear-gradient(to bottom, var(--hundida), transparent);
+  /* Dos capas: el degradado adelante y el grano atrás. `background-size` lleva
+     un valor por capa y en el mismo orden, si no el grano se estira. */
+  background-image: linear-gradient(to bottom, var(--hundida), transparent),
+    var(--textura-superficie);
+  background-size:
+    auto,
+    180px 180px;
   border-bottom: 1px solid var(--linea-suave);
 }
 

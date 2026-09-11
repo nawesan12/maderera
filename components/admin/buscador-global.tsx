@@ -19,6 +19,7 @@ import {
 export function BuscadorGlobal() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const resaltadoRef = useRef<HTMLButtonElement>(null);
   const [texto, setTexto] = useState("");
   const [resultados, setResultados] = useState<ResultadoBusqueda[]>([]);
   /**
@@ -65,6 +66,12 @@ export function BuscadorGlobal() {
     return () => clearTimeout(timer);
   }, [texto]);
 
+  // Con seis grupos de resultados la lista scrollea, y la flecha abajo tiene
+  // que arrastrar la vista o se navega a ciegas.
+  useEffect(() => {
+    resaltadoRef.current?.scrollIntoView({ block: "nearest" });
+  }, [resaltado]);
+
   function ir(resultado: ResultadoBusqueda) {
     setTexto("");
     setCerrado(false);
@@ -103,7 +110,7 @@ export function BuscadorGlobal() {
         // El retardo deja que el clic sobre un resultado llegue antes de que
         // el panel se cierre; sin él, el blur lo desmonta primero.
         onBlur={() => setTimeout(() => setCerrado(true), 150)}
-        placeholder="Buscar cliente, pedido, producto…"
+        placeholder="Buscar cliente, pedido, comprobante, producto…"
         aria-label="Buscar en el panel"
         className="h-10 w-full rounded-lg border border-linea bg-card pl-10 pr-14 text-[15px] outline-none transition-colors placeholder:text-texto-3 focus:border-accion/50"
       />
@@ -123,11 +130,24 @@ export function BuscadorGlobal() {
               Nada coincide con “{texto}”.
             </p>
           ) : (
-            <ul role="listbox">
+            <ul role="listbox" className="max-h-[70vh] overflow-y-auto py-1">
               {resultados.map((resultado, i) => (
-                <li key={resultado.id}>
+                <li key={`${resultado.tipo}-${resultado.id}`}>
+                  {/*
+                    El encabezado aparece cuando cambia el tipo. Los resultados
+                    ya vienen agrupados del servidor, así que alcanza con mirar
+                    el anterior: agrupar de nuevo acá sería repetir un orden que
+                    ya está decidido, y que además decide el servidor porque
+                    depende de qué secciones ve este rol.
+                  */}
+                  {resultados[i - 1]?.tipo !== resultado.tipo && (
+                    <p className="px-3 pb-1 pt-2.5 text-[12px] font-semibold uppercase tracking-[0.07em] text-texto-3">
+                      {resultado.tipo}
+                    </p>
+                  )}
                   <button
                     type="button"
+                    ref={i === resaltado ? resaltadoRef : undefined}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => ir(resultado)}
                     onMouseEnter={() => setResaltado(i)}
@@ -136,9 +156,11 @@ export function BuscadorGlobal() {
                     }`}
                   >
                     <span className="text-base font-medium">{resultado.titulo}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {resultado.detalle}
-                    </span>
+                    {resultado.detalle && (
+                      <span className="text-sm text-muted-foreground">
+                        {resultado.detalle}
+                      </span>
+                    )}
                   </button>
                 </li>
               ))}

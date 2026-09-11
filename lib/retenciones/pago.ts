@@ -42,6 +42,8 @@ export interface EntradaDePago {
   medio: string;
   referencia?: string | null;
   notas?: string | null;
+  /** Por qué circuito de facturación sale. Ver `lib/db/schema/circuito.ts`. */
+  circuito?: "blanco" | "negro";
   fecha?: Date;
   retenciones: RetencionAAplicar[];
   /**
@@ -120,6 +122,7 @@ export async function registrarPagoAProveedor(
         medio: entrada.medio,
         referencia: entrada.referencia ?? null,
         notas: entrada.notas ?? null,
+        circuito: entrada.circuito ?? "blanco",
         createdByUserId: entrada.usuarioId,
       })
       .returning({ id: supplierPayments.id });
@@ -322,6 +325,9 @@ export async function registrarPagoAProveedor(
               fechaPago: parte.cheque.fechaPago,
               importe: parte.importe.toFixed(2),
               estado: "entregado",
+              // El cheque hereda el circuito del pago: sale con esa plata y
+              // por esa vía, así que no es una decisión aparte.
+              circuito: entrada.circuito ?? "blanco",
               notas: `Pago a ${proveedor.nombre}`,
               createdByUserId: entrada.usuarioId,
             })

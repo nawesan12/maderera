@@ -1,9 +1,10 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
-import { Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { usePathname } from "next/navigation";
+import {
+  CampoDeBusqueda,
+  useFiltrosDeLista,
+} from "@/components/admin/filtros-de-lista";
 import {
   Select,
   SelectContent,
@@ -12,6 +13,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+/**
+ * El filtro de la lista de productos, que también usan Stock y Precios.
+ *
+ * **La ruta sale de `usePathname` y no está escrita acá.** Estaba fija en
+ * `/admin/productos`, así que filtrar por categoría estando en Stock o en
+ * Precios te sacaba de la pantalla: escribías dos letras para acotar la
+ * comparación y aparecías en otra lista, sin ninguna pista de por qué.
+ */
 export function BuscadorProductos({
   categorias,
   busquedaActual,
@@ -21,44 +30,20 @@ export function BuscadorProductos({
   busquedaActual: string;
   categoriaActual: string;
 }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [, startTransition] = useTransition();
-  const [texto, setTexto] = useState(busquedaActual);
-
-  function actualizar(cambios: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    for (const [k, v] of Object.entries(cambios)) {
-      if (!v || v === "todos") params.delete(k);
-      else params.set(k, v);
-    }
-    startTransition(() =>
-      router.replace(
-        params.size > 0 ? `/admin/productos?${params}` : "/admin/productos",
-        { scroll: false },
-      ),
-    );
-  }
-
-  useEffect(() => {
-    if (texto === busquedaActual) return;
-    const timer = setTimeout(() => actualizar({ buscar: texto }), 350);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [texto]);
+  const ruta = usePathname();
+  const { texto, setTexto, actualizar } = useFiltrosDeLista({
+    ruta,
+    busquedaActual,
+  });
 
   return (
-    <div className="flex gap-3">
-      <div className="relative flex-1">
-        <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={texto}
-          onChange={(e) => setTexto(e.target.value)}
-          placeholder="Filtrar esta lista…"
-          className="h-11 pl-11"
-          aria-label="Filtrar la lista"
-        />
-      </div>
+    <div className="flex flex-wrap gap-3">
+      <CampoDeBusqueda
+        valor={texto}
+        alEscribir={setTexto}
+        placeholder="Filtrar esta lista…"
+        etiqueta="Filtrar la lista"
+      />
       <Select
         value={categoriaActual}
         onValueChange={(v) => v && actualizar({ cat: v })}

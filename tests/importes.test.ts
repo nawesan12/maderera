@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsearImporte } from "@/lib/formato";
+import { importeParaEditar, parsearImporte } from "@/lib/formato";
 
 /**
  * El defecto que ya ocurrió: el parseo quitaba todos los puntos asumiendo
@@ -47,5 +47,36 @@ describe("parsearImporte", () => {
     expect(parsearImporte("")).toBeNaN();
     expect(parsearImporte("   ")).toBeNaN();
     expect(parsearImporte("mil pesos")).toBeNaN();
+  });
+});
+
+/**
+ * El importe que entra en un campo editable.
+ *
+ * Se prueba porque el defecto era visible y silencioso a la vez: el costo de
+ * una orden de compra aparecía como `44992.5600` —cuatro decimales, que es
+ * como guarda la base el costo promedio— y hay que leerlo dos veces para saber
+ * si dice cuarenta y cuatro mil o cuatro millones.
+ */
+describe("importeParaEditar", () => {
+  it("recorta a dos decimales", () => {
+    expect(importeParaEditar("44992.5600")).toBe("44992.56");
+    expect(importeParaEditar("35613.2249")).toBe("35613.22");
+  });
+
+  it("saca los ceros que no dicen nada", () => {
+    expect(importeParaEditar("19200.0000")).toBe("19200");
+    expect(importeParaEditar("19200.5000")).toBe("19200.5");
+  });
+
+  it("deja el campo vacío cuando no hay costo", () => {
+    expect(importeParaEditar(null)).toBe("");
+    expect(importeParaEditar("")).toBe("");
+    expect(importeParaEditar("no es un número")).toBe("");
+  });
+
+  it("acepta números además de texto", () => {
+    expect(importeParaEditar(1234.567)).toBe("1234.57");
+    expect(importeParaEditar(0)).toBe("0");
   });
 });

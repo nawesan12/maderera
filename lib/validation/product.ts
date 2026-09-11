@@ -90,6 +90,11 @@ export const productoSchema = z.object({
   alicuotaIva: z.enum(["21", "10.5", "0"]).default("21"),
   /** Recargo por elaboración sobre el costo, en %. Vacío: no se elabora. */
   recargoElaboracionPct: z.coerce.number().min(0).max(500).optional(),
+  /**
+   * A qué cuenta contable imputa. Texto libre hasta que llegue el plan de
+   * cuentas del contador; ver el comentario del schema.
+   */
+  imputacion: z.string().trim().max(80).optional(),
   featured: z.boolean().default(false),
   aPedido: z.boolean().default(false),
   active: z.boolean().default(true),

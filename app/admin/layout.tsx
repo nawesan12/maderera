@@ -116,7 +116,7 @@ export default async function AdminLayout({
           el documento entero se estira. Con el menú lateral fijo y la barra
           superior pegajosa, eso se ve como que el panel se desarma. */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-[60px] items-center gap-4 border-b border-linea bg-background/90 px-4 backdrop-blur-lg lg:px-7">
+        <header className="textura sticky top-0 z-30 flex h-[60px] items-center gap-4 border-b border-linea bg-background/90 px-4 backdrop-blur-lg lg:px-7">
           <div className="flex max-w-[420px] flex-1 items-center gap-3 pl-12 lg:pl-0">
             <BuscadorGlobal />
           </div>

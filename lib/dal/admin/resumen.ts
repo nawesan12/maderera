@@ -193,6 +193,9 @@ export async function stockParaReponer(limite = 5) {
   return db
     .select({
       variantId: productVariants.id,
+      // Para poder abrir la ficha desde el resumen: ver que falta un MDF de
+      // 18 y tener que ir a buscarlo a mano al listado es el paso que sobra.
+      productId: products.id,
       producto: products.name,
       medida: productVariants.label,
       sucursal: branches.name,

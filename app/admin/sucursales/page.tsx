@@ -25,13 +25,22 @@ export const metadata: Metadata = { title: "Sucursales" };
 /**
  * Sucursales: la ficha que ve el público y los números del día.
  *
- * Era la última pantalla de maqueta del panel. Mostraba métricas inventadas y,
- * peor, la dirección y el teléfono escritos en el código: el mismo dato que ya
- * vivía en `branches` y alimentaba el sitio. Ahora la ficha se edita acá y el
- * sitio público la refleja al guardar.
+ * Era la última pantalla de maqueta del panel: mostraba métricas inventadas.
+ * Ahora los números salen de la base.
+ *
+ * **La ficha publicada no se edita acá y no es un olvido.** Dirección, teléfono
+ * y horario viven en `lib/sucursales.ts`, como constantes: son dos locales de
+ * siempre y su domicilio no es un dato operativo. El comentario que decía que
+ * se editaban desde esta pantalla quedó de una versión anterior y era falso
+ * —no hay ni hubo formulario—; el razonamiento está escrito en ese archivo.
  *
  * Los números son del día, no del mes: esta pantalla se abre para saber cómo
  * viene la jornada en cada local. El acumulado del mes está en el resumen.
+ *
+ * **Cada número lleva a donde se resuelve.** Mostraba seis métricas por
+ * sucursal —incluidos "cortes en cola" y "para reponer", que son trabajo
+ * pendiente— y ninguna era clickeable: había que leer el número, ir al menú y
+ * volver a filtrar por sucursal a mano.
  */
 export default async function AdminSucursalesPage() {
   const [sucursales, sueltos] = await Promise.all([
@@ -87,6 +96,7 @@ function TarjetaSucursal({ sucursal }: { sucursal: SucursalConMetricas }) {
       icono: DollarSign,
       etiqueta: "Vendido hoy",
       valor: formatearMonto(sucursal.ventasHoy),
+      href: `/admin/pedidos?sucursal=${sucursal.slug}`,
     },
     {
       icono: Truck,
@@ -96,28 +106,33 @@ function TarjetaSucursal({ sucursal }: { sucursal: SucursalConMetricas }) {
         sucursal.pedidosAbiertos > 0
           ? `${sucursal.pedidosAbiertos} sin entregar`
           : undefined,
+      href: `/admin/pedidos?sucursal=${sucursal.slug}`,
     },
     {
       icono: Scissors,
       etiqueta: "Cortes en cola",
       valor: String(sucursal.cortesEnCola),
       atencion: sucursal.cortesEnCola > 0,
+      href: "/admin/cortes",
     },
     {
       icono: Users,
       etiqueta: "Clientes atendidos",
       valor: String(sucursal.clientesAtendidos),
+      href: "/admin/clientes",
     },
     {
       icono: Package,
       etiqueta: "Stock valorizado",
       valor: formatearMonto(sucursal.stockValor),
+      href: "/admin/stock",
     },
     {
       icono: PackageX,
       etiqueta: "Para reponer",
       valor: String(sucursal.productosStockBajo),
       atencion: sucursal.productosStockBajo > 0,
+      href: `/admin/reportes/reposicion?sucursal=${sucursal.slug}`,
     },
   ];
 
@@ -163,32 +178,31 @@ function TarjetaSucursal({ sucursal }: { sucursal: SucursalConMetricas }) {
 
       <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-3">
         {metricas.map((m) => (
-          <div key={m.etiqueta} className="bg-card p-4">
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <m.icono className="h-4 w-4" />
-              <p className="text-sm">{m.etiqueta}</p>
-            </div>
-            <p
-              className={`tabular mt-1.5 text-xl font-semibold ${
+          <Link
+            key={m.etiqueta}
+            href={m.href}
+            className="bg-card p-4 transition-colors hover:bg-hundida"
+          >
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <m.icono className="h-4 w-4" aria-hidden="true" />
+              <span className="text-sm">{m.etiqueta}</span>
+            </span>
+            <span
+              className={`tabular mt-1.5 block text-xl font-semibold ${
                 m.atencion ? "text-brand-orange" : ""
               }`}
             >
               {m.valor}
-            </p>
+            </span>
             {m.pie && (
-              <p className="mt-0.5 text-sm text-muted-foreground">{m.pie}</p>
+              <span className="mt-0.5 block text-sm text-muted-foreground">
+                {m.pie}
+              </span>
             )}
-          </div>
+          </Link>
         ))}
       </div>
 
-      {/*
-        La ficha publicada ya no se edita desde acá.
-        Dirección, teléfono, horario y servicios viven en `lib/sucursales.ts`:
-        son dos locales de siempre y su domicilio no es un dato operativo.
-        Esta pantalla quedó para lo que sí cambia todos los días, que son los
-        números de la jornada.
-      */}
     </article>
   );
 }

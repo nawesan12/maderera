@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { ArrowLeft, PackageX } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { candidatosDeBaja, UMBRALES_DE_BAJA } from "@/lib/dal/admin/products";
+import { candidatosDeBaja } from "@/lib/dal/admin/products";
+import { mesesSinVenderParaBaja } from "@/lib/dal/admin/parametros-catalogo";
 import { AlternarBaja } from "./alternar";
+import { UmbralDeBaja } from "./umbral";
 
 export const metadata = { title: "Candidatos a dar de baja" };
 
@@ -15,11 +17,14 @@ export const metadata = { title: "Candidatos a dar de baja" };
  * desaparecería del catálogo sin que nadie se entere, y eso se descubre cuando
  * un cliente pregunta por algo que ya no está.
  *
- * Los umbrales están en `UMBRALES_DE_BAJA`. Cuando la clienta diga con qué
- * números trabaja, es cambiar esa constante o traerla a una pantalla.
+ * **El umbral se edita acá arriba.** Era una constante del código, así que
+ * pasar de doce meses a dieciocho pedía un despliegue: eso no es un parámetro.
+ * Ahora se guarda en `site_settings` y queda anotado en la bitácora, porque
+ * cambia lo que ve todo el equipo en esta pantalla.
  */
 export default async function CandidatosPage() {
-  const candidatos = await candidatosDeBaja();
+  const meses = await mesesSinVenderParaBaja();
+  const candidatos = await candidatosDeBaja({ mesesSinVender: meses });
 
   return (
     <div className="space-y-6">
@@ -33,8 +38,10 @@ export default async function CandidatosPage() {
 
       <EncabezadoPanel
         titulo="Candidatos a dar de baja"
-        detalle={`Sin ventas hace más de ${UMBRALES_DE_BAJA.mesesSinVender} meses, sin stock, o sin precio cargado. Nada se da de baja solo.`}
-      />
+        detalle="Sin ventas en el período de abajo, sin stock, o sin precio cargado. Nada se da de baja solo."
+      >
+        <UmbralDeBaja meses={meses} />
+      </EncabezadoPanel>
 
       {candidatos.length === 0 ? (
         <section className="tarjeta px-5 py-10 text-center">

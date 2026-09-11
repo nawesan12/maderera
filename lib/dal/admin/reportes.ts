@@ -376,11 +376,68 @@ export {
 } from "@/lib/reportes-cortes";
 
 /** El reporte pedido, sin que la pantalla tenga que saber cuál es cuál. */
+/**
+ * Lo que se maquina contra lo que se vende en bruto.
+ *
+ * Es la segunda mitad del pedido de la clienta: *"de cada rubro cuánta
+ * utilidad hay, **qué porcentaje dejan las materias que se maquinan**"*. El
+ * corte por rubro contestaba la primera; esta contesta la que decide si
+ * conviene seguir cepillando y cortando en planta o vender la madera como
+ * viene.
+ *
+ * **Elaborado es el producto con `recargoElaboracionPct` cargado**, que es el
+ * mismo dato con el que el ajuste masivo de precios calcula el "costo con
+ * elaboración". Usar ese y no una marca aparte es lo que evita que las dos
+ * pantallas digan cosas distintas del mismo producto.
+ *
+ * Solo dos filas, y está bien: la pregunta es una comparación, no un ranking.
+ * El margen de cada lado sale de la misma cuenta que el resto del reporte, así
+ * que los dos porcentajes se leen contra los de cualquier otro corte.
+ */
+export async function ventasPorElaboracion(
+  periodo: Periodo,
+): Promise<FilaDeReporte[]> {
+  await requireStaff();
+
+  const elaborado = sql`coalesce(${products.recargoElaboracionPct}, 0) > 0`;
+
+  const filas = await db
+    .select({
+      clave: sql<string>`case when ${elaborado} then 'elaborado' else 'bruto' end`,
+      etiqueta: sql<string>`case when ${elaborado} then 'Se maquina en planta' else 'Se vende como viene' end`,
+      detalle: sql<string | null>`count(distinct ${products.id})::text`,
+      cantidad: sql<string>`sum(${orderItems.cantidad})`,
+      total: sql<string>`sum(${orderItems.subtotal})`,
+      netoVenta: sql<string>`sum(${orderItems.subtotal} / (1 + coalesce(${orderItems.alicuotaIva}, 21) / 100))`,
+      costo: sql<
+        string | null
+      >`sum(${orderItems.cantidad} * ${orderItems.costoUnitario}) filter (where ${orderItems.costoUnitario} is not null)`,
+      lineasSinCosto: sql<number>`count(*) filter (where ${orderItems.costoUnitario} is null)::int`,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orders.id, orderItems.orderId))
+    .innerJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+    .innerJoin(products, eq(products.id, productVariants.productId))
+    .where(enElPeriodo(periodo))
+    .groupBy(sql`1`, sql`2`)
+    .orderBy(desc(sql`sum(${orderItems.subtotal})`));
+
+  return filas.map((f) => ({
+    clave: f.clave,
+    etiqueta: f.etiqueta,
+    detalle: f.detalle ? plural(Number(f.detalle), "producto") : null,
+    cantidad: Number(f.cantidad),
+    total: Number(f.total),
+    ...leerMargen(f),
+  }));
+}
+
 export async function reporteDeVentas(
   corte: CorteDelReporte,
   periodo: Periodo,
 ): Promise<FilaDeReporte[]> {
   if (corte === "rubro") return ventasPorCategoria(periodo);
+  if (corte === "elaboracion") return ventasPorElaboracion(periodo);
   if (corte === "cliente") return ventasPorCliente(periodo);
   if (corte === "vendedor") return ventasPorVendedor(periodo);
   if (corte === "sucursal") return ventasPorSucursal(periodo);

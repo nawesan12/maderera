@@ -273,6 +273,23 @@ export default async function FichaCortePage({
             </section>
           )}
 
+          {/* De qué venta salió. Sin esto, quien está parado frente a la
+              seccionadora no puede saber si el pedido ya se cobró ni qué más
+              lleva el cliente en el mismo viaje. */}
+          {corte.orderId && (
+            <section className="tarjeta p-5">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Del pedido
+              </h2>
+              <Link
+                href={`/admin/pedidos/${corte.orderId}`}
+                className="tabular text-base font-medium hover:text-brand-orange"
+              >
+                {corte.pedidoNumero}
+              </Link>
+            </section>
+          )}
+
           <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
             Las medidas están en milímetros y listas para exportar al optimizador
             cuando se conecte la máquina.

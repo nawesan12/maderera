@@ -3,6 +3,7 @@ import { enlaceWhatsapp, numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import {
   ArrowRight,
+  Calculator,
   ClipboardList,
   Clock,
   MapPin,
@@ -552,6 +553,22 @@ function Herramientas() {
       href: "/stock",
       cta: "Ver stock",
     },
+    /*
+     * La calculadora vuelve a tener puerta de entrada.
+     *
+     * Salió del menú principal a pedido de la clienta y por arrastre quedó
+     * fuera de todo el sitio: existía, calculaba bien y no se llegaba a ella
+     * desde ningún lado. Acá no contradice ese pedido —el menú sigue sin
+     * tenerla— y deja de ser una herramienta que nadie puede encontrar.
+     */
+    {
+      icono: Calculator,
+      titulo: "Calculadora de materiales",
+      texto:
+        "Cuántas chapas, placas, tablas o metros necesitás, a partir de las medidas.",
+      href: "/calculadora",
+      cta: "Calcular materiales",
+    },
   ];
 
   return (
@@ -559,7 +576,7 @@ function Herramientas() {
       <div className="contenedor">
         <TituloSeccion>Herramientas</TituloSeccion>
 
-        <div className="mt-7 grid gap-[18px] md:grid-cols-3">
+        <div className="mt-7 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
           {herramientas.map((h) => (
             <article
               key={h.titulo}

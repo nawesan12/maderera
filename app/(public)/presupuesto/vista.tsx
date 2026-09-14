@@ -74,14 +74,14 @@ export function VistaPresupuesto({
               <h2 className="mb-2 text-xl font-bold">
                 Tu presupuesto está vacío
               </h2>
-              {/* No nombra la calculadora. Existe y calcula bien, pero hoy
-                  no se llega a ella desde ningún lado del sitio —salió del
-                  menú a pedido de la clienta—, así que mencionarla acá le
-                  prometía a alguien una herramienta que después no iba a
-                  poder encontrar. Cuando vuelva a enlazarse, vuelve la frase. */}
               <p className="mb-6 text-muted-foreground">
                 Agregá los productos que necesites del catálogo y te pasamos el
-                precio y la disponibilidad.
+                precio y la disponibilidad. Si no sabés cuánto material lleva,
+                la{" "}
+                <Link href="/calculadora" className="font-medium underline underline-offset-2">
+                  calculadora
+                </Link>{" "}
+                lo estima con las medidas y deja todo acá.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Button

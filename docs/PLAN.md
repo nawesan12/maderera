@@ -588,19 +588,24 @@ código de migración, probado de punta a punta) y 1.10 en su parte escrita.
 | 1 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Acceso al dominio |
 | 2 | **Capacitación presencial.** Las guías escritas ya están; falta la sesión con la gente. | 1.10 | Fecha con el cliente |
 | 3 | **Soporte post-lanzamiento**: un mes. | 1.11 | Arranca al lanzar |
-| 4 | **La calculadora no se alcanza desde ningún lado.** Ver abajo. | 1.1 y 1.4 | Decisión de la clienta |
 
-**El punto 4 es el único que conviene mirar con atención.** La cláusula 1.1
-lista «Calculadora» entre las páginas a diseñar y la 1.4 la nombra primera entre
-las herramientas digitales, con sus cuatro módulos. Está construida, anda, y
-sugiere los productos que pueden faltar. Pero **no la enlaza nada**: salió del
-menú a pedido de la clienta, y por arrastre quedó también fuera de la sección
-«Herramientas» de la portada, del pie y del mapa del sitio. Se llega solo si el
-asistente la sugiere.
+Los tres dependen del cliente: no queda trabajo de construcción pendiente.
 
-No es un incumplimiento —la página existe y funciona, y salió del menú porque lo
-pidieron— pero es un entregable del contrato que hoy nadie puede encontrar, y
-eso conviene resolverlo por escrito antes del cierre y no después.
+**La calculadora ya se alcanza** (14/9/2026). Era el cuarto punto de este
+cuadro: la cláusula 1.1 la lista entre las páginas a diseñar y la 1.4 la nombra
+primera entre las herramientas digitales, estaba construida y andando, y **no la
+enlazaba nada**. Salió del menú a pedido de la clienta y por arrastre quedó
+también fuera de la portada, del pie y del mapa del sitio; se llegaba solo si el
+asistente la sugería.
+
+Ahora entra como cuarta tarjeta de «Herramientas» en la portada, está en la
+columna de navegación del pie, en el mapa del sitio, y el presupuesto vacío
+vuelve a nombrarla. **El menú principal sigue sin tenerla**, que es lo que la
+clienta pidió. Además se le sacó el `noindex`: estaba puesto justamente porque
+no había puerta de entrada —una página sin enlaces que igual aparece en el
+buscador es peor que no tenerla—, y ahora la hay. Es la página que busca quien
+todavía no conoce la maderera: «cuántas placas necesito» se escribe en el
+buscador.
 
 **Dos ítems del contrato salieron a pedido de la clienta** y conviene que la
 baja quede confirmada por escrito, con la disciplina de 8.4 / 8.5:

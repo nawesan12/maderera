@@ -26,6 +26,9 @@ const FIJAS: { ruta: string; prioridad: number; frecuencia: MetadataRoute.Sitema
   { ruta: "/", prioridad: 1, frecuencia: "weekly" },
   { ruta: "/catalogo", prioridad: 0.9, frecuencia: "daily" },
   { ruta: "/stock", prioridad: 0.8, frecuencia: "daily" },
+  // La busca gente que todavía no conoce la maderera: "cuántas placas
+  // necesito" se escribe en el buscador, no en el catálogo.
+  { ruta: "/calculadora", prioridad: 0.7, frecuencia: "monthly" },
   // La línea propia: es la página por la que llega un mayorista de la
   // provincia que busca molduras finger joint, no la maderera de al lado.
   { ruta: "/moldava", prioridad: 0.8, frecuencia: "monthly" },

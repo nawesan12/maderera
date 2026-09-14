@@ -12,6 +12,7 @@ export interface PromoEditable {
   titulo: string;
   detalle: string;
   dias: string;
+  quienPaga: "banco" | "nosotros";
   /** "2026-10-22", como lo espera el input de fecha. Vacía es sin vencimiento. */
   vigenciaHasta: string;
   orden: number;
@@ -63,6 +64,58 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
           Condiciones, topes, qué tarjetas entran. Sale tal cual en el sitio.
         </p>
       </div>
+
+      {/* Quién pone la plata.
+          Es el campo que evita que alguien descuente en el mostrador un
+          reintegro que iba a pagar el banco. Va con las dos opciones escritas
+          enteras, sin valor por defecto elegido de antemano: hay que decidirlo. */}
+      <fieldset className="rounded-lg border border-linea p-4">
+        <legend className="px-1.5 text-base font-medium">
+          ¿Quién pone el descuento?
+        </legend>
+        <div className="mt-1 space-y-2">
+          <label className="flex items-start gap-2.5 text-base">
+            <input
+              type="radio"
+              name="quienPaga"
+              value="banco"
+              defaultChecked={(promo?.quienPaga ?? "banco") === "banco"}
+              className="mt-1 h-5 w-5"
+            />
+            <span>
+              <span className="font-medium">El banco o la tarjeta.</span>{" "}
+              <span className="text-muted-foreground">
+                El cliente paga el total y el banco se lo devuelve. Es lo normal
+                en reintegros y cuotas sin interés.{" "}
+                <strong>En el mostrador no se descuenta.</strong>
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2.5 text-base">
+            <input
+              type="radio"
+              name="quienPaga"
+              value="nosotros"
+              defaultChecked={promo?.quienPaga === "nosotros"}
+              className="mt-1 h-5 w-5"
+            />
+            <span>
+              <span className="font-medium">La maderera.</span>{" "}
+              <span className="text-muted-foreground">
+                Sale de nuestro bolsillo. Para que además se descuente solo al
+                cobrar, hay que cargar el porcentaje en{" "}
+                <a
+                  href="/admin/precios/formas-de-pago"
+                  className="underline underline-offset-2"
+                >
+                  Precios → Formas de pago
+                </a>
+                , que es la única pantalla que mueve precios.
+              </span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Campo

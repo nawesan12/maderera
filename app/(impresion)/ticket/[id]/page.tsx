@@ -84,6 +84,7 @@ export default async function TicketPage({
       tarjeta: p.tarjeta,
       nroLote: p.nroLote,
       nroCupon: p.nroCupon,
+      cuotas: p.cuotas,
     })),
     enCuentaCorriente:
       pedido.estadoPago === "pendiente" || pedido.estadoPago === "parcial",

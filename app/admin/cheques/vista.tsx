@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useId, useState, useTransition } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { AlertTriangle, Loader2, Plus } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Confirmar } from "@/components/admin/confirmar";
 import {
   cambiarEstadoDeCheque,
   cargarCheque,
@@ -17,12 +19,17 @@ import {
 
 const inicial: EstadoCheque = {};
 
-/** Qué botones ofrece cada estado. El resto de transiciones no existen. */
+/**
+ * Qué botones ofrece cada estado. El resto de transiciones no existen.
+ *
+ * `anular` viaja aparte porque no es una operación más: no tiene vuelta —un
+ * cheque anulado se queda sin botones para siempre— y estaba pegada a
+ * "Depositar" con seis píxeles de por medio, en una pantalla que maneja plata.
+ */
 const ACCIONES: Record<string, { a: string; texto: string }[]> = {
   cartera: [
     { a: "depositado", texto: "Depositar" },
     { a: "rechazado", texto: "Rechazado" },
-    { a: "anulado", texto: "Anular" },
   ],
   depositado: [
     { a: "acreditado", texto: "Se acreditó" },
@@ -34,51 +41,105 @@ const ACCIONES: Record<string, { a: string; texto: string }[]> = {
   ],
 };
 
+/** Desde qué estados se puede anular. Lo dice `TRANSICIONES` en `actions.ts`. */
+const SE_PUEDE_ANULAR = ["cartera"];
+
 export function AccionesDeCheque({
   id,
   estado,
   sentido,
+  numero,
+  importe,
 }: {
   id: string;
   estado: string;
   sentido: string;
+  numero: string;
+  importe: number;
 }) {
   const [pendiente, empezar] = useTransition();
   const [aviso, setAviso] = useState<string | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
 
   const acciones = (ACCIONES[estado] ?? []).filter(
-    // Un recibido en cartera no se "anula" con un botón al lado de depositar
-    // sin más contexto; y depositar solo tiene sentido para los recibidos.
+    // Depositar solo tiene sentido para los recibidos: un cheque propio ya
+    // entregado lo deposita el proveedor, no nosotros.
     (a) => !(sentido === "entregado" && a.a === "depositado"),
   );
+  const puedeAnular = SE_PUEDE_ANULAR.includes(estado);
 
-  if (acciones.length === 0) return null;
+  if (acciones.length === 0 && !puedeAnular) return null;
+
+  function cambiar(a: string) {
+    empezar(async () => {
+      const r = await cambiarEstadoDeCheque(id, a);
+      setConfirmando(false);
+      if (r.error) {
+        setAviso(r.error);
+        return;
+      }
+      // El éxito va por aviso global: un cheque que se acredita o se anula se
+      // muda a "Terminados", el componente se vuelve a montar y un mensaje
+      // propio desaparece antes de que nadie lo lea. El error sí queda acá,
+      // porque en ese caso la fila no se mueve.
+      if (r.ok) toast.success(r.ok);
+    });
+  }
 
   return (
     <div className="flex flex-col items-end gap-1.5">
-      <div className="flex gap-1.5">
+      <div className="flex items-center gap-2">
         {acciones.map((accion) => (
           <button
             key={accion.a}
             type="button"
             disabled={pendiente}
-            onClick={() =>
-              empezar(async () => {
-                const r = await cambiarEstadoDeCheque(id, accion.a);
-                setAviso(r.error ?? r.ok ?? null);
-              })
-            }
-            className="h-9 rounded-lg border px-3 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
+            onClick={() => cambiar(accion.a)}
+            className="h-11 rounded-lg border border-linea px-3.5 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50"
           >
             {accion.texto}
           </button>
         ))}
+
+        {puedeAnular && (
+          <>
+            {acciones.length > 0 && (
+              <span aria-hidden="true" className="h-7 w-px bg-linea" />
+            )}
+            <button
+              type="button"
+              disabled={pendiente}
+              onClick={() => setConfirmando(true)}
+              className="h-11 rounded-lg px-3.5 text-base font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            >
+              Anular
+            </button>
+          </>
+        )}
       </div>
+
       {aviso && (
-        <p className="max-w-64 text-right text-sm text-muted-foreground">
-          {aviso}
+        <p className="estado-problema flex max-w-72 items-start gap-1.5 text-right text-base font-medium">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{aviso}</span>
         </p>
       )}
+
+      <Confirmar
+        abierto={confirmando}
+        alCerrar={() => setConfirmando(false)}
+        titulo={`Anular el cheque ${numero}`}
+        detalle={`Son ${importe.toLocaleString("es-AR", {
+          style: "currency",
+          currency: "ARS",
+          maximumFractionDigits: 0,
+        })}. Un cheque anulado no vuelve a la cartera ni se puede depositar después: queda así para siempre.`}
+        confirmar="Sí, anularlo"
+        cancelar="No, dejarlo como está"
+        peligro
+        pendiente={pendiente}
+        alConfirmar={() => cambiar("anulado")}
+      />
     </div>
   );
 }

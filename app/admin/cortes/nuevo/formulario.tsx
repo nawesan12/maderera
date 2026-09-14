@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, Search, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +10,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { crearCorte } from "../actions";
 import { buscarClientes, buscarEnMostrador } from "@/app/mostrador/actions";
+import { MEDIDAS_DE_PLACA } from "@/lib/calculations";
+import {
+  calcularPlanoDeCorte,
+  type PiezaFijada,
+} from "@/lib/cortes/plano";
+import { PlanoEnVivo } from "@/components/cortes/plano-en-vivo";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 
 interface Pieza {
@@ -68,9 +74,19 @@ export function FormularioCorte({
     desdePedido?.cliente ?? null,
   );
   const [nombre, setNombre] = useState(desdePedido?.contactoNombre ?? "");
-  const [placa, setPlaca] = useState<{ variantId: string; descripcion: string } | null>(null);
+  const [placa, setPlaca] = useState<{
+    variantId: string;
+    descripcion: string;
+    largoMm: number | null;
+    anchoMm: number | null;
+  } | null>(null);
   const [material, setMaterial] = useState("");
   const [piezas, setPiezas] = useState<Pieza[]>([piezaVacia()]);
+  const [placas, setPlacas] = useState(1);
+  /** Las piezas que alguien mandó a mano a una placa. */
+  const [fijadas, setFijadas] = useState<PiezaFijada[]>([]);
+  /** Si alguien lo pisó a mano, el plano deja de moverlo solo. */
+  const [placasTocado, setPlacasTocado] = useState(false);
 
   const validas = piezas.filter((p) => p.largoMm > 0 && p.anchoMm > 0 && p.cantidad > 0);
   const totalPiezas = validas.reduce((s, p) => s + p.cantidad, 0);
@@ -83,6 +99,63 @@ export function FormularioCorte({
   // Los metros de tapacanto, con la misma cuenta que la ficha y la planilla
   // del taller. Verlos mientras se carga es lo que atrapa el canto olvidado.
   const metrosCanto = metrosDeTapacanto(validas);
+
+  /*
+   * La medida de la placa sobre la que se acomoda.
+   *
+   * Sale de la variante del catálogo. Cuando todavía no se eligió ninguna —o
+   * cuando la que se eligió no tiene las medidas cargadas— se usa la de plaza
+   * más común y **se avisa en pantalla**: un plano hecho sobre una medida
+   * supuesta no sirve para cobrar.
+   */
+  const medidaPlaca =
+    placa?.largoMm && placa?.anchoMm
+      ? { largo: placa.largoMm, ancho: placa.anchoMm, supuesta: false }
+      : {
+          largo: MEDIDAS_DE_PLACA[0].largo,
+          ancho: MEDIDAS_DE_PLACA[0].ancho,
+          supuesta: true,
+        };
+
+  const paraElPlano = useMemo(
+    () =>
+      validas.map((p) => ({
+        largoMm: p.largoMm,
+        anchoMm: p.anchoMm,
+        cantidad: p.cantidad,
+        respetaVeta: p.respetaVeta ? 1 : 0,
+        etiqueta: p.etiqueta || null,
+        cantoLargo: p.cantoLargo,
+        cantoAncho: p.cantoAncho,
+      })),
+    // `validas` se deriva de `piezas` en cada render; la dependencia real es
+    // esa, y compararla por JSON evita rehacer el plano por una identidad nueva
+    // del array cuando los números no cambiaron.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(validas)],
+  );
+
+  /*
+   * El plano se calcula acá y no adentro del dibujo porque el formulario lo
+   * necesita para dos cosas: mostrarlo y proponer cuántas placas.
+   */
+  const plano = useMemo(
+    () =>
+      calcularPlanoDeCorte({
+        piezas: paraElPlano,
+        placaLargo: medidaPlaca.largo,
+        placaAncho: medidaPlaca.ancho,
+        fijadas,
+      }),
+    [paraElPlano, medidaPlaca.largo, medidaPlaca.ancho, fijadas],
+  );
+
+  const placasDelPlano = Math.max(1, plano.placas.length);
+
+  // Mientras nadie lo pise a mano, el campo sigue al plano.
+  useEffect(() => {
+    if (!placasTocado) setPlacas(placasDelPlano);
+  }, [placasDelPlano, placasTocado]);
 
   function actualizar(
     indice: number,
@@ -114,6 +187,15 @@ export function FormularioCorte({
       )}
       {cliente && <input type="hidden" name="customerId" value={cliente.id} />}
       {placa && <input type="hidden" name="variantId" value={placa.variantId} />}
+      {/* El acomodo corregido a mano viaja con el formulario: sin esto, mover
+          una pieza y apretar Guardar la devolvía al automático sin avisar. */}
+      {fijadas.length > 0 && (
+        <input
+          type="hidden"
+          name="acomodoManual"
+          value={JSON.stringify(fijadas)}
+        />
+      )}
       {validas.map((p, i) => (
         <input key={i} type="hidden" name="pieza" value={JSON.stringify(p)} />
       ))}
@@ -181,6 +263,11 @@ export function FormularioCorte({
               />
             </div>
 
+            {/* Cuántas placas.
+                Ya no arranca en 1 a ciegas: lo calcula el plano con el despiece
+                cargado y el campo lo sigue. Se puede pisar a mano —alguien
+                puede querer llevarse una de más— pero el número de partida es
+                el medido, no un supuesto. */}
             <div className="space-y-2">
               <Label htmlFor="placas">Placas</Label>
               <Input
@@ -188,8 +275,24 @@ export function FormularioCorte({
                 name="placas"
                 type="number"
                 min="1"
-                defaultValue={1}
+                value={placas}
+                onChange={(e) => {
+                  setPlacasTocado(true);
+                  setPlacas(Number(e.target.value) || 1);
+                }}
               />
+              {placasTocado && placas !== placasDelPlano && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlacas(placasDelPlano);
+                    setPlacasTocado(false);
+                  }}
+                  className="text-sm text-muted-foreground underline-offset-2 hover:underline"
+                >
+                  El plano dice {placasDelPlano}
+                </button>
+              )}
             </div>
           </div>
 
@@ -230,10 +333,11 @@ export function FormularioCorte({
               >
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="w-28 space-y-1">
-                    <Label className="text-xs text-muted-foreground">
+                    <Label htmlFor={`largo-${i}`} className="text-base">
                       Largo (mm)
                     </Label>
                     <Input
+                      id={`largo-${i}`}
                       type="number"
                       min="1"
                       value={p.largoMm || ""}
@@ -242,10 +346,11 @@ export function FormularioCorte({
                   </div>
 
                   <div className="w-28 space-y-1">
-                    <Label className="text-xs text-muted-foreground">
+                    <Label htmlFor={`ancho-${i}`} className="text-base">
                       Ancho (mm)
                     </Label>
                     <Input
+                      id={`ancho-${i}`}
                       type="number"
                       min="1"
                       value={p.anchoMm || ""}
@@ -254,10 +359,11 @@ export function FormularioCorte({
                   </div>
 
                   <div className="w-24 space-y-1">
-                    <Label className="text-xs text-muted-foreground">
+                    <Label htmlFor={`cantidad-${i}`} className="text-base">
                       Cantidad
                     </Label>
                     <Input
+                      id={`cantidad-${i}`}
                       type="number"
                       min="1"
                       value={p.cantidad}
@@ -266,10 +372,11 @@ export function FormularioCorte({
                   </div>
 
                   <div className="min-w-40 flex-1 space-y-1">
-                    <Label className="text-xs text-muted-foreground">
+                    <Label htmlFor={`etiqueta-${i}`} className="text-base">
                       Etiqueta
                     </Label>
                     <Input
+                      id={`etiqueta-${i}`}
                       value={p.etiqueta}
                       onChange={(e) => actualizar(i, "etiqueta", e.target.value)}
                       placeholder="Puerta, estante…"
@@ -280,13 +387,13 @@ export function FormularioCorte({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon"
                       onClick={() =>
                         setPiezas((previas) => previas.filter((_, j) => j !== i))
                       }
-                      aria-label={`Quitar pieza ${i + 1}`}
+                      className="h-11 gap-1.5 text-base text-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4" />
+                      Quitar
                     </Button>
                   )}
                 </div>
@@ -304,12 +411,12 @@ export function FormularioCorte({
 
                   {/* Los cantos van 0/1/2 por medida, como la planilla del
                       taller: "2" es canto en los dos lados de esa medida. */}
-                  <label className="flex items-center gap-2 text-sm">
+                  <label className="flex items-center gap-2 text-base">
                     Canto en el largo
                     <select
                       value={p.cantoLargo}
                       onChange={(e) => actualizar(i, "cantoLargo", e.target.value)}
-                      className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                      className="h-11 rounded-md border border-input bg-transparent px-2.5 text-base"
                       aria-label="Lados con canto en el largo"
                     >
                       <option value={0}>No</option>
@@ -317,12 +424,12 @@ export function FormularioCorte({
                       <option value={2}>2 lados</option>
                     </select>
                   </label>
-                  <label className="flex items-center gap-2 text-sm">
+                  <label className="flex items-center gap-2 text-base">
                     Canto en el ancho
                     <select
                       value={p.cantoAncho}
                       onChange={(e) => actualizar(i, "cantoAncho", e.target.value)}
-                      className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                      className="h-11 rounded-md border border-input bg-transparent px-2.5 text-base"
                       aria-label="Lados con canto en el ancho"
                     >
                       <option value={0}>No</option>
@@ -333,10 +440,11 @@ export function FormularioCorte({
 
                   {(p.cantoLargo > 0 || p.cantoAncho > 0) && (
                     <div className="min-w-44 flex-1 space-y-1">
-                      <Label className="text-xs text-muted-foreground">
+                      <Label htmlFor={`aclaracion-${i}`} className="text-base">
                         Aclaración del canto
                       </Label>
                       <Input
+                        id={`aclaracion-${i}`}
                         value={p.aclaracion}
                         onChange={(e) =>
                           actualizar(i, "aclaracion", e.target.value)
@@ -358,6 +466,29 @@ export function FormularioCorte({
             <Plus className="h-4 w-4" />
             Agregar pieza
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* El plano, acá y no después de guardar.
+          No se puede vender un corte sin ver cómo queda adentro de la placa: de
+          este acomodo salen las placas que hacen falta, si conviene vender la
+          placa entera y cuántas pasadas se cobran. Se recalcula con cada medida
+          que se tipea porque el cálculo corre en el navegador. */}
+      <Card className="border-border bg-card">
+        <CardContent className="space-y-4 p-6">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold">Cómo entra en la placa</h2>
+            <p className="text-base text-muted-foreground">
+              Se rehace solo a medida que cargás las piezas.
+            </p>
+          </div>
+
+          <PlanoEnVivo
+            plano={plano}
+            medidaSupuesta={medidaPlaca.supuesta}
+            fijadas={fijadas}
+            onFijadas={setFijadas}
+          />
         </CardContent>
       </Card>
 
@@ -504,13 +635,31 @@ function BuscadorDePlaca({
   onElegir,
 }: {
   branchId: string;
-  elegida: { variantId: string; descripcion: string } | null;
-  onElegir: (p: { variantId: string; descripcion: string } | null) => void;
+  elegida: {
+    variantId: string;
+    descripcion: string;
+    largoMm: number | null;
+    anchoMm: number | null;
+  } | null;
+  onElegir: (
+    p: {
+      variantId: string;
+      descripcion: string;
+      largoMm: number | null;
+      anchoMm: number | null;
+    } | null,
+  ) => void;
 }) {
   const [texto, setTexto] = useState("");
   const [traidos, setTraidos] = useState<{
     clave: string;
-    items: { variantId: string; producto: string; medida: string }[];
+    items: {
+      variantId: string;
+      producto: string;
+      medida: string;
+      largoMm?: number | null;
+      anchoMm?: number | null;
+    }[];
   }>({ clave: "", items: [] });
 
   const consulta = texto.trim();
@@ -576,6 +725,8 @@ function BuscadorDePlaca({
                 onClick={() => {
                   onElegir({
                     variantId: r.variantId,
+                    largoMm: r.largoMm ?? null,
+                    anchoMm: r.anchoMm ?? null,
                     descripcion: `${r.producto} — ${r.medida}`,
                   });
                   setTexto("");

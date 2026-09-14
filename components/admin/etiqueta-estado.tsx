@@ -87,6 +87,27 @@ const ESTADOS: Record<string, Estilo> = {
   en_revision: { etiqueta: "A verificar", familia: "espera", abierto: true },
   aprobado: { etiqueta: "Acreditado", familia: "ok", abierto: false },
   reintegrado: { etiqueta: "Reintegrado", familia: "info", abierto: false },
+
+  // Reseñas de producto.
+  publicada: { etiqueta: "Publicada", familia: "ok", abierto: false },
+
+  // Cheques, en los dos sentidos.
+  cartera: { etiqueta: "En cartera", familia: "espera", abierto: true },
+  depositado: { etiqueta: "Depositado", familia: "info", abierto: true },
+  acreditado: { etiqueta: "Acreditado", familia: "ok", abierto: false },
+  anulado: { etiqueta: "Anulado", familia: "cerrado", abierto: false },
+
+  // Remitos y envíos.
+  preparada: { etiqueta: "Preparada", familia: "espera", abierto: true },
+  entregada: { etiqueta: "Entregada", familia: "cerrado", abierto: false },
+  despachado: { etiqueta: "Despachado", familia: "marca", abierto: true },
+  en_transito: { etiqueta: "En viaje", familia: "marca", abierto: true },
+  devuelto: { etiqueta: "Devuelto", familia: "problema", abierto: true },
+
+  // Órdenes de compra y recepciones.
+  enviada: { etiqueta: "Enviada al proveedor", familia: "marca", abierto: true },
+  completa: { etiqueta: "Completa", familia: "ok", abierto: false },
+  confirmada: { etiqueta: "Confirmada", familia: "ok", abierto: false },
 };
 
 const PREDETERMINADO: Estilo = {
@@ -104,6 +125,10 @@ export function estiloDeEstado(estado: string): Estilo {
   const encontrado = ESTADOS[estado];
   if (encontrado) return encontrado;
 
+  // Un estado que no está en la tabla sale legible igual —"en_transito" se ve
+  // "En transito"— pero eso es un respaldo, no la forma de nombrar nada: lo que
+  // corresponde es agregarlo arriba. Sin esto, un enum nuevo se filtraba a la
+  // pantalla escrito como lo guarda la base, sin tildes y en minúscula.
   return {
     ...PREDETERMINADO,
     etiqueta:

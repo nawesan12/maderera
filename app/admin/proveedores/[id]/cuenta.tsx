@@ -138,7 +138,8 @@ export function CuentaDelProveedor({
 
       {movimientos.length === 0 ? (
         <p className="px-5 py-10 text-center text-base text-muted-foreground">
-          Todavía no hay movimientos en esta cuenta.
+          Todavía no hay movimientos en esta cuenta. Se llena sola con las
+          facturas de compra y los pagos que se le imputen.
         </p>
       ) : (
         <div className="overflow-x-auto">

@@ -169,13 +169,13 @@ function SinFicha({
           htmlFor={`vincular-${conversacionId}`}
           className="text-sm text-muted-foreground"
         >
-          O pegá el id de la ficha para vincularla ahora
+          O pegá el número de cliente para vincularlo ahora
         </label>
         <div className="mt-1 flex gap-2">
           <input
             id={`vincular-${conversacionId}`}
             name="customerId"
-            placeholder="id del cliente"
+            placeholder="Número de cliente"
             className="h-10 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-sm"
           />
           <button

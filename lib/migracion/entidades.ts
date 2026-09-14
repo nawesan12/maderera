@@ -150,7 +150,7 @@ export const ENTIDADES: DefinicionEntidad[] = [
         tipo: "texto",
         alias: ["codigo", "cod", "codcliente", "codigocliente", "nrocliente", "numerocliente", "idcliente", "id", "nro"],
         ayuda:
-          "Es lo que permite volver a correr la migración sin duplicar nada, y lo que después ata los saldos a cada ficha.",
+          "Es lo que permite volver a subir el archivo sin duplicar nada, y lo que después ata los saldos a cada ficha.",
       },
       {
         clave: "nombre",
@@ -233,11 +233,11 @@ export const ENTIDADES: DefinicionEntidad[] = [
       "El catálogo: un renglón por código. Los renglones con el mismo nombre y categoría quedan como medidas de un mismo producto.",
     escribe:
       "Crea o actualiza productos, medidas y —si vienen las columnas— los precios de lista general y profesional.",
-    identidad: "El código (SKU) de cada medida.",
+    identidad: "El código de cada medida.",
     campos: [
       {
         clave: "sku",
-        etiqueta: "Código / SKU",
+        etiqueta: "Código del sistema anterior",
         tipo: "texto",
         requerido: true,
         alias: ["sku", "codigo", "cod", "codigoarticulo", "codarticulo", "codproducto", "articulo", "idarticulo"],
@@ -318,17 +318,17 @@ export const ENTIDADES: DefinicionEntidad[] = [
   },
   {
     clave: "stock",
-    titulo: "Existencias",
+    titulo: "Stock",
     resumen:
-      "Las cantidades por sucursal con las que arranca el sistema nuevo. Se corre después de los productos.",
+      "Las cantidades por sucursal con las que arranca el sistema nuevo. En el sistema anterior este listado se llama «existencias». Se sube después de los productos.",
     escribe:
       "Ajusta el stock físico de cada medida y deja el movimiento en el libro, con el motivo.",
     identidad:
-      "Código de medida y sucursal. Volver a correrlo deja la existencia en el número del archivo, no la suma.",
+      "Código de medida y sucursal. Volver a subirlo deja el stock en el número del archivo, no lo suma.",
     campos: [
       {
         clave: "sku",
-        etiqueta: "Código / SKU",
+        etiqueta: "Código del sistema anterior",
         tipo: "texto",
         requerido: true,
         alias: ["sku", "codigo", "cod", "codigoarticulo", "codarticulo", "articulo", "idarticulo"],

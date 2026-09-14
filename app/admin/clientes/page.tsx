@@ -30,12 +30,16 @@ import { DialogoCliente } from "./dialogo-cliente";
 export default async function ClientesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; tipo?: string }>;
+  searchParams: Promise<{ buscar?: string; tipo?: string; vendedor?: string }>;
 }) {
   const params = await searchParams;
 
   const [clientes, listas, vendedores] = await Promise.all([
-    listarClientes({ busqueda: params.buscar, tipo: params.tipo }),
+    listarClientes({
+      busqueda: params.buscar,
+      tipo: params.tipo,
+      vendedor: params.vendedor,
+    }),
     listarListasParaClientes(),
     vendedoresActivos(),
   ]);

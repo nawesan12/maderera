@@ -15,6 +15,26 @@ export type RolStaff = "admin" | "vendedor" | "deposito" | "aserradero";
  * resumen sería mostrarle ventas del mes, que no es lo suyo y con lo que no
  * puede hacer nada.
  */
+/**
+ * Cómo se llama cada rol en pantalla.
+ *
+ * Estaba escrito solo en el encabezado del panel, así que la bitácora mostraba
+ * `deposito` en minúscula y sin tilde mientras la barra de arriba, en la misma
+ * pantalla, decía "Depósito".
+ */
+export const ETIQUETA_ROL: Record<RolStaff, string> = {
+  admin: "Administración",
+  vendedor: "Ventas",
+  deposito: "Depósito",
+  aserradero: "Aserradero",
+};
+
+/** El nombre de un rol, tolerando los que vengan sueltos de la base. */
+export function etiquetaDeRol(rol: string | null): string | null {
+  if (!rol) return null;
+  return ETIQUETA_ROL[rol as RolStaff] ?? rol;
+}
+
 export function inicioDelRol(rol: RolStaff | null): string {
   return rol === "aserradero" ? "/taller" : "/admin";
 }
@@ -123,6 +143,16 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/precios/formas-de-pago": ["admin"],
   "/admin/migracion": ["admin"],
   "/admin/bitacora": ["admin"],
+  /*
+   * Las guías son de **todo** el personal, aserradero incluido: la número 8
+   * está escrita para el taller.
+   *
+   * Hay que declararla aunque "la vea todo el mundo", porque `puedeEntrar`
+   * toma la clave más larga que sea prefijo y sin esta línea heredaba de
+   * `/admin`, que no incluye al aserradero. Es el mismo mecanismo que ya se
+   * documentó para las de compras: no declarar **también** decide.
+   */
+  "/admin/ayuda": ["admin", "vendedor", "deposito", "aserradero"],
 };
 
 /** Los roles que pueden entrar a una ruta, o `null` si la ve todo el personal. */

@@ -112,7 +112,8 @@ export async function alternarRubro(
     .object({ id: z.string().uuid(), activo: z.enum(["si", "no"]) })
     .safeParse({ id: formData.get("id"), activo: formData.get("activo") });
 
-  if (!parsed.success) return { error: "Rubro inválido." };
+  if (!parsed.success)
+    return { error: "Revisá el nombre del rubro: no puede quedar vacío." };
 
   const activo = parsed.data.activo === "si";
 
@@ -151,7 +152,7 @@ export async function engancharPorTexto(
   await requireStaff();
 
   const id = z.string().uuid().safeParse(formData.get("id"));
-  if (!id.success) return { error: "Rubro inválido." };
+  if (!id.success) return { error: "Ese rubro ya no existe." };
 
   const [rubro] = await db
     .select({

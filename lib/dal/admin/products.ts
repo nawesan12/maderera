@@ -307,6 +307,7 @@ export async function listarRubrosAdmin() {
     .select({
       id: subcategories.id,
       categoryId: subcategories.categoryId,
+      slug: subcategories.slug,
       name: subcategories.name,
       active: subcategories.active,
     })

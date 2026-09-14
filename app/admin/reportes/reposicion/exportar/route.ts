@@ -24,6 +24,8 @@ export async function GET(request: Request) {
     diasDelPeriodo: [30, 60, 90].includes(dias) ? dias : 30,
     coberturaObjetivo: objetivo,
     categoria: url.searchParams.get("cat") ?? undefined,
+    // Sin esto el PDF traía todos los rubros mientras la pantalla mostraba uno.
+    rubro: url.searchParams.get("rubro") ?? undefined,
     sucursal: url.searchParams.get("sucursal") ?? undefined,
   });
 

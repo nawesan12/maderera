@@ -71,7 +71,7 @@ export default async function RecepcionesPage() {
                   <th className="px-5 py-2.5 text-right font-semibold">
                     Renglones
                   </th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Neto</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Neto (sin IVA)</th>
                   <th className="px-5 py-2.5 font-semibold">Estado</th>
                 </tr>
               </thead>

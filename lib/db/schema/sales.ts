@@ -367,6 +367,18 @@ export const orderPayments = pgTable(
     nroCupon: text(),
     /** Qué tarjeta o banco: "Visa Galicia", "Naranja". Texto libre. */
     tarjeta: text(),
+    /**
+     * En cuántas cuotas se pagó. Uno es "un pago".
+     *
+     * **No cambia lo que se cobra.** Las cuotas sin interés las financia el
+     * banco o la tarjeta: la maderera cobra el total igual. Se guarda porque
+     * va en el comprobante y porque es lo que permite conciliar después contra
+     * la liquidación de la terminal, donde una venta en doce cuotas se acredita
+     * distinto de una en un pago.
+     *
+     * Solo tiene sentido en crédito; en efectivo o transferencia queda en uno.
+     */
+    cuotas: integer().notNull().default(1),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("order_payments_order_idx").on(t.orderId)],
@@ -420,6 +432,23 @@ export const cuttingOrders = pgTable(
      * planilla que el taller usa hoy.
      */
     cantoDescripcion: text(),
+    /**
+     * Las piezas que alguien mandó a mano a una placa, como JSON.
+     *
+     * `[{ indice, unidad, placa, girada? }]`. El acomodo lo calcula la
+     * plataforma, pero quien mira la placa puede corregirlo —"esta puerta que
+     * salga de la placa nueva, no de la que tiene el borde golpeado"— y esa
+     * decisión tiene que sobrevivir al guardado. Sin esto, mover una pieza y
+     * apretar Guardar la devolvía al automático sin avisar.
+     *
+     * Va como texto y no como columnas porque es una lista de largo variable
+     * que solo se lee entera, igual que `cuttingExportProfiles.columnas`.
+     *
+     * **No guarda coordenadas**: ver `PiezaFijada` en `lib/cortes/plano.ts`.
+     * Un punto exacto no se puede reconstruir y además permitiría armar
+     * patrones que la seccionadora no puede cortar.
+     */
+    acomodoManual: text(),
     estado: estadoCorte().notNull().default("en-cola"),
     urgente: integer().notNull().default(0),
     notas: text(),

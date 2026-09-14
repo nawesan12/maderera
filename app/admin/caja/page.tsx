@@ -158,7 +158,7 @@ export default async function CajaPage({
                   <th className="px-5 py-2.5 font-semibold">Sucursal</th>
                   <th className="px-5 py-2.5 font-semibold">Quién</th>
                   <th className="px-5 py-2.5 font-semibold">Cerrado</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Esperado</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Tendría que haber</th>
                   <th className="px-5 py-2.5 text-right font-semibold">Contado</th>
                   <th className="px-5 py-2.5 text-right font-semibold">Diferencia</th>
                 </tr>

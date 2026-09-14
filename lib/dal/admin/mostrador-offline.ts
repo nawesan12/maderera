@@ -38,6 +38,8 @@ export interface CopiaDelMostrador {
     categoria: string;
     sortOrder: number;
     busqueda: string;
+    largoMm: number | null;
+    anchoMm: number | null;
   }[];
   precios: { priceListId: string; variantId: string; precio: number }[];
   stock: { branchId: string; variantId: string; qty: number }[];
@@ -85,6 +87,10 @@ export async function copiaDelMostrador(
       marca: products.brand,
       categoria: categories.name,
       sortOrder: productVariants.sortOrder,
+      // La medida de la placa: sin ella el mostrador no puede armar el plano de
+      // un corte, y el buscador usa esta copia también estando en línea.
+      largoMm: productVariants.largoMm,
+      anchoMm: productVariants.anchoMm,
     })
     .from(productVariants)
     .innerJoin(products, eq(products.id, productVariants.productId))

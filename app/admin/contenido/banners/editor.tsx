@@ -91,7 +91,7 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
           nombre="bajada"
           etiqueta="Bajada"
           valorInicial={banner?.bajada ?? ""}
-          placeholder="Placas de yeso, perfilería y aislantes con 15% off"
+          placeholder="Placas de yeso, perfilería y aislantes con 15% de descuento"
         />
       )}
 

@@ -219,7 +219,13 @@ function Tarjeta({
         </p>
       </div>
 
-      {!apagado && <AccionesDeCheque id={c.id} estado={c.estado} sentido={c.sentido} />}
+      {!apagado && <AccionesDeCheque
+          id={c.id}
+          estado={c.estado}
+          sentido={c.sentido}
+          numero={c.numero}
+          importe={c.importe}
+        />}
     </article>
   );
 }

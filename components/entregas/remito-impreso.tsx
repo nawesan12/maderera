@@ -26,6 +26,16 @@ export function RemitoImpreso({
 }) {
   const anulado = remito.estado === "anulada";
 
+  /*
+   * Completo o de acopio, con las palabras que pidió la clienta.
+   *
+   * Estaba solo en el PDF (`lib/pdf/remito.ts`): el mismo remito decía "Remito
+   * de entrega parcial" bajado como PDF y "Remito de entrega" impreso desde la
+   * pantalla, y no listaba lo que quedaba guardado. Dos papeles con el mismo
+   * número diciendo cosas distintas es peor que cualquiera de los dos.
+   */
+  const deAcopio = remito.pendientes.length > 0;
+
   return (
     <div className="comprobante-hoja">
       <div className="barra no-imprimir">
@@ -63,7 +73,9 @@ export function RemitoImpreso({
           </div>
 
           <div className="comprobante-datos">
-            <p className="titulo">Remito de entrega</p>
+            <p className="titulo">
+              {deAcopio ? "Remito de entrega parcial" : "Remito de entrega total"}
+            </p>
             <p className="numero">{remito.numero}</p>
             <div className="datos">
               <div>Fecha {fechaCorta.format(remito.createdAt)}</div>
@@ -88,7 +100,15 @@ export function RemitoImpreso({
             </div>
             {remito.clienteDireccion && (
               <div>
-                <span>Domicilio de entrega</span>
+                {/* En un retiro no se entrega nada en esa dirección: es el
+                    domicilio del cliente y va como dato de la ficha. Rotularlo
+                    "domicilio de entrega" en un remito de mostrador invita a
+                    cargar el camión para un pedido que la persona ya se llevó. */}
+                <span>
+                  {remito.tipo === "envio"
+                    ? "Domicilio de entrega"
+                    : "Domicilio del cliente"}
+                </span>
                 <strong>{remito.clienteDireccion}</strong>
               </div>
             )}
@@ -146,6 +166,27 @@ export function RemitoImpreso({
             ))}
           </tbody>
         </table>
+
+        {/* Qué le queda guardado. No alcanza con decir "entrega parcial": la
+            pregunta que se hace el cliente al leerlo es *qué* le queda, y si el
+            papel no lo dice hay que llamar. Sin importes, como todo el remito. */}
+        {deAcopio && (
+          <section className="acopio">
+            <p className="etiqueta">Queda en acopio</p>
+            <ul>
+              {remito.pendientes.map((p, i) => (
+                <li key={i}>
+                  <span className="mono">{p.pendiente}</span>{" "}
+                  {formatearUnidad(p.unidad)} · {p.descripcion}
+                </li>
+              ))}
+            </ul>
+            <p className="chico">
+              Esta mercadería queda guardada en la maderera a nombre del cliente
+              y se retira contra este remito.
+            </p>
+          </section>
+        )}
 
         {remito.notas && (
           <p className="observaciones">{remito.notas}</p>

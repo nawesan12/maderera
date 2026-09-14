@@ -13,7 +13,7 @@
  */
 export default function CargandoSitio() {
   return (
-    <div className="contenedor py-12" aria-label="Cargando" aria-busy="true">
+    <div className="contenedor py-12" aria-label="Cargando la página" aria-busy="true">
       <div className="h-4 w-40 animate-pulse rounded bg-hundida" />
 
       <div className="mt-7 space-y-3">

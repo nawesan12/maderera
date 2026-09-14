@@ -42,7 +42,10 @@ export async function conciliarTransferencia(
       motivo: (formData.get("motivo") as string) || undefined,
     });
 
-  if (!parsed.success) return { error: "Datos inválidos." };
+  if (!parsed.success)
+    return {
+      error: "No pudimos registrar la decisión. Si escribiste un motivo, fijate que no pase de 300 letras.",
+    };
 
   const [pago] = await db
     .select({ id: payments.id, estado: payments.estado, proveedor: payments.proveedor })
@@ -137,7 +140,7 @@ export async function reconsultarCobro(
   );
 
   if (!proveedor) {
-    return { error: "Mercado Pago no está configurado en este entorno." };
+    return { error: "Mercado Pago todavía no está conectado." };
   }
 
   try {

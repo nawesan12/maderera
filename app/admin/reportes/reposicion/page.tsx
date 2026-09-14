@@ -9,6 +9,9 @@ import {
   reporteDeReposicion,
   type FilaDeReposicion,
 } from "@/lib/dal/admin/reposicion";
+import { listarRubrosAdmin } from "@/lib/dal/admin/products";
+import { SelectorDeRubro } from "@/components/admin/selector-de-rubro";
+import { Vacio } from "@/components/admin/vacio";
 
 export const metadata: Metadata = { title: "Reposición" };
 
@@ -40,6 +43,7 @@ export default async function ReposicionPage({
     dias?: string;
     objetivo?: string;
     cat?: string;
+    rubro?: string;
     sucursal?: string;
   }>;
 }) {
@@ -47,13 +51,18 @@ export default async function ReposicionPage({
   const dias = leerDias(params.dias);
   const objetivo = Math.min(Math.max(Number(params.objetivo) || 30, 7), 180);
   const sucursal = params.sucursal ?? "todos";
+  const rubro = params.rubro ?? "todos";
 
-  const reporte = await reporteDeReposicion({
-    diasDelPeriodo: dias,
-    coberturaObjetivo: objetivo,
-    categoria: params.cat,
-    sucursal,
-  });
+  const [reporte, rubros] = await Promise.all([
+    reporteDeReposicion({
+      diasDelPeriodo: dias,
+      coberturaObjetivo: objetivo,
+      categoria: params.cat,
+      rubro,
+      sucursal,
+    }),
+    listarRubrosAdmin(),
+  ]);
 
   const paraComprar = reporte.filas.filter((f) => f.sugerido > 0);
   const seMovieron = reporte.filas.filter(
@@ -70,6 +79,7 @@ export default async function ReposicionPage({
     if (dias !== 30) p.set("dias", String(dias));
     if (objetivo !== 30) p.set("objetivo", String(objetivo));
     if (params.cat) p.set("cat", params.cat);
+    if (rubro !== "todos") p.set("rubro", rubro);
     if (sucursal !== "todos") p.set("sucursal", sucursal);
     for (const [k, v] of Object.entries(cambios)) {
       if (v === "" || v === "todos" || (k === "dias" && v === "30")) p.delete(k);
@@ -81,7 +91,9 @@ export default async function ReposicionPage({
 
   const urlExportar = `/admin/reportes/reposicion/exportar?dias=${dias}&objetivo=${objetivo}${
     params.cat ? `&cat=${params.cat}` : ""
-  }${sucursal !== "todos" ? `&sucursal=${sucursal}` : ""}`;
+  }${rubro !== "todos" ? `&rubro=${rubro}` : ""}${
+    sucursal !== "todos" ? `&sucursal=${sucursal}` : ""
+  }`;
 
   return (
     <div className="space-y-6">
@@ -149,6 +161,11 @@ export default async function ReposicionPage({
             </Link>
           ))}
         </div>
+
+        <SelectorDeRubro
+          actual={rubro}
+          rubros={rubros.filter((r) => r.active)}
+        />
       </div>
 
       {/* Lo vendido por categoría, como barras. A mano y sin librería, como
@@ -180,10 +197,12 @@ export default async function ReposicionPage({
       )}
 
       {reporte.filas.length === 0 ? (
-        <div className="rounded-xl border border-dashed py-16 text-center">
-          <ShoppingCart className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="text-base font-medium">No hay datos con ese filtro</p>
-        </div>
+        <Vacio
+          icono={ShoppingCart}
+          titulo="No hay nada con ese filtro"
+          detalle="Probá con otra sucursal o con otra categoría."
+          accion={{ texto: "Ver todo", href: "/admin/reportes/reposicion" }}
+        />
       ) : (
         <>
           <GrupoListado

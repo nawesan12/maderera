@@ -28,7 +28,22 @@ import type { ClienteLocal, VarianteLocal } from "./busqueda-local";
 interface EstadoCatalogo {
   ultimaSincronizacion: string | null;
   listaGeneralId: string | null;
+  /** Con qué forma se guardó la copia. Ver `FORMA_DE_LA_COPIA`. */
+  forma?: number;
 }
+
+/**
+ * La forma de los datos que guarda la copia local.
+ *
+ * **Hay que subirla cada vez que se le agrega un campo a lo que se copia.**
+ * El delta solo trae lo que cambió, así que una variante que ya estaba en el
+ * mostrador nunca vuelve a bajar y se queda sin el campo nuevo para siempre —o
+ * hasta que venza la copia entera, que es un día—. Pasó al agregar la medida de
+ * la placa: el botón de cortar no aparecía y no había nada roto que mirar.
+ *
+ * Subir este número obliga a bajar todo de nuevo una sola vez.
+ */
+const FORMA_DE_LA_COPIA = 3;
 
 /** Cada cuánto se pregunta si cambió algo, con conexión. */
 export const CADA_CUANTO_MS = 10 * 60 * 1000;
@@ -55,7 +70,11 @@ export async function sincronizarCatalogo(
     Date.now() - new Date(estado.ultimaSincronizacion).getTime() >
       RESINCRONIZAR_CADA_MS;
 
-  const desdeCero = Boolean(opciones.forzarTodo) || vencido;
+  // Una copia guardada con otra forma no se puede completar con un delta: hay
+  // que bajar todo de nuevo, una vez.
+  const otraForma = (estado?.forma ?? 1) !== FORMA_DE_LA_COPIA;
+
+  const desdeCero = Boolean(opciones.forzarTodo) || vencido || otraForma;
   const desde = desdeCero ? null : estado?.ultimaSincronizacion ?? null;
 
   const consulta = desde ? `?desde=${encodeURIComponent(desde)}` : "";
@@ -115,6 +134,7 @@ export async function sincronizarCatalogo(
       catalogo.listas.find((l: { esGeneral: boolean }) => l.esGeneral)?.id ??
       estado?.listaGeneralId ??
       null,
+    forma: FORMA_DE_LA_COPIA,
   });
 
   return {

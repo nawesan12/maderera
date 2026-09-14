@@ -1,0 +1,1 @@
+ALTER TABLE "order_payments" ADD COLUMN "cuotas" integer DEFAULT 1 NOT NULL;

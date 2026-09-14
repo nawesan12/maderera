@@ -147,7 +147,7 @@ export async function emitirEnTransaccion(
   tipoForzado?: TipoComprobante,
 ): Promise<ResultadoEmision> {
   if (datos.lineas.length === 0) {
-    return { error: "El comprobante no tiene ningún ítem." };
+    return { error: "El comprobante no tiene ningún renglón cargado." };
   }
 
   const config = await obtenerConfiguracionFiscal();
@@ -765,7 +765,7 @@ export async function emitirNotaDeDebito(
   userId?: string,
 ): Promise<ResultadoEmision> {
   if (lineas.length === 0) {
-    return { error: "La nota de débito no tiene ningún ítem." };
+    return { error: "La nota de débito no tiene ningún renglón cargado." };
   }
 
   try {

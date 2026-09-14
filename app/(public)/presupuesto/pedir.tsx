@@ -71,6 +71,10 @@ export function PedirPresupuesto({
             ? "Te contestamos dentro de las 24 horas hábiles."
             : "Te lo contestamos el mismo día, dentro del horario de atención."}
         </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Los campos con <span className="text-brand-orange">*</span> hay que
+          completarlos.
+        </p>
       </div>
 
       {esProfesional && (
@@ -235,7 +239,9 @@ function Campo({
     <div>
       <label htmlFor={nombre} className="block text-sm font-medium">
         {etiqueta}
-        {requerido && <span className="text-brand-orange"> *</span>}
+        {requerido && <span className="text-brand-orange" aria-label="obligatorio">
+            {" *"}
+          </span>}
       </label>
       <input
         id={nombre}

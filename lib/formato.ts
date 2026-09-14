@@ -143,21 +143,30 @@ export function formatearCuit(cuit: string | null): string {
  * En la base se guarda `metro_cuadrado` porque la calculadora, el carrito y la
  * factura tienen que hablar el mismo idioma sin ambigüedad. Pero al cliente se
  * le muestra "m²": nadie pide quince metro_cuadrado de machimbre.
+ *
+ * **Tiene que cubrir todo `unitOfSale` de `lib/db/schema/catalog.ts`.** Le
+ * faltaban cuatro —entre ellas **tabla**, la del deck— y la del kilo estaba
+ * escrita `kilo` cuando el enum dice `kg`: las cinco caían al respaldo y salían
+ * a la pantalla como las guarda la base. `tests/formato.test.ts` lo vigila.
  */
-const UNIDADES: Record<string, string> = {
+export const ABREVIATURA_UNIDAD: Record<string, string> = {
   unidad: "u.",
   metro_lineal: "ml",
   metro_cuadrado: "m²",
   metro_cubico: "m³",
+  tabla: "tabla",
   placa: "placa",
+  rollo: "rollo",
+  par: "par",
+  juego: "juego",
   bolsa: "bolsa",
-  kilo: "kg",
+  kg: "kg",
   litro: "l",
 };
 
 export function formatearUnidad(unidad: string | null): string {
   if (!unidad) return "u.";
-  return UNIDADES[unidad] ?? unidad.replace(/_/g, " ");
+  return ABREVIATURA_UNIDAD[unidad] ?? unidad.replace(/_/g, " ");
 }
 
 /** Pluraliza sin que quede "1 ítems". */

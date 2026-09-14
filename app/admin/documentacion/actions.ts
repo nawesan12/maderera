@@ -105,7 +105,10 @@ export async function cambiarVisibilidad(
       soloProfesionales: formData.get("soloProfesionales"),
     });
 
-  if (!parsed.success) return { error: "Datos inválidos." };
+  if (!parsed.success)
+    return {
+      error: "No pudimos identificar ese documento. Recargá la pantalla y probá de nuevo.",
+    };
 
   await db
     .update(technicalDocuments)
@@ -132,7 +135,10 @@ export async function borrarDocumento(
   await requireStaff();
 
   const id = z.string().uuid().safeParse(formData.get("id"));
-  if (!id.success) return { error: "Documento inválido." };
+  if (!id.success)
+    return {
+      error: "No encontramos ese documento. Puede que ya lo hayan dado de baja.",
+    };
 
   // Se da de baja en vez de borrarse: el archivo puede estar enlazado desde un
   // pliego o un correo, y una URL que deja de existir es un enlace roto en el
@@ -145,4 +151,32 @@ export async function borrarDocumento(
   refrescar();
 
   return { ok: "Documento dado de baja." };
+}
+
+/**
+ * Vuelve a poner en línea un documento dado de baja.
+ *
+ * Existe porque la baja no tenía vuelta: la lista de "dados de baja" ofrecía un
+ * único botón, "Ver archivo", y recuperar un documento bajado por error pedía
+ * volver a subirlo —con otra dirección, que es justo lo que la baja blanda
+ * evita—.
+ */
+export async function restaurarDocumento(
+  _previo: EstadoDocumento,
+  formData: FormData,
+): Promise<EstadoDocumento> {
+  await requireStaff();
+
+  const id = z.string().uuid().safeParse(formData.get("id"));
+  if (!id.success)
+    return { error: "No encontramos ese documento." };
+
+  await db
+    .update(technicalDocuments)
+    .set({ activo: true, updatedAt: new Date() })
+    .where(eq(technicalDocuments.id, id.data));
+
+  refrescar();
+
+  return { ok: "El documento vuelve a estar en línea." };
 }

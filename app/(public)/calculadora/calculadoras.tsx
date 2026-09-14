@@ -497,7 +497,7 @@ export function Calculadoras({
                     <ResultRow label={`Cajas necesarias (${floorResult.m2PorCaja} m²/caja)`} value={floorResult.cajasNecesarias} unit="cajas" sugerencia={sugerenciaDe("piso melaminico")} />
                     <ResultRow label="Zócalos (3m c/u)" value={floorResult.zocalos} unit="unidades" sugerencia={sugerenciaDe("zocalo")} />
                     <ResultRow label="Metros lineales de zócalo" value={floorResult.zocaloML} unit="ml" />
-                    <ResultRow label="Underlay / foam" value={floorResult.underlayM2} unit="m²" sugerencia={sugerenciaDe("underlay")} />
+                    <ResultRow label="Manta de espuma (underlay)" value={floorResult.underlayM2} unit="m²" sugerencia={sugerenciaDe("underlay")} />
                     <div className="pt-4 mt-2">
                       <Button
                         className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"

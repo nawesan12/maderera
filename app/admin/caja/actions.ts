@@ -83,6 +83,25 @@ export async function crearCaja(
 export async function darDeBajaCaja(id: string): Promise<EstadoCajas> {
   const usuario = await requireStaff();
 
+  const [actual] = await db
+    .select({ codigo: posDevices.codigo, pendientes: posDevices.pendientes })
+    .from(posDevices)
+    .where(eq(posDevices.id, id))
+    .limit(1);
+
+  if (!actual) return { error: "Esa caja no existe." };
+
+  // Una caja con ventas sin subir tiene plata cobrada que todavía no llegó al
+  // sistema. Darla de baja acá deja esas ventas sin una máquina activa que las
+  // empuje, y nadie se entera hasta que no cuadra el cierre.
+  if (actual.pendientes > 0) {
+    return {
+      error: `${actual.codigo} tiene ${actual.pendientes} ${
+        actual.pendientes === 1 ? "venta cobrada" : "ventas cobradas"
+      } que todavía no subieron. Conectá la caja y esperá a que suban antes de darla de baja.`,
+    };
+  }
+
   const [caja] = await db
     .update(posDevices)
     .set({ activo: false })

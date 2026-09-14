@@ -55,6 +55,7 @@ export interface DocumentoTicket {
     tarjeta: string | null;
     nroLote: string | null;
     nroCupon: string | null;
+    cuotas?: number | null;
   }[];
   enCuentaCorriente: boolean;
   /** Cuánto quedó en el libro: en un pago partido no es el total. */
@@ -138,6 +139,7 @@ export function documentoDeVenta(
       tarjeta: p.tarjeta ?? null,
       nroLote: p.nroLote ?? null,
       nroCupon: p.nroCupon ?? null,
+      cuotas: p.cuotas ?? null,
     })),
     enCuentaCorriente: importeEnCuenta > 0,
     importeEnCuenta,

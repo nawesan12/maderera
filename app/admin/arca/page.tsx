@@ -137,7 +137,7 @@ export default async function ArcaPage() {
             <Paso
               hecho={puntos.length > 0}
               titulo="Dar de alta el punto de venta"
-              detalle="Se habilita en ARCA con modalidad Webservices y después se carga acá con el mismo número."
+              detalle="Se habilita en la página de ARCA eligiendo la modalidad «Webservices» —así la llaman ellos— y después se carga acá con el mismo número."
             />
             <Paso
               hecho={Boolean(process.env.ARCA_CERTIFICADO)}
@@ -146,8 +146,8 @@ export default async function ArcaPage() {
             />
             <Paso
               hecho={Boolean(process.env.ARCA_CLAVE_PRIVADA)}
-              titulo="Cargar certificado y clave en el servidor"
-              detalle="Variables ARCA_CERTIFICADO y ARCA_CLAVE_PRIVADA, en formato PEM o base64."
+              titulo="Pasarle el certificado y la clave a quien mantiene el sistema"
+              detalle="Son dos archivos que se cargan una sola vez y quedan guardados. Dato técnico: las variables ARCA_CERTIFICADO y ARCA_CLAVE_PRIVADA, en formato PEM o base64."
             />
           </ol>
         )}

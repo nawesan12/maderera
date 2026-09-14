@@ -42,7 +42,7 @@ export const varianteSchema = z.object({
   sku: z
     .string()
     .trim()
-    .min(2, "El código tiene que tener al menos 2 caracteres.")
+    .min(2, "El código tiene que tener al menos 2 letras o números.")
     .max(60),
   label: z.string().trim().min(1, "Poné cómo se muestra la medida.").max(120),
   largoMm: enteroOpcional,
@@ -70,7 +70,7 @@ export const productoSchema = z.object({
     .max(160)
     .regex(
       /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-      "Solo minúsculas, números y guiones.",
+      "Solo se pueden usar minúsculas, números y guiones (sin espacios ni acentos).",
     ),
   categoryId: z.string().uuid("Elegí una categoría."),
   subcategory: z.string().trim().max(80).optional(),
@@ -98,7 +98,7 @@ export const productoSchema = z.object({
   featured: z.boolean().default(false),
   aPedido: z.boolean().default(false),
   active: z.boolean().default(true),
-  imagen: z.string().trim().url("La imagen tiene que ser una URL.").or(z.literal("")),
+  imagen: z.string().trim().url("Pegá la dirección completa de la foto; tiene que empezar con https://").or(z.literal("")),
   variantes: z
     .array(varianteSchema)
     .min(1, "Cargá al menos una medida o presentación."),

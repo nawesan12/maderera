@@ -158,7 +158,7 @@ function TarjetaPedido({ pedido }: { pedido: PedidoListado }) {
       </p>
 
       <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
-        <span>{plural(pedido.items, "ítem")}</span>
+        <span>{plural(pedido.items, "producto")}</span>
         <span aria-hidden="true">·</span>
         <span>{haceCuanto(pedido.createdAt)}</span>
       </p>

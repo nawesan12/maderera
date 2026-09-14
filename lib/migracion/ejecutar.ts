@@ -942,7 +942,7 @@ export async function informeDeIntegridad(
       {
         titulo: "Suma de los totales",
         detalle:
-          "El del sistema incluye las corridas anteriores; el del archivo, solo esta.",
+          "El del sistema incluye las veces anteriores; el del archivo, solo esta.",
         segunElArchivo: esperado.toFixed(2),
         enElSistema: Number(total).toFixed(2),
         ok: Number(total) >= esperado - 0.01,

@@ -11,6 +11,7 @@ import { listarClientes } from "@/lib/dal/admin/clientes";
 import { leerPeriodoMensual } from "@/lib/periodos";
 import { formatearMonto } from "@/lib/formato";
 import { CargarSufrida } from "./cargar";
+import { Vacio } from "@/components/admin/vacio";
 
 export const metadata: Metadata = { title: "Retenciones sufridas" };
 
@@ -104,12 +105,11 @@ export default async function RetencionesSufridasPage({
 
       <section className="tarjeta overflow-hidden">
         {sufridas.length === 0 ? (
-          <div className="px-5 py-14 text-center">
-            <FileCheck2 className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-3 text-base text-muted-foreground">
-              Todavía no se cargó ningún certificado.
-            </p>
-          </div>
+          <Vacio
+            icono={FileCheck2}
+            titulo="Todavía no se cargó ningún certificado"
+            detalle="Se cargan con el formulario de acá arriba, a medida que llegan. Son los que después se descuentan del impuesto."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-base">

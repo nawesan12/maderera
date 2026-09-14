@@ -2,13 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { History, ShieldCheck } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { rutaDeEntidad } from "@/lib/dal/admin/rutas-entidad";
+import {
+  etiquetaDeEntidad,
+  rutaDeEntidad,
+} from "@/lib/dal/admin/rutas-entidad";
+import { etiquetaDeRol } from "@/lib/roles";
 import { fechaHora, haceCuanto } from "@/lib/formato";
 import {
   listarBitacora,
   opcionesDeBitacora,
   type AccionAuditoria,
 } from "@/lib/dal/admin/auditoria";
+import { Vacio } from "@/components/admin/vacio";
 
 export const metadata: Metadata = { title: "Bitácora" };
 
@@ -124,7 +129,11 @@ export default async function BitacoraPage({
           etiqueta="Sobre qué"
           nombre="entidad"
           valor={entidad}
-          opciones={opciones.entidades.map((e) => ({ valor: e, texto: e }))}
+          // Ordenadas por el nombre que se ve, no por el de la tabla: con las
+          // etiquetas puestas, el orden viejo quedaba al azar.
+          opciones={opciones.entidades
+            .map((e) => ({ valor: e, texto: etiquetaDeEntidad(e) }))
+            .sort((a, b) => a.texto.localeCompare(b.texto, "es"))}
         />
 
         <Selector
@@ -179,10 +188,12 @@ export default async function BitacoraPage({
       </div>
 
       {filas.length === 0 ? (
-        <p className="rounded-lg border border-dashed px-4 py-12 text-center text-base text-muted-foreground">
-          <History className="mx-auto mb-2 h-6 w-6" />
-          No hay movimientos registrados con estos filtros.
-        </p>
+        <Vacio
+          icono={History}
+          titulo="No hay movimientos con estos filtros"
+          detalle="La bitácora guarda todo lo que se toca en el panel. Si no aparece nada, casi siempre es el filtro y no la falta de actividad."
+          accion={{ texto: "Ver todo", href: "/admin/bitacora" }}
+        />
       ) : (
         <ul className="divide-y rounded-lg border">
           {filas.map((fila) => (
@@ -191,7 +202,7 @@ export default async function BitacoraPage({
                 <p className="text-base">{fila.descripcion}</p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   {fila.usuarioNombre}
-                  {fila.usuarioRol ? ` · ${fila.usuarioRol}` : ""} ·{" "}
+                  {fila.usuarioRol ? ` · ${etiquetaDeRol(fila.usuarioRol)}` : ""} ·{" "}
                   <span className="tabular">
                     {fechaHora.format(new Date(fila.createdAt))}
                   </span>{" "}
@@ -220,10 +231,12 @@ export default async function BitacoraPage({
                     href={ruta}
                     className={`${clases} transition-colors hover:bg-brand-orange/12 hover:text-brand-orange-dark`}
                   >
-                    {fila.entidad}
+                    {etiquetaDeEntidad(fila.entidad)}
                   </Link>
                 ) : (
-                  <span className={clases}>{fila.entidad}</span>
+                  <span className={clases}>
+                    {etiquetaDeEntidad(fila.entidad)}
+                  </span>
                 );
               })()}
             </li>

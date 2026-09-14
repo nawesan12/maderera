@@ -39,6 +39,19 @@ export interface ResultadoDeMostrador {
   precio: number;
   /** Lo que hay en la sucursal donde se está vendiendo. */
   stock: number;
+  /**
+   * La medida de la placa, cuando la variante la tiene cargada.
+   *
+   * La usa el plano de corte para acomodar las piezas mientras alguien carga el
+   * despiece en el mostrador. Viene en nulo para lo que no es una placa —un
+   * tarugo no tiene largo ni ancho— y también para las placas a las que todavía
+   * no se les cargó la medida. Opcionales porque la copia local del mostrador
+   * —la que sirve sin internet— no las guarda: ahí no hace falta el plano.
+   */
+  largoMm?: number | null;
+  anchoMm?: number | null;
+  /** La familia del producto. Por acá se busca la tarifa de corte. */
+  categoria?: string | null;
 }
 
 /**
@@ -126,6 +139,10 @@ export async function buscarParaMostrador(
       sku: productVariants.sku,
       producto: products.name,
       medida: productVariants.label,
+      largoMm: productVariants.largoMm,
+      anchoMm: productVariants.anchoMm,
+      // Por acá se busca la tarifa de corte: se cargan por familia.
+      categoria: categories.name,
       unidad: products.unit,
       precio: sql<string | null>`coalesce(${propia.price}, round((${general.price} * ${lista.factorDerivado})::numeric, 2))`,
       stock: sql<number>`coalesce(${inventory.qty}, 0)`,
@@ -177,6 +194,9 @@ export async function buscarParaMostrador(
     unidad: f.unidad,
     precio: Number(f.precio ?? 0),
     stock: Number(f.stock),
+    largoMm: f.largoMm,
+    anchoMm: f.anchoMm,
+    categoria: f.categoria,
   }));
 }
 

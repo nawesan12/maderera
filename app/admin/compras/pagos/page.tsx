@@ -100,14 +100,14 @@ export default async function PagosPage({
                 <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-semibold">Fecha</th>
                   <th className="px-5 py-2.5 font-semibold">Proveedor</th>
-                  <th className="px-5 py-2.5 font-semibold">Medio</th>
+                  <th className="px-5 py-2.5 font-semibold">Forma de pago</th>
                   <th className="px-5 py-2.5 text-right font-semibold">
                     Imputado
                   </th>
                   <th className="px-5 py-2.5 text-right font-semibold">
                     Retenido
                   </th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Salió</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Importe pagado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-linea">
@@ -153,6 +153,21 @@ export default async function PagosPage({
                     </td>
                     <td className="tabular px-5 py-3 text-right font-semibold">
                       {formatearMonto(p.total)}
+                      {/* Contra qué se imputó. Sin esto la tabla contestaba
+                          "salieron $800.000" y no "de qué facturas". */}
+                      {p.facturas.length > 0 ? (
+                        <span className="mt-0.5 flex flex-col items-end gap-0.5 text-sm font-normal text-muted-foreground">
+                          {p.facturas.map((f) => (
+                            <span key={f.id} className="tabular">
+                              {f.numero} · {formatearMonto(f.importe)}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="mt-0.5 block text-sm font-normal text-muted-foreground">
+                          Sin imputar a ninguna factura
+                        </span>
+                      )}
                     </td>
                     <td className="tabular px-5 py-3 text-right text-muted-foreground">
                       {p.retenido > 0 ? formatearMonto(p.retenido) : "—"}

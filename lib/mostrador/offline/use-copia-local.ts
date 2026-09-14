@@ -39,6 +39,11 @@ export interface ResultadoLocal {
   unidad: string;
   precio: number;
   stock: number;
+  /** La medida de la placa, para poder ofrecer cortarla. */
+  largoMm?: number | null;
+  anchoMm?: number | null;
+  /** La familia del producto. Por acá se busca la tarifa de corte. */
+  categoria?: string | null;
 }
 
 /*
@@ -144,6 +149,9 @@ export function useCopiaLocal(branchId: string): CopiaLista {
         unidad: v.unidad,
         precio: precioLocal(precios, v.variantId, listaDelCliente, listaGeneralId),
         stock: stock.get(`${branchId}:${v.variantId}`) ?? 0,
+        largoMm: v.largoMm ?? null,
+        anchoMm: v.anchoMm ?? null,
+        categoria: v.categoria ?? null,
       }));
     },
     [branchId],

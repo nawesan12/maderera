@@ -41,7 +41,10 @@ export async function guardarAjuste(
       valor: formData.get("valor") ?? "",
     });
 
-  if (!parsed.success) return { error: "Datos inválidos." };
+  if (!parsed.success)
+    return {
+      error: "No se pudo guardar: el texto no puede pasar de 500 letras.",
+    };
 
   await db
     .update(siteSettings)
@@ -79,7 +82,10 @@ export async function moderarResena(
       motivo: (formData.get("motivo") as string) || undefined,
     });
 
-  if (!parsed.success) return { error: "Datos inválidos." };
+  if (!parsed.success)
+    return {
+      error: "No pudimos identificar esa reseña. Recargá la pantalla y probá de nuevo.",
+    };
 
   const [fila] = await db
     .update(productReviews)

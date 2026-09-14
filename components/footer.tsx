@@ -85,6 +85,7 @@ export async function Footer() {
               {[
                 ["Catálogo", "/catalogo"],
                 ["Pedir Presupuesto", "/presupuesto"],
+                ["Crear una cuenta", "/registro"],
                 ["Portal Profesionales", "/profesionales"],
                 ["Sucursales", "/sucursales"],
                 ["Moldava", "/moldava"],

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DollarSign, Plus, Settings2 } from "lucide-react";
+import { DollarSign, Maximize2, Plus, Settings2 } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { plural } from "@/components/admin/formato";
 import { listarCortes } from "@/lib/dal/admin/cortes";
@@ -56,6 +56,18 @@ export default async function CortesPage({
         >
           <DollarSign className="h-5 w-5" />
           Tarifas
+        </Link>
+
+        {/* La pantalla del aserradero no estaba enlazada desde ningún lado: el
+            rol aserradero cae ahí al entrar, pero cualquier otro tenía que
+            tipear la dirección. Es la puerta que `/admin/whatsapp` ya tenía
+            hacia `/atencion`. */}
+        <Link
+          href="/taller"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <Maximize2 className="h-5 w-5" />
+          Abrir la pantalla del taller
         </Link>
       </EncabezadoPanel>
 

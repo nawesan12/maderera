@@ -56,7 +56,7 @@ export async function guardarPerfil(
   try {
     columnas = JSON.parse(String(formData.get("columnas") ?? "[]"));
   } catch {
-    return { error: "No se entendió la configuración de columnas." };
+    return { error: "No pudimos guardar las columnas. Revisá que todas tengan nombre." };
   }
 
   const parsed = esquema.safeParse({
@@ -134,7 +134,7 @@ export async function borrarPerfil(
   const usuario = await requireStaff();
 
   const id = z.string().uuid().safeParse(formData.get("id"));
-  if (!id.success) return { error: "No se pudo identificar el formato." };
+  if (!id.success) return { error: "No encontramos ese formato. Puede que lo hayan borrado." };
 
   const [borrado] = await db
     .delete(cuttingExportProfiles)

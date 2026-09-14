@@ -23,7 +23,10 @@ export async function cambiarAvisoEmail(
     .object({ id: z.string().uuid(), activo: z.enum(["si", "no"]) })
     .safeParse({ id: formData.get("id"), activo: formData.get("activo") });
 
-  if (!parsed.success) return { error: "Datos inválidos." };
+  if (!parsed.success)
+    return {
+      error: "No pudimos identificar ese aviso. Recargá la pantalla y probá de nuevo.",
+    };
 
   await db
     .update(avisosEmail)

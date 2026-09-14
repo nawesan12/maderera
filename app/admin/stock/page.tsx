@@ -163,7 +163,12 @@ export default async function AdminStockPage({
                     className="flex items-baseline justify-between gap-3 border-b border-border/60 px-3 py-3 last:border-0"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-base">{m.productName}</p>
+                      <Link
+                        href={`/admin/productos/${m.productId}`}
+                        className="block truncate text-base hover:text-brand-orange hover:underline"
+                      >
+                        {m.productName}
+                      </Link>
                       <p className="truncate text-sm text-muted-foreground">
                         {m.label}
                       </p>

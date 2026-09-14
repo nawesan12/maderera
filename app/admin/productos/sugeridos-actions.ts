@@ -106,7 +106,7 @@ export async function quitarSugerido(
       productId: formData.get("productId"),
     });
 
-  if (!parsed.success) return { error: "No se pudo identificar la relación." };
+  if (!parsed.success) return { error: "No pudimos encontrar ese producto sugerido. Recargá la pantalla y probá de nuevo." };
 
   // El `productId` va en el `where` además del id propio: sin eso, un id
   // adivinado borraría una relación de otra ficha.

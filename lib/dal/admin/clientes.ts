@@ -39,7 +39,7 @@ export interface ClienteListado {
  * en el mostrador.
  */
 export async function listarClientes(
-  filtros: { busqueda?: string; tipo?: string } = {},
+  filtros: { busqueda?: string; tipo?: string; vendedor?: string } = {},
 ): Promise<ClienteListado[]> {
   await requireStaff();
 
@@ -47,6 +47,12 @@ export async function listarClientes(
 
   if (filtros.tipo && filtros.tipo !== "todos") {
     condiciones.push(eq(customers.tipo, filtros.tipo as "particular" | "profesional"));
+  }
+  // La cartera de un vendedor. El conteo de `/admin/clientes/vendedores`
+  // decía "3 clientes asignados" y era texto muerto: no había con qué ver
+  // cuáles, que es la pregunta que sigue.
+  if (filtros.vendedor) {
+    condiciones.push(eq(customers.sellerId, filtros.vendedor));
   }
   if (filtros.busqueda) {
     const coincidencia = coincideBusqueda(filtros.busqueda, [

@@ -36,7 +36,7 @@ export default async function AdminEnviosPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Envíos"
-        detalle="Las zonas que se ofrecen en el checkout, con su costo y su plazo."
+        detalle="Las zonas que se le ofrecen al cliente al terminar la compra, con su costo y su plazo."
       />
 
       <div className="rounded-xl border bg-card p-5">

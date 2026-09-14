@@ -64,6 +64,8 @@ const pagoSchema = z.object({
   /** Lote y cupón de la terminal: el "código de que se pagó con qué". */
   nroLote: z.string().max(20).nullable().optional(),
   nroCupon: z.string().max(20).nullable().optional(),
+  /* En cuántas cuotas. No cambia el importe; ver `PagoDeVenta`. */
+  cuotas: z.coerce.number().int().min(1).max(24).nullable().optional(),
   tarjeta: z.string().max(40).nullable().optional(),
 });
 
@@ -94,6 +96,38 @@ const ventaSchema = z.object({
   notas: z.string().nullable().optional(),
   /** El vendedor ya vio el aviso de cuenta corriente y decidió seguir. */
   autorizado: z.boolean().optional(),
+  /*
+   * El corte que se vendió, si se vendió uno.
+   *
+   * Se valida acá y no solo en la pantalla porque una acción de servidor es una
+   * dirección pública. El trabajo nace dentro de la misma transacción que la
+   * venta: ver `CorteDeMostrador` en `lib/mostrador/venta.ts`.
+   */
+  corte: z
+    .object({
+      variantId: z.string().uuid().nullable(),
+      materialDescripcion: z.string().trim().min(2).max(200),
+      cantoDescripcion: z.string().trim().max(120).nullable(),
+      placas: z.coerce.number().int().min(1).max(999),
+      pasadas: z.coerce.number().int().min(0).max(9999),
+      acomodoManual: z.string().max(20_000).nullable(),
+      piezas: z
+        .array(
+          z.object({
+            largoMm: z.coerce.number().int().positive().max(10_000),
+            anchoMm: z.coerce.number().int().positive().max(10_000),
+            cantidad: z.coerce.number().int().positive().max(999),
+            respetaVeta: z.coerce.number().int().min(0).max(1),
+            cantoLargo: z.coerce.number().int().min(0).max(2),
+            cantoAncho: z.coerce.number().int().min(0).max(2),
+            etiqueta: z.string().trim().max(120).nullable(),
+            aclaracion: z.string().trim().max(200).nullable(),
+          }),
+        )
+        .min(1)
+        .max(500),
+    })
+    .optional(),
 });
 
 function refrescar() {

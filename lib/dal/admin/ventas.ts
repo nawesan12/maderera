@@ -361,6 +361,7 @@ export async function obtenerPedido(id: string) {
         importe: orderPayments.importe,
         nroLote: orderPayments.nroLote,
         nroCupon: orderPayments.nroCupon,
+        cuotas: orderPayments.cuotas,
         tarjeta: orderPayments.tarjeta,
       })
       .from(orderPayments)

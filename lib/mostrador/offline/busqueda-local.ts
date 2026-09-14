@@ -48,6 +48,16 @@ export interface VarianteLocal {
   /** Todo lo buscable, ya normalizado por el servidor. */
   busqueda: string;
   sortOrder: number;
+  /**
+   * La medida de la placa, cuando la variante la tiene.
+   *
+   * Va en la copia porque el buscador del mostrador lee de acá **también
+   * estando en línea**, y sin las dos medidas no se puede ofrecer cortar.
+   */
+  largoMm?: number | null;
+  anchoMm?: number | null;
+  /** La familia del producto. Por acá se busca la tarifa de corte. */
+  categoria?: string | null;
 }
 
 /**

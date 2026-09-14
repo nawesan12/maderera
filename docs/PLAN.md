@@ -571,23 +571,61 @@ cuatro calculadoras, que no tenían ninguno.
 
 ### Lo que falta para cerrar el contrato
 
+> Revisado cláusula por cláusula contra el código el **14/09/2026**, leyendo la
+> Cláusula Primera del contrato firmado (1.1 a 1.11) y verificando cada ítem en
+> la base y en las pantallas.
+
+**Construido y funcionando**: 1.1 (identidad y diseño), 1.2 (sitio público, con
+las ocho categorías del contrato cargadas), 1.3 (tienda: carrito, medios de
+pago, envíos por zona con las tres del contrato —Mar del Plata, Tandil,
+Necochea—, productos sugeridos, panel de pedidos con avisos), 1.4 (las cuatro
+calculadoras, el presupuestador y el consultor de stock), 1.5 (gestión entera),
+1.6 (portal de clientes), 1.7 (portal de profesionales con eventos), 1.9 (el
+código de migración, probado de punta a punta) y 1.10 en su parte escrita.
+
 | # | Qué | Cláusula | Depende de |
 |---|---|---|---|
-| 1 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Decisión de infraestructura (R5) y acceso al dominio |
-| 2 | **Capacitación presencial** y acompañamiento en la transición. Las guías escritas ya están; esto es la sesión con la gente. | 1.10 | Fecha con el cliente |
+| 1 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Acceso al dominio |
+| 2 | **Capacitación presencial.** Las guías escritas ya están; falta la sesión con la gente. | 1.10 | Fecha con el cliente |
+| 3 | **Soporte post-lanzamiento**: un mes. | 1.11 | Arranca al lanzar |
+| 4 | **La calculadora no se alcanza desde ningún lado.** Ver abajo. | 1.1 y 1.4 | Decisión de la clienta |
 
-**No queda nada pendiente que dependa solo del PRESTADOR.** Los dos renglones
-que quedan necesitan una decisión o una fecha del cliente.
+**El punto 4 es el único que conviene mirar con atención.** La cláusula 1.1
+lista «Calculadora» entre las páginas a diseñar y la 1.4 la nombra primera entre
+las herramientas digitales, con sus cuatro módulos. Está construida, anda, y
+sugiere los productos que pueden faltar. Pero **no la enlaza nada**: salió del
+menú a pedido de la clienta, y por arrastre quedó también fuera de la sección
+«Herramientas» de la portada, del pie y del mapa del sitio. Se llega solo si el
+asistente la sugiere.
 
-El SEO (1.8) sale del cuadro salvo la publicación en sí, que necesita el
-dominio. La migración (1.9) tampoco está: **el código está hecho y probado
-de punta a punta**. Lo que falta es el archivo del cliente, y está anotado como
-insumo pendiente.
+No es un incumplimiento —la página existe y funciona, y salió del menú porque lo
+pidieron— pero es un entregable del contrato que hoy nadie puede encontrar, y
+eso conviene resolverlo por escrito antes del cierre y no después.
+
+**Dos ítems del contrato salieron a pedido de la clienta** y conviene que la
+baja quede confirmada por escrito, con la disciplina de 8.4 / 8.5:
+
+- **El blog** (1.2 lo pide con categorías, fechas y tiempo de lectura). Salió el
+  7/9; `/blog` y cada nota redirigen con 301.
+- **Los testimonios** (1.2). Los reemplazaron las reseñas de compra verificada,
+  que son el mismo dato con un pedido entregado detrás.
+
+**Una definición para confirmar**: la 1.3 pide «integración con servicios de
+flete tercerizado (Andreani, CDI u otros), cálculo de costo por zona». El
+cálculo por zona, el retiro en sucursal y el seguimiento están; el transportista
+y el número de seguimiento se cargan a mano. Una integración por API con
+Andreani necesita cuenta corporativa —un insumo del cliente— y conviene acordar
+si el «u otros» alcanza con lo que hay.
+
+**Lo que no es un faltante, aunque lo parezca**: las cuotas. La 1.3 las nombra
+**dentro de Mercado Pago**, y las resuelve el checkout de Mercado Pago. En el
+mostrador no existen, pero el contrato no las pide ahí: es un pedido nuevo de la
+clienta del 14/9 y está anotado como insumo.
 
 De los cobros, los avisos y ARCA no falta código: falta lo que tramita el
 cliente —credenciales de Mercado Pago, casilla con dominio verificado,
-certificado fiscal y la definición sobre WhatsApp—. La lista completa de
-insumos pendientes está en `docs/CAMBIOS.md`.
+certificado fiscal y la definición sobre WhatsApp—. La lista completa de insumos
+pendientes está en `docs/CAMBIOS.md`.
 
 
 ## 2. Punto de partida real
@@ -901,10 +939,19 @@ escritas, no un modelo de lenguaje—.
 
 **El catálogo ganó un nivel.** Las subcategorías eran texto libre escrito en
 cada producto —dos productos del mismo rubro con una tilde de diferencia eran
-dos rubros— y ahora son una tabla con filtro navegable. Se cargaron los 43
-rubros de ferretería que la clienta trajo del sitio anterior. Están vacíos y no
-se muestran hasta que haya productos: el brief da ~1000 SKUs para esa categoría
-sola, y sin este nivel es una grilla donde no se encuentra un tarugo.
+dos rubros— y ahora son una tabla con filtro navegable. Los 43 rubros de
+ferretería que la clienta trajo del sitio anterior quedaron escritos en el
+sembrado. Están vacíos y no se muestran hasta que haya productos: el brief da
+~1000 SKUs para esa categoría sola, y sin este nivel es una grilla donde no se
+encuentra un tarugo.
+
+> **Precisión del 13/9.** Este párrafo decía "se cargaron", en pasado, y eso es
+> cierto del repositorio y no necesariamente de la base: los rubros viven en
+> `lib/db/seed-negocio.ts`, que corre con el script aparte `db:seed-negocio` y
+> **no** con `db:seed`. Lo mismo vale para los 9 rubros de placas (nota 64) y
+> para la lista constructora (nota 88). Contra la base local corrieron —78
+> rubros, 3 listas, 8 promociones bancarias—; contra producción está sin
+> comprobar y anotado como insumo en `CAMBIOS.md`.
 
 **Dos pantallas nuevas en el panel.** `/admin/calculadoras` trae a la superficie
 los números con los que calculan las cuatro calculadoras —y de paso destraba
@@ -1022,6 +1069,316 @@ de factura" quiere la clienta en el mostrador —la nota dice "etc etc etc" y lo
 tipos fiscales no se eligen a mano—.
 
 Migraciones 0051 y 0052. Tests: 505.
+
+---
+
+## 7 sexies. Quinta pasada: que se entienda y se pueda usar (13/9/2026)
+
+Tres preguntas, hechas sobre las 103 pantallas: **¿se puede operar todo?**,
+**¿quedó jerga técnica escondida?**, **¿seguimos cumpliendo `notas.md`?**
+
+El diagnóstico de fondo conviene decirlo antes que los defectos: **no hay un
+solo `TODO`, `href="#"`, `onClick` vacío ni "Próximamente" en toda la app**, no
+hay botones deshabilitados para siempre, las 63 rutas de `/admin` tienen entrada
+de menú —salvo una— y el castellano está cuidado. El trabajo de la cuarta pasada
+se nota. Lo que quedaba eran fugas, y casi todas repetidas.
+
+**Lo más caro no era de lenguaje.** `/admin/cierre` le decía al administrador
+"N asientos no cierran, no exportes hasta revisarlos" y **no le mostraba
+cuáles**: el valor se calculaba, se contaba y no se usaba en ninguna otra línea
+del archivo. El botón de exportar, tres líneas más arriba, se apretaba igual.
+Una advertencia que no frena nada es una advertencia que se aprende a ignorar.
+
+**Cuatro cosas más frenaban trabajo**: anular un cheque era un clic irreversible
+pegado a "Depositar" —con un comentario en el propio archivo que decía que no
+debía estar ahí—; se podía dar de baja una caja con ventas cobradas sin subir,
+con el número a la vista al lado del botón; dar de baja un documento era un
+tacho de 32 píxeles sin etiqueta, sin confirmación y sin vuelta atrás; y
+`/taller` no se alcanzaba desde ningún lado.
+
+**El criterio que ordenó el resto: lo que ya existe, usarlo.** El componente de
+estado vacío estaba escrito para exactamente este problema —su comentario cuenta
+el caso— y lo usaban 3 pantallas de unas 20. La confirmación existía en cuatro
+lugares con cuatro formas distintas: anular una factura pedía motivo y anular un
+cheque no preguntaba nada. Ahora hay una sola, y lo que no tiene vuelta lo dice.
+
+**La jerga que quedaba**: "ítem" en 28 lugares —palabra de ERP; en el mostrador
+se dice *renglón* o *producto*—, `"Datos inválidos."` en diez pantallas sin
+decir qué dato, `Close` en inglés en todos los diálogos, y una bitácora que
+ofrecía filtrar entre `orden_compra` y `retencion_sufrida`. Las tres pantallas
+de configuración que eran un muro —WhatsApp, ARCA y el formato del corte—
+separan ahora lo que hace el dueño del negocio de lo que hace quien mantiene el
+sistema: el operario de la seccionadora ya no elige entre "Windows (CRLF)" y
+"Unix (LF)".
+
+**Un hueco de `notas.md` que el código no confirmaba.** La clienta pidió dejar
+de vender el deck por metro cuadrado y venderlo por tabla (nota 8). El modelo se
+cambió, el sembrado se cambió, y **el selector de unidad del formulario se quedó
+atrás**: `tabla` no estaba, así que un deck nuevo no se podía cargar bien desde
+el panel. `formatearUnidad` tenía además cuatro unidades sin nombre y el kilo
+escrito `kilo` cuando el enum dice `kg`. Hay un test atado al enum para que no
+vuelva a pasar.
+
+**Y la nota 61 estaba a un tercio.** "Hacer más promoción de hacer una cuenta":
+había **un solo** enlace a `/registro` en toda la aplicación, en la barra y solo
+desde pantallas anchas. En celular y en tablet no existía ninguno. La nota 85
+tampoco estaba entera: el reporte de reposición traía el rubro como columna pero
+solo se podía filtrar por categoría, que es el nivel de arriba.
+
+**Lo que no se tocó, y por qué.** La calculadora sigue sin enlazarse: salió del
+menú por pedido de la clienta y volver a meterla desde el catálogo sería
+revertir su decisión sin decírselo. Está anotada como insumo pendiente, junto
+con otras tres: si "rubro" significa categoría o subrubro en el reporte de
+utilidad, que los PDF de proveedores están rechazados a propósito, y si los
+sembrados corrieron contra producción —en local corrieron; desde acá no se pudo
+comprobar la otra punta—.
+
+**Un defecto que apareció verificando, no leyendo.** El aviso de éxito que se
+agregó al desactivar un vendedor y al anular un cheque **no se veía nunca**: la
+fila se muda de "Activos" a "Inactivos" —o de "En juego" a "Terminados"—, el
+componente se vuelve a montar y el mensaje propio desaparece con él. El éxito
+va ahora por el aviso global, que sobrevive al remonte; el error se queda al
+lado del botón, porque en ese caso la fila no se mueve. Es exactamente el tipo
+de cosa que no se ve en el código y sí usando la pantalla.
+
+**El barrido en caliente, que es donde aparecieron los últimos.** Se recorrieron
+las 81 rutas estáticas con los cuatro roles, mirando el código de respuesta y a
+dónde rebota cada una. Ninguna pantalla falla y el control de acceso es
+coherente, pero salieron tres cosas que leyendo no se veían:
+
+- **El aserradero no podía abrir una sola guía.** `/admin/ayuda` no estaba
+  declarada en `ACCESO`, así que heredaba de `/admin` —que lo excluye—, y la
+  excepción del layout lo sacaba de todo lo que no colgara de `/admin/cortes`.
+  La única persona sin panel detrás era la única sin ayuda, y la guía 8 está
+  escrita para ella. Es otra vez lo que advierte el comentario de las rutas de
+  compras: **no declarar una ruta también decide.**
+- **El mismo remito decía dos cosas según cómo se imprimiera.** El PDF llevaba
+  el «total / parcial» y la lista de lo que queda en acopio; la impresión desde
+  pantalla, no. Dos papeles con el mismo número que no coinciden es peor que
+  cualquiera de los dos.
+- **Un remito de retiro rotulaba «Domicilio de entrega»** la dirección del
+  cliente. En un retiro no se entrega nada ahí.
+
+Tests: 522. Sin migraciones.
+
+---
+
+## 7 septies. El plano de corte propio (14/9/2026)
+
+**Cambió una decisión del plan, y la cambió el negocio.** La sección 9 dice que
+la plataforma entrega la lista de piezas y el patrón lo arma el optimizador del
+taller. Eso sigue siendo cierto para **cortar**. Pero para **vender** no
+alcanza, y el motivo lo puso la clienta:
+
+> No podemos vender un corte sin antes ver cómo va a quedar, cómo distribuirlo
+> adentro de la misma plancha. Y si para el corte que necesita la persona se
+> necesita más de media placa, se le vende la placa entera directamente.
+
+Esa es una regla comercial que la plataforma no conocía, y sin ella el mostrador
+no puede dar un precio. Ahora está en `lib/cortes/plano.ts` y
+`lib/cortes/presupuesto.ts`, las dos sin base de datos.
+
+**Cómo funciona.** Se acomoda el despiece sobre la placa —que sale de la
+variante del catálogo, con su medida y su precio— con corte guillotina, que es
+lo único que sabe hacer una seccionadora. De ahí salen tres cosas:
+
+1. **Cuántas placas.**
+2. **Cuáles se venden enteras.** La decisión es **placa por placa**: un trabajo
+   de tres placas puede tener dos que se venden enteras y una tercera de la que
+   sale un 39 % y se cobra por pasada. Promediarlas le cobraría de más a unos y
+   de menos a otros.
+3. **Cuántas pasadas se cobran**, que son solo las de las placas que no se
+   venden enteras: en las que sí, el cliente ya pagó todo el material.
+
+**El plano se dibuja mientras se carga el despiece.** El cálculo es geometría
+pura, así que corre en el navegador y se rehace con cada medida que se tipea.
+Cargar una pieza y ver que se pasó a una segunda placa es la información que
+hace falta **antes** de decirle un precio a alguien que está esperando.
+
+**El acomodo se midió y se mejoró.** El primer intento acomodaba por tiras
+horizontales; una pieza baja en una tira alta desperdicia esa altura para
+siempre. La segunda versión apoya cada pieza en el hueco donde mejor calza y
+parte el resto con un corte recto, recursivamente. Sobre 200 despieces generados
+con medidas de mueblería: **876 placas contra 971, un 9,8 % menos**. El piso
+teórico de esos mismos despieces son 628, así que sigue lejos del óptimo y
+sigue sin reusar recortes de trabajos anteriores, que es lo que hace un
+optimizador dedicado.
+
+**Un error propio, corregido por escrito.** El primer informe comparaba «nuestro
+64 % contra el 70-80 % de un optimizador». Está mal: para un despiece dado la
+superficie útil es fija, así que ese porcentaje depende **solo de cuántas placas
+se usaron**. Un optimizador que use tres placas da exactamente el mismo 64 %. Lo
+que sí distingue un acomodo son dos cosas: cuántas placas gasta, y de qué tamaño
+es el retal que deja —uno de 1540 × 1540 vuelve al stock; el mismo desperdicio
+en tiras de seis centímetros se tira—. Hay un test que fija esa lectura para que
+no se vuelva a contar mal.
+
+**Un defecto que encontró un test.** Los cortes se registraban siempre de punta
+a punta del hueco, sin mirar cuál se hacía primero. Con la partición recursiva
+eso dibujaba **la sierra atravesando una pieza ya apoyada**. Lo atrapó el test
+que verifica que ningún corte cruce una pieza, que es la garantía de que el
+plano se puede ejecutar.
+
+**Y una corrección de la misma pasada.** La ficha del corte salió con cuatro
+párrafos que narraban el acomodo, y cada uno repetía un número que la pantalla
+ya mostraba dos veces. En una ficha que se lee de pie eso es una pared. Se
+sacaron y entró el dibujo de las placas, con la decisión —"se vende entera" o
+"se cobra el corte"— escrita en cada una: la decisión es por placa, y un párrafo
+que la promedia dice menos que tres recuadros. El campo `explicacion` se eliminó
+del módulo en vez de dejarlo sin usar.
+
+**Y se puede meter mano.** El cálculo acomoda y quien mira la placa corrige,
+que es como trabajan los programas del rubro: arrastrar una pieza a otra placa
+la manda ahí, doble clic la gira, y siempre se puede volver al automático —de a
+una pieza o todas—. Lo movido queda dibujado con borde punteado.
+
+**Se arrastra a una placa y no a un punto, y esa restricción es la feature.** El
+primer intento guardaba la coordenada exacta y no se podía reconstruir: la
+esquina donde se había soltado existía *porque las otras piezas ya estaban
+puestas*, y al rehacer el plano sobre una placa virgen no hay dónde apoyarla. El
+test lo mostró enseguida. Pero el motivo de fondo es más serio: soltar piezas en
+coordenadas libres arma patrones con forma de molinete que **la seccionadora no
+puede cortar**, porque corta de borde a borde y no sabe hacer una L. Mandar la
+pieza a una placa sí es una decisión que se puede respetar siempre, y es la que
+de verdad se toma mirando el plano —"esta puerta que salga de la placa nueva, no
+de la que tiene el borde golpeado"—.
+
+**Y se guarda.** La primera versión dejaba mover piezas y perdía la corrección
+al guardar el corte: existía solo mientras la pantalla estaba abierta, que es
+una función a medias disfrazada de función. Ahora va con el trabajo —migración
+0053, columna `acomodo_manual`— y lo respetan la ficha, la hoja del taller y el
+precio. La validación vive del lado de la lectura: una lista de otra época o
+rota no rompe la ficha, solo hace que el plano se recalcule solo.
+
+También se corrige **después** de cargado, no solo en el alta. La decisión se
+toma muchas veces con el trabajo ya en la cola.
+
+**Y se vende desde el mostrador.** Era el último tramo suelto: el corte se
+cobraba como un renglón escrito a mano y el trabajo se cargaba aparte, o no se
+cargaba. Ahora el buscador ofrece «Cortar» sobre cualquier placa con medida, se
+carga el despiece sin salir de la venta, y de ahí salen los renglones —las
+placas enteras con su variante, que descuentan stock; el corte y el tapacanto
+sin variante, que no descuentan nada—.
+
+**El trabajo nace con la venta y dentro de la misma transacción.** Crearlo al
+armar el despiece dejaría un corte fantasma en la cola cada vez que una venta se
+cancela, con el aserradero cortando una placa que nadie pagó.
+
+**Sin conexión no se puede, y se dice.** El botón no aparece: la venta se encola
+pero el despiece no viaja en la cola. Cobrar un corte que nunca llega al
+aserradero es peor que no poder venderlo.
+
+Un defecto de la copia local que apareció acá y vale para todo lo que venga: el
+delta solo trae lo que cambió, así que una variante ya guardada **nunca vuelve a
+bajar** y se queda sin los campos nuevos. El botón de cortar no aparecía y no
+había nada roto que mirar. La copia lleva ahora una versión de forma, y subirla
+obliga a bajar todo una vez.
+
+**Las promociones de los bancos, sin regalar plata.** Un reintegro de MODO o
+del Hipotecario lo paga el banco: el cliente abona el total y se lo devuelven.
+Descontarlo en el mostrador sería poner de nuestro bolsillo lo que iba a poner
+otro, y sobre el 15 % de una venta de placas es mucho. Ahora cada promoción
+declara **quién pone la plata** —obligatorio al cargarla, sin valor elegido de
+antemano— y el mostrador las muestra plegadas, con esa etiqueta y sin tocar el
+total. Lo que sí se descuenta solo sigue viviendo en Formas de pago: dos listas
+de descuentos es lo que hace que alguien aplique el mismo dos veces.
+
+**Y las cuotas.** El cobro no registraba en cuántas se pagó, así que no se podía
+ofrecer «12 sin interés del Nación» ni conciliar después. Ahora se elige cuando
+el medio es crédito y sale en el ticket, **sin cambiar el total**: las sin
+interés las financia el banco.
+
+**Y un defecto que estaba desde que existe la tarifa de corte.** Las tarifas se
+cargan por familia —"Placas", "Tableros de madera", como las dio el brief— y el
+corte guarda el nombre completo de lo que se corta: "Melamina Blanca — 1830 x
+2600mm — 18mm". La búsqueda comparaba esas dos cadenas **por igualdad**, así que
+nunca coincidía: la ficha decía "no hay tarifa cargada" para todos los cortes y
+el trabajo salía en cero. **El corte no se cobraba en ninguna parte del
+sistema**, que es exactamente el problema que la tarifa vino a resolver.
+
+Se descubrió vendiendo un corte desde el mostrador y mirando el total. Ahora la
+tarifa se busca por la **categoría** del producto, con la descripción como
+respaldo para el material que trae el cliente. El mismo trabajo pasó de $ 0 a
+$ 20.400.
+
+**El circuito, verificado de punta a punta.** Se vendió un corte de verdad desde
+el mostrador y se siguió el rastro: el renglón entró a la venta con el descuento
+de transferencia aplicado —$ 1.080 la pasada en vez de $ 1.200—, el pedido
+PED-1206 quedó en $ 6.480, y el trabajo **CRT-460 nació en la cola del taller**
+atado a ese pedido, con su pieza de 600 × 400 ×4. Aparece en `/taller` y el
+pedido aparece en el panel. Era lo único construido que todavía no se había
+visto funcionar entero.
+
+Tests: 575. Migraciones 0053, 0054 y 0055.
+
+---
+
+## 7 octies. El mostrador, sin mouse (14/9/2026)
+
+La pantalla que más se usa se operaba con el mouse y con scroll. El panel
+derecho —cliente, medios, tipo de operación, descuento, papel, vuelto y cobro—
+medía 400 px fijos, y en el monitor del mostrador quedaban unos 380 px de alto
+útiles para 560 px de controles: en **toda** venta en efectivo había que
+scrollear para llegar a «con cuánto paga», y las acciones de imprimir vivían al
+final de esa columna, justo cuando el cliente espera el ticket en la mano.
+
+**El panel, ancho y en dos columnas.** Ahora mide 560 px en el monitor de
+mostrador y 620 en uno grande. Arriba, el tipo de operación, que decide el
+resto; debajo, dos columnas: cómo paga y con cuánto, contra descuento y qué se
+lleva. Lo que aparece de a ratos —lote y cupón, cuotas, pago partido— ocupa el
+ancho entero cuando aparece; lo que se consulta —promociones del banco— quedó
+plegado. Cobrar y presupuesto comparten fila. Una venta común entra sin
+scrollear.
+
+**Dos controles que decían lo mismo.** «Cuenta corriente» estaba como medio de
+pago **y** como tipo de operación: había que elegir lo mismo dos veces. Ahora el
+tipo fija el medio, y en cuenta corriente la columna de medios se reemplaza por
+a quién se le anota la deuda. Los carteles de «falta caja» y «falta cliente»
+dejaron de vivir al final del scroll: cada uno está al lado del control que lo
+provoca, y el resultado de la venta salió del área scrolleable.
+
+**La venta entera, con el teclado.** Se verificó cobrando sin tocar el mouse:
+
+- **La cantidad va adelante**: `3*machimbre` carga tres. La `x` también sirve
+  —`3 x pino`— pero solo con espacios, porque «2x4» es una medida y no dos
+  unidades de algo llamado «4»; la regla está en `leerTipeo`, con sus pruebas.
+- **Flechas** para moverse por los resultados, `Enter` para el marcado y
+  `Ctrl + Enter` para cortar esa placa, que hasta ahora era el único paso que
+  obligaba al mouse. El resaltado ya no lo mueve el puntero: la lista aparece
+  debajo del cursor y eso cargaba el producto equivocado.
+- **El foco se encadena**: elegir efectivo lleva a «con cuánto paga» —donde
+  `Enter` cobra—, elegir tarjeta lleva a la marca, partir el pago lleva al
+  primer importe, y terminada la venta el cursor vuelve al buscador.
+- **Los atajos** (`Alt` + inicial) están en `app/mostrador/atajos.tsx`, que es
+  también de donde sale la ayuda que se ve en pantalla: `Alt+C` cliente, `Alt+O`
+  tipo de operación, `Alt+1..4` medios, `Alt+D` descuento, `Alt+F` factura,
+  `Alt+P` partir, `Alt+U` presupuesto, `Alt+I` imprimir, `F2` cantidad,
+  `Ctrl+Enter` cobrar.
+
+**Un clic menos en cada venta a una empresa.** Elegir un cliente que no es
+consumidor final pone el comprobante en factura solo: viene a comprar para su
+negocio y la va a pedir igual. Solo sube: no le saca la factura a quien ya la
+eligió a mano.
+
+**Los diálogos, también.** El corte a medida suma otra medida con `Enter` y
+cierra con `Ctrl + Enter` —un despiece son cinco o seis medidas seguidas, y el
+botón «Agregar medida» obligaba a soltar el teclado entre una y otra—; el alta a
+mano es un formulario, así que `Enter` agrega desde cualquier campo; y `Alt + K`
+abre y cierra la caja, que es lo que se toca a la mañana y al cierre.
+
+**Un defecto que apareció recién al probarlo.** `Ctrl + Enter` para cerrar el
+corte a medida cerraba el corte **y cobraba la venta de atrás**: la tecla seguía
+viajando hasta el oyente de la ventana. Ahora, con un diálogo abierto, la
+pantalla de atrás no escucha ninguna tecla. Hay que mirar `data-open` y
+`data-closed` —los diálogos son de Base UI, no de Radix— y no el `data-state`
+que uno espera. Se cobró una venta de prueba antes de darse cuenta; quedó
+anulada con su motivo, que es exactamente para lo que la anulación existe.
+
+Verificado en el navegador a 1366 × 768 y en Full HD: se cobró PED-1208 sin
+tocar el mouse —`3*machimbre`, `Enter`, `Alt+1`, el importe, `Enter`— y se
+imprimió con `Alt+I`. Después, un corte a medida entero por teclado y un flete
+cargado a mano, los dos sin mouse. Tests: 581, seis nuevos sobre la cantidad
+tipeada. Sin migraciones.
 
 ---
 

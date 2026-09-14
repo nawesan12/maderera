@@ -81,8 +81,8 @@ export default async function OrdenPage({
               <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                 <th className="px-4 py-2.5 font-semibold">Mercadería</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Pedido</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Llegó</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Falta</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Ya llegó</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Falta que llegue</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Costo</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Subtotal</th>
               </tr>

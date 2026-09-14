@@ -277,7 +277,7 @@ export async function simularEntrante(
   await requireStaff();
 
   if (proveedorWhatsapp().id !== "demo") {
-    return { error: "Esto solo se puede hacer en modo demostración." };
+    return { error: "Esto solo sirve mientras WhatsApp está en prueba." };
   }
 
   const parsed = z

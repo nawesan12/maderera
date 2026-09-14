@@ -65,17 +65,36 @@ export interface ProductoForm {
   variantes: VarianteForm[];
 }
 
+/**
+ * Las unidades de venta, en el orden en que se ofrecen.
+ *
+ * Tienen que ser las mismas que `unitOfSale` en `lib/db/schema/catalog.ts`.
+ * Faltaba **tabla**, que es la unidad del deck: la clienta pidió dejar de
+ * venderlo por metro cuadrado, el modelo y el sembrado se cambiaron, y el
+ * selector se quedó atrás. Un producto nuevo de deck no se podía cargar bien
+ * desde el panel.
+ */
 const UNIDADES = [
-  { valor: "unidad", texto: "Por unidad" },
-  { valor: "metro_lineal", texto: "Por metro lineal" },
-  { valor: "metro_cuadrado", texto: "Por metro cuadrado" },
-  { valor: "placa", texto: "Por placa" },
-  { valor: "rollo", texto: "Por rollo" },
-  { valor: "par", texto: "Por par" },
-  { valor: "juego", texto: "Por juego" },
-  { valor: "kg", texto: "Por kilo" },
-  { valor: "litro", texto: "Por litro" },
+  { valor: "unidad", texto: "Por unidad", nombre: "unidades" },
+  { valor: "metro_lineal", texto: "Por metro lineal", nombre: "metros" },
+  {
+    valor: "metro_cuadrado",
+    texto: "Por metro cuadrado",
+    nombre: "metros cuadrados",
+  },
+  { valor: "tabla", texto: "Por tabla", nombre: "tablas" },
+  { valor: "placa", texto: "Por placa", nombre: "placas" },
+  { valor: "rollo", texto: "Por rollo", nombre: "rollos" },
+  { valor: "par", texto: "Por par", nombre: "pares" },
+  { valor: "juego", texto: "Por juego", nombre: "juegos" },
+  { valor: "kg", texto: "Por kilo", nombre: "kilos" },
+  { valor: "litro", texto: "Por litro", nombre: "litros" },
 ];
+
+/** Cómo se nombra la unidad al lado de una cantidad. */
+function textoDeUnidad(valor: string): string {
+  return UNIDADES.find((u) => u.valor === valor)?.nombre ?? "unidades";
+}
 
 const varianteVacia = (): VarianteForm => ({
   sku: "",
@@ -231,7 +250,7 @@ export function FormularioProducto({
             <input type="hidden" name="slug" value={slug} />
 
             <div className="space-y-2">
-              <Label>Categoría</Label>
+              <Label htmlFor="categoria">Categoría</Label>
               <Select
                 value={categoria}
                 onValueChange={(v) => v && setCategoria(v)}
@@ -239,7 +258,7 @@ export function FormularioProducto({
                   categorias.map((c) => [c.id, c.name]),
                 )}
               >
-                <SelectTrigger>
+                <SelectTrigger id="categoria">
                   <SelectValue placeholder="Elegí una categoría" />
                 </SelectTrigger>
                 <SelectContent>
@@ -253,7 +272,7 @@ export function FormularioProducto({
             </div>
 
             <div className="space-y-2">
-              <Label>Rubro</Label>
+              <Label htmlFor="rubro">Rubro</Label>
               {/* El valor viaja en un campo oculto: `Select` no es un
                   `<select>` nativo y no se envía solo con el formulario. */}
               <input type="hidden" name="subcategoryId" value={rubroValido} />
@@ -265,7 +284,7 @@ export function FormularioProducto({
                   ...rubrosDeLaCategoria.map((r) => [r.id, r.name]),
                 ])}
               >
-                <SelectTrigger>
+                <SelectTrigger id="rubro">
                   <SelectValue placeholder="Sin rubro" />
                 </SelectTrigger>
                 <SelectContent>
@@ -296,7 +315,7 @@ export function FormularioProducto({
             </div>
 
             <div className="space-y-2">
-              <Label>Unidad de venta</Label>
+              <Label htmlFor="unidad-de-venta">Unidad de venta</Label>
               <Select
                 value={unidad}
                 onValueChange={(v) => v && setUnidad(v)}
@@ -304,7 +323,7 @@ export function FormularioProducto({
                   UNIDADES.map((u) => [u.valor, u.texto]),
                 )}
               >
-                <SelectTrigger>
+                <SelectTrigger id="unidad-de-venta">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -492,16 +511,18 @@ export function FormularioProducto({
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Código (SKU)</Label>
+                  <Label htmlFor={`sku-${i}`}>Código del producto</Label>
                   <Input
+                    id={`sku-${i}`}
                     value={variante.sku}
                     onChange={(e) => actualizarVariante(i, "sku", e.target.value)}
                     placeholder="PLA-MEL-BLA-18"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Cómo se muestra</Label>
+                  <Label htmlFor={`label-${i}`}>Cómo se muestra</Label>
                   <Input
+                    id={`label-${i}`}
                     value={variante.label}
                     onChange={(e) => actualizarVariante(i, "label", e.target.value)}
                     placeholder='1830 x 2600mm — 18mm'
@@ -510,7 +531,7 @@ export function FormularioProducto({
               </div>
 
               <p className="text-sm font-medium text-muted-foreground">
-                Geometría
+                Medidas
               </p>
               <div className="grid gap-3 sm:grid-cols-3">
                 {(
@@ -521,8 +542,9 @@ export function FormularioProducto({
                   ] as const
                 ).map(([campo, etiqueta]) => (
                   <div key={campo} className="space-y-1.5">
-                    <Label className="text-sm">{etiqueta}</Label>
+                    <Label htmlFor={`${campo}-${i}`}>{etiqueta}</Label>
                     <Input
+                      id={`${campo}-${i}`}
                       type="number"
                       min={0}
                       value={variante[campo] ?? ""}
@@ -536,8 +558,9 @@ export function FormularioProducto({
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Material</Label>
+                  <Label htmlFor={`material-${i}`}>Material</Label>
                   <Input
+                    id={`material-${i}`}
                     value={variante.material}
                     onChange={(e) =>
                       actualizarVariante(i, "material", e.target.value)
@@ -546,16 +569,18 @@ export function FormularioProducto({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Color</Label>
+                  <Label htmlFor={`color-${i}`}>Color</Label>
                   <Input
+                    id={`color-${i}`}
                     value={variante.color}
                     onChange={(e) => actualizarVariante(i, "color", e.target.value)}
                     placeholder="Blanco"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Terminación</Label>
+                  <Label htmlFor={`terminacion-${i}`}>Terminación</Label>
                   <Input
+                    id={`terminacion-${i}`}
                     value={variante.terminacion}
                     onChange={(e) =>
                       actualizarVariante(i, "terminacion", e.target.value)
@@ -564,8 +589,9 @@ export function FormularioProducto({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Tipo o calidad</Label>
+                  <Label htmlFor={`calidad-${i}`}>Tipo o calidad</Label>
                   <Input
+                    id={`calidad-${i}`}
                     value={variante.calidad}
                     onChange={(e) =>
                       actualizarVariante(i, "calidad", e.target.value)
@@ -581,26 +607,41 @@ export function FormularioProducto({
                 Precios y stock
               </p>
 
+              {/* Los dos precios se guardan finales, con IVA incluido: es la
+                  regla de `lib/precios/vista.ts` y no estaba dicha en ningún
+                  lado de la pantalla donde se los carga. */}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Precio de lista</Label>
+                  <Label htmlFor={`precio-lista-${i}`}>
+                    Precio de lista (con IVA)
+                  </Label>
                   <Input
+                    id={`precio-lista-${i}`}
                     value={variante.precioGeneral}
                     onChange={(e) =>
                       actualizarVariante(i, "precioGeneral", e.target.value)
                     }
                     inputMode="decimal"
                   />
+                  <p className="text-sm text-muted-foreground">
+                    El precio final, como se cobra en el mostrador.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Precio profesional</Label>
+                  <Label htmlFor={`precio-prof-${i}`}>
+                    Precio profesional (con IVA)
+                  </Label>
                   <Input
+                    id={`precio-prof-${i}`}
                     value={variante.precioProfesional}
                     onChange={(e) =>
                       actualizarVariante(i, "precioProfesional", e.target.value)
                     }
                     inputMode="decimal"
                   />
+                  <p className="text-sm text-muted-foreground">
+                    También final. Al profesional se le muestra el neto aparte.
+                  </p>
                 </div>
               </div>
 
@@ -614,8 +655,17 @@ export function FormularioProducto({
                   ] as const
                 ).map(([campo, etiqueta]) => (
                   <div key={campo} className="space-y-1.5">
-                    <Label className="text-sm">{etiqueta}</Label>
+                    <Label htmlFor={`${campo}-${i}`}>
+                      {etiqueta}
+                      {/* Sin la unidad, "Stock Central: 40" no dice si son
+                          chapas, metros o tablas. La unidad ya está elegida
+                          más arriba en la misma pantalla. */}
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        (en {textoDeUnidad(unidad)})
+                      </span>
+                    </Label>
                     <Input
+                      id={`${campo}-${i}`}
                       type="number"
                       min={0}
                       value={variante[campo] ?? 0}

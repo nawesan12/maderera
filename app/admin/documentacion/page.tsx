@@ -7,7 +7,7 @@ import {
   listarDocumentos,
 } from "@/lib/dal/admin/documentacion";
 import { SubirDocumento } from "./subir";
-import { AccionesDocumento } from "./acciones";
+import { AccionesDocumento, RestaurarDocumento } from "./acciones";
 
 export const metadata: Metadata = { title: "Documentación técnica" };
 
@@ -94,14 +94,17 @@ export default async function DocumentacionAdminPage() {
                 className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-3 text-base text-muted-foreground"
               >
                 <span className="line-through">{doc.titulo}</span>
-                <a
-                  href={doc.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:underline"
-                >
-                  Ver archivo
-                </a>
+                <span className="flex items-center gap-3">
+                  <a
+                    href={doc.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:underline"
+                  >
+                    Ver archivo
+                  </a>
+                  <RestaurarDocumento id={doc.id} />
+                </span>
               </li>
             ))}
           </ul>
@@ -163,6 +166,7 @@ function Grupo({
 
             <AccionesDocumento
               id={doc.id}
+              titulo={doc.titulo}
               soloProfesionales={doc.soloProfesionales}
             />
           </li>

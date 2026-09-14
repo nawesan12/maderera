@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Download, Flame, Tags } from "lucide-react";
+import { ArrowLeft, Download, Flame, Map, Tags } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_CORTE, Pasos } from "@/components/admin/pasos";
 import { fechaHora, plural } from "@/components/admin/formato";
@@ -12,6 +12,13 @@ import {
   metrosDeTapacanto,
   tarifaDeCorte,
 } from "@/lib/cortes/tarifa";
+import {
+  calcularPlanoDeCorte,
+  leerAcomodoManual,
+} from "@/lib/cortes/plano";
+import { AcomodoDelCorte } from "../acomodo";
+import { presupuestarCorte } from "@/lib/cortes/presupuesto";
+import { MEDIDAS_DE_PLACA } from "@/lib/calculations";
 import { formatearMonto } from "@/lib/formato";
 import { AccionesCorte } from "../acciones";
 import { CargarPasadas } from "../pasadas";
@@ -30,9 +37,12 @@ export default async function FichaCortePage({
 
   // La tarifa depende del material y de la lista de quien encarga: un mayorista
   // paga $996 la pasada donde el público paga $1.200.
+  // Por categoría primero —que es como se cargan las tarifas— y por la
+  // descripción después, que es lo único que hay si el material lo trajo el
+  // cliente y no salió del catálogo.
   const tarifa = tarifaDeCorte(
     await tarifasDeCorte(),
-    corte.material,
+    [corte.categoria ?? "", corte.material],
     corte.priceListId ?? null,
   );
   const cargo = cargoPorCorte(tarifa, corte.pasadas);
@@ -40,6 +50,28 @@ export default async function FichaCortePage({
   // del taller; el pegado se cobra aparte del corte.
   const metrosCanto = metrosDeTapacanto(corte.piezas);
   const cargoCanto = cargoPorTapacanto(tarifa, metrosCanto);
+  /*
+   * El plano, que es de donde sale el precio.
+   *
+   * No se puede cobrar un corte sin ver cómo entra en la placa: de una placa de
+   * la que sale más de la mitad se vende la placa entera y el corte va sin
+   * cargo. Ver `lib/cortes/presupuesto.ts`.
+   */
+  const medidaSupuesta = !corte.placaLargoMm || !corte.placaAnchoMm;
+  const plano = calcularPlanoDeCorte({
+    piezas: corte.piezas,
+    placaLargo: corte.placaLargoMm ?? MEDIDAS_DE_PLACA[0].largo,
+    placaAncho: corte.placaAnchoMm ?? MEDIDAS_DE_PLACA[0].ancho,
+    // Lo que alguien corrigió a mano cuando cargó el trabajo.
+    fijadas: leerAcomodoManual(corte.acomodoManual),
+  });
+  const cuenta = presupuestarCorte({
+    plano,
+    tarifa,
+    precioPorPlaca: corte.precioPlaca,
+    piezas: corte.piezas,
+  });
+
   const superficie =
     corte.piezas.reduce(
       (s, p) => s + (p.largoMm * p.anchoMm * p.cantidad) / 1_000_000,
@@ -71,9 +103,13 @@ export default async function FichaCortePage({
             )}
           </div>
           <p className="mt-0.5 text-base text-muted-foreground">
+            {/* Cada dato con su propia guarda: la sucursal puede venir en
+                nulo —`branchId` lo admite— y concatenarla sin preguntar
+                imprimía "null" en el encabezado de la ficha. */}
             <span className="tabular">{corte.numero}</span>
             {corte.empresa && ` · ${corte.empresa}`}
-            {` · ${corte.sucursal} · ${fechaHora.format(corte.createdAt)}`}
+            {corte.sucursal && ` · ${corte.sucursal}`}
+            {` · ${fechaHora.format(corte.createdAt)}`}
           </p>
         </div>
 
@@ -87,6 +123,118 @@ export default async function FichaCortePage({
       <section className="tarjeta p-5">
         <Pasos etapas={ETAPAS_CORTE} actual={corte.estado} />
       </section>
+
+      {/* Cómo entra en la placa y cuánto sale.
+          Va arriba de todo porque es lo que se contesta primero cuando alguien
+          pregunta por un corte en el mostrador: cuántas placas, si se le vende
+          la placa entera, y cuánto es. */}
+      {corte.piezas.length > 0 && (
+        <section className="tarjeta overflow-hidden">
+          <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-linea px-5 py-4">
+            <div>
+              <h2 className="text-base font-medium">Cómo entra en la placa</h2>
+              <p className="text-sm text-muted-foreground">
+                Placa de {plano.placaLargo} × {plano.placaAncho} mm
+                {medidaSupuesta ? " (medida supuesta: la placa no salió del catálogo)" : ""}
+              </p>
+            </div>
+            <Link
+              href={`/plano/${corte.id}`}
+              target="_blank"
+              className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+            >
+              <Map className="h-4 w-4" />
+              Ver el plano para el taller
+            </Link>
+          </header>
+
+          <div className="grid gap-px bg-linea sm:grid-cols-4">
+            <Cifra
+              valor={String(plano.placas.length)}
+              rotulo={plano.placas.length === 1 ? "placa" : "placas"}
+            />
+            <Cifra
+              valor={String(plano.placasEnteras)}
+              rotulo={
+                plano.placasEnteras === 1
+                  ? "se vende entera"
+                  : "se venden enteras"
+              }
+              destacada={plano.placasEnteras > 0}
+            />
+            <Cifra
+              valor={String(plano.pasadasCobrables)}
+              rotulo="pasadas a cobrar"
+            />
+            <Cifra
+              valor={
+                plano.recorteMayor
+                  ? `${plano.recorteMayor.ancho}×${plano.recorteMayor.alto}`
+                  : "—"
+              }
+              rotulo={
+                plano.recorteMayor ? "retal que queda, en mm" : "sin retal útil"
+              }
+            />
+          </div>
+
+          <div className="space-y-3 px-5 py-4">
+            <dl className="space-y-1.5">
+              {cuenta.placasEnteras > 0 && (
+                <Renglon
+                  que={`${cuenta.placasEnteras} ${cuenta.placasEnteras === 1 ? "placa entera" : "placas enteras"} × ${formatearMonto(cuenta.precioPorPlaca)}`}
+                  cuanto={cuenta.subtotalPlacas}
+                />
+              )}
+              {/* Sin tarifa no se muestra el renglón: "15 pasadas × $ 0" se
+                  lee como que el corte sale gratis, cuando lo que pasa es que
+                  falta cargar el precio. El aviso de abajo lo dice. */}
+              {cuenta.pasadasCobrables > 0 && cuenta.precioPorPasada > 0 && (
+                <Renglon
+                  que={`${cuenta.pasadasCobrables} ${cuenta.pasadasCobrables === 1 ? "pasada" : "pasadas"} × ${formatearMonto(cuenta.precioPorPasada)}`}
+                  cuanto={cuenta.subtotalCorte}
+                />
+              )}
+              {cuenta.subtotalCanto > 0 && (
+                <Renglon
+                  que={`${cuenta.metrosCanto.toFixed(2).replace(".", ",")} m de tapacanto`}
+                  cuanto={cuenta.subtotalCanto}
+                />
+              )}
+              <div className="flex items-baseline justify-between gap-4 border-t border-linea pt-2">
+                <dt className="text-base font-semibold">Total del trabajo</dt>
+                <dd className="tabular text-xl font-bold">
+                  {formatearMonto(cuenta.total)}
+                </dd>
+              </div>
+            </dl>
+
+            {cuenta.faltan.map((linea, i) => (
+              <p
+                key={`f${i}`}
+                className="estado-problema rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2 text-base font-medium"
+              >
+                {linea}
+              </p>
+            ))}
+          </div>
+
+          {/* El dibujo va al final y reemplaza a la explicación escrita: cuatro
+              párrafos que repetían los mismos números de arriba. Lo que faltaba
+              no era explicar el acomodo, era verlo. */}
+          {/* Editable, no solo mirable: la decisión de qué pieza sale de qué
+              placa se toma muchas veces después de cargar el trabajo. */}
+          <div className="border-t border-linea px-5 py-4">
+            <AcomodoDelCorte
+              id={corte.id}
+              piezas={corte.piezas}
+              placaLargo={plano.placaLargo}
+              placaAncho={plano.placaAncho}
+              inicial={leerAcomodoManual(corte.acomodoManual)}
+            />
+          </div>
+        </section>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
         <section className="tarjeta overflow-hidden">
@@ -193,9 +341,19 @@ export default async function FichaCortePage({
               Material
             </h2>
             <p className="text-base">{corte.material}</p>
+            {/* Cuántas placas.
+                El campo lo escribe una persona al dar de alta el trabajo y el
+                plano lo calcula. Cuando no coinciden gana el plano —que midió—
+                y se dice que el cargado quedó viejo, en vez de mostrar los dos
+                números contradiciéndose en la misma pantalla. */}
             <p className="mt-1 text-base text-muted-foreground">
-              {plural(corte.placas, "placa")} a cortar
+              {plural(plano.placas.length, "placa")} a cortar
             </p>
+            {plano.placas.length !== corte.placas && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                En el alta se habían cargado {plural(corte.placas, "placa")}.
+              </p>
+            )}
             {corte.cantoDescripcion && (
               <p className="mt-1 text-base text-muted-foreground">
                 Tapacanto: {corte.cantoDescripcion}
@@ -246,7 +404,11 @@ export default async function FichaCortePage({
                 </p>
               )}
 
-              <CargarPasadas id={corte.id} actuales={corte.pasadas} />
+              <CargarPasadas
+                id={corte.id}
+                actuales={corte.pasadas}
+                sugeridas={plano.pasadasCobrables}
+              />
             </div>
           </section>
 
@@ -296,6 +458,36 @@ export default async function FichaCortePage({
           </p>
         </aside>
       </div>
+    </div>
+  );
+}
+
+/** Una cifra del encabezado del plano. */
+function Cifra({
+  valor,
+  rotulo,
+  destacada,
+}: {
+  valor: string;
+  rotulo: string;
+  destacada?: boolean;
+}) {
+  return (
+    <div
+      className={`px-5 py-3.5 ${destacada ? "estado-marca bg-[var(--estado-fondo)]" : "bg-card"}`}
+    >
+      <p className="tabular text-2xl font-bold leading-none">{valor}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{rotulo}</p>
+    </div>
+  );
+}
+
+/** Un renglón de la cuenta del trabajo. */
+function Renglon({ que, cuanto }: { que: string; cuanto: number }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <dt className="text-base text-muted-foreground">{que}</dt>
+      <dd className="tabular text-base">{formatearMonto(cuanto)}</dd>
     </div>
   );
 }

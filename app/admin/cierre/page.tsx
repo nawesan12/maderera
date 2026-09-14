@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlertTriangle, Download } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
   asientosDelPeriodo,
@@ -9,7 +9,8 @@ import {
   resumenDelMes,
 } from "@/lib/dal/admin/cierre-mensual";
 import { leerPeriodoMensual } from "@/lib/periodos";
-import { formatearMonto } from "@/lib/formato";
+import { fechaCorta, formatearMonto } from "@/lib/formato";
+import { ExportarAsientos } from "./exportar-asientos";
 
 export const metadata: Metadata = { title: "Cierre del mes" };
 
@@ -73,22 +74,50 @@ export default async function CierrePage({
             </button>
           </form>
 
-          <a
-            href={`/admin/cierre/exportar?periodo=${periodo.clave}`}
-            className="inline-flex h-11 items-center gap-1.5 rounded-lg boton-accion px-4 text-base font-medium transition-colors"
-          >
-            <Download className="h-4 w-4" />
-            Asientos en CSV
-          </a>
+          <ExportarAsientos periodo={periodo.clave} rotos={rotos.length} />
         </div>
       </header>
 
       {rotos.length > 0 && (
-        <p className="estado-problema rounded-xl bg-[var(--estado-fondo)] px-4 py-3 text-base">
-          <AlertTriangle className="mr-2 inline h-4 w-4" />
-          {rotos.length} asientos no cierran. No exportes hasta revisarlos: el
-          sistema del estudio rechaza el archivo entero.
-        </p>
+        <section className="tarjeta overflow-hidden border-[var(--estado-borde)]">
+          <header className="estado-problema border-b border-linea bg-[var(--estado-fondo)] px-5 py-3.5">
+            <h2 className="text-base font-semibold">
+              <AlertTriangle className="mr-2 inline h-4 w-4" />
+              {rotos.length === 1
+                ? "Un asiento no cierra"
+                : `${rotos.length} asientos no cierran`}
+            </h2>
+            <p className="text-sm">
+              El debe y el haber tienen que dar igual. Si se exporta así, el
+              sistema del estudio rechaza el archivo entero.
+            </p>
+          </header>
+          <ul className="divide-y divide-linea">
+            {rotos.map((asiento, i) => {
+              const debe = asiento.renglones.reduce((t, r) => t + r.debe, 0);
+              const haber = asiento.renglones.reduce((t, r) => t + r.haber, 0);
+              return (
+                <li
+                  key={`${asiento.concepto}-${i}`}
+                  className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-5 py-3.5"
+                >
+                  <p className="min-w-0 flex-1 text-base font-medium">
+                    {asiento.concepto}
+                  </p>
+                  <p className="tabular text-sm text-muted-foreground">
+                    {fechaCorta.format(asiento.fecha)}
+                  </p>
+                  <p className="tabular text-sm text-muted-foreground">
+                    Debe {formatearMonto(debe)} · Haber {formatearMonto(haber)}
+                  </p>
+                  <p className="tabular estado-problema text-base font-semibold">
+                    Diferencia {formatearMonto(debe - haber)}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
 
       {pendientes.length > 0 && (
@@ -128,16 +157,19 @@ export default async function CierrePage({
           titulo="Ventas netas"
           valor={resumen.ventas.neto}
           detalle={`${resumen.ventas.cantidad} comprobantes`}
+          href={`/admin/arca/libro-iva?periodo=${periodo.clave}`}
         />
         <Tarjeta
           titulo="Compras netas"
           valor={resumen.compras.neto}
           detalle={`${resumen.compras.cantidad} comprobantes`}
+          href={`/admin/arca/libro-iva-compras?periodo=${periodo.clave}`}
         />
         <Tarjeta
           titulo="Gastos"
           valor={resumen.gastos.total}
           detalle={`${resumen.gastos.cantidad} anotados`}
+          href={`/admin/compras/gastos?periodo=${periodo.clave}`}
         />
         <Tarjeta
           titulo="Posición de IVA"
@@ -189,19 +221,28 @@ export default async function CierrePage({
   );
 }
 
+/**
+ * Una cifra del cierre.
+ *
+ * Con `href` lleva a la lista de la que sale. Mirando el cierre la pregunta
+ * que siempre viene después de un número es "¿de dónde salió?", y hasta acá
+ * había que ir a buscar el libro a mano por el menú.
+ */
 function Tarjeta({
   titulo,
   valor,
   detalle,
   destacado,
+  href,
 }: {
   titulo: string;
   valor: number;
   detalle: string;
   destacado?: boolean;
+  href?: string;
 }) {
-  return (
-    <article className="tarjeta p-4">
+  const cuerpo = (
+    <>
       <p className="text-sm text-muted-foreground">{titulo}</p>
       <p
         className={`tabular mt-0.5 text-2xl font-bold ${
@@ -215,7 +256,18 @@ function Tarjeta({
         {formatearMonto(valor)}
       </p>
       <p className="text-sm text-muted-foreground">{detalle}</p>
-    </article>
+    </>
+  );
+
+  if (!href) return <article className="tarjeta p-4">{cuerpo}</article>;
+
+  return (
+    <Link
+      href={href}
+      className="tarjeta block p-4 transition-colors hover:border-brand-orange/40 hover:bg-hundida"
+    >
+      {cuerpo}
+    </Link>
   );
 }
 

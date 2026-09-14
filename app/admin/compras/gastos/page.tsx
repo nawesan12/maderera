@@ -93,7 +93,11 @@ export default async function GastosPage({
           {(["blanco", "negro"] as const).map((c) => {
             const fila = porCircuito.find((x) => x.circuito === c);
             return (
-              <article key={c} className="tarjeta p-4">
+              <Link
+                key={c}
+                href={`/admin/compras/gastos?periodo=${periodo.clave}&circuito=${c}`}
+                className="tarjeta block p-4 transition-colors hover:border-brand-orange/40 hover:bg-hundida"
+              >
                 <p className="text-sm text-muted-foreground">
                   {ETIQUETA_CIRCUITO[c]} · {etiqueta}
                 </p>
@@ -104,7 +108,7 @@ export default async function GastosPage({
                   {fila?.cantidad ?? 0} gasto
                   {(fila?.cantidad ?? 0) === 1 ? "" : "s"}
                 </p>
-              </article>
+              </Link>
             );
           })}
         </div>
@@ -169,9 +173,9 @@ export default async function GastosPage({
                 <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-semibold">Fecha</th>
                   <th className="px-5 py-2.5 font-semibold">Categoría</th>
-                  <th className="px-5 py-2.5 font-semibold">En qué</th>
-                  <th className="px-5 py-2.5 font-semibold">Medio</th>
-                  <th className="px-5 py-2.5 font-semibold">Circuito</th>
+                  <th className="px-5 py-2.5 font-semibold">En qué se gastó</th>
+                  <th className="px-5 py-2.5 font-semibold">Forma de pago</th>
+                  <th className="px-5 py-2.5 font-semibold">Circuito de facturación</th>
                   <th className="px-5 py-2.5 text-right font-semibold">
                     Importe
                   </th>

@@ -66,3 +66,78 @@ export function rutaDeEntidad(
 
   return LISTADOS[entidad] ?? null;
 }
+
+/**
+ * Cómo se llama cada cosa en castellano.
+ *
+ * La bitácora armaba su desplegable "Sobre qué" con los nombres que la tabla
+ * guarda, así que quien la usaba elegía entre `orden_compra`,
+ * `condicion_proveedor` y `retencion_sufrida`, y el chip de cada renglón los
+ * repetía igual. Son nombres de programador filtrados a la pantalla de alguien
+ * que quiere saber quién tocó un precio.
+ *
+ * Vive acá y no en la página porque las claves son exactamente las de arriba:
+ * si aparece una entidad nueva, falta su ruta **y** su nombre, y conviene que
+ * las dos se noten en el mismo archivo.
+ */
+const ETIQUETAS: Record<string, string> = {
+  banner: "Cartel del sitio",
+  caja: "Caja",
+  cheque: "Cheque",
+  cliente: "Cliente",
+  condicion_proveedor: "Condición con el proveedor",
+  configuracion: "Configuración",
+  corte: "Corte",
+  descuento_pago: "Descuento por forma de pago",
+  factura: "Factura emitida",
+  factura_compra: "Factura de compra",
+  gasto: "Gasto",
+  lista_precios: "Lista de precios",
+  migracion: "Migración de datos",
+  orden_compra: "Orden de compra",
+  pago: "Cobro",
+  pago_proveedor: "Pago a proveedor",
+  pedido: "Pedido",
+  precio: "Precio",
+  producto: "Producto",
+  profesional: "Profesional",
+  promo_bancaria: "Promoción bancaria",
+  presupuesto: "Presupuesto",
+  proveedor: "Proveedor",
+  recepcion: "Recepción de mercadería",
+  remito: "Remito",
+  retencion_sufrida: "Retención que nos hicieron",
+  stock: "Stock",
+  tarifa_corte: "Tarifa de corte",
+  vendedor: "Vendedor",
+  zona_envio: "Zona de envío",
+};
+
+/**
+ * El nombre de una entidad para mostrar.
+ *
+ * Si aparece una que no está en la tabla, se devuelve legible —guiones bajos
+ * por espacios y la primera en mayúscula— en vez del nombre crudo: es mejor
+ * "Nota de crédito" que `nota_credito`, y peor que ninguna de las dos es que la
+ * pantalla se rompa porque alguien agregó una entidad y no pasó por acá.
+ */
+/**
+ * Todas las entidades que el panel sabe nombrar y a dónde llevar.
+ *
+ * Se arma de las tres tablas de este archivo para que un test pueda exigir que
+ * vayan juntas: una entidad con ruta y sin nombre sale a la pantalla escrita
+ * como la guarda la base, que es exactamente el defecto que esto vino a tapar.
+ */
+export const ENTIDADES_CONOCIDAS: readonly string[] = [
+  ...new Set([
+    ...Object.keys(FICHAS),
+    ...Object.keys(LISTADOS),
+    ...Object.keys(ETIQUETAS),
+  ]),
+].sort();
+
+export function etiquetaDeEntidad(entidad: string): string {
+  if (ETIQUETAS[entidad]) return ETIQUETAS[entidad];
+  const suelto = entidad.replace(/_/g, " ");
+  return suelto.charAt(0).toUpperCase() + suelto.slice(1);
+}

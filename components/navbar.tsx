@@ -328,7 +328,7 @@ export function Navbar({
               href="/presupuesto"
               aria-label={
                 cantidadItems > 0
-                  ? `Tu presupuesto, ${cantidadItems} ${cantidadItems === 1 ? "ítem" : "ítems"}`
+                  ? `Tu presupuesto, ${cantidadItems} ${cantidadItems === 1 ? "producto" : "productos"}`
                   : "Tu presupuesto"
               }
               className="relative flex h-10 w-10 items-center justify-center rounded-[11px] text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto"
@@ -418,6 +418,20 @@ export function Navbar({
                       Pedir Presupuesto
                     </Button>
                   </Link>
+
+                  {/* Crear cuenta también acá. En la barra de arriba solo
+                      aparece desde `xl`, así que en celular y en tablet —que
+                      es donde entra la mayoría— no había un solo enlace para
+                      registrarse en todo el sitio. */}
+                  {!sesion && (
+                    <Link
+                      href="/registro"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="mt-2 rounded-xl px-3 py-2.5 text-center text-sm font-semibold text-acento-texto hover:bg-sitio-alt"
+                    >
+                      Crear una cuenta
+                    </Link>
+                  )}
                 </div>
               </SheetContent>
             </Sheet>

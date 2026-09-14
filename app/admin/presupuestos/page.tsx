@@ -206,7 +206,7 @@ function Tarjeta({
               {p.numero}
             </Link>
             <span aria-hidden="true">·</span>
-            <span>{plural(p.items, "ítem")}</span>
+            <span>{plural(p.items, "producto")}</span>
             <span aria-hidden="true">·</span>
             <span>{ORIGEN[p.origen] ?? p.origen}</span>
             {/* De qué sucursal salió: la central y Canosa presupuestan las

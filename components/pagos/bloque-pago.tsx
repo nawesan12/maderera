@@ -26,7 +26,7 @@ import type { DatosParaTransferir } from "@/lib/dal/pagos";
 /**
  * El bloque de pago de la pantalla de confirmación del pedido.
  *
- * Antes decía "te pasamos el link por WhatsApp", que era la forma amable de
+ * Antes decía "te mandamos el enlace por WhatsApp", que era la forma amable de
  * decir que no había forma de pagar. Ahora resuelve los tres caminos del
  * contrato: Mercado Pago, transferencia con comprobante y cuenta corriente.
  *

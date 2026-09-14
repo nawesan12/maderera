@@ -316,7 +316,7 @@ export default async function FichaPedidoPage({
             </h2>
             <dl className="space-y-2 text-base">
               <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Medio</dt>
+                <dt className="text-muted-foreground">Forma de pago</dt>
                 <dd>{pedido.medioPago ? MEDIOS[pedido.medioPago] : "—"}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">

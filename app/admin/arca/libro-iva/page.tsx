@@ -102,12 +102,12 @@ export default async function LibroIvaPage({
                   <th scope="col" className="px-3 py-3 font-semibold">Comprobante</th>
                   <th scope="col" className="px-3 py-3 font-semibold">Cliente</th>
                   <th scope="col" className="px-3 py-3 font-semibold">CUIT</th>
-                  <th scope="col" className="px-3 py-3 text-right font-semibold">Neto</th>
+                  <th scope="col" className="px-3 py-3 text-right font-semibold">Neto (sin IVA)</th>
                   <th scope="col" className="px-3 py-3 text-right font-semibold">IVA 21%</th>
                   <th scope="col" className="px-3 py-3 text-right font-semibold">IVA 10,5%</th>
                   <th scope="col" className="px-3 py-3 text-right font-semibold">IVA 27%</th>
                   <th scope="col" className="px-3 py-3 text-right font-semibold">Exento</th>
-                  <th scope="col" className="px-3 py-3 text-right font-semibold">Percep.</th>
+                  <th scope="col" className="px-3 py-3 text-right font-semibold">Percepciones</th>
                   <th scope="col" className="px-4 py-3 text-right font-semibold">Total</th>
                 </tr>
               </thead>

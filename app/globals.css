@@ -979,6 +979,46 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   color: var(--tinta-suave);
 }
 
+/*
+ * Lo que queda en acopio, en el remito parcial.
+ *
+ * Se lee al lado del detalle de lo que sí se llevó, así que tiene que
+ * distinguirse sin gritar: mismo cuerpo, recuadro tenue. Quien lo mira ya sabe
+ * que le falta algo; lo que necesita es *qué*.
+ */
+.comprobante-hoja .acopio {
+  margin-top: 1.25rem;
+  border: 1px solid var(--linea);
+  border-radius: 4px;
+  padding: 0.65rem 0.85rem;
+}
+
+.comprobante-hoja .acopio .etiqueta {
+  margin-bottom: 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+}
+
+.comprobante-hoja .acopio ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.comprobante-hoja .acopio li + li {
+  margin-top: 0.15rem;
+}
+
+.comprobante-hoja .acopio .chico {
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--tinta-suave);
+}
+
 /* Pie fiscal */
 .comprobante-hoja .pie {
   display: flex;

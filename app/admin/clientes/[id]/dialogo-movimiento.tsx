@@ -71,9 +71,9 @@ export function DialogoMovimiento({
           <input type="hidden" name="tipo" value={tipo} />
 
           <div className="space-y-2">
-            <Label>Tipo</Label>
+            <Label htmlFor="movimiento-tipo">Tipo</Label>
             <Select value={tipo} onValueChange={(v) => v && setTipo(v)} items={TIPOS}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="movimiento-tipo" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

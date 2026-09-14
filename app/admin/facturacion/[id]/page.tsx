@@ -163,7 +163,7 @@ export default async function FichaComprobantePage({
             <h2 className="border-b px-5 py-3.5 text-base font-medium">
               Detalle
               <span className="ml-2 text-base font-normal text-muted-foreground">
-                {plural(comprobante.items.length, "ítem")}
+                {plural(comprobante.items.length, "renglón")}
               </span>
             </h2>
 
@@ -172,7 +172,7 @@ export default async function FichaComprobantePage({
                 <thead>
                   <tr className="border-b text-sm uppercase tracking-[0.06em] text-muted-foreground">
                     <th scope="col" className="px-5 py-2.5 font-semibold">Descripción</th>
-                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Cant.</th>
+                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Cantidad</th>
                     <th scope="col" className="px-3 py-2.5 text-right font-semibold">
                       {discrimina ? "P. unit. neto" : "P. unitario"}
                     </th>

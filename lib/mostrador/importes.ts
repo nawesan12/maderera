@@ -51,7 +51,7 @@ export function revisarVenta(
   medioPago: MedioDeMostrador,
   customerId: string | null,
 ): string | null {
-  if (lineas.length === 0) return "La venta no tiene ningún ítem.";
+  if (lineas.length === 0) return "Todavía no cargaste nada para cobrar.";
 
   for (const l of lineas) {
     if (!Number.isFinite(l.cantidad) || l.cantidad <= 0) {
@@ -106,6 +106,14 @@ export interface PagoDeVenta {
   nroCupon?: string | null;
   /** Qué tarjeta o banco: "Visa Galicia", "Naranja". */
   tarjeta?: string | null;
+  /**
+   * En cuántas cuotas. Uno o ausente es "un pago".
+   *
+   * No cambia el importe: las cuotas sin interés las financia el banco y la
+   * maderera cobra el total igual. Se guarda para el comprobante y para
+   * conciliar contra la liquidación de la terminal.
+   */
+  cuotas?: number | null;
 }
 
 /**
@@ -235,4 +243,42 @@ export function aplicarDescuento(
     lineas: rebajadas,
     descuento: aCentavos(total - totalDeLaVenta(rebajadas)),
   };
+}
+
+/* -------------------------------------------------------------------------- */
+
+/** Lo que el vendedor tipeó en el buscador, separado en cantidad y búsqueda. */
+export interface TipeoDelBuscador {
+  cantidad: number;
+  consulta: string;
+  /** Si la cantidad estaba escrita: sirve para mostrarla mientras se tipea. */
+  explicita: boolean;
+}
+
+/**
+ * La cantidad adelante, como en los sistemas de mostrador de toda la vida.
+ *
+ * «3*pino» son tres tablas de pino. Es el ahorro de clics más grande de la
+ * pantalla: sin esto, cada línea que no sea de uno obliga a soltar el teclado,
+ * ir hasta el campo de cantidad y volver.
+ *
+ * **La trampa está en las medidas.** En una maderera se busca «2x4» todo el
+ * día, y leído como cantidad eso serían dos unidades de algo llamado «4». Por
+ * eso la `x` solo cuenta con espacios de los dos lados —«3 x pino»— y el
+ * asterisco, que nadie usa para medir, vale pegado. Un código de catálogo como
+ * «18x2750» entra intacto.
+ */
+export function leerTipeo(texto: string): TipeoDelBuscador {
+  const limpio = texto.trim();
+  const m = /^(\d+(?:[.,]\d+)?)(?:\s*\*\s*|\s+x\s+)(.+)$/i.exec(limpio);
+
+  if (!m) return { cantidad: 1, consulta: limpio, explicita: false };
+
+  const cantidad = Number(m[1].replace(",", "."));
+  // Cero unidades no es una venta; se lee como si no hubiera prefijo.
+  if (!(cantidad > 0)) {
+    return { cantidad: 1, consulta: limpio, explicita: false };
+  }
+
+  return { cantidad, consulta: m[2].trim(), explicita: true };
 }

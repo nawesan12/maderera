@@ -127,7 +127,10 @@ export async function cambiarEstadoEvento(
     })
     .safeParse({ id: formData.get("id"), estado: formData.get("estado") });
 
-  if (!parsed.success) return { error: "Datos inválidos." };
+  if (!parsed.success)
+    return {
+      error: "No pudimos identificar ese evento. Recargá la pantalla y probá de nuevo.",
+    };
 
   await db
     .update(events)
@@ -160,7 +163,10 @@ export async function marcarAsistencia(
     })
     .safeParse({ id: formData.get("id"), estado: formData.get("estado") });
 
-  if (!parsed.success) return { error: "Datos inválidos." };
+  if (!parsed.success)
+    return {
+      error: "No pudimos registrar la asistencia. Recargá la pantalla y probá de nuevo.",
+    };
 
   await db
     .update(eventRegistrations)

@@ -35,7 +35,7 @@ export function AccionesEvento({
       : estado === "publicado"
         ? [
             { valor: "cerrado", texto: "Cerrar inscripciones" },
-            { valor: "borrador", texto: "Despublicar" },
+            { valor: "borrador", texto: "Volver a borrador" },
           ]
         : estado === "cerrado"
           ? [{ valor: "publicado", texto: "Reabrir" }]

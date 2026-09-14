@@ -35,7 +35,10 @@ export async function ajustarStock(
   const usuario = await requireStaff();
 
   const parsed = ajusteSchema.safeParse({ variantId, branchSlug, cantidad });
-  if (!parsed.success) return { error: "Datos inválidos." };
+  if (!parsed.success)
+    return {
+      error: "La cantidad tiene que ser un número entero, sin comas ni letras.",
+    };
   if (parsed.data.cantidad === 0) return {};
 
   const [sucursal] = await db

@@ -155,7 +155,7 @@ export function CargarFactura({
 
       <div className="grid gap-4 border-t border-linea pt-4 sm:grid-cols-3 lg:grid-cols-6">
         <label className="block">
-          <span className="text-sm font-medium">Neto</span>
+          <span className="text-sm font-medium">Neto (sin IVA)</span>
           <input
             type="number"
             min="0"

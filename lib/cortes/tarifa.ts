@@ -39,24 +39,48 @@ function comparable(texto: string): string {
 /**
  * La tarifa que corresponde a un material y a una lista de precios.
  *
+ * **Se busca por categoría, no por el nombre del producto.** Las tarifas se
+ * cargan por familia —"Placas", "Tableros de madera"—, que es como las dio el
+ * brief, y el corte guarda el nombre completo de lo que se corta: "Melamina
+ * Blanca — 1830 x 2600mm — 18mm". Comparar esas dos cadenas **nunca daba
+ * verdadero**, así que el corte no se cobraba en ningún lado y la pantalla
+ * decía "no hay tarifa cargada" para todo. Se descubrió vendiendo un corte
+ * desde el mostrador.
+ *
+ * Por eso recibe una lista de nombres candidatos y prueba en orden: primero la
+ * categoría del producto, que es la que coincide, y después la descripción, que
+ * es lo único que hay cuando el material lo trajo el cliente y no sale del
+ * catálogo.
+ *
  * **Cae a la tarifa general cuando la lista no tiene la suya**, por la misma
  * razón que el precio del catálogo: una lista alternativa rara vez tiene todo
  * cargado, y quedarse sin tarifa significaría no cobrar el corte.
  */
 export function tarifaDeCorte(
   tarifas: TarifaDeCorte[],
-  material: string,
+  material: string | string[],
   priceListId: string | null,
 ): TarifaDeCorte | null {
-  const buscado = comparable(material);
-  const delMaterial = tarifas.filter((t) => comparable(t.material) === buscado);
+  const candidatos = (Array.isArray(material) ? material : [material])
+    .filter(Boolean)
+    .map(comparable);
 
-  if (priceListId) {
-    const propia = delMaterial.find((t) => t.priceListId === priceListId);
-    if (propia) return propia;
+  for (const buscado of candidatos) {
+    const delMaterial = tarifas.filter(
+      (t) => comparable(t.material) === buscado,
+    );
+    if (delMaterial.length === 0) continue;
+
+    if (priceListId) {
+      const propia = delMaterial.find((t) => t.priceListId === priceListId);
+      if (propia) return propia;
+    }
+
+    const general = delMaterial.find((t) => t.priceListId === null);
+    if (general) return general;
   }
 
-  return delMaterial.find((t) => t.priceListId === null) ?? null;
+  return null;
 }
 
 /**

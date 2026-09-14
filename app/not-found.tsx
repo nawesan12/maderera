@@ -34,7 +34,7 @@ export default function NoEncontradoRaiz() {
       </Link>
 
       <p className="tabular mt-10 text-[13px] font-bold uppercase tracking-[0.12em] text-acento-texto">
-        Error 404
+        Página no encontrada
       </p>
       <h1 className="mt-2 text-[34px] font-bold tracking-[-0.03em]">
         Esta dirección no existe

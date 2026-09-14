@@ -17,39 +17,45 @@ export const metadata: Metadata = { title: "WhatsApp · Configuración" };
  */
 const PASOS = [
   {
-    titulo: "Cuenta de Meta Business verificada",
+    titulo: "Verificar la empresa en Meta",
     detalle:
-      "Meta pide verificar la empresa con constancia de CUIT y datos fiscales. Lo hace el titular del negocio y suele tardar días.",
+      "Meta pide la constancia de CUIT y los datos fiscales para confirmar que el negocio existe. Lo hace el titular y suele tardar días.",
+    quien: "negocio",
     variable: null,
   },
   {
-    titulo: "Número dado de alta en la Cloud API",
+    titulo: "Pasar el número de WhatsApp a la cuenta de empresa",
     detalle:
-      "Es el paso que más cuesta: el número que hoy se usa en la app de WhatsApp Business hay que migrarlo, y una vez migrado deja de funcionar en el teléfono. Se puede empezar con un número nuevo para no cortar la atención.",
+      "Es el paso que más cuesta: el número que hoy se usa en la aplicación de WhatsApp Business hay que mudarlo, y una vez mudado deja de funcionar en el teléfono. Se puede arrancar con un número nuevo para no cortar la atención.",
+    quien: "negocio",
     variable: "WHATSAPP_PHONE_NUMBER_ID",
   },
   {
-    titulo: "Token permanente de acceso",
+    titulo: "Permiso permanente para enviar mensajes",
     detalle:
-      "Se genera con un System User en Meta Business. El token de prueba dura 24 horas y no sirve para producción.",
+      "Lo genera quien mantiene el sistema, dentro de la cuenta de Meta del negocio. El permiso de prueba se vence en un día y no sirve para trabajar.",
+    quien: "sistema",
     variable: "WHATSAPP_ACCESS_TOKEN",
   },
   {
-    titulo: "Webhook apuntando al sitio",
+    titulo: "Avisarle a Meta a qué dirección mandar los mensajes",
     detalle:
-      "En Meta se carga la URL /api/whatsapp/webhook con el mismo token de verificación, y se suscribe el campo messages. Sin esto no entran los mensajes.",
+      "Sin esto los mensajes de los clientes no entran a la bandeja. Lo configura quien mantiene el sistema.",
+    quien: "sistema",
     variable: "WHATSAPP_WEBHOOK_SECRET",
   },
   {
-    titulo: "App secret para validar la firma",
+    titulo: "La clave que prueba que los mensajes vienen de Meta",
     detalle:
-      "Sin él, el webhook rechaza todo: es lo que prueba que los mensajes vienen de Meta y no de cualquiera que descubra la dirección.",
+      "Sin ella el sistema rechaza todo lo que llega: es lo que impide que cualquiera que descubra la dirección escriba mensajes falsos.",
+    quien: "sistema",
     variable: "WHATSAPP_APP_SECRET",
   },
   {
-    titulo: "Plantillas aprobadas",
+    titulo: "Que Meta apruebe los textos de los avisos",
     detalle:
-      "Los textos de los avisos los aprueba Meta antes de poder usarlos. Los que necesita el sistema están listados abajo, listos para cargar tal cual.",
+      "Meta revisa y aprueba cada texto antes de que se pueda usar. Los que necesita el sistema están más abajo, listos para copiar tal cual.",
+    quien: "negocio",
     variable: "WHATSAPP_BUSINESS_ACCOUNT_ID",
   },
 ];
@@ -146,8 +152,14 @@ export default async function ConfiguracionWhatsappPage() {
                     <p className="mt-0.5 text-base text-muted-foreground">
                       {paso.detalle}
                     </p>
+                    <p className="mt-1.5 text-sm text-muted-foreground">
+                      {paso.quien === "negocio"
+                        ? "Lo hace el titular del negocio."
+                        : "Lo hace quien mantiene el sistema."}
+                    </p>
                     {paso.variable && (
-                      <p className="tabular mt-1.5 text-sm text-muted-foreground">
+                      <p className="tabular mt-1 text-sm text-muted-foreground">
+                        <span className="font-medium">Dato técnico:</span>{" "}
                         {paso.variable}
                         {listo ? " — cargada" : " — falta"}
                       </p>

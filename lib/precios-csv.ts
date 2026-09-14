@@ -106,7 +106,7 @@ export function leerFilas(grilla: string[][]): FilaImportada[] {
         sku: "",
         precioGeneral: null,
         precioProfesional: null,
-        error: "La planilla no tiene una columna SKU.",
+        error: "La planilla no tiene la columna con el código del producto.",
       },
     ];
   }
@@ -120,7 +120,7 @@ export function leerFilas(grilla: string[][]): FilaImportada[] {
         sku: "",
         precioGeneral: null,
         precioProfesional: null,
-        error: "Falta el SKU.",
+        error: "Esta fila no tiene código de producto.",
       };
     }
 

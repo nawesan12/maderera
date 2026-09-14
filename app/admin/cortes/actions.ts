@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { PiezaFijada } from "@/lib/cortes/plano";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { z } from "zod";
@@ -146,6 +147,15 @@ export async function crearCorte(
       cantoDescripcion: z.string().trim().max(120).optional(),
       urgente: z.coerce.boolean().default(false),
       notas: z.string().trim().max(1000).optional(),
+      /*
+       * El acomodo que alguien corrigió a mano, como JSON.
+       *
+       * Se guarda tal cual llega y se valida al leerlo: la forma la fija
+       * `leerAcomodoManual`, que descarta lo que no entiende en vez de romper
+       * la pantalla. Un acomodo manual que no se entiende solo significa que el
+       * plano se recalcula, que es el comportamiento de siempre.
+       */
+      acomodoManual: z.string().max(20_000).optional(),
     })
     .safeParse({
       customerId: (formData.get("customerId") as string) || undefined,
@@ -158,6 +168,7 @@ export async function crearCorte(
       cantoDescripcion: (formData.get("cantoDescripcion") as string) || undefined,
       urgente: formData.get("urgente") === "si",
       notas: (formData.get("notas") as string) || undefined,
+      acomodoManual: (formData.get("acomodoManual") as string) || undefined,
     });
 
   if (!cabecera.success) {
@@ -195,6 +206,7 @@ export async function crearCorte(
         materialDescripcion: cabecera.data.materialDescripcion,
         placas: cabecera.data.placas,
         cantoDescripcion: cabecera.data.cantoDescripcion ?? null,
+        acomodoManual: cabecera.data.acomodoManual ?? null,
         estado: "en-cola",
         urgente: cabecera.data.urgente ? 1 : 0,
         notas: cabecera.data.notas ?? null,
@@ -273,4 +285,57 @@ export async function cargarPasadas(
   revalidatePath(`/admin/cortes/${id}`);
   revalidatePath("/admin/cortes");
   return { ok: "Pasadas cargadas." };
+}
+
+/**
+ * Guarda el acomodo que alguien corrigió a mano sobre el plano.
+ *
+ * Se puede corregir en el alta y también después: un trabajo entra a la cola y
+ * al mirarlo con calma se decide que esa puerta salga de la placa nueva. Sin
+ * esta acción la corrección solo existía mientras la pantalla estaba abierta.
+ *
+ * Guarda el JSON tal cual y la validación vive del lado de la lectura
+ * (`leerAcomodoManual`): así una lista de otra época no rompe la ficha, solo
+ * hace que el plano se recalcule.
+ */
+export async function guardarAcomodoManual(
+  id: string,
+  fijadas: PiezaFijada[],
+): Promise<EstadoCorte> {
+  const usuario = await requireStaff();
+
+  const [corte] = await db
+    .select({ numero: cuttingOrders.numero })
+    .from(cuttingOrders)
+    .where(eq(cuttingOrders.id, id))
+    .limit(1);
+
+  if (!corte) return { error: "No encontramos la orden de corte." };
+
+  // Una lista vacía vuelve la columna a nulo: "sin correcciones" y "corregido a
+  // cero piezas" son lo mismo, y el nulo lo dice sin ambigüedad.
+  const guardado = fijadas.length > 0 ? JSON.stringify(fijadas) : null;
+
+  await db
+    .update(cuttingOrders)
+    .set({ acomodoManual: guardado, updatedAt: new Date() })
+    .where(eq(cuttingOrders.id, id));
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "editar",
+    entidad: "corte",
+    entidadId: id,
+    descripcion: guardado
+      ? `${corte.numero}: acomodo corregido a mano (${fijadas.length} ${
+          fijadas.length === 1 ? "pieza" : "piezas"
+        })`
+      : `${corte.numero}: el acomodo vuelve al automático`,
+  });
+
+  revalidatePath(`/admin/cortes/${id}`);
+  revalidatePath(`/plano/${id}`);
+  return {
+    ok: guardado ? "Acomodo guardado." : "El plano vuelve al automático.",
+  };
 }

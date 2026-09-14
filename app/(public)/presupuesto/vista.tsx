@@ -74,9 +74,14 @@ export function VistaPresupuesto({
               <h2 className="mb-2 text-xl font-bold">
                 Tu presupuesto está vacío
               </h2>
+              {/* No nombra la calculadora. Existe y calcula bien, pero hoy
+                  no se llega a ella desde ningún lado del sitio —salió del
+                  menú a pedido de la clienta—, así que mencionarla acá le
+                  prometía a alguien una herramienta que después no iba a
+                  poder encontrar. Cuando vuelva a enlazarse, vuelve la frase. */}
               <p className="mb-6 text-muted-foreground">
-                Agregá productos del catálogo o usá la calculadora para que te
-                digamos cuánto material necesitás.
+                Agregá los productos que necesites del catálogo y te pasamos el
+                precio y la disponibilidad.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Button
@@ -388,7 +393,7 @@ function Encabezado({ cantidad }: { cantidad: number }) {
       <p className="mt-1.5 text-base text-texto-2">
         {cantidad === 0
           ? "Todavía no agregaste nada."
-          : `${cantidad === 1 ? "1 ítem" : `${cantidad} ítems`} · los precios se confirman cuando te respondemos`}
+          : `${cantidad === 1 ? "1 producto" : `${cantidad} productos`} · los precios se confirman cuando te respondemos`}
       </p>
     </div>
   );

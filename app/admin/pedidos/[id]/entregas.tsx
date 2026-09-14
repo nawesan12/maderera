@@ -402,7 +402,7 @@ function LinkDeFirma({
         ) : (
           <Copy className="h-4 w-4" />
         )}
-        {copiado ? "Copiado" : "Copiar link"}
+        {copiado ? "Copiado" : "Copiar el enlace para firmar"}
       </button>
     </span>
   );

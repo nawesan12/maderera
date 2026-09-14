@@ -44,7 +44,7 @@ export async function responderPresupuesto(
     respuesta: formData.get("respuesta"),
   });
 
-  if (!parsed.success) return { error: "No entendimos la respuesta." };
+  if (!parsed.success) return { error: "No pudimos guardar tu respuesta. Probá de nuevo." };
 
   const cliente = await clienteDeLaSesion();
   if (!cliente) return { error: "No encontramos tu ficha de cliente." };

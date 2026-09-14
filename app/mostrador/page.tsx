@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { promosVigentes } from "@/lib/dal/contenido";
+import { tarifasDeCorte } from "@/lib/dal/cortes-tarifas";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/dal/session";
 import { inicioDelRol, puedeEntrar } from "@/lib/roles";
@@ -59,12 +61,18 @@ export default async function MostradorPage({
   const elegida =
     sucursales.find((s) => s.slug === sucursal) ?? sucursales[0];
 
-  const [turno, ventas, listaGeneral] = await Promise.all([
+  const [turno, ventas, listaGeneral, tarifas, promos] = await Promise.all([
     turnoAbierto(elegida.id),
     ventasDeHoy(elegida.id),
     // Cuál es la lista general: con eso la pantalla sabe si el cliente elegido
     // compra con precio de profesional, que es de contado y no admite crédito.
     listaDelCliente(null).then((l) => l.generalId),
+    // Las tarifas de corte, para poder cotizar un corte sin salir del
+    // mostrador: hasta ahora había que ir al panel y volver con el número.
+    tarifasDeCorte(),
+    // Las promociones vigentes: están para contarlas, no para descontarlas.
+    // Ver `PromosDelBanco`.
+    promosVigentes(),
   ]);
   const movimientos = turno ? await movimientosDelTurno(turno.id) : [];
   // El cierre Z: cuánto entró por cada medio en el turno. El arqueo cuenta
@@ -89,6 +97,8 @@ export default async function MostradorPage({
         monto: Number(m.monto),
         createdAt: m.createdAt.toISOString(),
       }))}
+      tarifasDeCorte={tarifas}
+      promos={promos}
       ventas={ventas.map((v) => ({
         ...v,
         total: Number(v.total),

@@ -113,7 +113,7 @@ export async function agregarVarios(
     if (resultado.error) return resultado;
   }
 
-  return { ok: `Se agregaron ${items.length} ítems al presupuesto.` };
+  return { ok: `Se agregaron ${items.length} productos al presupuesto.` };
 }
 
 /**

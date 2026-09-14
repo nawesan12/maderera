@@ -10,6 +10,7 @@ import {
 } from "@/lib/dal/admin/avisos";
 import { sembrarAvisosEmail } from "@/lib/notificaciones/sembrar";
 import { FilaAvisoEmail } from "./fila";
+import { Vacio } from "@/components/admin/vacio";
 
 export const metadata: Metadata = { title: "Avisos automáticos" };
 
@@ -101,9 +102,11 @@ export default async function AvisosPage() {
         </div>
 
         {enviados.length === 0 ? (
-          <p className="px-5 py-10 text-center text-base text-muted-foreground">
-            Todavía no se mandó ningún aviso.
-          </p>
+          <Vacio
+            icono={MessageCircle}
+            titulo="Todavía no salió ningún aviso"
+            detalle="Se mandan solos cuando un pedido cambia de estado. Acá van quedando los que ya salieron, con su resultado."
+          />
         ) : (
           <ul className="divide-y">
             {enviados.map((aviso) => {

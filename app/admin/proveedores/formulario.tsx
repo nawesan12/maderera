@@ -221,7 +221,11 @@ function Campo({
     <label className="block">
       <span className="text-sm font-medium">
         {etiqueta}
-        {requerido && <span className="text-saldo-debe"> *</span>}
+        {requerido && (
+          <span className="text-saldo-debe" aria-label="obligatorio">
+            {" *"}
+          </span>
+        )}
       </span>
       <input
         value={valor}

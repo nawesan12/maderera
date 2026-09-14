@@ -60,6 +60,13 @@ export interface PromoVigente {
   dias: string;
   /** Ya formateada para mostrar. Vacía es "hasta nuevo aviso". */
   vigenciaHasta: string;
+  /**
+   * Quién pone la plata: el banco o la maderera.
+   *
+   * Lo necesita el mostrador para no descontar lo que paga otro. Ver
+   * `quienPagaPromo` en el esquema.
+   */
+  quienPaga: "banco" | "nosotros";
 }
 
 /**
@@ -82,6 +89,7 @@ export const promosVigentes = cachearPublico(
         detalle: bankPromotions.detalle,
         dias: bankPromotions.dias,
         vigenciaHasta: bankPromotions.vigenciaHasta,
+        quienPaga: bankPromotions.quienPaga,
       })
       .from(bankPromotions)
       .where(

@@ -222,7 +222,7 @@ export async function vincularCuentaWeb(
     cuentaWebId: formData.get("cuentaWebId"),
   });
 
-  if (!parsed.success) return { error: "No pudimos identificar las fichas." };
+  if (!parsed.success) return { error: "No pudimos encontrar esos dos clientes. Recargá la pantalla y probá de nuevo." };
 
   const { customerId, cuentaWebId } = parsed.data;
 

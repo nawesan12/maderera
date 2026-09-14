@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Loader2, Monitor, Plus } from "lucide-react";
 import { haceCuanto } from "@/lib/formato";
+import { Confirmar } from "@/components/admin/confirmar";
 import { crearCaja, darDeBajaCaja, type EstadoCajas } from "./actions";
 
 interface CajaFisica {
@@ -33,6 +34,10 @@ export function CajasFisicas({
   const [abierto, setAbierto] = useState(false);
   const [estado, setEstado] = useState<EstadoCajas>({});
   const [enCurso, empezar] = useTransition();
+  const [porDarDeBaja, setPorDarDeBaja] = useState<{
+    id: string;
+    codigo: string;
+  } | null>(null);
 
   const [codigo, setCodigo] = useState("");
   const [nombre, setNombre] = useState("");
@@ -180,11 +185,21 @@ export function CajasFisicas({
               {c.activo && (
                 <button
                   type="button"
-                  onClick={() =>
-                    empezar(async () => setEstado(await darDeBajaCaja(c.id)))
-                  }
+                  onClick={() => {
+                    // La guarda de verdad está en el servidor; esto evita ir y
+                    // volver por algo que ya se ve en pantalla.
+                    if (c.pendientes > 0) {
+                      setEstado({
+                        error: `${c.codigo} tiene ${c.pendientes} ${
+                          c.pendientes === 1 ? "venta" : "ventas"
+                        } sin subir. Conectá la caja y esperá a que suban.`,
+                      });
+                      return;
+                    }
+                    setPorDarDeBaja({ id: c.id, codigo: c.codigo });
+                  }}
                   disabled={enCurso}
-                  className="inline-flex h-10 shrink-0 items-center rounded-lg border border-linea px-3.5 text-sm font-medium transition-colors hover:bg-hundida disabled:opacity-60"
+                  className="inline-flex h-11 shrink-0 items-center rounded-lg border border-linea px-3.5 text-base font-medium transition-colors hover:bg-hundida disabled:opacity-60"
                 >
                   Dar de baja
                 </button>
@@ -193,6 +208,24 @@ export function CajasFisicas({
           ))}
         </ul>
       )}
+
+      <Confirmar
+        abierto={porDarDeBaja !== null}
+        alCerrar={() => setPorDarDeBaja(null)}
+        titulo={`Dar de baja ${porDarDeBaja?.codigo ?? ""}`}
+        detalle="Deja de estar en servicio y no va a poder cobrar más. Sus ventas viejas siguen guardadas y sus tickets se pueden reimprimir."
+        confirmar="Sí, darla de baja"
+        peligro
+        pendiente={enCurso}
+        alConfirmar={() => {
+          const caja = porDarDeBaja;
+          if (!caja) return;
+          empezar(async () => {
+            setEstado(await darDeBajaCaja(caja.id));
+            setPorDarDeBaja(null);
+          });
+        }}
+      />
     </section>
   );
 }

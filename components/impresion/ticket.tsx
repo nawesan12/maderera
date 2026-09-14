@@ -113,6 +113,7 @@ export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
               <span>
                 {MEDIOS[pago.medio] ?? pago.medio}
                 {pago.tarjeta ? ` ${pago.tarjeta}` : ""}
+                {pago.cuotas && pago.cuotas > 1 ? ` en ${pago.cuotas}` : ""}
               </span>
               <span>{formatearMonto(pago.importe)}</span>
             </p>
@@ -126,6 +127,11 @@ export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
                 : "—"}
               {documento.pagos[0]?.tarjeta
                 ? ` ${documento.pagos[0].tarjeta}`
+                : ""}
+              {/* En cuántas cuotas. El total impreso es el total: las sin
+                  interés las financia el banco y no cambian lo que se cobra. */}
+              {documento.pagos[0]?.cuotas && documento.pagos[0].cuotas > 1
+                ? ` en ${documento.pagos[0].cuotas} cuotas`
                 : ""}
             </span>
           </p>

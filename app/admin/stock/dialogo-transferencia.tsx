@@ -46,7 +46,7 @@ export function DialogoTransferencia({
 
   return (
     <Dialog open={abierto} onOpenChange={setAbierto}>
-      <DialogTrigger className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-brand-orange px-3 text-sm font-medium text-white transition-colors hover:bg-brand-orange-dark">
+      <DialogTrigger className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark">
         <ArrowLeftRight className="h-4 w-4" />
         Transferir stock
       </DialogTrigger>
@@ -61,7 +61,7 @@ export function DialogoTransferencia({
           <input type="hidden" name="destinoId" value={destino} />
 
           <div className="space-y-2">
-            <Label>Producto</Label>
+            <Label htmlFor="transferencia-producto">Producto</Label>
             <Select
               value={variante}
               onValueChange={(v) => v && setVariante(v)}
@@ -69,7 +69,7 @@ export function DialogoTransferencia({
                 variantes.map((v) => [v.id, v.texto]),
               )}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="transferencia-producto" className="w-full">
                 <SelectValue placeholder="Elegí un producto" />
               </SelectTrigger>
               <SelectContent>
@@ -84,13 +84,13 @@ export function DialogoTransferencia({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Desde</Label>
+              <Label htmlFor="transferencia-origen">Desde</Label>
               <Select
                 value={origen}
                 onValueChange={(v) => v && setOrigen(v)}
                 items={Object.fromEntries(sucursales.map((s) => [s.id, s.name]))}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="transferencia-origen" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -104,13 +104,13 @@ export function DialogoTransferencia({
             </div>
 
             <div className="space-y-2">
-              <Label>Hacia</Label>
+              <Label htmlFor="transferencia-destino">Hacia</Label>
               <Select
                 value={destino}
                 onValueChange={(v) => v && setDestino(v)}
                 items={Object.fromEntries(sucursales.map((s) => [s.id, s.name]))}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="transferencia-destino" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

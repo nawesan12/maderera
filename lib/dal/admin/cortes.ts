@@ -8,9 +8,13 @@ import {
   cuttingOrders,
   customers,
   orders,
+  productVariants,
+  products,
+  categories,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { coincideBusqueda } from "@/lib/busqueda";
+import { preciosPara } from "@/lib/mostrador/buscar";
 
 export interface CorteListado {
   id: string;
@@ -123,9 +127,27 @@ export async function obtenerCorte(
       // $996 la pasada donde el público paga $1.200.
       priceListId: customers.priceListId,
       material: cuttingOrders.materialDescripcion,
+      variantId: cuttingOrders.variantId,
+      /*
+       * La medida de la placa que se va a cortar.
+       *
+       * Sale de la variante del catálogo y no de un texto: el plano de corte
+       * necesita los dos números para acomodar las piezas. Puede venir en nulo
+       * —un corte sobre material que trajo el cliente no tiene variante— y en
+       * ese caso el plano se arma con la medida que se elija en pantalla.
+       */
+      placaLargoMm: productVariants.largoMm,
+      placaAnchoMm: productVariants.anchoMm,
+      /*
+       * La categoría del producto: es por donde se busca la tarifa de corte.
+       * Las tarifas se cargan por familia ("Placas") y el corte guarda el
+       * nombre completo, así que comparar contra la descripción nunca daba.
+       */
+      categoria: categories.name,
       placas: cuttingOrders.placas,
       pasadas: cuttingOrders.pasadas,
       cantoDescripcion: cuttingOrders.cantoDescripcion,
+      acomodoManual: cuttingOrders.acomodoManual,
       estado: cuttingOrders.estado,
       urgente: cuttingOrders.urgente,
       notas: cuttingOrders.notas,
@@ -133,6 +155,9 @@ export async function obtenerCorte(
       createdAt: cuttingOrders.createdAt,
     })
     .from(cuttingOrders)
+    .leftJoin(productVariants, eq(productVariants.id, cuttingOrders.variantId))
+    .leftJoin(products, eq(products.id, productVariants.productId))
+    .leftJoin(categories, eq(categories.id, products.categoryId))
     .leftJoin(customers, eq(customers.id, cuttingOrders.customerId))
     .leftJoin(orders, eq(orders.id, cuttingOrders.orderId))
     .leftJoin(branches, eq(branches.id, cuttingOrders.branchId))
@@ -147,7 +172,28 @@ export async function obtenerCorte(
     .where(eq(cuttingItems.cuttingOrderId, id))
     .orderBy(asc(cuttingItems.orden));
 
-  return { ...corte, urgente: corte.urgente === 1, piezas };
+  /*
+   * El precio de la placa, en la lista que le toca a este cliente.
+   *
+   * Hace falta para presupuestar: de una placa de la que sale más de la mitad
+   * se vende la placa entera, y ahí lo que se cobra es el material, no las
+   * pasadas. Se reusa `preciosPara`, que es la misma resolución de lista que
+   * usa el mostrador —propia, o la general por el factor derivado—, para que un
+   * mayorista no vea el precio de público.
+   */
+  const precios = corte.variantId
+    ? await preciosPara([corte.variantId], corte.customerId)
+    : {};
+  const precioPlaca = corte.variantId
+    ? (precios[corte.variantId] ?? null)
+    : null;
+
+  return {
+    ...corte,
+    urgente: corte.urgente === 1,
+    piezas,
+    precioPlaca,
+  };
 }
 
 /**

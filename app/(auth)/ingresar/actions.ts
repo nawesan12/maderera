@@ -31,7 +31,11 @@ export async function ingresar(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+    return {
+      error:
+        parsed.error.issues[0]?.message ??
+        "Revisá el correo y la contraseña.",
+    };
   }
 
   let userId: string;

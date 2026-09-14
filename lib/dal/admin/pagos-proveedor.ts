@@ -6,6 +6,7 @@ import {
   purchaseInvoices,
   regimenesRetencion,
   retencionesPracticadas,
+  supplierPaymentAllocations,
   supplierPayments,
   suppliers,
 } from "@/lib/db/schema";
@@ -35,6 +36,33 @@ export async function listarPagosAProveedores(limite = 60) {
     .groupBy(retencionesPracticadas.paymentId)
     .as("retenido");
 
+  /**
+   * Qué facturas cubrió cada pago.
+   *
+   * El listado terminaba el circuito de compras sin salida: se veía que se
+   * pagaron $800.000 y no contra qué. La imputación ya se guardaba —es lo que
+   * la clienta pidió en "relacionar con las facturas"—, solo que no se leía de
+   * vuelta en ningún lado.
+   */
+  const imputadas = db
+    .select({
+      paymentId: supplierPaymentAllocations.paymentId,
+      facturas: sql<
+        { id: string; numero: string; importe: string }[]
+      >`json_agg(json_build_object(
+          'id', ${purchaseInvoices.id},
+          'numero', ${purchaseInvoices.puntoVenta} || '-' || ${purchaseInvoices.numero},
+          'importe', ${supplierPaymentAllocations.importe}
+        ) order by ${purchaseInvoices.fechaEmision})`.as("facturas"),
+    })
+    .from(supplierPaymentAllocations)
+    .innerJoin(
+      purchaseInvoices,
+      eq(purchaseInvoices.id, supplierPaymentAllocations.purchaseInvoiceId),
+    )
+    .groupBy(supplierPaymentAllocations.paymentId)
+    .as("imputadas");
+
   const filas = await db
     .select({
       id: supplierPayments.id,
@@ -49,10 +77,12 @@ export async function listarPagosAProveedores(limite = 60) {
       retenido: retenido.total,
       certificados: retenido.cantidad,
       numerosCertificado: retenido.numeros,
+      facturas: imputadas.facturas,
     })
     .from(supplierPayments)
     .innerJoin(suppliers, eq(suppliers.id, supplierPayments.supplierId))
     .leftJoin(retenido, eq(retenido.paymentId, supplierPayments.id))
+    .leftJoin(imputadas, eq(imputadas.paymentId, supplierPayments.id))
     .orderBy(desc(supplierPayments.fecha))
     .limit(limite);
 
@@ -63,6 +93,11 @@ export async function listarPagosAProveedores(limite = 60) {
     retenido: Number(f.retenido ?? 0),
     certificados: Number(f.certificados ?? 0),
     numerosCertificado: f.numerosCertificado ?? [],
+    facturas: (f.facturas ?? []).map((x) => ({
+      id: x.id,
+      numero: x.numero,
+      importe: Number(x.importe),
+    })),
   }));
 }
 

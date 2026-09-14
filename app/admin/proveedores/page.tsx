@@ -6,6 +6,7 @@ import { listarProveedores } from "@/lib/dal/admin/proveedores";
 import { formatearMonto, haceCuanto } from "@/lib/formato";
 import { BuscadorDeProveedores } from "./buscador";
 import { DialogoProveedor } from "./dialogo";
+import { Vacio } from "@/components/admin/vacio";
 
 export const metadata: Metadata = { title: "Proveedores" };
 
@@ -49,26 +50,37 @@ export default async function ProveedoresPage({
             {formatearMonto(deuda)}
           </p>
         </article>
-        <article className="tarjeta p-4">
+        {/* El filtro por estado ya existía en el buscador; la tarjeta era el
+            único lugar donde el número no llevaba a la lista. */}
+        <Link
+          href="/admin/proveedores?estado=activo"
+          className="tarjeta block p-4 transition-colors hover:border-brand-orange/40 hover:bg-hundida"
+        >
           <p className="text-sm text-muted-foreground">Proveedores activos</p>
           <p className="tabular mt-0.5 text-2xl font-bold">
             {proveedores.filter((p) => p.estado === "activo").length}
           </p>
-        </article>
+        </Link>
       </section>
 
       <BuscadorDeProveedores />
 
       <section className="tarjeta overflow-hidden">
         {proveedores.length === 0 ? (
-          <div className="px-5 py-14 text-center">
-            <Truck className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-3 text-base text-muted-foreground">
-              {q
-                ? "Ningún proveedor coincide con esa búsqueda."
-                : "Todavía no hay proveedores cargados."}
-            </p>
-          </div>
+          <Vacio
+            icono={Truck}
+            titulo={
+              q
+                ? "Ningún proveedor coincide con esa búsqueda"
+                : "Todavía no hay proveedores cargados"
+            }
+            detalle={
+              q
+                ? "Probá con parte del nombre o con el CUIT."
+                : "La ficha del proveedor guarda sus condiciones de pago, sus facturas y su cuenta corriente."
+            }
+            accion={q ? undefined : <DialogoProveedor />}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-base">
@@ -81,7 +93,7 @@ export default async function ProveedoresPage({
                   <th className="px-5 py-2.5 text-right font-semibold">
                     Se le debe
                   </th>
-                  <th className="px-5 py-2.5 font-semibold">Último mov.</th>
+                  <th className="px-5 py-2.5 font-semibold">Último movimiento</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-linea">

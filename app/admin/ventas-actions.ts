@@ -245,7 +245,7 @@ export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
     .where(eq(quoteItems.quoteId, quoteId));
 
   if (items.length === 0) {
-    return { error: "El presupuesto no tiene ítems." };
+    return { error: "El presupuesto está vacío: no tiene ningún producto." };
   }
 
   // Se asigna adentro de la transacción y se usa afuera, en el mensaje.

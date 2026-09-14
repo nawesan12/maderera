@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { LayoutDashboard, Settings2 } from "lucide-react";
+import { CircleHelp, LayoutDashboard, Settings2 } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
 import { listarCortes } from "@/lib/dal/admin/cortes";
 import { plural } from "@/components/admin/formato";
@@ -79,7 +79,17 @@ export default async function TallerPage({
           className="inline-flex h-11 items-center gap-2 rounded-[9px] border border-linea bg-card px-3.5 text-base font-medium transition-colors hover:bg-hundida"
         >
           <Settings2 className="h-5 w-5" />
-          <span className="hidden md:inline">Formato</span>
+          <span className="hidden md:inline">Formato del archivo para la máquina</span>
+        </Link>
+
+        {/* La guía, acá y no solo en el menú del panel: el aserradero no tiene
+            panel detrás, así que este encabezado es todo lo que tiene. */}
+        <Link
+          href="/admin/ayuda/cortes-y-whatsapp"
+          className="inline-flex h-11 items-center gap-2 rounded-[9px] border border-linea bg-card px-3.5 text-base font-medium transition-colors hover:bg-hundida"
+        >
+          <CircleHelp className="h-5 w-5" />
+          <span className="hidden md:inline">Cómo se usa</span>
         </Link>
 
         {puedeVolverAlPanel && (

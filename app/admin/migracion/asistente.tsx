@@ -84,7 +84,7 @@ function descargarRechazos(entidad: ClaveEntidad, rechazos: RechazoMigracion[]) 
 
   const contenido =
     "﻿" +
-    ["Linea;Identificador;Motivo"]
+    ["Fila;Código;Qué pasó"]
       .concat(
         rechazos.map((r) =>
           [String(r.linea), escapar(r.identificador), escapar(r.motivo)].join(";"),

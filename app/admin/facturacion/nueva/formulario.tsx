@@ -176,7 +176,7 @@ export function FormularioFacturaManual({
                 onChange={(e) => cambiar(i, "descripcion", e.target.value)}
                 placeholder="Descripción"
                 className="h-10 rounded-lg border bg-background px-3 text-base"
-                aria-label={`Descripción del ítem ${i + 1}`}
+                aria-label={`Descripción del renglón ${i + 1}`}
               />
               <input
                 name="cantidad"
@@ -184,7 +184,7 @@ export function FormularioFacturaManual({
                 onChange={(e) => cambiar(i, "cantidad", e.target.value)}
                 inputMode="decimal"
                 className="tabular h-10 rounded-lg border bg-background px-3 text-base"
-                aria-label={`Cantidad del ítem ${i + 1}`}
+                aria-label={`Cantidad del renglón ${i + 1}`}
               />
               <input
                 name="precio"
@@ -193,14 +193,14 @@ export function FormularioFacturaManual({
                 inputMode="decimal"
                 placeholder="Precio final"
                 className="tabular h-10 rounded-lg border bg-background px-3 text-base"
-                aria-label={`Precio del ítem ${i + 1}`}
+                aria-label={`Precio del renglón ${i + 1}`}
               />
               <select
                 name="alicuota"
                 value={linea.alicuota}
                 onChange={(e) => cambiar(i, "alicuota", e.target.value)}
                 className="h-10 rounded-lg border bg-background px-2 text-base"
-                aria-label={`IVA del ítem ${i + 1}`}
+                aria-label={`IVA del renglón ${i + 1}`}
               >
                 <option value="21">21%</option>
                 <option value="10.5">10,5%</option>
@@ -216,7 +216,7 @@ export function FormularioFacturaManual({
                   )
                 }
                 className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                aria-label={`Quitar el ítem ${i + 1}`}
+                aria-label={`Quitar el renglón ${i + 1}`}
               >
                 <Trash2 className="h-5 w-5" />
               </button>
@@ -230,7 +230,7 @@ export function FormularioFacturaManual({
           className="mt-3 inline-flex h-10 items-center gap-2 rounded-lg border border-dashed px-3.5 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <Plus className="h-5 w-5" />
-          Agregar ítem
+          Agregar renglón
         </button>
 
         {/* Desagregación en vivo */}

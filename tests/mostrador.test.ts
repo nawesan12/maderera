@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aCentavos,
+  leerTipeo,
   montoDelDescuento,
   aplicarDescuento,
   revisarVenta,
@@ -58,7 +59,7 @@ describe("qué se puede cobrar y qué no", () => {
   });
 
   it("rechaza la venta vacía", () => {
-    expect(revisarVenta([], "efectivo", null)).toMatch(/ningún ítem/);
+    expect(revisarVenta([], "efectivo", null)).toMatch(/nada para cobrar/);
   });
 
   it("rechaza cantidad cero o negativa", () => {
@@ -177,5 +178,56 @@ describe("cómo se reparte el descuento entre las líneas", () => {
     const r = aplicarDescuento(lineas, 1000);
     expect(totalDeLaVenta(r.lineas)).toBe(0);
     expect(r.descuento).toBe(1000);
+  });
+});
+
+describe("la cantidad tipeada en el buscador", () => {
+  it("lee «3*pino» como tres de pino", () => {
+    expect(leerTipeo("3*pino")).toEqual({
+      cantidad: 3,
+      consulta: "pino",
+      explicita: true,
+    });
+  });
+
+  it("acepta espacios y la equis, que es como lo escribe quien no sabe la convención", () => {
+    expect(leerTipeo("2 x fenólico")).toMatchObject({
+      cantidad: 2,
+      consulta: "fenólico",
+    });
+    expect(leerTipeo(" 10 * tirante ")).toMatchObject({
+      cantidad: 10,
+      consulta: "tirante",
+    });
+  });
+
+  it("deja pasar las medidas: «2x4» es una madera, no dos de algo", () => {
+    expect(leerTipeo("2x4")).toEqual({
+      cantidad: 1,
+      consulta: "2x4",
+      explicita: false,
+    });
+    expect(leerTipeo("18x2750")).toMatchObject({ consulta: "18x2750" });
+  });
+
+  it("no toca una búsqueda común", () => {
+    expect(leerTipeo("fenólico 18")).toEqual({
+      cantidad: 1,
+      consulta: "fenólico 18",
+      explicita: false,
+    });
+  });
+
+  it("entiende media docena y la coma decimal", () => {
+    expect(leerTipeo("2,5*cemento")).toMatchObject({ cantidad: 2.5 });
+    expect(leerTipeo("1.5 x arena")).toMatchObject({ cantidad: 1.5 });
+  });
+
+  it("ignora el cero: vender cero no es vender", () => {
+    expect(leerTipeo("0*pino")).toEqual({
+      cantidad: 1,
+      consulta: "0*pino",
+      explicita: false,
+    });
   });
 });

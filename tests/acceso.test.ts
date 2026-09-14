@@ -153,3 +153,36 @@ describe("rol después de aprobar una solicitud profesional", () => {
     expect(rolTrasAprobarProfesional(undefined)).toBe("profesional");
   });
 });
+
+/**
+ * La ayuda es de todo el personal, y el aserradero la tenía cerrada.
+ *
+ * No por una decisión: `/admin/ayuda` no estaba declarada, así que heredaba de
+ * `/admin` —que excluye al aserradero— y encima la excepción del layout lo
+ * sacaba de todo lo que no colgara de `/admin/cortes`. El resultado era que la
+ * única persona sin panel detrás, la que está parada frente a la seccionadora,
+ * no podía abrir una sola guía; y la número 8 está escrita para ella.
+ *
+ * Es el mismo mecanismo que el comentario de las de compras ya advertía: no
+ * declarar una ruta **también** decide.
+ */
+describe("las guías las abre todo el personal", () => {
+  it("los cuatro roles entran a la ayuda", () => {
+    for (const rol of ["admin", "vendedor", "deposito", "aserradero"] as const) {
+      expect(puedeEntrar("/admin/ayuda", rol)).toBe(true);
+      expect(puedeEntrar("/admin/ayuda/cortes-y-whatsapp", rol)).toBe(true);
+    }
+  });
+
+  it("sin sesión de personal, no", () => {
+    expect(puedeEntrar("/admin/ayuda", null)).toBe(false);
+  });
+
+  it("la ayuda no le abre nada más del panel al aserradero", () => {
+    // Que la excepción acote y no habilite: es lo que se rompió una vez con
+    // `/admin/cortes/tarifas`.
+    expect(puedeEntrar("/admin/precios", "aserradero")).toBe(false);
+    expect(puedeEntrar("/admin/cierre", "aserradero")).toBe(false);
+    expect(puedeEntrar("/admin/cortes/tarifas", "aserradero")).toBe(false);
+  });
+});

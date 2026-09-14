@@ -67,6 +67,8 @@ export async function reporteDeReposicion(opciones: {
   diasDelPeriodo: number;
   coberturaObjetivo: number;
   categoria?: string;
+  /** El rubro, que es el nivel que la clienta llama así. */
+  rubro?: string;
   sucursal?: string;
 }): Promise<ReporteDeReposicion> {
   await requireStaff();
@@ -80,6 +82,12 @@ export async function reporteDeReposicion(opciones: {
   ];
   if (opciones.categoria && opciones.categoria !== "todos") {
     condiciones.push(eq(categories.slug, opciones.categoria));
+  }
+  // "Reporte de stock por rubros": el rubro venía como columna de la tabla
+  // pero no se podía filtrar por él, que es lo que convierte el listado en
+  // una decisión de compra —"qué me falta de bulonería"— y no en una planilla.
+  if (opciones.rubro && opciones.rubro !== "todos") {
+    condiciones.push(eq(subcategories.slug, opciones.rubro));
   }
 
   // El stock por sucursal en columnas, como la pantalla de stock: dos

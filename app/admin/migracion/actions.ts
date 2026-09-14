@@ -82,7 +82,7 @@ export async function analizarArchivo(
 
   if (filas.length < 2) {
     return {
-      error: "El archivo no tiene datos: se esperaba una fila de encabezados y al menos un registro.",
+      error: "El archivo está vacío. Tiene que tener la fila de títulos y al menos una fila de datos.",
     };
   }
 
@@ -262,7 +262,7 @@ export async function ejecutarLote(
 
   const definicion = definicionDe(entidad);
   if (faltantes(definicion, mapeo).length > 0) {
-    return { error: "El mapeo de columnas quedó incompleto." };
+    return { error: "Faltan emparejar columnas. Fijate las que están marcadas con *." };
   }
 
   const normalizadas = normalizarFilas(definicion, mapeo, filas);

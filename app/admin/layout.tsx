@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { degradar } from "@/lib/degradar";
 import { PanelNoDisponible } from "@/components/admin/panel-no-disponible";
-import { inicioDelRol, puedeEntrar } from "@/lib/roles";
+import { ETIQUETA_ROL, inicioDelRol, puedeEntrar } from "@/lib/roles";
 import { SaltarAlContenido } from "@/components/saltar-al-contenido";
 import { headers } from "next/headers";
 import { redirect, unstable_rethrow } from "next/navigation";
@@ -25,13 +25,6 @@ function iniciales(nombre: string) {
     .map((parte) => parte[0]?.toUpperCase() ?? "")
     .join("");
 }
-
-const etiquetaRol = {
-  admin: "Administración",
-  vendedor: "Ventas",
-  deposito: "Depósito",
-  aserradero: "Aserradero",
-} as const;
 
 export default async function AdminLayout({
   children,
@@ -81,7 +74,14 @@ export default async function AdminLayout({
    * porque una tarifa de corte es un precio: fija cuánto entra por caja. El
    * operario de la seccionadora podía cambiarla.
    */
-  if (usuario.staffRole === "aserradero" && !ruta.startsWith("/admin/cortes")) {
+  if (
+    usuario.staffRole === "aserradero" &&
+    !ruta.startsWith("/admin/cortes") &&
+    // La ayuda también, porque es de todo el personal y no estaba declarada en
+    // `ACCESO`: la excepción se la llevaba puesta y el aserradero quedaba sin
+    // poder abrir una guía. La 8 —"Cortes y WhatsApp"— está escrita para él.
+    !ruta.startsWith("/admin/ayuda")
+  ) {
     redirect("/taller");
   }
 
@@ -132,7 +132,7 @@ export default async function AdminLayout({
               <MenuUsuario
                 nombre={usuario.name}
                 iniciales={iniciales(usuario.name)}
-                rol={etiquetaRol[usuario.staffRole!]}
+                rol={ETIQUETA_ROL[usuario.staffRole!]}
               />
             </div>
           </div>

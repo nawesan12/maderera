@@ -113,9 +113,9 @@ export function DialogoCliente({
               <Input id="razonSocial" name="razonSocial" />
             </div>
             <div className="space-y-2">
-              <Label>Tipo de cliente</Label>
+              <Label htmlFor="cliente-tipo">Tipo de cliente</Label>
               <Select value={tipo} onValueChange={(v) => v && cambiarTipo(v)} items={TIPOS}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="cliente-tipo" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -136,13 +136,13 @@ export function DialogoCliente({
               <Input id="cuit" name="cuit" placeholder="20-12345678-9" inputMode="numeric" />
             </div>
             <div className="space-y-2">
-              <Label>Condición frente al IVA</Label>
+              <Label htmlFor="cliente-condicion">Condición frente al IVA</Label>
               <Select
                 value={condicion}
                 onValueChange={(v) => v && setCondicion(v)}
                 items={CONDICIONES}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="cliente-condicion" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -170,13 +170,13 @@ export function DialogoCliente({
               <Input id="direccion" name="direccion" />
             </div>
             <div className="space-y-2">
-              <Label>Vendedor asignado</Label>
+              <Label htmlFor="cliente-vendedor">Vendedor asignado</Label>
               <Select
                 value={vendedor}
                 onValueChange={(v) => setVendedor(v ?? "")}
                 items={opcionesDeVendedor}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="cliente-vendedor" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -192,13 +192,13 @@ export function DialogoCliente({
               </p>
             </div>
             <div className="space-y-2">
-              <Label>Lista de precios</Label>
+              <Label htmlFor="cliente-lista">Lista de precios</Label>
               <Select
                 value={lista}
                 onValueChange={(v) => setLista(v ?? "")}
                 items={opcionesDeLista}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="cliente-lista" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

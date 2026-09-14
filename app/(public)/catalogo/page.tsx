@@ -185,7 +185,7 @@ function Encabezado() {
         {/* Las migas de la cabecera acompañan al JSON-LD que ya se emite: lo
             que declara el marcado y lo que ve la persona coinciden. */}
         <nav
-          aria-label="Miga de pan"
+          aria-label="Dónde estás"
           className="flex items-center gap-2 text-[13.5px] text-white/60"
         >
           <Link href="/" className="transition-colors hover:text-white">

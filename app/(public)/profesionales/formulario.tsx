@@ -68,6 +68,11 @@ export function FormularioProfesional({
       action={accion}
       className="space-y-4"
     >
+      <p className="text-sm text-muted-foreground">
+        Los campos con <span className="text-brand-orange">*</span> hay que
+        completarlos.
+      </p>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo
           nombre="nombre"
@@ -85,7 +90,9 @@ export function FormularioProfesional({
         />
         <div>
           <label htmlFor="documentoNumero" className="block text-sm font-medium">
-            DNI o CUIT <span className="text-brand-orange">*</span>
+            DNI o CUIT <span className="text-brand-orange" aria-label="obligatorio">
+              *
+            </span>
           </label>
           <div className="mt-1 flex gap-2">
             <select
@@ -115,7 +122,9 @@ export function FormularioProfesional({
         </div>
         <div>
           <label htmlFor="rubro" className="block text-sm font-medium">
-            A qué te dedicás <span className="text-brand-orange">*</span>
+            A qué te dedicás <span className="text-brand-orange" aria-label="obligatorio">
+              *
+            </span>
           </label>
           <select
             id="rubro"
@@ -234,7 +243,9 @@ function Campo({
     <div>
       <label htmlFor={nombre} className="block text-sm font-medium">
         {etiqueta}
-        {requerido && <span className="text-brand-orange"> *</span>}
+        {requerido && <span className="text-brand-orange" aria-label="obligatorio">
+            {" *"}
+          </span>}
       </label>
       <input
         id={nombre}

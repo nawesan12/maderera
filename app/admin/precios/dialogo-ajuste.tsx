@@ -135,13 +135,13 @@ export function DialogoAjuste({
             </div>
 
             <div className="space-y-2">
-              <Label>Sobre qué se calcula</Label>
+              <Label htmlFor="ajuste-base">Sobre qué se calcula</Label>
               <Select
                 value={base}
                 onValueChange={(v) => v && setBase(v)}
                 items={BASES}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="ajuste-base" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -165,7 +165,7 @@ export function DialogoAjuste({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Qué productos</Label>
+              <Label htmlFor="ajuste-categoria">Qué productos</Label>
               <Select
                 value={categoria}
                 onValueChange={(v) => v && setCategoria(v)}
@@ -174,7 +174,7 @@ export function DialogoAjuste({
                   ...Object.fromEntries(categorias.map((c) => [c.slug, c.name])),
                 }}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="ajuste-categoria" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -191,7 +191,7 @@ export function DialogoAjuste({
             {/* El corte por rubro que pidió la clienta: dentro de Ferretería,
                 tocar solo Tornillos. Aparece con la categoría elegida. */}
             <div className="space-y-2">
-              <Label>Qué rubro</Label>
+              <Label htmlFor="ajuste-rubro">Qué rubro</Label>
               <Select
                 value={rubroValido}
                 onValueChange={(v) => setRubro(v ?? "todos")}
@@ -202,7 +202,7 @@ export function DialogoAjuste({
                   ),
                 }}
               >
-                <SelectTrigger
+                <SelectTrigger id="ajuste-rubro"
                   className="w-full"
                   disabled={rubrosDeLaCategoria.length === 0}
                 >
@@ -222,13 +222,13 @@ export function DialogoAjuste({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Qué lista</Label>
+              <Label htmlFor="ajuste-lista">Qué lista</Label>
               <Select
                 value={lista}
                 onValueChange={(v) => v && setLista(v)}
                 items={LISTAS}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="ajuste-lista" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -242,13 +242,13 @@ export function DialogoAjuste({
             </div>
 
             <div className="space-y-2">
-              <Label>Redondeo</Label>
+              <Label htmlFor="ajuste-redondeo">Redondeo</Label>
               <Select
                 value={redondeo}
                 onValueChange={(v) => v && setRedondeo(v)}
                 items={REDONDEOS}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="ajuste-redondeo" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -312,7 +312,7 @@ export function DialogoAjuste({
                 Aplicando…
               </>
             ) : (
-              "Aplicar ajuste"
+              "Aplicar el aumento"
             )}
           </Button>
         </form>

@@ -62,7 +62,10 @@ export async function aprobarSolicitud(
       limiteCredito: (formData.get("limiteCredito") as string) || undefined,
     });
 
-  if (!parsed.success) return { error: "Datos inválidos." };
+  if (!parsed.success)
+    return {
+      error: "No pudimos identificar esa solicitud. Recargá la pantalla y probá de nuevo.",
+    };
 
   const solicitud = await db
     .select()
@@ -325,7 +328,8 @@ export async function borrarEscala(
   await requireStaff();
 
   const id = z.string().uuid().safeParse(formData.get("id"));
-  if (!id.success) return { error: "Escala inválida." };
+  if (!id.success)
+    return { error: "No encontramos esa escala de descuento." };
 
   await db.delete(volumeDiscounts).where(eq(volumeDiscounts.id, id.data));
 

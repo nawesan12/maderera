@@ -160,6 +160,23 @@ export const ubicacionBanner = pgEnum("ubicacion_banner", [
  * Distinto de `banners`: el banner es un cartel libre que rota; esto es la
  * grilla estable de "con qué me conviene pagar", con un renglón por medio.
  */
+/**
+ * Quién pone la plata de un beneficio.
+ *
+ * **Es la diferencia entre anunciar y regalar.** Un reintegro de MODO o del
+ * Hipotecario lo paga el banco: el cliente abona el total y el banco se lo
+ * devuelve después. Descontarlo en el mostrador sería que la maderera ponga de
+ * su bolsillo una plata que iba a poner otro, y sobre el 15 % de una venta de
+ * placas eso es mucho.
+ *
+ * Al revés también: el 10 % de contado lo pone la maderera y **sí** se
+ * descuenta. Ese vive en `payment_discounts`, que es la única tabla que mueve
+ * precios. Acá el campo existe para que al cargar una promoción haya que
+ * decidirlo, y para que la pantalla del mostrador pueda decir cuál se descuenta
+ * y cuál no.
+ */
+export const quienPagaPromo = pgEnum("quien_paga_promo", ["banco", "nosotros"]);
+
 export const bankPromotions = pgTable(
   "bank_promotions",
   {
@@ -174,6 +191,15 @@ export const bankPromotions = pgTable(
     dias: text().notNull().default(""),
     /** Hasta cuándo. Vacía es "hasta nuevo aviso" y no vence sola. */
     vigenciaHasta: timestamp({ withTimezone: true }),
+    /**
+     * Quién pone la plata.
+     *
+     * Arranca en `banco`, que es el lado seguro: no descontar de más. Si una
+     * promoción quedara mal marcada como del banco, el peor caso es que el
+     * cliente reclame y alguien lo revise; al revés, la maderera regala el
+     * descuento sin enterarse.
+     */
+    quienPaga: quienPagaPromo().notNull().default("banco"),
     orden: integer().notNull().default(0),
     activo: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

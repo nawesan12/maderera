@@ -76,7 +76,7 @@ export interface PerfilDeExportacion {
  * cuanto haya un archivo del taller con el que comparar.
  */
 export const PERFIL_GENERICO: PerfilDeExportacion = {
-  nombre: "Genérico (CSV)",
+  nombre: "Formato común (planilla)",
   separador: ";",
   conEncabezado: true,
   unidad: "mm",

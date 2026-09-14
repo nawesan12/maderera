@@ -80,6 +80,9 @@ export default async function EtiquetasPage({
             {recortadas.length} etiquetas — una por pieza. El lado grueso del
             croquis es el que lleva tapacanto
             {corte.cantoDescripcion ? ` (${corte.cantoDescripcion})` : ""}.
+            {/* La flecha estaba dibujada y sin explicar: quien mira la etiqueta
+                en la pila veía un símbolo que no dice nada por sí solo. */}
+            {" "}La flecha ⇢ marca las piezas que respetan la veta.
             {etiquetas.length > TOPE &&
               ` Se recortó a ${TOPE}: revisá las cantidades del despiece.`}
           </p>
@@ -114,6 +117,34 @@ export default async function EtiquetasPage({
 }
 
 /**
+ * Cómo se dice el croquis en voz alta.
+ *
+ * Decía "Canto en 2 lado(s) del largo y 1 del ancho": los paréntesis del plural
+ * son de programador y un lector de pantalla los pronuncia. Acá se arma la
+ * frase como se diría en el taller.
+ */
+function textoDelCanto(
+  cantoLargo: number,
+  cantoAncho: number,
+  respetaVeta: boolean,
+): string {
+  const partes: string[] = [];
+  if (cantoLargo > 0) {
+    partes.push(
+      cantoLargo === 1 ? "canto en un lado del largo" : "canto en los dos lados del largo",
+    );
+  }
+  if (cantoAncho > 0) {
+    partes.push(
+      cantoAncho === 1 ? "canto en un lado del ancho" : "canto en los dos lados del ancho",
+    );
+  }
+  if (partes.length === 0) partes.push("sin canto");
+  if (respetaVeta) partes.push("respeta la veta");
+  return partes.join(", ");
+}
+
+/**
  * La pieza dibujada: los bordes gruesos son los lados con tapacanto.
  *
  * El largo va horizontal, así que sus cantos son arriba y abajo; los del ancho
@@ -135,7 +166,7 @@ function Croquis({
   return (
     <div
       className="croquis"
-      aria-label={`Canto en ${cantoLargo} lado(s) del largo y ${cantoAncho} del ancho`}
+      aria-label={textoDelCanto(cantoLargo, cantoAncho, respetaVeta)}
       style={{
         width: "18mm",
         height: "12mm",

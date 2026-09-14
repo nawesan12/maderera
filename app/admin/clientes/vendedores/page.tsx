@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, UsersRound } from "lucide-react";
+import { ArrowLeft, UserPlus, UsersRound } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { listarVendedores } from "@/lib/dal/admin/vendedores";
 import { EditorDeVendedor, FilaDeVendedor } from "./editor";
+import { Vacio } from "@/components/admin/vacio";
 
 export const metadata: Metadata = { title: "Vendedores" };
 
@@ -54,9 +55,12 @@ export default async function VendedoresPage() {
           </span>
         </h2>
         {activos.length === 0 ? (
-          <p className="mt-3 rounded-lg border border-dashed px-4 py-3 text-base text-muted-foreground">
-            Todavía no hay vendedores cargados.
-          </p>
+          <Vacio
+            icono={UserPlus}
+            titulo="Todavía no hay vendedores cargados"
+            detalle="Un vendedor se asigna a la ficha del cliente, y después los presupuestos y los pedidos lo heredan solos."
+            accion={{ texto: "Agregar el primero", href: "#agregar" }}
+          />
         ) : (
           <ul className="mt-3 divide-y divide-linea-tenue">
             {activos.map((v) => (
@@ -80,7 +84,7 @@ export default async function VendedoresPage() {
         </section>
       )}
 
-      <section className="space-y-2">
+      <section id="agregar" className="space-y-2">
         <h2 className="text-base font-semibold">Agregar un vendedor</h2>
         <EditorDeVendedor />
       </section>

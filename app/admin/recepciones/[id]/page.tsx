@@ -94,7 +94,7 @@ export default async function RecepcionPage({
             <thead>
               <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                 <th className="px-4 py-2.5 font-semibold">Mercadería</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Cant.</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Cantidad</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Costo</th>
                 <th className="px-4 py-2.5 text-right font-semibold">IVA</th>
                 {confirmada && (

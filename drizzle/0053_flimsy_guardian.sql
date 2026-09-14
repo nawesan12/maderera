@@ -1,0 +1,1 @@
+ALTER TABLE "cutting_orders" ADD COLUMN "acomodo_manual" text;

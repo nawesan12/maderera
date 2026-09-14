@@ -25,7 +25,7 @@ import {
 import { VolverAPedir } from "./volver-a-pedir";
 
 const COMO_SIGUE: Record<string, string> = {
-  mercado_pago: "Te pasamos el link de pago por WhatsApp.",
+  mercado_pago: "Te mandamos el enlace para pagar por WhatsApp.",
   transferencia:
     "Te pasamos los datos bancarios por WhatsApp. Preparamos el pedido cuando se acredita.",
   efectivo: "Abonás al retirar o cuando te lo entregamos.",

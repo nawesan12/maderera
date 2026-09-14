@@ -2,13 +2,18 @@ import "server-only";
 
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { siguienteNumeroDePedido } from "@/lib/dal/numeracion-ventas";
+import {
+  siguienteNumeroDeCorte,
+  siguienteNumeroDePedido,
+} from "@/lib/dal/numeracion-ventas";
 import { fechaAcotada } from "@/lib/mostrador/offline/numero-provisorio";
 import { turnoQueContiene } from "@/lib/mostrador/turno";
 import { costosParaCongelar } from "@/lib/compras/congelar";
 import {
   accountMovements,
   cashMovements,
+  cuttingItems,
+  cuttingOrders,
   customers,
   inventory,
   inventoryMovements,
@@ -74,6 +79,27 @@ export type { LineaDeVenta, MedioDeMostrador, PagoDeVenta };
  *    pendiente. Anotarla como cobrada mostraría plata que no está.
  */
 
+/** El despiece que se cargó en el mostrador, para que nazca el trabajo. */
+export interface CorteDeMostrador {
+  variantId: string | null;
+  materialDescripcion: string;
+  cantoDescripcion: string | null;
+  placas: number;
+  pasadas: number;
+  /** El acomodo corregido a mano, como JSON. Ver `lib/cortes/plano.ts`. */
+  acomodoManual: string | null;
+  piezas: {
+    largoMm: number;
+    anchoMm: number;
+    cantidad: number;
+    respetaVeta: number;
+    cantoLargo: number;
+    cantoAncho: number;
+    etiqueta: string | null;
+    aclaracion: string | null;
+  }[];
+}
+
 export interface VentaDeMostrador {
   /** La genera el navegador al empezar la venta. Es lo que la hace repetible. */
   clave: string;
@@ -91,6 +117,18 @@ export interface VentaDeMostrador {
    * dar el total al centavo y `medioPago` pasa a ser el de mayor importe.
    */
   pagos?: PagoDeVenta[];
+  /**
+   * El corte que se vendió en esta venta, si se vendió uno.
+   *
+   * Nace **con la venta y dentro de la misma transacción**, no antes: si se
+   * creara al armar el despiece, una venta que se cancela dejaría un trabajo
+   * fantasma en la cola del taller, y el aserradero cortaría una placa que
+   * nadie pagó.
+   *
+   * Queda atado al pedido por `orderId`, que es lo que permite contestar desde
+   * las dos puntas —"¿este corte de quién es?" y "¿qué falta de este pedido?"—.
+   */
+  corte?: CorteDeMostrador;
   /**
    * La venta queda en acopio: se cobra y la mercadería no se lleva.
    *
@@ -412,6 +450,51 @@ export async function registrarVentaDeMostrador(
       })
       .returning({ id: orders.id });
 
+    /*
+     * El corte, si la venta lleva uno.
+     *
+     * Nace en la cola del taller, atado a este pedido. Las pasadas vienen ya
+     * calculadas por el plano —son las cobrables, las de las placas que no se
+     * venden enteras— porque es lo que se acaba de cobrar: cargarlas en cero
+     * obligaría a alguien a volver a medirlas para un trabajo ya facturado.
+     */
+    if (venta.corte && venta.corte.piezas.length > 0) {
+      const numeroCorte = await siguienteNumeroDeCorte(tx);
+      const [corte] = await tx
+        .insert(cuttingOrders)
+        .values({
+          numero: numeroCorte,
+          customerId: venta.customerId,
+          orderId: pedido.id,
+          contactoNombre: venta.contactoNombre,
+          branchId: venta.branchId,
+          variantId: venta.corte.variantId,
+          materialDescripcion: venta.corte.materialDescripcion,
+          placas: venta.corte.placas,
+          pasadas: venta.corte.pasadas,
+          cantoDescripcion: venta.corte.cantoDescripcion,
+          acomodoManual: venta.corte.acomodoManual,
+          estado: "en-cola",
+          createdByUserId: venta.usuarioId,
+        })
+        .returning({ id: cuttingOrders.id });
+
+      await tx.insert(cuttingItems).values(
+        venta.corte.piezas.map((pieza, i) => ({
+          cuttingOrderId: corte!.id,
+          largoMm: pieza.largoMm,
+          anchoMm: pieza.anchoMm,
+          cantidad: pieza.cantidad,
+          respetaVeta: pieza.respetaVeta,
+          cantoLargo: pieza.cantoLargo,
+          cantoAncho: pieza.cantoAncho,
+          etiqueta: pieza.etiqueta,
+          aclaracion: pieza.aclaracion,
+          orden: i,
+        })),
+      );
+    }
+
     // El detalle de cómo se pagó, con lote y cupón. Siempre, aun con un solo
     // pago: el cierre Z y la conciliación leen de acá.
     await tx.insert(orderPayments).values(
@@ -421,6 +504,7 @@ export async function registrarVentaDeMostrador(
         importe: p.importe.toFixed(2),
         nroLote: p.nroLote || null,
         nroCupon: p.nroCupon || null,
+        cuotas: p.cuotas && p.cuotas > 1 ? p.cuotas : 1,
         tarjeta: p.tarjeta || null,
       })),
     );

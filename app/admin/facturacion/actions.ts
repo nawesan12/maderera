@@ -223,7 +223,7 @@ export async function emitirManual(
   }
 
   if (lineas.length === 0) {
-    return { error: "Cargá al menos un ítem." };
+    return { error: "Agregá al menos un renglón a la factura." };
   }
 
   const resultado = await emitirComprobante({

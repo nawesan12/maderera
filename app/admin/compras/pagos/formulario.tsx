@@ -248,7 +248,7 @@ export function FormularioPago({
         </label>
 
         <label className="block">
-          <span className="text-sm font-medium">Medio</span>
+          <span className="text-sm font-medium">Forma de pago</span>
           <select
             value={medio}
             onChange={(e) => {
@@ -287,7 +287,7 @@ export function FormularioPago({
         {/* Por qué circuito sale el pago. Los cheques que se emitan en él lo
             heredan: salen con esa plata y por esa vía. */}
         <label className="block">
-          <span className="text-sm font-medium">Circuito</span>
+          <span className="text-sm font-medium">Circuito de facturación</span>
           <div
             className="mt-1 flex gap-1.5"
             role="group"

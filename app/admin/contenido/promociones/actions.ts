@@ -31,6 +31,14 @@ const esquema = z.object({
   titulo: z.string().trim().min(2, "Poné el beneficio en una línea.").max(120),
   detalle: z.string().trim().max(600).default(""),
   dias: z.string().trim().max(60).default(""),
+  /*
+   * Quién pone la plata. Sin valor por defecto **a propósito**: cargar una
+   * promoción sin decidirlo es lo que después hace que alguien la descuente en
+   * el mostrador creyendo que la paga la maderera, o al revés.
+   */
+  quienPaga: z.enum(["banco", "nosotros"], {
+    message: "Decí quién pone el descuento: el banco o la maderera.",
+  }),
   vigenciaHasta: z
     .string()
     .trim()
@@ -54,6 +62,7 @@ export async function guardarPromo(
     titulo: formData.get("titulo"),
     detalle: (formData.get("detalle") as string) || "",
     dias: (formData.get("dias") as string) || "",
+    quienPaga: formData.get("quienPaga"),
     vigenciaHasta: (formData.get("vigenciaHasta") as string) || undefined,
     orden: (formData.get("orden") as string) || 0,
     activo: formData.get("activo") === "on",
@@ -69,6 +78,7 @@ export async function guardarPromo(
     titulo: datos.titulo,
     detalle: datos.detalle,
     dias: datos.dias,
+    quienPaga: datos.quienPaga,
     vigenciaHasta: datos.vigenciaHasta,
     orden: datos.orden,
     activo: datos.activo,

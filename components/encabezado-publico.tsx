@@ -29,7 +29,7 @@ export function EncabezadoPublico({
       />
       <div className="contenedor relative">
         <nav
-          aria-label="Miga de pan"
+          aria-label="Dónde estás"
           className="flex flex-wrap items-center gap-2 text-[13.5px] text-white/60"
         >
           <Link href="/" className="transition-colors hover:text-white">

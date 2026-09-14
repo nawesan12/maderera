@@ -4,6 +4,7 @@ import { ClipboardList, Plus } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import { listarOrdenesDeCompra } from "@/lib/dal/admin/ordenes-compra";
 import { formatearMonto } from "@/lib/formato";
+import { Vacio } from "@/components/admin/vacio";
 
 export const metadata: Metadata = { title: "Órdenes de compra" };
 
@@ -54,12 +55,12 @@ export default async function OrdenesDeCompraPage() {
 
       <section className="tarjeta overflow-hidden">
         {ordenes.length === 0 ? (
-          <div className="px-5 py-14 text-center">
-            <ClipboardList className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-3 text-base text-muted-foreground">
-              Todavía no hay órdenes de compra.
-            </p>
-          </div>
+          <Vacio
+            icono={ClipboardList}
+            titulo="Todavía no hay órdenes de compra"
+            detalle="Una orden deja por escrito qué se le pidió a cada proveedor, y después la recepción se compara contra ella."
+            accion={{ texto: "Nueva orden", href: "/admin/compras/ordenes/nueva" }}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-base">
@@ -68,11 +69,11 @@ export default async function OrdenesDeCompraPage() {
                   <th className="px-5 py-2.5 font-semibold">Orden</th>
                   <th className="px-5 py-2.5 font-semibold">Proveedor</th>
                   <th className="px-5 py-2.5 font-semibold">Sucursal</th>
-                  <th className="px-5 py-2.5 font-semibold">Prometida</th>
+                  <th className="px-5 py-2.5 font-semibold">Fecha prometida</th>
                   <th className="px-5 py-2.5 text-right font-semibold">
                     Pendientes
                   </th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Neto</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Neto (sin IVA)</th>
                   <th className="px-5 py-2.5 font-semibold">Estado</th>
                 </tr>
               </thead>

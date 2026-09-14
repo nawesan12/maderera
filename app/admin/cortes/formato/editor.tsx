@@ -96,7 +96,7 @@ export function EditorDeFormato({ perfiles }: { perfiles: CuttingExportProfile[]
           className="inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-base font-medium transition-colors hover:bg-muted"
         >
           <Plus className="h-4 w-4" />
-          {perfiles.length === 0 ? "Configurar un formato" : "Agregar otro formato"}
+          {perfiles.length === 0 ? "Armar el formato del archivo" : "Agregar otro formato"}
         </button>
       ) : (
         <Formulario />
@@ -187,7 +187,7 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
         />
         <Campo
           nombre="programa"
-          etiqueta="Programa del optimizador"
+          etiqueta="Programa que usa la máquina"
           valorInicial={perfil?.programa ?? ""}
           placeholder="Cut Rite, Ardis, Corte Certo…"
           ayuda="Se completa cuando se sepa cuál usan. Sirve para saber contra qué se probó."
@@ -197,7 +197,7 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Selector
           nombre="separador"
-          etiqueta="Separador"
+          etiqueta="Cómo separa las columnas"
           valor={separador}
           alCambiar={setSeparador}
           opciones={[
@@ -220,7 +220,7 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
         />
         <Selector
           nombre="decimal"
-          etiqueta="Decimal"
+          etiqueta="Coma o punto en los decimales"
           valor={decimal}
           alCambiar={setDecimal}
           opciones={[
@@ -230,11 +230,11 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
         />
         <Selector
           nombre="finDeLinea"
-          etiqueta="Fin de línea"
+          etiqueta="Cómo termina cada renglón"
           valor={perfil?.finDeLinea ?? "crlf"}
           opciones={[
-            ["crlf", "Windows (CRLF)"],
-            ["lf", "Unix (LF)"],
+            ["crlf", "Como Windows (lo más común)"],
+            ["lf", "Como Linux o Mac"],
           ]}
         />
       </div>
@@ -315,7 +315,7 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
                 onClick={() =>
                   setColumnas([...columnas, { clave, encabezado: COLUMNAS[clave] }])
                 }
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium transition-colors hover:bg-muted"
+                className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
               >
                 <Plus className="h-3.5 w-3.5" />
                 {COLUMNAS[clave]}

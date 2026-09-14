@@ -96,6 +96,7 @@ export default async function PromocionesPage() {
             titulo: p.titulo,
             detalle: p.detalle,
             dias: p.dias,
+            quienPaga: p.quienPaga,
             vigenciaHasta: paraInput(p.vigenciaHasta),
             orden: p.orden,
             activo: p.activo,

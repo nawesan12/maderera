@@ -294,7 +294,9 @@ export async function ComprobanteImpreso({
                 dangerouslySetInnerHTML={{ __html: qr }}
               />
               <div className="cae">
-                <p>
+                {/* El comprobante lo lee el cliente, no el contador: la
+                    sigla sola no le dice nada a quien la ve por primera vez. */}
+                <p title="El número con el que ARCA autorizó esta factura">
                   <strong>CAE:</strong>{" "}
                   <span className="mono">{comprobante.cae}</span>
                 </p>

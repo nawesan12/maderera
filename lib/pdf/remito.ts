@@ -127,7 +127,13 @@ export async function remitoPdf(
   const datos: [string, string][] = [
     ["Cliente", remito.clienteNombre],
     ["Retira", remito.receptorNombre || "—"],
-    ["Domicilio de entrega", remito.clienteDireccion || "—"],
+    // En un retiro no se entrega nada en esa dirección: es el domicilio del
+    // cliente. El mismo rótulo que usa `remito-impreso.tsx`, para que el PDF y
+    // la impresión desde pantalla digan lo mismo.
+    [
+      remito.tipo === "envio" ? "Domicilio de entrega" : "Domicilio del cliente",
+      remito.clienteDireccion || "—",
+    ],
     ["Documento", remito.receptorDocumento || "—"],
   ];
 

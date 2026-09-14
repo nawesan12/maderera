@@ -162,7 +162,7 @@ export const proveedorCloud: ProveedorWhatsapp = {
   async enviarTexto(waJid, cuerpo, media) {
     const config = configCloud();
     if (!config) {
-      return { error: "WhatsApp no está configurado en el servidor." };
+      return { error: "WhatsApp todavía no está conectado. Avisale a quien mantiene el sistema." };
     }
 
     const to = aTelefono(waJid);
@@ -176,7 +176,7 @@ export const proveedorCloud: ProveedorWhatsapp = {
   async enviarPlantilla(waJid, plantilla: PlantillaSaliente) {
     const config = configCloud();
     if (!config) {
-      return { error: "WhatsApp no está configurado en el servidor." };
+      return { error: "WhatsApp todavía no está conectado. Avisale a quien mantiene el sistema." };
     }
 
     const componentes =

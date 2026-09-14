@@ -372,6 +372,27 @@
       "when": 1789099387361,
       "tag": "0052_previous_wildside",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1789366123323,
+      "tag": "0053_flimsy_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1789367637060,
+      "tag": "0054_tan_moon_knight",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1789369647358,
+      "tag": "0055_huge_captain_universe",
+      "breakpoints": true
     }
   ]
 }

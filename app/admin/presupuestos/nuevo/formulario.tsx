@@ -199,10 +199,11 @@ export function FormularioPresupuesto({
                   </div>
 
                   <div className="w-24 space-y-1">
-                    <Label className="text-xs text-muted-foreground">
+                    <Label htmlFor={`cantidad-${i}`} className="text-base">
                       Cantidad
                     </Label>
                     <Input
+                      id={`cantidad-${i}`}
                       type="number"
                       min="0.01"
                       step="0.01"
@@ -212,10 +213,11 @@ export function FormularioPresupuesto({
                   </div>
 
                   <div className="w-32 space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Precio
+                    <Label htmlFor={`precio-${i}`} className="text-base">
+                      Precio por unidad
                     </Label>
                     <Input
+                      id={`precio-${i}`}
                       type="number"
                       min="0"
                       step="0.01"
@@ -227,7 +229,7 @@ export function FormularioPresupuesto({
                   </div>
 
                   <div className="w-28 text-right">
-                    <p className="text-xs text-muted-foreground">Subtotal</p>
+                    <p className="text-base text-muted-foreground">Subtotal</p>
                     <p className="tabular font-semibold">
                       {formatearMonto(linea.cantidad * linea.precioUnitario)}
                     </p>

@@ -9,6 +9,7 @@ import {
   MessageCircle,
   Phone,
   Scissors,
+  UserPlus,
   Warehouse,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { datosDePortada, numerosDeLaEmpresa } from "@/lib/dal/catalog";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { escalasDeVolumenPublicas } from "@/lib/dal/profesionales";
 import { vistaDePrecio } from "@/lib/dal/precios-sesion";
+import { getSession } from "@/lib/dal/session";
 import { bannersDe } from "@/lib/dal/banners";
 import { promosVigentes, type PromoVigente } from "@/lib/dal/contenido";
 import { escalasDePago } from "@/lib/dal/descuentos-pago";
@@ -755,6 +757,7 @@ function Sucursales({
 }
 
 async function CierreCta() {
+  const sesion = await getSession();
   const whatsapp = await enlaceWhatsapp();
   return (
     <section className="relative overflow-hidden bg-oscuro-marca py-16 text-white">
@@ -784,6 +787,19 @@ async function CierreCta() {
             Ver el catálogo
             <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
+          {/* "Hacer más promoción de hacer una cuenta": en toda la portada no
+              había un solo enlace a registrarse, y en la barra de arriba
+              aparece recién desde pantallas anchas. */}
+          {!sesion && (
+            <Button
+              render={<Link href="/registro" />}
+              size="lg"
+              className="h-14 rounded-full border-2 border-white/30 bg-white/10 px-8 text-base !text-white backdrop-blur-sm hover:bg-white/20"
+            >
+              <UserPlus className="mr-2 h-5 w-5" />
+              Crear una cuenta
+            </Button>
+          )}
           <Button
             render={
               <a href={whatsapp} target="_blank" rel="noopener noreferrer" />

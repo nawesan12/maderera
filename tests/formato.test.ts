@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { enlaceDeWhatsapp, primerNombre, whatsappDestino } from "@/lib/formato";
+import {
+  enlaceDeWhatsapp,
+  ABREVIATURA_UNIDAD,
+  formatearUnidad,
+  primerNombre,
+  whatsappDestino,
+} from "@/lib/formato";
+import { unitOfSale } from "@/lib/db/schema/catalog";
 
 /**
  * Las fichas del mostrador vienen con el título adelante —"Arq. Carolina
@@ -72,5 +79,31 @@ describe("whatsappDestino", () => {
       "https://wa.me/5492235544332?text=Hola",
     );
     expect(enlaceDeWhatsapp("2235544332")).toBe("https://wa.me/5492235544332");
+  });
+});
+
+describe("formatearUnidad cubre todas las unidades de venta", () => {
+  /**
+   * El enum de la base es la lista de verdad.
+   *
+   * `tabla` se agregó cuando la clienta cambió la venta del deck y este mapa no
+   * se enteró: la ficha del producto mostraba "tabla" porque el respaldo la
+   * dejaba pasar tal cual, pero `kg` salía escrito "kg" de pura casualidad y
+   * `metro_cubico` no está en el enum. Si alguien agrega una unidad, que falle
+   * acá y no en la pantalla de un cliente.
+   */
+  it("no deja ninguna unidad del enum sin abreviatura propia", () => {
+    const sinAbreviatura = unitOfSale.enumValues.filter(
+      (u) => !(u in ABREVIATURA_UNIDAD),
+    );
+    expect(sinAbreviatura).toEqual([]);
+  });
+
+  it("nombra la tabla del deck", () => {
+    expect(formatearUnidad("tabla")).toBe("tabla");
+  });
+
+  it("sin unidad no rompe", () => {
+    expect(formatearUnidad(null)).toBe("u.");
   });
 });

@@ -102,7 +102,7 @@ export function Resenas({ resenas }: { resenas: ResenaParaModerar[] }) {
                     <input type="hidden" name="estado" value="publicada" />
                     <button
                       type="submit"
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-green px-3 text-base font-medium text-white transition-opacity hover:opacity-90"
+                      className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand-green px-3 text-base font-medium text-white transition-opacity hover:opacity-90"
                     >
                       <Check className="h-4 w-4" />
                       Publicar
@@ -117,11 +117,11 @@ export function Resenas({ resenas }: { resenas: ResenaParaModerar[] }) {
                     <input
                       name="motivo"
                       placeholder="Motivo (opcional)"
-                      className="h-9 w-52 rounded-lg border bg-background px-3 text-base"
+                      className="h-11 w-52 rounded-lg border bg-background px-3 text-base"
                     />
                     <button
                       type="submit"
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-base transition-colors hover:bg-muted hover:text-destructive"
+                      className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3 text-base transition-colors hover:bg-muted hover:text-destructive"
                     >
                       <X className="h-4 w-4" />
                       Rechazar

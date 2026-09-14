@@ -201,6 +201,9 @@ export async function ultimosMovimientos(limite = 10) {
   return db
     .select({
       id: inventoryMovements.id,
+      // Para poder abrir la ficha desde el movimiento: mirando "salieron 12
+      // placas" la pregunta que sigue es siempre cuál producto.
+      productId: products.id,
       productName: products.name,
       label: productVariants.label,
       branchName: branches.name,

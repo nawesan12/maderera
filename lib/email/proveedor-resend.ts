@@ -19,7 +19,7 @@ export const proveedorResend: ProveedorEmail = {
   async enviar(mensaje: MensajeEmail): Promise<ResultadoEmail> {
     const config = configEmail();
     if (!config) {
-      return { enviado: false, simulado: false, error: "Resend no está configurado." };
+      return { enviado: false, simulado: false, error: "El envío de correos todavía no está conectado." };
     }
 
     try {

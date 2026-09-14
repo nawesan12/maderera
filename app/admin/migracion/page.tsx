@@ -15,7 +15,7 @@ export const metadata = { title: "Migración de datos · Panel" };
 const ETIQUETA_ENTIDAD: Record<ClaveEntidad, string> = {
   clientes: "Clientes",
   productos: "Productos y medidas",
-  stock: "Existencias",
+  stock: "Stock",
   saldos: "Saldos de cuenta corriente",
   proveedores: "Proveedores",
   ventas_historicas: "Histórico de ventas",
@@ -43,7 +43,7 @@ export default async function MigracionPage() {
     <div>
       <EncabezadoPanel
         titulo="Migración de datos"
-        detalle="Traer clientes, catálogo, existencias y saldos desde el sistema anterior"
+        detalle="Traer clientes, catálogo, stock y saldos desde el sistema anterior"
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -58,7 +58,7 @@ export default async function MigracionPage() {
           detalle="Cada código de artículo es una medida"
         />
         <Dato
-          titulo="Medidas con existencia"
+          titulo="Medidas con stock"
           valor={estado.conExistencia}
           detalle="Con stock cargado mayor a cero"
         />

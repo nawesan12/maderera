@@ -107,7 +107,7 @@ export default async function FacturasDeCompraPage({
                   <th className="px-5 py-2.5 font-semibold">Comprobante</th>
                   <th className="px-5 py-2.5 font-semibold">Proveedor</th>
                   <th className="px-5 py-2.5 font-semibold">Vence</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Neto</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Neto (sin IVA)</th>
                   <th className="px-5 py-2.5 text-right font-semibold">Total</th>
                   <th className="px-5 py-2.5 text-right font-semibold">Pago</th>
                   <th className="px-5 py-2.5 text-right font-semibold">

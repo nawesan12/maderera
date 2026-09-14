@@ -82,6 +82,7 @@ export default async function PublicLayout({
       <Navbar
         telefono={principal?.telefono}
         horario={principal?.horario}
+        whatsapp={whatsapp || null}
       />
       <main id="contenido" className="flex-1">
         {children}

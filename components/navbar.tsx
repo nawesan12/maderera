@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -51,7 +52,6 @@ const productLinks = [
  * siguen existiendo y enlazadas desde el inicio y el presupuesto.
  */
 const enlacesDirectos = [
-  { name: "Catálogo", href: "/catalogo" },
   // Moldava salió de "Más" a la barra: es la marca propia, y la clienta pidió
   // darle mucha más presencia. Escondida detrás de un desplegable no la
   // encontraba nadie.
@@ -63,11 +63,21 @@ const enlacesDirectos = [
   { name: "Sucursales", href: "/sucursales" },
 ];
 
+/*
+ * "Catálogo" no está en esta lista y no es un olvido.
+ *
+ * Estaba, y llevaba al mismo `/catalogo` que "Productos", que está justo al
+ * lado: dos botones pegados con el mismo destino. El que quedó es "Productos",
+ * que además abre las ocho categorías y tiene adentro "Ver catálogo completo".
+ */
+
 const enlacesMas = [
   { name: "Nosotros", href: "/nosotros" },
-  { name: "Contacto", href: "/contacto" },
   { name: "Documentación", href: "/documentacion" },
   { name: "Eventos", href: "/eventos" },
+  // La calculadora vuelve a tener lugar en el menú, sin ocupar la barra: salió
+  // de ahí a pedido de la clienta y quedó sin ninguna puerta de entrada.
+  { name: "Calculadora", href: "/calculadora" },
 ];
 
 /**
@@ -97,10 +107,25 @@ export interface SesionNavbar {
 export function Navbar({
   telefono,
   horario,
+  whatsapp,
 }: {
   telefono?: string | null;
   horario?: string | null;
+  /** El enlace armado, que sale del número cargado en el panel. */
+  whatsapp?: string | null;
 }) {
+  const pathname = usePathname();
+
+  /*
+   * En qué sección está parado.
+   *
+   * El menú no lo decía: se navegaba a Sucursales y la barra seguía viéndose
+   * igual que en la portada. `aria-current` es además lo que un lector de
+   * pantalla anuncia como "página actual".
+   */
+  const enSeccion = (href: string) =>
+    href === "/" ? pathname === "/" : pathname.startsWith(href);
+
   const [productsOpen, setProductsOpen] = useState(false);
   const [masOpen, setMasOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -136,22 +161,30 @@ export function Navbar({
               {horario}
             </span>
           )}
+          {/*
+            Arriba va cómo comunicarse, y nada más.
+            Tenía además "Portal Profesionales" y la sesión, que están los dos
+            en la barra de abajo apuntando al mismo lugar: el mismo destino dos
+            veces en la misma pantalla no es dar más opciones, es hacer dudar
+            cuál de las dos es.
+          */}
           <div className="ml-auto flex items-center gap-3.5">
-            <Link href="/profesionales" className="font-medium text-white/80 transition-colors hover:text-white">
-              Portal Profesionales
-            </Link>
-            <span className="text-white/20">|</span>
             <Link href="/contacto" className="transition-colors hover:text-white">
               Contacto
             </Link>
-            <span className="text-white/20">|</span>
-            <Link
-              href={destinoSesion}
-              className="flex items-center gap-[7px] font-medium text-white transition-colors hover:text-brand-orange-light"
-            >
-              <IconoSesion className="h-[13px] w-[13px] text-brand-orange" />
-              {sesion ? (sesion.esStaff ? "Panel" : `Hola, ${nombreDePila}`) : "Ingresar"}
-            </Link>
+            {whatsapp && (
+              <>
+                <span className="text-white/20">|</span>
+                <a
+                  href={whatsapp}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-white/80 transition-colors hover:text-white"
+                >
+                  WhatsApp
+                </a>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -177,10 +210,29 @@ export function Navbar({
 
           <div className="hidden items-center gap-0.5 lg:flex">
             {/* Panel de productos */}
+            {/*
+              El desplegable abría solo al pasar el mouse por encima. Con el
+              teclado no había forma de ver las ocho categorías: se tabulaba
+              sobre "Productos" y no pasaba nada. Ahora también abre al recibir
+              el foco, se cierra con Escape y se cierra al salir del grupo, que
+              es lo que un menú tiene que hacer para ser navegable sin mouse.
+            */}
             <div
               className="relative"
               onMouseEnter={() => setProductsOpen(true)}
               onMouseLeave={() => setProductsOpen(false)}
+              onFocus={() => setProductsOpen(true)}
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setProductsOpen(false);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape" && productsOpen) {
+                  e.stopPropagation();
+                  setProductsOpen(false);
+                }
+              }}
             >
               {/* Es un enlace y no un botón: antes solo abría el desplegable
                   al pasar por encima, así que en un teléfono —donde no hay
@@ -189,9 +241,16 @@ export function Navbar({
                   clicable es lo mínimo. */}
               <Link
                 href="/catalogo"
-                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
-                  productsOpen ? "bg-sitio-alt text-acento-texto" : "text-foreground"
+                className={`relative flex h-10 items-center gap-1.5 rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
+                  productsOpen || enSeccion("/catalogo")
+                    ? "bg-sitio-alt text-acento-texto"
+                    : "text-foreground"
+                } ${
+                  enSeccion("/catalogo")
+                    ? "after:absolute after:inset-x-[11px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
+                    : ""
                 }`}
+                aria-current={enSeccion("/catalogo") ? "page" : undefined}
                 aria-expanded={productsOpen}
               >
                 Productos
@@ -241,18 +300,38 @@ export function Navbar({
 
             {/* En imprenta mayúscula y con más cuerpo, por pedido de la
                 clienta: "que todas las del menú sean en imprenta mayúsculas". */}
-            {enlacesDirectos.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="flex h-10 items-center rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] text-foreground transition-colors hover:bg-sitio-alt hover:text-acento-texto"
-              >
-                {link.name}
-              </Link>
-            ))}
+            {enlacesDirectos.map((link) => {
+              const activa = enSeccion(link.href);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={activa ? "page" : undefined}
+                  className={`relative flex h-10 items-center rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors hover:bg-sitio-alt hover:text-acento-texto ${
+                    activa
+                      ? "text-acento-texto after:absolute after:inset-x-[11px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
+                      : "text-foreground"
+                  }`}
+                >
+                  {link.name}
+                </Link>
+              );
+            })}
 
             <div
               className="relative"
+              onFocus={() => setMasOpen(true)}
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setMasOpen(false);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape" && masOpen) {
+                  e.stopPropagation();
+                  setMasOpen(false);
+                }
+              }}
               onMouseEnter={() => setMasOpen(true)}
               onMouseLeave={() => setMasOpen(false)}
             >
@@ -293,7 +372,7 @@ export function Navbar({
 
             <Link
               href={destinoSesion}
-              className={`hidden h-11 items-center gap-2 rounded-[11px] border border-linea px-[15px] text-[14.5px] font-semibold transition-colors hover:bg-sitio-alt md:flex ${
+              className={`hidden h-11 items-center gap-2 whitespace-nowrap rounded-[11px] border border-linea px-[15px] text-[14.5px] font-semibold transition-colors hover:bg-sitio-alt md:flex ${
                 sesion ? "text-acento-texto" : "text-foreground"
               }`}
             >
@@ -334,7 +413,7 @@ export function Navbar({
 
             <Link
               href="/presupuesto"
-              className="hidden h-11 items-center rounded-full bg-accion px-5 text-[15px] font-semibold text-white shadow-[0_4px_14px_-6px_rgb(194_87_15_/_0.6)] transition-colors hover:bg-accion-hover md:flex"
+              className="hidden h-11 items-center whitespace-nowrap rounded-full bg-accion px-5 text-[15px] font-semibold text-white shadow-[0_4px_14px_-6px_rgb(194_87_15_/_0.6)] transition-colors hover:bg-accion-hover md:flex"
             >
               Pedir Presupuesto
             </Link>
@@ -386,22 +465,37 @@ export function Navbar({
                     </Link>
                   ))}
 
+                  <Link
+                    href="/catalogo"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-acento-texto hover:bg-sitio-alt"
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-naranja-claro">
+                      <ArrowRight className="h-4 w-4" />
+                    </span>
+                    Ver todo el catálogo
+                  </Link>
+
                   <div className="my-3 border-t border-linea-tenue" />
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Navegación
                   </p>
-                  {[...enlacesDirectos, ...enlacesMas].map(
-                    (link) => (
+                  {[...enlacesDirectos, ...enlacesMas].map((link) => {
+                    const activa = enSeccion(link.href);
+                    return (
                       <Link
                         key={link.href}
                         href={link.href}
                         onClick={() => setMobileMenuOpen(false)}
-                        className="rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-sitio-alt"
+                        aria-current={activa ? "page" : undefined}
+                        className={`rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-sitio-alt ${
+                          activa ? "bg-sitio-alt text-acento-texto" : ""
+                        }`}
                       >
                         {link.name}
                       </Link>
-                    ),
-                  )}
+                    );
+                  })}
 
                   <div className="my-3 border-t border-linea-tenue" />
                   <Link href="/presupuesto" onClick={() => setMobileMenuOpen(false)}>

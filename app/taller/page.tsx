@@ -47,7 +47,10 @@ export default async function TallerPage({
 
   return (
     <div className="panel panel-fondo flex min-h-screen flex-col text-[17px] text-foreground">
-      <header className="flex h-[60px] shrink-0 items-center gap-3.5 border-b border-linea bg-sidebar px-[18px]">
+      {/* El mismo encabezado que el panel —claro, con textura—. Estaba en
+          `bg-sidebar`, el color del menú lateral: acá no hay menú, así que la
+          barra entera quedaba negra y el título, negro encima. */}
+      <header className="textura flex h-[60px] shrink-0 items-center gap-3.5 border-b border-linea bg-background px-[18px]">
         <span className="flex items-center gap-2.5">
           <Image
             src="/cropped-icon-180x180.png"

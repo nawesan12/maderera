@@ -1387,6 +1387,34 @@ tipeada. Sin migraciones.
 
 ---
 
+## 7 nonies. Dos superficies negras sobre negro (14/9/2026)
+
+Apareció mirando la pantalla del taller, no leyendo el código: el encabezado y
+los títulos de las columnas del tablero estaban en negro sobre negro.
+
+La causa es la misma en los dos casos: `bg-sidebar` **no es una superficie
+clara**, es el color del menú lateral del panel —`oklch(0.185)`, casi negro— y
+se usó como si fuera un gris de fondo, sin el `text-sidebar-foreground` que lo
+acompaña donde sí corresponde. El título quedaba en `lab(3)` sobre `lab(5.7)`.
+
+- `components/admin/kanban.tsx`: la cabecera sticky de cada columna pasa a
+  `bg-card`, que es la superficie que se levanta sobre la columna
+  (`bg-hundida`). Arregla las tres pantallas que usan el tablero: `/taller`,
+  `/admin/cortes` y `/admin/pedidos`.
+- `app/taller/page.tsx`: el encabezado usa el mismo tratamiento que el del
+  panel —claro y con textura—. En el taller no hay menú lateral, así que el
+  color del menú no tenía dónde apoyarse.
+
+**Lo que queda abierto, del mismo rato de usar la pantalla:** anular una venta
+de mostrador revierte stock, caja, cuenta corriente y reservas, pero **no toca
+el trabajo de corte**. Se anuló PED-1209 y CRT-461 siguió en la cola del
+aserradero: si alguien lo corta, se pierde el material de una venta que ya no
+existe. Arreglarlo pide un estado `cancelado` en `estado_corte` —hoy el enum
+solo tiene en-cola, en-proceso, terminado y retirado—, o sea una migración más,
+y el tablero tiene que dejar de mostrarlo. Está sin hacer.
+
+---
+
 ## 8. Definición de "entregado" (por semana)
 
 Para que el plazo de 5 días hábiles de 8.1 empiece a correr, cada viernes:

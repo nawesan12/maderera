@@ -59,7 +59,11 @@ export function ColumnaTablero({
 
   return (
     <section className="flex flex-col overflow-hidden rounded-[10px] border border-linea bg-hundida">
-      <header className="sticky top-0 z-[2] border-b border-linea bg-sidebar px-3.5 pb-[11px] pt-3">
+      {/* La cabecera se levanta sobre la columna, que es `bg-hundida`.
+          Decía `bg-sidebar`, que no es una superficie clara sino **el lateral
+          oscuro del panel**: el título quedaba en negro sobre negro y no se
+          leía ni acá ni en el taller. */}
+      <header className="sticky top-0 z-[2] border-b border-linea bg-card px-3.5 pb-[11px] pt-3">
         <span
           className={`${claseDeFamilia(estado)} mb-3 block h-[3px] w-[34px] rounded-full bg-[var(--estado-acento)]`}
           aria-hidden="true"

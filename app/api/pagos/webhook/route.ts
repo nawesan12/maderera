@@ -19,8 +19,6 @@ import { notificarResultadoDePago } from "@/lib/notificaciones/avisos";
  * Alta en el panel de Mercado Pago: URL `https://<dominio>/api/pagos/webhook`,
  * evento "Pagos", y la clave secreta que genera ahí va a `MP_WEBHOOK_SECRET`.
  */
-export const runtime = "nodejs";
-
 export async function POST(request: NextRequest) {
   const url = new URL(request.url);
   const crudo = await request.text();

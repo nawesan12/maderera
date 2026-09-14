@@ -18,8 +18,6 @@ import { numeroFormateado } from "@/lib/fiscal/comprobantes";
  * sesión no se responde 401 sino 404: un 401 le confirmaría a quien prueba ids
  * al azar que ese comprobante existe.
  */
-export const runtime = "nodejs";
-
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },

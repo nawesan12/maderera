@@ -13,8 +13,6 @@ import { presupuestoPdf } from "@/lib/pdf/presupuesto";
  * el cliente solo lo que apunta a su ficha. Todo lo demás es 404 y no 403,
  * para no confirmar que el id existe.
  */
-export const runtime = "nodejs";
-
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },

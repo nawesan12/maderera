@@ -6,8 +6,6 @@ import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 import { remitoPdf } from "@/lib/pdf/remito";
 
 /** Descarga del remito en PDF. Misma regla de propiedad que el comprobante. */
-export const runtime = "nodejs";
-
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },

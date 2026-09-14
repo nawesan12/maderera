@@ -138,9 +138,29 @@ export default async function AdminLayout({
           </div>
         </header>
         <main id="contenido" className="panel-fondo flex-1 px-4 py-[26px] pb-10 lg:px-7">
-          {children}
+          {/*
+           * El armazón del panel —menú, encabezado, campana— se sirve al
+           * instante y la pantalla se completa cuando la base contesta.
+           *
+           * Antes cada pantalla del panel esperaba a sus consultas antes de
+           * pintar nada: con una consulta lenta, la persona miraba una página
+           * en blanco sin saber si había entrado. El menú aparece primero, que
+           * además es lo que permite cambiar de sección sin esperar.
+           */}
+          <Suspense fallback={<CargandoPantalla />}>{children}</Suspense>
         </main>
       </div>
+    </div>
+  );
+}
+
+/** Lo que se ve mientras la pantalla trae sus datos. */
+function CargandoPantalla() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Cargando la pantalla…</span>
+      <div className="h-8 w-56 animate-pulse rounded-lg bg-hundida" />
+      <div className="h-[280px] animate-pulse rounded-xl bg-hundida" />
     </div>
   );
 }

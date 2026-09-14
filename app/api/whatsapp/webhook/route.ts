@@ -17,8 +17,6 @@ import {
  * Alta en Meta: URL `https://<dominio>/api/whatsapp/webhook`, verify token
  * igual a `WHATSAPP_WEBHOOK_SECRET`, campo suscrito `messages`.
  */
-export const runtime = "nodejs";
-
 /** Verificación inicial de Meta al dar de alta la URL. */
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;

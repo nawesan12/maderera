@@ -7,8 +7,6 @@ import { reposicionPdf } from "@/lib/pdf/reposicion";
  * El reporte de reposición para llevar: CSV para trabajarlo, PDF para
  * imprimirlo y salir a comprar con la hoja. La clienta pidió los dos.
  */
-export const runtime = "nodejs";
-
 export async function GET(request: Request) {
   const usuario = await staffOrNull();
   if (!usuario) return new NextResponse("No encontrado", { status: 404 });

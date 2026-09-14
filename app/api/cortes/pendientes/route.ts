@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { listarCortes } from "@/lib/dal/admin/cortes";
 import { agenteAutorizado, tokenDelAgente } from "@/lib/cortes/agente";
 
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**

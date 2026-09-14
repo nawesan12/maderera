@@ -17,8 +17,6 @@ import { armarArchivoDeCorte, nombreDeArchivo } from "@/lib/cortes/formatos";
  * que el optimizador vigila— consume exactamente esto, así que construirlo no
  * se tira cuando se avance.
  */
-export const runtime = "nodejs";
-
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },

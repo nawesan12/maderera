@@ -395,6 +395,14 @@ export const estadoCorte = pgEnum("estado_corte", [
   "en-proceso",
   "terminado",
   "retirado",
+  /*
+   * La venta que lo pidió se anuló.
+   *
+   * No se borra el trabajo: queda con su despiece y su historia, como todo lo
+   * demás que se deshace en este sistema. Lo que cambia es que sale de la cola,
+   * porque cortar las piezas de una venta que ya no existe es material tirado.
+   */
+  "cancelado",
 ]);
 
 export const cuttingOrders = pgTable(

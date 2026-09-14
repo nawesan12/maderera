@@ -393,6 +393,13 @@
       "when": 1789369647358,
       "tag": "0055_huge_captain_universe",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1789426787912,
+      "tag": "0056_skinny_otto_octavius",
+      "breakpoints": true
     }
   ]
 }

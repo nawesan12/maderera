@@ -6,6 +6,7 @@ import {
   accountMovements,
   cashMovements,
   cashSessions,
+  cuttingOrders,
   deliveries,
   inventory,
   inventoryMovements,
@@ -250,6 +251,28 @@ export async function anularVentaDeMostrador(
         updatedAt: new Date(),
       })
       .where(eq(orders.id, orderId));
+
+    /*
+     * El trabajo de corte se cae con la venta.
+     *
+     * Si no, el aserradero corta las piezas de una venta que ya no existe y ese
+     * material no vuelve: la placa cortada no se puede vender entera. Pasó de
+     * verdad —PED-1209 anulada, CRT-461 siguió en la cola—.
+     *
+     * **Solo lo que todavía no se cortó.** Un trabajo terminado o retirado ya
+     * consumió el material: cancelarlo sería decir que no pasó algo que pasó, y
+     * lo que corresponde ahí es hablarlo con el taller, no reescribir la
+     * historia.
+     */
+    await tx
+      .update(cuttingOrders)
+      .set({ estado: "cancelado", updatedAt: new Date() })
+      .where(
+        and(
+          eq(cuttingOrders.orderId, orderId),
+          sql`${cuttingOrders.estado} in ('en-cola', 'en-proceso')`,
+        ),
+      );
 
     const [factura] = await tx
       .select({ id: invoices.id, estado: invoices.estado })

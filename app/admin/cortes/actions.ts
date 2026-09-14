@@ -29,7 +29,19 @@ export async function avanzarCorte(id: string): Promise<EstadoCorte> {
 
   if (!corte) return { error: "No se encontró el corte." };
 
-  const siguiente = ORDEN[ORDEN.indexOf(corte.estado as never) + 1];
+  /*
+   * Un corte cancelado no avanza a ningún lado.
+   *
+   * `indexOf` devuelve -1 para lo que no está en la cola, y -1 + 1 es 0: sin
+   * este corte, apretar el botón sobre un trabajo cancelado lo devolvía al
+   * principio, a "en cola", listo para que alguien lo corte.
+   */
+  const posicion = ORDEN.indexOf(corte.estado as never);
+  if (posicion === -1) {
+    return { error: "Ese corte está cancelado: la venta que lo pidió se anuló." };
+  }
+
+  const siguiente = ORDEN[posicion + 1];
   if (!siguiente) return { error: "El corte ya está retirado." };
 
   await db

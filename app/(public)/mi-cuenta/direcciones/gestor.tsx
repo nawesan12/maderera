@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
   Check,
@@ -50,8 +49,7 @@ export function GestorDirecciones({
 
   return (
     <div className="space-y-3">
-      <AnimatePresence initial={false}>
-        {direcciones.map((direccion) =>
+      {direcciones.map((direccion) =>
           abierta === direccion.id ? (
             <Formulario
               key={direccion.id}
@@ -65,8 +63,7 @@ export function GestorDirecciones({
               onEditar={() => setAbierta(direccion.id)}
             />
           ),
-        )}
-      </AnimatePresence>
+      )}
 
       {abierta === "nueva" ? (
         <Formulario onCerrar={() => setAbierta(null)} />
@@ -97,10 +94,11 @@ function Tarjeta({
   );
 
   return (
-    <motion.article
-      layout
-      exit={{ opacity: 0, height: 0 }}
-      className={`rounded-xl border bg-card p-5 ${
+    /* Entra con una animación de CSS. La salida no se anima: la dirección
+       desaparece cuando el servidor confirma que se borró, y ahí lo que importa
+       es que el cambio se vea, no que se vea lindo. */
+    <article
+      className={`animate-in rounded-xl border bg-card p-5 duration-200 fade-in motion-reduce:animate-none ${
         direccion.predeterminada ? "border-brand-orange/40" : ""
       }`}
     >
@@ -160,7 +158,7 @@ function Tarjeta({
           {estado.error}
         </p>
       )}
-    </motion.article>
+    </article>
   );
 }
 
@@ -183,12 +181,9 @@ function Formulario({
   }, [estado.ok, onCerrar]);
 
   return (
-    <motion.form
-      layout
+    <form
       action={accion}
-      initial={{ opacity: 0, y: -4 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-4 rounded-xl border-2 border-brand-orange/35 bg-card p-5"
+      className="animate-in space-y-4 rounded-xl border-2 border-brand-orange/35 bg-card p-5 duration-200 fade-in slide-in-from-top-1 motion-reduce:animate-none"
     >
       {direccion && <input type="hidden" name="id" value={direccion.id} />}
 
@@ -303,6 +298,6 @@ function Formulario({
           Cancelar
         </button>
       </div>
-    </motion.form>
+    </form>
   );
 }

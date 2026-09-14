@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
 import {
   FileText,
   LayoutGrid,
@@ -76,21 +75,20 @@ export function NavegacionCuenta({
               <Link
                 href={seccion.href}
                 aria-current={activa ? "page" : undefined}
+                /*
+                 * El fondo del ítem activo se dibuja acá y no en un elemento
+                 * aparte. Antes se deslizaba de una sección a otra con el
+                 * `layoutId` de framer-motion: quedaba lindo, pero era la única
+                 * animación del sitio que no se puede hacer con CSS, y sostener
+                 * por ella una librería que baja todo el que entra a cualquier
+                 * página salía mucho más caro de lo que valía.
+                 */
                 className={`relative flex items-center gap-[11px] rounded-[10px] px-3 py-[11px] text-[15px] transition-colors lg:w-full ${
                   activa
-                    ? "font-semibold text-foreground"
+                    ? "bg-card font-semibold text-foreground shadow-[inset_3px_0_0_0_var(--color-accion),0_1px_2px_rgb(60_50_40_/_0.06)]"
                     : "text-texto-2 hover:bg-black/[0.03] hover:text-foreground"
                 }`}
               >
-                {activa && (
-                  // El fondo del ítem activo se desliza entre secciones en
-                  // lugar de aparecer de golpe: se ve de dónde vino el foco.
-                  <motion.span
-                    layoutId="cuenta-nav-activa"
-                    className="absolute inset-0 -z-10 rounded-[10px] bg-card shadow-[inset_3px_0_0_0_var(--color-accion),0_1px_2px_rgb(60_50_40_/_0.06)]"
-                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                  />
-                )}
                 <seccion.icono
                   className={`h-[18px] w-[18px] shrink-0 ${
                     activa ? "text-acento-texto" : "text-texto-3"

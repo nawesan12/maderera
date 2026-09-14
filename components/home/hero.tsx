@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { AnimatedCounter } from "@/components/animated-counter";
 
 /**
@@ -59,46 +58,26 @@ export function Hero({
 
       <div className="contenedor relative pb-[76px] pt-[88px]">
         <div className="max-w-[560px]">
-          <motion.span
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2.5 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-[13.5px] text-white/85"
-          >
+          <span className="inline-flex animate-in items-center gap-2.5 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-[13.5px] text-white/85 duration-500 fade-in slide-in-from-left-5 motion-reduce:animate-none">
             <span
               className="h-[7px] w-[7px] rounded-full bg-brand-orange motion-safe:animate-pulse"
               aria-hidden="true"
             />
             Desde 1981 en Mar del Plata
-          </motion.span>
+          </span>
 
-          <motion.h1
-            className="mt-[22px] text-[40px] font-extrabold leading-[1.02] tracking-[-0.035em] text-balance sm:text-5xl lg:text-[60px]"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.1 }}
-          >
+          <h1 className="mt-[22px] animate-in text-[40px] font-extrabold leading-[1.02] tracking-[-0.035em] text-balance duration-700 fade-in slide-in-from-bottom-8 fill-mode-backwards [animation-delay:100ms] motion-reduce:animate-none sm:text-5xl lg:text-[60px]">
             Tu proyecto.
             <br />
             <span className="text-brand-orange-light">Nuestra madera.</span>
-          </motion.h1>
+          </h1>
 
-          <motion.p
-            className="mt-5 max-w-[440px] text-lg leading-relaxed text-white/75"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.2 }}
-          >
+          <p className="mt-5 max-w-[440px] animate-in text-lg leading-relaxed text-white/75 duration-700 fade-in slide-in-from-bottom-8 fill-mode-backwards [animation-delay:200ms] motion-reduce:animate-none">
             Maderas, placas y ferretería para obra y carpintería, con corte a
             medida y entrega en toda la ciudad.
-          </motion.p>
+          </p>
 
-          <motion.div
-            className="mt-[30px] flex flex-wrap gap-3"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.3 }}
-          >
+          <div className="mt-[30px] flex animate-in flex-wrap gap-3 duration-700 fade-in slide-in-from-bottom-8 fill-mode-backwards [animation-delay:300ms] motion-reduce:animate-none">
             <Link
               href="/catalogo"
               className="flex h-[52px] items-center rounded-[10px] bg-brand-orange px-6 text-base font-semibold text-white transition-colors hover:bg-accion-hover"
@@ -111,14 +90,9 @@ export function Hero({
             >
               Pedir un corte a medida
             </Link>
-          </motion.div>
+          </div>
 
-          <motion.dl
-            className="mt-11 flex gap-10"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.45 }}
-          >
+          <dl className="mt-11 flex animate-in gap-10 duration-700 fade-in slide-in-from-bottom-5 fill-mode-backwards [animation-delay:450ms] motion-reduce:animate-none">
             {contadores.map((c) => (
               <div key={c.label}>
                 <dd className="tabular text-[34px] font-bold leading-none tracking-[-0.03em]">
@@ -129,7 +103,7 @@ export function Hero({
                 </dt>
               </div>
             ))}
-          </motion.dl>
+          </dl>
         </div>
       </div>
     </section>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useInView, useReducedMotion } from "framer-motion";
 import { moneda } from "@/lib/formato";
 
 function escribir(valor: number, formato?: "moneda", suffix = "") {
@@ -39,31 +38,54 @@ export function AnimatedCounter({
   formato?: "moneda";
 }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const isInView = useInView(ref, { once: true, margin: "-50px" });
-  const sinMovimiento = useReducedMotion();
 
+  /*
+   * Entrar en pantalla y la preferencia de movimiento se miran con lo que trae
+   * el navegador —`IntersectionObserver` y `matchMedia`—, que es exactamente
+   * para esto. Antes venían de una librería de animación de 110 KB que bajaba
+   * todo el que entraba al sitio.
+   */
   useEffect(() => {
     const nodo = ref.current;
-    if (!nodo || !isInView || sinMovimiento) return;
+    if (!nodo) return;
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     let vivo = true;
-    const inicio = performance.now();
 
-    const animar = (ahora: number) => {
-      if (!vivo) return;
-      const avance = Math.min((ahora - inicio) / (duration * 1000), 1);
-      const suavizado = 1 - Math.pow(1 - avance, 3);
-      nodo.textContent = escribir(suavizado * target, formato, suffix);
-      if (avance < 1) requestAnimationFrame(animar);
-    };
-    requestAnimationFrame(animar);
+    function contar() {
+      const inicio = performance.now();
+
+      const animar = (ahora: number) => {
+        if (!vivo || !nodo) return;
+        const avance = Math.min((ahora - inicio) / (duration * 1000), 1);
+        const suavizado = 1 - Math.pow(1 - avance, 3);
+        nodo.textContent = escribir(suavizado * target, formato, suffix);
+        if (avance < 1) requestAnimationFrame(animar);
+      };
+      requestAnimationFrame(animar);
+    }
+
+    // `once`: se cuenta la primera vez que asoma y no cada vez que se pasa por
+    // encima. El margen negativo pide que haya entrado de verdad, no que esté
+    // rozando el borde.
+    const observador = new IntersectionObserver(
+      (entradas) => {
+        if (!entradas[0]?.isIntersecting) return;
+        observador.disconnect();
+        contar();
+      },
+      { rootMargin: "-50px" },
+    );
+    observador.observe(nodo);
 
     return () => {
       vivo = false;
+      observador.disconnect();
       // Si el componente se va a mitad de la cuenta, queda el número real.
       nodo.textContent = escribir(target, formato, suffix);
     };
-  }, [isInView, target, duration, sinMovimiento, formato, suffix]);
+  }, [target, duration, formato, suffix]);
 
   return <span ref={ref}>{escribir(target, formato, suffix)}</span>;
 }

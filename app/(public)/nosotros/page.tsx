@@ -14,7 +14,8 @@ import { ALCANCE_MOLDAVA, masDeAnios } from "@/lib/empresa";
  *
  * Era una página de cliente entera para animar la entrada de cada bloque. Las
  * animaciones ahora son CSS (`tw-animate-css`), que hace lo mismo sin mandar
- * framer-motion al navegador en una página que no tiene ni un botón.
+ * una librería de animación al navegador en una página que no tiene
+ * ni un botón.
  *
  * Los números grandes salen de la base y del calendario. Estaban escritos a
  * mano y ya eran falsos: decía "43 años" cuando iban 45, y "200+ productos"

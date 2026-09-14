@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   Menu,
   Phone,
@@ -202,14 +201,13 @@ export function Navbar({
                   }`}
                 />
               </Link>
-              <AnimatePresence>
-                {productsOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                    transition={{ duration: 0.18 }}
-                    className="absolute left-0 top-full z-[60] mt-2 w-[520px] max-w-[calc(100vw-2rem)] rounded-2xl border border-linea-suave bg-popover p-3 shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.4)]"
+              {/* El desplegable entra con una animación de CSS. La salida no se
+                  anima: dura 180 ms, se dispara al sacar el mouse y nadie la
+                  mira, y mantenerla era el único motivo para tener montada una
+                  librería de animación en todas las páginas del sitio. */}
+              {productsOpen && (
+                <div
+                    className="absolute left-0 top-full z-[60] mt-2 w-[520px] max-w-[calc(100vw-2rem)] animate-in rounded-2xl border border-linea-suave bg-popover p-3 shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.4)] duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none"
                   >
                     <div className="grid grid-cols-2 gap-1">
                       {productLinks.map((link) => (
@@ -237,9 +235,8 @@ export function Navbar({
                         <ArrowRight className="h-4 w-4" />
                       </Link>
                     </div>
-                  </motion.div>
+                  </div>
                 )}
-              </AnimatePresence>
             </div>
 
             {/* En imprenta mayúscula y con más cuerpo, por pedido de la
@@ -272,14 +269,9 @@ export function Navbar({
                   }`}
                 />
               </button>
-              <AnimatePresence>
-                {masOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                    transition={{ duration: 0.18 }}
-                    className="absolute left-0 top-full z-[60] mt-2 w-[200px] rounded-xl border border-linea-suave bg-popover p-1.5 shadow-[0_18px_40px_-18px_rgb(60_50_40_/_0.4)]"
+              {masOpen && (
+                  <div
+                    className="absolute left-0 top-full z-[60] mt-2 w-[200px] animate-in rounded-xl border border-linea-suave bg-popover p-1.5 shadow-[0_18px_40px_-18px_rgb(60_50_40_/_0.4)] duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none"
                   >
                     {enlacesMas.map((link) => (
                       <Link
@@ -290,9 +282,8 @@ export function Navbar({
                         {link.name}
                       </Link>
                     ))}
-                  </motion.div>
+                  </div>
                 )}
-              </AnimatePresence>
             </div>
           </div>
 

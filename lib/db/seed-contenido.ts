@@ -152,8 +152,13 @@ async function main() {
       ubicacion: "portada" as const,
       etiqueta: "Portal profesionales",
       titulo: "Precios de gremio y cuenta corriente",
+      // Sin «escalas por cantidad»: la maderera no da descuento por volumen.
       bajada:
-        "Carpinteros, arquitectos y constructoras compran con su propia lista y escalas por cantidad. Se solicita una vez y queda habilitada.",
+        "Carpinteros, arquitectos y constructoras compran con la lista que les corresponde y con cuenta corriente. Se solicita una vez y queda habilitada.",
+      // Un slide sin foto sale como un rectángulo de color plano al lado del
+      // hero, que sí tiene una: la diapositiva siguiente parecía un error.
+      imagenUrl:
+        "https://images.unsplash.com/photo-1687422810663-c316494f725a?w=1600&q=75",
       enlace: "/profesionales",
       textoEnlace: "Solicitar cuenta profesional",
       orden: 1,

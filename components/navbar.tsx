@@ -562,18 +562,25 @@ export function Navbar({
               </Link>
             )}
 
+            {/* Dice «Carrito», no solo el dibujito: lo pidió la clienta. Un
+                ícono suelto obliga a interpretarlo, y el carrito es el paso
+                que no se puede errar. El número sigue al lado, que es el dato
+                que se mira de reojo. */}
             <Link
               href="/presupuesto"
               aria-label={
                 cantidadItems > 0
-                  ? `Tu presupuesto, ${cantidadItems} ${cantidadItems === 1 ? "producto" : "productos"}`
-                  : "Tu presupuesto"
+                  ? `Carrito, ${cantidadItems} ${cantidadItems === 1 ? "producto" : "productos"}`
+                  : "Carrito"
               }
-              className="relative flex h-10 w-10 items-center justify-center rounded-[11px] text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto"
+              className="relative flex h-10 items-center gap-2 rounded-[11px] px-2.5 text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto"
             >
-              <ShoppingCart className="h-[19px] w-[19px]" />
+              <ShoppingCart className="h-[19px] w-[19px] shrink-0" />
+              <span className="hidden text-[13px] font-bold uppercase tracking-[0.045em] sm:inline">
+                Carrito
+              </span>
               {cantidadItems > 0 && (
-                <span className="tabular absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-accion px-[5px] text-[11px] font-bold text-white">
+                <span className="tabular flex h-5 min-w-5 items-center justify-center rounded-full bg-accion px-[5px] text-[11px] font-bold text-white">
                   {cantidadItems}
                 </span>
               )}

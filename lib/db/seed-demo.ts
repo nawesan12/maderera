@@ -24,7 +24,7 @@
  */
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import * as schema from "./schema";
 
@@ -39,7 +39,6 @@ const {
   orderItems,
   orders,
   posDevices,
-  priceLists,
   products,
   productVariants,
   professionalApplications,
@@ -49,7 +48,6 @@ const {
   shippingZones,
   suppliers,
   technicalDocuments,
-  volumeDiscounts,
 } = schema;
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -298,58 +296,17 @@ async function sembrarEventos(
 
 /* -------------------------------------------------------------------------- */
 
-/**
- * Escalas de descuento por volumen para la lista profesional.
+/*
+ * Acá se sembraban escalas de descuento por volumen —3 %, 5 % y 8 % desde 10,
+ * 25 y 50 unidades— y **la maderera no trabaja así**: no da descuento por
+ * cantidad. Eran números de demostración que el brief nunca dio, y mientras
+ * existieron el carrito los aplicaba de verdad y el presupuesto mostraba un
+ * «ahorro por cantidad» que nadie había prometido.
  *
- * Son las que lee el banner de profesionales de la portada, que hoy sale sin
- * la lista porque no hay ninguna cargada. Los porcentajes son de
- * demostración: **el brief no los dio**, y el escalón del −15 % sigue anotado
- * como insumo pendiente en `docs/CAMBIOS.md` porque nadie dijo desde qué monto
- * aplica. Estas son por cantidad, que es otra cosa y no lo reemplaza.
+ * Se borraron de las dos bases el 15/9/2026 y el sembrado dejó de crearlas.
+ * La tabla y la pantalla del panel siguen estando: la capacidad existe si algún
+ * día el negocio la usa, pero no se inventa sola desde un seed.
  */
-const ESCALAS = [
-  { desdeCantidad: "10", porcentaje: "3" },
-  { desdeCantidad: "25", porcentaje: "5" },
-  { desdeCantidad: "50", porcentaje: "8" },
-];
-
-async function sembrarEscalas() {
-  const [lista] = await db
-    .select({ id: priceLists.id })
-    .from(priceLists)
-    .where(eq(priceLists.slug, "profesional"))
-    .limit(1);
-
-  if (!lista) {
-    console.warn("· Escalas por volumen: no existe la lista profesional, se saltea.");
-    return;
-  }
-
-  for (const escala of ESCALAS) {
-    const [previa] = await db
-      .select({ id: volumeDiscounts.id })
-      .from(volumeDiscounts)
-      .where(
-        and(
-          eq(volumeDiscounts.priceListId, lista.id),
-          eq(volumeDiscounts.desdeCantidad, escala.desdeCantidad),
-          sql`${volumeDiscounts.variantId} is null`,
-          sql`${volumeDiscounts.categoryId} is null`,
-        ),
-      )
-      .limit(1);
-
-    if (previa) {
-      await db
-        .update(volumeDiscounts)
-        .set({ porcentaje: escala.porcentaje, activo: true })
-        .where(eq(volumeDiscounts.id, previa.id));
-    } else {
-      await db.insert(volumeDiscounts).values({ priceListId: lista.id, ...escala });
-    }
-  }
-  console.log(`· Escalas por volumen: ${ESCALAS.length} sobre la lista profesional.`);
-}
 
 /* -------------------------------------------------------------------------- */
 
@@ -776,7 +733,6 @@ async function main() {
   await sembrarCajas(sucursal);
   await sembrarDocumentacion();
   await sembrarEventos(sucursal, cliente);
-  await sembrarEscalas();
   await sembrarSolicitudes();
   await sembrarSugeridos();
   const porFirmar = await sembrarRemitos();

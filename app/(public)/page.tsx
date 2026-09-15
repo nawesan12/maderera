@@ -147,7 +147,7 @@ async function Ofertas({
   const whatsapp = await numeroWhatsapp();
 
   return (
-    <section className="bg-sitio-fondo pt-[66px]">
+    <section className="bg-sitio-fondo pt-[48px]">
       <div className="contenedor">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <TituloSeccion>Ofertas</TituloSeccion>
@@ -175,7 +175,7 @@ function Categorias({
   categorias: Awaited<ReturnType<typeof datosDePortada>>["categorias"];
 }) {
   return (
-    <section className="bg-sitio-alt py-[66px]">
+    <section className="bg-sitio-alt py-[48px]">
       <div className="contenedor">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <TituloSeccion>Categorías</TituloSeccion>
@@ -235,7 +235,7 @@ async function Destacados({
   const whatsapp = await numeroWhatsapp();
 
   return (
-    <section className="bg-sitio-fondo py-[66px]">
+    <section className="bg-sitio-fondo py-[48px]">
       <div className="contenedor">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <TituloSeccion>Los que más salen</TituloSeccion>
@@ -462,7 +462,7 @@ function BannerProfesionales({
     "https://images.unsplash.com/photo-1634672652995-ee7525bce595?w=1200&q=75";
 
   return (
-    <section className="bg-sitio-fondo pb-[66px]">
+    <section className="bg-sitio-fondo pb-[48px]">
       <div className="contenedor">
         <div className="grid gap-[18px] lg:grid-cols-2">
           <article className="flex flex-col overflow-hidden rounded-2xl border border-linea bg-sitio-alt">
@@ -580,7 +580,7 @@ function Herramientas() {
   ];
 
   return (
-    <section className="bg-sitio-alt py-[66px]">
+    <section className="bg-sitio-alt py-[48px]">
       <div className="contenedor">
         <TituloSeccion>Herramientas</TituloSeccion>
 
@@ -638,7 +638,7 @@ function Historia({
   ];
 
   return (
-    <section className="bg-sitio-fondo py-[66px]">
+    <section className="bg-sitio-fondo py-[48px]">
       <div className="contenedor">
         <div className="grid items-center gap-14 lg:grid-cols-2">
           <div>
@@ -710,7 +710,7 @@ function Sucursales({
   sucursales: Awaited<ReturnType<typeof listarSucursalesPublicas>>;
 }) {
   return (
-    <section className="bg-sitio-fondo py-[66px]">
+    <section className="bg-sitio-fondo py-[48px]">
       <div className="contenedor">
         <TituloSeccion>Nuestras sucursales</TituloSeccion>
         <p className="mb-7 mt-3 text-lg text-texto-2">
@@ -784,7 +784,7 @@ function Sucursales({
 async function CierreCta() {
   const whatsapp = await enlaceWhatsapp();
   return (
-    <section className="relative overflow-hidden bg-oscuro-marca py-16 text-white">
+    <section className="relative overflow-hidden bg-oscuro-marca py-[52px] text-white">
       <div
         className="absolute inset-0 opacity-[0.06]"
         style={{

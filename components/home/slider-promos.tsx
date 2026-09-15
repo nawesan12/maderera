@@ -186,9 +186,6 @@ export function SliderDePromos({
 
       {varios && (
         <>
-          <Flecha lado="izquierda" onClick={() => mover(-1)} />
-          <Flecha lado="derecha" onClick={() => mover(1)} />
-
           {/*
             Los controles van **adentro** de la diapositiva, apoyados abajo.
             Colgados debajo dejaban una franja blanca de unos 40 px entre la
@@ -200,7 +197,8 @@ export function SliderDePromos({
             `backdrop-blur` es lo que los sostiene sobre una imagen clara.
           */}
           <div className="absolute inset-x-0 bottom-4 z-10 flex items-center justify-center gap-2">
-            <div className="flex items-center gap-2 rounded-full bg-black/25 px-3 py-2 backdrop-blur-md">
+            <div className="flex items-center gap-2 rounded-full bg-black/25 px-2 py-1.5 backdrop-blur-md">
+              <Flecha lado="izquierda" onClick={() => mover(-1)} />
             {slides.map((slide, i) => (
               <button
                 key={slide.clave}
@@ -243,6 +241,7 @@ export function SliderDePromos({
                 <Pause className="h-3.5 w-3.5" />
               )}
             </button>
+            <Flecha lado="derecha" onClick={() => mover(1)} />
             </div>
           </div>
         </>
@@ -265,11 +264,15 @@ function Flecha({
       type="button"
       onClick={onClick}
       aria-label={lado === "izquierda" ? "Promoción anterior" : "Promoción siguiente"}
-      className={`absolute top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md transition-colors hover:bg-white/30 sm:flex ${
-        lado === "izquierda" ? "left-4" : "right-4"
-      }`}
+      /*
+       * Van con las barritas y no contra el borde de la pantalla. Pegadas a los
+       * costados, con el sitio a 1440 px la flecha izquierda quedaba encima del
+       * texto del hero: el contenido llega hasta ahí. Juntas además se leen
+       * como lo que son, los controles del carrusel.
+       */
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/20 hover:text-white"
     >
-      <Icono className="h-5 w-5" />
+      <Icono className="h-[18px] w-[18px]" />
     </button>
   );
 }

@@ -336,9 +336,22 @@ input::placeholder, textarea::placeholder {
    Por eso las páginas que ya traen un ancho propio más angosto —la nota del
    blog, el detalle de un pedido, el portal— no la usan: llevan `mx-auto px-6`
    con su `max-w-*`, que es explícito y no depende de quién le gana a quién. */
+/*
+ * El ancho del sitio.
+ *
+ * Estaba en 1200 px y en un monitor de 1512 dejaba 312 px de margen muerto a
+ * los costados —una quinta parte de la pantalla—, con todo apilado en una
+ * columna angosta. La clienta lo dijo a su manera: que no siente que pueda
+ * recorrer el sitio, que es «muy scrolleable». Con once secciones de casi una
+ * pantalla cada una, tenía razón.
+ *
+ * 1440 es el ancho de un portátil de 16 pulgadas y el de los monitores de
+ * oficina más comunes: llena la pantalla sin estirar los renglones de texto,
+ * que siguen acotados por la tipografía de cada bloque.
+ */
 .contenedor {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1440px;
   margin-inline: auto;
   padding-inline: 24px;
 }

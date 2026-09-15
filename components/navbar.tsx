@@ -22,6 +22,10 @@ import {
   ArrowRight,
   UserRound,
   LayoutDashboard,
+  Scissors,
+  Calculator,
+  Warehouse,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -30,14 +34,51 @@ import { useEstado } from "@/lib/estado-context";
 import { primerNombre, telefonoParaMarcar } from "@/lib/formato";
 
 const productLinks = [
-  { name: "Techos", href: "/catalogo?cat=techos", icon: Home, desc: "Tirantes, machimbres, aislantes" },
-  { name: "Placas", href: "/catalogo?cat=placas", icon: Layers, desc: "Melaminas, MDF, fenólicos" },
-  { name: "Pisos", href: "/catalogo?cat=pisos", icon: Grid3X3, desc: "Melamínicos Decno Flooring" },
-  { name: "Molduras", href: "/catalogo?cat=molduras", icon: Minus, desc: "Línea propia Moldava — Finger Joint" },
-  { name: "Ferretería", href: "/catalogo?cat=ferreteria", icon: Wrench, desc: "Herrajes y accesorios" },
-  { name: "Decks y Escaleras", href: "/catalogo?cat=decks-y-escaleras", icon: Footprints, desc: "Madera y PVC" },
-  { name: "Construcción en Seco", href: "/catalogo?cat=construccion-en-seco", icon: Building, desc: "Durlock, perfiles, aislantes" },
-  { name: "Cubiertas", href: "/catalogo?cat=cubiertas", icon: Umbrella, desc: "Chapas y tejas Curvin" },
+  { name: "Techos", slug: "techos", icon: Home, desc: "Tirantes, machimbres, aislantes" },
+  { name: "Placas", slug: "placas", icon: Layers, desc: "Melaminas, MDF, fenólicos" },
+  { name: "Pisos", slug: "pisos", icon: Grid3X3, desc: "Melamínicos Decno Flooring" },
+  {
+    name: "Molduras",
+    slug: "molduras",
+    icon: Minus,
+    desc: "Finger Joint, fabricadas acá",
+    // La única línea que sale del aserradero propio. La clienta pidió que
+    // Moldava se note; acá se nota sin ocupar un renglón más.
+    propia: true,
+  },
+  { name: "Ferretería", slug: "ferreteria", icon: Wrench, desc: "Herrajes y accesorios" },
+  { name: "Decks y Escaleras", slug: "decks-y-escaleras", icon: Footprints, desc: "Madera y PVC" },
+  { name: "Construcción en Seco", slug: "construccion-en-seco", icon: Building, desc: "Durlock, perfiles, aislantes" },
+  { name: "Cubiertas", slug: "cubiertas", icon: Umbrella, desc: "Chapas y tejas Curvin" },
+];
+
+/**
+ * Lo que la maderera hace, que no es un rubro del catálogo.
+ *
+ * El desplegable listaba ocho rubros y nada más: ocho filas del mismo peso,
+ * sin nada que ayudara a decidir. Quien entra al menú de una maderera muchas
+ * veces no viene a buscar "placas" sino a resolver algo —cortar, calcular
+ * cuánto lleva, ver si hay stock— y eso no estaba en ningún lado del menú.
+ */
+const herramientas = [
+  {
+    name: "Corte a medida",
+    href: "/presupuesto",
+    icon: Scissors,
+    desc: "Mandá el despiece en milímetros",
+  },
+  {
+    name: "Calculadora",
+    href: "/calculadora",
+    icon: Calculator,
+    desc: "Cuánto material lleva tu obra",
+  },
+  {
+    name: "Stock en sucursal",
+    href: "/stock",
+    icon: Warehouse,
+    desc: "Qué hay hoy, antes de venir",
+  },
 ];
 
 /**
@@ -108,11 +149,14 @@ export function Navbar({
   telefono,
   horario,
   whatsapp,
+  productosPorRubro = {},
 }: {
   telefono?: string | null;
   horario?: string | null;
   /** El enlace armado, que sale del número cargado en el panel. */
   whatsapp?: string | null;
+  /** Cuántos productos activos tiene cada rubro, por slug. */
+  productosPorRubro?: Record<string, number>;
 }) {
   const pathname = usePathname();
 
@@ -265,36 +309,122 @@ export function Navbar({
                   mira, y mantenerla era el único motivo para tener montada una
                   librería de animación en todas las páginas del sitio. */}
               {productsOpen && (
-                <div
-                    className="absolute left-0 top-full z-[60] mt-2 w-[520px] max-w-[calc(100vw-2rem)] animate-in rounded-2xl border border-linea-suave bg-popover p-3 shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.4)] duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none"
-                  >
-                    <div className="grid grid-cols-2 gap-1">
-                      {productLinks.map((link) => (
+                <div className="absolute left-0 top-full z-[60] mt-2 flex w-[760px] max-w-[calc(100vw-2rem)] animate-in overflow-hidden rounded-2xl border border-linea-suave bg-popover shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.4)] duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none">
+                  {/* Lo que se vende */}
+                  <div className="min-w-0 flex-1 p-3">
+                    <p className="px-3 pb-2 pt-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-texto-3">
+                      Rubros
+                    </p>
+                    <div className="grid grid-cols-2 gap-0.5">
+                      {productLinks.map((link) => {
+                        const cuantos = productosPorRubro[link.slug];
+                        return (
+                          <Link
+                            key={link.slug}
+                            href={`/catalogo?cat=${link.slug}`}
+                            className="group/item flex items-start gap-3 rounded-xl px-3 py-[11px] text-foreground transition-colors hover:bg-sitio-alt"
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-sitio-alt text-acento-texto transition-colors group-hover/item:bg-naranja-claro">
+                              <link.icon className="h-[17px] w-[17px]" />
+                            </span>
+                            <span className="min-w-0">
+                              <span className="flex items-center gap-1.5">
+                                <span className="text-[14.5px] font-semibold">
+                                  {link.name}
+                                </span>
+                                {/* La línea propia, dicha una sola vez y donde
+                                    corresponde. */}
+                                {"propia" in link && link.propia && (
+                                  <span className="rounded-full bg-naranja-claro px-1.5 py-px text-[10px] font-bold uppercase tracking-[0.06em] text-acento-sobre-claro">
+                                    Moldava
+                                  </span>
+                                )}
+                              </span>
+                              <span className="block text-[12.5px] leading-[1.35] text-texto-3">
+                                {link.desc}
+                              </span>
+                              {/* El número sale de la base y no está escrito a
+                                  mano: dice qué rubro tiene fondo de verdad. */}
+                              {cuantos !== undefined && cuantos > 0 && (
+                                <span className="tabular mt-0.5 block text-[11.5px] text-texto-3">
+                                  {cuantos} {cuantos === 1 ? "producto" : "productos"}
+                                </span>
+                              )}
+                            </span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-1.5 border-t border-linea-tenue pt-1.5">
+                      <Link
+                        href="/catalogo"
+                        className="group/todo flex items-center justify-between rounded-xl px-3 py-[11px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-naranja-tenue"
+                      >
+                        Ver todo el catálogo
+                        <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover/todo:translate-x-1" />
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/*
+                    Lo que la maderera hace.
+                    Va en su propia columna y sobre otra superficie porque no es
+                    más de lo mismo: son las tres cosas que alguien viene a
+                    resolver y que antes no estaban en el menú.
+                  */}
+                  <div className="flex w-[264px] shrink-0 flex-col border-l border-linea-tenue bg-sitio-alt p-3">
+                    <p className="px-3 pb-2 pt-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-texto-3">
+                      Y además
+                    </p>
+                    <div className="space-y-0.5">
+                      {herramientas.map((h) => (
                         <Link
-                          key={link.href}
-                          href={link.href}
-                          className="group/item flex items-start gap-3 rounded-xl px-3 py-[11px] text-foreground transition-colors hover:bg-sitio-alt"
+                          key={h.href}
+                          href={h.href}
+                          className="group/h flex items-start gap-3 rounded-xl px-3 py-[11px] transition-colors hover:bg-card"
                         >
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-sitio-alt text-acento-texto transition-colors group-hover/item:bg-naranja-claro">
-                            <link.icon className="h-[17px] w-[17px]" />
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-card text-acento-texto transition-colors group-hover/h:bg-naranja-claro">
+                            <h.icon className="h-[17px] w-[17px]" />
                           </span>
                           <span className="min-w-0">
-                            <span className="block text-[14.5px] font-semibold">{link.name}</span>
-                            <span className="block text-[12.5px] leading-[1.35] text-texto-3">{link.desc}</span>
+                            <span className="block text-[14.5px] font-semibold text-foreground">
+                              {h.name}
+                            </span>
+                            <span className="block text-[12.5px] leading-[1.35] text-texto-3">
+                              {h.desc}
+                            </span>
                           </span>
                         </Link>
                       ))}
                     </div>
-                    <div className="mt-2 border-t border-linea-tenue pt-2">
-                      <Link
-                        href="/catalogo"
-                        className="flex items-center justify-between rounded-xl px-3 py-[11px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-naranja-tenue"
+
+                    {/* Al pie de la columna, la salida para quien no sabe qué
+                        pedir: en una maderera es media clientela, y hasta acá
+                        el menú solo servía a quien ya sabía el nombre del
+                        material. */}
+                    {whatsapp && (
+                      <a
+                        href={whatsapp}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group/ayuda mt-auto flex items-center gap-3 rounded-xl border border-linea-suave bg-card px-3 py-3 transition-colors hover:border-accion/40"
                       >
-                        Ver catálogo completo
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </div>
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#25D366]/12 text-[#128C4A]">
+                          <MessageCircle className="h-[17px] w-[17px]" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-[13.5px] font-semibold text-foreground">
+                            ¿No sabés qué llevar?
+                          </span>
+                          <span className="block text-[12px] leading-[1.35] text-texto-3">
+                            Contanos la obra por WhatsApp
+                          </span>
+                        </span>
+                      </a>
+                    )}
                   </div>
+                </div>
                 )}
             </div>
 
@@ -451,19 +581,27 @@ export function Navbar({
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Productos
                   </p>
-                  {productLinks.map((link) => (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-sitio-alt"
-                    >
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-naranja-claro">
-                        <link.icon className="h-4 w-4 text-acento-texto" />
-                      </span>
-                      {link.name}
-                    </Link>
-                  ))}
+                  {productLinks.map((link) => {
+                    const cuantos = productosPorRubro[link.slug];
+                    return (
+                      <Link
+                        key={link.slug}
+                        href={`/catalogo?cat=${link.slug}`}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-sitio-alt"
+                      >
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-naranja-claro">
+                          <link.icon className="h-4 w-4 text-acento-texto" />
+                        </span>
+                        <span className="min-w-0 flex-1">{link.name}</span>
+                        {cuantos !== undefined && cuantos > 0 && (
+                          <span className="tabular shrink-0 text-[12px] text-texto-3">
+                            {cuantos}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
 
                   <Link
                     href="/catalogo"
@@ -475,6 +613,24 @@ export function Navbar({
                     </span>
                     Ver todo el catálogo
                   </Link>
+
+                  <div className="my-3 border-t border-linea-tenue" />
+                  <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
+                    Y además
+                  </p>
+                  {herramientas.map((h) => (
+                    <Link
+                      key={h.href}
+                      href={h.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-sitio-alt"
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sitio-alt">
+                        <h.icon className="h-4 w-4 text-acento-texto" />
+                      </span>
+                      {h.name}
+                    </Link>
+                  ))}
 
                   <div className="my-3 border-t border-linea-tenue" />
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">

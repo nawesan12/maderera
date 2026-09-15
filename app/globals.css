@@ -1357,3 +1357,32 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
     margin: 4mm;
   }
 }
+
+/*
+ * La entrada escalonada de los desplegables del menú.
+ *
+ * Los ocho rubros aparecían todos en el mismo cuadro: el panel se sentía un
+ * bloque que se prende, no algo que se abre. Entrando de a uno, con 25 ms de
+ * diferencia, el ojo sigue el orden de lectura y el panel se lee antes.
+ *
+ * El retraso se calcula con `--i`, que pone cada ítem: sin eso harían falta
+ * ocho reglas y agregar un rubro obligaría a escribir la novena.
+ */
+@keyframes entrada-menu {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.entra-en-orden > * {
+  animation: entrada-menu 0.26s ease backwards;
+  animation-delay: calc(var(--i, 0) * 25ms);
+}
+
+/* Quien pidió menos movimiento no ve ninguno: el panel aparece y ya está. */
+@media (prefers-reduced-motion: reduce) {
+  .entra-en-orden > * {
+    animation: none;
+  }
+}

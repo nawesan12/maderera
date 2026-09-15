@@ -213,7 +213,10 @@ export function Navbar({
             cuál de las dos es.
           */}
           <div className="ml-auto flex items-center gap-3.5">
-            <Link href="/contacto" className="transition-colors hover:text-white">
+            <Link
+              href="/contacto"
+              className="uppercase tracking-[0.07em] transition-colors hover:text-white"
+            >
               Contacto
             </Link>
             {whatsapp && (
@@ -223,7 +226,7 @@ export function Navbar({
                   href={whatsapp}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-medium text-white/80 transition-colors hover:text-white"
+                  className="font-medium uppercase tracking-[0.07em] text-white/80 transition-colors hover:text-white"
                 >
                   WhatsApp
                 </a>
@@ -315,13 +318,14 @@ export function Navbar({
                     <p className="px-3 pb-2 pt-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-texto-3">
                       Rubros
                     </p>
-                    <div className="grid grid-cols-2 gap-0.5">
-                      {productLinks.map((link) => {
+                    <div className="entra-en-orden grid grid-cols-2 gap-0.5">
+                      {productLinks.map((link, i) => {
                         const cuantos = productosPorRubro[link.slug];
                         return (
                           <Link
                             key={link.slug}
                             href={`/catalogo?cat=${link.slug}`}
+                            style={{ "--i": i } as React.CSSProperties}
                             className="group/item flex items-start gap-3 rounded-xl px-3 py-[11px] text-foreground transition-colors hover:bg-sitio-alt"
                           >
                             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-sitio-alt text-acento-texto transition-colors group-hover/item:bg-naranja-claro">
@@ -329,7 +333,7 @@ export function Navbar({
                             </span>
                             <span className="min-w-0">
                               <span className="flex items-center gap-1.5">
-                                <span className="text-[14.5px] font-semibold">
+                                <span className="text-[13px] font-bold uppercase tracking-[0.045em]">
                                   {link.name}
                                 </span>
                                 {/* La línea propia, dicha una sola vez y donde
@@ -359,7 +363,7 @@ export function Navbar({
                     <div className="mt-1.5 border-t border-linea-tenue pt-1.5">
                       <Link
                         href="/catalogo"
-                        className="group/todo flex items-center justify-between rounded-xl px-3 py-[11px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-naranja-tenue"
+                        className="group/todo flex items-center justify-between rounded-xl px-3 py-[11px] text-[13px] font-bold uppercase tracking-[0.045em] text-acento-texto transition-colors hover:bg-naranja-tenue"
                       >
                         Ver todo el catálogo
                         <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover/todo:translate-x-1" />
@@ -377,18 +381,19 @@ export function Navbar({
                     <p className="px-3 pb-2 pt-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-texto-3">
                       Y además
                     </p>
-                    <div className="space-y-0.5">
-                      {herramientas.map((h) => (
+                    <div className="entra-en-orden space-y-0.5">
+                      {herramientas.map((h, i) => (
                         <Link
                           key={h.href}
                           href={h.href}
+                          style={{ "--i": i + 2 } as React.CSSProperties}
                           className="group/h flex items-start gap-3 rounded-xl px-3 py-[11px] transition-colors hover:bg-card"
                         >
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-card text-acento-texto transition-colors group-hover/h:bg-naranja-claro">
                             <h.icon className="h-[17px] w-[17px]" />
                           </span>
                           <span className="min-w-0">
-                            <span className="block text-[14.5px] font-semibold text-foreground">
+                            <span className="block text-[13px] font-bold uppercase tracking-[0.045em] text-foreground">
                               {h.name}
                             </span>
                             <span className="block text-[12.5px] leading-[1.35] text-texto-3">
@@ -480,13 +485,14 @@ export function Navbar({
               </button>
               {masOpen && (
                   <div
-                    className="absolute left-0 top-full z-[60] mt-2 w-[200px] animate-in rounded-xl border border-linea-suave bg-popover p-1.5 shadow-[0_18px_40px_-18px_rgb(60_50_40_/_0.4)] duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none"
+                    className="entra-en-orden absolute left-0 top-full z-[60] mt-2 w-[200px] animate-in rounded-xl border border-linea-suave bg-popover p-1.5 shadow-[0_18px_40px_-18px_rgb(60_50_40_/_0.4)] duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none"
                   >
-                    {enlacesMas.map((link) => (
+                    {enlacesMas.map((link, i) => (
                       <Link
                         key={link.href}
                         href={link.href}
-                        className="block rounded-[9px] px-[11px] py-[9px] text-[14.5px] text-foreground transition-colors hover:bg-sitio-alt hover:text-acento-texto"
+                        style={{ "--i": i } as React.CSSProperties}
+                        className="block rounded-[9px] px-[11px] py-[9px] text-[13px] font-semibold uppercase tracking-[0.045em] text-foreground transition-colors hover:bg-sitio-alt hover:text-acento-texto"
                       >
                         {link.name}
                       </Link>

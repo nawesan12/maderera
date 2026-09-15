@@ -7,7 +7,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { haySenal } from "@/lib/senal-navegador";
+import { usePathname } from "next/navigation";
+import { valorDeSenal } from "@/lib/senal-navegador";
 import type { VistaDePrecio } from "@/lib/precios/vista";
 
 export interface PrecioPropio {
@@ -26,6 +27,15 @@ interface Precios {
    * servidor, que es «final»: lo que corresponde mostrarle al público.
    */
   vista: VistaDePrecio | null;
+  /**
+   * Con qué señal se pidió esto.
+   *
+   * Es lo que permite notar que lo guardado quedó de **otra sesión**: el
+   * profesional cierra sesión en la máquina del mostrador, entra el siguiente
+   * en la misma pestaña, y sin esta marca se le mostraban los precios del
+   * anterior como si fueran suyos.
+   */
+  senal?: string | null;
 }
 
 const NINGUNO: Precios = { porSlug: {}, lista: null, vista: null };
@@ -54,11 +64,29 @@ const CAJON = "mis-precios";
  * ya calculada de este visitante, guardada en su propia pestaña. Al cerrar
  * sesión la señal desaparece y esto se limpia con ella.
  */
-/** Lo guardado en esta pestaña, o null si no hay nada utilizable. */
-function leerGuardado(): Precios | null {
+/**
+ * Si lo que quedó guardado es de esta misma sesión.
+ *
+ * **Es la regla que cierra el agujero, y por eso está aparte y tiene test.**
+ * Lo guardado por otra sesión no se corrige ni se aprovecha en parte: se
+ * descarta entero y se vuelve a pedir. Sin señal guardada tampoco sirve —es de
+ * antes de que la señal llevara valor— y lo que no se puede atribuir se tira.
+ */
+export function sirveLoGuardado(
+  guardado: Pick<Precios, "senal"> | null,
+  senal: string | null,
+): boolean {
+  if (!guardado || !senal) return false;
+  return typeof guardado.senal === "string" && guardado.senal === senal;
+}
+
+/** Lo guardado en esta pestaña, si es de esta misma sesión. */
+function leerGuardado(senal: string): Precios | null {
   try {
     const crudo = sessionStorage.getItem(CAJON);
-    return crudo ? (JSON.parse(crudo) as Precios) : null;
+    if (!crudo) return null;
+    const guardado = JSON.parse(crudo) as Precios;
+    return sirveLoGuardado(guardado, senal) ? guardado : null;
   } catch {
     // Un JSON roto o el almacenamiento bloqueado: se pide de nuevo.
     return null;
@@ -75,18 +103,35 @@ function guardar(precios: Precios | null) {
   }
 }
 
+/** Si la respuesta que llegó es la que ya está puesta. */
+function iguales(a: Precios, b: Precios) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Tira lo que esta pestaña guardó. Lo usa el botón de cerrar sesión. */
+export function olvidarPreciosPropios() {
+  guardar(null);
+}
+
 export function PreciosProvider({ children }: { children: ReactNode }) {
   const [precios, setPrecios] = useState<Precios>(NINGUNO);
 
-  useEffect(() => {
-    if (!haySenal()) {
-      // Quedó una respuesta de una sesión anterior: se tira. Mostrar precios de
-      // profesional a quien ya cerró sesión sería exactamente lo que todo este
-      // módulo cuida.
-      guardar(null);
-      return;
-    }
+  /*
+   * La ruta entra como dependencia, por el mismo motivo que en
+   * `EstadoProvider`: este provider vive en el layout y se monta una sola vez.
+   *
+   * Sin esto el efecto corría al entrar al sitio y nunca más, y lo que quedaba
+   * mal era el caso que importa: alguien cierra sesión en otra pestaña —o se
+   * le vence—, sigue navegando el catálogo, y sigue viendo su precio de gremio
+   * en pantalla hasta recargar entera. La señal ya no está y el precio seguía
+   * ahí.
+   *
+   * No agrega tráfico: al navegar se lee lo guardado en la pestaña, no se
+   * vuelve a preguntar.
+   */
+  const ruta = usePathname();
 
+  useEffect(() => {
     let vigente = true;
 
     /*
@@ -99,7 +144,17 @@ export function PreciosProvider({ children }: { children: ReactNode }) {
      */
     Promise.resolve()
       .then((): Precios | Promise<Precios | null> => {
-        const guardado = leerGuardado();
+        const senal = valorDeSenal();
+
+        if (!senal) {
+          // Quedó una respuesta de una sesión anterior: se tira, y la pantalla
+          // vuelve al precio de público. Mostrar precios de profesional a quien
+          // ya cerró sesión es exactamente lo que este módulo cuida.
+          guardar(null);
+          return NINGUNO;
+        }
+
+        const guardado = leerGuardado(senal);
         if (guardado) return guardado;
 
         return fetch("/api/mis-precios")
@@ -110,13 +165,18 @@ export function PreciosProvider({ children }: { children: ReactNode }) {
               porSlug: d.precios ?? {},
               lista: d.lista ?? null,
               vista: d.vista ?? null,
+              senal,
             };
             guardar(traido);
             return traido;
           });
       })
       .then((nuevos) => {
-        if (vigente && nuevos) setPrecios(nuevos);
+        if (!vigente || !nuevos) return;
+        // Al navegar vuelve a salir lo mismo de la pestaña. Sin comparar, cada
+        // navegación entregaría un objeto nuevo y redibujaría cada precio de la
+        // pantalla para dejarlo igual.
+        setPrecios((antes) => (iguales(antes, nuevos) ? antes : nuevos));
       })
       .catch(() => {
         // Si falla, queda el precio de público. Es el lado seguro: de menos
@@ -126,7 +186,7 @@ export function PreciosProvider({ children }: { children: ReactNode }) {
     return () => {
       vigente = false;
     };
-  }, []);
+  }, [ruta]);
 
   return <Contexto.Provider value={precios}>{children}</Contexto.Provider>;
 }

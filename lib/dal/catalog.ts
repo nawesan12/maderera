@@ -914,19 +914,24 @@ export const obtenerProducto = cache(
   },
 );
 
-/**
- * La misma ficha, siempre a precio de público.
+/*
+ * Acá vivía `obtenerProductoPublico`: la misma ficha pero siempre a precio de
+ * público, escrita para que la ficha se sirviera estática como la portada, con
+ * el navegador corrigiendo el precio del profesional.
  *
- * Es la que permite que la página se sirva estática. Al profesional se la
- * corrige el navegador, igual que en el listado.
+ * **Se borró sin haberla usado nunca, y conviene saber por qué antes de
+ * volver a escribirla.** El listado se pudo pasar porque la tarjeta muestra un
+ * solo precio por producto —el «desde»— y eso es lo que `/api/mis-precios`
+ * devuelve, un mapa por slug. La ficha no: muestra el precio de cada variante,
+ * y para corregirla desde el navegador hace falta una respuesta por variante
+ * que ese endpoint hoy no da.
+ *
+ * Y medido, el cambio no compraba lo que parecía. La ficha ya hace **cero
+ * consultas** para quien no tiene sesión, que es casi todo el tráfico: es
+ * dinámica pero no toca la base. Lo que cuesta es la visita del profesional
+ * —seis consultas por página, cinco de ellas preguntando de nuevo qué lista le
+ * toca— y eso no se arregla acá, sino resolviendo esa pregunta una sola vez.
  */
-export const obtenerProductoPublico = cache(
-  async (slug: string): Promise<ProductoDetalle | null> => {
-    const general = await listaGeneral();
-    const id = general?.id ?? null;
-    return productoCacheado(slug, { id, generalId: id, factorDerivado: 1 });
-  },
-);
 
 /**
  * Con qué productos está vinculado, según lo que cargó el vendedor.

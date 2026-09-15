@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { SENAL_ESTADO } from "@/lib/senal-navegador";
+import { olvidarPreciosPropios } from "@/lib/precios-propios-context";
 
 export function BotonSalir() {
   const router = useRouter();
@@ -19,6 +20,11 @@ export function BotonSalir() {
     // decir "Ingresar" en el acto; si no, seguiría preguntando —y recibiendo
     // "no hay nada"— hasta que el servidor la apague por su cuenta.
     document.cookie = `${SENAL_ESTADO}=; Max-Age=0; Path=/`;
+
+    // Y los precios que trajo esta sesión se van con ella. La señal nueva del
+    // que entre después ya no coincidiría, pero borrarlo acá es no dejar los
+    // precios de nadie escritos en una máquina compartida.
+    olvidarPreciosPropios();
 
     router.push("/");
     router.refresh();

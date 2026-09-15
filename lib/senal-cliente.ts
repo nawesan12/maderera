@@ -19,6 +19,14 @@ import { cookies } from "next/headers";
  * decide sigue siendo la cookie de sesión, que no salió de `httpOnly`. Si
  * alguien se la inventa a mano, lo único que consigue es que su propio
  * navegador haga un pedido de más y reciba un "no hay nada".
+ *
+ * **El valor es un azar y cambia en cada inicio de sesión**, porque lo que el
+ * navegador guarda de una sesión no le sirve a la siguiente. Antes era un `1`
+ * fijo y eso abrió un agujero concreto: el profesional cierra sesión en la
+ * computadora del mostrador, entra el siguiente en la misma pestaña, y los
+ * precios que quedaron guardados de la sesión anterior se le mostraban como
+ * propios. El valor sigue sin decir quién es nadie: solo permite notar que ya
+ * no es la misma sesión de antes.
  */
 export const SENAL_ESTADO = "mjbj_estado";
 
@@ -30,9 +38,30 @@ const OPCIONES = {
   secure: process.env.NODE_ENV === "production",
 } as const;
 
-/** La prende. Se llama al crear un carrito y al iniciar sesión. */
+/** Un valor opaco y corto, distinto en cada sesión. */
+function nuevoValor(): string {
+  return crypto.randomUUID().slice(0, 8);
+}
+
+/**
+ * La prende si no estaba. Se llama al crear un carrito.
+ *
+ * No pisa la que ya hay: agregar algo al presupuesto no cambia de sesión, y
+ * rotar el valor ahí tiraría los precios que el navegador ya trajo para nada.
+ */
 export async function encenderSenal(): Promise<void> {
-  (await cookies()).set(SENAL_ESTADO, "1", OPCIONES);
+  const cajon = await cookies();
+  if (cajon.get(SENAL_ESTADO)) return;
+  cajon.set(SENAL_ESTADO, nuevoValor(), OPCIONES);
+}
+
+/**
+ * La prende con un valor nuevo. Se llama al iniciar sesión y al registrarse.
+ *
+ * Es lo que le avisa al navegador que lo que guardó es de otra persona.
+ */
+export async function renovarSenal(): Promise<void> {
+  (await cookies()).set(SENAL_ESTADO, nuevoValor(), OPCIONES);
 }
 
 /** La apaga. Al vaciar el presupuesto y al cerrar sesión. */

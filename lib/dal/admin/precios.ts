@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -50,7 +52,7 @@ export async function listarPrecios(
 ): Promise<FilaPrecio[]> {
   await requireStaff();
 
-  const listas = await db.select().from(priceLists);
+  const listas = await listarListasDePrecios();
   const general = listas.find((l) => l.isDefault);
   const profesional = listas.find((l) => l.slug === "profesional");
 
@@ -188,10 +190,17 @@ export async function historialDePrecios(limite = 40) {
     .limit(limite);
 }
 
-export async function listarListasDePrecios() {
+/**
+ * Las listas de precios cargadas.
+ *
+ * Memoizada por pedido: la pantalla de precios la pide para el selector y
+ * `listarPrecios` la pedía de nuevo para resolver cuál es la general. Son
+ * cuatro filas, pero era la única consulta repetida de todo el panel.
+ */
+export const listarListasDePrecios = cache(async () => {
   await requireStaff();
   return db.select().from(priceLists).orderBy(desc(priceLists.isDefault));
-}
+});
 
 /**
  * Los rubros activos con su categoría, para el corte del ajuste masivo.

@@ -19,12 +19,11 @@ import { Hero } from "@/components/home/hero";
 import { ProductCard } from "@/components/product-card";
 import { datosDePortada, numerosDeLaEmpresa } from "@/lib/dal/catalog";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
-import { escalasDeVolumenPublicas } from "@/lib/dal/profesionales";
 import { vistaDePrecio } from "@/lib/dal/precios-sesion";
 import { getSession } from "@/lib/dal/session";
 import { bannersDe } from "@/lib/dal/banners";
 import { promosVigentes, type PromoVigente } from "@/lib/dal/contenido";
-import { escalasDePago } from "@/lib/dal/descuentos-pago";
+import { escalasDePagoPublicas } from "@/lib/dal/descuentos-pago";
 import { ALCANCE_MOLDAVA } from "@/lib/empresa";
 import { SliderDePromos } from "@/components/home/slider-promos";
 import { FranjaBeneficios } from "@/components/franja-beneficios";
@@ -36,15 +35,14 @@ import { FranjaBeneficios } from "@/components/franja-beneficios";
  */
 
 export default async function HomePage() {
-  const [portada, sucursales, numeros, escalas, avisos, promos, escalasPago] =
+  const [portada, sucursales, numeros, avisos, promos, escalasPago] =
     await Promise.all([
       datosDePortada(),
       listarSucursalesPublicas(),
       numerosDeLaEmpresa(),
-      escalasDeVolumenPublicas(),
       bannersDe("portada"),
       promosVigentes(),
-      escalasDePago(),
+      escalasDePagoPublicas(),
     ]);
 
   return (
@@ -83,7 +81,7 @@ export default async function HomePage() {
 
       <Herramientas />
 
-      <BannerProfesionales escalas={escalas} sucursales={sucursales} />
+      <BannerProfesionales sucursales={sucursales} />
 
       <Historia
         anios={numeros.anios}
@@ -331,7 +329,7 @@ function MediosDePago({
   escalasPago,
 }: {
   promos: PromoVigente[];
-  escalasPago: Awaited<ReturnType<typeof escalasDePago>>;
+  escalasPago: Awaited<ReturnType<typeof escalasDePagoPublicas>>;
 }) {
   /*
    * El descuento de contado, con los medios que de verdad lo tienen cargado.
@@ -426,82 +424,83 @@ function MediosDePago({
 /**
  * Portal de profesionales y las dos sucursales.
  *
- * Las escalas salen de la base (`escalasDeVolumenPublicas`) y el umbral es por
- * **cantidad**, no por importe: el diseño las dibujaba como "5% desde
- * $500.000" y el modelo no tiene ese dato. Si no hay ninguna cargada, el
- * bloque va sin la lista en vez de mostrar números de ejemplo — es una
- * política comercial y publicarla mal es una promesa que hay que cumplir.
+ * **Acá había una escala de descuentos por cantidad —3 %, 5 %, 8 % desde 10,
+ * 25 y 50 unidades— y la maderera no trabaja así.** Lo que tiene una cuenta
+ * profesional es su propia lista de precios y cuenta corriente, que es lo que
+ * dice ahora. Anunciar un descuento que después no aparece en el presupuesto
+ * es peor que no anunciar nada: quien lo leyó viene a reclamarlo.
+ *
+ * Si algún día existe de verdad, se anuncia con los números de la base y no
+ * con ejemplos escritos acá.
  */
 function BannerProfesionales({
-  escalas,
   sucursales,
 }: {
-  escalas: Awaited<ReturnType<typeof escalasDeVolumenPublicas>>;
   sucursales: Awaited<ReturnType<typeof listarSucursalesPublicas>>;
 }) {
-  // La foto sale de la ficha de la sucursal si está cargada. Mientras no lo
-  // esté, va una veta dibujada: un recuadro vacío o una foto de stock que no es
-  // el local se leen peor que una superficie que no pretende ser una foto.
-  const foto = sucursales.find((s) => s.imagenUrl)?.imagenUrl ?? null;
+  /*
+   * La foto sale de la ficha de la sucursal si está cargada, y esa es la que
+   * vale: es el local de verdad. Mientras no haya ninguna, va madera apilada.
+   *
+   * Antes el respaldo era una veta dibujada, para no hacer pasar una foto
+   * ajena por el local. El encuadre lo resuelve: se ve el material, no una
+   * fachada, así que no afirma «este es nuestro depósito» —eso lo dice el
+   * texto, y lo que muestra es cierto: hay stock propio—. En cuanto se cargue
+   * la foto de Casa Central o del Aserradero, esta desaparece sola.
+   */
+  const foto =
+    sucursales.find((s) => s.imagenUrl)?.imagenUrl ??
+    "https://images.unsplash.com/photo-1634672652995-ee7525bce595?w=1200&q=75";
 
   return (
     <section className="bg-sitio-fondo pb-[66px]">
       <div className="contenedor">
         <div className="grid gap-[18px] lg:grid-cols-2">
-          <article className="overflow-hidden rounded-2xl border border-linea bg-sitio-alt px-8 py-8 sm:px-[34px]">
-            <span className="inline-block rounded-full bg-naranja-claro px-[11px] py-[5px] text-xs font-bold uppercase tracking-[0.08em] text-acento-sobre-claro">
-              Portal profesionales
-            </span>
-            <h3 className="mt-3.5 text-[26px] font-bold tracking-[-0.025em]">
-              Precios por volumen
-            </h3>
-            <p className="mt-2 text-[15.5px] leading-relaxed text-texto-2">
-              Carpinteros, arquitectos y constructoras tienen escala de
-              descuento y cuenta corriente. Se solicita una vez y queda
-              habilitada.
-            </p>
-
-            {escalas.length > 0 && (
-              <ul className="mt-[18px] flex flex-col gap-[7px]">
-                {escalas.map((e) => (
-                  <li
-                    key={e.desdeCantidad}
-                    className="flex items-center gap-3 rounded-[9px] border border-linea-suave bg-card px-3 py-2.5"
-                  >
-                    <span className="tabular flex-1 text-[13.5px] text-texto-2">
-                      Desde {e.desdeCantidad} unidades
-                    </span>
-                    <span className="tabular text-[15px] font-semibold text-acento-texto">
-                      &minus;{e.porcentaje}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <Link
-              href="/profesionales"
-              className="mt-5 flex h-12 w-fit items-center rounded-[10px] bg-accion px-[22px] text-[15.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
-            >
-              Solicitar cuenta profesional
-            </Link>
-          </article>
-
-          <article className="relative min-h-[340px] overflow-hidden rounded-2xl bg-brand-wood-light">
-            {foto ? (
+          <article className="flex flex-col overflow-hidden rounded-2xl border border-linea bg-sitio-alt">
+            {/* La foto arriba: son carpinteros trabajando con la madera que
+                vende la casa, que es exactamente a quién le habla el bloque.
+                `priority` no: está abajo del hero y cargarla antes le saca
+                ancho de banda a lo primero que se ve. */}
+            <div className="relative h-[190px] shrink-0">
               <Image
-                src={foto}
+                src="https://images.unsplash.com/photo-1773430272778-28c224216811?w=900&q=75"
                 alt=""
                 fill
                 className="object-cover"
                 sizes="(max-width: 1024px) 100vw, 50vw"
               />
-            ) : (
-              <div
-                className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,#e7dccd_0_9px,#ded1bf_9px_18px)] dark:bg-[repeating-linear-gradient(-45deg,#3a352f_0_9px,#332f29_9px_18px)]"
-                aria-hidden="true"
-              />
-            )}
+            </div>
+
+            <div className="flex flex-1 flex-col px-8 py-8 sm:px-[34px]">
+              <span className="inline-block w-fit rounded-full bg-naranja-claro px-[11px] py-[5px] text-xs font-bold uppercase tracking-[0.08em] text-acento-sobre-claro">
+                Portal profesionales
+              </span>
+              <h3 className="mt-3.5 text-[26px] font-bold tracking-[-0.025em]">
+                Tu propia lista de precios
+              </h3>
+              <p className="mt-2 text-[15.5px] leading-relaxed text-texto-2">
+                Carpinteros, arquitectos y constructoras compran con la lista
+                que les corresponde y con cuenta corriente. Se solicita una vez
+                y queda habilitada.
+              </p>
+
+              <Link
+                href="/profesionales"
+                className="mt-5 flex h-12 w-fit items-center rounded-[10px] bg-accion px-[22px] text-[15.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
+              >
+                Solicitar cuenta profesional
+              </Link>
+            </div>
+          </article>
+
+          <article className="relative min-h-[340px] overflow-hidden rounded-2xl bg-brand-wood-light">
+            <Image
+              src={foto}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="(max-width: 1024px) 100vw, 50vw"
+            />
             <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(28_25_22_/_0.9),rgb(28_25_22_/_0.15)_60%,transparent)]" />
             <div className="absolute inset-x-8 bottom-7 text-white">
               <h3 className="text-[26px] font-bold tracking-[-0.025em]">

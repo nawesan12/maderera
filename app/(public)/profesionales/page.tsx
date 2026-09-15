@@ -29,7 +29,7 @@ import { FormularioProfesional } from "./formulario";
 export const metadata: Metadata = {
   title: "Portal de profesionales",
   description:
-    "Precios diferenciados, descuentos por volumen, cuenta corriente, presupuestos express en 24 horas y documentación técnica para arquitectos, constructoras y carpinteros de Mar del Plata.",
+    "Lista de precios propia, cuenta corriente, presupuestos express en 24 horas y documentación técnica para arquitectos, constructoras y carpinteros de Mar del Plata.",
   alternates: { canonical: "/profesionales" },
 };
 
@@ -96,7 +96,7 @@ export default async function ProfesionalesPage() {
         bajada={
           estado.aprobado
             ? `Hola ${(estado.nombre ?? "").split(" ")[0]}, tu acceso está activo. Los precios del catálogo ya son los tuyos.`
-            : "Precios por volumen, cuenta corriente y documentación reservada."
+            : "Lista de precios propia, cuenta corriente y documentación reservada."
         }
       />
 

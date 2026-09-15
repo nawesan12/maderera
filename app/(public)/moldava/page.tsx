@@ -88,12 +88,12 @@ export default async function MoldavaPage() {
         {/* El acceso mayorista, arriba de todo.
 
             Estaba al final de la página, en un bloque discreto: quien viene a
-            Moldava buscando precio por volumen es justo el visitante que la
+            Moldava buscando precio mayorista es justo el visitante que la
             clienta quiere captar, y le hacía falta bajar la página entera para
             encontrar cómo. */}
         <section className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] border border-linea bg-card p-6">
           <div>
-            <h2 className="text-lg font-bold">¿Comprás por volumen?</h2>
+            <h2 className="text-lg font-bold">¿Comprás al por mayor?</h2>
             <p className="mt-1 text-[15px] text-texto-2">
               Entrega en puerta en {ALCANCE_MOLDAVA}, con precio mayorista.
             </p>

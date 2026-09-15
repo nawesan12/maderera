@@ -24,10 +24,13 @@ export function Banner({
   banner,
   alto = false,
   prioridad = false,
+  deBordeABorde = false,
 }: {
   banner: BannerPublicado;
   /** El tamaño del carrusel de la portada. */
   alto?: boolean;
+  /** Sin esquinas redondeadas: ocupa el ancho entero, como el hero. */
+  deBordeABorde?: boolean;
   /** Solo para el primero del carrusel: es imagen visible al cargar. */
   prioridad?: boolean;
 }) {
@@ -119,8 +122,18 @@ export function Banner({
     </>
   );
 
-  const clases =
-    "group/banner relative block overflow-hidden rounded-[16px] bg-[#2c2621] isolate";
+  /*
+   * En el carrusel de la portada va a sangre y sin esquinas redondeadas.
+   *
+   * El banner nació como tarjeta —así se usa en el catálogo, metido en el
+   * contenedor y con margen a los lados— y al entrar al carrusel se llevó el
+   * redondeo puesto: el hero ocupa el ancho entero con las esquinas rectas y,
+   * al avanzar la diapositiva, aparecían dos esquinas redondas sobre el borde
+   * de la pantalla. Es lo mismo que se ve al costado en `slider-promos`.
+   */
+  const clases = `group/banner relative block overflow-hidden bg-[#2c2621] isolate ${
+    deBordeABorde ? "" : "rounded-[16px]"
+  }`;
 
   if (!banner.enlace) return <div className={clases}>{contenido}</div>;
 

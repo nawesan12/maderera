@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { customers, priceLists, profiles } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
 import { factorDeLista } from "@/lib/precios/derivada";
+import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 
 /**
  * Qué lista de precios corresponde a quien está mirando.
@@ -50,12 +51,34 @@ export interface ListaVigente {
   factorDerivado: number;
 }
 
+/**
+ * Cuál es la lista general.
+ *
+ * **Esto sí se cachea, y es la única parte de este módulo que puede.** No
+ * depende de quién mira: la lista general es la misma para todo el mundo y es
+ * justamente la pública. Lo que no se puede cachear —y sigue sin cacharse— es
+ * *qué lista le toca a esta persona*, que es lo que sale abajo del perfil y de
+ * la ficha de cliente.
+ *
+ * Importa porque era la última consulta que quedaba por visita en el sitio
+ * público: el resto de la portada ya se servía de datos cacheados y esta sola
+ * obligaba a ir a la base en cada carga, para leer siempre la misma fila.
+ */
+const listaGeneral = cachearPublico(
+  async () => {
+    const [fila] = await db
+      .select({ id: priceLists.id, nombre: priceLists.name })
+      .from(priceLists)
+      .where(and(eq(priceLists.isDefault, true), eq(priceLists.active, true)))
+      .limit(1);
+    return fila ?? null;
+  },
+  ["lista-de-precios-general"],
+  ETIQUETAS.catalogo,
+);
+
 export const listaVigente = cache(async (): Promise<ListaVigente> => {
-  const [general] = await db
-    .select({ id: priceLists.id, nombre: priceLists.name })
-    .from(priceLists)
-    .where(and(eq(priceLists.isDefault, true), eq(priceLists.active, true)))
-    .limit(1);
+  const general = await listaGeneral();
 
   const generalId = general?.id ?? null;
   const sesion = await getSession();

@@ -56,7 +56,7 @@ export function SliderDePromos({
     ...banners.map((banner) => ({
       clave: banner.id,
       titulo: banner.titulo,
-      contenido: <Banner banner={banner} alto />,
+      contenido: <Banner banner={banner} alto deBordeABorde />,
     })),
   ];
   const pista = useRef<HTMLDivElement>(null);
@@ -189,7 +189,18 @@ export function SliderDePromos({
           <Flecha lado="izquierda" onClick={() => mover(-1)} />
           <Flecha lado="derecha" onClick={() => mover(1)} />
 
-          <div className="mt-3.5 flex items-center justify-center gap-2">
+          {/*
+            Los controles van **adentro** de la diapositiva, apoyados abajo.
+            Colgados debajo dejaban una franja blanca de unos 40 px entre la
+            foto y la banda de beneficios, que no era parte de ningún bloque:
+            se veía como un hueco.
+
+            Sobre una foto el gris de la barra no se lee, así que acá van en
+            blanco translúcido, igual que las flechas de los costados. El
+            `backdrop-blur` es lo que los sostiene sobre una imagen clara.
+          */}
+          <div className="absolute inset-x-0 bottom-4 z-10 flex items-center justify-center gap-2">
+            <div className="flex items-center gap-2 rounded-full bg-black/25 px-3 py-2 backdrop-blur-md">
             {slides.map((slide, i) => (
               <button
                 key={slide.clave}
@@ -202,12 +213,14 @@ export function SliderDePromos({
                 aria-label={`Ver "${slide.titulo}"`}
                 aria-current={i === actual}
                 className={`h-1.5 overflow-hidden rounded-full transition-all ${
-                  i === actual ? "w-10 bg-linea" : "w-1.5 bg-linea hover:bg-texto-3"
+                  i === actual
+                    ? "w-10 bg-white/35"
+                    : "w-1.5 bg-white/35 hover:bg-white/60"
                 }`}
               >
                 {i === actual && (
                   <span
-                    className="block h-full rounded-full bg-accion"
+                    className="block h-full rounded-full bg-white"
                     // Sin transición: el ancho ya se actualiza cada 50 ms y
                     // animarlo encima lo deja siempre atrasado.
                     style={{ width: `${corriendo ? avance : 100}%` }}
@@ -222,7 +235,7 @@ export function SliderDePromos({
               aria-label={
                 detenidoAMano ? "Reanudar las promociones" : "Detener las promociones"
               }
-              className="ml-1.5 flex h-7 w-7 items-center justify-center rounded-full text-texto-3 transition-colors hover:bg-muted hover:text-foreground"
+              className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/20 hover:text-white"
             >
               {detenidoAMano ? (
                 <Play className="h-3.5 w-3.5" />
@@ -230,6 +243,7 @@ export function SliderDePromos({
                 <Pause className="h-3.5 w-3.5" />
               )}
             </button>
+            </div>
           </div>
         </>
       )}

@@ -22,19 +22,23 @@ const pool =
       : { rejectUnauthorized: true },
 
     /*
-     * Pocas conexiones por instancia, a propósito.
+     * Cuántas conexiones abre cada instancia.
      *
-     * `pg` abre hasta diez por defecto, y eso está pensado para un servidor
-     * único de toda la vida. Acá corre sobre funciones: bajo carga conviven
-     * varias instancias, cada una con su pool, y diez por cabeza agotan el
-     * techo de conexiones de la base mucho antes de que la aplicación esté
-     * exigida. El síntoma no es lentitud sino "too many clients", que tira
-     * pantallas enteras.
+     * **Acá hubo un intento de ahorro que salió mal.** Estuvo en 3, con el
+     * razonamiento de que varias instancias con diez conexiones cada una
+     * agotarían el techo de la base. El número era demasiado bajo: una sola
+     * carga de la portada dispara unas diez consultas en paralelo —cuatro del
+     * layout y seis de la página— y con tres conexiones el resto hace cola. En
+     * cuanto una tardaba, las que esperaban se pasaban del tiempo de conexión
+     * y la página se caía con «Connection terminated due to connection
+     * timeout».
      *
-     * Tres alcanza: una función atiende de a pocas consultas en paralelo y la
-     * espera de una conexión libre dura microsegundos.
+     * Diez es el valor por omisión de `pg` y es el que corresponde: **la URL
+     * apunta al pooler de Neon**, que ya multiplexa contra Postgres, así que el
+     * techo que se quería cuidar lo cuida él. Si algún día hay que bajarlo,
+     * medir antes cuántas consultas en paralelo hace la página más pesada.
      */
-    max: 3,
+    max: 10,
 
     /*
      * Y las que no se usan se sueltan. Entre el pico de la mañana en el

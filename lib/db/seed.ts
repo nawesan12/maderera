@@ -13,6 +13,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { eq, sql } from "drizzle-orm";
 import * as schema from "./schema";
+import { PORTADA } from "./portadas-datos";
 
 const {
   branches,
@@ -74,23 +75,6 @@ const IMG = {
   piso: "https://images.unsplash.com/photo-1615873968403-89e068629265?w=800&q=80",
 } as const;
 
-/**
- * Portada de cada categoría, una distinta por rubro.
- *
- * Todas verificadas: varias URLs de Unsplash que parecían válidas devolvían
- * 404, y una portada rota deja la tarjeta en gris. Son provisorias hasta que
- * lleguen las fotos del cliente.
- */
-const PORTADA: Record<string, string> = {
-  techos: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80",
-  placas: "https://images.unsplash.com/photo-1541123437800-1bb1317badc2?w=800&q=80",
-  pisos: "https://images.unsplash.com/photo-1615873968403-89e068629265?w=800&q=80",
-  molduras: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=800&q=80",
-  ferreteria: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
-  "decks-y-escaleras": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=80",
-  "construccion-en-seco": "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=800&q=80",
-  cubiertas: "https://images.unsplash.com/photo-1632759145351-1d592919f522?w=800&q=80",
-};
 
 const CATALOGO: CategorySeed[] = [
   {

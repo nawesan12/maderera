@@ -23,6 +23,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:seed-contenido": "tsx --env-file=.env.local lib/db/seed-contenido.ts",
+    "db:portadas": "tsx --env-file=.env.local lib/db/portadas.ts",
     "db:seed-retenciones": "tsx --env-file=.env.local lib/db/seed-retenciones.ts"
   },
   "dependencies": {

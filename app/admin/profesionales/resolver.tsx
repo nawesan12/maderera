@@ -102,7 +102,6 @@ export function ResolverSolicitud({
                 .map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.nombre}
-                    {l.escalas > 0 ? ` · ${l.escalas} escalas` : ""}
                   </option>
                 ))}
             </select>

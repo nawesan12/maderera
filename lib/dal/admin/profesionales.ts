@@ -6,7 +6,6 @@ import {
   customers,
   priceLists,
   professionalApplications,
-  volumeDiscounts,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { variantesDeCuit } from "@/lib/cuit";
@@ -116,8 +115,6 @@ export interface ListaAsignable {
   id: string;
   nombre: string;
   esGeneral: boolean;
-  /** Cuántas escalas de volumen tiene cargadas. */
-  escalas: number;
 }
 
 export async function listasAsignables(): Promise<ListaAsignable[]> {
@@ -128,52 +125,12 @@ export async function listasAsignables(): Promise<ListaAsignable[]> {
       id: priceLists.id,
       nombre: priceLists.name,
       esGeneral: priceLists.isDefault,
-      escalas: sql<number>`(
-        select count(*)::int from volume_discounts vd
-        where vd.price_list_id = price_lists.id and vd.activo
-      )`,
     })
     .from(priceLists)
     .where(eq(priceLists.active, true))
     .orderBy(asc(priceLists.name));
 
   return filas;
-}
-
-export interface EscalaListada {
-  id: string;
-  priceListId: string;
-  lista: string;
-  variantId: string | null;
-  categoryId: string | null;
-  desdeCantidad: number;
-  porcentaje: number;
-  activo: boolean;
-}
-
-export async function listarEscalas(): Promise<EscalaListada[]> {
-  await requireStaff();
-
-  const filas = await db
-    .select({
-      id: volumeDiscounts.id,
-      priceListId: volumeDiscounts.priceListId,
-      lista: priceLists.name,
-      variantId: volumeDiscounts.variantId,
-      categoryId: volumeDiscounts.categoryId,
-      desdeCantidad: volumeDiscounts.desdeCantidad,
-      porcentaje: volumeDiscounts.porcentaje,
-      activo: volumeDiscounts.activo,
-    })
-    .from(volumeDiscounts)
-    .innerJoin(priceLists, eq(priceLists.id, volumeDiscounts.priceListId))
-    .orderBy(asc(priceLists.name), asc(volumeDiscounts.desdeCantidad));
-
-  return filas.map((f) => ({
-    ...f,
-    desdeCantidad: Number(f.desdeCantidad),
-    porcentaje: Number(f.porcentaje),
-  }));
 }
 
 export interface ResumenProfesionales {

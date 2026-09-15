@@ -9,14 +9,12 @@ import {
 import { fechaHora, plural } from "@/lib/formato";
 import { formatearCuitLargo } from "@/lib/cuit";
 import {
-  listarEscalas,
   listarSolicitudes,
   listasAsignables,
   resumenProfesionales,
   type SolicitudListada,
 } from "@/lib/dal/admin/profesionales";
 import { ResolverSolicitud } from "./resolver";
-import { Escalas } from "./escalas";
 
 export const metadata: Metadata = { title: "Profesionales" };
 
@@ -39,10 +37,9 @@ const RUBROS: Record<string, string> = {
  * se acumulen sin responder.
  */
 export default async function ProfesionalesAdminPage() {
-  const [solicitudes, listas, escalas, resumen] = await Promise.all([
+  const [solicitudes, listas, resumen] = await Promise.all([
     listarSolicitudes(),
     listasAsignables(),
-    listarEscalas(),
     resumenProfesionales(),
   ]);
 
@@ -138,8 +135,6 @@ export default async function ProfesionalesAdminPage() {
           </ul>
         </section>
       )}
-
-      <Escalas escalas={escalas} listas={listas} />
     </div>
   );
 }

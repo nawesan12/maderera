@@ -10,7 +10,6 @@ import {
   priceLists,
   professionalApplications,
   profiles,
-  volumeDiscounts,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { rolTrasAprobarProfesional } from "@/lib/roles";
@@ -280,61 +279,18 @@ export async function rechazarSolicitud(
   return { ok: "Solicitud rechazada. Le avisamos por correo." };
 }
 
-/** Alta de una escala de descuento por volumen. */
-export async function guardarEscala(
-  _previo: EstadoProfesionales,
-  formData: FormData,
-): Promise<EstadoProfesionales> {
-  await requireStaff();
-
-  const parsed = z
-    .object({
-      priceListId: z.string().uuid(),
-      desdeCantidad: z.coerce.number().positive().max(1_000_000),
-      porcentaje: z.coerce
-        .number()
-        .positive("El descuento tiene que ser mayor a cero.")
-        .max(90, "Un descuento de más del 90% seguro es un error de tipeo."),
-      categoryId: z.string().uuid().optional(),
-    })
-    .safeParse({
-      priceListId: formData.get("priceListId"),
-      desdeCantidad: formData.get("desdeCantidad"),
-      porcentaje: formData.get("porcentaje"),
-      categoryId: (formData.get("categoryId") as string) || undefined,
-    });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
-  }
-
-  await db.insert(volumeDiscounts).values({
-    priceListId: parsed.data.priceListId,
-    categoryId: parsed.data.categoryId ?? null,
-    desdeCantidad: parsed.data.desdeCantidad.toFixed(2),
-    porcentaje: parsed.data.porcentaje.toFixed(2),
-  });
-
-  refrescar();
-  revalidatePath("/presupuesto");
-
-  return { ok: "Escala agregada." };
-}
-
-export async function borrarEscala(
-  _previo: EstadoProfesionales,
-  formData: FormData,
-): Promise<EstadoProfesionales> {
-  await requireStaff();
-
-  const id = z.string().uuid().safeParse(formData.get("id"));
-  if (!id.success)
-    return { error: "No encontramos esa escala de descuento." };
-
-  await db.delete(volumeDiscounts).where(eq(volumeDiscounts.id, id.data));
-
-  refrescar();
-  revalidatePath("/presupuesto");
-
-  return { ok: "Escala eliminada." };
-}
+/*
+ * Acá vivían `guardarEscala` y `borrarEscala`: el alta y la baja de los
+ * descuentos por volumen del profesional.
+ *
+ * **Se fueron porque el negocio no da descuentos por volumen.** No es que la
+ * pantalla sobrara: mientras la acción existiera, el panel ofrecía cargar una
+ * promesa que el mostrador después no iba a cumplir. Y una server action sin
+ * formulario no queda inofensiva —sigue siendo un endpoint— así que se borró
+ * entera y no solo la pantalla que la llamaba.
+ *
+ * El cálculo del carrito (`descuentoPorVolumen`, en `lib/dal/carrito.ts`)
+ * quedó: con `volume_discounts` vacía y sin forma de cargarle nada, no aplica
+ * descuento a nadie. Sacarlo es tocar cómo se suma un carrito, y eso se hace
+ * con tiempo y no la noche antes de una demostración.
+ */

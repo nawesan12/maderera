@@ -88,8 +88,11 @@ export default async function PublicLayout({
         telefono={principal?.telefono}
         horario={principal?.horario}
         whatsapp={whatsapp || null}
-        productosPorRubro={Object.fromEntries(
-          categorias.map((c) => [c.slug, c.productCount]),
+        rubros={Object.fromEntries(
+          categorias.map((c) => [
+            c.slug,
+            { cantidad: c.productCount, imagen: c.image ?? null },
+          ]),
         )}
       />
       <main id="contenido" className="flex-1">

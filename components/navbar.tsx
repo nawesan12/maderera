@@ -149,14 +149,15 @@ export function Navbar({
   telefono,
   horario,
   whatsapp,
-  productosPorRubro = {},
+  rubros = {},
 }: {
   telefono?: string | null;
   horario?: string | null;
   /** El enlace armado, que sale del número cargado en el panel. */
   whatsapp?: string | null;
-  /** Cuántos productos activos tiene cada rubro, por slug. */
-  productosPorRubro?: Record<string, number>;
+  /** Lo que el catálogo sabe de cada rubro, por slug: cuántos productos tiene
+   *  y con qué foto se muestra. Las dos cosas se editan desde el panel. */
+  rubros?: Record<string, { cantidad: number; imagen: string | null }>;
 }) {
   const pathname = usePathname();
 
@@ -318,54 +319,85 @@ export function Navbar({
                     <p className="px-3 pb-2 pt-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-texto-3">
                       Rubros
                     </p>
-                    <div className="entra-en-orden grid grid-cols-2 gap-0.5">
+                    <div className="entra-en-orden grid grid-cols-3 gap-2">
                       {productLinks.map((link, i) => {
-                        const cuantos = productosPorRubro[link.slug];
+                        const rubro = rubros[link.slug];
                         return (
                           <Link
                             key={link.slug}
                             href={`/catalogo?cat=${link.slug}`}
                             style={{ "--i": i } as React.CSSProperties}
-                            className="group/item flex items-start gap-3 rounded-xl px-3 py-[11px] text-foreground transition-colors hover:bg-sitio-alt"
+                            className="group/item relative flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-xl bg-oscuro-marca text-white"
                           >
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-sitio-alt text-acento-texto transition-colors group-hover/item:bg-naranja-claro">
-                              <link.icon className="h-[17px] w-[17px]" />
-                            </span>
-                            <span className="min-w-0">
-                              <span className="flex items-center gap-1.5">
-                                <span className="text-[13px] font-bold uppercase tracking-[0.045em]">
+                            {rubro?.imagen && (
+                              <Image
+                                src={rubro.imagen}
+                                alt=""
+                                fill
+                                sizes="160px"
+                                className="object-cover transition-transform duration-300 group-hover/item:scale-[1.07]"
+                              />
+                            )}
+                            {/* El velo: sin él, un nombre blanco sobre una foto
+                                clara no se lee. Se oscurece al pasar, que es lo
+                                que hace legible la descripción. */}
+                            <span
+                              className="absolute inset-0 bg-gradient-to-t from-oscuro-marca/95 via-oscuro-marca/30 to-transparent transition-colors duration-300 group-hover/item:from-oscuro-marca group-hover/item:via-oscuro-marca/70"
+                              aria-hidden="true"
+                            />
+
+                            <span className="relative p-2.5">
+                              <span className="flex flex-wrap items-center gap-x-1.5">
+                                <span className="text-balance text-[11.5px] font-extrabold uppercase leading-tight tracking-[0.04em]">
                                   {link.name}
                                 </span>
                                 {/* La línea propia, dicha una sola vez y donde
                                     corresponde. */}
                                 {"propia" in link && link.propia && (
-                                  <span className="rounded-full bg-naranja-claro px-1.5 py-px text-[10px] font-bold uppercase tracking-[0.06em] text-acento-sobre-claro">
+                                  <span className="rounded-full bg-naranja-claro px-1.5 py-px text-[9.5px] font-bold uppercase tracking-[0.06em] text-acento-sobre-claro">
                                     Moldava
                                   </span>
                                 )}
                               </span>
-                              <span className="block text-[12.5px] leading-[1.35] text-texto-3">
-                                {link.desc}
-                              </span>
+
                               {/* El número sale de la base y no está escrito a
                                   mano: dice qué rubro tiene fondo de verdad. */}
-                              {cuantos !== undefined && cuantos > 0 && (
-                                <span className="tabular mt-0.5 block text-[11.5px] text-texto-3">
-                                  {cuantos} {cuantos === 1 ? "producto" : "productos"}
+                              {rubro?.cantidad ? (
+                                <span className="tabular block text-[11px] text-white/75">
+                                  {rubro.cantidad}{" "}
+                                  {rubro.cantidad === 1 ? "producto" : "productos"}
                                 </span>
-                              )}
+                              ) : null}
+
+                              {/*
+                                La descripción aparece al pasar por encima y no
+                                empuja nada: la fila va de alto cero a alto
+                                automático, que es lo que permite animar una
+                                altura que no se conoce de antemano.
+                              */}
+                              <span className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 group-hover/item:grid-rows-[1fr] group-focus-visible/item:grid-rows-[1fr] motion-reduce:transition-none">
+                                <span className="overflow-hidden">
+                                  <span className="block pt-0.5 text-[11px] leading-[1.35] text-white/80">
+                                    {link.desc}
+                                  </span>
+                                </span>
+                              </span>
                             </span>
                           </Link>
                         );
                       })}
-                    </div>
 
-                    <div className="mt-1.5 border-t border-linea-tenue pt-1.5">
+                      {/* La novena celda cierra la grilla. Ocho rubros en tres
+                          columnas dejaban un hueco, y este enlace estaba al pie
+                          ocupando una fila entera para él solo. */}
                       <Link
                         href="/catalogo"
-                        className="group/todo flex items-center justify-between rounded-xl px-3 py-[11px] text-[13px] font-bold uppercase tracking-[0.045em] text-acento-texto transition-colors hover:bg-naranja-tenue"
+                        style={{ "--i": productLinks.length } as React.CSSProperties}
+                        className="group/todo flex aspect-[4/3] flex-col justify-end gap-0.5 rounded-xl border border-transparent bg-naranja-claro p-2.5 text-acento-sobre-claro transition-colors hover:border-accion"
                       >
-                        Ver todo el catálogo
+                        <span className="text-balance text-[11.5px] font-extrabold uppercase leading-tight tracking-[0.04em]">
+                          Ver todo el catálogo
+                        </span>
                         <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover/todo:translate-x-1" />
                       </Link>
                     </div>
@@ -587,8 +619,11 @@ export function Navbar({
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Productos
                   </p>
+                  {/* En el cajón del teléfono la foto va de miniatura y no de
+                      tarjeta: una grilla de tarjetas en 320 px deja los nombres
+                      ilegibles, y acá lo que se busca es leer rápido. */}
                   {productLinks.map((link) => {
-                    const cuantos = productosPorRubro[link.slug];
+                    const rubro = rubros[link.slug];
                     return (
                       <Link
                         key={link.slug}
@@ -596,15 +631,27 @@ export function Navbar({
                         onClick={() => setMobileMenuOpen(false)}
                         className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-sitio-alt"
                       >
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-naranja-claro">
-                          <link.icon className="h-4 w-4 text-acento-texto" />
-                        </span>
-                        <span className="min-w-0 flex-1">{link.name}</span>
-                        {cuantos !== undefined && cuantos > 0 && (
-                          <span className="tabular shrink-0 text-[12px] text-texto-3">
-                            {cuantos}
+                        {rubro?.imagen ? (
+                          <Image
+                            src={rubro.imagen}
+                            alt=""
+                            width={36}
+                            height={36}
+                            className="h-9 w-9 shrink-0 rounded-lg object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-naranja-claro">
+                            <link.icon className="h-4 w-4 text-acento-texto" />
                           </span>
                         )}
+                        <span className="min-w-0 flex-1 text-[13px] font-bold uppercase tracking-[0.045em]">
+                          {link.name}
+                        </span>
+                        {rubro?.cantidad ? (
+                          <span className="tabular shrink-0 text-[12px] text-texto-3">
+                            {rubro.cantidad}
+                          </span>
+                        ) : null}
                       </Link>
                     );
                   })}
@@ -612,9 +659,9 @@ export function Navbar({
                   <Link
                     href="/catalogo"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-acento-texto hover:bg-sitio-alt"
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-bold uppercase tracking-[0.045em] text-acento-texto hover:bg-sitio-alt"
                   >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-naranja-claro">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-naranja-claro">
                       <ArrowRight className="h-4 w-4" />
                     </span>
                     Ver todo el catálogo
@@ -629,9 +676,9 @@ export function Navbar({
                       key={h.href}
                       href={h.href}
                       onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-sitio-alt"
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-bold uppercase tracking-[0.045em] hover:bg-sitio-alt"
                     >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sitio-alt">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sitio-alt">
                         <h.icon className="h-4 w-4 text-acento-texto" />
                       </span>
                       {h.name}
@@ -650,7 +697,7 @@ export function Navbar({
                         href={link.href}
                         onClick={() => setMobileMenuOpen(false)}
                         aria-current={activa ? "page" : undefined}
-                        className={`rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-sitio-alt ${
+                        className={`rounded-xl px-3 py-2.5 text-[13px] font-bold uppercase tracking-[0.045em] hover:bg-sitio-alt ${
                           activa ? "bg-sitio-alt text-acento-texto" : ""
                         }`}
                       >

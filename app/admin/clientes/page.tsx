@@ -30,7 +30,12 @@ import { DialogoCliente } from "./dialogo-cliente";
 export default async function ClientesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; tipo?: string; vendedor?: string }>;
+  searchParams: Promise<{
+    buscar?: string;
+    tipo?: string;
+    vendedor?: string;
+    nuevo?: string;
+  }>;
 }) {
   const params = await searchParams;
 
@@ -65,7 +70,11 @@ export default async function ClientesPage({
         >
           Vendedores
         </Link>
-        <DialogoCliente listas={listas} vendedores={vendedores} />
+        <DialogoCliente
+          listas={listas}
+          vendedores={vendedores}
+          abrirDeEntrada={params.nuevo === "1"}
+        />
       </EncabezadoPanel>
 
       <BuscadorClientes

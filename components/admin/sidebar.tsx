@@ -4,43 +4,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import type { LucideIcon } from "lucide-react";
-import { inicioDelRol, quienEntra, type RolStaff } from "@/lib/roles";
+import { inicioDelRol, type RolStaff } from "@/lib/roles";
 import {
   ArrowUpRight,
-  BarChart3,
-  BookOpen,
-  Boxes,
-  Calculator,
-  CalendarCheck,
-  CalendarDays,
-  Tags,
-  Building2,
   CircleQuestionMark,
-  DatabaseZap,
-  ClipboardList,
-  FileText,
-  Landmark,
-  LayoutDashboard,
   Menu,
-  Newspaper,
-  MessageCircle,
-  Package,
-  PackagePlus,
-  Receipt,
-  ReceiptText,
-  Scissors,
-  MapPin,
-  Truck,
-  HardHat,
-  History,
-  Banknote,
-  Mail,
-  Store,
-  Users,
-  Wallet,
   X,
 } from "lucide-react";
+
+import { seccionesPara } from "./secciones";
 
 /**
  * Navegación del panel.
@@ -53,125 +25,10 @@ import {
  * La excepción es WhatsApp, y por un motivo concreto: un mensaje sin contestar
  * no se ve desde ninguna otra pantalla y el cliente está del otro lado
  * esperando. Ese contador sale de la base, no de una constante.
+ *
+ * Los destinos están en `secciones.ts`, del lado del servidor, porque el
+ * resumen los usa también.
  */
-interface ItemNav {
-  href: string;
-  icon: LucideIcon;
-  label: string;
-  /** El único contador del menú; sale de la base. */
-  contador?: "whatsapp";
-  /*
-   * Quién la ve **no se declara acá**: sale de `ACCESO`, que es la misma lista
-   * que exigen las páginas. Tenerla en dos lugares fue justamente el problema:
-   * el menú escondía Precios y la página lo dejaba entrar igual.
-   */
-}
-
-const secciones: { titulo: string; items: ItemNav[] }[] = [
-  {
-    titulo: "Operación",
-    items: [
-      { href: "/admin", icon: LayoutDashboard, label: "Resumen" },
-      { href: "/admin/pedidos", icon: Truck, label: "Pedidos" },
-      {
-        href: "/admin/whatsapp",
-        icon: MessageCircle,
-        label: "WhatsApp",
-        contador: "whatsapp" as const,
-      },
-      {
-        href: "/admin/presupuestos",
-        icon: ClipboardList,
-        label: "Presupuestos",
-      },
-      { href: "/admin/cortes", icon: Scissors, label: "Cortes" },
-      /*
-       * El mostrador es una pantalla completa fuera del panel, como el taller.
-       * Va igual en el menú: es la única forma de llegar sin escribir la
-       * dirección, y quien atiende entra por acá cada mañana.
-       */
-      {
-        href: "/mostrador",
-        icon: Store,
-        label: "Mostrador",
-      },
-    ],
-  },
-  {
-    titulo: "Catálogo",
-    items: [
-      { href: "/admin/productos", icon: Boxes, label: "Productos" },
-      { href: "/admin/stock", icon: Package, label: "Stock" },
-      { href: "/admin/precios", icon: Tags, label: "Precios" },
-      { href: "/admin/calculadoras", icon: Calculator, label: "Calculadoras" },
-    ],
-  },
-  {
-    titulo: "Compras",
-    items: [
-      { href: "/admin/proveedores", icon: Truck, label: "Proveedores" },
-      {
-        href: "/admin/compras/ordenes",
-        icon: ClipboardList,
-        label: "Órdenes de compra",
-      },
-      { href: "/admin/recepciones", icon: PackagePlus, label: "Recepciones" },
-      {
-        href: "/admin/compras/facturas",
-        icon: ReceiptText,
-        label: "Facturas de compra",
-      },
-      { href: "/admin/compras/pagos", icon: Wallet, label: "Pagos" },
-      { href: "/admin/cheques", icon: Banknote, label: "Cheques" },
-      { href: "/admin/compras/gastos", icon: Receipt, label: "Gastos" },
-    ],
-  },
-  /*
-   * Ventas tiene grupo propio, y antes no.
-   *
-   * "Administración" juntaba dieciséis ítems que eran cuatro cosas distintas:
-   * la cobranza, el trato con el cliente, el sitio y la configuración. La
-   * asimetría se notaba al lado de Compras, que sí tiene su grupo con los siete
-   * pasos en orden cronológico, mientras que el circuito de venta quedaba
-   * partido entre Operación (presupuesto y pedido) y ese cajón (factura y
-   * cobro).
-   *
-   * El orden de adentro es el del circuito, no el alfabético: se factura,
-   * se cobra, entra a la caja, se declara y se cierra el mes.
-   */
-  {
-    titulo: "Ventas",
-    items: [
-      { href: "/admin/clientes", icon: Users, label: "Clientes" },
-      { href: "/admin/profesionales", icon: HardHat, label: "Profesionales" },
-      { href: "/admin/facturacion", icon: FileText, label: "Facturación" },
-      { href: "/admin/pagos", icon: Wallet, label: "Cobros" },
-      { href: "/admin/caja", icon: Banknote, label: "Caja" },
-      { href: "/admin/arca", icon: Landmark, label: "ARCA" },
-      { href: "/admin/cierre", icon: CalendarCheck, label: "Cierre del mes" },
-    ],
-  },
-  {
-    titulo: "Sitio",
-    items: [
-      { href: "/admin/contenido", icon: Newspaper, label: "Contenido" },
-      { href: "/admin/eventos", icon: CalendarDays, label: "Eventos" },
-      { href: "/admin/documentacion", icon: BookOpen, label: "Documentación" },
-      { href: "/admin/avisos", icon: Mail, label: "Avisos" },
-    ],
-  },
-  /* Lo que se toca de vez en cuando: reglas, datos del negocio y rastros. */
-  {
-    titulo: "Ajustes",
-    items: [
-      { href: "/admin/reportes", icon: BarChart3, label: "Reportes" },
-      { href: "/admin/sucursales", icon: Building2, label: "Sucursales" },
-      { href: "/admin/envios", icon: MapPin, label: "Envíos" },
-      { href: "/admin/migracion", icon: DatabaseZap, label: "Migración" },
-      { href: "/admin/bitacora", icon: History, label: "Bitácora" },
-    ],
-  },
-];
 
 export function AdminSidebar({
   whatsappSinLeer = 0,
@@ -193,17 +50,7 @@ export function AdminSidebar({
    * las que solo tres son suyas no es un problema de permisos: es que no
    * encuentra la que necesita.
    */
-  const visibles = secciones
-    .map((seccion) => ({
-      ...seccion,
-      items: seccion.items.filter(
-        (item) => {
-          const permitidos = quienEntra(item.href);
-          return !permitidos || !rol || permitidos.includes(rol);
-        },
-      ),
-    }))
-    .filter((seccion) => seccion.items.length > 0);
+  const visibles = seccionesPara(rol);
 
   const contenido = (
     <>

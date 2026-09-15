@@ -39,11 +39,19 @@ const TIPOS = {
 export function DialogoCliente({
   listas,
   vendedores = [],
+  abrirDeEntrada = false,
 }: {
   listas: { id: string; name: string; isDefault: boolean }[];
   vendedores?: { id: string; nombre: string; tipo: "salon" | "calle" }[];
+  /**
+   * Abrirlo con la pantalla, sin que nadie toque el botón.
+   *
+   * Lo usa el atajo «Nuevo cliente» del resumen: si llevara nada más a la
+   * lista, el botón prometería un alta y entregaría una búsqueda.
+   */
+  abrirDeEntrada?: boolean;
 }) {
-  const [abierto, setAbierto] = useState(false);
+  const [abierto, setAbierto] = useState(abrirDeEntrada);
   const [, accion, pendiente] = useAccionDeDialogo(
     guardarCliente,
     {} as EstadoCliente,

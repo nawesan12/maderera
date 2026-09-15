@@ -5,8 +5,11 @@ import { db } from "@/lib/db";
 import {
   cheques,
   cuttingOrders,
+  inventory,
   orders,
   productReviews,
+  productVariants,
+  products,
   professionalApplications,
   purchaseInvoices,
 } from "@/lib/db/schema";
@@ -53,7 +56,7 @@ export async function trabajoPendiente(): Promise<Pendiente[]> {
 
   const ve = (ruta: string) => puedeEntrar(ruta, staffRole);
 
-  const [ventas, cortes, cartera, compras, solicitudes, resenas] =
+  const [ventas, cortes, cartera, compras, solicitudes, resenas, reponer] =
     await Promise.all([
       ve("/admin/pedidos") ? contarPedidos() : null,
       ve("/admin/cortes") ? contarCortes() : null,
@@ -61,6 +64,7 @@ export async function trabajoPendiente(): Promise<Pendiente[]> {
       ve("/admin/compras/facturas") ? contarFacturasDeCompra() : null,
       ve("/admin/profesionales") ? contarSolicitudes() : null,
       ve("/admin/contenido") ? contarResenas() : null,
+      ve("/admin/stock") ? contarStockBajoMinimo() : null,
     ]);
 
   const filas: Pendiente[] = [];
@@ -145,6 +149,16 @@ export async function trabajoPendiente(): Promise<Pendiente[]> {
       texto: solicitudes === 1 ? "profesional esperando respuesta" : "profesionales esperando respuesta",
       detalle: "Pidieron la cuenta con precio de gremio",
       href: "/admin/profesionales",
+    });
+  }
+
+  if (reponer) {
+    filas.push({
+      clave: "reponer",
+      cantidad: reponer,
+      texto: reponer === 1 ? "producto bajo el mínimo" : "productos bajo el mínimo",
+      detalle: "Quedó en el mínimo o por debajo: hay que reponerlo",
+      href: "/admin/stock",
     });
   }
 
@@ -235,6 +249,31 @@ async function contarSolicitudes() {
     .select({ n: sql<number>`count(*)::int` })
     .from(professionalApplications)
     .where(eq(professionalApplications.estado, "pendiente"));
+  return fila?.n ?? 0;
+}
+
+/**
+ * Cuántas medidas quedaron en el mínimo o por debajo.
+ *
+ * Estaba en las métricas del resumen, que son de administración. Pero reponer
+ * es trabajo del depósito, y el depósito no ve las métricas: el aviso quedaba
+ * del lado de quien no lo ejecuta. La cuenta es la misma que la de la lista
+ * «Hay que reponer», sin traer las filas.
+ */
+async function contarStockBajoMinimo() {
+  const [fila] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(inventory)
+    .innerJoin(productVariants, eq(productVariants.id, inventory.variantId))
+    .innerJoin(products, eq(products.id, productVariants.productId))
+    .where(
+      and(
+        eq(products.active, true),
+        eq(productVariants.active, true),
+        sql`${inventory.minQty} > 0`,
+        sql`${inventory.qty} <= ${inventory.minQty}`,
+      ),
+    );
   return fila?.n ?? 0;
 }
 

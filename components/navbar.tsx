@@ -562,26 +562,24 @@ export function Navbar({
               </Link>
             )}
 
-            {/* Lleva la palabra y no solo el dibujito: la clienta pidió que se
-                leyera, y un ícono suelto obliga a interpretarlo justo en el
-                paso que no se puede errar.
-                Dice «Presupuesto» y no «Carrito» porque es como se llama en
-                todo el sitio —la página, el botón de cada producto, el correo
-                que sale después—: acá se arma un pedido de precio, y que se
-                pueda comprar al final no lo convierte en otra cosa. Una misma
-                cosa con dos nombres hace dudar si son dos. */}
+            {/* Dice «Carrito», y es una decisión tomada, no un descuido.
+                El resto del sitio lo llama «presupuesto» —la página, el botón
+                de cada ficha— porque eso es lo que se arma. Pero la clienta
+                pidió esta palabra acá: es la que su cliente reconoce de
+                cualquier otra tienda, y este ícono es el que no se puede errar.
+                Si algún día se unifica, se cambian los tres lugares juntos. */}
             <Link
               href="/presupuesto"
               aria-label={
                 cantidadItems > 0
-                  ? `Tu presupuesto, ${cantidadItems} ${cantidadItems === 1 ? "producto" : "productos"}`
-                  : "Tu presupuesto"
+                  ? `Carrito, ${cantidadItems} ${cantidadItems === 1 ? "producto" : "productos"}`
+                  : "Carrito"
               }
               className="relative flex h-10 items-center gap-2 rounded-[11px] px-2.5 text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto"
             >
               <ShoppingCart className="h-[19px] w-[19px] shrink-0" />
               <span className="hidden text-[13px] font-bold uppercase tracking-[0.045em] sm:inline">
-                Presupuesto
+                Carrito
               </span>
               {cantidadItems > 0 && (
                 <span className="tabular flex h-5 min-w-5 items-center justify-center rounded-full bg-accion px-[5px] text-[11px] font-bold text-white">

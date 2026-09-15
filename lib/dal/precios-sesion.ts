@@ -64,7 +64,7 @@ export interface ListaVigente {
  * público: el resto de la portada ya se servía de datos cacheados y esta sola
  * obligaba a ir a la base en cada carga, para leer siempre la misma fila.
  */
-const listaGeneral = cachearPublico(
+export const listaGeneral = cachearPublico(
   async () => {
     const [fila] = await db
       .select({ id: priceLists.id, nombre: priceLists.name })

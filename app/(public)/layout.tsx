@@ -8,6 +8,7 @@ import { PanelDelAsistente } from "@/components/asistente/panel";
 import { ScrollToTop } from "@/components/scroll-to-top";
 import { CarritoProvider } from "@/lib/carrito-context";
 import { EstadoProvider } from "@/lib/estado-context";
+import { PreciosProvider } from "@/lib/precios-propios-context";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
 import { bannersDe } from "@/lib/dal/banners";
 import { FranjaDeAviso } from "@/components/banner";
@@ -78,6 +79,7 @@ export default async function PublicLayout({
 
   return (
     <EstadoProvider>
+    <PreciosProvider>
     <CarritoProvider>
       <SaltarAlContenido />
       <DatosEstructurados datos={marcado} />
@@ -113,6 +115,7 @@ export default async function PublicLayout({
         />
       </Suspense>
     </CarritoProvider>
+    </PreciosProvider>
     </EstadoProvider>
   );
 }

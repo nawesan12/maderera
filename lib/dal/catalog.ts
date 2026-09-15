@@ -18,7 +18,11 @@ import {
   relatedProducts,
   subcategories,
 } from "@/lib/db/schema";
-import { listaVigente, type ListaVigente } from "@/lib/dal/precios-sesion";
+import {
+  listaGeneral,
+  listaVigente,
+  type ListaVigente,
+} from "@/lib/dal/precios-sesion";
 import { aniosDeTrayectoria } from "@/lib/empresa";
 import {
   combinedStockLevel,
@@ -429,6 +433,31 @@ const productosCacheados = cachearPublico(
  * una fuga de datos: el visitante recibía el catálogo entero aunque mirara una
  * sola categoría.
  */
+/**
+ * El catálogo **sin preguntar quién mira**, siempre a precio de público.
+ *
+ * Es lo que hace que la portada y el catálogo se puedan servir estáticos: leer
+ * la sesión obliga a armar la página en cada visita, y esa era la única razón
+ * por la que lo hacían. Acá la lista es la general —la misma para todo el
+ * mundo, la que ya es pública— así que el resultado se puede guardar en el CDN
+ * sin filtrarle a nadie el precio de otro.
+ *
+ * **Al profesional no se le esconde su precio**: la página sale con el de
+ * público y el navegador lo reemplaza con el suyo apenas responde
+ * `/api/mis-precios`, que sí mira la sesión. Ver `PreciosPropios`.
+ */
+export async function listarProductosPublicos(
+  filtros: FiltrosCatalogo = {},
+): Promise<ProductoListado[]> {
+  const general = await listaGeneral();
+  const id = general?.id ?? null;
+  return productosCacheados(filtros, {
+    id,
+    generalId: id,
+    factorDerivado: 1,
+  });
+}
+
 export async function listarProductos(
   filtros: FiltrosCatalogo = {},
 ): Promise<ProductoListado[]> {
@@ -1047,7 +1076,9 @@ export const numerosDeLaEmpresa = cache(
 export async function datosDePortada() {
   const [categorias, todos] = await Promise.all([
     listarCategorias(),
-    listarProductos(),
+    // Pública a propósito: es lo que deja la portada estática. Al profesional
+    // se la corrige el navegador (`PreciosProvider`).
+    listarProductosPublicos(),
   ]);
 
   const ofertas = todos.filter((p) => p.descuento !== null).slice(0, 4);

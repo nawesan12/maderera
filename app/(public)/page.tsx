@@ -10,7 +10,6 @@ import {
   MessageCircle,
   Phone,
   Scissors,
-  UserPlus,
   Warehouse,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,20 +18,32 @@ import { Hero } from "@/components/home/hero";
 import { ProductCard } from "@/components/product-card";
 import { datosDePortada, numerosDeLaEmpresa } from "@/lib/dal/catalog";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
-import { vistaDePrecio } from "@/lib/dal/precios-sesion";
-import { getSession } from "@/lib/dal/session";
 import { bannersDe } from "@/lib/dal/banners";
 import { promosVigentes, type PromoVigente } from "@/lib/dal/contenido";
 import { escalasDePagoPublicas } from "@/lib/dal/descuentos-pago";
 import { ALCANCE_MOLDAVA } from "@/lib/empresa";
 import { SliderDePromos } from "@/components/home/slider-promos";
 import { FranjaBeneficios } from "@/components/franja-beneficios";
+import { BotonCrearCuenta } from "@/components/boton-crear-cuenta";
 
 /**
  * Los años de la empresa se leen al renderizar y no una vez al cargar el
  * módulo: un servidor que queda levantado de un año al otro seguiría diciendo
  * el número viejo hasta el próximo despliegue.
  */
+
+/**
+ * La portada se prerenderiza y se sirve del CDN.
+ *
+ * No lee la sesión en ningún lado: sale con precio de público —y con el botón
+ * de crear cuenta— y el navegador corrige lo que sea propio de quien mira. Esa
+ * era la única razón por la que se armaba de nuevo en cada visita.
+ *
+ * El día de vencimiento es la red de seguridad, no el mecanismo: cuando alguien
+ * toca un precio, un producto o el stock, el panel invalida la etiqueta del
+ * catálogo y la página se rehace enseguida.
+ */
+export const revalidate = 86400;
 
 export default async function HomePage() {
   const [portada, sucursales, numeros, avisos, promos, escalasPago] =
@@ -134,7 +145,6 @@ async function Ofertas({
   productos: Awaited<ReturnType<typeof datosDePortada>>["ofertas"];
 }) {
   const whatsapp = await numeroWhatsapp();
-  const vista = await vistaDePrecio();
 
   return (
     <section className="bg-sitio-fondo pt-[66px]">
@@ -151,7 +161,7 @@ async function Ofertas({
 
         <div className="mt-7 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
           {productos.map((p) => (
-            <ProductCard key={p.id} product={p} whatsapp={whatsapp} vista={vista} />
+            <ProductCard key={p.id} product={p} whatsapp={whatsapp} />
           ))}
         </div>
       </div>
@@ -223,7 +233,6 @@ async function Destacados({
   if (productos.length === 0) return null;
 
   const whatsapp = await numeroWhatsapp();
-  const vista = await vistaDePrecio();
 
   return (
     <section className="bg-sitio-fondo py-[66px]">
@@ -240,7 +249,7 @@ async function Destacados({
 
         <div className="mt-7 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
           {productos.map((p) => (
-            <ProductCard key={p.id} product={p} whatsapp={whatsapp} vista={vista} />
+            <ProductCard key={p.id} product={p} whatsapp={whatsapp} />
           ))}
         </div>
       </div>
@@ -773,7 +782,6 @@ function Sucursales({
 }
 
 async function CierreCta() {
-  const sesion = await getSession();
   const whatsapp = await enlaceWhatsapp();
   return (
     <section className="relative overflow-hidden bg-oscuro-marca py-16 text-white">
@@ -806,16 +814,10 @@ async function CierreCta() {
           {/* "Hacer más promoción de hacer una cuenta": en toda la portada no
               había un solo enlace a registrarse, y en la barra de arriba
               aparece recién desde pantallas anchas. */}
-          {!sesion && (
-            <Button
-              render={<Link href="/registro" />}
-              size="lg"
-              className="h-14 rounded-full border-2 border-white/30 bg-white/10 px-8 text-base !text-white backdrop-blur-sm hover:bg-white/20"
-            >
-              <UserPlus className="mr-2 h-5 w-5" />
-              Crear una cuenta
-            </Button>
-          )}
+          {/* Se muestra solo a quien no entró, y eso lo decide el navegador:
+              preguntarlo en el servidor obligaba a rearmar la portada entera en
+              cada visita para esconder un botón. */}
+          <BotonCrearCuenta />
           <Button
             render={
               <a href={whatsapp} target="_blank" rel="noopener noreferrer" />

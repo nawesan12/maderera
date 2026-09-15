@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ImageOff, Loader2, MessageCircle, Plus } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useCarrito } from "@/lib/carrito-context";
+import { usePrecioPropio, useVistaPropia } from "@/lib/precios-propios-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
 import { presentarComparado, presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
@@ -48,12 +49,29 @@ export function ProductCard({
 }) {
   const { agregar, guardando } = useCarrito();
 
-  const alicuota = Number(product.alicuotaIva) || 21;
-  const mostrado = presentarPrecio(Number(product.precioDesde ?? 0), alicuota, vista);
+  /*
+   * El precio del profesional pisa al de público, si lo hay.
+   *
+   * La tarjeta llega del servidor con el precio de público —así la página se
+   * puede servir estática— y esto lo reemplaza para quien tiene lista propia.
+   * Para todos los demás `propio` es null y no cambia nada, ni siquiera se
+   * vuelve a pintar.
+   */
+  const propio = usePrecioPropio(product.slug);
+  // Lo mismo con el IVA: la página estática sale con la vista del público y el
+  // profesional recibe la suya cuando llega la respuesta.
+  const vistaPropia = useVistaPropia();
+  const vistaVigente = vistaPropia ?? vista;
+  const precioDesde = propio?.desde ?? product.precioDesde;
+  const precioAnterior = propio ? propio.anterior : product.precioAnterior;
+  const descuento = propio ? propio.descuento : product.descuento;
 
-  const sinPrecio = !product.precioDesde || Number(product.precioDesde) <= 0;
+  const alicuota = Number(product.alicuotaIva) || 21;
+  const mostrado = presentarPrecio(Number(precioDesde ?? 0), alicuota, vistaVigente);
+
+  const sinPrecio = !precioDesde || Number(precioDesde) <= 0;
   const variasMedidas = product.labels.length > 1;
-  const enOferta = product.descuento !== null;
+  const enOferta = descuento !== null;
 
   const consulta = `https://wa.me/${whatsapp}?text=${encodeURIComponent(
     `Hola! Quería consultar por ${product.name}.`,
@@ -84,7 +102,7 @@ export function ProductCard({
             eso es lo que hay que ver. */}
         {enOferta ? (
           <span className="absolute left-3 top-3 rounded-full bg-rojo-oferta px-[11px] py-[5px] text-[12.5px] font-bold text-white shadow-[0_2px_8px_-2px_rgb(120_25_10_/_0.5)]">
-            −{product.descuento}%
+            −{descuento}%
           </span>
         ) : (
           product.featured && (
@@ -138,14 +156,14 @@ export function ProductCard({
                     {mostrado.sufijo}
                   </span>
                 )}
-                {product.precioAnterior && (
+                {precioAnterior && (
                   <span className="tabular text-[12.5px] leading-none text-texto-3 line-through">
                     {formatearPrecio(
                       String(
                         presentarComparado(
-                          Number(product.precioAnterior),
+                          Number(precioAnterior),
                           alicuota,
-                          vista,
+                          vistaVigente,
                         ),
                       ),
                     )}
@@ -153,9 +171,9 @@ export function ProductCard({
                 )}
               </p>
               <PrecioSecundario
-                precioFinal={Number(product.precioDesde)}
+                precioFinal={Number(precioDesde)}
                 alicuota={alicuota}
-                vista={vista}
+                vista={vistaVigente}
                 compacto
               />
             </>

@@ -10,6 +10,7 @@ import {
   products,
 } from "@/lib/db/schema";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
+import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 
 /**
  * Reseñas de producto, de compra verificada.
@@ -35,8 +36,18 @@ export interface ResumenDeResenas {
   reparto: Record<number, number>;
 }
 
-/** Las reseñas publicadas de un producto, de la más nueva a la más vieja. */
-export async function resenasDelProducto(
+/**
+ * Las reseñas publicadas de un producto, de la más nueva a la más vieja.
+ *
+ * Cacheadas: son públicas —solo se muestran las aprobadas— y las pedía cada
+ * visita a cada ficha. Las dos acciones que las cambian, la del cliente que
+ * escribe y la del panel que publica o rechaza, ya invalidan la etiqueta del
+ * catálogo, así que una reseña nueva aparece enseguida.
+ *
+ * **Las fechas vuelven como texto** —el caché viaja en JSON— y por eso se
+ * rearman al salir. Es la trampa que documenta `lib/cache-publico.ts`.
+ */
+async function consultarResenas(
   productId: string,
 ): Promise<ResenaPublicada[]> {
   const filas = await db
@@ -60,13 +71,34 @@ export async function resenasDelProducto(
   return filas;
 }
 
+const resenasCacheadas = cachearPublico(
+  consultarResenas,
+  ["resenas", "producto"],
+  ETIQUETAS.catalogo,
+);
+
+export async function resenasDelProducto(
+  productId: string,
+): Promise<ResenaPublicada[]> {
+  const filas = await resenasCacheadas(productId);
+  // Las fechas salen del caché como texto: se rearman acá para que quien las
+  // reciba tenga un `Date` de verdad, como antes de cachear.
+  return filas.map((f) => ({ ...f, fecha: new Date(f.fecha) }));
+}
+
 /**
  * Promedio y reparto de estrellas de un producto.
  *
  * Se calcula sobre las publicadas nada más: una reseña pendiente todavía no
  * existe para el público, y contarla en el promedio la publicaría a medias.
  */
-export async function resumenDeResenas(
+export const resumenDeResenas = cachearPublico(
+  consultarResumen,
+  ["resenas", "resumen"],
+  ETIQUETAS.catalogo,
+);
+
+async function consultarResumen(
   productId: string,
 ): Promise<ResumenDeResenas | null> {
   const filas = await db

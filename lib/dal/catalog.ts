@@ -745,9 +745,16 @@ export interface ProductoDetalle {
   variantes: VarianteDetalle[];
 }
 
-/** Ficha completa de un producto. Devuelve null si no existe o está dado de baja. */
-export async function obtenerProducto(
+/**
+ * La ficha, para una lista de precios dada.
+ *
+ * La lista entra por argumento y no se resuelve adentro, igual que en el
+ * listado: así el resultado se puede cachear y la clave incluye la lista, que
+ * es lo que impide servirle a uno la ficha con los precios de otro.
+ */
+async function consultarProducto(
   slug: string,
+  lista: { id: string | null; generalId: string | null; factorDerivado: number },
 ): Promise<ProductoDetalle | null> {
   const [fila] = await db
     .select({
@@ -774,7 +781,6 @@ export async function obtenerProducto(
 
   if (!fila) return null;
 
-  const lista = await listaVigente();
   const propia = alias(priceListItems, "precio_propio");
   const general = alias(priceListItems, "precio_general");
 
@@ -877,6 +883,72 @@ export async function obtenerProducto(
   };
 }
 
+/**
+ * La ficha, cacheada y compartida entre visitas.
+ *
+ * Eran nueve consultas por visita —producto, imágenes, variantes, precios,
+ * stock, relacionados y reseñas— y tres de ellas repetidas, porque
+ * `generateMetadata` pide la misma ficha que después arma la página.
+ */
+const productoCacheado = cachearPublico(
+  consultarProducto,
+  ["catalogo", "producto"],
+  ETIQUETAS.catalogo,
+);
+
+/**
+ * Ficha completa de un producto. Devuelve null si no existe o está dado de baja.
+ *
+ * Memoizada por pedido con `cache()` además del caché compartido: la página y
+ * su `generateMetadata` piden la misma ficha, y sin esto se resolvía dos veces
+ * en la misma carga.
+ */
+export const obtenerProducto = cache(
+  async (slug: string): Promise<ProductoDetalle | null> => {
+    const lista = await listaVigente();
+    return productoCacheado(slug, {
+      id: lista.id,
+      generalId: lista.generalId,
+      factorDerivado: lista.factorDerivado,
+    });
+  },
+);
+
+/**
+ * La misma ficha, siempre a precio de público.
+ *
+ * Es la que permite que la página se sirva estática. Al profesional se la
+ * corrige el navegador, igual que en el listado.
+ */
+export const obtenerProductoPublico = cache(
+  async (slug: string): Promise<ProductoDetalle | null> => {
+    const general = await listaGeneral();
+    const id = general?.id ?? null;
+    return productoCacheado(slug, { id, generalId: id, factorDerivado: 1 });
+  },
+);
+
+/**
+ * Con qué productos está vinculado, según lo que cargó el vendedor.
+ *
+ * Cacheado: es una lista corta que cambia cuando alguien la edita en el panel,
+ * y se pedía en cada visita a cada ficha.
+ */
+const vinculosCacheados = cachearPublico(
+  async (productId: string) =>
+    db
+      .select({
+        relatedProductId: relatedProducts.relatedProductId,
+        tipo: relatedProducts.tipo,
+        orden: relatedProducts.orden,
+      })
+      .from(relatedProducts)
+      .where(eq(relatedProducts.productId, productId))
+      .orderBy(asc(relatedProducts.orden)),
+  ["catalogo", "vinculos"],
+  ETIQUETAS.catalogo,
+);
+
 /** Otros productos de la misma categoría, para el bloque de relacionados. */
 export async function productosRelacionados(
   categorySlug: string,
@@ -918,15 +990,7 @@ export async function productosSugeridos(
   excluirSlug: string,
   limite = 4,
 ): Promise<Sugeridos> {
-  const vinculos = await db
-    .select({
-      relatedProductId: relatedProducts.relatedProductId,
-      tipo: relatedProducts.tipo,
-      orden: relatedProducts.orden,
-    })
-    .from(relatedProducts)
-    .where(eq(relatedProducts.productId, productId))
-    .orderBy(asc(relatedProducts.orden));
+  const vinculos = await vinculosCacheados(productId);
 
   const idsComplementarios = vinculos
     .filter((v) => v.tipo === "complementario")

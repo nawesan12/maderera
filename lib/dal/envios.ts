@@ -46,7 +46,7 @@ export const listarZonasDeEnvio = cachearPublico(
  *
  * De la base sale lo único que la base sabe: **qué id tiene cada sucursal y si
  * está activa**. El `id` es el que usan el stock, los pedidos, la caja y los
- * puntos de venta, y es lo que el checkout manda al elegir retiro; el `slug`
+ * puntos de venta, y es lo que el carrito manda al elegir retiro; el `slug`
  * es el que une la fila con su ficha publicada.
  *
  * Memoizada para toda la request: el pie del sitio la pide en cada página

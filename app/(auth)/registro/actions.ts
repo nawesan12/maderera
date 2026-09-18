@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { adoptarCarritoAnonimo } from "@/lib/dal/carrito";
+import { avisoDeEspera, ipDelPedido, permitido } from "@/lib/limites";
 
 const registroSchema = z
   .object({
@@ -61,6 +62,20 @@ export async function registrarse(
   }
 
   const datos = parsed.data;
+
+  /*
+   * El freno.
+   *
+   * El registro no pide confirmar el correo —hoy no puede: el remitente propio
+   * todavía no está habilitado— así que con una casilla inventada se crea una
+   * cuenta, y cada cuenta nueva escribe en cuatro tablas. Eso es lo que hace
+   * escalable el abuso de todo lo demás: inscripciones a eventos, presupuestos,
+   * la lista de precios en PDF. Mientras no haya verificación, el freno es
+   * cuántas cuentas puede crear una misma IP por hora.
+   */
+  const puede = await permitido("registrarse", `ip:${await ipDelPedido()}`);
+
+  if (!puede.permitido) return { error: avisoDeEspera(puede) };
 
   try {
     const alta = await auth.api.signUpEmail({

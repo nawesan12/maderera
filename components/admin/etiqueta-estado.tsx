@@ -81,7 +81,7 @@ const ESTADOS: Record<string, Estilo> = {
   nota_debito: { etiqueta: "Nota de débito", familia: "espera", abierto: false },
   ajuste: { etiqueta: "Ajuste", familia: "cerrado", abierto: false },
 
-  // Cobros. "Iniciado" es el abandono de checkout: se generó el link y nadie
+  // Cobros. "Iniciado" es el carrito abandonado: se generó el link y nadie
   // volvió. Se distingue del rechazo porque no hay nada que resolver.
   iniciado: { etiqueta: "Sin pagar", familia: "cerrado", abierto: false },
   en_revision: { etiqueta: "A verificar", familia: "espera", abierto: true },

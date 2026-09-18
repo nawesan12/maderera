@@ -39,6 +39,6 @@ si nunca completó el pago, del lado de Mercado Pago no hay nada que consultar.
 ## Datos bancarios
 
 Los datos que ve quien va a transferir —CBU, alias, titular— se editan en
-*Cobros*. Cambiarlos cambia lo que ve el cliente en el checkout al instante.
+*Cobros*. Cambiarlos cambia lo que ve el cliente en el carrito al instante.
 Revise dos veces antes de guardar: un CBU mal escrito manda la plata a otro
 lado.

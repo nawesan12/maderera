@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireStaff } from "@/lib/dal/session";
 import { CORTES, leerCorte, reporteDeVentas } from "@/lib/dal/admin/reportes";
 import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
+import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
+import { etiquetaDeRubro } from "@/lib/rubros-cliente";
 
 /**
  * El reporte en CSV, que es como se lo pide de verdad.
@@ -13,17 +15,64 @@ import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
 export async function GET(request: NextRequest) {
   await requireStaff();
 
-  const corte = leerCorte(request.nextUrl.searchParams.get("corte") ?? undefined);
-  const clave = leerPeriodo(request.nextUrl.searchParams.get("periodo") ?? undefined);
+  const consulta = request.nextUrl.searchParams;
+
+  const corte = leerCorte(consulta.get("corte") ?? undefined);
+  const clave = leerPeriodo(consulta.get("periodo") ?? undefined);
   const periodo = resolverPeriodo(clave);
 
-  const filas = await reporteDeVentas(corte, periodo);
+  // Los mismos filtros que la pantalla: un archivo que trae otra cosa que lo
+  // que se está mirando es peor que no tener archivo.
+  const filtros = {
+    rubro: consulta.get("rubro") ?? undefined,
+    sucursal: consulta.get("sucursal") ?? undefined,
+  };
+
+  const filas = await reporteDeVentas(corte, periodo, filtros);
+
+  const etiquetaCorte =
+    CORTES.find((c) => c.clave === corte)?.etiqueta ?? "Por producto";
+
+  /*
+   * El PDF es para mandar; el CSV, para trabajar.
+   *
+   * Los dos salen de la misma consulta y del mismo filtro, así que no pueden
+   * decir cosas distintas: el día que uno cambie, cambian los dos.
+   */
+  if (consulta.get("formato") === "pdf") {
+    const [emisor, { reporteDeVentasPdf }] = await Promise.all([
+      obtenerConfiguracionFiscal(),
+      import("@/lib/pdf/reporte-ventas"),
+    ]);
+
+    const acotado = [
+      filtros.rubro ? etiquetaDeRubro(filtros.rubro) : null,
+      filtros.sucursal ? "Una sucursal" : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    const pdf = await reporteDeVentasPdf({
+      filas,
+      titulo: etiquetaCorte,
+      periodo: periodo.etiqueta,
+      filtros: acotado || null,
+      emisor,
+    });
+
+    return new NextResponse(pdf as BodyInit, {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="ventas-${corte}-${periodo.clave}.pdf"`,
+        "Cache-Control": "private, no-store",
+      },
+    });
+  }
 
   const numero = (valor: number) => valor.toFixed(2).replace(".", ",");
   const texto = (valor: string | null) => `"${(valor ?? "").replace(/"/g, '""')}"`;
 
-  const sinPrefijo = (CORTES.find((c) => c.clave === corte)?.etiqueta ?? "Concepto")
-    .replace("Por ", "");
+  const sinPrefijo = etiquetaCorte.replace("Por ", "");
   const encabezado = sinPrefijo.charAt(0).toUpperCase() + sinPrefijo.slice(1);
 
   /*

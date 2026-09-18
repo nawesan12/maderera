@@ -34,8 +34,23 @@ import { unstable_cache } from "next/cache";
  * volver a armarlas al salir; hay ejemplos en `contenido.ts` y `profesionales.ts`.
  */
 
-/** Cinco minutos: lo que se tolera ver desactualizado si falla la invalidación. */
-const RED_DE_SEGURIDAD = 300;
+/**
+ * Un día. Es una red de seguridad, no el mecanismo de actualización.
+ *
+ * Lo que mantiene el sitio al día es la **invalidación por etiqueta**: las
+ * acciones del panel avisan qué cambió y el contenido nuevo se ve enseguida.
+ * Este número es para el caso que no debería pasar —una pantalla de edición
+ * nueva que se olvide de invalidar—, y entonces el sitio se corrige solo en un
+ * día en lugar de mostrar algo viejo para siempre.
+ *
+ * **Estaba en cinco minutos y eso costaba plata todos los días.** El vencimiento
+ * de una entrada de caché le pisa el de la página que la usa: Next se queda con
+ * el más corto de los dos. La portada declara treinta días y quedaba en cinco
+ * minutos igual, o sea unos 288 rearmados diarios —por ruta y por región— de
+ * páginas que nadie tocó. Cada uno de esos rearmados es tiempo de CPU que se
+ * factura.
+ */
+const RED_DE_SEGURIDAD = 86_400;
 
 export const ETIQUETAS = {
   ajustes: "ajustes-del-sitio",

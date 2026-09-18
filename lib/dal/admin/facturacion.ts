@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, lt, lte, or, sql } from "drizzle-orm";
 import { resolverPeriodo, type Periodo } from "@/lib/periodos";
 import { db } from "@/lib/db";
 import {
@@ -32,10 +32,38 @@ export interface ComprobanteListado {
   cae: string | null;
   fechaEmision: Date;
   fechaVencimiento: Date | null;
+  /**
+   * Con qué se cobró: los medios, sin repetir.
+   *
+   * Es lo que permite contestar «¿cuánto facturamos de contado?». La factura no
+   * guarda un medio de pago —puede cobrarse en varias veces y de varias
+   * formas— así que sale de los cobros registrados.
+   */
+  medios: string[];
 }
 
+/** Los medios que cuentan como contado, para el filtro de la pantalla. */
+export const MEDIOS_DE_CONTADO = [
+  "efectivo",
+  "transferencia",
+  "debito",
+  "credito",
+  "mercado_pago",
+  "cheque",
+] as const;
+
 export async function listarComprobantes(
-  filtros: { estado?: string; desde?: Date } = {},
+  filtros: {
+    estado?: string;
+    desde?: Date;
+    /** Hasta cuándo, inclusive. Antes se ignoraba y solo se podía cortar por abajo. */
+    hasta?: Date;
+    /** Cómo se cobró: `contado`, `cuenta` (sin cobros) o todo. */
+    cobro?: "contado" | "cuenta" | "todos";
+    /** Número, CUIT o razón social. */
+    busqueda?: string;
+    tope?: number;
+  } = {},
 ): Promise<ComprobanteListado[]> {
   await requireStaff();
 
@@ -50,6 +78,32 @@ export async function listarComprobantes(
     );
   }
   if (filtros.desde) condiciones.push(gte(invoices.fechaEmision, filtros.desde));
+  if (filtros.hasta) condiciones.push(lte(invoices.fechaEmision, filtros.hasta));
+
+  /*
+   * Buscar por número, CUIT o nombre.
+   *
+   * El número se compara como texto contra el formateado —"0015-00001234"— y
+   * también suelto, porque la clienta lo dice de las dos formas: "el 1234" y
+   * "el cero cero quince guion…".
+   */
+  const texto = filtros.busqueda?.trim();
+
+  if (texto) {
+    const soloDigitos = texto.replace(/\D/g, "");
+
+    condiciones.push(
+      or(
+        ilike(invoices.receptorNombre, `%${texto}%`),
+        soloDigitos
+          ? sql`${invoices.receptorCuit} like ${`%${soloDigitos}%`}`
+          : undefined,
+        soloDigitos
+          ? sql`${invoices.numero}::text like ${`%${soloDigitos}%`}`
+          : undefined,
+      ),
+    );
+  }
 
   // Lo cobrado se suma acá y no se guarda en la factura: un saldo cacheado se
   // desincroniza en cuanto un cobro falla a mitad de camino, y esa diferencia
@@ -58,6 +112,11 @@ export async function listarComprobantes(
     .select({
       invoiceId: invoicePayments.invoiceId,
       cobrado: sql<string>`sum(${invoicePayments.monto})`.as("cobrado"),
+      // Los medios con los que se cobró, sin repetir: con esto la pantalla
+      // puede contestar "de contado" sin otra consulta por fila.
+      medios: sql<
+        string[]
+      >`array_agg(distinct ${invoicePayments.medio})`.as("medios"),
     })
     .from(invoicePayments)
     .groupBy(invoicePayments.invoiceId)
@@ -74,6 +133,7 @@ export async function listarComprobantes(
       receptorCuit: invoices.receptorCuit,
       total: invoices.total,
       cobrado: cobros.cobrado,
+      medios: cobros.medios,
       cae: invoices.cae,
       fechaEmision: invoices.fechaEmision,
       fechaVencimiento: invoices.fechaVencimiento,
@@ -82,14 +142,43 @@ export async function listarComprobantes(
     .leftJoin(cobros, eq(cobros.invoiceId, invoices.id))
     .where(condiciones.length > 0 ? and(...condiciones) : undefined)
     .orderBy(desc(invoices.fechaEmision), desc(invoices.numero))
-    .limit(200);
+    .limit(filtros.tope ?? 200);
 
-  return filas.map((f) => ({
+  const listadas = filas.map((f) => ({
     ...f,
     tipo: f.tipo as TipoComprobante,
     total: Number(f.total),
     cobrado: Number(f.cobrado ?? 0),
+    medios: (f.medios ?? []).filter(Boolean),
   }));
+
+  /*
+   * Contado o cuenta corriente.
+   *
+   * Se filtra en memoria y no en SQL a propósito: «contado» no es una columna
+   * sino una propiedad de cómo se cobró —puede haber cobros parciales, de
+   * varias formas— y expresarlo como condición de la consulta obligaría a
+   * decidir qué pasa con una factura cobrada mitad y mitad. Acá la regla es
+   * explícita: contado es **todo lo que tenga algún cobro de contado**, y
+   * cuenta corriente es lo que no tiene ninguno.
+   */
+  if (filtros.cobro === "contado") {
+    return listadas.filter((f) =>
+      f.medios.some((m) => (MEDIOS_DE_CONTADO as readonly string[]).includes(m)),
+    );
+  }
+
+  if (filtros.cobro === "cuenta") {
+    return listadas.filter(
+      (f) =>
+        f.medios.length === 0 ||
+        f.medios.every(
+          (m) => !(MEDIOS_DE_CONTADO as readonly string[]).includes(m),
+        ),
+    );
+  }
+
+  return listadas;
 }
 
 /** Comprobante completo, con líneas, cobros y tributos. */

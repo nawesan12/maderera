@@ -165,3 +165,39 @@ describe("qué falta para que el precio sea firme", () => {
     expect(cuenta.faltan.join(" ")).toContain("Cargá el despiece");
   });
 });
+
+describe("media placa", () => {
+  it("cobra la mitad del material", () => {
+    // El trabajo sale de media placa: el plano ya se armó sobre la medida
+    // partida, así que lo que cambia es el precio del material. Cobrar la
+    // placa entera sería venderle al cliente lo que se queda la maderera.
+    const piezas: PiezaAcortar[] = [
+      { largoMm: 2000, anchoMm: 800, cantidad: 1, respetaVeta: 0 },
+    ];
+    const plano = calcularPlanoDeCorte({
+      piezas,
+      placaLargo: 2750,
+      placaAncho: 915,
+    });
+
+    const entera = presupuestarCorte({
+      plano,
+      tarifa: TARIFA,
+      precioPorPlaca: 100_000,
+      piezas,
+    });
+    const media = presupuestarCorte({
+      plano,
+      tarifa: TARIFA,
+      precioPorPlaca: 100_000,
+      piezas,
+      fraccion: 0.5,
+    });
+
+    expect(entera.placasEnteras).toBe(1);
+    expect(media.placasEnteras).toBe(1);
+    expect(media.subtotalPlacas).toBe(entera.subtotalPlacas / 2);
+    // El corte se cobra igual: las pasadas son las mismas.
+    expect(media.subtotalCorte).toBe(entera.subtotalCorte);
+  });
+});

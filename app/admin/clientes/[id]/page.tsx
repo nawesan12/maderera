@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MessageCircle, Printer } from "lucide-react";
+import { ArrowLeft, Download, MessageCircle, Printer } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { enlaceDeWhatsapp } from "@/lib/formato";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/components/admin/formato";
 import { obtenerCliente } from "@/lib/dal/admin/clientes";
 import { AvisoCuentaWeb } from "./aviso-cuenta-web";
+import { CreditoDelCliente } from "./credito";
 import { DialogoMovimiento } from "./dialogo-movimiento";
 
 const CONDICIONES: Record<string, string> = {
@@ -145,6 +146,16 @@ export default async function FichaClientePage({
             )}
           </section>
 
+          {/* El plazo de pago y el corte de cuenta. Van acá, debajo del
+              saldo: es donde se mira cuando alguien pregunta por qué el
+              mostrador no le vende a cuenta. */}
+          <CreditoDelCliente
+            customerId={cliente.id}
+            diasCredito={cliente.diasCredito}
+            bloqueada={cliente.cuentaBloqueada}
+            motivo={cliente.motivoBloqueo}
+          />
+
           <section className="tarjeta p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Datos
@@ -197,14 +208,25 @@ export default async function FichaClientePage({
               {/* Esta lista muestra los últimos veinte. El resumen los trae
                   todos, con el saldo acumulado y la antigüedad de la deuda: es
                   lo que se le manda al cliente cuando pregunta cuánto debe. */}
-              <Link
-                href={`/cuenta/${cliente.id}`}
-                target="_blank"
-                className="inline-flex items-center gap-1.5 text-base font-normal text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <Printer className="h-4 w-4" />
-                Resumen de cuenta
-              </Link>
+              <span className="flex flex-wrap items-center gap-3">
+                <Link
+                  href={`/cuenta/${cliente.id}`}
+                  target="_blank"
+                  className="inline-flex items-center gap-1.5 text-base font-normal text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Printer className="h-4 w-4" />
+                  Imprimir
+                </Link>
+                {/* El archivo, para adjuntarlo a un correo o mandarlo por
+                    WhatsApp: es lo que se necesita al reclamar una deuda. */}
+                <a
+                  href={`/api/cuenta/${cliente.id}/pdf`}
+                  className="inline-flex items-center gap-1.5 text-base font-normal text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Download className="h-4 w-4" />
+                  Bajar en PDF
+                </a>
+              </span>
             </h2>
             {cliente.movimientos.length === 0 ? (
               <p className="border-t px-5 py-8 text-center text-base text-muted-foreground">

@@ -14,7 +14,8 @@ import {
 import { proveedorEmail } from "@/lib/email";
 import type { AdjuntoEmail } from "@/lib/email/tipos";
 import * as plantillas from "@/lib/email/plantillas";
-import { fechaHora } from "@/lib/formato";
+import { fechaHora, moneda } from "@/lib/formato";
+import { avisarAlPanel } from "@/lib/notificaciones/push";
 
 /**
  * Avisos automáticos al cliente por correo.
@@ -130,6 +131,18 @@ const MEDIOS: Record<string, string> = {
   cuenta_corriente: "Cuenta corriente",
 };
 
+/**
+ * El acuse al comprador **y el aviso al negocio**.
+ *
+ * Lo segundo faltaba: todos los avisos del sistema iban al cliente y ninguno al
+ * mostrador, así que una venta del sábado a la tarde se descubría el lunes. La
+ * clienta lo pidió después de ver Tiendanube —«enviar notificaciones por cada
+ * compra que se haga a través del ecommerce»— y por eso el panel ahora se puede
+ * instalar en el teléfono.
+ *
+ * El aviso al negocio sale aunque el comprador no haya dejado correo: son dos
+ * destinatarios distintos y uno no depende del otro.
+ */
 export async function notificarPedidoRecibido(orderId: string): Promise<void> {
   try {
     const [pedido] = await db
@@ -138,7 +151,19 @@ export async function notificarPedidoRecibido(orderId: string): Promise<void> {
       .where(eq(orders.id, orderId))
       .limit(1);
 
-    if (!pedido?.contactoEmail) return;
+    if (!pedido) return;
+
+    // Primero al negocio: es el que tiene que salir a preparar el pedido.
+    await avisarAlPanel({
+      titulo: `Venta nueva · ${pedido.numero}`,
+      cuerpo: `${pedido.contactoNombre} · ${moneda.format(Number(pedido.total))}${
+        pedido.tipoEntrega === "envio" ? " · con envío" : " · retira"
+      }`,
+      url: `/admin/pedidos/${pedido.id}`,
+      etiqueta: "venta_ecommerce",
+    });
+
+    if (!pedido.contactoEmail) return;
 
     const lineas = await db
       .select({
@@ -258,7 +283,18 @@ export async function notificarResultadoDePago(resultado: {
         .where(eq(orders.id, resultado.orderId))
         .limit(1);
 
-      if (!pedido?.email) return;
+      if (!pedido) return;
+
+      // El cobro también se avisa al panel: una cosa es que entre el pedido y
+      // otra que la plata esté, y es lo que habilita a preparar y entregar.
+      await avisarAlPanel({
+        titulo: `Pago acreditado · ${pedido.numero}`,
+        cuerpo: `${pedido.nombre} · ${moneda.format(Number(pedido.total))}`,
+        url: `/admin/pedidos/${resultado.orderId}`,
+        etiqueta: "pago_acreditado",
+      });
+
+      if (!pedido.email) return;
 
       const [pago] = await db
         .select({ medio: payments.medio, monto: payments.monto })

@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  numeric,
   pgEnum,
   pgTable,
   text,
@@ -30,6 +31,19 @@ export const branches = pgTable(
     slug: text().notNull(),
     name: text().notNull(),
     sortOrder: integer().notNull().default(0),
+    /**
+     * El fondo de cambio que tiene que quedar siempre en el cajón.
+     *
+     * De la clienta: «la caja tiene que tener un monto base para empezar a
+     * cobrar, siempre se les deja cambio a los mostradores, no puede quedar
+     * menos que la base». No es lo mismo que el fondo inicial del turno —ése se
+     * carga al abrir y es un movimiento— sino el piso: la plata que no se
+     * retira ni al cerrar, porque mañana a las ocho hay que dar vuelto.
+     *
+     * Cero desactiva el control, que es como arranca hasta que cada sucursal
+     * fije el suyo.
+     */
+    fondoBase: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
     active: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },

@@ -245,6 +245,34 @@ interface PlacaEnCurso {
 }
 
 /**
+ * Cuánto material se lleva la sierra en una placa, en mm².
+ *
+ * **Existe porque no se veía.** El motor descuenta el espesor del disco entre
+ * pieza y pieza desde siempre —5 mm por omisión, configurables en
+ * /admin/calculadoras— pero el plano no lo decía en ninguna parte, así que
+ * quien miraba la pantalla no entendía por qué dos piezas de 900 no entraban en
+ * 1830. Con este número al pie del dibujo, la cuenta cierra sola.
+ *
+ * Es la suma de cada línea de corte por el ancho del disco. Dos cortes que se
+ * cruzan comparten el cuadradito del cruce y acá se cuenta dos veces: sobre una
+ * placa de 5 m² la diferencia es de centímetros cuadrados, y el número es para
+ * explicar, no para liquidar.
+ */
+export function superficieDeSierra(
+  placa: Pick<PlacaDelPlano, "cortes">,
+  anchoSierra: number,
+): number {
+  return placa.cortes.reduce((total, corte) => {
+    const largo =
+      corte.direccion === "horizontal"
+        ? Math.abs(corte.x2 - corte.x1)
+        : Math.abs(corte.y2 - corte.y1);
+
+    return total + largo * anchoSierra;
+  }, 0);
+}
+
+/**
  * Arma el plano.
  *
  * `placaLargo` corre horizontal y es el sentido de la veta: una pieza que la

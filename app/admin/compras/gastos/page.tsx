@@ -4,7 +4,7 @@ import { Receipt } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { Vacio } from "@/components/admin/vacio";
-import { ETIQUETA_CIRCUITO } from "@/lib/db/schema/circuito";
+import { ETIQUETA_CIRCUITO, etiquetaDeCircuito } from "@/lib/circuito";
 import { FiltroDeCircuito } from "./filtro";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
@@ -222,7 +222,7 @@ export default async function GastosPage({
                             : "bg-naranja-claro text-acento-sobre-claro"
                         }`}
                       >
-                        {ETIQUETA_CIRCUITO[g.circuito] ?? g.circuito}
+                        {etiquetaDeCircuito(g.circuito)}
                       </span>
                       {/* Con factura o sin factura: es otra pregunta, y la
                           columna estaba en la base sin mostrarse nunca. */}

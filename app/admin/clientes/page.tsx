@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Building2,
   ClipboardList,
+  Download,
   Eye,
   MessageCircle,
   Printer,
@@ -24,6 +25,9 @@ import {
   type ClienteListado,
 } from "@/lib/dal/admin/clientes";
 import { vendedoresActivos } from "@/lib/dal/admin/vendedores";
+import { etiquetaDeRubro } from "@/lib/rubros-cliente";
+import { deudaPorCliente, type DeudaDeCliente } from "@/lib/dal/admin/cobranza";
+import { ETIQUETA_URGENCIA } from "@/lib/cuenta-corriente/prioridad";
 import { BuscadorClientes } from "./buscador";
 import { DialogoCliente } from "./dialogo-cliente";
 
@@ -32,7 +36,7 @@ export default async function ClientesPage({
 }: {
   searchParams: Promise<{
     buscar?: string;
-    tipo?: string;
+    rubro?: string;
     vendedor?: string;
     nuevo?: string;
   }>;
@@ -42,17 +46,43 @@ export default async function ClientesPage({
   const [clientes, listas, vendedores] = await Promise.all([
     listarClientes({
       busqueda: params.buscar,
-      tipo: params.tipo,
+      rubro: params.rubro,
       vendedor: params.vendedor,
     }),
     listarListasParaClientes(),
     vendedoresActivos(),
   ]);
 
-  // Quien debe plata va primero: es a quien hay que llamar.
+  /*
+   * Quien debe plata va primero, **y entre ellos manda el atraso**.
+   *
+   * Antes esta lista salía por nombre: arriba quedaba el que más compra —que
+   * suele ser el que mejor paga— y la deuda chica de hace cuatro meses quedaba
+   * enterrada. La clienta lo pidió así: «que el sistema indique a quién darle
+   * prioridad». Ver `lib/cuenta-corriente/prioridad.ts`.
+   */
   const conDeuda = clientes.filter((c) => c.saldo > 0);
   const alDia = clientes.filter((c) => c.saldo <= 0);
   const deudaTotal = conDeuda.reduce((s, c) => s + c.saldo, 0);
+
+  const deudas = await deudaPorCliente(
+    conDeuda.map((c) => ({
+      id: c.id,
+      diasCredito: c.diasCredito,
+      cuentaBloqueada: c.cuentaBloqueada,
+    })),
+  );
+
+  const aCobrar = [...conDeuda].sort(
+    (a, b) =>
+      (deudas.get(b.id)?.prioridad.puntaje ?? 0) -
+      (deudas.get(a.id)?.prioridad.puntaje ?? 0),
+  );
+
+  const vencidoTotal = [...deudas.values()].reduce(
+    (total, d) => total + d.vencido,
+    0,
+  );
 
   return (
     <div>
@@ -64,6 +94,13 @@ export default async function ClientesPage({
             : plural(clientes.length, "cliente")
         }
       >
+        <Link
+          href="/admin/clientes/seguimiento"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <ClipboardList className="h-4 w-4" />
+          Seguimiento
+        </Link>
         <Link
           href="/admin/clientes/vendedores"
           className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
@@ -79,7 +116,7 @@ export default async function ClientesPage({
 
       <BuscadorClientes
         busquedaActual={params.buscar ?? ""}
-        tipoActual={params.tipo ?? "todos"}
+        rubroActual={params.rubro ?? "todos"}
       />
 
       {clientes.length === 0 ? (
@@ -93,16 +130,24 @@ export default async function ClientesPage({
       ) : (
         <>
           <GrupoListado
-            titulo="Con saldo pendiente"
+            titulo="Por cobrar, del más atrasado al menos"
             cantidad={conDeuda.length}
             detalle={
-              conDeuda.length > 0 ? moneda.format(deudaTotal) : undefined
+              conDeuda.length > 0
+                ? vencidoTotal > 0
+                  ? `${moneda.format(deudaTotal)} · ${moneda.format(vencidoTotal)} vencido`
+                  : moneda.format(deudaTotal)
+                : undefined
             }
             destacado
           >
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {conDeuda.map((c) => (
-                <TarjetaCliente key={c.id} cliente={c} />
+              {aCobrar.map((c) => (
+                <TarjetaCliente
+                  key={c.id}
+                  cliente={c}
+                  deuda={deudas.get(c.id) ?? null}
+                />
               ))}
             </div>
           </GrupoListado>
@@ -139,7 +184,14 @@ function iniciales(nombre: string) {
     .join("");
 }
 
-function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
+function TarjetaCliente({
+  cliente,
+  deuda = null,
+}: {
+  cliente: ClienteListado;
+  /** Cuánto está vencido y desde cuándo. Solo en los que deben. */
+  deuda?: DeudaDeCliente | null;
+}) {
   const excedido =
     cliente.limiteCredito > 0 && cliente.saldo > cliente.limiteCredito;
   const usoLimite =
@@ -174,8 +226,11 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
               {cliente.razonSocial}
             </p>
           )}
+          {/* El rubro, que es por donde se corta la lista. El tipo
+              —particular o profesional— sigue estando en el color del
+              círculo de las iniciales y en la ficha. */}
           <p className="text-sm text-muted-foreground">
-            {cliente.rubro ?? "Particular"}
+            {etiquetaDeRubro(cliente.rubro)}
           </p>
         </div>
 
@@ -217,10 +272,48 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
                 icono: <Printer className="h-4 w-4" aria-hidden="true" />,
                 href: `/cuenta/${cliente.id}`,
               },
+              {
+                // El PDF, que es lo que se adjunta a un correo o se manda por
+                // WhatsApp cuando se reclama una deuda. La pantalla imprimible
+                // da una hoja; esto da un archivo.
+                texto: "Bajar el resumen en PDF",
+                icono: <Download className="h-4 w-4" aria-hidden="true" />,
+                href: `/api/cuenta/${cliente.id}/pdf`,
+              },
             ]}
           />
         </span>
       </div>
+
+      {/* Por qué este cliente está arriba en la lista.
+          «Debe $300.000» no dice nada; «$300.000 vencidos hace 120 días» es lo
+          que decide si hay que llamarlo hoy. */}
+      {deuda && deuda.prioridad.urgencia !== "al-dia" && (
+        <p
+          className="estado-problema mt-3 flex flex-wrap items-baseline gap-x-2 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1.5 text-sm text-[var(--estado-tinta)]"
+        >
+          <span className="font-semibold">
+            {ETIQUETA_URGENCIA[deuda.prioridad.urgencia]}
+          </span>
+          {deuda.vencido > 0 && (
+            <span className="tabular">
+              {moneda.format(deuda.vencido)} vencidos
+            </span>
+          )}
+          {deuda.prioridad.diasVencida > 0 && (
+            <span>
+              · {deuda.prioridad.diasVencida}{" "}
+              {deuda.prioridad.diasVencida === 1 ? "día" : "días"} de atraso
+            </span>
+          )}
+        </p>
+      )}
+
+      {cliente.cuentaBloqueada && cliente.motivoBloqueo && (
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          {cliente.motivoBloqueo}
+        </p>
+      )}
 
       <dl className="mt-4 grid grid-cols-2 gap-3 border-t pt-3">
         <div>

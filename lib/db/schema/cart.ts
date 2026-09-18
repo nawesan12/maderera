@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -71,6 +72,59 @@ export const cartItems = pgTable(
 );
 
 /**
+ * Un corte a medida que alguien armó en el sitio.
+ *
+ * **Por qué no es una línea más del carrito.** Un corte no es un producto con
+ * cantidad: es una placa, un despiece de medidas en milímetros y un acomodo del
+ * que salen tres cobros distintos —el material, las pasadas de sierra y los
+ * metros de tapacanto—. Meterlo como texto en `cart_items` perdería el despiece,
+ * que es justamente lo que después tiene que bajar al taller.
+ *
+ * Al confirmar la compra cada fila se convierte en una orden de corte en la cola
+ * del taller, dentro de la misma transacción del pedido —igual que hace el
+ * mostrador— y en las líneas que se cobran.
+ *
+ * **El precio se vuelve a calcular en el servidor al comprar.** El que se guarda
+ * acá es el que se le mostró a la persona, para poder avisarle si cambió; nunca
+ * es el que se cobra.
+ */
+export const cartCortes = pgTable(
+  "cart_cortes",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    cartId: uuid()
+      .notNull()
+      .references(() => carts.id, { onDelete: "cascade" }),
+    /** La placa del catálogo. Sin ella no hay precio de material ni stock. */
+    variantId: uuid().references(() => productVariants.id, {
+      onDelete: "cascade",
+    }),
+    materialDescripcion: text().notNull(),
+    /** La medida sobre la que se acomodó, ya resuelta. */
+    placaLargoMm: integer().notNull(),
+    placaAnchoMm: integer().notNull(),
+    /** De qué sale: placa entera (null) o media, y en qué sentido partida. */
+    mitad: text(),
+    cantoDescripcion: text(),
+    /**
+     * El despiece, como JSON: `[{ largoMm, anchoMm, cantidad, respetaVeta,
+     * cantoLargo, cantoAncho, etiqueta }]`.
+     *
+     * Va como texto y no como tabla hija porque solo se lee entero y solo vive
+     * hasta que la compra se confirma, igual que `cuttingOrders.acomodoManual`.
+     */
+    piezas: text().notNull(),
+    /** Lo que dio el plano cuando se armó, para mostrarlo sin recalcular. */
+    placas: integer().notNull().default(1),
+    pasadas: integer().notNull().default(0),
+    /** El precio que se le mostró. Se recalcula al comprar. */
+    total: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("cart_cortes_cart_idx").on(t.cartId)],
+);
+
+/**
  * Zonas de envío con su costo.
  *
  * Se configuran desde el panel en vez de consultarle la tarifa a un
@@ -110,6 +164,15 @@ export const shippingZones = pgTable(
 export const cartsRelations = relations(carts, ({ one, many }) => ({
   user: one(user, { fields: [carts.userId], references: [user.id] }),
   items: many(cartItems),
+  cortes: many(cartCortes),
+}));
+
+export const cartCortesRelations = relations(cartCortes, ({ one }) => ({
+  cart: one(carts, { fields: [cartCortes.cartId], references: [carts.id] }),
+  variant: one(productVariants, {
+    fields: [cartCortes.variantId],
+    references: [productVariants.id],
+  }),
 }));
 
 export const cartItemsRelations = relations(cartItems, ({ one }) => ({
@@ -121,5 +184,6 @@ export const cartItemsRelations = relations(cartItems, ({ one }) => ({
 }));
 
 export type Cart = typeof carts.$inferSelect;
+export type CartCorte = typeof cartCortes.$inferSelect;
 export type CartItem = typeof cartItems.$inferSelect;
 export type ShippingZone = typeof shippingZones.$inferSelect;

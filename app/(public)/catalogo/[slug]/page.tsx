@@ -12,9 +12,10 @@ import {
 import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
 import { SelectorVariante } from "@/components/catalogo/selector-variante";
-import { obtenerProducto, productosSugeridos } from "@/lib/dal/catalog";
-import { vistaDePrecio } from "@/lib/dal/precios-sesion";
-import { getSession } from "@/lib/dal/session";
+import {
+  obtenerProductoPublico,
+  productosSugeridos,
+} from "@/lib/dal/catalog";
 import { AvisoGremio } from "@/components/catalogo/aviso-gremio";
 import { combinedStockLevel } from "@/lib/stock-level";
 import { DatosEstructurados } from "@/components/datos-estructurados";
@@ -22,13 +23,31 @@ import { resenasDelProducto, resumenDeResenas } from "@/lib/dal/resenas";
 import { ResenasDelProducto } from "@/components/catalogo/resenas";
 import { migasJsonLd, productoJsonLd, urlAbsoluta } from "@/lib/seo";
 
+/**
+ * Ninguna ficha se genera en el build, pero todas se pueden cachear.
+ *
+ * Devolver la lista vacía es lo que le dice a Next que esta ruta **es
+ * prerenderizable**: sin esta función trata cada `[slug]` como dinámico y le
+ * pone `no-store` a la respuesta, aunque la página no lea nada de la sesión.
+ * Con ella, la primera visita a una ficha la arma y la guarda, y las demás la
+ * reciben ya hecha.
+ *
+ * Vacía y no con los slugs reales, a propósito: pedirle la lista de productos
+ * a la base durante el build obligaría a que la base esté alcanzable para
+ * compilar, que es justo lo que este proyecto evita. La ficha se genera la
+ * primera vez que alguien la pide.
+ */
+export async function generateStaticParams() {
+  return [];
+}
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const producto = await obtenerProducto(slug);
+  const producto = await obtenerProductoPublico(slug);
 
   if (!producto) return { title: "Producto no encontrado" };
 
@@ -60,7 +79,7 @@ export default async function ProductoPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const producto = await obtenerProducto(slug);
+  const producto = await obtenerProductoPublico(slug);
 
   if (!producto) notFound();
 
@@ -70,18 +89,15 @@ export default async function ProductoPage({
     producto.slug,
   );
 
-  const [whatsapp, numeroDelNegocio, vista, resenas, resumenResenas] =
+  const [whatsapp, numeroDelNegocio, resenas, resumenResenas] =
     await Promise.all([
       enlaceWhatsapp(
         `Hola! Me interesa: ${producto.name}. ¿Podrían darme más información?`,
       ),
       numeroWhatsapp(),
-      vistaDePrecio(),
       resenasDelProducto(producto.id),
       resumenDeResenas(producto.id),
     ]);
-
-  const sesion = await getSession();
 
   // Las medidas se arman de las variantes: si ninguna las tiene cargadas, la
   // ficha técnica no se muestra en lugar de quedar con guiones.
@@ -190,16 +206,12 @@ export default async function ProductoPage({
                 variantes={producto.variantes}
                 whatsapp={whatsapp}
                 alicuota={Number(producto.alicuotaIva) || 21}
-                vista={vista}
                 aPedido={producto.aPedido}
               />
             </div>
 
-            {!sesion && (
-              <div className="mt-3.5">
-                <AvisoGremio />
-              </div>
-            )}
+            {/* Se retira solo si hay sesión: lo decide el navegador. */}
+            <AvisoGremio className="mt-3.5" />
 
             {/* Cómo lo recibe */}
             <ul className="mt-3.5 grid gap-3 sm:grid-cols-2">
@@ -306,7 +318,7 @@ export default async function ProductoPage({
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {sugeridos.complementarios.map((p) => (
-                <ProductCard key={p.id} product={p} whatsapp={numeroDelNegocio} vista={vista} />
+                <ProductCard key={p.id} product={p} whatsapp={numeroDelNegocio} />
               ))}
             </div>
           </section>
@@ -330,7 +342,7 @@ export default async function ProductoPage({
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {sugeridos.similares.map((p) => (
-                <ProductCard key={p.id} product={p} whatsapp={numeroDelNegocio} vista={vista} />
+                <ProductCard key={p.id} product={p} whatsapp={numeroDelNegocio} />
               ))}
             </div>
           </section>

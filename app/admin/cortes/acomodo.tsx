@@ -28,12 +28,15 @@ export function AcomodoDelCorte({
   piezas,
   placaLargo,
   placaAncho,
+  anchoSierra,
   inicial,
 }: {
   id: string;
   piezas: PiezaAcortar[];
   placaLargo: number;
   placaAncho: number;
+  /** El espesor del disco, de /admin/calculadoras. */
+  anchoSierra: number;
   inicial: PiezaFijada[];
 }) {
   const [fijadas, setFijadas] = useState<PiezaFijada[]>(inicial);
@@ -46,6 +49,10 @@ export function AcomodoDelCorte({
     piezas,
     placaLargo,
     placaAncho,
+    // El mismo que usó la ficha para presupuestar: si acá se acomodara con
+    // otro espesor, mover una pieza podría cambiar el precio sin que nadie
+    // tocara el despiece.
+    anchoSierra,
     fijadas,
   });
 

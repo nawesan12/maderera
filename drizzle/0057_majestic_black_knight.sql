@@ -1,0 +1,1 @@
+ALTER TABLE "bank_promotions" ADD COLUMN "imagen_url" text;

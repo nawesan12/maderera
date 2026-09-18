@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { avisoDeEspera, permitido } from "@/lib/limites";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -139,6 +140,18 @@ export async function subirComprobante(
   if (!TIPOS_COMPROBANTE.has(archivo.type)) {
     return { error: "Subí una imagen o un PDF." };
   }
+
+  /*
+   * El freno, antes de subir nada.
+   *
+   * El token del pedido autoriza a subir, y está bien que así sea —el cliente
+   * que compró sin cuenta también tiene que poder mandar su transferencia—,
+   * pero sin límite ese mismo token es almacenamiento gratis e ilimitado: cada
+   * envío son hasta 16 MB a Blob, que se pagan.
+   */
+  const puede = await permitido("comprobante", `pedido:${numero}`);
+
+  if (!puede.permitido) return { error: avisoDeEspera(puede) };
 
   // Igual que en `pagarPedido`: sin el token, cualquiera le colgaba un
   // comprobante inventado al pedido de otro y lo dejaba esperando que alguien

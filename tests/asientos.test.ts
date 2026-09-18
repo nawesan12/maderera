@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CUENTAS,
+  asientoDeCobro,
   asientoDeCompra,
   asientoDeGasto,
   asientoDePagoAProveedor,
@@ -212,11 +213,30 @@ describe("asientoDeGasto", () => {
     });
 
     expect(balancea(a)).toBe(true);
-    expect(a.renglones.find((r) => r.cuenta === CUENTAS.gastos)?.debe).toBe(
+    // Cada categoría va a su cuenta: antes las diez caían en «Gastos» y el
+    // mayor no sabía cuánto fue de flete sin leer los conceptos uno por uno.
+    expect(a.renglones.find((r) => r.cuenta === CUENTAS.gastoFlete)?.debe).toBe(
       30_000,
     );
     expect(a.renglones.find((r) => r.cuenta === CUENTAS.caja)?.haber).toBe(
       30_000,
+    );
+  });
+
+  it("una categoría sin cuenta propia cae en gastos varios", () => {
+    // El asiento tiene que balancear igual: una categoría nueva no puede
+    // romper el cierre del mes.
+    const a = asientoDeGasto({
+      fecha: new Date("2026-03-05"),
+      descripcion: "Lo que sea",
+      categoria: "otros",
+      importe: 10_000,
+      medio: "efectivo",
+    });
+
+    expect(balancea(a)).toBe(true);
+    expect(a.renglones.find((r) => r.cuenta === CUENTAS.gastos)?.debe).toBe(
+      10_000,
     );
   });
 
@@ -288,5 +308,41 @@ describe("todo asiento balancea", () => {
         }
       }
     }
+  });
+});
+
+describe("asientoDeCobro", () => {
+  it("descarga la deuda del cliente contra donde entró la plata", () => {
+    // Faltaba y se notaba en el mayor: la venta cargaba Deudores y nada la
+    // descargaba, así que la cuenta crecía como si nadie hubiera pagado.
+    const a = asientoDeCobro({
+      fecha: new Date("2026-03-10"),
+      comprobante: "Factura A 0015-00001234",
+      cliente: "Constructora del Sur",
+      importe: 500_000,
+      medio: "transferencia",
+    });
+
+    expect(balancea(a)).toBe(true);
+    expect(a.renglones.find((r) => r.cuenta === CUENTAS.banco)?.debe).toBe(
+      500_000,
+    );
+    expect(a.renglones.find((r) => r.cuenta === CUENTAS.deudores)?.haber).toBe(
+      500_000,
+    );
+  });
+
+  it("en efectivo entra por caja", () => {
+    const a = asientoDeCobro({
+      fecha: new Date("2026-03-10"),
+      comprobante: "Factura B 0015-00000042",
+      cliente: "Juan Pérez",
+      importe: 80_000,
+      medio: "efectivo",
+    });
+
+    expect(a.renglones.find((r) => r.cuenta === CUENTAS.caja)?.debe).toBe(
+      80_000,
+    );
   });
 });

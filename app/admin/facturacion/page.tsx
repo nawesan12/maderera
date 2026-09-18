@@ -3,7 +3,9 @@ import Link from "next/link";
 import { FilePlus2, Landmark, ReceiptText, TriangleAlert } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { FiltroPeriodo } from "@/components/admin/filtro-periodo";
-import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
+import { FiltroRango } from "@/components/admin/filtro-rango";
+import { leerPeriodo, leerRango, resolverPeriodo } from "@/lib/periodos";
+import { BuscadorDeComprobantes } from "./buscador";
 import { AcentoEstado, EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, moneda, plural } from "@/lib/formato";
 import {
@@ -21,15 +23,53 @@ export const metadata: Metadata = { title: "Facturación" };
 export default async function FacturacionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<{
+    periodo?: string;
+    desde?: string;
+    hasta?: string;
+    cobro?: string;
+    buscar?: string;
+  }>;
 }) {
-  const periodo = resolverPeriodo(leerPeriodo((await searchParams).periodo));
+  const params = await searchParams;
+  const periodo = resolverPeriodo(leerPeriodo(params.periodo));
+
+  /*
+   * El rango libre le gana al período.
+   *
+   * Son dos formas de decir lo mismo y no pueden estar las dos a la vez: si
+   * alguien puso fechas, ésas mandan y el período queda de adorno. Se dice en
+   * el encabezado para que no haya dudas de qué se está mirando.
+   */
+  const rango = leerRango(params.desde, params.hasta);
+
+  const cobro =
+    params.cobro === "contado" || params.cobro === "cuenta"
+      ? params.cobro
+      : "todos";
 
   const [comprobantes, resumen, arca] = await Promise.all([
-    listarComprobantes(periodo.desde ? { desde: periodo.desde } : {}),
+    listarComprobantes({
+      ...(rango
+        ? { desde: rango.desde, hasta: rango.hasta }
+        : periodo.desde
+          ? { desde: periodo.desde }
+          : {}),
+      cobro,
+      busqueda: params.buscar,
+      // Con un día concreto o una búsqueda, 200 renglones no alcanzan para
+      // nada: el tope está para que "todo" no traiga la historia entera.
+      tope: rango || params.buscar ? 500 : 200,
+    }),
     resumenFacturacion(periodo),
     estadoArca(),
   ]);
+
+  // Lo que se está mirando, sumado: es la respuesta a "¿cuánto facturamos el
+  // sábado?", que hasta ahora había que sacar a mano de la lista.
+  const totalFiltrado = comprobantes
+    .filter((c) => c.estado !== "anulada")
+    .reduce((total, c) => total + c.total, 0);
 
   // Lo que necesita una decisión va arriba: rechazados por ARCA primero, que
   // son los que no se pueden entregar al cliente, y después los que todavía no
@@ -44,9 +84,13 @@ export default async function FacturacionPage({
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Facturación"
-        detalle={`Comprobantes emitidos, su estado en ARCA y lo cobrado · ${periodo.etiqueta.toLowerCase()}`}
+        detalle={
+          rango
+            ? `Comprobantes del ${fechaCorta.format(rango.desde)} al ${fechaCorta.format(rango.hasta)}${cobro === "contado" ? ", cobrados de contado" : cobro === "cuenta" ? ", en cuenta corriente" : ""} · ${moneda.format(totalFiltrado)} en ${plural(comprobantes.length, "comprobante")}`
+            : `Comprobantes emitidos, su estado en ARCA y lo cobrado · ${periodo.etiqueta.toLowerCase()}`
+        }
       >
-        <FiltroPeriodo actual={periodo.clave} />
+        {!rango && <FiltroPeriodo actual={periodo.clave} />}
         <Link
           href="/admin/arca"
           className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
@@ -62,6 +106,17 @@ export default async function FacturacionPage({
           Nueva factura
         </Link>
       </EncabezadoPanel>
+
+      {/* Buscar y cortar por fecha o por forma de cobro. Es lo que convierte
+          el listado en una consulta: «las facturas de contado del sábado»,
+          «la factura de Gómez». */}
+      <section className="tarjeta flex flex-wrap items-center gap-3 p-4">
+        <BuscadorDeComprobantes
+          busquedaActual={params.buscar ?? ""}
+          cobro={cobro}
+        />
+        <FiltroRango desde={params.desde} hasta={params.hasta} />
+      </section>
 
       {!arca.operativo && (
         <section className="tarjeta-atencion flex flex-wrap items-start gap-x-4 gap-y-2 p-5">

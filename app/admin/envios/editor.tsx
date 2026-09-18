@@ -71,7 +71,7 @@ export function EditorDeZona({ zona }: { zona: ZonaEditable | null }) {
         <span>
           El flete de esta zona se cotiza en cada pedido
           <span className="mt-0.5 block text-sm text-muted-foreground">
-            El pedido entra sin cargo de envío y el checkout dice «A cotizar».
+            El pedido entra sin cargo de envío y el carrito dice «A cotizar».
             Es lo que corresponde cuando el precio depende del volumen o de si
             va en camión propio.
           </span>
@@ -113,7 +113,7 @@ export function EditorDeZona({ zona }: { zona: ZonaEditable | null }) {
             defaultChecked={zona?.activa ?? true}
             className="h-4 w-4 accent-brand-orange"
           />
-          Se ofrece en el checkout
+          Se ofrece en el carrito
         </label>
       </div>
 

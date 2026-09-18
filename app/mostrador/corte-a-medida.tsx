@@ -13,7 +13,12 @@ import {
   calcularPlanoDeCorte,
   type PiezaFijada,
 } from "@/lib/cortes/plano";
-import { MEDIDAS_DE_PLACA } from "@/lib/calculations";
+import {
+  fraccionDePlaca,
+  medidaDePlaca,
+  nombreDeLaMitad,
+  type Mitad,
+} from "@/lib/cortes/placa";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 import { moneda } from "@/lib/formato";
 import type { CorteDeMostrador } from "@/lib/mostrador/venta";
@@ -59,6 +64,7 @@ export function CorteAMedida({
   placa,
   precioPorPasada,
   precioPorMetroCanto,
+  anchoSierra,
   onCerrar,
   onAgregar,
 }: {
@@ -70,7 +76,11 @@ export function CorteAMedida({
     precio: number;
     largoMm: number | null;
     anchoMm: number | null;
+    /** Para avisar al partir: en una placa de color el dibujo tiene sentido. */
+    color?: string | null;
   };
+  /** Lo que se lleva el disco por pasada, de /admin/calculadoras. */
+  anchoSierra: number;
   precioPorPasada: number;
   precioPorMetroCanto: number;
   onCerrar: () => void;
@@ -80,9 +90,23 @@ export function CorteAMedida({
   const [canto, setCanto] = useState("");
   const [fijadas, setFijadas] = useState<PiezaFijada[]>([]);
 
-  const medidaSupuesta = !placa.largoMm || !placa.anchoMm;
-  const placaLargo = placa.largoMm ?? MEDIDAS_DE_PLACA[0].largo;
-  const placaAncho = placa.anchoMm ?? MEDIDAS_DE_PLACA[0].ancho;
+  /*
+   * De qué sale el trabajo: placa entera o media, y en qué sentido partida.
+   *
+   * La maderera vende media placa y el mostrador es donde más se pide. El
+   * sentido lo elige quien atiende: depende de la placa que haya y de cómo
+   * corre el dibujo cuando es de color.
+   */
+  const [mitad, setMitad] = useState<Mitad>(null);
+
+  const medida = medidaDePlaca({
+    varianteLargo: placa.largoMm,
+    varianteAncho: placa.anchoMm,
+    mitad,
+  });
+  const medidaSupuesta = medida.supuesta;
+  const placaLargo = medida.largo;
+  const placaAncho = medida.ancho;
 
   const validas = useMemo(
     () =>
@@ -106,16 +130,19 @@ export function CorteAMedida({
         piezas: validas,
         placaLargo,
         placaAncho,
+        anchoSierra,
         fijadas,
       }),
-    [validas, placaLargo, placaAncho, fijadas],
+    [validas, placaLargo, placaAncho, anchoSierra, fijadas],
   );
 
   // La misma cuenta que la ficha del corte y la planilla del taller, que ya
   // está probada: no hay dos formas de medir un metro de tapacanto.
   const metrosCanto = useMemo(() => metrosDeTapacanto(validas), [validas]);
 
-  const subtotalPlacas = plano.placasEnteras * placa.precio;
+  // De media placa se cobra media placa: el plano ya trabaja sobre la medida
+  // partida, así que lo único que cambia es el precio del material.
+  const subtotalPlacas = plano.placasEnteras * placa.precio * fraccionDePlaca(mitad);
   const subtotalCorte = plano.pasadasCobrables * precioPorPasada;
   const subtotalCanto = Math.round(metrosCanto * precioPorMetroCanto * 100) / 100;
   const total = subtotalPlacas + subtotalCorte + subtotalCanto;
@@ -156,12 +183,20 @@ export function CorteAMedida({
      * tapacanto van sin variante, que es lo que hace que no descuenten nada.
      */
     if (plano.placasEnteras > 0) {
+      /*
+       * Media placa se cobra a mitad de precio, pero **descuenta una placa
+       * entera del estante**: es lo que sale físicamente del depósito. El
+       * pedazo que queda vuelve como retal, y de retales el sistema todavía no
+       * lleva stock (ver `lib/cortes/plano.ts`).
+       */
       lineas.push({
         variantId: placa.variantId,
-        descripcion: placa.descripcion,
+        descripcion: mitad
+          ? `${placa.descripcion} — ${nombreDeLaMitad(mitad).toLowerCase()}`
+          : placa.descripcion,
         unidad: placa.unidad,
         cantidad: plano.placasEnteras,
-        precioUnitario: placa.precio,
+        precioUnitario: placa.precio * fraccionDePlaca(mitad),
       });
     }
 
@@ -191,6 +226,9 @@ export function CorteAMedida({
       variantId: placa.variantId,
       materialDescripcion: placa.descripcion,
       cantoDescripcion: canto.trim() || null,
+      placaLargoMm: placa.largoMm,
+      placaAnchoMm: placa.anchoMm,
+      mitad,
       placas: plano.placas.length,
       pasadas: plano.pasadasCobrables,
       acomodoManual: fijadas.length > 0 ? JSON.stringify(fijadas) : null,
@@ -222,12 +260,49 @@ export function CorteAMedida({
 
         <div className="space-y-4">
           <p className="text-base text-muted-foreground">
-            {placa.descripcion} · placa de{" "}
+            {placa.descripcion} · {nombreDeLaMitad(mitad).toLowerCase()} de{" "}
             <span className="tabular">
               {placaLargo} × {placaAncho} mm
             </span>
             {medidaSupuesta && " (medida supuesta: la placa no la tiene cargada)"}
+            {/* Los milímetros del disco, dichos. Estaban descontados desde
+                siempre y en ninguna pantalla se veían, así que en el mostrador
+                no se podía explicar por qué dos piezas de 900 no entran en
+                una placa de 1830. */}
+            {` · la sierra se lleva ${anchoSierra} mm por corte`}
           </p>
+
+          {/* Media placa. Se vende, y no es lo mismo partirla a lo largo que
+              al ancho: cambia qué piezas entran. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-base font-medium">De qué sale:</span>
+            {([null, "largo", "ancho"] as const).map((m) => (
+              <button
+                key={m ?? "entera"}
+                type="button"
+                onClick={() => setMitad(m)}
+                aria-pressed={mitad === m}
+                className={`h-10 rounded-lg px-3 text-base font-medium transition-colors ${
+                  mitad === m
+                    ? "boton-accion"
+                    : "border border-linea text-muted-foreground hover:bg-hundida"
+                }`}
+              >
+                {m === null
+                  ? "Placa entera"
+                  : m === "largo"
+                    ? "Media a lo largo"
+                    : "Media al ancho"}
+              </button>
+            ))}
+          </div>
+
+          {mitad && placa.color && (
+            <p className="tarjeta-atencion px-4 py-2.5 text-base">
+              La placa es <strong>{placa.color}</strong>: fijate cómo corre el
+              dibujo antes de partirla.
+            </p>
+          )}
 
           {/* Dos columnas en pantalla ancha: a la izquierda se carga, a la
               derecha se ve cómo va quedando. En el mostrador se tipea mirando

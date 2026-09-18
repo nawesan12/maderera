@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Mail, MessageCircle, TriangleAlert } from "lucide-react";
+import { BellRing, Mail, MessageCircle, TriangleAlert } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
+import { AvisosPush } from "@/components/admin/avisos-push";
 import { fechaHora } from "@/lib/formato";
 import {
   estadoCorreo,
@@ -73,6 +74,26 @@ export default async function AvisosPage() {
           </div>
         </section>
       )}
+
+      {/* Los avisos que van para adentro, al teléfono de quien atiende.
+          Todos los demás son para el cliente: éste es el que faltaba, y el que
+          hace que una venta del sábado no se descubra el lunes. */}
+      <section className="tarjeta p-5">
+        <h2 className="flex items-center gap-2 text-base font-medium">
+          <BellRing className="h-5 w-5 text-muted-foreground" />
+          Avisos de venta en el teléfono
+        </h2>
+        <p className="mt-1 text-base text-muted-foreground">
+          Cuando entra una compra por el sitio o se acredita un pago, el panel
+          avisa como cualquier aplicación. Se activa por dispositivo, y en el
+          teléfono conviene{" "}
+          <strong className="text-foreground">instalar el panel</strong> desde el
+          menú del navegador: en iPhone, es la única forma de que funcione.
+        </p>
+        <div className="mt-3">
+          <AvisosPush />
+        </div>
+      </section>
 
       <section className="tarjeta">
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-4">

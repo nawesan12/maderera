@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { cashMovements, cashSessions } from "@/lib/db/schema";
+import { branches, cashMovements, cashSessions } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { cajasConPendientes } from "@/lib/dal/admin/cajas-fisicas";
@@ -13,6 +13,10 @@ import {
   type MedioDeMostrador,
 } from "@/lib/mostrador/venta";
 import { anularVentaDeMostrador } from "@/lib/mostrador/anular";
+import {
+  nombreDeLaDiferencia,
+  TOLERANCIA_ARQUEO,
+} from "@/lib/mostrador/arqueo";
 import { emitirParaLaVenta, letraQueSaldria } from "@/lib/mostrador/comprobante";
 import { ErrorDeEntrega, remitoDeConstancia } from "@/lib/entregas";
 import { siguienteNumeroDePresupuesto } from "@/lib/dal/numeracion-ventas";
@@ -108,6 +112,11 @@ const ventaSchema = z.object({
       variantId: z.string().uuid().nullable(),
       materialDescripcion: z.string().trim().min(2).max(200),
       cantoDescripcion: z.string().trim().max(120).nullable(),
+      /** La medida de la placa, para que el taller rehaga el mismo plano. */
+      placaLargoMm: z.coerce.number().int().positive().max(6000).nullable(),
+      placaAnchoMm: z.coerce.number().int().positive().max(6000).nullable(),
+      /** De qué salió: placa entera (null) o media, y en qué sentido. */
+      mitad: z.enum(["largo", "ancho"]).nullable(),
       placas: z.coerce.number().int().min(1).max(999),
       pasadas: z.coerce.number().int().min(0).max(9999),
       acomodoManual: z.string().max(20_000).nullable(),
@@ -152,6 +161,22 @@ export async function abrirCaja(
     return { error: "El fondo inicial no puede ser negativo." };
   }
 
+  /*
+   * El fondo de cambio de la sucursal.
+   *
+   * Abrir con menos que la base no se prohíbe —puede pasar, y el mostrador
+   * tiene que poder empezar a cobrar igual— pero se avisa: es plata que hay que
+   * reponer antes de que llegue el primero que pague con un billete grande.
+   */
+  const [sucursal] = await db
+    .select({ fondoBase: branches.fondoBase })
+    .from(branches)
+    .where(eq(branches.id, branchId))
+    .limit(1);
+
+  const base = Number(sucursal?.fondoBase ?? 0);
+  const faltaCambio = base > 0 && fondoInicial < base;
+
   try {
     await db.transaction(async (tx) => {
       const [sesion] = await tx
@@ -187,7 +212,12 @@ export async function abrirCaja(
   });
 
   refrescar();
-  return { ok: "Caja abierta." };
+
+  return {
+    ok: faltaCambio
+      ? `Caja abierta, pero el fondo quedó por debajo de la base de $${base.toFixed(2)}. Reponé el cambio.`
+      : "Caja abierta.",
+  };
 }
 
 export async function registrarMovimientoDeCaja(
@@ -203,6 +233,41 @@ export async function registrarMovimientoDeCaja(
   }
   if (!motivo.trim()) {
     return { error: "Poné el motivo: un movimiento sin explicación no se puede revisar después." };
+  }
+
+  /*
+   * Un retiro no puede dejar el cajón por debajo del fondo de cambio.
+   *
+   * Es el pedido de la clienta: «siempre se les deja cambio a los mostradores,
+   * no puede quedar menos que la base». Acá sí se rechaza en vez de avisar,
+   * porque el retiro es voluntario y se puede hacer por menos: dejar el
+   * mostrador sin cambio a media tarde le cuesta ventas al negocio.
+   */
+  if (tipo === "retiro") {
+    const [turno] = await db
+      .select({
+        esperado: sql<string>`coalesce(sum(${cashMovements.monto}), 0)`,
+        fondoBase: branches.fondoBase,
+      })
+      .from(cashSessions)
+      .innerJoin(branches, eq(branches.id, cashSessions.branchId))
+      .leftJoin(cashMovements, eq(cashMovements.sessionId, cashSessions.id))
+      .where(eq(cashSessions.id, sessionId))
+      .groupBy(cashSessions.id, branches.fondoBase)
+      .limit(1);
+
+    const base = Number(turno?.fondoBase ?? 0);
+    const enCaja = Number(turno?.esperado ?? 0);
+
+    if (base > 0 && enCaja - monto < base) {
+      const disponible = Math.max(0, enCaja - base);
+      return {
+        error:
+          disponible > 0
+            ? `Ese retiro deja el cajón sin el cambio de la base ($${base.toFixed(2)}). Podés retirar hasta $${disponible.toFixed(2)}.`
+            : `No se puede retirar: en el cajón hay $${enCaja.toFixed(2)} y la base de cambio es $${base.toFixed(2)}.`,
+      };
+    }
   }
 
   await db.insert(cashMovements).values({
@@ -271,6 +336,33 @@ export async function cerrarCaja(
     .where(eq(cashMovements.sessionId, sessionId));
 
   const diferencia = contado - Number(esperado);
+  const comoSeLlama = nombreDeLaDiferencia(diferencia);
+
+  /*
+   * Una diferencia sin explicar no se guarda.
+   *
+   * Es el otro lado del pedido de la clienta —«hay que tener ojo que al hacer
+   * el arqueo no falte plata o sobre»—: el sistema no puede impedir que falte,
+   * pero sí puede impedir que se cierre sin que nadie diga qué pasó. Mañana,
+   * cuando alguien revise el mes, la nota es lo único que va a estar.
+   */
+  if (Math.abs(diferencia) > TOLERANCIA_ARQUEO && !notas.trim()) {
+    return {
+      error: `Hay un ${comoSeLlama} de $${Math.abs(diferencia).toFixed(2)}. Escribí qué pasó antes de cerrar: mañana nadie se va a acordar.`,
+    };
+  }
+
+  // Y el cambio para mañana. No bloquea el cierre —la plata está o no está—
+  // pero se dice, que es cuando todavía se puede reponer.
+  const [sucursalDelTurno] = await db
+    .select({ fondoBase: branches.fondoBase })
+    .from(branches)
+    .innerJoin(cashSessions, eq(cashSessions.branchId, branches.id))
+    .where(eq(cashSessions.id, sessionId))
+    .limit(1);
+
+  const base = Number(sucursalDelTurno?.fondoBase ?? 0);
+  const sinCambio = base > 0 && contado < base;
 
   const actualizadas = await db
     .update(cashSessions)
@@ -298,17 +390,23 @@ export async function cerrarCaja(
     entidad: "caja",
     descripcion:
       `Cerró la caja. Esperado $${Number(esperado).toFixed(2)}, contado $${contado.toFixed(2)}` +
-      (Math.abs(diferencia) >= 0.01
-        ? `, diferencia $${diferencia.toFixed(2)}`
-        : ", sin diferencia"),
+      (comoSeLlama === "sin diferencia"
+        ? ", sin diferencia"
+        : `, ${comoSeLlama} de $${Math.abs(diferencia).toFixed(2)}`) +
+      (notas.trim() ? `: ${notas.trim()}` : ""),
   });
 
   refrescar();
+
+  const cierre =
+    comoSeLlama === "sin diferencia"
+      ? "Caja cerrada sin diferencia."
+      : `Caja cerrada con un ${comoSeLlama} de $${Math.abs(diferencia).toFixed(2)}.`;
+
   return {
-    ok:
-      Math.abs(diferencia) < 0.01
-        ? "Caja cerrada sin diferencia."
-        : `Caja cerrada con una diferencia de $${diferencia.toFixed(2)}.`,
+    ok: sinCambio
+      ? `${cierre} Ojo: quedan $${contado.toFixed(2)} en el cajón y la base de cambio es $${base.toFixed(2)}.`
+      : cierre,
   };
 }
 

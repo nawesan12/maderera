@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import { vistaDePrecio } from "@/lib/dal/precios-sesion";
-import { getSession } from "@/lib/dal/session";
 import { AvisoGremio } from "@/components/catalogo/aviso-gremio";
 import { bannersDe } from "@/lib/dal/banners";
 import { Banner } from "@/components/banner";
@@ -20,7 +18,7 @@ import {
   listarCategorias,
   marcasDelCatalogo,
   productosEnOferta,
-  paginaDeProductos,
+  paginaDeProductosPublica,
   rubrosDeCategoria,
   type OrdenCatalogo,
 } from "@/lib/dal/catalog";
@@ -260,34 +258,64 @@ async function Lateral({ params }: { params: Params }) {
   );
 }
 
+/**
+ * La grilla.
+ *
+ * **Acá no se lee la sesión, y eso es lo que hace que el catálogo sea barato.**
+ * Leía dos cosas: con qué vista de IVA mostrar el precio y si poner el aviso al
+ * gremio. Ninguna de las dos cambia lo que se vende —son presentación— y las
+ * dos las resuelve ahora el navegador: `PreciosProvider` reemplaza el precio y
+ * la vista para quien tiene lista propia, y el aviso se retira solo cuando hay
+ * sesión. Mientras tanto, el HTML es **uno solo para todo el mundo** y se puede
+ * servir de la caché en vez de armarlo de nuevo en cada visita.
+ *
+ * Lo que no se toca: la lista de precios sigue viajando dentro de la clave del
+ * caché (`lib/dal/catalog.ts`). Que el precio del profesional se corrija en el
+ * navegador no significa que un precio de gremio pueda salir de un caché
+ * compartido; significa que no sale de ahí en absoluto.
+ */
 async function Resultados({ params }: { params: Params }) {
   const pagina = Math.max(1, Number(params.pagina) || 1);
-  const whatsapp = await numeroWhatsapp();
-  const vista = await vistaDePrecio();
-  const sesion = await getSession();
-  const avisos = await bannersDe("catalogo");
-  const categorias = await listarCategorias();
-  /*
-   * Las marcas de lo que se está mirando: con una categoría elegida, las de
-   * esa categoría; sin ninguna, las del catálogo entero. Mostrar las marcas de
-   * ferretería mientras alguien mira placas no ayuda a nadie.
-   */
-  const marcas = await marcasDelCatalogo(
-    params.cat && params.cat !== "todos" ? params.cat : undefined,
-  );
 
-  const { productos, total, hayMas, topeAlcanzado } = await paginaDeProductos(
-    {
-      categoria: params.cat,
-      subcategoria: params.rubro,
-      busqueda: params.buscar,
-      stock: params.stock as never,
-      orden: (params.orden as OrdenCatalogo) ?? "relevancia",
-      soloOfertas: params.ofertas === "1",
-      marca: params.marca,
-    },
-    pagina,
-  );
+  /*
+   * Todo junto y no de a uno.
+   *
+   * Eran siete `await` en fila, cada uno esperando a que terminara el anterior
+   * sin necesitarlo: ninguna de estas consultas depende del resultado de otra.
+   * En serie, el tiempo de la pantalla es la suma; en paralelo, el de la más
+   * lenta. Y el tiempo de una función también se paga.
+   */
+  const [
+    whatsapp,
+    avisos,
+    categorias,
+    /*
+     * Las marcas de lo que se está mirando: con una categoría elegida, las de
+     * esa categoría; sin ninguna, las del catálogo entero. Mostrar las marcas de
+     * ferretería mientras alguien mira placas no ayuda a nadie.
+     */
+    marcas,
+    { productos, total, hayMas, topeAlcanzado },
+  ] = await Promise.all([
+    numeroWhatsapp(),
+    bannersDe("catalogo"),
+    listarCategorias(),
+    marcasDelCatalogo(
+      params.cat && params.cat !== "todos" ? params.cat : undefined,
+    ),
+    paginaDeProductosPublica(
+      {
+        categoria: params.cat,
+        subcategoria: params.rubro,
+        busqueda: params.buscar,
+        stock: params.stock as never,
+        orden: (params.orden as OrdenCatalogo) ?? "relevancia",
+        soloOfertas: params.ofertas === "1",
+        marca: params.marca,
+      },
+      pagina,
+    ),
+  ]);
 
   if (productos.length === 0) {
     return (
@@ -372,11 +400,8 @@ async function Resultados({ params }: { params: Params }) {
         </div>
       )}
 
-      {!sesion && (
-        <div className="mb-4">
-          <AvisoGremio />
-        </div>
-      )}
+      {/* Se retira solo si hay sesión: lo decide el navegador. */}
+      <AvisoGremio className="mb-4" />
 
       <p className="mb-4 text-[15px] text-texto-2">
         <span className="tabular font-semibold text-foreground">{total}</span>{" "}
@@ -393,7 +418,11 @@ async function Resultados({ params }: { params: Params }) {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {productos.map((producto) => (
-          <ProductCard key={producto.id} product={producto} whatsapp={whatsapp} vista={vista} />
+          <ProductCard
+            key={producto.id}
+            product={producto}
+            whatsapp={whatsapp}
+          />
         ))}
       </div>
 

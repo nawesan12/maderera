@@ -6,6 +6,7 @@ import { LogOut } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { SENAL_ESTADO } from "@/lib/senal-navegador";
 import { olvidarPreciosPropios } from "@/lib/precios-propios-context";
+import { olvidarEstado } from "@/lib/estado-context";
 
 export function BotonSalir() {
   const router = useRouter();
@@ -25,6 +26,11 @@ export function BotonSalir() {
     // que entre después ya no coincidiría, pero borrarlo acá es no dejar los
     // precios de nadie escritos en una máquina compartida.
     olvidarPreciosPropios();
+
+    // Lo mismo con el nombre y el contador del encabezado: quedaban guardados
+    // en la pestaña y el próximo que entrara en esa máquina vería el nombre del
+    // anterior hasta que su propia señal no coincidiera.
+    olvidarEstado();
 
     router.push("/");
     router.refresh();

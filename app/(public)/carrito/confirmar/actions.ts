@@ -1,0 +1,507 @@
+"use server";
+
+import { revalidatePath, updateTag } from "next/cache";
+import { after } from "next/server";
+import { redirect } from "next/navigation";
+import { eq, inArray } from "drizzle-orm";
+import { z } from "zod";
+import { db } from "@/lib/db";
+import {
+  accountMovements,
+  cartCortes,
+  cartItems,
+  carts,
+  customers,
+  cuttingItems,
+  cuttingOrders,
+  orderItems,
+  orderStatusHistory,
+  orders,
+} from "@/lib/db/schema";
+import { getSession } from "@/lib/dal/session";
+import { obtenerCarrito } from "@/lib/dal/carrito";
+import { calcularEnvio, listarZonasDeEnvio } from "@/lib/dal/envios";
+import { costosParaCongelar } from "@/lib/compras/congelar";
+import { creditoDisponible } from "@/lib/dal/cuenta";
+import { escalasDePago } from "@/lib/dal/descuentos-pago";
+import {
+  descuentoPorMedioDePago,
+  medioPermitido,
+  montoDelDescuentoDePago,
+} from "@/lib/precios/medio-pago";
+import { listaVigente } from "@/lib/dal/precios-sesion";
+import {
+  siguienteNumeroDeCorte,
+  siguienteNumeroDePedido,
+} from "@/lib/dal/numeracion-ventas";
+import { enlaceDeSeguimiento } from "@/lib/seguimiento";
+import { notificarPedidoRecibido } from "@/lib/notificaciones/avisos";
+import { reservarPedido } from "@/lib/inventario/reservas";
+import { resolverCortesDelCarrito } from "@/lib/cortes/desde-carrito";
+import { ETIQUETAS } from "@/lib/cache-publico";
+import { avisoDeEspera, permitidoPorAmbos } from "@/lib/limites";
+
+export interface EstadoDeCompra {
+  error?: string;
+  /** Número del pedido creado, para la pantalla de confirmación. */
+  numero?: string;
+}
+
+const datosDeCompraSchema = z
+  .object({
+    nombre: z.string().trim().min(2, "Necesitamos tu nombre.").max(120),
+    email: z.string().trim().email("Revisá el correo."),
+    telefono: z
+      .string()
+      .trim()
+      .min(6, "Dejanos un teléfono para coordinar.")
+      .max(40),
+    entrega: z.enum(["retiro", "envio"]),
+    sucursalId: z.string().uuid().optional(),
+    zonaId: z.string().uuid().optional(),
+    direccion: z.string().trim().max(240).optional(),
+    medioPago: z.enum([
+      "mercado_pago",
+      "transferencia",
+      "debito",
+      "efectivo",
+      "cuenta_corriente",
+    ]),
+    notas: z.string().trim().max(600).optional(),
+  })
+  .refine(
+    (d) => d.entrega === "retiro" || (d.zonaId && d.direccion),
+    "Para el envío necesitamos la zona y la dirección.",
+  )
+  .refine(
+    (d) => d.entrega === "envio" || Boolean(d.sucursalId),
+    "Elegí en qué sucursal lo vas a retirar.",
+  );
+
+/**
+ * Cierra la compra y crea el pedido.
+ *
+ * Todo pasa en una transacción: se crea el pedido, se copian las líneas, se
+ * registra el estado inicial y se vacía el carrito. Si algo falla en el medio,
+ * no queda ni un pedido a medias ni un carrito vaciado sin pedido.
+ *
+ * Los precios se toman de la base en el momento de confirmar, nunca del
+ * formulario: si vinieran del navegador, cualquiera podría comprarse una placa
+ * a un peso.
+ */
+export async function confirmarCompra(
+  _previo: EstadoDeCompra,
+  formData: FormData,
+): Promise<EstadoDeCompra> {
+  const parsed = datosDeCompraSchema.safeParse({
+    nombre: formData.get("nombre"),
+    email: formData.get("email"),
+    telefono: formData.get("telefono"),
+    entrega: formData.get("entrega"),
+    sucursalId: (formData.get("sucursalId") as string) || undefined,
+    zonaId: (formData.get("zonaId") as string) || undefined,
+    direccion: (formData.get("direccion") as string) || undefined,
+    medioPago: formData.get("medioPago"),
+    notas: (formData.get("notas") as string) || undefined,
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
+  }
+
+  const datos = parsed.data;
+
+  /*
+   * El freno, antes de tocar nada.
+   *
+   * Es la acción más pesada del sitio y es pública: cada llamada quema un número
+   * de pedido —serie con lock, así que se serializan— reserva stock **de
+   * verdad** y abre una orden en la cola del aserradero. Un bot acá no tira el
+   * servidor: llena el panel de pedidos falsos, deja el stock comprometido con
+   * reservas fantasma y manda a cortar placas que nadie pidió.
+   *
+   * Por IP y por correo: diez compras por hora desde una misma casilla ya es
+   * mucho más de lo que hace nadie.
+   */
+  const puede = await permitidoPorAmbos("comprar", {
+    nombre: "correo",
+    valor: datos.email,
+  });
+
+  if (!puede.permitido) return { error: avisoDeEspera(puede) };
+
+  const carrito = await obtenerCarrito();
+
+  if (!carrito.id || (carrito.items.length === 0 && carrito.cortes.length === 0)) {
+    return { error: "El carrito está vacío." };
+  }
+
+  /*
+   * Los cortes a medida, recalculados contra la base.
+   *
+   * Lo que se cobra y lo que se manda a cortar sale de acá, no del precio que
+   * quedó guardado cuando la persona armó el corte: entre una cosa y la otra
+   * pueden haber pasado días y cambiado el precio de la placa o la tarifa de la
+   * pasada. Ver `lib/cortes/desde-carrito.ts`.
+   */
+  const cortes = await resolverCortesDelCarrito(carrito.id);
+
+  if (cortes.error) return { error: cortes.error };
+
+  const subtotalCortes = cortes.resueltos.reduce(
+    (total, c) => total + c.cuenta.total,
+    0,
+  );
+  const subtotal =
+    carrito.items.reduce((total, i) => total + i.subtotal, 0) + subtotalCortes;
+
+  const sinPrecio = carrito.items.filter(
+    (i) => (i.precioActual ?? i.precioUnitario ?? 0) <= 0,
+  );
+
+  if (sinPrecio.length > 0) {
+    return {
+      error:
+        "Hay productos sin precio cargado. Pedilos por WhatsApp y te pasamos la cotización.",
+    };
+  }
+
+  let costoEnvio = 0;
+  let nombreZona: string | null = null;
+
+  if (datos.entrega === "envio" && datos.zonaId) {
+    const zonas = await listarZonasDeEnvio();
+    const zona = zonas.find((z) => z.id === datos.zonaId);
+    if (!zona) return { error: "Esa zona de envío ya no está disponible." };
+
+    costoEnvio = calcularEnvio(zona, subtotal);
+    /*
+     * En una zona a cotizar el nombre lleva la aclaración pegada.
+     *
+     * `zonaEnvio` es texto y es lo que se lee en el tablero de pedidos, en el
+     * remito y en el aviso al cliente. Sin la marca, un pedido con el flete en
+     * cero se lee como "envío sin cargo" y sale a la calle sin que nadie
+     * cotice nada.
+     */
+    nombreZona = zona.aCotizar ? `${zona.nombre} (flete a cotizar)` : zona.nombre;
+  }
+
+  const sesion = await getSession();
+
+  // Si quien compra ya es cliente, el pedido queda atado a su ficha.
+  let customerId: string | null = null;
+
+  if (sesion) {
+    const [propio] = await db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(eq(customers.userId, sesion.userId))
+      .limit(1);
+    customerId = propio?.id ?? null;
+  }
+
+  if (!customerId) {
+    const [porMail] = await db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(eq(customers.email, datos.email))
+      .limit(1);
+    customerId = porMail?.id ?? null;
+  }
+
+  /*
+   * Descuento por medio de pago.
+   *
+   * Se resuelve en el servidor, contra la base, y **sobre la mercadería sin el
+   * flete**: descontarle un 10 % al envío sería regalar plata que se le paga a
+   * un tercero. El formulario muestra el mismo número, pero lo que se guarda
+   * es esto: el medio de pago viaja en un radio button y el porcentaje no
+   * puede salir de ahí.
+   */
+  /*
+   * El precio mayorista es de contado.
+   *
+   * De la clienta: con transferencia o débito, nunca en cuotas. El formulario
+   * ya no ofrece los otros medios, pero esto se verifica acá porque el medio
+   * viaja en un campo del formulario: sin este control, cambiar un radio button
+   * desde el navegador compraría a precio de profesional pagando en cuotas.
+   *
+   * El carrito ya está valuado con la lista de la sesión, así que rechazar es
+   * lo correcto: recalcular en silencio a precio de catálogo le cobraría más de
+   * lo que la pantalla le mostró.
+   */
+  const lista = await listaVigente();
+
+  if (!medioPermitido(datos.medioPago, lista.esDiferenciada)) {
+    return {
+      error:
+        "Tu precio de profesional es de contado: pagá por transferencia, débito o efectivo.",
+    };
+  }
+
+  const escala = descuentoPorMedioDePago(
+    await escalasDePago(),
+    datos.medioPago,
+    subtotal,
+  );
+  const descuento = escala
+    ? montoDelDescuentoDePago(subtotal, escala.porcentaje)
+    : 0;
+
+  const total = subtotal - descuento + costoEnvio;
+
+  // La cuenta corriente se verifica acá y no solo en la pantalla: el formulario
+  // puede mandar cualquier medio de pago, y "comprar sin pagar" era literalmente
+  // cuestión de cambiar un radio button desde las herramientas del navegador.
+  if (datos.medioPago === "cuenta_corriente") {
+    const credito = await creditoDisponible(total);
+
+    if (!credito.habilitado || !customerId) {
+      return {
+        error:
+          credito.motivo ??
+          "No podemos cargar esta compra a cuenta corriente. Elegí otro medio de pago.",
+      };
+    }
+  }
+
+  let pedidoCreado: string | null = null;
+  let tokenCreado: string | null = null;
+  // El número se asigna adentro de la transacción pero se usa afuera, para el
+  // enlace de seguimiento, así que sube por acá igual que el token.
+  let numeroCreado = "";
+
+  // El vendedor asignado a la ficha, si la hay: la compra web de un cliente de
+  // cartera sigue siendo una venta de su vendedor de calle.
+  let sellerId: string | null = null;
+  if (customerId) {
+    const [ficha] = await db
+      .select({ sellerId: customers.sellerId })
+      .from(customers)
+      .where(eq(customers.id, customerId))
+      .limit(1);
+    sellerId = ficha?.sellerId ?? null;
+  }
+
+  await db.transaction(async (tx) => {
+    // Adentro de la transacción: el lock de la serie vive lo que vive la
+    // transacción, así que pedirlo antes no protegería el insert.
+    const numero = await siguienteNumeroDePedido(tx);
+    numeroCreado = numero;
+
+    const [pedido] = await tx
+      .insert(orders)
+      .values({
+        numero,
+        customerId,
+        contactoNombre: datos.nombre,
+        contactoEmail: datos.email,
+        contactoTelefono: datos.telefono,
+        branchId: datos.sucursalId ?? null,
+        estado: "pendiente",
+        origen: "tienda",
+        tipoEntrega: datos.entrega,
+        direccionEntrega: datos.direccion ?? null,
+        zonaEnvio: nombreZona,
+        costoEnvio: costoEnvio.toFixed(2),
+        subtotal: subtotal.toFixed(2),
+        descuento: descuento.toFixed(2),
+        total: total.toFixed(2),
+        medioPago: datos.medioPago,
+        estadoPago: "pendiente",
+        notas: datos.notas ?? null,
+        sellerId,
+        createdByUserId: sesion?.userId,
+      })
+      .returning();
+
+    // El costo del momento, congelado: ver `costosParaCongelar`.
+    const costos = await costosParaCongelar(
+      tx,
+      carrito.items.map((i) => i.variantId).filter((v): v is string => Boolean(v)),
+    );
+
+    // Las líneas de los cortes: el material va con su variante —descuenta
+    // stock— y las pasadas y el tapacanto van sin, porque no son mercadería.
+    const lineasDeCortes = cortes.resueltos.flatMap((c) => c.lineas);
+    const costosDeCortes = await costosParaCongelar(
+      tx,
+      lineasDeCortes
+        .map((l) => l.variantId)
+        .filter((v): v is string => Boolean(v)),
+    );
+
+    await tx.insert(orderItems).values([
+      ...carrito.items.map((item, i) => {
+        const precio = item.precioActual ?? item.precioUnitario ?? 0;
+        const costo = item.variantId ? costos.get(item.variantId) : undefined;
+        return {
+          orderId: pedido.id,
+          variantId: item.variantId,
+          descripcion: item.descripcion,
+          unidad: item.unidad,
+          cantidad: item.cantidad.toFixed(2),
+          precioUnitario: precio.toFixed(2),
+          subtotal: (precio * item.cantidad).toFixed(2),
+          costoUnitario: costo?.costoUnitario ?? null,
+          alicuotaIva: costo?.alicuotaIva ?? null,
+          orden: i,
+        };
+      }),
+      ...lineasDeCortes.map((linea, i) => {
+        const costo = linea.variantId
+          ? costosDeCortes.get(linea.variantId)
+          : undefined;
+        return {
+          orderId: pedido.id,
+          variantId: linea.variantId,
+          descripcion: linea.descripcion,
+          unidad: linea.unidad,
+          cantidad: linea.cantidad.toFixed(2),
+          precioUnitario: linea.precioUnitario.toFixed(2),
+          subtotal: (linea.precioUnitario * linea.cantidad).toFixed(2),
+          costoUnitario: costo?.costoUnitario ?? null,
+          alicuotaIva: costo?.alicuotaIva ?? null,
+          orden: carrito.items.length + i,
+        };
+      }),
+    ]);
+
+    /*
+     * Cada corte abre su orden en la cola del taller, atada a este pedido y
+     * dentro de la misma transacción: igual que hace el mostrador. Si el pedido
+     * no llega a guardarse, no queda ningún trabajo huérfano esperando en el
+     * taller.
+     */
+    for (const corte of cortes.resueltos) {
+      const numeroCorte = await siguienteNumeroDeCorte(tx);
+
+      const [creado] = await tx
+        .insert(cuttingOrders)
+        .values({
+          numero: numeroCorte,
+          customerId,
+          orderId: pedido.id,
+          contactoNombre: datos.nombre,
+          branchId: datos.sucursalId ?? null,
+          variantId: corte.placa.variantId,
+          materialDescripcion: corte.placa.descripcion,
+          placaLargoMm: corte.placaLargoMm,
+          placaAnchoMm: corte.placaAnchoMm,
+          mitad: corte.mitad,
+          placas: corte.placas,
+          // Las pasadas vienen del plano, que es lo que se acaba de cobrar.
+          pasadas: corte.pasadas,
+          cantoDescripcion: corte.cantoDescripcion,
+          estado: "en-cola",
+          notas: "Pedido desde el sitio",
+          createdByUserId: sesion?.userId,
+        })
+        .returning({ id: cuttingOrders.id });
+
+      await tx.insert(cuttingItems).values(
+        corte.piezas.map((pieza, i) => ({
+          cuttingOrderId: creado.id,
+          largoMm: pieza.largoMm,
+          anchoMm: pieza.anchoMm,
+          cantidad: pieza.cantidad,
+          respetaVeta: pieza.respetaVeta ?? 0,
+          cantoLargo: pieza.cantoLargo ?? 0,
+          cantoAncho: pieza.cantoAncho ?? 0,
+          etiqueta: pieza.etiqueta ?? null,
+          orden: i,
+        })),
+      );
+    }
+
+    await tx.insert(orderStatusHistory).values({
+      orderId: pedido.id,
+      estado: "pendiente",
+      nota: "Pedido hecho desde la tienda",
+      createdByUserId: sesion?.userId,
+    });
+
+    // A cuenta corriente, la deuda se registra al confirmar: es cuando se
+    // entrega la mercadería, no cuando se cobra.
+    if (datos.medioPago === "cuenta_corriente" && customerId) {
+      await tx.insert(accountMovements).values({
+        customerId,
+        tipo: "compra",
+        monto: total.toFixed(2),
+        detalle: `Pedido ${numero}`,
+        referencia: numero,
+      });
+    }
+
+    // La mercadería queda comprometida en la misma transacción que crea el
+    // pedido. Un pedido de la tienda no es un carrito abandonado: alguien puso
+    // sus datos y confirmó, y si el stock no se reserva acá, el sitio le vende
+    // la misma placa al que entre un minuto después.
+    await reservarPedido(tx, pedido.id);
+
+    pedidoCreado = pedido.id;
+    tokenCreado = pedido.publicToken;
+
+    await tx.delete(cartItems).where(eq(cartItems.cartId, carrito.id!));
+    await tx.delete(cartCortes).where(eq(cartCortes.cartId, carrito.id!));
+    await tx
+      .update(carts)
+      .set({ activo: false, updatedAt: new Date() })
+      .where(eq(carts.id, carrito.id!));
+  });
+
+  /*
+   * Lo que de verdad cambió: el stock.
+   *
+   * La compra reserva mercadería, así que la disponibilidad que muestra el
+   * catálogo quedó vieja. Antes eso se resolvía con `revalidatePath("/",
+   * "layout")`, que tira el caché de **todo el sitio** —incluidas las páginas
+   * que no tienen nada que ver con el stock— y obliga a re-renderizarlas de
+   * cero. Con la etiqueta del catálogo se invalida exactamente lo que depende
+   * del stock, que es para lo que existe; es la misma que usan los ajustes de
+   * stock del panel.
+   */
+  updateTag(ETIQUETAS.catalogo);
+  revalidatePath("/carrito");
+  revalidatePath("/admin/pedidos");
+
+  // La confirmación por correo sale con el pedido ya guardado y fuera del
+  // camino de la respuesta: quien compró no tiene que esperar a Resend para
+  // ver su número de pedido.
+  if (pedidoCreado) {
+    const id = pedidoCreado;
+    after(async () => {
+      await notificarPedidoRecibido(id);
+    });
+  }
+
+  // La redirección va acá y no en el cliente: apenas se vacía el carrito, la
+  // página de confirmación manda a /carrito por no tener ítems, y quien acaba de
+  // comprar terminaba viendo un presupuesto vacío en lugar de su confirmación.
+  // El token va en la URL: el número no autoriza nada. Quien compró sin cuenta
+  // llega a su pedido por este enlace y por el del correo, y por ningún otro.
+  redirect(enlaceDeSeguimiento(numeroCreado, tokenCreado!));
+}
+
+/**
+ * Saca del presupuesto los productos que todavía no tienen precio cargado.
+ *
+ * Existe para que "seguir con el resto" sea un botón y no una tarea: antes, el
+ * único camino era volver al presupuesto y borrar a mano, uno por uno, los
+ * ítems que la pantalla anterior ya había identificado.
+ */
+export async function quitarLosQueSeCotizan(): Promise<void> {
+  const carrito = await obtenerCarrito();
+  if (!carrito.id) return;
+
+  const aQuitar = carrito.items
+    .filter((i) => (i.precioActual ?? i.precioUnitario ?? 0) <= 0)
+    .map((i) => i.id);
+
+  if (aQuitar.length === 0) return;
+
+  await db.delete(cartItems).where(inArray(cartItems.id, aQuitar));
+
+  revalidatePath("/carrito/confirmar");
+  revalidatePath("/carrito");
+}

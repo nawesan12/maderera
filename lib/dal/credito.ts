@@ -8,7 +8,7 @@ import { calcularAging } from "@/lib/cuenta-corriente/aging";
 /**
  * Si a este cliente se le puede seguir cargando a cuenta corriente.
  *
- * Existe porque el control estaba **solo en el checkout del sitio**. El
+ * Existe porque el control estaba **solo en el carrito del sitio**. El
  * mostrador pedía únicamente que hubiera un cliente elegido, y el cobro desde
  * Facturación aceptaba "cuenta corriente" sin mirar nada: los dos caminos por
  * los que entra la mayor parte de la venta de una maderera no verificaban ni
@@ -42,12 +42,12 @@ export interface EstadoDeCredito {
 }
 
 /**
- * A partir de cuántos días una deuda se considera vencida.
+ * A partir de cuántos días vence una deuda, cuando la ficha no dice otra cosa.
  *
- * El brief dice que el plazo de pago "depende del cliente" y no lo fija, así
- * que se toma el tramo que el propio informe de antigüedad ya usa como primer
- * corte: hasta 30 días está al día. Cuando el cliente defina plazos por ficha,
- * este número sale de ahí.
+ * El brief decía que el plazo «depende del cliente» y no lo fijaba, así que
+ * durante un tiempo esto fue el plazo de todos. **Ahora es solo el valor por
+ * omisión**: cada ficha tiene su `diasCredito`, porque la constructora a la que
+ * se le dan 60 días y el que paga a 15 no pueden tener el mismo corte.
  */
 export const DIAS_PARA_VENCER = 30;
 
@@ -68,6 +68,9 @@ export async function estadoDeCredito(
     .select({
       limiteCredito: customers.limiteCredito,
       estado: customers.estado,
+      diasCredito: customers.diasCredito,
+      cuentaBloqueada: customers.cuentaBloqueada,
+      motivoBloqueo: customers.motivoBloqueo,
     })
     .from(customers)
     .where(eq(customers.id, customerId))
@@ -110,6 +113,24 @@ export async function estadoDeCredito(
     autorizable: true,
   };
 
+  /*
+   * El bloqueo puesto a mano.
+   *
+   * Va **antes** que todo lo demás y no es autorizable: alguien decidió cortarle
+   * la cuenta a este cliente, y que el mostrador lo pueda saltear con un botón
+   * vaciaría la decisión. Se levanta desde la ficha, que es donde se tomó.
+   */
+  if (cliente.cuentaBloqueada) {
+    return {
+      ...base,
+      puede: false,
+      autorizable: false,
+      motivo: cliente.motivoBloqueo
+        ? `Cuenta corriente bloqueada: ${cliente.motivoBloqueo}`
+        : "La cuenta corriente está bloqueada.",
+    };
+  }
+
   if (cliente.estado === "moroso") {
     return {
       ...base,
@@ -120,12 +141,14 @@ export async function estadoDeCredito(
 
   // Deuda vencida: es el bloqueo que pide el brief y el que hasta ahora no
   // existía en ningún lado. El informe de antigüedad ya calculaba esto y solo
-  // se mostraba.
-  if (diasDeLaMasVieja !== null && diasDeLaMasVieja > DIAS_PARA_VENCER) {
+  // se mostraba. El plazo sale de la ficha de este cliente.
+  const plazo = cliente.diasCredito || DIAS_PARA_VENCER;
+
+  if (diasDeLaMasVieja !== null && diasDeLaMasVieja > plazo) {
     return {
       ...base,
       puede: false,
-      motivo: `Tiene deuda de hace ${diasDeLaMasVieja} días, más de los ${DIAS_PARA_VENCER} de plazo.`,
+      motivo: `Tiene deuda de hace ${diasDeLaMasVieja} días, más de los ${plazo} de plazo.`,
     };
   }
 

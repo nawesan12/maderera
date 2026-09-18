@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { professionalApplications } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
+import { avisoDeEspera, ipDelPedido, permitido } from "@/lib/limites";
 import { documentoValido, soloDigitos } from "@/lib/cuit";
 import { notificarSolicitudProfesional } from "@/lib/notificaciones/profesionales";
 
@@ -126,6 +127,25 @@ export async function solicitarAcceso(
 
   const datos = parsed.data;
   const numero = soloDigitos(datos.documentoNumero);
+
+  /*
+   * El freno, además del dedupe de abajo.
+   *
+   * Ese dedupe rechaza la misma solicitud dos veces, pero se saltea cambiando un
+   * dígito del documento: tres solicitudes distintas son tres filas en la cola
+   * del panel y tres correos. Con el límite por IP, la cola del panel no se
+   * puede llenar desde un solo lugar.
+   */
+  const puede = await permitido("profesional", `ip:${await ipDelPedido()}`);
+
+  if (!puede.permitido) {
+    return {
+      error: avisoDeEspera(puede),
+      valores: loEscrito(formData),
+      intento: (previo.intento ?? 0) + 1,
+    };
+  }
+
   const sesion = await getSession();
 
   // Una solicitud pendiente por documento: mandar el formulario tres veces no

@@ -84,6 +84,11 @@ export interface CorteDeMostrador {
   variantId: string | null;
   materialDescripcion: string;
   cantoDescripcion: string | null;
+  /** La medida de la placa, para que el taller rehaga el mismo plano. */
+  placaLargoMm: number | null;
+  placaAnchoMm: number | null;
+  /** De qué sale: placa entera (null) o media, y en qué sentido partida. */
+  mitad: "largo" | "ancho" | null;
   placas: number;
   pasadas: number;
   /** El acomodo corregido a mano, como JSON. Ver `lib/cortes/plano.ts`. */
@@ -470,6 +475,9 @@ export async function registrarVentaDeMostrador(
           branchId: venta.branchId,
           variantId: venta.corte.variantId,
           materialDescripcion: venta.corte.materialDescripcion,
+          placaLargoMm: venta.corte.placaLargoMm,
+          placaAnchoMm: venta.corte.placaAnchoMm,
+          mitad: venta.corte.mitad,
           placas: venta.corte.placas,
           pasadas: venta.corte.pasadas,
           cantoDescripcion: venta.corte.cantoDescripcion,

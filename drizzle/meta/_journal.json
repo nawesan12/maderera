@@ -400,6 +400,83 @@
       "when": 1789426787912,
       "tag": "0056_skinny_otto_octavius",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1789675127105,
+      "tag": "0057_majestic_black_knight",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1789675356513,
+      "tag": "0058_last_carlie_cooper",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1789676227344,
+      "tag": "0059_sweet_shinko_yamashiro",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1789677100592,
+      "tag": "0060_normal_prodigy",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1789678035264,
+      "tag": "0061_wealthy_sway",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1789678400452,
+      "tag": "0062_simple_newton_destine",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1789678817254,
+      "tag": "0063_tranquil_leo",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1789679138322,
+      "tag": "0064_bored_mockingbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1789679919737,
+      "tag": "0065_supreme_lord_hawal",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1789680293356,
+      "tag": "0066_brief_meggan",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1789692179237,
+      "tag": "0067_dusty_quasimodo",
+      "breakpoints": true
     }
   ]
 }

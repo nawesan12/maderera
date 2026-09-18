@@ -11,6 +11,7 @@ import type { Carrito } from "@/lib/dal/carrito";
 export const CARRITO_VACIO: Carrito = {
   id: null,
   items: [],
+  cortes: [],
   cantidadItems: 0,
   subtotal: 0,
   conPrecioDesactualizado: 0,

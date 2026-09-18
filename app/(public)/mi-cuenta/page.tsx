@@ -277,7 +277,7 @@ function AccesosRapidos() {
       texto: "Todo el catálogo con precio y disponibilidad",
     },
     {
-      href: "/presupuesto",
+      href: "/carrito",
       icono: Scissors,
       titulo: "Pedir un corte a medida",
       texto: "Mandanos el despiece y lo cortamos en el aserradero",
@@ -351,7 +351,7 @@ async function Bienvenida({ nombre }: { nombre: string }) {
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
-            href="/presupuesto"
+            href="/carrito"
             className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea bg-card px-5 font-medium transition-colors hover:bg-sitio-alt"
           >
             <Scissors className="h-4 w-4" />

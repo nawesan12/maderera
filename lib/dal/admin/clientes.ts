@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   accountMovements,
@@ -26,6 +26,11 @@ export interface ClienteListado {
   email: string | null;
   saldo: number;
   limiteCredito: number;
+  /** El plazo de pago de este cliente, en días. */
+  diasCredito: number;
+  /** Si alguien le cortó la cuenta corriente a mano. */
+  cuentaBloqueada: boolean;
+  motivoBloqueo: string | null;
   totalComprado: number;
   ultimaCompra: Date | null;
 }
@@ -39,7 +44,17 @@ export interface ClienteListado {
  * en el mostrador.
  */
 export async function listarClientes(
-  filtros: { busqueda?: string; tipo?: string; vendedor?: string } = {},
+  filtros: {
+    busqueda?: string;
+    tipo?: string;
+    /**
+     * A qué se dedica. Reemplazó al «tipo de cliente» en la pantalla: es lo
+     * que permite ver cuánto creció cada gremio, que es para lo que la clienta
+     * lo pidió. Ver `lib/rubros-cliente.ts`.
+     */
+    rubro?: string;
+    vendedor?: string;
+  } = {},
 ): Promise<ClienteListado[]> {
   await requireStaff();
 
@@ -47,6 +62,16 @@ export async function listarClientes(
 
   if (filtros.tipo && filtros.tipo !== "todos") {
     condiciones.push(eq(customers.tipo, filtros.tipo as "particular" | "profesional"));
+  }
+
+  if (filtros.rubro && filtros.rubro !== "todos") {
+    // «Sin rubro» es una respuesta útil: son las fichas que hay que completar
+    // para que los reportes por gremio signifiquen algo.
+    condiciones.push(
+      filtros.rubro === "sin-rubro"
+        ? or(isNull(customers.rubro), eq(customers.rubro, ""))!
+        : eq(customers.rubro, filtros.rubro),
+    );
   }
   // La cartera de un vendedor. El conteo de `/admin/clientes/vendedores`
   // decía "3 clientes asignados" y era texto muerto: no había con qué ver
@@ -98,6 +123,9 @@ export async function listarClientes(
       telefono: customers.telefono,
       email: customers.email,
       limiteCredito: customers.limiteCredito,
+      diasCredito: customers.diasCredito,
+      cuentaBloqueada: customers.cuentaBloqueada,
+      motivoBloqueo: customers.motivoBloqueo,
       saldo: saldo.saldo,
       totalComprado: compras.total,
       ultimaCompra: compras.ultima,

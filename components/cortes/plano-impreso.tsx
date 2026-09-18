@@ -1,6 +1,10 @@
 import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
 import { fechaCorta } from "@/lib/formato";
-import type { PlanoDeCorte, PlacaDelPlano } from "@/lib/cortes/plano";
+import {
+  superficieDeSierra,
+  type PlanoDeCorte,
+  type PlacaDelPlano,
+} from "@/lib/cortes/plano";
 
 /**
  * El plano de corte en papel.
@@ -29,6 +33,8 @@ export function PlanoImpreso({
     material: string;
     cantoDescripcion: string | null;
     createdAt: Date;
+    /** «Placa entera» o de qué media sale. */
+    deQueSale?: string;
   };
 }) {
   const desperdicio = 1 - plano.aprovechadoTotal;
@@ -67,7 +73,8 @@ export function PlanoImpreso({
             Plano de corte {corte.numero} · {corte.cliente}
           </p>
           <p className="plano-sub">
-            {corte.material} · placa {plano.placaLargo} × {plano.placaAncho} mm
+            {corte.material} · {corte.deQueSale ?? "placa"} de{" "}
+            {plano.placaLargo} × {plano.placaAncho} mm
             {corte.cantoDescripcion ? ` · canto ${corte.cantoDescripcion}` : ""}
             {" · "}
             {fechaCorta.format(corte.createdAt)}
@@ -111,6 +118,14 @@ export function PlanoImpreso({
         <div className="plano-numero">
           <p className="valor">{plano.totalPiezas}</p>
           <p className="rotulo">piezas</p>
+        </div>
+        {/* Lo que se lleva el disco. Es el número que faltaba: estaba
+            descontado en el acomodo desde siempre y no se decía en ninguna
+            parte, así que el operario no entendía por qué dos piezas de 900 no
+            entraban en una placa de 1830. */}
+        <div className="plano-numero">
+          <p className="valor">{plano.anchoSierra} mm</p>
+          <p className="rotulo">se lleva la sierra por corte</p>
         </div>
       </div>
 
@@ -156,6 +171,7 @@ export function PlanoImpreso({
       ))}
 
       {plano.placas.length > 0 && <TablaDePiezas plano={plano} />}
+      {plano.placas.length > 0 && <TablaDeSobrantes plano={plano} />}
 
       <p className="plano-pie">
         Las piezas están numeradas en el orden en que salen de la máquina: las
@@ -316,18 +332,34 @@ function DibujoDePlaca({
 
       {/* Cada pasada de sierra. Van dibujadas sobre el pedazo que parten y no
           de borde a borde de la placa: el corte guillotina es recursivo, así
-          que el segundo corte ya trabaja sobre lo que dejó el primero. */}
+          que el segundo corte ya trabaja sobre lo que dejó el primero.
+
+          El trazo relleno es **el ancho real del disco**, a la misma escala que
+          todo lo demás: esos milímetros no están en ninguna pieza ni en ningún
+          recorte, se hacen aserrín. Dibujarlos es lo que hace que la cuenta
+          cierre a ojo, que es lo que la clienta pedía al decir «nunca te das
+          cuenta de que deja esos 5 mm». */}
       {placa.cortes.map((c, i) => (
-        <line
-          key={`c${i}`}
-          x1={c.x1}
-          y1={c.y1}
-          x2={c.x2}
-          y2={c.y2}
-          stroke="#c2410c"
-          strokeWidth={3}
-          strokeDasharray="18 12"
-        />
+        <g key={`c${i}`}>
+          <line
+            x1={c.x1}
+            y1={c.y1}
+            x2={c.x2}
+            y2={c.y2}
+            stroke="#c2410c"
+            strokeOpacity={0.28}
+            strokeWidth={plano.anchoSierra}
+          />
+          <line
+            x1={c.x1}
+            y1={c.y1}
+            x2={c.x2}
+            y2={c.y2}
+            stroke="#c2410c"
+            strokeWidth={3}
+            strokeDasharray="18 12"
+          />
+        </g>
       ))}
 
       {/* Las cotas de la placa, fuera del recuadro. */}
@@ -389,5 +421,74 @@ function TablaDePiezas({ plano }: { plano: PlanoDeCorte }) {
         )}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * Lo que sobra de cada placa, en números.
+ *
+ * El dibujo ya muestra los recortes punteados, pero el taller necesita la
+ * lista: qué pedazo guardar, de qué medida, y de cuál placa salió. Y al pie,
+ * las dos formas en que se va el material que no es pieza —el aserrín de la
+ * sierra y lo que sobra— que es lo que contesta «¿por qué no entró todo?».
+ */
+function TablaDeSobrantes({ plano }: { plano: PlanoDeCorte }) {
+  const sierra = plano.placas.reduce(
+    (t, placa) => t + superficieDeSierra(placa, plano.anchoSierra),
+    0,
+  );
+
+  return (
+    <>
+      <table className="plano-tabla">
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th>Sobrante</th>
+            <th>Medida</th>
+            <th className="num">m²</th>
+            <th>De quién es</th>
+          </tr>
+        </thead>
+        <tbody>
+          {plano.placas.flatMap((placa) =>
+            placa.recortes.length === 0
+              ? [
+                  <tr key={`v${placa.numero}`}>
+                    <td>{placa.numero}</td>
+                    <td colSpan={4}>Sin pedazos enteros que valga guardar</td>
+                  </tr>,
+                ]
+              : placa.recortes.map((r, i) => (
+                  <tr key={`${placa.numero}-s${i}`}>
+                    <td>{placa.numero}</td>
+                    <td>{i + 1}</td>
+                    <td>
+                      {r.ancho} × {r.alto} mm
+                    </td>
+                    <td className="num">
+                      {((r.ancho * r.alto) / 1_000_000)
+                        .toFixed(2)
+                        .replace(".", ",")}
+                    </td>
+                    <td>
+                      {placa.seVendeEntera
+                        ? "Del cliente: se lleva la placa entera"
+                        : "Al stock de la maderera"}
+                    </td>
+                  </tr>
+                )),
+          )}
+        </tbody>
+      </table>
+
+      <p className="plano-pie">
+        De lo comprado, el{" "}
+        {Math.round(plano.aprovechadoTotal * 100)}% sale en piezas. La sierra se
+        come {(sierra / 1_000_000).toFixed(2).replace(".", ",")} m² en{" "}
+        {plano.pasadas} {plano.pasadas === 1 ? "pasada" : "pasadas"} de{" "}
+        {plano.anchoSierra} mm, y el resto queda en los sobrantes de la tabla.
+      </p>
+    </>
   );
 }

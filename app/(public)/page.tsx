@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Hero } from "@/components/home/hero";
+import { ResenasDelNegocio } from "@/components/home/resenas";
+import { resenasDelNegocio, resumenDelNegocio } from "@/lib/google/resenas";
 import { ProductCard } from "@/components/product-card";
 import { datosDePortada, numerosDeLaEmpresa } from "@/lib/dal/catalog";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
@@ -43,18 +45,30 @@ import { BotonCrearCuenta } from "@/components/boton-crear-cuenta";
  * toca un precio, un producto o el stock, el panel invalida la etiqueta del
  * catálogo y la página se rehace enseguida.
  */
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 export default async function HomePage() {
-  const [portada, sucursales, numeros, avisos, promos, escalasPago] =
-    await Promise.all([
-      datosDePortada(),
-      listarSucursalesPublicas(),
-      numerosDeLaEmpresa(),
-      bannersDe("portada"),
-      promosVigentes(),
-      escalasDePagoPublicas(),
-    ]);
+  const [
+    portada,
+    sucursales,
+    numeros,
+    avisos,
+    promos,
+    escalasPago,
+    resenas,
+    resumenResenas,
+  ] = await Promise.all([
+    datosDePortada(),
+    listarSucursalesPublicas(),
+    numerosDeLaEmpresa(),
+    bannersDe("portada"),
+    promosVigentes(),
+    escalasDePagoPublicas(),
+    // Lo que dicen los clientes: el brief pedía que quien entra sienta
+    // confianza y trayectoria, y eso lo sostenía el año de fundación solo.
+    resenasDelNegocio(),
+    resumenDelNegocio(),
+  ]);
 
   return (
     <div className="overflow-hidden">
@@ -91,6 +105,8 @@ export default async function HomePage() {
       <Destacados productos={portada.destacados} />
 
       <Herramientas />
+
+      <ResenasDelNegocio resenas={resenas} resumen={resumenResenas} />
 
       <BannerProfesionales sucursales={sucursales} />
 
@@ -289,12 +305,13 @@ function BannerCorte() {
                 mientras esperás
               </h2>
               <p className="mt-3 max-w-[420px] text-base leading-relaxed text-white/70">
-                Traé el despiece en milímetros y te lo cortamos en el día. Si
-                son más de 20 piezas, dejalo y lo pasás a buscar.
+                Cargá el despiece en milímetros, mirá cómo entra en la placa y
+                comprá el corte hecho. Si son más de 20 piezas, dejalo y lo
+                pasás a buscar.
               </p>
               <div className="mt-6 flex flex-wrap gap-2.5">
                 <Link
-                  href="/presupuesto"
+                  href="/corte"
                   className="flex h-12 items-center rounded-[10px] bg-brand-orange px-[22px] text-[15.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
                 >
                   Pedir un corte
@@ -329,7 +346,7 @@ function BannerCorte() {
  * que nadie reclama en el mostrador un reintegro que terminó el mes pasado.
  *
  * El descuento de contado va aparte y destacado porque no vence: sale de las
- * mismas escalas que cobra el checkout (`paymentDiscounts`), no de un texto
+ * mismas escalas que cobra el carrito (`paymentDiscounts`), no de un texto
  * escrito acá. Si las escalas de contado no coinciden entre sí, la franja no se
  * muestra antes que prometer un número que la caja después no aplica.
  */
@@ -392,7 +409,7 @@ function MediosDePago({
               <p className="text-[14px] text-white/70">
                 {mediosDeContado.charAt(0).toUpperCase() +
                   mediosDeContado.slice(1)}
-                . Se aplica solo en el checkout y en el mostrador.
+                . Se aplica solo en el carrito y en el mostrador.
               </p>
             </div>
           </div>
@@ -405,9 +422,23 @@ function MediosDePago({
                 key={p.id}
                 className="flex flex-col rounded-2xl border border-linea bg-card px-5 py-[18px]"
               >
-                <span className="text-xs font-bold uppercase tracking-[0.08em] text-acento-texto">
-                  {p.medio}
-                </span>
+                {/* El logo del banco, si lo cargaron. Se reconoce antes que
+                    el nombre escrito, que es para lo que la clienta lo pidió.
+                    Va a altura fija y `object-contain` porque los logos vienen
+                    de cualquier proporción. */}
+                {p.imagenUrl ? (
+                  <Image
+                    src={p.imagenUrl}
+                    alt={p.medio}
+                    width={160}
+                    height={40}
+                    className="mb-2 h-10 w-auto max-w-[160px] object-contain object-left"
+                  />
+                ) : (
+                  <span className="text-xs font-bold uppercase tracking-[0.08em] text-acento-texto">
+                    {p.medio}
+                  </span>
+                )}
                 <h3 className="mt-1.5 text-[17px] font-bold leading-snug tracking-[-0.01em]">
                   {p.titulo}
                 </h3>
@@ -541,16 +572,16 @@ function Herramientas() {
       icono: Scissors,
       titulo: "Corte a medida",
       texto:
-        "Mandanos el despiece en milímetros y te lo cortamos en el aserradero.",
-      href: "/presupuesto",
-      cta: "Pedir un corte",
+        "Cargá el despiece en milímetros, mirá el plano y comprá el corte hecho.",
+      href: "/corte",
+      cta: "Armar mi corte",
     },
     {
       icono: ClipboardList,
       titulo: "Presupuesto online",
       texto:
         "Armá tu lista, pedí precio y seguí la respuesta desde tu cuenta.",
-      href: "/presupuesto",
+      href: "/carrito",
       cta: "Armar presupuesto",
     },
     {

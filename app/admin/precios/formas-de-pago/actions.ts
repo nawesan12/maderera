@@ -104,10 +104,10 @@ export async function guardarDescuentoDePago(
   // La franja de la portada anuncia este número desde un caché compartido
   // (`escalasDePagoPublicas`). `updateTag` y no `revalidateTag`: quien acaba de
   // cambiar el descuento tiene que verlo al volver al sitio, no en cinco
-  // minutos. Lo que *cobra* el checkout no pasa por acá: eso se lee en vivo.
+  // minutos. Lo que *cobra* el carrito no pasa por acá: eso se lee en vivo.
   updateTag(ETIQUETAS.contenido);
   revalidatePath("/admin/precios/formas-de-pago");
-  revalidatePath("/checkout");
+  revalidatePath("/carrito/confirmar");
   revalidatePath("/");
   return { ok: "Descuento guardado." };
 }

@@ -20,7 +20,7 @@ export function VolverAPedir({ numero }: { numero: string }) {
         <Check className="h-4 w-4 shrink-0" />
         {estado.ok}
         <Link
-          href="/presupuesto"
+          href="/carrito"
           className="font-medium underline underline-offset-2"
         >
           Ver el presupuesto

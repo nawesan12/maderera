@@ -262,7 +262,7 @@ export async function guardarDireccion(
     .where(eq(addresses.customerId, cliente.id));
 
   // La primera dirección queda como predeterminada sin que nadie lo marque:
-  // tener una sola y que igual haya que elegirla en el checkout es trabajo de
+  // tener una sola y que igual haya que elegirla en el carrito es trabajo de
   // más para nada.
   const predeterminada = datos.predeterminada || Number(cuantas) === 0;
 

@@ -55,6 +55,23 @@ const pool =
     connectionTimeoutMillis: 10_000,
   });
 
+/*
+ * Un cliente que se muere no puede llevarse la instancia entera.
+ *
+ * `pg` emite `error` en el pool cuando una conexión que estaba ociosa se corta
+ * —Neon escalando a cero, un corte de red, el pooler reciclando—. **Sin este
+ * manejador, Node lo trata como una excepción no capturada y termina el
+ * proceso**: con Fluid Compute, donde una misma instancia atiende muchas
+ * requests a la vez, eso no es una consulta que falla sino todas las consultas
+ * de esa instancia cayéndose juntas.
+ *
+ * Con el manejador, el cliente roto se descarta y el pool abre otro en la
+ * próxima consulta, que es exactamente lo que uno querría que pasara.
+ */
+pool.on("error", (error) => {
+  console.error("Conexión de la base caída, se descarta el cliente", error);
+});
+
 if (process.env.NODE_ENV !== "production") globalForDb.pool = pool;
 
 export const db = drizzle(pool, { schema, casing: "snake_case" });

@@ -12,8 +12,24 @@ export interface EstadoCarrito {
   ok?: string;
 }
 
+/**
+ * Qué hay que volver a dibujar después de tocar el carrito.
+ *
+ * **Antes decía `revalidatePath("/", "layout")`, y eso era carísimo.** Esa
+ * llamada tira el caché de *todas* las páginas del sitio: cada vez que un
+ * visitante agregaba un producto, la portada, el catálogo y las ocho fichas de
+ * rubro quedaban sin cachear y la siguiente visita de cualquier otra persona
+ * pagaba el render completo. Cuanto más se usaba el carrito, más caro salía el
+ * sitio para todos.
+ *
+ * Y no hacía falta: el contador del carrito lo dibuja el navegador
+ * (`CarritoProvider`), y las dos pantallas que muestran el carrito del servidor
+ * son dinámicas por definición —leen la cookie—, así que nunca estuvieron
+ * cacheadas. Alcanza con nombrarlas.
+ */
 function refrescar() {
-  revalidatePath("/", "layout");
+  revalidatePath("/carrito");
+  revalidatePath("/carrito/confirmar");
 }
 
 const agregarSchema = z.object({
@@ -102,11 +118,27 @@ export async function agregarAlCarrito(
   return { ok: `${item.descripcion} va al presupuesto.` };
 }
 
+/**
+ * Cuántas líneas se pueden mandar juntas.
+ *
+ * La calculadora más larga —la de techos— manda una decena de materiales. Este
+ * tope es lo que separa eso de un arreglo de diez mil elementos, que serían diez
+ * mil `INSERT` en una sola llamada sin sesión: la acción **no tenía ningún
+ * límite de largo**.
+ */
+const MAXIMO_POR_TANDA = 40;
+
 /** Agrega varias líneas de una sola vez: la calculadora manda todo junto. */
 export async function agregarVarios(
   items: z.input<typeof agregarSchema>[],
 ): Promise<EstadoCarrito> {
   if (items.length === 0) return { error: "No hay nada para agregar." };
+
+  if (items.length > MAXIMO_POR_TANDA) {
+    return {
+      error: `Son demasiadas líneas juntas (${items.length}). Agregalas en tandas de ${MAXIMO_POR_TANDA}.`,
+    };
+  }
 
   for (const item of items) {
     const resultado = await agregarAlCarrito(item);

@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FileCheck2, Loader2 } from "lucide-react";
 import { formatearMonto } from "@/lib/formato";
+import { ETIQUETA_CIRCUITO } from "@/lib/circuito";
 import {
   pagarAProveedor,
   verAcumulado,
@@ -43,6 +44,8 @@ interface ChequeDeCartera {
   banco: string | null;
   fechaPago: Date | string;
   importe: number;
+  /** Físico o e-Cheq: al endosar hay que ofrecer el que corresponde. */
+  tipo: string;
   cliente: string | null;
 }
 
@@ -270,7 +273,11 @@ export function FormularioPago({
             <option value="transferencia">Transferencia</option>
             <option value="efectivo">Efectivo</option>
             <option value="cheque">Cheque</option>
-            <option value="echeq">e-Cheq</option>
+            {/* El e-Cheq solo en el circuito de facturas: es electrónico y
+                queda a nombre de la empresa en el banco, así que por el otro
+                circuito cruzaría las dos cajas. Lo pidió la clienta y el
+                servidor lo rechaza igual. */}
+            {circuito !== "negro" && <option value="echeq">e-Cheq</option>}
           </select>
         </label>
 
@@ -297,7 +304,29 @@ export function FormularioPago({
               <button
                 key={c}
                 type="button"
-                onClick={() => setCircuito(c)}
+                onClick={() => {
+                  setCircuito(c);
+
+                  /*
+                   * Pasar el pago al circuito B saca los e-Cheq.
+                   *
+                   * Sin esto se podía elegir e-Cheq, cambiar el circuito
+                   * después y mandar el formulario: el servidor lo rechaza,
+                   * pero recién al guardar, con todo tipeado.
+                   */
+                  if (c === "negro") {
+                    if (medio === "echeq") setMedio("cheque");
+                    setPartes((previas) =>
+                      previas
+                        ? previas.map((p) =>
+                            p.medio === "echeq"
+                              ? { ...p, medio: "cheque", chequeId: "" }
+                              : p,
+                          )
+                        : previas,
+                    );
+                  }
+                }}
                 aria-pressed={circuito === c}
                 className={`h-11 flex-1 rounded-lg text-base font-medium transition-colors ${
                   circuito === c
@@ -305,7 +334,7 @@ export function FormularioPago({
                     : "border border-linea text-muted-foreground hover:bg-hundida"
                 }`}
               >
-                {c === "blanco" ? "En blanco" : "En negro"}
+                {ETIQUETA_CIRCUITO[c]}
               </button>
             ))}
           </div>
@@ -432,7 +461,9 @@ export function FormularioPago({
                     <option value="transferencia">Transferencia</option>
                     <option value="efectivo">Efectivo</option>
                     <option value="cheque">Cheque</option>
-                    <option value="echeq">e-Cheq</option>
+                    {circuito !== "negro" && (
+                      <option value="echeq">e-Cheq</option>
+                    )}
                   </select>
                   <input
                     type="number"
@@ -469,7 +500,10 @@ export function FormularioPago({
 
                 {(parte.medio === "cheque" || parte.medio === "echeq") && (
                   <div className="space-y-2">
-                    {cartera.length > 0 && parte.medio === "cheque" && (
+                    {/* Endosar uno de los que están en cartera, en vez de
+                        tipear uno nuevo. Se ofrecen los del mismo tipo: un
+                        e-Cheq recibido no se endosa como cheque de papel. */}
+                    {chequesParaEndosar(cartera, parte.medio).length > 0 && (
                       <select
                         value={parte.chequeId}
                         onChange={(e) => {
@@ -488,7 +522,7 @@ export function FormularioPago({
                         className="h-10 w-full rounded-lg border border-linea bg-card px-2 text-base"
                       >
                         <option value="">Cheque nuevo (propio)</option>
-                        {cartera.map((c) => (
+                        {chequesParaEndosar(cartera, parte.medio).map((c) => (
                           <option key={c.id} value={c.id}>
                             Endosar {c.numero}
                             {c.banco ? ` · ${c.banco}` : ""} ·{" "}
@@ -710,4 +744,20 @@ export function FormularioPago({
       </div>
     </section>
   );
+}
+
+/**
+ * Los cheques de cartera que se pueden endosar en un renglón.
+ *
+ * Del mismo tipo que el medio elegido: un e-Cheq recibido no se puede entregar
+ * como cheque de papel ni al revés, porque son dos instrumentos distintos aunque
+ * en la pantalla se carguen igual.
+ */
+function chequesParaEndosar(
+  cartera: ChequeDeCartera[],
+  medio: ParteUI["medio"],
+): ChequeDeCartera[] {
+  if (medio !== "cheque" && medio !== "echeq") return [];
+  const buscado = medio === "echeq" ? "echeq" : "fisico";
+  return cartera.filter((c) => c.tipo === buscado);
 }

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   branches,
@@ -106,12 +106,49 @@ function leerMargen(f: {
   };
 }
 
-/** El filtro común: pedidos reales del período. */
-function enElPeriodo(periodo: Periodo) {
+/**
+ * Con qué se acota el reporte, además del período.
+ *
+ * Los cortes agrupan; esto **filtra**, que es otra cosa y es lo que faltaba:
+ * «ventas por producto» cortado por rubro no contesta «qué le vendemos a las
+ * constructoras», porque mezcla todos los clientes. Lo pidió la clienta al
+ * pedir poder ver el crecimiento de cada gremio.
+ */
+export interface FiltrosDeReporte {
+  /** Rubro del **cliente**, no del producto. Ver `lib/rubros-cliente.ts`. */
+  rubro?: string;
+  sucursal?: string;
+}
+
+/** El filtro común: pedidos reales del período, acotados si se pidió. */
+function enElPeriodo(periodo: Periodo, filtros: FiltrosDeReporte = {}) {
   const condiciones = [sql`${orders.estado} <> 'cancelado'`];
 
   if (periodo.desde) condiciones.push(gte(orders.createdAt, periodo.desde));
   if (periodo.hasta) condiciones.push(lt(orders.createdAt, periodo.hasta));
+
+  /*
+   * Por rubro del cliente, con una subconsulta y no con un join.
+   *
+   * Un join a `customers` obligaría a tocar las siete consultas de este archivo
+   * —cada una agrupa por otra cosa— y a cuidar que ninguna duplique filas. La
+   * subconsulta se agrega en un solo lugar y las siete la heredan.
+   */
+  if (filtros.rubro && filtros.rubro !== "todos") {
+    condiciones.push(
+      inArray(
+        orders.customerId,
+        db
+          .select({ id: customers.id })
+          .from(customers)
+          .where(eq(customers.rubro, filtros.rubro)),
+      ),
+    );
+  }
+
+  if (filtros.sucursal && filtros.sucursal !== "todas") {
+    condiciones.push(eq(orders.branchId, filtros.sucursal));
+  }
 
   return and(...condiciones);
 }
@@ -119,6 +156,7 @@ function enElPeriodo(periodo: Periodo) {
 /** Qué se vendió, por producto. Ordenado por lo que más facturó. */
 export async function ventasPorProducto(
   periodo: Periodo,
+  filtros: FiltrosDeReporte = {},
   tope = 50,
 ): Promise<FilaDeReporte[]> {
   await requireStaff();
@@ -140,7 +178,7 @@ export async function ventasPorProducto(
     .innerJoin(orders, eq(orders.id, orderItems.orderId))
     .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
     .leftJoin(products, eq(products.id, productVariants.productId))
-    .where(enElPeriodo(periodo))
+    .where(enElPeriodo(periodo, filtros))
     .groupBy(sql`1`, sql`2`)
     .orderBy(desc(sql`sum(${orderItems.subtotal})`))
     .limit(tope);
@@ -170,6 +208,7 @@ export async function ventasPorProducto(
  */
 export async function ventasPorCategoria(
   periodo: Periodo,
+  filtros: FiltrosDeReporte = {},
   tope = 50,
 ): Promise<FilaDeReporte[]> {
   await requireStaff();
@@ -192,7 +231,7 @@ export async function ventasPorCategoria(
     .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
     .leftJoin(products, eq(products.id, productVariants.productId))
     .leftJoin(categories, eq(categories.id, products.categoryId))
-    .where(enElPeriodo(periodo))
+    .where(enElPeriodo(periodo, filtros))
     .groupBy(sql`1`, sql`2`)
     .orderBy(desc(sql`sum(${orderItems.subtotal})`))
     .limit(tope);
@@ -212,6 +251,7 @@ export async function ventasPorCategoria(
 /** Quién compró. Sirve para saber a quién llamar cuando deja de comprar. */
 export async function ventasPorCliente(
   periodo: Periodo,
+  filtros: FiltrosDeReporte = {},
   tope = 50,
 ): Promise<FilaDeReporte[]> {
   await requireStaff();
@@ -231,7 +271,7 @@ export async function ventasPorCliente(
     .from(orders)
     .leftJoin(margenes, eq(margenes.orderId, orders.id))
     .leftJoin(customers, eq(customers.id, orders.customerId))
-    .where(enElPeriodo(periodo))
+    .where(enElPeriodo(periodo, filtros))
     .groupBy(sql`1`, sql`2`, customers.cuit)
     .orderBy(desc(sql`sum(${orders.total})`))
     .limit(tope);
@@ -252,11 +292,12 @@ export async function ventasPorCliente(
  * Agrupa por el **vendedor asignado** a la venta (`orders.sellerId`) y, si no
  * hay, por quien la cargó en el sistema: el vendedor de calle vende y otro
  * tipea, y sumarle esa venta al que tipeó infla el ranking equivocado. Lo que
- * no tiene ni vendedor ni autor —el checkout del sitio— queda afuera: no lo
+ * no tiene ni vendedor ni autor —el carrito del sitio— queda afuera: no lo
  * atendió nadie.
  */
 export async function ventasPorVendedor(
   periodo: Periodo,
+  filtros: FiltrosDeReporte = {},
 ): Promise<FilaDeReporte[]> {
   await requireStaff();
 
@@ -278,7 +319,7 @@ export async function ventasPorVendedor(
     .leftJoin(user, eq(user.id, orders.createdByUserId))
     .where(
       and(
-        enElPeriodo(periodo),
+        enElPeriodo(periodo, filtros),
         sql`(${sellers.id} is not null or ${user.id} is not null)`,
       ),
     )
@@ -298,6 +339,7 @@ export async function ventasPorVendedor(
 /** Dónde se vendió, por sucursal y por canal. */
 export async function ventasPorSucursal(
   periodo: Periodo,
+  filtros: FiltrosDeReporte = {},
 ): Promise<FilaDeReporte[]> {
   await requireStaff();
 
@@ -316,7 +358,7 @@ export async function ventasPorSucursal(
     .from(orders)
     .leftJoin(margenes, eq(margenes.orderId, orders.id))
     .leftJoin(branches, eq(branches.id, orders.branchId))
-    .where(enElPeriodo(periodo))
+    .where(enElPeriodo(periodo, filtros))
     .groupBy(sql`1`, sql`2`)
     .orderBy(desc(sql`sum(${orders.total})`));
 
@@ -333,6 +375,7 @@ export async function ventasPorSucursal(
 /** Por dónde entró la venta: mostrador, sitio, presupuesto, teléfono. */
 export async function ventasPorCanal(
   periodo: Periodo,
+  filtros: FiltrosDeReporte = {},
 ): Promise<FilaDeReporte[]> {
   await requireStaff();
 
@@ -350,7 +393,7 @@ export async function ventasPorCanal(
     })
     .from(orders)
     .leftJoin(margenes, eq(margenes.orderId, orders.id))
-    .where(enElPeriodo(periodo))
+    .where(enElPeriodo(periodo, filtros))
     .groupBy(orders.origen)
     .orderBy(desc(sql`sum(${orders.total})`));
 
@@ -396,6 +439,7 @@ export {
  */
 export async function ventasPorElaboracion(
   periodo: Periodo,
+  filtros: FiltrosDeReporte = {},
 ): Promise<FilaDeReporte[]> {
   await requireStaff();
 
@@ -418,7 +462,7 @@ export async function ventasPorElaboracion(
     .innerJoin(orders, eq(orders.id, orderItems.orderId))
     .innerJoin(productVariants, eq(productVariants.id, orderItems.variantId))
     .innerJoin(products, eq(products.id, productVariants.productId))
-    .where(enElPeriodo(periodo))
+    .where(enElPeriodo(periodo, filtros))
     .groupBy(sql`1`, sql`2`)
     .orderBy(desc(sql`sum(${orderItems.subtotal})`));
 
@@ -435,12 +479,76 @@ export async function ventasPorElaboracion(
 export async function reporteDeVentas(
   corte: CorteDelReporte,
   periodo: Periodo,
+  filtros: FiltrosDeReporte = {},
 ): Promise<FilaDeReporte[]> {
-  if (corte === "rubro") return ventasPorCategoria(periodo);
-  if (corte === "elaboracion") return ventasPorElaboracion(periodo);
-  if (corte === "cliente") return ventasPorCliente(periodo);
-  if (corte === "vendedor") return ventasPorVendedor(periodo);
-  if (corte === "sucursal") return ventasPorSucursal(periodo);
-  if (corte === "canal") return ventasPorCanal(periodo);
-  return ventasPorProducto(periodo);
+  if (corte === "rubro") return ventasPorCategoria(periodo, filtros);
+  if (corte === "elaboracion") return ventasPorElaboracion(periodo, filtros);
+  if (corte === "cliente") return ventasPorCliente(periodo, filtros);
+  if (corte === "vendedor") return ventasPorVendedor(periodo, filtros);
+  if (corte === "sucursal") return ventasPorSucursal(periodo, filtros);
+  if (corte === "canal") return ventasPorCanal(periodo, filtros);
+  return ventasPorProducto(periodo, filtros);
+}
+
+/**
+ * Lo vendido mes a mes, con los mismos filtros del reporte.
+ *
+ * **Es lo único que la tabla no puede contestar.** La tabla dice qué se vendió y
+ * cuánto dejó; esto dice si el mes viene mejor o peor que los anteriores, que es
+ * la pregunta que se hace mirando un reporte. Por eso se agregó un gráfico y no
+ * otra columna: una serie de tiempo en una tabla se lee sumando de cabeza.
+ *
+ * Agrupa por mes calendario y devuelve los meses **sin ventas también**, en
+ * cero: una serie con huecos se lee como si esos meses no existieran.
+ */
+export interface MesDelReporte {
+  /** `2026-03`, para la clave del gráfico. */
+  clave: string;
+  /** "mar", como se rotula el eje. */
+  etiqueta: string;
+  total: number;
+}
+
+export async function ventasPorMes(
+  periodo: Periodo,
+  filtros: FiltrosDeReporte = {},
+  meses = 6,
+): Promise<MesDelReporte[]> {
+  await requireStaff();
+
+  const filas = await db
+    .select({
+      mes: sql<string>`to_char(date_trunc('month', ${orders.createdAt}), 'YYYY-MM')`,
+      total: sql<string>`sum(${orders.total})`,
+    })
+    .from(orders)
+    .where(enElPeriodo(periodo, filtros))
+    .groupBy(sql`1`)
+    .orderBy(sql`1`);
+
+  const porMes = new Map(filas.map((f) => [f.mes, Number(f.total)]));
+
+  // La serie se arma desde el calendario y no desde lo que trajo la consulta:
+  // un mes sin ventas es un dato, y saltearlo dibuja una línea que miente.
+  const hasta = periodo.hasta ?? new Date();
+  const desde =
+    periodo.desde ??
+    new Date(hasta.getFullYear(), hasta.getMonth() - (meses - 1), 1);
+
+  const serie: MesDelReporte[] = [];
+  const cursor = new Date(desde.getFullYear(), desde.getMonth(), 1);
+
+  while (cursor <= hasta && serie.length < 24) {
+    const clave = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+
+    serie.push({
+      clave,
+      etiqueta: cursor.toLocaleDateString("es-AR", { month: "short" }),
+      total: porMes.get(clave) ?? 0,
+    });
+
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return serie;
 }

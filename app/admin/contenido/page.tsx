@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Landmark, Megaphone, Settings2 } from "lucide-react";
+import { Landmark, Megaphone, Settings2, Star } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { listarAjustes, listarResenas } from "@/lib/dal/admin/contenido";
 import { Ajustes } from "./secciones";
@@ -45,6 +45,16 @@ export default async function ContenidoPage() {
         >
           <Landmark className="h-5 w-5" />
           Promociones bancarias
+        </Link>
+        {/* Las del negocio, distintas de las de producto que se moderan más
+            abajo: éstas hablan de la atención y son las que van en la
+            portada. */}
+        <Link
+          href="/admin/contenido/resenas-negocio"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <Star className="h-5 w-5" />
+          Reseñas del negocio
         </Link>
       </EncabezadoPanel>
 

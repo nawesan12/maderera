@@ -1,0 +1,1 @@
+ALTER TABLE "regimenes_retencion" ADD COLUMN "jurisdiccion" text;

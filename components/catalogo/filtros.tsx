@@ -312,7 +312,7 @@ export function PanelCategorias({
           Lo cortamos en el aserradero. Mandanos el despiece y te cotizamos.
         </p>
         <Link
-          href="/presupuesto"
+          href="/carrito"
           className="mt-3 flex h-[42px] items-center justify-center rounded-[9px] bg-brand-orange text-[14.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
         >
           Pedir corte a medida

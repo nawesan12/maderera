@@ -25,7 +25,7 @@ export function FormularioBanco({ datos }: { datos: DatosBancarios | null }) {
     <section className="tarjeta p-5">
       <h2 className="text-base font-medium">Datos para transferencias</h2>
       <p className="mt-0.5 text-base text-muted-foreground">
-        Es lo que ve quien elige transferencia en el checkout. Sin esto cargado,
+        Es lo que ve quien elige transferencia en el carrito. Sin esto cargado,
         la tienda le pide que los solicite por WhatsApp.
       </p>
 

@@ -8,6 +8,7 @@ import {
   products,
 } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
+import { avisoDeEspera, permitido } from "@/lib/limites";
 import { listaVigente } from "@/lib/dal/precios-sesion";
 import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 import { pdfDeListaDePrecios } from "@/lib/pdf/lista-precios";
@@ -32,6 +33,20 @@ export async function GET() {
   const sesion = await getSession();
   if (!sesion) {
     return new Response("Necesitás iniciar sesión.", { status: 401 });
+  }
+
+  /*
+   * El freno.
+   *
+   * Este documento recorre **todas** las variantes activas con cinco uniones y
+   * arma un PDF de la lista entera: es el trabajo más caro que se puede pedir
+   * desde afuera del panel, y alcanza con registrarse —que es gratis y no pide
+   * confirmar el correo—. Diez por hora es más de lo que nadie necesita.
+   */
+  const puede = await permitido("listaDePrecios", `usuario:${sesion.userId}`);
+
+  if (!puede.permitido) {
+    return new Response(avisoDeEspera(puede), { status: 429 });
   }
 
   const lista = await listaVigente();

@@ -124,7 +124,7 @@ export async function datosDelAsistente(
   }
 
   /*
-   * Las formas de pago están escritas acá y en el checkout, y eso es una copia
+   * Las formas de pago están escritas acá y en el carrito, y eso es una copia
    * que conviene tener presente: si se agrega un medio, hay que tocar los dos
    * lugares. Se deja así porque llevarlas a la base para tres renglones que
    * cambian una vez por año sería más máquina que problema.

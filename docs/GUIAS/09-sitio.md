@@ -43,6 +43,21 @@ Google muestre las estrellitas en el resultado de búsqueda.
 > por pedido de la clienta. Las direcciones viejas redirigen a la portada, así
 > que un enlace compartido no queda roto.
 
+## Las reseñas del negocio
+
+Son otras: éstas hablan de **la maderera** —la atención, el corte, la entrega— y
+son las que van en la portada. Se cargan en *Contenido → Reseñas del negocio*,
+copiando de la ficha de Google las que valga la pena mostrar: quién la escribió,
+cuántas estrellas puso y el texto tal cual.
+
+Se cargan y se publican por separado, así que se puede tener una guardada sin
+mostrarla.
+
+Cuando estén las claves de Google configuradas aparece además el botón **«Traer
+las de Google»**, que las baja solas. Las que trae quedan **sin publicar**: Google
+devuelve las cinco que él elige, y no siempre son las que uno pondría al frente
+del negocio.
+
 ## Las sucursales
 
 En *Sucursales*, el botón **Editar la ficha publicada** abre los datos que se
@@ -50,7 +65,7 @@ ven en el sitio: dirección, teléfono, WhatsApp, correo, horario, el enlace del
 mapa, los servicios y los destacados.
 
 Ese dato es **uno solo para todo**: si cambia el horario del sábado, cambia en
-la página de sucursales, en el pie, en el checkout con retiro y en la ficha que
+la página de sucursales, en el pie, en el carrito con retiro y en la ficha que
 Google muestra al costado de la búsqueda. Antes había que corregirlo en cuatro
 lugares y por eso quedaba viejo en tres.
 
@@ -70,9 +85,14 @@ Hay tres lugares:
 
 | Dónde | Qué es |
 |---|---|
-| **Franja de arriba de todo** | Una línea de texto sobre el encabezado, en todas las páginas. Para un aviso corto. |
+| **Aviso de bienvenida** | Un cartel que se abre solo la primera vez que alguien entra, en cualquier página. Para la promoción que no se puede pasar por alto. |
 | **Portada, debajo del inicio** | El lugar grande. Si cargás varios, la portada los pasa solos, de a uno. |
 | **Arriba del catálogo** | Lo ve quien ya está buscando productos. |
+
+El aviso de bienvenida **era una franja de una línea** arriba de todo, y se
+cambió por pedido de la clienta: una línea de texto pegada al borde se lee como
+parte del navegador y nadie la miraba. Ahora se muestra **una vez por visita** —no
+en cada página— y se cierra con la X, con Escape o tocando afuera.
 
 ### Poné siempre la fecha de fin
 

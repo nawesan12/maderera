@@ -10,10 +10,14 @@ import {
 import { listarClientes } from "@/lib/dal/admin/clientes";
 import { leerPeriodoMensual } from "@/lib/periodos";
 import { formatearMonto } from "@/lib/formato";
+import { asc } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { regimenesRetencion } from "@/lib/db/schema";
 import { CargarSufrida } from "./cargar";
+import { Regimenes } from "./regimenes";
 import { Vacio } from "@/components/admin/vacio";
 
-export const metadata: Metadata = { title: "Retenciones sufridas" };
+export const metadata: Metadata = { title: "Retenciones" };
 
 const IMPUESTOS: Record<string, string> = {
   ganancias: "Ganancias",
@@ -39,10 +43,17 @@ export default async function RetencionesSufridasPage({
   const { periodo: crudo } = await searchParams;
   const periodo = leerPeriodoMensual(crudo, new Date());
 
-  const [sufridas, credito, clientes] = await Promise.all([
+  const [sufridas, credito, clientes, regimenes] = await Promise.all([
     listarRetencionesSufridas(),
     creditoPorRetenciones(periodo.desde, periodo.hasta),
     listarClientes({}),
+    // Con qué se retiene. Va en esta misma pantalla porque es la única que
+    // habla de retenciones, y hasta ahora las alícuotas solo se podían cambiar
+    // entrando a la base.
+    db
+      .select()
+      .from(regimenesRetencion)
+      .orderBy(asc(regimenesRetencion.impuesto), asc(regimenesRetencion.codigo)),
   ]);
 
   const etiqueta = new Date(periodo.anio, periodo.mes - 1, 1).toLocaleDateString(
@@ -63,7 +74,7 @@ export default async function RetencionesSufridasPage({
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-[26px] font-bold tracking-tight">
-              Retenciones sufridas
+              Retenciones
             </h1>
             <p className="mt-1 text-base text-muted-foreground">
               Los certificados que nos entregan los clientes. Bajan lo que deben
@@ -94,6 +105,23 @@ export default async function RetencionesSufridasPage({
           ))}
         </section>
       )}
+
+      {/* Con qué se retiene. Arriba de lo sufrido porque es lo que se
+          configura una vez y se mira cuando algo no cuadra. */}
+      <Regimenes
+        regimenes={regimenes.map((r) => ({
+          id: r.id,
+          codigo: r.codigo,
+          nombre: r.nombre,
+          impuesto: r.impuesto,
+          jurisdiccion: r.jurisdiccion,
+          alicuota: Number(r.alicuota),
+          alicuotaNoInscripto: Number(r.alicuotaNoInscripto),
+          minimoNoImponible: Number(r.minimoNoImponible),
+          minimoRetencion: Number(r.minimoRetencion),
+          activo: r.activo,
+        }))}
+      />
 
       <CargarSufrida
         clientes={clientes.map((c) => ({

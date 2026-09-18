@@ -2,7 +2,7 @@
  * La forma del enlace de seguimiento de un pedido.
  *
  * Vive suelto, sin `server-only` ni acceso a la base, porque lo arman cuatro
- * lugares distintos —la redirección del checkout, las plantillas de correo, la
+ * lugares distintos —la redirección del carrito, las plantillas de correo, la
  * vuelta de Mercado Pago y la pantalla de pago de demostración— y la forma en
  * que esto se rompe de verdad es que alguien escriba la URL a mano en un lugar
  * nuevo y se olvide el token.

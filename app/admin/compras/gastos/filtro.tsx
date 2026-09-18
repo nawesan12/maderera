@@ -4,6 +4,7 @@ import {
   BotonesDeFiltro,
   useFiltrosDeLista,
 } from "@/components/admin/filtros-de-lista";
+import { ETIQUETA_CIRCUITO } from "@/lib/circuito";
 
 /**
  * Cortar los gastos por circuito de facturación.
@@ -25,8 +26,8 @@ export function FiltroDeCircuito({ actual }: { actual: string }) {
       alElegir={(v) => actualizar({ circuito: v })}
       opciones={[
         { valor: "todos", texto: "Los dos" },
-        { valor: "blanco", texto: "En blanco" },
-        { valor: "negro", texto: "En negro" },
+        { valor: "blanco", texto: ETIQUETA_CIRCUITO.blanco },
+        { valor: "negro", texto: ETIQUETA_CIRCUITO.negro },
       ]}
     />
   );

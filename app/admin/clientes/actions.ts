@@ -304,3 +304,116 @@ export async function vincularCuentaWeb(
     ok: "Listo: ahora ve sus pedidos y su cuenta corriente desde el sitio.",
   };
 }
+
+/**
+ * Corta o vuelve a habilitar la cuenta corriente de un cliente.
+ *
+ * Es lo que la clienta ya hace en papel —«ellos hacen un bloqueo de la cuenta
+ * corriente»— y hasta ahora el sistema no tenía: lo más cercano era marcar la
+ * ficha como morosa, que es otra cosa (un estado del cliente, no una decisión
+ * sobre su crédito) y que el mostrador podía saltear autorizando la venta.
+ *
+ * **El bloqueo a mano no es autorizable**: alguien decidió cortarle la cuenta y
+ * el mostrador no lo puede saltear con un botón. Se levanta desde acá, que es
+ * donde se tomó la decisión, y queda en la bitácora con el motivo.
+ */
+export async function bloquearCuentaCorriente(
+  customerId: string,
+  bloquear: boolean,
+  motivo: string,
+): Promise<EstadoCliente> {
+  const usuario = await requireStaffRole("admin");
+
+  const parsed = z
+    .object({
+      customerId: z.string().uuid(),
+      bloquear: z.boolean(),
+      motivo: z.string().trim().max(200),
+    })
+    .safeParse({ customerId, bloquear, motivo });
+
+  if (!parsed.success) return { error: "No se pudo actualizar la cuenta." };
+
+  // Bloquear sin explicar por qué deja a quien atiende sin nada que decirle al
+  // cliente cuando reclama, que es dentro de cinco minutos.
+  if (parsed.data.bloquear && parsed.data.motivo.length < 3) {
+    return { error: "Escribí por qué se bloquea: se lo van a preguntar." };
+  }
+
+  const [cliente] = await db
+    .update(customers)
+    .set({
+      cuentaBloqueada: parsed.data.bloquear,
+      motivoBloqueo: parsed.data.bloquear ? parsed.data.motivo : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(customers.id, parsed.data.customerId))
+    .returning({ nombre: customers.nombre });
+
+  if (!cliente) return { error: "Esa ficha ya no está." };
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "cambiar_estado",
+    entidad: "cliente",
+    entidadId: parsed.data.customerId,
+    descripcion: parsed.data.bloquear
+      ? `Bloqueó la cuenta corriente de ${cliente.nombre}: ${parsed.data.motivo}`
+      : `Volvió a habilitar la cuenta corriente de ${cliente.nombre}`,
+  });
+
+  revalidatePath("/admin/clientes");
+  revalidatePath(`/admin/clientes/${parsed.data.customerId}`);
+
+  return {
+    ok: parsed.data.bloquear
+      ? "Cuenta corriente bloqueada. El mostrador no va a poder venderle a cuenta."
+      : "Cuenta corriente habilitada de nuevo.",
+  };
+}
+
+/**
+ * Cambia el plazo de pago de un cliente.
+ *
+ * Era una constante global de 30 días para toda la cartera. La constructora a
+ * la que se le dan 60 y el que paga a 15 no pueden tener el mismo corte: con un
+ * solo número, uno de los dos siempre aparece mal marcado en la cobranza.
+ */
+export async function cambiarPlazoDePago(
+  customerId: string,
+  dias: number,
+): Promise<EstadoCliente> {
+  const usuario = await requireStaffRole("admin");
+
+  const parsed = z
+    .object({
+      customerId: z.string().uuid(),
+      dias: z.coerce.number().int().min(0).max(365),
+    })
+    .safeParse({ customerId, dias });
+
+  if (!parsed.success) {
+    return { error: "El plazo va en días, de 0 a 365." };
+  }
+
+  const [cliente] = await db
+    .update(customers)
+    .set({ diasCredito: parsed.data.dias, updatedAt: new Date() })
+    .where(eq(customers.id, parsed.data.customerId))
+    .returning({ nombre: customers.nombre });
+
+  if (!cliente) return { error: "Esa ficha ya no está." };
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "editar",
+    entidad: "cliente",
+    entidadId: parsed.data.customerId,
+    descripcion: `Dejó el plazo de pago de ${cliente.nombre} en ${parsed.data.dias} días`,
+  });
+
+  revalidatePath("/admin/clientes");
+  revalidatePath(`/admin/clientes/${parsed.data.customerId}`);
+
+  return { ok: `Listo: paga a ${parsed.data.dias} días.` };
+}

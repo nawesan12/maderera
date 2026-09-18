@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { ETIQUETA_CIRCUITO } from "@/lib/circuito";
 import { cargarGasto, type EstadoGasto } from "./actions";
 
 const CATEGORIAS = {
@@ -164,7 +165,7 @@ export function CargarGasto({
                     : "border border-linea text-muted-foreground hover:bg-hundida"
                 }`}
               >
-                {c === "blanco" ? "En blanco" : "En negro"}
+                {ETIQUETA_CIRCUITO[c]}
               </button>
             ))}
           </div>

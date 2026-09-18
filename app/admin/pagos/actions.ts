@@ -230,7 +230,7 @@ export async function guardarDatosBancarios(
   }
 
   revalidatePath("/admin/pagos");
-  revalidatePath("/checkout");
+  revalidatePath("/carrito/confirmar");
 
   await registrarEnBitacora({
     sesion: usuario,

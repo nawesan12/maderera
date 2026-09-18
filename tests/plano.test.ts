@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calcularPlanoDeCorte,
+  superficieDeSierra,
   leerAcomodoManual,
   MINIMO_APROVECHABLE,
   type PiezaAcortar,
@@ -525,5 +526,38 @@ describe("leerAcomodoManual", () => {
 
     const colocadas = plano.placas.reduce((t, p) => t + p.piezas.length, 0);
     expect(colocadas).toBe(2);
+  });
+});
+
+describe("lo que se lleva la sierra", () => {
+  it("cuenta cada corte por el espesor del disco", () => {
+    // Un corte horizontal de 1000 mm con un disco de 5 mm se come 5000 mm².
+    expect(
+      superficieDeSierra(
+        {
+          cortes: [
+            { direccion: "horizontal", x1: 0, y1: 100, x2: 1000, y2: 100 },
+            { direccion: "vertical", x1: 400, y1: 0, x2: 400, y2: 200 },
+          ],
+        },
+        5,
+      ),
+    ).toBe(1000 * 5 + 200 * 5);
+  });
+
+  it("sin cortes no se come nada", () => {
+    expect(superficieDeSierra({ cortes: [] }, 5)).toBe(0);
+  });
+
+  it("acompaña el espesor configurado", () => {
+    // El valor sale de /admin/calculadoras: con un disco más grueso, la
+    // pérdida crece en proporción. Es lo que la pantalla tiene que poder
+    // explicar.
+    const cortes = [
+      { direccion: "horizontal" as const, x1: 0, y1: 10, x2: 100, y2: 10 },
+    ];
+    expect(superficieDeSierra({ cortes }, 8)).toBe(
+      superficieDeSierra({ cortes }, 4) * 2,
+    );
   });
 });

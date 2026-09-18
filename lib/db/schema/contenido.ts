@@ -189,6 +189,16 @@ export const bankPromotions = pgTable(
     detalle: text().notNull().default(""),
     /** Qué días corre: "Todos los días", "Sólo jueves". Vacío no muestra nada. */
     dias: text().notNull().default(""),
+    /**
+     * El logo del banco o de la billetera.
+     *
+     * Lo pidió la clienta —"poner flyers o logos"— y tiene una razón que se ve
+     * en la pantalla: una grilla de ocho tarjetas de texto es una lista que
+     * nadie lee, y el cliente reconoce a su banco por el logo antes que por el
+     * nombre. Es opcional: sin logo la tarjeta se ve como hasta ahora, con el
+     * medio escrito.
+     */
+    imagenUrl: text(),
     /** Hasta cuándo. Vacía es "hasta nuevo aviso" y no vence sola. */
     vigenciaHasta: timestamp({ withTimezone: true }),
     /**
@@ -209,6 +219,54 @@ export const bankPromotions = pgTable(
 );
 
 export type BankPromotion = typeof bankPromotions.$inferSelect;
+
+/**
+ * Las reseñas del negocio, las que se ven en Google.
+ *
+ * **No son las mismas que `product_reviews`.** Aquéllas son de compra
+ * verificada y hablan de un producto: «la melamina vino impecable». Éstas
+ * hablan del negocio —la atención, el corte, la entrega— y son las que alguien
+ * lee antes de decidir si compra acá. La clienta las pidió al pedir «sumar
+ * reseñas de Google».
+ *
+ * **De dónde salen: de los dos lados.** Las que se cargan a mano desde el panel
+ * —copiadas de Google, elegidas por el equipo— y las que trae la API de Google
+ * Places si hay clave configurada. El `origen` las distingue, y el `externoId`
+ * evita que la misma reseña entre dos veces cuando la API la vuelve a traer.
+ *
+ * No llevan JSON-LD: marcar como propias reseñas que están publicadas en Google
+ * va contra sus reglas de datos estructurados, y el castigo es a todo el sitio.
+ */
+export const origenResena = pgEnum("origen_resena", ["manual", "google"]);
+
+export const businessReviews = pgTable(
+  "business_reviews",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    autor: text().notNull(),
+    /** De 1 a 5, como las pone Google. */
+    estrellas: integer().notNull(),
+    texto: text().notNull(),
+    /** Cuándo la escribieron. Una reseña de 2019 se lee distinto que la de ayer. */
+    fecha: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    origen: origenResena().notNull().default("manual"),
+    /** El id que le da Google, para no traerla dos veces. */
+    externoId: text(),
+    /** La foto del autor, si Google la da. */
+    fotoUrl: text(),
+    /** Se muestra en el sitio. Se carga apagada: alguien la lee antes. */
+    publicada: boolean().notNull().default(false),
+    orden: integer().notNull().default(0),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("business_reviews_publicada_idx").on(t.publicada, t.orden),
+    uniqueIndex("business_reviews_externo_idx").on(t.externoId),
+  ],
+);
+
+export type BusinessReview = typeof businessReviews.$inferSelect;
 
 export const banners = pgTable(
   "banners",

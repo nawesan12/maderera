@@ -6,6 +6,11 @@
  * por eso viven en la base y no en el código. Este script deja la tabla lista
  * para operar; mantenerla al día es tarea del contador.
  *
+ * **Se puede volver a correr**: los que ya están no se pisan (`onConflictDoNothing`
+ * por código), así que sembrar de nuevo solo agrega los que falten —por ejemplo
+ * los de Ingresos Brutos, que se sumaron después— sin tocar las alícuotas que
+ * el contador ya haya ajustado desde la pantalla.
+ *
  * Uso: npm run db:seed-retenciones
  */
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -26,6 +31,7 @@ async function main() {
         codigo: r.codigo,
         nombre: r.nombre,
         impuesto: r.impuesto,
+        jurisdiccion: r.jurisdiccion ?? null,
         alicuota: r.alicuota.toFixed(3),
         alicuotaNoInscripto: r.alicuotaNoInscripto.toFixed(3),
         minimoNoImponible: r.minimoNoImponible.toFixed(2),

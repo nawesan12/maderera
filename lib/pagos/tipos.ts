@@ -2,7 +2,7 @@
  * La forma de un proveedor de cobros.
  *
  * Existe por lo mismo que `lib/whatsapp/tipos.ts` y
- * `lib/fiscal/proveedores/tipos.ts`: el checkout, la conciliación y el pago de
+ * `lib/fiscal/proveedores/tipos.ts`: el carrito, la conciliación y el pago de
  * deuda hablan con esta interfaz y no con Mercado Pago. Mientras el cliente no
  * entregue sus credenciales corre el proveedor de demostración, y el día que
  * las entregue se cargan dos variables de entorno sin tocar una pantalla.

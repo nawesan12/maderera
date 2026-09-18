@@ -40,6 +40,14 @@ de la cuenta, y las columnas de debe y haber.
 El código de cuenta es una sugerencia —cada estudio tiene su plan— y por eso va
 también el nombre: alcanza para remapearlo sin adivinar.
 
+**Los gastos van a su cuenta, no a una bolsa.** Cada categoría —flete,
+combustible, sueldos, alquiler— tiene la suya, así que el mayor contesta «cuánto
+gastamos en combustible» sin leer los conceptos uno por uno.
+
+**Los cobros descargan la deuda del cliente.** Antes la venta cargaba Deudores y
+nada la descargaba nunca: la cuenta crecía mes a mes como si nadie hubiera
+pagado, y el saldo del cierre no se parecía al de la cuenta corriente.
+
 **Si alguna fila dice "NO CIERRA", no mandes el archivo.** Un asiento
 desbalanceado hace que el sistema del estudio rechace todo, y eso se descubre el
 día del vencimiento. Avisá antes.

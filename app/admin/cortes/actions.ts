@@ -5,7 +5,7 @@ import type { PiezaFijada } from "@/lib/cortes/plano";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { z } from "zod";
-import { cuttingItems, cuttingOrders } from "@/lib/db/schema";
+import { branches, cuttingItems, cuttingOrders } from "@/lib/db/schema";
 import { siguienteNumeroDeCorte } from "@/lib/dal/numeracion-ventas";
 import { requireStaff } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
@@ -155,6 +155,18 @@ export async function crearCorte(
         .trim()
         .min(2, "Falta decir qué placa se corta.")
         .max(200),
+      /*
+       * La medida de la placa de este trabajo.
+       *
+       * Puede no venir —la mayoría de los cortes son sobre una placa del
+       * catálogo y la medida sale de la variante—, pero cuando viene manda:
+       * es material del cliente, un retazo, o una placa que no mide lo de
+       * plaza. El tope de 6000 mm es holgado incluso para tableros largos.
+       */
+      placaLargoMm: z.coerce.number().int().positive().max(6000).optional(),
+      placaAnchoMm: z.coerce.number().int().positive().max(6000).optional(),
+      /** De qué sale: placa entera (vacío) o media, y en qué sentido. */
+      mitad: z.enum(["largo", "ancho"]).optional(),
       placas: z.coerce.number().int().positive().max(999).default(1),
       cantoDescripcion: z.string().trim().max(120).optional(),
       urgente: z.coerce.boolean().default(false),
@@ -176,6 +188,9 @@ export async function crearCorte(
       branchId: (formData.get("branchId") as string) || undefined,
       variantId: (formData.get("variantId") as string) || undefined,
       materialDescripcion: formData.get("materialDescripcion"),
+      placaLargoMm: (formData.get("placaLargoMm") as string) || undefined,
+      placaAnchoMm: (formData.get("placaAnchoMm") as string) || undefined,
+      mitad: (formData.get("mitad") as string) || undefined,
       placas: formData.get("placas") || 1,
       cantoDescripcion: (formData.get("cantoDescripcion") as string) || undefined,
       urgente: formData.get("urgente") === "si",
@@ -206,6 +221,27 @@ export async function crearCorte(
   await db.transaction(async (tx) => {
     numero = await siguienteNumeroDeCorte(tx);
 
+    /*
+     * En qué sucursal se corta.
+     *
+     * Dejó de preguntarse en pantalla —lo pidió la clienta: el corte se hace
+     * donde está la máquina— pero se sigue guardando, porque de eso dependen
+     * la cola de ese taller y de dónde se descuenta el stock. Sale del pedido
+     * si el corte nació de uno; si no, de la primera sucursal activa, la misma
+     * convención que usan las reservas de stock.
+     */
+    const branchId =
+      cabecera.data.branchId ??
+      (
+        await tx
+          .select({ id: branches.id })
+          .from(branches)
+          .where(eq(branches.active, true))
+          .orderBy(branches.sortOrder)
+          .limit(1)
+      )[0]?.id ??
+      null;
+
     const [corte] = await tx
       .insert(cuttingOrders)
       .values({
@@ -213,9 +249,12 @@ export async function crearCorte(
         customerId: cabecera.data.customerId ?? null,
         orderId: cabecera.data.orderId ?? null,
         contactoNombre: cabecera.data.contactoNombre,
-        branchId: cabecera.data.branchId ?? null,
+        branchId,
         variantId: cabecera.data.variantId ?? null,
         materialDescripcion: cabecera.data.materialDescripcion,
+        placaLargoMm: cabecera.data.placaLargoMm ?? null,
+        placaAnchoMm: cabecera.data.placaAnchoMm ?? null,
+        mitad: cabecera.data.mitad ?? null,
         placas: cabecera.data.placas,
         cantoDescripcion: cabecera.data.cantoDescripcion ?? null,
         acomodoManual: cabecera.data.acomodoManual ?? null,

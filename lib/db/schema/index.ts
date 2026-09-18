@@ -23,3 +23,4 @@ export * from "./gastos";
 export * from "./comercial";
 export * from "./cheques";
 export * from "./circuito";
+export * from "./limites";

@@ -290,18 +290,51 @@ export async function registrarPagoAProveedor(
       }
 
       for (const parte of partes) {
+        /*
+         * El e-Cheq no cruza al circuito B.
+         *
+         * Lo pidió la clienta —«para pagos en negro no usar los echeq, tener
+         * cuidado con eso, para que no crucen»— y la razón es evidente puesta
+         * así: un e-Cheq es electrónico y deja rastro bancario a nombre de la
+         * empresa, así que pagar con uno por el circuito que no se factura
+         * cruza las dos cajas en el único lugar donde no tiene arreglo.
+         *
+         * Se rechaza acá y no solo en la pantalla porque una acción de servidor
+         * es una dirección pública.
+         */
+        const circuito = entrada.circuito ?? "blanco";
+        const esEcheq =
+          parte.medio === "echeq" || parte.cheque?.tipo === "echeq";
+
+        if (circuito === "negro" && esEcheq) {
+          throw new Error(
+            "Un e-Cheq no puede salir por el circuito B: queda registrado en el banco a nombre de la empresa. Usá cheque físico o efectivo.",
+          );
+        }
+
         let chequeId: string | null = null;
 
         if (parte.chequeId) {
           // Endoso: el cheque tiene que estar en cartera, y de ahí sale.
           const [enCartera] = await tx
-            .select({ id: cheques.id, importe: cheques.importe })
+            .select({
+              id: cheques.id,
+              importe: cheques.importe,
+              tipo: cheques.tipo,
+            })
             .from(cheques)
             .where(and(eq(cheques.id, parte.chequeId), eq(cheques.estado, "cartera")))
             .limit(1);
 
           if (!enCartera) {
             throw new Error("Uno de los cheques elegidos ya no está en cartera.");
+          }
+          // La misma regla para el endoso: el e-Cheq que se recibió tampoco
+          // puede salir por el circuito B.
+          if (circuito === "negro" && enCartera.tipo === "echeq") {
+            throw new Error(
+              "Ese es un e-Cheq y el pago va por el circuito B: quedaría registrado en el banco. Endosá un cheque físico.",
+            );
           }
           if (Math.abs(Number(enCartera.importe) - parte.importe) > 0.01) {
             throw new Error(
@@ -327,7 +360,7 @@ export async function registrarPagoAProveedor(
               estado: "entregado",
               // El cheque hereda el circuito del pago: sale con esa plata y
               // por esa vía, así que no es una decisión aparte.
-              circuito: entrada.circuito ?? "blanco",
+              circuito,
               notas: `Pago a ${proveedor.nombre}`,
               createdByUserId: entrada.usuarioId,
             })

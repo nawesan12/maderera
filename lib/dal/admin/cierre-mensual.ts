@@ -7,6 +7,7 @@ import {
   cashSessions,
   expenses,
   goodsReceipts,
+  invoicePayments,
   invoices,
   purchaseInvoices,
   retencionesPracticadas,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/db/schema";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
+  asientoDeCobro,
   asientoDeCompra,
   asientoDeGasto,
   asientoDePagoAProveedor,
@@ -61,7 +63,7 @@ export async function asientosDelPeriodo(
   const enRango = (columna: PgColumn) =>
     and(gte(columna, desde), sql`${columna} <= ${hasta}`);
 
-  const [ventas, compras, pagos, gastos] = await Promise.all([
+  const [ventas, compras, pagos, gastos, cobros] = await Promise.all([
     db
       .select({
         fecha: invoices.fechaEmision,
@@ -129,6 +131,27 @@ export async function asientosDelPeriodo(
       .from(expenses)
       .where(enRango(expenses.fecha))
       .orderBy(asc(expenses.fecha)),
+
+    /*
+     * Lo que los clientes pagaron.
+     *
+     * Faltaba, y se notaba: la venta cargaba Deudores y nada lo descargaba, así
+     * que en el mayor la cuenta crecía mes a mes como si nadie hubiera pagado.
+     */
+    db
+      .select({
+        fecha: invoicePayments.fecha,
+        tipo: invoices.tipo,
+        puntoVenta: invoices.puntoVenta,
+        numero: invoices.numero,
+        cliente: invoices.receptorNombre,
+        importe: invoicePayments.monto,
+        medio: invoicePayments.medio,
+      })
+      .from(invoicePayments)
+      .innerJoin(invoices, eq(invoices.id, invoicePayments.invoiceId))
+      .where(enRango(invoicePayments.fecha))
+      .orderBy(asc(invoicePayments.fecha)),
   ]);
 
   const asientos: Asiento[] = [];
@@ -146,6 +169,18 @@ export async function asientosDelPeriodo(
         tributos: Number(v.tributos),
         total: Number(v.total),
         esNotaDeCredito: v.tipo.startsWith("nota_credito"),
+      }),
+    );
+  }
+
+  for (const c of cobros) {
+    asientos.push(
+      asientoDeCobro({
+        fecha: c.fecha,
+        comprobante: `${nombreComprobante(c.tipo as TipoComprobante)} ${numeroFormateado(c.puntoVenta, c.numero)}`,
+        cliente: c.cliente,
+        importe: Number(c.importe),
+        medio: c.medio,
       }),
     );
   }

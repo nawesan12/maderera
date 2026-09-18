@@ -276,7 +276,7 @@ function PanelDelProfesional({
           : "Consultanos para habilitarla.",
     },
     {
-      href: "/presupuesto",
+      href: "/carrito",
       icono: Clock,
       titulo: "Presupuesto express",
       detalle: "Mandá la lista de la obra y contestamos en 24 horas hábiles.",

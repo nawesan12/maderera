@@ -100,6 +100,7 @@ export default async function PromocionesPage() {
             vigenciaHasta: paraInput(p.vigenciaHasta),
             orden: p.orden,
             activo: p.activo,
+            imagenUrl: p.imagenUrl,
             alAire: alAire(p),
           }}
         />

@@ -29,10 +29,22 @@ import { branches } from "./inventory";
  * actualiza la ficha de cliente.
  */
 
+/**
+ * A qué se dedica quien pide el acceso.
+ *
+ * Es el mismo catálogo que usan las fichas de cliente (`lib/rubros-cliente.ts`),
+ * y por eso un profesional aprobado queda con el rubro que él mismo eligió al
+ * anotarse. **Cementista** y **Moldava** los sumó la clienta al pedir que la
+ * lista de clientes se corte por rubro: el primero es quien trabaja con cemento
+ * y compra madera para encofrado; el segundo, quien revende la línea propia de
+ * molduras.
+ */
 export const rubroProfesional = pgEnum("rubro_profesional", [
   "arquitecto",
   "constructora",
   "carpintero",
+  "cementista",
+  "moldava",
   "disenador",
   "instalador",
   "woodframer",

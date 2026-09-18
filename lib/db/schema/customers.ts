@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
   numeric,
   pgEnum,
   pgTable,
@@ -79,6 +80,27 @@ export const customers = pgTable(
     }),
     /** Tope de cuenta corriente. Cero significa que no opera a cuenta. */
     limiteCredito: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    /**
+     * A cuántos días vence lo que compra a cuenta.
+     *
+     * Era una constante global de 30 días (`DIAS_PARA_VENCER`) porque el brief
+     * decía que el plazo «depende del cliente» sin fijarlo. Ahora depende del
+     * cliente de verdad: la constructora a la que se le dan 60 días y el que
+     * paga a 15 no pueden tener el mismo corte, y con un solo número uno de los
+     * dos siempre queda mal marcado.
+     */
+    diasCredito: integer().notNull().default(30),
+    /**
+     * Cuenta corriente bloqueada a mano.
+     *
+     * Es lo que la clienta ya hace en papel: cuando alguien se atrasa, le cortan
+     * la cuenta hasta que se ponga al día. Distinto del bloqueo automático por
+     * mora —que se calcula de la antigüedad— porque éste lo decide una persona y
+     * no se levanta solo: hay que volver a habilitarlo.
+     */
+    cuentaBloqueada: boolean().notNull().default(false),
+    /** Por qué se bloqueó. Es lo que se le explica al cliente cuando reclama. */
+    motivoBloqueo: text(),
     /** El vendedor asignado. `asesor` queda como texto legado de la migración. */
     sellerId: uuid().references(() => sellers.id, { onDelete: "set null" }),
     asesor: text(),
@@ -105,6 +127,68 @@ export const customers = pgTable(
     uniqueIndex("customers_user_idx").on(t.userId),
   ],
 );
+
+/**
+ * En qué anda una gestión con un cliente.
+ *
+ * Las cuatro etapas de un seguimiento real, que es el que la clienta pidió
+ * asentar: hay algo para hacer, se está hablando, quedó una promesa con fecha,
+ * o se terminó. No son etapas de venta genéricas de un CRM —«prospecto»,
+ * «calificado»— porque acá el cliente ya existe: lo que se sigue es la gestión,
+ * casi siempre una cobranza o un presupuesto que espera respuesta.
+ */
+export const etapaSeguimiento = pgEnum("etapa_seguimiento", [
+  "pendiente",
+  "hablando",
+  "promesa",
+  "cerrado",
+]);
+
+/**
+ * Las gestiones con un cliente, con su recordatorio.
+ *
+ * **Por qué existe.** De la clienta: «seguimiento tipo pipeline para que los
+ * recordatorios estén asentados». Hasta ahora lo único que había era un campo
+ * de notas en la ficha —un solo texto, que se pisa— y todo lo demás vivía en la
+ * cabeza de quien atendió: a quién había que volver a llamar, qué prometió y
+ * para cuándo.
+ *
+ * Lo que la vuelve útil es **`proximaAccionAt`**: una gestión sin fecha es una
+ * anotación, y una anotación no aparece sola el día que hay que hacer algo. Con
+ * la fecha, lo vencido entra al «Para hoy» del panel.
+ */
+export const customerFollowUps = pgTable(
+  "customer_follow_ups",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    customerId: uuid()
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    etapa: etapaSeguimiento().notNull().default("pendiente"),
+    /** De qué se trata, en una línea: "Cobrar la factura 1234". */
+    asunto: text().notNull(),
+    /** Lo que se fue hablando. Se agrega, no se pisa. */
+    notas: text(),
+    /** Cuándo hay que volver. Sin esto, la gestión no aparece sola nunca. */
+    proximaAccionAt: timestamp({ withTimezone: true }),
+    /** Quién la tiene: el vendedor que atiende a este cliente. */
+    responsableUserId: text(),
+    creadoPor: text(),
+    cerradoAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index("customer_follow_ups_cliente_idx").on(t.customerId),
+    // Por acá entra el "Para hoy": lo que vence, de lo que sigue abierto.
+    index("customer_follow_ups_proxima_idx").on(t.etapa, t.proximaAccionAt),
+  ],
+);
+
+export type CustomerFollowUp = typeof customerFollowUps.$inferSelect;
 
 export const tipoMovimientoCuenta = pgEnum("tipo_movimiento_cuenta", [
   "compra",
@@ -148,7 +232,7 @@ export const accountMovements = pgTable(
  * Direcciones guardadas del cliente.
  *
  * Existen para que quien compra seguido no vuelva a tipear la dirección de la
- * obra en cada checkout. Van en tabla aparte y no como una columna más de
+ * obra en cada compra. Van en tabla aparte y no como una columna más de
  * `customers` porque una constructora entrega en varios lados a la vez, y
  * `customers.direccion` sigue siendo el domicilio fiscal, que es otra cosa.
  */

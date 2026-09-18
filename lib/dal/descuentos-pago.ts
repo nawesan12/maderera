@@ -12,7 +12,7 @@ import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
  *
  * **Esta es la que cobra.** Request-time y sin caché compartido: es un número
  * que el panel cambia y tiene que valer en la venta siguiente, no en cinco
- * minutos. La usan el checkout y el mostrador, donde una escala vieja no es un
+ * minutos. La usan el carrito y el mostrador, donde una escala vieja no es un
  * texto desactualizado sino plata mal cobrada. Son pocas filas y la consulta se
  * memoiza por request.
  *

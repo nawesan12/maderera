@@ -51,7 +51,7 @@ export interface ClienteDeSesion {
  */
 export const clienteDeLaSesion = cache(
   async (): Promise<ClienteDeSesion | null> => {
-    // `getSession()` y no `verifySession()`: el checkout también pregunta por la
+    // `getSession()` y no `verifySession()`: el carrito también pregunta por la
     // ficha y ahí no hay que redirigir a nadie, porque se puede comprar sin
     // cuenta. Las pantallas del portal ya exigen la sesión en su layout.
     const sesion = await getSession();
@@ -416,7 +416,7 @@ export async function miCuentaCorriente(): Promise<CuentaCorriente> {
 /**
  * Saldo actual del cliente, sumado en la base.
  *
- * Lo usa el checkout para decidir si la compra entra en el límite de crédito.
+ * Lo usa el carrito para decidir si la compra entra en el límite de crédito.
  * Va por separado de `miCuentaCorriente()` para no traerse todos los
  * movimientos cuando solo hace falta el número.
  */
@@ -445,7 +445,7 @@ export interface CreditoDisponible {
 /**
  * Si esta persona puede cargar una compra a su cuenta corriente.
  *
- * Antes el checkout ofrecía la opción a quien tuviera el rol "profesional" y la
+ * Antes el carrito ofrecía la opción a quien tuviera el rol "profesional" y la
  * acción la aceptaba sin mirar nada: cualquiera podía mandar el formulario con
  * `medioPago: cuenta_corriente` y llevarse la mercadería sin pagar ni tener
  * cuenta. Ahora la decisión sale del límite que le puso el negocio y del saldo

@@ -6,6 +6,7 @@ import { requireStaffRole } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { registrarGasto } from "@/lib/dal/admin/gastos";
 import { formatearMonto } from "@/lib/formato";
+import { etiquetaDeCircuito } from "@/lib/circuito";
 
 export interface EstadoGasto {
   error?: string;
@@ -80,7 +81,7 @@ export async function cargarGasto(
     sesion: usuario,
     accion: "crear",
     entidad: "gasto",
-    descripcion: `Anotó un gasto de ${formatearMonto(d.importe)} en ${d.categoria} (${d.circuito === "negro" ? "en negro" : "en blanco"}): ${d.descripcion}`,
+    descripcion: `Anotó un gasto de ${formatearMonto(d.importe)} en ${d.categoria} (${etiquetaDeCircuito(d.circuito)}): ${d.descripcion}`,
   });
 
   revalidatePath("/admin/compras/gastos");

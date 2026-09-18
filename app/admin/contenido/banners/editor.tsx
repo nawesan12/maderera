@@ -32,9 +32,9 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
   const [avisoBorrado, setAvisoBorrado] = useState<string | null>(null);
   const id = useId();
 
-  // La franja de arriba es una línea de texto: no lleva imagen ni bajada, y
-  // ofrecerlas invitaría a cargar una foto que no se va a ver.
-  const esFranja = ubicacion === "franja";
+  // El aviso de bienvenida era una franja de una línea y no admitía ni bajada
+  // ni imagen. Como diálogo sí las muestra, así que los tres lugares llevan los
+  // mismos campos y no hay nada que esconder según dónde vaya.
 
   return (
     <form action={guardar} className="space-y-4 rounded-xl border bg-card p-5">
@@ -75,25 +75,19 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo
           nombre="titulo"
-          etiqueta={esFranja ? "El aviso" : "Título"}
+          etiqueta="Título"
           valorInicial={banner?.titulo ?? ""}
-          placeholder={
-            esFranja
-              ? "30% de descuento con MODO los martes"
-              : "Semana de la construcción en seco"
-          }
+          placeholder="30% de descuento con MODO los martes"
           requerido
         />
       </div>
 
-      {!esFranja && (
-        <Campo
-          nombre="bajada"
-          etiqueta="Bajada"
-          valorInicial={banner?.bajada ?? ""}
-          placeholder="Placas de yeso, perfilería y aislantes con 15% de descuento"
-        />
-      )}
+      <Campo
+        nombre="bajada"
+        etiqueta="Bajada"
+        valorInicial={banner?.bajada ?? ""}
+        placeholder="Placas de yeso, perfilería y aislantes con 15% de descuento"
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo
@@ -111,35 +105,32 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
         />
       </div>
 
-      {!esFranja && (
-        <div>
-          <label htmlFor={`${id}-img`} className="block text-base font-medium">
-            Imagen de fondo
-          </label>
-          <input
-            id={`${id}-img`}
-            type="file"
-            name="imagen"
-            accept="image/jpeg,image/png,image/webp,image/avif"
-            className="mt-1 block w-full text-base"
-          />
-          <p className="mt-1 text-sm text-muted-foreground">
-            Opcional. Sin imagen el banner sale sobre el color de marca, que se
-            ve mejor que una foto mal recortada. Apaisada, mínimo 1200 px de
-            ancho.
-          </p>
+      <div>
+        <label htmlFor={`${id}-img`} className="block text-base font-medium">
+          Imagen de fondo
+        </label>
+        <input
+          id={`${id}-img`}
+          type="file"
+          name="imagen"
+          accept="image/jpeg,image/png,image/webp,image/avif"
+          className="mt-1 block w-full text-base"
+        />
+        <p className="mt-1 text-sm text-muted-foreground">
+          Opcional. Sin imagen el banner sale sobre el color de marca, que se ve
+          mejor que una foto mal recortada. Apaisada, mínimo 1200 px de ancho.
+        </p>
 
-          {banner?.imagenUrl && (
-            <Image
-              src={banner.imagenUrl}
-              alt=""
-              width={280}
-              height={90}
-              className="mt-2 h-[90px] w-[280px] rounded-lg object-cover"
-            />
-          )}
-        </div>
-      )}
+        {banner?.imagenUrl && (
+          <Image
+            src={banner.imagenUrl}
+            alt=""
+            width={280}
+            height={90}
+            className="mt-2 h-[90px] w-[280px] rounded-lg object-cover"
+          />
+        )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Campo

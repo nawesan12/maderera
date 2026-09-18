@@ -8,7 +8,7 @@ import {
 } from "@/lib/dal/admin/pagos-proveedor";
 import { listarProveedores } from "@/lib/dal/admin/proveedores";
 import { formatearMonto } from "@/lib/formato";
-import { ETIQUETA_CIRCUITO } from "@/lib/db/schema/circuito";
+import { etiquetaDeCircuito } from "@/lib/circuito";
 import { FormularioPago } from "./formulario";
 
 export const metadata: Metadata = { title: "Pagos a proveedores" };
@@ -148,7 +148,7 @@ export default async function PagosPage({
                       {/* Por qué circuito salió: el mismo dato que separa los
                           totales de gastos. Ver lib/db/schema/circuito.ts. */}
                       <span className="block text-sm">
-                        {ETIQUETA_CIRCUITO[p.circuito] ?? p.circuito}
+                        {etiquetaDeCircuito(p.circuito)}
                       </span>
                     </td>
                     <td className="tabular px-5 py-3 text-right font-semibold">

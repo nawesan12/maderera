@@ -28,6 +28,27 @@ Hay dos caminos:
 Los precios del catálogo son finales; el sistema desagrega el IVA al armar el
 comprobante.
 
+### A quién se le factura
+
+Arriba del receptor hay un buscador: se escriben tres letras del apellido, del
+nombre de la empresa o el CUIT, y los datos se completan solos. Elegir al cliente
+además **carga la factura a su cuenta corriente**, que es lo que hace que el
+saldo del sistema coincida con el papel.
+
+Si no está cargado, se tipean los datos y se marca **«Guardarlo como cliente
+nuevo»**: la ficha se crea con eso mismo, sin ir a otra pantalla ni escribirlo
+dos veces.
+
+## Buscar una factura
+
+Arriba del listado se busca por **número, CUIT o nombre**, y se corta por fechas
+—una sola fecha es ese día— y por **cómo se cobró**: de contado o en cuenta
+corriente. Con el rango puesto, el encabezado dice cuánto suma lo que se está
+mirando.
+
+Es la forma de contestar «¿cuánto facturamos de contado el sábado?» sin exportar
+nada.
+
 ## Los estados
 
 | Estado | Qué significa |

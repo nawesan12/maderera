@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useId, useState, useTransition } from "react";
+import Image from "next/image";
 import { Loader2, Trash2 } from "lucide-react";
 import { borrarPromo, guardarPromo, type EstadoPromo } from "./actions";
 
@@ -17,6 +18,8 @@ export interface PromoEditable {
   vigenciaHasta: string;
   orden: number;
   activo: boolean;
+  /** El logo del banco o de la billetera, si tiene. */
+  imagenUrl: string | null;
   /** Si hoy está efectivamente publicada, contando la vigencia. */
   alAire: boolean;
 }
@@ -63,6 +66,50 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
         <p className="mt-1 text-sm text-muted-foreground">
           Condiciones, topes, qué tarjetas entran. Sale tal cual en el sitio.
         </p>
+      </div>
+
+      {/* El logo del banco. Es lo que hace que la grilla de la portada se lea
+          de un vistazo: el cliente reconoce a su banco por la marca antes que
+          por el nombre escrito. */}
+      <div>
+        <label htmlFor={`${id}-img`} className="block text-base font-medium">
+          Logo del banco o la billetera
+        </label>
+
+        <div className="mt-1 flex flex-wrap items-center gap-4">
+          {promo?.imagenUrl && (
+            <Image
+              src={promo.imagenUrl}
+              alt=""
+              width={120}
+              height={40}
+              className="h-10 w-auto max-w-[120px] object-contain"
+            />
+          )}
+          <input
+            id={`${id}-img`}
+            type="file"
+            name="imagen"
+            accept="image/jpeg,image/png,image/webp,image/avif"
+            className="block text-base"
+          />
+        </div>
+
+        <p className="mt-1 text-sm text-muted-foreground">
+          Opcional. Sin logo se muestra el nombre escrito, como hasta ahora. Que
+          sea apaisado y con fondo transparente o blanco.
+        </p>
+
+        {promo?.imagenUrl && (
+          <label className="mt-2 flex items-center gap-2.5 text-base">
+            <input
+              type="checkbox"
+              name="quitarImagen"
+              className="h-4 w-4 accent-brand-orange"
+            />
+            Sacar el logo al guardar
+          </label>
+        )}
       </div>
 
       {/* Quién pone la plata.

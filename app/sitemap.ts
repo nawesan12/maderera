@@ -11,8 +11,11 @@ import {
  *
  * El resto del sitio se renderiza por pedido, así que el build no necesita una
  * base alcanzable; generar el sitemap al compilar rompería esa propiedad para
- * ganar poco, porque un sitemap lo piden los buscadores un puñado de veces por
- * día. A cambio, una nota publicada o un producto nuevo aparecen enseguida.
+ * ganar poco. A cambio, un producto nuevo aparece enseguida.
+ *
+ * **Pero las consultas sí están cacheadas** (`lib/dal/sitemap.ts`), con la
+ * etiqueta del catálogo. Armar la lista por pedido es barato; ir tres veces a
+ * la base por cada rastreador que pasa, no —y pasan seguido—.
  */
 export const dynamic = "force-dynamic";
 
@@ -29,6 +32,9 @@ const FIJAS: { ruta: string; prioridad: number; frecuencia: MetadataRoute.Sitema
   // La busca gente que todavía no conoce la maderera: "cuántas placas
   // necesito" se escribe en el buscador, no en el catálogo.
   { ruta: "/calculadora", prioridad: 0.7, frecuencia: "monthly" },
+  // Lo mismo con "corte de melamina a medida": es el servicio que trae gente
+  // al sitio, y la pantalla se puede usar sin cuenta.
+  { ruta: "/corte", prioridad: 0.8, frecuencia: "monthly" },
   // La línea propia: es la página por la que llega un mayorista de la
   // provincia que busca molduras finger joint, no la maderera de al lado.
   { ruta: "/moldava", prioridad: 0.8, frecuencia: "monthly" },

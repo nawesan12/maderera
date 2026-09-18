@@ -21,7 +21,7 @@ import type { ProductoListado } from "@/lib/dal/catalog";
  * **La tarjeta ya no muestra stock.** Salieron la franja "Sin stock" y el
  * detalle por sucursal: al cliente no le importa en qué depósito está la
  * madera, y publicar existencias por sucursal invitaba a preguntas que se
- * resuelven recién en el checkout. `Disponibilidad` sigue en uso en la ficha
+ * resuelven recién en el carrito. `Disponibilidad` sigue en uso en la ficha
  * del producto y en el panel.
  *
  * `height: 100%` no es decorativo: iguala las alturas dentro de la grilla para

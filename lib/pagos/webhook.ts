@@ -56,9 +56,26 @@ export async function procesarAviso(opciones: {
     return { resultado: "ignorado", detalle: "El aviso no es sobre un pago." };
   }
 
-  // El aviso se guarda antes de hacerle caso, incluso si la firma no cierra:
-  // una ráfaga de avisos con firma inválida es justamente lo que hay que poder
-  // ver después.
+  /*
+   * Un aviso con firma inválida no se guarda fila por fila.
+   *
+   * Antes se insertaba **antes** de mirar la firma, con el argumento —bueno— de
+   * poder ver después una ráfaga de avisos falsos. El problema es que este
+   * endpoint es público y sin autenticación: variando el identificador del
+   * evento, cualquiera podía escribir en `payment_events` todas las filas que
+   * quisiera. La intención se conserva sin el agujero: el aviso queda en el
+   * registro del servidor —con su identificador, para poder rastrear la
+   * ráfaga— y en la base no entra nada.
+   */
+  if (opciones.firmaVerificada === false) {
+    console.warn(
+      `Aviso de pago con firma inválida, descartado: ${aviso.eventoId}`,
+    );
+    return { resultado: "sin_firma" };
+  }
+
+  // El aviso con firma buena —o sin firma que verificar— sí se guarda antes de
+  // hacerle caso: es el rastro de qué llegó y cuándo.
   const [evento] = await db
     .insert(paymentEvents)
     .values({
@@ -77,11 +94,6 @@ export async function procesarAviso(opciones: {
   // Sin fila devuelta, el aviso ya estaba: es un reintento del proveedor y no
   // se vuelve a procesar.
   if (!evento) return { resultado: "repetido" };
-
-  if (opciones.firmaVerificada === false) {
-    await marcar(evento.id, "Firma inválida: el aviso no se procesó.");
-    return { resultado: "sin_firma" };
-  }
 
   try {
     const remoto = await proveedor.consultarPago(aviso.pagoRemotoId);

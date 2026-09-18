@@ -7,6 +7,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import {
+  cartCortes,
   cartItems,
   carts,
   priceListItems,
@@ -45,9 +46,33 @@ export interface ItemCarrito {
   imagen: string | null;
 }
 
+/**
+ * Un corte a medida armado en el sitio.
+ *
+ * Es un renglón aparte del carrito porque no es un producto con cantidad: es
+ * una placa, un despiece y un acomodo. Ver `cart_cortes` en el esquema.
+ */
+export interface CorteEnCarrito {
+  id: string;
+  variantId: string | null;
+  material: string;
+  placaLargoMm: number;
+  placaAnchoMm: number;
+  mitad: "largo" | "ancho" | null;
+  cantoDescripcion: string | null;
+  /** Cuántas piezas lleva el despiece, sumando cantidades. */
+  piezas: number;
+  placas: number;
+  pasadas: number;
+  /** El precio que se le mostró al armarlo. Se recalcula al comprar. */
+  total: number;
+}
+
 export interface Carrito {
   id: string | null;
   items: ItemCarrito[];
+  /** Los cortes a medida, que se cobran y se fabrican aparte de los ítems. */
+  cortes: CorteEnCarrito[];
   cantidadItems: number;
   subtotal: number;
   /** Ítems cuyo precio cambió desde que se agregaron al carrito. */
@@ -121,6 +146,14 @@ export const obtenerCarrito = cache(async (): Promise<Carrito> => {
         porcentaje: Number(e.porcentaje),
       }))
     : [];
+
+  // Los cortes a medida. Van en su propia consulta porque no son líneas: cada
+  // uno lleva su despiece y su plano. Ver `cart_cortes`.
+  const cortes = await db
+    .select()
+    .from(cartCortes)
+    .where(eq(cartCortes.cartId, carrito.id))
+    .orderBy(asc(cartCortes.createdAt));
 
   const propia = alias(priceListItems, "precio_propio");
   const general = alias(priceListItems, "precio_general");
@@ -211,11 +244,30 @@ export const obtenerCarrito = cache(async (): Promise<Carrito> => {
     };
   });
 
+  const cortesDelCarrito: CorteEnCarrito[] = cortes.map((c) => ({
+    id: c.id,
+    variantId: c.variantId,
+    material: c.materialDescripcion,
+    placaLargoMm: c.placaLargoMm,
+    placaAnchoMm: c.placaAnchoMm,
+    mitad: (c.mitad as "largo" | "ancho" | null) ?? null,
+    cantoDescripcion: c.cantoDescripcion,
+    piezas: contarPiezas(c.piezas),
+    placas: c.placas,
+    pasadas: c.pasadas,
+    total: Number(c.total),
+  }));
+
   return {
     id: carrito.id,
     items,
-    cantidadItems: items.length,
-    subtotal: items.reduce((s, i) => s + i.subtotal, 0),
+    cortes: cortesDelCarrito,
+    // Los cortes cuentan como renglones: es lo que muestra el globito del
+    // carrito, y alguien que solo pidió un corte no tiene el carrito vacío.
+    cantidadItems: items.length + cortesDelCarrito.length,
+    subtotal:
+      items.reduce((s, i) => s + i.subtotal, 0) +
+      cortesDelCarrito.reduce((s, c) => s + c.total, 0),
     // Se compara contra el precio de lista, no contra el efectivo: un descuento
     // por volumen recién aplicado no es un cambio de precio, y avisarlo como
     // tal hacía que el aviso apareciera siempre para un profesional.
@@ -378,4 +430,25 @@ export async function obtenerOCrearCarrito(): Promise<string> {
   await encenderSenal();
 
   return creado.id;
+}
+
+/**
+ * Cuántas piezas lleva un despiece guardado como JSON.
+ *
+ * Tolera basura: un despiece ilegible da cero piezas y el carrito se sigue
+ * mostrando, en vez de tirar la página entera por un renglón.
+ */
+function contarPiezas(crudo: string): number {
+  try {
+    const piezas = JSON.parse(crudo);
+    if (!Array.isArray(piezas)) return 0;
+
+    return piezas.reduce(
+      (total: number, p: { cantidad?: unknown }) =>
+        total + (Number(p?.cantidad) || 0),
+      0,
+    );
+  } catch {
+    return 0;
+  }
 }

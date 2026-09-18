@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { promosVigentes } from "@/lib/dal/contenido";
 import { tarifasDeCorte } from "@/lib/dal/cortes-tarifas";
+import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/dal/session";
 import { inicioDelRol, puedeEntrar } from "@/lib/roles";
@@ -8,6 +9,7 @@ import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { listaDelCliente } from "@/lib/mostrador/buscar";
 import {
   cierreDelTurno,
+  fondoBaseDeSucursal,
   movimientosDelTurno,
   turnoAbierto,
   ventasDeHoy,
@@ -61,19 +63,27 @@ export default async function MostradorPage({
   const elegida =
     sucursales.find((s) => s.slug === sucursal) ?? sucursales[0];
 
-  const [turno, ventas, listaGeneral, tarifas, promos] = await Promise.all([
-    turnoAbierto(elegida.id),
-    ventasDeHoy(elegida.id),
-    // Cuál es la lista general: con eso la pantalla sabe si el cliente elegido
-    // compra con precio de profesional, que es de contado y no admite crédito.
-    listaDelCliente(null).then((l) => l.generalId),
-    // Las tarifas de corte, para poder cotizar un corte sin salir del
-    // mostrador: hasta ahora había que ir al panel y volver con el número.
-    tarifasDeCorte(),
-    // Las promociones vigentes: están para contarlas, no para descontarlas.
-    // Ver `PromosDelBanco`.
-    promosVigentes(),
-  ]);
+  const [turno, ventas, listaGeneral, tarifas, promos, parametros, fondoBase] =
+    await Promise.all([
+      turnoAbierto(elegida.id),
+      ventasDeHoy(elegida.id),
+      // Cuál es la lista general: con eso la pantalla sabe si el cliente
+      // elegido compra con precio de profesional, que es de contado y no
+      // admite crédito.
+      listaDelCliente(null).then((l) => l.generalId),
+      // Las tarifas de corte, para poder cotizar un corte sin salir del
+      // mostrador: hasta ahora había que ir al panel y volver con el número.
+      tarifasDeCorte(),
+      // Las promociones vigentes: están para contarlas, no para descontarlas.
+      // Ver `PromosDelBanco`.
+      promosVigentes(),
+      // El espesor del disco, que el plano descuenta entre pieza y pieza y
+      // ahora además se dice en pantalla.
+      parametrosDeCalculo(),
+      // El cambio que tiene que quedar en el cajón: se dice al abrir, al
+      // retirar y al cerrar.
+      fondoBaseDeSucursal(elegida.id),
+    ]);
   const movimientos = turno ? await movimientosDelTurno(turno.id) : [];
   // El cierre Z: cuánto entró por cada medio en el turno. El arqueo cuenta
   // efectivo, que es lo único que puede faltar del cajón; esto es lo otro que
@@ -98,6 +108,8 @@ export default async function MostradorPage({
         createdAt: m.createdAt.toISOString(),
       }))}
       tarifasDeCorte={tarifas}
+      anchoSierra={parametros.anchoSierraMm}
+      fondoBase={fondoBase}
       promos={promos}
       ventas={ventas.map((v) => ({
         ...v,

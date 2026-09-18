@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FiltrosStock } from "@/components/catalogo/filtros-stock";
-import { listarCategorias, listarProductos } from "@/lib/dal/catalog";
+import { listarCategorias, listarProductosPublicos } from "@/lib/dal/catalog";
 import type { StockLevel } from "@/lib/stock-level";
 
 interface Params {
@@ -69,8 +69,20 @@ export default async function StockPage({
   );
 }
 
+/*
+ * Esta pantalla **no muestra un solo precio**, y eso la cambia entera.
+ *
+ * Usaba `listarProductos`, que resuelve la lista de la sesión para saber qué
+ * precio corresponde: eso obliga a armar la página en cada visita y a consultar
+ * la base cada vez, para después no mostrar ningún precio. Con
+ * `listarProductosPublicos` el resultado es el mismo para todo el mundo —lo
+ * único que se ve es disponibilidad— y se sirve del caché compartido.
+ *
+ * De paso deja de pesar que el resumen y la tabla pidan el catálogo por
+ * separado: sin filtros, las dos llamadas caen en la misma entrada de caché.
+ */
 async function Resumen() {
-  const productos = await listarProductos();
+  const productos = await listarProductosPublicos();
 
   const enAmbas = productos.filter(
     (p) => p.stockCentral !== "sin-stock" && p.stockAserradero !== "sin-stock",
@@ -115,7 +127,7 @@ async function Filtros({ params }: { params: Params }) {
 }
 
 async function Tabla({ params }: { params: Params }) {
-  const productos = await listarProductos({
+  const productos = await listarProductosPublicos({
     categoria: params.cat,
     busqueda: params.buscar,
   });

@@ -16,17 +16,17 @@ export interface EstadoZona {
 }
 
 /**
- * Las zonas de envío se veían solo en el checkout y **no se podían editar
+ * Las zonas de envío se veían solo en el carrito y **no se podían editar
  * desde ningún lado**: existían únicamente en el script de siembra, así que
  * cambiar una tarifa exigía un despliegue. Para un negocio cuyo flete cambia
  * con el combustible, eso es tenerlo desactualizado siempre.
  */
 function refrescar() {
   // Comparten etiqueta de caché con las sucursales: las dos las lee el
-  // checkout y se invalidan juntas.
+  // carrito y se invalidan juntas.
   updateTag(ETIQUETAS.sucursales);
   revalidatePath("/admin/envios");
-  revalidatePath("/checkout");
+  revalidatePath("/carrito/confirmar");
 }
 
 const esquema = z.object({

@@ -50,6 +50,14 @@ export interface ResultadoDeMostrador {
    */
   largoMm?: number | null;
   anchoMm?: number | null;
+  /**
+   * El color de la placa, si la variante lo declara.
+   *
+   * Lo mira quien vende media placa: en una placa de color el dibujo corre en
+   * un sentido, y partirla al ancho puede dejar las dos mitades con la veta
+   * cruzada. La pantalla lo avisa y la decisión la toma quien atiende.
+   */
+  color?: string | null;
   /** La familia del producto. Por acá se busca la tarifa de corte. */
   categoria?: string | null;
 }
@@ -141,6 +149,7 @@ export async function buscarParaMostrador(
       medida: productVariants.label,
       largoMm: productVariants.largoMm,
       anchoMm: productVariants.anchoMm,
+      color: productVariants.color,
       // Por acá se busca la tarifa de corte: se cargan por familia.
       categoria: categories.name,
       unidad: products.unit,
@@ -196,6 +205,7 @@ export async function buscarParaMostrador(
     stock: Number(f.stock),
     largoMm: f.largoMm,
     anchoMm: f.anchoMm,
+    color: f.color,
     categoria: f.categoria,
   }));
 }
@@ -218,6 +228,9 @@ export async function buscarClienteEnMostrador(texto: string) {
       razonSocial: customers.razonSocial,
       cuit: customers.cuit,
       condicionIva: customers.condicionIva,
+      // El domicilio lo usa la factura manual: es un campo del comprobante y
+      // volver a tipearlo teniendo la ficha cargada es pedir un error.
+      direccion: customers.direccion,
       estado: customers.estado,
       limiteCredito: customers.limiteCredito,
       // La lista que le toca: con ella, la pantalla puede resolver el precio

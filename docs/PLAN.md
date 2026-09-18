@@ -2,8 +2,8 @@
 
 > Documento de trabajo interno del PRESTADOR. Traduce el contrato firmado
 > (`Contrato — Maderera Juan B. Justo.pdf`, 15 pp.) a un plan ejecutable.
-> Última actualización: 05/09/2026 (el brief del cliente, aplicado de punta a
-> punta).
+> Última actualización: 17/09/2026 (las notas del relevamiento de la clienta,
+> atendidas de punta a punta).
 
 ---
 
@@ -631,6 +631,53 @@ De los cobros, los avisos y ARCA no falta código: falta lo que tramita el
 cliente —credenciales de Mercado Pago, casilla con dominio verificado,
 certificado fiscal y la definición sobre WhatsApp—. La lista completa de insumos
 pendientes está en `docs/CAMBIOS.md`.
+
+**La sexta pasada de relevamiento — las notas del 17/9/2026:**
+
+Treinta y un observaciones de la clienta **usando el sistema**, no leyéndolo
+(están en `notas.md` con el detalle de dónde quedó cada una). Es la clase de
+lista que solo aparece después de operar unas semanas, y por eso la mayoría no
+son funciones nuevas sino cosas que el sistema hacía y no se veían, o que hacía
+de una forma que el negocio no usa.
+
+- **Un defecto que se llevaba por delante una pantalla.** Aprobar una cuenta
+  profesional de alguien que ya se había registrado en el sitio **fallaba
+  entera**: la aprobación buscaba la ficha solo por CUIT, no encontraba la que el
+  registro había creado, insertaba otra con la misma cuenta web y chocaba contra
+  el índice único. Resultado: ni ficha, ni solicitud aprobada, ni aviso — y la
+  clienta viendo que el profesional habilitado no aparecía en Clientes.
+- **Los 5 mm de la sierra.** El motor los descontaba desde el primer día y no se
+  decían en ninguna pantalla, así que nadie entendía por qué dos piezas de 900 no
+  entraban en una placa de 1830. Ahora se dibujan a escala sobre cada corte, se
+  escriben en la ficha, en el mostrador y en el sitio, y el valor sale de
+  `/admin/calculadoras` en vez de una constante.
+- **La jerga.** «En blanco / en negro» pasó a **«Facturas / B»**, y `/checkout`
+  —que además convivía con `/presupuesto` para lo mismo— a **`/carrito` y
+  `/carrito/confirmar`**, con las direcciones viejas redirigidas.
+- **Media placa, medida propia y reporte del corte.** Se vende media placa y se
+  elige en qué sentido se parte; la medida de la placa se puede escribir cuando
+  el material lo trajo el cliente; y el trabajo baja en PDF con las piezas, los
+  sobrantes, el desperdicio y lo que se llevó la sierra.
+- **El corte, para el cliente** (`/corte`): el mismo motor y el mismo precio, sin
+  cuenta para mirar y con cuenta para comprar. Entra al carrito y abre su orden
+  en la cola del taller al confirmar.
+- **Plata que no se puede mover de más.** La caja tiene un cambio fijo por
+  sucursal que el retiro no puede perforar, el arqueo dice «falta» o «sobra» y
+  pide explicación antes de cerrar, y el e-Cheq quedó prohibido en el circuito B
+  —es electrónico y cruzaría las dos cajas—.
+- **Cobranza con prioridad.** El plazo de pago pasó de constante global a dato de
+  cada ficha, la cuenta corriente se puede bloquear a mano —y el mostrador no lo
+  puede saltear—, y la lista de clientes se ordena por atraso real en vez de por
+  nombre. Al lado, un tablero de seguimiento cuyos recordatorios vencidos
+  aparecen en el «Para hoy» del panel.
+- **El teclado.** Enter pasa al campo siguiente en todas las pantallas de carga
+  del panel, con una sola pieza en el layout y no veinte copias.
+- **Avisos de venta en el teléfono.** El panel se instala como aplicación y avisa
+  cuando entra una compra por el sitio o se acredita un pago, como Tiendanube.
+  Falta generar las claves VAPID —dos líneas de configuración— y está andando.
+
+Lo único descartado fue «CDI», que resultó ser una empresa de envíos y no el
+documento fiscal: se retoma cuando se defina qué se quiere con ellos.
 
 
 ## 2. Punto de partida real

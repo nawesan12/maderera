@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/dal/session";
 import { listaVigente } from "@/lib/dal/precios-sesion";
-import { listarProductos } from "@/lib/dal/catalog";
+import {
+  listarProductos,
+  preciosPropiosPorVariante,
+} from "@/lib/dal/catalog";
 import { vistaDePrecio } from "@/lib/dal/precios-sesion";
 
 /**
@@ -43,7 +46,18 @@ export async function GET() {
     );
   }
 
-  const productos = await listarProductos();
+  /*
+   * Dos mapas y no uno.
+   *
+   * El del catálogo va por slug y lleva el precio «desde», que es lo único que
+   * muestra una tarjeta. La ficha de producto muestra el precio de **cada
+   * medida**, así que necesita el detalle por variante: es lo que permite que
+   * la ficha también se sirva de la caché a precio de público.
+   */
+  const [productos, porVariante] = await Promise.all([
+    listarProductos(),
+    preciosPropiosPorVariante(),
+  ]);
 
   const precios: Record<
     string,
@@ -58,7 +72,7 @@ export async function GET() {
   }
 
   return NextResponse.json(
-    { lista: lista.nombre, precios, vista },
+    { lista: lista.nombre, precios, porVariante, vista },
     { headers: { "Cache-Control": "private, no-store" } },
   );
 }

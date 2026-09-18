@@ -14,7 +14,7 @@ import type {
  * Proveedor de demostración.
  *
  * MJBJ todavía no entregó las credenciales de Mercado Pago —es un ítem de la
- * lista de insumos pendientes—, y esperarlas para escribir el checkout dejaría
+ * lista de insumos pendientes—, y esperarlas para escribir el carrito dejaría
  * el módulo entero sin probar hasta el final del proyecto. Es la misma decisión
  * que se tomó con WhatsApp y con ARCA, y por la misma razón: el camino de
  * demostración recorre exactamente el mismo código que el real, salvo la

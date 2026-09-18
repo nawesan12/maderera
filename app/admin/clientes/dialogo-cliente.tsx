@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { guardarCliente, type EstadoCliente } from "./actions";
+import { RUBROS_CLIENTE } from "@/lib/rubros-cliente";
 
 const CONDICIONES = {
   consumidor_final: "Consumidor final",
@@ -31,10 +32,18 @@ const CONDICIONES = {
   no_categorizado: "No categorizado",
 };
 
-const TIPOS = {
-  particular: "Particular",
-  profesional: "Profesional",
-};
+/**
+ * El rubro reemplazó al «tipo de cliente» como campo principal.
+ *
+ * Lo pidió la clienta, y el argumento era bueno: «consumidor final o particular
+ * no tendría rubro». El tipo sigue existiendo —es lo que decide qué lista de
+ * precios y qué crédito tiene— pero pasó a ser una casilla explícita en vez del
+ * primer desplegable de la ficha, porque es una decisión comercial y no una
+ * descripción de a qué se dedica la persona.
+ */
+const RUBROS = Object.fromEntries(
+  RUBROS_CLIENTE.map((r) => [r.valor, r.etiqueta]),
+);
 
 export function DialogoCliente({
   listas,
@@ -59,6 +68,7 @@ export function DialogoCliente({
   );
 
   const [tipo, setTipo] = useState("particular");
+  const [rubro, setRubro] = useState("particular");
   const [condicion, setCondicion] = useState("consumidor_final");
   const [lista, setLista] = useState("");
   const [vendedor, setVendedor] = useState("");
@@ -86,11 +96,28 @@ export function DialogoCliente({
     ),
   };
 
-  // Un profesional casi siempre factura A: se propone, sin imponerlo.
-  function cambiarTipo(valor: string) {
-    setTipo(valor);
-    if (valor === "profesional" && condicion === "consumidor_final") {
-      setCondicion("responsable_inscripto");
+  /*
+   * Elegir un rubro de gremio propone la cuenta profesional, sin imponerla.
+   *
+   * Un carpintero casi siempre va a tener su lista y su cuenta corriente, y
+   * casi siempre factura A. Pero puede no tenerla —el que compra una vez por
+   * año— así que las dos cosas quedan marcadas y se pueden desmarcar: es el
+   * mismo criterio con el que ya se proponía la condición frente al IVA.
+   */
+  function cambiarRubro(valor: string) {
+    setRubro(valor);
+
+    const delGremio = RUBROS_CLIENTE.find(
+      (r) => r.valor === valor,
+    )?.esProfesional;
+
+    if (delGremio) {
+      setTipo("profesional");
+      if (condicion === "consumidor_final") {
+        setCondicion("responsable_inscripto");
+      }
+    } else {
+      setTipo("particular");
     }
   }
 
@@ -121,23 +148,49 @@ export function DialogoCliente({
               <Input id="razonSocial" name="razonSocial" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cliente-tipo">Tipo de cliente</Label>
-              <Select value={tipo} onValueChange={(v) => v && cambiarTipo(v)} items={TIPOS}>
-                <SelectTrigger id="cliente-tipo" className="w-full">
+              <Label htmlFor="cliente-rubro">A qué se dedica</Label>
+              <input type="hidden" name="rubro" value={rubro} />
+              <Select
+                value={rubro}
+                onValueChange={(v) => v && cambiarRubro(v)}
+                items={RUBROS}
+              >
+                <SelectTrigger id="cliente-rubro" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(TIPOS).map(([valor, texto]) => (
+                  {Object.entries(RUBROS).map(([valor, texto]) => (
                     <SelectItem key={valor} value={valor}>
                       {texto}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-sm text-muted-foreground">
+                Es por donde se corta la lista y los reportes.
+              </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="rubro">Rubro</Label>
-              <Input id="rubro" name="rubro" placeholder="Arquitectura, Construcción…" />
+              <Label htmlFor="cliente-profesional">Cuenta profesional</Label>
+              <label
+                htmlFor="cliente-profesional"
+                className="flex h-10 items-center gap-2.5 text-base"
+              >
+                <input
+                  id="cliente-profesional"
+                  type="checkbox"
+                  checked={tipo === "profesional"}
+                  onChange={(e) =>
+                    setTipo(e.target.checked ? "profesional" : "particular")
+                  }
+                  className="h-4 w-4 accent-brand-orange"
+                />
+                Tiene precio y cuenta corriente propios
+              </label>
+              <p className="text-sm text-muted-foreground">
+                Es lo que decide qué paga. Se propone solo al elegir un rubro
+                del gremio.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="cuit">CUIT</Label>

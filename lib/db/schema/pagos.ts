@@ -48,7 +48,7 @@ export const proveedorPago = pgEnum("proveedor_pago", [
  * Estados, en el orden en que ocurren.
  *
  * `iniciado` es "se generó el link y todavía no volvió nadie": la mayoría de
- * los abandonos de checkout quedan acá para siempre, y por eso conviene poder
+ * los carritos abandonados quedan acá para siempre, y por eso conviene poder
  * distinguirlos de un rechazo real.
  */
 export const estadoCobro = pgEnum("estado_cobro", [

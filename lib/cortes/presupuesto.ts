@@ -7,6 +7,10 @@
  * - **De la que sale más de la mitad**, se vende la placa entera y el corte va
  *   sin cargo. El cliente ya pagó todo el material; cobrarle además las pasadas
  *   sería cobrarle dos veces la misma placa.
+ *
+ *   Si el trabajo sale de **media placa**, la unidad es la media: se cobra la
+ *   mitad del precio de la placa. El plano ya trabaja sobre la medida partida,
+ *   así que lo único que cambia acá es el precio del material.
  * - **De la que sale menos de la mitad**, se cobra el corte por pasada y el
  *   material que se llevó. El sobrante queda en la maderera y sirve.
  *
@@ -41,6 +45,9 @@ export interface PiezaPresupuestada {
 export interface PresupuestoDeCorte {
   /** Placas que se le venden enteras porque sale de ellas más de la mitad. */
   placasEnteras: number;
+  /** Qué porción de placa es cada una: 1 entera, 0,5 media. */
+  fraccion: number;
+  /** Precio de la placa entera, aunque el trabajo salga de media. */
   precioPorPlaca: number;
   subtotalPlacas: number;
   /** Pasadas de las placas que no se venden enteras. */
@@ -68,16 +75,22 @@ export function presupuestarCorte({
   tarifa,
   precioPorPlaca,
   piezas,
+  fraccion = 1,
 }: {
   plano: PlanoDeCorte;
   tarifa: TarifaDeCorte | null;
   /** Precio final de una placa, con IVA, en la lista que le toca al cliente. */
   precioPorPlaca: number | null;
   piezas: PiezaPresupuestada[];
+  /**
+   * Qué porción de placa se compra por cada placa del plano: 1 entera, 0,5
+   * media. Sale de `fraccionDePlaca` en `lib/cortes/placa.ts`.
+   */
+  fraccion?: number;
 }): PresupuestoDeCorte {
   const placasEnteras = plano.placasEnteras;
   const precioPlaca = precioPorPlaca ?? 0;
-  const subtotalPlacas = redondear(placasEnteras * precioPlaca);
+  const subtotalPlacas = redondear(placasEnteras * precioPlaca * fraccion);
 
   const pasadasCobrables = plano.pasadasCobrables;
   const subtotalCorte = cargoPorCorte(tarifa, pasadasCobrables);
@@ -124,6 +137,7 @@ export function presupuestarCorte({
 
   return {
     placasEnteras,
+    fraccion,
     precioPorPlaca: precioPlaca,
     subtotalPlacas,
     pasadasCobrables,

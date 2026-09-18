@@ -8,8 +8,8 @@
 export const UBICACIONES = [
   {
     valor: "franja",
-    etiqueta: "Franja de arriba de todo",
-    ayuda: "Una línea de texto sobre el encabezado, en todas las páginas. Para un aviso corto.",
+    etiqueta: "Aviso de bienvenida",
+    ayuda: "Un cartel que se abre una vez por visita, en cualquier página. Para la promoción que no se puede pasar por alto.",
   },
   {
     valor: "portada",

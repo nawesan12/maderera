@@ -40,7 +40,47 @@ export const avisosEmail = pgTable(
 export const canalNotificacion = pgEnum("canal_notificacion", [
   "email",
   "whatsapp",
+  "push",
 ]);
+
+/**
+ * Los dispositivos que reciben avisos del panel.
+ *
+ * **Por qué por dispositivo y no por persona.** El permiso de notificaciones lo
+ * da el navegador, no el sistema: la misma persona que dijo que sí en el
+ * teléfono no dijo nada en la computadora del escritorio, y cada uno tiene su
+ * propia suscripción. Por eso la fila lleva `userId` **y** su endpoint: una
+ * persona puede tener tres.
+ *
+ * Lo pidió la clienta después de ver Tiendanube: que el panel avise en el
+ * teléfono cuando entra una venta por el sitio, sin tener que mirar el correo.
+ *
+ * `p256dh` y `auth` son las claves con las que el navegador descifra el mensaje:
+ * el servidor de push del navegador **no puede leer el contenido**, solo
+ * entregarlo. Son de ese dispositivo y no sirven en ningún otro lado.
+ */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: text().notNull(),
+    /** La dirección que da el navegador. Identifica al dispositivo. */
+    endpoint: text().notNull(),
+    p256dh: text().notNull(),
+    auth: text().notNull(),
+    /** Para poder decir cuál es cuál en la pantalla: "Chrome en Android". */
+    descripcion: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** Última vez que el servidor de push la aceptó. */
+    ultimaVezAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("push_subscriptions_endpoint_idx").on(t.endpoint),
+    index("push_subscriptions_user_idx").on(t.userId),
+  ],
+);
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 
 export const estadoNotificacion = pgEnum("estado_notificacion", [
   "enviada",

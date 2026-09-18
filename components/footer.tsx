@@ -85,7 +85,7 @@ export async function Footer() {
               {[
                 ["Catálogo", "/catalogo"],
                 ["Calculadora de materiales", "/calculadora"],
-                ["Pedir Presupuesto", "/presupuesto"],
+                ["Pedir Presupuesto", "/carrito"],
                 ["Crear una cuenta", "/registro"],
                 ["Portal Profesionales", "/profesionales"],
                 ["Sucursales", "/sucursales"],

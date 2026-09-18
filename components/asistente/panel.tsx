@@ -21,7 +21,6 @@ import {
   type PasoDelGuion,
 } from "@/lib/asistente/guion";
 import {
-  equipajeDelAsistente,
   preguntarAlAsistente,
   productosDelRubro,
   type DatoDelAsistente,
@@ -31,6 +30,19 @@ import {
 import { responderLocal } from "@/lib/asistente/respuestas";
 import { formatearPrecio } from "@/lib/formato";
 import { useCarrito } from "@/lib/carrito-context";
+
+/** Dónde queda el equipaje mientras dure la pestaña. */
+const CLAVE_EQUIPAJE = "mjbj-asistente-equipaje";
+
+/** Lo guardado, si lo hay y se puede leer. */
+function leerGuardado(): EquipajeDelAsistente | null {
+  try {
+    const crudo = sessionStorage.getItem(CLAVE_EQUIPAJE);
+    return crudo ? (JSON.parse(crudo) as EquipajeDelAsistente) : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Un renglón de la conversación. */
 type Renglon =
@@ -85,10 +97,49 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
    * todo lo que es igual para cualquiera. Con eso adentro, esas preguntas se
    * contestan en el navegador y no vuelven a molestar al servidor. Quien nunca
    * abre el panel no cuesta ni esta llamada.
+   *
+   * **Va por `fetch` y no por acción de servidor**, y esa es toda la diferencia
+   * de costo: como acción viajaba por POST —que no se cachea nunca— y cada
+   * persona que abría el panel pagaba una invocación de función. Como GET, el
+   * primero la paga y el resto se sirve del CDN. Además queda en
+   * `sessionStorage`: en la misma pestaña no se vuelve a pedir ni una vez.
    */
   useEffect(() => {
     if (!abierto || equipaje) return;
-    void equipajeDelAsistente().then(setEquipaje);
+
+    let vigente = true;
+
+    void (async () => {
+      const guardado = leerGuardado();
+
+      if (guardado) {
+        if (vigente) setEquipaje(guardado);
+        return;
+      }
+
+      try {
+        const respuesta = await fetch("/api/asistente/equipaje");
+        if (!respuesta.ok) return;
+
+        const datos = (await respuesta.json()) as EquipajeDelAsistente;
+        if (!vigente) return;
+
+        setEquipaje(datos);
+
+        try {
+          sessionStorage.setItem(CLAVE_EQUIPAJE, JSON.stringify(datos));
+        } catch {
+          // Sin almacenamiento se vuelve a pedir la próxima vez que se abra.
+        }
+      } catch {
+        // Sin equipaje el asistente sigue andando: le pregunta al servidor lo
+        // que no puede contestar solo, que es como funcionaba antes.
+      }
+    })();
+
+    return () => {
+      vigente = false;
+    };
   }, [abierto, equipaje]);
 
   useEffect(() => {

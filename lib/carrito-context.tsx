@@ -18,7 +18,7 @@ import {
 } from "@/app/(public)/carrito-actions";
 import type { Carrito, ItemCarrito } from "@/lib/dal/carrito";
 import { CARRITO_VACIO } from "@/lib/carrito-vacio";
-import { useEstado } from "@/lib/estado-context";
+import { olvidarEstado, useEstado } from "@/lib/estado-context";
 
 export interface ItemNuevo {
   variantId?: string;
@@ -62,7 +62,7 @@ export function CarritoProvider({
 }: {
   /**
    * El presupuesto ya resuelto. Lo pasan las pantallas que lo muestran entero
-   * —`/presupuesto`, `/checkout`—, que son dinámicas de todas formas porque
+   * —`/carrito`, `/carrito/confirmar`—, que son dinámicas de todas formas porque
    * eso es exactamente lo que tienen para mostrar.
    *
    * El resto del sitio no lo pasa: esas páginas se sirven del CDN, con el
@@ -117,6 +117,14 @@ export function CarritoProvider({
       const resultado = await ejecutar();
       if (resultado.error) toast.error(resultado.error);
       else if (resultado.ok) toast.success(resultado.ok);
+
+      // El contador del encabezado sale de `/api/estado`, y esta pestaña lo
+      // tiene guardado: sin esto seguiría mostrando el número de antes de
+      // agregar. De paso lo arregla en las pantallas que no muestran los
+      // renglones, donde el número no se podía deducir de lo que hay en
+      // pantalla.
+      olvidarEstado();
+
       router.refresh();
     });
   }

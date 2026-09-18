@@ -8,6 +8,10 @@ import { useCarrito } from "@/lib/carrito-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
 import { presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
+import {
+  usePreciosPorVariante,
+  useVistaPropia,
+} from "@/lib/precios-propios-context";
 import type { VarianteDetalle } from "@/lib/dal/catalog";
 
 /**
@@ -33,7 +37,13 @@ export function SelectorVariante({
   whatsapp: string;
   /** La del producto. Sin esto el neto informado se calcula siempre al 21 %. */
   alicuota?: number;
-  /** Con IVA o sin IVA, según quién esté mirando. La resuelve el servidor. */
+  /**
+   * Con IVA o sin IVA.
+   *
+   * Es lo que mandó el servidor —siempre «final», que es lo que corresponde
+   * mostrarle al público— y el punto de partida: si quien mira tiene otra
+   * vista, la corrige `useVistaPropia` sin volver al servidor.
+   */
   vista?: VistaDePrecio;
   /**
    * Se fabrica a pedido: no falta, se hace.
@@ -46,10 +56,34 @@ export function SelectorVariante({
   aPedido?: boolean;
 }) {
   const { agregar, guardando } = useCarrito();
-  const [elegida, setElegida] = useState(variantes[0]);
+  const [medida, setMedida] = useState(variantes[0]);
   const [cantidad, setCantidad] = useState(1);
 
-  const mostrado = presentarPrecio(Number(elegida?.precio ?? 0), alicuota, vista);
+  /*
+   * El precio del profesional pisa al de público, medida por medida.
+   *
+   * La ficha llega con el precio de público —así se sirve de la caché, igual
+   * que el catálogo— y esto lo reemplaza para quien tiene lista propia. Para
+   * todos los demás el mapa está vacío y no cambia nada.
+   *
+   * **Es solo lo que se ve.** Lo que se cobra lo recalcula el servidor con la
+   * lista real al agregar al carrito; acá viaja el id de la variante, nunca un
+   * precio.
+   */
+  const propios = usePreciosPorVariante();
+  const vistaVigente = useVistaPropia() ?? vista;
+
+  const conPrecioPropio = (v: VarianteDetalle): VarianteDetalle =>
+    propios[v.id] ? { ...v, precio: propios[v.id] } : v;
+
+  const elegida = medida ? conPrecioPropio(medida) : medida;
+  const setElegida = setMedida;
+
+  const mostrado = presentarPrecio(
+    Number(elegida?.precio ?? 0),
+    alicuota,
+    vistaVigente,
+  );
 
   if (!elegida) {
     return (
@@ -133,7 +167,7 @@ export function SelectorVariante({
         </p>
         <p className="mt-1.5 text-[14.5px] text-texto-2">
           por {formatearUnidad(unit)}
-          {vista === "final" && " · IVA incluido"}
+          {vistaVigente === "final" && " · IVA incluido"}
           {elegida.material && ` · ${elegida.material}`}
           {elegida.color && ` · ${elegida.color}`}
           {elegida.terminacion && ` · ${elegida.terminacion}`}
@@ -142,7 +176,7 @@ export function SelectorVariante({
         <PrecioSecundario
           precioFinal={Number(elegida.precio)}
           alicuota={alicuota}
-          vista={vista}
+          vista={vistaVigente}
           className="mt-1"
         />
 

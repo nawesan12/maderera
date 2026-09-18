@@ -29,6 +29,13 @@ export interface TurnoAbierto {
   /** Suma de todos los movimientos: el efectivo que tendría que haber. */
   esperado: number;
   fondoInicial: number;
+  /**
+   * El piso de efectivo de la sucursal: el cambio que no se retira nunca.
+   *
+   * Cero significa que esta sucursal no lo tiene fijado y no se controla nada.
+   * Ver `branches.fondoBase`.
+   */
+  fondoBase: number;
   ventasEnEfectivo: number;
   otrosIngresos: number;
   retiros: number;
@@ -57,6 +64,7 @@ export async function turnoAbierto(
       abiertaPor: user.name,
       abiertaAt: cashSessions.abiertaAt,
       esperado: sumaDe(),
+      fondoBase: branches.fondoBase,
       fondoInicial: sumaDe("apertura"),
       ventasEnEfectivo: sumaDe("venta"),
       otrosIngresos: sumaDe("ingreso"),
@@ -74,6 +82,7 @@ export async function turnoAbierto(
       cashSessions.id,
       cashSessions.branchId,
       branches.name,
+      branches.fondoBase,
       user.name,
       cashSessions.abiertaAt,
     )
@@ -84,6 +93,7 @@ export async function turnoAbierto(
   return {
     ...fila,
     esperado: Number(fila.esperado),
+    fondoBase: Number(fila.fondoBase),
     fondoInicial: Number(fila.fondoInicial),
     ventasEnEfectivo: Number(fila.ventasEnEfectivo),
     otrosIngresos: Number(fila.otrosIngresos),
@@ -151,11 +161,29 @@ export async function turnosCerrados(limite = 30) {
 }
 
 /** Las sucursales donde se puede abrir caja, con su turno si ya está abierto. */
+/**
+ * El cambio que tiene que quedar en el cajón de una sucursal.
+ *
+ * Se lee aparte del turno porque hace falta **antes** de abrirlo: con la caja
+ * cerrada no hay turno de donde sacarlo, y es justo el momento en que la
+ * pantalla tiene que decir con cuánto conviene arrancar.
+ */
+export async function fondoBaseDeSucursal(branchId: string): Promise<number> {
+  const [fila] = await db
+    .select({ fondoBase: branches.fondoBase })
+    .from(branches)
+    .where(eq(branches.id, branchId))
+    .limit(1);
+
+  return Number(fila?.fondoBase ?? 0);
+}
+
 export async function sucursalesConCaja() {
   return db
     .select({
       id: branches.id,
       nombre: branches.name,
+      fondoBase: branches.fondoBase,
       turnoId: cashSessions.id,
       abiertaAt: cashSessions.abiertaAt,
     })

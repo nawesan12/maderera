@@ -63,9 +63,9 @@ const productLinks = [
 const herramientas = [
   {
     name: "Corte a medida",
-    href: "/presupuesto",
+    href: "/corte",
     icon: Scissors,
-    desc: "Mandá el despiece en milímetros",
+    desc: "Cargá el despiece y mirá cómo entra",
   },
   {
     name: "Calculadora",
@@ -562,14 +562,15 @@ export function Navbar({
               </Link>
             )}
 
-            {/* Dice «Carrito», y es una decisión tomada, no un descuido.
-                El resto del sitio lo llama «presupuesto» —la página, el botón
-                de cada ficha— porque eso es lo que se arma. Pero la clienta
-                pidió esta palabra acá: es la que su cliente reconoce de
-                cualquier otra tienda, y este ícono es el que no se puede errar.
-                Si algún día se unifica, se cambian los tres lugares juntos. */}
+            {/* Dice «Carrito», y ahora lo dice todo el sitio.
+                Durante un tiempo esta fue la única palabra: la página se
+                llamaba «presupuesto» y el paso siguiente, «checkout». Eran tres
+                nombres para dos pantallas. Quedó el que la gente reconoce de
+                cualquier otra tienda —/carrito y /carrito/confirmar—, y pedir
+                un presupuesto por escrito pasó a ser una de las salidas del
+                carrito, que es lo que siempre fue. */}
             <Link
-              href="/presupuesto"
+              href="/carrito"
               aria-label={
                 cantidadItems > 0
                   ? `Carrito, ${cantidadItems} ${cantidadItems === 1 ? "producto" : "productos"}`
@@ -589,7 +590,7 @@ export function Navbar({
             </Link>
 
             <Link
-              href="/presupuesto"
+              href="/carrito"
               className="hidden h-11 items-center whitespace-nowrap rounded-full bg-accion px-5 text-[15px] font-semibold text-white shadow-[0_4px_14px_-6px_rgb(194_87_15_/_0.6)] transition-colors hover:bg-accion-hover md:flex"
             >
               Pedir Presupuesto
@@ -716,7 +717,7 @@ export function Navbar({
                   })}
 
                   <div className="my-3 border-t border-linea-tenue" />
-                  <Link href="/presupuesto" onClick={() => setMobileMenuOpen(false)}>
+                  <Link href="/carrito" onClick={() => setMobileMenuOpen(false)}>
                     <Button className="w-full rounded-full bg-accion font-semibold text-white hover:bg-accion-hover">
                       Pedir Presupuesto
                     </Button>

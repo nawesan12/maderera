@@ -11,7 +11,7 @@ import { EstadoProvider } from "@/lib/estado-context";
 import { PreciosProvider } from "@/lib/precios-propios-context";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
 import { bannersDe } from "@/lib/dal/banners";
-import { FranjaDeAviso } from "@/components/banner";
+import { AvisoModal } from "@/components/aviso-modal";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { listarCategorias } from "@/lib/dal/catalog";
 import { DatosEstructurados } from "@/components/datos-estructurados";
@@ -83,9 +83,16 @@ export default async function PublicLayout({
     <CarritoProvider>
       <SaltarAlContenido />
       <DatosEstructurados datos={marcado} />
-      {/* Arriba del encabezado: es donde se mira un aviso, y donde no tapa
-          nada. Se muestra uno solo aunque haya varios cargados. */}
-      {avisos[0] && <FranjaDeAviso banner={avisos[0]} />}
+      {/* El aviso de promoción, como diálogo y no como franja: una línea
+          arriba de todo se lee como parte del marco de la página y nadie la
+          mira. Se muestra uno solo aunque haya varios cargados, y una sola vez
+          por visita. Ver `components/aviso-modal.tsx`. */}
+      {avisos[0] && (
+        <AvisoModal
+          banner={avisos[0]}
+          clave={`${avisos[0].id}-${avisos[0].actualizado.getTime()}`}
+        />
+      )}
       <Navbar
         telefono={principal?.telefono}
         horario={principal?.horario}

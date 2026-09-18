@@ -58,6 +58,17 @@ export const regimenesRetencion = pgTable(
     alicuota: numeric({ precision: 6, scale: 3 }).notNull(),
     alicuotaNoInscripto: numeric({ precision: 6, scale: 3 }).notNull(),
 
+    /**
+     * De qué provincia es el régimen. Nulo en los nacionales.
+     *
+     * Ingresos Brutos es provincial y la maderera opera con convenio
+     * multilateral: la misma compra puede tener retención de Misiones —de donde
+     * viene la madera— o de Buenos Aires. Sin esta columna los dos regímenes
+     * eran indistinguibles en la pantalla y en el certificado, que es donde el
+     * proveedor lo va a mirar.
+     */
+    jurisdiccion: text(),
+
     /** Se resta del **acumulado del mes**, no de cada pago. */
     minimoNoImponible: numeric({ precision: 12, scale: 2 })
       .notNull()

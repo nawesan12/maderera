@@ -96,6 +96,10 @@ export function PrecioEditable({
         }
       }}
       inputMode="decimal"
+      /* Acá Enter guarda el precio y cierra la edición: no tiene que avanzar
+         al campo siguiente como en el resto del panel. Ver
+         `components/admin/enter-avanza.tsx`. */
+      data-enter="enviar"
       className="tabular w-full rounded-md border border-brand-orange bg-card px-2 py-1 text-right text-base outline-none"
       aria-label="Nuevo precio"
     />

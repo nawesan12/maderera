@@ -109,6 +109,9 @@ export async function chequesEnCartera() {
       banco: cheques.banco,
       fechaPago: cheques.fechaPago,
       importe: cheques.importe,
+      // Físico o e-Cheq: al endosar hay que ofrecer el que corresponde, y el
+      // e-Cheq además no puede salir por el circuito B.
+      tipo: cheques.tipo,
       cliente: customers.nombre,
     })
     .from(cheques)

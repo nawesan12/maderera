@@ -11,6 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Confirmar } from "@/components/admin/confirmar";
+import { ETIQUETA_CIRCUITO } from "@/lib/circuito";
 import {
   cambiarEstadoDeCheque,
   cargarCheque,
@@ -159,6 +160,8 @@ export function AltaDeCheque({
     inicial,
   );
   const [sentido, setSentido] = useState("recibido");
+  const [tipo, setTipo] = useState("fisico");
+  const [circuito, setCircuito] = useState("blanco");
   const id = useId();
 
   return (
@@ -191,12 +194,40 @@ export function AltaDeCheque({
               <span className="text-base font-medium">Tipo</span>
               <select
                 name="tipo"
-                defaultValue="fisico"
+                value={tipo}
+                onChange={(e) => {
+                  setTipo(e.target.value);
+                  // El e-Cheq solo va por el circuito de facturas.
+                  if (e.target.value === "echeq") setCircuito("blanco");
+                }}
                 className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
               >
                 <option value="fisico">Físico</option>
                 <option value="echeq">e-Cheq</option>
               </select>
+            </label>
+
+            {/* Por qué circuito va. Antes no se preguntaba y todo lo cargado a
+                mano quedaba en «Facturas», así que los dos totales de la
+                cartera no eran los de nadie. */}
+            <label className="block">
+              <span className="text-base font-medium">Circuito</span>
+              <select
+                name="circuito"
+                value={circuito}
+                onChange={(e) => setCircuito(e.target.value)}
+                disabled={tipo === "echeq"}
+                className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base disabled:opacity-60"
+              >
+                <option value="blanco">{ETIQUETA_CIRCUITO.blanco}</option>
+                <option value="negro">{ETIQUETA_CIRCUITO.negro}</option>
+              </select>
+              {tipo === "echeq" && (
+                <span className="mt-1 block text-sm text-muted-foreground">
+                  Un e-Cheq queda registrado en el banco: va siempre por
+                  facturas.
+                </span>
+              )}
             </label>
 
             <label className="block">

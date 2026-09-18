@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { notificationsLog } from "@/lib/db/schema";
 import { proveedorEmail } from "@/lib/email";
 import { envolver, escapar } from "@/lib/email/plantillas";
+import { avisoDeEspera, permitidoPorAmbos } from "@/lib/limites";
 
 /**
  * La consulta del formulario de contacto.
@@ -69,6 +70,25 @@ export async function enviarConsulta(
   }
 
   const consulta = leido.data;
+
+  /*
+   * El freno.
+   *
+   * Cada envío es **un correo real** que sale del dominio del negocio, con el
+   * «responder a» que escribió quien completó el formulario. Sin límite es un
+   * relay abierto: además del costo, quema la reputación del dominio recién
+   * verificado, y eso después no se arregla con un despliegue.
+   *
+   * Tres por hora por IP y tres por correo. Nadie manda tres consultas
+   * distintas en una hora; quien lo hace, no es una persona.
+   */
+  const puede = await permitidoPorAmbos("contacto", {
+    nombre: "correo",
+    valor: consulta.email,
+  });
+
+  if (!puede.permitido) return { error: avisoDeEspera(puede) };
+
   const asunto = `${MOTIVOS[consulta.motivo]} — ${consulta.nombre}`;
 
   const { html, texto } = envolver({

@@ -80,6 +80,29 @@ trabajar dos veces sobre lo mismo. **Cada renglón se puede abrir**: si dice
 está en **Bitácora**, donde también se abre la cosa tocada desde la etiqueta
 gris de la derecha.
 
+## Cargar sin soltar el teclado
+
+En las pantallas de carga, **Enter pasa al campo siguiente** y en el último
+envía. Es lo mismo que hacía el sistema anterior y lo que la mano ya sabe: se
+tipea el dato, Enter, el siguiente, Enter.
+
+Dos excepciones, y las dos son a propósito: en un cuadro de notas Enter hace un
+renglón nuevo, y en un buscador con lista Enter elige lo que está resaltado.
+
+En el mostrador, además, están los atajos con **Alt** —Alt+B para buscar, Alt+C
+para el cliente— que se ven apretando el signo de pregunta de la pantalla.
+
+## Los avisos de venta en el teléfono
+
+El panel se puede **instalar como una aplicación**: desde el menú del navegador,
+«Agregar a la pantalla de inicio». Instalado, avisa cuando entra una compra por
+el sitio o se acredita un pago, como cualquier aplicación de ventas.
+
+Se activa en *Avisos automáticos → Avisos de venta en el teléfono*, y es **por
+dispositivo**: activarlo en el teléfono no lo activa en la computadora del
+mostrador. En iPhone solo funciona si el panel está agregado a la pantalla de
+inicio.
+
 ## Lo que cambia respecto de un sistema de escritorio
 
 1. **No hay botón de guardar general.** Cada pantalla guarda lo suyo cuando

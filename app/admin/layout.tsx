@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { degradar } from "@/lib/degradar";
 import { PanelNoDisponible } from "@/components/admin/panel-no-disponible";
@@ -13,8 +14,23 @@ import {
   ActivityBellSkeleton,
 } from "@/components/admin/activity-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { EnterAvanza } from "@/components/admin/enter-avanza";
 import { requireStaff } from "@/lib/dal/session";
 import { conversacionesSinLeer } from "@/lib/dal/admin/whatsapp";
+
+/**
+ * El panel se puede instalar.
+ *
+ * No es un capricho: en el teléfono, **el permiso de notificaciones de iPhone
+ * solo existe si la aplicación está agregada a la pantalla de inicio**, y los
+ * avisos de venta son justamente lo que la clienta pidió. El manifiesto se
+ * declara acá y no en `app/manifest.ts` para que el sitio público no le ofrezca
+ * a los clientes instalarse el panel de administración.
+ */
+export const metadata: Metadata = {
+  manifest: "/admin/app.webmanifest",
+  robots: { index: false, follow: false },
+};
 
 /** Iniciales para el avatar: "Juan Pérez" -> "JP". */
 function iniciales(nombre: string) {
@@ -110,6 +126,11 @@ export default async function AdminLayout({
   return (
     <div className="panel flex min-h-screen bg-background text-foreground">
       <SaltarAlContenido />
+      {/* Enter pasa al campo siguiente en todas las pantallas de carga. Va
+          una vez acá y no formulario por formulario: la regla es la misma en
+          las veinte pantallas y repetirla garantizaba que tres quedaran
+          distintas. Ver `lib/teclado/avance.ts`. */}
+      <EnterAvanza />
       <AdminSidebar whatsappSinLeer={sinLeer} rol={usuario.staffRole} />
       {/* `min-w-0` no es decorativo: sin él este hijo de flex no baja del ancho
           de su contenido, así que el `overflow-x` del tablero no recorta nada y

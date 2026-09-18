@@ -53,6 +53,10 @@ import {
 import type { MedioDeMostrador } from "@/lib/mostrador/importes";
 import type { RenglonDelCierre } from "@/lib/mostrador/caja";
 import {
+  nombreDeLaDiferencia,
+  TOLERANCIA_ARQUEO,
+} from "@/lib/mostrador/arqueo";
+import {
   useCopiaLocal,
   type CopiaLista,
 } from "@/lib/mostrador/offline/use-copia-local";
@@ -104,6 +108,8 @@ interface Turno {
   abiertaPor: string;
   abiertaAt: Date;
   esperado: number;
+  /** El cambio que tiene que quedar siempre. Cero = la sucursal no lo fijó. */
+  fondoBase: number;
   fondoInicial: number;
   ventasEnEfectivo: number;
   otrosIngresos: number;
@@ -261,6 +267,8 @@ export function VistaMostrador({
   movimientos,
   ventas,
   tarifasDeCorte,
+  anchoSierra,
+  fondoBase,
   promos,
 }: {
   usuario: { nombre: string; userId: string };
@@ -274,6 +282,10 @@ export function VistaMostrador({
   ventas: VentaDeHoy[];
   /** Las tarifas de corte, para poder cotizar un corte sin salir del mostrador. */
   tarifasDeCorte: TarifaDeCorte[];
+  /** Lo que se lleva el disco por pasada, de /admin/calculadoras. */
+  anchoSierra: number;
+  /** El cambio que tiene que quedar en el cajón de esta sucursal. */
+  fondoBase: number;
   /** Las promociones vigentes. Se cuentan, no se descuentan. */
   promos: PromoVigente[];
 }) {
@@ -1016,7 +1028,9 @@ export function VistaMostrador({
             precio: cortando.precio,
             largoMm: cortando.largoMm ?? null,
             anchoMm: cortando.anchoMm ?? null,
+            color: cortando.color ?? null,
           }}
+          anchoSierra={anchoSierra}
           precioPorPasada={tarifaDeLaPlaca?.precioPorPasada ?? 0}
           precioPorMetroCanto={tarifaDeLaPlaca?.precioPorMetroCanto ?? 0}
           onCerrar={() => setCortando(null)}
@@ -1043,6 +1057,7 @@ export function VistaMostrador({
         <PanelDeCaja
           sucursal={sucursal}
           turno={turno}
+          fondoBase={fondoBase}
           cierre={cierre}
           movimientos={movimientos}
           ventas={ventas}
@@ -2443,6 +2458,7 @@ function BuscadorDeCliente({
 function PanelDeCaja({
   sucursal,
   turno,
+  fondoBase,
   cierre,
   movimientos,
   ventas,
@@ -2452,6 +2468,11 @@ function PanelDeCaja({
 }: {
   sucursal: Sucursal;
   turno: Turno | null;
+  /**
+   * El cambio de la sucursal, para poder decirlo **antes** de abrir la caja:
+   * con el turno cerrado no hay de dónde leerlo.
+   */
+  fondoBase: number;
   cierre: RenglonDelCierre[];
   movimientos: Movimiento[];
   ventas: VentaDeHoy[];
@@ -2470,6 +2491,9 @@ function PanelDeCaja({
 
   const diferencia =
     turno && contado !== "" ? Number(contado) - turno.esperado : null;
+
+  // Antes de abrir no hay turno, así que la base sale de la sucursal.
+  const baseDeCambio = turno?.fondoBase ?? fondoBase;
 
   return (
     /*
@@ -2501,6 +2525,16 @@ function PanelDeCaja({
               <p className="text-base text-muted-foreground">
                 No hay caja abierta en esta sucursal. Abrila con el efectivo con
                 el que arrancás el día.
+                {baseDeCambio > 0 && (
+                  <>
+                    {" "}
+                    El cambio que tiene que quedar siempre acá es{" "}
+                    <strong className="tabular text-foreground">
+                      {formatearMonto(baseDeCambio)}
+                    </strong>
+                    .
+                  </>
+                )}
               </p>
               <label className="mt-4 block">
                 <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -2557,6 +2591,17 @@ function PanelDeCaja({
                   {formatearMonto(turno.esperado)}
                 </span>
               </div>
+
+              {/* El cambio que no se retira. Sin esto, «podés retirar hasta
+                  tanto» aparecía recién como error al intentarlo. */}
+              {turno.fondoBase > 0 && (
+                <p className="mt-2 flex items-baseline justify-between text-base text-muted-foreground">
+                  <span>Cambio que queda para mañana</span>
+                  <span className="tabular font-semibold">
+                    {formatearMonto(turno.fondoBase)}
+                  </span>
+                </p>
+              )}
 
               {/* El cierre Z. Lo de arriba es el efectivo, que es lo único que
                   puede faltar del cajón; esto es todo lo que se cobró en el
@@ -2621,6 +2666,32 @@ function PanelDeCaja({
                            * anotado, el arqueo de la noche muestra un faltante
                            * que nadie va a poder explicar.
                            */
+                          /*
+                           * El piso de cambio también sin conexión.
+                           *
+                           * El servidor lo controla al registrar el retiro,
+                           * pero sin conexión no hay servidor: acá la cuenta se
+                           * hace con el esperado que ya está en pantalla. Sin
+                           * esto, la regla que la clienta pidió se caía justo
+                           * el día que se corta internet.
+                           */
+                          if (
+                            t === "retiro" &&
+                            turno.fondoBase > 0 &&
+                            turno.esperado - Number(monto) < turno.fondoBase
+                          ) {
+                            const disponible = Math.max(
+                              0,
+                              turno.esperado - turno.fondoBase,
+                            );
+                            setAviso(
+                              disponible > 0
+                                ? `Ese retiro deja el cajón sin el cambio de la base (${formatearMonto(turno.fondoBase)}). Podés retirar hasta ${formatearMonto(disponible)}.`
+                                : `No se puede retirar: en el cajón hay ${formatearMonto(turno.esperado)} y la base de cambio es ${formatearMonto(turno.fondoBase)}.`,
+                            );
+                            return;
+                          }
+
                           if (!enLinea) {
                             await encolarMovimiento({
                               clave: crypto.randomUUID(),
@@ -2679,27 +2750,60 @@ function PanelDeCaja({
                   />
                 </label>
 
+                {/* Faltante o sobrante, con esa palabra: un número con signo
+                    obliga a traducir, y es el dato que después hay que
+                    explicar. */}
                 {diferencia !== null && (
                   <p className="mt-2 flex items-baseline justify-between text-lg">
-                    <span className="text-muted-foreground">Diferencia</span>
+                    <span className="text-muted-foreground">
+                      {nombreDeLaDiferencia(diferencia) === "sin diferencia"
+                        ? "Arqueo"
+                        : nombreDeLaDiferencia(diferencia) === "faltante"
+                          ? "Falta"
+                          : "Sobra"}
+                    </span>
                     <span
                       className={`tabular font-bold ${
-                        Math.abs(diferencia) < 0.01
+                        Math.abs(diferencia) <= TOLERANCIA_ARQUEO
                           ? "text-saldo-cero"
                           : diferencia < 0
                             ? "text-saldo-debe"
                             : "text-saldo-favor"
                       }`}
                     >
-                      {formatearMonto(diferencia)}
+                      {Math.abs(diferencia) <= TOLERANCIA_ARQUEO
+                        ? "cierra"
+                        : formatearMonto(Math.abs(diferencia))}
                     </span>
                   </p>
                 )}
 
+                {diferencia !== null &&
+                  Math.abs(diferencia) > TOLERANCIA_ARQUEO && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Escribí qué pasó: no se puede cerrar con una diferencia
+                      sin explicar.
+                    </p>
+                  )}
+
+                {turno.fondoBase > 0 &&
+                  contado !== "" &&
+                  Number(contado) < turno.fondoBase && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Quedan menos de {formatearMonto(turno.fondoBase)}: mañana
+                      el mostrador arranca sin cambio.
+                    </p>
+                  )}
+
                 <input
                   value={notas}
                   onChange={(e) => setNotas(e.target.value)}
-                  placeholder="Notas del cierre (opcional)"
+                  placeholder={
+                    diferencia !== null &&
+                    Math.abs(diferencia) > TOLERANCIA_ARQUEO
+                      ? "Qué pasó con la diferencia"
+                      : "Notas del cierre (opcional)"
+                  }
                   className="mt-2.5 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
                 />
 

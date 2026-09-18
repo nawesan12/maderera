@@ -35,17 +35,30 @@ const nextConfig: NextConfig = {
    * raíz de `public`.
    */
   /**
-   * El blog salió del sitio el 7/9/2026, por pedido de la clienta.
+   * Redirecciones de rutas que dejaron de existir.
    *
-   * Las seis notas estaban en el sitemap y pueden estar indexadas, además de
-   * compartidas por WhatsApp. Un 404 pierde ese tráfico y deja un enlace roto
-   * en cualquier lado donde alguien lo haya pegado; un 301 lo manda a la
-   * portada, que es lo más cerca que quedó de lo que la persona buscaba.
+   * **El blog** salió del sitio el 7/9/2026, por pedido de la clienta. Las seis
+   * notas estaban en el sitemap y pueden estar indexadas, además de compartidas
+   * por WhatsApp. Un 404 pierde ese tráfico y deja un enlace roto en cualquier
+   * lado donde alguien lo haya pegado; un 301 lo manda a la portada, que es lo
+   * más cerca que quedó de lo que la persona buscaba.
+   *
+   * **El carrito** dejó de llamarse «presupuesto» y «checkout»: eran dos
+   * nombres para el mismo paso y ninguno de los dos es el que usa la gente —la
+   * barra de arriba siempre dijo «Carrito»—. Las dos rutas viejas están
+   * indexadas y, sobre todo, pegadas en conversaciones de WhatsApp, así que van
+   * por 308 a las nuevas en vez de romperse.
    */
   async redirects() {
     return [
       { source: "/blog", destination: "/", permanent: true },
       { source: "/blog/:slug", destination: "/", permanent: true },
+      { source: "/presupuesto", destination: "/carrito", permanent: true },
+      {
+        source: "/checkout",
+        destination: "/carrito/confirmar",
+        permanent: true,
+      },
     ];
   },
 
@@ -57,6 +70,79 @@ const nextConfig: NextConfig = {
           { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
           { key: "Content-Type", value: "application/javascript; charset=utf-8" },
           { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+
+      /*
+       * Las dos pantallas que siguen armándose por pedido, servidas igual desde
+       * la red.
+       *
+       * El catálogo y la consulta de stock reciben filtros por la URL —la
+       * categoría, la búsqueda, el orden—, y eso las deja dinámicas: cada
+       * combinación es una página distinta. Pero **el resultado ya no depende
+       * de quién mira**: el precio del profesional lo corrige el navegador, así
+       * que dos visitantes con la misma dirección reciben exactamente el mismo
+       * HTML.
+       *
+       * **Va en `Vercel-CDN-Cache-Control` y no en `Cache-Control`, y eso no es
+       * un detalle.** Con `Cache-Control` funciona en `next start` pero no en
+       * Vercel: una página dinámica responde con `private, no-store` puesto por
+       * el framework, ese encabezado gana, y la red no guarda nada. Medido
+       * contra producción, que es la única forma de saberlo.
+       *
+       * La cabecera propia del CDN no compite con la otra: le habla solo a la
+       * red, que además la borra antes de entregar la respuesta.
+       * `CDN-Cache-Control` va al lado para cualquier otra red intermedia, y
+       * `Cache-Control` queda para el navegador, donde no queremos copia vieja
+       * —el precio y el stock cambian—.
+       *
+       * `s-maxage` es cuánto vale la copia guardada; `stale-while-revalidate`,
+       * que mientras se rehace se sigue entregando la que hay en vez de hacer
+       * esperar a nadie.
+       */
+      ...["/catalogo", "/stock"].map((source) => ({
+        source,
+        headers: [
+          {
+            key: "Vercel-CDN-Cache-Control",
+            value: "public, s-maxage=300, stale-while-revalidate=3600",
+          },
+          {
+            key: "CDN-Cache-Control",
+            value: "public, s-maxage=300, stale-while-revalidate=3600",
+          },
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+        ],
+      })),
+
+      /*
+       * Las cabeceras de seguridad, para todo el sitio.
+       *
+       * No había ninguna. Son cuatro líneas que no cambian nada de lo que se
+       * ve y cierran las cosas de siempre:
+       *
+       * - `X-Content-Type-Options`: que el navegador no adivine el tipo de un
+       *   archivo. Acá se suben comprobantes y fotos, y adivinar es cómo una
+       *   imagen termina ejecutándose como script.
+       * - `Referrer-Policy`: al salir del sitio se manda el dominio, no la
+       *   dirección completa. Un enlace desde `/pedido/1234?token=…` no tiene
+       *   por qué contarle a nadie el token.
+       * - `X-Frame-Options`: que nadie meta el panel adentro de un iframe suyo
+       *   para hacer clickjacking.
+       * - `Permissions-Policy`: el sitio no usa cámara, micrófono ni ubicación;
+       *   decirlo explícitamente es que tampoco los pueda pedir un script que
+       *   entre por donde sea.
+       */
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(), payment=()",
+          },
         ],
       },
     ];

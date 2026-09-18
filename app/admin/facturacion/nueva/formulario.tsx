@@ -1,8 +1,17 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { AlertCircle, Loader2, Plus, Trash2 } from "lucide-react";
+import { useActionState, useEffect, useState } from "react";
+import {
+  AlertCircle,
+  Loader2,
+  Plus,
+  Search,
+  Trash2,
+  UserRound,
+  X,
+} from "lucide-react";
 import { emitirManual, type EstadoFactura } from "../actions";
+import { buscarClientes } from "@/app/mostrador/actions";
 import { calcularTotales } from "@/lib/fiscal/impuestos";
 import {
   letraQueCorresponde,
@@ -56,6 +65,21 @@ export function FormularioFacturaManual({
   const [condicion, setCondicion] = useState<CondicionIva>("consumidor_final");
   const [lineas, setLineas] = useState<Linea[]>([{ ...LINEA_VACIA }]);
 
+  /*
+   * A quién se le factura.
+   *
+   * Antes esto se tipeaba entero, siempre, aunque el cliente estuviera cargado
+   * hace años: el servidor ya aceptaba `customerId` —y con él generaba el
+   * movimiento de cuenta corriente— pero no había forma de mandarlo desde la
+   * pantalla. Ahora se busca, y si no está, se crea con estos mismos datos.
+   */
+  const [cliente, setCliente] = useState<ClienteElegido | null>(null);
+  const [receptor, setReceptor] = useState({
+    nombre: "",
+    cuit: "",
+    domicilio: "",
+  });
+
   const letra = letraQueCorresponde(condicionEmisor, condicion);
 
   const totales = calcularTotales(
@@ -91,6 +115,23 @@ export function FormularioFacturaManual({
           </p>
         </div>
 
+        <BuscadorDeCliente
+          elegido={cliente}
+          onElegir={(c) => {
+            setCliente(c);
+            if (c) {
+              setCondicion(c.condicionIva as CondicionIva);
+              setReceptor({
+                nombre: c.razonSocial || c.nombre,
+                cuit: c.cuit ?? "",
+                domicilio: c.direccion ?? "",
+              });
+            }
+          }}
+        />
+
+        {cliente && <input type="hidden" name="customerId" value={cliente.id} />}
+
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="receptorNombre" className="mb-1.5 block text-base font-medium">
@@ -100,6 +141,10 @@ export function FormularioFacturaManual({
               id="receptorNombre"
               name="receptorNombre"
               required
+              value={receptor.nombre}
+              onChange={(e) =>
+                setReceptor((r) => ({ ...r, nombre: e.target.value }))
+              }
               className="h-10 w-full rounded-lg border bg-background px-3 text-base"
             />
           </div>
@@ -112,6 +157,10 @@ export function FormularioFacturaManual({
               id="receptorCuit"
               name="receptorCuit"
               placeholder="30-12345678-9"
+              value={receptor.cuit}
+              onChange={(e) =>
+                setReceptor((r) => ({ ...r, cuit: e.target.value }))
+              }
               className="tabular h-10 w-full rounded-lg border bg-background px-3 text-base"
             />
           </div>
@@ -151,10 +200,35 @@ export function FormularioFacturaManual({
             <input
               id="receptorDomicilio"
               name="receptorDomicilio"
+              value={receptor.domicilio}
+              onChange={(e) =>
+                setReceptor((r) => ({ ...r, domicilio: e.target.value }))
+              }
               className="h-10 w-full rounded-lg border bg-background px-3 text-base"
             />
           </div>
         </div>
+
+        {/* Dar de alta la ficha con lo que se está tipeando.
+            Es el pedido de «poder crear clientes desde facturación» sin otra
+            pantalla: los datos del receptor son los de la ficha. Con cliente
+            elegido no aparece, porque ya existe. */}
+        {!cliente && (
+          <label className="mt-4 flex items-start gap-2.5 text-base">
+            <input
+              type="checkbox"
+              name="guardarComoCliente"
+              className="mt-1 h-4 w-4 accent-brand-orange"
+            />
+            <span>
+              Guardarlo como cliente nuevo
+              <span className="block text-sm text-muted-foreground">
+                Queda la ficha con estos datos y la factura se le carga a su
+                cuenta corriente.
+              </span>
+            </span>
+          </label>
+        )}
       </section>
 
       {/* Ítems */}
@@ -296,5 +370,156 @@ export function FormularioFacturaManual({
         Emitir {letra === "A" ? "factura A" : letra === "B" ? "factura B" : "factura C"}
       </button>
     </form>
+  );
+}
+
+/** El cliente elegido, con lo que la factura necesita de él. */
+interface ClienteElegido {
+  id: string;
+  nombre: string;
+  razonSocial: string | null;
+  cuit: string | null;
+  condicionIva: string;
+  direccion: string | null;
+}
+
+/**
+ * Buscar al cliente antes de tipear el receptor.
+ *
+ * Reusa el mismo buscador del mostrador —nombre, razón social o CUIT— porque es
+ * el mismo padrón y la misma forma de buscar: quien factura escribe las tres
+ * primeras letras del apellido, igual que quien cobra.
+ *
+ * Elegir a alguien **no bloquea los campos**: la factura puede salir a nombre
+ * de la empresa aunque la ficha esté a nombre de la persona, y esa corrección
+ * hay que poder hacerla sin desvincular la ficha.
+ */
+function BuscadorDeCliente({
+  elegido,
+  onElegir,
+}: {
+  elegido: ClienteElegido | null;
+  onElegir: (c: ClienteElegido | null) => void;
+}) {
+  const [texto, setTexto] = useState("");
+  /*
+   * Los resultados se guardan con la consulta que los trajo.
+   *
+   * Así no hace falta limpiarlos desde el efecto cuando alguien borra lo que
+   * escribió: si la consulta cambió, los resultados guardados simplemente no
+   * corresponden y no se muestran. Es la misma forma que usa el buscador de
+   * placas del alta de cortes.
+   */
+  const [traidos, setTraidos] = useState<{
+    clave: string;
+    items: ClienteElegido[];
+  }>({ clave: "", items: [] });
+
+  const consulta = texto.trim();
+  const resultados = traidos.clave === consulta ? traidos.items : [];
+  const buscando = consulta.length >= 2 && traidos.clave !== consulta;
+
+  useEffect(() => {
+    if (consulta.length < 2) return;
+
+    let vigente = true;
+
+    const id = setTimeout(async () => {
+      const encontrados = await buscarClientes(consulta);
+      if (!vigente) return;
+      setTraidos({ clave: consulta, items: encontrados as ClienteElegido[] });
+    }, 250);
+
+    return () => {
+      vigente = false;
+      clearTimeout(id);
+    };
+  }, [consulta]);
+
+  if (elegido) {
+    return (
+      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-linea bg-hundida px-4 py-3">
+        <UserRound className="h-5 w-5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 text-base font-medium">
+          {elegido.razonSocial || elegido.nombre}
+          {elegido.cuit && (
+            <span className="tabular ml-2 text-sm font-normal text-muted-foreground">
+              {elegido.cuit}
+            </span>
+          )}
+        </span>
+        <span className="text-sm text-muted-foreground">
+          La factura se carga a su cuenta corriente
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            onElegir(null);
+            setTexto("");
+          }}
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-linea px-3 text-sm font-medium transition-colors hover:bg-background"
+        >
+          <X className="h-4 w-4" />
+          Quitar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4">
+      <label htmlFor="buscarCliente" className="mb-1.5 block text-base font-medium">
+        Buscar un cliente cargado
+      </label>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          id="buscarCliente"
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder="Nombre, razón social o CUIT"
+          // Enter no avanza acá: la lista se elige con el mouse o bajando.
+          data-enter="enviar"
+          className="h-10 w-full rounded-lg border bg-background pl-9 pr-3 text-base"
+        />
+      </div>
+
+      {consulta.length >= 2 && (
+        <ul className="mt-1.5 overflow-hidden rounded-lg border border-linea">
+          {buscando && resultados.length === 0 && (
+            <li className="px-3.5 py-2.5 text-base text-muted-foreground">
+              Buscando…
+            </li>
+          )}
+          {!buscando && resultados.length === 0 && (
+            <li className="px-3.5 py-2.5 text-base text-muted-foreground">
+              No hay ninguno con ese nombre. Tipeá los datos y marcá «Guardarlo
+              como cliente nuevo».
+            </li>
+          )}
+          {resultados.map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  onElegir(c);
+                  setTexto("");
+                }}
+                className="flex w-full flex-col items-start px-3.5 py-2.5 text-left transition-colors hover:bg-hundida"
+              >
+                <span className="text-base font-medium">
+                  {c.razonSocial || c.nombre}
+                </span>
+                {c.cuit && (
+                  <span className="tabular text-sm text-muted-foreground">
+                    {c.cuit}
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -26,6 +26,14 @@ const esquema = z.object({
     .transform((v) => new Date(`${v}T12:00:00`)),
   importe: z.string().min(1, "Poné el importe."),
   customerId: z.string().uuid().optional(),
+  /**
+   * Por qué circuito va.
+   *
+   * Antes no se preguntaba y todos los cheques cargados a mano quedaban en
+   * «Facturas», aunque fueran del otro circuito: la cartera mostraba entonces
+   * dos totales que no eran los de nadie.
+   */
+  circuito: z.enum(["blanco", "negro"]).default("blanco"),
   notas: z.string().trim().max(500).optional(),
 });
 
@@ -52,6 +60,7 @@ export async function cargarCheque(
     fechaPago: formData.get("fechaPago"),
     importe: (formData.get("importe") as string) || "",
     customerId: (formData.get("customerId") as string) || undefined,
+    circuito: (formData.get("circuito") as string) || "blanco",
     notas: (formData.get("notas") as string) || undefined,
   });
 
@@ -65,6 +74,21 @@ export async function cargarCheque(
     return { error: "El importe tiene que ser mayor a cero." };
   }
 
+  /*
+   * Un e-Cheq no va por el circuito B.
+   *
+   * Es electrónico: queda registrado en el banco a nombre de la empresa, así
+   * que anotarlo del otro lado cruza las dos cajas en el único lugar donde no
+   * tiene arreglo. La misma regla que aplica el pago a proveedores
+   * (`lib/retenciones/pago.ts`), acá para el alta a mano.
+   */
+  if (d.tipo === "echeq" && d.circuito === "negro") {
+    return {
+      error:
+        "Un e-Cheq no puede ir por el circuito B: queda registrado en el banco a nombre de la empresa.",
+    };
+  }
+
   await db.insert(cheques).values({
     sentido: d.sentido,
     tipo: d.tipo,
@@ -76,6 +100,7 @@ export async function cargarCheque(
     // Un recibido arranca en el cajón; un entregado ya salió.
     estado: d.sentido === "recibido" ? "cartera" : "entregado",
     customerId: d.customerId ?? null,
+    circuito: d.circuito,
     notas: d.notas ?? null,
     createdByUserId: usuario.userId,
   });

@@ -72,7 +72,7 @@ function haceHoras(horas: number): Date {
  *
  * Salieron de `seed-ventas` —datos de desarrollo— y quedaron conviviendo con
  * las tres del brief, que son las buenas y van **a cotizar** porque la clienta
- * contestó "depende" al costo de las tres. El resultado en el checkout es que
+ * contestó "depende" al costo de las tres. El resultado en el carrito es que
  * hoy aparecen dos "Mar del Plata": una a $18.000 y otra a $0.
  *
  * Se desactivan, no se borran: los pedidos sembrados guardan el nombre de su

@@ -20,6 +20,7 @@ import { Vacio } from "@/components/admin/vacio";
 import { leerPeriodoMensual } from "@/lib/periodos";
 import { nombreComprobante } from "@/lib/fiscal/comprobantes";
 import { CajasFisicas } from "./cajas-fisicas";
+import { FondoBase } from "./fondo-base";
 import { VentasSueltas } from "./ventas-sueltas";
 
 export const metadata: Metadata = { title: "Caja" };
@@ -122,6 +123,8 @@ export default async function CajaPage({
                   ? `Abierta ${haceCuanto(new Date(s.abiertaAt))}`
                   : "Sin turno abierto"}
               </p>
+              {/* El cambio que no se retira nunca. Ver `FondoBase`. */}
+              <FondoBase branchId={s.id} valor={Number(s.fondoBase)} />
             </div>
             <Link
               href="/mostrador"

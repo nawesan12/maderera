@@ -85,6 +85,21 @@ corriente, esa misma acción le baja la deuda al cliente. Es una sola operación
 no dos: cobrar en un lado y no en el otro es exactamente como se desincroniza
 una cuenta.
 
+## La caja del mostrador
+
+**El cambio no se retira.** Cada sucursal tiene un monto de cambio fijo —se carga
+en *Caja*, desde el panel— y el mostrador no puede sacar plata por debajo de ese
+piso: mañana a las ocho hay que dar vuelto. Si se intenta, el sistema dice hasta
+cuánto se puede retirar.
+
+**El arqueo dice «falta» o «sobra»**, no un número con signo. Y si hay
+diferencia, **no se cierra sin escribir qué pasó**: mañana nadie se va a acordar,
+y una diferencia sin explicación repetida veinte veces es lo único que después no
+se puede reconstruir.
+
+Al cerrar, si el efectivo contado quedó por debajo del cambio fijo, se avisa —no
+frena el cierre: la plata está o no está—.
+
 ## Errores que conviene evitar
 
 - **Cargar el pedido y facturar aparte, a mano.** Facture desde el pedido: el

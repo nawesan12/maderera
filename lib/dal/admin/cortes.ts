@@ -15,6 +15,7 @@ import {
 import { requireStaff } from "@/lib/dal/session";
 import { coincideBusqueda } from "@/lib/busqueda";
 import { preciosPara } from "@/lib/mostrador/buscar";
+import { medidaDePlaca } from "@/lib/cortes/placa";
 
 export interface CorteListado {
   id: string;
@@ -131,13 +132,27 @@ export async function obtenerCorte(
       /*
        * La medida de la placa que se va a cortar.
        *
-       * Sale de la variante del catálogo y no de un texto: el plano de corte
-       * necesita los dos números para acomodar las piezas. Puede venir en nulo
-       * —un corte sobre material que trajo el cliente no tiene variante— y en
-       * ese caso el plano se arma con la medida que se elija en pantalla.
+       * Sale de dos lados y se resuelve abajo con `medidaDePlaca`: lo que se
+       * cargó a mano en el trabajo manda sobre lo que dice la variante del
+       * catálogo. El plano necesita los dos números para acomodar las piezas, y
+       * puede no haber ninguno —un corte sobre material que trajo el cliente no
+       * tiene variante—: ahí se usa la medida de plaza y la pantalla avisa que
+       * es un supuesto.
        */
-      placaLargoMm: productVariants.largoMm,
-      placaAnchoMm: productVariants.anchoMm,
+      varianteLargoMm: productVariants.largoMm,
+      varianteAnchoMm: productVariants.anchoMm,
+      propiaLargoMm: cuttingOrders.placaLargoMm,
+      propiaAnchoMm: cuttingOrders.placaAnchoMm,
+      mitad: cuttingOrders.mitad,
+      /**
+       * El color de la placa, si la variante lo declara.
+       *
+       * Lo mira quien parte una placa al medio: en una placa de color el
+       * dibujo corre en un sentido, y partirla al ancho puede dejar las dos
+       * mitades con la veta cruzada. La pantalla lo avisa; la decisión es de
+       * quien carga el trabajo.
+       */
+      color: productVariants.color,
       /*
        * La categoría del producto: es por donde se busca la tarifa de corte.
        * Las tarifas se cargan por familia ("Placas") y el corte guarda el
@@ -193,6 +208,15 @@ export async function obtenerCorte(
     urgente: corte.urgente === 1,
     piezas,
     precioPlaca,
+    // La medida con la que se arma el plano, resuelta una sola vez acá y no en
+    // cada pantalla. Ver `lib/cortes/placa.ts`.
+    medida: medidaDePlaca({
+      propiaLargo: corte.propiaLargoMm,
+      propiaAncho: corte.propiaAnchoMm,
+      varianteLargo: corte.varianteLargoMm,
+      varianteAncho: corte.varianteAnchoMm,
+      mitad: corte.mitad,
+    }),
   };
 }
 

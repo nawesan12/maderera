@@ -8,7 +8,7 @@ import { combinedStockLevel } from "@/lib/stock-level";
  * comprarlo, no cómo está repartida la mercadería entre los depósitos. Eso es
  * un dato interno y ocupaba dos líneas de la tarjeta para no responder nada.
  *
- * Dónde retirarlo se resuelve en el checkout, que es cuando la sucursal
+ * Dónde retirarlo se resuelve en el carrito, que es cuando la sucursal
  * empieza a importar.
  *
  * **Cuando quedan pocas, dice cuántas.** Lo pidió la clienta como promoción:

@@ -8,10 +8,15 @@
  * lógica interesante —la cola de ventas, las reglas de conflicto— vive en la
  * página, no acá: esto son ciento cincuenta líneas de política de caché.
  *
- * Alcance: **solo el mostrador**. El panel y el sitio público no se interceptan.
- * Un POS a medio conectar es útil; un panel a medio conectar es peligroso,
- * porque ahí se cierran cajas y se factura, y un dato viejo es peor que un
- * error.
+ * Alcance del **caché**: solo el mostrador. El panel y el sitio público no se
+ * interceptan. Un POS a medio conectar es útil; un panel a medio conectar es
+ * peligroso, porque ahí se cierran cajas y se factura, y un dato viejo es peor
+ * que un error.
+ *
+ * **Los avisos del panel sí viven acá**, al final del archivo. No tienen nada
+ * que ver con el caché —un push llega con la pestaña cerrada— pero un dominio
+ * tiene un solo ayudante con alcance de raíz, así que comparten archivo. Están
+ * separados a propósito: nada de lo de arriba los toca.
  */
 
 /*
@@ -272,3 +277,72 @@ async function guardarSiSirve(cache, clave, respuesta) {
     await cache.put(clave, respuesta);
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Avisos del panel                                                            */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Lo que la clienta pidió después de ver Tiendanube: que cuando entra una venta
+ * por el sitio, suene el teléfono. El servidor manda el mensaje cifrado —el
+ * servidor de push del navegador no puede leerlo— y acá se convierte en la
+ * notificación que se ve.
+ *
+ * **Toda la información va en el mensaje.** Nada de traerla del servidor al
+ * recibirlo: el push llega con la pestaña cerrada y muchas veces sin conexión
+ * estable, y una notificación que dice "cargando…" no sirve para nada.
+ */
+self.addEventListener("push", (evento) => {
+  if (!evento.data) return;
+
+  let aviso;
+  try {
+    aviso = evento.data.json();
+  } catch {
+    aviso = { titulo: "Maderera Juan B. Justo", cuerpo: evento.data.text() };
+  }
+
+  evento.waitUntil(
+    self.registration.showNotification(aviso.titulo ?? "Maderera Juan B. Justo", {
+      body: aviso.cuerpo ?? "",
+      icon: "/mostrador/icono-192.png",
+      badge: "/mostrador/icono-192.png",
+      // La etiqueta agrupa: tres ventas seguidas no dejan tres notificaciones
+      // apiladas, la última reemplaza a la anterior.
+      tag: aviso.etiqueta ?? "mjbj",
+      renotify: true,
+      data: { url: aviso.url ?? "/admin" },
+    }),
+  );
+});
+
+/**
+ * Tocar la notificación abre la pantalla que corresponde.
+ *
+ * Si el panel ya está abierto en alguna ventana, se enfoca ésa en vez de abrir
+ * otra: quien está trabajando no quiere una tercera pestaña del mismo sistema.
+ */
+self.addEventListener("notificationclick", (evento) => {
+  evento.notification.close();
+
+  const destino = evento.notification.data?.url ?? "/admin";
+
+  evento.waitUntil(
+    (async () => {
+      const ventanas = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+
+      for (const ventana of ventanas) {
+        if (ventana.url.includes("/admin") && "focus" in ventana) {
+          await ventana.focus();
+          if ("navigate" in ventana) await ventana.navigate(destino);
+          return;
+        }
+      }
+
+      await self.clients.openWindow(destino);
+    })(),
+  );
+});

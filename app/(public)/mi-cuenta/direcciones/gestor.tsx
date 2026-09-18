@@ -264,7 +264,7 @@ function Formulario({
           defaultChecked={direccion?.predeterminada}
           className="h-4 w-4 accent-[var(--brand-orange,#e2711d)]"
         />
-        Usar esta dirección por defecto en el checkout
+        Usar esta dirección por defecto en el carrito
       </label>
 
       {estado.error && (

@@ -41,13 +41,13 @@ export const metadata: Metadata = {
 
 const ATAJOS = [
   {
-    href: "/presupuesto",
+    href: "/carrito",
     icono: Package,
     titulo: "Pedir un presupuesto",
     detalle: "Armá la lista y te pasamos el precio con validez.",
   },
   {
-    href: "/presupuesto",
+    href: "/carrito",
     icono: Scissors,
     titulo: "Pedir un corte a medida",
     detalle: "Mandanos el despiece y lo cortamos en el aserradero.",

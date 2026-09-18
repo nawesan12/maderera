@@ -67,6 +67,8 @@ export interface PromoVigente {
    * `quienPagaPromo` en el esquema.
    */
   quienPaga: "banco" | "nosotros";
+  /** El logo del banco o de la billetera. Vacío muestra solo el nombre. */
+  imagenUrl: string | null;
 }
 
 /**
@@ -90,6 +92,7 @@ export const promosVigentes = cachearPublico(
         dias: bankPromotions.dias,
         vigenciaHasta: bankPromotions.vigenciaHasta,
         quienPaga: bankPromotions.quienPaga,
+        imagenUrl: bankPromotions.imagenUrl,
       })
       .from(bankPromotions)
       .where(

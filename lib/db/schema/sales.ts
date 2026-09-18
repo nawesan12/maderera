@@ -183,7 +183,7 @@ export const orders = pgTable(
      * dirección y la compra de **cada cliente de la maderera**.
      *
      * Así que el número identifica y el token autoriza. Quien tiene el enlace
-     * ve su pedido —es lo que hace falta para el checkout sin cuenta— y quien
+     * ve su pedido —es lo que hace falta para el carrito sin cuenta— y quien
      * no lo tiene no ve nada, salvo que tenga sesión y el pedido sea suyo.
      */
     publicToken: uuid().notNull().defaultRandom(),
@@ -405,6 +405,14 @@ export const estadoCorte = pgEnum("estado_corte", [
   "cancelado",
 ]);
 
+/**
+ * En qué sentido se parte una placa cuando se vende por la mitad.
+ *
+ * `largo` deja la veta entera: el corte corre paralelo al largo y salen dos
+ * mitades de 2750 × 915. `ancho` corta la veta: salen dos de 1375 × 1830.
+ */
+export const mitadDePlaca = pgEnum("mitad_placa", ["largo", "ancho"]);
+
 export const cuttingOrders = pgTable(
   "cutting_orders",
   {
@@ -419,6 +427,30 @@ export const cuttingOrders = pgTable(
       onDelete: "set null",
     }),
     materialDescripcion: text().notNull(),
+    /**
+     * La medida de la placa de este trabajo, en milímetros.
+     *
+     * Normalmente sale de la variante del catálogo, y estas dos columnas están
+     * en nulo. Se cargan cuando la medida es otra: material que trajo el
+     * cliente, un retazo grande que ya estaba cortado, o una placa importada
+     * que no mide lo de plaza. Antes, sin variante, el plano se armaba con
+     * 1830 × 2750 y la pantalla avisaba «medida supuesta»; lo que faltaba era
+     * poder escribir la de verdad.
+     */
+    placaLargoMm: integer(),
+    placaAnchoMm: integer(),
+    /**
+     * Si el trabajo sale de media placa, y en qué sentido se parte.
+     *
+     * La maderera vende media placa, y no es lo mismo partirla a lo largo que
+     * al ancho: de una 2750 × 1830 salen dos de 2750 × 915 o dos de 1375 × 1830,
+     * y qué piezas entran cambia por completo. Lo elige quien carga el trabajo
+     * —no lo decide el sistema— porque depende de la placa que haya en el
+     * depósito y de cómo corre el dibujo cuando es de color.
+     *
+     * Nulo es placa entera, que es el caso normal.
+     */
+    mitad: mitadDePlaca(),
     placas: integer().notNull().default(1),
     /**
      * Pasadas de sierra del trabajo, para poder cobrarlo.

@@ -6,7 +6,7 @@
  * consiste entonces en desagregar, no en agregar.
  *
  * Que la cuenta vaya en una sola dirección importa: si en algún lugar se
- * calculara `precio * 1,21` y en otro `precio / 1,21`, los totales del checkout
+ * calculara `precio * 1,21` y en otro `precio / 1,21`, los totales del carrito
  * y de la factura diferirían en unos pesos, y esa diferencia la descubre el
  * cliente comparando el papel con lo que pagó.
  *

@@ -10,13 +10,23 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { crearCorte } from "../actions";
 import { buscarClientes, buscarEnMostrador } from "@/app/mostrador/actions";
-import { MEDIDAS_DE_PLACA } from "@/lib/calculations";
+import { medidaDePlaca, nombreDeLaMitad, type Mitad } from "@/lib/cortes/placa";
 import {
   calcularPlanoDeCorte,
   type PiezaFijada,
 } from "@/lib/cortes/plano";
 import { PlanoEnVivo } from "@/components/cortes/plano-en-vivo";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
+
+/** La placa elegida del catálogo, con lo que el plano necesita saber de ella. */
+interface PlacaElegida {
+  variantId: string;
+  descripcion: string;
+  largoMm: number | null;
+  anchoMm: number | null;
+  /** Para avisar al partir: en una placa de color el dibujo tiene sentido. */
+  color: string | null;
+}
 
 interface Pieza {
   largoMm: number;
@@ -47,8 +57,18 @@ const estadoInicial = {} as { error?: string; ok?: string };
 export function FormularioCorte({
   sucursales,
   desdePedido,
+  anchoSierra,
 }: {
   sucursales: { id: string; nombre: string }[];
+  /**
+   * Lo que se lleva el disco en cada pasada, de /admin/calculadoras.
+   *
+   * Viaja como prop porque esta pantalla es de cliente —el plano se rehace con
+   * cada tecla— y el valor vive en la base. Antes el motor usaba su constante
+   * de 5 mm y el número configurable no lo leía nadie: dos verdades para lo
+   * mismo.
+   */
+  anchoSierra: number;
   /**
    * El pedido del que sale este corte, cuando se entra desde su ficha.
    *
@@ -67,19 +87,26 @@ export function FormularioCorte({
 }) {
   const [estado, accion, pendiente] = useActionState(crearCorte, estadoInicial);
 
-  const [sucursal, setSucursal] = useState(
-    desdePedido?.branchId ?? sucursales[0]?.id ?? "",
-  );
+  /*
+   * Dónde se corta.
+   *
+   * Dejó de preguntarse —lo pidió la clienta— porque no era una decisión: el
+   * corte se hace donde está la máquina y quien carga el trabajo ya está
+   * parado ahí. La sucursal se sigue guardando, que es lo que hace que el
+   * trabajo aparezca en la cola de ese taller y que el stock se descuente
+   * donde corresponde; sale del pedido, o de la primera sucursal.
+   */
+  const sucursal = desdePedido?.branchId ?? sucursales[0]?.id ?? "";
   const [cliente, setCliente] = useState<{ id: string; nombre: string; razonSocial: string | null } | null>(
     desdePedido?.cliente ?? null,
   );
   const [nombre, setNombre] = useState(desdePedido?.contactoNombre ?? "");
-  const [placa, setPlaca] = useState<{
-    variantId: string;
-    descripcion: string;
-    largoMm: number | null;
-    anchoMm: number | null;
-  } | null>(null);
+  const [placa, setPlaca] = useState<PlacaElegida | null>(null);
+  /** La medida de la placa, en milímetros, como está en pantalla. */
+  const [largoPlaca, setLargoPlaca] = useState("");
+  const [anchoPlaca, setAnchoPlaca] = useState("");
+  /** Si sale de media placa, y en qué sentido se parte. */
+  const [mitad, setMitad] = useState<Mitad>(null);
   const [material, setMaterial] = useState("");
   const [piezas, setPiezas] = useState<Pieza[]>([piezaVacia()]);
   const [placas, setPlacas] = useState(1);
@@ -103,19 +130,19 @@ export function FormularioCorte({
   /*
    * La medida de la placa sobre la que se acomoda.
    *
-   * Sale de la variante del catálogo. Cuando todavía no se eligió ninguna —o
-   * cuando la que se eligió no tiene las medidas cargadas— se usa la de plaza
-   * más común y **se avisa en pantalla**: un plano hecho sobre una medida
-   * supuesta no sirve para cobrar.
+   * Manda lo que está escrito en los dos campos —que se autocompletan con la
+   * variante del catálogo—, y encima se aplica la mitad si el trabajo sale de
+   * media placa. Cuando no hay nada de dónde sacarla se usa la de plaza más
+   * común y **se avisa en pantalla**: un plano hecho sobre una medida supuesta
+   * no sirve para cobrar. Ver `lib/cortes/placa.ts`.
    */
-  const medidaPlaca =
-    placa?.largoMm && placa?.anchoMm
-      ? { largo: placa.largoMm, ancho: placa.anchoMm, supuesta: false }
-      : {
-          largo: MEDIDAS_DE_PLACA[0].largo,
-          ancho: MEDIDAS_DE_PLACA[0].ancho,
-          supuesta: true,
-        };
+  const medidaPlaca = medidaDePlaca({
+    propiaLargo: Number(largoPlaca) || null,
+    propiaAncho: Number(anchoPlaca) || null,
+    varianteLargo: placa?.largoMm,
+    varianteAncho: placa?.anchoMm,
+    mitad,
+  });
 
   const paraElPlano = useMemo(
     () =>
@@ -145,9 +172,10 @@ export function FormularioCorte({
         piezas: paraElPlano,
         placaLargo: medidaPlaca.largo,
         placaAncho: medidaPlaca.ancho,
+        anchoSierra,
         fijadas,
       }),
-    [paraElPlano, medidaPlaca.largo, medidaPlaca.ancho, fijadas],
+    [paraElPlano, medidaPlaca.largo, medidaPlaca.ancho, anchoSierra, fijadas],
   );
 
   const placasDelPlano = Math.max(1, plano.placas.length);
@@ -224,21 +252,6 @@ export function FormularioCorte({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="branch">Dónde se corta</Label>
-              <select
-                id="branch"
-                value={sucursal}
-                onChange={(e) => setSucursal(e.target.value)}
-                className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-base"
-              >
-                {sucursales.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
 
           <BuscadorDePlaca
@@ -246,7 +259,14 @@ export function FormularioCorte({
             elegida={placa}
             onElegir={(p) => {
               setPlaca(p);
-              if (p) setMaterial(p.descripcion);
+              if (p) {
+                setMaterial(p.descripcion);
+                // La medida de la variante entra en los campos, donde se puede
+                // corregir: la placa que hay en el depósito no siempre mide lo
+                // que dice el catálogo.
+                setLargoPlaca(p.largoMm ? String(p.largoMm) : "");
+                setAnchoPlaca(p.anchoMm ? String(p.anchoMm) : "");
+              }
             }}
           />
 
@@ -295,6 +315,88 @@ export function FormularioCorte({
               )}
             </div>
           </div>
+
+          {/* La medida de la placa y de qué sale.
+
+              Antes esto no se podía tocar: la medida salía de la variante y,
+              si no había, el plano se armaba sobre 1830 × 2750 avisando
+              «medida supuesta» sin dejar corregirla. Con material del cliente
+              —que es la mitad de los trabajos— eso volvía inútil el plano. */}
+          <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto]">
+            <div className="space-y-2">
+              <Label htmlFor="placaLargoMm">Largo de la placa (mm)</Label>
+              <Input
+                id="placaLargoMm"
+                name="placaLargoMm"
+                type="number"
+                min="1"
+                inputMode="numeric"
+                value={largoPlaca}
+                onChange={(e) => setLargoPlaca(e.target.value)}
+                placeholder={String(medidaPlaca.largo)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="placaAnchoMm">Ancho de la placa (mm)</Label>
+              <Input
+                id="placaAnchoMm"
+                name="placaAnchoMm"
+                type="number"
+                min="1"
+                inputMode="numeric"
+                value={anchoPlaca}
+                onChange={(e) => setAnchoPlaca(e.target.value)}
+                placeholder={String(medidaPlaca.ancho)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>De qué sale</Label>
+              <input type="hidden" name="mitad" value={mitad ?? ""} />
+              <div className="flex gap-1.5" role="group" aria-label="De qué sale">
+                {([null, "largo", "ancho"] as const).map((m) => (
+                  <button
+                    key={m ?? "entera"}
+                    type="button"
+                    onClick={() => setMitad(m)}
+                    aria-pressed={mitad === m}
+                    className={`h-10 rounded-md px-3 text-base font-medium transition-colors ${
+                      mitad === m
+                        ? "bg-brand-orange text-white"
+                        : "border border-input text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {m === null
+                      ? "Placa entera"
+                      : m === "largo"
+                        ? "Media a lo largo"
+                        : "Media al ancho"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            {nombreDeLaMitad(mitad)} de {medidaPlaca.largo} × {medidaPlaca.ancho}{" "}
+            mm
+            {medidaPlaca.supuesta
+              ? " · medida supuesta: elegí la placa del catálogo o escribí la medida"
+              : ""}
+            {` · la sierra se lleva ${anchoSierra} mm por corte`}
+          </p>
+
+          {/* Partir una placa de color no es lo mismo que partir una blanca:
+              el dibujo corre en un sentido y la mitad cortada al ancho puede
+              quedar con la veta cruzada. No se bloquea —quien atiende sabe qué
+              placa tiene en la mano—, se avisa. */}
+          {mitad && placa?.color && (
+            <p className="tarjeta-atencion px-4 py-3 text-base">
+              La placa es <strong>{placa.color}</strong>: fijate cómo corre el
+              dibujo antes de partirla. Al ancho, las dos mitades quedan con la
+              veta cruzada.
+            </p>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="cantoDescripcion">Tapacanto del trabajo</Label>
@@ -635,20 +737,8 @@ function BuscadorDePlaca({
   onElegir,
 }: {
   branchId: string;
-  elegida: {
-    variantId: string;
-    descripcion: string;
-    largoMm: number | null;
-    anchoMm: number | null;
-  } | null;
-  onElegir: (
-    p: {
-      variantId: string;
-      descripcion: string;
-      largoMm: number | null;
-      anchoMm: number | null;
-    } | null,
-  ) => void;
+  elegida: PlacaElegida | null;
+  onElegir: (p: PlacaElegida | null) => void;
 }) {
   const [texto, setTexto] = useState("");
   const [traidos, setTraidos] = useState<{
@@ -659,6 +749,7 @@ function BuscadorDePlaca({
       medida: string;
       largoMm?: number | null;
       anchoMm?: number | null;
+      color?: string | null;
     }[];
   }>({ clave: "", items: [] });
 
@@ -727,6 +818,7 @@ function BuscadorDePlaca({
                     variantId: r.variantId,
                     largoMm: r.largoMm ?? null,
                     anchoMm: r.anchoMm ?? null,
+                    color: r.color ?? null,
                     descripcion: `${r.producto} — ${r.medida}`,
                   });
                   setTexto("");

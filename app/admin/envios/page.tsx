@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Envíos" };
 /**
  * Zonas de envío.
  *
- * Pantalla nueva: las zonas existían en el modelo y en el checkout, pero **no
+ * Pantalla nueva: las zonas existían en el modelo y en el carrito, pero **no
  * se podían editar desde ningún lado**. Vivían en el script de siembra, así
  * que corregir una tarifa —o marcar que una zona se cotiza aparte— exigía
  * tocar código y volver a desplegar. Para un negocio cuyo flete se mueve con
@@ -52,7 +52,7 @@ export default async function AdminEnviosPage() {
                 flete a cotizar
               </>
             )}
-            . Lo que se cobra sale de acá: el checkout no calcula nada por su
+            . Lo que se cobra sale de acá: el carrito no calcula nada por su
             cuenta.
           </span>
         </p>

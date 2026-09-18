@@ -178,3 +178,81 @@ describe("calcularRetencion", () => {
     expect(r.imponible).toBe(0);
   });
 });
+
+/**
+ * Hoy la maderera **solo retiene Ingresos Brutos**, y los regímenes
+ * nacionales quedaron cargados con alícuota cero en vez de borrados: el día que
+ * vuelvan a corresponder se cambia el número y listo. Se prueba que un régimen
+ * en cero de verdad no retiene nada, porque de eso depende que dejarlos
+ * cargados sea seguro.
+ */
+describe("regímenes apagados y de Ingresos Brutos", () => {
+  const apagado: RegimenDeRetencion = {
+    ...ganancias,
+    alicuota: 0,
+    alicuotaNoInscripto: 0,
+  };
+
+  const iibbMisiones: RegimenDeRetencion = {
+    codigo: "IIBB-MI",
+    nombre: "Ingresos Brutos · Misiones",
+    impuesto: "iibb",
+    jurisdiccion: "Misiones",
+    alicuota: 1.5,
+    alicuotaNoInscripto: 3,
+    minimoNoImponible: 0,
+    minimoRetencion: 0,
+  };
+
+  it("un régimen en cero no retiene nada, por grande que sea el pago", () => {
+    const r = calcularRetencion({
+      base: 5_000_000,
+      acumuladoMes: 0,
+      retenidoMes: 0,
+      regimen: apagado,
+      inscripto: true,
+    });
+
+    expect(r.retencion).toBe(0);
+  });
+
+  it("tampoco retiene al no inscripto", () => {
+    // La alícuota agravada también está en cero: si quedara la vieja, apagar
+    // el régimen le seguiría reteniendo el 28 % a medio padrón.
+    const r = calcularRetencion({
+      base: 5_000_000,
+      acumuladoMes: 0,
+      retenidoMes: 0,
+      regimen: apagado,
+      inscripto: false,
+    });
+
+    expect(r.retencion).toBe(0);
+  });
+
+  it("Ingresos Brutos retiene desde el primer peso", () => {
+    // Sin mínimo no imponible, a diferencia de Ganancias.
+    const r = calcularRetencion({
+      base: 100_000,
+      acumuladoMes: 0,
+      retenidoMes: 0,
+      regimen: iibbMisiones,
+      inscripto: true,
+    });
+
+    expect(r.alicuota).toBe(1.5);
+    expect(r.retencion).toBe(1500);
+  });
+
+  it("al no inscripto en Ingresos Brutos le retiene el doble", () => {
+    const r = calcularRetencion({
+      base: 100_000,
+      acumuladoMes: 0,
+      retenidoMes: 0,
+      regimen: iibbMisiones,
+      inscripto: false,
+    });
+
+    expect(r.retencion).toBe(3000);
+  });
+});

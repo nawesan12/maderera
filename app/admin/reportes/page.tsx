@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Download, ShoppingCart } from "lucide-react";
+import { Download, FileText, ShoppingCart } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { FiltroPeriodo } from "@/components/admin/filtro-periodo";
 import { formatearMonto, plural } from "@/components/admin/formato";
@@ -8,10 +8,14 @@ import {
   CORTES,
   leerCorte,
   reporteDeVentas,
+  ventasPorMes,
 } from "@/lib/dal/admin/reportes";
 import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
 import { requireStaff } from "@/lib/dal/session";
 import { ElegirCorte } from "./elegir-corte";
+import { FiltrosDelReporte } from "./filtros";
+import { GraficoDeEvolucion } from "@/components/admin/grafico-evolucion";
+import { listarSucursalesPublicas } from "@/lib/dal/envios";
 
 export const metadata = { title: "Reportes" };
 
@@ -28,7 +32,12 @@ export const metadata = { title: "Reportes" };
 export default async function ReportesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; corte?: string }>;
+  searchParams: Promise<{
+    periodo?: string;
+    corte?: string;
+    rubro?: string;
+    sucursal?: string;
+  }>;
 }) {
   await requireStaff();
 
@@ -37,7 +46,14 @@ export default async function ReportesPage({
   const periodo = resolverPeriodo(clave);
   const corte = leerCorte(params.corte);
 
-  const filas = await reporteDeVentas(corte, periodo);
+  // Cortar agrupa; filtrar se queda con una parte. Ver `FiltrosDelReporte`.
+  const filtros = { rubro: params.rubro, sucursal: params.sucursal };
+
+  const [filas, meses, sucursales] = await Promise.all([
+    reporteDeVentas(corte, periodo, filtros),
+    ventasPorMes(periodo, filtros),
+    listarSucursalesPublicas(),
+  ]);
 
   const total = filas.reduce((suma, f) => suma + f.total, 0);
   const operaciones = filas.reduce((suma, f) => suma + f.cantidad, 0);
@@ -62,6 +78,8 @@ export default async function ReportesPage({
 
   const parametros = new URLSearchParams({ corte });
   if (params.periodo) parametros.set("periodo", params.periodo);
+  if (params.rubro) parametros.set("rubro", params.rubro);
+  if (params.sucursal) parametros.set("sucursal", params.sucursal);
 
   return (
     <div className="space-y-6">
@@ -87,6 +105,15 @@ export default async function ReportesPage({
           <Download className="h-5 w-5" />
           Exportar CSV
         </a>
+        {/* El PDF es para mandar, no para trabajar: el CSV se abre en Excel y
+            esto se adjunta a un correo o se le muestra al contador. */}
+        <a
+          href={`/admin/reportes/exportar?${parametros}&formato=pdf`}
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <FileText className="h-5 w-5" />
+          PDF
+        </a>
       </EncabezadoPanel>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -96,7 +123,28 @@ export default async function ReportesPage({
         <Suspense fallback={null}>
           <ElegirCorte actual={corte} />
         </Suspense>
+        <Suspense fallback={null}>
+          <FiltrosDelReporte
+            rubro={params.rubro ?? "todos"}
+            sucursal={params.sucursal ?? "todas"}
+            sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
+          />
+        </Suspense>
       </div>
+
+      {/* Cómo viene el mes contra los anteriores. Es lo único que la tabla de
+          abajo no puede contestar. */}
+      {meses.length > 1 && (
+        <section className="tarjeta p-5">
+          <h2 className="text-base font-medium">Mes a mes</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Lo vendido en cada mes del período, con los mismos filtros.
+          </p>
+          <div className="mt-3">
+            <GraficoDeEvolucion meses={meses} />
+          </div>
+        </section>
+      )}
 
       {hayMargen && (
         <section className="grid gap-3 sm:grid-cols-3">

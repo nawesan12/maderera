@@ -5,7 +5,7 @@ import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 
 import { and, asc, count, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { coincideBusqueda } from "@/lib/busqueda";
+import { coincideBusqueda, normalizarBusqueda } from "@/lib/busqueda";
 import { db } from "@/lib/db";
 import {
   branches,
@@ -451,7 +451,7 @@ export async function listarProductosPublicos(
 ): Promise<ProductoListado[]> {
   const general = await listaGeneral();
   const id = general?.id ?? null;
-  return productosCacheados(filtros, {
+  return productosCacheados(conBusquedaNormalizada(filtros), {
     id,
     generalId: id,
     factorDerivado: 1,
@@ -462,13 +462,25 @@ export async function listarProductos(
   filtros: FiltrosCatalogo = {},
 ): Promise<ProductoListado[]> {
   const lista = await listaVigente();
-  return productosCacheados(filtros, {
+  return productosCacheados(conBusquedaNormalizada(filtros), {
     id: lista.id,
     generalId: lista.generalId,
     // En la clave del caché a propósito: si la clienta ajusta el porcentaje de
     // una lista derivada, el factor cambia y el caché viejo deja de servirse.
     factorDerivado: lista.factorDerivado,
   });
+}
+
+/**
+ * Los mismos filtros, con el término de búsqueda en su forma canónica.
+ *
+ * Los filtros son la clave del caché: sin esto, cada variante de escritura del
+ * mismo término es una entrada nueva y tres consultas más. Ver
+ * `normalizarBusqueda`.
+ */
+function conBusquedaNormalizada(filtros: FiltrosCatalogo): FiltrosCatalogo {
+  if (!filtros.busqueda) return filtros;
+  return { ...filtros, busqueda: normalizarBusqueda(filtros.busqueda) };
 }
 
 /** Cuántos productos entran en una página del catálogo. */
@@ -508,16 +520,40 @@ export const TOPE_PAGINAS = 5;
  * páginas y de ahí en más la pantalla invita a filtrar, que es como se busca en
  * un catálogo de ese tamaño.
  */
-export async function paginaDeProductos(
-  filtros: FiltrosCatalogo = {},
-  pagina = 1,
-): Promise<{
+export interface PaginaDeCatalogo {
   productos: ProductoListado[];
   total: number;
   hayMas: boolean;
   topeAlcanzado: boolean;
-}> {
-  const todos = await listarProductos(filtros);
+}
+
+/**
+ * La misma página, **sin preguntar quién mira**.
+ *
+ * Es a `paginaDeProductos` lo que `listarProductosPublicos` es a
+ * `listarProductos`, y existe por el mismo motivo: el catálogo sale con el
+ * precio de público y el navegador lo corrige para quien tiene lista propia.
+ * El recorte es idéntico —lo hace `recortar`—; lo único que cambia es de dónde
+ * salen los precios.
+ */
+export async function paginaDeProductosPublica(
+  filtros: FiltrosCatalogo = {},
+  pagina = 1,
+): Promise<PaginaDeCatalogo> {
+  return recortar(await listarProductosPublicos(filtros), pagina);
+}
+
+export async function paginaDeProductos(
+  filtros: FiltrosCatalogo = {},
+  pagina = 1,
+): Promise<PaginaDeCatalogo> {
+  return recortar(await listarProductos(filtros), pagina);
+}
+
+function recortar(
+  todos: ProductoListado[],
+  pagina: number,
+): PaginaDeCatalogo {
   const pedida = Math.max(1, Math.floor(pagina) || 1);
   const acotada = Math.min(pedida, TOPE_PAGINAS);
   const hasta = acotada * POR_PAGINA;
@@ -914,24 +950,109 @@ export const obtenerProducto = cache(
   },
 );
 
-/*
- * Acá vivía `obtenerProductoPublico`: la misma ficha pero siempre a precio de
- * público, escrita para que la ficha se sirviera estática como la portada, con
- * el navegador corrigiendo el precio del profesional.
+/**
+ * La ficha **a precio de público**, la misma para todo el que entre.
  *
- * **Se borró sin haberla usado nunca, y conviene saber por qué antes de
- * volver a escribirla.** El listado se pudo pasar porque la tarjeta muestra un
- * solo precio por producto —el «desde»— y eso es lo que `/api/mis-precios`
- * devuelve, un mapa por slug. La ficha no: muestra el precio de cada variante,
- * y para corregirla desde el navegador hace falta una respuesta por variante
- * que ese endpoint hoy no da.
+ * Es la gemela de `listarProductosPublicos` y existe por lo mismo: sin
+ * preguntar quién mira, el HTML de la ficha es uno solo y se puede servir de la
+ * caché en vez de armarlo en cada visita.
  *
- * Y medido, el cambio no compraba lo que parecía. La ficha ya hace **cero
- * consultas** para quien no tiene sesión, que es casi todo el tráfico: es
- * dinámica pero no toca la base. Lo que cuesta es la visita del profesional
- * —seis consultas por página, cinco de ellas preguntando de nuevo qué lista le
- * toca— y eso no se arregla acá, sino resolviendo esa pregunta una sola vez.
+ * **Ya se había escrito una vez y se borró**, con este argumento: la ficha
+ * muestra el precio de *cada variante*, y `/api/mis-precios` solo sabía
+ * devolver un precio por producto, así que el navegador no podía corregirla.
+ * Eso ya no es cierto —ahora también devuelve el mapa por variante, ver
+ * `preciosPropiosPorVariante`—, que era la pieza que faltaba.
+ *
+ * El otro argumento de entonces era que la ficha ya hacía cero consultas para
+ * el visitante sin sesión. Sigue siendo verdad y sigue sin ser el punto: no
+ * consultar la base no es no gastar. Armar la ficha entera —galería, variantes,
+ * reseñas, sugeridos, datos estructurados— es tiempo de CPU, se paga en cada
+ * visita, y con trescientas fichas recorridas por los buscadores eso es todos
+ * los días.
  */
+export const obtenerProductoPublico = cache(
+  async (slug: string): Promise<ProductoDetalle | null> => {
+    const general = await listaGeneral();
+    const id = general?.id ?? null;
+    return productoCacheado(slug, { id, generalId: id, factorDerivado: 1 });
+  },
+);
+
+/**
+ * Qué precio tiene cada variante para la lista de quien pide.
+ *
+ * Es lo que permite que la ficha se sirva a precio de público y el navegador la
+ * corrija: la tarjeta del listado se arregla con un precio por producto, pero
+ * la ficha muestra el de la medida elegida y necesita el detalle.
+ *
+ * **Solo devuelve algo para una lista diferenciada.** Para el público —y para
+ * el cliente con cuenta que compra a precio de lista general— no hay nada que
+ * corregir, y un mapa vacío es la respuesta correcta y la más barata.
+ *
+ * Cacheado por lista, con la misma regla de siempre: la lista viaja en la clave,
+ * así que la entrada de uno nunca se le puede servir a otro.
+ */
+const preciosDeVarianteCacheados = cachearPublico(
+  async (
+    lista: Pick<ListaVigente, "id" | "generalId" | "factorDerivado">,
+  ): Promise<Record<string, string>> => {
+    const propia = alias(priceListItems, "precio_propio");
+    const general = alias(priceListItems, "precio_general");
+
+    const filas = await db
+      .select({
+        id: productVariants.id,
+        precio: sql<
+          string | null
+        >`coalesce(${propia.price}, round((${general.price} * ${lista.factorDerivado ?? 1})::numeric, 2))`,
+      })
+      .from(productVariants)
+      .innerJoin(
+        products,
+        and(
+          eq(products.id, productVariants.productId),
+          eq(products.active, true),
+        ),
+      )
+      .leftJoin(
+        propia,
+        lista.id
+          ? and(
+              eq(propia.variantId, productVariants.id),
+              eq(propia.priceListId, lista.id),
+            )
+          : sql`false`,
+      )
+      .leftJoin(
+        general,
+        lista.generalId
+          ? and(
+              eq(general.variantId, productVariants.id),
+              eq(general.priceListId, lista.generalId),
+            )
+          : sql`false`,
+      )
+      .where(eq(productVariants.active, true));
+
+    const mapa: Record<string, string> = {};
+    for (const f of filas) if (f.precio !== null) mapa[f.id] = f.precio;
+    return mapa;
+  },
+  ["catalogo", "precios-variante"],
+  ETIQUETAS.catalogo,
+);
+
+export async function preciosPropiosPorVariante(): Promise<
+  Record<string, string>
+> {
+  const lista = await listaVigente();
+  if (!lista.esDiferenciada) return {};
+  return preciosDeVarianteCacheados({
+    id: lista.id,
+    generalId: lista.generalId,
+    factorDerivado: lista.factorDerivado,
+  });
+}
 
 /**
  * Con qué productos está vinculado, según lo que cargó el vendedor.
@@ -1004,10 +1125,15 @@ export async function productosSugeridos(
     .filter((v) => v.tipo === "similar")
     .map((v) => v.relatedProductId);
 
+  /*
+   * A precio de público, como la ficha que los muestra: son tarjetas de
+   * producto y el navegador les corrige el precio igual que en el catálogo.
+   * Preguntar acá qué lista corresponde ataría la ficha entera a la sesión.
+   */
   const [cargados, deCategoria] = await Promise.all([
-    listarProductos({ ids: [...idsComplementarios, ...idsSimilares] }),
+    listarProductosPublicos({ ids: [...idsComplementarios, ...idsSimilares] }),
     idsSimilares.length === 0
-      ? listarProductos({ categoria: categorySlug })
+      ? listarProductosPublicos({ categoria: categorySlug })
       : Promise.resolve([]),
   ]);
 

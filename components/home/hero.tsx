@@ -85,7 +85,7 @@ export function Hero({
               Ver el catálogo
             </Link>
             <Link
-              href="/presupuesto"
+              href="/carrito"
               className="flex h-[52px] items-center rounded-[10px] border border-white/25 px-6 text-base font-semibold text-white transition-colors hover:bg-white/10"
             >
               Pedir un corte a medida

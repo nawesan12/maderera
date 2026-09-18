@@ -20,6 +20,14 @@ export interface PrecioPropio {
 interface Precios {
   /** Por slug de producto. Vacío para el público, que es casi todo el tráfico. */
   porSlug: Record<string, PrecioPropio>;
+  /**
+   * Por id de variante: el precio de cada medida.
+   *
+   * Lo usa la ficha del producto, que muestra el precio de la medida elegida y
+   * no el «desde» del listado. Sin esto la ficha tendría que preguntarle al
+   * servidor quién mira, y volvería a armarse en cada visita.
+   */
+  porVariante: Record<string, string>;
   /** Nombre de la lista, para poder decirlo en pantalla. */
   lista: string | null;
   /**
@@ -38,7 +46,12 @@ interface Precios {
   senal?: string | null;
 }
 
-const NINGUNO: Precios = { porSlug: {}, lista: null, vista: null };
+const NINGUNO: Precios = {
+  porSlug: {},
+  porVariante: {},
+  lista: null,
+  vista: null,
+};
 
 const Contexto = createContext<Precios>(NINGUNO);
 
@@ -86,7 +99,10 @@ function leerGuardado(senal: string): Precios | null {
     const crudo = sessionStorage.getItem(CAJON);
     if (!crudo) return null;
     const guardado = JSON.parse(crudo) as Precios;
-    return sirveLoGuardado(guardado, senal) ? guardado : null;
+    if (!sirveLoGuardado(guardado, senal)) return null;
+    // Lo guardado puede ser de una versión anterior del sitio, de antes de que
+    // existiera el mapa por variante: se completa en vez de dejar un hueco.
+    return { ...guardado, porVariante: guardado.porVariante ?? {} };
   } catch {
     // Un JSON roto o el almacenamiento bloqueado: se pide de nuevo.
     return null;
@@ -163,6 +179,7 @@ export function PreciosProvider({ children }: { children: ReactNode }) {
             if (!d) return null;
             const traido: Precios = {
               porSlug: d.precios ?? {},
+              porVariante: d.porVariante ?? {},
               lista: d.lista ?? null,
               vista: d.vista ?? null,
               senal,
@@ -204,4 +221,15 @@ export function usePrecioPropio(slug: string): PrecioPropio | null {
 /** Con qué vista de IVA mira esta persona, si ya se sabe. */
 export function useVistaPropia(): VistaDePrecio | null {
   return useContext(Contexto).vista;
+}
+
+/**
+ * Los precios propios por variante, para la ficha del producto.
+ *
+ * Devuelve el mapa entero y no un precio suelto porque quien lo usa —el
+ * selector de medida— los necesita todos: el precio cambia al elegir otra
+ * medida, y pedirlos de a uno obligaría a llamar un hook dentro de un bucle.
+ */
+export function usePreciosPorVariante(): Record<string, string> {
+  return useContext(Contexto).porVariante;
 }

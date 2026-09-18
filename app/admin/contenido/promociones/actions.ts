@@ -8,6 +8,7 @@ import { bankPromotions } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { ETIQUETAS } from "@/lib/cache-publico";
+import { borrarImagen, guardarImagen } from "@/lib/almacenamiento";
 
 export interface EstadoPromo {
   error?: string;
@@ -73,6 +74,21 @@ export async function guardarPromo(
   }
 
   const datos = parsed.data;
+
+  // El logo del banco. `undefined` quiere decir "no mandaron archivo", que no
+  // es lo mismo que "sacaron el logo": sin esta distinción, guardar cualquier
+  // otro campo borraría la imagen cargada.
+  let imagenUrl: string | null | undefined;
+  const archivo = formData.get("imagen");
+
+  if (archivo instanceof File && archivo.size > 0) {
+    const subida = await guardarImagen(archivo, "promo");
+    if (subida.error) return { error: subida.error };
+    imagenUrl = subida.url ?? null;
+  }
+
+  if (formData.get("quitarImagen") === "on") imagenUrl = null;
+
   const valores = {
     medio: datos.medio,
     titulo: datos.titulo,
@@ -83,13 +99,26 @@ export async function guardarPromo(
     orden: datos.orden,
     activo: datos.activo,
     updatedAt: new Date(),
+    ...(imagenUrl !== undefined ? { imagenUrl } : {}),
   };
 
   if (datos.id) {
+    // El logo anterior se borra recién después de guardar el nuevo: si la
+    // escritura falla, la promoción sigue con el que tenía.
+    const [previa] = await db
+      .select({ imagenUrl: bankPromotions.imagenUrl })
+      .from(bankPromotions)
+      .where(eq(bankPromotions.id, datos.id))
+      .limit(1);
+
     await db
       .update(bankPromotions)
       .set(valores)
       .where(eq(bankPromotions.id, datos.id));
+
+    if (previa?.imagenUrl && previa.imagenUrl !== imagenUrl && imagenUrl !== undefined) {
+      await borrarImagen(previa.imagenUrl);
+    }
   } else {
     await db.insert(bankPromotions).values(valores);
   }
@@ -112,7 +141,11 @@ export async function borrarPromo(id: string): Promise<EstadoPromo> {
   const usuario = await requireStaff();
 
   const [previa] = await db
-    .select({ medio: bankPromotions.medio, titulo: bankPromotions.titulo })
+    .select({
+      medio: bankPromotions.medio,
+      titulo: bankPromotions.titulo,
+      imagenUrl: bankPromotions.imagenUrl,
+    })
     .from(bankPromotions)
     .where(eq(bankPromotions.id, id))
     .limit(1);
@@ -120,6 +153,8 @@ export async function borrarPromo(id: string): Promise<EstadoPromo> {
   if (!previa) return { error: "Esa promoción ya no está." };
 
   await db.delete(bankPromotions).where(eq(bankPromotions.id, id));
+
+  if (previa.imagenUrl) await borrarImagen(previa.imagenUrl);
 
   await registrarEnBitacora({
     sesion: usuario,

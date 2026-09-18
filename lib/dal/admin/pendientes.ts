@@ -13,6 +13,7 @@ import {
   professionalApplications,
   purchaseInvoices,
 } from "@/lib/db/schema";
+import { gestionesVencidas } from "@/lib/dal/admin/seguimiento";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
 
@@ -56,18 +57,43 @@ export async function trabajoPendiente(): Promise<Pendiente[]> {
 
   const ve = (ruta: string) => puedeEntrar(ruta, staffRole);
 
-  const [ventas, cortes, cartera, compras, solicitudes, resenas, reponer] =
-    await Promise.all([
-      ve("/admin/pedidos") ? contarPedidos() : null,
-      ve("/admin/cortes") ? contarCortes() : null,
-      ve("/admin/cheques") ? contarCheques() : null,
-      ve("/admin/compras/facturas") ? contarFacturasDeCompra() : null,
-      ve("/admin/profesionales") ? contarSolicitudes() : null,
-      ve("/admin/contenido") ? contarResenas() : null,
-      ve("/admin/stock") ? contarStockBajoMinimo() : null,
-    ]);
+  const [
+    ventas,
+    cortes,
+    cartera,
+    compras,
+    solicitudes,
+    resenas,
+    reponer,
+    seguimientos,
+  ] = await Promise.all([
+    ve("/admin/pedidos") ? contarPedidos() : null,
+    ve("/admin/cortes") ? contarCortes() : null,
+    ve("/admin/cheques") ? contarCheques() : null,
+    ve("/admin/compras/facturas") ? contarFacturasDeCompra() : null,
+    ve("/admin/profesionales") ? contarSolicitudes() : null,
+    ve("/admin/contenido") ? contarResenas() : null,
+    ve("/admin/stock") ? contarStockBajoMinimo() : null,
+    // Los recordatorios de la cartera. Un seguimiento que hay que venir a
+    // buscar al tablero no es un recordatorio: acá es donde aparece solo.
+    ve("/admin/clientes") ? gestionesVencidas() : null,
+  ]);
 
   const filas: Pendiente[] = [];
+
+  if (seguimientos) {
+    filas.push({
+      clave: "seguimiento",
+      cantidad: seguimientos,
+      texto:
+        seguimientos === 1
+          ? "cliente para llamar hoy"
+          : "clientes para llamar hoy",
+      detalle: "Seguimientos con la fecha cumplida",
+      href: "/admin/clientes/seguimiento",
+      urgente: true,
+    });
+  }
 
   if (ventas?.porPreparar) {
     filas.push({

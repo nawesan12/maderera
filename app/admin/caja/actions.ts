@@ -4,8 +4,14 @@ import { revalidatePath } from "next/cache";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { cashMovements, cashSessions, orders, posDevices } from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
+import {
+  branches,
+  cashMovements,
+  cashSessions,
+  orders,
+  posDevices,
+} from "@/lib/db/schema";
+import { requireStaff, requireStaffRole } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { crearCajaFisica } from "@/lib/dal/admin/cajas-fisicas";
 
@@ -194,4 +200,56 @@ export async function asignarVentaAlTurno(
 
   refrescar();
   return { ok: `${resultado.numero} quedó en el turno.` };
+}
+
+/**
+ * Fija el cambio que tiene que quedar en el cajón de una sucursal.
+ *
+ * De la clienta: «siempre se les deja cambio a los mostradores, no puede quedar
+ * menos que la base». Es el piso que después hace que el mostrador rechace un
+ * retiro que dejaría el cajón sin vuelto para mañana.
+ *
+ * Solo el administrador: es una decisión de plata, y quien atiende es quien
+ * tiene la tentación de bajarla para poder retirar.
+ */
+export async function guardarFondoBase(
+  branchId: string,
+  monto: number,
+): Promise<EstadoCajas> {
+  const usuario = await requireStaffRole("admin");
+
+  const parsed = z
+    .object({
+      branchId: z.string().uuid(),
+      monto: z.coerce.number().min(0).max(10_000_000),
+    })
+    .safeParse({ branchId, monto });
+
+  if (!parsed.success) {
+    return { error: "Revisá el monto: tiene que ser un número de cero para arriba." };
+  }
+
+  const [sucursal] = await db
+    .update(branches)
+    .set({ fondoBase: parsed.data.monto.toFixed(2) })
+    .where(eq(branches.id, parsed.data.branchId))
+    .returning({ nombre: branches.name });
+
+  if (!sucursal) return { error: "Esa sucursal no existe." };
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "editar",
+    entidad: "caja",
+    descripcion: `Fijó el cambio fijo de ${sucursal.nombre} en $${parsed.data.monto.toFixed(2)}`,
+  });
+
+  refrescar();
+
+  return {
+    ok:
+      parsed.data.monto > 0
+        ? "Listo: el mostrador no va a poder retirar por debajo de ese monto."
+        : "Listo: sin cambio fijo, no se controla el retiro.",
+  };
 }

@@ -29,6 +29,55 @@ a la pantalla de formato, que son lo suyo.
 
 Es lo mismo que pasa con `/atencion` para quien contesta WhatsApp.
 
+### La medida de la placa y las medias placas
+
+La medida sale sola de la placa del catálogo, y **se puede escribir a mano**
+cuando el material lo trajo el cliente o cuando la placa que hay en el depósito
+no mide lo que dice la ficha. Debajo del despiece, la pantalla dice siempre con
+qué medida está calculando.
+
+Al lado está **de qué sale el trabajo**: placa entera, media a lo largo o media
+al ancho. No es lo mismo: de una 2750 × 1830 salen dos de 2750 × 915 o dos de
+1375 × 1830, y qué piezas entran cambia por completo. Media placa se cobra a
+mitad de precio, pero del depósito sale una placa entera —el pedazo que queda
+vuelve como retazo—.
+
+Si la placa es de color, la pantalla avisa antes de partirla: el dibujo corre en
+un sentido y una mitad cortada al ancho queda con la veta cruzada. **La decisión
+es de quien atiende**, que es el que tiene la placa en la mano.
+
+### Los 5 mm de la sierra
+
+El disco se come **5 mm en cada corte**, y esos milímetros no quedan en ninguna
+pieza: se hacen aserrín. El sistema los descuenta desde siempre, y ahora además
+se ven —el trazo naranja del dibujo es el ancho real del disco— y se dicen en
+pantalla.
+
+Es lo que explica por qué dos piezas de 900 no entran en una placa de 1830.
+
+El valor se cambia en **Calculadoras**, y vale para el plano, el presupuesto y la
+hoja del taller a la vez.
+
+### El reporte del corte
+
+El botón **Reporte en PDF** de la ficha baja el trabajo entero: cada placa
+dibujada, la tabla de piezas con su posición, **qué sobra de cada placa y de
+quién es** —de una placa vendida entera el recorte se lo lleva el cliente—, el
+desperdicio y los milímetros que se llevó la sierra.
+
+Es para guardar o mandar. La hoja del plano sigue estando, y es la que se imprime
+para bajar al taller.
+
+### El corte que pide el cliente desde el sitio
+
+En **`/corte`** cualquiera puede armar su despiece, ver el dibujo y el precio, y
+agregarlo al carrito. No hace falta tener cuenta para mirar; sí para comprar.
+
+Lo que entra por ahí abre su orden en la cola del taller **al confirmarse la
+compra**, atada al pedido, igual que un corte vendido en el mostrador. El precio
+se vuelve a calcular en ese momento: el que vio el cliente sirve para decidir, no
+para cobrar.
+
 ### Urgente
 
 El botón *Urgente* manda la orden al principio de la cola. Úselo con criterio:

@@ -5,8 +5,7 @@ import { EncabezadoPublico } from "@/components/encabezado-publico";
 import { ProductCard } from "@/components/product-card";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd } from "@/lib/seo";
-import { paginaDeProductos } from "@/lib/dal/catalog";
-import { vistaDePrecio } from "@/lib/dal/precios-sesion";
+import { listarProductosPublicos, POR_PAGINA } from "@/lib/dal/catalog";
 import { enlaceWhatsapp, numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import { ALCANCE_MOLDAVA } from "@/lib/empresa";
 
@@ -60,15 +59,30 @@ const PROCESO = [
   },
 ];
 
+/**
+ * **Esta página no le pregunta a nadie quién es, y por eso es estática.**
+ *
+ * Es una presentación fija de la línea propia: el mismo texto y la misma grilla
+ * para todo el que entra. Leía la sesión por dos cosas —el precio de lista y si
+ * mostrar con IVA o sin IVA— y eso obligaba a armarla de nuevo en cada visita,
+ * incluidas las de los buscadores, que es justamente por quienes existe.
+ *
+ * Las dos las resuelve el navegador: la tarjeta sale con el precio de público y
+ * `PreciosProvider` lo reemplaza por el del profesional cuando corresponde. Ver
+ * `lib/precios-propios-context.tsx`.
+ */
 export default async function MoldavaPage() {
-  const [{ productos }, whatsapp, numero, vista] = await Promise.all([
-    paginaDeProductos({ marca: "Moldava", orden: "relevancia" }),
+  const [todas, whatsapp, numero] = await Promise.all([
+    listarProductosPublicos({ marca: "Moldava", orden: "relevancia" }),
     enlaceWhatsapp(
       "Hola! Quería consultar por la línea Moldava y precios mayoristas.",
     ),
     numeroWhatsapp(),
-    vistaDePrecio(),
   ]);
+
+  // La grilla es una muestra, no el catálogo: debajo está el enlace a la lista
+  // completa filtrada por la marca.
+  const productos = todas.slice(0, POR_PAGINA);
 
   return (
     <div className="min-h-screen">
@@ -155,12 +169,7 @@ export default async function MoldavaPage() {
           {productos.length > 0 && (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {productos.map((p) => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  whatsapp={numero}
-                  vista={vista}
-                />
+                <ProductCard key={p.id} product={p} whatsapp={numero} />
               ))}
             </div>
           )}

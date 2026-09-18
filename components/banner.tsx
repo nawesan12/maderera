@@ -144,40 +144,16 @@ export function Banner({
   );
 }
 
-/**
- * La franja de arriba de todo.
+/*
+ * Acá vivía `FranjaDeAviso`: la línea de texto que iba sobre el encabezado de
+ * todas las páginas.
  *
- * Es una línea sola y a propósito: va sobre el encabezado de **todas** las
- * páginas, así que cualquier cosa más alta empuja el catálogo fuera de la
- * pantalla en un teléfono. Si hay varios avisos cargados se muestra el
- * primero; apilarlos convertiría el encabezado en una cartelera.
+ * **Se fue porque nadie la miraba.** Una línea arriba de todo se lee como
+ * parte del marco del navegador, sobre todo en el teléfono, y la promoción que
+ * el equipo cargaba pasaba inadvertida. La clienta pidió cambiarla por un
+ * cartel, y eso es `components/aviso-modal.tsx`: el mismo banner de ubicación
+ * «franja», ahora como diálogo que se abre una vez por visita.
+ *
+ * El valor `franja` sigue siendo el de la base y el del panel; lo que cambió es
+ * cómo se muestra.
  */
-export function FranjaDeAviso({ banner }: { banner: BannerPublicado }) {
-  const texto = (
-    <>
-      {banner.etiqueta && (
-        <span className="mr-2 rounded-full bg-white/20 px-2 py-0.5 text-[11.5px] font-bold uppercase tracking-[0.06em]">
-          {banner.etiqueta}
-        </span>
-      )}
-      {banner.titulo}
-      {banner.enlace && (
-        <span className="ml-2 inline-flex items-center gap-1 font-semibold underline underline-offset-2">
-          {banner.textoEnlace || "Ver"}
-          <ArrowRight className="h-3.5 w-3.5" />
-        </span>
-      )}
-    </>
-  );
-
-  const clases =
-    "block bg-[linear-gradient(90deg,oklch(0.52_0.13_45)_0%,oklch(0.68_0.19_48)_100%)] px-4 py-2 text-center text-[13.5px] leading-snug text-white";
-
-  if (!banner.enlace) return <div className={clases}>{texto}</div>;
-
-  return (
-    <Link href={banner.enlace} className={`${clases} transition-opacity hover:opacity-90`}>
-      {texto}
-    </Link>
-  );
-}

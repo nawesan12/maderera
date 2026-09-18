@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getSession } from "@/lib/dal/session";
+import { avisoDeEspera, permitidoPorAmbos } from "@/lib/limites";
 import { estadoProfesional } from "@/lib/dal/profesionales";
 import { ErrorDeInscripcion, inscribir } from "@/lib/eventos";
 import { ErrorDeCobro, iniciarPagoDeInscripcion } from "@/lib/pagos/crear";
@@ -47,6 +48,21 @@ export async function anotarse(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
   }
+
+  /*
+   * El freno.
+   *
+   * El evento con precio crea una **preferencia real en Mercado Pago** por cada
+   * inscripción, y el cupo se ocupa al reservar. La regla de negocio ya impide
+   * dos inscripciones con el mismo correo al mismo evento; esto impide las mil
+   * con mil correos distintos desde el mismo lado.
+   */
+  const puede = await permitidoPorAmbos("evento", {
+    nombre: "correo",
+    valor: parsed.data.email,
+  });
+
+  if (!puede.permitido) return { error: avisoDeEspera(puede) };
 
   const [sesion, profesional] = await Promise.all([
     getSession(),

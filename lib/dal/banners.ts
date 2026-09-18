@@ -13,6 +13,12 @@ export interface BannerPublicado {
   enlace: string | null;
   textoEnlace: string;
   imagenUrl: string | null;
+  /**
+   * Cuándo se tocó por última vez. Lo usa el modal de aviso para saber si
+   * quien ya lo cerró tiene que volver a verlo: si el equipo edita la
+   * promoción, la clave cambia y el diálogo reaparece.
+   */
+  actualizado: Date;
 }
 
 /**
@@ -29,8 +35,21 @@ export interface BannerPublicado {
  * minutos tarde. Para una promoción de quince días eso no importa; si alguna
  * vez hiciera falta al minuto, esta consulta sale del caché.
  */
-export const bannersDe = cachearPublico(
-  async (ubicacion: "franja" | "portada" | "catalogo"): Promise<BannerPublicado[]> => {
+/**
+ * Lo que realmente sale del caché: la fecha, en texto.
+ *
+ * `unstable_cache` guarda JSON, así que el `Date` que entra vuelve string. El
+ * tipo lo dice para que nadie le llame `.getTime()` a algo que ya no es una
+ * fecha; `bannersDe` las rearma antes de devolverlas.
+ */
+type BannerGuardado = Omit<BannerPublicado, "actualizado"> & {
+  actualizado: string;
+};
+
+const bannersCacheados = cachearPublico(
+  async (
+    ubicacion: "franja" | "portada" | "catalogo",
+  ): Promise<BannerGuardado[]> => {
     const ahora = new Date();
 
     const filas = await db
@@ -42,6 +61,7 @@ export const bannersDe = cachearPublico(
         enlace: banners.enlace,
         textoEnlace: banners.textoEnlace,
         imagenUrl: banners.imagenUrl,
+        actualizado: banners.updatedAt,
       })
       .from(banners)
       .where(
@@ -54,8 +74,28 @@ export const bannersDe = cachearPublico(
       )
       .orderBy(asc(banners.orden), asc(banners.createdAt));
 
-    return filas;
+    return filas.map((f) => ({
+      ...f,
+      actualizado: f.actualizado.toISOString(),
+    }));
   },
   ["banners"],
   ETIQUETAS.contenido,
 );
+
+/**
+ * Los banners de una ubicación, con la fecha rearmada.
+ *
+ * **Esto rompió un despliegue y conviene saber por qué.** El layout público usa
+ * `actualizado.getTime()` para armar la clave del aviso de bienvenida, y el
+ * `Date` volvía del caché convertido en texto. No se notaba en desarrollo: la
+ * primera llamada devuelve el objeto tal cual, y recién la segunda —ya
+ * serializada— explota. En el build, donde cada página arranca limpia, el sitio
+ * entero dejó de compilar apenas hubo un banner activo en la base.
+ */
+export async function bannersDe(
+  ubicacion: "franja" | "portada" | "catalogo",
+): Promise<BannerPublicado[]> {
+  const filas = await bannersCacheados(ubicacion);
+  return filas.map((f) => ({ ...f, actualizado: new Date(f.actualizado) }));
+}

@@ -6,7 +6,8 @@ import {
   calcularPlanoDeCorte,
   leerAcomodoManual,
 } from "@/lib/cortes/plano";
-import { MEDIDAS_DE_PLACA } from "@/lib/calculations";
+import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
+import { nombreDeLaMitad } from "@/lib/cortes/placa";
 import { PlanoImpreso } from "@/components/cortes/plano-impreso";
 
 export const metadata: Metadata = {
@@ -37,14 +38,13 @@ export default async function PlanoDeCortePage({
   const corte = await obtenerCorte(id);
   if (!corte) notFound();
 
-  const porDefecto = MEDIDAS_DE_PLACA[0]!;
-  const placaLargo = corte.placaLargoMm ?? porDefecto.largo;
-  const placaAncho = corte.placaAnchoMm ?? porDefecto.ancho;
-
   const plano = calcularPlanoDeCorte({
     piezas: corte.piezas,
-    placaLargo,
-    placaAncho,
+    placaLargo: corte.medida.largo,
+    placaAncho: corte.medida.ancho,
+    // El mismo espesor de disco con el que se presupuestó en el panel: si la
+    // hoja del taller usara otro, el patrón dibujado no sería el que se cobró.
+    anchoSierra: (await parametrosDeCalculo()).anchoSierraMm,
     // Lo que alguien corrigió a mano cuando cargó el trabajo.
     fijadas: leerAcomodoManual(corte.acomodoManual),
   });
@@ -58,6 +58,9 @@ export default async function PlanoDeCortePage({
         material: corte.material,
         cantoDescripcion: corte.cantoDescripcion,
         createdAt: corte.createdAt,
+        // De qué sale: placa entera o media, y en qué sentido partida. En el
+        // taller es lo primero que hay que saber antes de bajar la placa.
+        deQueSale: nombreDeLaMitad(corte.medida.mitad),
       }}
     />
   );

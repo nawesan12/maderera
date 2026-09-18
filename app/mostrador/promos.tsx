@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { ChevronDown, Landmark } from "lucide-react";
 import type { PromoVigente } from "@/lib/dal/contenido";
 
@@ -62,6 +63,17 @@ export function PromosDelBanco({ promos }: { promos: PromoVigente[] }) {
           <ul className="space-y-2.5">
             {promos.map((p) => (
               <li key={p.id} className="flex flex-wrap items-baseline gap-x-2">
+                {/* El logo, si lo cargaron: acá el vendedor lo busca de un
+                    vistazo mientras el cliente le dice con qué tarjeta paga. */}
+                {p.imagenUrl && (
+                  <Image
+                    src={p.imagenUrl}
+                    alt=""
+                    width={72}
+                    height={24}
+                    className="h-6 w-auto max-w-[72px] self-center object-contain"
+                  />
+                )}
                 <span className="text-base font-medium">{p.medio}</span>
                 <span className="text-base">{p.titulo}</span>
                 {p.dias && (

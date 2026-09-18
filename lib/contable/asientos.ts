@@ -35,8 +35,50 @@ export const CUENTAS = {
   retencionesAPagar: "2.1.05",
 
   ventas: "4.1.01",
+
+  /*
+   * Los gastos, por categoría.
+   *
+   * **Antes todo caía en `5.1.01`.** El gasto ya se cargaba con su categoría
+   * —flete, combustible, sueldos— y esa categoría se escribía en el concepto del
+   * asiento, pero las diez iban a la misma cuenta: el mayor decía «Gastos
+   * $4.200.000» y para saber cuánto fue de combustible había que leer los
+   * conceptos uno por uno. Es lo que la clienta pidió al hablar de «pulir el
+   * cierre del mes categorizando todo».
+   *
+   * Los códigos siguen el mismo criterio que el resto: son de uso corriente y se
+   * remapean con el nombre al lado, porque cada estudio tiene el suyo.
+   */
   gastos: "5.1.01",
+  gastoFlete: "5.1.02",
+  gastoCombustible: "5.1.03",
+  gastoServicios: "5.1.04",
+  gastoAlquiler: "5.1.05",
+  gastoSueldos: "5.1.06",
+  gastoMantenimiento: "5.1.07",
+  gastoImpuestos: "5.1.08",
+  gastoLibreria: "5.1.09",
+  gastoPublicidad: "5.1.10",
 } as const;
+
+/**
+ * Qué cuenta le toca a cada categoría de gasto.
+ *
+ * Lo que no esté en la lista cae en la cuenta general de gastos, que es el
+ * comportamiento de siempre: una categoría nueva no puede hacer que el asiento
+ * no balancee.
+ */
+export const CUENTA_POR_CATEGORIA: Record<string, string> = {
+  flete: CUENTAS.gastoFlete,
+  combustible: CUENTAS.gastoCombustible,
+  servicios: CUENTAS.gastoServicios,
+  alquiler: CUENTAS.gastoAlquiler,
+  sueldos: CUENTAS.gastoSueldos,
+  mantenimiento: CUENTAS.gastoMantenimiento,
+  impuestos: CUENTAS.gastoImpuestos,
+  librería: CUENTAS.gastoLibreria,
+  publicidad: CUENTAS.gastoPublicidad,
+};
 
 const NOMBRES: Record<string, string> = {
   [CUENTAS.caja]: "Caja",
@@ -50,7 +92,16 @@ const NOMBRES: Record<string, string> = {
   [CUENTAS.percepcionesIibb]: "Percepciones IIBB a depositar",
   [CUENTAS.retencionesAPagar]: "Retenciones a depositar",
   [CUENTAS.ventas]: "Ventas",
-  [CUENTAS.gastos]: "Gastos",
+  [CUENTAS.gastos]: "Gastos varios",
+  [CUENTAS.gastoFlete]: "Fletes",
+  [CUENTAS.gastoCombustible]: "Combustible",
+  [CUENTAS.gastoServicios]: "Servicios",
+  [CUENTAS.gastoAlquiler]: "Alquileres",
+  [CUENTAS.gastoSueldos]: "Sueldos y cargas",
+  [CUENTAS.gastoMantenimiento]: "Mantenimiento",
+  [CUENTAS.gastoImpuestos]: "Impuestos y tasas",
+  [CUENTAS.gastoLibreria]: "Librería y oficina",
+  [CUENTAS.gastoPublicidad]: "Publicidad",
 };
 
 export interface RenglonDeAsiento {
@@ -131,6 +182,46 @@ export function asientoDeVenta(v: VentaAAsentar): Asiento {
     fecha: v.fecha,
     concepto: `${v.comprobante} · ${v.cliente}`,
     renglones: v.esNotaDeCredito ? invertir(renglones) : renglones,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Cobros                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export interface CobroAAsentar {
+  fecha: Date;
+  comprobante: string;
+  cliente: string;
+  importe: number;
+  /** Con qué pagó: decide contra qué cuenta se cancela la deuda. */
+  medio: string;
+}
+
+/**
+ * Lo que el cliente pagó.
+ *
+ * **Faltaba, y se notaba en el mayor.** La venta cargaba Deudores y nada lo
+ * descargaba nunca: la cuenta crecía mes a mes como si nadie hubiera pagado, y
+ * el saldo de Deudores del cierre no se parecía al de la cuenta corriente. Es
+ * parte de lo que la clienta pidió al hablar de «pulir integralmente el cierre
+ * del mes».
+ *
+ * El efectivo entra a Caja y todo lo demás al Banco: una transferencia, una
+ * tarjeta y un cheque depositado terminan los tres ahí, y el detalle de cada
+ * uno vive en la cartera de cheques y en Cobros, no en el asiento.
+ */
+export function asientoDeCobro(c: CobroAAsentar): Asiento {
+  const cuentaDeEntrada =
+    c.medio === "efectivo" ? CUENTAS.caja : CUENTAS.banco;
+
+  return {
+    fecha: c.fecha,
+    concepto: `Cobro ${c.comprobante} · ${c.cliente}`,
+    renglones: [
+      renglon(cuentaDeEntrada, c.importe, 0),
+      renglon(CUENTAS.deudores, 0, c.importe),
+    ],
   };
 }
 
@@ -232,11 +323,16 @@ export function asientoDeGasto(g: GastoAAsentar): Asiento {
   const cuentaDeSalida =
     g.medio === "efectivo" ? CUENTAS.caja : CUENTAS.banco;
 
+  // Cada categoría a su cuenta. Lo que no esté mapeado va a gastos varios: una
+  // categoría nueva no puede hacer que el asiento deje de balancear.
+  const cuentaDelGasto =
+    CUENTA_POR_CATEGORIA[g.categoria] ?? CUENTAS.gastos;
+
   return {
     fecha: g.fecha,
     concepto: `${g.categoria} · ${g.descripcion}`,
     renglones: [
-      renglon(CUENTAS.gastos, g.importe, 0),
+      renglon(cuentaDelGasto, g.importe, 0),
       renglon(cuentaDeSalida, 0, g.importe),
     ],
   };

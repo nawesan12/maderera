@@ -11,6 +11,7 @@ import {
   cashMovements,
   cashSessions,
   configuracionFiscal,
+  customers,
   invoicePayments,
   invoices,
   orders,
@@ -179,6 +180,15 @@ export async function emitirManual(
       receptorDomicilio: z.string().trim().max(200).optional(),
       observaciones: z.string().trim().max(600).optional(),
       customerId: z.string().uuid().optional(),
+      /**
+       * Dar de alta la ficha con estos mismos datos.
+       *
+       * Lo pidió la clienta: «en facturación poder crear clientes también».
+       * No hace falta otra pantalla —el nombre, el CUIT, la condición y el
+       * domicilio ya se están tipeando acá— así que la ficha se crea con eso y
+       * la factura le queda enganchada, con su movimiento de cuenta corriente.
+       */
+      guardarComoCliente: z.coerce.boolean().default(false),
     })
     .safeParse({
       receptorNombre: formData.get("receptorNombre"),
@@ -187,6 +197,7 @@ export async function emitirManual(
       receptorDomicilio: (formData.get("receptorDomicilio") as string) || undefined,
       observaciones: (formData.get("observaciones") as string) || undefined,
       customerId: (formData.get("customerId") as string) || undefined,
+      guardarComoCliente: formData.get("guardarComoCliente") === "on",
     });
 
   if (!cabecera.success) {
@@ -226,8 +237,45 @@ export async function emitirManual(
     return { error: "Agregá al menos un renglón a la factura." };
   }
 
+  /*
+   * La ficha nueva, si se pidió.
+   *
+   * Se crea **antes** de emitir: si algo falla en ARCA, queda el cliente
+   * cargado y se puede reintentar la factura sin volver a tipear los datos.
+   * Al revés —emitir y después fallar el alta— dejaría una factura sin ficha y
+   * sin deuda registrada, que es el agujero que esto viene a tapar.
+   */
+  let customerId = cabecera.data.customerId;
+
+  if (!customerId && cabecera.data.guardarComoCliente) {
+    const [creado] = await db
+      .insert(customers)
+      .values({
+        nombre: cabecera.data.receptorNombre,
+        razonSocial: cabecera.data.receptorNombre,
+        // Sin guiones, como lo guarda el alta de clientes: es lo que permite
+        // encontrarlo escrito de cualquier forma.
+        cuit: cabecera.data.receptorCuit?.replace(/\D/g, "") || null,
+        condicionIva: cabecera.data.receptorCondicionIva,
+        direccion: cabecera.data.receptorDomicilio || null,
+        notas: "Ficha creada al emitir una factura.",
+      })
+      .returning({ id: customers.id });
+
+    customerId = creado?.id;
+
+    await registrarEnBitacora({
+      sesion: usuario,
+      accion: "crear",
+      entidad: "cliente",
+      entidadId: customerId ?? null,
+      descripcion: `Dio de alta a ${cabecera.data.receptorNombre} al facturar`,
+    });
+  }
+
   const resultado = await emitirComprobante({
     ...cabecera.data,
+    customerId,
     receptorCuit: cabecera.data.receptorCuit?.replace(/\D/g, "") || null,
     createdByUserId: usuario.userId,
     lineas,
@@ -247,7 +295,7 @@ export async function emitirManual(
    * Solo cuando **no** hay pedido detrás: si la factura nace de uno, la deuda
    * ya la manejó el pedido y anotarla acá la contaría dos veces.
    */
-  if (cabecera.data.customerId && resultado.invoiceId) {
+  if (customerId && resultado.invoiceId) {
     const [emitida] = await db
       .select({
         total: invoices.total,
@@ -264,7 +312,7 @@ export async function emitirManual(
       const etiqueta = `${nombreComprobante(emitida.tipo)} ${numeroFormateado(emitida.puntoVenta, emitida.numero)}`;
 
       await db.insert(accountMovements).values({
-        customerId: cabecera.data.customerId,
+        customerId,
         tipo: "compra",
         monto: Number(emitida.total).toFixed(2),
         detalle: etiqueta,

@@ -18,7 +18,8 @@ import {
 } from "@/lib/cortes/plano";
 import { AcomodoDelCorte } from "../acomodo";
 import { presupuestarCorte } from "@/lib/cortes/presupuesto";
-import { MEDIDAS_DE_PLACA } from "@/lib/calculations";
+import { fraccionDePlaca, nombreDeLaMitad } from "@/lib/cortes/placa";
+import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
 import { formatearMonto } from "@/lib/formato";
 import { AccionesCorte } from "../acciones";
 import { CargarPasadas } from "../pasadas";
@@ -57,11 +58,13 @@ export default async function FichaCortePage({
    * la que sale más de la mitad se vende la placa entera y el corte va sin
    * cargo. Ver `lib/cortes/presupuesto.ts`.
    */
-  const medidaSupuesta = !corte.placaLargoMm || !corte.placaAnchoMm;
   const plano = calcularPlanoDeCorte({
     piezas: corte.piezas,
-    placaLargo: corte.placaLargoMm ?? MEDIDAS_DE_PLACA[0].largo,
-    placaAncho: corte.placaAnchoMm ?? MEDIDAS_DE_PLACA[0].ancho,
+    placaLargo: corte.medida.largo,
+    placaAncho: corte.medida.ancho,
+    // El espesor del disco sale de /admin/calculadoras y no de una constante:
+    // es lo que explica por qué dos piezas de 900 no entran en 1830.
+    anchoSierra: (await parametrosDeCalculo()).anchoSierraMm,
     // Lo que alguien corrigió a mano cuando cargó el trabajo.
     fijadas: leerAcomodoManual(corte.acomodoManual),
   });
@@ -70,6 +73,8 @@ export default async function FichaCortePage({
     tarifa,
     precioPorPlaca: corte.precioPlaca,
     piezas: corte.piezas,
+    // De media placa se cobra media placa.
+    fraccion: fraccionDePlaca(corte.medida.mitad),
   });
 
   const superficie =
@@ -134,18 +139,37 @@ export default async function FichaCortePage({
             <div>
               <h2 className="text-base font-medium">Cómo entra en la placa</h2>
               <p className="text-sm text-muted-foreground">
-                Placa de {plano.placaLargo} × {plano.placaAncho} mm
-                {medidaSupuesta ? " (medida supuesta: la placa no salió del catálogo)" : ""}
+                {nombreDeLaMitad(corte.medida.mitad)} de {plano.placaLargo} ×{" "}
+                {plano.placaAncho} mm
+                {corte.medida.supuesta
+                  ? " (medida supuesta: la placa no salió del catálogo)"
+                  : ""}
+                {/* Los milímetros que se lleva el disco. Estaban descontados
+                    desde siempre y no se decían en ninguna parte, así que
+                    nadie entendía por qué dos piezas de 900 no entraban en
+                    1830. */}
+                {` · la sierra se lleva ${plano.anchoSierra} mm por corte`}
               </p>
             </div>
-            <Link
-              href={`/plano/${corte.id}`}
-              target="_blank"
-              className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
-            >
-              <Map className="h-4 w-4" />
-              Ver el plano para el taller
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/plano/${corte.id}`}
+                target="_blank"
+                className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+              >
+                <Map className="h-4 w-4" />
+                Ver el plano para el taller
+              </Link>
+              {/* El reporte completo, para guardar o mandar: la hoja del
+                  plano se imprime pero no se adjunta a nada. */}
+              <a
+                href={`/api/cortes/${corte.id}/pdf`}
+                className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+              >
+                <Download className="h-4 w-4" />
+                Reporte en PDF
+              </a>
+            </div>
           </header>
 
           <div className="grid gap-px bg-linea sm:grid-cols-4">
@@ -219,6 +243,49 @@ export default async function FichaCortePage({
             ))}
           </div>
 
+          {/* Lo que sobra, placa por placa.
+
+              El dibujo ya los muestra punteados y arriba está el mayor como
+              cifra, pero quien apila necesita la lista: qué guardar, de qué
+              medida y de cuál placa salió. Y de quién es, que no es un detalle
+              administrativo: de una placa vendida entera el recorte se lo
+              lleva el cliente. */}
+          <div className="border-t border-linea px-5 py-4">
+            <h3 className="text-base font-medium">Lo que sobra</h3>
+            <ul className="mt-2 space-y-1.5">
+              {plano.placas.map((placa) => (
+                <li key={placa.numero} className="text-base">
+                  <span className="text-muted-foreground">
+                    Placa {placa.numero}:
+                  </span>{" "}
+                  {placa.recortes.length === 0 ? (
+                    <span className="text-muted-foreground">
+                      sin pedazos enteros que valga guardar
+                    </span>
+                  ) : (
+                    <>
+                      {placa.recortes
+                        .map((r) => `${r.ancho} × ${r.alto} mm`)
+                        .join(" · ")}{" "}
+                      <span className="text-muted-foreground">
+                        ({placa.seVendeEntera
+                          ? "del cliente: se lleva la placa entera"
+                          : "al stock"})
+                      </span>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Del material comprado, el{" "}
+              {Math.round(plano.aprovechadoTotal * 100)}% sale en piezas; el
+              resto se va entre estos sobrantes y los {plano.anchoSierra} mm que
+              se lleva la sierra en cada una de las {plano.pasadas}{" "}
+              {plano.pasadas === 1 ? "pasada" : "pasadas"}.
+            </p>
+          </div>
+
           {/* El dibujo va al final y reemplaza a la explicación escrita: cuatro
               párrafos que repetían los mismos números de arriba. Lo que faltaba
               no era explicar el acomodo, era verlo. */}
@@ -230,6 +297,7 @@ export default async function FichaCortePage({
               piezas={corte.piezas}
               placaLargo={plano.placaLargo}
               placaAncho={plano.placaAncho}
+              anchoSierra={plano.anchoSierra}
               inicial={leerAcomodoManual(corte.acomodoManual)}
             />
           </div>

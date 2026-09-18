@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { profiles } from "@/lib/db/schema";
 import { adoptarCarritoAnonimo } from "@/lib/dal/carrito";
+import { avisoDeEspera, permitidoPorAmbos, soltar } from "@/lib/limites";
 
 const ingresoSchema = z.object({
   email: z.email({ message: "Revisá el correo, no parece válido." }),
@@ -38,6 +39,25 @@ export async function ingresar(
     };
   }
 
+  /*
+   * El freno, antes de tocar la contraseña.
+   *
+   * Este formulario **no tenía ningún límite**. El que trae Better Auth no se
+   * aplica: vive en su ruta HTTP y acá se llama `auth.api.signInEmail` directo
+   * desde la acción, así que nunca pasaba por ahí. Parecía protegido y no lo
+   * estaba.
+   *
+   * Se cuenta por IP **y** por correo: solo por IP deja pasar al que prueba una
+   * contraseña contra mil cuentas desde mil lugares, y solo por correo, al que
+   * prueba mil contraseñas contra una cuenta rotando de IP.
+   */
+  const puede = await permitidoPorAmbos("ingresar", {
+    nombre: "correo",
+    valor: parsed.data.email,
+  });
+
+  if (!puede.permitido) return { error: avisoDeEspera(puede) };
+
   let userId: string;
 
   try {
@@ -48,6 +68,10 @@ export async function ingresar(
       headers: new Headers(),
     });
     userId = ingreso.user.id;
+
+    // Acertó: la cuenta se suelta. Si no, alguien que se equivoca dos veces y
+    // después entra bien arrastraría el límite el resto de la ventana.
+    await soltar("ingresar", `correo:${parsed.data.email.toLowerCase()}`);
     // El encabezado se dibuja en el navegador porque el HTML viene del CDN:
     // sin la señal prendida, no sabría que ahora hay un nombre que mostrar.
     await renovarSenal();

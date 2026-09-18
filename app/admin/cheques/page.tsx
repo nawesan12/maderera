@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Banknote } from "lucide-react";
-import { ETIQUETA_CIRCUITO } from "@/lib/db/schema/circuito";
+import { etiquetaDeCircuito } from "@/lib/circuito";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
 import { fechaCorta, moneda, plural } from "@/components/admin/formato";
@@ -165,7 +165,7 @@ function Tarjeta({
           {/* El circuito, porque la cartera tiene que poder contestar "cuánto
               hay que cubrir esta semana" para cada uno por separado. */}
           <span className="rounded-full bg-chip px-2.5 py-1 text-sm font-medium text-texto-2">
-            {ETIQUETA_CIRCUITO[c.circuito] ?? c.circuito}
+            {etiquetaDeCircuito(c.circuito)}
           </span>
         </div>
         {/*

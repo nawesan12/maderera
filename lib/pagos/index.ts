@@ -8,7 +8,7 @@ import type { NombreProveedorPago, ProveedorPagos } from "./tipos";
 /**
  * Elige con qué se cobra.
  *
- * El checkout, la conciliación y el pago de deuda piden el proveedor acá y solo
+ * El carrito, la conciliación y el pago de deuda piden el proveedor acá y solo
  * conocen la interfaz de `tipos.ts`. Sin `MP_ACCESS_TOKEN` cargado —que es la
  * situación de hoy— corre el de demostración, y todas las pantallas lo avisan.
  */

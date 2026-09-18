@@ -22,7 +22,7 @@ import { migasJsonLd, sucursalJsonLd } from "@/lib/seo";
  * Antes era una página de cliente con las dos direcciones escritas a mano y
  * fotos de un aserradero ajeno sacadas de un banco de imágenes. El problema no
  * era el "use client": era que el teléfono del local vivía en tres lugares
- * —esta página, el checkout y el pie— y cambiarlo obligaba a publicar el sitio
+ * —esta página, el carrito y el pie— y cambiarlo obligaba a publicar el sitio
  * de nuevo, con lo cual no se cambiaba.
  *
  * Ahora sale todo de `branches`, que es de donde también sale el marcado que

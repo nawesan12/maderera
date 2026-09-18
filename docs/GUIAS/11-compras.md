@@ -112,19 +112,29 @@ tener el gasto en ningún lado.
 desglose por categoría y la lista, los tres del mismo mes— y se cambia con el
 selector del encabezado. Para ver lo de agosto no hay que exportar nada.
 
-## En blanco y en negro
+## Facturas y B
 
 Los gastos, los pagos a proveedores y los cheques llevan el **circuito** por el
-que salieron. Son dos botones y por omisión queda «En blanco», que es la
-mayoría.
+que salieron. Son dos botones —«Facturas» y «B»— y por omisión queda
+«Facturas», que es la mayoría.
 
 No es un detalle decorativo: en Gastos, arriba de la lista, están **los dos
-totales del mes por separado**, y los botones de «En blanco / En negro / Los
-dos» acotan la lista. El total mezclado no sirve para decidir en ninguno de los
-dos circuitos.
+totales del mes por separado**, y los botones de «Los dos / Facturas / B»
+acotan la lista. El total mezclado no sirve para decidir en ninguno de los dos
+circuitos.
 
 Un cheque que sale en un pago **hereda el circuito del pago**: salió con esa
 plata y por esa vía, no es una decisión aparte.
+
+**El e-Cheq solo va por Facturas.** Es electrónico: queda registrado en el banco
+a nombre de la empresa, así que pagar con uno por el otro circuito cruza las dos
+cajas justo donde no tiene arreglo. El sistema no lo deja, ni al pagar ni al
+cargar un cheque a mano.
+
+**Los cheques que ya están en cartera se endosan**, no se vuelven a tipear: al
+elegir cheque o e-Cheq como forma de pago aparece la lista de los que hay, con su
+número, su banco y de quién vinieron. El importe lo pone el cheque: no se endosa
+medio cheque.
 
 Ojo con no confundirlo con **«con factura / sin factura»**, que aparece al lado
 en la lista de gastos y es otra cosa: puede haber gasto con factura en

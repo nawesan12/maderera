@@ -77,6 +77,14 @@ services:
       # Hay un proceso que vive y un cron: enciende el tiempo real del panel
       # (`lib/vivo`). En Vercel no está y las pantallas consultan cada tanto.
       PLATAFORMA: vps
+      # El envío de los avisos y las campañas por el servidor de correo propio
+      # (servicio `correo`), cuando `.env.produccion` dice EMAIL_PROVIDER=smtp
+      # y trae SMTP_USUARIO y SMTP_CLAVE. Se conecta por la red interna con el
+      # nombre del contenedor, y verifica el certificado contra el nombre
+      # público: el certificado es de `mail.<dominio>`, no de `correo`.
+      SMTP_HOST: ${SMTP_HOST:-correo}
+      SMTP_PUERTO: ${SMTP_PUERTO:-587}
+      SMTP_NOMBRE_TLS: ${SMTP_NOMBRE_TLS:-mail.${DOMINIO}}
       # El certificado de ARCA, como archivos de solo lectura (ver el volumen
       # abajo). Si todavía no están, la facturación sigue con el proveedor
       # interno, igual que sin variables.
@@ -174,9 +182,17 @@ services:
       RCLONE_REMOTE: ${RCLONE_REMOTE:-}
       RCLONE_DIAS: ${RCLONE_DIAS:-90}
       RCLONE_CONFIG: /config/rclone/rclone.conf
+      CORREO_RESPALDO: ${CORREO_RESPALDO:-si}
     volumes:
       - ./respaldos:/respaldos
       - ./scripts/respaldo.sh:/respaldo.sh:ro
+      # Los buzones y la configuración del correo (casillas, claves, llaves
+      # DKIM), en solo lectura: el respaldo los empaqueta junto con la base.
+      # Si el correo propio no está en uso, los volúmenes están vacíos y el
+      # respaldo lo saltea.
+      - correo_buzones:/correo/buzones:ro
+      - correo_estado:/correo/estado:ro
+      - correo_config:/correo/config:ro
       # La configuración de rclone, si hay copia fuera de la máquina. Va con
       # escritura porque algunos destinos renuevan el token ahí adentro.
       - ./secretos/rclone:/config/rclone
@@ -207,9 +223,109 @@ services:
       - -c
       - 'umask 077; printf %s "$$TAREAS_SECRETO" > /run/secreto; exec crond -f -l 8'
 
+
+  # **Las casillas de correo propias** (docker-mailserver: Postfix, Dovecot y
+  # Rspamd). Es la pieza que más mantenimiento pide de todo el servidor —ver
+  # «Correo propio» en docs/SERVIDOR-PROPIO.md antes de encenderla—, por eso
+  # va en un perfil: solo levanta con `COMPOSE_PROFILES=correo` en
+  # `.env.produccion`. Sin eso, el resto del servidor anda igual y los avisos
+  # pueden seguir saliendo por Resend.
+  correo:
+    profiles: ["correo"]
+    image: mailserver/docker-mailserver:16.0.1
+    # El nombre con que se presenta a los otros servidores. Tiene que coincidir
+    # con el registro A de `mail`, con el PTR de la IP (lo configura Hostinger)
+    # y con el certificado: si no, Gmail lo trata como sospechoso.
+    hostname: mail.${DOMINIO}
+    restart: unless-stopped
+    env_file:
+      - ./servidor/correo/correo.env
+    environment:
+      POSTMASTER_ADDRESS: postmaster@${DOMINIO}
+      # El certificado lo saca y lo renueva Caddy (bloque `mail.` del
+      # Caddyfile), y acá se lee de su volumen. Con `SSL_TYPE=manual` el
+      # servidor de correo vigila esos archivos y se recarga solo cuando Caddy
+      # los renueva. La ruta lleva el emisor: por eso el Caddyfile fija Let's
+      # Encrypt para ese nombre y no deja que caiga en otro.
+      SSL_CERT_PATH: ${CORREO_CERTIFICADO:-/srv/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${DOMINIO}/mail.${DOMINIO}.crt}
+      SSL_KEY_PATH: ${CORREO_CLAVE_CERTIFICADO:-/srv/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${DOMINIO}/mail.${DOMINIO}.key}
+    # **Publicados a internet, a diferencia de la aplicación.** 25 para
+    # recibir de otros servidores, 465 y 587 para que las personas manden, 993
+    # para leer. No 143 ni 110: son IMAP y POP sin cifrar, y no hay ningún
+    # programa de correo de hoy que los necesite.
+    ports:
+      - "25:25"
+      - "465:465"
+      - "587:587"
+      - "993:993"
+    volumes:
+      - correo_buzones:/var/mail
+      - correo_estado:/var/mail-state
+      - correo_registro:/var/log/mail
+      # Casillas, alias y llaves DKIM: lo escribe `scripts/correo.sh`. En un
+      # volumen y no en el repositorio porque tiene las claves.
+      - correo_config:/tmp/docker-mailserver
+      - ./servidor/correo/fail2ban-jail.cf:/tmp/docker-mailserver/fail2ban-jail.cf:ro
+      - caddy_data:/srv/caddy:ro
+    # fail2ban banea con nftables dentro del contenedor, y para eso necesita
+    # tocar la red.
+    cap_add:
+      - NET_ADMIN
+    # Postfix termina de entregar lo que tiene en curso antes de cortar.
+    stop_grace_period: 1m
+    healthcheck:
+      test: ["CMD-SHELL", "ss --listening --tcp | grep -P 'LISTEN.+:smtp' || exit 1"]
+      interval: 1m
+      timeout: 5s
+      start_period: 2m
+      retries: 3
+    networks:
+      default:
+        # Dentro de Docker, `mail.<dominio>` es este contenedor. El webmail se
+        # conecta por ese nombre y el certificado coincide, así que la conexión
+        # interna también va verificada.
+        aliases:
+          - mail.${DOMINIO}
+
+  # El webmail: leer y mandar desde el navegador, sin configurar nada. Para
+  # el mostrador o una PC prestada; en el teléfono conviene la aplicación de
+  # correo (ver la guía). Detrás de Caddy, en `webmail.<dominio>`.
+  webmail:
+    profiles: ["correo"]
+    image: roundcube/roundcubemail:1.7.4-apache-nonroot
+    restart: unless-stopped
+    depends_on:
+      - correo
+    environment:
+      ROUNDCUBEMAIL_DEFAULT_HOST: ssl://mail.${DOMINIO}
+      ROUNDCUBEMAIL_DEFAULT_PORT: "993"
+      ROUNDCUBEMAIL_SMTP_SERVER: tls://mail.${DOMINIO}
+      ROUNDCUBEMAIL_SMTP_PORT: "587"
+      # Sus propias tablas (libreta de direcciones, preferencias) en SQLite y no
+      # en la base de la tienda: no tienen nada que ver, y así un problema de
+      # una no toca a la otra.
+      ROUNDCUBEMAIL_DB_TYPE: sqlite
+      ROUNDCUBEMAIL_SKIN: elastic
+      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload
+    volumes:
+      # El volumen va en `/var/roundcube` y no en `/var/roundcube/db`: esa
+      # carpeta no existe en la imagen, Docker la crearía como root y Roundcube
+      # —que corre sin root— no podría escribir su base. La de arriba es de su
+      # usuario, y un volumen nuevo hereda el dueño de lo que tapa.
+      - webmail_db:/var/roundcube
+      - ./servidor/webmail/maderera.inc.php:/var/roundcube/config/maderera.inc.php:ro
+      - ./servidor/webmail/php.ini:/usr/local/etc/php/conf.d/zzz-maderera.ini:ro
+    expose:
+      - "8000"
+
 volumes:
   pgdata:
   subidas:
   next_cache:
   caddy_data:
   caddy_config:
+  correo_buzones:
+  correo_estado:
+  correo_registro:
+  correo_config:
+  webmail_db:

@@ -8,7 +8,6 @@ import { PanelDelAsistente } from "@/components/asistente/panel";
 import { ScrollToTop } from "@/components/scroll-to-top";
 import { CarritoProvider } from "@/lib/carrito-context";
 import { EstadoProvider } from "@/lib/estado-context";
-import { PreciosProvider } from "@/lib/precios-propios-context";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
 import { bannersDe } from "@/lib/dal/banners";
 import { AvisoModal } from "@/components/aviso-modal";
@@ -17,24 +16,27 @@ import { listarCategorias } from "@/lib/dal/catalog";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { organizacionJsonLd, sitioWebJsonLd } from "@/lib/seo";
 import { degradar } from "@/lib/degradar";
+import { estadoDelVisitante } from "@/lib/dal/visitante";
 
 export default async function PublicLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // **Este layout no lee ni la sesión ni el presupuesto, y es a propósito.**
+  // **Este layout no espera ni la sesión ni el presupuesto, y es a propósito.**
   //
-  // Leerlos significa leer cookies, y una página que lee cookies se arma en el
-  // servidor en cada visita: no hay forma de guardarla en el CDN, porque el
-  // resultado es distinto para cada persona. Eso valía para todo el sitio
-  // —incluidas "Quiénes somos" y el blog, iguales para cualquiera— nada más que
-  // porque el menú de arriba tenía que decir un nombre.
+  // Esperarlos significaría leer cookies antes de dibujar nada, y entonces la
+  // página entera dependería de quién mira: no se podría armar de antemano,
+  // ni siquiera "Quiénes somos", igual para cualquiera, nada más que porque el
+  // menú de arriba tenía que decir un nombre.
   //
-  // Ahora el nombre y el contador los completa el navegador (`EstadoProvider`),
-  // y solo cuando hay algo que completar. Lo que queda acá es lo que es igual
-  // para todo el mundo, cacheado entre visitas: los datos del negocio, las
-  // sucursales y el número de WhatsApp.
+  // Lo que se hace es **pedirlo sin esperarlo**: `estadoDelVisitante()` sale
+  // como promesa hacia `EstadoProvider`, y solo el saludo y el contador la
+  // esperan, cada uno detrás de su `<Suspense>`. Con Cache Components eso
+  // llega en la misma respuesta, por streaming; antes lo completaba el
+  // navegador después de cargar, y se veía el cambio. Lo que se espera acá es
+  // lo que es igual para todo el mundo, cacheado entre visitas: los datos del
+  // negocio, las sucursales y el número de WhatsApp.
   //
   // Todo va envuelto en `degradar`: un error acá adentro no lo agarra el
   // `error.tsx` de esta carpeta —sube hasta el global y reemplaza el documento
@@ -78,8 +80,7 @@ export default async function PublicLayout({
   ];
 
   return (
-    <EstadoProvider>
-    <PreciosProvider>
+    <EstadoProvider estado={estadoDelVisitante()}>
     <CarritoProvider>
       <SaltarAlContenido />
       <DatosEstructurados datos={marcado} />
@@ -122,7 +123,6 @@ export default async function PublicLayout({
         />
       </Suspense>
     </CarritoProvider>
-    </PreciosProvider>
     </EstadoProvider>
   );
 }

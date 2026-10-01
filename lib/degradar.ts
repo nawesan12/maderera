@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_rethrow } from "next/navigation";
 
 /**
  * Ejecuta algo que el encabezado necesita, pero sin lo cual el sitio todavía
@@ -33,6 +34,12 @@ export async function degradar<T>(
   try {
     return await leer();
   } catch (error) {
+    // Lo que Next usa para controlar el render no es una falla y no se
+    // degrada: con Cache Components, al terminar de armar la página de
+    // antemano, `cookies()` y `headers()` rechazan a propósito, y tragarse ese
+    // rechazo llenaba el registro del build de falsos errores. Lo mismo vale
+    // para una redirección o un 404, que tienen que llegar a destino.
+    unstable_rethrow(error);
     // Al registro del servidor y no a la pantalla: al visitante no le sirve, y
     // el mensaje de un error de base puede nombrar tablas y columnas.
     console.error(`[degradado] no se pudo leer ${que}:`, error);

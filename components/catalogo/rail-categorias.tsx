@@ -53,7 +53,6 @@ export function RailDeCategorias({
                     ? "/catalogo"
                     : `/catalogo?cat=${categoria.slug}`
                 }
-                prefetch={false}
                 aria-current={esActiva ? "page" : undefined}
                 className={`inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 text-[14.5px] font-medium transition-colors ${
                   esActiva

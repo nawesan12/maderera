@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { SENAL_ESTADO } from "@/lib/senal-navegador";
-import { olvidarPreciosPropios } from "@/lib/precios-propios-context";
 import { olvidarEstado } from "@/lib/estado-context";
 
 export function BotonSalir() {
@@ -16,20 +15,15 @@ export function BotonSalir() {
     setSaliendo(true);
     await authClient.signOut();
 
-    // El encabezado del sitio se completa en el navegador y solo pregunta si
-    // la señal está prendida. Apagarla acá es lo que hace que el menú vuelva a
-    // decir "Ingresar" en el acto; si no, seguiría preguntando —y recibiendo
-    // "no hay nada"— hasta que el servidor la apague por su cuenta.
+    // Sin señal, el servidor no busca nada de quien mira: el menú vuelve a
+    // decir "Ingresar" sin una sola consulta. Si quedara prendida, cada página
+    // preguntaría —y recibiría "no hay nada"— hasta que se apagara sola.
     document.cookie = `${SENAL_ESTADO}=; Max-Age=0; Path=/`;
 
-    // Y los precios que trajo esta sesión se van con ella. La señal nueva del
-    // que entre después ya no coincidiría, pero borrarlo acá es no dejar los
-    // precios de nadie escritos en una máquina compartida.
-    olvidarPreciosPropios();
-
-    // Lo mismo con el nombre y el contador del encabezado: quedaban guardados
-    // en la pestaña y el próximo que entrara en esa máquina vería el nombre del
-    // anterior hasta que su propia señal no coincidiera.
+    // El encabezado vive en el layout y no se rearma al navegar: que vuelva a
+    // preguntar ya, sin esperar al refresco. Los precios no hace falta
+    // tocarlos —ya no quedan guardados en la pestaña: cada página los trae
+    // del servidor con la sesión del momento—.
     olvidarEstado();
 
     router.push("/");

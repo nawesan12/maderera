@@ -18,7 +18,6 @@ import {
 } from "@/app/(public)/carrito-actions";
 import type { Carrito, ItemCarrito } from "@/lib/dal/carrito";
 import { CARRITO_VACIO } from "@/lib/carrito-vacio";
-import { olvidarEstado, useEstado } from "@/lib/estado-context";
 
 export interface ItemNuevo {
   variantId?: string;
@@ -33,7 +32,13 @@ export interface ItemNuevo {
 
 interface ContextoCarrito {
   items: ItemCarrito[];
-  cantidadItems: number;
+  /**
+   * Cuántos renglones tiene, **solo cuando la pantalla trae el carrito**
+   * (`/carrito`, `/carrito/confirmar`). En el resto del sitio es null: el
+   * contador del encabezado lo resuelve el servidor junto con el saludo
+   * (`useEstado`), y el carrito no lo espera para no frenar la página.
+   */
+  cantidadItems: number | null;
   subtotal: number;
   conPrecioDesactualizado: number;
   /** Cuánto se ahorra por los descuentos por volumen de la lista aplicada. */
@@ -77,14 +82,7 @@ export function CarritoProvider({
   const router = useRouter();
   const [guardando, startTransition] = useTransition();
 
-  // El contador lo trae `EstadoProvider`, en el mismo pedido que resuelve el
-  // nombre del menú: son la misma pregunta y no tiene sentido hacerla dos veces.
-  const { cantidadItems: traidos } = useEstado();
-
-  const carrito: Carrito = delServidor ?? {
-    ...CARRITO_VACIO,
-    cantidadItems: traidos,
-  };
+  const carrito: Carrito = delServidor ?? CARRITO_VACIO;
 
   const [optimista, aplicar] = useOptimistic(
     carrito.items,
@@ -120,13 +118,8 @@ export function CarritoProvider({
       if (resultado.error) toast.error(resultado.error);
       else if (resultado.ok) toast.success(resultado.ok);
 
-      // El contador del encabezado sale de `/api/estado`, y esta pestaña lo
-      // tiene guardado: sin esto seguiría mostrando el número de antes de
-      // agregar. De paso lo arregla en las pantallas que no muestran los
-      // renglones, donde el número no se podía deducir de lo que hay en
-      // pantalla.
-      olvidarEstado();
-
+      // El refresco rearma también el layout, y con él el contador del
+      // encabezado: lo vuelve a resolver el servidor con el carrito nuevo.
       router.refresh();
     });
   }
@@ -134,9 +127,9 @@ export function CarritoProvider({
   const valor: ContextoCarrito = {
     items: optimista,
     // Cuando el presupuesto vino del servidor, el contador son los renglones
-    // que se están mostrando. Cuando se hidrató, no hay renglones —esas
-    // pantallas no los muestran— y el número es el que trajo el navegador.
-    cantidadItems: delServidor ? optimista.length : carrito.cantidadItems,
+    // que se están mostrando —con el cambio optimista ya aplicado—. Si no, lo
+    // dice el encabezado.
+    cantidadItems: delServidor ? optimista.length : null,
     subtotal: optimista.reduce((s, i) => s + i.subtotal, 0),
     conPrecioDesactualizado: carrito.conPrecioDesactualizado,
     // El ahorro y la lista no se recalculan del lado del cliente: el descuento

@@ -7,17 +7,15 @@ import {
 } from "@/lib/dal/sitemap";
 
 /**
- * Se arma en cada pedido y no en el build.
+ * Se arma una vez y se rehace cuando cambia el catálogo.
  *
- * El resto del sitio se renderiza por pedido, así que el build no necesita una
- * base alcanzable; generar el sitemap al compilar rompería esa propiedad para
- * ganar poco. A cambio, un producto nuevo aparece enseguida.
- *
- * **Pero las consultas sí están cacheadas** (`lib/dal/sitemap.ts`), con la
- * etiqueta del catálogo. Armar la lista por pedido es barato; ir tres veces a
- * la base por cada rastreador que pasa, no —y pasan seguido—.
+ * Hasta el 1/10/2026 se armaba en cada pedido (`dynamic = "force-dynamic"`),
+ * para que el build no necesitara la base. Con Cache Components esa opción no
+ * existe, y tampoco hace falta: el build ya va contra la base, y las consultas
+ * (`lib/dal/sitemap.ts`) llevan la etiqueta del catálogo, así que un producto
+ * nuevo invalida el sitemap en el acto. Ir tres veces a la base por cada
+ * rastreador que pasa —y pasan seguido— quedó atrás dos veces.
  */
-export const dynamic = "force-dynamic";
 
 /**
  * Prioridades: no son un ranking, son una señal de por dónde empezar a

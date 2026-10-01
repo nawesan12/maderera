@@ -1,9 +1,9 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { Suspense } from "react";
 import Link from "next/link";
 import { Tag } from "lucide-react";
-import { haySenal } from "@/lib/senal-navegador";
+import { useEstado } from "@/lib/estado-context";
 
 /**
  * "Si comprás por tu cuenta, entrá para ver tu precio."
@@ -20,33 +20,28 @@ import { haySenal } from "@/lib/senal-navegador";
  * **Solo se muestra a quien no inició sesión.** A alguien que ya está adentro
  * y ve su lista, este cartel le diría algo falso.
  *
- * Esa condición la resuelve el navegador y no el servidor, a propósito: era la
- * última cosa que obligaba al catálogo a leer la sesión, y por una decisión
- * cosmética el sitio entero se armaba de nuevo en cada visita. El cartel sale
- * en el HTML —que es lo correcto para el 95 % de las visitas, que son de gente
- * sin cuenta— y se retira solo cuando hay señal de sesión. Ver
- * `lib/senal-navegador.ts`.
+ * El cartel queda en la página armada de antemano —que es lo correcto para el
+ * 95 % de las visitas, de gente sin cuenta— y, para quien entró, el servidor lo
+ * retira en la misma respuesta (`useEstado`). Antes lo decidía el navegador
+ * mirando la señal, que se prende también con solo agregar algo al carrito:
+ * a quien había agregado algo sin cuenta se le escondía justo el cartel que le
+ * decía que podía tenerla.
  */
-/** La cookie no avisa cuando cambia: se lee, no se escucha. */
-const sinSuscripcion = () => () => {};
-
 export function AvisoGremio({ className = "" }: { className?: string }) {
-  /*
-   * `useSyncExternalStore` y no un efecto con `useState`.
-   *
-   * Es la forma que React tiene para esto: el valor del servidor —el segundo
-   * argumento— es el que se usa al hidratar, así que el HTML coincide, y el
-   * real se lee inmediatamente después sin pasar por un render intermedio con
-   * el valor equivocado.
-   */
-  const conCuenta = useSyncExternalStore(
-    sinSuscripcion,
-    haySenal,
-    () => false,
+  return (
+    <Suspense fallback={<Cartel className={className} />}>
+      <CartelParaQuienMira className={className} />
+    </Suspense>
   );
+}
 
-  if (conCuenta) return null;
+function CartelParaQuienMira({ className }: { className: string }) {
+  const { sesion } = useEstado();
+  if (sesion) return null;
+  return <Cartel className={className} />;
+}
 
+function Cartel({ className }: { className: string }) {
   return (
     <aside
       /* El margen viene de afuera y no de un div que lo envuelva: cuando el

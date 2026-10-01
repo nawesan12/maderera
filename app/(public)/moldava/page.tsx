@@ -67,9 +67,9 @@ const PROCESO = [
  * mostrar con IVA o sin IVA— y eso obligaba a armarla de nuevo en cada visita,
  * incluidas las de los buscadores, que es justamente por quienes existe.
  *
- * Las dos las resuelve el navegador: la tarjeta sale con el precio de público y
- * `PreciosProvider` lo reemplaza por el del profesional cuando corresponde. Ver
- * `lib/precios-propios-context.tsx`.
+ * La página sale armada con el precio de público, y el del profesional y su
+ * vista de IVA llegan en la misma respuesta, detrás del `<Suspense>` de cada
+ * tarjeta. Ver `components/product-card.tsx`.
  */
 export default async function MoldavaPage() {
   const [todas, whatsapp, numero] = await Promise.all([

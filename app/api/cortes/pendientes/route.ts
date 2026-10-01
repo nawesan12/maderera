@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { listarCortes } from "@/lib/dal/admin/cortes";
 import { agenteAutorizado, tokenDelAgente } from "@/lib/cortes/agente";
 
-export const dynamic = "force-dynamic";
 
 /**
  * Los cortes que el agente del taller tiene que bajar.

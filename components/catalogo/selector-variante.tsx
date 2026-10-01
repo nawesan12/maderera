@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, use, useState, type ComponentProps } from "react";
 import { Check, Loader2, MessageCircle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Disponibilidad } from "@/components/catalogo/disponibilidad";
@@ -8,10 +8,7 @@ import { useCarrito } from "@/lib/carrito-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
 import { presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
-import {
-  usePreciosPorVariante,
-  useVistaPropia,
-} from "@/lib/precios-propios-context";
+import type { PreciosDeFicha } from "@/lib/dal/visitante";
 import type { VarianteDetalle } from "@/lib/dal/catalog";
 import {
   admiteMedia,
@@ -43,6 +40,7 @@ export function SelectorVariante({
   aPedido = false,
   formaDeVenta = "entera",
   precioMediaPct = 50,
+  precios,
 }: {
   productName: string;
   unit: string;
@@ -51,11 +49,8 @@ export function SelectorVariante({
   /** La del producto. Sin esto el neto informado se calcula siempre al 21 %. */
   alicuota?: number;
   /**
-   * Con IVA o sin IVA.
-   *
-   * Es lo que mandó el servidor —siempre «final», que es lo que corresponde
-   * mostrarle al público— y el punto de partida: si quien mira tiene otra
-   * vista, la corrige `useVistaPropia` sin volver al servidor.
+   * Con IVA o sin IVA, la del público. Si quien mira tiene otra, viene en
+   * `precios`.
    */
   vista?: VistaDePrecio;
   /**
@@ -70,6 +65,12 @@ export function SelectorVariante({
   /** Cómo se vende la placa (nota de la clienta del 30/9/2026). */
   formaDeVenta?: FormaDeVenta;
   precioMediaPct?: number;
+  /**
+   * Los precios de quien mira, por medida. Sin esto se muestra el de público,
+   * que es lo que queda en la ficha armada de antemano. Ver
+   * `SelectorVarianteDeQuienMira`.
+   */
+  precios?: PreciosDeFicha;
 }) {
   const { agregar, guardando } = useCarrito();
   const [medida, setMedida] = useState(variantes[0]);
@@ -95,16 +96,16 @@ export function SelectorVariante({
   /*
    * El precio del profesional pisa al de público, medida por medida.
    *
-   * La ficha llega con el precio de público —así se sirve de la caché, igual
-   * que el catálogo— y esto lo reemplaza para quien tiene lista propia. Para
-   * todos los demás el mapa está vacío y no cambia nada.
+   * La ficha sale armada con el precio de público y el de quien mira llega
+   * en la misma respuesta (`SelectorVarianteDeQuienMira`). Para el público el
+   * mapa está vacío y no cambia nada.
    *
    * **Es solo lo que se ve.** Lo que se cobra lo recalcula el servidor con la
    * lista real al agregar al carrito; acá viaja el id de la variante, nunca un
    * precio.
    */
-  const propios = usePreciosPorVariante();
-  const vistaVigente = useVistaPropia() ?? vista;
+  const propios = precios?.porVariante ?? {};
+  const vistaVigente = precios?.vista ?? vista;
 
   const conPrecioPropio = (v: VarianteDetalle): VarianteDetalle =>
     propios[v.id] ? { ...v, precio: propios[v.id] } : v;
@@ -376,4 +377,34 @@ export function SelectorVariante({
       </p>
     </div>
   );
+}
+
+/**
+ * El selector con los precios de quien mira.
+ *
+ * El respaldo es el selector con el precio de público, que es lo que queda en
+ * la ficha armada de antemano; el de quien mira lo reemplaza en la misma
+ * respuesta, antes de que se pueda tocar nada. La promesa trae solo las medidas
+ * de este producto: el mapa completo de la lista no sale del servidor.
+ */
+export function SelectorVarianteDeQuienMira({
+  precios,
+  ...props
+}: Omit<ComponentProps<typeof SelectorVariante>, "precios"> & {
+  precios: Promise<PreciosDeFicha>;
+}) {
+  return (
+    <Suspense fallback={<SelectorVariante {...props} />}>
+      <SelectorConPrecios promesa={precios} {...props} />
+    </Suspense>
+  );
+}
+
+function SelectorConPrecios({
+  promesa,
+  ...props
+}: Omit<ComponentProps<typeof SelectorVariante>, "precios"> & {
+  promesa: Promise<PreciosDeFicha>;
+}) {
+  return <SelectorVariante {...props} precios={use(promesa)} />;
 }

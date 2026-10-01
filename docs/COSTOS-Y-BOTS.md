@@ -14,23 +14,53 @@ bots es que nadie pueda pedir trabajo caro de a miles.
 
 ## Qué se hizo
 
+### Desde Cache Components (1/10/2026, servidor propio)
+
+El sitio pasó a Cache Components (`cacheComponents: true`). Cada página sale
+armada de antemano y **solo lo que depende de quién mira** —el saludo del
+menú, el contador del carrito, cada precio, el aviso al gremio— queda detrás
+de un `<Suspense>` que el servidor completa en la **misma respuesta**, por
+streaming. Ya no hay un pedido del navegador después de cargar, ni el
+parpadeo del precio de público al del profesional.
+
+Las piezas: `lib/dal/visitante.ts` resuelve lo de cada persona (sin la cookie
+señal no toca la base), `components/product-card.tsx` arma la tarjeta con el
+precio en un hueco, y `lib/estado-context.tsx` reparte el saludo y el
+contador. Se borraron `/api/mis-precios`, `/api/mis-placas` y el
+`sessionStorage` con señal.
+
+Tres cosas que se aprendieron midiendo y que no hay que deshacer:
+
+- **El catálogo y el stock no pueden llevar caché pública de red.** Su HTML
+  trae ahora el precio de quien mira; una red que lo guardara le serviría a
+  cualquiera el precio de un profesional. Next les pone `private, no-store`.
+- **No envolver componentes grandes en `<Suspense>` con un respaldo grande.**
+  React manda aparte los límites grandes ya resueltos, y con ellos el
+  respaldo: envolver la barra entera la duplicaba (~100 KB por página). La
+  sección activa del menú se marca enlace por enlace.
+- **Una redirección o un 404 que ocurren después de la parte armada salen
+  con 200**: la redirección viaja como `meta refresh` y el 404 como pantalla
+  con `noindex`. Ninguno muestra datos antes de irse (medido en el panel con
+  un cliente sin permiso).
+
 ### Que el sitio se sirva de la red
 
 La regla que se respetó en todo: **la lista de precios sigue viajando dentro de
 la clave del caché** (`lib/dal/catalog.ts`). Nada de esto relajó eso. Lo que
-cambió es de dónde sale el precio del profesional: el HTML sale con el de
-público —que ya es público— y el navegador lo reemplaza pidiendo
-`/api/mis-precios` con su cookie. Ver `lib/precios-propios-context.tsx`.
+cambió es de dónde sale el precio del profesional: la página sale armada con
+el de público —que ya es público— y el suyo llega aparte. Hasta el 1/10/2026
+lo traía el navegador desde `/api/mis-precios`; desde Cache Components lo
+resuelve el servidor en la misma respuesta (ver más abajo).
 
 | Pantalla | Antes | Ahora |
 |---|---|---|
 | `/moldava` | se armaba en cada visita | estática |
-| `/corte` | se armaba en cada visita, con la consulta más cara del sitio | estática, con el precio corregido en el navegador |
+| `/corte` | se armaba en cada visita, con la consulta más cara del sitio | armada de antemano, con el precio de quien mira en la misma respuesta |
 | `/catalogo/[slug]` | se armaba en cada visita | se arma la primera vez que alguien la pide y después sale de la caché |
-| `/catalogo` y `/stock` | se armaban en cada visita | siguen armándose, pero la red guarda el resultado 5 minutos |
+| `/catalogo` y `/stock` | se armaban en cada visita | se arman en cada visita, con las consultas cacheadas por etiqueta; **sin** caché de red (ver más abajo) |
 | `/sitemap.xml` | tres consultas por cada rastreador | consultas cacheadas, con la etiqueta del catálogo |
 | `/api/estado` | una consulta por cada cambio de pantalla | una por pestaña |
-| `/api/asistente/equipaje` | una acción de servidor por cada apertura | un endpoint cacheado una hora |
+| `/api/asistente/equipaje` | una acción de servidor por cada apertura | un endpoint cacheado, que se rehace cuando cambian el catálogo o las sucursales |
 
 Dos arreglos que valen tanto como la lista:
 

@@ -16,6 +16,7 @@ const idDeBuild =
   `local-${Date.now()}`;
 
 const nextConfig: NextConfig = {
+  cacheComponents: true,
   /**
    * Empaquetado para servidor propio.
    *
@@ -112,55 +113,23 @@ const nextConfig: NextConfig = {
       },
 
       /*
-       * Las dos pantallas que siguen armándose por pedido, servidas igual desde
-       * la red.
+       * **El catálogo y la consulta de stock ya no llevan cabeceras de caché
+       * pública, y no deben volver a llevarlas.**
        *
-       * El catálogo y la consulta de stock reciben filtros por la URL —la
-       * categoría, la búsqueda, el orden—, y eso las deja dinámicas: cada
-       * combinación es una página distinta. Pero **el resultado ya no depende
-       * de quién mira**: el precio del profesional lo corrige el navegador, así
-       * que dos visitantes con la misma dirección reciben exactamente el mismo
-       * HTML.
+       * Las tuvieron mientras el sitio vivió en Vercel: el HTML era el mismo
+       * para todo el mundo —el precio del profesional lo corregía el
+       * navegador— y la red lo guardaba cinco minutos. Desde Cache Components
+       * la respuesta trae, en el mismo HTML, el precio y el saludo de quien
+       * mira (`components/product-card.tsx`): una red que la guardara le
+       * serviría a cualquiera el precio de un profesional. Next ya le pone a
+       * estas respuestas `private, no-store`, y nada de acá tiene que pisarlo.
        *
-       * **Va en `Vercel-CDN-Cache-Control` y no en `Cache-Control`, y eso no es
-       * un detalle.** Con `Cache-Control` funciona en `next start` pero no en
-       * Vercel: una página dinámica responde con `private, no-store` puesto por
-       * el framework, ese encabezado gana, y la red no guarda nada. Medido
-       * contra producción, que es la única forma de saberlo.
-       *
-       * La cabecera propia del CDN no compite con la otra: le habla solo a la
-       * red, que además la borra antes de entregar la respuesta.
-       * `CDN-Cache-Control` va al lado para cualquier otra red intermedia, y
-       * `Cache-Control` queda para el navegador, donde no queremos copia vieja
-       * —el precio y el stock cambian—.
-       *
-       * `s-maxage` es cuánto vale la copia guardada; `stale-while-revalidate`,
-       * que mientras se rehace se sigue entregando la que hay en vez de hacer
-       * esperar a nadie.
-       *
-       * **En el servidor propio esto no hace nada, y no rompe nada.** Caddy no
-       * guarda copias: las dos cabeceras de CDN pasan hasta el navegador, que
-       * las ignora, y el catálogo y el stock se arman en cada pedido. Lo que
-       * evita que eso sea caro es lo de abajo: los datos salen de
-       * `unstable_cache` con etiqueta (`lib/cache-publico.ts`), así que armar
-       * la página no vuelve a consultar la base. Si algún día se pone un CDN
-       * adelante —Cloudflare, por ejemplo—, `CDN-Cache-Control` es la que va a
-       * leer.
+       * Tampoco hace falta: sin CDN delante, el catálogo y el stock se arman en
+       * cada pedido —que es lo que la propuesta promete, el stock real— y lo
+       * que lo hace barato está abajo: las consultas salen de `unstable_cache`
+       * con etiqueta (`lib/cache-publico.ts`), así que armar la página no
+       * vuelve a la base.
        */
-      ...["/catalogo", "/stock"].map((source) => ({
-        source,
-        headers: [
-          {
-            key: "Vercel-CDN-Cache-Control",
-            value: "public, s-maxage=300, stale-while-revalidate=3600",
-          },
-          {
-            key: "CDN-Cache-Control",
-            value: "public, s-maxage=300, stale-while-revalidate=3600",
-          },
-          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
-        ],
-      })),
 
       /*
        * Las cabeceras de seguridad, para todo el sitio.

@@ -464,7 +464,6 @@ function Renglon({ renglon }: { renglon: Renglon }) {
         <li key={p.slug} className="flex items-stretch gap-1.5">
           <Link
             href={`/catalogo/${p.slug}`}
-            prefetch={false}
             className="flex flex-1 items-center gap-3 rounded-xl bg-card p-2.5 shadow-sm transition-colors hover:bg-chip"
           >
             {p.imagen ? (

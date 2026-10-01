@@ -1,4 +1,4 @@
-import type { NextRequest } from "next/server";
+import { connection, type NextRequest } from "next/server";
 import { getSession } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
 import { CANALES, PANTALLA_DEL_CANAL, type Canal, type EventoEnVivo } from "@/lib/vivo/canales";
@@ -23,6 +23,9 @@ import { escuchaEnVivo, tiempoRealDisponible } from "@/lib/vivo/escucha";
 const LATIDO_MS = 25_000;
 
 export async function GET(request: NextRequest) {
+  // Siempre por pedido: con Cache Components el build prerenderiza los GET, y
+  // un 204 «armado de antemano» ni siquiera es una respuesta válida.
+  await connection();
   if (!tiempoRealDisponible()) return new Response(null, { status: 204 });
 
   const sesion = await getSession();

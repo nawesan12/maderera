@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import { CargandoSitio } from "@/components/sitio/cargando";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { verifySession } from "@/lib/dal/session";
@@ -12,7 +14,20 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function CuentaLayout({
+/**
+ * Mi cuenta lee la sesión desde el layout, así que el layout pone su propio
+ * `<Suspense>`: el grupo `(public)` ya no tiene un `loading.tsx` que lo cubra
+ * (ver `components/sitio/cargando.tsx`).
+ */
+export default function CuentaLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<CargandoSitio />}>
+      <CuentaConSesion>{children}</CuentaConSesion>
+    </Suspense>
+  );
+}
+
+async function CuentaConSesion({
   children,
 }: {
   children: React.ReactNode;

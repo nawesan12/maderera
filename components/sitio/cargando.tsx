@@ -10,8 +10,15 @@
  * ruedita: ocupa el lugar que va a ocupar el contenido, así que al llegar no
  * salta. El encabezado y el pie no están acá porque los dibuja el layout, que
  * no se vuelve a armar en cada navegación.
+ *
+ * **Va ruta por ruta y no en un `loading.tsx` del grupo `(public)`.** Con Cache
+ * Components, un `loading` envuelve la página en `<Suspense>`: el esqueleto se
+ * manda primero y con él el código 200. Una ficha de producto o de evento que
+ * no existe respondía 200 en lugar de 404 —un «soft 404» para Google—. Por eso
+ * las fichas indexables no lo llevan: resuelven si existen desde la caché y
+ * llaman a `notFound()` antes de mandar nada.
  */
-export default function CargandoSitio() {
+export function CargandoSitio() {
   return (
     <div className="contenedor py-12" aria-label="Cargando la página" aria-busy="true">
       <div className="h-4 w-40 animate-pulse rounded bg-hundida" />

@@ -6,7 +6,15 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarDays, Clock, MapPin, Users } from "lucide-react";
 import { getSession } from "@/lib/dal/session";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
-import { estadoProfesional, eventoPorSlug } from "@/lib/dal/profesionales";
+import {
+  estadoProfesional,
+  eventoPorSlug,
+  eventoVisible,
+  slugsDeEventosVisibles,
+} from "@/lib/dal/profesionales";
+import { Suspense } from "react";
+import { CargandoSitio } from "@/components/sitio/cargando";
+import { degradar } from "@/lib/degradar";
 import { cobrosEnVivo } from "@/lib/pagos";
 import { fechaLarga, hora } from "@/lib/formato";
 import { Anotarse } from "./anotarse";
@@ -46,8 +54,33 @@ export default async function EventoPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+
+  // El 404 se decide acá, con la caché, antes de que salga el esqueleto: lo
+  // que se resuelve detrás del `<Suspense>` ya no puede cambiar el código.
+  if (!(await eventoVisible(slug))) notFound();
+
+  return (
+    <Suspense fallback={<CargandoSitio />}>
+      <FichaDelEvento slug={slug} />
+    </Suspense>
+  );
+}
+
+/**
+ * Unos pocos eventos se arman en el build. Con Cache Components, leer el
+ * parámetro de una ruta sin esta lista es un dato por pedido, y obligaría a
+ * resolver el 404 detrás de un `<Suspense>`. Sin eventos, un slug que no
+ * existe: da 404 en el build y la verificación se hace igual.
+ */
+export async function generateStaticParams() {
+  const slugs = await degradar("los eventos del build", () => slugsDeEventosVisibles(6), []);
+  return (slugs.length > 0 ? slugs : ["sin-eventos"]).map((slug) => ({ slug }));
+}
+
+async function FichaDelEvento({ slug }: { slug: string }) {
   const evento = await eventoPorSlug(slug);
 
+  // Se pudo haber pasado a borrador entre la caché y esta consulta.
   if (!evento) notFound();
 
   const [sesion, cliente, profesional, whatsapp] = await Promise.all([

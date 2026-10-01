@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CargandoSitio } from "@/components/sitio/cargando";
 import { AvisoGremio } from "@/components/catalogo/aviso-gremio";
 import { bannersDe } from "@/lib/dal/banners";
 import { Banner } from "@/components/banner";
@@ -127,7 +128,25 @@ export async function generateMetadata({
   };
 }
 
-export default async function CatalogoPage({
+/**
+ * El catálogo lee los filtros del pedido, así que se arma detrás de su propio
+ * `<Suspense>`. No con un `loading.tsx` en esta carpeta: envolvería también la
+ * ficha de cada producto, que vive debajo, y la dejaría respondiendo 200 cuando
+ * el producto no existe (ver `components/sitio/cargando.tsx`).
+ */
+export default function CatalogoPage({
+  searchParams,
+}: {
+  searchParams: Promise<Params>;
+}) {
+  return (
+    <Suspense fallback={<CargandoSitio />}>
+      <Catalogo searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function Catalogo({
   searchParams,
 }: {
   searchParams: Promise<Params>;

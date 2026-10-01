@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { cacheLife, cacheTag } from "next/cache";
 import { and, asc, desc, eq, gte, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
@@ -316,4 +317,37 @@ export async function eventoPorSlug(
     miInscripcion: mia ?? null,
     yaPaso: evento.inicia.getTime() < Date.now(),
   };
+}
+
+/**
+ * Si un evento se puede mostrar, desde la caché.
+ *
+ * Existe aparte de `eventoPorSlug` —que trae los cupos en vivo y la
+ * inscripción de quien mira— para que la ficha decida el 404 **antes** de
+ * mandar nada: con Cache Components, lo que se resuelve después de un
+ * `<Suspense>` ya no puede cambiar el código de estado. La misma regla que
+ * `eventoPorSlug`: un borrador no existe para el público.
+ */
+export async function eventoVisible(slug: string): Promise<boolean> {
+  "use cache";
+  cacheTag(ETIQUETAS.eventos);
+  cacheLife("hours");
+
+  const [fila] = await db
+    .select({ estado: events.estado })
+    .from(events)
+    .where(eq(events.slug, slug))
+    .limit(1);
+  return Boolean(fila && fila.estado !== "borrador");
+}
+
+/** Algunos eventos visibles, para la muestra del build (ver la ficha). */
+export async function slugsDeEventosVisibles(limite: number): Promise<string[]> {
+  const filas = await db
+    .select({ slug: events.slug })
+    .from(events)
+    .where(sql`${events.estado} <> 'borrador'`)
+    .orderBy(desc(events.inicia))
+    .limit(limite);
+  return filas.map((f) => f.slug);
 }

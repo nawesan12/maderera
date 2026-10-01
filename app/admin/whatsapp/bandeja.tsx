@@ -10,6 +10,7 @@ import { PanelCliente } from "./panel-cliente";
 import { NuevaConversacion } from "./nueva-conversacion";
 import type { ConversacionListada } from "@/lib/dal/admin/whatsapp";
 import type { PlantillaAprobada } from "@/lib/whatsapp/tipos";
+import { useEnVivo } from "@/lib/vivo/use-en-vivo";
 
 type Detalle = NonNullable<
   Awaited<ReturnType<typeof import("@/lib/dal/admin/whatsapp").obtenerConversacion>>
@@ -55,18 +56,19 @@ export function Bandeja({
   const [busqueda, setBusqueda] = useState("");
   const [abriendoNueva, setAbriendoNueva] = useState(false);
 
-  /**
-   * Refresco periódico.
-   *
-   * No hay conexión abierta con el servidor: los mensajes entran por el webhook
-   * y esta pantalla se entera al volver a consultar. Diez segundos es el
-   * intervalo que hace que una respuesta se note enseguida sin castigar a la
-   * base con una consulta por segundo.
+  /*
+   * Los mensajes nuevos llegan en vivo (ver `lib/vivo`): el webhook escribe,
+   * Postgres avisa y esta pantalla se refresca al instante. Donde no hay
+   * tiempo real —en Vercel— vuelve a consultar cada diez segundos, como
+   * antes: el intervalo que hace que una respuesta se note enseguida sin
+   * castigar a la base con una consulta por segundo.
    */
+  const enVivo = useEnVivo(["whatsapp"], () => router.refresh());
   useEffect(() => {
+    if (enVivo) return;
     const reloj = setInterval(() => router.refresh(), 10_000);
     return () => clearInterval(reloj);
-  }, [router]);
+  }, [router, enVivo]);
 
   const visibles = busqueda.trim()
     ? conversaciones.filter((c) => {

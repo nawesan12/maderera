@@ -7,6 +7,7 @@ import { listarCortes } from "@/lib/dal/admin/cortes";
 import { plural } from "@/components/admin/formato";
 import { BuscadorCortes } from "@/app/admin/cortes/buscador";
 import { TableroDeCortes } from "@/app/admin/cortes/vista";
+import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 
 export const metadata: Metadata = {
   title: "Taller · Cola de corte",
@@ -119,6 +120,10 @@ export default async function TallerPage({
         </p>
 
         <BuscadorCortes busquedaActual={params.buscar ?? ""} />
+        {/* Un corte que se carga en el mostrador aparece acá al instante.
+            Antes esta pantalla no se actualizaba nunca: quien cortaba tenía que
+            recargarla para enterarse. */}
+        <RefrescarEnVivo canales={["taller"]} sinConexionCadaMs={60_000} />
         <TableroDeCortes cortes={cortes} />
       </main>
     </div>

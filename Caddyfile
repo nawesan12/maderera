@@ -92,5 +92,9 @@ www.{$DOMINIO} {
 		}
 	}
 
-	encode zstd gzip
+	# Todo comprimido salvo los avisos en vivo: comprimir un flujo SSE lo
+	# junta en un buffer hasta llenar el bloque, y el aviso del pedido nuevo
+	# llegaría cuando hubiera varios.
+	@comprimible not path /api/vivo
+	encode @comprimible zstd gzip
 }

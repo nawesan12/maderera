@@ -6,6 +6,7 @@ import type { ClienteLocal, VarianteLocal } from "./busqueda-local";
 import { precioLocal, type PreciosLocales } from "./precio-local";
 import { cargarIndices, sincronizarCatalogo, CADA_CUANTO_MS } from "./sincronizar";
 import { hayAlmacenLocal, pedirPersistencia } from "./db";
+import { useEnVivo } from "@/lib/vivo/use-en-vivo";
 
 /**
  * La copia local, lista para usar en la pantalla.
@@ -143,6 +144,13 @@ export function useCopiaLocal(branchId: string): CopiaLista {
       clearInterval(cada);
     };
   }, [recargar, sincronizar]);
+
+  /*
+   * Un precio que cambia en el panel llega acá al instante (ver `lib/vivo`):
+   * antes el mostrador podía cobrar hasta diez minutos con el precio viejo.
+   * La sincronización periódica sigue: es la red cuando no hay tiempo real.
+   */
+  useEnVivo(["precios"], () => void sincronizar());
 
   const buscar = useCallback(
     (texto: string, _customerId: string | null, listaDelCliente: string | null) => {

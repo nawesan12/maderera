@@ -74,6 +74,9 @@ services:
       # Las fotos van a un volumen y no adentro de la imagen: si vivieran en
       # `public/`, cada despliegue borraría lo que se subió desde el panel.
       CARPETA_SUBIDAS: /datos/subidas
+      # Hay un proceso que vive y un cron: enciende el tiempo real del panel
+      # (`lib/vivo`). En Vercel no está y las pantallas consultan cada tanto.
+      PLATAFORMA: vps
       # El certificado de ARCA, como archivos de solo lectura (ver el volumen
       # abajo). Si todavía no están, la facturación sigue con el proveedor
       # interno, igual que sin variables.

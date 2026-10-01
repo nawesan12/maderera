@@ -27,7 +27,7 @@ const globalForDb = globalThis as unknown as { pool?: Pool };
  * Ahora se puede decir explícitamente con `DATABASE_SSL`. Sin esa variable
  * queda la regla vieja, para no tocar lo que ya funciona.
  */
-function usaSsl(url: string): boolean {
+export function usaSsl(url: string): boolean {
   const declarado = process.env.DATABASE_SSL?.trim().toLowerCase();
   if (declarado === "true" || declarado === "on") return true;
   if (declarado === "false" || declarado === "off") return false;

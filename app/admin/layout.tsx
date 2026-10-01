@@ -15,6 +15,7 @@ import {
 } from "@/components/admin/activity-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { EnterAvanza } from "@/components/admin/enter-avanza";
+import { AvisoDePedidosEnVivo } from "@/components/vivo/aviso-pedidos";
 import { requireStaff } from "@/lib/dal/session";
 import { conversacionesSinLeer } from "@/lib/dal/admin/whatsapp";
 
@@ -131,6 +132,7 @@ export default async function AdminLayout({
           las veinte pantallas y repetirla garantizaba que tres quedaran
           distintas. Ver `lib/teclado/avance.ts`. */}
       <EnterAvanza />
+      <AvisoDePedidosEnVivo />
       <AdminSidebar whatsappSinLeer={sinLeer} rol={usuario.staffRole} />
       {/* `min-w-0` no es decorativo: sin él este hijo de flex no baja del ancho
           de su contenido, así que el `overflow-x` del tablero no recorta nada y

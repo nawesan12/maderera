@@ -5,6 +5,7 @@ import { plural } from "@/components/admin/formato";
 import { listarCortes } from "@/lib/dal/admin/cortes";
 import { BuscadorCortes } from "./buscador";
 import { TableroDeCortes } from "./vista";
+import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 
 export default async function CortesPage({
   searchParams,
@@ -73,6 +74,10 @@ export default async function CortesPage({
 
       <BuscadorCortes busquedaActual={params.buscar ?? ""} />
 
+      {/* Un corte que se carga en el mostrador aparece acá al instante.
+          Antes esta pantalla no se actualizaba nunca: quien cortaba tenía que
+          recargarla para enterarse. */}
+      <RefrescarEnVivo canales={["taller"]} sinConexionCadaMs={60_000} />
       <TableroDeCortes cortes={cortes} />
     </div>
   );

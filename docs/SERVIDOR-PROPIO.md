@@ -9,7 +9,7 @@
 
 Hoy son tres servicios: **Vercel** arma y sirve el sitio, **Neon** guarda la
 base y **Vercel Blob** guarda lo que se sube desde el panel. En el servidor
-propio todo eso corre en una sola máquina, en cuatro contenedores:
+propio todo eso corre en una sola máquina, en cinco contenedores:
 
 | Contenedor | Qué hace | Reemplaza a |
 |---|---|---|
@@ -17,8 +17,9 @@ propio todo eso corre en una sola máquina, en cuatro contenedores:
 | `app` | La aplicación (Next, empaquetado `standalone`) | Vercel |
 | `web` | Caddy: HTTPS con certificado automático, comprime, sirve las fotos | El CDN de Vercel |
 | `respaldo` | Un volcado diario de la base, con copia fuera de la máquina opcional | Los respaldos de Neon |
+| `cron` | Llama a las tareas programadas a horario (`servidor/cron/crontab`) | Nada: en Vercel no había |
 
-Y un quinto que no queda corriendo: `migrador`, que aplica las migraciones en
+Y un sexto que no queda corriendo: `migrador`, que aplica las migraciones en
 cada despliegue y corre los scripts de mudanza.
 
 **Lo que se paga a cambio no es plata, es trabajo.** Vercel y Neon se encargan
@@ -32,13 +33,14 @@ alguien tiene que mirar de vez en cuando que sigan andando (ver
 | Archivo | Para qué |
 |---|---|
 | `Dockerfile` | La imagen de la aplicación y la del migrador |
-| `docker-compose.prod.yml` | Los cinco servicios, los volúmenes y la red |
+| `docker-compose.prod.yml` | Los seis servicios, los volúmenes y la red |
 | `Caddyfile` | HTTPS, compresión, fotos, sondas bloqueadas, registro de acceso |
 | `scripts/desplegar.sh` | El reemplazo del push que disparaba el deploy |
 | `scripts/respaldo.sh` | El respaldo diario (lo corre el contenedor `respaldo`) |
 | `scripts/mudar-base.sh` | Una vez: trae la base de Neon |
 | `scripts/mudar-subidas.ts` | Una vez: trae los archivos de Vercel Blob |
 | `servidor/fail2ban/` | El filtro y las cárceles de fail2ban |
+| `servidor/cron/` | El crontab y el script que dispara cada tarea |
 | `.github/workflows/desplegar.yml` | Desplegar desde GitHub, apagado por omisión |
 
 ## Antes de empezar
@@ -241,6 +243,7 @@ Lo que cambia respecto del ejemplo (el resto, con los valores de Vercel):
 | `DOMINIO` | `mjbj.ar` (o el subdominio de prueba) |
 | `POSTGRES_USER` / `POSTGRES_DB` | `mjbj` / `mjbj` |
 | `POSTGRES_PASSWORD` | `openssl rand -hex 32` (solo letras y números: va adentro de una URL) |
+| `TAREAS_SECRETO` | `openssl rand -base64 32` — **obligatoria**: sin ella el compose no levanta |
 | `BLOB_READ_WRITE_TOKEN` | **vacía**: con token, las fotos nuevas seguirían yendo a Vercel |
 | `DATABASE_URL` | se ignora: la arma el compose |
 | `RCLONE_REMOTE` | ver [Respaldos](#respaldos) |
@@ -442,6 +445,8 @@ hay que volcarlo antes con `pg_dump` y cargarlo allá.
 | Caddy, certificados | `dc logs -f web` |
 | Cada pedido | `/var/log/caddy/acceso.log` (JSON; `client_ip` es la IP real) |
 | El respaldo | `dc logs respaldo` y `ls -lh ~/maderera/respaldos` |
+| Las tareas programadas | `dc logs cron` (una línea por corrida; la de cada minuto, solo si hizo algo) |
+| La cola de trabajos | `select tipo, estado, intentos, ultimo_error from trabajos where estado <> 'hecho'` |
 | Los baneados | `sudo fail2ban-client status caddy-sondas` |
 | El estado | `dc ps` (la app tiene que decir `healthy`) |
 | El disco | `df -h` y `docker system df` |
@@ -498,6 +503,29 @@ Una vez por mes, cinco minutos:
   (actualiza Postgres 17 y Caddy 2 dentro de la misma versión mayor).
 
 Las actualizaciones del sistema y el certificado son automáticos.
+
+## Lo que se gana respecto de Vercel
+
+En Vercel se pagaba por cada uso, y varias cosas se recortaron por eso. Acá el
+costo es fijo y el criterio cambia: no saturar una sola máquina.
+
+- **Tareas programadas** (`lib/tareas`, contenedor `cron`). Cada minuto se
+  procesa la cola; cada hora deja de verse lo que venció en la portada (un
+  banner «hasta el 30/9» ya no sigue el 1/10); a las 7 salen los
+  recordatorios de eventos, el parte del día al panel y la limpieza de tablas
+  que crecían solas; los lunes, las reseñas de Google y los candidatos a baja.
+  Cada una corre **una vez por período**: el candado está en
+  `tareas_corridas`, así que reiniciar el cron o dispararla a mano no repite
+  nada. Para probarla a mano:
+  `dc exec cron sh /tarea.sh diaria`.
+- **Una cola con reintentos** (`lib/cola`). Los webhooks de Mercado Pago y de
+  WhatsApp guardan el trabajo y contestan; si el proceso se reinicia en ese
+  segundo —un despliegue— el pago o el mensaje no se pierden. Lo que falla se
+  reintenta con espera creciente, y lo que agota los intentos avisa al panel.
+- **Tiempo real** (`lib/vivo`, con `PLATAFORMA=vps`). Postgres avisa con
+  `LISTEN/NOTIFY` y el panel lo recibe por SSE: la bandeja de WhatsApp, el
+  taller y los pedidos web nuevos aparecen sin recargar, y el mostrador se
+  entera de un precio nuevo al instante. Una sola conexión escucha por proceso.
 
 ## Lo que se pierde respecto de Vercel
 

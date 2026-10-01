@@ -8,7 +8,7 @@ import { cartCortes } from "@/lib/db/schema";
 import { obtenerOCrearCarrito } from "@/lib/dal/carrito";
 import { placaCortable } from "@/lib/dal/cortes-publico";
 import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
-import { calcularPlanoDeCorte } from "@/lib/cortes/plano";
+import { calcularPlanoDeCorteSinTrabar } from "@/lib/cortes/plano";
 import { presupuestarCorte } from "@/lib/cortes/presupuesto";
 import { fraccionDePlaca, medidaDePlaca } from "@/lib/cortes/placa";
 import { avisoDeEspera, ipDelPedido, permitido } from "@/lib/limites";
@@ -87,10 +87,10 @@ export async function agregarCorteAlCarrito(
   /*
    * El freno, antes de acomodar.
    *
-   * `calcularPlanoDeCorte` prueba varios órdenes de entrada por dos formas de
-   * partir cada sobrante: es el trabajo de CPU más caro que se puede pedir desde
-   * afuera sin siquiera tener cuenta. El tope por llamada ya está en el esquema;
-   * esto es el tope por rato.
+   * El plano prueba ocho combinaciones fijas y después cientos de órdenes más
+   * con la búsqueda: es el trabajo de CPU más caro que se puede pedir desde
+   * afuera sin siquiera tener cuenta. El tope por llamada ya está en el esquema
+   * (y la búsqueda tiene su propio tope de trabajo); esto es el tope por rato.
    */
   const puede = await permitido("corte", `ip:${await ipDelPedido()}`);
 
@@ -117,7 +117,7 @@ export async function agregarCorteAlCarrito(
     mitad: mitad ?? null,
   });
 
-  const plano = calcularPlanoDeCorte({
+  const plano = await calcularPlanoDeCorteSinTrabar({
     piezas,
     placaLargo: medida.largo,
     placaAncho: medida.ancho,

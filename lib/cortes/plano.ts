@@ -21,12 +21,15 @@
  * pieza en una esquina del espacio libre, se parte el resto con un corte recto,
  * y se sigue. Todo lo que sale de acá se puede ejecutar tal cual.
  *
- * **Es una heurística y hay que decirlo.** El problema es NP-difícil. Se prueban
- * varios órdenes de entrada y las dos formas de partir cada sobrante, y gana el
- * resultado que gaste menos placas. Un optimizador de verdad prueba muchas más
- * combinaciones y además reusa los recortes de trabajos anteriores, que esto no
- * hace. Si el número queda peor que el de CutMaster, esa diferencia es lo que
- * vale el optimizador, y conviene verla escrita en vez de suponerla.
+ * **Es una heurística y hay que decirlo.** El problema es NP-difícil. Primero
+ * se prueban ocho combinaciones fijas —cuatro órdenes de entrada por las dos
+ * formas de partir cada sobrante— y después una búsqueda con azar **de semilla
+ * fija** prueba cientos de órdenes más (ver `buscarMejorPlano`). Sobre el banco
+ * de 200 despieces de `scripts/benchmark-plano.ts` la búsqueda bajó de 559 a
+ * 534 placas, con un piso teórico de 490. Lo que todavía no hace es reusar los
+ * recortes de trabajos anteriores, que sí hace un optimizador dedicado como
+ * CutMaster; si su número queda mejor, esa diferencia es lo que vale, y conviene
+ * verla escrita en vez de suponerla.
  *
  * Sin base de datos y sin `server-only`: es geometría pura. Por eso se puede
  * probar, y por eso puede correr también en el navegador mientras alguien carga
@@ -272,26 +275,94 @@ export function superficieDeSierra(
   }, 0);
 }
 
-/**
- * Arma el plano.
- *
- * `placaLargo` corre horizontal y es el sentido de la veta: una pieza que la
- * respeta apoya su largo sobre ese eje y no se gira.
- */
-export function calcularPlanoDeCorte({
-  piezas,
-  placaLargo,
-  placaAncho,
-  anchoSierra = ANCHO_DE_SIERRA_MM,
-  fijadas = [],
-}: {
+type DatosDelPlano = {
   piezas: PiezaAcortar[];
   placaLargo: number;
   placaAncho: number;
   anchoSierra?: number;
   /** Las que alguien movió a mano. Se colocan primero y no se tocan. */
   fijadas?: PiezaFijada[];
-}): PlanoDeCorte {
+  /**
+   * Si después de las ocho combinaciones fijas se busca un plano mejor. Se
+   * apaga solo para medir contra la heurística sola (el banco de prueba y los
+   * tests); en el sistema va siempre prendida. Ver `buscarMejorPlano`.
+   */
+  busqueda?: boolean;
+  /** La semilla del azar de la búsqueda. Fija: ver `SEMILLA_DE_BUSQUEDA`. */
+  semilla?: number;
+  /** Cuánto trabajo puede hacer. Ver `PRESUPUESTO_DE_BUSQUEDA`. */
+  presupuesto?: number;
+};
+
+/**
+ * Arma el plano.
+ *
+ * `placaLargo` corre horizontal y es el sentido de la veta: una pieza que la
+ * respeta apoya su largo sobre ese eje y no se gira.
+ *
+ * Es síncrona para el navegador, que la llama en cada tecla. En el servidor va
+ * `calcularPlanoDeCorteSinTrabar`, que da exactamente el mismo plano.
+ */
+export function calcularPlanoDeCorte(datos: DatosDelPlano): PlanoDeCorte {
+  const pasos = armarPlano(datos);
+  for (;;) {
+    const paso = pasos.next();
+    if (paso.done) return paso.value;
+  }
+}
+
+/**
+ * El mismo plano, sin trabar el servidor mientras se busca.
+ *
+ * La búsqueda tarda unos milisegundos en un despiece común y hasta unas
+ * decenas en uno grande. En el navegador eso es del que tipea; en el servidor
+ * es un proceso que atiende a todos, y mientras una placa se acomoda nadie más
+ * recibe respuesta. Acá se cede el turno cada pocos milisegundos para que los
+ * demás pedidos avancen.
+ *
+ * **Por qué no un `worker_thread`, como decía el plan.** Lo que justificaba un
+ * hilo aparte era una búsqueda con tope de tiempo, larga por diseño. Terminó
+ * siendo una búsqueda con tope de **trabajo** —para que el plano sea siempre el
+ * mismo, ver `SEMILLA_DE_BUSQUEDA`— que no pasa de unas decenas de
+ * milisegundos. Para eso un hilo cuesta más de lo que ahorra: copiar el
+ * despiece y el plano entre hilos, y un archivo de worker que Next tiene que
+ * empaquetar aparte en `output: standalone`, algo que su documentación no
+ * cubre y que fallaría recién en el servidor. Ceder el turno da el mismo
+ * resultado exacto, porque el cálculo es el mismo generador.
+ */
+export async function calcularPlanoDeCorteSinTrabar(
+  datos: DatosDelPlano,
+): Promise<PlanoDeCorte> {
+  const pasos = armarPlano(datos);
+  let desde = Date.now();
+  for (;;) {
+    const paso = pasos.next();
+    if (paso.done) return paso.value;
+    if (Date.now() - desde >= MILISEGUNDOS_POR_TURNO) {
+      await new Promise<void>((listo) => setTimeout(listo, 0));
+      desde = Date.now();
+    }
+  }
+}
+
+/** Cuánto puede calcular de corrido antes de dejar pasar a los demás. */
+const MILISEGUNDOS_POR_TURNO = 8;
+
+/**
+ * El cálculo, por pasos. Cada `yield` es una ronda de la búsqueda: el lugar
+ * donde `calcularPlanoDeCorteSinTrabar` puede ceder el turno. El resultado no
+ * depende de si se cede o no.
+ */
+function* armarPlano({
+  piezas,
+  placaLargo,
+  placaAncho,
+  anchoSierra = ANCHO_DE_SIERRA_MM,
+  fijadas = [],
+  busqueda = true,
+  semilla = SEMILLA_DE_BUSQUEDA,
+  presupuesto = PRESUPUESTO_DE_BUSQUEDA,
+}: DatosDelPlano): Generator<void, PlanoDeCorte> {
   const vacio: PlanoDeCorte = {
     placaLargo,
     placaAncho,
@@ -335,8 +406,8 @@ export function calcularPlanoDeCorte({
    * Ningún criterio sirve para todos los despieces: ordenar por superficie
    * acomoda bien los muebles, y ordenar por el lado más largo salva los
    * despieces con una pieza larga y flaca que, entrando tarde, obliga a abrir
-   * una placa entera para ella sola. Probar ocho combinaciones cuesta
-   * milisegundos y evita elegir de antemano por el cliente.
+   * una placa entera para ella sola. Estas ocho combinaciones son el piso: la
+   * búsqueda de después arranca de la mejor y solo la cambia por una mejor.
    */
   const criterios: ((o: Orientacion) => number)[] = [
     (o) => o.ancho * o.alto,
@@ -356,41 +427,60 @@ export function calcularPlanoDeCorte({
     (u) => !porClave.has(clave(u.indice, u.unidad)),
   );
 
-  let descartadas: PiezaFijada[] = [];
-  let mejor: PlacaEnCurso[] | null = null;
+  /** Un intento completo: siembra lo fijado y acomoda el resto en ese orden. */
+  const probar = (
+    orden: Unidad[],
+    sembrarCon: ReglaDePartir,
+    partir: ReglaDePartir | (() => ReglaDePartir),
+  ): Intento => {
+    const sembrado = sembrarFijadas(
+      aFijar,
+      porClave,
+      placaLargo,
+      placaAncho,
+      anchoSierra,
+      sembrarCon,
+    );
+    const placas = acomodar(
+      [...orden, ...sembrado.devueltas],
+      placaLargo,
+      placaAncho,
+      anchoSierra,
+      partir,
+      sembrado.placas,
+    );
+    return { placas, orden, descartadas: sembrado.descartadas };
+  };
+
+  let mejor: Intento | null = null;
 
   for (const criterio of criterios) {
-    const orden = [...sueltas].sort(
-      (a, b) =>
-        criterio(referencia(b)) - criterio(referencia(a)) ||
-        referencia(b).ancho - referencia(a).ancho,
-    );
+    const orden = ordenarPor(sueltas, criterio, () => 0);
 
     for (const partir of ["corto", "largo"] as const) {
-      const semilla = sembrarFijadas(
-        aFijar,
-        porClave,
-        placaLargo,
-        placaAncho,
-        anchoSierra,
-        partir,
-      );
-      const intento = acomodar(
-        [...orden, ...semilla.devueltas],
-        placaLargo,
-        placaAncho,
-        anchoSierra,
-        partir,
-        semilla.placas,
-      );
-      if (!mejor || esMejor(intento, mejor)) {
-        mejor = intento;
-        descartadas = semilla.descartadas;
-      }
+      const intento = probar(orden, partir, partir);
+      if (!mejor || esMejor(intento.placas, mejor.placas)) mejor = intento;
     }
   }
 
-  const enCurso = mejor ?? [];
+  if (
+    busqueda &&
+    mejor &&
+    sueltas.length > 1 &&
+    unidades.length <= PIEZAS_MAXIMAS_PARA_BUSCAR
+  ) {
+    mejor = yield* buscarMejorPlano(
+      mejor,
+      sueltas,
+      criterios,
+      probar,
+      semilla,
+      presupuesto,
+    );
+  }
+
+  const enCurso = mejor?.placas ?? [];
+  const descartadas = mejor?.descartadas ?? [];
   const superficiePlaca = placaLargo * placaAncho;
   let superficieUtil = 0;
 
@@ -463,13 +553,197 @@ function esMejor(candidato: PlacaEnCurso[], actual: PlacaEnCurso[]): boolean {
   return mayor(candidato) > mayor(actual);
 }
 
+/**
+ * La semilla del azar de la búsqueda.
+ *
+ * **Fija a propósito, y es lo más importante de la búsqueda.** El plano no se
+ * guarda: se rehace cada vez que alguien abre la ficha, imprime la hoja del
+ * taller, baja el PDF o vuelve a mirar el trabajo en el mostrador. Si el azar
+ * cambiara de una vez a la otra, el mismo trabajo podría salir con otro
+ * acomodo —o con otra cantidad de placas— que el que se cobró. Con la semilla
+ * fija la búsqueda es una función pura: mismo despiece, mismo plano, en el
+ * navegador y en el servidor, hoy y dentro de un mes.
+ */
+export const SEMILLA_DE_BUSQUEDA = 20260914;
+
+/**
+ * Cuánto trabajo puede hacer la búsqueda, en «pieza × placa».
+ *
+ * **Se mide en trabajo y no en milisegundos** por la misma razón que la semilla
+ * es fija: un tope de tiempo haría que un servidor ocupado probara menos
+ * combinaciones que la notebook del mostrador, y saldrían planos distintos para
+ * el mismo trabajo. Contar trabajo da el mismo número de intentos en cualquier
+ * máquina.
+ *
+ * La unidad es pieza × placa porque eso es lo que cuesta un intento: cada
+ * pieza se prueba contra los huecos de cada placa abierta. Calibrado con
+ * `scripts/benchmark-plano.ts` (1/10/2026): un despiece típico de mostrador
+ * —una veintena de piezas, dos o tres placas— hace las 600 rondas en menos de
+ * 10 ms; más presupuesto no bajaba ni una placa más en el banco.
+ */
+export const PRESUPUESTO_DE_BUSQUEDA = 90_000;
+
+/** Ni muy pocas para que valga, ni tantas que trabe el mostrador. */
+const RONDAS_MINIMAS = 16;
+const RONDAS_MAXIMAS = 600;
+
+/**
+ * Desde cuántas piezas ya no se busca y queda la heurística sola.
+ *
+ * Con 400 piezas la búsqueda mínima ronda los 100 ms, que en el mostrador ya se
+ * siente al tipear. Un trabajo de ese tamaño es de un carpintero con su propio
+ * despiece y lo optimiza de todas formas el CutMaster del taller; lo que el
+ * plano tiene que dar ahí es una cuenta de placas honesta, y la heurística la
+ * da en milisegundos.
+ */
+export const PIEZAS_MAXIMAS_PARA_BUSCAR = 400;
+
+type ReglaDePartir = "corto" | "largo";
+
+interface Intento {
+  placas: PlacaEnCurso[];
+  /** El orden de las piezas sueltas que lo produjo, para seguir desde ahí. */
+  orden: Unidad[];
+  descartadas: PiezaFijada[];
+}
+
+/** Ordena de mayor a menor según el criterio, con un ruido opcional. */
+function ordenarPor(
+  unidades: Unidad[],
+  criterio: (o: Orientacion) => number,
+  ruido: () => number,
+): Unidad[] {
+  return unidades
+    .map((u) => ({ u, clave: criterio(referencia(u)) * (1 + ruido()) }))
+    .sort(
+      (a, b) =>
+        b.clave - a.clave || referencia(b.u).ancho - referencia(a.u).ancho,
+    )
+    .map((x) => x.u);
+}
+
+/**
+ * Generador de azar con semilla (mulberry32): rápido, y sobre todo
+ * **reproducible**, que `Math.random` no es.
+ */
+export function azarConSemilla(semilla: number): () => number {
+  let a = semilla >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Busca un plano mejor que el de las ocho combinaciones fijas.
+ *
+ * **Por qué hace falta.** Las ocho combinaciones son órdenes «razonables» —por
+ * superficie, por lado mayor…— y la regla de partir es la misma para todo el
+ * plano. Muchas veces el mejor acomodo sale de un orden que ningún criterio
+ * simple produce: meter una pieza chica antes para que la grande calce en el
+ * hueco que queda, o partir distinto un solo sobrante. Sobre el banco de
+ * prueba la diferencia son placas enteras, que es plata del cliente.
+ *
+ * **Cómo.** Reinicios al azar alrededor de lo que ya se sabe:
+ *
+ * - la mitad de las rondas reordena todo con uno de los criterios **con ruido**
+ *   (cada pieza pesa entre un 5 y un 40 % más o menos de lo que mide), que es
+ *   explorar órdenes nuevos sin caer en el desorden total;
+ * - la otra mitad toma el orden que viene ganando y **mueve unas pocas piezas**,
+ *   que es afinar lo que ya anda bien;
+ * - en todas, la forma de partir se sortea **pieza por pieza**, con una
+ *   preferencia que también se sortea por ronda.
+ *
+ * Para elegir desde dónde seguir afinando no alcanza con «menos placas»: entre
+ * dos planos de tres placas, el que dejó la tercera casi vacía está más cerca
+ * de entrar en dos. Ese es el criterio de guía; el que decide el plano final
+ * sigue siendo `esMejor` (menos placas, y a igualdad, el retal más grande).
+ *
+ * **Nunca empeora**: el resultado de las ocho combinaciones entra como primer
+ * candidato y solo se lo reemplaza por uno estrictamente mejor.
+ */
+function* buscarMejorPlano(
+  inicial: Intento,
+  sueltas: Unidad[],
+  criterios: ((o: Orientacion) => number)[],
+  probar: (
+    orden: Unidad[],
+    sembrarCon: ReglaDePartir,
+    partir: ReglaDePartir | (() => ReglaDePartir),
+  ) => Intento,
+  semilla: number,
+  presupuesto: number,
+): Generator<void, Intento> {
+  const costoDeUnIntento = sueltas.length * Math.max(1, inicial.placas.length);
+  const rondas = Math.min(
+    RONDAS_MAXIMAS,
+    Math.max(RONDAS_MINIMAS, Math.floor(presupuesto / costoDeUnIntento)),
+  );
+
+  const azar = azarConSemilla(semilla);
+  let mejor = inicial;
+  let guia = inicial;
+
+  for (let r = 0; r < rondas; r++) {
+    let orden: Unidad[];
+
+    if (azar() < 0.5) {
+      const criterio = criterios[Math.floor(azar() * criterios.length)]!;
+      const amplitud = 0.05 + azar() * 0.35;
+      orden = ordenarPor(sueltas, criterio, () => amplitud * (azar() * 2 - 1));
+    } else {
+      orden = [...guia.orden];
+      const movimientos = 1 + Math.floor(azar() * 3);
+      for (let m = 0; m < movimientos; m++) {
+        const desde = Math.floor(azar() * orden.length);
+        const hasta = Math.floor(azar() * orden.length);
+        const [pieza] = orden.splice(desde, 1);
+        orden.splice(hasta, 0, pieza!);
+      }
+    }
+
+    const preferencia = azar();
+    const sembrarCon: ReglaDePartir = azar() < 0.5 ? "corto" : "largo";
+    const intento = probar(orden, sembrarCon, () =>
+      azar() < preferencia ? "corto" : "largo",
+    );
+
+    if (esMejor(intento.placas, mejor.placas)) mejor = intento;
+    if (guiaMejorOIgual(intento.placas, guia.placas)) guia = intento;
+    yield;
+  }
+
+  return mejor;
+}
+
+/**
+ * Para seguir afinando: menos placas, y a igualdad, la placa menos usada más
+ * vacía —es la que está más cerca de desaparecer—. Acepta empates para poder
+ * moverse por planos que valen lo mismo en vez de quedarse quieta.
+ */
+function guiaMejorOIgual(candidato: PlacaEnCurso[], actual: PlacaEnCurso[]): boolean {
+  if (candidato.length !== actual.length) return candidato.length < actual.length;
+  const menosUsada = (placas: PlacaEnCurso[]) =>
+    Math.min(
+      ...placas.map((p) => p.piezas.reduce((t, x) => t + x.ancho * x.alto, 0)),
+    );
+  return menosUsada(candidato) <= menosUsada(actual);
+}
+
 /** Acomoda las unidades en el orden que vienen. */
 function acomodar(
   unidades: Unidad[],
   placaLargo: number,
   placaAncho: number,
   anchoSierra: number,
-  partir: "corto" | "largo",
+  /**
+   * Cómo partir el hueco. Las ocho combinaciones fijas usan la misma regla
+   * para todo el plano; la búsqueda la sortea pieza por pieza.
+   */
+  reglaDePartir: ReglaDePartir | (() => ReglaDePartir),
   /** Placas que ya traen las piezas fijadas a mano. */
   sembradas: PlacaEnCurso[] = [],
 ): PlacaEnCurso[] {
@@ -477,6 +751,8 @@ function acomodar(
 
   for (const unidad of unidades) {
     let ubicada = false;
+    const partir =
+      typeof reglaDePartir === "function" ? reglaDePartir() : reglaDePartir;
 
     for (const placa of placas) {
       if (ubicar(placa, unidad, anchoSierra, partir)) {
@@ -550,7 +826,7 @@ function ubicar(
   placa: PlacaEnCurso,
   unidad: Unidad,
   anchoSierra: number,
-  partir: "corto" | "largo",
+  partir: ReglaDePartir,
 ): boolean {
   let indiceElegido = -1;
   let libreElegido: Libre | null = null;
@@ -613,7 +889,7 @@ function partirLibre(
   libre: Libre,
   orientacion: Orientacion,
   anchoSierra: number,
-  partir: "corto" | "largo",
+  partir: ReglaDePartir,
 ) {
   const sobraDerecha = libre.ancho - orientacion.ancho - anchoSierra;
   const sobraAbajo = libre.alto - orientacion.alto - anchoSierra;
@@ -730,7 +1006,7 @@ function sembrarFijadas(
   placaLargo: number,
   placaAncho: number,
   anchoSierra: number,
-  partir: "corto" | "largo",
+  partir: ReglaDePartir,
 ): {
   placas: PlacaEnCurso[];
   descartadas: PiezaFijada[];

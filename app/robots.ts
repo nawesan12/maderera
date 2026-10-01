@@ -93,15 +93,16 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: DE_ENTRENAMIENTO, disallow: "/" },
 
       /*
-       * El armador de cortes queda afuera para **todos**, incluidos los
-       * buscadores.
+       * El armador de cortes **ya no se bloquea** (1/10/2026).
        *
-       * Es la pantalla que más CPU cuesta del sitio: cada corte que se arma
-       * acomoda piezas con una heurística pesada. No tiene nada que indexar
-       * —es una herramienta, no contenido— y lo que se quiere que aparezca en
-       * Google es la página que la explica, no la calculadora en sí.
+       * Había un `disallow: "/corte/"` pensado para que los robots no gastaran
+       * CPU armando planos. Dos cosas lo dejaron sin sentido: el plano se
+       * calcula en el navegador de quien lo arma, no en el servidor —la acción
+       * del servidor corre recién al comprar, con su propio límite de uso—, y el
+       * resultado no tiene URL propia: vive en `/corte`, que es la página que sí
+       * se quiere en Google («corte de melamina mar del plata»). Además la
+       * regla, con la barra final, no alcanzaba a `/corte` y no bloqueaba nada.
        */
-      { userAgent: "*", disallow: ["/corte/"] },
     ],
     sitemap: urlAbsoluta("/sitemap.xml"),
   };

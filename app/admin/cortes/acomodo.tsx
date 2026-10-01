@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Save } from "lucide-react";
 import { PlanoEditable } from "@/components/cortes/plano-editable";
 import {
@@ -45,16 +45,22 @@ export function AcomodoDelCorte({
     null,
   );
 
-  const plano = calcularPlanoDeCorte({
-    piezas,
-    placaLargo,
-    placaAncho,
-    // El mismo que usó la ficha para presupuestar: si acá se acomodara con
-    // otro espesor, mover una pieza podría cambiar el precio sin que nadie
-    // tocara el despiece.
-    anchoSierra,
-    fijadas,
-  });
+  // Memorizado: el plano ahora incluye la búsqueda (unos milisegundos), y sin
+  // esto se rehacía en cada render, incluidos los del arrastre.
+  const plano = useMemo(
+    () =>
+      calcularPlanoDeCorte({
+        piezas,
+        placaLargo,
+        placaAncho,
+        // El mismo que usó la ficha para presupuestar: si acá se acomodara con
+        // otro espesor, mover una pieza podría cambiar el precio sin que nadie
+        // tocara el despiece.
+        anchoSierra,
+        fijadas,
+      }),
+    [piezas, placaLargo, placaAncho, anchoSierra, fijadas],
+  );
 
   // Comparado como texto: las dos listas son del mismo origen y el orden no
   // cambia salvo que alguien mueva algo, que es justamente lo que se detecta.

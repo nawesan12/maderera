@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { calcularPlanoDeCorte, leerAcomodoManual, type PiezaFijada } from "@/lib/cortes/plano";
+import { calcularPlanoDeCorteSinTrabar, leerAcomodoManual, type PiezaFijada } from "@/lib/cortes/plano";
 import { obtenerCorte } from "@/lib/dal/admin/cortes";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -421,7 +421,7 @@ export async function cambiarAnchoDeSierra(id: string, valor: string): Promise<E
     return { error: "Ese trabajo ya pasó por la máquina: su plano es el que se cortó." };
   }
 
-  const plano = calcularPlanoDeCorte({
+  const plano = await calcularPlanoDeCorteSinTrabar({
     piezas: corte.piezas,
     placaLargo: corte.medida.largo,
     placaAncho: corte.medida.ancho,

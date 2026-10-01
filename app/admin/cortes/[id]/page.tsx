@@ -13,7 +13,7 @@ import {
   tarifaDeCorte,
 } from "@/lib/cortes/tarifa";
 import {
-  calcularPlanoDeCorte,
+  calcularPlanoDeCorteSinTrabar,
   leerAcomodoManual,
 } from "@/lib/cortes/plano";
 import { AcomodoDelCorte } from "../acomodo";
@@ -59,7 +59,7 @@ export default async function FichaCortePage({
    * la que sale más de la mitad se vende la placa entera y el corte va sin
    * cargo. Ver `lib/cortes/presupuesto.ts`.
    */
-  const plano = calcularPlanoDeCorte({
+  const plano = await calcularPlanoDeCorteSinTrabar({
     piezas: corte.piezas,
     placaLargo: corte.medida.largo,
     placaAncho: corte.medida.ancho,

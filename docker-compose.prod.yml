@@ -179,6 +179,31 @@ services:
       - ./secretos/rclone:/config/rclone
     entrypoint: ["sh", "/respaldo.sh"]
 
+  # Las tareas programadas (ver `servidor/cron/crontab` y `lib/tareas`). Un
+  # crond de busybox y nada más: no guarda estado ni sabe qué hace cada tarea,
+  # solo llama a la aplicación a horario. El candado de «una vez por período»
+  # está en la base, así que reiniciar este contenedor no repite nada.
+  cron:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      # En formato POSIX y no «America/Argentina/Buenos_Aires»: alpine no trae
+      # la base de zonas, y Argentina no tiene horario de verano, así que «tres
+      # horas al oeste de UTC» es exacto todo el año.
+      TZ: ART3
+      TAREAS_SECRETO: ${TAREAS_SECRETO:?Falta TAREAS_SECRETO en .env.produccion}
+    volumes:
+      - ./servidor/cron/crontab:/etc/crontabs/root:ro
+      - ./servidor/cron/tarea.sh:/tarea.sh:ro
+    # crond no hereda el entorno: el secreto se deja en un archivo que solo
+    # vive dentro del contenedor, y `tarea.sh` lo lee de ahí.
+    entrypoint:
+      - sh
+      - -c
+      - 'umask 077; printf %s "$$TAREAS_SECRETO" > /run/secreto; exec crond -f -l 8'
+
 volumes:
   pgdata:
   subidas:

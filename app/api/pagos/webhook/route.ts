@@ -1,8 +1,7 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { configMercadoPago } from "@/lib/pagos/config";
 import { firmaValida, leerCabeceraFirma } from "@/lib/pagos/firma";
-import { procesarAviso } from "@/lib/pagos/webhook";
-import { notificarResultadoDePago } from "@/lib/notificaciones/avisos";
+import { encolar, procesarCola } from "@/lib/cola";
 
 /**
  * Webhook de cobros.
@@ -11,8 +10,9 @@ import { notificarResultadoDePago } from "@/lib/notificaciones/avisos";
  * de cómo reintenta:
  *
  * 1. **Contestar 200 rápido.** Si tarda, reintenta; y el reintento llega como
- *    un aviso más. El trabajo real corre en `after()`, con la respuesta ya
- *    mandada, y la idempotencia vive en `procesarAviso`.
+ *    un aviso más. El aviso se guarda en la cola (`lib/cola`) y el trabajo
+ *    real corre en `after()`, con la respuesta ya mandada; la idempotencia
+ *    vive en `procesarAviso`.
  * 2. **Contestar 200 también ante un cuerpo que no entendemos.** Un 500 lo hace
  *    reintentar durante horas algo que nunca va a funcionar.
  *
@@ -52,18 +52,20 @@ export async function POST(request: NextRequest) {
       )
     : false;
 
-  after(async () => {
-    const resultado = await procesarAviso({
-      proveedor: "mercado_pago",
-      cuerpo,
-      url,
-      firmaVerificada: verificada,
-    });
-
-    if (resultado.resultado === "acreditado" || resultado.resultado === "actualizado") {
-      await notificarResultadoDePago(resultado);
-    }
+  /*
+   * Se guarda en la cola antes de contestar, y recién ahí se procesa. Si el
+   * proceso se reinicia en ese segundo —un despliegue—, el aviso no se pierde:
+   * la tarea de cada minuto lo retoma. Con la base caída tampoco: el `encolar`
+   * tira, se contesta 500 y Mercado Pago reintenta, que es lo que corresponde.
+   */
+  const id = await encolar("pago.aviso", {
+    proveedor: "mercado_pago",
+    cuerpo,
+    url: url.toString(),
+    firmaVerificada: verificada,
   });
+
+  after(() => procesarCola({ soloId: id }));
 
   return NextResponse.json({ ok: true });
 }

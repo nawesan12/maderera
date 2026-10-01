@@ -12,10 +12,11 @@ import {
   products,
   professionalApplications,
   purchaseInvoices,
+  quotes,
 } from "@/lib/db/schema";
 import { gestionesVencidas } from "@/lib/dal/admin/seguimiento";
 import { requireStaff } from "@/lib/dal/session";
-import { puedeEntrar } from "@/lib/roles";
+import { puedeEntrar, type RolStaff } from "@/lib/roles";
 
 /**
  * Qué hay que hacer hoy.
@@ -54,7 +55,15 @@ const DIAS_DE_AVISO = 7;
 export async function trabajoPendiente(): Promise<Pendiente[]> {
   const { staffRole } = await requireStaff();
   if (!staffRole) return [];
+  return pendientesDelRol(staffRole);
+}
 
+/**
+ * Lo mismo, para un rol dado, **sin mirar la sesión**: solo para las tareas programadas
+ * (`lib/tareas`), que corren sin nadie logueado y ya validaron su secreto.
+ * Una página nunca importa esto: usa la de arriba.
+ */
+export async function pendientesDelRol(staffRole: RolStaff): Promise<Pendiente[]> {
   const ve = (ruta: string) => puedeEntrar(ruta, staffRole);
 
   const [
@@ -66,6 +75,7 @@ export async function trabajoPendiente(): Promise<Pendiente[]> {
     resenas,
     reponer,
     seguimientos,
+    presupuestos,
   ] = await Promise.all([
     ve("/admin/pedidos") ? contarPedidos() : null,
     ve("/admin/cortes") ? contarCortes() : null,
@@ -77,6 +87,7 @@ export async function trabajoPendiente(): Promise<Pendiente[]> {
     // Los recordatorios de la cartera. Un seguimiento que hay que venir a
     // buscar al tablero no es un recordatorio: acá es donde aparece solo.
     ve("/admin/clientes") ? gestionesVencidas() : null,
+    ve("/admin/presupuestos") ? contarPresupuestosPorVencer() : null,
   ]);
 
   const filas: Pendiente[] = [];
@@ -165,6 +176,19 @@ export async function trabajoPendiente(): Promise<Pendiente[]> {
       cantidad: compras.porVencer,
       texto: compras.porVencer === 1 ? "factura de compra vence esta semana" : "facturas de compra vencen esta semana",
       href: "/admin/compras/facturas",
+    });
+  }
+
+  if (presupuestos) {
+    filas.push({
+      clave: "presupuestos",
+      cantidad: presupuestos,
+      texto:
+        presupuestos === 1
+          ? "presupuesto enviado vence en 3 días"
+          : "presupuestos enviados vencen en 3 días",
+      detalle: "Un llamado antes de que venza suele cerrar la venta",
+      href: "/admin/presupuestos",
     });
   }
 
@@ -268,6 +292,23 @@ async function contarFacturasDeCompra() {
       ),
     );
   return fila ?? { vencidas: 0, porVencer: 0 };
+}
+
+/**
+ * Presupuestos enviados que vencen en los próximos tres días. Es el momento de
+ * llamar: después de vencido, el precio hay que rehacerlo.
+ */
+async function contarPresupuestosPorVencer() {
+  const [fila] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(quotes)
+    .where(
+      and(
+        eq(quotes.estado, "enviado"),
+        sql`${quotes.validoHasta} >= now() and ${quotes.validoHasta} < now() + interval '3 days'`,
+      ),
+    );
+  return fila?.n ?? 0;
 }
 
 async function contarSolicitudes() {

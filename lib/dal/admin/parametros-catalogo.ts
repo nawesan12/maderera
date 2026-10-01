@@ -26,7 +26,15 @@ export const MESES_SIN_VENDER_POR_OMISION = 12;
 
 export async function mesesSinVenderParaBaja(): Promise<number> {
   await requireStaff();
+  return mesesSinVenderDelSistema();
+}
 
+/**
+ * Lo mismo, **sin mirar la sesión**: solo para las tareas programadas
+ * (`lib/tareas`), que corren sin nadie logueado y ya validaron su secreto.
+ * Una página nunca importa esto: usa la de arriba.
+ */
+export async function mesesSinVenderDelSistema(): Promise<number> {
   const [fila] = await db
     .select({ valor: siteSettings.valor })
     .from(siteSettings)

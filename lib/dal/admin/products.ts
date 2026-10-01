@@ -471,7 +471,17 @@ export async function candidatosDeBaja(
   umbrales: UmbralesDeBaja = UMBRALES_DE_BAJA,
 ): Promise<CandidatoDeBaja[]> {
   await requireStaff();
+  return candidatosDeBajaDelSistema(umbrales);
+}
 
+/**
+ * Lo mismo, **sin mirar la sesión**: solo para las tareas programadas
+ * (`lib/tareas`), que corren sin nadie logueado y ya validaron su secreto.
+ * Una página nunca importa esto: usa la de arriba.
+ */
+export async function candidatosDeBajaDelSistema(
+  umbrales: UmbralesDeBaja = UMBRALES_DE_BAJA,
+): Promise<CandidatoDeBaja[]> {
   const corte = new Date();
   corte.setMonth(corte.getMonth() - umbrales.mesesSinVender);
 

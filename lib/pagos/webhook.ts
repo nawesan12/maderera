@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { paymentEvents, payments } from "@/lib/db/schema";
 import { acreditarPago } from "./acreditar";
@@ -76,7 +76,7 @@ export async function procesarAviso(opciones: {
 
   // El aviso con firma buena —o sin firma que verificar— sí se guarda antes de
   // hacerle caso: es el rastro de qué llegó y cuándo.
-  const [evento] = await db
+  const [nuevo] = await db
     .insert(paymentEvents)
     .values({
       proveedor: opciones.proveedor === "demo" ? "demo" : "mercado_pago",
@@ -91,8 +91,33 @@ export async function procesarAviso(opciones: {
     .onConflictDoNothing()
     .returning({ id: paymentEvents.id });
 
-  // Sin fila devuelta, el aviso ya estaba: es un reintento del proveedor y no
-  // se vuelve a procesar.
+  /*
+   * Sin fila devuelta, el aviso ya estaba: es un reintento del proveedor.
+   *
+   * Si la vez anterior **terminó bien**, no se vuelve a procesar. Si terminó
+   * con error —la API de Mercado Pago contestó 503, se cortó la base— se
+   * retoma: antes un aviso que fallaba una vez quedaba marcado y todos los
+   * reintentos siguientes, del proveedor o de la cola, rebotaban como
+   * «repetido», y el pago no se acreditaba nunca. El `UPDATE` condicional es
+   * el candado: si dos reintentos llegan juntos, solo uno lo retoma.
+   */
+  const evento =
+    nuevo ??
+    (
+      await db
+        .update(paymentEvents)
+        .set({ procesadoAt: null, error: null })
+        .where(
+          and(
+            eq(paymentEvents.proveedor, opciones.proveedor === "demo" ? "demo" : "mercado_pago"),
+            eq(paymentEvents.eventoId, aviso.eventoId),
+            isNotNull(paymentEvents.procesadoAt),
+            isNotNull(paymentEvents.error),
+          ),
+        )
+        .returning({ id: paymentEvents.id })
+    )[0];
+
   if (!evento) return { resultado: "repetido" };
 
   try {

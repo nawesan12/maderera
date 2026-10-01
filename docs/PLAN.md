@@ -679,6 +679,38 @@ de una forma que el negocio no usa.
 Lo único descartado fue «CDI», que resultó ser una empresa de envíos y no el
 documento fiscal: se retoma cuando se defina qué se quiere con ellos.
 
+**La séptima pasada — las notas del 30/9/2026 (aplicadas el 1/10):**
+
+Doce notas, de nuevo de usar el sistema (`notas.md`, con dónde quedó cada una).
+El hilo común es **la plata que entra por otro lado que no sea la caja**: el
+cheque, la transferencia, el pago a cuenta.
+
+- **Recibos.** Cada cobro de un cliente deja un recibo numerado (`REC-0001`),
+  con el importe en letras y cada cheque identificado por banco, número y
+  fecha. Una sola función los emite (`lib/cobros/recibo.ts`) para el panel, el
+  mostrador, la factura y el pago online; se anulan, no se borran.
+- **Cheques con estados que significan algo.** El cliente informa un cheque
+  desde Mi cuenta y queda «por recibir»; aceptarlo emite el recibo y baja la
+  deuda, rechazarlo —también uno ya depositado que rebota— la devuelve con una
+  nota de débito y le avisa al cliente. El número es obligatorio y no se repite.
+- **La deuda no se paga online.** Pedido de la clienta: transferencia,
+  depósito, cheques o saldo a favor.
+- **La placa se vende como se vende.** Entera, entera o media, o por m²; la
+  media a un porcentaje editable. El stock pasó a decimal (`numeric(12,3)`) y
+  los productos por metro lineal se cargan en piezas de un largo.
+- **El mostrador, más rápido para cargar clientes.** Primero los de la
+  sucursal y los recientes; si el documento no existe, el alta sale ahí mismo
+  sin soltar el teclado. Y cobra cuentas corrientes con recibo.
+- **El disco es de cada trabajo.** El ancho de sierra se guarda en el trabajo,
+  con un decimal, y cambiar el general ya no redibuja los planos viejos.
+- **Papeles con logo, remito con CAE, portada con los logos de los bancos.**
+
+Y en paralelo, **la mudanza al VPS de Hostinger** (rama `vps-hostinger`, sin
+aplicar): con un servidor propio el costo es fijo, y se recupera lo que en
+Vercel se había resignado por costo —tareas programadas, una cola de trabajos
+con reintentos, el panel en tiempo real, un plano de corte que busca mejor—.
+Detalle en `docs/SERVIDOR-PROPIO.md`.
+
 
 ## 2. Punto de partida real
 

@@ -3,10 +3,10 @@ import "server-only";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
-  accountMovements,
   customers,
   retencionesSufridas,
 } from "@/lib/db/schema";
+import { emitirRecibo } from "@/lib/cobros/recibo";
 import { requireStaffRole } from "@/lib/dal/session";
 
 /**
@@ -68,17 +68,23 @@ export async function cargarRetencionSufrida(
       });
 
       /*
-       * En clientes **positivo es lo que deben**, al revés que en proveedores.
-       * La retención baja la deuda, así que entra en negativo, igual que un
-       * pago: para el cliente es plata que ya entregó, solo que al fisco.
+       * La retención baja la deuda igual que un pago: para el cliente es plata
+       * que ya entregó, solo que al fisco. Va con recibo, como todo pago —el
+       * cliente lo pide para conciliar con su contador— y el medio dice
+       * «Retención» con el número de certificado.
        */
-      await tx.insert(accountMovements).values({
+      await emitirRecibo(tx, {
         customerId: entrada.customerId,
-        tipo: "pago",
-        monto: (-entrada.importe).toFixed(2),
-        detalle: `Retención de ${entrada.impuesto} · certificado ${entrada.numero.trim()}`,
-        referencia: entrada.numero.trim(),
-        createdByUserId: entrada.usuarioId,
+        origen: "panel",
+        concepto: `Retención de ${entrada.impuesto} · certificado ${entrada.numero.trim()}`,
+        partes: [
+          {
+            medio: "retencion",
+            importe: entrada.importe,
+            referencia: entrada.numero.trim(),
+          },
+        ],
+        usuarioId: entrada.usuarioId,
       });
     });
   } catch (error) {

@@ -8,8 +8,6 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import {
   accountMovements,
-  cashMovements,
-  cashSessions,
   configuracionFiscal,
   customers,
   invoicePayments,
@@ -31,11 +29,17 @@ import {
 } from "@/lib/fiscal/emitir";
 import { pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
 import { parsearImporte } from "@/lib/formato";
+import { ErrorDeCobro, emitirRecibo } from "@/lib/cobros/recibo";
+import { leerPartes } from "@/lib/cobros/leer";
+import type { MedioDeCobro } from "@/lib/cobros/partes";
+import { notificarRecibo } from "@/lib/notificaciones/cobros";
 import { enviarComprobantePorCorreo } from "@/lib/notificaciones/fiscal";
 
 export interface EstadoFactura {
   error?: string;
   ok?: string;
+  /** El recibo del cobro, para ofrecer imprimirlo en el momento. */
+  receiptId?: string;
 }
 
 function refrescar(id?: string) {
@@ -422,10 +426,23 @@ export async function anular(
 }
 
 /**
- * Registra un cobro.
+ * Registra un cobro de un comprobante.
  *
- * Se permiten cobros parciales: una factura puede saldarse en varias veces y
- * con distintos medios, que es como se cobra de verdad en el mostrador.
+ * Se permiten cobros parciales y con varios medios a la vez: una factura se
+ * salda en partes, y una parte puede ser dos cheques y algo de efectivo, que
+ * es como se cobra de verdad.
+ *
+ * Dos caminos, que no se mezclan:
+ *
+ * - **Cobrar**: las partes van a `emitirRecibo`, que deja el recibo, crea los
+ *   cheques, baja la deuda del cliente y entra el efectivo a la caja. Antes
+ *   esto insertaba un movimiento con texto libre y el cheque era una palabra
+ *   en «referencia»: no entraba a la cartera y no se podía rechazar.
+ * - **Pasar a cuenta corriente**: no es un pago, es venderle fiado. No emite
+ *   recibo y pasa por el control de límite y mora.
+ *
+ * Todo en una transacción por el mismo motivo que la venta del mostrador:
+ * media registración es peor que ninguna.
  */
 export async function registrarCobro(
   _previo: EstadoFactura,
@@ -433,36 +450,8 @@ export async function registrarCobro(
 ): Promise<EstadoFactura> {
   const usuario = await requireStaff();
 
-  const parsed = z
-    .object({
-      id: z.string().uuid(),
-      medio: z.enum([
-        "efectivo",
-        "transferencia",
-        "mercado_pago",
-        "tarjeta",
-        "cheque",
-        "cuenta_corriente",
-      ]),
-      monto: z.string().trim().min(1, "Poné el importe."),
-      referencia: z.string().trim().max(120).optional(),
-    })
-    .safeParse({
-      id: formData.get("id"),
-      medio: formData.get("medio"),
-      monto: formData.get("monto"),
-      referencia: (formData.get("referencia") as string) || undefined,
-    });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
-  }
-
-  const monto = parsearImporte(parsed.data.monto);
-
-  if (!Number.isFinite(monto) || monto <= 0) {
-    return { error: "El importe tiene que ser mayor a cero." };
-  }
+  const id = z.string().uuid().safeParse(formData.get("id"));
+  if (!id.success) return { error: "No encontramos el comprobante." };
 
   const [comprobante] = await db
     .select({
@@ -473,9 +462,12 @@ export async function registrarCobro(
       numero: invoices.numero,
       customerId: invoices.customerId,
       orderId: invoices.orderId,
+      receptorNombre: invoices.receptorNombre,
+      branchId: orders.branchId,
     })
     .from(invoices)
-    .where(eq(invoices.id, parsed.data.id))
+    .leftJoin(orders, eq(orders.id, invoices.orderId))
+    .where(eq(invoices.id, id.data))
     .limit(1);
 
   if (!comprobante) return { error: "No encontramos el comprobante." };
@@ -483,112 +475,123 @@ export async function registrarCobro(
     return { error: "El comprobante está anulado." };
   }
 
+  const etiqueta = `${nombreComprobante(comprobante.tipo)} ${numeroFormateado(comprobante.puntoVenta, comprobante.numero)}`;
+
   /*
-   * Cargar un comprobante a cuenta corriente es venderle fiado a alguien, y
-   * hasta acá era lo único que movía plata sin ninguna verificación: se
-   * aceptaba el medio sin mirar el límite ni la mora.
+   * Cargar un comprobante a cuenta corriente es venderle fiado a alguien.
    *
    * A diferencia del mostrador, acá no hay válvula de autorización: quien
    * factura desde el panel tiene tiempo de resolverlo —cobrar de otra forma,
    * pedir una autorización, o ampliarle el límite desde la ficha—. Un
    * "seguir igual" a un click convertiría el control en un cartel.
    */
-  if (parsed.data.medio === "cuenta_corriente" && comprobante.customerId) {
+  if (formData.get("modo") === "cuenta_corriente") {
+    const monto = parsearImporte(String(formData.get("monto") ?? ""));
+    if (!Number.isFinite(monto) || monto <= 0) {
+      return { error: "El importe tiene que ser mayor a cero." };
+    }
+    if (!comprobante.customerId) {
+      return { error: "Este comprobante no tiene cliente: no hay cuenta a la que pasarlo." };
+    }
     const credito = await estadoDeCredito(comprobante.customerId, monto);
     if (!credito.puede) {
       return {
         error: `${credito.motivo ?? "No se puede cargar a cuenta corriente."} Cobralo de otra forma o revisá la ficha del cliente.`,
       };
     }
-  }
 
-  const etiqueta = `${nombreComprobante(comprobante.tipo)} ${numeroFormateado(comprobante.puntoVenta, comprobante.numero)}`;
-
-  /*
-   * El cobro impacta en los tres lados que tiene que impactar.
-   *
-   * Antes esto insertaba una fila en `invoice_payments` y nada más, y esa tabla
-   * era una isla: un cobro **en efectivo** de una factura no aparecía en el
-   * arqueo de caja, y un cobro de un cliente con cuenta corriente no le bajaba
-   * la deuda. Quien cerraba el turno contaba plata que el sistema no sabía que
-   * había entrado.
-   *
-   * Va todo en una transacción por el mismo motivo que la venta del mostrador:
-   * media registración es peor que ninguna.
-   */
-  const aviso = await db.transaction(async (tx) => {
-    await tx.insert(invoicePayments).values({
-      invoiceId: parsed.data.id,
-      medio: parsed.data.medio,
+    await db.insert(invoicePayments).values({
+      invoiceId: comprobante.id,
+      medio: "cuenta_corriente",
       monto: monto.toFixed(2),
-      referencia: parsed.data.referencia ?? null,
       createdByUserId: usuario.userId,
     });
 
-    // Cancela deuda: negativo, igual que el cobro de un pedido.
-    if (comprobante.customerId && parsed.data.medio !== "cuenta_corriente") {
-      await tx.insert(accountMovements).values({
-        customerId: comprobante.customerId,
-        tipo: "pago",
-        monto: (-monto).toFixed(2),
-        detalle: `Cobro de ${etiqueta}`,
-        referencia: etiqueta,
-        createdByUserId: usuario.userId,
-      });
-    }
-
-    if (parsed.data.medio !== "efectivo") return null;
-
-    // La plata en mano entra a la caja abierta. Qué caja: la del pedido que
-    // originó la factura si lo hay; si no, la única abierta. Con varias
-    // abiertas y sin pedido no se puede adivinar, y adivinar mal descuadra un
-    // arqueo ajeno: se registra el cobro igual y se avisa.
-    const turnos = await tx
-      .select({ id: cashSessions.id, branchId: cashSessions.branchId })
-      .from(cashSessions)
-      .where(eq(cashSessions.estado, "abierta"));
-
-    let turno = turnos.length === 1 ? turnos[0] : undefined;
-
-    if (!turno && comprobante.orderId) {
-      const [pedido] = await tx
-        .select({ branchId: orders.branchId })
-        .from(orders)
-        .where(eq(orders.id, comprobante.orderId))
-        .limit(1);
-
-      turno = turnos.find((t) => t.branchId === pedido?.branchId);
-    }
-
-    if (!turno) {
-      return turnos.length === 0
-        ? "No hay ninguna caja abierta, así que no entró al arqueo."
-        : "Hay varias cajas abiertas y no se pudo saber a cuál entra: registralo a mano desde el mostrador.";
-    }
-
-    await tx.insert(cashMovements).values({
-      sessionId: turno.id,
-      tipo: "ingreso",
-      monto: monto.toFixed(2),
-      motivo: `Cobro de ${etiqueta}`,
-      creadoPor: usuario.userId,
+    await registrarEnBitacora({
+      sesion: usuario,
+      accion: "cobrar",
+      entidad: "factura",
+      entidadId: comprobante.id,
+      descripcion: `Pasó ${monto.toFixed(2)} de ${etiqueta} a cuenta corriente`,
     });
 
-    return null;
-  });
+    refrescar(comprobante.id);
+    return { ok: "Pasado a cuenta corriente." };
+  }
+
+  const leidas = leerPartes(formData.get("partes"));
+  if ("error" in leidas) return { error: leidas.error };
+
+  let recibo: Awaited<ReturnType<typeof emitirRecibo>>;
+  try {
+    recibo = await db.transaction(async (tx) => {
+      const emitido = await emitirRecibo(tx, {
+        customerId: comprobante.customerId,
+        recibidoDe: comprobante.receptorNombre,
+        branchId: comprobante.branchId,
+        origen: "factura",
+        concepto: `Cobro de ${etiqueta}`,
+        partes: leidas.partes,
+        // La plata en mano entra a la caja abierta: la de la sucursal del
+        // pedido si la hay; si no, la única abierta.
+        caja: "buscar",
+        usuarioId: usuario.userId,
+      });
+
+      await tx.insert(invoicePayments).values(
+        leidas.partes.map((parte) => ({
+          invoiceId: comprobante.id,
+          medio: MEDIO_DE_FACTURA[parte.medio],
+          monto: parte.importe.toFixed(2),
+          referencia: parte.cheque
+            ? `${parte.cheque.banco} N° ${parte.cheque.numero}`
+            : (parte.referencia ?? null),
+          receiptId: emitido.receiptId,
+          createdByUserId: usuario.userId,
+        })),
+      );
+
+      return emitido;
+    });
+  } catch (error) {
+    if (error instanceof ErrorDeCobro) return { error: error.message };
+    throw error;
+  }
 
   await registrarEnBitacora({
     sesion: usuario,
     accion: "cobrar",
     entidad: "factura",
-    entidadId: parsed.data.id,
-    descripcion: `Registró un cobro de ${monto.toFixed(2)} por ${parsed.data.medio}`,
-    detalle: { medio: parsed.data.medio, monto: monto.toFixed(2), referencia: parsed.data.referencia },
+    entidadId: comprobante.id,
+    descripcion: `Registró el cobro de ${etiqueta} con el recibo ${recibo.numero} por ${recibo.total.toFixed(2)}`,
+    detalle: { receiptId: recibo.receiptId },
   });
 
-  refrescar(parsed.data.id);
-  return { ok: aviso ? `Cobro registrado. ${aviso}` : "Cobro registrado." };
+  after(() => notificarRecibo(recibo.receiptId));
+
+  refrescar(comprobante.id);
+  revalidatePath("/admin/clientes");
+  return {
+    ok: `Cobro registrado con el recibo ${recibo.numero}.${recibo.aviso ? ` ${recibo.aviso}` : ""}`,
+    receiptId: recibo.receiptId,
+  };
 }
+
+/**
+ * Cómo se anota cada medio del recibo en los cobros de la factura, que tienen
+ * su propia lista —más corta— desde antes.
+ */
+const MEDIO_DE_FACTURA: Record<MedioDeCobro, "efectivo" | "transferencia" | "mercado_pago" | "tarjeta" | "cheque"> = {
+  efectivo: "efectivo",
+  transferencia: "transferencia",
+  deposito: "transferencia",
+  cheque: "cheque",
+  echeq: "cheque",
+  tarjeta_debito: "tarjeta",
+  tarjeta_credito: "tarjeta",
+  mercado_pago: "mercado_pago",
+  retencion: "transferencia",
+};
 
 /* -------------------------------------------------------------------------- */
 /* Configuración tributaria                                                    */

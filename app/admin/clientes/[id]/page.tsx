@@ -12,6 +12,11 @@ import { obtenerCliente } from "@/lib/dal/admin/clientes";
 import { AvisoCuentaWeb } from "./aviso-cuenta-web";
 import { CreditoDelCliente } from "./credito";
 import { DialogoMovimiento } from "./dialogo-movimiento";
+import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
+import { LineaDeTiempo } from "@/components/cuenta/linea-de-tiempo";
+import { FiltrosDeMovimientos, esFiltro } from "@/components/cuenta/filtros-de-movimientos";
+import { desdeDelPeriodo, historialDelCliente } from "@/lib/dal/historial-cliente";
+import { requireStaff } from "@/lib/dal/session";
 
 const CONDICIONES: Record<string, string> = {
   consumidor_final: "Consumidor final",
@@ -23,13 +28,23 @@ const CONDICIONES: Record<string, string> = {
 
 export default async function FichaClientePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ periodo?: string; ver?: string }>;
 }) {
   const { id } = await params;
-  const cliente = await obtenerCliente(id);
+  const { periodo = "12m", ver } = await searchParams;
+  const filtro = esFiltro(ver) ? ver : "todo";
+
+  const [cliente, historial, usuario] = await Promise.all([
+    obtenerCliente(id),
+    historialDelCliente(id, { desde: desdeDelPeriodo(periodo), filtro }),
+    requireStaff(),
+  ]);
 
   if (!cliente) notFound();
+  const esAdmin = usuario.staffRole === "admin";
 
   const limite = Number(cliente.limiteCredito);
   const excedido = limite > 0 && cliente.saldo > limite;
@@ -82,7 +97,15 @@ export default async function FichaClientePage({
               WhatsApp
             </a>
           )}
-          <DialogoMovimiento customerId={cliente.id} nombre={cliente.nombre} />
+          {/* Cobrar es lo de todos los días y va primero; los otros
+              movimientos —una nota de crédito, un ajuste— corrigen la
+              cuenta y quedan para el admin. */}
+          {esAdmin && <DialogoMovimiento customerId={cliente.id} nombre={cliente.nombre} />}
+          <DialogoCobro
+            customerId={cliente.id}
+            nombre={cliente.nombre}
+            aCobrar={Math.max(cliente.saldo, 0)}
+          />
         </div>
       </div>
 
@@ -194,94 +217,47 @@ export default async function FichaClientePage({
         {/* Actividad */}
         <div className="space-y-4">
           <section className="tarjeta overflow-hidden">
-            <h2 className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-4 text-base font-medium">
-              <span className="flex items-baseline gap-3">
-                Movimientos de cuenta
-                {cliente.totalMovimientos > cliente.movimientos.length && (
-                  <span className="text-base font-normal text-muted-foreground">
-                    últimos {cliente.movimientos.length} de{" "}
-                    <span className="tabular">{cliente.totalMovimientos}</span>
-                  </span>
-                )}
-              </span>
+            <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-4">
+              <h2 className="text-base font-medium">Movimientos</h2>
 
-              {/* Esta lista muestra los últimos veinte. El resumen los trae
-                  todos, con el saldo acumulado y la antigüedad de la deuda: es
-                  lo que se le manda al cliente cuando pregunta cuánto debe. */}
+              {/* El resumen trae el libro entero con el saldo corrido y la
+                  antigüedad de la deuda: es lo que se le manda al cliente
+                  cuando pregunta cuánto debe. */}
               <span className="flex flex-wrap items-center gap-3">
                 <Link
                   href={`/cuenta/${cliente.id}`}
                   target="_blank"
-                  className="inline-flex items-center gap-1.5 text-base font-normal text-muted-foreground transition-colors hover:text-foreground"
+                  className="inline-flex items-center gap-1.5 text-base text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <Printer className="h-4 w-4" />
-                  Imprimir
+                  Imprimir resumen
                 </Link>
-                {/* El archivo, para adjuntarlo a un correo o mandarlo por
-                    WhatsApp: es lo que se necesita al reclamar una deuda. */}
                 <a
                   href={`/api/cuenta/${cliente.id}/pdf`}
-                  className="inline-flex items-center gap-1.5 text-base font-normal text-muted-foreground transition-colors hover:text-foreground"
+                  className="inline-flex items-center gap-1.5 text-base text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <Download className="h-4 w-4" />
-                  Bajar en PDF
+                  Resumen en PDF
                 </a>
               </span>
-            </h2>
-            {cliente.movimientos.length === 0 ? (
-              <p className="border-t px-5 py-8 text-center text-base text-muted-foreground">
-                Todavía no hay movimientos.
-              </p>
-            ) : (
-              <ul className="divide-y border-t">
-                {cliente.movimientos.map((m) => {
-                  const cuerpo = (
-                    <>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2">
-                          <EtiquetaEstado estado={m.tipo} />
-                          <span className="text-base">{m.detalle ?? ""}</span>
-                        </span>
-                        <span className="mt-0.5 block text-sm text-muted-foreground">
-                          {fechaCorta.format(m.createdAt)}
-                          {m.referencia && (
-                            <span className="tabular"> · {m.referencia}</span>
-                          )}
-                        </span>
-                      </span>
-                      <span
-                        className={`tabular shrink-0 text-base font-medium ${
-                          Number(m.monto) > 0 ? "" : "text-green-700"
-                        }`}
-                      >
-                        {Number(m.monto) > 0 ? "+" : ""}
-                        {moneda.format(Number(m.monto))}
-                      </span>
-                    </>
-                  );
+            </div>
 
-                  /* Un movimiento que salió de un pedido abre ese pedido:
-                     "¿de dónde salió este cargo de $84.000?" es la pregunta
-                     que se hace mirando esta lista, casi siempre con el
-                     cliente esperando la respuesta. */
-                  return (
-                    <li key={m.id}>
-                      {m.pedidoId ? (
-                        <Link
-                          href={`/admin/pedidos/${m.pedidoId}`}
-                          className="flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-muted/40"
-                        >
-                          {cuerpo}
-                        </Link>
-                      ) : (
-                        <span className="flex items-center justify-between gap-4 px-5 py-3.5">
-                          {cuerpo}
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+            {/* Lo mismo que ve el cliente en Mi cuenta → Movimientos, con los
+                mismos filtros: los dos tienen que estar mirando lo mismo
+                cuando hablan por teléfono. */}
+            <FiltrosDeMovimientos
+              base={`/admin/clientes/${cliente.id}`}
+              periodo={periodo}
+              filtro={filtro}
+            />
+            <LineaDeTiempo
+              movimientos={historial.movimientos}
+              enlacePedido={(p) => `/admin/pedidos/${p.id}`}
+            />
+            {historial.hayMas && (
+              <p className="border-t border-linea px-5 py-3 text-sm text-muted-foreground">
+                Se muestran los últimos 200. Achicá el período o filtrá para ver el resto.
+              </p>
             )}
           </section>
 

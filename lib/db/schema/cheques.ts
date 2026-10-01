@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   index,
   numeric,
@@ -5,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { customers } from "./customers";
@@ -36,6 +38,15 @@ export const sentidoCheque = pgEnum("sentido_cheque", [
 export const tipoCheque = pgEnum("tipo_cheque", ["fisico", "echeq"]);
 
 export const estadoCheque = pgEnum("estado_cheque", [
+  /**
+   * El cliente dice que lo mandó y todavía no lo tenemos en mano.
+   *
+   * Nace cuando un cliente paga su cuenta corriente desde Mi cuenta (30/9/2026:
+   * «que el usuario pueda pagar su cuenta corriente con cheques»). No mueve la
+   * cuenta: recién al **aceptarlo** se emite el recibo y baja la deuda. Un
+   * cheque que nadie vio no es un pago.
+   */
+  "informado",
   /** En el cajón (o en la cuenta, si es echeq), esperando. */
   "cartera",
   /** Endosado o emitido a un proveedor: ya no es nuestro. */
@@ -78,6 +89,15 @@ export const cheques = pgTable(
      * contestar "cuánto tengo que cubrir esta semana" para cada uno.
      */
     circuito: circuito().notNull().default("blanco"),
+    /**
+     * El recibo que lo trajo, si fue un cobro.
+     *
+     * Sin FK a propósito: `receipts` ya apunta a `cheques` por sus partes, y
+     * la referencia en los dos sentidos ataría los dos módulos en un ciclo.
+     */
+    receiptId: uuid(),
+    /** Por qué se rechazó, cuando se rechaza: lo lee el cliente en Mi cuenta. */
+    motivoRechazo: text(),
     notas: text(),
     createdByUserId: text().references(() => user.id),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -88,6 +108,18 @@ export const cheques = pgTable(
     index("cheques_fecha_pago_idx").on(t.fechaPago),
     index("cheques_customer_idx").on(t.customerId),
     index("cheques_circuito_idx").on(t.circuito, t.fechaPago),
+    /*
+     * El mismo cheque no se carga dos veces.
+     *
+     * De la clienta: «cargar número de cheque para que la gente sepa cuál
+     * cheque es en el banco». El número solo identifica junto con el banco, y
+     * solo entre los vivos: uno rechazado o anulado puede volver a cargarse
+     * corregido. Sin esto, el mismo cheque informado por el cliente y cargado
+     * en el mostrador bajaba la deuda dos veces.
+     */
+    uniqueIndex("cheques_recibido_unico_idx")
+      .on(sql`lower(coalesce(${t.banco}, ''))`, t.numero)
+      .where(sql`${t.sentido} = 'recibido' and ${t.estado} not in ('anulado', 'rechazado')`),
   ],
 );
 

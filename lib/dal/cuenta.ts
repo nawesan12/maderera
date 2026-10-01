@@ -358,6 +358,8 @@ export interface MovimientoConSaldo {
   referencia: string | null;
   /** Saldo de la cuenta después de este movimiento. */
   saldoDespues: number;
+  /** El recibo del pago, si es un pago con recibo. */
+  receiptId: string | null;
   createdAt: Date;
 }
 
@@ -398,6 +400,7 @@ export async function miCuentaCorriente(): Promise<CuentaCorriente> {
       monto: Number(m.monto),
       detalle: m.detalle,
       referencia: m.referencia,
+      receiptId: m.receiptId,
       saldoDespues: corrido,
       createdAt: m.createdAt,
     };
@@ -440,6 +443,8 @@ export interface CreditoDisponible {
   disponible: number;
   /** Motivo por el que no puede usarla ahora, para poder decírselo. */
   motivo: string | null;
+  /** No tiene crédito: lo que puede usar es su saldo a favor. */
+  soloSaldoAFavor?: boolean;
 }
 
 /**
@@ -470,11 +475,26 @@ export async function creditoDisponible(
     return { ...vacio, motivo: "Necesitás iniciar sesión con tu cuenta." };
   }
 
+  const saldo = await miSaldo();
+
   if (cliente.limiteCredito <= 0) {
+    // Sin crédito, el saldo a favor se puede usar para comprar hasta ese
+    // importe. Ver `estadoDeCredito` en `lib/dal/credito.ts`, la misma regla
+    // para el personal.
+    const aFavor = Math.max(-saldo, 0);
+    if (aFavor > 0 && cliente.estado !== "moroso") {
+      const alcanza = monto <= aFavor + 0.005;
+      return {
+        habilitado: alcanza,
+        saldo,
+        limiteCredito: 0,
+        disponible: aFavor,
+        soloSaldoAFavor: true,
+        motivo: alcanza ? null : "Tu saldo a favor no alcanza para esta compra.",
+      };
+    }
     return { ...vacio, motivo: "Tu cuenta no tiene cuenta corriente habilitada." };
   }
-
-  const saldo = await miSaldo();
   const disponible = Math.max(cliente.limiteCredito - saldo, 0);
   const base = {
     saldo,

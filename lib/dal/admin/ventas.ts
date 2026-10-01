@@ -236,6 +236,8 @@ export interface PedidoListado {
   estadoPago: string;
   total: number;
   items: number;
+  /** Para cobrar a cuenta corriente con recibo desde el tablero. */
+  customerId: string | null;
   createdAt: Date;
 }
 
@@ -286,6 +288,7 @@ export async function listarPedidos(
       total: orders.total,
       createdAt: orders.createdAt,
       items: conteo.items,
+      customerId: orders.customerId,
     })
     .from(orders)
     .leftJoin(customers, eq(customers.id, orders.customerId))

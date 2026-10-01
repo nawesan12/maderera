@@ -1,10 +1,24 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { after } from "next/server";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { cheques } from "@/lib/db/schema";
+import { accountMovements, cheques } from "@/lib/db/schema";
+import { ErrorDeCobro, emitirRecibo } from "@/lib/cobros/recibo";
+import {
+  ESTADO_PARA_EL_CLIENTE,
+  efectoEnLaCuenta,
+  puedePasar,
+  type EstadoDeCheque,
+} from "@/lib/cheques/estados";
+import {
+  nombreDelCheque,
+  normalizarNumeroDeCheque,
+  revisarNumeroDeCheque,
+} from "@/lib/cheques/numero";
+import { notificarChequeRechazado, notificarRecibo } from "@/lib/notificaciones/cobros";
 import { requireStaffRole } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { parsearImporte } from "@/lib/formato";
@@ -12,6 +26,8 @@ import { parsearImporte } from "@/lib/formato";
 export interface EstadoCheque {
   error?: string;
   ok?: string;
+  /** El recibo que se emitió al aceptar un cheque informado. */
+  receiptId?: string;
 }
 
 const esquema = z.object({
@@ -69,6 +85,9 @@ export async function cargarCheque(
   }
 
   const d = parsed.data;
+  const problemaDeNumero = revisarNumeroDeCheque(d.numero);
+  if (problemaDeNumero) return { error: problemaDeNumero };
+  const numero = normalizarNumeroDeCheque(d.numero);
   const importe = parsearImporte(d.importe);
   if (!Number.isFinite(importe) || importe <= 0) {
     return { error: "El importe tiene que ser mayor a cero." };
@@ -89,10 +108,29 @@ export async function cargarCheque(
     };
   }
 
+  if (d.sentido === "recibido") {
+    const [repetido] = await db
+      .select({ id: cheques.id })
+      .from(cheques)
+      .where(
+        and(
+          eq(cheques.sentido, "recibido"),
+          eq(cheques.numero, numero),
+          sql`lower(coalesce(${cheques.banco}, '')) = lower(${d.banco ?? ""})`,
+          ne(cheques.estado, "anulado"),
+          ne(cheques.estado, "rechazado"),
+        ),
+      )
+      .limit(1);
+    if (repetido) {
+      return { error: `${nombreDelCheque({ tipo: d.tipo, banco: d.banco ?? null, numero })} ya está en la cartera.` };
+    }
+  }
+
   await db.insert(cheques).values({
     sentido: d.sentido,
     tipo: d.tipo,
-    numero: d.numero,
+    numero,
     banco: d.banco ?? null,
     librador: d.librador ?? null,
     fechaPago: d.fechaPago,
@@ -109,7 +147,7 @@ export async function cargarCheque(
     sesion: usuario,
     accion: "crear",
     entidad: "cheque",
-    descripcion: `Cheque ${d.sentido} ${d.numero} por $${importe.toFixed(2)}, al ${d.fechaPago.toLocaleDateString("es-AR")}`,
+    descripcion: `Cheque ${d.sentido} ${numero} por $${importe.toFixed(2)}, al ${d.fechaPago.toLocaleDateString("es-AR")}`,
   });
 
   revalidatePath("/admin/cheques");
@@ -117,53 +155,152 @@ export async function cargarCheque(
 }
 
 /**
- * Qué transiciones tienen sentido. Un acreditado no vuelve a la cartera y un
- * rechazado no se acredita: los estados finales son finales.
+ * Cambia el estado de un cheque, con lo que eso le hace a la cuenta del
+ * cliente.
+ *
+ * Las transiciones y su efecto viven en `lib/cheques/estados.ts`, probadas.
+ * Acá se ejecutan, en una sola transacción y con el cheque bloqueado: dos
+ * clics en «Aceptar» emitirían dos recibos por el mismo cheque.
+ *
+ * - **Aceptar** un cheque informado por el cliente emite el recibo y baja la
+ *   deuda (`emitirRecibo`).
+ * - **Rechazar** uno que ya había bajado la deuda —el banco lo rebotó— deja
+ *   una nota de débito atada al cheque: la deuda vuelve y el cliente la ve en
+ *   Mi cuenta con el cheque nombrado. Antes esto era un cartel que decía «la
+ *   deuda hay que reclamarla aparte».
+ * - Rechazar uno informado que nunca se aceptó no toca la cuenta: nunca bajó.
  */
-const TRANSICIONES: Record<string, string[]> = {
-  cartera: ["depositado", "entregado", "rechazado", "anulado"],
-  depositado: ["acreditado", "rechazado"],
-  entregado: ["acreditado", "rechazado"],
-};
-
 export async function cambiarEstadoDeCheque(
   id: string,
   nuevoEstado: string,
+  motivo?: string,
 ): Promise<EstadoCheque> {
   const usuario = await requireStaffRole("admin");
 
-  const [cheque] = await db
-    .select({ estado: cheques.estado, numero: cheques.numero, sentido: cheques.sentido })
-    .from(cheques)
-    .where(eq(cheques.id, id))
-    .limit(1);
+  const hacia = nuevoEstado as EstadoDeCheque;
+  const motivoLimpio = motivo?.trim().slice(0, 300) || null;
 
-  if (!cheque) return { error: "Ese cheque no está." };
-
-  if (!TRANSICIONES[cheque.estado]?.includes(nuevoEstado)) {
-    return {
-      error: `Un cheque ${cheque.estado} no puede pasar a ${nuevoEstado}.`,
-    };
+  if (hacia === "rechazado" && !motivoLimpio) {
+    return { error: "Poné el motivo del rechazo: lo lee el cliente." };
   }
 
-  await db
-    .update(cheques)
-    .set({ estado: nuevoEstado as never, updatedAt: new Date() })
-    .where(eq(cheques.id, id));
+  let resultado: {
+    desde: EstadoDeCheque;
+    numero: string;
+    sentido: "recibido" | "entregado";
+    receiptId: string | null;
+    numeroRecibo: string | null;
+    debitado: boolean;
+    estabaEndosado: boolean;
+  };
+
+  try {
+    resultado = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${id}))`);
+
+      const [cheque] = await tx.select().from(cheques).where(eq(cheques.id, id)).limit(1);
+      if (!cheque) throw new ErrorDeCobro("Ese cheque no está.");
+
+      const desde = cheque.estado as EstadoDeCheque;
+      if (!puedePasar(desde, hacia)) {
+        throw new ErrorDeCobro(
+          `Un cheque ${ESTADO_PARA_EL_CLIENTE[desde].toLowerCase()} no puede pasar a ${ESTADO_PARA_EL_CLIENTE[hacia]?.toLowerCase() ?? hacia}.`,
+        );
+      }
+
+      const efecto =
+        cheque.sentido === "recibido" ? efectoEnLaCuenta(desde, hacia) : "nada";
+
+      let receiptId: string | null = null;
+      let numeroRecibo: string | null = null;
+      let debitado = false;
+
+      if (efecto === "acreditar") {
+        const recibo = await emitirRecibo(tx, {
+          customerId: cheque.customerId,
+          origen: "portal",
+          concepto: "Pago de cuenta corriente",
+          circuito: cheque.circuito,
+          partes: [
+            {
+              medio: cheque.tipo === "echeq" ? "echeq" : "cheque",
+              importe: Number(cheque.importe),
+              chequeId: cheque.id,
+            },
+          ],
+          usuarioId: usuario.userId,
+        });
+        receiptId = recibo.receiptId;
+        numeroRecibo = recibo.numero;
+      } else {
+        await tx
+          .update(cheques)
+          .set({
+            estado: hacia,
+            motivoRechazo: hacia === "rechazado" ? motivoLimpio : cheque.motivoRechazo,
+            updatedAt: new Date(),
+          })
+          .where(eq(cheques.id, id));
+      }
+
+      if (efecto === "debitar" && cheque.customerId) {
+        await tx.insert(accountMovements).values({
+          customerId: cheque.customerId,
+          tipo: "nota_debito",
+          monto: Number(cheque.importe).toFixed(2),
+          detalle: `${nombreDelCheque(cheque)} rechazado por el banco${motivoLimpio ? `: ${motivoLimpio}` : ""}`,
+          referencia: cheque.numero,
+          chequeId: cheque.id,
+          receiptId: cheque.receiptId,
+          createdByUserId: usuario.userId,
+        });
+        debitado = true;
+      }
+
+      return {
+        desde,
+        numero: cheque.numero,
+        sentido: cheque.sentido,
+        receiptId,
+        numeroRecibo,
+        debitado,
+        estabaEndosado: desde === "entregado",
+      };
+    });
+  } catch (error) {
+    if (error instanceof ErrorDeCobro) return { error: error.message };
+    throw error;
+  }
 
   await registrarEnBitacora({
     sesion: usuario,
     accion: "cambiar_estado",
     entidad: "cheque",
     entidadId: id,
-    descripcion: `Cheque ${cheque.numero}: ${cheque.estado} → ${nuevoEstado}`,
+    descripcion: `Cheque ${resultado.numero}: ${resultado.desde} → ${hacia}${motivoLimpio ? ` (${motivoLimpio})` : ""}`,
   });
 
+  // Los avisos, después del commit: un correo que no sale no deshace nada.
+  if (resultado.receiptId) after(() => notificarRecibo(resultado.receiptId!));
+  if (hacia === "rechazado" && resultado.sentido === "recibido") {
+    after(() => notificarChequeRechazado(id, resultado.desde !== "informado"));
+  }
+
   revalidatePath("/admin/cheques");
-  return {
-    ok:
-      nuevoEstado === "rechazado" && cheque.sentido === "recibido"
-        ? "Marcado como rechazado. Ojo: la deuda del cliente que lo entregó hay que reclamarla aparte."
-        : "Estado actualizado.",
-  };
+  revalidatePath("/admin/clientes");
+
+  if (resultado.numeroRecibo) {
+    return { ok: `Cheque aceptado. Se emitió el recibo ${resultado.numeroRecibo}.`, receiptId: resultado.receiptId! };
+  }
+  if (resultado.debitado) {
+    return {
+      ok: resultado.estabaEndosado
+        ? "Rechazado: la deuda volvió a la cuenta del cliente. El cheque estaba endosado: hay que reponérselo al proveedor."
+        : "Rechazado: la deuda volvió a la cuenta del cliente y se le avisó.",
+    };
+  }
+  if (hacia === "rechazado" && resultado.sentido === "recibido") {
+    return { ok: "Rechazado. La cuenta del cliente no cambió y se le avisó." };
+  }
+  return { ok: "Estado actualizado." };
 }

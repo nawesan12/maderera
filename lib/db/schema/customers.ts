@@ -219,11 +219,20 @@ export const accountMovements = pgTable(
     detalle: text(),
     /** Comprobante que originó el movimiento, si hay. */
     referencia: text(),
+    /**
+     * El recibo de este pago. Todo `pago` nuevo tiene uno (`emitirRecibo`);
+     * los anteriores al 1/10/2026 quedan sin, y Mi cuenta los muestra igual.
+     * Sin FK para no atar en ciclo `customers` y `recibos`.
+     */
+    receiptId: uuid(),
+    /** El cheque que originó el movimiento: la nota de débito de un rechazo. */
+    chequeId: uuid(),
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("account_movements_customer_idx").on(t.customerId),
+    index("account_movements_receipt_idx").on(t.receiptId),
     index("account_movements_created_idx").on(t.createdAt),
   ],
 );

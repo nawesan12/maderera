@@ -3,7 +3,6 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
-  customers,
   eventRegistrations,
   events,
   orderItems,
@@ -114,73 +113,12 @@ export async function iniciarPagoDePedido(
   return { pagoId: pago.id, urlPago: preferencia.urlPago, real: proveedor.real };
 }
 
-/**
- * Abre el pago de deuda de cuenta corriente (cláusula 1.6).
- *
- * El monto lo elige el cliente porque los pagos a cuenta son la norma en el
- * rubro: se abona una parte y se sigue comprando. Lo único que se valida es que
- * sea positivo y que no supere lo que debe, para que un tipeo de más no genere
- * un saldo a favor que después hay que devolver.
+/*
+ * El pago de deuda por Mercado Pago se sacó el 1/10/2026: la clienta pidió que
+ * la cuenta corriente se pague con transferencia, depósito o cheque, y no
+ * online. `acreditarPago` sigue entendiendo los pagos de tipo `deuda` por si
+ * queda alguno abierto de antes.
  */
-export async function iniciarPagoDeDeuda(
-  customerId: string,
-  monto: number,
-  saldoActual: number,
-  usuarioId?: string,
-): Promise<CobroAbierto> {
-  if (!(monto > 0)) throw new ErrorDeCobro("Ingresá un importe mayor a cero.");
-
-  if (saldoActual <= 0) {
-    throw new ErrorDeCobro("La cuenta no tiene saldo pendiente.");
-  }
-
-  if (monto - saldoActual > 0.5) {
-    throw new ErrorDeCobro(
-      `El importe supera la deuda. El saldo pendiente es de $${saldoActual.toFixed(2)}.`,
-    );
-  }
-
-  const [cliente] = await db
-    .select({ nombre: customers.nombre, email: customers.email })
-    .from(customers)
-    .where(eq(customers.id, customerId))
-    .limit(1);
-
-  if (!cliente) throw new ErrorDeCobro("La ficha de cliente no existe.");
-
-  const proveedor = proveedorPagos();
-
-  const [pago] = await db
-    .insert(payments)
-    .values({
-      customerId,
-      tipo: "deuda",
-      proveedor: proveedor.nombre === "demo" ? "demo" : "mercado_pago",
-      monto: monto.toFixed(2),
-      estado: "iniciado",
-      createdByUserId: usuarioId,
-    })
-    .returning({ id: payments.id });
-
-  const preferencia = await proveedor.crearPreferencia({
-    referencia: pago.id,
-    descripcion: "Pago de cuenta corriente",
-    monto,
-    items: [
-      { titulo: "Pago de cuenta corriente", cantidad: 1, precioUnitario: monto },
-    ],
-    pagador: { nombre: cliente.nombre, email: cliente.email },
-    urlRetorno: `${urlBase()}/mi-cuenta/cuenta-corriente`,
-    urlWebhook: urlWebhookPagos(),
-  });
-
-  await db
-    .update(payments)
-    .set({ preferenciaId: preferencia.preferenciaId, updatedAt: new Date() })
-    .where(eq(payments.id, pago.id));
-
-  return { pagoId: pago.id, urlPago: preferencia.urlPago, real: proveedor.real };
-}
 
 /**
  * Deja registrada una transferencia bancaria con su comprobante.
@@ -195,6 +133,8 @@ export async function registrarTransferencia(opciones: {
   customerId?: string | null;
   tipo: "pedido" | "deuda";
   monto: number;
+  /** Transferencia o depósito: decide qué dice el recibo al conciliarla. */
+  medio?: "transferencia" | "deposito";
   comprobanteUrl: string;
 }): Promise<string> {
   if (!(opciones.monto > 0)) {
@@ -208,6 +148,7 @@ export async function registrarTransferencia(opciones: {
       customerId: opciones.customerId ?? null,
       tipo: opciones.tipo,
       proveedor: "transferencia",
+      medio: opciones.medio ?? "transferencia",
       monto: opciones.monto.toFixed(2),
       estado: "en_revision",
       comprobanteUrl: opciones.comprobanteUrl,

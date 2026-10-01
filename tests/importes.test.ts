@@ -21,9 +21,20 @@ describe("parsearImporte", () => {
   });
 
   it("NO convierte 528.300 en 52.830.000", () => {
-    // El caso exacto del defecto. Sin coma, el punto es decimal.
-    expect(parsearImporte("528.300")).toBe(528.3);
-    expect(parsearImporte("528.300")).not.toBe(52830000);
+    // El caso exacto del defecto: «528.300» son quinientos veintiocho mil
+    // trescientos, nunca cincuenta y dos millones.
+    expect(parsearImporte("528.300")).toBe(528300);
+    expect(parsearImporte("528300.00")).not.toBe(52830000);
+  });
+
+  it("un solo punto con tres cifras detrás es de miles, como se tipea acá", () => {
+    // Un cheque de «250.000» se cargaba por $250 (1/10/2026). Un importe en
+    // pesos no tiene tres decimales, así que no hay lectura decimal posible.
+    expect(parsearImporte("250.000")).toBe(250000);
+    expect(parsearImporte("1.500")).toBe(1500);
+    // Lo que manda el navegador sigue leyéndose igual.
+    expect(parsearImporte("250.5")).toBe(250.5);
+    expect(parsearImporte("250.50")).toBe(250.5);
   });
 
   it("con más de un punto, todos son de miles", () => {

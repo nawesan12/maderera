@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { normalizarNumeroDeCheque, revisarNumeroDeCheque } from "@/lib/cheques/numero";
 import {
   cheques,
   purchaseInvoices,
@@ -98,6 +99,15 @@ export async function registrarPagoAProveedor(
 ): Promise<ResultadoPago | FalloPago> {
   if (!Number.isFinite(entrada.total) || entrada.total <= 0) {
     return { ok: false, error: "El pago tiene que ser mayor a cero." };
+  }
+
+  // El número de cada cheque, como en los cobros: solo dígitos y de un largo
+  // creíble. Es lo que se busca en el banco cuando el proveedor llama.
+  for (const parte of entrada.partes ?? []) {
+    if (!parte.cheque) continue;
+    const problema = revisarNumeroDeCheque(parte.cheque.numero);
+    if (problema) return { ok: false, error: problema };
+    parte.cheque.numero = normalizarNumeroDeCheque(parte.cheque.numero);
   }
 
   const fecha = entrada.fecha ?? new Date();

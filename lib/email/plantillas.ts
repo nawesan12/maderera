@@ -456,3 +456,87 @@ export function remitoFirmado(datos: {
 
   return { asunto: `Entrega ${datos.remito} · pedido ${datos.numero}`, ...cuerpo };
 }
+
+/**
+ * El recibo de un pago, con el PDF adjunto.
+ *
+ * Va aparte de `pagoAcreditado` porque este tiene un papel: el cliente lo
+ * guarda, se lo pasa a su contador, y lo muestra si alguien le reclama una
+ * deuda que ya pagó.
+ */
+export function reciboEmitido(datos: {
+  nombre: string;
+  numero: string;
+  total: number | string;
+  medios: string;
+  saldo: number | null;
+}): CorreoArmado {
+  const saldo =
+    datos.saldo === null
+      ? []
+      : [
+          {
+            etiqueta: datos.saldo < -0.005 ? "A tu favor" : "Saldo de tu cuenta",
+            valor: formatearPrecio(Math.abs(datos.saldo)),
+          },
+        ];
+
+  const cuerpo = envolver({
+    titulo: "Recibimos tu pago",
+    adelanto: `Recibo ${datos.numero} por ${formatearPrecio(datos.total)}.`,
+    saludo: datos.nombre,
+    parrafos: [
+      "Te adjuntamos el recibo. Ya está imputado en tu cuenta, y lo vas a encontrar también en Mi cuenta → Movimientos.",
+    ],
+    datos: [
+      { etiqueta: "Recibo", valor: datos.numero },
+      { etiqueta: "Importe", valor: formatearPrecio(datos.total) },
+      { etiqueta: "Forma de pago", valor: datos.medios },
+      ...saldo,
+    ],
+    cta: { texto: "Ver mis movimientos", url: `${urlBase()}/mi-cuenta/movimientos` },
+  });
+
+  return { asunto: `Recibo ${datos.numero} · ${formatearPrecio(datos.total)}`, ...cuerpo };
+}
+
+/**
+ * Un cheque que no se pudo tomar, o que el banco rechazó.
+ *
+ * De la clienta (30/9/2026): «poder marcar cheques como aceptados o
+ * rechazados, y que eso se plasme en el usuario final». El correo dice cuál
+ * cheque —banco y número, que es como el cliente lo busca en su chequera— y
+ * qué pasa con la cuenta, porque las dos situaciones son distintas: uno que no
+ * aceptamos nunca bajó la deuda; uno que rebotó en el banco la vuelve a subir.
+ */
+export function chequeRechazado(datos: {
+  nombre: string;
+  cheque: string;
+  importe: number | string;
+  motivo: string | null;
+  porElBanco: boolean;
+}): CorreoArmado {
+  const cuerpo = envolver({
+    titulo: datos.porElBanco ? "El banco rechazó un cheque" : "No pudimos tomar un cheque",
+    adelanto: `${datos.cheque} por ${formatearPrecio(datos.importe)}.`,
+    saludo: datos.nombre,
+    parrafos: [
+      datos.porElBanco
+        ? "El banco rechazó este cheque, así que su importe volvió a tu cuenta corriente. Escribinos para ver cómo lo reponés."
+        : "Revisamos el cheque que nos informaste y no lo pudimos tomar. Tu cuenta no cambió: el importe sigue pendiente.",
+    ],
+    datos: [
+      { etiqueta: "Cheque", valor: datos.cheque },
+      { etiqueta: "Importe", valor: formatearPrecio(datos.importe) },
+      ...(datos.motivo ? [{ etiqueta: "Motivo", valor: datos.motivo }] : []),
+    ],
+    cta: { texto: "Ver mi cuenta", url: `${urlBase()}/mi-cuenta/movimientos` },
+  });
+
+  return {
+    asunto: datos.porElBanco
+      ? `Cheque rechazado · ${datos.cheque}`
+      : `No pudimos tomar tu cheque · ${datos.cheque}`,
+    ...cuerpo,
+  };
+}

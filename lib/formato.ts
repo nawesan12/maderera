@@ -206,13 +206,17 @@ export const fechaSolaCorta = new Intl.DateTimeFormat("es-AR", {
  * 1. **Con coma**, la coma es el decimal y los puntos son de miles.
  * 2. **Sin coma y con más de un punto**, todos los puntos son de miles: no hay
  *    ninguna notación decimal con dos puntos.
- * 3. **Sin coma y con un solo punto**, el punto es decimal y se deja como está.
+ * 3. **Sin coma, con un solo punto y exactamente tres cifras después**, el
+ *    punto es de miles: «250.000» son doscientos cincuenta mil pesos.
+ * 4. **Sin coma y con un solo punto**, en cualquier otro caso, el punto es
+ *    decimal y se deja como está.
  *
- * La tercera regla es la importante y no se puede relajar: el error opuesto ya
- * ocurrió, y quitar todos los puntos siempre convertía un cobro de $528.300 en
- * uno de $52.830.000, con la factura dada por cobrada de más. Ante la
- * ambigüedad de un solo punto gana la lectura del navegador, que es la que
- * llega sin que nadie la escriba.
+ * La cuarta regla es la que no se puede relajar: el error opuesto ya ocurrió,
+ * y quitar todos los puntos siempre convertía un cobro de $528.300 en uno de
+ * $52.830.000, con la factura dada por cobrada de más. Lo que llega del
+ * navegador —«528300.00», «1234.5»— nunca trae tres decimales: un importe en
+ * pesos tiene dos. La tercera regla se agregó el 1/10/2026, cuando un cheque
+ * de «250.000» tipeado a mano se cargó por $250 en el cobro multimedio.
  */
 export function parsearImporte(texto: string): number {
   const limpio = texto.trim().replace(/\s/g, "");
@@ -224,6 +228,9 @@ export function parsearImporte(texto: string): number {
 
   const puntos = (limpio.match(/\./g) ?? []).length;
   if (puntos > 1) return Number(limpio.replace(/\./g, ""));
+  if (puntos === 1 && /^-?\d{1,3}\.\d{3}$/.test(limpio)) {
+    return Number(limpio.replace(".", ""));
+  }
 
   return Number(limpio);
 }

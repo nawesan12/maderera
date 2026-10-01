@@ -7,7 +7,9 @@ import {
   eventRegistrations,
   orders,
   payments,
+  receiptParts,
 } from "@/lib/db/schema";
+import { anularRecibo, emitirRecibo } from "@/lib/cobros/recibo";
 import type { PagoRemoto } from "./tipos";
 
 /**
@@ -45,6 +47,8 @@ export interface ResultadoAcreditacion {
   tipo: "pedido" | "deuda" | "inscripcion";
   monto: number;
   motivo?: string;
+  /** El recibo que se emitió, si el pago saldó deuda. */
+  receiptId?: string | null;
 }
 
 /** Entero estable para el lock, derivado del uuid del pago. */
@@ -129,21 +133,37 @@ export async function acreditarPago(
 
     let accountMovementId = pago.accountMovementId;
 
-    if (acredita && pago.tipo === "deuda" && pago.customerId) {
-      // Negativo porque en `account_movements` positivo es lo que el cliente
-      // debe. Este es el único lugar donde un pago online toca la cuenta.
-      const [movimiento] = await tx
-        .insert(accountMovements)
-        .values({
-          customerId: pago.customerId,
-          tipo: "pago",
-          monto: (-nuestroMonto).toFixed(2),
-          detalle: `Pago online${remoto.medio ? ` (${remoto.medio})` : ""}`,
-          referencia: remoto.id,
-        })
-        .returning({ id: accountMovements.id });
+    let receiptId: string | null = null;
 
-      accountMovementId = movimiento.id;
+    if (acredita && pago.tipo === "deuda" && pago.customerId) {
+      /*
+       * El pago de una deuda deja su recibo, como cualquier otro cobro.
+       *
+       * `emitirRecibo` es el que escribe el movimiento de la cuenta: este
+       * sigue siendo el único lugar donde un pago online o una transferencia
+       * conciliada tocan la cuenta, y además ahora el cliente tiene un papel.
+       */
+      const esTransferencia = pago.proveedor === "transferencia";
+      const recibo = await emitirRecibo(tx, {
+        customerId: pago.customerId,
+        origen: esTransferencia ? "portal" : "mercado_pago",
+        concepto: "Pago de cuenta corriente",
+        partes: [
+          {
+            medio: esTransferencia
+              ? pago.medio === "deposito"
+                ? "deposito"
+                : "transferencia"
+              : "mercado_pago",
+            importe: nuestroMonto,
+            paymentId: pago.id,
+            referencia: esTransferencia ? null : remoto.id,
+          },
+        ],
+      });
+
+      accountMovementId = recibo.accountMovementId;
+      receiptId = recibo.receiptId;
     }
 
     // Una inscripción a un evento con precio queda reservada —ocupando lugar—
@@ -167,16 +187,36 @@ export async function acreditarPago(
     }
 
     if (revierte && pago.tipo === "deuda" && pago.customerId) {
-      // La deuda vuelve. No se borra el movimiento original: la cuenta
-      // corriente es un libro, y un asiento que desaparece es un asiento que
-      // nadie puede explicar tres meses después.
-      await tx.insert(accountMovements).values({
-        customerId: pago.customerId,
-        tipo: "ajuste",
-        monto: nuestroMonto.toFixed(2),
-        detalle: "Reintegro de un pago online",
-        referencia: remoto.id,
-      });
+      /*
+       * La deuda vuelve. No se borra el movimiento original: la cuenta
+       * corriente es un libro, y un asiento que desaparece es un asiento que
+       * nadie puede explicar tres meses después.
+       *
+       * Si el pago tuvo recibo, lo que se hace es anularlo —deja el asiento
+       * que revierte y el papel marcado—; los pagos anteriores a los recibos
+       * revierten con un ajuste suelto, como antes.
+       */
+      const [parte] = await tx
+        .select({ receiptId: receiptParts.receiptId })
+        .from(receiptParts)
+        .where(eq(receiptParts.paymentId, pago.id))
+        .limit(1);
+
+      if (parte) {
+        await anularRecibo(tx, {
+          receiptId: parte.receiptId,
+          motivo: "Reintegro del pago online",
+          usuarioId: null,
+        });
+      } else {
+        await tx.insert(accountMovements).values({
+          customerId: pago.customerId,
+          tipo: "ajuste",
+          monto: nuestroMonto.toFixed(2),
+          detalle: "Reintegro de un pago online",
+          referencia: remoto.id,
+        });
+      }
     }
 
     await tx
@@ -184,7 +224,10 @@ export async function acreditarPago(
       .set({
         estado: remoto.estado,
         proveedorPaymentId: remoto.id,
-        medio: remoto.medio,
+        // En una transferencia el medio lo eligió el cliente al informarla
+        // —transferencia o depósito— y se conserva; en Mercado Pago lo dice
+        // el proveedor.
+        medio: pago.proveedor === "transferencia" ? pago.medio : remoto.medio,
         detalle: remoto.crudo as object,
         motivoRechazo: remoto.motivoRechazo,
         accountMovementId,
@@ -210,6 +253,6 @@ export async function acreditarPago(
         .where(eq(orders.id, pago.orderId));
     }
 
-    return { cambio: true, estado: remoto.estado, ...base };
+    return { cambio: true, estado: remoto.estado, ...base, receiptId };
   });
 }

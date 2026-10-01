@@ -5,7 +5,6 @@ import { MessageCircle, Printer, Receipt } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { clienteDeLaSesion, miCuentaCorriente } from "@/lib/dal/cuenta";
 import { datosParaTransferir } from "@/lib/dal/pagos";
-import { cobrosEnVivo } from "@/lib/pagos";
 import { PagarDeuda } from "@/components/cuenta/pagar-deuda";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
 
@@ -183,16 +182,31 @@ export default async function CuentaCorrientePage({
         </p>
       )}
 
-      <PagarDeuda
-        saldo={cuenta.saldo}
-        banco={banco}
-        enVivo={cobrosEnVivo()}
-      />
+      <PagarDeuda saldo={cuenta.saldo} banco={banco} />
+
+      {/* El saldo a favor no se «usa» acá: ya descuenta solo de lo que se
+          debe. Donde sirve es al comprar, y conviene decirlo, porque si no el
+          cliente lo pide por WhatsApp. */}
+      {cuenta.saldo < 0 && (
+        <p className="rounded-xl border border-linea bg-card p-4 text-[15px]">
+          Tenés <strong className="tabular">{formatearMonto(-cuenta.saldo)}</strong> a favor. Se
+          descuenta solo de tu próxima compra: en el carrito elegí «Con mi saldo a favor», o
+          avisá en el mostrador.
+        </p>
+      )}
 
       {/* Acá sí va tabla: son cifras que se comparan columna contra columna, y
           el saldo corrido solo se sigue si está alineado. */}
       <section className="overflow-hidden rounded-xl border bg-card">
-        <h2 className="border-b px-5 py-3.5 font-medium">Movimientos</h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-3.5">
+          <h2 className="font-medium">Libro de la cuenta</h2>
+          {/* Acá va solo lo que mueve el saldo. Las compras de contado, las
+              transferencias en revisión y los cheques por recibir están en
+              Movimientos. */}
+          <Link href="/mi-cuenta/movimientos" className="text-sm font-medium text-brand-orange hover:underline">
+            Ver todos tus movimientos
+          </Link>
+        </div>
 
         {cuenta.movimientos.length === 0 ? (
           <p className="px-5 py-10 text-center text-muted-foreground">
@@ -228,8 +242,20 @@ export default async function CuentaCorrientePage({
                         <EtiquetaEstado estado={m.tipo} />
                         <span className="text-sm">{m.detalle ?? ""}</span>
                       </span>
-                      {m.referencia && (
+                      {m.referencia && !m.receiptId && (
                         <PedidoRelacionado referencia={m.referencia} />
+                      )}
+                      {/* El pago con recibo lleva el papel a un clic: es lo
+                          que el cliente le manda a su contador. */}
+                      {m.receiptId && (
+                        <a
+                          href={`/api/recibos/${m.receiptId}/pdf`}
+                          target="_blank"
+                          rel="noopener"
+                          className="tabular mt-0.5 block text-sm text-brand-orange hover:underline"
+                        >
+                          Recibo {m.referencia}
+                        </a>
                       )}
                     </td>
                     <td

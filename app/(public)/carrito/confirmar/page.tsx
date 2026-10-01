@@ -149,6 +149,7 @@ export default async function ConfirmarCompraPage() {
             habilitado: credito.habilitado,
             disponible: credito.disponible,
             motivo: credito.motivo,
+            soloSaldoAFavor: credito.soloSaldoAFavor ?? false,
           }}
           direcciones={direcciones.map((d) => ({
             id: d.id,

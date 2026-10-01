@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import {
   cheques,
   customers,
+  receipts,
   supplierPayments,
   supplierPaymentParts,
   suppliers,
@@ -35,6 +36,10 @@ export interface ChequeListado {
   /** A qué proveedor se le entregó, si salió en un pago. */
   proveedor: string | null;
   notas: string | null;
+  /** El recibo del cobro en el que entró, si entró en uno. */
+  receiptId: string | null;
+  recibo: string | null;
+  motivoRechazo: string | null;
 }
 
 export async function listarCheques(
@@ -73,6 +78,9 @@ export async function listarCheques(
        */
       proveedor: suppliers.nombre,
       notas: cheques.notas,
+      receiptId: cheques.receiptId,
+      recibo: receipts.numero,
+      motivoRechazo: cheques.motivoRechazo,
     })
     .from(cheques)
     .leftJoin(customers, eq(customers.id, cheques.customerId))
@@ -87,10 +95,11 @@ export async function listarCheques(
       eq(supplierPayments.id, supplierPaymentParts.paymentId),
     )
     .leftJoin(suppliers, eq(suppliers.id, supplierPayments.supplierId))
+    .leftJoin(receipts, eq(receipts.id, cheques.receiptId))
     .where(condiciones.length > 0 ? and(...condiciones) : undefined)
     // Lo vivo primero y por vencimiento: es el orden en el que se decide.
     .orderBy(
-      sql`case when ${cheques.estado} in ('cartera', 'depositado', 'entregado') then 0 else 1 end`,
+      sql`case when ${cheques.estado} in ('informado', 'cartera', 'depositado', 'entregado') then 0 else 1 end`,
       asc(cheques.fechaPago),
       desc(cheques.createdAt),
     );

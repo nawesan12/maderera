@@ -39,6 +39,11 @@ export interface EstadoDeCredito {
    * atraso, es que el cliente nunca tuvo cuenta.
    */
   autorizable: boolean;
+  /**
+   * El cliente no tiene crédito y lo que se le ofrece es su saldo a favor.
+   * La pantalla lo nombra así y no «cuenta corriente».
+   */
+  soloSaldoAFavor?: boolean;
 }
 
 /**
@@ -82,13 +87,6 @@ export async function estadoDeCredito(
 
   const limiteCredito = Number(cliente.limiteCredito);
 
-  if (limiteCredito <= 0) {
-    return {
-      ...vacio,
-      motivo: "Este cliente no tiene cuenta corriente habilitada.",
-    };
-  }
-
   // Los movimientos completos y no solo la suma: la antigüedad necesita las
   // fechas para imputar los pagos contra las deudas más viejas.
   const movimientos = await db
@@ -102,6 +100,37 @@ export async function estadoDeCredito(
   }));
 
   const saldo = paraAging.reduce((suma, m) => suma + m.monto, 0);
+
+  if (limiteCredito <= 0) {
+    /*
+     * Sin cuenta corriente, pero con plata a favor.
+     *
+     * De la clienta (30/9/2026): pagar «con dinero en cuenta». Un cliente sin
+     * crédito que tiene saldo a favor —una nota de crédito, un pago de más—
+     * puede usarlo para comprar hasta ese importe: la compra se carga a la
+     * cuenta y el saldo la absorbe. Más allá de eso no hay crédito que
+     * autorizar, así que no es autorizable.
+     */
+    const aFavor = Math.max(-saldo, 0);
+    if (aFavor > 0 && !cliente.cuentaBloqueada) {
+      const alcanza = monto <= aFavor + 0.005;
+      return {
+        ...vacio,
+        saldo,
+        disponible: aFavor,
+        soloSaldoAFavor: true,
+        puede: alcanza,
+        motivo: alcanza
+          ? null
+          : `Tiene ${aFavor.toLocaleString("es-AR", { style: "currency", currency: "ARS" })} a favor y no alcanza: el resto, con otro medio.`,
+      };
+    }
+    return {
+      ...vacio,
+      saldo,
+      motivo: "Este cliente no tiene cuenta corriente habilitada.",
+    };
+  }
   const { diasDeLaMasVieja } = calcularAging(paraAging);
   const disponible = Math.max(limiteCredito - saldo, 0);
 

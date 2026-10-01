@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowRight, Check, Loader2 } from "lucide-react";
 import { avanzarPedido, marcarPagado } from "@/app/admin/ventas-actions";
+import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 
 const SIGUIENTE: Record<string, string> = {
   pendiente: "Preparar",
@@ -19,6 +20,7 @@ export function AccionesPedido({
   estadoPago,
   tipoEntrega,
   compacto = false,
+  cobroACuenta,
 }: {
   id: string;
   estado: string;
@@ -26,6 +28,12 @@ export function AccionesPedido({
   tipoEntrega: string;
   /** En una tarjeta de tablero los botones ocupan el ancho disponible. */
   compacto?: boolean;
+  /**
+   * Si el pedido es a cuenta corriente de un cliente, «Cobrar» abre el cobro
+   * con recibo: hay que decir con qué pagó, y ese pago baja la deuda. Marcarlo
+   * pagado a secas bajaba la deuda sin saber con qué se pagó.
+   */
+  cobroACuenta?: { customerId: string; nombre: string; numero: string; total: number } | null;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -49,7 +57,19 @@ export function AccionesPedido({
 
   return (
     <div className={`flex items-center gap-2 ${compacto ? "w-full" : ""}`}>
-      {estadoPago !== "pagado" && estado !== "cancelado" && (
+      {estadoPago !== "pagado" && estado !== "cancelado" && cobroACuenta && (
+        <DialogoCobro
+          customerId={cobroACuenta.customerId}
+          nombre={cobroACuenta.nombre}
+          aCobrar={cobroACuenta.total}
+          orderId={id}
+          numeroPedido={cobroACuenta.numero}
+          etiqueta="Cobrar"
+          claseBoton={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+        />
+      )}
+
+      {estadoPago !== "pagado" && estado !== "cancelado" && !cobroACuenta && (
         <button
           onClick={() => accion(() => marcarPagado(id))}
           disabled={pendiente}

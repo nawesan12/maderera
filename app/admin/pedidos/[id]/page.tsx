@@ -104,6 +104,11 @@ export default async function FichaPedidoPage({
               estado={pedido.estado}
               estadoPago={pedido.estadoPago}
               tipoEntrega={pedido.tipoEntrega}
+              cobroACuenta={
+                pedido.medioPago === "cuenta_corriente" && pedido.customerId
+                  ? { customerId: pedido.customerId, nombre: pedido.cliente, numero: pedido.numero, total: Number(pedido.total) }
+                  : null
+              }
             />
           </>
         }

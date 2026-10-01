@@ -28,6 +28,13 @@ const inicial: EstadoCheque = {};
  * "Depositar" con seis píxeles de por medio, en una pantalla que maneja plata.
  */
 const ACCIONES: Record<string, { a: string; texto: string }[]> = {
+  // Lo informó el cliente: se acepta cuando está en mano, y ahí se emite el
+  // recibo. Es la acción que pidió la clienta: «poder marcar cheques como
+  // aceptados o rechazados».
+  informado: [
+    { a: "cartera", texto: "Aceptar" },
+    { a: "rechazado", texto: "Rechazar" },
+  ],
   cartera: [
     { a: "depositado", texto: "Depositar" },
     { a: "rechazado", texto: "Rechazado" },
@@ -61,6 +68,10 @@ export function AccionesDeCheque({
   const [pendiente, empezar] = useTransition();
   const [aviso, setAviso] = useState<string | null>(null);
   const [confirmando, setConfirmando] = useState(false);
+  /** El rechazo pide motivo: lo lee el cliente en el correo y en Mi cuenta. */
+  const [rechazando, setRechazando] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const idMotivo = useId();
 
   const acciones = (ACCIONES[estado] ?? []).filter(
     // Depositar solo tiene sentido para los recibidos: un cheque propio ya
@@ -71,10 +82,18 @@ export function AccionesDeCheque({
 
   if (acciones.length === 0 && !puedeAnular) return null;
 
-  function cambiar(a: string) {
+  function cambiar(a: string, conMotivo?: string) {
+    if (a === "rechazado" && conMotivo === undefined) {
+      setRechazando(true);
+      return;
+    }
     empezar(async () => {
-      const r = await cambiarEstadoDeCheque(id, a);
+      const r = await cambiarEstadoDeCheque(id, a, conMotivo);
       setConfirmando(false);
+      if (!r.error) {
+        setRechazando(false);
+        setMotivo("");
+      }
       if (r.error) {
         setAviso(r.error);
         return;
@@ -83,7 +102,16 @@ export function AccionesDeCheque({
       // muda a "Terminados", el componente se vuelve a montar y un mensaje
       // propio desaparece antes de que nadie lo lea. El error sí queda acá,
       // porque en ese caso la fila no se mueve.
-      if (r.ok) toast.success(r.ok);
+      if (r.ok) {
+        toast.success(r.ok, {
+          action: r.receiptId
+            ? {
+                label: "Ver recibo",
+                onClick: () => window.open(`/api/recibos/${r.receiptId}/pdf`, "_blank"),
+              }
+            : undefined,
+        });
+      }
     });
   }
 
@@ -96,9 +124,17 @@ export function AccionesDeCheque({
             type="button"
             disabled={pendiente}
             onClick={() => cambiar(accion.a)}
-            className="h-11 rounded-lg border border-linea px-3.5 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50"
+            className={`h-11 rounded-lg px-3.5 text-base font-medium transition-colors disabled:opacity-50 ${
+              estado === "informado" && accion.a === "cartera"
+                ? "boton-accion"
+                : "border border-linea hover:bg-muted"
+            }`}
           >
-            {accion.texto}
+            {pendiente && estado === "informado" && accion.a === "cartera" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              accion.texto
+            )}
           </button>
         ))}
 
@@ -125,6 +161,64 @@ export function AccionesDeCheque({
           <span>{aviso}</span>
         </p>
       )}
+
+      <Dialog open={rechazando} onOpenChange={(v) => !v && setRechazando(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {estado === "informado" ? "Rechazar" : "El banco rechazó"} el cheque {numero}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-base text-muted-foreground">
+            {estado === "informado"
+              ? "La cuenta del cliente no cambia: el cheque nunca bajó la deuda. Se le avisa con este motivo."
+              : sentido === "recibido"
+                ? `Los ${importe.toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 })} vuelven a la cuenta del cliente con una nota de débito, y se le avisa con este motivo.`
+                : "Es un cheque nuestro: hay que reponérselo al proveedor."}
+          </p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              cambiar("rechazado", motivo);
+            }}
+            className="space-y-3"
+          >
+            <label htmlFor={idMotivo} className="block text-base font-medium">
+              Motivo
+            </label>
+            <input
+              id={idMotivo}
+              autoFocus
+              // Un solo dato: Enter rechaza, no pasa al botón.
+              data-enter="enviar"
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder={estado === "informado" ? "La fecha está mal, falta la firma…" : "Sin fondos, firma no coincide…"}
+              className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
+            />
+            {aviso && (
+              <p className="estado-problema text-base font-medium">{aviso}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRechazando(false)}
+                className="h-11 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida"
+              >
+                Volver
+              </button>
+              <button
+                type="submit"
+                disabled={pendiente || !motivo.trim()}
+                className="inline-flex h-11 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white disabled:opacity-50"
+              >
+                {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
+                Rechazar
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Confirmar
         abierto={confirmando}

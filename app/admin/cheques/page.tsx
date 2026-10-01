@@ -31,11 +31,17 @@ export default async function ChequesPage() {
   const enDias = (fecha: Date) =>
     Math.ceil((fecha.getTime() - ahora.getTime()) / 86_400_000);
 
+  /*
+   * Lo que informaron los clientes desde Mi cuenta y todavía no se tiene en
+   * mano. Va primero y aparte: hasta que alguien lo acepta, el cliente ve su
+   * pago «en revisión» y la deuda no le baja.
+   */
+  const porRecibir = filas.filter((c) => c.estado === "informado");
   const vivos = filas.filter((c) =>
     ["cartera", "depositado", "entregado"].includes(c.estado),
   );
   const terminados = filas.filter(
-    (c) => !["cartera", "depositado", "entregado"].includes(c.estado),
+    (c) => !["informado", "cartera", "depositado", "entregado"].includes(c.estado),
   );
 
   const porVencer = vivos.filter((c) => enDias(c.fechaPago) <= DIAS_DE_AVISO);
@@ -51,9 +57,16 @@ export default async function ChequesPage() {
       <EncabezadoPanel
         titulo="Cheques"
         detalle={
-          vivos.length > 0
-            ? `${moneda.format(recibidosVivos)} en cartera · ${moneda.format(entregadosVivos)} entregados sin debitar`
-            : "Sin cheques en juego"
+          [
+            porRecibir.length > 0 ? `${plural(porRecibir.length, "por recibir", "por recibir")}` : null,
+            vivos.length > 0
+              ? `${moneda.format(recibidosVivos)} en cartera · ${moneda.format(entregadosVivos)} entregados sin debitar`
+              : porRecibir.length === 0
+                ? "Sin cheques en juego"
+                : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")
         }
       >
         <AltaDeCheque
@@ -90,6 +103,19 @@ export default async function ChequesPage() {
         </div>
       ) : (
         <>
+          {porRecibir.length > 0 && (
+            <GrupoListado
+              titulo="Por recibir"
+              cantidad={porRecibir.length}
+              detalle="Los informaron los clientes desde Mi cuenta. Aceptalo cuando lo tengas en mano: ahí se emite el recibo y baja la deuda."
+              destacado
+            >
+              {porRecibir.map((c) => (
+                <Tarjeta key={c.id} cheque={c} dias={enDias(c.fechaPago)} />
+              ))}
+            </GrupoListado>
+          )}
+
           <GrupoListado
             titulo="En juego"
             cantidad={vivos.length}
@@ -121,6 +147,7 @@ export default async function ChequesPage() {
 }
 
 const ESTADOS: Record<string, string> = {
+  informado: "Por recibir",
   cartera: "En cartera",
   depositado: "Depositado",
   entregado: "Entregado",
@@ -148,7 +175,11 @@ function Tarjeta({
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2.5">
-          <h3 className="tabular text-lg font-medium">{c.numero}</h3>
+          {/* El banco y el número juntos: es como se lo encuentra en el
+              banco, que es lo que pidió la clienta. */}
+          <h3 className="text-lg font-medium">
+            {c.banco ?? "Sin banco"} <span className="tabular">N° {c.numero}</span>
+          </h3>
           <span
             className={`rounded-full px-2.5 py-1 text-sm font-medium ${
               c.sentido === "recibido"
@@ -176,11 +207,10 @@ function Tarjeta({
           rebotado y alguien preguntando de qué cliente era.
         */}
         <p className="mt-1 text-base text-muted-foreground">
-          {[c.banco, c.librador].filter(Boolean).join(" · ") ||
-            "Sin datos del banco"}
+          {c.librador ? `Librado por ${c.librador}` : c.cliente ? "" : "Sin librador"}
           {c.cliente && (
             <>
-              {" · de "}
+              {c.librador ? " · de " : "De "}
               {c.customerId ? (
                 <Link
                   href={`/admin/clientes/${c.customerId}`}
@@ -195,7 +225,25 @@ function Tarjeta({
           )}
           {c.proveedor && ` · entregado a ${c.proveedor}`}
           {c.notas && ` · ${c.notas}`}
+          {c.receiptId && c.recibo && (
+            <>
+              {" · "}
+              <a
+                href={`/api/recibos/${c.receiptId}/pdf`}
+                target="_blank"
+                rel="noopener"
+                className="tabular hover:text-brand-orange hover:underline"
+              >
+                recibo {c.recibo}
+              </a>
+            </>
+          )}
         </p>
+        {c.estado === "rechazado" && c.motivoRechazo && (
+          <p className="estado-problema mt-1 text-sm font-medium">
+            Rechazado: {c.motivoRechazo}
+          </p>
+        )}
       </div>
 
       <div className="text-right">

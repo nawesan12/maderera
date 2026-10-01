@@ -22,8 +22,11 @@ import {
 } from "@/components/ui/select";
 import { registrarMovimiento, type EstadoCliente } from "../actions";
 
+/**
+ * Los movimientos que corrigen la cuenta. El pago no está: se registra con su
+ * recibo, desde «Registrar cobro», para que diga con qué se pagó.
+ */
 const TIPOS = {
-  pago: "Pago recibido",
   compra: "Compra a cuenta",
   nota_credito: "Nota de crédito",
   nota_debito: "Nota de débito",
@@ -32,7 +35,6 @@ const TIPOS = {
 
 /** Qué hace cada tipo con el saldo, dicho en criollo. */
 const EFECTO: Record<string, string> = {
-  pago: "Baja la deuda del cliente.",
   compra: "Suma deuda.",
   nota_credito: "Baja la deuda.",
   nota_debito: "Suma deuda.",
@@ -47,7 +49,7 @@ export function DialogoMovimiento({
   nombre: string;
 }) {
   const [abierto, setAbierto] = useState(false);
-  const [tipo, setTipo] = useState("pago");
+  const [tipo, setTipo] = useState("nota_credito");
   const [, accion, pendiente] = useAccionDeDialogo(
     registrarMovimiento,
     {} as EstadoCliente,
@@ -57,9 +59,9 @@ export function DialogoMovimiento({
 
   return (
     <Dialog open={abierto} onOpenChange={setAbierto}>
-      <DialogTrigger className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors">
+      <DialogTrigger className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-linea px-3 text-base font-medium transition-colors hover:bg-muted">
         <Plus className="h-5 w-5" />
-        Registrar movimiento
+        Otro movimiento
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
@@ -107,7 +109,7 @@ export function DialogoMovimiento({
             <Input
               id="detalle"
               name="detalle"
-              placeholder="Transferencia, factura 0001-00012847…"
+              placeholder="Nota de crédito por devolución, factura 0001-00012847…"
             />
           </div>
 

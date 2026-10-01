@@ -293,6 +293,16 @@ export default async function FichaComprobantePage({
                       <span className="tabular ml-2 text-sm text-muted-foreground">
                         {fechaCorta.format(cobro.fecha)}
                       </span>
+                      {cobro.receiptId && (
+                        <a
+                          href={`/api/recibos/${cobro.receiptId}/pdf`}
+                          target="_blank"
+                          rel="noopener"
+                          className="ml-2 text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                        >
+                          recibo
+                        </a>
+                      )}
                     </span>
                     <span className="tabular text-base font-medium">
                       {moneda.format(Number(cobro.monto))}
@@ -304,7 +314,11 @@ export default async function FichaComprobantePage({
 
             {!anulada && comprobante.saldo > 0 && (
               <div className="p-5">
-                <FormularioCobro id={comprobante.id} saldo={comprobante.saldo} />
+                <FormularioCobro
+                  id={comprobante.id}
+                  saldo={comprobante.saldo}
+                  conCliente={Boolean(comprobante.customerId)}
+                />
               </div>
             )}
           </section>

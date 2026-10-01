@@ -2,23 +2,16 @@
 
 import { useActionState, useState } from "react";
 import { AlertCircle, Check, Loader2, Send, Undo2, Wallet } from "lucide-react";
+import { toast } from "sonner";
 import {
   anular,
   autorizar,
   registrarCobro,
   type EstadoFactura,
 } from "../actions";
+import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
 
 const inicial: EstadoFactura = {};
-
-const MEDIOS = [
-  { valor: "efectivo", texto: "Efectivo" },
-  { valor: "transferencia", texto: "Transferencia" },
-  { valor: "mercado_pago", texto: "Mercado Pago" },
-  { valor: "tarjeta", texto: "Tarjeta" },
-  { valor: "cheque", texto: "Cheque" },
-  { valor: "cuenta_corriente", texto: "Cuenta corriente" },
-];
 
 /** Manda el comprobante a ARCA. Se puede reintentar si fue rechazado. */
 export function BotonAutorizar({
@@ -70,79 +63,120 @@ export function BotonAutorizar({
   );
 }
 
-/** Cobro parcial o total. */
-export function FormularioCobro({ id, saldo }: { id: string; saldo: number }) {
-  const [estado, accion, pendiente] = useActionState(registrarCobro, inicial);
+/**
+ * Cobro parcial o total, con uno o varios medios.
+ *
+ * Cobrar emite un recibo (`CobroMultimedio` + `emitirRecibo`); pasar a cuenta
+ * corriente no es un pago y va aparte, con su propio botón, para que nadie lo
+ * elija de una lista de medios creyendo que cobró.
+ */
+export function FormularioCobro({
+  id,
+  saldo,
+  conCliente,
+}: {
+  id: string;
+  saldo: number;
+  conCliente: boolean;
+}) {
+  const [estado, accion, pendiente] = useActionState(
+    async (previo: EstadoFactura, formData: FormData) => {
+      const r = await registrarCobro(previo, formData);
+      /*
+       * El aviso va por `toast` y no solo en el formulario: cuando el cobro
+       * salda la factura, el formulario desaparece con el refresco y el enlace
+       * al recibo se iba con él justo cuando el cliente está esperando el papel.
+       */
+      if (r.ok) {
+        toast.success(r.ok, {
+          duration: 12_000,
+          action: r.receiptId
+            ? {
+                label: "Imprimir recibo",
+                onClick: () => window.open(`/api/recibos/${r.receiptId}/pdf`, "_blank"),
+              }
+            : undefined,
+        });
+      }
+      return r;
+    },
+    inicial,
+  );
+  const [modo, setModo] = useState<"cobrar" | "cuenta_corriente">("cobrar");
 
   return (
     <form action={accion} className="space-y-3">
       <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="modo" value={modo} />
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div>
-          <label
-            htmlFor="monto"
-            className="mb-1 block text-sm text-muted-foreground"
-          >
-            Importe
-          </label>
+      {conCliente && (
+        <div className="flex rounded-lg border border-linea p-0.5 text-base" role="group">
+          {(
+            [
+              ["cobrar", "Cobrar ahora"],
+              ["cuenta_corriente", "Pasar a cuenta corriente"],
+            ] as const
+          ).map(([valor, texto]) => (
+            <button
+              key={valor}
+              type="button"
+              onClick={() => setModo(valor)}
+              aria-pressed={modo === valor}
+              className={`h-10 flex-1 rounded-md px-3 font-medium transition-colors ${
+                modo === valor ? "bg-hundida" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {texto}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {modo === "cobrar" ? (
+        <CobroMultimedio
+          aCobrar={saldo}
+          medios={["efectivo", "transferencia", "deposito", "cheque", "echeq", "tarjeta_debito", "tarjeta_credito", "mercado_pago"]}
+        />
+      ) : (
+        <label className="block text-sm text-muted-foreground">
+          Importe que pasa a la cuenta
           <input
-            id="monto"
             name="monto"
             required
             inputMode="decimal"
             defaultValue={saldo > 0 ? saldo.toFixed(2) : ""}
-            className="tabular h-10 w-full rounded-lg border bg-background px-3 text-base"
+            className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
           />
-        </div>
-        <div>
-          <label
-            htmlFor="medio"
-            className="mb-1 block text-sm text-muted-foreground"
-          >
-            Medio
-          </label>
-          <select
-            id="medio"
-            name="medio"
-            className="h-10 w-full rounded-lg border bg-background px-2.5 text-base"
-          >
-            {MEDIOS.map((m) => (
-              <option key={m.valor} value={m.valor}>
-                {m.texto}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <input
-        name="referencia"
-        placeholder="Referencia (número de operación, cheque…)"
-        className="h-10 w-full rounded-lg border bg-background px-3 text-base"
-      />
+        </label>
+      )}
 
       <button
         type="submit"
         disabled={pendiente}
-        className="inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-base font-medium transition-colors hover:bg-muted disabled:opacity-60"
+        className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-60"
       >
-        {pendiente ? (
-          <Loader2 className="h-5 w-5 animate-spin" />
-        ) : (
-          <Wallet className="h-5 w-5" />
-        )}
-        Registrar cobro
+        {pendiente ? <Loader2 className="h-5 w-5 animate-spin" /> : <Wallet className="h-5 w-5" />}
+        {modo === "cobrar" ? "Registrar cobro y emitir recibo" : "Pasar a cuenta corriente"}
       </button>
 
       {estado.error && (
-        <p role="alert" className="text-base text-red-700">
+        <p role="alert" className="estado-problema text-base font-medium">
           {estado.error}
         </p>
       )}
       {estado.ok && (
-        <p role="status" className="text-base text-green-700">
+        <p role="status" className="estado-ok flex flex-wrap items-center gap-x-3 text-base font-medium">
           {estado.ok}
+          {estado.receiptId && (
+            <a
+              href={`/api/recibos/${estado.receiptId}/pdf`}
+              target="_blank"
+              rel="noopener"
+              className="underline underline-offset-2"
+            >
+              Imprimir el recibo
+            </a>
+          )}
         </p>
       )}
     </form>

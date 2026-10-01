@@ -257,6 +257,8 @@ export async function notificarResultadoDePago(resultado: {
   customerId?: string | null;
   tipo?: "pedido" | "deuda" | "inscripcion";
   detalle?: string;
+  /** El recibo, cuando el pago saldó deuda: el correo lo lleva adjunto. */
+  receiptId?: string | null;
 }): Promise<void> {
   try {
     if (resultado.detalle !== "aprobado") return;
@@ -316,6 +318,14 @@ export async function notificarResultadoDePago(resultado: {
           esDeuda: false,
         }),
       });
+      return;
+    }
+
+    // Un pago de deuda con recibo manda el recibo: es el mismo aviso, con el
+    // papel adjunto. Import dinámico porque `cobros.ts` usa `despacharEmail`.
+    if (resultado.receiptId) {
+      const { notificarRecibo } = await import("./cobros");
+      await notificarRecibo(resultado.receiptId);
       return;
     }
 

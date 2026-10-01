@@ -1,207 +1,196 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { AlertCircle, Banknote, Check, Landmark, Loader2, ScrollText, Upload } from "lucide-react";
 import {
-  AlertCircle,
-  Banknote,
-  Check,
-  CreditCard,
-  Loader2,
-  Upload,
-} from "lucide-react";
-import {
-  pagarDeuda,
+  informarChequesDeDeuda,
   subirComprobanteDeDeuda,
   type EstadoPago,
 } from "@/app/(public)/pago-actions";
+import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
 import { formatearMonto } from "@/lib/formato";
 import type { DatosParaTransferir } from "@/lib/dal/pagos";
 
 const inicial: EstadoPago = {};
 
+type Forma = "transferencia" | "deposito" | "cheques";
+
 /**
- * Pago online de la deuda de cuenta corriente (cláusula 1.6).
+ * Cómo paga el cliente su cuenta corriente.
  *
- * El importe viene con el saldo total precargado pero se puede editar: los
- * pagos a cuenta son la norma en el rubro —se abona una parte y se sigue
- * comprando—, y obligar a cancelar todo haría que la gente no use el botón y
- * siga transfiriendo por afuera.
+ * De la clienta (30/9/2026): «que el usuario pueda pagar su cuenta corriente
+ * con cheques, y no pagar online, sino con transferencia o dinero en cuenta
+ * nada más». Tres formas, ninguna online:
  *
- * El importe que se manda no decide nada por sí solo: el servidor lo vuelve a
- * validar contra el saldo real antes de abrir el cobro.
+ * - **Transferencia** y **depósito**: el cliente sube el comprobante, la casa
+ *   lo verifica contra el extracto, y recién ahí baja la deuda y sale el
+ *   recibo. Son dos pestañas y no una porque el recibo tiene que decir cuál.
+ * - **Cheques**: los informa uno por uno —banco, número, fecha— y quedan «por
+ *   recibir» hasta que alguien los tiene en mano y los acepta.
+ *
+ * El saldo a favor no es una forma de pago acá: ya descuenta solo de lo que se
+ * debe. Se usa al comprar, y la pantalla lo dice.
  */
-export function PagarDeuda({
-  saldo,
-  banco,
-  enVivo,
-}: {
-  saldo: number;
-  banco: DatosParaTransferir | null;
-  enVivo: boolean;
-}) {
-  const [pestana, setPestana] = useState<"online" | "transferencia">("online");
-  const [estadoPago, accionPago, pagando] = useActionState(pagarDeuda, inicial);
-  const [estadoComprobante, accionComprobante, subiendo] = useActionState(
-    subirComprobanteDeDeuda,
-    inicial,
-  );
+export function PagarDeuda({ saldo, banco }: { saldo: number; banco: DatosParaTransferir | null }) {
+  const [forma, setForma] = useState<Forma>("transferencia");
 
   if (saldo <= 0) return null;
 
   return (
     <section className="overflow-hidden rounded-xl border bg-card">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-3.5">
-        <h2 className="font-medium">Cancelar tu saldo</h2>
-        <p className="text-sm text-muted-foreground">
-          Debés {formatearMonto(saldo)}
-        </p>
+        <h2 className="font-medium">Pagar tu cuenta</h2>
+        <p className="text-sm text-muted-foreground">Debés {formatearMonto(saldo)}</p>
       </div>
 
-      <div className="flex gap-1 border-b px-5 pt-3">
-        <Pestana
-          activa={pestana === "online"}
-          onClick={() => setPestana("online")}
-          icono={CreditCard}
-        >
-          Pagar online
-        </Pestana>
-        <Pestana
-          activa={pestana === "transferencia"}
-          onClick={() => setPestana("transferencia")}
-          icono={Banknote}
-        >
+      <div className="flex gap-1 overflow-x-auto border-b px-5 pt-3">
+        <Pestana activa={forma === "transferencia"} onClick={() => setForma("transferencia")} icono={Banknote}>
           Transferencia
         </Pestana>
+        <Pestana activa={forma === "deposito"} onClick={() => setForma("deposito")} icono={Landmark}>
+          Depósito
+        </Pestana>
+        <Pestana activa={forma === "cheques"} onClick={() => setForma("cheques")} icono={ScrollText}>
+          Cheques
+        </Pestana>
       </div>
 
-      {pestana === "online" ? (
-        <form action={accionPago} className="space-y-3 p-5">
-          <label htmlFor="monto" className="block text-sm font-medium">
-            Cuánto querés pagar
-          </label>
-          <div className="flex flex-wrap gap-3">
-            <input
-              id="monto"
-              name="monto"
-              inputMode="decimal"
-              defaultValue={saldo.toFixed(2).replace(".", ",")}
-              className="tabular h-11 min-w-[10rem] flex-1 rounded-lg border px-3 text-lg"
-            />
-            <button
-              type="submit"
-              disabled={pagando}
-              className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-orange px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
-            >
-              {pagando ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Abriendo el pago…
-                </>
-              ) : (
-                "Pagar con Mercado Pago"
-              )}
-            </button>
-          </div>
-
-          {estadoPago.error && (
-            <p className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              {estadoPago.error}
-            </p>
-          )}
-
-          <p className="text-sm text-muted-foreground">
-            Podés pagar una parte. El saldo se actualiza apenas se acredita.
-            {!enVivo &&
-              " Por ahora los cobros están en modo de prueba: no se mueve plata."}
-          </p>
-        </form>
+      {forma === "cheques" ? (
+        <Cheques saldo={saldo} />
       ) : (
-        <div className="space-y-4 p-5">
-          {banco ? (
-            <dl className="space-y-1.5 rounded-lg bg-sitio-alt p-4 text-sm">
-              <Fila etiqueta="Titular" valor={banco.titular} />
-              <Fila etiqueta="Banco" valor={banco.banco} />
-              <Fila etiqueta="CBU" valor={banco.cbu} />
-              <Fila etiqueta="Alias" valor={banco.alias} />
-              <Fila etiqueta="CUIT" valor={banco.cuit} />
-            </dl>
-          ) : (
-            <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
-              Escribinos por WhatsApp y te pasamos los datos para transferir.
-            </p>
-          )}
-
-          {estadoComprobante.ok ? (
-            <p className="flex items-start gap-2 rounded-lg bg-brand-green/10 p-3 text-sm">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-green" />
-              {estadoComprobante.ok}
-            </p>
-          ) : (
-            <form action={accionComprobante} className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="monto-transferencia"
-                    className="block text-sm font-medium"
-                  >
-                    Importe transferido
-                  </label>
-                  <input
-                    id="monto-transferencia"
-                    name="monto"
-                    inputMode="decimal"
-                    defaultValue={saldo.toFixed(2).replace(".", ",")}
-                    className="tabular mt-1 h-11 w-full rounded-lg border px-3 text-base"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="comprobante-deuda"
-                    className="block text-sm font-medium"
-                  >
-                    Comprobante
-                  </label>
-                  <input
-                    id="comprobante-deuda"
-                    name="comprobante"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,application/pdf"
-                    required
-                    className="mt-1 h-11 w-full rounded-lg border px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
-
-              {estadoComprobante.error && (
-                <p className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  {estadoComprobante.error}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={subiendo}
-                className="inline-flex h-11 items-center gap-2 rounded-lg border px-5 font-medium transition-colors hover:bg-muted disabled:opacity-60"
-              >
-                {subiendo ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4" />
-                )}
-                Informar el pago
-              </button>
-
-              <p className="text-sm text-muted-foreground">
-                Lo imputamos a tu cuenta cuando lo verificamos contra el
-                extracto.
-              </p>
-            </form>
-          )}
-        </div>
+        <Comprobante key={forma} medio={forma} saldo={saldo} banco={banco} />
       )}
     </section>
+  );
+}
+
+function Comprobante({
+  medio,
+  saldo,
+  banco,
+}: {
+  medio: "transferencia" | "deposito";
+  saldo: number;
+  banco: DatosParaTransferir | null;
+}) {
+  const [estado, accion, subiendo] = useActionState(subirComprobanteDeDeuda, inicial);
+
+  return (
+    <div className="space-y-4 p-5">
+      {banco ? (
+        <dl className="space-y-1.5 rounded-lg bg-sitio-alt p-4 text-sm">
+          <Fila etiqueta="Titular" valor={banco.titular} />
+          <Fila etiqueta="Banco" valor={banco.banco} />
+          <Fila etiqueta="CBU" valor={banco.cbu} />
+          <Fila etiqueta="Alias" valor={banco.alias} />
+          <Fila etiqueta="CUIT" valor={banco.cuit} />
+        </dl>
+      ) : (
+        <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
+          Escribinos por WhatsApp y te pasamos los datos de la cuenta.
+        </p>
+      )}
+
+      {estado.ok ? (
+        <p className="flex items-start gap-2 rounded-lg bg-brand-green/10 p-3 text-sm">
+          <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-green" />
+          {estado.ok}
+        </p>
+      ) : (
+        <form action={accion} className="space-y-3">
+          <input type="hidden" name="medio" value={medio} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor={`monto-${medio}`} className="block text-sm font-medium">
+                {medio === "deposito" ? "Importe depositado" : "Importe transferido"}
+              </label>
+              <input
+                id={`monto-${medio}`}
+                name="monto"
+                inputMode="decimal"
+                defaultValue={saldo.toFixed(2).replace(".", ",")}
+                className="tabular mt-1 h-11 w-full rounded-lg border px-3 text-base"
+              />
+            </div>
+            <div>
+              <label htmlFor={`comprobante-${medio}`} className="block text-sm font-medium">
+                {medio === "deposito" ? "Foto de la boleta de depósito" : "Comprobante"}
+              </label>
+              <input
+                id={`comprobante-${medio}`}
+                name="comprobante"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                required
+                className="mt-1 h-11 w-full rounded-lg border px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          {estado.error && (
+            <p className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              {estado.error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={subiendo}
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-accion-hover disabled:opacity-60"
+          >
+            {subiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            Informar el pago
+          </button>
+
+          <p className="text-sm text-muted-foreground">
+            Podés pagar una parte. Lo imputamos a tu cuenta cuando lo verificamos contra el
+            extracto, y te mandamos el recibo por correo.
+          </p>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function Cheques({ saldo }: { saldo: number }) {
+  const [estado, accion, enviando] = useActionState(informarChequesDeDeuda, inicial);
+
+  if (estado.ok) {
+    return (
+      <p className="m-5 flex items-start gap-2 rounded-lg bg-brand-green/10 p-3 text-sm">
+        <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-green" />
+        {estado.ok}
+      </p>
+    );
+  }
+
+  return (
+    <form action={accion} className="space-y-4 p-5">
+      <p className="text-sm text-muted-foreground">
+        Cargá cada cheque con su banco, número y fecha de pago, tal como figuran en el papel.
+        Traelos al local o mandalos como e-Cheq: cuando los tengamos los aceptamos, baja tu
+        saldo y te llega el recibo.
+      </p>
+
+      <CobroMultimedio aCobrar={saldo} medios={["cheque", "echeq"]} medioInicial="cheque" />
+
+      {estado.error && (
+        <p className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          {estado.error}
+        </p>
+      )}
+
+      <button
+        type="submit"
+        disabled={enviando}
+        className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-accion-hover disabled:opacity-60"
+      >
+        {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScrollText className="h-4 w-4" />}
+        Informar los cheques
+      </button>
+    </form>
   );
 }
 
@@ -221,7 +210,7 @@ function Pestana({
       type="button"
       onClick={onClick}
       aria-pressed={activa}
-      className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 pb-2.5 text-sm font-medium transition-colors ${
+      className={`-mb-px inline-flex shrink-0 items-center gap-2 border-b-2 px-3 pb-2.5 text-sm font-medium transition-colors ${
         activa
           ? "border-brand-orange text-foreground"
           : "border-transparent text-muted-foreground hover:text-foreground"

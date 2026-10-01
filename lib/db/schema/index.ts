@@ -24,3 +24,4 @@ export * from "./comercial";
 export * from "./cheques";
 export * from "./circuito";
 export * from "./limites";
+export * from "./recibos";

@@ -393,6 +393,22 @@ input::placeholder, textarea::placeholder {
 .estado-problema { --estado-fondo: #fbe4e2; --estado-tinta: #b3261e; --estado-acento: #b3261e; }
 .estado-cerrado  { --estado-fondo: #ecebe8; --estado-tinta: #5c564e; --estado-acento: #c3bfb8; }
 
+/* La familia también pinta el texto.
+
+   Las clases definían solo las variables, y veinte lugares del panel las usaban
+   como si pintaran: «estado-problema» sobre un error, «estado-espera» sobre un
+   aviso. Esos textos salían del color normal y el error no se distinguía del
+   resto (1/10/2026). Los chips ya ponían la tinta a mano y no cambian; las
+   franjas de acento son elementos vacíos. */
+.estado-espera,
+.estado-info,
+.estado-marca,
+.estado-ok,
+.estado-problema,
+.estado-cerrado {
+  color: var(--estado-tinta);
+}
+
 .dark .estado-espera {
   --estado-fondo: oklch(0.26 0.05 75);
   --estado-tinta: oklch(0.78 0.11 75);

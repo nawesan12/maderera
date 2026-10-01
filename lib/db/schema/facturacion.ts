@@ -348,6 +348,8 @@ export const invoicePayments = pgTable(
     medio: medioCobro().notNull(),
     monto: numeric({ precision: 12, scale: 2 }).notNull(),
     referencia: text(),
+    /** El recibo del cobro. Nulo en lo pasado a cuenta corriente: no es un pago. */
+    receiptId: uuid(),
     fecha: timestamp({ withTimezone: true }).notNull().defaultNow(),
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

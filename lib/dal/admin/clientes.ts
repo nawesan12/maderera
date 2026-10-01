@@ -168,32 +168,10 @@ export async function obtenerCliente(id: string) {
       )[0]?.nombre ?? null
     : null;
 
-  const [movimientos, pedidosDelCliente, presupuestosDelCliente, totales] =
+  // Los movimientos ya no vienen acá: la ficha usa `historialDelCliente`, la
+  // misma línea de tiempo que ve el cliente en Mi cuenta.
+  const [pedidosDelCliente, presupuestosDelCliente, totales] =
     await Promise.all([
-      /*
-       * Los movimientos, con el pedido que los originó resuelto.
-       *
-       * `referencia` guarda el número del comprobante como texto —"PED-1201"—,
-       * así que el enlace no sale de una clave foránea: se busca el pedido por
-       * su número. Es un `left join`, y tiene que serlo: hay movimientos que no
-       * vienen de un pedido (un ajuste a mano, un pago suelto) y esos se siguen
-       * mostrando, solo que sin enlace.
-       */
-      db
-        .select({
-          id: accountMovements.id,
-          tipo: accountMovements.tipo,
-          monto: accountMovements.monto,
-          detalle: accountMovements.detalle,
-          referencia: accountMovements.referencia,
-          createdAt: accountMovements.createdAt,
-          pedidoId: orders.id,
-        })
-        .from(accountMovements)
-        .leftJoin(orders, eq(orders.numero, accountMovements.referencia))
-        .where(eq(accountMovements.customerId, id))
-        .orderBy(desc(accountMovements.createdAt))
-        .limit(20),
       db
         .select({
           id: orders.id,
@@ -218,30 +196,24 @@ export async function obtenerCliente(id: string) {
         .where(eq(quotes.customerId, id))
         .orderBy(desc(quotes.createdAt))
         .limit(10),
-      // El saldo se suma en la base y no sobre `movimientos`: esa lista viene
-      // con `limit(20)`, así que sumarla daba el saldo de las últimas veinte
-      // filas y no el de la cuenta. Con un cliente de años, el número que se
-      // mostraba en la ficha no era el que el cliente debía.
+      // El saldo se suma en la base, sobre todos los movimientos. Sumar una
+      // lista recortada daba el saldo de las últimas filas y no el de la
+      // cuenta: con un cliente de años, el número no era el que debía.
       db
         .select({
           saldo: sql<string>`coalesce(sum(${accountMovements.monto}), 0)`,
-          cuantos: sql<number>`count(*)`,
         })
         .from(accountMovements)
         .where(eq(accountMovements.customerId, id)),
     ]);
 
   const saldo = Number(totales[0]?.saldo ?? 0);
-  const totalMovimientos = Number(totales[0]?.cuantos ?? 0);
 
   return {
     ...cliente,
     vendedor,
     cuentaWebSinVincular: await buscarCuentaWebSinVincular(cliente),
     saldo,
-    movimientos,
-    /** Cuántos hay en total: `movimientos` trae solo los últimos veinte. */
-    totalMovimientos,
     pedidos: pedidosDelCliente,
     presupuestos: presupuestosDelCliente,
   };

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  ArrowLeftRight,
   FileText,
   LayoutGrid,
   MapPin,
@@ -28,6 +29,8 @@ const SECCIONES = [
   { href: "/mi-cuenta/pedidos", titulo: "Pedidos", icono: Package },
   { href: "/mi-cuenta/presupuestos", titulo: "Presupuestos", icono: ScrollText },
   { href: "/mi-cuenta/comprobantes", titulo: "Facturas", icono: FileText },
+  // Para todos: quien compra de contado también tiene movimientos.
+  { href: "/mi-cuenta/movimientos", titulo: "Movimientos", icono: ArrowLeftRight },
   {
     href: "/mi-cuenta/cuenta-corriente",
     titulo: "Cuenta corriente",

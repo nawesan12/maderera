@@ -100,6 +100,16 @@ const POR_DEFECTO: {
     asunto: "Mañana te esperamos",
     encabezado: null,
   },
+  {
+    evento: "recibo_emitido",
+    asunto: "Tu recibo de pago",
+    encabezado: null,
+  },
+  {
+    evento: "cheque_rechazado",
+    asunto: "Un cheque tuyo fue rechazado",
+    encabezado: null,
+  },
 ];
 
 /**

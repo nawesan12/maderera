@@ -132,7 +132,8 @@ export async function guardarCliente(
 
 const movimientoSchema = z.object({
   customerId: z.string().uuid(),
-  tipo: z.enum(["compra", "pago", "nota_credito", "nota_debito", "ajuste"]),
+  // Sin «pago»: un pago se registra con su recibo, desde «Registrar cobro».
+  tipo: z.enum(["compra", "nota_credito", "nota_debito", "ajuste"]),
   monto: z.string(),
   detalle: z.string().trim().max(200).optional(),
 });
@@ -148,7 +149,8 @@ export async function registrarMovimiento(
   _previo: EstadoCliente,
   formData: FormData,
 ): Promise<EstadoCliente> {
-  const usuario = await requireStaff();
+  // Corregir una cuenta a mano es del admin: cobrar no pasa por acá.
+  const usuario = await requireStaffRole("admin");
 
   const parsed = movimientoSchema.safeParse({
     customerId: formData.get("customerId"),
@@ -180,7 +182,7 @@ export async function registrarMovimiento(
 
   await registrarEnBitacora({
     sesion: usuario,
-    accion: parsed.data.tipo === "pago" ? "cobrar" : "crear",
+    accion: "crear",
     entidad: "cliente",
     entidadId: parsed.data.customerId,
     descripcion: `Cargó un movimiento de cuenta corriente: ${parsed.data.tipo} por ${monto}`,

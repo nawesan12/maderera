@@ -92,6 +92,8 @@ export function FormularioDeCompra({
     habilitado: boolean;
     disponible: number;
     motivo: string | null;
+    /** Sin crédito: lo que ofrece es el saldo a favor del cliente. */
+    soloSaldoAFavor: boolean;
   };
   direcciones: DireccionElegible[];
   /** Descuentos por forma de pago. El servidor los vuelve a calcular al confirmar. */
@@ -359,12 +361,27 @@ export function FormularioDeCompra({
                 <OpcionLista
                   activa={medioPago === "cuenta_corriente"}
                   onClick={() => setMedioPago("cuenta_corriente")}
-                  titulo="Cuenta corriente"
-                  detalle={`Tenés ${formatearPrecio(cuentaCorriente.disponible)} disponibles`}
+                  titulo={cuentaCorriente.soloSaldoAFavor ? "Con mi saldo a favor" : "Cuenta corriente"}
+                  detalle={
+                    cuentaCorriente.soloSaldoAFavor
+                      ? `Tenés ${formatearPrecio(cuentaCorriente.disponible)} a favor`
+                      : `Tenés ${formatearPrecio(cuentaCorriente.disponible)} disponibles`
+                  }
                   icono={Wallet}
                 />
               )}
             </div>
+
+            {/* El saldo a favor que no alcanza no se esconde sin decir nada:
+                el cliente sabe que lo tiene y lo va a buscar. */}
+            {!cuentaCorriente.habilitado &&
+              cuentaCorriente.soloSaldoAFavor &&
+              cuentaCorriente.disponible > 0 && (
+                <p className="mt-3 rounded-lg bg-sitio-alt px-3.5 py-2.5 text-sm text-texto-2">
+                  Tenés {formatearPrecio(cuentaCorriente.disponible)} a favor, que no alcanzan
+                  para esta compra. En el mostrador lo podés combinar con otro medio.
+                </p>
+              )}
 
             {medioPago === "cuenta_corriente" &&
               cuentaCorriente.habilitado &&

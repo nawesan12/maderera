@@ -6,7 +6,6 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
-  accountMovements,
   customers,
   orderItems,
   orderStatusHistory,
@@ -343,8 +342,11 @@ export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
 /**
  * Marca un pedido como cobrado.
  *
- * Si el pedido era a cuenta corriente, además baja la deuda del cliente: cobrar
- * en un lado y no en el otro es cómo se desincroniza una cuenta.
+ * Es para lo que ya se cobró por otro lado —contado, una transferencia ya
+ * conciliada— y solo queda anotarlo. **Un pedido a cuenta corriente no pasa
+ * por acá**: su cobro baja la deuda, y eso se hace con recibo desde
+ * `registrarCobroDeCliente`, que dice con qué se pagó. Antes esta función
+ * bajaba la deuda con un movimiento sin medio y sin papel.
  */
 export async function marcarPagado(id: string): Promise<EstadoVenta> {
   const usuario = await requireStaff();
@@ -357,6 +359,11 @@ export async function marcarPagado(id: string): Promise<EstadoVenta> {
 
   if (!pedido) return { error: "No se encontró el pedido." };
   if (pedido.estadoPago === "pagado") return { error: "Ya figura como pagado." };
+  if (pedido.medioPago === "cuenta_corriente" && pedido.customerId) {
+    return {
+      error: "Es a cuenta corriente: registrá el cobro con el medio con que pagó, así sale el recibo y baja la deuda.",
+    };
+  }
 
   await db.transaction(async (tx) => {
     await tx
@@ -364,16 +371,6 @@ export async function marcarPagado(id: string): Promise<EstadoVenta> {
       .set({ estadoPago: "pagado", updatedAt: new Date() })
       .where(eq(orders.id, id));
 
-    if (pedido.medioPago === "cuenta_corriente" && pedido.customerId) {
-      await tx.insert(accountMovements).values({
-        customerId: pedido.customerId,
-        tipo: "pago",
-        monto: (-Number(pedido.total)).toFixed(2),
-        detalle: `Cobro del pedido ${pedido.numero}`,
-        referencia: pedido.numero,
-        createdByUserId: usuario.userId,
-      });
-    }
   });
 
   await registrarEnBitacora({

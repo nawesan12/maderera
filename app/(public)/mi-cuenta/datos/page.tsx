@@ -4,6 +4,8 @@ import { verifySession } from "@/lib/dal/session";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import { formatearCuit } from "@/lib/formato";
 import { FormularioDatos } from "./formulario";
+import { NovedadesPorCorreo } from "./novedades";
+import { estaDadoDeBaja } from "@/lib/campanas/bajas";
 
 export const metadata: Metadata = { title: "Mis datos" };
 
@@ -12,6 +14,7 @@ export default async function MisDatosPage() {
     verifySession(),
     clienteDeLaSesion(),
   ]);
+  const recibe = !(await estaDadoDeBaja(cliente?.email || sesion.email));
 
   return (
     <div className="space-y-5">
@@ -43,6 +46,8 @@ export default async function MisDatosPage() {
         }
         condicionIva={cliente?.condicionIva ?? "consumidor_final"}
       />
+
+      <NovedadesPorCorreo recibe={recibe} />
     </div>
   );
 }

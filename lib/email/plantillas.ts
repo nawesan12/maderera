@@ -79,6 +79,10 @@ interface OpcionesEnvoltura {
   total?: number | string;
   cta?: { texto: string; url: string };
   cierre?: string;
+  /** Una imagen arriba del título (las campañas). Ancho completo, con alt. */
+  imagen?: { url: string; alt: string };
+  /** Algo más para el pie: el enlace de baja de las campañas. */
+  pie?: { html: string; texto: string };
 }
 
 function filaDato(bloque: Bloque): string {
@@ -166,6 +170,7 @@ export function envolver(opciones: OpcionesEnvoltura): {
       <span style="font-family:${FUENTE};font-size:17px;font-weight:700;color:${MARCA.blanco};letter-spacing:-0.2px;">Maderera Juan B. Justo</span><br>
       <span style="font-family:${FUENTE};font-size:12px;color:#B9AFA4;">Tu proyecto. Nuestra madera.</span>
     </td></tr>
+    ${opciones.imagen ? `<tr><td><img src="${escapar(opciones.imagen.url)}" alt="${escapar(opciones.imagen.alt)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;"></td></tr>` : ""}
     <tr><td style="padding:28px;font-family:${FUENTE};">
       <h1 style="margin:0 0 16px;font-size:21px;line-height:1.3;color:${MARCA.gris};">${escapar(opciones.titulo)}</h1>
       ${opciones.saludo ? `<p style="margin:0 0 14px;font-size:15px;color:${MARCA.gris};">Hola ${escapar(opciones.saludo)},</p>` : ""}
@@ -179,6 +184,7 @@ export function envolver(opciones: OpcionesEnvoltura): {
       Casa Central · Av. Juan B. Justo 4153 · (0223) 474-3328<br>
       Aserradero · Canosa 61 · (0223) 483-0535<br>
       <a href="${sitio}" style="color:${MARCA.naranjaOscuro};text-decoration:none;">mjbj.ar</a>
+      ${opciones.pie ? `<br><br>${opciones.pie.html}` : ""}
     </td></tr>
   </table>
 </td></tr></table>
@@ -205,6 +211,7 @@ export function envolver(opciones: OpcionesEnvoltura): {
     opciones.cta ? `\n${opciones.cta.texto}: ${opciones.cta.url}` : null,
     opciones.cierre ? `\n${opciones.cierre.replace(/<[^>]+>/g, "")}` : null,
     "\n—\nMaderera Juan B. Justo · Mar del Plata\nCasa Central (0223) 474-3328 · Aserradero (0223) 483-0535",
+    opciones.pie ? `\n${opciones.pie.texto}` : null,
   ]
     .filter((linea) => linea !== null)
     .join("\n");

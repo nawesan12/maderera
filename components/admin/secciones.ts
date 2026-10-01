@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   Mail,
   MapPin,
+  Megaphone,
   MessageCircle,
   Newspaper,
   Package,
@@ -172,6 +173,7 @@ export const secciones: { titulo: string; items: ItemNav[] }[] = [
       { href: "/admin/eventos", icon: CalendarDays, label: "Eventos" },
       { href: "/admin/documentacion", icon: BookOpen, label: "Documentación" },
       { href: "/admin/avisos", icon: Mail, label: "Avisos" },
+      { href: "/admin/campanas", icon: Megaphone, label: "Campañas" },
     ],
   },
   /* Lo que se toca de vez en cuando: reglas, datos del negocio y rastros. */

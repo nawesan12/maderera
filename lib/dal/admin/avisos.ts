@@ -4,7 +4,7 @@ import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { avisosEmail, notificationsLog } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
-import { correoEnVivo } from "@/lib/email";
+import { proveedorEmail } from "@/lib/email";
 import { remitenteVisible } from "@/lib/email/config";
 import { posicionDelEvento } from "@/lib/notificaciones/titulos";
 
@@ -48,14 +48,17 @@ export interface EstadoCorreo {
 export async function estadoCorreo(): Promise<EstadoCorreo> {
   await requireStaff();
 
-  const enVivo = correoEnVivo();
+  const proveedor = proveedorEmail();
 
   return {
-    enVivo,
+    enVivo: proveedor.real,
     remitente: remitenteVisible(),
-    detalle: enVivo
-      ? "Los correos salen por Resend."
-      : "Falta cargar RESEND_API_KEY. Los avisos se arman y quedan registrados, pero no se envían.",
+    detalle:
+      proveedor.nombre === "smtp"
+        ? "Los correos salen por el servidor de correo propio."
+        : proveedor.nombre === "resend"
+          ? "Los correos salen por Resend."
+          : "Falta conectar el envío (el servidor de correo propio o Resend). Los avisos se arman y quedan registrados, pero no se envían.",
   };
 }
 

@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { tareasCorridas, trabajos } from "@/lib/db/schema";
 import { ETIQUETAS } from "@/lib/cache-publico";
 import { procesarCola } from "@/lib/cola";
+import { iniciarProgramadas } from "@/lib/campanas/envio";
 import { limpiarVentanasViejas } from "@/lib/limites";
 import { enviarRecordatorios } from "@/lib/notificaciones/eventos";
 import { avisarAlPanel } from "@/lib/notificaciones/push";
@@ -45,8 +46,12 @@ interface Tarea {
 export const TAREAS = {
   "cada-minuto": {
     frecuencia: null,
-    descripcion: "Procesa la cola: pagos y mensajes que quedaron sin hacer o fallaron.",
-    ejecutar: async () => ({ ...(await procesarCola({ limite: 100 })) }),
+    descripcion:
+      "Arranca las campañas programadas y procesa la cola: pagos, mensajes y tandas de correo.",
+    ejecutar: async () => {
+      const campanas = await iniciarProgramadas();
+      return { campanasIniciadas: campanas, ...(await procesarCola({ limite: 100 })) };
+    },
   },
 
   "cada-hora": {

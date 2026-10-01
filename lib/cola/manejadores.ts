@@ -22,6 +22,8 @@ export interface CargasDeTrabajo {
     firmaVerificada: boolean | null;
   };
   "whatsapp.payload": { payload: PayloadWebhook };
+  /** Una tanda de una campaña de correo (ver `lib/campanas/envio.ts`). */
+  "campana.tanda": { campanaId: string };
 }
 
 export type TipoDeTrabajo = keyof CargasDeTrabajo;
@@ -55,5 +57,10 @@ export const MANEJADORES: {
   "whatsapp.payload": async (carga) => {
     const { procesarPayload } = await import("@/lib/whatsapp/webhook");
     await procesarPayload(carga.payload);
+  },
+
+  "campana.tanda": async (carga) => {
+    const { procesarTanda } = await import("@/lib/campanas/envio");
+    await procesarTanda(carga.campanaId);
   },
 };

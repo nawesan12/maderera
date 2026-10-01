@@ -36,6 +36,7 @@ export const proveedorResend: ProveedorEmail = {
           html: mensaje.html,
           text: mensaje.texto,
           reply_to: mensaje.responderA ?? config.responderA ?? undefined,
+          headers: mensaje.cabeceras,
           attachments: mensaje.adjuntos?.map((a) => ({
             filename: a.nombre,
             content: Buffer.from(a.contenido).toString("base64"),

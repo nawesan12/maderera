@@ -20,10 +20,16 @@ const TOMA_MS = 5 * 60_000;
 export async function encolar<T extends TipoDeTrabajo>(
   tipo: T,
   carga: CargaDe<T>,
+  /** Para más tarde: así se espacian las tandas de una campaña. */
+  opciones: { en?: Date } = {},
 ): Promise<string> {
   const [fila] = await db
     .insert(trabajos)
-    .values({ tipo, carga: carga as unknown as Record<string, unknown> })
+    .values({
+      tipo,
+      carga: carga as unknown as Record<string, unknown>,
+      ...(opciones.en ? { proximoIntentoAt: opciones.en } : {}),
+    })
     .returning({ id: trabajos.id });
   return fila.id;
 }

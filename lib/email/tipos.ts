@@ -26,6 +26,11 @@ export interface MensajeEmail {
   texto: string;
   responderA?: string;
   adjuntos?: AdjuntoEmail[];
+  /**
+   * Cabeceras extra. Las usan las campañas para `List-Unsubscribe`: Gmail y
+   * Yahoo exigen la baja con un clic a quien manda correo masivo.
+   */
+  cabeceras?: Record<string, string>;
 }
 
 export interface ResultadoEmail {
@@ -38,7 +43,7 @@ export interface ResultadoEmail {
 }
 
 export interface ProveedorEmail {
-  nombre: "resend" | "demo";
+  nombre: "resend" | "smtp" | "demo";
   real: boolean;
   enviar(mensaje: MensajeEmail): Promise<ResultadoEmail>;
 }

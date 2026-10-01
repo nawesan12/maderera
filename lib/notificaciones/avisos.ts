@@ -28,7 +28,7 @@ import { avisarAlPanel } from "@/lib/notificaciones/push";
  *    cobro que no se registra porque el mail rebotó es un problema real.
  * 2. **Todo queda en `notifications_log`.** "¿Le avisamos?" es una pregunta que
  *    aparece sola cuando alguien dice que nunca le llegó nada.
- * 3. **`simulada` no es `enviada`.** Sin `RESEND_API_KEY` cargada el correo se
+ * 3. **`simulada` no es `enviada`.** Sin envío conectado (SMTP propio o Resend) el correo se
  *    arma y no sale, y la bitácora lo dice con todas las letras.
  */
 

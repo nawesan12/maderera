@@ -8,6 +8,7 @@ import { addresses, customers, profiles, quotes } from "@/lib/db/schema";
 import { verifySession } from "@/lib/dal/session";
 import { clienteDeLaSesion, miPedido } from "@/lib/dal/cuenta";
 import { plural } from "@/lib/formato";
+import { darDeBaja, volverARecibir } from "@/lib/campanas/bajas";
 import { agregarVarios } from "@/app/(public)/carrito-actions";
 
 export interface EstadoAccion {
@@ -339,4 +340,24 @@ export async function borrarDireccion(
 
   revalidatePath("/mi-cuenta/direcciones");
   return { ok: "Dirección eliminada." };
+}
+
+/**
+ * Recibir o no las novedades por correo.
+ *
+ * Se aplica a la dirección con que ingresa y a la de su ficha de cliente, si
+ * son distintas: las campañas salen a la de la ficha, y quien se da de baja
+ * desde su cuenta no tiene por qué saber cuál de las dos tenemos cargada.
+ */
+export async function cambiarNovedades(recibir: boolean): Promise<{ ok?: string; error?: string }> {
+  const sesion = await verifySession();
+  const cliente = await clienteDeLaSesion();
+  const direcciones = [...new Set([sesion.email, cliente?.email].filter((d): d is string => Boolean(d)))];
+
+  for (const email of direcciones) {
+    if (recibir) await volverARecibir(email);
+    else await darDeBaja(email, "cuenta");
+  }
+  revalidatePath("/mi-cuenta/datos");
+  return { ok: recibir ? "Te vamos a mandar las novedades." : "No te vamos a mandar más novedades." };
 }

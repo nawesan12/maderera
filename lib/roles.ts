@@ -106,6 +106,9 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/facturacion": ["admin"],
   "/admin/arca": ["admin"],
   "/admin/avisos": ["admin"],
+  // Una campaña sale a toda la cartera de una vez: un error ahí no se
+  // deshace, así que la manda quien decide qué dice la maderera hacia afuera.
+  "/admin/campanas": ["admin"],
   "/admin/caja": ["admin"],
   /*
    * Compras. Lo que se le paga a un proveedor y a qué costo entró cada tabla es

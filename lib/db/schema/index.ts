@@ -26,3 +26,4 @@ export * from "./circuito";
 export * from "./limites";
 export * from "./recibos";
 export * from "./tareas";
+export * from "./campanas";

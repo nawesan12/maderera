@@ -71,6 +71,11 @@ const ESTADOS: Record<string, Estilo> = {
   anulada: { etiqueta: "Anulada", familia: "cerrado", abierto: false },
   rechazada: { etiqueta: "Rechazada por ARCA", familia: "problema", abierto: true },
   borrador: { etiqueta: "Borrador", familia: "espera", abierto: true },
+  // Campañas de correo
+  programada: { etiqueta: "Programada", familia: "info", abierto: true },
+  enviando: { etiqueta: "Enviando", familia: "marca", abierto: true },
+  campana_enviada: { etiqueta: "Enviada", familia: "ok", abierto: false },
+  cancelada: { etiqueta: "Cancelada", familia: "cerrado", abierto: false },
 
   // Pagos y cuenta corriente
   pagado: { etiqueta: "Pagado", familia: "ok", abierto: false },

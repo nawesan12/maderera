@@ -1,10 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { PiezaFijada } from "@/lib/cortes/plano";
+import { calcularPlanoDeCorte, leerAcomodoManual, type PiezaFijada } from "@/lib/cortes/plano";
+import { obtenerCorte } from "@/lib/dal/admin/cortes";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { z } from "zod";
+import { leerAnchoDeSierra } from "@/lib/cortes/sierra";
+import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
 import { branches, cuttingItems, cuttingOrders } from "@/lib/db/schema";
 import { siguienteNumeroDeCorte } from "@/lib/dal/numeracion-ventas";
 import { requireStaff } from "@/lib/dal/session";
@@ -180,6 +183,8 @@ export async function crearCorte(
        * plano se recalcula, que es el comportamiento de siempre.
        */
       acomodoManual: z.string().max(20_000).optional(),
+      /** El disco de este trabajo. Vacío: el de la configuración. */
+      anchoSierraMm: z.string().optional(),
     })
     .safeParse({
       customerId: (formData.get("customerId") as string) || undefined,
@@ -196,6 +201,7 @@ export async function crearCorte(
       urgente: formData.get("urgente") === "si",
       notas: (formData.get("notas") as string) || undefined,
       acomodoManual: (formData.get("acomodoManual") as string) || undefined,
+      anchoSierraMm: (formData.get("anchoSierraMm") as string) || undefined,
     });
 
   if (!cabecera.success) {
@@ -258,6 +264,9 @@ export async function crearCorte(
         placas: cabecera.data.placas,
         cantoDescripcion: cabecera.data.cantoDescripcion ?? null,
         acomodoManual: cabecera.data.acomodoManual ?? null,
+        anchoSierraMm:
+          leerAnchoDeSierra(cabecera.data.anchoSierraMm) ??
+          (await parametrosDeCalculo()).anchoSierraMm,
         estado: "en-cola",
         urgente: cabecera.data.urgente ? 1 : 0,
         notas: cabecera.data.notas ?? null,
@@ -388,5 +397,62 @@ export async function guardarAcomodoManual(
   revalidatePath(`/plano/${id}`);
   return {
     ok: guardado ? "Acomodo guardado." : "El plano vuelve al automático.",
+  };
+}
+
+/**
+ * Cambia el disco de un trabajo que todavía no se cortó, y recalcula.
+ *
+ * De la clienta (30/9/2026): «que los 5 mm que saca la máquina sean
+ * editables». Con otro disco el plano es otro: entran más o menos piezas por
+ * placa y cambian las pasadas, así que se guardan de nuevo las placas y las
+ * pasadas del plano —lo que lee la hoja del taller y lo que se cobra—. Un
+ * trabajo que ya pasó por la máquina no se toca: su plano es el que se cortó.
+ */
+export async function cambiarAnchoDeSierra(id: string, valor: string): Promise<EstadoCorte> {
+  const usuario = await requireStaff();
+
+  const ancho = leerAnchoDeSierra(valor);
+  if (ancho === null) return { error: "El disco tiene que medir entre 0,5 y 10 mm." };
+
+  const corte = await obtenerCorte(id);
+  if (!corte) return { error: "No encontramos la orden de corte." };
+  if (corte.estado !== "en-cola") {
+    return { error: "Ese trabajo ya pasó por la máquina: su plano es el que se cortó." };
+  }
+
+  const plano = calcularPlanoDeCorte({
+    piezas: corte.piezas,
+    placaLargo: corte.medida.largo,
+    placaAncho: corte.medida.ancho,
+    anchoSierra: ancho,
+    fijadas: leerAcomodoManual(corte.acomodoManual),
+  });
+
+  await db
+    .update(cuttingOrders)
+    .set({
+      anchoSierraMm: ancho,
+      placas: plano.placas.length,
+      pasadas: plano.pasadasCobrables,
+      updatedAt: new Date(),
+    })
+    .where(eq(cuttingOrders.id, id));
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "editar",
+    entidad: "corte",
+    entidadId: id,
+    descripcion: `${corte.numero}: disco de ${corte.anchoSierraMm} a ${ancho} mm`,
+  });
+
+  revalidatePath(`/admin/cortes/${id}`);
+  revalidatePath(`/plano/${id}`);
+  return {
+    ok:
+      plano.noEntran.length > 0
+        ? `Disco cambiado. Ojo: con ${ancho} mm hay ${plano.noEntran.length} pieza(s) que no entran.`
+        : `Disco cambiado: el plano se rehizo con ${ancho} mm.`,
   };
 }

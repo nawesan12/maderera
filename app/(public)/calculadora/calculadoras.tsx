@@ -23,10 +23,10 @@ import {
   type DeckResult,
   type BoardPiece,
   MEDIDAS_DE_PLACA,
-  ANCHO_DE_SIERRA_MM,
 } from "@/lib/calculations";
 import { buscarSugerencias } from "./actions";
 import type { Sugerencia } from "@/lib/dal/sugerencias";
+import { formatearSierra } from "@/lib/cortes/sierra";
 
 function ResultRow({ label, value, unit, onAdd, sugerencia, nota }: {
   label: string;
@@ -418,7 +418,7 @@ export function Calculadoras({
                   <CardContent className="p-6">
                     <ResultRow label="Placas necesarias" value={boardResult.placasNecesarias} unit={`placas (${boardResult.placaDimension})`} sugerencia={sugerenciaDe("placa melamina")} />
                     <ResultRow label="Aprovechamiento" value={`${boardResult.aprovechamiento}%`} unit="" />
-                    <ResultRow label="Desperdicio" value={`${boardResult.desperdicio}%`} unit="" nota={`Incluye los ${ANCHO_DE_SIERRA_MM} mm que se lleva la sierra en cada pasada.`} />
+                    <ResultRow label="Desperdicio" value={`${boardResult.desperdicio}%`} unit="" nota={`Incluye los ${formatearSierra(parametros.anchoSierraMm)} que se lleva la sierra en cada pasada.`} />
                     <div className="pt-4 mt-2">
                       <Button
                         className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"

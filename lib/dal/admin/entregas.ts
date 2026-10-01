@@ -1,6 +1,6 @@
 import "server-only";
 
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { sucursalPublicada } from "@/lib/sucursales";
 import { saldoAlRemito } from "@/lib/entregas";
@@ -8,11 +8,13 @@ import {
   branches,
   deliveries,
   deliveryItems,
+  invoices,
   orderItems,
   orders,
   shipments,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { nombreComprobante, numeroFormateado } from "@/lib/fiscal/comprobantes";
 
 /** Lectura de remitos para el panel. */
 
@@ -127,6 +129,19 @@ export interface RemitoCompleto {
     unidad: string;
     pendiente: number;
   }[];
+  /**
+   * La factura del pedido, con su CAE, si la hay.
+   *
+   * De la clienta (30/9/2026): «agregar CAE al remito». El CAE es de la
+   * factura —ARCA autoriza comprobantes, y por WSFE no se emiten remitos—,
+   * así que el remito la nombra: con qué factura viaja esta mercadería y con
+   * qué autorización. Nulo si el pedido todavía no se facturó: no se inventa.
+   */
+  factura: {
+    etiqueta: string;
+    cae: string | null;
+    caeVencimiento: Date | null;
+  } | null;
 }
 
 /**
@@ -175,7 +190,7 @@ export async function remitoCompleto(
 
   if (!remito) return null;
 
-  const [lineas, pendientes] = await Promise.all([
+  const [lineas, pendientes, facturas] = await Promise.all([
     db
       .select({
         descripcion: orderItems.descripcion,
@@ -190,7 +205,32 @@ export async function remitoCompleto(
     // Lo que quedaba **en ese momento**, no lo que queda hoy: un remito
     // reimpreso tiene que decir lo mismo que dijo el día que se firmó.
     saldoAlRemito(remito.pedidoId, deliveryId),
+    // La última factura vigente del pedido. Las notas de crédito no: anulan,
+    // no acompañan mercadería.
+    db
+      .select({
+        tipo: invoices.tipo,
+        puntoVenta: invoices.puntoVenta,
+        numero: invoices.numero,
+        cae: invoices.cae,
+        caeVencimiento: invoices.caeVencimiento,
+      })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.orderId, remito.pedidoId),
+          ne(invoices.estado, "anulada"),
+          // Una rechazada se nombra igual: es la emitida sin certificado de
+          // ARCA, y el remito la muestra «sin CAE, sin valor fiscal».
+          ne(invoices.estado, "borrador"),
+          sql`${invoices.tipo}::text like 'factura%'`,
+        ),
+      )
+      .orderBy(desc(invoices.createdAt))
+      .limit(1),
   ]);
+
+  const factura = facturas[0];
 
   return {
     ...remito,
@@ -208,6 +248,13 @@ export async function remitoCompleto(
       unidad: p.unidad,
       pendiente: p.pendiente,
     })),
+    factura: factura
+      ? {
+          etiqueta: `${nombreComprobante(factura.tipo)} ${numeroFormateado(factura.puntoVenta, factura.numero)}`,
+          cae: factura.cae,
+          caeVencimiento: factura.caeVencimiento,
+        }
+      : null,
   };
 }
 

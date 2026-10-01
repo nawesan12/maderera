@@ -111,6 +111,7 @@ const ventaSchema = z.object({
       placas: z.coerce.number().int().min(1).max(999),
       pasadas: z.coerce.number().int().min(0).max(9999),
       acomodoManual: z.string().max(20_000).nullable(),
+      anchoSierraMm: z.number().min(0.5).max(10).nullable().optional(),
       piezas: z
         .array(
           z.object({

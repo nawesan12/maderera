@@ -843,6 +843,15 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   padding-bottom: 1rem;
 }
 
+/* El logo arriba de la razón social. A escala fija: en el papel tiene que
+   medir lo mismo en la factura, el remito y el resumen. */
+.comprobante-hoja .logo-emisor {
+  display: block;
+  height: 12mm;
+  width: auto;
+  margin-bottom: 2.5mm;
+}
+
 .comprobante-hoja .razon {
   font-size: 1.05rem;
   font-weight: 800;

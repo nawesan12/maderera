@@ -1,12 +1,16 @@
 import "server-only";
 
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import {
   PDFDocument,
   StandardFonts,
   rgb,
   type PDFFont,
+  type PDFImage,
   type PDFPage,
 } from "pdf-lib";
+import { LOGO_DOCUMENTOS } from "@/lib/empresa";
 
 /**
  * Armador de hojas A4.
@@ -42,13 +46,34 @@ export interface Hoja {
   normal: PDFFont;
   negrita: PDFFont;
   mono: PDFFont;
+  /** El logo, ya embebido. `null` si el archivo no estaba: el papel sale igual. */
+  logo: PDFImage | null;
   /** Posición vertical del cursor, desde arriba. */
   y: number;
+}
+
+/**
+ * Los bytes del logo, leídos una vez por proceso.
+ *
+ * Cada PDF lo embebe de nuevo —un documento no puede compartir objetos con
+ * otro—, pero leerlo del disco en cada descarga es trabajo de más.
+ */
+let bytesDelLogo: Promise<Uint8Array | null> | null = null;
+
+function leerLogo(): Promise<Uint8Array | null> {
+  bytesDelLogo ??= readFile(path.join(process.cwd(), "public", LOGO_DOCUMENTOS.ruta))
+    .then((b) => new Uint8Array(b))
+    // Sin el archivo el documento sale con el nombre en texto, como antes:
+    // un logo que falta no puede impedir imprimir una factura.
+    .catch(() => null);
+  return bytesDelLogo;
 }
 
 export async function nuevaHoja(): Promise<Hoja> {
   const doc = await PDFDocument.create();
   const pagina = doc.addPage([A4.ancho, A4.alto]);
+
+  const logo = await leerLogo();
 
   return {
     doc,
@@ -56,6 +81,7 @@ export async function nuevaHoja(): Promise<Hoja> {
     normal: await doc.embedFont(StandardFonts.Helvetica),
     negrita: await doc.embedFont(StandardFonts.HelveticaBold),
     mono: await doc.embedFont(StandardFonts.Courier),
+    logo: logo ? await doc.embedPng(logo) : null,
     y: A4.alto - MARGEN,
   };
 }
@@ -229,7 +255,14 @@ export function marcaDeAgua(hoja: Hoja, texto: string): void {
   });
 }
 
-/** Encabezado común: el emisor arriba a la izquierda. */
+/**
+ * Encabezado común: el emisor arriba a la izquierda, con el logo.
+ *
+ * El logo va arriba de todo y los datos legales abajo, en chico: la razón
+ * social con su «S.R.L.», el domicilio y el CUIT son lo que el papel tiene que
+ * decir; el logo es lo que hace que se reconozca de un vistazo en la carpeta
+ * del cliente. Lo llevan todos los PDF del sistema porque todos pasan por acá.
+ */
 export function encabezadoEmisor(
   hoja: Hoja,
   emisor: {
@@ -242,13 +275,22 @@ export function encabezadoEmisor(
 ): number {
   let cursor = y;
 
+  if (hoja.logo) {
+    const alto = mm(10);
+    const ancho = (alto * LOGO_DOCUMENTOS.ancho) / LOGO_DOCUMENTOS.alto;
+    // `y` es la línea de base del primer texto: el logo se apoya desde ahí
+    // hacia arriba un poco, para que su borde superior quede en el margen.
+    hoja.pagina.drawImage(hoja.logo, { x: MARGEN, y: cursor - alto + 9, width: ancho, height: alto });
+    cursor -= alto + 7;
+  }
+
   escribir(hoja, emisor?.razonSocial || "Maderera Juan B. Justo", {
     x: MARGEN,
     y: cursor,
-    tamano: 13,
+    tamano: hoja.logo ? 9 : 13,
     fuente: hoja.negrita,
   });
-  cursor -= 13;
+  cursor -= hoja.logo ? 11 : 13;
 
   if (emisor?.nombreFantasia) {
     escribir(hoja, emisor.nombreFantasia, {

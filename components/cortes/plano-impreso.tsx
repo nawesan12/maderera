@@ -5,6 +5,7 @@ import {
   type PlanoDeCorte,
   type PlacaDelPlano,
 } from "@/lib/cortes/plano";
+import { formatearSierra } from "@/lib/cortes/sierra";
 
 /**
  * El plano de corte en papel.
@@ -124,7 +125,7 @@ export function PlanoImpreso({
             parte, así que el operario no entendía por qué dos piezas de 900 no
             entraban en una placa de 1830. */}
         <div className="plano-numero">
-          <p className="valor">{plano.anchoSierra} mm</p>
+          <p className="valor">{formatearSierra(plano.anchoSierra)}</p>
           <p className="rotulo">se lleva la sierra por corte</p>
         </div>
       </div>
@@ -176,7 +177,7 @@ export function PlanoImpreso({
       <p className="plano-pie">
         Las piezas están numeradas en el orden en que salen de la máquina: las
         tiras de arriba hacia abajo, y adentro de cada tira de izquierda a
-        derecha. Entre pieza y pieza se descuentan {plano.anchoSierra} mm de
+        derecha. Entre pieza y pieza se descuentan {formatearSierra(plano.anchoSierra)} de
         sierra. El dibujo está a escala, pero para cortar vale el número escrito.
         Los recuadros punteados son los pedazos que quedan enteros; lo que sobra
         fuera de ellos no da para nada. **Ojo con a quién pertenecen**: de una
@@ -487,7 +488,7 @@ function TablaDeSobrantes({ plano }: { plano: PlanoDeCorte }) {
         {Math.round(plano.aprovechadoTotal * 100)}% sale en piezas. La sierra se
         come {(sierra / 1_000_000).toFixed(2).replace(".", ",")} m² en{" "}
         {plano.pasadas} {plano.pasadas === 1 ? "pasada" : "pasadas"} de{" "}
-        {plano.anchoSierra} mm, y el resto queda en los sobrantes de la tabla.
+        {formatearSierra(plano.anchoSierra)}, y el resto queda en los sobrantes de la tabla.
       </p>
     </>
   );

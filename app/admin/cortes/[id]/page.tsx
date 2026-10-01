@@ -19,10 +19,11 @@ import {
 import { AcomodoDelCorte } from "../acomodo";
 import { presupuestarCorte } from "@/lib/cortes/presupuesto";
 import { fraccionDePlaca, nombreDeLaMitad } from "@/lib/cortes/placa";
-import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
 import { formatearMonto } from "@/lib/formato";
 import { AccionesCorte } from "../acciones";
 import { CargarPasadas } from "../pasadas";
+import { SierraDelTrabajo } from "./sierra";
+import { formatearSierra } from "@/lib/cortes/sierra";
 
 export default async function FichaCortePage({
   params,
@@ -62,9 +63,9 @@ export default async function FichaCortePage({
     piezas: corte.piezas,
     placaLargo: corte.medida.largo,
     placaAncho: corte.medida.ancho,
-    // El espesor del disco sale de /admin/calculadoras y no de una constante:
-    // es lo que explica por qué dos piezas de 900 no entran en 1830.
-    anchoSierra: (await parametrosDeCalculo()).anchoSierraMm,
+    // El disco de **este** trabajo, guardado al crearlo: cambiar el general en
+    // /admin/calculadoras ya no redibuja los planos viejos ni su precio.
+    anchoSierra: corte.anchoSierraMm,
     // Lo que alguien corrigió a mano cuando cargó el trabajo.
     fijadas: leerAcomodoManual(corte.acomodoManual),
   });
@@ -144,12 +145,18 @@ export default async function FichaCortePage({
                 {corte.medida.supuesta
                   ? " (medida supuesta: la placa no salió del catálogo)"
                   : ""}
-                {/* Los milímetros que se lleva el disco. Estaban descontados
-                    desde siempre y no se decían en ninguna parte, así que
-                    nadie entendía por qué dos piezas de 900 no entraban en
-                    1830. */}
-                {` · la sierra se lleva ${plano.anchoSierra} mm por corte`}
               </p>
+              {/* Los milímetros que se lleva el disco, de este trabajo y
+                  editables mientras no se cortó. Estaban descontados desde
+                  siempre y no se decían en ninguna parte, así que nadie
+                  entendía por qué dos piezas de 900 no entraban en 1830. */}
+              <div className="text-sm text-muted-foreground">
+                <SierraDelTrabajo
+                  id={corte.id}
+                  anchoSierra={corte.anchoSierraMm}
+                  editable={corte.estado === "en-cola"}
+                />
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link
@@ -280,7 +287,7 @@ export default async function FichaCortePage({
             <p className="mt-2 text-sm text-muted-foreground">
               Del material comprado, el{" "}
               {Math.round(plano.aprovechadoTotal * 100)}% sale en piezas; el
-              resto se va entre estos sobrantes y los {plano.anchoSierra} mm que
+              resto se va entre estos sobrantes y los {formatearSierra(plano.anchoSierra)} que
               se lleva la sierra en cada una de las {plano.pasadas}{" "}
               {plano.pasadas === 1 ? "pasada" : "pasadas"}.
             </p>

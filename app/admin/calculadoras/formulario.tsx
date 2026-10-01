@@ -89,7 +89,7 @@ export function FormularioParametros({
           etiqueta="Ancho de la sierra"
           sufijo="mm"
           valor={parametros.anchoSierraMm}
-          ayuda="El espesor del disco: lo que se pierde en cada pasada."
+          ayuda="El espesor del disco: lo que se pierde en cada pasada. Es el valor con el que nace cada trabajo; en el trabajo se puede cambiar."
         />
         <Campo
           nombre="margenSeguridad"

@@ -10,7 +10,6 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
-  integer,
   numeric,
   pgTable,
   text,
@@ -156,8 +155,14 @@ export const calculatorSettings = pgTable("calculator_settings", {
   factorPendiente: numeric({ precision: 5, scale: 4 }).notNull().default("0.15"),
   /** Margen de seguridad sobre el material, además de lo de la sierra. */
   margenSeguridad: numeric({ precision: 5, scale: 4 }).notNull().default("0.12"),
-  /** Lo que se come la sierra por pasada. Del brief: 5 mm. */
-  anchoSierraMm: integer().notNull().default(5),
+  /**
+   * Lo que se come la sierra por pasada. Del brief: 5 mm.
+   *
+   * Con un decimal desde el 1/10/2026: un disco de 3,2 mm se redondeaba a 3 y
+   * el plano prometía piezas que no entraban. Es el valor **por omisión**:
+   * cada trabajo guarda el suyo (`cutting_orders.anchoSierraMm`).
+   */
+  anchoSierraMm: numeric({ precision: 4, scale: 1, mode: "number" }).notNull().default(5),
   /** Cuánto rinde un rollo de membrana ya descontado el solape, en m². */
   rindeRolloMembrana: numeric({ precision: 6, scale: 2 })
     .notNull()

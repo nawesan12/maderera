@@ -24,6 +24,7 @@ import { moneda } from "@/lib/formato";
 import type { CorteDeMostrador } from "@/lib/mostrador/venta";
 import type { LineaDeVenta } from "@/lib/mostrador/importes";
 import { presentacionDeMitad } from "@/lib/ventas/forma-de-venta";
+import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";
 
 /**
  * Vender un corte desde el mostrador.
@@ -65,7 +66,7 @@ export function CorteAMedida({
   placa,
   precioPorPasada,
   precioPorMetroCanto,
-  anchoSierra,
+  anchoSierra: anchoSierraGeneral,
   onCerrar,
   onAgregar,
 }: {
@@ -102,6 +103,14 @@ export function CorteAMedida({
    * corre el dibujo cuando es de color.
    */
   const [mitad, setMitad] = useState<Mitad>(null);
+
+  /*
+   * El disco de este trabajo. Arranca con el de la configuración y se puede
+   * cambiar acá (nota del 30/9/2026): el plano, el precio y la hoja del taller
+   * salen con este número, y el trabajo lo guarda.
+   */
+  const [sierraTexto, setSierraTexto] = useState(String(anchoSierraGeneral).replace(".", ","));
+  const anchoSierra = leerAnchoDeSierra(sierraTexto) ?? anchoSierraGeneral;
 
   const medida = medidaDePlaca({
     varianteLargo: placa.largoMm,
@@ -241,6 +250,7 @@ export function CorteAMedida({
       placas: plano.placas.length,
       pasadas: plano.pasadasCobrables,
       acomodoManual: fijadas.length > 0 ? JSON.stringify(fijadas) : null,
+      anchoSierraMm: anchoSierra,
       piezas: validas.map((p) => ({
         largoMm: p.largoMm,
         anchoMm: p.anchoMm,
@@ -274,12 +284,29 @@ export function CorteAMedida({
               {placaLargo} × {placaAncho} mm
             </span>
             {medidaSupuesta && " (medida supuesta: la placa no la tiene cargada)"}
-            {/* Los milímetros del disco, dichos. Estaban descontados desde
-                siempre y en ninguna pantalla se veían, así que en el mostrador
-                no se podía explicar por qué dos piezas de 900 no entran en
-                una placa de 1830. */}
-            {` · la sierra se lleva ${anchoSierra} mm por corte`}
           </p>
+
+          {/* Los milímetros del disco, dichos y editables. Estaban descontados
+              desde siempre y en ninguna pantalla se veían, así que en el
+              mostrador no se podía explicar por qué dos piezas de 900 no
+              entran en una placa de 1830. */}
+          <label className="flex flex-wrap items-center gap-2 text-base">
+            <span className="text-muted-foreground">La sierra se lleva</span>
+            <input
+              value={sierraTexto}
+              onChange={(e) => setSierraTexto(e.target.value)}
+              inputMode="decimal"
+              aria-label="Ancho de la sierra, en milímetros"
+              aria-invalid={leerAnchoDeSierra(sierraTexto) === null}
+              className="tabular h-10 w-20 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
+            />
+            <span className="text-muted-foreground">mm por corte</span>
+            {leerAnchoDeSierra(sierraTexto) === null && (
+              <span className="estado-espera text-sm font-medium">
+                Entre 0,5 y 10 mm: mientras tanto se usa {formatearSierra(anchoSierraGeneral)}.
+              </span>
+            )}
+          </label>
 
           {/* Media placa. Se vende, y no es lo mismo partirla a lo largo que
               al ancho: cambia qué piezas entran. Solo aparece si el producto

@@ -17,6 +17,7 @@ import {
 } from "@/lib/cortes/plano";
 import { PlanoEnVivo } from "@/components/cortes/plano-en-vivo";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
+import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";
 
 /** La placa elegida del catálogo, con lo que el plano necesita saber de ella. */
 interface PlacaElegida {
@@ -57,7 +58,7 @@ const estadoInicial = {} as { error?: string; ok?: string };
 export function FormularioCorte({
   sucursales,
   desdePedido,
-  anchoSierra,
+  anchoSierra: anchoSierraGeneral,
 }: {
   sucursales: { id: string; nombre: string }[];
   /**
@@ -161,6 +162,11 @@ export function FormularioCorte({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [JSON.stringify(validas)],
   );
+
+  // El disco de este trabajo: arranca con el general y se puede cambiar. El
+  // trabajo lo guarda, así su plano no cambia si después se toca el general.
+  const [sierraTexto, setSierraTexto] = useState(String(anchoSierraGeneral).replace(".", ","));
+  const anchoSierra = leerAnchoDeSierra(sierraTexto) ?? anchoSierraGeneral;
 
   /*
    * El plano se calcula acá y no adentro del dibujo porque el formulario lo
@@ -383,8 +389,26 @@ export function FormularioCorte({
             {medidaPlaca.supuesta
               ? " · medida supuesta: elegí la placa del catálogo o escribí la medida"
               : ""}
-            {` · la sierra se lleva ${anchoSierra} mm por corte`}
           </p>
+
+          <label className="flex flex-wrap items-center gap-2 text-base">
+            <span className="text-muted-foreground">La sierra se lleva</span>
+            <input
+              name="anchoSierraMm"
+              value={sierraTexto}
+              onChange={(e) => setSierraTexto(e.target.value)}
+              inputMode="decimal"
+              aria-label="Ancho de la sierra, en milímetros"
+              aria-invalid={leerAnchoDeSierra(sierraTexto) === null}
+              className="tabular h-10 w-20 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
+            />
+            <span className="text-muted-foreground">mm por corte</span>
+            {leerAnchoDeSierra(sierraTexto) === null && (
+              <span className="estado-espera text-sm font-medium">
+                Entre 0,5 y 10 mm: mientras tanto se usa {formatearSierra(anchoSierraGeneral)}.
+              </span>
+            )}
+          </label>
 
           {/* Partir una placa de color no es lo mismo que partir una blanca:
               el dibujo corre en un sentido y la mitad cortada al ancho puede

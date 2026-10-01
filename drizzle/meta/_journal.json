@@ -505,6 +505,13 @@
       "when": 1790829354973,
       "tag": "0071_secret_infant_terrible",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1790830330022,
+      "tag": "0072_famous_masque",
+      "breakpoints": true
     }
   ]
 }

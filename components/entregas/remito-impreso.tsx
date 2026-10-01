@@ -2,6 +2,8 @@ import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
 import { fechaCorta, fechaHora, formatearUnidad } from "@/lib/formato";
 import type { ConfiguracionFiscal } from "@/lib/db/schema";
 import type { RemitoCompleto } from "@/lib/dal/admin/entregas";
+import { LogoEmisor } from "@/components/impresion/logo-emisor";
+import { lineasDeLaFactura } from "@/lib/entregas/factura-del-remito";
 
 /**
  * El remito en papel.
@@ -47,6 +49,7 @@ export function RemitoImpreso({
 
         <header className="cabecera">
           <div>
+            <LogoEmisor />
             <p className="razon">
               {emisor?.razonSocial || "Maderera Juan B. Justo"}
             </p>
@@ -80,6 +83,11 @@ export function RemitoImpreso({
             <div className="datos">
               <div>Fecha {fechaCorta.format(remito.createdAt)}</div>
               <div>Pedido {remito.pedidoNumero}</div>
+              {/* La factura con su CAE: el CAE es de la factura, y el remito
+                  dice con cuál viaja la mercadería. */}
+              {lineasDeLaFactura(remito.factura).map((linea) => (
+                <div key={linea}>{linea}</div>
+              ))}
               <div>
                 {remito.tipo === "envio" ? "Envío a domicilio" : "Retiro en sucursal"}
               </div>

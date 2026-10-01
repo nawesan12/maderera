@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { calculatorSettings } from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
+import { requireStaffRole } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { ETIQUETAS } from "@/lib/cache-publico";
 
@@ -35,7 +35,7 @@ const esquema = z.object({
   mermaMachimbre: porcentaje,
   factorPendiente: porcentaje,
   margenSeguridad: porcentaje,
-  anchoSierraMm: z.coerce.number().min(0).max(50),
+  anchoSierraMm: z.coerce.number().min(0.5, "El disco tiene que medir más de medio milímetro.").max(10, "Más de 10 mm no es un disco de sierra."),
   rindeRolloMembrana: medida,
   rindeRolloAislacion: medida,
   separacionTechoM: medida,
@@ -56,7 +56,9 @@ export async function guardarParametros(
   _previo: EstadoCalculadoras,
   formData: FormData,
 ): Promise<EstadoCalculadoras> {
-  const usuario = await requireStaff();
+  // Los parámetros de cálculo son del admin: la pantalla ya lo era, la
+  // acción no lo pedía.
+  const usuario = await requireStaffRole("admin");
 
   const parsed = esquema.safeParse(Object.fromEntries(formData));
 
@@ -73,7 +75,9 @@ export async function guardarParametros(
     mermaMachimbre: (d.mermaMachimbre / 100).toFixed(4),
     factorPendiente: (d.factorPendiente / 100).toFixed(4),
     margenSeguridad: (d.margenSeguridad / 100).toFixed(4),
-    anchoSierraMm: Math.round(d.anchoSierraMm),
+    // Con un decimal: un disco de 3,2 mm redondeado a 3 promete piezas que no
+    // entran. Es el valor con el que nacen los trabajos nuevos.
+    anchoSierraMm: Math.round(d.anchoSierraMm * 10) / 10,
     rindeRolloMembrana: d.rindeRolloMembrana.toFixed(2),
     rindeRolloAislacion: d.rindeRolloAislacion.toFixed(2),
     separacionTechoM: d.separacionTechoM.toFixed(2),

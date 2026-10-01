@@ -19,6 +19,7 @@ import {
 } from "./hoja";
 import { fechaHora, fechaSolaCorta, formatearUnidad } from "@/lib/formato";
 import type { RemitoCompleto } from "@/lib/dal/admin/entregas";
+import { lineasDeLaFactura } from "@/lib/entregas/factura-del-remito";
 
 /**
  * El remito en PDF.
@@ -109,6 +110,8 @@ export async function remitoPdf(
     `Fecha ${fechaSolaCorta.format(remito.createdAt)}`,
     `Pedido ${remito.pedidoNumero}`,
     remito.tipo === "envio" ? "Envío a domicilio" : "Retiro en sucursal",
+    // La factura del pedido con su CAE (nota del 30/9/2026).
+    ...lineasDeLaFactura(remito.factura),
   ]) {
     escribir(hoja, texto, {
       x: derecha,

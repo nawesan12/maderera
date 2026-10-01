@@ -15,6 +15,7 @@ import {
   moneda,
 } from "@/lib/formato";
 import type { ConfiguracionFiscal } from "@/lib/db/schema";
+import { LogoEmisor } from "@/components/impresion/logo-emisor";
 
 const CONDICIONES: Record<string, string> = {
   responsable_inscripto: "Responsable inscripto",
@@ -114,6 +115,7 @@ export async function ComprobanteImpreso({
         {/* Cabecera con la letra en el medio, como exige el formato */}
         <header className="cabecera">
           <div className="emisor">
+            <LogoEmisor />
             <p className="razon">{emisor.razonSocial}</p>
             {emisor.nombreFantasia && (
               <p className="fantasia">{emisor.nombreFantasia}</p>

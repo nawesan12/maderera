@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/dal/session";
 import { obtenerCorte } from "@/lib/dal/admin/cortes";
-import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
 import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 import { calcularPlanoDeCorte, leerAcomodoManual } from "@/lib/cortes/plano";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
@@ -26,11 +25,7 @@ export async function GET(
   await requireStaff();
 
   const { id } = await params;
-  const [corte, parametros, emisor] = await Promise.all([
-    obtenerCorte(id),
-    parametrosDeCalculo(),
-    obtenerConfiguracionFiscal(),
-  ]);
+  const [corte, emisor] = await Promise.all([obtenerCorte(id), obtenerConfiguracionFiscal()]);
 
   if (!corte) return new NextResponse("No encontrado", { status: 404 });
 
@@ -38,7 +33,8 @@ export async function GET(
     piezas: corte.piezas,
     placaLargo: corte.medida.largo,
     placaAncho: corte.medida.ancho,
-    anchoSierra: parametros.anchoSierraMm,
+    // El disco del trabajo, no el general de hoy.
+    anchoSierra: corte.anchoSierraMm,
     fijadas: leerAcomodoManual(corte.acomodoManual),
   });
 

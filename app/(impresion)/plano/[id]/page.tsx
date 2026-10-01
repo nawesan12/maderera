@@ -6,7 +6,6 @@ import {
   calcularPlanoDeCorte,
   leerAcomodoManual,
 } from "@/lib/cortes/plano";
-import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
 import { PlanoImpreso } from "@/components/cortes/plano-impreso";
 
@@ -42,9 +41,10 @@ export default async function PlanoDeCortePage({
     piezas: corte.piezas,
     placaLargo: corte.medida.largo,
     placaAncho: corte.medida.ancho,
-    // El mismo espesor de disco con el que se presupuestó en el panel: si la
-    // hoja del taller usara otro, el patrón dibujado no sería el que se cobró.
-    anchoSierra: (await parametrosDeCalculo()).anchoSierraMm,
+    // El mismo espesor de disco con el que se presupuestó, guardado en el
+    // trabajo: si la hoja del taller usara otro, el patrón dibujado no sería
+    // el que se cobró.
+    anchoSierra: corte.anchoSierraMm,
     // Lo que alguien corrigió a mano cuando cargó el trabajo.
     fijadas: leerAcomodoManual(corte.acomodoManual),
   });

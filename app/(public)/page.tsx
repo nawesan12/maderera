@@ -27,6 +27,7 @@ import { ALCANCE_MOLDAVA } from "@/lib/empresa";
 import { SliderDePromos } from "@/components/home/slider-promos";
 import { FranjaBeneficios } from "@/components/franja-beneficios";
 import { BotonCrearCuenta } from "@/components/boton-crear-cuenta";
+import { MARCAS_DE_PAGO, marcaDelMedio, type MarcaDePago } from "@/lib/medios-de-pago";
 
 /**
  * Los años de la empresa se leen al renderizar y no una vez al cargar el
@@ -388,8 +389,11 @@ function MediosDePago({
       ? `${nombres.slice(0, -1).join(", ")} o ${nombres[nombres.length - 1]}`
       : (nombres[0] ?? "");
 
-  if (promos.length === 0 && contadoPct === 0) return null;
-
+  /*
+   * Ya no se esconde cuando no hay promociones: la franja de logos siempre
+   * tiene algo que decir —con qué se puede pagar— y es lo que la clienta pidió
+   * ver en la portada.
+   */
   return (
     <section className="bg-sitio-fondo pt-11 pb-3">
       <div className="contenedor">
@@ -415,9 +419,15 @@ function MediosDePago({
           </div>
         )}
 
+        <MarcasQueAceptamos />
+
         {promos.length > 0 && (
           <div className="mt-[18px] grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
-            {promos.map((p) => (
+            {promos.map((p) => {
+              // Sin imagen cargada, el logo fijo de la marca si es una de
+              // las conocidas; si tampoco, el nombre escrito.
+              const marca = p.imagenUrl ? null : marcaDelMedio(p.medio);
+              return (
               <article
                 key={p.id}
                 className="flex flex-col rounded-2xl border border-linea bg-card px-5 py-[18px]"
@@ -434,6 +444,13 @@ function MediosDePago({
                     height={40}
                     className="mb-2 h-10 w-auto max-w-[160px] object-contain object-left"
                   />
+                ) : marca ? (
+                  // Sobre su ficha blanca, como en la franja: en el tema
+                  // oscuro el texto de Mercado Pago o del Hipotecario se
+                  // perdía contra la tarjeta.
+                  <span className="mb-1.5 inline-flex h-10 w-fit items-center rounded-lg bg-white px-3 ring-1 ring-linea">
+                    <LogoDeMarca marca={marca} alto={marca.proporcion < 1.8 ? 26 : 24} />
+                  </span>
                 ) : (
                   <span className="text-xs font-bold uppercase tracking-[0.08em] text-acento-texto">
                     {p.medio}
@@ -453,11 +470,68 @@ function MediosDePago({
                   {p.vigenciaHasta && `Hasta el ${p.vigenciaHasta}`}
                 </p>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * Las tarjetas y billeteras con las que se paga, con sus logos.
+ *
+ * De la clienta (30/9/2026): «agregar logos de entidades bancarias en la
+ * home». Van sobre fichas blancas también en el tema oscuro: los logos están
+ * pensados para fondo claro —el de Cabal es negro, el texto de Mercado Pago
+ * azul oscuro— y sobre el marrón del sitio se perdían. A la misma altura
+ * visual cada uno, que es lo que hace que una fila de marcas se vea ordenada
+ * y no un collage.
+ */
+function MarcasQueAceptamos() {
+  const aceptadas = MARCAS_DE_PAGO.filter((m) => m.tipo !== "banco");
+  return (
+    <div className="mt-7">
+      <p className="text-xs font-bold uppercase tracking-[0.08em] text-texto-2">
+        Tarjetas y billeteras
+      </p>
+      <ul className="mt-3 grid grid-cols-4 gap-2 sm:flex sm:flex-wrap sm:gap-2.5">
+        {aceptadas.map((m) => (
+          <li
+            key={m.clave}
+            className="flex h-12 items-center justify-center rounded-xl border border-linea bg-white px-2 sm:h-14 sm:min-w-[104px] sm:px-4"
+          >
+            {/* Los cuadrados (Amex, Cabal, Mastercard) más altos que los
+                apaisados: a la misma altura parecían más chicos. */}
+            <LogoDeMarca marca={m} alto={m.proporcion < 1.8 ? 36 : 22} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Un logo fijo a la altura pedida, con el ancho que da su proporción. */
+function LogoDeMarca({
+  marca,
+  alto,
+  className = "",
+}: {
+  marca: MarcaDePago;
+  alto: number;
+  className?: string;
+}) {
+  const ancho = Math.round(alto * marca.proporcion);
+  return (
+    <Image
+      src={marca.logo}
+      alt={marca.nombre}
+      width={ancho}
+      height={alto}
+      style={{ height: alto, width: "auto" }}
+      className={`max-w-full object-contain ${className}`}
+    />
   );
 }
 

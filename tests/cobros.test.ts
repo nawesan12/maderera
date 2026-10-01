@@ -12,6 +12,7 @@ import {
 } from "@/lib/cheques/numero";
 import { importeEnLetras, revisarPartes, totalDePartes } from "@/lib/cobros/partes";
 import { leerPartes } from "@/lib/cobros/leer";
+import { lineasDeLaFactura } from "@/lib/entregas/factura-del-remito";
 
 /**
  * Los cheques del cliente, de la nota del 30/9/2026: «poder marcar cheques
@@ -131,5 +132,23 @@ describe("el importe en letras del recibo", () => {
     expect(importeEnLetras(345_678.9)).toBe(
       "trescientos cuarenta y cinco mil seiscientos setenta y ocho con 90/100",
     );
+  });
+});
+
+
+describe("la factura en el remito", () => {
+  it("nombra la factura y su CAE, y no inventa nada si falta", () => {
+    expect(lineasDeLaFactura(null)).toEqual(["Sin factura asociada"]);
+    expect(lineasDeLaFactura({ etiqueta: "Factura B 0015-00000001", cae: null, caeVencimiento: null })).toEqual([
+      "Factura B 0015-00000001",
+      "Sin CAE: sin valor fiscal",
+    ]);
+    expect(
+      lineasDeLaFactura({
+        etiqueta: "Factura A 0015-00000002",
+        cae: "76123456789012",
+        caeVencimiento: new Date("2026-10-11T00:00:00Z"),
+      }),
+    ).toEqual(["Factura A 0015-00000002", "CAE 76123456789012 · vto. 11/10/26"]);
   });
 });

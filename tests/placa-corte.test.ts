@@ -4,6 +4,7 @@ import {
   medidaDePlaca,
   nombreDeLaMitad,
 } from "@/lib/cortes/placa";
+import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";
 
 /**
  * De qué medida es la placa que se corta.
@@ -87,5 +88,26 @@ describe("media placa se cobra media", () => {
   it("lo dice con las palabras del taller", () => {
     expect(nombreDeLaMitad("largo")).toBe("Media placa, partida a lo largo");
     expect(nombreDeLaMitad(null)).toBe("Placa entera");
+  });
+});
+
+
+describe("el ancho de la sierra de un trabajo", () => {
+  it("acepta un decimal, con coma o con punto", () => {
+    expect(leerAnchoDeSierra("3,2")).toBe(3.2);
+    expect(leerAnchoDeSierra("3.25")).toBe(3.3);
+    expect(leerAnchoDeSierra(5)).toBe(5);
+  });
+
+  it("rechaza lo que no puede ser un disco", () => {
+    expect(leerAnchoDeSierra("0")).toBeNull();
+    expect(leerAnchoDeSierra("32")).toBeNull();
+    expect(leerAnchoDeSierra("cinco")).toBeNull();
+    expect(leerAnchoDeSierra("")).toBeNull();
+  });
+
+  it("se escribe en castellano", () => {
+    expect(formatearSierra(3.2)).toBe("3,2 mm");
+    expect(formatearSierra(5)).toBe("5 mm");
   });
 });

@@ -47,6 +47,8 @@ export interface CorteResuelto {
   placaAnchoMm: number;
   placas: number;
   pasadas: number;
+  /** El disco con que se armó el plano: el general, el sitio no lo cambia. */
+  anchoSierraMm: number;
   cuenta: PresupuestoDeCorte;
   lineas: LineaDeCorte[];
 }
@@ -196,6 +198,7 @@ export async function resolverCortesDelCarrito(
       placaAnchoMm: medida.ancho,
       placas: plano.placas.length,
       pasadas: plano.pasadasCobrables,
+      anchoSierraMm: parametros.anchoSierraMm,
       cuenta,
       lineas,
     });

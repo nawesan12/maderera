@@ -512,6 +512,17 @@ export const cuttingOrders = pgTable(
      * patrones que la seccionadora no puede cortar.
      */
     acomodoManual: text(),
+    /**
+     * Lo que se come la sierra en **este** trabajo, en mm.
+     *
+     * De la clienta (30/9/2026): «hacer que los 5 mm que saca la máquina por
+     * corte sean editables». Era un solo número para todo el sistema, y peor:
+     * los trabajos no lo guardaban, así que cambiarlo en la configuración
+     * redibujaba los planos viejos —y su precio— con un disco que no era el
+     * que los cortó. Ahora nace con el valor de la configuración y quien arma
+     * el trabajo lo puede cambiar.
+     */
+    anchoSierraMm: numeric({ precision: 4, scale: 1, mode: "number" }).notNull().default(5),
     estado: estadoCorte().notNull().default("en-cola"),
     urgente: integer().notNull().default(0),
     notas: text(),

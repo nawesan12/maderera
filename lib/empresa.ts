@@ -37,3 +37,20 @@ export function masDeAnios(hoy: Date = new Date()): string {
  * El sitio decía "distribución nacional", que era del prototipo.
  */
 export const ALCANCE_MOLDAVA = "toda la Provincia de Buenos Aires";
+
+/**
+ * El logo con el nombre, para los papeles: factura, remito, recibo,
+ * presupuesto, resumen de cuenta.
+ *
+ * De la clienta (30/9/2026): «agregar logo al remito». Es el del sitio que
+ * tienen hoy (`mjbj.ar`), en gris y naranja sobre transparente: se lee igual
+ * impreso en blanco y negro. Vive en `public/` porque lo usan las hojas HTML
+ * por URL y los PDF leyéndolo del disco. Las medidas son las del archivo, para
+ * dibujarlo sin deformar.
+ */
+export const LOGO_DOCUMENTOS = {
+  ruta: "/marca/logo-maderera.png",
+  ancho: 463,
+  alto: 89,
+  texto: "Maderera Juan B. Justo",
+} as const;

@@ -2,6 +2,7 @@ import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
 import type { ConfiguracionFiscal } from "@/lib/db/schema";
 import type { ResumenDeCuenta } from "@/lib/dal/admin/resumen-cuenta";
+import { LogoEmisor } from "@/components/impresion/logo-emisor";
 
 const NOMBRE_DEL_TIPO: Record<string, string> = {
   compra: "Compra",
@@ -47,6 +48,7 @@ export function ResumenImpreso({
       <div className="hoja">
         <header className="cabecera">
           <div>
+            <LogoEmisor />
             <p className="razon">
               {emisor?.razonSocial || "Maderera Juan B. Justo"}
             </p>

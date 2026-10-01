@@ -402,6 +402,7 @@ export async function confirmarCompra(
           placaAnchoMm: corte.placaAnchoMm,
           mitad: corte.mitad,
           placas: corte.placas,
+          anchoSierraMm: corte.anchoSierraMm,
           // Las pasadas vienen del plano, que es lo que se acaba de cobrar.
           pasadas: corte.pasadas,
           cantoDescripcion: corte.cantoDescripcion,

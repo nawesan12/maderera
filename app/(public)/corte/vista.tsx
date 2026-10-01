@@ -16,6 +16,7 @@ import { PlanoSimple } from "@/components/cortes/plano-simple";
 import { formatearMonto } from "@/lib/formato";
 import { haySenal } from "@/lib/senal-navegador";
 import { agregarCorteAlCarrito } from "./actions";
+import { formatearSierra } from "@/lib/cortes/sierra";
 
 interface Fila {
   largo: string;
@@ -263,7 +264,7 @@ export function VistaDeCorte({
             <span className="tabular">
               {medida.largo} × {medida.ancho} mm
             </span>
-            . La sierra se lleva {anchoSierra} mm en cada corte, y eso ya está
+            . La sierra se lleva {formatearSierra(anchoSierra)} en cada corte, y eso ya está
             descontado en el dibujo.
           </p>
 

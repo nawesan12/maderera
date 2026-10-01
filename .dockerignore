@@ -1,0 +1,31 @@
+# Lo que no viaja al build de la imagen.
+#
+# Los `.env*` son lo más importante de la lista: `COPY . .` los metería en una
+# capa de la imagen y `next build` los leería, así que las claves de
+# producción quedarían horneadas. La configuración llega al contenedor por
+# `env_file` del compose, al arrancar.
+.env*
+
+# Lo que es del servidor y no del código: respaldos de la base, certificados
+# de ARCA, registros de Caddy.
+respaldos
+secretos
+registros
+
+# Fotos subidas en desarrollo. Las de producción viven en un volumen.
+public/subidas
+
+node_modules
+.next
+.git
+.github
+.vercel
+.claude
+.playwright-mcp
+screenshots
+tests
+agente-taller
+*.png
+*.pdf
+docs/*.html
+servidor

@@ -1,0 +1,68 @@
+# Despliegue en el servidor propio, desde GitHub.
+#
+# **Apagado por omisión: solo corre a mano**, desde la pestaña Actions →
+# «Desplegar en el servidor» → Run workflow. Hace exactamente lo mismo que
+# entrar por SSH y correr `./scripts/desplegar.sh`; la ventaja es no necesitar
+# una terminal para desplegar.
+#
+# Necesita tres secretos del repositorio (Settings → Secrets and variables →
+# Actions):
+#
+#   VPS_HOST     la IP o el nombre del servidor
+#   VPS_USER     el usuario sin privilegios que despliega (ver
+#                docs/SERVIDOR-PROPIO.md)
+#   VPS_SSH_KEY  la clave privada de una llave hecha solo para esto, cuya
+#                pública está en ~/.ssh/authorized_keys de ese usuario
+#
+# Y uno opcional, recomendable: VPS_KNOWN_HOSTS, con la salida de
+# `ssh-keyscan <IP>` hecha desde una máquina de confianza. Sin él, la huella
+# del servidor se toma en cada corrida y se confía en la primera que conteste.
+#
+# **Para desplegar en cada push a main**, agregar debajo de `on:`:
+#
+#   push:
+#     branches: [main]
+#
+# Antes de hacerlo, desconectar el despliegue automático de Vercel (ver la
+# guía): si no, cada push sale a dos lados y no se sabe cuál de los dos está
+# atendiendo. Y tener presente que un push con una migración rota frena el
+# despliegue —el script no cambia la aplicación si la migración falla—, pero
+# un push con un error que solo aparece al usar la pantalla sale igual.
+
+name: Desplegar en el servidor
+
+on:
+  workflow_dispatch:
+
+# Un despliegue por vez: dos a la par se pisarían el build y la migración.
+concurrency:
+  group: desplegar-servidor
+  cancel-in-progress: false
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Cargar la llave
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_despliegue
+          chmod 600 ~/.ssh/id_despliegue
+          if [ -n "$VPS_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$VPS_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          fi
+
+      - name: Desplegar
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -i ~/.ssh/id_despliegue -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
+            'cd ~/maderera && ./scripts/desplegar.sh'

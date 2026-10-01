@@ -169,5 +169,52 @@ Dos cosas que conviene no olvidar cuando se pasen a bloquear:
   habilitado, así que pedirla dejaría el registro inutilizable. El límite de
   frecuencia hace el trabajo mientras tanto.
 - **BotID de Vercel**: resuelve lo mismo que el límite propio pero atado a la
-  plataforma. Si algún día el sitio se muda a un servidor propio —ver la rama
-  `servidor-propio`—, el límite en Postgres se muda con él y esto no.
+  plataforma. Si algún día el sitio se muda a un servidor propio —ver abajo—,
+  el límite en Postgres se muda con él y esto no.
+
+## En el servidor propio
+
+> Agregado el 1/10/2026 con la rama `vps-hostinger`. Ver
+> `docs/SERVIDOR-PROPIO.md`.
+
+Si el sitio se muda a la VPS, la mitad de este documento cambia de sentido:
+
+- **No hay factura por uso.** La VPS cuesta lo mismo con diez visitas que con
+  diez mil; no existe el «Active CPU» ni el cobro por transformación de
+  imagen. Lo que se cuida ya no es plata sino **capacidad**: una máquina sola
+  con un techo fijo. Un robot que pide el catálogo de a miles no genera una
+  factura rara, pone lento el mostrador. Por eso todo lo de «Que no lo gasten
+  los bots» sigue valiendo igual.
+- **`/catalogo` y `/stock` se arman en cada pedido.** La cabecera
+  `Vercel-CDN-Cache-Control` no tiene a quién hablarle: Caddy no guarda
+  copias. Las consultas de abajo siguen cacheadas por etiqueta, así que armar
+  la página no va a la base. Si algún día pesa, Cloudflare adelante lee
+  `CDN-Cache-Control`, que ya se manda.
+- **El límite de frecuencia se muda tal cual**: está en Postgres, no en la
+  plataforma. Y con una sola instancia, el límite configurado es el real —no se
+  multiplica por regiones—. Caddy pisa el `X-Forwarded-For` que manda el
+  cliente, así que la IP con que cuenta es la verdadera.
+- **Las reglas de firewall de arriba no se usan.** Su lugar lo ocupan dos
+  piezas que no dependen de ningún plan:
+  - **Las sondas** (regla 5) las contesta Caddy con un 404 sin despertar a la
+    aplicación —ver `@sondas` en el `Caddyfile`—, y **fail2ban** banea un día
+    a quien insiste (`servidor/fail2ban/`).
+  - **Los intentos de SSH** también los banea fail2ban; el ingreso es solo con
+    llave.
+  - El login por fuerza bruta, los cortes y los PDF (reglas 1 a 3) quedan
+    cubiertos por el límite propio de `lib/limites/`. Si alguna vez hiciera
+    falta un tope por IP más grueso, va en Caddy con un módulo de rate limit o
+    como otra cárcel de fail2ban sobre el mismo registro de acceso.
+- **El registro de acceso es nuestro.** `/var/log/caddy/acceso.log`, una línea
+  JSON por pedido con la IP real y el user-agent: es lo que reemplaza a
+  «Observability → Bot traffic». Para ver quién pide más:
+
+  ```bash
+  jq -r '.request.headers["User-Agent"][0]' /var/log/caddy/acceso.log | sort | uniq -c | sort -rn | head
+  ```
+
+- **Cuando algo ande lento**, en lugar de mirar la factura: `docker stats`
+  (CPU y memoria por contenedor), el registro de acceso agrupado por IP o por
+  user-agent, y `dc logs app` por errores de conexión a la base —si aparecen
+  esperas de conexión con la base tranquila, ver `DATABASE_POOL_MAX` en
+  `lib/db/index.ts`—.

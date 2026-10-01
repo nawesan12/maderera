@@ -65,3 +65,9 @@ agente-taller/estado.json
 /guia-*.png
 /mapa-*.png
 /consola-*.png
+
+# Lo que vive en el servidor propio y nunca en el repositorio: los volcados de
+# la base, el certificado de ARCA y la configuración de rclone. Ver
+# docs/SERVIDOR-PROPIO.md.
+/respaldos/
+/secretos/

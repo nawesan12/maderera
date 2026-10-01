@@ -1,0 +1,96 @@
+# El que atiende internet.
+#
+# Caddy y no Nginx por una sola razón que importa acá: saca y renueva el
+# certificado de Let's Encrypt solo, sin cron ni certbot. El certificado
+# vencido un domingo es de los problemas más tontos y más caros que puede
+# tener una tienda, y con esto no puede pasar.
+#
+# **Las cabeceras de seguridad no están acá.** Viven en `next.config.ts` y
+# salen con cada respuesta de la aplicación; repetirlas en dos lados es la
+# forma de que un día digan cosas distintas. La única excepción es
+# `/subidas/`, que Caddy sirve del disco sin pasar por Next (ver abajo).
+
+# El `www` lleva al dominio sin `www`. Necesita su propio registro DNS
+# apuntando a la misma IP: si no existe, Caddy no puede sacar el certificado y
+# lo reintenta en el registro, sin afectar al dominio principal.
+www.{$DOMINIO} {
+	redir https://{$DOMINIO}{uri} permanent
+}
+
+{$DOMINIO} {
+	# El registro de acceso, en JSON y con fecha legible. Es el que lee
+	# fail2ban (ver docs/SERVIDOR-PROPIO.md) para banear a quien anda tanteando
+	# las rutas de abajo; el `client_ip` de cada línea es la IP real.
+	log {
+		output file /var/log/caddy/acceso.log {
+			roll_size 20MiB
+			roll_keep 10
+		}
+		format json {
+			time_format iso8601
+		}
+	}
+
+	# Las sondas de siempre: WordPress, `.env`, `.git`, phpMyAdmin. Nada de eso
+	# existe en este sitio y cada pedido es un robot buscando una puerta.
+	# Contestarlas desde acá es no despertar a Node para decir que no, y que
+	# queden en el registro con un 404 es lo que fail2ban usa para banear.
+	@sondas {
+		path /wp-admin* /wp-login.php /wp-content/* /wp-includes/* /xmlrpc.php /wordpress* /.env* /.git* /.aws* /.ssh* /phpmyadmin* /pma* /cgi-bin/* /vendor/phpunit/* /server-status /actuator* *.php
+	}
+	handle @sondas {
+		respond 404
+	}
+
+	# Las fotos subidas desde el panel las sirve Caddy directo del volumen, sin
+	# despertar a Node. Cada nombre lleva un UUID y nunca se reescribe, así que
+	# se pueden cachear para siempre.
+	#
+	# Es la única respuesta que no pasa por Next, y por eso es el único lugar
+	# con cabeceras propias: `nosniff` para que un adjunto de WhatsApp no se
+	# interprete como otra cosa, y una CSP que no deja ejecutar nada si alguien
+	# logra que se abra un archivo como página.
+	handle_path /subidas/* {
+		root * /datos/subidas
+		header Cache-Control "public, max-age=31536000, immutable"
+		header X-Content-Type-Options "nosniff"
+		header Content-Security-Policy "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox"
+		file_server
+	}
+
+	# Todo lo demás va a la aplicación.
+	handle {
+		# Lo que Next ya marca como inmutable —los JS y CSS con hash en el
+		# nombre— se refuerza acá por si algún día una respuesta llega sin la
+		# cabecera. No cambia nada para el resto de las rutas.
+		header /_next/static/* {
+			Cache-Control "public, max-age=31536000, immutable"
+			# Después de que responde la aplicación; si no, la cabecera de
+			# Next pisaría a esta.
+			defer
+		}
+
+		# El tope de lo que se puede mandar: el comprobante más grande que se
+		# acepta son 16 MB. Sin tope, cualquiera puede tener ocupada a la
+		# aplicación leyendo un cuerpo infinito.
+		request_body {
+			max_size 25MB
+		}
+
+		reverse_proxy app:3000 {
+			# **La IP del cliente, sin que el cliente la pueda inventar.** Caddy
+			# no confía en el `X-Forwarded-For` que llega de afuera —no hay
+			# `trusted_proxies` declarados— y lo reemplaza por la IP real de la
+			# conexión, así que el primer valor que lee `lib/limites` es
+			# siempre el verdadero. `X-Real-IP` se pisa por lo mismo.
+			header_up X-Real-IP {remote_host}
+
+			# Que las respuestas en streaming —las páginas con Suspense, el
+			# asistente— lleguen a medida que se arman y no todas juntas al
+			# final.
+			flush_interval -1
+		}
+	}
+
+	encode zstd gzip
+}

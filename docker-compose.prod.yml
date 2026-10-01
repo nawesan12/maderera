@@ -1,0 +1,187 @@
+# El servidor entero: base, aplicación, el que atiende internet y el respaldo.
+#
+# Todo en una sola máquina. Es la configuración que reemplaza a Vercel, Neon y
+# Vercel Blob: una VPS chica alcanza para el tráfico de una maderera de Mar del
+# Plata.
+#
+# Lo que hay que tener presente: acá el mantenimiento es propio. Las
+# actualizaciones del sistema, que la máquina no se llene y —sobre todo— que
+# los respaldos se estén haciendo, no los cubre nadie más. El respaldo está
+# resuelto en el servicio `respaldo`; lo que no está resuelto es que alguien
+# mire de vez en cuando que sigue corriendo.
+#
+# **Siempre con `--env-file .env.produccion`.** Los `${...}` de este archivo
+# salen de ahí, y sin esa opción Compose busca un `.env` que no existe y deja
+# todo vacío. `scripts/desplegar.sh` ya lo pasa; a mano:
+#
+#   docker compose --env-file .env.produccion -f docker-compose.prod.yml ps
+
+name: mjbj
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Falta POSTGRES_USER en .env.produccion}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env.produccion}
+      POSTGRES_DB: ${POSTGRES_DB:?Falta POSTGRES_DB en .env.produccion}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # **Solo en loopback.** El puerto se publica para que el build de la
+    # aplicación pueda consultar la base —Next prerenderiza páginas que leen
+    # los ajustes y las sucursales— y para `scripts/mudar-base.sh`. Con
+    # `127.0.0.1` queda invisible desde internet: Docker se saltea ufw para los
+    # puertos que publica, así que no alcanza con el firewall; lo que lo
+    # protege es no escuchar en la IP pública.
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      target: runner
+      # Con la red del host, para que el build llegue al puerto de loopback
+      # donde está la base.
+      network: host
+      args:
+        DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}
+        DATABASE_SSL: "off"
+        APP_URL: ${APP_URL:?Falta APP_URL en .env.produccion}
+        APP_ENV: ${APP_ENV:-production}
+        SEO_INDEXAR: ${SEO_INDEXAR:-}
+        GIT_SHA: ${GIT_SHA:-}
+    image: mjbj-app:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.produccion
+    environment:
+      # Estas pisan lo que diga `.env.produccion`: la URL de la base la arma el
+      # compose con el nombre interno del contenedor.
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # La base está en la misma máquina y en una red privada de Docker:
+      # cifrar ese tramo no protege de nada y el Postgres del compose ni
+      # siquiera lo admite.
+      DATABASE_SSL: "off"
+      # Las fotos van a un volumen y no adentro de la imagen: si vivieran en
+      # `public/`, cada despliegue borraría lo que se subió desde el panel.
+      CARPETA_SUBIDAS: /datos/subidas
+      # El certificado de ARCA, como archivos de solo lectura (ver el volumen
+      # abajo). Si todavía no están, la facturación sigue con el proveedor
+      # interno, igual que sin variables.
+      ARCA_CERTIFICADO_ARCHIVO: /run/secrets/arca/arca.crt
+      ARCA_CLAVE_PRIVADA_ARCHIVO: /run/secrets/arca/arca.key
+    volumes:
+      - subidas:/datos/subidas
+      # La caché de Next —las imágenes ya optimizadas y los datos de
+      # `unstable_cache`— sobrevive al despliegue. Sin esto, cada deploy
+      # arranca en frío y la primera visita a cada foto la vuelve a
+      # recomprimir. Es lo mismo que hacía Vercel con su Data Cache, que
+      # también persiste entre despliegues.
+      - next_cache:/app/.next/cache
+      # El certificado y la clave de ARCA, de `secretos/arca/` en el servidor
+      # y en solo lectura. Nunca entran en la imagen: `.dockerignore` deja
+      # `secretos/` afuera. Solo esta subcarpeta: la configuración de rclone,
+      # que da acceso a los respaldos, no tiene por qué verla la aplicación.
+      - ./secretos/arca:/run/secrets/arca:ro
+    # **Sin `ports`.** Solo Caddy le habla a la aplicación, por la red interna.
+    # Si el puerto estuviera publicado, cualquiera podría saltearse Caddy y
+    # mandar el `X-Forwarded-For` que quisiera, y el límite de frecuencia
+    # contaría contra la IP que el atacante eligiera.
+    expose:
+      - "3000"
+    # `docker stop` manda SIGTERM y Next termina lo que tiene en curso —los
+    # pedidos abiertos y lo pendiente de `after()`, como el aviso de una
+    # venta— antes de salir. Diez segundos, el valor por omisión, pueden no
+    # alcanzar para un correo que tarda.
+    stop_grace_period: 30s
+    healthcheck:
+      # `robots.txt` es estático: contesta si el servidor está vivo sin tocar
+      # la base.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/robots.txt || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  # Las migraciones y los scripts de mudanza. No queda corriendo: el perfil
+  # `herramientas` hace que `up` lo ignore, y se usa con `run --rm`.
+  migrador:
+    profiles: ["herramientas"]
+    build:
+      context: .
+      target: migrador
+    image: mjbj-migrador:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.produccion
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_SSL: "off"
+      CARPETA_SUBIDAS: /datos/subidas
+    volumes:
+      - subidas:/datos/subidas
+
+  web:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      # HTTP/3. Si el firewall no deja pasar UDP 443, el navegador vuelve solo
+      # a HTTP/2.
+      - "443:443/udp"
+    environment:
+      DOMINIO: ${DOMINIO:?Falta DOMINIO en .env.produccion}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # La misma carpeta que escribe la aplicación: las fotos las sirve Caddy
+      # directamente, sin pasar por Node.
+      - subidas:/datos/subidas:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      # El registro de acceso queda en el disco del servidor, donde lo lee
+      # fail2ban.
+      - /var/log/caddy:/var/log/caddy
+
+  respaldo:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: America/Argentina/Buenos_Aires
+      RESPALDO_DIAS: ${RESPALDO_DIAS:-14}
+      RCLONE_REMOTE: ${RCLONE_REMOTE:-}
+      RCLONE_DIAS: ${RCLONE_DIAS:-90}
+      RCLONE_CONFIG: /config/rclone/rclone.conf
+    volumes:
+      - ./respaldos:/respaldos
+      - ./scripts/respaldo.sh:/respaldo.sh:ro
+      # La configuración de rclone, si hay copia fuera de la máquina. Va con
+      # escritura porque algunos destinos renuevan el token ahí adentro.
+      - ./secretos/rclone:/config/rclone
+    entrypoint: ["sh", "/respaldo.sh"]
+
+volumes:
+  pgdata:
+  subidas:
+  next_cache:
+  caddy_data:
+  caddy_config:

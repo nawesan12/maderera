@@ -62,7 +62,7 @@ se ve con pedidos y cuenta corriente reales en vez de vacío.
 | Framework | Next.js 16, App Router |
 | Datos | Postgres + Drizzle ORM |
 | Sesión | Better Auth, con `proxy.ts` para los chequeos optimistas |
-| Archivos | Disco en desarrollo, Vercel Blob en producción, detrás de la misma interfaz |
+| Archivos | Disco en desarrollo y en el servidor propio (un volumen, ver `docs/SERVIDOR-PROPIO.md`), Vercel Blob en Vercel, detrás de la misma interfaz |
 | Estilos | Tailwind 4 |
 
 ### Reglas que no se negocian

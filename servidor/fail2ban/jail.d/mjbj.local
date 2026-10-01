@@ -1,0 +1,32 @@
+# Las dos cárceles del servidor: SSH y las sondas que llegan por la web.
+#
+# Se instala con: sudo cp servidor/fail2ban/jail.d/mjbj.local /etc/fail2ban/jail.d/
+#                 sudo systemctl restart fail2ban
+# Se mira con:    sudo fail2ban-client status caddy-sondas
+
+[DEFAULT]
+# Las redes de Docker no se banean nunca. Si algún día un pedido llega con la
+# IP de la puerta de enlace de Docker —pasa con clientes IPv6 cuando Docker no
+# tiene IPv6 activado, ver docs/SERVIDOR-PROPIO.md—, banearla sería dejar
+# afuera a todos los que entran por ahí.
+ignoreip = 127.0.0.1/8 ::1 172.16.0.0/12 192.168.0.0/16
+
+[sshd]
+enabled  = true
+maxretry = 5
+findtime = 10m
+bantime  = 1h
+
+[caddy-sondas]
+enabled  = true
+filter   = caddy-sondas
+logpath  = /var/log/caddy/acceso.log
+backend  = polling
+maxretry = 3
+findtime = 10m
+bantime  = 1d
+# **En la cadena DOCKER-USER, no en INPUT.** Los puertos 80 y 443 los publica
+# Docker, y Docker arma sus propias reglas antes que las del sistema: un ban
+# puesto en INPUT —que es lo que hace fail2ban por omisión— no frena nada que
+# vaya a un contenedor. DOCKER-USER es la cadena que Docker deja para esto.
+action   = iptables-allports[name=caddy-sondas, chain=DOCKER-USER, protocol=all]

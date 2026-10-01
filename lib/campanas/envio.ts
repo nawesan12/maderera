@@ -14,15 +14,21 @@ import { armarCorreoDeCampana } from "./correo";
  * **En tandas, por la cola de trabajos.** Un servidor de correo nuevo que
  * manda quinientos mensajes de golpe es exactamente lo que los filtros de
  * Gmail tratan como spam, y una IP marcada tarda semanas en limpiarse. Cada
- * tanda manda `CAMPANAS_POR_MINUTO` correos (60 por omisión; conviene bajarlo
- * las primeras semanas del servidor nuevo) y deja encolada la siguiente para
- * dentro de un minuto. Si el proceso se reinicia en medio, la cola retoma: lo
+ * tanda manda `CAMPANAS_POR_MINUTO` correos y deja encolada la siguiente para
+ * dentro de un minuto.
+ *
+ * **Por omisión, 3 por minuto con el servidor propio y 60 con Resend.**
+ * Hostinger deja salir 5 correos por minuto desde la VPS: tres para la
+ * campaña dejan lugar a los avisos de pedidos y recibos, que no pueden
+ * esperar. Con un relay configurado en el servidor de correo
+ * (`scripts/correo.sh relay`) se sube con la variable. Si el proceso se reinicia en medio, la cola retoma: lo
  * que ya salió está marcado y no se repite.
  */
 
-function porMinuto(): number {
+export function porMinuto(): number {
   const n = Number.parseInt(process.env.CAMPANAS_POR_MINUTO ?? "", 10);
-  return Number.isInteger(n) && n > 0 && n <= 1000 ? n : 60;
+  if (Number.isInteger(n) && n > 0 && n <= 1000) return n;
+  return proveedorEmail().nombre === "smtp" ? 3 : 60;
 }
 
 /**
@@ -139,6 +145,7 @@ export async function procesarTanda(campanaId: string): Promise<void> {
   };
   const proveedor = proveedorEmail();
 
+  let cortar = false;
   await db.transaction(async (tx) => {
     const { rows: tanda } = await tx.execute<{ id: string; email: string; nombre: string | null; dado_de_baja: boolean }>(sql`
       select e.id, e.email, e.nombre,
@@ -151,6 +158,7 @@ export async function procesarTanda(campanaId: string): Promise<void> {
     `);
 
     for (const envio of tanda) {
+      if (cortar) break;
       if (envio.dado_de_baja) {
         await tx.execute(sql`update campana_envios set estado = 'omitido' where id = ${envio.id}`);
         continue;
@@ -163,6 +171,12 @@ export async function procesarTanda(campanaId: string): Promise<void> {
         texto: correo.texto,
         cabeceras: correo.cabeceras,
       });
+      // Rechazo temporal (el tope de Hostinger, un corte): queda pendiente y
+      // la tanda termina acá. La siguiente lo vuelve a intentar.
+      if (!resultado.enviado && resultado.temporal) {
+        cortar = true;
+        continue;
+      }
       await tx.execute(sql`
         update campana_envios
            set estado = ${resultado.enviado ? "enviado" : "fallido"}::estado_envio_campana,
@@ -178,7 +192,8 @@ export async function procesarTanda(campanaId: string): Promise<void> {
   `);
 
   if ((quedan[0]?.n ?? 0) > 0) {
-    await encolar("campana.tanda", { campanaId }, { en: new Date(Date.now() + 60_000) });
+    // Después de un rechazo temporal, se espera un poco más que una tanda.
+    await encolar("campana.tanda", { campanaId }, { en: new Date(Date.now() + (cortar ? 3 : 1) * 60_000) });
   } else {
     await db.execute(sql`
       update campanas set estado = 'enviada', terminada_at = now(), updated_at = now()

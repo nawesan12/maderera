@@ -40,6 +40,12 @@ export interface ResultadoEmail {
   simulado: boolean;
   id?: string;
   error?: string;
+  /**
+   * El rechazo es temporal (un 4xx del servidor, la conexión que se cortó):
+   * reintentarlo más tarde va a andar. Hostinger, por ejemplo, deja salir
+   * cinco correos por minuto desde la VPS, y el sexto se rechaza así.
+   */
+  temporal?: boolean;
 }
 
 export interface ProveedorEmail {

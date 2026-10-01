@@ -41,6 +41,21 @@ export function configSmtp(): ConfigSmtp | null {
   };
 }
 
+/**
+ * El «De» del correo: el nombre de `EMAIL_REMITENTE` con la dirección de la
+ * casilla autenticada.
+ *
+ * El servidor de correo rechaza mandar a nombre de otra dirección (es lo que
+ * impide que una cuenta robada suplante a `info@`), así que la dirección
+ * visible **tiene** que ser la de la casilla. Tomarla de acá evita que un
+ * `EMAIL_REMITENTE` mal escrito deje a todos los avisos rebotando.
+ */
+function remitente(usuario: string): string {
+  const visible = remitenteVisible();
+  const nombre = visible.match(/^\s*"?([^"<]+?)"?\s*</)?.[1]?.trim();
+  return nombre ? `"${nombre.replace(/"/g, "")}" <${usuario}>` : usuario;
+}
+
 const global = globalThis as unknown as { transporteSmtp?: Transporter };
 
 /** Una sola conexión reutilizable por proceso: abrir una por correo es lento. */
@@ -75,10 +90,7 @@ export const proveedorSmtp: ProveedorEmail = {
 
     try {
       const info = await transporte(config).sendMail({
-        from: remitenteVisible(),
-        // El sobre sale de la cuenta autenticada: si el «De» visible es otra
-        // dirección del mismo dominio, el servidor igual lo firma con DKIM.
-        envelope: { from: config.usuario, to: mensaje.para },
+        from: remitente(config.usuario),
         to: mensaje.para,
         replyTo: mensaje.responderA ?? process.env.EMAIL_RESPUESTAS ?? undefined,
         subject: mensaje.asunto,
@@ -93,10 +105,14 @@ export const proveedorSmtp: ProveedorEmail = {
       });
       return { enviado: true, simulado: false, id: info.messageId };
     } catch (error) {
+      const e = error as { message?: string; responseCode?: number; code?: string };
       return {
         enviado: false,
         simulado: false,
-        error: error instanceof Error ? error.message : "Error de SMTP.",
+        error: e.message ?? "Error de SMTP.",
+        temporal:
+          (typeof e.responseCode === "number" && e.responseCode >= 400 && e.responseCode < 500) ||
+          ["ECONNECTION", "ETIMEDOUT", "ESOCKET", "EDNS", "ECONNRESET"].includes(e.code ?? ""),
       };
     }
   },

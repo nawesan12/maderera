@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cuerpoComoParrafos, leerCuerpo } from "@/lib/campanas/cuerpo";
 import { parametrosDeBaja, verificarBaja } from "@/lib/campanas/baja";
-import { describirSegmento, leerSegmento } from "@/lib/campanas/segmento";
+import { describirSegmento, duracionDelEnvio, leerSegmento } from "@/lib/campanas/segmento";
 import { RUBROS_CLIENTE } from "@/lib/rubros-cliente";
 
 /**
@@ -56,5 +56,14 @@ describe("el segmento", () => {
     expect(
       describirSegmento({ tipo: "profesional", rubros: ["carpintero"], actividad: { tipo: "sinComprar", meses: 6 } }),
     ).toBe("Profesionales de carpintería que no compran hace más de 6 meses con correo");
+  });
+});
+
+describe("cuánto tarda en salir", () => {
+  it("se dice como se dice", () => {
+    expect(duracionDelEnvio(1, 3)).toBe("un minuto");
+    expect(duracionDelEnvio(60, 3)).toBe("unos 20 minutos");
+    expect(duracionDelEnvio(1000, 3)).toBe("unas 5,6 horas");
+    expect(duracionDelEnvio(20000, 3)).toBe("unos 5 días");
   });
 });

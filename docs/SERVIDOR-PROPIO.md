@@ -601,6 +601,16 @@ Y en el DNS, los registros que pide Resend para el dominio. Los avisos de la
 tienda siguen saliendo por `EMAIL_PROVIDER="smtp"`: pasan por el servidor
 propio y de ahí al relay.
 
+**Qué hace la aplicación con el límite.** Las campañas (`/admin/campanas`)
+salen en tandas por la cola: con `EMAIL_PROVIDER="smtp"`, **3 por minuto** por
+omisión, para dejar lugar a los avisos de pedidos y recibos dentro de los 5.
+El editor dice cuánto va a tardar antes de enviar (mil direcciones son más de
+cinco horas). Con el relay configurado, se sube con `CAMPANAS_POR_MINUTO` en
+`.env.produccion` (por ejemplo, 60). Y lo que el servidor rechaza
+temporalmente —el sexto correo del minuto— no se pierde: el aviso va a la
+cola y se reintenta, y la tanda de la campaña corta y sigue tres minutos
+después.
+
 ### Mantenimiento del correo
 
 - **Actualizar la imagen**: la versión está fijada en el compose

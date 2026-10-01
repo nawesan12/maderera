@@ -74,6 +74,36 @@ export async function despacharEmail(despacho: DespachoEmail): Promise<void> {
       adjuntos: despacho.adjuntos,
     });
 
+    /*
+     * Un rechazo temporal —el tope de 5 por minuto de Hostinger, un corte— no
+     * es un aviso perdido: va a la cola y se reintenta con espera creciente.
+     * Los recibos salen en ráfaga cuando se cobran varias cuentas seguidas, y
+     * el sexto del minuto rebotaría.
+     */
+    if (!resultado.enviado && resultado.temporal) {
+      await registrar({ ...despacho, asunto, estado: "fallida", error: `Rechazo temporal, se reintenta: ${resultado.error ?? ""}` });
+      const { encolar } = await import("@/lib/cola");
+      await encolar(
+        "email.reintento",
+        {
+          evento: despacho.evento,
+          para: despacho.para,
+          asunto,
+          html: despacho.correo.html,
+          texto: despacho.correo.texto,
+          adjuntos: despacho.adjuntos?.map((a) => ({
+            nombre: a.nombre,
+            tipo: a.tipo,
+            base64: Buffer.from(a.contenido).toString("base64"),
+          })),
+          entidadTipo: despacho.entidadTipo ?? null,
+          entidadId: despacho.entidadId ?? null,
+        },
+        { en: new Date(Date.now() + 2 * 60_000) },
+      );
+      return;
+    }
+
     await registrar({
       ...despacho,
       asunto,
@@ -94,6 +124,49 @@ export async function despacharEmail(despacho: DespachoEmail): Promise<void> {
       }),
     );
   }
+}
+
+export interface ReintentoDeEmail {
+  evento: string;
+  para: string;
+  asunto: string;
+  html: string;
+  texto: string;
+  adjuntos?: { nombre: string; tipo: string; base64: string }[];
+  entidadTipo: string | null;
+  entidadId: string | null;
+}
+
+/**
+ * El reintento de un aviso que rebotó temporalmente. Lo corre la cola
+ * (`email.reintento`): si vuelve a rebotar temporalmente, tira y la cola
+ * espera más; si el rechazo es definitivo, queda registrado y no se insiste.
+ */
+export async function reintentarEmail(carga: ReintentoDeEmail): Promise<void> {
+  const resultado = await proveedorEmail().enviar({
+    para: carga.para,
+    asunto: carga.asunto,
+    html: carga.html,
+    texto: carga.texto,
+    adjuntos: carga.adjuntos?.map((a) => ({
+      nombre: a.nombre,
+      tipo: a.tipo,
+      contenido: new Uint8Array(Buffer.from(a.base64, "base64")),
+    })),
+  });
+  if (!resultado.enviado && resultado.temporal) {
+    throw new Error(resultado.error ?? "Rechazo temporal.");
+  }
+  await registrar({
+    evento: carga.evento,
+    para: carga.para,
+    asunto: carga.asunto,
+    entidadTipo: carga.entidadTipo ?? undefined,
+    entidadId: carga.entidadId,
+    estado: resultado.simulado ? "simulada" : resultado.enviado ? "enviada" : "fallida",
+    proveedorMensajeId: resultado.id,
+    error: resultado.error,
+  });
 }
 
 async function registrar(datos: {

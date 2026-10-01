@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { CalendarClock, Eye, Loader2, Save, Send, TestTube2, Users } from "lucide-react";
 import { Confirmar } from "@/components/admin/confirmar";
 import type { SegmentoCampana } from "@/lib/db/schema/campanas";
+import { duracionDelEnvio } from "@/lib/campanas/segmento";
 import {
   alcanceDelSegmento,
   enviarCampana,
@@ -51,7 +52,7 @@ export function EditorDeCampana({
   const router = useRouter();
   const formulario = useRef<HTMLFormElement>(null);
   const [segmento, setSegmento] = useState<SegmentoCampana>(inicial.segmento);
-  const [alcance, setAlcance] = useState<{ cantidad: number; descripcion: string } | null>(null);
+  const [alcance, setAlcance] = useState<{ cantidad: number; descripcion: string; porMinuto: number } | null>(null);
   const [html, setHtml] = useState<string | null>(null);
   const [errorPrevia, setErrorPrevia] = useState<string | null>(null);
   const [sucio, setSucio] = useState(false);
@@ -277,6 +278,11 @@ export function EditorDeCampana({
               <span>
                 <strong className="tabular">{alcance.cantidad}</strong>{" "}
                 {alcance.cantidad === 1 ? "dirección" : "direcciones"} · {alcance.descripcion}
+                {alcance.cantidad > 0 && (
+                  <span className="block text-sm text-muted-foreground">
+                    Sale a {alcance.porMinuto} por minuto: tarda {duracionDelEnvio(alcance.cantidad, alcance.porMinuto)}.
+                  </span>
+                )}
               </span>
             ) : (
               <span className="text-muted-foreground">Contando…</span>
@@ -360,7 +366,7 @@ export function EditorDeCampana({
         abierto={confirmando}
         alCerrar={() => setConfirmando(false)}
         titulo="¿Enviar la campaña?"
-        detalle={`Sale a ${alcance?.cantidad ?? 0} ${alcance?.cantidad === 1 ? "dirección" : "direcciones"} (${alcance?.descripcion ?? ""}), en tandas de un minuto. Lo que sale no se puede deshacer.`}
+        detalle={`Sale a ${alcance?.cantidad ?? 0} ${alcance?.cantidad === 1 ? "dirección" : "direcciones"} (${alcance?.descripcion ?? ""}). Tarda ${alcance ? duracionDelEnvio(alcance.cantidad, alcance.porMinuto) : ""}; se puede cancelar a mitad de camino, pero lo que ya salió no se puede deshacer.`}
         confirmar="Enviar"
         pendiente={pendiente}
         alConfirmar={enviar}

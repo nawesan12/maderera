@@ -2,6 +2,7 @@ import "server-only";
 
 import type { NombreProveedorPago } from "@/lib/pagos/tipos";
 import type { PayloadWebhook } from "@/lib/whatsapp/webhook";
+import type { ReintentoDeEmail } from "@/lib/notificaciones/avisos";
 
 /**
  * Qué hace cada tipo de trabajo.
@@ -24,6 +25,8 @@ export interface CargasDeTrabajo {
   "whatsapp.payload": { payload: PayloadWebhook };
   /** Una tanda de una campaña de correo (ver `lib/campanas/envio.ts`). */
   "campana.tanda": { campanaId: string };
+  /** Un aviso por correo que rebotó temporalmente (ver `despacharEmail`). */
+  "email.reintento": ReintentoDeEmail;
 }
 
 export type TipoDeTrabajo = keyof CargasDeTrabajo;
@@ -57,6 +60,11 @@ export const MANEJADORES: {
   "whatsapp.payload": async (carga) => {
     const { procesarPayload } = await import("@/lib/whatsapp/webhook");
     await procesarPayload(carga.payload);
+  },
+
+  "email.reintento": async (carga) => {
+    const { reintentarEmail } = await import("@/lib/notificaciones/avisos");
+    await reintentarEmail(carga);
   },
 
   "campana.tanda": async (carga) => {

@@ -11,7 +11,7 @@ import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { RUBROS_CLIENTE } from "@/lib/rubros-cliente";
 import { leerSegmento, describirSegmento } from "@/lib/campanas/segmento";
 import { armarCorreoDeCampana } from "@/lib/campanas/correo";
-import { contarDestinatarios, iniciarEnvio, ErrorDeCampana } from "@/lib/campanas/envio";
+import { contarDestinatarios, iniciarEnvio, porMinuto, ErrorDeCampana } from "@/lib/campanas/envio";
 import { proveedorEmail } from "@/lib/email";
 import { procesarCola } from "@/lib/cola";
 import { motivoParaNoEnviar } from "@/lib/campanas/disponible";
@@ -112,7 +112,9 @@ export async function guardarCampana(_previo: EstadoCampana, formData: FormData)
 }
 
 /** A cuántas direcciones llega un segmento, para verlo mientras se elige. */
-export async function alcanceDelSegmento(segmento: SegmentoCampana): Promise<{ cantidad: number; descripcion: string }> {
+export async function alcanceDelSegmento(
+  segmento: SegmentoCampana,
+): Promise<{ cantidad: number; descripcion: string; porMinuto: number }> {
   await requireStaffRole("admin");
   const sano = leerSegmento(
     {
@@ -123,7 +125,11 @@ export async function alcanceDelSegmento(segmento: SegmentoCampana): Promise<{ c
     },
     RUBROS,
   );
-  return { cantidad: await contarDestinatarios(sano), descripcion: describirSegmento(sano) };
+  return {
+    cantidad: await contarDestinatarios(sano),
+    descripcion: describirSegmento(sano),
+    porMinuto: porMinuto(),
+  };
 }
 
 /** El correo tal cual va a llegar, con el nombre de quien lo está armando. */

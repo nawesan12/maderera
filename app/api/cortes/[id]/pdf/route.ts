@@ -36,6 +36,8 @@ export async function GET(
     // El disco del trabajo, no el general de hoy.
     anchoSierra: corte.anchoSierraMm,
     fijadas: leerAcomodoManual(corte.acomodoManual),
+    // Con el motor con que nació el trabajo (ver `cutting_orders.motorPlano`).
+    busqueda: corte.motorPlano >= 2,
   });
 
   const pdf = await cortePdf(

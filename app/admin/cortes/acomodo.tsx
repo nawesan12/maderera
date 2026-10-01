@@ -29,14 +29,17 @@ export function AcomodoDelCorte({
   placaLargo,
   placaAncho,
   anchoSierra,
+  busqueda,
   inicial,
 }: {
   id: string;
   piezas: PiezaAcortar[];
   placaLargo: number;
   placaAncho: number;
-  /** El espesor del disco, de /admin/calculadoras. */
+  /** El espesor del disco del trabajo. */
   anchoSierra: number;
+  /** Si el trabajo se armó con el motor que busca (ver `motorPlano`). */
+  busqueda: boolean;
   inicial: PiezaFijada[];
 }) {
   const [fijadas, setFijadas] = useState<PiezaFijada[]>(inicial);
@@ -58,8 +61,9 @@ export function AcomodoDelCorte({
         // tocara el despiece.
         anchoSierra,
         fijadas,
+        busqueda,
       }),
-    [piezas, placaLargo, placaAncho, anchoSierra, fijadas],
+    [piezas, placaLargo, placaAncho, anchoSierra, fijadas, busqueda],
   );
 
   // Comparado como texto: las dos listas son del mismo origen y el orden no

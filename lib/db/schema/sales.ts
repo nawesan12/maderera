@@ -523,6 +523,17 @@ export const cuttingOrders = pgTable(
      * el trabajo lo puede cambiar.
      */
     anchoSierraMm: numeric({ precision: 4, scale: 1, mode: "number" }).notNull().default(5),
+    /**
+     * Con qué versión del motor se armó el plano de este trabajo.
+     *
+     * El plano no se guarda: se rehace en la ficha, el PDF y la hoja del
+     * taller. Cuando el motor mejora (1/10/2026, la búsqueda de
+     * `lib/cortes/plano.ts`), un trabajo viejo se redibujaría distinto de lo
+     * que se cobró y de lo que el taller ya tiene impreso. Cada trabajo se
+     * dibuja con el motor con el que nació: 1 = las ocho combinaciones
+     * fijas, 2 = con búsqueda.
+     */
+    motorPlano: integer().notNull().default(2),
     estado: estadoCorte().notNull().default("en-cola"),
     urgente: integer().notNull().default(0),
     notas: text(),

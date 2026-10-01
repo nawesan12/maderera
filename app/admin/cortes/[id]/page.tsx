@@ -68,6 +68,8 @@ export default async function FichaCortePage({
     anchoSierra: corte.anchoSierraMm,
     // Lo que alguien corrigió a mano cuando cargó el trabajo.
     fijadas: leerAcomodoManual(corte.acomodoManual),
+    // Con el motor con que nació el trabajo (ver `cutting_orders.motorPlano`).
+    busqueda: corte.motorPlano >= 2,
   });
   const cuenta = presupuestarCorte({
     plano,
@@ -305,6 +307,7 @@ export default async function FichaCortePage({
               placaLargo={plano.placaLargo}
               placaAncho={plano.placaAncho}
               anchoSierra={plano.anchoSierra}
+              busqueda={corte.motorPlano >= 2}
               inicial={leerAcomodoManual(corte.acomodoManual)}
             />
           </div>

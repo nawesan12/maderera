@@ -47,6 +47,8 @@ export default async function PlanoDeCortePage({
     anchoSierra: corte.anchoSierraMm,
     // Lo que alguien corrigió a mano cuando cargó el trabajo.
     fijadas: leerAcomodoManual(corte.acomodoManual),
+    // Con el motor con que nació el trabajo (ver `cutting_orders.motorPlano`).
+    busqueda: corte.motorPlano >= 2,
   });
 
   return (

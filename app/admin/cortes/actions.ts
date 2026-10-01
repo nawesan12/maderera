@@ -427,12 +427,15 @@ export async function cambiarAnchoDeSierra(id: string, valor: string): Promise<E
     placaAncho: corte.medida.ancho,
     anchoSierra: ancho,
     fijadas: leerAcomodoManual(corte.acomodoManual),
+    // Se rehace todo: pasa al motor de hoy, y así lo guarda abajo.
+    busqueda: true,
   });
 
   await db
     .update(cuttingOrders)
     .set({
       anchoSierraMm: ancho,
+      motorPlano: 2,
       placas: plano.placas.length,
       pasadas: plano.pasadasCobrables,
       updatedAt: new Date(),

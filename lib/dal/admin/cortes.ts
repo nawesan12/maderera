@@ -165,6 +165,7 @@ export async function obtenerCorte(
       cantoDescripcion: cuttingOrders.cantoDescripcion,
       acomodoManual: cuttingOrders.acomodoManual,
       anchoSierraMm: cuttingOrders.anchoSierraMm,
+      motorPlano: cuttingOrders.motorPlano,
       estado: cuttingOrders.estado,
       urgente: cuttingOrders.urgente,
       notas: cuttingOrders.notas,

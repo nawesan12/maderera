@@ -107,6 +107,10 @@ export async function agregarCorteAlCarrito(
     };
   }
 
+  if (mitad && !placa.admiteMedia) {
+    return { error: "Esa placa se vende solo entera: armá el corte sobre la placa completa." };
+  }
+
   const medida = medidaDePlaca({
     varianteLargo: placa.largoMm,
     varianteAncho: placa.anchoMm,
@@ -139,7 +143,7 @@ export async function agregarCorteAlCarrito(
     },
     precioPorPlaca: placa.precio,
     piezas,
-    fraccion: fraccionDePlaca(mitad ?? null),
+    fraccion: fraccionDePlaca(mitad ?? null, placa.precioMediaPct),
   });
 
   const cartId = await obtenerOCrearCarrito();

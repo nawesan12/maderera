@@ -15,7 +15,8 @@ import {
   quotes,
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
-import { costosParaCongelar } from "@/lib/compras/congelar";
+import { costoPorUnidadDeVenta, costosParaCongelar } from "@/lib/compras/congelar";
+import { factoresDeStock } from "@/lib/ventas/factores";
 import {
   siguienteNumeroDePedido,
   siguienteNumeroDePresupuesto,
@@ -281,10 +282,13 @@ export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
       tx,
       items.map((i) => i.variantId).filter((v): v is string => Boolean(v)),
     );
+    // Cuánto stock descuenta cada línea, del producto y no del papel.
+    const factores = await factoresDeStock(tx, items);
 
     await tx.insert(orderItems).values(
-      items.map((item) => {
+      items.map((item, i) => {
         const costo = item.variantId ? costos.get(item.variantId) : undefined;
+        const { presentacion, stockPorUnidad } = factores[i]!;
         return {
           orderId: pedido.id,
           variantId: item.variantId,
@@ -293,7 +297,9 @@ export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
           cantidad: item.cantidad,
           precioUnitario: item.precioUnitario,
           subtotal: item.subtotal,
-          costoUnitario: costo?.costoUnitario ?? null,
+          presentacion,
+          stockPorUnidad,
+          costoUnitario: costoPorUnidadDeVenta(costo?.costoUnitario, stockPorUnidad),
           alicuotaIva: costo?.alicuotaIva ?? null,
           orden: item.orden,
         };

@@ -8,7 +8,9 @@ import {
 } from "@/lib/dal/numeracion-ventas";
 import { fechaAcotada } from "@/lib/mostrador/offline/numero-provisorio";
 import { turnoQueContiene } from "@/lib/mostrador/turno";
-import { costosParaCongelar } from "@/lib/compras/congelar";
+import { costoPorUnidadDeVenta, costosParaCongelar } from "@/lib/compras/congelar";
+import { factoresDeStock } from "@/lib/ventas/factores";
+import { unidadesDeStock } from "@/lib/ventas/forma-de-venta";
 import {
   accountMovements,
   cashMovements,
@@ -522,6 +524,7 @@ export async function registrarVentaDeMostrador(
      * ponderado se mueve con cada recepción: leer el de hoy para calcular el
      * margen de una venta vieja lo reescribiría cada vez que llega un camión.
      */
+    const factores = await factoresDeStock(tx, lineas);
     const costos = await costosParaCongelar(
       tx,
       lineas.map((l) => l.variantId).filter((v): v is string => Boolean(v)),
@@ -530,6 +533,7 @@ export async function registrarVentaDeMostrador(
     await tx.insert(orderItems).values(
       lineas.map((l, i) => {
         const costo = l.variantId ? costos.get(l.variantId) : undefined;
+        const { presentacion, stockPorUnidad } = factores[i]!;
         return {
           orderId: pedido.id,
           variantId: l.variantId,
@@ -538,7 +542,11 @@ export async function registrarVentaDeMostrador(
           cantidad: l.cantidad.toFixed(2),
           precioUnitario: l.precioUnitario.toFixed(2),
           subtotal: aCentavos(l.cantidad * l.precioUnitario).toFixed(2),
-          costoUnitario: costo?.costoUnitario ?? null,
+          presentacion,
+          stockPorUnidad,
+          // El costo promedio es por unidad de stock: una media placa cuesta
+          // media placa. Sin esto el margen de las medias salía al doble.
+          costoUnitario: costoPorUnidadDeVenta(costo?.costoUnitario, stockPorUnidad),
           alicuotaIva: costo?.alicuotaIva ?? null,
           orden: i,
         };
@@ -555,9 +563,9 @@ export async function registrarVentaDeMostrador(
     } else {
       // Stock: solo las líneas que apuntan a una variante. Un flete o una
       // diferencia de precio no descuentan nada de ningún estante.
-      for (const l of lineas) {
+      for (const [i, l] of lineas.entries()) {
         if (!l.variantId) continue;
-        const unidades = Math.round(l.cantidad);
+        const unidades = unidadesDeStock(l.cantidad, factores[i]!.stockPorUnidad);
         if (unidades <= 0) continue;
 
         await tx

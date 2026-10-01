@@ -92,6 +92,19 @@ export const ATAJOS: Definicion[] = [
 ];
 
 /**
+ * Las teclas que valen **sobre un resultado del buscador**.
+ *
+ * No son atajos de la pantalla —los maneja el propio buscador, porque dependen
+ * de qué resultado está marcado— pero van en la misma ayuda: el vendedor no
+ * distingue dónde vive cada tecla, y una que no figura no existe.
+ */
+export const EN_EL_BUSCADOR = [
+  { teclas: "Enter", texto: "Agregar el resultado marcado" },
+  { teclas: "Mayús + Enter", texto: "Media placa, partida al largo" },
+  { teclas: "Alt + Enter", texto: "Media placa, partida al ancho" },
+] as const;
+
+/**
  * Si hay un diálogo abierto encima de la venta.
  *
  * El diálogo es de Base UI, que marca el abierto con `data-open` y el que se
@@ -230,6 +243,17 @@ export function AyudaDeAtajos() {
         <dl className="mt-1.5 grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1.5 rounded-xl border border-linea bg-card p-3">
           {conTexto.map((a) => (
             <Fragment key={a.accion}>
+              <dt className="text-right">
+                <Tecla>{a.teclas}</Tecla>
+              </dt>
+              <dd className="text-base">{a.texto}</dd>
+            </Fragment>
+          ))}
+          <dt className="col-span-2 mt-1.5 border-t border-linea pt-2 text-xs font-semibold uppercase tracking-[0.08em]">
+            En el buscador
+          </dt>
+          {EN_EL_BUSCADOR.map((a) => (
+            <Fragment key={a.teclas}>
               <dt className="text-right">
                 <Tecla>{a.teclas}</Tecla>
               </dt>

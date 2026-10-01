@@ -60,6 +60,13 @@ export interface ResultadoDeMostrador {
   color?: string | null;
   /** La familia del producto. Por acá se busca la tarifa de corte. */
   categoria?: string | null;
+  /**
+   * Cómo se vende la placa y cuánto vale la media. Opcionales porque una
+   * copia local bajada antes del 1/10/2026 no los trae: sin ellos la placa se
+   * vende entera, que es lo que pasaba hasta entonces.
+   */
+  formaDeVenta?: "entera" | "entera_o_media" | "metro_cuadrado";
+  precioMediaPct?: number;
 }
 
 /**
@@ -153,8 +160,10 @@ export async function buscarParaMostrador(
       // Por acá se busca la tarifa de corte: se cargan por familia.
       categoria: categories.name,
       unidad: products.unit,
+      formaDeVenta: products.formaDeVenta,
+      precioMediaPct: products.precioMediaPct,
       precio: sql<string | null>`coalesce(${propia.price}, round((${general.price} * ${lista.factorDerivado})::numeric, 2))`,
-      stock: sql<number>`coalesce(${inventory.qty}, 0)`,
+      stock: sql<number>`coalesce(${inventory.qty}, 0)`.mapWith(Number),
       // Lo que coincide por código va primero: es lo más específico que alguien
       // puede tipear.
       exacto: sql<number>`case when ${productVariants.sku} ilike ${consulta + "%"} then 0 else 1 end`,
@@ -207,6 +216,8 @@ export async function buscarParaMostrador(
     anchoMm: f.anchoMm,
     color: f.color,
     categoria: f.categoria,
+    formaDeVenta: f.formaDeVenta,
+    precioMediaPct: f.precioMediaPct,
   }));
 }
 

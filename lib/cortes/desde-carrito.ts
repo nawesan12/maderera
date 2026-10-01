@@ -11,6 +11,7 @@ import {
   type PresupuestoDeCorte,
 } from "@/lib/cortes/presupuesto";
 import { fraccionDePlaca, medidaDePlaca, nombreDeLaMitad } from "@/lib/cortes/placa";
+import { presentacionDeMitad, type Presentacion } from "@/lib/ventas/forma-de-venta";
 
 /**
  * Los cortes del carrito, listos para convertirse en pedido.
@@ -27,6 +28,8 @@ import { fraccionDePlaca, medidaDePlaca, nombreDeLaMitad } from "@/lib/cortes/pl
  * abrir la orden en la cola del taller.
  */
 export interface LineaDeCorte {
+  /** Si el material es media placa: descuenta 0,5 por placa del plano. */
+  presentacion?: Presentacion;
   variantId: string | null;
   descripcion: string;
   unidad: string;
@@ -93,6 +96,13 @@ export async function resolverCortesDelCarrito(
 
     const mitad = (corte.mitad as "largo" | "ancho" | null) ?? null;
 
+    if (mitad && !placa.admiteMedia) {
+      return {
+        resueltos: [],
+        error: `${corte.materialDescripcion} se vende solo entera. Sacá el corte del carrito y armalo sobre la placa completa.`,
+      };
+    }
+
     const medida = medidaDePlaca({
       varianteLargo: placa.largoMm,
       varianteAncho: placa.anchoMm,
@@ -113,7 +123,7 @@ export async function resolverCortesDelCarrito(
       };
     }
 
-    const fraccion = fraccionDePlaca(mitad);
+    const fraccion = fraccionDePlaca(mitad, placa.precioMediaPct);
     const cuenta = presupuestarCorte({
       plano,
       tarifa: {
@@ -131,12 +141,15 @@ export async function resolverCortesDelCarrito(
 
     /*
      * El material va con su variante: es lo que descuenta stock del estante.
-     * Media placa se cobra a mitad de precio pero saca **una placa entera** del
-     * depósito, que es lo que pasa físicamente; el pedazo que queda vuelve como
-     * retal.
+     *
+     * Media placa descuenta **media placa** desde el 1/10/2026, cuando el stock
+     * pasó a llevar decimales: la otra mitad queda en el depósito y se puede
+     * vender suelta. Antes salía una placa entera y la mitad sobrante quedaba
+     * fuera del sistema.
      */
     if (cuenta.placasEnteras > 0) {
       lineas.push({
+        presentacion: presentacionDeMitad(mitad),
         variantId: placa.variantId,
         descripcion: mitad
           ? `${placa.descripcion} — ${nombreDeLaMitad(mitad).toLowerCase()}`

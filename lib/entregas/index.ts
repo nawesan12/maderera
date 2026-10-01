@@ -12,6 +12,7 @@ import {
   shipments,
 } from "@/lib/db/schema";
 import { salidaPorEntrega } from "@/lib/inventario/reservas";
+import { unidadesDeStock } from "@/lib/ventas/forma-de-venta";
 
 /**
  * Entregas y acopio.
@@ -417,7 +418,11 @@ export async function anularEntrega(
     if (!entrega.branchId || lineas.length === 0) return;
 
     const variantes = await tx
-      .select({ id: orderItems.id, variantId: orderItems.variantId })
+      .select({
+        id: orderItems.id,
+        variantId: orderItems.variantId,
+        stockPorUnidad: orderItems.stockPorUnidad,
+      })
       .from(orderItems)
       .where(
         inArray(
@@ -426,7 +431,7 @@ export async function anularEntrega(
         ),
       );
 
-    const porItem = new Map(variantes.map((v) => [v.id, v.variantId]));
+    const porItem = new Map(variantes.map((v) => [v.id, v]));
 
     const { devolverAlStock } = await import("@/lib/inventario/reservas");
 
@@ -436,8 +441,11 @@ export async function anularEntrega(
       usuarioId,
       lineas: lineas
         .map((l) => ({
-          variantId: porItem.get(l.orderItemId) ?? null,
-          cantidad: Math.ceil(Number(l.cantidad)),
+          variantId: porItem.get(l.orderItemId)?.variantId ?? null,
+          cantidad: unidadesDeStock(
+            Number(l.cantidad),
+            porItem.get(l.orderItemId)?.stockPorUnidad ?? 1,
+          ),
         }))
         .filter((l): l is { variantId: string; cantidad: number } =>
           Boolean(l.variantId),

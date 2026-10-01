@@ -45,6 +45,10 @@ export interface PlacaCortable {
   color: string | null;
   /** Precio final de la placa entera, con IVA, en la lista de quien mira. */
   precio: number;
+  /** Si se puede partir: solo las placas que se venden enteras o por la mitad. */
+  admiteMedia: boolean;
+  /** Precio de la media, en % de la entera. */
+  precioMediaPct: number;
   precioPorPasada: number;
   precioPorMetroCanto: number;
 }
@@ -66,6 +70,8 @@ const consultarPlacas = async (
       anchoMm: productVariants.anchoMm,
       color: productVariants.color,
       categoria: categories.name,
+      formaDeVenta: products.formaDeVenta,
+      precioMediaPct: products.precioMediaPct,
       precio: sql<string | null>`coalesce(${propia.price}, round((${general.price} * ${lista.factorDerivado})::numeric, 2))`,
     })
     .from(productVariants)
@@ -115,6 +121,8 @@ const consultarPlacas = async (
         anchoMm: f.anchoMm!,
         color: f.color,
         precio: Number(f.precio ?? 0),
+        admiteMedia: f.formaDeVenta === "entera_o_media",
+        precioMediaPct: f.precioMediaPct,
         precioPorPasada: tarifa?.precioPorPasada ?? 0,
         precioPorMetroCanto: tarifa?.precioPorMetroCanto ?? 0,
       };

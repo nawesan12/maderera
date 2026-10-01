@@ -80,7 +80,7 @@ export async function sugerirDelCatalogo(
         medida: productVariants.label,
         unidad: products.unit,
         precio: sql<string | null>`coalesce(${propia.price}, ${general.price})`,
-        stock: sql<number>`coalesce(sum(${inventory.qty}), 0)`,
+        stock: sql<number>`coalesce(sum(${inventory.qty}), 0)`.mapWith(Number),
       })
       .from(productVariants)
       .innerJoin(products, eq(products.id, productVariants.productId))

@@ -23,6 +23,7 @@ import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 import { moneda } from "@/lib/formato";
 import type { CorteDeMostrador } from "@/lib/mostrador/venta";
 import type { LineaDeVenta } from "@/lib/mostrador/importes";
+import { presentacionDeMitad } from "@/lib/ventas/forma-de-venta";
 
 /**
  * Vender un corte desde el mostrador.
@@ -78,6 +79,9 @@ export function CorteAMedida({
     anchoMm: number | null;
     /** Para avisar al partir: en una placa de color el dibujo tiene sentido. */
     color?: string | null;
+    /** Si se vende partida, y a qué porcentaje de la entera. */
+    formaDeVenta?: "entera" | "entera_o_media" | "metro_cuadrado";
+    precioMediaPct?: number;
   };
   /** Lo que se lleva el disco por pasada, de /admin/calculadoras. */
   anchoSierra: number;
@@ -142,7 +146,11 @@ export function CorteAMedida({
 
   // De media placa se cobra media placa: el plano ya trabaja sobre la medida
   // partida, así que lo único que cambia es el precio del material.
-  const subtotalPlacas = plano.placasEnteras * placa.precio * fraccionDePlaca(mitad);
+  const pctMedia = placa.precioMediaPct ?? 50;
+  const subtotalPlacas = plano.placasEnteras * placa.precio * fraccionDePlaca(mitad, pctMedia);
+  // Solo se ofrece partir lo que se vende partido: un fenólico que se vende
+  // entero no tiene media placa en ningún lado (nota de la clienta, 30/9/2026).
+  const sePuedePartir = placa.formaDeVenta === "entera_o_media";
   const subtotalCorte = plano.pasadasCobrables * precioPorPasada;
   const subtotalCanto = Math.round(metrosCanto * precioPorMetroCanto * 100) / 100;
   const total = subtotalPlacas + subtotalCorte + subtotalCanto;
@@ -184,19 +192,20 @@ export function CorteAMedida({
      */
     if (plano.placasEnteras > 0) {
       /*
-       * Media placa se cobra a mitad de precio, pero **descuenta una placa
-       * entera del estante**: es lo que sale físicamente del depósito. El
-       * pedazo que queda vuelve como retal, y de retales el sistema todavía no
-       * lleva stock (ver `lib/cortes/plano.ts`).
+       * Media placa se cobra al precio de la media y descuenta **media placa**
+       * del estante: la otra mitad queda en el depósito y se puede vender
+       * suelta. Hasta el 1/10/2026 salía una placa entera, porque el stock no
+       * admitía decimales.
        */
       lineas.push({
+        presentacion: presentacionDeMitad(mitad),
         variantId: placa.variantId,
         descripcion: mitad
           ? `${placa.descripcion} — ${nombreDeLaMitad(mitad).toLowerCase()}`
           : placa.descripcion,
         unidad: placa.unidad,
         cantidad: plano.placasEnteras,
-        precioUnitario: placa.precio * fraccionDePlaca(mitad),
+        precioUnitario: placa.precio * fraccionDePlaca(mitad, pctMedia),
       });
     }
 
@@ -273,29 +282,32 @@ export function CorteAMedida({
           </p>
 
           {/* Media placa. Se vende, y no es lo mismo partirla a lo largo que
-              al ancho: cambia qué piezas entran. */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-base font-medium">De qué sale:</span>
-            {([null, "largo", "ancho"] as const).map((m) => (
-              <button
-                key={m ?? "entera"}
-                type="button"
-                onClick={() => setMitad(m)}
-                aria-pressed={mitad === m}
-                className={`h-10 rounded-lg px-3 text-base font-medium transition-colors ${
-                  mitad === m
-                    ? "boton-accion"
-                    : "border border-linea text-muted-foreground hover:bg-hundida"
-                }`}
-              >
-                {m === null
-                  ? "Placa entera"
-                  : m === "largo"
-                    ? "Media a lo largo"
-                    : "Media al ancho"}
-              </button>
-            ))}
-          </div>
+              al ancho: cambia qué piezas entran. Solo aparece si el producto
+              se vende partido. */}
+          {sePuedePartir && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-base font-medium">De qué sale:</span>
+              {([null, "largo", "ancho"] as const).map((m) => (
+                <button
+                  key={m ?? "entera"}
+                  type="button"
+                  onClick={() => setMitad(m)}
+                  aria-pressed={mitad === m}
+                  className={`h-10 rounded-lg px-3 text-base font-medium transition-colors ${
+                    mitad === m
+                      ? "boton-accion"
+                      : "border border-linea text-muted-foreground hover:bg-hundida"
+                  }`}
+                >
+                  {m === null
+                    ? "Placa entera"
+                    : m === "largo"
+                      ? "Media a lo largo"
+                      : "Media al ancho"}
+                </button>
+              ))}
+            </div>
+          )}
 
           {mitad && placa.color && (
             <p className="tarjeta-atencion px-4 py-2.5 text-base">

@@ -60,6 +60,10 @@ export interface ProductoListado {
   alicuotaIva: string;
   /** Se fabrica a pedido: la ficha lo dice en vez de mostrarlo como agotado. */
   aPedido: boolean;
+  /** Cómo se vende la placa: entera, entera o media, por m². */
+  formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
+  /** Precio de la media placa, en % de la entera. */
+  precioMediaPct: number;
   featured: boolean;
   categorySlug: string;
   categoryName: string;
@@ -301,6 +305,8 @@ async function consultarProductos(
       unit: products.unit,
       alicuotaIva: products.alicuotaIva,
       aPedido: products.aPedido,
+      formaDeVenta: products.formaDeVenta,
+      precioMediaPct: products.precioMediaPct,
       featured: products.featured,
       categorySlug: categories.slug,
       categoryName: categories.name,
@@ -774,6 +780,10 @@ export interface ProductoDetalle {
   alicuotaIva: string;
   /** Se fabrica a pedido: la ficha lo dice en vez de mostrarlo como agotado. */
   aPedido: boolean;
+  /** Cómo se vende la placa: entera, entera o media, por m². */
+  formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
+  /** Precio de la media placa, en % de la entera. */
+  precioMediaPct: number;
   featured: boolean;
   categorySlug: string;
   categoryName: string;
@@ -803,6 +813,8 @@ async function consultarProducto(
       unit: products.unit,
       alicuotaIva: products.alicuotaIva,
       aPedido: products.aPedido,
+      formaDeVenta: products.formaDeVenta,
+      precioMediaPct: products.precioMediaPct,
       featured: products.featured,
       categorySlug: categories.slug,
       categoryName: categories.name,

@@ -25,6 +25,8 @@ export interface ItemNuevo {
   descripcion: string;
   unidad?: string;
   cantidad: number;
+  /** Media placa al largo o al ancho. */
+  presentacion?: "media_largo" | "media_ancho" | null;
   origen?: string;
   notas?: string;
 }
@@ -150,6 +152,7 @@ export function CarritoProvider({
           descripcion: item.descripcion,
           unidad: item.unidad ?? "unidad",
           cantidad: item.cantidad,
+          presentacion: item.presentacion ?? null,
           origen: item.origen ?? "catalogo",
           notas: item.notas,
         }),

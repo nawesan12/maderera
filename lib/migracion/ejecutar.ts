@@ -1027,7 +1027,7 @@ export async function informeDeIntegridad(
   const unidades = validas.reduce((suma, f) => suma + Number(f.datos.cantidad), 0);
 
   const [{ total = 0 } = {}] = await db
-    .select({ total: sql<number>`coalesce(sum(${inventory.qty}), 0)::int` })
+    .select({ total: sql<number>`coalesce(sum(${inventory.qty}), 0)`.mapWith(Number) })
     .from(inventory);
 
   return [

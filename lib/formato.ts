@@ -148,18 +148,18 @@ export function formatearCuit(cuit: string | null): string {
  * faltaban cuatro —entre ellas **tabla**, la del deck— y la del kilo estaba
  * escrita `kilo` cuando el enum dice `kg`: las cinco caían al respaldo y salían
  * a la pantalla como las guarda la base. `tests/formato.test.ts` lo vigila.
+ * Tenía además `metro_cubico` y `bolsa`, que no existen en el enum: se sacaron
+ * el 1/10/2026 para que este mapa diga exactamente lo mismo que la base.
  */
 export const ABREVIATURA_UNIDAD: Record<string, string> = {
   unidad: "u.",
   metro_lineal: "ml",
   metro_cuadrado: "m²",
-  metro_cubico: "m³",
   tabla: "tabla",
   placa: "placa",
   rollo: "rollo",
   par: "par",
   juego: "juego",
-  bolsa: "bolsa",
   kg: "kg",
   litro: "l",
 };

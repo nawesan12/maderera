@@ -61,3 +61,19 @@ export async function costosParaCongelar(
 
   return mapa;
 }
+
+/**
+ * El costo congelado de una línea, en su unidad de venta.
+ *
+ * El promedio ponderado es por unidad de stock —una placa—. Una línea de media
+ * placa (factor 0,5) o de m² de una placa (factor 1 / área) cuesta esa
+ * fracción: congelar el costo de la placa entera sobre una media hacía que el
+ * margen saliera negativo en el reporte.
+ */
+export function costoPorUnidadDeVenta(
+  costoPorUnidadDeStock: string | null | undefined,
+  stockPorUnidad: number,
+): string | null {
+  if (costoPorUnidadDeStock == null) return null;
+  return (Number(costoPorUnidadDeStock) * stockPorUnidad).toFixed(4);
+}

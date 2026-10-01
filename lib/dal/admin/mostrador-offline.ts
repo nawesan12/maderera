@@ -40,6 +40,8 @@ export interface CopiaDelMostrador {
     busqueda: string;
     largoMm: number | null;
     anchoMm: number | null;
+    formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
+    precioMediaPct: number;
   }[];
   precios: { priceListId: string; variantId: string; precio: number }[];
   stock: { branchId: string; variantId: string; qty: number }[];
@@ -91,6 +93,8 @@ export async function copiaDelMostrador(
       // un corte, y el buscador usa esta copia también estando en línea.
       largoMm: productVariants.largoMm,
       anchoMm: productVariants.anchoMm,
+      formaDeVenta: products.formaDeVenta,
+      precioMediaPct: products.precioMediaPct,
     })
     .from(productVariants)
     .innerJoin(products, eq(products.id, productVariants.productId))

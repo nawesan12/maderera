@@ -1,10 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { cartItems, priceListItems, priceLists } from "@/lib/db/schema";
+import {
+  cartItems,
+  priceListItems,
+  priceLists,
+  productVariants,
+  products,
+} from "@/lib/db/schema";
+import { admiteMedia, precioDeLinea, unidadDeLinea } from "@/lib/ventas/forma-de-venta";
+import { admiteDecimales, formatearCantidad } from "@/lib/unidades";
 import { obtenerOCrearCarrito } from "@/lib/dal/carrito";
 
 export interface EstadoCarrito {
@@ -37,6 +45,7 @@ const agregarSchema = z.object({
   descripcion: z.string().trim().min(1).max(240),
   unidad: z.string().trim().max(40).default("unidad"),
   cantidad: z.coerce.number().positive().max(100000),
+  presentacion: z.enum(["media_largo", "media_ancho"]).nullable().optional(),
   origen: z.string().trim().max(40).default("catalogo"),
   notas: z.string().trim().max(300).optional(),
 });
@@ -63,6 +72,30 @@ export async function agregarAlCarrito(
   let precio: string | null = null;
 
   if (item.variantId) {
+    const [producto] = await db
+      .select({
+        unit: products.unit,
+        formaDeVenta: products.formaDeVenta,
+        precioMediaPct: products.precioMediaPct,
+      })
+      .from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .where(eq(productVariants.id, item.variantId))
+      .limit(1);
+
+    if (!producto) return { error: "Ese producto ya no está disponible." };
+
+    // La media solo existe donde el producto la admite: si no, se descarta y
+    // va la placa entera, igual que en el mostrador.
+    if (!admiteMedia(producto)) item.presentacion = null;
+
+    // Lo que se cuenta va entero; lo que se mide admite decimales.
+    const unidad = unidadDeLinea(producto);
+    const fraccionable = admiteDecimales(unidad) && unidad !== "placa";
+    if (!fraccionable && !Number.isInteger(item.cantidad)) {
+      return { error: "Este producto se vende por unidad entera." };
+    }
+
     const [fila] = await db
       .select({ price: priceListItems.price })
       .from(priceListItems)
@@ -75,7 +108,12 @@ export async function agregarAlCarrito(
       )
       .limit(1);
 
-    precio = fila?.price ?? null;
+    // El precio que se guarda es el de lo que se agregó: el de la media si es
+    // media. Si no, el aviso de «cambió el precio» saltaría siempre.
+    precio =
+      fila?.price != null
+        ? precioDeLinea(Number(fila.price), producto, item.presentacion ?? null).toFixed(2)
+        : null;
   }
 
   if (item.variantId) {
@@ -86,6 +124,11 @@ export async function agregarAlCarrito(
         and(
           eq(cartItems.cartId, cartId),
           eq(cartItems.variantId, item.variantId),
+          // Una placa entera y una media de la misma medida son dos renglones:
+          // sumarlas daría «3 medias» donde se pidieron dos enteras y una media.
+          item.presentacion
+            ? eq(cartItems.presentacion, item.presentacion)
+            : isNull(cartItems.presentacion),
         ),
       )
       .limit(1);
@@ -99,7 +142,7 @@ export async function agregarAlCarrito(
         .where(eq(cartItems.id, existente.id));
 
       refrescar();
-      return { ok: `Sumaste ${item.cantidad} a ${item.descripcion}.` };
+      return { ok: `Sumaste ${formatearCantidad(item.cantidad)} a ${item.descripcion}.` };
     }
   }
 
@@ -109,6 +152,7 @@ export async function agregarAlCarrito(
     descripcion: item.descripcion,
     unidad: item.unidad,
     cantidad: item.cantidad.toFixed(2),
+    presentacion: item.presentacion ?? null,
     precioUnitario: precio,
     origen: item.origen,
     notas: item.notas,

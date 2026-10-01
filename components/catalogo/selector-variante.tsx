@@ -13,6 +13,17 @@ import {
   useVistaPropia,
 } from "@/lib/precios-propios-context";
 import type { VarianteDetalle } from "@/lib/dal/catalog";
+import {
+  admiteMedia,
+  areaDePlacaM2,
+  nombreDePresentacion,
+  precioDeLinea,
+  seVendePorM2,
+  unidadDeLinea,
+  type FormaDeVenta,
+  type Presentacion,
+} from "@/lib/ventas/forma-de-venta";
+import { admiteDecimales, formatearCantidad, leerCantidad, pasoDeCantidad } from "@/lib/unidades";
 
 /**
  * Elección de medida y compra.
@@ -30,6 +41,8 @@ export function SelectorVariante({
   alicuota = 21,
   vista = "final",
   aPedido = false,
+  formaDeVenta = "entera",
+  precioMediaPct = 50,
 }: {
   productName: string;
   unit: string;
@@ -54,10 +67,30 @@ export function SelectorVariante({
    * quien justamente venía a encargarlo.
    */
   aPedido?: boolean;
+  /** Cómo se vende la placa (nota de la clienta del 30/9/2026). */
+  formaDeVenta?: FormaDeVenta;
+  precioMediaPct?: number;
 }) {
   const { agregar, guardando } = useCarrito();
   const [medida, setMedida] = useState(variantes[0]);
   const [cantidad, setCantidad] = useState(1);
+  /** Lo que se está tipeando en la cantidad, para dejar escribir «2,» a medias. */
+  const [cantidadTexto, setCantidadTexto] = useState("1");
+  const [presentacion, setPresentacion] = useState<Presentacion>(null);
+
+  const producto = { unit, formaDeVenta, precioMediaPct };
+  const conMedia = admiteMedia(producto);
+  const porM2 = seVendePorM2(producto);
+  const unidadVendida = unidadDeLinea(producto);
+  // Metros y m² se piden con decimales; placas, tablas y bisagras, enteras.
+  const fraccionable = admiteDecimales(unidadVendida) && unidadVendida !== "placa";
+  const paso = fraccionable ? pasoDeCantidad(unidadVendida) : 1;
+
+  function fijarCantidad(n: number) {
+    const valor = Math.max(paso, Math.round(n * 100) / 100);
+    setCantidad(valor);
+    setCantidadTexto(formatearCantidad(valor));
+  }
 
   /*
    * El precio del profesional pisa al de público, medida por medida.
@@ -79,11 +112,14 @@ export function SelectorVariante({
   const elegida = medida ? conPrecioPropio(medida) : medida;
   const setElegida = setMedida;
 
-  const mostrado = presentarPrecio(
+  // El precio de lo que se está eligiendo: la media placa vale su porcentaje.
+  const precioElegido = precioDeLinea(
     Number(elegida?.precio ?? 0),
-    alicuota,
-    vistaVigente,
+    producto,
+    conMedia ? presentacion : null,
   );
+  const mostrado = presentarPrecio(precioElegido, alicuota, vistaVigente);
+  const area = porM2 ? areaDePlacaM2(elegida?.largoMm, elegida?.anchoMm) : null;
 
   if (!elegida) {
     return (
@@ -105,7 +141,7 @@ export function SelectorVariante({
   const sinStock =
     elegida.stockCentral === "sin-stock" &&
     elegida.stockAserradero === "sin-stock";
-  const subtotal = sinPrecio ? 0 : Number(elegida.precio) * cantidad;
+  const subtotal = sinPrecio ? 0 : precioElegido * cantidad;
 
   return (
     <div className="space-y-5">
@@ -153,6 +189,40 @@ export function SelectorVariante({
         </div>
       )}
 
+      {/* Entera o media: dos precios distintos sobre la misma medida, así que
+          se elige antes de ver el precio, igual que la medida. */}
+      {conMedia && (
+        <div>
+          <p className="mb-2.5 text-[15px] font-semibold">Cómo la querés</p>
+          <div className="flex flex-wrap gap-2">
+            {([null, "media_largo", "media_ancho"] as const).map((p) => {
+              const activa = presentacion === p;
+              return (
+                <button
+                  key={p ?? "entera"}
+                  onClick={() => setPresentacion(p)}
+                  aria-pressed={activa}
+                  className={`rounded-[10px] px-3.5 py-2.5 text-left text-[14.5px] transition-colors ${
+                    activa
+                      ? "border-[1.5px] border-accion bg-naranja-claro font-semibold text-acento-texto"
+                      : "border border-linea bg-card hover:border-accion/40"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {activa && <Check className="h-3.5 w-3.5" />}
+                    {p === null
+                      ? "Placa entera"
+                      : p === "media_largo"
+                        ? "Media, al largo"
+                        : "Media, al ancho"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Precio de la medida elegida */}
       <div className="rounded-[14px] border border-linea bg-card px-[22px] py-5 shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
         <p className="flex items-baseline gap-2">
@@ -166,15 +236,27 @@ export function SelectorVariante({
           )}
         </p>
         <p className="mt-1.5 text-[14.5px] text-texto-2">
-          por {formatearUnidad(unit)}
+          {conMedia && presentacion
+            ? nombreDePresentacion(presentacion)?.toLowerCase()
+            : `por ${formatearUnidad(unidadVendida)}`}
           {vistaVigente === "final" && " · IVA incluido"}
           {elegida.material && ` · ${elegida.material}`}
           {elegida.color && ` · ${elegida.color}`}
           {elegida.terminacion && ` · ${elegida.terminacion}`}
           {elegida.calidad && ` · ${elegida.calidad}`}
         </p>
+        {/* Por m², la cuenta que el cliente hace de cabeza: cuánto es una
+            placa. Sin esto «$9.800 el m²» no dice cuánto sale la placa. */}
+        {porM2 && area && (
+          <p className="tabular mt-1 text-[14.5px] text-texto-2">
+            Placa de {formatearCantidad((elegida.largoMm ?? 0) / 1000)} ×{" "}
+            {formatearCantidad((elegida.anchoMm ?? 0) / 1000)} m ={" "}
+            {formatearCantidad(Math.round(area * 100) / 100)} m² ·{" "}
+            {formatearPrecio(String(Math.round(precioElegido * area)))} la placa
+          </p>
+        )}
         <PrecioSecundario
-          precioFinal={Number(elegida.precio)}
+          precioFinal={precioElegido}
           alicuota={alicuota}
           vista={vistaVigente}
           className="mt-1"
@@ -215,22 +297,44 @@ export function SelectorVariante({
           <div className="flex items-center gap-2.5">
             <div className="flex h-[50px] items-center overflow-hidden rounded-[10px] border border-linea bg-card">
               <button
-                onClick={() => setCantidad((c) => Math.max(1, c - 1))}
+                onClick={() => fijarCantidad(cantidad - 1)}
                 className="h-full w-[46px] text-xl leading-none transition-colors hover:bg-chip"
                 aria-label="Quitar uno"
               >
                 −
               </button>
-              <span className="tabular w-[52px] text-center text-[17px] font-semibold">
-                {cantidad}
-              </span>
+              {/* Lo que se mide se puede tipear: 3,7 metros de zócalo no se
+                  arman apretando «+». */}
+              {fraccionable ? (
+                <input
+                  value={cantidadTexto}
+                  inputMode="decimal"
+                  aria-label={`Cantidad, en ${formatearUnidad(unidadVendida)}`}
+                  onChange={(e) => {
+                    setCantidadTexto(e.target.value);
+                    const n = leerCantidad(e.target.value);
+                    if (Number.isFinite(n) && n > 0) setCantidad(Math.round(n * 100) / 100);
+                  }}
+                  onBlur={() => fijarCantidad(cantidad)}
+                  className="tabular h-full w-[64px] bg-transparent text-center text-[17px] font-semibold outline-none"
+                />
+              ) : (
+                <span className="tabular w-[52px] text-center text-[17px] font-semibold">
+                  {cantidad}
+                </span>
+              )}
               <button
-                onClick={() => setCantidad((c) => c + 1)}
+                onClick={() => fijarCantidad(cantidad + 1)}
                 className="h-full w-[46px] text-xl leading-none transition-colors hover:bg-chip"
                 aria-label="Agregar uno"
               >
                 +
               </button>
+              {fraccionable && (
+                <span className="pr-3 text-[14.5px] text-texto-2">
+                  {formatearUnidad(unidadVendida)}
+                </span>
+              )}
             </div>
 
             <Button
@@ -240,8 +344,9 @@ export function SelectorVariante({
                 agregar({
                   variantId: elegida.id,
                   descripcion: `${productName} — ${elegida.label}`,
-                  unidad: unit,
+                  unidad: unidadVendida,
                   cantidad,
+                  presentacion: conMedia ? presentacion : null,
                   origen: "catalogo",
                 })
               }
@@ -255,9 +360,9 @@ export function SelectorVariante({
             </Button>
           </div>
 
-          {cantidad > 1 && (
+          {cantidad !== 1 && (
             <p className="text-center text-sm text-muted-foreground">
-              {cantidad} × {formatearPrecio(elegida.precio)} ={" "}
+              {formatearCantidad(cantidad)} × {formatearPrecio(String(precioElegido))} ={" "}
               <span className="tabular font-semibold text-foreground">
                 {formatearPrecio(String(subtotal))}
               </span>

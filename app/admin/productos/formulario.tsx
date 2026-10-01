@@ -21,6 +21,7 @@ import {
   type ImagenProducto,
 } from "@/components/admin/galeria-imagenes";
 import { generarSlug } from "@/lib/validation/product";
+import { admiteDecimales } from "@/lib/unidades";
 import { guardarProducto, type EstadoFormulario } from "./actions";
 
 export interface VarianteForm {
@@ -52,6 +53,10 @@ export interface ProductoForm {
   description: string;
   brand: string;
   unit: string;
+  /** Cómo se vende la placa: entera, entera o media, por m². */
+  formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
+  /** Precio de la media placa, en % de la entera. */
+  precioMediaPct: string;
   /** "21", "10.5" o "0". */
   alicuotaIva: string;
   /** Recargo por elaboración sobre el costo, en %. Vacío: no se elabora. */
@@ -142,6 +147,8 @@ export function FormularioProducto({
   // compartida. Solo el alta lo deriva del nombre.
   const slugFijo = Boolean(inicial.id);
   const [unidad, setUnidad] = useState(inicial.unit);
+  const [forma, setForma] = useState(inicial.formaDeVenta);
+  const [pctMedia, setPctMedia] = useState(inicial.precioMediaPct);
   const [categoria, setCategoria] = useState(inicial.categoryId);
   const [rubro, setRubro] = useState(inicial.subcategoryId);
 
@@ -213,6 +220,8 @@ export function FormularioProducto({
         )}
       />
       <input type="hidden" name="unit" value={unidad} />
+      <input type="hidden" name="formaDeVenta" value={unidad === "placa" ? forma : "entera"} />
+      <input type="hidden" name="precioMediaPct" value={pctMedia} />
       <input type="hidden" name="categoryId" value={categoria} />
 
       {estado.error && (
@@ -336,6 +345,19 @@ export function FormularioProducto({
               </Select>
             </div>
           </div>
+
+          {unidad === "placa" && (
+            <FormaDeVentaDePlaca
+              forma={forma}
+              onForma={setForma}
+              pct={pctMedia}
+              onPct={setPctMedia}
+              precioEjemplo={Number(
+                (variantes[0]?.precioGeneral ?? "0").replace(",", "."),
+              )}
+              sinMedidas={variantes.filter((v) => !v.largoMm || !v.anchoMm).length}
+            />
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             {/* La clienta pidió "tipos de IVA" en productos. El campo existía
@@ -542,7 +564,16 @@ export function FormularioProducto({
                   ] as const
                 ).map(([campo, etiqueta]) => (
                   <div key={campo} className="space-y-1.5">
-                    <Label htmlFor={`${campo}-${i}`}>{etiqueta}</Label>
+                    <Label htmlFor={`${campo}-${i}`}>
+                      {etiqueta}
+                      {/* En el metro lineal el largo es el de la pieza: con
+                          él, el stock se carga contando piezas. */}
+                      {campo === "largoMm" && unidad === "metro_lineal" && (
+                        <span className="ml-1 font-normal text-muted-foreground">
+                          de la pieza
+                        </span>
+                      )}
+                    </Label>
                     <Input
                       id={`${campo}-${i}`}
                       type="number"
@@ -668,6 +699,8 @@ export function FormularioProducto({
                       id={`${campo}-${i}`}
                       type="number"
                       min={0}
+                      step={admiteDecimales(unidad) ? "any" : 1}
+                      inputMode={admiteDecimales(unidad) ? "decimal" : "numeric"}
                       value={variante[campo] ?? 0}
                       onChange={(e) =>
                         actualizarVariante(i, campo, e.target.value)
@@ -702,4 +735,132 @@ export function FormularioProducto({
       </div>
     </form>
   );
+}
+
+
+const FORMAS_DE_VENTA = [
+  {
+    valor: "entera",
+    titulo: "Solo entera",
+    detalle: "Se vende la placa completa. Es lo que corresponde a un fenólico o a una placa de color con dibujo.",
+  },
+  {
+    valor: "entera_o_media",
+    titulo: "Entera o media",
+    detalle: "Además media placa, partida al largo o al ancho. La otra mitad queda en el stock.",
+  },
+  {
+    valor: "metro_cuadrado",
+    titulo: "Por metro cuadrado",
+    detalle: "El precio de lista es el del m² y se pide en m². El stock se sigue contando en placas.",
+  },
+] as const;
+
+/**
+ * Cómo se vende la placa (pedido de la clienta del 30/9/2026).
+ *
+ * Tres tarjetas y no un desplegable: las opciones son pocas, se eligen una vez
+ * por producto, y la explicación de cada una es lo que evita elegir mal.
+ */
+function FormaDeVentaDePlaca({
+  forma,
+  onForma,
+  pct,
+  onPct,
+  precioEjemplo,
+  sinMedidas,
+}: {
+  forma: ProductoForm["formaDeVenta"];
+  onForma: (f: ProductoForm["formaDeVenta"]) => void;
+  pct: string;
+  onPct: (v: string) => void;
+  precioEjemplo: number;
+  sinMedidas: number;
+}) {
+  const pctNumero = Number(pct.replace(",", "."));
+  const media =
+    Number.isFinite(pctNumero) && precioEjemplo > 0
+      ? Math.round((precioEjemplo * pctNumero) / 100)
+      : null;
+
+  return (
+    <fieldset className="tarjeta-hundida space-y-3 rounded-xl p-4">
+      <legend className="sr-only">Cómo se vende la placa</legend>
+      <p className="text-base font-medium" aria-hidden>
+        Cómo se vende la placa
+      </p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {FORMAS_DE_VENTA.map((f) => (
+          <label
+            key={f.valor}
+            className={`flex cursor-pointer flex-col gap-1 rounded-lg border bg-card p-3 transition-colors ${
+              forma === f.valor
+                ? "border-brand-orange ring-1 ring-brand-orange"
+                : "hover:border-foreground/30"
+            }`}
+          >
+            <span className="flex items-center gap-2 text-base font-medium">
+              <input
+                type="radio"
+                name="forma-de-venta-placa"
+                value={f.valor}
+                checked={forma === f.valor}
+                onChange={() => onForma(f.valor)}
+                className="accent-brand-orange"
+              />
+              {f.titulo}
+            </span>
+            <span className="text-sm text-muted-foreground">{f.detalle}</span>
+          </label>
+        ))}
+      </div>
+
+      {forma === "entera_o_media" && (
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="precioMediaPct">Precio de la media placa</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="precioMediaPct"
+                value={pct}
+                onChange={(e) => onPct(e.target.value)}
+                inputMode="decimal"
+                className="tabular w-24"
+              />
+              <span className="text-base text-muted-foreground">% de la entera</span>
+            </div>
+          </div>
+          {media !== null && (
+            <p className="text-base">
+              Entera <span className="tabular">{formatearPesos(precioEjemplo)}</span> → media{" "}
+              <strong className="tabular">{formatearPesos(media)}</strong>
+              <span className="block text-sm text-muted-foreground">
+                Con la primera medida y el precio general. Vale igual para cada
+                lista de precios.
+              </span>
+            </p>
+          )}
+        </div>
+      )}
+
+      {forma === "metro_cuadrado" && sinMedidas > 0 && (
+        <p className="estado-espera text-sm font-medium">
+          {sinMedidas === 1
+            ? "Una medida no tiene largo y ancho cargados."
+            : `${sinMedidas} medidas no tienen largo y ancho cargados.`}{" "}
+          Sin ellos no se puede pasar de m² a placas: cargalos abajo.
+        </p>
+      )}
+    </fieldset>
+  );
+}
+
+const PESOS = new Intl.NumberFormat("es-AR", {
+  style: "currency",
+  currency: "ARS",
+  maximumFractionDigits: 0,
+});
+
+function formatearPesos(n: number): string {
+  return PESOS.format(n);
 }

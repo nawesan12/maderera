@@ -103,8 +103,8 @@ export async function reporteDeReposicion(opciones: {
       categoria: categories.name,
       categoriaSlug: categories.slug,
       rubro: subcategories.name,
-      disponibleCentral: sql<number>`coalesce(sum(case when ${branches.slug} = 'casa-central' then ${inventory.qty} - coalesce(${inventory.reservado}, 0) end), 0)::int`,
-      disponibleAserradero: sql<number>`coalesce(sum(case when ${branches.slug} = 'aserradero' then ${inventory.qty} - coalesce(${inventory.reservado}, 0) end), 0)::int`,
+      disponibleCentral: sql<number>`coalesce(sum(case when ${branches.slug} = 'casa-central' then ${inventory.qty} - coalesce(${inventory.reservado}, 0) end), 0)`.mapWith(Number),
+      disponibleAserradero: sql<number>`coalesce(sum(case when ${branches.slug} = 'aserradero' then ${inventory.qty} - coalesce(${inventory.reservado}, 0) end), 0)`.mapWith(Number),
     })
     .from(productVariants)
     .innerJoin(products, eq(products.id, productVariants.productId))

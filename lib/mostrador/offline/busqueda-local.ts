@@ -58,6 +58,13 @@ export interface VarianteLocal {
   anchoMm?: number | null;
   /** La familia del producto. Por acá se busca la tarifa de corte. */
   categoria?: string | null;
+  /**
+   * Cómo se vende la placa y cuánto vale la media. Opcionales porque una
+   * copia local bajada antes del 1/10/2026 no los trae: sin ellos la placa se
+   * vende entera, que es lo que pasaba hasta entonces.
+   */
+  formaDeVenta?: "entera" | "entera_o_media" | "metro_cuadrado";
+  precioMediaPct?: number;
 }
 
 /**

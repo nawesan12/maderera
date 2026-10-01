@@ -21,7 +21,9 @@ import {
 import { getSession } from "@/lib/dal/session";
 import { obtenerCarrito } from "@/lib/dal/carrito";
 import { calcularEnvio, listarZonasDeEnvio } from "@/lib/dal/envios";
-import { costosParaCongelar } from "@/lib/compras/congelar";
+import { costoPorUnidadDeVenta, costosParaCongelar } from "@/lib/compras/congelar";
+import { factoresDeStock } from "@/lib/ventas/factores";
+import { descripcionConPresentacion } from "@/lib/ventas/forma-de-venta";
 import { creditoDisponible } from "@/lib/dal/cuenta";
 import { escalasDePago } from "@/lib/dal/descuentos-pago";
 import {
@@ -331,19 +333,26 @@ export async function confirmarCompra(
         .filter((v): v is string => Boolean(v)),
     );
 
+    // Cuánto stock descuenta cada línea: una media placa, media placa.
+    const factores = await factoresDeStock(tx, carrito.items);
+    const factoresDeCortes = await factoresDeStock(tx, lineasDeCortes);
+
     await tx.insert(orderItems).values([
       ...carrito.items.map((item, i) => {
         const precio = item.precioActual ?? item.precioUnitario ?? 0;
         const costo = item.variantId ? costos.get(item.variantId) : undefined;
+        const { presentacion, stockPorUnidad } = factores[i]!;
         return {
           orderId: pedido.id,
           variantId: item.variantId,
-          descripcion: item.descripcion,
+          descripcion: descripcionConPresentacion(item.descripcion, presentacion),
           unidad: item.unidad,
           cantidad: item.cantidad.toFixed(2),
           precioUnitario: precio.toFixed(2),
           subtotal: (precio * item.cantidad).toFixed(2),
-          costoUnitario: costo?.costoUnitario ?? null,
+          presentacion,
+          stockPorUnidad,
+          costoUnitario: costoPorUnidadDeVenta(costo?.costoUnitario, stockPorUnidad),
           alicuotaIva: costo?.alicuotaIva ?? null,
           orden: i,
         };
@@ -352,6 +361,7 @@ export async function confirmarCompra(
         const costo = linea.variantId
           ? costosDeCortes.get(linea.variantId)
           : undefined;
+        const { presentacion, stockPorUnidad } = factoresDeCortes[i]!;
         return {
           orderId: pedido.id,
           variantId: linea.variantId,
@@ -360,7 +370,9 @@ export async function confirmarCompra(
           cantidad: linea.cantidad.toFixed(2),
           precioUnitario: linea.precioUnitario.toFixed(2),
           subtotal: (linea.precioUnitario * linea.cantidad).toFixed(2),
-          costoUnitario: costo?.costoUnitario ?? null,
+          presentacion,
+          stockPorUnidad,
+          costoUnitario: costoPorUnidadDeVenta(costo?.costoUnitario, stockPorUnidad),
           alicuotaIva: costo?.alicuotaIva ?? null,
           orden: carrito.items.length + i,
         };

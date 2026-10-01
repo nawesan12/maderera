@@ -8,6 +8,8 @@ import { branches, inventory, inventoryMovements } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { claveDeLock } from "@/lib/inventario/locks";
 import { ETIQUETAS } from "@/lib/cache-publico";
+import { revisarCantidadDeStock } from "@/lib/inventario/cantidad";
+import { cantidadDeStock, formatearCantidad, leerCantidad } from "@/lib/unidades";
 
 export interface EstadoAjuste {
   error?: string;
@@ -17,7 +19,7 @@ export interface EstadoAjuste {
 const ajusteSchema = z.object({
   variantId: z.string().uuid(),
   branchSlug: z.enum(["casa-central", "aserradero"]),
-  cantidad: z.coerce.number().int(),
+  cantidad: z.number().finite(),
 });
 
 /**
@@ -34,12 +36,17 @@ export async function ajustarStock(
 ): Promise<EstadoAjuste> {
   const usuario = await requireStaff();
 
-  const parsed = ajusteSchema.safeParse({ variantId, branchSlug, cantidad });
+  const parsed = ajusteSchema.safeParse({
+    variantId,
+    branchSlug,
+    cantidad: cantidadDeStock(leerCantidad(cantidad)),
+  });
   if (!parsed.success)
-    return {
-      error: "La cantidad tiene que ser un número entero, sin comas ni letras.",
-    };
+    return { error: "La cantidad tiene que ser un número, sin letras." };
   if (parsed.data.cantidad === 0) return {};
+
+  const problema = await revisarCantidadDeStock(db, parsed.data.variantId, parsed.data.cantidad);
+  if (problema) return { error: problema };
 
   const [sucursal] = await db
     .select({ id: branches.id, nombre: branches.name })
@@ -79,13 +86,13 @@ export async function ajustarStock(
       .limit(1);
 
     const previo = actual?.qty ?? 0;
-    const nuevo = previo + parsed.data.cantidad;
+    const nuevo = cantidadDeStock(previo + parsed.data.cantidad);
 
     if (nuevo < 0) {
       // El inventario no baja de cero: si el depósito dice que hay menos de lo
       // que el sistema descuenta, lo que hay que corregir es el número, no
       // permitir un negativo que después nadie entiende.
-      return { error: `Solo hay ${previo} en ${sucursal.nombre}.` };
+      return { error: `Solo hay ${formatearCantidad(previo)} en ${sucursal.nombre}.` };
     }
 
     await tx
@@ -107,11 +114,13 @@ export async function ajustarStock(
       branchId: sucursal.id,
       type: parsed.data.cantidad > 0 ? "ingreso" : "egreso",
       qty: parsed.data.cantidad,
-      note: `Ajuste rápido desde Stock (${previo} → ${nuevo})`,
+      note: `Ajuste rápido desde Stock (${formatearCantidad(previo)} → ${formatearCantidad(nuevo)})`,
       createdByUserId: usuario.userId,
     });
 
-    return { ok: `${sucursal.nombre}: ${previo} → ${nuevo}` };
+    return {
+      ok: `${sucursal.nombre}: ${formatearCantidad(previo)} → ${formatearCantidad(nuevo)}`,
+    };
   });
 
   if (resultado.error) return resultado;

@@ -109,6 +109,7 @@ const UNIDADES: OpcionCampo[] = [
   { valor: "unidad", etiqueta: "Unidad", alias: ["unidad", "u", "un", "cu", "cadauno", "pieza", "pza"] },
   { valor: "metro_lineal", etiqueta: "Metro lineal", alias: ["metrolineal", "ml", "metro", "metros", "m", "mlineal", "lineal", "lineales"] },
   { valor: "metro_cuadrado", etiqueta: "Metro cuadrado", alias: ["metrocuadrado", "m2", "mtscuadrados", "metros2", "cuadrado", "cuadrados"] },
+  { valor: "tabla", etiqueta: "Tabla", alias: ["tabla", "tablas", "tb"] },
   { valor: "placa", etiqueta: "Placa", alias: ["placa", "pl", "tablero", "chapa"] },
   { valor: "rollo", etiqueta: "Rollo", alias: ["rollo", "ro"] },
   { valor: "par", etiqueta: "Par", alias: ["par", "pares"] },

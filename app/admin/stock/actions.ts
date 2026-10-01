@@ -9,6 +9,8 @@ import { db } from "@/lib/db";
 import { inventory, inventoryMovements } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
+import { revisarCantidadDeStock } from "@/lib/inventario/cantidad";
+import { cantidadDeStock, formatearCantidad, leerCantidad } from "@/lib/unidades";
 
 export interface EstadoTransferencia {
   error?: string;
@@ -19,7 +21,10 @@ const transferenciaSchema = z.object({
   variantId: z.string().uuid("Elegí un producto."),
   origenId: z.string().uuid("Elegí la sucursal de origen."),
   destinoId: z.string().uuid("Elegí la sucursal de destino."),
-  cantidad: z.coerce.number().int().positive("La cantidad tiene que ser mayor a cero."),
+  cantidad: z.preprocess(
+    (v) => cantidadDeStock(leerCantidad(v as string)),
+    z.number().finite("La cantidad tiene que ser un número.").positive("La cantidad tiene que ser mayor a cero."),
+  ),
   nota: z.string().trim().max(300).optional(),
 });
 
@@ -55,6 +60,9 @@ export async function transferirStock(
     return { error: "El origen y el destino tienen que ser distintos." };
   }
 
+  const problema = await revisarCantidadDeStock(db, variantId, cantidad);
+  if (problema) return { error: problema };
+
   try {
     await db.transaction(async (tx) => {
       const [enOrigen] = await tx
@@ -71,7 +79,7 @@ export async function transferirStock(
         // No se permite dejar el origen en negativo: si el depósito dice que hay
         // menos de lo que se quiere mover, el dato a corregir es el inventario.
         throw new Error(
-          `En la sucursal de origen hay ${disponible}. No se pueden mover ${cantidad}.`,
+          `En la sucursal de origen hay ${formatearCantidad(disponible)}. No se pueden mover ${formatearCantidad(cantidad)}.`,
         );
       }
 
@@ -79,7 +87,7 @@ export async function transferirStock(
 
       await tx
         .update(inventory)
-        .set({ qty: disponible - cantidad, updatedAt: new Date() })
+        .set({ qty: cantidadDeStock(disponible - cantidad), updatedAt: new Date() })
         .where(
           and(eq(inventory.variantId, variantId), eq(inventory.branchId, origenId)),
         );

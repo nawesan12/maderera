@@ -1,5 +1,6 @@
 import type { StockLevel } from "@/lib/stock-level";
 import { combinedStockLevel } from "@/lib/stock-level";
+import { formatearCantidad } from "@/lib/unidades";
 
 /**
  * Disponibilidad de un producto para quien compra.
@@ -41,7 +42,7 @@ export function Disponibilidad({
       punto: "bg-brand-orange",
       texto:
         cantidad !== undefined && cantidad > 0
-          ? `¡Quedan ${cantidad}!`
+          ? `¡Quedan ${formatearCantidad(cantidad)}!`
           : "Quedan pocas",
       color: "text-brand-orange",
     },

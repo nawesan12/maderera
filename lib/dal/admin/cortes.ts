@@ -159,6 +159,7 @@ export async function obtenerCorte(
        * nombre completo, así que comparar contra la descripción nunca daba.
        */
       categoria: categories.name,
+      precioMediaPct: products.precioMediaPct,
       placas: cuttingOrders.placas,
       pasadas: cuttingOrders.pasadas,
       cantoDescripcion: cuttingOrders.cantoDescripcion,

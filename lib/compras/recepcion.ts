@@ -16,6 +16,7 @@ import {
 import { claveDeLock } from "@/lib/inventario/locks";
 import { agregarIva } from "@/lib/fiscal/impuestos";
 import { mezclarCosto, prorratearGastos } from "./costo";
+import { cantidadDeStock } from "@/lib/unidades";
 
 /**
  * Confirmar una recepción: la mercadería entra y el costo se mueve.
@@ -186,7 +187,7 @@ export async function confirmarRecepcion(
        * en esa sucursal: sin fila que actualizar, el update no hace nada y la
        * mercadería entra al depósito sin entrar al sistema.
        */
-      const unidades = Math.round(linea.cantidad);
+      const unidades = cantidadDeStock(linea.cantidad);
       if (unidades > 0) {
         await tx
           .insert(inventory)
@@ -342,7 +343,7 @@ export async function anularRecepcion(
 
     if (recepcion.estado === "confirmada") {
       for (const linea of items) {
-        const unidades = Math.round(Number(linea.cantidad));
+        const unidades = cantidadDeStock(Number(linea.cantidad));
         if (unidades <= 0) continue;
 
         await tx.execute(

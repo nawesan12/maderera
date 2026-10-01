@@ -14,6 +14,7 @@ import {
 } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
 import { disponible, stockLevel, type StockLevel } from "@/lib/stock-level";
+import { cantidadDeStock } from "@/lib/unidades";
 
 export interface FilaStock {
   variantId: string;
@@ -24,6 +25,8 @@ export interface FilaStock {
   sku: string;
   categoryName: string;
   unidad: string;
+  /** Largo de la pieza, para cargar y mostrar el metro lineal en piezas. */
+  largoMm: number | null;
   imagen: string | null;
   qtyCentral: number;
   qtyAserradero: number;
@@ -71,6 +74,7 @@ export async function listarStock(filtros: {
       sku: productVariants.sku,
       categoryName: categories.name,
       unidad: products.unit,
+      largoMm: productVariants.largoMm,
       branchSlug: branches.slug,
       qty: inventory.qty,
       reservado: inventory.reservado,
@@ -121,6 +125,7 @@ export async function listarStock(filtros: {
       sku: fila.sku,
       categoryName: fila.categoryName,
       unidad: fila.unidad,
+      largoMm: fila.largoMm,
       imagen: portadaPorProducto.get(fila.productId) ?? null,
       qtyCentral: 0,
       qtyAserradero: 0,
@@ -155,7 +160,7 @@ export async function listarStock(filtros: {
       );
     }
 
-    actual.total = actual.qtyCentral + actual.qtyAserradero;
+    actual.total = cantidadDeStock(actual.qtyCentral + actual.qtyAserradero);
     porVariante.set(fila.variantId, actual);
   }
 

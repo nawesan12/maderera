@@ -18,6 +18,7 @@ import {
   stockReservations,
 } from "@/lib/db/schema";
 import { liberarReservas } from "@/lib/inventario/reservas";
+import { unidadesDeStock } from "@/lib/ventas/forma-de-venta";
 
 /**
  * Anula una venta de mostrador.
@@ -184,7 +185,7 @@ export async function anularVentaDeMostrador(
     } else {
       for (const item of items) {
         if (!item.variantId || !pedido.branchId) continue;
-        const unidades = Math.round(Number(item.cantidad));
+        const unidades = unidadesDeStock(Number(item.cantidad), item.stockPorUnidad);
         if (unidades <= 0) continue;
 
         await tx

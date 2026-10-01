@@ -120,6 +120,8 @@ export const quoteItems = pgTable(
     cantidad: numeric({ precision: 12, scale: 2 }).notNull(),
     precioUnitario: numeric({ precision: 12, scale: 2 }).notNull(),
     subtotal: numeric({ precision: 12, scale: 2 }).notNull(),
+    /** Media placa al largo o al ancho; `null` es la unidad tal cual. */
+    presentacion: text(),
     notas: text(),
     orden: integer().notNull().default(0),
   },
@@ -288,6 +290,21 @@ export const orderItems = pgTable(
     cantidad: numeric({ precision: 12, scale: 2 }).notNull(),
     precioUnitario: numeric({ precision: 12, scale: 2 }).notNull(),
     subtotal: numeric({ precision: 12, scale: 2 }).notNull(),
+    /** Media placa al largo o al ancho; `null` es la unidad tal cual. */
+    presentacion: text(),
+    /**
+     * Cuánto stock descuenta cada unidad de esta línea.
+     *
+     * Casi siempre 1. Una media placa descuenta 0,5; un m² de una placa que se
+     * vende por metro cuadrado descuenta 1 / área de la placa. **Se congela al
+     * vender**, como el precio: si mañana el producto cambia de forma de venta,
+     * el acopio que se retire en tres semanas tiene que descontar lo que se
+     * vendió, no lo que diga el producto ese día. `unidadesDeStock()` en
+     * `lib/ventas/forma-de-venta.ts` es la única cuenta que lo usa.
+     */
+    stockPorUnidad: numeric({ precision: 12, scale: 6, mode: "number" })
+      .notNull()
+      .default(1),
 
     /**
      * El costo de la variante **en el momento de la venta**.

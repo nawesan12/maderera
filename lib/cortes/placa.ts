@@ -72,11 +72,17 @@ export function nombreDeLaMitad(mitad: Mitad): string {
 }
 
 /**
- * Qué porción de placa se compra por cada placa del plano.
+ * Qué porción del precio de la placa se cobra por cada placa del plano.
  *
- * Media placa se cobra media: el plano cuenta «placas», y de media placa sale
- * media placa.
+ * Media placa se cobra al porcentaje que el producto tiene cargado para la
+ * media (`products.precioMediaPct`, por omisión 50 %): el mismo número que
+ * cobra el mostrador cuando la vende suelta. Antes era siempre la mitad, y el
+ * corte y la venta suelta de la misma media placa daban precios distintos.
+ *
+ * Lo que descuenta del stock es otra cuenta: `factorDeStock` en
+ * `lib/ventas/forma-de-venta.ts` —media placa son 0,5 placas, valga lo que
+ * valga—.
  */
-export function fraccionDePlaca(mitad: Mitad): number {
-  return mitad ? 0.5 : 1;
+export function fraccionDePlaca(mitad: Mitad, pctMedia = 50): number {
+  return mitad ? pctMedia / 100 : 1;
 }

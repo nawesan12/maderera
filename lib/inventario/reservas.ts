@@ -3,6 +3,8 @@ import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { claveDeLock } from "@/lib/inventario/locks";
+import { unidadesDeStock } from "@/lib/ventas/forma-de-venta";
+import { cantidadDeStock } from "@/lib/unidades";
 import {
   branches,
   inventory,
@@ -74,7 +76,7 @@ async function moverReservado(
   await tx
     .update(inventory)
     .set({
-      reservado: sql`greatest(${inventory.reservado} + ${delta}, 0)`,
+      reservado: sql`greatest(${inventory.reservado} + ${cantidadDeStock(delta)}, 0)`,
       updatedAt: new Date(),
     })
     .where(
@@ -122,6 +124,7 @@ export async function reservarPedido(
       id: orderItems.id,
       variantId: orderItems.variantId,
       cantidad: orderItems.cantidad,
+      stockPorUnidad: orderItems.stockPorUnidad,
     })
     .from(orderItems)
     .where(eq(orderItems.orderId, orderId));
@@ -131,7 +134,8 @@ export async function reservarPedido(
     // no hay nada que reservar porque no está en el catálogo.
     if (!linea.variantId) continue;
 
-    const cantidad = Math.ceil(Number(linea.cantidad));
+    // Exacta y en unidades de stock: dos medias placas reservan una placa.
+    const cantidad = unidadesDeStock(Number(linea.cantidad), linea.stockPorUnidad);
     if (!(cantidad > 0)) continue;
 
     await tx.insert(stockReservations).values({
@@ -209,14 +213,17 @@ export async function salidaPorEntrega(
 ): Promise<void> {
   for (const linea of opciones.lineas) {
     const [renglon] = await tx
-      .select({ variantId: orderItems.variantId })
+      .select({
+        variantId: orderItems.variantId,
+        stockPorUnidad: orderItems.stockPorUnidad,
+      })
       .from(orderItems)
       .where(eq(orderItems.id, linea.orderItemId))
       .limit(1);
 
     if (!renglon?.variantId) continue;
 
-    const cantidad = Math.ceil(linea.cantidad);
+    const cantidad = unidadesDeStock(linea.cantidad, renglon.stockPorUnidad);
     if (!(cantidad > 0)) continue;
 
     const variantId = renglon.variantId;
@@ -276,7 +283,7 @@ export async function salidaPorEntrega(
       // Entrega parcial: queda reservado el resto del renglón.
       await tx
         .update(stockReservations)
-        .set({ cantidad: reserva.cantidad - consumido })
+        .set({ cantidad: cantidadDeStock(reserva.cantidad - consumido) })
         .where(eq(stockReservations.id, reserva.id));
     }
   }
@@ -343,7 +350,7 @@ export async function devolverAlStock(
 export async function recalcularReservado(): Promise<number> {
   const resultado = await db.execute(sql`
     with reales as (
-      select variant_id, branch_id, sum(cantidad)::int as total
+      select variant_id, branch_id, sum(cantidad) as total
       from stock_reservations
       where estado = 'activa'
       group by variant_id, branch_id

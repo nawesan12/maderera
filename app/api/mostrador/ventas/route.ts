@@ -27,6 +27,8 @@ const lineaSchema = z.object({
   unidad: z.string().default("unidad"),
   cantidad: z.number().positive(),
   precioUnitario: z.number().min(0),
+  // Solo la intención: cuánto stock descuenta lo decide el servidor.
+  presentacion: z.enum(["media_largo", "media_ancho"]).nullable().optional(),
 });
 
 const ventaSchema = z.object({

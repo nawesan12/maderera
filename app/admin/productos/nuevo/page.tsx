@@ -39,6 +39,8 @@ export default async function NuevoProductoPage() {
           description: "",
           brand: "",
           unit: "unidad",
+          formaDeVenta: "entera",
+          precioMediaPct: "50",
           alicuotaIva: "21",
           recargoElaboracionPct: "",
           imputacion: "",

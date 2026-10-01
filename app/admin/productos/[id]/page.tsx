@@ -182,6 +182,8 @@ export default async function EditarProductoPage({
           description: producto.description,
           brand: producto.brand ?? "",
           unit: producto.unit,
+          formaDeVenta: producto.formaDeVenta,
+          precioMediaPct: String(producto.precioMediaPct),
           alicuotaIva: String(Number(producto.alicuotaIva ?? 21)),
           recargoElaboracionPct: producto.recargoElaboracionPct
             ? String(Number(producto.recargoElaboracionPct))

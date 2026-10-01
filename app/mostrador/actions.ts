@@ -54,6 +54,8 @@ const lineaSchema = z.object({
   unidad: z.string().min(1),
   cantidad: z.number().positive(),
   precioUnitario: z.number().min(0),
+  // Solo la intención: cuánto stock descuenta lo decide el servidor.
+  presentacion: z.enum(["media_largo", "media_ancho"]).nullable().optional(),
 });
 
 const pagoSchema = z.object({
@@ -656,6 +658,7 @@ export async function emitirPresupuestoDeMostrador(
         cantidad: linea.cantidad.toFixed(2),
         precioUnitario: linea.precioUnitario.toFixed(2),
         subtotal: (Math.round(linea.cantidad * linea.precioUnitario * 100) / 100).toFixed(2),
+        presentacion: linea.presentacion ?? null,
         orden,
       })),
     );

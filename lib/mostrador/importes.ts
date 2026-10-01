@@ -21,6 +21,12 @@ export interface LineaDeVenta {
   unidad: string;
   cantidad: number;
   precioUnitario: number;
+  /**
+   * Media placa al largo o al ancho. Es lo único que dice el navegador sobre
+   * la presentación: cuánto stock descuenta lo decide el servidor leyendo el
+   * producto (`factoresDeStock`).
+   */
+  presentacion?: "media_largo" | "media_ancho" | null;
 }
 
 /** Redondeo a centavos, para que la suma de líneas cierre con el total. */

@@ -18,6 +18,7 @@ import {
 import { requireStaff } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { productoSchema } from "@/lib/validation/product";
+import { cantidadDeStock, formatearCantidad } from "@/lib/unidades";
 
 export interface EstadoFormulario {
   error?: string;
@@ -38,6 +39,8 @@ function parsearFormulario(formData: FormData) {
     description: formData.get("description") ?? "",
     brand: (formData.get("brand") as string) || undefined,
     unit: formData.get("unit"),
+    formaDeVenta: (formData.get("formaDeVenta") as string) || "entera",
+    precioMediaPct: ((formData.get("precioMediaPct") as string) || "50").replace(",", "."),
     alicuotaIva: (formData.get("alicuotaIva") as string) || "21",
     recargoElaboracionPct:
       (formData.get("recargoElaboracionPct") as string) || undefined,
@@ -137,6 +140,8 @@ export async function guardarProducto(
       description: datos.description,
       brand: datos.brand || null,
       unit: datos.unit,
+      formaDeVenta: datos.unit === "placa" ? datos.formaDeVenta : "entera",
+      precioMediaPct: datos.precioMediaPct,
       // Ahora sí editable: el campo existía en la base desde el schema
       // inicial y el formulario nunca lo mandaba, así que todo quedaba al 21.
       alicuotaIva: datos.alicuotaIva,
@@ -290,8 +295,8 @@ export async function guardarProducto(
             variantId: varianteId,
             branchId: sucursal.id,
             type: "ajuste",
-            qty: cantidad - anterior,
-            note: `Ajuste manual desde la ficha del producto (${anterior} → ${cantidad})`,
+            qty: cantidadDeStock(cantidad - anterior),
+            note: `Ajuste manual desde la ficha del producto (${formatearCantidad(anterior)} → ${formatearCantidad(cantidad)})`,
             createdByUserId: usuario.userId,
           });
         }

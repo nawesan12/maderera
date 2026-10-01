@@ -37,6 +37,28 @@ export const unitOfSale = pgEnum("unit_of_sale", [
   "litro",
 ]);
 
+/**
+ * Cómo se vende una placa.
+ *
+ * De la clienta (30/9/2026): «hay placas que se venden sí o sí enteras o por la
+ * mitad, o por metro cuadrado». Es una propiedad del producto —un fenólico se
+ * vende entero, un MDF admite media placa— y no de la venta, así que no se
+ * decide en el mostrador cada vez.
+ *
+ * - `entera`: solo la placa completa.
+ * - `entera_o_media`: además media placa, cortada al largo o al ancho, al
+ *   porcentaje de `precioMediaPct`.
+ * - `metro_cuadrado`: el precio de lista es por m² y se pide en m²; el stock
+ *   sigue contándose en placas, que es lo que hay en el depósito.
+ *
+ * Solo tiene sentido para `unit = 'placa'`; en el resto se ignora.
+ */
+export const formaDeVenta = pgEnum("forma_de_venta", [
+  "entera",
+  "entera_o_media",
+  "metro_cuadrado",
+]);
+
 export const categories = pgTable(
   "categories",
   {
@@ -115,6 +137,19 @@ export const products = pgTable(
     /** Marca propia del cliente (Moldava) o de terceros. */
     brand: text(),
     unit: unitOfSale().notNull().default("unidad"),
+    /** Ver `formaDeVenta`. Solo cuenta si `unit` es `placa`. */
+    formaDeVenta: formaDeVenta().notNull().default("entera"),
+    /**
+     * Precio de la media placa, en porcentaje del precio de la entera.
+     *
+     * Editable por producto a pedido de Nahuel: la media no siempre vale la
+     * mitad —el corte y la mitad que queda en el depósito tienen su costo—, y
+     * cada material lo resuelve distinto. Se aplica sobre la lista que
+     * corresponda, así que el profesional paga su media placa con su precio.
+     */
+    precioMediaPct: numeric({ precision: 5, scale: 2, mode: "number" })
+      .notNull()
+      .default(50),
     /**
      * Alicuota de IVA con la que se factura este producto.
      *

@@ -111,7 +111,7 @@ export function VistaDeCorte({
     [deLaPagina, propios],
   );
   const [variantId, setVariantId] = useState(placas[0]?.variantId ?? "");
-  const [mitad, setMitad] = useState<Mitad>(null);
+  const [mitadElegida, setMitad] = useState<Mitad>(null);
   const [canto, setCanto] = useState("");
   const [filas, setFilas] = useState<Fila[]>([vacia()]);
   const [aviso, setAviso] = useState<{ texto: string; mal: boolean } | null>(
@@ -120,6 +120,10 @@ export function VistaDeCorte({
   const [guardando, empezar] = useTransition();
 
   const placa = placas.find((p) => p.variantId === variantId) ?? placas[0];
+  // La mitad vale solo sobre una placa que se vende partida: si se cambia a
+  // una que se vende entera, el corte vuelve a la placa completa sin que haya
+  // que acordarse de destildar nada.
+  const mitad = placa?.admiteMedia ? mitadElegida : null;
 
   const medida = medidaDePlaca({
     varianteLargo: placa?.largoMm,
@@ -170,7 +174,7 @@ export function VistaDeCorte({
           : null,
         precioPorPlaca: placa?.precio ?? null,
         piezas,
-        fraccion: fraccionDePlaca(mitad),
+        fraccion: fraccionDePlaca(mitad, placa?.precioMediaPct),
       }),
     [plano, placa, piezas, mitad],
   );
@@ -229,28 +233,30 @@ export function VistaDeCorte({
             </select>
           </label>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium">De qué sale:</span>
-            {([null, "largo", "ancho"] as const).map((m) => (
-              <button
-                key={m ?? "entera"}
-                type="button"
-                onClick={() => setMitad(m)}
-                aria-pressed={mitad === m}
-                className={`h-10 rounded-lg px-3 text-[14.5px] font-medium transition-colors ${
-                  mitad === m
-                    ? "bg-accion text-white"
-                    : "border border-linea text-texto-2 hover:bg-sitio-alt"
-                }`}
-              >
-                {m === null
-                  ? "Placa entera"
-                  : m === "largo"
-                    ? "Media a lo largo"
-                    : "Media al ancho"}
-              </button>
-            ))}
-          </div>
+          {placa?.admiteMedia && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">De qué sale:</span>
+              {([null, "largo", "ancho"] as const).map((m) => (
+                <button
+                  key={m ?? "entera"}
+                  type="button"
+                  onClick={() => setMitad(m)}
+                  aria-pressed={mitad === m}
+                  className={`h-10 rounded-lg px-3 text-[14.5px] font-medium transition-colors ${
+                    mitad === m
+                      ? "bg-accion text-white"
+                      : "border border-linea text-texto-2 hover:bg-sitio-alt"
+                  }`}
+                >
+                  {m === null
+                    ? "Placa entera"
+                    : m === "largo"
+                      ? "Media a lo largo"
+                      : "Media al ancho"}
+                </button>
+              ))}
+            </div>
+          )}
 
           <p className="mt-2 text-sm text-texto-2">
             {nombreDeLaMitad(mitad)} de{" "}

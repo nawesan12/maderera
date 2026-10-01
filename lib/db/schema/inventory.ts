@@ -13,6 +13,16 @@ import {
 } from "drizzle-orm/pg-core";
 import { productVariants } from "./catalog";
 
+/**
+ * Columna de cantidad de stock: `numeric(12,3)` leída como número.
+ *
+ * `mode: "number"` hace que Drizzle devuelva `number` y no el string con que
+ * `pg` entrega los `numeric`: todo el código que ya sumaba y comparaba stock
+ * sigue funcionando igual. Ojo con el SQL crudo: un `sum()` sobre esta columna
+ * vuelve como string y hay que pasarlo por `.mapWith(Number)`.
+ */
+const cantidadDeStock = () => numeric({ precision: 12, scale: 3, mode: "number" });
+
 export const branches = pgTable(
   "branches",
   {
@@ -67,7 +77,17 @@ export const inventory = pgTable(
     branchId: uuid()
       .notNull()
       .references(() => branches.id, { onDelete: "cascade" }),
-    qty: integer().notNull().default(0),
+    /**
+     * Existencia física, **en la unidad de venta del producto**.
+     *
+     * Lleva decimales desde el 1/10/2026. Antes era entera y eso tenía dos
+     * consecuencias: una media placa sacaba del stock una placa entera —la
+     * otra mitad quedaba en el depósito sin que el sistema la viera— y un
+     * zócalo que se vende por metro no se podía controlar, porque 3,7 m se
+     * redondeaban distinto según quién descontara. Tres decimales alcanzan
+     * para milímetros de metro lineal y fracciones de m².
+     */
+    qty: cantidadDeStock().notNull().default(0),
     /**
      * Cantidad comprometida en pedidos confirmados que todavía no salieron del
      * depósito.
@@ -79,9 +99,9 @@ export const inventory = pgTable(
      * **Disponible = `qty − reservado`.** El físico solo cambia cuando algo
      * entra o sale de verdad por la puerta.
      */
-    reservado: integer().notNull().default(0),
+    reservado: cantidadDeStock().notNull().default(0),
     /** Umbral de reposición. Por debajo, el producto entra en las alertas del panel. */
-    minQty: integer().notNull().default(0),
+    minQty: cantidadDeStock().notNull().default(0),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -116,8 +136,8 @@ export const inventoryMovements = pgTable(
       .notNull()
       .references(() => branches.id, { onDelete: "restrict" }),
     type: movementType().notNull(),
-    /** Positivo suma, negativo resta. */
-    qty: integer().notNull(),
+    /** Positivo suma, negativo resta. En la unidad de venta, con decimales. */
+    qty: cantidadDeStock().notNull(),
     note: text(),
     /** Agrupa las dos patas de una transferencia entre sucursales. */
     transferGroup: uuid(),
@@ -182,13 +202,13 @@ export const stockReservations = pgTable(
       .notNull()
       .references(() => branches.id, { onDelete: "restrict" }),
     /**
-     * Unidades reservadas, redondeadas hacia arriba.
+     * Cantidad reservada, exacta y en la unidad de stock.
      *
-     * El inventario se lleva en enteros y una venta puede ser de 2,5 metros
-     * lineales. Reservar 3 es lo conservador: sobra medio metro en el papel,
-     * pero nunca se promete algo que no está.
+     * Hasta el 1/10/2026 el inventario era entero y esto se redondeaba hacia
+     * arriba: 2,5 metros reservaban 3. Ahora se reserva lo que se vendió —una
+     * media placa reserva 0,5—, convertido con `factorDeStock`.
      */
-    cantidad: integer().notNull(),
+    cantidad: cantidadDeStock().notNull(),
     estado: estadoReserva().notNull().default("activa"),
     resueltoAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

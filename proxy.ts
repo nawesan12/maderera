@@ -14,6 +14,20 @@ import { SENAL_ESTADO } from "@/lib/senal-navegador";
  * en `requireStaff()` de `lib/dal/session.ts`, pegada al dato y sin atajos.
  */
 export function proxy(request: NextRequest) {
+  /*
+   * El manifiesto del panel pasa sin sesión.
+   *
+   * El navegador lo pide **sin cookies** —es la regla para los manifiestos
+   * salvo que el `<link>` diga lo contrario—, así que el proxy lo mandaba al
+   * login y el teléfono recibía la página de ingreso en vez del JSON: «Syntax
+   * error» en la consola y el panel no se podía instalar, que es justamente
+   * lo que hace falta para recibir los avisos de compra. No tiene nada que
+   * proteger: nombre, íconos y colores.
+   */
+  if (request.nextUrl.pathname.endsWith("/app.webmanifest")) {
+    return NextResponse.next();
+  }
+
   const sessionCookie = getSessionCookie(request);
 
   if (!sessionCookie) {

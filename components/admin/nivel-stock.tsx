@@ -1,4 +1,5 @@
 import { disponible as calcularDisponible, type StockLevel } from "@/lib/stock-level";
+import { formatearCantidad, formatearLargo, piezasDeMetros } from "@/lib/unidades";
 
 /**
  * Nivel de stock de una sucursal.
@@ -24,6 +25,7 @@ export function NivelStock({
   minimo,
   nivel,
   unidad,
+  largoMm,
 }: {
   sucursal: string;
   /** Físico: lo que hay en el galpón. */
@@ -33,8 +35,14 @@ export function NivelStock({
   minimo: number;
   nivel: StockLevel;
   unidad?: string;
+  /**
+   * Largo de la pieza del metro lineal. Con él, «28,8» se lee además como
+   * «12 piezas de 2,40», que es lo que se encuentra al ir a contar.
+   */
+  largoMm?: number | null;
 }) {
   const libre = calcularDisponible(cantidad, reservado);
+  const enPiezas = largoMm && libre > 0 ? piezasDeMetros(libre, largoMm) : null;
   const tope = Math.max(minimo * 3, 1);
   const porcentaje = Math.min((libre / tope) * 100, 100);
 
@@ -69,14 +77,14 @@ export function NivelStock({
                 : ""
           }`}
         >
-          {libre}
+          {formatearCantidad(libre)}
         </span>
       </div>
 
       <div
         className="mt-1 h-2 overflow-hidden rounded-full bg-muted"
         role="img"
-        aria-label={`${sucursal}: ${libre} ${unidad ?? "unidades"} disponibles${reservado > 0 ? ` de ${cantidad} en el galpón` : ""}, mínimo ${minimo}. ${texto}.`}
+        aria-label={`${sucursal}: ${formatearCantidad(libre)} ${unidad ?? "unidades"} disponibles${reservado > 0 ? ` de ${formatearCantidad(cantidad)} en el galpón` : ""}, mínimo ${formatearCantidad(minimo)}. ${texto}.`}
       >
         <div
           className={`h-full rounded-full transition-[width] ${color}`}
@@ -95,13 +103,22 @@ export function NivelStock({
           {texto}
         </span>
         {minimo > 0 && (
-          <span className="tabular text-muted-foreground">mín. {minimo}</span>
+          <span className="tabular text-muted-foreground">
+            mín. {formatearCantidad(minimo)}
+          </span>
         )}
       </p>
 
+      {enPiezas && (
+        <p className="tabular mt-0.5 text-sm text-muted-foreground">
+          {enPiezas.piezas} × {formatearLargo(largoMm!)}
+          {enPiezas.resto > 0 ? ` + ${formatearCantidad(enPiezas.resto)} m` : ""}
+        </p>
+      )}
+
       {reservado > 0 && (
         <p className="tabular mt-0.5 text-sm text-muted-foreground">
-          {cantidad} en el galpón · {reservado} vendido
+          {formatearCantidad(cantidad)} en el galpón · {formatearCantidad(reservado)} vendido
           {reservado === 1 ? "" : "s"} sin retirar
         </p>
       )}

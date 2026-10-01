@@ -23,6 +23,7 @@ import {
   precioConDescuento,
   type EscalaDeVolumen,
 } from "@/lib/precios/volumen";
+import { esPresentacion, precioDeLinea, type Presentacion } from "@/lib/ventas/forma-de-venta";
 
 export const COOKIE_CARRITO = "mjbj_carrito";
 
@@ -32,6 +33,8 @@ export interface ItemCarrito {
   descripcion: string;
   unidad: string;
   cantidad: number;
+  /** Media placa al largo o al ancho. */
+  presentacion: Presentacion;
   precioUnitario: number | null;
   /** Precio actual de lista, para avisar si cambió desde que se agregó. */
   precioActual: number | null;
@@ -168,6 +171,10 @@ export const obtenerCarrito = cache(async (): Promise<Carrito> => {
       precioUnitario: cartItems.precioUnitario,
       origen: cartItems.origen,
       notas: cartItems.notas,
+      presentacion: cartItems.presentacion,
+      unit: products.unit,
+      formaDeVenta: products.formaDeVenta,
+      precioMediaPct: products.precioMediaPct,
       slug: products.slug,
       categoryId: products.categoryId,
       // Mismo respaldo que el catálogo: la lista propia manda y la general
@@ -205,7 +212,22 @@ export const obtenerCarrito = cache(async (): Promise<Carrito> => {
   const items: ItemCarrito[] = filas.map((f) => {
     const cantidad = Number(f.cantidad);
     const precio = f.precioUnitario !== null ? Number(f.precioUnitario) : null;
-    const deLista = f.precioActual !== null ? Number(f.precioActual) : null;
+    // Una media placa vale el porcentaje de la entera sobre la lista vigente.
+    const presentacion = esPresentacion(f.presentacion) ? f.presentacion : null;
+    const deLista =
+      f.precioActual !== null
+        ? f.unit && f.formaDeVenta
+          ? precioDeLinea(
+              Number(f.precioActual),
+              {
+                unit: f.unit,
+                formaDeVenta: f.formaDeVenta,
+                precioMediaPct: f.precioMediaPct ?? 50,
+              },
+              presentacion,
+            )
+          : Number(f.precioActual)
+        : null;
 
     // El descuento por volumen se calcula sobre el precio de lista vigente y no
     // sobre el que se guardó al agregar: la escala depende de la cantidad, que
@@ -232,6 +254,7 @@ export const obtenerCarrito = cache(async (): Promise<Carrito> => {
       descripcion: f.descripcion,
       unidad: f.unidad,
       cantidad,
+      presentacion,
       precioUnitario: precio,
       precioActual: actual,
       descuento,

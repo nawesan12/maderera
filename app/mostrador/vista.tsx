@@ -41,6 +41,17 @@ import {
 } from "@/components/ui/dialog";
 import { formatearMonto, formatearPrecio, formatearUnidad } from "@/lib/formato";
 import { medioPermitido } from "@/lib/precios/medio-pago";
+import { formatearCantidad } from "@/lib/unidades";
+import {
+  admiteMedia,
+  descripcionConPresentacion,
+  nombreDePresentacion,
+  precioDeLinea,
+  seVendePorM2,
+  unidadDeLinea,
+  type Presentacion,
+  type ProductoQueSeVende,
+} from "@/lib/ventas/forma-de-venta";
 import {
   leerTipeo,
   montoDelDescuento,
@@ -1029,6 +1040,8 @@ export function VistaMostrador({
             largoMm: cortando.largoMm ?? null,
             anchoMm: cortando.anchoMm ?? null,
             color: cortando.color ?? null,
+            formaDeVenta: cortando.formaDeVenta,
+            precioMediaPct: cortando.precioMediaPct,
           }}
           anchoSierra={anchoSierra}
           precioPorPasada={tarifaDeLaPlaca?.precioPorPasada ?? 0}
@@ -1271,13 +1284,23 @@ function Buscador({
   // pulsación es un render de más.
   const elegido = Math.min(marcado, Math.max(visibles.length - 1, 0));
 
-  function elegir(r: (typeof resultados)[number]) {
+  /**
+   * Agrega el resultado, entero o como media placa.
+   *
+   * La media solo existe si el producto la admite: sobre un fenólico que se
+   * vende entero, `Mayús + Enter` agrega la placa entera en vez de inventar
+   * una presentación que el servidor después descartaría.
+   */
+  function elegir(r: (typeof resultados)[number], presentacion: Presentacion = null) {
+    const producto = comoSeVende(r);
+    const pres = presentacion && admiteMedia(producto) ? presentacion : null;
     onElegir({
       variantId: r.variantId,
-      descripcion: `${r.producto} — ${r.medida}`,
-      unidad: r.unidad,
+      descripcion: descripcionConPresentacion(`${r.producto} — ${r.medida}`, pres),
+      unidad: unidadDeLinea(producto),
       cantidad,
-      precioUnitario: r.precio,
+      precioUnitario: precioDeLinea(r.precio, producto, pres),
+      presentacion: pres,
     });
     setTexto("");
     setResultados([]);
@@ -1327,7 +1350,10 @@ function Buscador({
               }
 
               if (r) {
-                elegir(r);
+                elegir(
+                  r,
+                  e.shiftKey ? "media_largo" : e.altKey ? "media_ancho" : null,
+                );
               } else if (consulta.length >= 2 && !buscando) {
                 /*
                  * Enter sobre algo que no está en el catálogo abre la carga a
@@ -1392,11 +1418,16 @@ function Buscador({
                     {r.producto} — {r.medida}
                   </span>
                   <span className="block text-sm text-muted-foreground">
-                    {r.sku} · {r.stock > 0 ? `${r.stock} en esta sucursal` : "sin stock acá"}
+                    {r.sku} · {r.stock > 0 ? `${formatearCantidad(r.stock)} en esta sucursal` : "sin stock acá"}
                   </span>
                 </span>
-                <span className="tabular shrink-0 text-lg font-semibold">
+                <span className="tabular shrink-0 text-right text-lg font-semibold">
                   {r.precio > 0 ? formatearPrecio(r.precio) : "a definir"}
+                  {seVendePorM2(comoSeVende(r)) && (
+                    <span className="block text-sm font-normal text-muted-foreground">
+                      el m²
+                    </span>
+                  )}
                 </span>
                 {i === elegido && (
                   <kbd className="shrink-0 rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">
@@ -1404,6 +1435,39 @@ function Buscador({
                   </kbd>
                 )}
               </button>
+
+              {/* Media placa: dos botones y no un menú, porque el sentido
+                  cambia qué piezas entran y se elige mirando la placa. Con
+                  teclado, Mayús + Enter (al largo) y Alt + Enter (al ancho). */}
+              {admiteMedia(comoSeVende(r)) && r.precio > 0 && (
+                <span className="flex shrink-0 items-stretch border-l border-linea">
+                  {(
+                    [
+                      ["media_largo", "½ al largo", "Mayús"],
+                      ["media_ancho", "½ al ancho", "Alt"],
+                    ] as const
+                  ).map(([valor, texto, tecla]) => (
+                    <button
+                      key={valor}
+                      onClick={() => elegir(r, valor)}
+                      title={`${nombreDePresentacion(valor)} · ${formatearPrecio(
+                        precioDeLinea(r.precio, comoSeVende(r), valor),
+                      )}`}
+                      className="flex flex-col items-center justify-center px-3 text-sm font-medium transition-colors hover:bg-hundida"
+                    >
+                      {texto}
+                      <span className="tabular text-xs text-muted-foreground">
+                        {formatearPrecio(precioDeLinea(r.precio, comoSeVende(r), valor))}
+                      </span>
+                      {i === elegido && (
+                        <kbd className="mt-0.5 rounded border border-linea px-1 text-[11px] text-muted-foreground">
+                          {tecla} + Enter
+                        </kbd>
+                      )}
+                    </button>
+                  ))}
+                </span>
+              )}
 
               {/* Cortar, solo para lo que tiene medida de placa cargada: un
                   tarugo no se corta, y sin las dos medidas no hay plano.
@@ -1487,7 +1551,7 @@ function Lineas({
             <span className="min-w-0 flex-1">
               <span className="block truncate text-base font-medium">{l.descripcion}</span>
               <span className="block text-sm text-muted-foreground">
-                por {formatearUnidad(l.unidad)}
+                {l.presentacion ? "cada media placa" : `por ${formatearUnidad(l.unidad)}`}
               </span>
             </span>
 
@@ -3150,4 +3214,22 @@ function Dato({ titulo, valor }: { titulo: string; valor: number }) {
       </dd>
     </div>
   );
+}
+
+
+/** Lo que el buscador sabe de cómo se vende un resultado. */
+function comoSeVende(r: {
+  unidad: string;
+  formaDeVenta?: ProductoQueSeVende["formaDeVenta"];
+  precioMediaPct?: number;
+  largoMm?: number | null;
+  anchoMm?: number | null;
+}): ProductoQueSeVende {
+  return {
+    unit: r.unidad,
+    formaDeVenta: r.formaDeVenta ?? "entera",
+    precioMediaPct: r.precioMediaPct ?? 50,
+    largoMm: r.largoMm,
+    anchoMm: r.anchoMm,
+  };
 }

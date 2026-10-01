@@ -207,6 +207,8 @@ export default async function ProductoPage({
                 whatsapp={whatsapp}
                 alicuota={Number(producto.alicuotaIva) || 21}
                 aPedido={producto.aPedido}
+                formaDeVenta={producto.formaDeVenta}
+                precioMediaPct={producto.precioMediaPct}
               />
             </div>
 

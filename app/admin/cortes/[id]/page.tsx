@@ -74,7 +74,7 @@ export default async function FichaCortePage({
     precioPorPlaca: corte.precioPlaca,
     piezas: corte.piezas,
     // De media placa se cobra media placa.
-    fraccion: fraccionDePlaca(corte.medida.mitad),
+    fraccion: fraccionDePlaca(corte.medida.mitad, corte.precioMediaPct ?? 50),
   });
 
   const superficie =

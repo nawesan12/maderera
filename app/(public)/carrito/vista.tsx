@@ -17,7 +17,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCarrito } from "@/lib/carrito-context";
 import { actualizarPrecios } from "@/app/(public)/carrito-actions";
-import { formatearPrecio } from "@/lib/formato";
+import { formatearPrecio, formatearUnidad } from "@/lib/formato";
+import { admiteDecimales, formatearCantidad, leerCantidad } from "@/lib/unidades";
+import { nombreDePresentacion } from "@/lib/ventas/forma-de-venta";
 import { PrecioSecundario } from "@/components/precio";
 import { PedirPresupuesto, type SucursalElegible } from "./pedir";
 import { quitarCorteDelCarrito } from "@/app/(public)/corte/actions";
@@ -255,9 +257,13 @@ export function VistaDelCarrito({
                           <p className="font-medium">{item.descripcion}</p>
                         )}
                         <p className="tabular mt-0.5 text-[13px] text-texto-3">
-                          {item.unidad.replace("_", " ")}
+                          {item.presentacion
+                            ? nombreDePresentacion(item.presentacion)
+                            : formatearUnidad(item.unidad)}
                           {item.precioActual !== null &&
-                            ` · ${formatearPrecio(String(item.precioActual))} por ${item.unidad.replace("_", " ")}`}
+                            ` · ${formatearPrecio(String(item.precioActual))} ${
+                              item.presentacion ? "cada una" : `por ${formatearUnidad(item.unidad)}`
+                            }`}
                         </p>
                         {/* Que se cotiza a mano se dice acá, en el renglón, y
                             no recién en el carrito: es lo que explica por qué
@@ -294,9 +300,32 @@ export function VistaDelCarrito({
                         >
                           <Minus className="h-4 w-4" />
                         </button>
-                        <span className="tabular w-11 text-center text-[15.5px] font-semibold">
-                          {item.cantidad}
-                        </span>
+                        {/* Los metros se tipean: con ±1 no se llega a 3,7. */}
+                        {admiteDecimales(item.unidad) && item.unidad !== "placa" ? (
+                          <input
+                            key={item.cantidad}
+                            defaultValue={formatearCantidad(item.cantidad)}
+                            inputMode="decimal"
+                            aria-label={`Cantidad de ${item.descripcion}, en ${formatearUnidad(item.unidad)}`}
+                            disabled={guardando}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") e.currentTarget.blur();
+                            }}
+                            onBlur={(e) => {
+                              const n = leerCantidad(e.currentTarget.value);
+                              if (Number.isFinite(n) && n > 0 && n !== item.cantidad) {
+                                cambiar(item.id, Math.round(n * 100) / 100);
+                              } else {
+                                e.currentTarget.value = formatearCantidad(item.cantidad);
+                              }
+                            }}
+                            className="tabular h-full w-14 bg-transparent text-center text-[15.5px] font-semibold outline-none"
+                          />
+                        ) : (
+                          <span className="tabular w-11 text-center text-[15.5px] font-semibold">
+                            {formatearCantidad(item.cantidad)}
+                          </span>
+                        )}
                         <button
                           onClick={() => cambiar(item.id, item.cantidad + 1)}
                           disabled={guardando}

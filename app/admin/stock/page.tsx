@@ -15,6 +15,7 @@ import {
   type FilaStock,
 } from "@/lib/dal/admin/inventory";
 import { loQueEstaPorLlegar } from "@/lib/dal/admin/ordenes-compra";
+import { formatearCantidad } from "@/lib/unidades";
 import { AjusteRapido } from "./ajuste-rapido";
 import { DialogoTransferencia } from "./dialogo-transferencia";
 
@@ -184,7 +185,7 @@ export default async function AdminStockPage({
                         m.qty > 0 ? "text-green-700" : "text-muted-foreground"
                       }`}
                     >
-                      {m.qty > 0 ? `+${m.qty}` : m.qty}
+                      {m.qty > 0 ? `+${formatearCantidad(m.qty)}` : formatearCantidad(m.qty)}
                     </span>
                   </li>
                 ))}
@@ -268,14 +269,14 @@ function TarjetaStock({
             <p className="tabular text-sm text-muted-foreground">{fila.sku}</p>
           </div>
           <p className="tabular shrink-0 text-right">
-            <span className="block text-xl font-semibold">{fila.total}</span>
+            <span className="block text-xl font-semibold">{formatearCantidad(fila.total)}</span>
             <span className="block text-sm text-muted-foreground">total</span>
             {/* Lo pedido va acá arriba, al lado del número que se mira para
                 decidir si hay que reponer. Puesto en cualquier otro lado sería
                 un dato que nadie cruza a tiempo. */}
             {enCamino && (
               <span className="estado-espera mt-1 block text-sm font-medium">
-                +{enCamino.cantidad} en camino
+                +{formatearCantidad(enCamino.cantidad)} en camino
                 {enCamino.llega
                   ? ` · ${new Date(enCamino.llega).toLocaleDateString("es-AR", {
                       day: "2-digit",
@@ -296,11 +297,14 @@ function TarjetaStock({
               minimo={fila.minCentral}
               nivel={fila.nivelCentral}
               unidad={fila.unidad}
+              largoMm={fila.unidad === "metro_lineal" ? fila.largoMm : null}
             />
             <div className="mt-2">
               <AjusteRapido
                 variantId={fila.variantId}
                 branchSlug="casa-central"
+                unidad={fila.unidad}
+                largoMm={fila.largoMm}
                 sucursal="Casa Central"
               />
             </div>
@@ -314,11 +318,14 @@ function TarjetaStock({
               minimo={fila.minAserradero}
               nivel={fila.nivelAserradero}
               unidad={fila.unidad}
+              largoMm={fila.unidad === "metro_lineal" ? fila.largoMm : null}
             />
             <div className="mt-2">
               <AjusteRapido
                 variantId={fila.variantId}
                 branchSlug="aserradero"
+                unidad={fila.unidad}
+                largoMm={fila.largoMm}
                 sucursal="Aserradero"
               />
             </div>

@@ -491,7 +491,7 @@ export async function candidatosDeBaja(
         from ${inventory}
         join ${productVariants} pv on pv.id = ${inventory.variantId}
         where pv.product_id = ${products.id} and pv.active
-      ), 0)::int`,
+      ), 0)`.mapWith(Number),
       variantesSinPrecio: sql<number>`(
         select count(*) from ${productVariants} pv
         where pv.product_id = ${products.id} and pv.active

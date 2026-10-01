@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { admiteDecimales } from "@/lib/unidades";
 
 /**
  * Validación de productos y variantes.
@@ -8,10 +9,17 @@ import { z } from "zod";
  * que validar en el cliente no alcanza: lo que llega siempre se revisa acá.
  */
 
-const unidades = [
+/**
+ * Las unidades de `unitOfSale`. Copiadas y no importadas porque este archivo
+ * corre también en el navegador y el esquema de la base no tiene que viajar.
+ * **Le faltaba `tabla`** y un deck no se podía guardar desde el panel:
+ * `tests/validacion-producto.test.ts` compara las dos listas.
+ */
+export const UNIDADES_DE_PRODUCTO = [
   "unidad",
   "metro_lineal",
   "metro_cuadrado",
+  "tabla",
   "placa",
   "rollo",
   "par",
@@ -28,6 +36,19 @@ const enteroOpcional = z
   .refine((v) => v === null || (Number.isFinite(v) && v >= 0), {
     message: "Tiene que ser un número positivo.",
   });
+
+/**
+ * Cantidad de stock: admite «2,5» además de «2.5», a tres decimales. Que la
+ * unidad admita o no decimales se revisa más abajo, con el producto entero.
+ */
+const cantidadOpcional = z
+  .string()
+  .trim()
+  .transform((v) => (v === "" ? null : Number(v.replace(",", "."))))
+  .refine((v) => v === null || (Number.isFinite(v) && v >= 0), {
+    message: "Tiene que ser un número positivo.",
+  })
+  .transform((v) => (v === null ? null : Math.round(v * 1000) / 1000));
 
 const precio = z
   .string()
@@ -54,10 +75,10 @@ export const varianteSchema = z.object({
   calidad: z.string().trim().max(80).optional(),
   precioGeneral: precio,
   precioProfesional: precio,
-  stockCentral: enteroOpcional,
-  stockAserradero: enteroOpcional,
-  minCentral: enteroOpcional,
-  minAserradero: enteroOpcional,
+  stockCentral: cantidadOpcional,
+  stockAserradero: cantidadOpcional,
+  minCentral: cantidadOpcional,
+  minAserradero: cantidadOpcional,
 });
 
 export const productoSchema = z.object({
@@ -81,7 +102,15 @@ export const productoSchema = z.object({
   subcategoryId: z.string().uuid().optional().or(z.literal("")),
   description: z.string().trim().max(2000).default(""),
   brand: z.string().trim().max(80).optional(),
-  unit: z.enum(unidades),
+  unit: z.enum(UNIDADES_DE_PRODUCTO),
+  /** Cómo se vende la placa. Ver `formaDeVenta` en el esquema. */
+  formaDeVenta: z.enum(["entera", "entera_o_media", "metro_cuadrado"]).default("entera"),
+  /** Precio de la media placa en % de la entera. */
+  precioMediaPct: z.coerce
+    .number()
+    .min(1, "El precio de la media tiene que ser mayor a cero.")
+    .max(100, "La media no puede costar más que la entera.")
+    .default(50),
   /**
    * La alícuota de IVA del producto. Las tres que existen en el rubro: la
    * general, la reducida y el exento. Decide cómo se desagrega el precio final
@@ -102,6 +131,36 @@ export const productoSchema = z.object({
   variantes: z
     .array(varianteSchema)
     .min(1, "Cargá al menos una medida o presentación."),
+}).superRefine((p, ctx) => {
+  // La placa por m² convierte a placas con la superficie de cada variante:
+  // sin largo y ancho no hay cuenta posible y el stock quedaría mal.
+  if (p.unit === "placa" && p.formaDeVenta === "metro_cuadrado") {
+    p.variantes.forEach((v, i) => {
+      if (!v.largoMm || !v.anchoMm) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["variantes", i, "largoMm"],
+          message: `Para vender por m², «${v.label || v.sku}» necesita largo y ancho de la placa.`,
+        });
+      }
+    });
+  }
+
+  // Lo que se cuenta no tiene fracciones: 2,5 bisagras es un error de tipeo.
+  if (!admiteDecimales(p.unit)) {
+    p.variantes.forEach((v, i) => {
+      for (const campo of ["stockCentral", "stockAserradero", "minCentral", "minAserradero"] as const) {
+        const valor = v[campo];
+        if (valor !== null && !Number.isInteger(valor)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["variantes", i, campo],
+            message: "Este producto se cuenta en unidades enteras: el stock va sin decimales.",
+          });
+        }
+      }
+    });
+  }
 });
 
 export type ProductoInput = z.input<typeof productoSchema>;

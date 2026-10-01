@@ -61,6 +61,8 @@ export const cartItems = pgTable(
     descripcion: text().notNull(),
     unidad: text().notNull().default("unidad"),
     cantidad: numeric({ precision: 12, scale: 2 }).notNull().default("1"),
+    /** Media placa al largo o al ancho; `null` es la unidad tal cual. */
+    presentacion: text(),
     /** Precio al momento de agregarlo, para avisar si cambió antes de comprar. */
     precioUnitario: numeric({ precision: 12, scale: 2 }),
     /** De dónde vino: el catálogo o alguna de las calculadoras. */

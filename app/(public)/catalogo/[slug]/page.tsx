@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
-import { SelectorVariante } from "@/components/catalogo/selector-variante";
+import { SelectorVarianteDeQuienMira } from "@/components/catalogo/selector-variante";
+import { preciosDeFicha } from "@/lib/dal/visitante";
 import {
   obtenerProductoPublico,
   productosSugeridos,
@@ -22,23 +23,39 @@ import { DatosEstructurados } from "@/components/datos-estructurados";
 import { resenasDelProducto, resumenDeResenas } from "@/lib/dal/resenas";
 import { ResenasDelProducto } from "@/components/catalogo/resenas";
 import { migasJsonLd, productoJsonLd, urlAbsoluta } from "@/lib/seo";
+import { rutasDelCatalogo } from "@/lib/dal/sitemap";
+import { degradar } from "@/lib/degradar";
 
 /**
- * Ninguna ficha se genera en el build, pero todas se pueden cachear.
+ * Unas pocas fichas se arman en el build; el resto, en la primera visita.
  *
- * Devolver la lista vacía es lo que le dice a Next que esta ruta **es
- * prerenderizable**: sin esta función trata cada `[slug]` como dinámico y le
- * pone `no-store` a la respuesta, aunque la página no lea nada de la sesión.
- * Con ella, la primera visita a una ficha la arma y la guarda, y las demás la
- * reciben ya hecha.
+ * Antes devolvía la lista vacía, que era la forma de decirle a Next «esta ruta
+ * es prerenderizable» sin pedirle nada a la base al compilar. Con Cache
+ * Components eso ya no vale: Next exige **al menos un** parámetro, porque es
+ * con esa muestra que verifica en el build que la página no lee nada por
+ * pedido fuera de un `<Suspense>`. Si la muestra no existiera, el error
+ * aparecería recién con la primera visita.
  *
- * Vacía y no con los slugs reales, a propósito: pedirle la lista de productos
- * a la base durante el build obligaría a que la base esté alcanzable para
- * compilar, que es justo lo que este proyecto evita. La ficha se genera la
- * primera vez que alguien la pide.
+ * El build ya necesita la base —la portada se arma ahí, y el `Dockerfile` la
+ * pide—, así que se toman las primeras fichas del catálogo. Si la base está
+ * vacía o no contesta, va un slug que no existe: la ficha da 404 en el build
+ * y la verificación se hace igual.
+ *
+ * **Un costo conocido:** una ficha que no existe responde 200 con la pantalla
+ * de «no encontrado» y `noindex`, y no un 404. La parte armada de antemano
+ * sale antes de saber si el producto existe, y con ella el código de estado.
+ * Para los buscadores alcanza —el `noindex` la saca del índice— y se probó
+ * que llamar a `notFound()` desde `generateMetadata` no lo cambia.
  */
+const FICHAS_DEL_BUILD = 12;
+
 export async function generateStaticParams() {
-  return [];
+  const rutas = await degradar("las fichas del build", rutasDelCatalogo, []);
+  const slugs = rutas
+    .map((r) => r.ruta.replace(/^\/catalogo\//, ""))
+    .filter((s) => s && !s.includes("/"))
+    .slice(0, FICHAS_DEL_BUILD);
+  return (slugs.length > 0 ? slugs : ["sin-productos"]).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({
@@ -155,7 +172,6 @@ export default async function ProductoPage({
             <ChevronRight className="h-3 w-3" />
             <Link
               href={`/catalogo?cat=${producto.categorySlug}`}
-              prefetch={false}
               className="transition-colors hover:text-acento-texto"
             >
               {producto.categoryName}
@@ -200,7 +216,9 @@ export default async function ProductoPage({
             </p>
 
             <div className="mt-6">
-              <SelectorVariante
+              <SelectorVarianteDeQuienMira
+                // Sin esperar: la ficha sale armada y solo el precio espera.
+                precios={preciosDeFicha(producto.variantes.map((v) => v.id))}
                 productName={producto.name}
                 unit={producto.unit}
                 variantes={producto.variantes}
@@ -212,7 +230,8 @@ export default async function ProductoPage({
               />
             </div>
 
-            {/* Se retira solo si hay sesión: lo decide el navegador. */}
+            {/* Se retira solo si hay sesión: lo resuelve el servidor en la
+                misma respuesta. */}
             <AvisoGremio className="mt-3.5" />
 
             {/* Cómo lo recibe */}
@@ -336,7 +355,6 @@ export default async function ProductoPage({
               </h2>
               <Link
                 href={`/catalogo?cat=${producto.categorySlug}`}
-                prefetch={false}
                 className="text-sm font-medium text-brand-orange hover:underline"
               >
                 Ver todos

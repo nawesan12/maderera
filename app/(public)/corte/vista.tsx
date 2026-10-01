@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { Suspense, use, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import type { PlacaCortable } from "@/lib/dal/cortes-publico";
+import type { PreciosDePlaca } from "@/lib/dal/visitante";
 import { calcularPlanoDeCorte } from "@/lib/cortes/plano";
 import { presupuestarCorte } from "@/lib/cortes/presupuesto";
 import {
@@ -14,7 +15,6 @@ import {
 } from "@/lib/cortes/placa";
 import { PlanoSimple } from "@/components/cortes/plano-simple";
 import { formatearMonto } from "@/lib/formato";
-import { haySenal } from "@/lib/senal-navegador";
 import { agregarCorteAlCarrito } from "./actions";
 import { formatearSierra } from "@/lib/cortes/sierra";
 
@@ -53,55 +53,51 @@ const vacia = (): Fila => ({
  * geometría pura— y el precio sale del mismo `presupuestarCorte` que usa el
  * panel. Al agregarlo al carrito, el servidor recalcula todo.
  */
-/** Lo que devuelve `/api/mis-placas`: el precio propio de cada placa. */
-type PreciosDePlaca = Record<
-  string,
-  { precio: number; precioPorPasada: number; precioPorMetroCanto: number }
->;
-
-export function VistaDeCorte({
-  placas: deLaPagina,
-  anchoSierra,
+/**
+ * La pantalla con el precio de quien mira.
+ *
+ * Sale armada con el precio de público —que es lo que queda en la página hecha
+ * de antemano— y la de quien mira la reemplaza en la misma respuesta, antes de
+ * que se pueda tocar nada. Antes la corregía el navegador con
+ * `/api/mis-placas`, y el profesional veía el cambio.
+ */
+export function VistaDeCorteDeQuienMira({
+  precios,
+  ...props
 }: {
   placas: PlacaCortable[];
   anchoSierra: number;
+  precios: Promise<PreciosDePlaca>;
+}) {
+  return (
+    <Suspense fallback={<VistaDeCorte {...props} propios={{}} />}>
+      <VistaConPrecios promesa={precios} {...props} />
+    </Suspense>
+  );
+}
+
+function VistaConPrecios({
+  promesa,
+  ...props
+}: {
+  placas: PlacaCortable[];
+  anchoSierra: number;
+  promesa: Promise<PreciosDePlaca>;
+}) {
+  return <VistaDeCorte {...props} propios={use(promesa)} />;
+}
+
+function VistaDeCorte({
+  placas: deLaPagina,
+  anchoSierra,
+  propios,
+}: {
+  placas: PlacaCortable[];
+  anchoSierra: number;
+  /** El precio propio de cada placa y de su corte. Vacío para el público. */
+  propios: PreciosDePlaca;
 }) {
   const router = useRouter();
-
-  /*
-   * El precio del profesional, traído por el navegador.
-   *
-   * La pantalla llega con el precio de público —que es lo que permite servirla
-   * de la caché en vez de armarla en cada visita— y esto lo reemplaza para
-   * quien tiene lista propia: el precio de la placa y también las tarifas de
-   * corte, que dependen de la lista igual que el material.
-   *
-   * **Para quien no tiene cuenta no hace nada**: sin la señal no sale ni un
-   * pedido. Y lo que se cobra no sale de acá en ningún caso: al agregar el
-   * corte al carrito el servidor vuelve a buscar la placa y a presupuestar con
-   * la lista real.
-   */
-  const [propios, setPropios] = useState<PreciosDePlaca>({});
-
-  useEffect(() => {
-    if (!haySenal()) return;
-
-    let vigente = true;
-
-    fetch("/api/mis-placas")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (vigente && d?.placas) setPropios(d.placas as PreciosDePlaca);
-      })
-      .catch(() => {
-        // Queda el precio de público, que es el lado seguro: de menos nunca de
-        // más, y el carrito se arma igual con la lista real.
-      });
-
-    return () => {
-      vigente = false;
-    };
-  }, []);
 
   const placas = useMemo(
     () =>

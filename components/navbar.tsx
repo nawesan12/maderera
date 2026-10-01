@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState, type ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -124,15 +124,15 @@ const enlacesMas = [
 /**
  * Quién está navegando.
  *
- * Ya no llega del servidor: las páginas públicas se sirven del CDN, con el
- * mismo HTML para todo el mundo, así que el nombre lo completa el navegador
- * con `useEstado()`. El costo es visible y conocido —para quien tiene la
- * sesión abierta, el menú dice "Ingresar" durante un instante antes de decir
- * su nombre— y es lo que se paga a cambio de que la página no se arme en el
- * servidor en cada visita.
+ * Lo resuelve el servidor en el mismo pedido (`estadoDelVisitante`) y llega
+ * por streaming: la barra sale armada con la página y solo el saludo y el
+ * contador esperan, cada uno detrás de su `<Suspense>`. Antes lo completaba el
+ * navegador después de cargar, y quien tenía la sesión abierta leía
+ * «Ingresar» un instante antes de leer su nombre.
  *
- * Mientras no se sabe, el menú muestra el lado de afuera. Es la opción segura:
- * de más nunca, de menos por un momento.
+ * Mientras no se sabe, el lugar queda reservado y en blanco: ni «Ingresar» ni
+ * un nombre. Decir «Ingresar» a quien ya entró era el parpadeo que esto viene
+ * a sacar.
  */
 export interface SesionNavbar {
   nombre: string;
@@ -145,12 +145,7 @@ export interface SesionNavbar {
  * panel lo dejaba viejo en la barra superior de todas las páginas: el dato de
  * contacto tiene una sola fuente, que es la ficha de la sucursal.
  */
-export function Navbar({
-  telefono,
-  horario,
-  whatsapp,
-  rubros = {},
-}: {
+interface PropsDeLaBarra {
   telefono?: string | null;
   horario?: string | null;
   /** El enlace armado, que sale del número cargado en el panel. */
@@ -158,33 +153,18 @@ export function Navbar({
   /** Lo que el catálogo sabe de cada rubro, por slug: cuántos productos tiene
    *  y con qué foto se muestra. Las dos cosas se editan desde el panel. */
   rubros?: Record<string, { cantidad: number; imagen: string | null }>;
-}) {
-  const pathname = usePathname();
+}
 
-  /*
-   * En qué sección está parado.
-   *
-   * El menú no lo decía: se navegaba a Sucursales y la barra seguía viéndose
-   * igual que en la portada. `aria-current` es además lo que un lector de
-   * pantalla anuncia como "página actual".
-   */
-  const enSeccion = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+export function Navbar({
+  telefono,
+  horario,
+  whatsapp,
+  rubros = {},
+}: PropsDeLaBarra) {
 
   const [productsOpen, setProductsOpen] = useState(false);
   const [masOpen, setMasOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { cantidadItems } = useCarrito();
-  const { sesion } = useEstado();
-
-  const nombreDePila = sesion ? primerNombre(sesion.nombre) : "";
-  const destinoSesion = sesion ? (sesion.esStaff ? "/admin" : "/mi-cuenta") : "/ingresar";
-  const IconoSesion = sesion?.esStaff ? LayoutDashboard : UserRound;
-  const textoSesion = sesion
-    ? sesion.esStaff
-      ? "Ir al panel"
-      : "Mi cuenta"
-    : "Ingresar";
 
   return (
     <>
@@ -287,18 +267,19 @@ export function Navbar({
                   hover— "Productos" no llevaba a ninguna parte. La clienta
                   pidió darle más presencia al catálogo; empezar por hacerlo
                   clicable es lo mínimo. */}
-              <Link
+              <EnlaceDeSeccion
                 href="/catalogo"
-                className={`relative flex h-10 items-center gap-1.5 rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
-                  productsOpen || enSeccion("/catalogo")
-                    ? "bg-sitio-alt text-acento-texto"
-                    : "text-foreground"
-                } ${
-                  enSeccion("/catalogo")
-                    ? "after:absolute after:inset-x-[11px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
-                    : ""
-                }`}
-                aria-current={enSeccion("/catalogo") ? "page" : undefined}
+                clase={(activa) =>
+                  `relative flex h-10 items-center gap-1.5 rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
+                    productsOpen || activa
+                      ? "bg-sitio-alt text-acento-texto"
+                      : "text-foreground"
+                  } ${
+                    activa
+                      ? "after:absolute after:inset-x-[11px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
+                      : ""
+                  }`
+                }
                 aria-expanded={productsOpen}
               >
                 Productos
@@ -307,7 +288,7 @@ export function Navbar({
                     productsOpen ? "rotate-180" : ""
                   }`}
                 />
-              </Link>
+              </EnlaceDeSeccion>
               {/* El desplegable entra con una animación de CSS. La salida no se
                   anima: dura 180 ms, se dispara al sacar el mouse y nadie la
                   mira, y mantenerla era el único motivo para tener montada una
@@ -467,23 +448,21 @@ export function Navbar({
 
             {/* En imprenta mayúscula y con más cuerpo, por pedido de la
                 clienta: "que todas las del menú sean en imprenta mayúsculas". */}
-            {enlacesDirectos.map((link) => {
-              const activa = enSeccion(link.href);
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  aria-current={activa ? "page" : undefined}
-                  className={`relative flex h-10 items-center rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors hover:bg-sitio-alt hover:text-acento-texto ${
+            {enlacesDirectos.map((link) => (
+              <EnlaceDeSeccion
+                key={link.href}
+                href={link.href}
+                clase={(activa) =>
+                  `relative flex h-10 items-center rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors hover:bg-sitio-alt hover:text-acento-texto ${
                     activa
                       ? "text-acento-texto after:absolute after:inset-x-[11px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
                       : "text-foreground"
-                  }`}
-                >
-                  {link.name}
-                </Link>
-              );
-            })}
+                  }`
+                }
+              >
+                {link.name}
+              </EnlaceDeSeccion>
+            ))}
 
             <div
               className="relative"
@@ -538,29 +517,9 @@ export function Navbar({
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
 
-            <Link
-              href={destinoSesion}
-              className={`hidden h-11 items-center gap-2 whitespace-nowrap rounded-[11px] border border-linea px-[15px] text-[14.5px] font-semibold transition-colors hover:bg-sitio-alt md:flex ${
-                sesion ? "text-acento-texto" : "text-foreground"
-              }`}
-            >
-              <IconoSesion className="h-[18px] w-[18px]" />
-              <span>{textoSesion}</span>
-            </Link>
-
-            {/* Crear cuenta, solo a quien no entró. La clienta pidió promover
-                más el registro: en el escritorio no había ni un enlace, solo
-                "Ingresar", que a quien todavía no tiene cuenta no le dice que
-                pueda hacerse una. Desde `xl` y no `lg`: con Profesionales en la
-                barra, en 1024 px ya no entran las dos cosas. */}
-            {!sesion && (
-              <Link
-                href="/registro"
-                className="hidden h-11 items-center whitespace-nowrap rounded-[11px] px-[13px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-sitio-alt xl:flex"
-              >
-                Crear cuenta
-              </Link>
-            )}
+            <Suspense fallback={<SesionDeEscritorio sesion={undefined} />}>
+              <SesionDeEscritorioVigente />
+            </Suspense>
 
             {/* Dice «Carrito», y ahora lo dice todo el sitio.
                 Durante un tiempo esta fue la única palabra: la página se
@@ -569,25 +528,9 @@ export function Navbar({
                 cualquier otra tienda —/carrito y /carrito/confirmar—, y pedir
                 un presupuesto por escrito pasó a ser una de las salidas del
                 carrito, que es lo que siempre fue. */}
-            <Link
-              href="/carrito"
-              aria-label={
-                cantidadItems > 0
-                  ? `Carrito, ${cantidadItems} ${cantidadItems === 1 ? "producto" : "productos"}`
-                  : "Carrito"
-              }
-              className="relative flex h-10 items-center gap-2 rounded-[11px] px-2.5 text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto"
-            >
-              <ShoppingCart className="h-[19px] w-[19px] shrink-0" />
-              <span className="hidden text-[13px] font-bold uppercase tracking-[0.045em] sm:inline">
-                Carrito
-              </span>
-              {cantidadItems > 0 && (
-                <span className="tabular flex h-5 min-w-5 items-center justify-center rounded-full bg-accion px-[5px] text-[11px] font-bold text-white">
-                  {cantidadItems}
-                </span>
-              )}
-            </Link>
+            <Suspense fallback={<EnlaceAlCarrito cantidad={0} />}>
+              <EnlaceAlCarritoVigente />
+            </Suspense>
 
             <Link
               href="/carrito"
@@ -611,20 +554,9 @@ export function Navbar({
                 <div className="mt-8 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pb-8">
                   {/* La cuenta va arriba de todo en el teléfono: es lo que se
                       busca cuando el pedido ya está hecho. */}
-                  <Link
-                    href={destinoSesion}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="mb-3 flex items-center gap-3 rounded-xl bg-sitio-alt px-3 py-3 text-sm font-medium"
-                  >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-naranja-claro">
-                      <IconoSesion className="h-4 w-4 text-acento-texto" />
-                    </span>
-                    {sesion
-                      ? sesion.esStaff
-                        ? "Ir al panel"
-                        : `Mi cuenta · ${nombreDePila}`
-                      : "Ingresar o crear cuenta"}
-                  </Link>
+                  <Suspense fallback={<SesionDelTelefono sesion={undefined} cerrar={() => setMobileMenuOpen(false)} />}>
+                    <SesionDelTelefonoVigente cerrar={() => setMobileMenuOpen(false)} />
+                  </Suspense>
 
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Productos
@@ -699,22 +631,20 @@ export function Navbar({
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Navegación
                   </p>
-                  {[...enlacesDirectos, ...enlacesMas].map((link) => {
-                    const activa = enSeccion(link.href);
-                    return (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        onClick={() => setMobileMenuOpen(false)}
-                        aria-current={activa ? "page" : undefined}
-                        className={`rounded-xl px-3 py-2.5 text-[13px] font-bold uppercase tracking-[0.045em] hover:bg-sitio-alt ${
+                  {[...enlacesDirectos, ...enlacesMas].map((link) => (
+                    <EnlaceDeSeccion
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      clase={(activa) =>
+                        `rounded-xl px-3 py-2.5 text-[13px] font-bold uppercase tracking-[0.045em] hover:bg-sitio-alt ${
                           activa ? "bg-sitio-alt text-acento-texto" : ""
-                        }`}
-                      >
-                        {link.name}
-                      </Link>
-                    );
-                  })}
+                        }`
+                      }
+                    >
+                      {link.name}
+                    </EnlaceDeSeccion>
+                  ))}
 
                   <div className="my-3 border-t border-linea-tenue" />
                   <Link href="/carrito" onClick={() => setMobileMenuOpen(false)}>
@@ -727,15 +657,9 @@ export function Navbar({
                       aparece desde `xl`, así que en celular y en tablet —que
                       es donde entra la mayoría— no había un solo enlace para
                       registrarse en todo el sitio. */}
-                  {!sesion && (
-                    <Link
-                      href="/registro"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="mt-2 rounded-xl px-3 py-2.5 text-center text-sm font-semibold text-acento-texto hover:bg-sitio-alt"
-                    >
-                      Crear una cuenta
-                    </Link>
-                  )}
+                  <Suspense fallback={null}>
+                    <CrearCuentaDelTelefono cerrar={() => setMobileMenuOpen(false)} />
+                  </Suspense>
                 </div>
               </SheetContent>
             </Sheet>
@@ -743,5 +667,198 @@ export function Navbar({
         </div>
       </nav>
     </>
+  );
+}
+
+/*
+ * Las piezas de la barra que dependen de quién mira.
+ *
+ * Cada una tiene dos caras: la «vigente», que espera lo que resolvió el
+ * servidor (`useEstado` suspende), y la de respaldo, que es la misma pieza sin
+ * saber todavía nada. El respaldo es lo que queda en la página armada; la
+ * vigente llega por streaming en la misma respuesta.
+ *
+ * `sesion === undefined` quiere decir «todavía no se sabe»: se reserva el
+ * lugar en blanco, sin decir «Ingresar» a alguien que quizás ya entró.
+ */
+
+type SesionConocida = SesionNavbar | null | undefined;
+
+function datosDeSesion(sesion: SesionConocida) {
+  return {
+    destino: sesion ? (sesion.esStaff ? "/admin" : "/mi-cuenta") : "/ingresar",
+    Icono: sesion?.esStaff ? LayoutDashboard : UserRound,
+    texto: sesion ? (sesion.esStaff ? "Ir al panel" : "Mi cuenta") : "Ingresar",
+  };
+}
+
+function SesionDeEscritorioVigente() {
+  const { sesion } = useEstado();
+  return <SesionDeEscritorio sesion={sesion} />;
+}
+
+function SesionDeEscritorio({ sesion }: { sesion: SesionConocida }) {
+  const { destino, Icono, texto } = datosDeSesion(sesion);
+  const sinSaber = sesion === undefined;
+
+  return (
+    <>
+      <Link
+        href={destino}
+        aria-busy={sinSaber || undefined}
+        className={`hidden h-11 items-center gap-2 whitespace-nowrap rounded-[11px] border border-linea px-[15px] text-[14.5px] font-semibold transition-colors hover:bg-sitio-alt md:flex ${
+          sesion ? "text-acento-texto" : "text-foreground"
+        }`}
+      >
+        <Icono className="h-[18px] w-[18px]" />
+        {/* El ancho de «Ingresar» queda reservado mientras no se sabe, para
+            que el botón no cambie de tamaño cuando llega el nombre. */}
+        <span className={sinSaber ? "invisible" : undefined}>{texto}</span>
+      </Link>
+
+      {/* Crear cuenta, solo a quien no entró. La clienta pidió promover
+          más el registro: en el escritorio no había ni un enlace, solo
+          "Ingresar", que a quien todavía no tiene cuenta no le dice que
+          pueda hacerse una. Desde `xl` y no `lg`: con Profesionales en la
+          barra, en 1024 px ya no entran las dos cosas. */}
+      {sesion === null && (
+        <Link
+          href="/registro"
+          className="hidden h-11 items-center whitespace-nowrap rounded-[11px] px-[13px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-sitio-alt xl:flex"
+        >
+          Crear cuenta
+        </Link>
+      )}
+    </>
+  );
+}
+
+/**
+ * El contador sale del carrito cuando la pantalla lo trae entero —ahí cuenta
+ * los renglones que se ven, con el cambio optimista aplicado— y si no, del
+ * encabezado.
+ */
+function EnlaceAlCarritoVigente() {
+  const { cantidadItems: delCarrito } = useCarrito();
+  const { cantidadItems } = useEstado();
+  return <EnlaceAlCarrito cantidad={delCarrito ?? cantidadItems} />;
+}
+
+function EnlaceAlCarrito({ cantidad }: { cantidad: number }) {
+  return (
+    <Link
+      href="/carrito"
+      aria-label={
+        cantidad > 0
+          ? `Carrito, ${cantidad} ${cantidad === 1 ? "producto" : "productos"}`
+          : "Carrito"
+      }
+      className="relative flex h-10 items-center gap-2 rounded-[11px] px-2.5 text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto"
+    >
+      <ShoppingCart className="h-[19px] w-[19px] shrink-0" />
+      <span className="hidden text-[13px] font-bold uppercase tracking-[0.045em] sm:inline">
+        Carrito
+      </span>
+      {cantidad > 0 && (
+        <span className="tabular flex h-5 min-w-5 items-center justify-center rounded-full bg-accion px-[5px] text-[11px] font-bold text-white">
+          {cantidad}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function SesionDelTelefonoVigente({ cerrar }: { cerrar: () => void }) {
+  const { sesion } = useEstado();
+  return <SesionDelTelefono sesion={sesion} cerrar={cerrar} />;
+}
+
+/* La cuenta va arriba de todo en el teléfono: es lo que se busca cuando el
+   pedido ya está hecho. */
+function SesionDelTelefono({
+  sesion,
+  cerrar,
+}: {
+  sesion: SesionConocida;
+  cerrar: () => void;
+}) {
+  const { destino, Icono } = datosDeSesion(sesion);
+  return (
+    <Link
+      href={destino}
+      onClick={cerrar}
+      className="mb-3 flex items-center gap-3 rounded-xl bg-sitio-alt px-3 py-3 text-sm font-medium"
+    >
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-naranja-claro">
+        <Icono className="h-4 w-4 text-acento-texto" />
+      </span>
+      <span className={sesion === undefined ? "invisible" : undefined}>
+        {sesion
+          ? sesion.esStaff
+            ? "Ir al panel"
+            : `Mi cuenta · ${primerNombre(sesion.nombre)}`
+          : "Ingresar o crear cuenta"}
+      </span>
+    </Link>
+  );
+}
+
+/* Crear cuenta también en el cajón. En la barra de arriba solo aparece desde
+   `xl`, así que en celular y en tablet —que es donde entra la mayoría— no
+   había un solo enlace para registrarse en todo el sitio. */
+function CrearCuentaDelTelefono({ cerrar }: { cerrar: () => void }) {
+  const { sesion } = useEstado();
+  if (sesion) return null;
+  return (
+    <Link
+      href="/registro"
+      onClick={cerrar}
+      className="mt-2 rounded-xl px-3 py-2.5 text-center text-sm font-semibold text-acento-texto hover:bg-sitio-alt"
+    >
+      Crear una cuenta
+    </Link>
+  );
+}
+
+/**
+ * Un enlace del menú que se marca cuando se está en su sección.
+ *
+ * El menú no lo decía: se navegaba a Sucursales y la barra seguía viéndose
+ * igual que en la portada. `aria-current` es además lo que un lector de
+ * pantalla anuncia como "página actual".
+ *
+ * **La ruta se lee acá, en cada enlace, y no en la barra entera.** En las
+ * páginas con parámetros —un pedido, un evento— la ruta es un dato del pedido
+ * y tiene que ir detrás de un `<Suspense>`. Envolver la barra completa
+ * duplicaba sus casi 100 KB en el HTML de todas las páginas: React manda
+ * aparte los límites grandes ya resueltos, y con ellos su respaldo. Un enlace
+ * suelto pesa poco y su respaldo —el mismo enlace sin marcar— solo se usa en
+ * esas páginas.
+ */
+function EnlaceDeSeccion({
+  clase,
+  ...props
+}: Omit<ComponentProps<typeof Link>, "className"> & {
+  href: string;
+  clase: (activa: boolean) => string;
+}) {
+  return (
+    <Suspense fallback={<Link {...props} className={clase(false)} />}>
+      <EnlaceMarcado {...props} clase={clase} />
+    </Suspense>
+  );
+}
+
+function EnlaceMarcado({
+  clase,
+  ...props
+}: Omit<ComponentProps<typeof Link>, "className"> & {
+  href: string;
+  clase: (activa: boolean) => string;
+}) {
+  const ruta = usePathname();
+  const activa = props.href === "/" ? ruta === "/" : ruta.startsWith(props.href);
+  return (
+    <Link {...props} aria-current={activa ? "page" : undefined} className={clase(activa)} />
   );
 }

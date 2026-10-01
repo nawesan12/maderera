@@ -264,15 +264,15 @@ async function Lateral({ params }: { params: Params }) {
  * **Acá no se lee la sesión, y eso es lo que hace que el catálogo sea barato.**
  * Leía dos cosas: con qué vista de IVA mostrar el precio y si poner el aviso al
  * gremio. Ninguna de las dos cambia lo que se vende —son presentación— y las
- * dos las resuelve ahora el navegador: `PreciosProvider` reemplaza el precio y
- * la vista para quien tiene lista propia, y el aviso se retira solo cuando hay
- * sesión. Mientras tanto, el HTML es **uno solo para todo el mundo** y se puede
- * servir de la caché en vez de armarlo de nuevo en cada visita.
+ * dos se resuelven aparte: el precio y la vista de quien mira llegan detrás
+ * del `<Suspense>` de cada tarjeta (`components/product-card.tsx`), y el aviso
+ * se retira para quien entró. La grilla en sí es **una sola para todo el
+ * mundo**, con las consultas cacheadas por etiqueta.
  *
  * Lo que no se toca: la lista de precios sigue viajando dentro de la clave del
- * caché (`lib/dal/catalog.ts`). Que el precio del profesional se corrija en el
- * navegador no significa que un precio de gremio pueda salir de un caché
- * compartido; significa que no sale de ahí en absoluto.
+ * caché (`lib/dal/catalog.ts`). Que el precio del profesional llegue aparte no
+ * significa que un precio de gremio pueda salir de un caché compartido;
+ * significa que no sale de ahí en absoluto.
  */
 async function Resultados({ params }: { params: Params }) {
   const pagina = Math.max(1, Number(params.pagina) || 1);

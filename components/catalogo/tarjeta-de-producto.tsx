@@ -1,0 +1,167 @@
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { ImageOff, Loader2, MessageCircle, Plus } from "lucide-react";
+import type { ReactNode } from "react";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { useCarrito } from "@/lib/carrito-context";
+import { formatearUnidad } from "@/lib/formato";
+import type { ProductoListado } from "@/lib/dal/catalog";
+
+/**
+ * Tarjeta de producto del catálogo.
+ *
+ * Lo que decide una compra está arriba y grande: la foto y el precio. El resto
+ * —categoría, unidad, medidas— acompaña en tamaño chico. Cuando todo pesa lo
+ * mismo, hay que leer la tarjeta entera para saber si sirve.
+ *
+ * **La tarjeta ya no muestra stock.** Salieron la franja "Sin stock" y el
+ * detalle por sucursal: al cliente no le importa en qué depósito está la
+ * madera, y publicar existencias por sucursal invitaba a preguntas que se
+ * resuelven recién en el carrito. `Disponibilidad` sigue en uso en la ficha
+ * del producto y en el panel.
+ *
+ * `height: 100%` no es decorativo: iguala las alturas dentro de la grilla para
+ * que la fila de botones quede alineada entre tarjetas vecinas.
+ *
+ * **Lo que depende de quién mira llega aparte**, en `etiqueta` y `precio`: los
+ * arma `ProductCard`, del lado del servidor, detrás de su `<Suspense>`. Esta
+ * parte es la que necesita el navegador —el botón de agregar— y es igual para
+ * todo el mundo.
+ *
+ * **Los enlaces a la ficha vuelven a precargarse.** Tuvieron `prefetch={false}`
+ * mientras el sitio vivió en Vercel, donde cada precarga era una función
+ * facturada y una vuelta a la base. La ficha ya sale armada de antemano —el
+ * precio de quien mira llega aparte— y en el servidor propio el costo es fijo:
+ * precargar lo que está a la vista vuelve a hacer instantánea la navegación al
+ * detalle.
+ */
+export function TarjetaDeProducto({
+  product,
+  whatsapp,
+  etiqueta,
+  precio,
+}: {
+  product: ProductoListado;
+  /** Número del negocio, en dígitos. Baja del servidor porque el dato es
+   *  editable desde el panel y esto es un componente de cliente. */
+  whatsapp: string;
+  /** El descuento o «Destacado», sobre la foto. Depende de la lista de quien mira. */
+  etiqueta: ReactNode;
+  /** El bloque de precio. Depende de la lista y de la vista de IVA de quien mira. */
+  precio: ReactNode;
+}) {
+  const { agregar, guardando } = useCarrito();
+
+  /*
+   * Si se puede agregar directo o hay que ir a la ficha se decide con el
+   * precio de público: es lo que se sabe al armar la página. Un producto sin
+   * precio general y con precio en la lista de un profesional es raro, y si
+   * se da, el botón lo lleva a la ficha —donde ve su precio y elige—, que es
+   * el camino seguro.
+   */
+  const sinPrecio = !product.precioDesde || Number(product.precioDesde) <= 0;
+  const variasMedidas = product.labels.length > 1;
+
+  const consulta = `https://wa.me/${whatsapp}?text=${encodeURIComponent(
+    `Hola! Quería consultar por ${product.name}.`,
+  )}`;
+
+  return (
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-[14px] border border-linea bg-card shadow-[0_1px_2px_rgb(60_50_40_/_0.05)] transition-[box-shadow,transform,border-color] duration-200 hover:-translate-y-[3px] hover:border-linea-hover hover:shadow-[0_14px_30px_-16px_rgb(60_50_40_/_0.34)] motion-reduce:transform-none motion-reduce:transition-none">
+      <Link
+        href={`/catalogo/${product.slug}`}
+        className="relative block aspect-[4/3] overflow-hidden bg-brand-wood-light/25"
+      >
+        {product.image ? (
+          <Image
+            src={product.image}
+            alt={product.name}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transform-none"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+          />
+        ) : (
+          <span className="flex h-full items-center justify-center text-texto-3">
+            <ImageOff className="h-8 w-8" />
+          </span>
+        )}
+
+        {etiqueta}
+      </Link>
+
+      <div className="flex flex-1 flex-col gap-[13px] px-4 pb-4 pt-[15px]">
+        <div className="flex flex-col gap-[3px]">
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.11em] text-acento-texto">
+            {product.subcategory || product.categoryName}
+          </p>
+          <Link
+            href={`/catalogo/${product.slug}`}
+                className="line-clamp-2 text-[15.5px] font-semibold leading-[1.32] tracking-[-0.01em] transition-colors hover:text-acento-texto"
+          >
+            {product.name}
+          </Link>
+        </div>
+
+        {precio}
+
+        <div className="flex flex-wrap gap-[5px]">
+          <span className="inline-flex h-[23px] items-center rounded-md bg-chip px-2 text-[11.5px] text-texto-2">
+            por {formatearUnidad(product.unit)}
+          </span>
+          {variasMedidas && (
+            <span className="tabular inline-flex h-[23px] items-center rounded-md bg-chip px-2 text-[11.5px] text-texto-2">
+              {product.labels.length} medidas
+            </span>
+          )}
+        </div>
+
+        <div className="mt-auto flex gap-2 border-t border-linea-tenue pt-3.5">
+          {variasMedidas || sinPrecio ? (
+            <Link
+              href={`/catalogo/${product.slug}`}
+                    className={buttonVariants({
+                variant: "outline",
+                className:
+                  "h-[42px] min-w-0 flex-1 rounded-[9px] border-linea text-[14.5px] font-semibold",
+              })}
+            >
+              {sinPrecio ? "Pedir cotización" : "Elegir medida"}
+            </Link>
+          ) : (
+            <Button
+              disabled={guardando}
+              className="h-[42px] min-w-0 flex-1 rounded-[9px] bg-accion text-[14.5px] font-semibold text-white hover:bg-accion-hover"
+              onClick={() =>
+                agregar({
+                  descripcion: product.name,
+                  unidad: product.unit,
+                  cantidad: 1,
+                  origen: "catalogo",
+                })
+              }
+            >
+              {guardando ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Agregar
+            </Button>
+          )}
+
+          <a
+            href={consulta}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Consultar por ${product.name} por WhatsApp`}
+            className="flex h-[42px] w-[42px] flex-none items-center justify-center rounded-[9px] border border-linea text-verde-whatsapp transition-colors hover:border-verde-whatsapp/40 hover:bg-verde-whatsapp/10"
+          >
+            <MessageCircle className="h-[18px] w-[18px]" />
+          </a>
+        </div>
+      </div>
+    </article>
+  );
+}

@@ -183,7 +183,6 @@ export default async function ProfesionalesPage() {
                   <Link
                     key={evento.id}
                     href={`/eventos/${evento.slug}`}
-                    prefetch={false}
                     className="rounded-xl border bg-card p-5 transition-shadow hover:shadow-md"
                   >
                     <p className="flex items-center gap-2 text-sm text-brand-orange-dark">

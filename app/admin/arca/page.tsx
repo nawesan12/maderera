@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import {
   BookOpen,
   Building2,
@@ -55,6 +56,11 @@ const REGIMENES: Record<string, string> = {
  * vez por año.
  */
 export default async function ArcaPage() {
+  // El mes en curso es el del momento en que se abre, no el del build: con
+  // Cache Components, leer el reloj sin haber leído antes algo del pedido es
+  // un error de compilación, porque la fecha quedaría congelada en el HTML.
+  await connection();
+
   const inicioMes = new Date();
   inicioMes.setDate(1);
   inicioMes.setHours(0, 0, 0, 0);

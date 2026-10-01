@@ -53,7 +53,6 @@ export default async function EventosPage() {
                 <li key={evento.id}>
                   <Link
                     href={`/eventos/${evento.slug}`}
-                    prefetch={false}
                     className="flex h-full flex-col overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md"
                   >
                     {evento.imagenUrl && (

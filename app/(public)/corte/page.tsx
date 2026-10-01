@@ -4,7 +4,8 @@ import { ArrowRight, Ruler } from "lucide-react";
 import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
 import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
 import { HORARIO_CORTES } from "@/lib/sucursales";
-import { VistaDeCorte } from "./vista";
+import { VistaDeCorteDeQuienMira } from "./vista";
+import { preciosDePlacas } from "@/lib/dal/visitante";
 
 export const metadata: Metadata = {
   title: "Corte a Medida Online",
@@ -38,12 +39,12 @@ export const metadata: Metadata = {
  */
 export default async function CortePage() {
   /*
-   * A precio de público, y por eso esta pantalla se puede cachear.
+   * A precio de público, y por eso esta pantalla se puede armar de antemano.
    *
    * El armador es la pantalla más pesada del sitio y la que más CPU consume por
    * visita; que además se armara de nuevo cada vez, solo para saber qué lista
-   * de precios corresponde, era pagar dos veces. Al profesional se le corrige
-   * el precio en el navegador: ver `VistaDeCorte`.
+   * de precios corresponde, era pagar dos veces. El precio del profesional
+   * llega aparte, en la misma respuesta: ver `VistaDeCorteDeQuienMira`.
    */
   const [placas, parametros] = await Promise.all([
     placasCortablesPublicas(),
@@ -79,7 +80,9 @@ export default async function CortePage() {
           </p>
         ) : (
           <div className="mt-8">
-            <VistaDeCorte
+            <VistaDeCorteDeQuienMira
+              // Sin esperar: la pantalla sale armada y solo el precio espera.
+              precios={preciosDePlacas()}
               placas={placas}
               anchoSierra={parametros.anchoSierraMm}
             />

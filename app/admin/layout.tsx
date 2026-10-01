@@ -42,7 +42,29 @@ function iniciales(nombre: string) {
     .join("");
 }
 
-export default async function AdminLayout({
+/**
+ * El panel entero depende de quién entró, así que no tiene una parte que se
+ * pueda armar de antemano.
+ *
+ * Con Cache Components, leer la sesión fuera de un `<Suspense>` frena el build:
+ * Next exige decir qué se muestra mientras tanto. Lo que se muestra es la
+ * silueta del panel —la columna del menú y la barra de arriba—, que es lo
+ * mismo que se veía antes durante el instante en que se resolvía la sesión,
+ * solo que ahora sale en el primer byte en vez de una página en blanco.
+ */
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Suspense fallback={<SiluetaDelPanel />}>
+      <PanelConSesion>{children}</PanelConSesion>
+    </Suspense>
+  );
+}
+
+async function PanelConSesion({
   children,
 }: {
   children: React.ReactNode;
@@ -170,6 +192,22 @@ export default async function AdminLayout({
            */}
           <Suspense fallback={<CargandoPantalla />}>{children}</Suspense>
         </main>
+      </div>
+    </div>
+  );
+}
+
+/** El armazón del panel antes de saber quién entró. */
+function SiluetaDelPanel() {
+  return (
+    <div className="panel flex min-h-screen bg-background text-foreground" aria-busy="true">
+      <span className="sr-only">Cargando el panel…</span>
+      <div className="textura sticky top-0 hidden h-screen w-[244px] shrink-0 border-r border-sidebar-border bg-sidebar lg:block" />
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+        <div className="h-[60px] border-b border-linea" />
+        <div className="panel-fondo flex-1 px-4 py-[26px] lg:px-7">
+          <CargandoPantalla />
+        </div>
       </div>
     </div>
   );

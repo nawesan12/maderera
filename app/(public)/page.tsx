@@ -46,7 +46,6 @@ import { MARCAS_DE_PAGO, marcaDelMedio, type MarcaDePago } from "@/lib/medios-de
  * toca un precio, un producto o el stock, el panel invalida la etiqueta del
  * catálogo y la página se rehace enseguida.
  */
-export const revalidate = 2592000;
 
 export default async function HomePage() {
   const [
@@ -211,7 +210,6 @@ function Categorias({
             <Link
               key={cat.slug}
               href={`/catalogo?cat=${cat.slug}`}
-              prefetch={false}
               className="group relative overflow-hidden rounded-[14px]"
             >
               {cat.image && (

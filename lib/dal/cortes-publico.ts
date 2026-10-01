@@ -28,9 +28,10 @@ import { tarifaDeCorte } from "@/lib/cortes/tarifa";
  * exactamente lo que corresponde.
  *
  * **El precio es el de quien mira**, con una vuelta. La pantalla se sirve a
- * precio de público —así se puede cachear, ver `placasCortablesPublicas`— y el
- * navegador reemplaza el de quien tiene lista propia con lo que le devuelve
- * `/api/mis-placas`. Lo que se cobra no sale de ninguno de los dos: al agregar
+ * precio de público —así se puede armar de antemano, ver
+ * `placasCortablesPublicas`— y el de quien tiene lista propia llega en la
+ * misma respuesta (`preciosDePlacas`, en `lib/dal/visitante.ts`). Lo que se
+ * cobra no sale de ninguno de los dos: al agregar
  * el corte al carrito el servidor vuelve a buscar la placa con la lista real.
  *
  * Cada placa viaja con su tarifa de corte ya resuelta —la pasada y el metro de
@@ -164,8 +165,8 @@ export const placasCortables = cache(async (): Promise<PlacaCortable[]> => {
  * Las placas **a precio de público**, las mismas para todo el que entre.
  *
  * Es lo que permite que el armador de cortes se sirva de la caché en lugar de
- * armarse en cada visita. Al profesional no se le esconde su precio: la
- * pantalla se lo corrige en el navegador con `/api/mis-placas`.
+ * armarse en cada visita. Al profesional no se le esconde su precio: llega en
+ * la misma respuesta, ver `preciosDePlacas`.
  */
 export const placasCortablesPublicas = cache(
   async (): Promise<PlacaCortable[]> => {

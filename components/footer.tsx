@@ -2,6 +2,7 @@ import Link from "next/link";
 import { telefonoParaMarcar } from "@/lib/formato";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Image from "next/image";
+import { anioEnCurso } from "@/lib/reloj";
 import { Phone, Mail, MapPin, Clock } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { Separator } from "@/components/ui/separator";
@@ -16,8 +17,11 @@ import { Separator } from "@/components/ui/separator";
  * exige buscarlo en cuatro archivos.
  */
 export async function Footer() {
-  const whatsapp = await enlaceWhatsapp();
-  const sucursales = await listarSucursalesPublicas();
+  const [whatsapp, sucursales, anio] = await Promise.all([
+    enlaceWhatsapp(),
+    listarSucursalesPublicas(),
+    anioEnCurso(),
+  ]);
   const principal = sucursales[0];
   return (
     <footer className="bg-oscuro-marca text-white/70">
@@ -148,7 +152,7 @@ export async function Footer() {
         <Separator className="mb-5 mt-[34px] bg-white/10" />
 
         <div className="flex flex-wrap items-center justify-between gap-3.5 text-[13px] text-white/50">
-          <p>&copy; {new Date().getFullYear()} Maderera Juan B. Justo. Todos los derechos reservados.</p>
+          <p>&copy; {anio} Maderera Juan B. Justo. Todos los derechos reservados.</p>
           {/* Obligación de la Ley 27.743, no un eslogan: el pie es el lugar donde
               se declara una vez para todo el sitio. */}
           <p>Precios finales con IVA incluido &middot; Ley 27.743</p>

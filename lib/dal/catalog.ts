@@ -449,8 +449,8 @@ const productosCacheados = cachearPublico(
  * sin filtrarle a nadie el precio de otro.
  *
  * **Al profesional no se le esconde su precio**: la página sale con el de
- * público y el navegador lo reemplaza con el suyo apenas responde
- * `/api/mis-precios`, que sí mira la sesión. Ver `PreciosPropios`.
+ * público y el suyo llega en la misma respuesta, resuelto por pedido en
+ * `lib/dal/visitante.ts`, que sí mira la sesión.
  */
 export async function listarProductosPublicos(
   filtros: FiltrosCatalogo = {},
@@ -970,10 +970,10 @@ export const obtenerProducto = cache(
  * caché en vez de armarlo en cada visita.
  *
  * **Ya se había escrito una vez y se borró**, con este argumento: la ficha
- * muestra el precio de *cada variante*, y `/api/mis-precios` solo sabía
- * devolver un precio por producto, así que el navegador no podía corregirla.
- * Eso ya no es cierto —ahora también devuelve el mapa por variante, ver
- * `preciosPropiosPorVariante`—, que era la pieza que faltaba.
+ * muestra el precio de *cada variante*, y lo que corregía el precio solo sabía
+ * de un precio por producto. Eso ya no es cierto: `preciosPropiosPorVariante`
+ * da el mapa por variante, y `preciosDeFicha` (`lib/dal/visitante.ts`) le
+ * pasa a la ficha las de ese producto.
  *
  * El otro argumento de entonces era que la ficha ya hacía cero consultas para
  * el visitante sin sesión. Sigue siendo verdad y sigue sin ser el punto: no
@@ -1283,8 +1283,8 @@ export const numerosDeLaEmpresa = cache(
 export async function datosDePortada() {
   const [categorias, todos] = await Promise.all([
     listarCategorias(),
-    // Pública a propósito: es lo que deja la portada estática. Al profesional
-    // se la corrige el navegador (`PreciosProvider`).
+    // Pública a propósito: es lo que deja la portada armada de antemano. El
+    // precio del profesional llega aparte, en cada tarjeta.
     listarProductosPublicos(),
   ]);
 

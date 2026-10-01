@@ -17,6 +17,76 @@ www.{$DOMINIO} {
 	redir https://{$DOMINIO}{uri} permanent
 }
 
+# El nombre del servidor de correo. Caddy no le sirve nada a nadie acá: el
+# bloque existe para que saque y renueve el certificado de `mail.<dominio>`,
+# que el contenedor `correo` lee de su volumen (ver docker-compose.prod.yml).
+#
+# **El emisor va fijo en Let's Encrypt.** La ruta del certificado en el
+# volumen lleva el nombre del emisor, y Caddy, si Let's Encrypt falla, prueba
+# con otro: el certificado quedaría en otra carpeta y el correo seguiría con el
+# viejo hasta vencerse. Mejor que falle a la vista, en el registro de Caddy.
+#
+# Si el correo propio no está encendido y el registro DNS de `mail` no existe,
+# Caddy reintenta en el registro sin afectar al sitio.
+mail.{$DOMINIO} {
+	tls {
+		ca https://acme-v02.api.letsencrypt.org/directory
+	}
+	respond "Servidor de correo de {$DOMINIO}. Para leer el correo: https://webmail.{$DOMINIO}" 200
+}
+
+# El webmail (Roundcube, servicio `webmail`, solo con el perfil `correo`).
+webmail.{$DOMINIO} {
+	log {
+		output file /var/log/caddy/webmail.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		format json {
+			time_format iso8601
+		}
+	}
+	# Adjuntos de hasta 25 MB más lo que agrega la codificación.
+	request_body {
+		max_size 40MB
+	}
+	reverse_proxy webmail:8000
+	encode zstd gzip
+}
+
+# La configuración automática de Thunderbird (y de otros que leen el mismo
+# formato): se pone la dirección y la clave, y el programa encuentra solo el
+# servidor, los puertos y el cifrado. Necesita el registro DNS `autoconfig`.
+autoconfig.{$DOMINIO} {
+	handle /mail/config-v1.1.xml {
+		header Content-Type "application/xml; charset=utf-8"
+		respond <<XML
+			<?xml version="1.0" encoding="UTF-8"?>
+			<clientConfig version="1.1">
+			  <emailProvider id="{$DOMINIO}">
+			    <domain>{$DOMINIO}</domain>
+			    <displayName>Maderera Juan B. Justo</displayName>
+			    <incomingServer type="imap">
+			      <hostname>mail.{$DOMINIO}</hostname>
+			      <port>993</port>
+			      <socketType>SSL</socketType>
+			      <username>%EMAILADDRESS%</username>
+			      <authentication>password-cleartext</authentication>
+			    </incomingServer>
+			    <outgoingServer type="smtp">
+			      <hostname>mail.{$DOMINIO}</hostname>
+			      <port>465</port>
+			      <socketType>SSL</socketType>
+			      <username>%EMAILADDRESS%</username>
+			      <authentication>password-cleartext</authentication>
+			    </outgoingServer>
+			  </emailProvider>
+			</clientConfig>
+			XML 200
+	}
+	respond 404
+}
+
 {$DOMINIO} {
 	# El registro de acceso, en JSON y con fecha legible. Es el que lee
 	# fail2ban (ver docs/SERVIDOR-PROPIO.md) para banear a quien anda tanteando

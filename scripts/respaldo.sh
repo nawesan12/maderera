@@ -23,8 +23,16 @@
 #   `RCLONE_REMOTE` declarado, cada volcado nuevo sube también a ese destino
 #   (ver docs/SERVIDOR-PROPIO.md para configurarlo).
 #
+# **El correo también**, si el correo propio está en uso: los buzones, el
+# estado (lo aprendido por el filtro de spam, la cola) y la configuración —las
+# casillas con sus claves y la llave DKIM—. Va en un `.tar.gz` aparte del de
+# la base, con la misma rotación. Sin la configuración, un servidor
+# reinstalado tendría los correos y ninguna casilla para leerlos; sin la llave
+# DKIM, habría que cambiar el registro DNS y esperar que se propague.
+#
 # Variables: POSTGRES_USER, POSTGRES_DB, PGPASSWORD (las pone el compose),
-# RESPALDO_DIAS (14 por omisión), RCLONE_REMOTE y RCLONE_DIAS (90).
+# RESPALDO_DIAS (14 por omisión), RCLONE_REMOTE y RCLONE_DIAS (90),
+# CORREO_RESPALDO (si/no; «si» por omisión).
 
 set -u
 
@@ -36,6 +44,32 @@ if [ -n "${RCLONE_REMOTE:-}" ] && ! command -v rclone >/dev/null 2>&1; then
   echo "[respaldo] instalando rclone para la copia fuera de la máquina"
   apk add --no-cache rclone >/dev/null || echo "[respaldo] no se pudo instalar rclone; los respaldos quedan solo en el disco" >&2
 fi
+
+# Los buzones son carpetas Maildir: un correo, un archivo, y nunca se
+# reescriben. Empaquetarlos con el servidor andando es seguro —lo peor que
+# pasa es que un correo que llegó en ese segundo quede para el respaldo de
+# mañana—, y es lo que recomienda la documentación de docker-mailserver.
+respaldar_correo() {
+  hoy="$1"
+  if [ "${CORREO_RESPALDO:-si}" = "no" ] || [ -z "$(ls -A /correo/config 2>/dev/null)" ]; then
+    return 0
+  fi
+
+  destino="$CARPETA/correo-$hoy.tar.gz"
+  temporal="$destino.parcial"
+  echo "[respaldo] empaquetando el correo en $destino"
+  # Los sockets de Postfix y Rspamd no son datos: existen mientras el
+  # servidor corre, y al restaurar se vuelven a crear.
+  if tar -czf "$temporal" -C /correo \
+    --exclude 'estado/spool-postfix/private' --exclude 'estado/spool-postfix/public' --exclude '*.sock' \
+    buzones estado config && tar -tzf "$temporal" >/dev/null; then
+    mv "$temporal" "$destino"
+    echo "[respaldo] correo listo: $(du -h "$destino" | cut -f1)"
+  else
+    echo "[respaldo] FALLÓ el respaldo del correo de $hoy" >&2
+    rm -f "$temporal"
+  fi
+}
 
 respaldar() {
   hoy="$(date +%Y-%m-%d)"
@@ -58,15 +92,22 @@ respaldar() {
   mv "$temporal" "$destino"
   echo "[respaldo] listo: $(du -h "$destino" | cut -f1)"
 
+  respaldar_correo "$hoy"
+
   # Los de hace más de DIAS días se borran, incluidos los que deja
   # `desplegar.sh` antes de cada migración.
   find "$CARPETA" -name "mjbj-*.dump" -mtime +"$DIAS" -delete
+  find "$CARPETA" -name "correo-*.tar.gz" -mtime +"$DIAS" -delete
   find "$CARPETA" -name "antes-de-migrar-*.dump" -mtime +"$DIAS" -delete
 
   if [ -n "${RCLONE_REMOTE:-}" ] && command -v rclone >/dev/null 2>&1; then
     if rclone copyto "$destino" "$RCLONE_REMOTE/mjbj-$hoy.dump"; then
       echo "[respaldo] copiado a $RCLONE_REMOTE"
-      rclone delete "$RCLONE_REMOTE" --min-age "${RCLONE_DIAS:-90}d" --include "mjbj-*.dump" ||
+      if [ -f "$CARPETA/correo-$hoy.tar.gz" ]; then
+        rclone copyto "$CARPETA/correo-$hoy.tar.gz" "$RCLONE_REMOTE/correo-$hoy.tar.gz" ||
+          echo "[respaldo] FALLÓ la copia del correo a $RCLONE_REMOTE" >&2
+      fi
+      rclone delete "$RCLONE_REMOTE" --min-age "${RCLONE_DIAS:-90}d" --include "mjbj-*.dump" --include "correo-*.tar.gz" ||
         echo "[respaldo] no se pudieron borrar los viejos de $RCLONE_REMOTE" >&2
     else
       echo "[respaldo] FALLÓ la copia a $RCLONE_REMOTE; el respaldo local está" >&2

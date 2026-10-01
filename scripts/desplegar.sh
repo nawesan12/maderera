@@ -114,6 +114,26 @@ fi
 echo "→ Levantando el resto"
 "${COMPOSE[@]}" up -d --no-deps web respaldo cron
 
+# El correo propio solo si está encendido (`COMPOSE_PROFILES=correo` en
+# $ENTORNO). Nombrarlo en `up` lo encendería aunque el perfil esté apagado: por
+# eso se pregunta antes qué servicios ve el compose.
+if "${COMPOSE[@]}" config --services | grep -qx correo; then
+  echo "→ Levantando el correo"
+  "${COMPOSE[@]}" up -d --no-deps correo webmail
+
+  # **La primera vez, el servidor de correo se apaga si en dos minutos no
+  # tiene ninguna casilla** (y vuelve a arrancar y a esperar, en bucle). Se
+  # avisa acá, que es donde alguien está mirando.
+  sleep 5
+  if ! "${COMPOSE[@]}" exec -T correo test -s /tmp/docker-mailserver/postfix-accounts.cf 2>/dev/null; then
+    echo
+    echo "  El correo no tiene casillas todavía. En los próximos dos minutos:"
+    dominio="$(grep -E '^DOMINIO=' "$ENTORNO" | tail -n1 | cut -d= -f2- | tr -d '"')"
+    echo "    scripts/correo.sh alta postmaster@${dominio}"
+    echo "  Ver «Correo propio» en docs/SERVIDOR-PROPIO.md."
+  fi
+fi
+
 echo "→ Limpiando imágenes viejas"
 docker image prune -f >/dev/null
 

@@ -69,8 +69,14 @@ if docker image inspect mjbj-app:latest >/dev/null 2>&1; then
   docker image tag mjbj-app:latest mjbj-app:anterior
 fi
 
-echo "→ Construyendo las imágenes"
-"${COMPOSE[@]}" --profile herramientas build app migrador
+# Primero el migrador y la migración, después la aplicación. El build de la
+# aplicación prerenderiza páginas que leen la base: si el código nuevo lee una
+# columna que trae la migración, construirlo contra el esquema viejo falla. Al
+# revés el riesgo es menor —la versión que sigue corriendo convive un par de
+# minutos con columnas que no conoce—, y si el build falla después de migrar,
+# la anterior sigue sirviendo.
+echo "→ Construyendo el migrador"
+"${COMPOSE[@]}" --profile herramientas build migrador
 
 echo "→ Respaldando la base antes de migrar"
 mkdir -p respaldos
@@ -87,6 +93,13 @@ if ! "${COMPOSE[@]}" --profile herramientas run --rm migrador; then
   exit 1
 fi
 
+echo "→ Construyendo la aplicación"
+if ! "${COMPOSE[@]}" build app; then
+  echo >&2
+  echo "El build FALLÓ después de migrar. La aplicación anterior sigue corriendo." >&2
+  exit 1
+fi
+
 echo "→ Cambiando la aplicación por la nueva"
 # `--wait` espera a que el chequeo de salud dé bien: si la imagen nueva no
 # arranca —por ejemplo, porque falta APP_URL—, el script termina con error y
@@ -99,7 +112,7 @@ if ! "${COMPOSE[@]}" up -d --no-deps --wait --wait-timeout 180 app; then
 fi
 
 echo "→ Levantando el resto"
-"${COMPOSE[@]}" up -d --no-deps web respaldo
+"${COMPOSE[@]}" up -d --no-deps web respaldo cron
 
 echo "→ Limpiando imágenes viejas"
 docker image prune -f >/dev/null

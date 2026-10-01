@@ -7,16 +7,53 @@ import { randomUUID } from "node:crypto";
 /**
  * Guardado de archivos subidos.
  *
- * En desarrollo escribe en `public/subidas`, que Next sirve directamente. En
- * producción usa Vercel Blob, porque el sistema de archivos de un servidor
- * serverless no persiste entre despliegues: una foto subida el martes
- * desaparecería con el deploy del miércoles.
+ * Hay dos destinos posibles y las páginas no saben cuál está activo: piden
+ * guardar y reciben una URL.
  *
- * Las páginas no saben cuál de los dos está activo: piden guardar y reciben una
- * URL.
+ * - **Disco**, que es el modo por defecto. En desarrollo escribe en
+ *   `public/subidas`, que Next sirve solo. En el servidor propio se apunta
+ *   `CARPETA_SUBIDAS` a un volumen que sobrevive al despliegue, y la URL
+ *   guardada es la misma: `/subidas/<nombre>`.
+ * - **Vercel Blob**, si hay `BLOB_READ_WRITE_TOKEN`. Hace falta cuando la app
+ *   corre sin disco propio: el sistema de archivos de un servidor serverless no
+ *   persiste entre despliegues, y una foto subida el martes desaparecería con
+ *   el deploy del miércoles.
+ *
+ * **Por qué la carpeta es una variable y no `public/subidas` a secas.** Con
+ * `output: "standalone"` lo que se escribe dentro de `public/` en tiempo de
+ * ejecución no se sirve —Next arma la lista de archivos públicos al arrancar—
+ * y encima se pierde al reconstruir la imagen. Fuera de `public/`, la foto la
+ * sirve Caddy directo del volumen y, para `next/image`, la ruta
+ * `app/api/subidas/[archivo]` (ver `next.config.ts`).
  */
 
-const CARPETA_LOCAL = path.join(process.cwd(), "public", "subidas");
+const CARPETA_LOCAL =
+  process.env.CARPETA_SUBIDAS || path.join(process.cwd(), "public", "subidas");
+
+/**
+ * La ruta en disco de un archivo subido.
+ *
+ * El comentario de adentro le dice al empaquetador que no siga esta ruta. Con
+ * la variable de entorno adelante no puede saber a qué carpeta apunta, y sin
+ * el aviso incluía el proyecto entero en el servidor `standalone`. Por eso
+ * todo acceso al disco pasa por acá y no por un `path.join` suelto.
+ */
+export function rutaDeSubida(nombre: string): string {
+  return path.join(/*turbopackIgnore: true*/ CARPETA_LOCAL, nombre);
+}
+
+/**
+ * El nombre de archivo de una URL `/subidas/…`, o `null` si no es una.
+ *
+ * Solo el último tramo y solo caracteres de los que genera este módulo
+ * (`prefijo-uuid.ext`): es lo que impide que `/subidas/..%2F..%2Fetc%2Fpasswd`
+ * termine leyendo fuera de la carpeta.
+ */
+export function nombreDeSubida(nombre: string): string | null {
+  const limpio = path.basename(nombre);
+  if (limpio !== nombre) return null;
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/.test(limpio) ? limpio : null;
+}
 
 /** Formatos que aceptamos. El navegador puede mentir, así que además se mira el contenido. */
 const TIPOS = new Map([
@@ -85,8 +122,8 @@ export async function guardarImagen(
     return { url: subido.url };
   }
 
-  await mkdir(CARPETA_LOCAL, { recursive: true });
-  await writeFile(path.join(CARPETA_LOCAL, nombre), bytes);
+  await mkdir(/*turbopackIgnore: true*/ CARPETA_LOCAL, { recursive: true });
+  await writeFile(rutaDeSubida(nombre), bytes);
 
   return { url: `/subidas/${nombre}` };
 }
@@ -95,7 +132,7 @@ export async function guardarImagen(
 export async function borrarImagen(url: string): Promise<void> {
   try {
     if (url.startsWith("/subidas/")) {
-      await unlink(path.join(CARPETA_LOCAL, path.basename(url)));
+      await unlink(rutaDeSubida(path.basename(url)));
       return;
     }
 
@@ -174,8 +211,8 @@ export async function guardarAdjunto(
     return { url: subido.url };
   }
 
-  await mkdir(CARPETA_LOCAL, { recursive: true });
-  await writeFile(path.join(CARPETA_LOCAL, nombre), bytes);
+  await mkdir(/*turbopackIgnore: true*/ CARPETA_LOCAL, { recursive: true });
+  await writeFile(rutaDeSubida(nombre), bytes);
 
   return { url: `/subidas/${nombre}` };
 }

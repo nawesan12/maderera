@@ -46,6 +46,11 @@ export function hayMercadoPago(): boolean {
  * Mercado Pago necesita URLs absolutas y alcanzables desde afuera, así que esto
  * no puede salir de la request: en desarrollo la request dice `localhost`, que
  * para Mercado Pago no existe.
+ *
+ * Las URLs de Vercel son un respaldo que solo existe en la plataforma. En un
+ * servidor propio no hay de dónde adivinar el dominio, y por eso ahí `APP_URL`
+ * es obligatoria: si falta, el servidor no arranca (ver `lib/entorno.ts`) en
+ * vez de caer al `localhost` de abajo y mandar a Mercado Pago a ninguna parte.
  */
 export function urlBase(): string {
   const explicita = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;

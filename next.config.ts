@@ -7,12 +7,29 @@ import type { NextConfig } from "next";
  * eso el archivo nunca cambia byte a byte, no se reinstala nunca y el punto de
  * venta se queda con el shell del día que se instaló.
  *
- * En Vercel sale del commit; en local, de la hora del build.
+ * Sale del commit: en el servidor propio lo pasa `scripts/desplegar.sh` como
+ * `GIT_SHA` —adentro del build de Docker no hay `.git` del que leerlo—, y en
+ * Vercel lo pone la plataforma. En local, de la hora del build.
  */
 const idDeBuild =
-  process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? `local-${Date.now()}`;
+  (process.env.GIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA)?.slice(0, 12) ||
+  `local-${Date.now()}`;
 
 const nextConfig: NextConfig = {
+  /**
+   * Empaquetado para servidor propio.
+   *
+   * `standalone` deja en `.next/standalone` un servidor con solo las
+   * dependencias que se usan, en vez de arrastrar `node_modules` entero: la
+   * imagen de Docker pasa de cientos de megas a unas decenas, y eso es lo que
+   * permite reconstruirla y desplegarla en una máquina chica sin que tarde una
+   * eternidad.
+   *
+   * Vercel lo ignora —arma su propio empaquetado—, así que tenerlo acá no
+   * cambia nada mientras el proyecto siga ahí.
+   */
+  output: "standalone",
+
   generateBuildId: () => idDeBuild,
   env: { NEXT_PUBLIC_BUILD_ID: idDeBuild },
 
@@ -62,6 +79,27 @@ const nextConfig: NextConfig = {
     ];
   },
 
+  /**
+   * Los archivos subidos que no están en `public/`.
+   *
+   * En el servidor propio viven en un volumen (`CARPETA_SUBIDAS`). Al navegador
+   * se los da Caddy, pero `next/image` se los pide a la propia aplicación y
+   * por adentro, sin pasar por Caddy; ver `app/api/subidas/[archivo]/route.ts`.
+   *
+   * Va en `fallback` y no antes: así un archivo que sí está en `public/subidas`
+   * —el caso de desarrollo— lo sigue sirviendo Next como siempre, y la ruta
+   * solo atiende lo que no encontró.
+   */
+  async rewrites() {
+    return {
+      beforeFiles: [],
+      afterFiles: [],
+      fallback: [
+        { source: "/subidas/:archivo", destination: "/api/subidas/:archivo" },
+      ],
+    };
+  },
+
   async headers() {
     return [
       {
@@ -99,6 +137,15 @@ const nextConfig: NextConfig = {
        * `s-maxage` es cuánto vale la copia guardada; `stale-while-revalidate`,
        * que mientras se rehace se sigue entregando la que hay en vez de hacer
        * esperar a nadie.
+       *
+       * **En el servidor propio esto no hace nada, y no rompe nada.** Caddy no
+       * guarda copias: las dos cabeceras de CDN pasan hasta el navegador, que
+       * las ignora, y el catálogo y el stock se arman en cada pedido. Lo que
+       * evita que eso sea caro es lo de abajo: los datos salen de
+       * `unstable_cache` con etiqueta (`lib/cache-publico.ts`), así que armar
+       * la página no vuelve a consultar la base. Si algún día se pone un CDN
+       * adelante —Cloudflare, por ejemplo—, `CDN-Cache-Control` es la que va a
+       * leer.
        */
       ...["/catalogo", "/stock"].map((source) => ({
         source,
@@ -132,6 +179,16 @@ const nextConfig: NextConfig = {
        * - `Permissions-Policy`: el sitio no usa cámara, micrófono ni ubicación;
        *   decirlo explícitamente es que tampoco los pueda pedir un script que
        *   entre por donde sea.
+       * - `Strict-Transport-Security`: que el navegador no vuelva a intentar por
+       *   `http://`. Vercel la ponía sola en sus dominios; en el servidor propio
+       *   nadie la pone si no está acá. Va sin `includeSubDomains` a propósito:
+       *   no sabemos qué otros subdominios tiene el dominio de la empresa —un
+       *   correo, un sistema viejo— y esa opción los obligaría a todos a HTTPS
+       *   por dos años. En `http://localhost` el navegador la ignora.
+       *
+       * **Viven solo acá**, también en el servidor propio: Caddy no agrega
+       * ninguna. Tenerlas en dos lados es la forma de que un día digan cosas
+       * distintas y nadie sepa cuál gana.
        */
       {
         source: "/:path*",
@@ -143,6 +200,7 @@ const nextConfig: NextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=(), payment=()",
           },
+          { key: "Strict-Transport-Security", value: "max-age=63072000" },
         ],
       },
     ];
@@ -181,7 +239,9 @@ const nextConfig: NextConfig = {
       /*
        * Las fotos que se suben desde el panel, en Vercel Blob. Faltaba: la
        * primera foto de producto cargada en producción iba a salir rota en
-       * `next/image`, que rechaza todo host que no esté acá (1/10/2026).
+       * `next/image`, que rechaza todo host que no esté acá (1/10/2026). En el
+       * servidor propio las muda `scripts/mudar-subidas.ts`; hasta que se
+       * corra, sus URLs siguen apuntando acá.
        */
       {
         protocol: "https",

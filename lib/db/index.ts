@@ -12,14 +12,56 @@ if (!process.env.DATABASE_URL) {
 // se guarda en globalThis para no abrir una conexión nueva por recarga.
 const globalForDb = globalThis as unknown as { pool?: Pool };
 
+/**
+ * Si la conexión va cifrada.
+ *
+ * Neon lo exige; un Postgres en la misma máquina no lo tiene configurado y
+ * rechaza el intento con «the server does not support SSL connections».
+ *
+ * Se decidía mirando si la URL decía `localhost`, y eso alcanzaba mientras las
+ * dos únicas opciones fueran Neon o el Docker de desarrollo. Deja de alcanzar
+ * apenas la base corre en otro contenedor: la aplicación se conecta a `db:5432`
+ * —el nombre del servicio—, que no dice `localhost`, así que intentaba cifrar
+ * contra un servidor que no puede y no arrancaba.
+ *
+ * Ahora se puede decir explícitamente con `DATABASE_SSL`. Sin esa variable
+ * queda la regla vieja, para no tocar lo que ya funciona.
+ */
+function usaSsl(url: string): boolean {
+  const declarado = process.env.DATABASE_SSL?.trim().toLowerCase();
+  if (declarado === "true" || declarado === "on") return true;
+  if (declarado === "false" || declarado === "off") return false;
+
+  return !url.includes("localhost") && !url.includes("127.0.0.1");
+}
+
+/**
+ * El techo de conexiones, con diez si nadie dice otra cosa.
+ *
+ * Ver el comentario de `max` abajo para por qué diez. Se puede subir con
+ * `DATABASE_POOL_MAX` sin tocar código; el caso es el servidor propio, donde
+ * hay **una sola instancia** de la aplicación contra un Postgres que acepta
+ * cien conexiones y no hay pooler adelante. Ahí diez sigue alcanzando para el
+ * tráfico de hoy, pero si algún día se ve «timeout exceeded when trying to
+ * connect» con la base tranquila, este es el número que hay que mover —sin
+ * pasar de unas setenta, para dejarles lugar a los respaldos y a las
+ * migraciones—.
+ *
+ * Un valor que no es un entero positivo se ignora: un error de tipeo en el
+ * `.env` no puede dejar a la aplicación sin conexiones.
+ */
+function maximoDeConexiones(): number {
+  const declarado = Number.parseInt(process.env.DATABASE_POOL_MAX ?? "", 10);
+  return Number.isInteger(declarado) && declarado > 0 ? declarado : 10;
+}
+
 const pool =
   globalForDb.pool ??
   new Pool({
     connectionString: process.env.DATABASE_URL,
-    // Neon exige SSL; el Postgres local de Docker no lo tiene configurado.
-    ssl: process.env.DATABASE_URL.includes("localhost")
-      ? false
-      : { rejectUnauthorized: true },
+    ssl: usaSsl(process.env.DATABASE_URL)
+      ? { rejectUnauthorized: true }
+      : false,
 
     /*
      * Cuántas conexiones abre cada instancia.
@@ -38,7 +80,7 @@ const pool =
      * techo que se quería cuidar lo cuida él. Si algún día hay que bajarlo,
      * medir antes cuántas consultas en paralelo hace la página más pesada.
      */
-    max: 10,
+    max: maximoDeConexiones(),
 
     /*
      * Y las que no se usan se sueltan. Entre el pico de la mañana en el

@@ -12,6 +12,7 @@
  * llega gente al local a una hora en que está cerrado.
  */
 
+import { entornoDeDespliegue } from "@/lib/entorno";
 import type { StockLevel } from "@/lib/stock-level";
 
 /**
@@ -38,9 +39,15 @@ export function urlAbsoluta(ruta: string): string {
  * queda publicada en una URL real, Google las encuentra, y el sitio termina
  * compitiendo consigo mismo con seis copias del catálogo. Solo producción se
  * indexa.
+ *
+ * El entorno sale de `VERCEL_ENV` en la plataforma y de `APP_ENV` en un
+ * servidor propio (ver `lib/entorno.ts`). **Ojo con el servidor propio:** la
+ * respuesta se hornea en el build —`robots.txt` es estático—, así que
+ * `APP_ENV` y `SEO_INDEXAR` tienen que estar cuando se construye la imagen, no
+ * solo cuando arranca. El compose los pasa como argumentos de build.
  */
 export function sitioIndexable(): boolean {
-  const entorno = process.env.VERCEL_ENV;
+  const entorno = entornoDeDespliegue();
   if (entorno && entorno !== "production") return false;
   return process.env.SEO_INDEXAR !== "no";
 }

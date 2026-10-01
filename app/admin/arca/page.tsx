@@ -20,6 +20,10 @@ import {
 } from "@/lib/dal/admin/facturacion";
 import { libroIvaCompras } from "@/lib/dal/admin/compras-fiscal";
 import { daCreditoFiscal } from "@/lib/fiscal/comprobantes-compra";
+import {
+  hayCertificadoArca,
+  hayClaveArca,
+} from "@/lib/fiscal/proveedores/config-arca";
 import { listarSucursales } from "@/lib/dal/admin/inventory";
 import { FormularioEmisor } from "./emisor";
 import { PuntosDeVenta } from "./puntos-venta";
@@ -140,14 +144,14 @@ export default async function ArcaPage() {
               detalle="Se habilita en la página de ARCA eligiendo la modalidad «Webservices» —así la llaman ellos— y después se carga acá con el mismo número."
             />
             <Paso
-              hecho={Boolean(process.env.ARCA_CERTIFICADO)}
+              hecho={hayCertificadoArca()}
               titulo="Generar el certificado digital"
               detalle="Se tramita con clave fiscal. Para probar alcanza con uno de homologación, que es gratis y sale online."
             />
             <Paso
-              hecho={Boolean(process.env.ARCA_CLAVE_PRIVADA)}
+              hecho={hayClaveArca()}
               titulo="Pasarle el certificado y la clave a quien mantiene el sistema"
-              detalle="Son dos archivos que se cargan una sola vez y quedan guardados. Dato técnico: las variables ARCA_CERTIFICADO y ARCA_CLAVE_PRIVADA, en formato PEM o base64."
+              detalle="Son dos archivos que se cargan una sola vez y quedan guardados. Dato técnico: las variables ARCA_CERTIFICADO y ARCA_CLAVE_PRIVADA en PEM o base64, o en el servidor propio los archivos arca.crt y arca.key de la carpeta secretos/arca/."
             />
           </ol>
         )}

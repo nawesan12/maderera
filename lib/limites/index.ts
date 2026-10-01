@@ -66,7 +66,14 @@ export type Accion = keyof typeof LIMITES;
  *
  * En Vercel el primer valor de `x-forwarded-for` lo escribe la plataforma y no
  * se puede falsificar desde afuera; los que siguen sí, por eso se toma solo el
- * primero. Sin IP —en desarrollo, o detrás de algo raro— se usa una constante:
+ * primero. En el servidor propio pasa lo mismo con Caddy: no confía en el
+ * `x-forwarded-for` que trae el cliente y lo **reemplaza** por la IP real de la
+ * conexión, y la aplicación no tiene puerto publicado, así que no hay forma de
+ * hablarle sin pasar por él. Si algún día se pone otro proxy adelante
+ * —Cloudflare—, hay que declararlo en `trusted_proxies` del `Caddyfile`; si
+ * no, todos los pedidos parecen venir de la misma IP del proxy.
+ *
+ * Sin IP —en desarrollo, o detrás de algo raro— se usa una constante:
  * es preferible un límite compartido por todos a no tener ninguno.
  */
 export async function ipDelPedido(): Promise<string> {

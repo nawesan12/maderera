@@ -35,7 +35,8 @@ export type Accion =
   | "presupuesto"
   | "imprimir"
   | "caja"
-  | "cantidad";
+  | "cantidad"
+  | "recibo";
 
 interface Definicion {
   accion: Accion;
@@ -81,6 +82,13 @@ export const ATAJOS: Definicion[] = [
   { accion: "partir", teclas: "Alt + P", texto: "Partir el pago en más de un medio", coincide: alt("KeyP") },
   { accion: "presupuesto", teclas: "Alt + U", texto: "Emitir presupuesto sin cobrar", coincide: alt("KeyU") },
   { accion: "imprimir", teclas: "Alt + I", texto: "Imprimir la última venta", coincide: alt("KeyI") },
+  {
+    accion: "recibo",
+    // R de recibo: cobrarle la cuenta al cliente elegido, con su recibo.
+    teclas: "Alt + R",
+    texto: "Cobrar la cuenta del cliente elegido",
+    coincide: alt("KeyR"),
+  },
   {
     accion: "caja",
     // K y no C: la C es del cliente, que se toca mil veces por día y se lleva
@@ -188,7 +196,8 @@ export type Campo =
   | "tarjeta"
   | "descuento"
   | "cantidad"
-  | "parte";
+  | "parte"
+  | "recibo";
 
 export function enfocar(campo: Campo, centrar = false) {
   const el = document.querySelector<HTMLElement>(`[data-foco="${campo}"]`);

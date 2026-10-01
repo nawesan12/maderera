@@ -1,8 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { moneda } from "@/lib/formato";
+import { medioDeMostradorSchema, pagoDeMostradorSchema } from "@/lib/mostrador/esquemas";
 import { db } from "@/lib/db";
 import { branches, cashMovements, cashSessions } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
@@ -20,9 +23,16 @@ import {
 import { emitirParaLaVenta, letraQueSaldria } from "@/lib/mostrador/comprobante";
 import { ErrorDeEntrega, remitoDeConstancia } from "@/lib/entregas";
 import { siguienteNumeroDePresupuesto } from "@/lib/dal/numeracion-ventas";
+import { leerDocumento } from "@/lib/clientes/documento";
+import { clientePorDocumento, crearClienteRapido } from "@/lib/clientes/alta";
+import { ErrorDeCobro, emitirRecibo } from "@/lib/cobros/recibo";
+import { leerPartes } from "@/lib/cobros/leer";
+import { saldoDelCliente } from "@/lib/dal/historial-cliente";
+import { notificarRecibo } from "@/lib/notificaciones/cobros";
 import { customers, quoteItems, quotes } from "@/lib/db/schema";
 import {
   buscarClienteEnMostrador,
+  clientesRecientesDeLaSucursal,
   buscarParaMostrador,
   preciosPara,
 } from "@/lib/mostrador/buscar";
@@ -58,22 +68,7 @@ const lineaSchema = z.object({
   presentacion: z.enum(["media_largo", "media_ancho"]).nullable().optional(),
 });
 
-const pagoSchema = z.object({
-  medio: z.enum([
-    "efectivo",
-    "debito",
-    "credito",
-    "transferencia",
-    "cuenta_corriente",
-  ]),
-  importe: z.number().positive(),
-  /** Lote y cupón de la terminal: el "código de que se pagó con qué". */
-  nroLote: z.string().max(20).nullable().optional(),
-  nroCupon: z.string().max(20).nullable().optional(),
-  /* En cuántas cuotas. No cambia el importe; ver `PagoDeVenta`. */
-  cuotas: z.coerce.number().int().min(1).max(24).nullable().optional(),
-  tarjeta: z.string().max(40).nullable().optional(),
-});
+const pagoSchema = pagoDeMostradorSchema;
 
 const ventaSchema = z.object({
   clave: z.string().uuid(),
@@ -82,13 +77,7 @@ const ventaSchema = z.object({
   customerId: z.string().uuid().nullable(),
   contactoNombre: z.string().min(1),
   contactoTelefono: z.string().nullable().optional(),
-  medioPago: z.enum([
-    "efectivo",
-    "debito",
-    "credito",
-    "transferencia",
-    "cuenta_corriente",
-  ]),
+  medioPago: medioDeMostradorSchema,
   /** Cómo se pagó, si se partió en más de un medio. Vacío = todo por medioPago. */
   pagos: z.array(pagoSchema).max(4).optional(),
   /** La venta queda en acopio: se cobra, el stock se reserva y no se entrega. */
@@ -499,6 +488,117 @@ export async function buscarClientes(texto: string) {
   return buscarClienteEnMostrador(texto);
 }
 
+/** Los últimos clientes atendidos en la sucursal, para la caja vacía. */
+export async function clientesRecientes(branchId: string) {
+  await requireStaff();
+  if (!z.string().uuid().safeParse(branchId).success) return [];
+  return clientesRecientesDeLaSucursal(branchId);
+}
+
+export type ResultadoAltaRapida =
+  | { ok: true; cliente: Awaited<ReturnType<typeof crearClienteRapido>> }
+  | { ok: false; error: string; existente?: { id: string; nombre: string } };
+
+/**
+ * Alta de un cliente sin salir de la venta.
+ *
+ * De la clienta (30/9/2026): «hacer eficiencia al momento de cargar clientes
+ * en caja». Hasta acá un cliente nuevo obligaba a ir al panel, cargar la ficha
+ * y volver a buscarlo, con la persona esperando. Ahora se crea con lo justo
+ * —nombre, documento, IVA, teléfono, rubro— y queda elegido.
+ *
+ * Si el documento ya está en otra ficha, **no** se crea: se ofrece la que
+ * existe. Una segunda ficha de la misma persona parte su cuenta corriente en
+ * dos, y eso se descubre recién cuando se le reclama una deuda.
+ */
+export async function crearClienteEnMostrador(datos: {
+  nombre: string;
+  documento: string;
+  condicionIva: string;
+  telefono?: string;
+  rubro?: string;
+}): Promise<ResultadoAltaRapida> {
+  const usuario = await requireStaff();
+
+  const parsed = z
+    .object({
+      nombre: z.string().trim().min(2, "Poné el nombre o la razón social.").max(160),
+      documento: z.string().trim().max(20),
+      condicionIva: z.enum([
+        "responsable_inscripto",
+        "monotributista",
+        "exento",
+        "consumidor_final",
+        "no_categorizado",
+      ]),
+      telefono: z.string().trim().max(40).optional(),
+      rubro: z.string().trim().max(40).optional(),
+    })
+    .safeParse(datos);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
+  }
+
+  const documento = leerDocumento(parsed.data.documento);
+  if ("error" in documento) return { ok: false, error: documento.error };
+
+  // A una factura A le hace falta el CUIT: sin él, la venta va a fallar al
+  // cobrar, con el cliente ya elegido.
+  if (parsed.data.condicionIva === "responsable_inscripto" && documento.tipo !== "cuit") {
+    return { ok: false, error: "Un responsable inscripto necesita el CUIT para la factura A." };
+  }
+
+  const existente = await clientePorDocumento(db, documento);
+  if (existente) {
+    return {
+      ok: false,
+      error: `Ese documento ya es de ${existente.nombre}.`,
+      existente,
+    };
+  }
+
+  const cliente = await crearClienteRapido(db, {
+    nombre: parsed.data.nombre,
+    documento,
+    condicionIva: parsed.data.condicionIva,
+    telefono: parsed.data.telefono,
+    rubro: parsed.data.rubro,
+    notas: "Ficha creada en el mostrador.",
+  });
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "crear",
+    entidad: "cliente",
+    entidadId: cliente.id,
+    descripcion: `Dio de alta a ${cliente.nombre} desde el mostrador`,
+  });
+
+  revalidatePath("/admin/clientes");
+  return { ok: true, cliente };
+}
+
+/** Un cliente por id, con lo que necesita la venta. Lo usa «usar el existente». */
+export async function clientePorId(id: string) {
+  await requireStaff();
+  if (!z.string().uuid().safeParse(id).success) return null;
+  const [fila] = await db
+    .select({
+      id: customers.id,
+      nombre: customers.nombre,
+      razonSocial: customers.razonSocial,
+      cuit: customers.cuit,
+      condicionIva: customers.condicionIva,
+      estado: customers.estado,
+      priceListId: customers.priceListId,
+      direccion: customers.direccion,
+    })
+    .from(customers)
+    .where(eq(customers.id, id))
+    .limit(1);
+  return fila ?? null;
+}
+
 /**
  * Los precios que le corresponden a un cliente para las variantes ya cargadas.
  *
@@ -700,4 +800,92 @@ export async function anularVenta(
       ? "La venta tenía factura. Emitile la nota de crédito desde Facturación."
       : undefined,
   };
+}
+
+/** Lo que debe un cliente, para ofrecer cobrarle la cuenta en el mostrador. */
+export async function saldoDeCuenta(customerId: string): Promise<number> {
+  await requireStaff();
+  if (!z.string().uuid().safeParse(customerId).success) return 0;
+  return saldoDelCliente(customerId);
+}
+
+export interface EstadoCobroDeCuenta {
+  ok?: string;
+  error?: string;
+  receiptId?: string;
+  numero?: string;
+}
+
+/**
+ * Cobra la cuenta corriente de un cliente en el mostrador y emite el recibo.
+ *
+ * Hasta acá no había cómo: el cliente que venía a pagar lo que debía tenía que
+ * esperar que alguien abriera la ficha en el panel. Ahora se cobra desde la
+ * misma pantalla de venta, con los mismos medios —efectivo, transferencia,
+ * cheques—, el efectivo entra al turno abierto y el recibo sale impreso.
+ *
+ * Usa `emitirRecibo`, que es la única forma de registrar un pago.
+ */
+export async function cobrarCuentaEnMostrador(
+  _previo: EstadoCobroDeCuenta,
+  formData: FormData,
+): Promise<EstadoCobroDeCuenta> {
+  const usuario = await requireStaff();
+
+  const ids = z
+    .object({ customerId: z.string().uuid(), branchId: z.string().uuid() })
+    .safeParse({ customerId: formData.get("customerId"), branchId: formData.get("branchId") });
+  if (!ids.success) return { error: "Falta el cliente." };
+
+  const leidas = leerPartes(formData.get("partes"));
+  if ("error" in leidas) return { error: leidas.error };
+
+  try {
+    const recibo = await db.transaction(async (tx) => {
+      const hayEfectivo = leidas.partes.some((p) => p.medio === "efectivo");
+      const [turno] = await tx
+        .select({ id: cashSessions.id })
+        .from(cashSessions)
+        .where(and(eq(cashSessions.branchId, ids.data.branchId), eq(cashSessions.estado, "abierta")))
+        .limit(1);
+
+      // El efectivo de un cobro es plata en el cajón: sin turno abierto no
+      // tiene dónde entrar y el arqueo del día no cerraría.
+      if (hayEfectivo && !turno) {
+        throw new ErrorDeCobro("No hay caja abierta: abrila para cobrar en efectivo.");
+      }
+
+      return emitirRecibo(tx, {
+        customerId: ids.data.customerId,
+        branchId: ids.data.branchId,
+        origen: "mostrador",
+        concepto: "Pago de cuenta corriente",
+        partes: leidas.partes,
+        caja: turno ? { turnoId: turno.id } : null,
+        usuarioId: usuario.userId,
+      });
+    });
+
+    await registrarEnBitacora({
+      sesion: usuario,
+      accion: "cobrar",
+      entidad: "cliente",
+      entidadId: ids.data.customerId,
+      descripcion: `Cobró la cuenta en el mostrador con el recibo ${recibo.numero} por ${recibo.total.toFixed(2)}`,
+      detalle: { receiptId: recibo.receiptId },
+    });
+
+    after(() => notificarRecibo(recibo.receiptId));
+    revalidatePath("/admin/clientes");
+    revalidatePath("/admin/caja");
+
+    return {
+      ok: `Recibo ${recibo.numero} por ${moneda.format(recibo.total)}.`,
+      receiptId: recibo.receiptId,
+      numero: recibo.numero,
+    };
+  } catch (error) {
+    if (error instanceof ErrorDeCobro) return { error: error.message };
+    throw error;
+  }
 }

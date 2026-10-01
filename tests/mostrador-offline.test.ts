@@ -124,8 +124,11 @@ describe("buscar clientes", () => {
     expect(buscarClientesLocal(clientes, "30712345678")[0].id).toBe("a");
   });
 
-  it("ordena por nombre", () => {
-    expect(buscarClientesLocal(clientes, "a").map((c) => c.id)).toEqual(["b", "a"]);
+  it("devuelve todos los que coinciden y deja el orden para `ordenarClientes`", () => {
+    // Antes ordenaba alfabéticamente y recortaba a ocho: con muchos
+    // parecidos, el cliente exacto quedaba afuera antes de que nadie lo
+    // ordenara. El orden ahora es uno solo, en `lib/mostrador/ranking-clientes`.
+    expect(buscarClientesLocal(clientes, "a").map((c) => c.id).sort()).toEqual(["a", "b"]);
   });
 });
 

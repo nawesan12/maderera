@@ -9,6 +9,7 @@ const MEDIOS: Record<string, string> = {
   transferencia: "Transferencia",
   cuenta_corriente: "Cuenta corriente",
   mercado_pago: "Mercado Pago",
+  cheque: "Cheque",
 };
 
 /**
@@ -142,10 +143,13 @@ export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
             {documento.pagos
               .filter((p) => p.nroLote || p.nroCupon)
               .map((p) =>
-                [
-                  p.nroLote ? `Lote ${p.nroLote}` : null,
-                  p.nroCupon ? `Cupón ${p.nroCupon}` : null,
-                ]
+                // En un cheque, el «cupón» es su número: así se lo busca en el banco.
+                p.medio === "cheque"
+                  ? [p.nroCupon ? `Cheque N° ${p.nroCupon}` : null]
+                  : [
+                      p.nroLote ? `Lote ${p.nroLote}` : null,
+                      p.nroCupon ? `Cupón ${p.nroCupon}` : null,
+                    ]
                   .filter(Boolean)
                   .join(" · "),
               )

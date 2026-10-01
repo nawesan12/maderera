@@ -25,6 +25,7 @@ const MEDIOS: Record<string, string> = {
   transferencia: "Transferencia",
   efectivo: "Efectivo",
   cuenta_corriente: "Cuenta corriente",
+  cheque: "Cheque",
 };
 
 export default async function FichaPedidoPage({

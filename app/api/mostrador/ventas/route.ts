@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { medioDeMostradorSchema, pagoDeMostradorSchema } from "@/lib/mostrador/esquemas";
 import { registrarVentaDeMostrador } from "@/lib/mostrador/venta";
 import { emitirParaLaVenta } from "@/lib/mostrador/comprobante";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
@@ -38,30 +39,10 @@ const ventaSchema = z.object({
   customerId: z.string().uuid().nullable(),
   contactoNombre: z.string().min(1),
   contactoTelefono: z.string().nullable().optional(),
-  medioPago: z.enum([
-    "efectivo",
-    "debito",
-    "credito",
-    "transferencia",
-    "cuenta_corriente",
-  ]),
+  medioPago: medioDeMostradorSchema,
   /** Cómo se pagó si se partió en varios medios. Vacío = todo por medioPago. */
   pagos: z
-    .array(
-      z.object({
-        medio: z.enum([
-          "efectivo",
-          "debito",
-          "credito",
-          "transferencia",
-          "cuenta_corriente",
-        ]),
-        importe: z.number().positive(),
-        nroLote: z.string().max(20).nullable().optional(),
-        nroCupon: z.string().max(20).nullable().optional(),
-        tarjeta: z.string().max(40).nullable().optional(),
-      }),
-    )
+    .array(pagoDeMostradorSchema)
     .max(4)
     .optional(),
   /** La venta quedó en acopio: reservar en vez de entregar al sincronizar. */

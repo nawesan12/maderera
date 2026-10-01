@@ -160,6 +160,12 @@ export const medioPago = pgEnum("medio_pago", [
   "debito",
   "credito",
   "cuenta_corriente",
+  /**
+   * Cheque o e-Cheq, en el mostrador (30/9/2026). El cheque en sí —banco,
+   * número, fecha— vive en `cheques`, atado a este renglón por
+   * `cheques.orderPaymentId`, y entra a la cartera al cobrar.
+   */
+  "cheque",
 ]);
 
 export const estadoPago = pgEnum("estado_pago", [

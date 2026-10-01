@@ -1,3 +1,5 @@
+import { revisarNumeroDeCheque } from "@/lib/cheques/numero";
+
 /**
  * Las reglas de una venta de mostrador, sin base de datos.
  *
@@ -12,7 +14,21 @@ export type MedioDeMostrador =
   | "debito"
   | "credito"
   | "transferencia"
-  | "cuenta_corriente";
+  | "cuenta_corriente"
+  | "cheque";
+
+/**
+ * El cheque con el que se paga una venta: lo que lo identifica en el banco.
+ * Entra a la cartera al cobrar, atado al renglón del pago.
+ */
+export interface ChequeDePago {
+  tipo: "fisico" | "echeq";
+  numero: string;
+  banco: string;
+  /** `AAAA-MM-DD`, como lo da el campo de fecha. */
+  fechaPago: string;
+  librador?: string | null;
+}
 
 export interface LineaDeVenta {
   /** Nulo para una línea suelta: un corte, un flete, una diferencia. */
@@ -120,6 +136,8 @@ export interface PagoDeVenta {
    * conciliar contra la liquidación de la terminal.
    */
   cuotas?: number | null;
+  /** Solo para el medio `cheque`. */
+  cheque?: ChequeDePago | null;
 }
 
 /**
@@ -163,6 +181,25 @@ export function revisarPagos(
     return "Para cargar a cuenta corriente hace falta elegir el cliente.";
   }
 
+  for (const p of pagos) {
+    if (p.medio !== "cheque") continue;
+    const problema = revisarChequeDePago(p.cheque);
+    if (problema) return problema;
+  }
+
+  return null;
+}
+
+/**
+ * Qué le falta al cheque de un pago. El número es el pedido de la clienta:
+ * «para que la gente sepa cuál cheque es en el banco».
+ */
+export function revisarChequeDePago(cheque: ChequeDePago | null | undefined): string | null {
+  if (!cheque) return "Faltan los datos del cheque: banco, número y fecha de pago.";
+  const problema = revisarNumeroDeCheque(cheque.numero);
+  if (problema) return problema;
+  if (!cheque.banco.trim()) return "Poné el banco del cheque.";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cheque.fechaPago)) return "Poné la fecha de pago del cheque.";
   return null;
 }
 

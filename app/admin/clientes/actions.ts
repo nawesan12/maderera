@@ -12,6 +12,8 @@ import {
   quotes,
 } from "@/lib/db/schema";
 import { requireStaff, requireStaffRole } from "@/lib/dal/session";
+import { leerDocumento } from "@/lib/clientes/documento";
+import { clientePorDocumento } from "@/lib/clientes/alta";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { parsearImporte } from "@/lib/formato";
 
@@ -102,6 +104,23 @@ export async function guardarCliente(
     notas: d.notas || null,
     updatedAt: new Date(),
   };
+
+  /*
+   * El mismo CUIT en otra ficha.
+   *
+   * Dos fichas de la misma empresa parten su cuenta corriente en dos, y eso
+   * se descubre recién cuando se le reclama una deuda que ya pagó en la otra.
+   * Se busca con y sin guiones, que es como puede haber quedado guardado.
+   */
+  if (campos.cuit) {
+    const documento = leerDocumento(campos.cuit);
+    if (!("error" in documento)) {
+      const otro = await clientePorDocumento(db, documento);
+      if (otro && otro.id !== d.id) {
+        return { error: `Ese CUIT ya es de ${otro.nombre}. Abrí esa ficha en vez de crear otra.` };
+      }
+    }
+  }
 
   let id = d.id;
 

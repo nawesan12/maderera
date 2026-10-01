@@ -1,12 +1,13 @@
 import "server-only";
 
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import {
   categories,
   customers,
   inventory,
+  orders,
   priceListItems,
   priceLists,
   productVariants,
@@ -14,6 +15,7 @@ import {
 } from "@/lib/db/schema";
 import { coincideBusqueda } from "@/lib/busqueda";
 import { factorDeLista } from "@/lib/precios/derivada";
+import { ordenarClientes } from "@/lib/mostrador/ranking-clientes";
 
 /**
  * La búsqueda del mostrador.
@@ -255,7 +257,45 @@ export async function buscarClienteEnMostrador(texto: string) {
         : eq(customers.active, true),
     )
     .orderBy(asc(customers.nombre))
-    .limit(8);
+    // Se traen más de los que se muestran y se ordenan acá: el orden
+    // alfabético dejaba afuera al «García» que se buscaba si había cuarenta.
+    .limit(30)
+    .then((filas) => ordenarClientes(filas, consulta).slice(0, 8));
+}
+
+/**
+ * Los últimos clientes atendidos en una sucursal, para ofrecerlos con la caja
+ * del cliente vacía: el de todos los días se elige con una flecha y Enter.
+ */
+export async function clientesRecientesDeLaSucursal(branchId: string) {
+  const ultimos = await db
+    .select({ id: orders.customerId, cuando: sql<Date>`max(${orders.createdAt})` })
+    .from(orders)
+    .where(and(eq(orders.branchId, branchId), isNotNull(orders.customerId)))
+    .groupBy(orders.customerId)
+    .orderBy(desc(sql`max(${orders.createdAt})`))
+    .limit(6);
+
+  const ids = ultimos.map((u) => u.id).filter((id): id is string => Boolean(id));
+  if (ids.length === 0) return [];
+
+  const filas = await db
+    .select({
+      id: customers.id,
+      nombre: customers.nombre,
+      razonSocial: customers.razonSocial,
+      cuit: customers.cuit,
+      condicionIva: customers.condicionIva,
+      direccion: customers.direccion,
+      estado: customers.estado,
+      limiteCredito: customers.limiteCredito,
+      priceListId: customers.priceListId,
+    })
+    .from(customers)
+    .where(and(eq(customers.active, true), inArray(customers.id, ids)));
+
+  const lugar = new Map(ids.map((id, i) => [id, i]));
+  return filas.sort((a, b) => (lugar.get(a.id) ?? 0) - (lugar.get(b.id) ?? 0));
 }
 
 /**

@@ -129,6 +129,7 @@ const MEDIOS: Record<string, string> = {
   transferencia: "Transferencia bancaria",
   efectivo: "Efectivo",
   cuenta_corriente: "Cuenta corriente",
+  cheque: "Cheque",
 };
 
 /**

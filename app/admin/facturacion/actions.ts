@@ -9,7 +9,6 @@ import { db } from "@/lib/db";
 import {
   accountMovements,
   configuracionFiscal,
-  customers,
   invoicePayments,
   invoices,
   orders,
@@ -30,6 +29,8 @@ import {
 import { pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
 import { parsearImporte } from "@/lib/formato";
 import { ErrorDeCobro, emitirRecibo } from "@/lib/cobros/recibo";
+import { leerDocumento } from "@/lib/clientes/documento";
+import { clientePorDocumento, crearClienteRapido } from "@/lib/clientes/alta";
 import { leerPartes } from "@/lib/cobros/leer";
 import type { MedioDeCobro } from "@/lib/cobros/partes";
 import { notificarRecibo } from "@/lib/notificaciones/cobros";
@@ -252,29 +253,33 @@ export async function emitirManual(
   let customerId = cabecera.data.customerId;
 
   if (!customerId && cabecera.data.guardarComoCliente) {
-    const [creado] = await db
-      .insert(customers)
-      .values({
+    const documento = leerDocumento(cabecera.data.receptorCuit ?? "");
+    if ("error" in documento) return { error: documento.error };
+
+    // Si el CUIT ya tiene ficha, la factura va a esa: crear otra partiría la
+    // cuenta corriente del cliente en dos.
+    const existente = await clientePorDocumento(db, documento);
+    const creado =
+      existente ??
+      (await crearClienteRapido(db, {
         nombre: cabecera.data.receptorNombre,
-        razonSocial: cabecera.data.receptorNombre,
-        // Sin guiones, como lo guarda el alta de clientes: es lo que permite
-        // encontrarlo escrito de cualquier forma.
-        cuit: cabecera.data.receptorCuit?.replace(/\D/g, "") || null,
+        documento,
         condicionIva: cabecera.data.receptorCondicionIva,
         direccion: cabecera.data.receptorDomicilio || null,
         notas: "Ficha creada al emitir una factura.",
-      })
-      .returning({ id: customers.id });
+      }));
 
-    customerId = creado?.id;
+    customerId = creado.id;
 
-    await registrarEnBitacora({
-      sesion: usuario,
-      accion: "crear",
-      entidad: "cliente",
-      entidadId: customerId ?? null,
-      descripcion: `Dio de alta a ${cabecera.data.receptorNombre} al facturar`,
-    });
+    if (!existente) {
+      await registrarEnBitacora({
+        sesion: usuario,
+        accion: "crear",
+        entidad: "cliente",
+        entidadId: customerId,
+        descripcion: `Dio de alta a ${cabecera.data.receptorNombre} al facturar`,
+      });
+    }
   }
 
   const resultado = await emitirComprobante({

@@ -178,6 +178,15 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "plus.unsplash.com",
       },
+      /*
+       * Las fotos que se suben desde el panel, en Vercel Blob. Faltaba: la
+       * primera foto de producto cargada en producción iba a salir rota en
+       * `next/image`, que rechaza todo host que no esté acá (1/10/2026).
+       */
+      {
+        protocol: "https",
+        hostname: "*.public.blob.vercel-storage.com",
+      },
     ],
   },
 };

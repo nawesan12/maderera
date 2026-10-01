@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useActionState, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
+import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
 import { CorteAMedida } from "./corte-a-medida";
 import type { CorteDeMostrador } from "@/lib/mostrador/venta";
 import type { ResultadoDeMostrador } from "@/lib/mostrador/buscar";
@@ -28,10 +30,12 @@ import {
   Search,
   Trash2,
   Undo2,
+  UserPlus,
   UserRound,
   WifiOff,
   X,
   Scissors,
+  ScrollText,
 } from "lucide-react";
 import {
   Dialog,
@@ -42,6 +46,9 @@ import {
 import { formatearMonto, formatearPrecio, formatearUnidad } from "@/lib/formato";
 import { medioPermitido } from "@/lib/precios/medio-pago";
 import { formatearCantidad } from "@/lib/unidades";
+import { leerDocumento, precargaDelAlta, sugerirCondicionIva } from "@/lib/clientes/documento";
+import { ordenarClientes } from "@/lib/mostrador/ranking-clientes";
+import { RUBROS_CLIENTE } from "@/lib/rubros-cliente";
 import {
   admiteMedia,
   descripcionConPresentacion,
@@ -53,6 +60,7 @@ import {
   type ProductoQueSeVende,
 } from "@/lib/ventas/forma-de-venta";
 import {
+  revisarChequeDePago,
   leerTipeo,
   montoDelDescuento,
   revisarVenta,
@@ -61,7 +69,7 @@ import {
   type LineaDeVenta,
   type TipoDescuento,
 } from "@/lib/mostrador/importes";
-import type { MedioDeMostrador } from "@/lib/mostrador/importes";
+import type { ChequeDePago, MedioDeMostrador } from "@/lib/mostrador/importes";
 import type { RenglonDelCierre } from "@/lib/mostrador/caja";
 import {
   nombreDeLaDiferencia,
@@ -91,6 +99,12 @@ import { documentoDeVenta } from "@/lib/mostrador/ticket";
 import {
   abrirCaja,
   buscarClientes,
+  clientePorId,
+  clientesRecientes,
+  cobrarCuentaEnMostrador,
+  crearClienteEnMostrador,
+  saldoDeCuenta,
+  type EstadoCobroDeCuenta,
   buscarEnMostrador,
   anularVenta,
   cerrarCaja,
@@ -163,6 +177,8 @@ const MEDIOS: { valor: MedioDeMostrador; texto: string; Icono: typeof Banknote }
   { valor: "debito", texto: "Débito", Icono: CreditCard },
   { valor: "credito", texto: "Crédito", Icono: CreditCard },
   { valor: "transferencia", texto: "Transferencia", Icono: Landmark },
+  // Cheque o e-Cheq: entra a la cartera con la venta (nota del 30/9/2026).
+  { valor: "cheque", texto: "Cheque", Icono: ScrollText },
   { valor: "cuenta_corriente", texto: "Cuenta corriente", Icono: NotebookPen },
 ];
 
@@ -249,6 +265,36 @@ interface ParteDePago {
   nroCupon: string;
   tarjeta: string;
   cuotas: number;
+  /** Solo si el medio es cheque. */
+  cheque?: ChequeEnPantalla;
+}
+
+/** El cheque como se tipea: todo texto hasta cobrar. */
+interface ChequeEnPantalla {
+  tipo: "fisico" | "echeq";
+  banco: string;
+  numero: string;
+  fechaPago: string;
+  librador: string;
+}
+
+const CHEQUE_VACIO: ChequeEnPantalla = {
+  tipo: "fisico",
+  banco: "",
+  numero: "",
+  fechaPago: "",
+  librador: "",
+};
+
+function aChequeDePago(c: ChequeEnPantalla | undefined): ChequeDePago | null {
+  if (!c) return null;
+  return {
+    tipo: c.tipo,
+    banco: c.banco.trim(),
+    numero: c.numero.trim(),
+    fechaPago: c.fechaPago,
+    librador: c.librador.trim() || null,
+  };
 }
 
 /**
@@ -312,6 +358,11 @@ export function VistaMostrador({
    * ida y vuelta, y lo que permite seguir vendiendo cuando se corta.
    */
   const copia = useCopiaLocal(sucursal.id);
+  const buscarClienteLocal = useCallback(
+    (texto: string): Cliente[] =>
+      copia.buscarCliente(texto).map((c) => ({ ...c, estado: c.estado ?? "activo" })),
+    [copia],
+  );
 
   /*
    * Lo que esta máquina cuenta de sí misma en cada latido.
@@ -413,6 +464,8 @@ export function VistaMostrador({
     marca: "",
     cuotas: 1,
   });
+  /** El cheque de un pago de un solo medio. En el pago partido va por renglón. */
+  const [cheque, setCheque] = useState<ChequeEnPantalla>(CHEQUE_VACIO);
 
   /*
    * El pago partido: null es "todo por el medio elegido", que es la venta de
@@ -475,7 +528,10 @@ export function VistaMostrador({
     !enviando &&
     !(medio === "efectivo" && !turno) &&
     !(medio === "cuenta_corriente" && !cliente) &&
-    !(partes !== null && Math.abs(restanteDePartes) > 0.01);
+    !(partes !== null && Math.abs(restanteDePartes) > 0.01) &&
+    // El cheque se cobra con sus datos: sin número no se lo encuentra en el banco.
+    !(partes === null && medio === "cheque" && revisarChequeDePago(aChequeDePago(cheque)) !== null) &&
+    !(partes?.some((p) => p.medio === "cheque" && revisarChequeDePago(aChequeDePago(p.cheque)) !== null) ?? false);
 
   /**
    * El detalle de pagos que viaja con la venta.
@@ -494,7 +550,12 @@ export function VistaMostrador({
           nroCupon: p.nroCupon.trim() || null,
           tarjeta: p.tarjeta.trim() || null,
           cuotas: p.medio === "credito" ? p.cuotas : 1,
+          cheque: p.medio === "cheque" ? aChequeDePago(p.cheque) : null,
         }));
+    }
+
+    if (medio === "cheque") {
+      return [{ medio, importe: total, cheque: aChequeDePago(cheque) }];
     }
 
     if (
@@ -645,6 +706,7 @@ export function VistaMostrador({
     setMotivoDesc("");
     setAcopio(false);
     setTarjeta({ nroLote: "", nroCupon: "", marca: "", cuotas: 1 });
+    setCheque(CHEQUE_VACIO);
     setPartes(null);
     // Terminada la venta, el foco vuelve al buscador: lo que sigue siempre es
     // el primer producto del que viene atrás en la fila.
@@ -906,6 +968,8 @@ export function VistaMostrador({
     cobrar: puedeCobrar ? () => void cobrar() : undefined,
     buscador: () => enfocar("buscador"),
     cliente: () => enfocar("cliente"),
+    // Abre el cobro de la cuenta, si el cliente elegido debe algo.
+    recibo: () => document.querySelector<HTMLButtonElement>('[data-foco="recibo"]')?.click(),
     cantidad: lineas.length > 0 ? () => enfocar("cantidad") : undefined,
     descuento: () => enfocar("descuento"),
     tipo: ciclarTipo,
@@ -983,6 +1047,8 @@ export function VistaMostrador({
             dos cosas. */}
         <aside className="flex w-[420px] shrink-0 flex-col border-l border-linea bg-card xl:w-[560px] 2xl:w-[620px]">
           <Cobro
+            branchId={sucursal.id}
+            buscarClienteLocal={buscarClienteLocal}
             listaGeneral={listaGeneral}
             subtotal={subtotal}
             descuento={descuento}
@@ -1019,6 +1085,8 @@ export function VistaMostrador({
             onPartir={partirElPago}
             tarjeta={tarjeta}
             onTarjeta={setTarjeta}
+            cheque={cheque}
+            onCheque={setCheque}
             partes={partes}
             onPartes={setPartes}
             restante={restanteDePartes}
@@ -1614,6 +1682,10 @@ function Lineas({
 /* -------------------------------------------------------------------------- */
 
 function Cobro({
+  cheque,
+  onCheque,
+  branchId,
+  buscarClienteLocal,
   subtotal,
   descuento,
   tipoDesc,
@@ -1707,9 +1779,14 @@ function Cobro({
   }) => void;
   partes: ParteDePago[] | null;
   onPartes: (v: ParteDePago[] | null) => void;
+  cheque: ChequeEnPantalla;
+  onCheque: (c: ChequeEnPantalla) => void;
   /** Lo que falta repartir en el pago partido. Cero es "cierra". */
   restante: number;
   enLinea: boolean;
+  branchId: string;
+  /** La copia local del padrón de clientes. */
+  buscarClienteLocal: (texto: string) => Cliente[];
   onRemito: () => void;
   onPresupuesto: () => void;
 }) {
@@ -1729,7 +1806,13 @@ function Cobro({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-b border-linea p-4">
-        <BuscadorDeCliente cliente={cliente} onCliente={onCliente} />
+        <BuscadorDeCliente
+          cliente={cliente}
+          onCliente={onCliente}
+          branchId={branchId}
+          enLinea={enLinea}
+          buscarLocal={buscarClienteLocal}
+        />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -1973,25 +2056,25 @@ function Cobro({
             </div>
 
             {comprobante === "fiscal" && !cliente && (
-              <label className="mt-2.5 block">
-                <span className="text-base text-muted-foreground">
-                  CUIT, si lo quiere a nombre de una empresa
-                </span>
-                <input
-                  value={cuit}
-                  onChange={(e) => onCuit(e.target.value)}
-                  inputMode="numeric"
-                  placeholder="Sin CUIT: sale a consumidor final"
-                  className="tabular mt-1.5 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
-                />
-              </label>
+              <CuitSuelto
+                cuit={cuit}
+                onCuit={onCuit}
+                enLinea={enLinea}
+                onCliente={onCliente}
+              />
             )}
           </div>
         </div>
 
+        {/* El cheque de un pago de un solo medio. */}
+        {!partes && medio === "cheque" && (
+          <CamposDeCheque valor={cheque} onCambio={onCheque} />
+        )}
+
         {/* El lote y el cupón de la terminal, cuando se paga con tarjeta y el
             pago no está partido (partido, van por renglón). Son el dato fiscal
             que después pide el contador; se pueden dejar vacíos. */}
+
         {!partes && (medio === "debito" || medio === "credito") && (
           <div className="mt-4 grid grid-cols-3 gap-2">
             <input
@@ -2168,6 +2251,14 @@ function Cobro({
                       <span />
                     )}
                   </div>
+                )}
+                {parte.medio === "cheque" && (
+                  <CamposDeCheque
+                    valor={parte.cheque ?? CHEQUE_VACIO}
+                    onCambio={(c) =>
+                      onPartes(partes.map((p, k) => (k === i ? { ...p, cheque: c } : p)))
+                    }
+                  />
                 )}
               </div>
             ))}
@@ -2419,53 +2510,122 @@ function Cobro({
 function BuscadorDeCliente({
   cliente,
   onCliente,
+  branchId,
+  enLinea,
+  buscarLocal,
 }: {
   cliente: Cliente | null;
   onCliente: (c: Cliente | null) => void;
+  branchId: string;
+  enLinea: boolean;
+  /** La copia local del padrón: contesta al instante y sin internet. */
+  buscarLocal: (texto: string) => Cliente[];
 }) {
   const [texto, setTexto] = useState("");
-  const [resultados, setResultados] = useState<Cliente[]>([]);
+  const [delServidor, setDelServidor] = useState<Cliente[]>([]);
+  const [recientes, setRecientes] = useState<Cliente[] | null>(null);
+  const [abierto, setAbierto] = useState(false);
+  /** Cuál de la lista está marcado. Se mueve con las flechas, no con el mouse. */
+  const [marcado, setMarcado] = useState(0);
+  const [alta, setAlta] = useState<{ nombre: string; documento: string } | null>(null);
+  const campo = useRef<HTMLInputElement>(null);
+
+  const consulta = texto.trim();
+
+  /*
+   * Primero la copia local, después el servidor.
+   *
+   * La copia contesta en el mismo cuadro en que se tipea —y sin internet—; el
+   * servidor completa lo que la copia no tenga todavía (un cliente dado de
+   * alta hace un minuto en otra caja). Los dos se mezclan y se ordenan con la
+   * misma regla: documento exacto, después lo que empieza igual, y entre
+   * iguales el que se atendió hace menos.
+   */
+  const locales = useMemo(
+    () => (consulta.length >= 2 ? buscarLocal(consulta) : []),
+    [consulta, buscarLocal],
+  );
 
   useEffect(() => {
-    const consulta = texto.trim();
-    if (consulta.length < 2) return;
+    if (consulta.length < 2 || !enLinea) return;
     const t = setTimeout(async () => {
-      setResultados((await buscarClientes(consulta)) as Cliente[]);
+      setDelServidor((await buscarClientes(consulta)) as Cliente[]);
     }, 180);
     return () => clearTimeout(t);
-  }, [texto]);
+  }, [consulta, enLinea]);
 
-  const visibles = texto.trim().length < 2 ? [] : resultados;
+  const visibles = useMemo(() => {
+    if (consulta.length < 2) return abierto ? (recientes ?? []) : [];
+    const porId = new Map<string, Cliente>();
+    for (const c of [...locales, ...delServidor]) if (!porId.has(c.id)) porId.set(c.id, c);
+    return ordenarClientes([...porId.values()], consulta, (recientes ?? []).map((r) => r.id)).slice(0, 8);
+  }, [consulta, abierto, recientes, locales, delServidor]);
+
+  // La última opción es crear: lo que no aparece se da de alta sin salir.
+  const ofreceAlta = consulta.length >= 2;
+  const opciones = visibles.length + (ofreceAlta ? 1 : 0);
+  const elegido = Math.min(marcado, Math.max(opciones - 1, 0));
+
+  async function alEnfocar() {
+    setAbierto(true);
+    // Los recientes se piden una vez por cliente elegido, no en cada foco.
+    if (recientes === null && enLinea) {
+      setRecientes((await clientesRecientes(branchId)) as Cliente[]);
+    }
+  }
 
   function elegir(c: Cliente) {
     onCliente(c);
     setTexto("");
-    setResultados([]);
+    setDelServidor([]);
+    setMarcado(0);
+    setAbierto(false);
     // De vuelta a la venta: identificar al cliente es un rodeo en el medio de
     // cargar productos.
     enfocar("buscador");
   }
 
+  function abrirAlta() {
+    setAlta(precargaDelAlta(consulta));
+    setAbierto(false);
+  }
+
   if (cliente) {
     return (
-      <div className="flex items-center gap-2.5 rounded-xl border border-linea bg-background px-3.5 py-2.5">
-        <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-base font-medium">{cliente.nombre}</span>
-          {cliente.cuit && (
-            <span className="tabular block text-sm text-muted-foreground">
-              CUIT {cliente.cuit}
-            </span>
-          )}
-        </span>
-        <button
-          onClick={() => onCliente(null)}
-          data-foco="cliente"
-          aria-label="Quitar el cliente"
-          className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-hundida"
-        >
-          <X className="h-4 w-4" />
-        </button>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2.5 rounded-xl border border-linea bg-background px-3.5 py-2.5">
+          <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-base font-medium">{cliente.nombre}</span>
+            {cliente.cuit && (
+              <span className="tabular block text-sm text-muted-foreground">
+                {cliente.cuit.length === 11 ? "CUIT" : "DNI"} {cliente.cuit}
+              </span>
+            )}
+          </span>
+          {/* Alt + C cae acá y Enter cambia de cliente: antes caía en la X y
+              Enter lo sacaba sin dejar buscar otro. */}
+          <button
+            onClick={() => {
+              onCliente(null);
+              setRecientes(null);
+              // El campo recién existe en el próximo render.
+              requestAnimationFrame(() => enfocar("cliente"));
+            }}
+            data-foco="cliente"
+            className="shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
+          >
+            Cambiar
+          </button>
+          <button
+            onClick={() => onCliente(null)}
+            aria-label="Volver a consumidor final"
+            className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-hundida"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <SaldoDelCliente cliente={cliente} branchId={branchId} enLinea={enLinea} />
       </div>
     );
   }
@@ -2475,13 +2635,38 @@ function BuscadorDeCliente({
       <div className="flex items-center gap-2.5 rounded-xl border border-linea bg-background px-3.5">
         <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" />
         <input
+          ref={campo}
           value={texto}
-          onChange={(e) => setTexto(e.target.value)}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            setMarcado(0);
+          }}
+          onFocus={alEnfocar}
+          onBlur={() => setTimeout(() => setAbierto(false), 150)}
           data-foco="cliente"
+          role="combobox"
+          aria-expanded={opciones > 0}
+          aria-controls="clientes-del-buscador"
+          aria-activedescendant={opciones > 0 ? `cliente-opcion-${elegido}` : undefined}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && visibles.length > 0) {
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              if (opciones === 0) return;
               e.preventDefault();
-              elegir(visibles[0]);
+              setMarcado((m) => {
+                const i = Math.min(m, opciones - 1);
+                return e.key === "ArrowDown" ? Math.min(i + 1, opciones - 1) : Math.max(i - 1, 0);
+              });
+              return;
+            }
+            if (e.key === "Enter") {
+              const c = visibles[elegido];
+              if (c) {
+                e.preventDefault();
+                elegir(c);
+              } else if (ofreceAlta) {
+                e.preventDefault();
+                abrirAlta();
+              }
               return;
             }
             // Sin nada tipeado, Escape devuelve el foco a la venta.
@@ -2490,30 +2675,355 @@ function BuscadorDeCliente({
               setTexto("");
             }
           }}
-          placeholder="Consumidor final — buscá para cambiar"
+          placeholder="Consumidor final — buscá por nombre, CUIT o DNI"
           className="h-11 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
         />
       </div>
 
-      {visibles.length > 0 && (
-        <ul className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-72 overflow-y-auto rounded-xl border border-linea bg-popover shadow-lg">
-          {visibles.map((c) => (
-            <li key={c.id}>
+      {opciones > 0 && (
+        <ul
+          id="clientes-del-buscador"
+          role="listbox"
+          className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-80 overflow-y-auto rounded-xl border border-linea bg-popover shadow-lg"
+        >
+          {consulta.length < 2 && visibles.length > 0 && (
+            <li className="px-3.5 pb-1 pt-2.5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Atendidos hace poco
+            </li>
+          )}
+          {visibles.map((c, i) => (
+            <li key={c.id} id={`cliente-opcion-${i}`} role="option" aria-selected={i === elegido}>
               <button
-                onClick={() => elegir(c)}
-                className="w-full px-3.5 py-2.5 text-left transition-colors hover:bg-hundida"
+                // `onMouseDown` y no `onClick`: el clic llega después del blur
+                // del campo, que ya cerró la lista.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  elegir(c);
+                }}
+                className={`flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-hundida ${
+                  i === elegido ? "bg-hundida" : ""
+                }`}
               >
-                <span className="block truncate text-base font-medium">{c.nombre}</span>
-                <span className="block text-sm text-muted-foreground">
-                  {c.cuit ? `CUIT ${c.cuit}` : "sin CUIT"}
-                  {c.estado === "moroso" && " · moroso"}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-base font-medium">{c.nombre}</span>
+                  <span className="block text-sm text-muted-foreground">
+                    {c.cuit ? `${c.cuit.length === 11 ? "CUIT" : "DNI"} ${c.cuit}` : "sin documento"}
+                    {c.estado === "moroso" && " · moroso"}
+                  </span>
                 </span>
+                {i === elegido && (
+                  <kbd className="shrink-0 rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">
+                    Enter
+                  </kbd>
+                )}
               </button>
             </li>
           ))}
+          {ofreceAlta && (
+            <li id={`cliente-opcion-${visibles.length}`} role="option" aria-selected={elegido === visibles.length}>
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  abrirAlta();
+                }}
+                className={`flex w-full items-center gap-2.5 border-t border-linea px-3.5 py-2.5 text-left text-base font-medium text-acento-texto transition-colors hover:bg-hundida ${
+                  elegido === visibles.length ? "bg-hundida" : ""
+                }`}
+              >
+                <UserPlus className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">Crear cliente «{consulta}»</span>
+                {elegido === visibles.length && (
+                  <kbd className="shrink-0 rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">
+                    Enter
+                  </kbd>
+                )}
+              </button>
+            </li>
+          )}
         </ul>
       )}
+
+      {alta && (
+        <AltaRapidaDeCliente
+          inicial={alta}
+          enLinea={enLinea}
+          onCerrar={() => {
+            setAlta(null);
+            campo.current?.focus();
+          }}
+          onCreado={(c) => {
+            setAlta(null);
+            elegir(c);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * El CUIT tipeado sin elegir un cliente, para una factura a una empresa.
+ *
+ * Se valida mientras se tipea —un CUIT mal escrito termina en una factura que
+ * ARCA rechaza, con el cliente ya yéndose— y, si es una empresa que va a
+ * volver, se guarda como cliente con un Enter: queda elegida, con su
+ * condición de IVA, y la próxima vez se la encuentra buscando.
+ */
+function CuitSuelto({
+  cuit,
+  onCuit,
+  enLinea,
+  onCliente,
+}: {
+  cuit: string;
+  onCuit: (v: string) => void;
+  enLinea: boolean;
+  onCliente: (c: Cliente | null) => void;
+}) {
+  const [alta, setAlta] = useState(false);
+  const leido = leerDocumento(cuit);
+  const digitos = cuit.replace(/\D/g, "");
+  const valido = !("error" in leido) && leido.tipo === "cuit";
+  const problema = digitos.length >= 11 && !valido ? "Ese CUIT no es válido: revisá los números." : null;
+
+  return (
+    <div className="mt-2.5">
+      <label className="block">
+        <span className="text-base text-muted-foreground">
+          CUIT, si lo quiere a nombre de una empresa
+        </span>
+        <input
+          value={cuit}
+          onChange={(e) => onCuit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && valido && enLinea) {
+              e.preventDefault();
+              setAlta(true);
+            }
+          }}
+          inputMode="numeric"
+          aria-invalid={Boolean(problema)}
+          placeholder="Sin CUIT: sale a consumidor final"
+          className="tabular mt-1.5 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
+        />
+      </label>
+      {problema && <p className="estado-problema mt-1 text-sm font-medium">{problema}</p>}
+      {valido && enLinea && (
+        <button
+          type="button"
+          onClick={() => setAlta(true)}
+          className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-medium text-acento-texto hover:underline"
+        >
+          <UserPlus className="h-4 w-4" />
+          Guardarlo como cliente
+          <kbd className="rounded border border-linea px-1 text-xs text-muted-foreground">Enter</kbd>
+        </button>
+      )}
+      {alta && (
+        <AltaRapidaDeCliente
+          inicial={{ nombre: "", documento: cuit }}
+          enLinea={enLinea}
+          onCerrar={() => setAlta(false)}
+          onCreado={(c) => {
+            setAlta(false);
+            onCuit("");
+            onCliente(c);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Alta de un cliente sin salir de la venta.
+ *
+ * Cinco campos y no trece: lo que hace falta para venderle y facturarle hoy.
+ * El resto de la ficha —correo, domicilio, límite— se completa en el panel
+ * cuando haga falta. Enter pasa de un campo al siguiente y en el último crea.
+ */
+function AltaRapidaDeCliente({
+  inicial,
+  enLinea,
+  onCerrar,
+  onCreado,
+}: {
+  inicial: { nombre: string; documento: string };
+  enLinea: boolean;
+  onCerrar: () => void;
+  onCreado: (c: Cliente) => void;
+}) {
+  const [nombre, setNombre] = useState(inicial.nombre);
+  const [documento, setDocumento] = useState(inicial.documento);
+  const [condicion, setCondicion] = useState<string | null>(null);
+  const [telefono, setTelefono] = useState("");
+  const [rubro, setRubro] = useState("particular");
+  const [error, setError] = useState<string | null>(null);
+  const [existente, setExistente] = useState<{ id: string; nombre: string } | null>(null);
+  const [pendiente, empezar] = useTransition();
+
+  const leido = leerDocumento(documento);
+  const errorDeDocumento = "error" in leido && documento.trim().length >= 7 ? leido.error : null;
+  // La condición sale sugerida del documento hasta que alguien la elige.
+  const condicionIva = condicion ?? ("error" in leido ? "consumidor_final" : sugerirCondicionIva(leido));
+
+  function crear() {
+    setError(null);
+    setExistente(null);
+    empezar(async () => {
+      const r = await crearClienteEnMostrador({ nombre, documento, condicionIva, telefono, rubro });
+      if (r.ok) {
+        toast.success(`${r.cliente.nombre} quedó cargado.`);
+        onCreado(r.cliente as Cliente);
+      } else {
+        setError(r.error);
+        setExistente(r.existente ?? null);
+      }
+    });
+  }
+
+  async function usarExistente() {
+    if (!existente) return;
+    const c = await clientePorId(existente.id);
+    if (c) onCreado(c as Cliente);
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onCerrar()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight">
+            <UserPlus className="h-5 w-5" />
+            Cliente nuevo
+          </DialogTitle>
+        </DialogHeader>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            crear();
+          }}
+          onKeyDown={(e) => {
+            // Enter avanza al campo siguiente; en el último, crea.
+            if (e.key !== "Enter" || e.target instanceof HTMLButtonElement) return;
+            const campos = Array.from(
+              e.currentTarget.querySelectorAll<HTMLElement>("input, select"),
+            );
+            const i = campos.indexOf(e.target as HTMLElement);
+            if (i < 0) return;
+            e.preventDefault();
+            if (i < campos.length - 1) campos[i + 1]!.focus();
+            else e.currentTarget.requestSubmit();
+          }}
+          className="space-y-3.5"
+        >
+          {!enLinea && (
+            <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base">
+              Sin conexión no se pueden dar de alta clientes. Cobrá como consumidor final y
+              cargalo después.
+            </p>
+          )}
+          <label className="block text-sm text-muted-foreground">
+            Nombre o razón social
+            <input
+              autoFocus={!inicial.nombre}
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              required
+              className="mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
+            />
+          </label>
+          <div className="grid gap-3.5 sm:grid-cols-2">
+            <label className="block text-sm text-muted-foreground">
+              CUIT o DNI <span className="font-normal">(opcional)</span>
+              <input
+                autoFocus={Boolean(inicial.nombre)}
+                value={documento}
+                onChange={(e) => setDocumento(e.target.value)}
+                inputMode="numeric"
+                aria-invalid={Boolean(errorDeDocumento)}
+                className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
+              />
+              {errorDeDocumento && (
+                <span className="estado-problema mt-1 block text-sm">{errorDeDocumento}</span>
+              )}
+            </label>
+            <label className="block text-sm text-muted-foreground">
+              Condición de IVA
+              <select
+                value={condicionIva}
+                onChange={(e) => setCondicion(e.target.value)}
+                className="mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-2.5 text-base text-foreground"
+              >
+                <option value="consumidor_final">Consumidor final</option>
+                <option value="monotributista">Monotributista</option>
+                <option value="responsable_inscripto">Responsable inscripto</option>
+                <option value="exento">Exento</option>
+              </select>
+            </label>
+          </div>
+          <div className="grid gap-3.5 sm:grid-cols-2">
+            <label className="block text-sm text-muted-foreground">
+              Teléfono <span className="font-normal">(opcional)</span>
+              <input
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+                inputMode="tel"
+                className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
+              />
+            </label>
+            <label className="block text-sm text-muted-foreground">
+              Rubro
+              <select
+                value={rubro}
+                onChange={(e) => setRubro(e.target.value)}
+                className="mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-2.5 text-base text-foreground"
+              >
+                {RUBROS_CLIENTE.map((r) => (
+                  <option key={r.valor} value={r.valor}>
+                    {r.etiqueta}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {error && (
+            <div className="estado-problema rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base">
+              {error}
+              {existente && (
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={usarExistente}
+                  className="ml-2 font-semibold underline underline-offset-2"
+                >
+                  Usar esa ficha
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onCerrar}
+              className="h-11 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida"
+            >
+              Volver
+            </button>
+            <button
+              type="submit"
+              disabled={pendiente || !enLinea || nombre.trim().length < 2 || Boolean(errorDeDocumento)}
+              className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-5 text-base font-semibold disabled:opacity-50"
+            >
+              {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
+              Crear y elegir
+            </button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -3232,4 +3742,229 @@ function comoSeVende(r: {
     largoMm: r.largoMm,
     anchoMm: r.anchoMm,
   };
+}
+
+/**
+ * Los datos de un cheque en el mostrador: banco, número y fecha de pago.
+ *
+ * El número es lo que pidió la clienta —«para que la gente sepa cuál cheque es
+ * en el banco»—, y la fecha es lo que ordena la cartera. Se dice qué falta
+ * mientras se tipea: «Cobrar» queda apagado hasta que el cheque esté completo.
+ */
+function CamposDeCheque({
+  valor,
+  onCambio,
+}: {
+  valor: ChequeEnPantalla;
+  onCambio: (c: ChequeEnPantalla) => void;
+}) {
+  const cambiar = (campo: keyof ChequeEnPantalla, v: string) => onCambio({ ...valor, [campo]: v });
+  const problema =
+    valor.numero || valor.banco || valor.fechaPago
+      ? revisarChequeDePago(aChequeDePago(valor))
+      : null;
+
+  return (
+    <div className="mt-3 space-y-2 rounded-xl border border-linea p-3">
+      <div className="flex rounded-lg border border-linea p-0.5 text-sm" role="group">
+        {(
+          [
+            ["fisico", "Cheque en papel"],
+            ["echeq", "e-Cheq"],
+          ] as const
+        ).map(([tipo, texto]) => (
+          <button
+            key={tipo}
+            type="button"
+            onClick={() => onCambio({ ...valor, tipo })}
+            aria-pressed={valor.tipo === tipo}
+            className={`h-9 flex-1 rounded-md font-medium transition-colors ${
+              valor.tipo === tipo ? "bg-hundida" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {texto}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-[1.2fr_1fr_1fr] gap-2">
+        <input
+          value={valor.banco}
+          onChange={(e) => cambiar("banco", e.target.value)}
+          placeholder="Banco"
+          aria-label="Banco del cheque"
+          className="h-11 min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
+        />
+        <input
+          value={valor.numero}
+          onChange={(e) => cambiar("numero", e.target.value)}
+          inputMode="numeric"
+          placeholder="N° de cheque"
+          aria-label="Número del cheque"
+          className="tabular h-11 min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
+        />
+        <input
+          type="date"
+          value={valor.fechaPago}
+          onChange={(e) => cambiar("fechaPago", e.target.value)}
+          aria-label="Fecha de pago del cheque"
+          className="tabular h-11 min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
+        />
+      </div>
+      <input
+        value={valor.librador}
+        onChange={(e) => cambiar("librador", e.target.value)}
+        placeholder="Librador, si no es el cliente"
+        aria-label="Librador del cheque"
+        className="h-11 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
+      />
+      {problema && <p className="estado-espera text-sm font-medium">{problema}</p>}
+    </div>
+  );
+}
+
+/**
+ * Lo que debe el cliente elegido, y cobrárselo ahí mismo.
+ *
+ * El cliente que viene a pagar su cuenta no viene a comprar: hasta acá había
+ * que mandarlo a esperar a que alguien abriera la ficha en el panel. Con el
+ * cliente elegido aparece lo que debe y el cobro con su recibo (`Alt + R`).
+ */
+function SaldoDelCliente({
+  cliente,
+  branchId,
+  enLinea,
+}: {
+  cliente: Cliente;
+  branchId: string;
+  enLinea: boolean;
+}) {
+  const [saldo, setSaldo] = useState<{ de: string; monto: number } | null>(null);
+  const [abierto, setAbierto] = useState(false);
+
+  useEffect(() => {
+    if (!enLinea) return;
+    let vigente = true;
+    saldoDeCuenta(cliente.id).then((monto) => {
+      if (vigente) setSaldo({ de: cliente.id, monto });
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [cliente.id, enLinea, abierto]);
+
+  // El saldo es del cliente que se pidió: si se cambió en el medio, no se muestra.
+  const monto = saldo?.de === cliente.id ? saldo.monto : null;
+  if (monto === null || Math.abs(monto) < 0.01) return null;
+
+  if (monto < 0) {
+    return (
+      <p className="px-1 text-sm text-muted-foreground">
+        Tiene <strong className="tabular text-saldo-favor">{formatearMonto(-monto)}</strong> a
+        favor: se usa cobrando con «Cuenta corriente».
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 px-1">
+      <p className="text-sm">
+        Debe <strong className="tabular text-saldo-debe">{formatearMonto(monto)}</strong>
+      </p>
+      <button
+        type="button"
+        data-foco="recibo"
+        onClick={() => setAbierto(true)}
+        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-linea px-3 text-sm font-medium transition-colors hover:bg-hundida"
+      >
+        Cobrar su cuenta
+        <kbd className="rounded border border-linea px-1 text-xs text-muted-foreground">Alt + R</kbd>
+      </button>
+      {abierto && (
+        <CobroDeCuenta
+          cliente={cliente}
+          branchId={branchId}
+          debe={monto}
+          onCerrar={() => {
+            setAbierto(false);
+            enfocar("buscador");
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function CobroDeCuenta({
+  cliente,
+  branchId,
+  debe,
+  onCerrar,
+}: {
+  cliente: Cliente;
+  branchId: string;
+  debe: number;
+  onCerrar: () => void;
+}) {
+  const [estado, accion, pendiente] = useActionState(
+    async (previo: EstadoCobroDeCuenta, formData: FormData) => {
+      const r = await cobrarCuentaEnMostrador(previo, formData);
+      if (r.ok && r.receiptId) {
+        toast.success(r.ok);
+        // El recibo se imprime en el acto: el cliente está esperando el papel.
+        window.open(`/api/recibos/${r.receiptId}/pdf`, "_blank");
+        onCerrar();
+      }
+      return r;
+    },
+    {} as EstadoCobroDeCuenta,
+  );
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onCerrar()}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold tracking-tight">
+            Cobro de cuenta — {cliente.nombre}
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-base text-muted-foreground">
+          Debe <strong className="tabular text-foreground">{formatearMonto(debe)}</strong>. Si paga
+          una parte, cargá solo lo que paga.
+        </p>
+        <form
+          action={accion}
+          onKeyDown={(e) => {
+            // Enter avanza de campo en campo; en el último, cobra.
+            if (e.key !== "Enter" || e.target instanceof HTMLButtonElement) return;
+            const campos = Array.from(
+              e.currentTarget.querySelectorAll<HTMLElement>("input:not([type=hidden]), select"),
+            );
+            const i = campos.indexOf(e.target as HTMLElement);
+            if (i < 0) return;
+            e.preventDefault();
+            if (i < campos.length - 1) campos[i + 1]!.focus();
+            else e.currentTarget.requestSubmit();
+          }}
+          className="space-y-4"
+        >
+          <input type="hidden" name="customerId" value={cliente.id} />
+          <input type="hidden" name="branchId" value={branchId} />
+          <CobroMultimedio aCobrar={debe} />
+          {estado.error && (
+            <p role="alert" className="estado-problema rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base">
+              {estado.error}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={pendiente}
+            className="boton-accion inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-base font-semibold disabled:opacity-60"
+          >
+            {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
+            Cobrar e imprimir el recibo
+          </button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }

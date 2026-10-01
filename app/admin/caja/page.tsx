@@ -43,6 +43,7 @@ const MEDIOS: Record<string, string> = {
   credito: "Crédito",
   transferencia: "Transferencia",
   cuenta_corriente: "Cuenta corriente",
+  cheque: "Cheque",
   mercado_pago: "Mercado Pago",
 };
 

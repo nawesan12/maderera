@@ -107,19 +107,21 @@ export interface ClienteLocal {
   cuit: string | null;
   condicionIva: string;
   priceListId: string | null;
+  /** Viene en la copia desde siempre; opcional para las copias viejas. */
+  estado?: string;
   busqueda: string;
 }
 
 export function buscarClientesLocal(
   indice: ClienteLocal[],
   texto: string,
-  tope = 8,
+  tope = 40,
 ): ClienteLocal[] {
   const terminos = terminosDe(texto);
   if (terminos.length === 0) return [];
 
-  return indice
-    .filter((c) => coincideLocal(terminos, c.busqueda))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
-    .slice(0, tope);
+  // Se devuelven todos los que coinciden, hasta un tope holgado: el orden lo
+  // decide quien llama con `ordenarClientes`, y recortar antes de ordenar
+  // dejaba afuera al cliente exacto si había muchos parecidos.
+  return indice.filter((c) => coincideLocal(terminos, c.busqueda)).slice(0, tope);
 }

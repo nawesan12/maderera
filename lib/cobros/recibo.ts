@@ -229,8 +229,47 @@ async function chequeDeLaParte(
   }
 
   const nuevo = parte.cheque!;
-  const numero = normalizarNumeroDeCheque(nuevo.numero);
-  const banco = nuevo.banco.trim();
+  return registrarChequeRecibido(tx, {
+    tipo: parte.medio === "echeq" ? "echeq" : "fisico",
+    numero: nuevo.numero,
+    banco: nuevo.banco,
+    librador: nuevo.librador ?? null,
+    emision: nuevo.emision ?? null,
+    fechaPago: nuevo.fechaPago,
+    importe: parte.importe,
+    customerId: contexto.customerId,
+    circuito: contexto.circuito,
+    receiptId: contexto.receiptId,
+    usuarioId: contexto.usuarioId,
+  });
+}
+
+/**
+ * Un cheque que entra a la cartera: lo crea, después de mirar que no esté ya.
+ *
+ * Lo usan el recibo y la venta del mostrador. El duplicado se busca antes de
+ * insertar aunque el índice único también lo frena: el índice daría un error
+ * de Postgres y esto da un motivo que dice qué cheque es.
+ */
+export async function registrarChequeRecibido(
+  tx: Transaccion,
+  datos: {
+    tipo: "fisico" | "echeq";
+    numero: string;
+    banco: string;
+    librador?: string | null;
+    emision?: Date | null;
+    fechaPago: Date;
+    importe: number;
+    customerId: string | null;
+    circuito?: "blanco" | "negro";
+    receiptId?: string | null;
+    orderPaymentId?: string | null;
+    usuarioId?: string | null;
+  },
+): Promise<string> {
+  const numero = normalizarNumeroDeCheque(datos.numero);
+  const banco = datos.banco.trim();
 
   const [repetido] = await tx
     .select({ id: cheques.id })
@@ -248,7 +287,7 @@ async function chequeDeLaParte(
 
   if (repetido) {
     throw new ErrorDeCobro(
-      `${nombreDelCheque({ tipo: parte.medio === "echeq" ? "echeq" : "fisico", banco, numero })} ya está cargado. Buscalo en la cartera.`,
+      `${nombreDelCheque({ tipo: datos.tipo, banco, numero })} ya está cargado. Buscalo en la cartera.`,
     );
   }
 
@@ -256,18 +295,19 @@ async function chequeDeLaParte(
     .insert(cheques)
     .values({
       sentido: "recibido",
-      tipo: parte.medio === "echeq" ? "echeq" : "fisico",
+      tipo: datos.tipo,
       numero,
       banco,
-      librador: nuevo.librador?.trim() || null,
-      emision: nuevo.emision ?? null,
-      fechaPago: nuevo.fechaPago,
-      importe: aCentavos(parte.importe).toFixed(2),
+      librador: datos.librador?.trim() || null,
+      emision: datos.emision ?? null,
+      fechaPago: datos.fechaPago,
+      importe: aCentavos(datos.importe).toFixed(2),
       estado: "cartera",
-      customerId: contexto.customerId,
-      circuito: contexto.circuito,
-      receiptId: contexto.receiptId,
-      createdByUserId: contexto.usuarioId,
+      customerId: datos.customerId,
+      circuito: datos.circuito ?? "blanco",
+      receiptId: datos.receiptId ?? null,
+      orderPaymentId: datos.orderPaymentId ?? null,
+      createdByUserId: datos.usuarioId ?? null,
     })
     .returning({ id: cheques.id });
 

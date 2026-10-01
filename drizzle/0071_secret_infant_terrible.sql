@@ -1,0 +1,1 @@
+ALTER TYPE "public"."medio_pago" ADD VALUE IF NOT EXISTS 'cheque';

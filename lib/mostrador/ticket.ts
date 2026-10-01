@@ -136,9 +136,11 @@ export function documentoDeVenta(
     pagos: pagos.map((p) => ({
       medio: p.medio,
       importe: p.importe,
-      tarjeta: p.tarjeta ?? null,
+      // Un cheque se nombra por su banco y su número, igual que la tarjeta por
+      // su marca y su cupón: es lo que se busca después.
+      tarjeta: p.medio === "cheque" ? (p.cheque?.banco ?? null) : (p.tarjeta ?? null),
       nroLote: p.nroLote ?? null,
-      nroCupon: p.nroCupon ?? null,
+      nroCupon: p.medio === "cheque" ? (p.cheque?.numero ?? null) : (p.nroCupon ?? null),
       cuotas: p.cuotas ?? null,
     })),
     enCuentaCorriente: importeEnCuenta > 0,

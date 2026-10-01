@@ -6,6 +6,7 @@ import {
   accountMovements,
   cashMovements,
   cashSessions,
+  cheques,
   cuttingOrders,
   deliveries,
   inventory,
@@ -109,6 +110,26 @@ export async function anularVentaDeMostrador(
     const parteCuenta = parte("cuenta_corriente");
 
     /*
+     * Los cheques con los que se pagó. Si siguen en la cartera se anulan con
+     * la venta —el papel se le devuelve al cliente—; si ya se depositaron o se
+     * endosaron, ya no están en la casa y anular la venta dejaría un cheque
+     * cobrado por una venta que no existe.
+     */
+    const chequesDeLaVenta = await tx
+      .select({ id: cheques.id, estado: cheques.estado, numero: cheques.numero })
+      .from(cheques)
+      .innerJoin(orderPayments, eq(orderPayments.id, cheques.orderPaymentId))
+      .where(eq(orderPayments.orderId, orderId));
+
+    const yaSalio = chequesDeLaVenta.find((c) => c.estado !== "cartera" && c.estado !== "anulado");
+    if (yaSalio) {
+      return {
+        ok: false as const,
+        error: `El cheque N° ${yaSalio.numero} de esta venta ya salió de la cartera. Resolvelo desde Cheques antes de anular.`,
+      };
+    }
+
+    /*
      * Una venta en acopio no descontó stock: lo reservó. Y si ya tuvo retiros
      * parciales, deshacerla acá dejaría los remitos apuntando a una venta que
      * no existe: eso se maneja desde la ficha del pedido, retiro por retiro.
@@ -207,6 +228,15 @@ export async function anularVentaDeMostrador(
           createdByUserId: usuarioId,
         });
       }
+    }
+
+    // Los cheques en cartera vuelven al cliente con la anulación.
+    for (const c of chequesDeLaVenta) {
+      if (c.estado !== "cartera") continue;
+      await tx
+        .update(cheques)
+        .set({ estado: "anulado", updatedAt: new Date() })
+        .where(eq(cheques.id, c.id));
     }
 
     // 2. La plata sale de la caja si es que había entrado ahí: solo la parte

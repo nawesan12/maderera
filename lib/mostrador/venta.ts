@@ -10,6 +10,7 @@ import { fechaAcotada } from "@/lib/mostrador/offline/numero-provisorio";
 import { turnoQueContiene } from "@/lib/mostrador/turno";
 import { costoPorUnidadDeVenta, costosParaCongelar } from "@/lib/compras/congelar";
 import { factoresDeStock } from "@/lib/ventas/factores";
+import { ErrorDeCobro, registrarChequeRecibido } from "@/lib/cobros/recibo";
 import { unidadesDeStock } from "@/lib/ventas/forma-de-venta";
 import {
   accountMovements,
@@ -335,314 +336,345 @@ export async function registrarVentaDeMostrador(
     sellerId = ficha?.sellerId ?? null;
   }
 
-  return db.transaction(async (tx) => {
-    /*
-     * El lock serializa los envíos repetidos de la misma venta. Sin él, dos
-     * toques simultáneos leen los dos que la clave no existe y los dos siguen;
-     * el índice único frenaría al segundo, pero recién al insertar, después de
-     * haber descontado stock. Se libera al cerrar la transacción.
-     */
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext(${venta.clave}))`,
-    );
-
-    const [yaHecha] = await tx
-      .select({
-        id: orders.id,
-        numero: orders.numero,
-        total: orders.total,
-      })
-      .from(orders)
-      .where(eq(orders.claveMostrador, venta.clave))
-      .limit(1);
-
-    if (yaHecha) {
-      return {
-        ok: true as const,
-        orderId: yaHecha.id,
-        numero: yaHecha.numero,
-        total: Number(yaHecha.total),
-        nueva: false,
-        lineas,
-      };
-    }
-
-    let sesionId: string | null = null;
-    const diferida = Boolean(venta.cobradaAt);
-
-    if (parteEfectivo > 0) {
+  try {
+    return await db.transaction(async (tx) => {
       /*
-       * El turno se busca por el momento del cobro, no por cuál está abierto
-       * ahora: una venta hecha sin internet a las 19:40 pertenece al turno de
-       * las 19:40, aunque llegue al servidor después del cierre.
+       * El lock serializa los envíos repetidos de la misma venta. Sin él, dos
+       * toques simultáneos leen los dos que la clave no existe y los dos siguen;
+       * el índice único frenaría al segundo, pero recién al insertar, después de
+       * haber descontado stock. Se libera al cerrar la transacción.
        */
-      const turno = await turnoQueContiene(
-        tx,
-        venta.branchId,
-        venta.cobradaAt ? fechaAcotada(venta.cobradaAt) : new Date(),
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${venta.clave}))`,
       );
 
-      if (!turno && !diferida) {
+      const [yaHecha] = await tx
+        .select({
+          id: orders.id,
+          numero: orders.numero,
+          total: orders.total,
+        })
+        .from(orders)
+        .where(eq(orders.claveMostrador, venta.clave))
+        .limit(1);
+
+      if (yaHecha) {
         return {
-          ok: false as const,
-          error: "No hay caja abierta en esta sucursal. Abrila antes de cobrar en efectivo.",
+          ok: true as const,
+          orderId: yaHecha.id,
+          numero: yaHecha.numero,
+          total: Number(yaHecha.total),
+          nueva: false,
+          lineas,
         };
       }
 
-      /*
-       * Una venta diferida sin turno donde caer **se guarda igual**. Rechazarla
-       * sería perder plata que ya se cobró y mercadería que ya se llevaron, por
-       * un turno que nadie abrió. Queda sin movimiento de caja y `/admin/caja`
-       * la muestra aparte para asignarla a mano.
-       */
-      sesionId = turno?.id ?? null;
-    }
+      let sesionId: string | null = null;
+      const diferida = Boolean(venta.cobradaAt);
 
-    // Con lock sobre la serie: dos cajas cobrando a la vez leían el mismo
-    // máximo y la segunda moría contra el índice único, con el cliente enfrente.
-    const numero = await siguienteNumeroDePedido(tx);
+      if (parteEfectivo > 0) {
+        /*
+         * El turno se busca por el momento del cobro, no por cuál está abierto
+         * ahora: una venta hecha sin internet a las 19:40 pertenece al turno de
+         * las 19:40, aunque llegue al servidor después del cierre.
+         */
+        const turno = await turnoQueContiene(
+          tx,
+          venta.branchId,
+          venta.cobradaAt ? fechaAcotada(venta.cobradaAt) : new Date(),
+        );
 
-    const [pedido] = await tx
-      .insert(orders)
-      .values({
-        numero,
-        claveMostrador: venta.clave,
-        numeroProvisorio: venta.numeroProvisorio ?? null,
-        cobradaAt: venta.cobradaAt ?? null,
-        // `null` significa que nació en línea; las diferidas llevan la marca.
-        sincronizadaAt: venta.cobradaAt ? new Date() : null,
-        /*
-         * La fecha de la venta es la del mostrador, acotada.
-         *
-         * `ventasDeHoy` y el cierre de caja filtran por `createdAt`: si la
-         * conexión vuelve al otro día, las ventas de ayer aparecerían como de
-         * hoy y la caja no cerraría.
-         */
-        createdAt: venta.cobradaAt
-          ? fechaAcotada(venta.cobradaAt)
-          : undefined,
-        customerId: venta.customerId,
-        contactoNombre: venta.contactoNombre,
-        contactoTelefono: venta.contactoTelefono ?? null,
-        branchId: venta.branchId,
-        /*
-         * Se cobra y se lleva: el pedido nace entregado. La excepción es el
-         * acopio, que nace "listo": la mercadería queda en el depósito
-         * esperando los retiros, y cada retiro sale con su remito.
-         */
-        estado: venta.acopio ? "listo" : "entregado",
-        origen: "mostrador",
-        tipoEntrega: "retiro",
-        subtotal: subtotal.toFixed(2),
-        descuento: descuento.toFixed(2),
-        descuentoMotivo:
-          descuento > 0
-            ? (venta.descuentoMotivo ?? motivoAutomatico)
-            : null,
-        total: total.toFixed(2),
-        medioPago,
-        /*
-         * Lo que fue a cuenta corriente sigue debiéndose: todo a cuenta es
-         * "pendiente", una parte es "parcial", nada es "pagado".
-         */
-        estadoPago:
-          parteCuenta >= total - 0.009
-            ? "pendiente"
-            : parteCuenta > 0
-              ? "parcial"
-              : "pagado",
-        sellerId,
-        notas: venta.notas ?? null,
-        createdByUserId: venta.usuarioId,
-      })
-      .returning({ id: orders.id });
+        if (!turno && !diferida) {
+          return {
+            ok: false as const,
+            error: "No hay caja abierta en esta sucursal. Abrila antes de cobrar en efectivo.",
+          };
+        }
 
-    /*
-     * El corte, si la venta lleva uno.
-     *
-     * Nace en la cola del taller, atado a este pedido. Las pasadas vienen ya
-     * calculadas por el plano —son las cobrables, las de las placas que no se
-     * venden enteras— porque es lo que se acaba de cobrar: cargarlas en cero
-     * obligaría a alguien a volver a medirlas para un trabajo ya facturado.
-     */
-    if (venta.corte && venta.corte.piezas.length > 0) {
-      const numeroCorte = await siguienteNumeroDeCorte(tx);
-      const [corte] = await tx
-        .insert(cuttingOrders)
+        /*
+         * Una venta diferida sin turno donde caer **se guarda igual**. Rechazarla
+         * sería perder plata que ya se cobró y mercadería que ya se llevaron, por
+         * un turno que nadie abrió. Queda sin movimiento de caja y `/admin/caja`
+         * la muestra aparte para asignarla a mano.
+         */
+        sesionId = turno?.id ?? null;
+      }
+
+      // Con lock sobre la serie: dos cajas cobrando a la vez leían el mismo
+      // máximo y la segunda moría contra el índice único, con el cliente enfrente.
+      const numero = await siguienteNumeroDePedido(tx);
+
+      const [pedido] = await tx
+        .insert(orders)
         .values({
-          numero: numeroCorte,
+          numero,
+          claveMostrador: venta.clave,
+          numeroProvisorio: venta.numeroProvisorio ?? null,
+          cobradaAt: venta.cobradaAt ?? null,
+          // `null` significa que nació en línea; las diferidas llevan la marca.
+          sincronizadaAt: venta.cobradaAt ? new Date() : null,
+          /*
+           * La fecha de la venta es la del mostrador, acotada.
+           *
+           * `ventasDeHoy` y el cierre de caja filtran por `createdAt`: si la
+           * conexión vuelve al otro día, las ventas de ayer aparecerían como de
+           * hoy y la caja no cerraría.
+           */
+          createdAt: venta.cobradaAt
+            ? fechaAcotada(venta.cobradaAt)
+            : undefined,
           customerId: venta.customerId,
-          orderId: pedido.id,
           contactoNombre: venta.contactoNombre,
+          contactoTelefono: venta.contactoTelefono ?? null,
           branchId: venta.branchId,
-          variantId: venta.corte.variantId,
-          materialDescripcion: venta.corte.materialDescripcion,
-          placaLargoMm: venta.corte.placaLargoMm,
-          placaAnchoMm: venta.corte.placaAnchoMm,
-          mitad: venta.corte.mitad,
-          placas: venta.corte.placas,
-          pasadas: venta.corte.pasadas,
-          cantoDescripcion: venta.corte.cantoDescripcion,
-          acomodoManual: venta.corte.acomodoManual,
-          estado: "en-cola",
+          /*
+           * Se cobra y se lleva: el pedido nace entregado. La excepción es el
+           * acopio, que nace "listo": la mercadería queda en el depósito
+           * esperando los retiros, y cada retiro sale con su remito.
+           */
+          estado: venta.acopio ? "listo" : "entregado",
+          origen: "mostrador",
+          tipoEntrega: "retiro",
+          subtotal: subtotal.toFixed(2),
+          descuento: descuento.toFixed(2),
+          descuentoMotivo:
+            descuento > 0
+              ? (venta.descuentoMotivo ?? motivoAutomatico)
+              : null,
+          total: total.toFixed(2),
+          medioPago,
+          /*
+           * Lo que fue a cuenta corriente sigue debiéndose: todo a cuenta es
+           * "pendiente", una parte es "parcial", nada es "pagado".
+           */
+          estadoPago:
+            parteCuenta >= total - 0.009
+              ? "pendiente"
+              : parteCuenta > 0
+                ? "parcial"
+                : "pagado",
+          sellerId,
+          notas: venta.notas ?? null,
           createdByUserId: venta.usuarioId,
         })
-        .returning({ id: cuttingOrders.id });
+        .returning({ id: orders.id });
 
-      await tx.insert(cuttingItems).values(
-        venta.corte.piezas.map((pieza, i) => ({
-          cuttingOrderId: corte!.id,
-          largoMm: pieza.largoMm,
-          anchoMm: pieza.anchoMm,
-          cantidad: pieza.cantidad,
-          respetaVeta: pieza.respetaVeta,
-          cantoLargo: pieza.cantoLargo,
-          cantoAncho: pieza.cantoAncho,
-          etiqueta: pieza.etiqueta,
-          aclaracion: pieza.aclaracion,
-          orden: i,
-        })),
-      );
-    }
-
-    // El detalle de cómo se pagó, con lote y cupón. Siempre, aun con un solo
-    // pago: el cierre Z y la conciliación leen de acá.
-    await tx.insert(orderPayments).values(
-      pagos.map((p) => ({
-        orderId: pedido.id,
-        medio: p.medio,
-        importe: p.importe.toFixed(2),
-        nroLote: p.nroLote || null,
-        nroCupon: p.nroCupon || null,
-        cuotas: p.cuotas && p.cuotas > 1 ? p.cuotas : 1,
-        tarjeta: p.tarjeta || null,
-      })),
-    );
-
-    /*
-     * El costo se congela en la línea, igual que el precio. El promedio
-     * ponderado se mueve con cada recepción: leer el de hoy para calcular el
-     * margen de una venta vieja lo reescribiría cada vez que llega un camión.
-     */
-    const factores = await factoresDeStock(tx, lineas);
-    const costos = await costosParaCongelar(
-      tx,
-      lineas.map((l) => l.variantId).filter((v): v is string => Boolean(v)),
-    );
-
-    await tx.insert(orderItems).values(
-      lineas.map((l, i) => {
-        const costo = l.variantId ? costos.get(l.variantId) : undefined;
-        const { presentacion, stockPorUnidad } = factores[i]!;
-        return {
-          orderId: pedido.id,
-          variantId: l.variantId,
-          descripcion: l.descripcion,
-          unidad: l.unidad,
-          cantidad: l.cantidad.toFixed(2),
-          precioUnitario: l.precioUnitario.toFixed(2),
-          subtotal: aCentavos(l.cantidad * l.precioUnitario).toFixed(2),
-          presentacion,
-          stockPorUnidad,
-          // El costo promedio es por unidad de stock: una media placa cuesta
-          // media placa. Sin esto el margen de las medias salía al doble.
-          costoUnitario: costoPorUnidadDeVenta(costo?.costoUnitario, stockPorUnidad),
-          alicuotaIva: costo?.alicuotaIva ?? null,
-          orden: i,
-        };
-      }),
-    );
-
-    if (venta.acopio) {
       /*
-       * En acopio la mercadería no sale: se **reserva**, con la misma función
-       * que usa un pedido confirmado. El movimiento `venta` lo genera cada
-       * retiro parcial, que es cuando de verdad cruza la puerta.
+       * El corte, si la venta lleva uno.
+       *
+       * Nace en la cola del taller, atado a este pedido. Las pasadas vienen ya
+       * calculadas por el plano —son las cobrables, las de las placas que no se
+       * venden enteras— porque es lo que se acaba de cobrar: cargarlas en cero
+       * obligaría a alguien a volver a medirlas para un trabajo ya facturado.
        */
-      await reservarPedido(tx, pedido.id);
-    } else {
-      // Stock: solo las líneas que apuntan a una variante. Un flete o una
-      // diferencia de precio no descuentan nada de ningún estante.
-      for (const [i, l] of lineas.entries()) {
-        if (!l.variantId) continue;
-        const unidades = unidadesDeStock(l.cantidad, factores[i]!.stockPorUnidad);
-        if (unidades <= 0) continue;
+      if (venta.corte && venta.corte.piezas.length > 0) {
+        const numeroCorte = await siguienteNumeroDeCorte(tx);
+        const [corte] = await tx
+          .insert(cuttingOrders)
+          .values({
+            numero: numeroCorte,
+            customerId: venta.customerId,
+            orderId: pedido.id,
+            contactoNombre: venta.contactoNombre,
+            branchId: venta.branchId,
+            variantId: venta.corte.variantId,
+            materialDescripcion: venta.corte.materialDescripcion,
+            placaLargoMm: venta.corte.placaLargoMm,
+            placaAnchoMm: venta.corte.placaAnchoMm,
+            mitad: venta.corte.mitad,
+            placas: venta.corte.placas,
+            pasadas: venta.corte.pasadas,
+            cantoDescripcion: venta.corte.cantoDescripcion,
+            acomodoManual: venta.corte.acomodoManual,
+            estado: "en-cola",
+            createdByUserId: venta.usuarioId,
+          })
+          .returning({ id: cuttingOrders.id });
 
-        await tx
-          .update(inventory)
-          .set({ qty: sql`${inventory.qty} - ${unidades}`, updatedAt: new Date() })
-          .where(
-            and(
-              eq(inventory.variantId, l.variantId),
-              eq(inventory.branchId, venta.branchId),
-            ),
-          );
+        await tx.insert(cuttingItems).values(
+          venta.corte.piezas.map((pieza, i) => ({
+            cuttingOrderId: corte!.id,
+            largoMm: pieza.largoMm,
+            anchoMm: pieza.anchoMm,
+            cantidad: pieza.cantidad,
+            respetaVeta: pieza.respetaVeta,
+            cantoLargo: pieza.cantoLargo,
+            cantoAncho: pieza.cantoAncho,
+            etiqueta: pieza.etiqueta,
+            aclaracion: pieza.aclaracion,
+            orden: i,
+          })),
+        );
+      }
 
-        await tx.insert(inventoryMovements).values({
-          variantId: l.variantId,
-          branchId: venta.branchId,
-          type: "venta",
-          qty: -unidades,
-          note: `Mostrador ${numero}`,
+      // El detalle de cómo se pagó, con lote y cupón. Siempre, aun con un solo
+      // pago: el cierre Z y la conciliación leen de acá.
+      const renglonesDePago = await tx
+        .insert(orderPayments)
+        .values(
+          pagos.map((p) => ({
+            orderId: pedido.id,
+            medio: p.medio,
+            importe: p.importe.toFixed(2),
+            nroLote: p.nroLote || null,
+            // El cupón de un cheque es su número: así el cierre lo muestra.
+            nroCupon: p.medio === "cheque" ? (p.cheque?.numero ?? null) : p.nroCupon || null,
+            cuotas: p.cuotas && p.cuotas > 1 ? p.cuotas : 1,
+            tarjeta: p.medio === "cheque" ? (p.cheque?.banco ?? null) : p.tarjeta || null,
+          })),
+        )
+        .returning({ id: orderPayments.id });
+
+      /*
+       * Los cheques entran a la cartera con la venta, atados a su renglón de
+       * pago. Si el mismo cheque ya estaba cargado, `registrarChequeRecibido`
+       * lanza y la venta entera vuelve atrás: cobrar dos veces el mismo papel es
+       * exactamente lo que el índice de cheques existe para impedir.
+       */
+      for (const [i, p] of pagos.entries()) {
+        if (p.medio !== "cheque" || !p.cheque) continue;
+        await registrarChequeRecibido(tx, {
+          tipo: p.cheque.tipo,
+          numero: p.cheque.numero,
+          banco: p.cheque.banco,
+          librador: p.cheque.librador ?? null,
+          fechaPago: new Date(`${p.cheque.fechaPago}T12:00:00`),
+          importe: p.importe,
+          customerId: venta.customerId,
+          orderPaymentId: renglonesDePago[i]!.id,
+          usuarioId: venta.usuarioId,
+        });
+      }
+
+      /*
+       * El costo se congela en la línea, igual que el precio. El promedio
+       * ponderado se mueve con cada recepción: leer el de hoy para calcular el
+       * margen de una venta vieja lo reescribiría cada vez que llega un camión.
+       */
+      const factores = await factoresDeStock(tx, lineas);
+      const costos = await costosParaCongelar(
+        tx,
+        lineas.map((l) => l.variantId).filter((v): v is string => Boolean(v)),
+      );
+
+      await tx.insert(orderItems).values(
+        lineas.map((l, i) => {
+          const costo = l.variantId ? costos.get(l.variantId) : undefined;
+          const { presentacion, stockPorUnidad } = factores[i]!;
+          return {
+            orderId: pedido.id,
+            variantId: l.variantId,
+            descripcion: l.descripcion,
+            unidad: l.unidad,
+            cantidad: l.cantidad.toFixed(2),
+            precioUnitario: l.precioUnitario.toFixed(2),
+            subtotal: aCentavos(l.cantidad * l.precioUnitario).toFixed(2),
+            presentacion,
+            stockPorUnidad,
+            // El costo promedio es por unidad de stock: una media placa cuesta
+            // media placa. Sin esto el margen de las medias salía al doble.
+            costoUnitario: costoPorUnidadDeVenta(costo?.costoUnitario, stockPorUnidad),
+            alicuotaIva: costo?.alicuotaIva ?? null,
+            orden: i,
+          };
+        }),
+      );
+
+      if (venta.acopio) {
+        /*
+         * En acopio la mercadería no sale: se **reserva**, con la misma función
+         * que usa un pedido confirmado. El movimiento `venta` lo genera cada
+         * retiro parcial, que es cuando de verdad cruza la puerta.
+         */
+        await reservarPedido(tx, pedido.id);
+      } else {
+        // Stock: solo las líneas que apuntan a una variante. Un flete o una
+        // diferencia de precio no descuentan nada de ningún estante.
+        for (const [i, l] of lineas.entries()) {
+          if (!l.variantId) continue;
+          const unidades = unidadesDeStock(l.cantidad, factores[i]!.stockPorUnidad);
+          if (unidades <= 0) continue;
+
+          await tx
+            .update(inventory)
+            .set({ qty: sql`${inventory.qty} - ${unidades}`, updatedAt: new Date() })
+            .where(
+              and(
+                eq(inventory.variantId, l.variantId),
+                eq(inventory.branchId, venta.branchId),
+              ),
+            );
+
+          await tx.insert(inventoryMovements).values({
+            variantId: l.variantId,
+            branchId: venta.branchId,
+            type: "venta",
+            qty: -unidades,
+            note: `Mostrador ${numero}`,
+            createdByUserId: venta.usuarioId,
+          });
+        }
+      }
+
+      if (sesionId && parteEfectivo > 0) {
+        // Al cajón entra solo la parte en efectivo: en una venta partida, lo que
+        // fue por débito no está en la caja y el arqueo no lo puede esperar.
+        await tx.insert(cashMovements).values({
+          sessionId: sesionId,
+          tipo: "venta",
+          monto: parteEfectivo.toFixed(2),
+          motivo: numero,
+          orderId: pedido.id,
+          creadoPor: venta.usuarioId,
+          // La misma fecha que el pedido: si el movimiento dijera la hora de la
+          // sincronización, el listado del turno tendría la plata ordenada por
+          // cuándo volvió el wifi.
+          createdAt: venta.cobradaAt ? fechaAcotada(venta.cobradaAt) : undefined,
+        });
+      }
+
+      if (parteCuenta > 0 && venta.customerId) {
+        // Positivo es lo que el cliente debe, igual que en el resto del libro.
+        await tx.insert(accountMovements).values({
+          customerId: venta.customerId,
+          tipo: "compra",
+          monto: parteCuenta.toFixed(2),
+          detalle: `Venta de mostrador ${numero}`,
+          referencia: numero,
           createdByUserId: venta.usuarioId,
         });
       }
-    }
 
-    if (sesionId && parteEfectivo > 0) {
-      // Al cajón entra solo la parte en efectivo: en una venta partida, lo que
-      // fue por débito no está en la caja y el arqueo no lo puede esperar.
-      await tx.insert(cashMovements).values({
-        sessionId: sesionId,
-        tipo: "venta",
-        monto: parteEfectivo.toFixed(2),
-        motivo: numero,
+      // La plata que entró queda anotada donde se mira la plata que entró, sin
+      // importar por qué canal. Un renglón por cada pago que no sea deuda.
+      for (const pago of pagos) {
+        if (pago.medio === "cuenta_corriente") continue;
+        await tx.insert(payments).values({
+          orderId: pedido.id,
+          customerId: venta.customerId,
+          tipo: "pedido",
+          proveedor: "mostrador",
+          medio: pago.medio,
+          monto: pago.importe.toFixed(2),
+          estado: "aprobado",
+          conciliadoPor: venta.usuarioId,
+          conciliadoAt: new Date(),
+          createdByUserId: venta.usuarioId,
+        });
+      }
+
+      return {
+        ok: true as const,
         orderId: pedido.id,
-        creadoPor: venta.usuarioId,
-        // La misma fecha que el pedido: si el movimiento dijera la hora de la
-        // sincronización, el listado del turno tendría la plata ordenada por
-        // cuándo volvió el wifi.
-        createdAt: venta.cobradaAt ? fechaAcotada(venta.cobradaAt) : undefined,
-      });
-    }
-
-    if (parteCuenta > 0 && venta.customerId) {
-      // Positivo es lo que el cliente debe, igual que en el resto del libro.
-      await tx.insert(accountMovements).values({
-        customerId: venta.customerId,
-        tipo: "compra",
-        monto: parteCuenta.toFixed(2),
-        detalle: `Venta de mostrador ${numero}`,
-        referencia: numero,
-        createdByUserId: venta.usuarioId,
-      });
-    }
-
-    // La plata que entró queda anotada donde se mira la plata que entró, sin
-    // importar por qué canal. Un renglón por cada pago que no sea deuda.
-    for (const pago of pagos) {
-      if (pago.medio === "cuenta_corriente") continue;
-      await tx.insert(payments).values({
-        orderId: pedido.id,
-        customerId: venta.customerId,
-        tipo: "pedido",
-        proveedor: "mostrador",
-        medio: pago.medio,
-        monto: pago.importe.toFixed(2),
-        estado: "aprobado",
-        conciliadoPor: venta.usuarioId,
-        conciliadoAt: new Date(),
-        createdByUserId: venta.usuarioId,
-      });
-    }
-
-    return {
-      ok: true as const,
-      orderId: pedido.id,
-      numero,
-      total,
-      nueva: true,
-      lineas,
-    };
-  });
+        numero,
+        total,
+        nueva: true,
+        lineas,
+      };
+    });
+  } catch (error) {
+    // Un cheque repetido: la transacción ya volvió atrás entera.
+    if (error instanceof ErrorDeCobro) return { ok: false, error: error.message };
+    throw error;
+  }
 }

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/dal/session";
 import { obtenerCorte } from "@/lib/dal/admin/cortes";
 import {
-  calcularPlanoDeCorte,
+  calcularPlanoDeCorteSinTrabar,
   leerAcomodoManual,
 } from "@/lib/cortes/plano";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
@@ -37,7 +37,7 @@ export default async function PlanoDeCortePage({
   const corte = await obtenerCorte(id);
   if (!corte) notFound();
 
-  const plano = calcularPlanoDeCorte({
+  const plano = await calcularPlanoDeCorteSinTrabar({
     piezas: corte.piezas,
     placaLargo: corte.medida.largo,
     placaAncho: corte.medida.ancho,

@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { cartCortes } from "@/lib/db/schema";
 import { placaCortable, type PlacaCortable } from "@/lib/dal/cortes-publico";
 import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
-import { calcularPlanoDeCorte, type PiezaAcortar } from "@/lib/cortes/plano";
+import { calcularPlanoDeCorteSinTrabar, type PiezaAcortar } from "@/lib/cortes/plano";
 import {
   presupuestarCorte,
   type PresupuestoDeCorte,
@@ -111,7 +111,7 @@ export async function resolverCortesDelCarrito(
       mitad,
     });
 
-    const plano = calcularPlanoDeCorte({
+    const plano = await calcularPlanoDeCorteSinTrabar({
       piezas,
       placaLargo: medida.largo,
       placaAncho: medida.ancho,

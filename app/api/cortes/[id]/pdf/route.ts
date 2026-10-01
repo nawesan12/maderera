@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/dal/session";
 import { obtenerCorte } from "@/lib/dal/admin/cortes";
 import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
-import { calcularPlanoDeCorte, leerAcomodoManual } from "@/lib/cortes/plano";
+import { calcularPlanoDeCorteSinTrabar, leerAcomodoManual } from "@/lib/cortes/plano";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 import { cortePdf } from "@/lib/pdf/corte";
@@ -29,7 +29,7 @@ export async function GET(
 
   if (!corte) return new NextResponse("No encontrado", { status: 404 });
 
-  const plano = calcularPlanoDeCorte({
+  const plano = await calcularPlanoDeCorteSinTrabar({
     piezas: corte.piezas,
     placaLargo: corte.medida.largo,
     placaAncho: corte.medida.ancho,

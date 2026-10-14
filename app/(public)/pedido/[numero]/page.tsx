@@ -85,7 +85,11 @@ async function Seguimiento({
   numero: string;
   searchParams: Promise<{ t?: string }>;
 }) {
-  const [whatsapp, { t }] = await Promise.all([enlaceWhatsapp(), searchParams]);
+  // Con el número puesto: es lo primero que se le pregunta a quien escribe.
+  const [whatsapp, { t }] = await Promise.all([
+    enlaceWhatsapp(`Hola! Consulto por mi pedido ${numero.slice(0, 20)}.`),
+    searchParams,
+  ]);
 
   // La consulta vive en el DAL, con el control de acceso adentro. Antes estaba
   // suelta acá y filtraba solo por número, que es consecutivo: alcanzaba con

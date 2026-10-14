@@ -167,8 +167,33 @@ plantillas aprobadas. El sistema avisa cuando la ventana está por cerrarse.
 No es una limitación del panel: es de WhatsApp, y vale para cualquier
 herramienta.
 
+### Atender una conversación
+
+- **Asignarla**: el desplegable de arriba dice quién la atiende. Así dos
+  personas no contestan lo mismo, y el filtro **Mías** muestra lo propio.
+- **Resuelta**: cuando ya no hay nada pendiente. Si el cliente vuelve a
+  escribir, se reabre sola.
+- **Responder a un mensaje**: pasando el mouse por lo que escribió el cliente
+  aparecen *Responder* (lo cita, como en el teléfono) y las reacciones.
+- **Mandar un papel**: el botón **Documento** lista los presupuestos,
+  facturas, remitos, recibos y cortes del cliente, y el resumen de cuenta. Se
+  elige y sale el PDF. También se puede mandar desde la pantalla del remito,
+  del presupuesto, de la factura o de la ficha, con **Por WhatsApp**.
+- **Fotos y archivos**: el clip, como en cualquier chat.
+- **Sin ficha**: a la derecha se busca el cliente para vincularlo, o se le crea
+  la ficha con el teléfono ya puesto.
+
+Cuando un mensaje **no sale**, queda en rojo con el motivo («pasaron más de 24
+horas», «el número no tiene WhatsApp») y un botón **Reintentar**: lo escrito no
+se pierde.
+
 ### Avisos automáticos
 
-Cuando un pedido cambia de estado, al cliente le sale el aviso solo. Se
-configura en *Avisos*, evento por evento, y se puede apagar el que no
-corresponda.
+Cuando un pedido cambia de estado, se registra un pago o se rechaza un cheque,
+al cliente le puede salir el aviso solo. Se prenden uno por uno en
+*WhatsApp → Configuración* (solo administración), y nacen apagados porque cada
+mensaje lo cobra Meta.
+
+Si un cliente escribe **BAJA**, no le sale ningún aviso más (y se le confirma);
+con **ALTA** vuelve. También se puede marcar desde la conversación, a la
+derecha.

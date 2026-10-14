@@ -29,8 +29,8 @@ export default async function DetallePresupuestoPage({
 }: {
   params: Promise<{ numero: string }>;
 }) {
-  const whatsapp = await enlaceWhatsapp();
   const { numero } = await params;
+  const whatsapp = await enlaceWhatsapp(`Hola! Consulto por el presupuesto ${numero.slice(0, 20)}.`);
   const presupuesto = await miPresupuesto(numero);
 
   if (!presupuesto) notFound();

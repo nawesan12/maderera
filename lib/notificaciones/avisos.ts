@@ -237,6 +237,10 @@ export async function notificarPedidoRecibido(orderId: string): Promise<void> {
       etiqueta: "venta_ecommerce",
     });
 
+    // Al cliente por WhatsApp, si ese aviso está prendido. No espera al correo.
+    const { avisarCambioDePedido } = await import("@/lib/whatsapp/avisos");
+    await avisarCambioDePedido(orderId, "pedido_recibido");
+
     if (!pedido.contactoEmail) return;
 
     const lineas = await db

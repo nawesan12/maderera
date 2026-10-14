@@ -4,7 +4,8 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { quoteItems, quotes } from "@/lib/db/schema";
 import { envolver, presupuestoListo, type CorreoArmado } from "@/lib/email/plantillas";
-import { fechaHora } from "@/lib/formato";
+import { fechaCorta, fechaHora, moneda } from "@/lib/formato";
+import { avisarPorWhatsapp } from "@/lib/whatsapp/avisos";
 import { urlBase } from "@/lib/pagos/config";
 import { despacharEmail } from "./avisos";
 
@@ -88,7 +89,28 @@ export async function notificarPresupuestoEnviado(
       .where(eq(quotes.id, quoteId))
       .limit(1);
 
-    if (!presupuesto?.contactoEmail) return;
+    if (!presupuesto) return;
+
+    // Por WhatsApp va con el PDF del presupuesto, el mismo que se descarga
+    // desde el panel. Independiente del correo: hay quien solo tiene teléfono.
+    await avisarPorWhatsapp({
+      evento: "presupuesto_listo",
+      telefono: presupuesto.contactoTelefono,
+      nombre: presupuesto.contactoNombre,
+      valores: {
+        presupuesto: presupuesto.numero,
+        total: moneda.format(Number(presupuesto.total)),
+        vence: presupuesto.validoHasta ? fechaCorta.format(presupuesto.validoHasta) : "consultar",
+      },
+      documento: async () => {
+        const { documentoPdf } = await import("@/lib/whatsapp/documentos");
+        const pdf = await documentoPdf({ tipo: "presupuesto", id: quoteId });
+        return pdf ? { contenido: pdf.contenido, nombre: pdf.nombre } : null;
+      },
+      entidad: { tipo: "quote", id: quoteId },
+    });
+
+    if (!presupuesto.contactoEmail) return;
 
     const lineas = await db
       .select({

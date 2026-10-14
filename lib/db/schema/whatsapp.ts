@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -68,6 +69,15 @@ export const conversaciones = pgTable(
     id: uuid().primaryKey().defaultRandom(),
     /** Número en formato de WhatsApp: "5492235550000@s.whatsapp.net". */
     waJid: text().notNull(),
+    /**
+     * El identificador de la persona para este negocio (BSUID, `AR.…`).
+     *
+     * Meta lo manda desde abril de 2026 porque WhatsApp admite nombres de
+     * usuario: quien usa uno y no habló con la maderera en los últimos 30 días
+     * llega **sin número**, solo con esto. En ese caso `waJid` guarda
+     * `bsuid:<id>` y los envíos van por `recipient` en vez de `to`.
+     */
+    usuarioMetaId: text(),
     /** Cómo se llama la persona según su perfil de WhatsApp. */
     displayName: text(),
     /** Ficha del cliente, si se pudo identificar por el teléfono. */
@@ -91,11 +101,28 @@ export const conversaciones = pgTable(
     ultimoEntranteAt: timestamp({ withTimezone: true }),
     noLeidos: integer().notNull().default(0),
     notas: text(),
+    /**
+     * Cuándo pidió que no le escriban más («BAJA»).
+     *
+     * Va en la conversación y no en la ficha porque el consentimiento es del
+     * número: un cliente con dos teléfonos puede querer los avisos en uno solo,
+     * y alguien que todavía no es cliente también puede pedir la baja. Con
+     * esto puesto no sale ningún aviso automático ni campaña a ese número; las
+     * respuestas a lo que él pregunte, sí.
+     */
+    bajaAt: timestamp({ withTimezone: true }),
+    /** Lo que escribió para pedirla, o quién la cargó desde el panel. */
+    bajaDetalle: text(),
+    /** Quién la marcó como resuelta, para la lista de «lo que atendí hoy». */
+    resueltaPorUserId: text().references(() => user.id, { onDelete: "set null" }),
+    resueltaAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("whatsapp_conversaciones_jid_idx").on(t.waJid),
+    index("whatsapp_conversaciones_asignado_idx").on(t.asignadoAUserId),
+    index("whatsapp_conversaciones_usuario_meta_idx").on(t.usuarioMetaId),
     index("whatsapp_conversaciones_ultimo_idx").on(t.ultimoMensajeAt),
     index("whatsapp_conversaciones_customer_idx").on(t.customerId),
     index("whatsapp_conversaciones_estado_idx").on(t.estado),
@@ -118,12 +145,62 @@ export const mensajes = pgTable(
      * bandeja.
      */
     waMessageId: text(),
+    /**
+     * El tipo de mensaje de WhatsApp: `text`, `image`, `location`,
+     * `interactive`… (ver `lib/whatsapp/payload.ts`). Texto y no enum: Meta
+     * agrega tipos, y uno nuevo tiene que poder guardarse sin migrar.
+     */
+    tipo: text().notNull().default("text"),
     cuerpo: text().notNull().default(""),
+    /**
+     * Dónde quedó guardado el adjunto, **nunca una URL pública**: son fotos y
+     * documentos de conversaciones privadas. La bandeja lo pide por
+     * `/api/whatsapp/medios/<id del mensaje>`, que exige sesión de la bandeja.
+     * Los mensajes viejos pueden tener `/subidas/…`, que la ruta también lee.
+     */
     mediaUrl: text(),
     mediaTipo: tipoMedia(),
     mediaMime: text(),
     mediaNombre: text(),
+    /**
+     * El id del adjunto en Meta. La URL de descarga vence a los minutos, pero
+     * con el id se pide otra: es lo que permite reintentar una descarga que
+     * falló sin perder lo que mandó el cliente.
+     */
+    mediaId: text(),
+    /** `listo`, `pendiente` (se está bajando) o `fallido` (se puede reintentar). */
+    mediaEstado: text(),
+    mediaBytes: integer(),
+    /** Si cita a otro mensaje (responder a…), el id de WhatsApp de ese. */
+    citadoWaMessageId: text(),
+    /** Ubicación, contactos, botón tocado, anuncio de origen. */
+    datos: jsonb().$type<Record<string, unknown>>(),
+    /** El emoji que le puso el cliente a este mensaje. */
+    reaccionCliente: text(),
+    /** El emoji que le pusimos nosotros. */
+    reaccionNuestra: text(),
     estado: estadoMensaje().notNull().default("enviado"),
+    estadoAt: timestamp({ withTimezone: true }),
+    /**
+     * Por qué no salió, con el código de Meta (131047 fuera de la ventana,
+     * 190 token vencido…). El mensaje fallido se guarda igual: el texto que
+     * escribió quien atiende no se pierde y se puede reintentar.
+     */
+    errorCodigo: integer(),
+    errorDetalle: text(),
+    /**
+     * Lo que Meta dice que cobra por este mensaje (`pricing` del estado):
+     * categoría y si es facturable. Con esto la configuración muestra cuánto
+     * se gastó en el mes sin esperar la factura de Meta.
+     */
+    cobroCategoria: text(),
+    cobrable: boolean(),
+    /**
+     * De dónde salió un saliente: `panel` (alguien de la bandeja), `aviso`
+     * (automático), `telefono` (escrito desde la app con el número en
+     * coexistencia) o `sistema` (la confirmación de una baja).
+     */
+    origen: text(),
     /** Si salió como plantilla aprobada, cuál. */
     plantilla: text(),
     /** Quién lo mandó desde el panel. Null si lo generó un aviso automático. */
@@ -135,6 +212,8 @@ export const mensajes = pgTable(
   (t) => [
     index("whatsapp_mensajes_conversacion_idx").on(t.conversacionId, t.ocurridoAt),
     uniqueIndex("whatsapp_mensajes_wa_id_idx").on(t.waMessageId),
+    // Para el gasto del mes: se cuenta por fecha y solo lo facturable.
+    index("whatsapp_mensajes_cobro_idx").on(t.cobrable, t.createdAt),
   ],
 );
 
@@ -153,8 +232,47 @@ export const sesionWhatsapp = pgTable("whatsapp_sesion", {
   telefono: text(),
   ultimaSenal: timestamp({ withTimezone: true }),
   detalle: text(),
+  /** Último POST de Meta con firma válida: si no llega nada, el webhook no está suscripto. */
+  ultimoWebhookAt: timestamp({ withTimezone: true }),
+  /** Calidad del número según Meta (GREEN, YELLOW, RED) y el último cambio de límite. */
+  calidad: text(),
+  limiteMensajes: text(),
+  /** El último chequeo de la configuración, para no repetirlo en cada visita. */
+  diagnostico: jsonb().$type<Record<string, unknown>>(),
+  diagnosticoAt: timestamp({ withTimezone: true }),
   updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Las plantillas del WABA, copiadas de Meta.
+ *
+ * Se sincronizan (botón de la configuración, tarea diaria y el webhook
+ * `message_template_status_update`) en vez de pedirlas en cada render: la
+ * bandeja las necesita para decidir qué ofrecer fuera de la ventana de 24 h, y
+ * la Graph API no puede estar en el camino de abrir una conversación.
+ *
+ * Una fila por nombre **e idioma**, que es como las identifica Meta.
+ */
+export const plantillasWhatsapp = pgTable(
+  "whatsapp_plantillas",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    metaId: text(),
+    nombre: text().notNull(),
+    idioma: text().notNull(),
+    /** MARKETING, UTILITY o AUTHENTICATION: decide cuánto cuesta cada envío. */
+    categoria: text(),
+    /** APPROVED, PENDING, REJECTED, PAUSED, DISABLED… Solo APPROVED se ofrece. */
+    estado: text().notNull(),
+    motivoRechazo: text(),
+    /** POSITIONAL ({{1}}) o NAMED ({{nombre}}). */
+    formatoParametros: text().notNull().default("POSITIONAL"),
+    /** Los componentes tal como los devuelve Meta (HEADER, BODY, FOOTER, BUTTONS). */
+    componentes: jsonb().$type<unknown[]>().notNull(),
+    sincronizadaAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("whatsapp_plantillas_nombre_idioma_idx").on(t.nombre, t.idioma)],
+);
 
 /**
  * Avisos automáticos al cambiar el estado de un pedido.
@@ -217,3 +335,4 @@ export const mensajesRelations = relations(mensajes, ({ one }) => ({
 export type Conversacion = typeof conversaciones.$inferSelect;
 export type MensajeWhatsapp = typeof mensajes.$inferSelect;
 export type AvisoWhatsapp = typeof avisosWhatsapp.$inferSelect;
+export type PlantillaWhatsapp = typeof plantillasWhatsapp.$inferSelect;

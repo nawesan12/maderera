@@ -142,8 +142,10 @@ export default async function ProductoPage({
 
   const [whatsapp, numeroDelNegocio, resenas, resumenResenas, hoy] =
     await Promise.all([
+      // Con el enlace a la ficha: quien atiende ve de qué producto se habla
+      // sin preguntar, y WhatsApp lo muestra como tarjeta con la foto.
       enlaceWhatsapp(
-        `Hola! Me interesa: ${producto.name}. ¿Podrían darme más información?`,
+        `Hola! Me interesa: ${producto.name}. ¿Podrían darme más información?\n${urlAbsoluta(`/catalogo/${producto.slug}`)}`,
       ),
       numeroWhatsapp(),
       resenasDelProducto(producto.id),

@@ -16,26 +16,13 @@ export interface AvisoConfigurable {
   plantilla: string;
   textoLibre: string | null;
   activo: boolean;
+  titulo: string;
+  cuando: string;
+  /** Si la plantilla está aprobada en Meta: sin eso, fuera de la ventana no sale. */
+  plantillaAprobada: boolean;
+  /** Los datos que se pueden usar en el texto: {{nombre}}, {{pedido}}… */
+  datos: string[];
 }
-
-const TITULOS: Record<string, { titulo: string; cuando: string }> = {
-  preparando: {
-    titulo: "Cuando se empieza a preparar",
-    cuando: "Apenas alguien mueve el pedido a Preparando.",
-  },
-  listo: {
-    titulo: "Cuando queda listo",
-    cuando: "El aviso que más consultas evita: el cliente sabe cuándo venir.",
-  },
-  "en-camino": {
-    titulo: "Cuando sale el flete",
-    cuando: "Solo en pedidos con envío.",
-  },
-  entregado: {
-    titulo: "Cuando se entrega",
-    cuando: "Cierra el círculo y deja la conversación abierta por si hay algo.",
-  },
-};
 
 /**
  * Un aviso automático, con su interruptor y su texto.
@@ -55,10 +42,7 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
   );
   const [editando, setEditando] = useState(false);
 
-  const info = TITULOS[aviso.evento] ?? {
-    titulo: aviso.evento,
-    cuando: "",
-  };
+  const info = { titulo: aviso.titulo, cuando: aviso.cuando };
 
   return (
     <li className={aviso.activo ? "tarjeta p-5" : "tarjeta-hundida p-5"}>
@@ -71,8 +55,14 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
             </p>
           )}
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Plantilla en Meta:{" "}
-            <span className="tabular">{aviso.plantilla}</span>
+            Plantilla en Meta: <span className="tabular">{aviso.plantilla}</span>{" "}
+            {aviso.plantillaAprobada ? (
+              <span className="estado-ok rounded bg-[var(--estado-fondo)] px-1.5 py-0.5 text-[var(--estado-tinta)]">aprobada</span>
+            ) : (
+              <span className="estado-espera rounded bg-[var(--estado-fondo)] px-1.5 py-0.5 text-[var(--estado-tinta)]">
+                sin aprobar: fuera de las 24 h no sale
+              </span>
+            )}
           </p>
         </div>
 
@@ -132,8 +122,7 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
               className="w-full rounded-lg border bg-background px-3 py-2.5 text-base"
             />
             <p className="text-sm text-muted-foreground">
-              Se reemplazan {"{{1}}"} por el nombre, {"{{2}}"} por el número de
-              pedido y {"{{3}}"} por la sucursal.
+              Datos que se completan solos: {aviso.datos.map((d) => `{{${d}}}`).join(", ")}.
             </p>
             <div className="flex gap-2">
               <button

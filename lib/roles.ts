@@ -60,6 +60,12 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin": ["admin", "vendedor", "deposito"],
   "/admin/pedidos": ["admin", "vendedor", "deposito"],
   "/admin/whatsapp": ["admin", "vendedor"],
+  /*
+   * La configuración de WhatsApp es del admin: prender un aviso le escribe a
+   * todos los clientes que lleguen a ese estado, y cada mensaje se cobra. El
+   * diagnóstico muestra además datos de la cuenta de Meta.
+   */
+  "/admin/whatsapp/configuracion": ["admin"],
   "/admin/presupuestos": ["admin", "vendedor"],
   /*
    * Los cortes los ve todo el personal, **incluido el aserradero**, que es el

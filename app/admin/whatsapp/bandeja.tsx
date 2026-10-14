@@ -3,49 +3,57 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MessageSquarePlus, Search } from "lucide-react";
+import { BellOff, MessageSquarePlus, Search } from "lucide-react";
 import { haceCuanto, jidCorto } from "./formato-wa";
 import { Hilo } from "./hilo";
 import { PanelCliente } from "./panel-cliente";
 import { NuevaConversacion } from "./nueva-conversacion";
-import type { ConversacionListada } from "@/lib/dal/admin/whatsapp";
-import type { PlantillaAprobada } from "@/lib/whatsapp/tipos";
+import type { ConversacionListada, DetalleConversacion, FiltroBandeja } from "@/lib/dal/admin/whatsapp";
+import type { PlantillaDisponible } from "@/lib/whatsapp/catalogo";
 import { useEnVivo } from "@/lib/vivo/use-en-vivo";
 
-type Detalle = NonNullable<
-  Awaited<ReturnType<typeof import("@/lib/dal/admin/whatsapp").obtenerConversacion>>
->;
+export interface Persona {
+  id: string;
+  nombre: string;
+}
 
-const FILTROS = [
+const FILTROS: { valor: FiltroBandeja; texto: string; contador?: "sinLeer" | "mias" | "sinAsignar" }[] = [
   { valor: "todas", texto: "Abiertas" },
-  { valor: "sin-leer", texto: "Sin leer" },
-  { valor: "cerradas", texto: "Archivadas" },
-] as const;
+  { valor: "sin-leer", texto: "Sin leer", contador: "sinLeer" },
+  { valor: "mias", texto: "Mías", contador: "mias" },
+  { valor: "sin-asignar", texto: "Sin asignar", contador: "sinAsignar" },
+  { valor: "resueltas", texto: "Resueltas" },
+];
 
 /**
  * Bandeja de WhatsApp: lista, conversación y ficha del cliente.
  *
  * Tres columnas en escritorio porque las tres se miran a la vez mientras se
  * contesta: quién escribió, qué dijo, y qué le debe o qué pidió. En pantallas
- * chicas se muestra una sola —la lista, o la conversación si hay una abierta—,
- * que es como se usa desde el teléfono del mostrador.
+ * chicas se muestra una sola —la lista, o la conversación si hay una
+ * abierta—, que es como se usa desde el teléfono del mostrador.
  *
- * La conversación abierta va en la URL (`?chat=`) y no en el estado del
- * componente: así el enlace a una charla se puede pasar por interno y
- * recargar la página no vuelve a la primera.
+ * La conversación abierta va en la URL (`?chat=`): así el enlace a una charla
+ * se puede pasar por interno, y el aviso del teléfono abre justo esa.
  */
 export function Bandeja({
   conversaciones,
   detalle,
   filtro,
+  contadores,
   plantillas,
+  personal,
+  usuarioId,
   modoDemo,
   pantallaCompleta = false,
 }: {
   conversaciones: ConversacionListada[];
-  detalle: Detalle | null;
-  filtro: "todas" | "sin-leer" | "cerradas";
-  plantillas: PlantillaAprobada[];
+  detalle: DetalleConversacion | null;
+  filtro: FiltroBandeja;
+  contadores: { sinLeer: number; mias: number; sinAsignar: number };
+  plantillas: PlantillaDisponible[];
+  personal: Persona[];
+  usuarioId: string;
   modoDemo: boolean;
   pantallaCompleta?: boolean;
 }) {
@@ -57,11 +65,10 @@ export function Bandeja({
   const [abriendoNueva, setAbriendoNueva] = useState(false);
 
   /*
-   * Los mensajes nuevos llegan en vivo (ver `lib/vivo`): el webhook escribe,
-   * Postgres avisa y esta pantalla se refresca al instante. Donde no hay
-   * tiempo real —en Vercel— vuelve a consultar cada diez segundos, como
-   * antes: el intervalo que hace que una respuesta se note enseguida sin
-   * castigar a la base con una consulta por segundo.
+   * Los mensajes nuevos y los estados llegan en vivo (ver `lib/vivo`): el
+   * webhook escribe, Postgres avisa y esta pantalla se refresca al instante,
+   * con el contador del menú incluido. Donde no hay tiempo real —en Vercel—
+   * vuelve a consultar cada diez segundos.
    */
   const enVivo = useEnVivo(["whatsapp"], () => router.refresh());
   useEffect(() => {
@@ -70,15 +77,14 @@ export function Bandeja({
     return () => clearInterval(reloj);
   }, [router, enVivo]);
 
-  const visibles = busqueda.trim()
-    ? conversaciones.filter((c) => {
-        const texto = busqueda.trim().toLowerCase();
-        return (
+  const texto = busqueda.trim().toLowerCase();
+  const visibles = texto
+    ? conversaciones.filter(
+        (c) =>
           c.nombre.toLowerCase().includes(texto) ||
-          c.waJid.includes(texto.replace(/\D/g, "")) ||
-          (c.ultimoMensajePreview ?? "").toLowerCase().includes(texto)
-        );
-      })
+          (texto.replace(/\D/g, "") !== "" && c.waJid.includes(texto.replace(/\D/g, ""))) ||
+          (c.ultimoMensajePreview ?? "").toLowerCase().includes(texto),
+      )
     : conversaciones;
 
   function enlaceFiltro(valor: string) {
@@ -94,25 +100,16 @@ export function Bandeja({
     return `${pathname}?${nuevos.toString()}`;
   }
 
-  // En el puesto de atención la bandeja ocupa lo que queda de pantalla; dentro
-  // del panel se le descuenta lo que ocupan el menú, el encabezado y el cartel
-  // de estado.
-  const alto = pantallaCompleta
-    ? "min-h-0 flex-1"
-    : "max-h-[calc(100vh-16rem)] min-h-[32rem]";
+  const alto = pantallaCompleta ? "min-h-0 flex-1" : "max-h-[calc(100vh-16rem)] min-h-[32rem]";
 
   return (
     <div
-      className={`grid gap-3 lg:grid-cols-[20rem_1fr] xl:grid-cols-[20rem_1fr_19rem] ${
+      className={`grid gap-3 lg:grid-cols-[21rem_1fr] xl:grid-cols-[21rem_1fr_20rem] ${
         pantallaCompleta ? "min-h-0 flex-1" : "gap-4"
       }`}
     >
       {/* Lista */}
-      <section
-        className={`tarjeta flex flex-col overflow-hidden ${alto} ${
-          detalle ? "hidden lg:flex" : "flex"
-        }`}
-      >
+      <section className={`tarjeta flex flex-col overflow-hidden ${alto} ${detalle ? "hidden lg:flex" : "flex"}`}>
         <div className="space-y-2.5 border-b p-3">
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -136,40 +133,46 @@ export function Bandeja({
             </button>
           </div>
 
-          <div className="flex gap-1">
-            {FILTROS.map((f) => (
-              <Link
-                key={f.valor}
-                href={enlaceFiltro(f.valor)}
-                className={`rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
-                  filtro === f.valor
-                    ? "bg-brand-orange/12 font-medium text-brand-orange-dark"
-                    : "text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                {f.texto}
-              </Link>
-            ))}
-          </div>
+          <nav className="flex flex-wrap gap-1" aria-label="Filtrar conversaciones">
+            {FILTROS.map((f) => {
+              const cantidad = f.contador ? contadores[f.contador] : 0;
+              return (
+                <Link
+                  key={f.valor}
+                  href={enlaceFiltro(f.valor)}
+                  aria-current={filtro === f.valor ? "page" : undefined}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+                    filtro === f.valor
+                      ? "bg-brand-orange/12 font-medium text-brand-orange-dark"
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {f.texto}
+                  {cantidad > 0 && <span className="tabular font-semibold">{cantidad}</span>}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
 
-        {abriendoNueva && (
-          <NuevaConversacion onCerrar={() => setAbriendoNueva(false)} />
-        )}
+        {abriendoNueva && <NuevaConversacion onCerrar={() => setAbriendoNueva(false)} />}
 
         <ul className="flex-1 divide-y overflow-y-auto">
           {visibles.length === 0 ? (
             <li className="px-4 py-10 text-center text-base text-muted-foreground">
               {busqueda
                 ? "No hay conversaciones que coincidan."
-                : filtro === "cerradas"
-                  ? "No hay conversaciones archivadas."
-                  : "Todavía no entró ningún mensaje."}
+                : filtro === "resueltas"
+                  ? "No hay conversaciones resueltas."
+                  : filtro === "mias"
+                    ? "No tenés conversaciones asignadas."
+                    : filtro === "sin-leer" || filtro === "sin-asignar"
+                      ? "Nada por acá: está todo atendido."
+                      : "Todavía no entró ningún mensaje."}
             </li>
           ) : (
             visibles.map((c) => {
               const activa = detalle?.id === c.id;
-
               return (
                 <li key={c.id}>
                   <Link
@@ -180,9 +183,7 @@ export function Bandeja({
                   >
                     <span
                       className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-semibold ${
-                        c.customerId
-                          ? "bg-brand-green/15 text-brand-green"
-                          : "bg-muted text-muted-foreground"
+                        c.customerId ? "bg-brand-green/15 text-brand-green" : "bg-muted text-muted-foreground"
                       }`}
                       aria-hidden
                     >
@@ -191,10 +192,11 @@ export function Bandeja({
 
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-base font-medium">
+                        <span className={`truncate text-base ${c.noLeidos > 0 ? "font-semibold" : "font-medium"}`}>
                           {c.nombre}
                         </span>
-                        <span className="shrink-0 text-sm text-muted-foreground">
+                        {/* El «hace cuánto» cambia entre el render del servidor y el del navegador. */}
+                        <span className="shrink-0 text-sm text-muted-foreground" suppressHydrationWarning>
                           {haceCuanto(c.ultimoMensajeAt)}
                         </span>
                       </span>
@@ -204,17 +206,27 @@ export function Bandeja({
                           {c.ultimoMensajePreview || jidCorto(c.waJid)}
                         </span>
                         {c.noLeidos > 0 && (
-                          <span className="tabular flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand-green px-1.5 text-sm font-semibold text-white">
+                          <span
+                            className="tabular flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-brand-green px-1.5 text-sm font-semibold text-white"
+                            aria-label={`${c.noLeidos} sin leer`}
+                          >
                             {c.noLeidos}
                           </span>
                         )}
                       </span>
 
-                      {!c.customerId && (
-                        <span className="mt-1 inline-block rounded px-1.5 py-0.5 text-sm text-muted-foreground ring-1 ring-inset ring-border">
-                          Sin ficha de cliente
-                        </span>
-                      )}
+                      <span className="mt-1 flex flex-wrap gap-1.5">
+                        {!c.customerId && <Pildora>Sin ficha</Pildora>}
+                        {c.asignadoAUserId && (
+                          <Pildora>{c.asignadoAUserId === usuarioId ? "La atendés vos" : c.asignadoNombre}</Pildora>
+                        )}
+                        {c.ventanaAbierta && <Pildora verde>Ventana abierta</Pildora>}
+                        {c.baja && (
+                          <Pildora>
+                            <BellOff className="h-3.5 w-3.5" /> Sin avisos
+                          </Pildora>
+                        )}
+                      </span>
                     </span>
                   </Link>
                 </li>
@@ -230,30 +242,36 @@ export function Bandeja({
           key={detalle.id}
           detalle={detalle}
           plantillas={plantillas}
+          personal={personal}
+          usuarioId={usuarioId}
           modoDemo={modoDemo}
           alto={alto}
         />
       ) : (
-        <section
-          className={`tarjeta hidden items-center justify-center p-10 text-center lg:flex ${alto}`}
-        >
-          <p className="text-base text-muted-foreground">
-            Elegí una conversación de la lista para leerla y contestar.
-          </p>
+        <section className={`tarjeta hidden items-center justify-center p-10 text-center lg:flex ${alto}`}>
+          <p className="text-base text-muted-foreground">Elegí una conversación de la lista para leerla y contestar.</p>
         </section>
       )}
 
       {/* Ficha del cliente */}
       {detalle && (
-        <div
-          className={`hidden xl:block ${
-            pantallaCompleta ? "min-h-0 overflow-y-auto" : ""
-          }`}
-        >
+        <div className={`hidden xl:block ${pantallaCompleta ? "min-h-0 overflow-y-auto" : ""}`}>
           <PanelCliente detalle={detalle} />
         </div>
       )}
     </div>
+  );
+}
+
+function Pildora({ children, verde = false }: { children: React.ReactNode; verde?: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-sm ring-1 ring-inset ${
+        verde ? "text-green-800 ring-green-700/30" : "text-muted-foreground ring-border"
+      }`}
+    >
+      {children}
+    </span>
   );
 }
 

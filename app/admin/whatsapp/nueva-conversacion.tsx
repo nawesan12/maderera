@@ -1,10 +1,11 @@
 "use client";
 
 import { useActionState, useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, Loader2, X } from "lucide-react";
 import { abrirConversacion, type EstadoWhatsapp } from "./actions";
 
-const estadoInicial: EstadoWhatsapp = {};
+const estadoInicial: EstadoWhatsapp & { conversacionId?: string } = {};
 
 /** Abre una conversación con un número que todavía no escribió. */
 export function NuevaConversacion({ onCerrar }: { onCerrar: () => void }) {
@@ -13,9 +14,18 @@ export function NuevaConversacion({ onCerrar }: { onCerrar: () => void }) {
     estadoInicial,
   );
 
+  const router = useRouter();
+  const pathname = usePathname();
+  const parametros = useSearchParams();
+
+  // Abierta, se va directo a esa conversación: lo que sigue es escribirle.
   useEffect(() => {
-    if (estado.ok) onCerrar();
-  }, [estado.ok, onCerrar]);
+    if (!estado.ok || !estado.conversacionId) return;
+    const nuevos = new URLSearchParams(parametros.toString());
+    nuevos.set("chat", estado.conversacionId);
+    router.push(`${pathname}?${nuevos.toString()}`);
+    onCerrar();
+  }, [estado.ok, estado.conversacionId, onCerrar, router, pathname, parametros]);
 
   return (
     <form action={accion} className="space-y-2 border-b bg-muted/40 p-3">
@@ -52,7 +62,8 @@ export function NuevaConversacion({ onCerrar }: { onCerrar: () => void }) {
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Con código de área, sin el 0 ni el 15.
+        Como lo tengas: con o sin 0, 15 o +54. Sin característica se toma la de Mar del Plata. Si nunca escribió,
+        el primer mensaje tiene que ser uno preparado.
       </p>
 
       {estado.error && (

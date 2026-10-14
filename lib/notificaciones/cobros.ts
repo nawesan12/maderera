@@ -10,6 +10,8 @@ import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 import { reciboPdf } from "@/lib/pdf/recibo";
 import { NOMBRE_DEL_MEDIO } from "@/lib/cobros/partes";
 import { nombreDelCheque } from "@/lib/cheques/numero";
+import { moneda } from "@/lib/formato";
+import { avisarPorWhatsapp } from "@/lib/whatsapp/avisos";
 
 /**
  * Los avisos de cobros: el recibo y el cheque rechazado.
@@ -25,14 +27,31 @@ export async function notificarRecibo(receiptId: string): Promise<void> {
     if (!recibo?.cliente || recibo.estado !== "emitido") return;
 
     const [cliente] = await db
-      .select({ nombre: customers.nombre, email: customers.email })
+      .select({ nombre: customers.nombre, email: customers.email, telefono: customers.telefono })
       .from(customers)
       .where(eq(customers.id, recibo.cliente.id))
       .limit(1);
-    if (!cliente?.email) return;
+    if (!cliente) return;
 
     const pdf = await reciboPdf(recibo, await obtenerConfiguracionFiscal());
     const medios = [...new Set(recibo.partes.map((p) => NOMBRE_DEL_MEDIO[p.medio]))].join(", ");
+
+    // Por WhatsApp, con el mismo PDF. Va aparte del correo y no lo espera:
+    // que uno no salga no frena el otro.
+    await avisarPorWhatsapp({
+      evento: "recibo_emitido",
+      telefono: cliente.telefono,
+      nombre: cliente.nombre,
+      valores: {
+        importe: moneda.format(Number(recibo.total)),
+        recibo: recibo.numero,
+        saldo: moneda.format(Number(recibo.saldoDespues ?? 0)),
+      },
+      documento: async () => ({ contenido: new Uint8Array(pdf), nombre: `recibo-${recibo.numero}.pdf` }),
+      entidad: { tipo: "receipt", id: receiptId },
+    });
+
+    if (!cliente.email) return;
 
     await despacharEmail({
       evento: "recibo_emitido",
@@ -70,12 +89,27 @@ export async function notificarChequeRechazado(
         motivo: cheques.motivoRechazo,
         nombre: customers.nombre,
         email: customers.email,
+        telefono: customers.telefono,
       })
       .from(cheques)
       .innerJoin(customers, eq(customers.id, cheques.customerId))
       .where(eq(cheques.id, chequeId))
       .limit(1);
-    if (!fila?.email) return;
+    if (!fila) return;
+
+    await avisarPorWhatsapp({
+      evento: "cheque_rechazado",
+      telefono: fila.telefono,
+      nombre: fila.nombre,
+      valores: {
+        cheque: nombreDelCheque(fila),
+        importe: moneda.format(Number(fila.importe)),
+        motivo: fila.motivo?.trim() || (porElBanco ? "lo rechazó el banco" : "no se pudo tomar"),
+      },
+      entidad: { tipo: "cheque", id: chequeId },
+    });
+
+    if (!fila.email) return;
 
     await despacharEmail({
       evento: "cheque_rechazado",

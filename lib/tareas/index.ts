@@ -14,6 +14,8 @@ import { pendientesDelRol } from "@/lib/dal/admin/pendientes";
 import { candidatosDeBajaDelSistema } from "@/lib/dal/admin/products";
 import { mesesSinVenderDelSistema } from "@/lib/dal/admin/parametros-catalogo";
 import { sincronizarResenasDeGoogle } from "@/lib/google/resenas";
+import { sincronizarPlantillas } from "@/lib/whatsapp/catalogo";
+import { proveedorWhatsapp } from "@/lib/whatsapp";
 import { periodoDe, type Frecuencia } from "./periodo";
 
 /**
@@ -72,10 +74,14 @@ export const TAREAS = {
   diaria: {
     frecuencia: "dia",
     descripcion:
-      "Recordatorios de eventos, el parte del día al panel y la limpieza de tablas que crecen solas.",
+      "Recordatorios de eventos, el parte del día al panel, las plantillas de WhatsApp y la limpieza de tablas que crecen solas.",
     ejecutar: async () => {
       const recordatorios = await enviarRecordatorios();
       const parte = await mandarParteDelDia();
+      // Por si Meta cambió alguna sin que llegara el webhook (o se cargó una
+      // nueva a mano en el administrador de WhatsApp).
+      const plantillas =
+        proveedorWhatsapp().id === "cloud" ? await sincronizarPlantillas() : { error: "modo demostración" };
 
       const limites = await limpiarVentanasViejas();
       const hace90 = new Date(Date.now() - 90 * 86_400_000);
@@ -93,6 +99,7 @@ export const TAREAS = {
       return {
         recordatorios,
         parte,
+        plantillasWhatsapp: plantillas.error ?? plantillas.total ?? 0,
         limitesBorrados: limites,
         corridasBorradas: corridas.length,
         trabajosBorrados: hechos.length,

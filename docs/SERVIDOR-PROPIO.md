@@ -409,10 +409,16 @@ Si se probó con un subdominio:
 4. `dc logs -f web` hasta ver `certificate obtained successfully` para cada
    nombre (cuatro con el dominio alternativo).
 5. `curl -sI https://mjbj.ar/catalogo` tiene que dar `301` con
-   `location: https://mjbj.com.ar/catalogo`.
-6. **Google Search Console**: dar de alta `mjbj.com.ar` y, desde la propiedad
-   de `mjbj.ar`, usar *Cambio de dirección* hacia la nueva. Con el 301 y eso,
-   Google muda el índice en semanas en vez de meses.
+   `location: https://mjbj.com.ar/catalogo`, y `curl -sI https://mjbj.ar/placas/`
+   con `location: https://mjbj.com.ar/catalogo?cat=placas`: las direcciones
+   del WordPress viejo van cada una a su equivalente
+   (`servidor/caddy/sitio-viejo.caddy`, generado desde `lib/sitio-viejo.ts`).
+6. **Buscadores**: Search Console, *Cambio de dirección*, sitemap, Perfil de
+   Empresa de cada sucursal y Merchant Center, en `docs/SEO-MUDANZA.md`. Ojo
+   antes de empezar: los dos dominios están detrás de Cloudflare, y hoy una
+   regla de Cloudflare manda todo `mjbj.com.ar` a la portada de `mjbj.ar`;
+   esa regla se borra, y los registros van en «Solo DNS» para que Caddy saque
+   los certificados.
 
 Y lo que apunta al sitio desde afuera:
 

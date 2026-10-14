@@ -17,6 +17,7 @@ export function WhatsAppButton({ enlace }: { enlace: string }) {
   return (
     <a
       href={enlace}
+      aria-label="Escribinos por WhatsApp"
       target="_blank"
       rel="noopener noreferrer"
       className="fixed bottom-6 right-6 z-50 flex h-14 w-14 animate-in items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition-all zoom-in fill-mode-backwards duration-300 [animation-delay:1s] hover:scale-110 hover:shadow-xl active:scale-95 motion-reduce:animate-none"

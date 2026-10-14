@@ -112,6 +112,9 @@ export function BarraCatalogo({
         </label>
         <select
           id="orden"
+          // La etiqueta visible se esconde en el teléfono; sin esto el lector
+          // de pantalla anunciaba un desplegable sin nombre.
+          aria-label="Ordenar"
           value={ordenActual}
           onChange={(e) => actualizar({ orden: e.target.value })}
           className="h-12 rounded-[10px] border border-linea bg-card px-3.5 text-[15px] outline-none focus:border-accion"

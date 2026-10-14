@@ -44,8 +44,13 @@ export function Hero({
           alt="Corte de madera con sierra en el aserradero"
           fill
           className="object-cover object-center"
-          priority
-          sizes="46vw"
+          preload
+          fetchPriority="high"
+          // En el teléfono este panel está oculto (`hidden lg:block`), pero el
+          // preload se baja igual: con `46vw` el navegador elegía una foto de
+          // 640 px que nadie veía, compitiendo con el texto del hero. Con
+          // `1px` debajo de `lg` se baja la más chica de la lista.
+          sizes="(min-width: 1024px) 46vw, 1px"
         />
         {/* El degradado solo funde el borde contra el fondo del texto. Antes
             cubría el 38% del panel y se comía justo la sierra, que es lo que
@@ -58,21 +63,33 @@ export function Hero({
 
       <div className="contenedor relative pb-[76px] pt-[88px]">
         <div className="max-w-[560px]">
-          <span className="inline-flex animate-in items-center gap-2.5 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-[13.5px] text-white/85 duration-500 fade-in slide-in-from-left-5 motion-reduce:animate-none">
-            <span
-              className="h-[7px] w-[7px] rounded-full bg-brand-orange motion-safe:animate-pulse"
-              aria-hidden="true"
-            />
-            Desde 1981 en Mar del Plata
-          </span>
+          {/*
+            El título nombra lo que es y dónde: «maderera en Mar del Plata»
+            es lo que se busca, y el lema solo no lo decía. La píldora y el
+            lema son el mismo `<h1>`, con el aspecto de siempre.
 
-          <h1 className="mt-[22px] animate-in text-[40px] font-extrabold leading-[1.02] tracking-[-0.035em] text-balance duration-700 fade-in slide-in-from-bottom-8 fill-mode-backwards [animation-delay:100ms] motion-reduce:animate-none sm:text-5xl lg:text-[60px]">
-            Tu proyecto.
-            <br />
-            <span className="text-brand-orange-light">Nuestra madera.</span>
+            **El lema y la bajada aparecen sin animación de entrada.** Con el
+            `fade-in` que tenían arrancaban invisibles y se pintaban recién
+            cuando el procesador se desocupaba de cargar los scripts: en un
+            teléfono medido con Lighthouse eso era a los 4,6 s, y es el número
+            que Google usa como LCP. La píldora y los botones conservan la suya.
+          */}
+          <h1>
+            <span className="inline-flex animate-in items-center gap-2.5 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-[13.5px] font-normal tracking-normal text-white/85 duration-500 fade-in slide-in-from-left-5 motion-reduce:animate-none">
+              <span
+                className="h-[7px] w-[7px] rounded-full bg-brand-orange motion-safe:animate-pulse"
+                aria-hidden="true"
+              />
+              Maderera en Mar del Plata desde 1981
+            </span>{" "}
+            <span className="mt-[22px] block text-[40px] font-extrabold leading-[1.02] tracking-[-0.035em] text-balance sm:text-5xl lg:text-[60px]">
+              Tu proyecto.
+              <br />
+              <span className="text-brand-orange-light">Nuestra madera.</span>
+            </span>
           </h1>
 
-          <p className="mt-5 max-w-[440px] animate-in text-lg leading-relaxed text-white/75 duration-700 fade-in slide-in-from-bottom-8 fill-mode-backwards [animation-delay:200ms] motion-reduce:animate-none">
+          <p className="mt-5 max-w-[440px] text-lg leading-relaxed text-white/75">
             Maderas, placas y ferretería para obra y carpintería, con corte a
             medida y entrega en toda la ciudad.
           </p>

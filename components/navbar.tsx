@@ -541,7 +541,10 @@ export function Navbar({
 
             {/* Menú del teléfono */}
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <SheetTrigger className="inline-flex h-10 w-10 items-center justify-center rounded-[11px] transition-colors hover:bg-sitio-alt lg:hidden">
+              <SheetTrigger
+                aria-label="Abrir el menú"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-[11px] transition-colors hover:bg-sitio-alt lg:hidden"
+              >
                 <Menu className="h-5 w-5" />
               </SheetTrigger>
               <SheetContent side="right" className="w-80">

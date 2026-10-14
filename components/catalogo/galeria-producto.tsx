@@ -40,7 +40,13 @@ export function GaleriaProducto({
           src={imagenes[activa]}
           alt={`${nombre}${activa > 0 ? ` — foto ${activa + 1}` : ""}`}
           fill
-          priority
+          // Es lo más grande de la ficha y lo que Lighthouse mide como LCP.
+          // `preload` la anuncia en el `<head>` y `fetchPriority` la pone
+          // adelante de los scripts; con el `priority` de antes (deprecado en
+          // Next 16) salía el preload pero no la prioridad.
+          preload
+          fetchPriority="high"
+          loading="eager"
           className="object-cover"
           sizes="(max-width: 1024px) 100vw, 50vw"
         />

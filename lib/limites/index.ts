@@ -57,6 +57,8 @@ export const LIMITES = {
   listaDePrecios: { maximo: 10, ventanaSegundos: 3600 },
   /** Sube hasta 16 MB a Blob con solo el token del pedido. */
   comprobante: { maximo: 10, ventanaSegundos: 3600 },
+  /** Solo escribe en el registro, pero no tiene por qué poder llenarlo. */
+  diagnostico: { maximo: 20, ventanaSegundos: 3600 },
 } as const satisfies Record<string, Limite>;
 
 export type Accion = keyof typeof LIMITES;

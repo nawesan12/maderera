@@ -28,6 +28,7 @@ import {
   precioEnTexto,
   productoJsonLd,
   recortar,
+  urlAbsoluta,
 } from "@/lib/seo";
 import { rutasDelCatalogo } from "@/lib/dal/sitemap";
 import { degradar } from "@/lib/degradar";

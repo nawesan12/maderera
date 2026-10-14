@@ -93,6 +93,9 @@ async function columnasDeTexto(cliente: Client): Promise<Columna[]> {
       JOIN pg_namespace n ON n.oid = c.relnamespace
      WHERE n.nspname = 'public'
        AND c.relkind IN ('r', 'p')
+       -- Los adjuntos de WhatsApp no van a la carpeta pública: los muda
+       -- mudarAdjuntosDeWhatsapp, a la privada.
+       AND NOT (c.relname = 'whatsapp_mensajes' AND a.attname = 'media_url')
        AND a.attnum > 0
        AND NOT a.attisdropped
        AND (format_type(a.atttypid, a.atttypmod) IN ('text', 'json', 'jsonb', 'text[]')
@@ -198,6 +201,7 @@ async function main() {
 
     if (urls.size === 0) {
       console.log("No hay URLs de Vercel Blob en la base. Nada que mudar.");
+      await mudarAdjuntosDeWhatsapp(cliente);
       return;
     }
 
@@ -275,6 +279,8 @@ async function main() {
     console.log(
       `\nListo: ${listas.length} archivos en el disco, ${reescritas} valores reescritos.`,
     );
+
+    await mudarAdjuntosDeWhatsapp(cliente);
     if (fallidas.length > 0) {
       console.log(
         `${fallidas.length} no se pudieron bajar y quedaron como estaban; correr de nuevo para reintentarlas.`,
@@ -284,6 +290,48 @@ async function main() {
   } finally {
     await cliente.end();
   }
+}
+
+/**
+ * Los adjuntos de las conversaciones de WhatsApp, a la carpeta **privada**.
+ *
+ * Son fotos y documentos de clientes: no pueden terminar en `/subidas/`, que
+ * Caddy sirve a cualquiera. Van a `CARPETA_PRIVADA` y la fila queda como
+ * `privado:<nombre>`, que es lo que lee `/api/whatsapp/medios/<id>`. Se
+ * mudan los de Blob y los que quedaron en la carpeta pública de antes.
+ */
+async function mudarAdjuntosDeWhatsapp(cliente: Client) {
+  const privada = process.env.CARPETA_PRIVADA || path.join(process.cwd(), ".privado", "whatsapp");
+  const { rows } = await cliente.query<{ id: string; media_url: string }>(
+    `SELECT id, media_url FROM whatsapp_mensajes
+      WHERE media_url LIKE 'https://%blob.vercel-storage.com/%' OR media_url LIKE '/subidas/whatsapp-%'`,
+  );
+  if (rows.length === 0) return;
+
+  console.log(`\nAdjuntos de WhatsApp a mudar a ${privada}: ${rows.length}`);
+  if (PROBAR) return;
+  await mkdir(privada, { recursive: true });
+
+  let mudados = 0;
+  for (const fila of rows) {
+    const nombre = `whatsapp-${createHash("sha1").update(fila.media_url).digest("hex").slice(0, 24)}${path.extname(fila.media_url.split("?")[0]) || ".bin"}`;
+    const destino = path.join(privada, nombre);
+    try {
+      if (!(await existe(destino))) {
+        if (fila.media_url.startsWith("/subidas/")) {
+          await rename(path.join(CARPETA, path.basename(fila.media_url)), destino);
+        } else {
+          await bajar(fila.media_url, destino);
+        }
+      }
+      await cliente.query("UPDATE whatsapp_mensajes SET media_url = $1 WHERE id = $2", [`privado:${nombre}`, fila.id]);
+      mudados++;
+    } catch (error) {
+      console.log(`  no se pudo: ${fila.media_url} (${(error as Error).message})`);
+      process.exitCode = 1;
+    }
+  }
+  console.log(`Adjuntos de WhatsApp mudados: ${mudados} de ${rows.length}.`);
 }
 
 main().catch((error) => {

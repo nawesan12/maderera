@@ -32,7 +32,7 @@ COPY drizzle.config.ts tsconfig.json ./
 COPY drizzle ./drizzle
 COPY lib/db/schema ./lib/db/schema
 COPY scripts ./scripts
-RUN mkdir -p /datos/subidas && chown 1001:1001 /datos/subidas
+RUN mkdir -p /datos/subidas /datos/privado && chown 1001:1001 /datos/subidas /datos/privado
 ENV HOME=/tmp
 USER 1001:1001
 CMD ["node_modules/.bin/drizzle-kit", "migrate"]
@@ -98,12 +98,12 @@ COPY --from=build /app/public ./public
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Las dos carpetas donde se monta un volumen tienen que existir en la imagen y
+# Las carpetas donde se monta un volumen tienen que existir en la imagen y
 # ser del usuario de la aplicación. Un volumen nuevo hereda el dueño de la
 # carpeta que tapa; si la carpeta no existe, nace de root y la primera foto que
 # se sube desde el panel falla con «permission denied».
-RUN mkdir -p .next/cache /datos/subidas \
-  && chown -R nextjs:nodejs .next/cache /datos/subidas
+RUN mkdir -p .next/cache /datos/subidas /datos/privado \
+  && chown -R nextjs:nodejs .next/cache /datos/subidas /datos/privado
 
 USER nextjs
 EXPOSE 3000

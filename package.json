@@ -25,7 +25,9 @@
     "db:seed-contenido": "tsx --env-file=.env.local lib/db/seed-contenido.ts",
     "db:portadas": "tsx --env-file=.env.local lib/db/portadas.ts",
     "db:seed-retenciones": "tsx --env-file=.env.local lib/db/seed-retenciones.ts",
-    "db:rubros": "tsx --env-file=.env.local lib/db/normalizar-rubros.ts"
+    "db:rubros": "tsx --env-file=.env.local lib/db/normalizar-rubros.ts",
+    "whatsapp:simulador": "tsx --env-file-if-exists=.env.local scripts/simulador-meta.ts",
+    "whatsapp:webhook": "tsx --env-file-if-exists=.env.local scripts/whatsapp-webhook.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

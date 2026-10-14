@@ -74,6 +74,10 @@ services:
       # Las fotos van a un volumen y no adentro de la imagen: si vivieran en
       # `public/`, cada despliegue borraría lo que se subió desde el panel.
       CARPETA_SUBIDAS: /datos/subidas
+      # Los adjuntos de WhatsApp (fotos, PDF y audios de los clientes) van
+      # aparte y **Caddy no monta este volumen**: solo se sirven por
+      # `/api/whatsapp/medios/<id>`, con sesión de la bandeja.
+      CARPETA_PRIVADA: /datos/privado
       # Hay un proceso que vive y un cron: enciende el tiempo real del panel
       # (`lib/vivo`). En Vercel no está y las pantallas consultan cada tanto.
       PLATAFORMA: vps
@@ -92,6 +96,7 @@ services:
       ARCA_CLAVE_PRIVADA_ARCHIVO: /run/secrets/arca/arca.key
     volumes:
       - subidas:/datos/subidas
+      - privado:/datos/privado
       # La caché de Next —las imágenes ya optimizadas y los datos de
       # `unstable_cache`— sobrevive al despliegue. Sin esto, cada deploy
       # arranca en frío y la primera visita a cada foto la vuelve a
@@ -140,8 +145,10 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       DATABASE_SSL: "off"
       CARPETA_SUBIDAS: /datos/subidas
+      CARPETA_PRIVADA: /datos/privado
     volumes:
       - subidas:/datos/subidas
+      - privado:/datos/privado
 
   web:
     image: caddy:2-alpine
@@ -323,6 +330,7 @@ services:
 volumes:
   pgdata:
   subidas:
+  privado:
   next_cache:
   caddy_data:
   caddy_config:

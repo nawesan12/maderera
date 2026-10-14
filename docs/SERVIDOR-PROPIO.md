@@ -360,6 +360,13 @@ JSON de la base buscando URLs de Blob, baja cada archivo al volumen de subidas y
 reescribe la fila a `/subidas/<nombre>`. Se puede correr las veces que haga
 falta; si alguna descarga falla, lo dice y la próxima corrida la reintenta.
 
+**Los adjuntos de WhatsApp son la excepción**: son fotos y documentos de
+clientes, así que no van a `/subidas/` (que Caddy sirve a cualquiera) sino al
+volumen `privado`, y la fila queda como `privado:<nombre>`. El script los muda
+solos, también los que habían quedado en la carpeta pública antes de este
+cambio. **Ese volumen hoy no entra en el respaldo** —tampoco el de subidas—:
+conviene sumarlo a rclone.
+
 **No dar de baja Vercel Blob** hasta que `--probar` diga «No hay URLs de Vercel
 Blob en la base».
 
@@ -419,7 +426,13 @@ Y lo que apunta al sitio desde afuera:
 - **Mercado Pago** → Tus integraciones → Webhooks:
   `https://mjbj.com.ar/api/pagos/webhook`. Las preferencias nuevas ya mandan la
   URL correcta (sale de `APP_URL`).
-- **Meta** → la app de WhatsApp → Webhooks: `https://mjbj.com.ar/api/whatsapp/webhook`.
+- **Meta** → la app de WhatsApp → Webhooks: `https://mjbj.com.ar/api/whatsapp/webhook`,
+  con el verify token de `WHATSAPP_WEBHOOK_SECRET` y los campos `messages` y
+  `message_template_status_update` (el trámite completo, en
+  [WHATSAPP.md](WHATSAPP.md)). Después, en el panel, **WhatsApp →
+  Configuración → Probar la conexión**: tiene que decir «Webhook suscripto» en
+  verde, y «Último aviso de Meta» tiene que tener la hora del primer mensaje que
+  se mande al número para probar.
 - **El agente del taller**, en la PC del aserradero: `MJBJ_URL` (ver
   `agente-taller/README.md`).
 - **Resend**: no cambia (es por dominio de correo, no del sitio).

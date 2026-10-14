@@ -1,20 +1,24 @@
 import "server-only";
 
+import { aWaId, numeroLegible, soloDigitos, waIdDeJid } from "./numeros";
+
 /**
  * Credenciales de la WhatsApp Cloud API.
  *
- * Viven solo en variables de entorno: un access token de Meta con permiso para
+ * Viven solo en variables de entorno: un token de Meta con permiso para
  * escribirle a los clientes no puede estar en el repo ni llegar al navegador.
- * Este módulo es el único que las lee.
+ * Este módulo es el único que las lee. Todas están explicadas en
+ * `.env.example` y el trámite para conseguirlas, en `docs/WHATSAPP.md`.
  *
- * Variables (`.env.local`):
- *   WHATSAPP_PHONE_NUMBER_ID        id del número en Meta
- *   WHATSAPP_ACCESS_TOKEN           token permanente del System User
- *   WHATSAPP_BUSINESS_ACCOUNT_ID    WABA, para listar plantillas
- *   WHATSAPP_APP_SECRET             valida la firma del webhook
- *   WHATSAPP_WEBHOOK_SECRET         verify token del alta del webhook
- *   WHATSAPP_BUSINESS_PHONE         número legible, informativo
- *   WHATSAPP_PROVIDER=demo          fuerza el proveedor de demostración
+ *   WHATSAPP_PHONE_NUMBER_ID        id del número en Meta (no es el teléfono)
+ *   WHATSAPP_ACCESS_TOKEN           token permanente del usuario del sistema
+ *   WHATSAPP_BUSINESS_ACCOUNT_ID    WABA: plantillas, suscripción del webhook
+ *   WHATSAPP_APP_SECRET             secreto de la app: valida la firma del webhook
+ *   WHATSAPP_WEBHOOK_SECRET         el «verify token» que se pone al dar de alta el webhook
+ *   WHATSAPP_BUSINESS_PHONE         el número legible, para mostrar
+ *   WHATSAPP_GRAPH_VERSION          versión de la Graph API (por omisión, la de abajo)
+ *   WHATSAPP_GRAPH_URL              otra URL base: el simulador en desarrollo
+ *   WHATSAPP_PROVIDER=demo          fuerza el modo demostración
  */
 
 export interface ConfigCloud {
@@ -24,27 +28,40 @@ export interface ConfigCloud {
   appSecret: string | null;
   telefono: string | null;
   graphVersion: string;
+  graphUrl: string;
 }
 
-const VERSION_GRAPH = "v21.0";
+/**
+ * La versión de la Graph API contra la que se escribió y probó esto.
+ *
+ * Meta saca una cada pocos meses y cada una vive unos dos años; pasada la
+ * fecha, los pedidos a una versión vencida se atienden con la más vieja que
+ * siga viva, que puede cambiar respuestas. Se fija acá —y se puede pisar con
+ * `WHATSAPP_GRAPH_VERSION`— para que una actualización sea una decisión y no
+ * algo que pasa solo.
+ */
+export const VERSION_GRAPH = "v26.0";
+
+const URL_GRAPH = "https://graph.facebook.com";
 
 /**
- * Devuelve la config solo si está lo mínimo para enviar y recibir. Null si
- * falta algo: ahí el sistema usa el proveedor de demostración en vez de
- * intentar llamar a Meta y fallar en cada acción.
+ * Devuelve la config solo si está lo mínimo para enviar. Null si falta algo:
+ * ahí el sistema usa el proveedor de demostración en vez de llamar a Meta y
+ * fallar en cada acción.
  */
 export function configCloud(): ConfigCloud | null {
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
   if (!phoneNumberId || !accessToken) return null;
 
   return {
     phoneNumberId,
     accessToken,
-    wabaId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID ?? null,
-    appSecret: process.env.WHATSAPP_APP_SECRET ?? null,
-    telefono: process.env.WHATSAPP_BUSINESS_PHONE ?? null,
-    graphVersion: process.env.WHATSAPP_GRAPH_VERSION ?? VERSION_GRAPH,
+    wabaId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID?.trim() || null,
+    appSecret: process.env.WHATSAPP_APP_SECRET?.trim() || null,
+    telefono: process.env.WHATSAPP_BUSINESS_PHONE?.trim() || null,
+    graphVersion: process.env.WHATSAPP_GRAPH_VERSION?.trim() || VERSION_GRAPH,
+    graphUrl: (process.env.WHATSAPP_GRAPH_URL?.trim() || URL_GRAPH).replace(/\/+$/, ""),
   };
 }
 
@@ -52,60 +69,35 @@ export function hayCloud(): boolean {
   return configCloud() !== null;
 }
 
-export function urlGraph(config: ConfigCloud, path: string): string {
-  return `https://graph.facebook.com/${config.graphVersion}/${path}`;
+/** El secreto de la app, para validar la firma aun sin el resto de la config. */
+export function secretoDeLaApp(): string | null {
+  return process.env.WHATSAPP_APP_SECRET?.trim() || null;
 }
 
-/**
- * Número en el formato que espera la Cloud API: solo dígitos, sin "+".
- * Acepta un JID ("5492235550000@s.whatsapp.net"), un "+54 9 223…" o los
- * dígitos pelados.
- */
+/** Si se está hablando con el simulador y no con Meta. Se avisa en pantalla. */
+export function usaSimulador(config: ConfigCloud | null = configCloud()): boolean {
+  return Boolean(config && !config.graphUrl.startsWith(URL_GRAPH));
+}
+
+export function urlGraph(config: ConfigCloud, ruta: string): string {
+  return `${config.graphUrl}/${config.graphVersion}/${ruta.replace(/^\/+/, "")}`;
+}
+
+/** Número en el formato que espera la Cloud API: solo dígitos, sin «+». */
 export function aTelefono(waJidOTelefono: string): string {
-  return waJidOTelefono.split("@")[0].replace(/\D/g, "");
+  return soloDigitos(waIdDeJid(waJidOTelefono));
 }
 
 /**
- * Pasa un teléfono argentino al JID que usa WhatsApp.
- *
- * Los teléfonos de la base vienen como los tipeó quien atendió: "223 590-3118",
- * "(0223) 474-3328", "+5492235903118". Para hablarle a esa persona hace falta
- * el formato internacional con el 9 de celular, así que se normaliza acá y en
- * un solo lugar.
+ * Pasa un teléfono tipeado a mano al JID que usa la bandeja, o null si no es
+ * un número reconocible. La normalización vive en `numeros.ts`.
  */
 export function aJid(telefono: string): string | null {
-  let digitos = telefono.replace(/\D/g, "");
-  if (digitos.length < 8) return null;
-
-  // Saca el 0 de larga distancia y el 15 de celular, que conviven en cómo se
-  // escriben los números en Argentina pero no van en el formato internacional.
-  if (digitos.startsWith("0")) digitos = digitos.slice(1);
-
-  if (!digitos.startsWith("54")) {
-    // Sin código de país: se asume Argentina. Si arranca con 15 después del
-    // characterístico, ese 15 se descarta.
-    digitos = digitos.replace(/^(\d{2,4})15(\d{6,8})$/, "$1$2");
-    digitos = `54${digitos}`;
-  }
-
-  // Todo celular argentino lleva un 9 después del 54 para WhatsApp.
-  if (!digitos.startsWith("549")) {
-    digitos = `549${digitos.slice(2)}`;
-  }
-
-  if (digitos.length < 12 || digitos.length > 15) return null;
-
-  return `${digitos}@s.whatsapp.net`;
+  const waId = aWaId(telefono);
+  return waId ? `${waId}@s.whatsapp.net` : null;
 }
 
-/** Muestra un JID como número legible: "+54 9 223 590-3118". */
+/** Muestra un JID como número legible: «+54 9 223 590-3118». */
 export function jidLegible(waJid: string): string {
-  const d = aTelefono(waJid);
-  if (d.length < 10) return waJid;
-
-  const sinPais = d.startsWith("549") ? d.slice(3) : d.replace(/^54/, "");
-  const area = sinPais.slice(0, 3);
-  const resto = sinPais.slice(3);
-
-  return `+54 9 ${area} ${resto.slice(0, resto.length - 4)}-${resto.slice(-4)}`;
+  return numeroLegible(waJid);
 }

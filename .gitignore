@@ -71,3 +71,6 @@ agente-taller/estado.json
 # docs/SERVIDOR-PROPIO.md.
 /respaldos/
 /secretos/
+
+# Los adjuntos de WhatsApp en desarrollo (ver lib/whatsapp/medios.ts).
+/.privado/

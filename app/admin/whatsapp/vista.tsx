@@ -1,13 +1,20 @@
 import { after } from "next/server";
 import {
+  contarBandeja,
   estadoWhatsapp,
   listarConversaciones,
   listarPlantillas,
   marcarLeidaSilencioso,
   obtenerConversacion,
+  personalDeLaBandeja,
+  requireBandeja,
+  type FiltroBandeja,
 } from "@/lib/dal/admin/whatsapp";
+import { proveedorWhatsapp } from "@/lib/whatsapp";
 import { Bandeja } from "./bandeja";
 import { AvisoConexion } from "./aviso-conexion";
+
+const FILTROS: FiltroBandeja[] = ["todas", "sin-leer", "mias", "sin-asignar", "resueltas"];
 
 /**
  * La bandeja, compartida por las dos formas de usarla.
@@ -26,13 +33,17 @@ export async function VistaWhatsapp({
   filtro?: string;
   pantallaCompleta?: boolean;
 }) {
-  const vista =
-    filtro === "sin-leer" || filtro === "cerradas" ? filtro : "todas";
+  const usuario = await requireBandeja();
+  // «cerradas» era el nombre viejo de «resueltas»: los enlaces guardados siguen andando.
+  const pedido = filtro === "cerradas" ? "resueltas" : filtro;
+  const vista: FiltroBandeja = FILTROS.includes(pedido as FiltroBandeja) ? (pedido as FiltroBandeja) : "todas";
 
-  const [conversaciones, estado, plantillas] = await Promise.all([
+  const [conversaciones, estado, plantillas, contadores, personal] = await Promise.all([
     listarConversaciones(vista),
     estadoWhatsapp(),
     listarPlantillas(),
+    contarBandeja(),
+    personalDeLaBandeja(),
   ]);
 
   // La conversación abierta se elige por la URL, así el enlace a una charla
@@ -40,26 +51,31 @@ export async function VistaWhatsapp({
   const elegida = chat ?? conversaciones[0]?.id ?? null;
   const detalle = elegida ? await obtenerConversacion(elegida) : null;
 
-  // Abrirla es haberla leído. Va en `after()` para no demorar el render y sin
-  // revalidar, porque revalidar desde acá volvería a renderizar esta misma
-  // pantalla en un ciclo.
+  // Abrirla es haberla leído: se ponen en cero los no leídos y se le avisa a
+  // WhatsApp, que le muestra al cliente los dos tildes azules. En `after()`
+  // para no demorar el render y sin revalidar, que volvería a renderizar esta
+  // misma pantalla en un ciclo.
   if (detalle && detalle.noLeidos > 0) {
     after(async () => {
-      await marcarLeidaSilencioso(detalle.id);
+      const ultimo = await marcarLeidaSilencioso(detalle.id);
+      if (ultimo) await proveedorWhatsapp().marcarLeido(ultimo);
     });
   }
 
   return (
     <>
-      {/* En pantalla completa el cartel de demostración va compacto: el alto
-          que ocupa se le resta a los mensajes, que es lo que se vino a leer. */}
-      <AvisoConexion estado={estado} compacto={pantallaCompleta} />
+      {/* En pantalla completa el cartel va compacto: el alto que ocupa se le
+          resta a los mensajes, que es lo que se vino a leer. */}
+      <AvisoConexion estado={estado} compacto={pantallaCompleta} esAdmin={usuario.staffRole === "admin"} />
 
       <Bandeja
         conversaciones={conversaciones}
         detalle={detalle}
         filtro={vista}
+        contadores={contadores}
         plantillas={plantillas}
+        personal={personal}
+        usuarioId={usuario.userId}
         modoDemo={estado.proveedor === "demo"}
         pantallaCompleta={pantallaCompleta}
       />

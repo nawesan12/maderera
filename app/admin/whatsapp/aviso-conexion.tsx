@@ -15,13 +15,30 @@ import type { EstadoConexion } from "@/lib/whatsapp/tipos";
 export function AvisoConexion({
   estado,
   compacto = false,
+  esAdmin = false,
 }: {
   estado: EstadoConexion;
   /** En el puesto de atención el cartel va en una línea: el alto es para los mensajes. */
   compacto?: boolean;
+  /** La configuración es del admin: a los demás no se les ofrece el enlace. */
+  esAdmin?: boolean;
 }) {
   if (compacto) {
     return <AvisoCompacto estado={estado} />;
+  }
+
+  // Conectado, pero al simulador: nada sale a WhatsApp y hay que decirlo igual
+  // de fuerte que en demostración.
+  if (estado.conectado && estado.detalle) {
+    return (
+      <section className="tarjeta-atencion flex flex-wrap items-start gap-x-4 gap-y-3 p-5">
+        <FlaskConical className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
+        <div className="min-w-[16rem] flex-1">
+          <h2 className="text-base font-medium">Simulador de Meta</h2>
+          <p className="mt-1 text-base text-muted-foreground">{estado.detalle}</p>
+        </div>
+      </section>
+    );
   }
 
   if (estado.proveedor === "demo") {
@@ -42,6 +59,7 @@ export function AvisoConexion({
           </p>
         </div>
 
+        {esAdmin && (
         <Link
           href="/admin/whatsapp/configuracion"
           className="inline-flex h-10 items-center gap-2 rounded-lg border bg-white px-3.5 text-base font-medium transition-colors hover:bg-muted"
@@ -49,6 +67,7 @@ export function AvisoConexion({
           <Settings2 className="h-5 w-5" />
           Qué falta
         </Link>
+        )}
       </section>
     );
   }
@@ -64,6 +83,7 @@ export function AvisoConexion({
             {estado.detalle ?? "No se puede enviar ni recibir en este momento."}
           </p>
         </div>
+        {esAdmin && (
         <Link
           href="/admin/whatsapp/configuracion"
           className="inline-flex h-10 items-center gap-2 rounded-lg border bg-white px-3.5 text-base font-medium transition-colors hover:bg-muted"
@@ -71,6 +91,7 @@ export function AvisoConexion({
           <Settings2 className="h-5 w-5" />
           Revisar
         </Link>
+        )}
       </section>
     );
   }
@@ -91,13 +112,15 @@ export function AvisoConexion({
           Último movimiento {haceCuanto(new Date(estado.ultimaSenal))}
         </p>
       )}
+      {esAdmin && (
       <Link
         href="/admin/whatsapp/configuracion"
         className="ml-2 inline-flex h-10 items-center gap-2 rounded-lg px-3 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
         <Settings2 className="h-5 w-5" />
-        Avisos automáticos
+        Configuración
       </Link>
+      )}
     </section>
   );
 }
@@ -124,6 +147,16 @@ function AvisoCompacto({ estado }: { estado: EstadoConexion }) {
         >
           Qué falta
         </Link>
+      </p>
+    );
+  }
+
+  if (estado.conectado && estado.detalle) {
+    return (
+      <p className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-brand-orange/35 bg-brand-orange/[0.07] px-3.5 py-2 text-base">
+        <FlaskConical className="h-4 w-4 shrink-0 text-brand-orange" />
+        <span className="font-medium">Simulador:</span>
+        <span className="text-muted-foreground">{estado.detalle}</span>
       </p>
     );
   }

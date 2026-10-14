@@ -1,9 +1,10 @@
 import "server-only";
 
 import webpush from "web-push";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { notificationsLog, pushSubscriptions } from "@/lib/db/schema";
+import { notificationsLog, profiles, pushSubscriptions } from "@/lib/db/schema";
+import { quienEntra, type RolStaff } from "@/lib/roles";
 
 /**
  * Avisos al panel, en el teléfono.
@@ -32,6 +33,16 @@ export interface AvisoPush {
   url: string;
   /** Agrupa los avisos del mismo tipo: el nuevo reemplaza al anterior. */
   etiqueta?: string;
+  /**
+   * A quién, si no es a todo el personal. Un mensaje de WhatsApp de un cliente
+   * no le tiene que sonar al aserradero —no puede abrir la bandeja—, y una
+   * conversación que ya atiende alguien le suena solo a esa persona.
+   */
+  para?: {
+    /** Solo a quienes pueden entrar a esta pantalla, según `ACCESO`. */
+    pantalla?: string;
+    usuarioId?: string | null;
+  };
 }
 
 /** Si hay con qué firmar los mensajes. Sin esto, el push está apagado. */
@@ -70,7 +81,7 @@ export async function avisarAlPanel(aviso: AvisoPush): Promise<void> {
       return;
     }
 
-    const suscripciones = await db.select().from(pushSubscriptions);
+    const suscripciones = await suscripcionesPara(aviso.para);
 
     if (suscripciones.length === 0) {
       await registrar(aviso, "omitida", "Ningún dispositivo con avisos activados");
@@ -128,6 +139,21 @@ export async function avisarAlPanel(aviso: AvisoPush): Promise<void> {
     // Un aviso nunca puede voltear la operación que lo disparó.
     console.error("No se pudo mandar el aviso al panel", error);
   }
+}
+
+async function suscripcionesPara(para: AvisoPush["para"]) {
+  if (para?.usuarioId) {
+    return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, para.usuarioId));
+  }
+  const roles = para?.pantalla ? quienEntra(para.pantalla) : null;
+  if (!roles) return db.select().from(pushSubscriptions);
+
+  const filas = await db
+    .select({ suscripcion: pushSubscriptions })
+    .from(pushSubscriptions)
+    .innerJoin(profiles, eq(profiles.userId, pushSubscriptions.userId))
+    .where(inArray(profiles.staffRole, roles as RolStaff[]));
+  return filas.map((f) => f.suscripcion);
 }
 
 async function registrar(

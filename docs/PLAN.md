@@ -743,7 +743,7 @@ y sirve como maqueta de referencia para el resto.
 
 | Capa | Elección | Por qué |
 |---|---|---|
-| Framework | Next.js 16.2.2 (App Router) — ya instalado | — |
+| Framework | Next.js 16.4.1 (App Router) — ya instalado | — |
 | Datos | **Neon** (Postgres serverless) + **Drizzle ORM** | Postgres puro, sin capa propietaria encima. El *branching* copy-on-write da una DB por deploy de preview, que encaja justo con las entregas semanales de 8.1 |
 | Auth | **Better Auth** sobre las mismas tablas de Neon | Es la opción estándar para Next.js en 2026: TypeScript nativo, sesiones sobre Postgres, email/password y OAuth. Neon lo ofrece también gestionado (tablas en el schema `neon_auth`) — a evaluar en S1 |
 | Archivos | **Vercel Blob** | PDFs de factura, firmas de acopio, fotos de producto. Soporta blobs privados, necesario para documentación fiscal |

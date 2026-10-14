@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { esUuid } from "@/lib/uuid";
 import { ArrowLeft, Download, MessageCircle, Printer } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { enlaceDeWhatsapp } from "@/lib/formato";
@@ -34,6 +35,7 @@ export default async function FichaClientePage({
   searchParams: Promise<{ periodo?: string; ver?: string }>;
 }) {
   const { id } = await params;
+  if (!esUuid(id)) notFound();
   const { periodo = "12m", ver } = await searchParams;
   const filtro = esFiltro(ver) ? ver : "todo";
 

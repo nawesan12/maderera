@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Hoja, MUESTRA_DEL_BUILD } from "../../preparando";
 import {
   comprobanteDelCliente,
   configuracionFiscalActual,
@@ -21,7 +22,23 @@ export const metadata: Metadata = {
  * cliente desde su portal. Quién puede ver qué se decide acá, y de una sola
  * manera: el personal ve cualquiera, y el cliente únicamente los suyos.
  */
-export default async function ImprimirComprobantePage({
+export async function generateStaticParams() {
+  return MUESTRA_DEL_BUILD;
+}
+
+export default function ImprimirComprobantePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  return (
+    <Hoja que="comprobante" params={params}>
+      <Contenido params={params} />
+    </Hoja>
+  );
+}
+
+async function Contenido({
   params,
 }: {
   params: Promise<{ id: string }>;

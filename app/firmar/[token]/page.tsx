@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { existe } from "@/lib/dal/existencia";
 import { Check, PackageCheck } from "lucide-react";
 import { remitoPorToken } from "@/lib/dal/admin/entregas";
 import { fechaHora, formatearUnidad } from "@/lib/formato";
@@ -27,6 +29,37 @@ export default async function FirmarPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
+
+  // El 404 antes de mandar nada, desde la caché (ver `lib/dal/existencia.ts`):
+  // con el `loading.tsx` que tenía esta carpeta, un enlace inventado respondía
+  // 200 con la pantalla de no encontrado.
+  if (!(await existe("remito-por-token", token))) notFound();
+
+  return (
+    <Suspense fallback={<BuscandoElRemito />}>
+      <Firma token={token} />
+    </Suspense>
+  );
+}
+
+/**
+ * Un token que no es de nadie, para el build. Sin esta lista, leer el
+ * parámetro es un dato por pedido y el 404 quedaría detrás del `<Suspense>`.
+ */
+export async function generateStaticParams() {
+  return [{ token: "sin-remito" }];
+}
+
+/** Lo que se ve mientras se trae el remito: el estado de la firma es por pedido. */
+function BuscandoElRemito() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center p-8" aria-busy="true">
+      <span className="text-base text-muted-foreground">Buscando el remito…</span>
+    </div>
+  );
+}
+
+async function Firma({ token }: { token: string }) {
   const remito = await remitoPorToken(token);
 
   // Sin remito, el link nunca existió. Un token es aleatorio de 24 bytes: si no

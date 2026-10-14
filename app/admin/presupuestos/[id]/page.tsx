@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { esUuid } from "@/lib/uuid";
 import { FileDown } from "lucide-react";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
@@ -13,6 +14,7 @@ export default async function FichaPresupuestoPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  if (!esUuid(id)) notFound();
   const p = await obtenerPresupuesto(id);
 
   if (!p) notFound();

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { avisarPedidoNuevo } from "@/lib/dal/existencia";
 import { after } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -332,6 +333,7 @@ export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
 
   refrescar();
   revalidatePath("/admin/stock");
+  avisarPedidoNuevo(numero);
   return { ok: `Se creó el pedido ${numero}.` };
 }
 

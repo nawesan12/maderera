@@ -1,3 +1,5 @@
+import type { Instrumentation } from "next";
+
 /**
  * Lo que se mira una sola vez, al arrancar el servidor.
  *
@@ -21,3 +23,20 @@ export async function register() {
   const { verificarArranque } = await import("./lib/arranque");
   verificarArranque();
 }
+
+/**
+ * Cada error que Next atrapa al armar una página, con la ruta.
+ *
+ * Next ya los escribe en el registro, pero sin decir de qué página venían: con
+ * un digest y una pila minificada no se sabe por dónde empezar. Este renglón
+ * agrega la ruta pedida, el archivo y si pasó al armar de antemano o por
+ * pedido. Ver `lib/diagnostico/registro.ts`.
+ */
+export const onRequestError: Instrumentation.onRequestError = async (
+  error,
+  pedido,
+  contexto,
+) => {
+  const { lineaDelServidor } = await import("./lib/diagnostico/registro");
+  console.error(lineaDelServidor(error, pedido, contexto));
+};

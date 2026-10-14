@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { esUuid } from "@/lib/uuid";
 import {
   ArrowLeft,
   Download,
@@ -47,6 +48,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
+  if (!esUuid(id)) notFound();
   const comprobante = await obtenerComprobante(id);
 
   return {
@@ -62,6 +64,7 @@ export default async function FichaComprobantePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  if (!esUuid(id)) notFound();
   const comprobante = await obtenerComprobante(id);
 
   if (!comprobante) notFound();

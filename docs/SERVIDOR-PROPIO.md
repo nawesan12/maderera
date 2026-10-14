@@ -280,6 +280,31 @@ Lo que cambia respecto del ejemplo (el resto, con los valores de Vercel):
 | `DATABASE_URL` | se ignora: la arma el compose |
 | `RCLONE_REMOTE` | ver [Respaldos](#respaldos) |
 
+### Las claves de los avisos en el teléfono
+
+El panel se instala en el teléfono y avisa de cada compra, pero solo con un par
+de claves VAPID. Sin ellas el sitio anda igual y `scripts/desplegar.sh` lo
+avisa en cada despliegue, sin cortarlo. Se generan **una sola vez**, en el
+servidor:
+
+```bash
+cd ~/maderera
+scripts/claves-push.sh .env.produccion
+```
+
+Agrega `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `VAPID_SUBJECT`
+(`mailto:info@mjbj.com.ar`) al final del archivo. Usa solo openssl —no hace
+falta Node fuera de los contenedores— y **no pisa claves que ya estén**: cada
+teléfono que activó los avisos queda atado a la clave pública, y cambiarla los
+deja mudos hasta que cada uno los vuelva a activar. Si se va a mudar desde
+Vercel con avisos ya activados, copiar las de Vercel en vez de generar nuevas.
+
+Las lee el servidor al atender, no el build: después de agregarlas alcanza con
+`dc up -d --force-recreate app`. Para comprobar que andan: entrar al panel desde
+el teléfono, en `/admin/avisos` tocar «Activar avisos en este dispositivo» y
+después «Probar». En iPhone, el permiso solo aparece con el panel
+agregado a la pantalla de inicio.
+
 `APP_URL`, `APP_ENV` y `SEO_INDEXAR` llegan también al build: `robots.txt`, las
 canónicas y el `metadataBase` se arman ahí. Si se cambian, hay que volver a
 desplegar, no alcanza con reiniciar.

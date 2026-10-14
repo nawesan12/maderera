@@ -46,6 +46,22 @@ if [ ${#faltan[@]} -gt 0 ]; then
   exit 1
 fi
 
+# Lo que no frena el despliegue pero apaga algo que la clienta pidió. Se avisa
+# y se sigue: el sitio anda igual, y cortar acá dejaría sin desplegar un
+# arreglo urgente por una clave que se puede agregar después.
+avisos=()
+for variable in VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY; do
+  if ! grep -Eq "^${variable}=\"?[^\"[:space:]]+" "$ENTORNO"; then
+    avisos+=("$variable")
+  fi
+done
+if [ ${#avisos[@]} -gt 0 ]; then
+  echo "Aviso: en $ENTORNO faltan ${avisos[*]}." >&2
+  echo "  Sin eso, el panel no avisa en el teléfono cuando entra una venta." >&2
+  echo "  Se generan una sola vez con: scripts/claves-push.sh $ENTORNO" >&2
+  echo >&2
+fi
+
 if [ "${1:-}" != "--sin-pull" ]; then
   echo "→ Trayendo el código"
   git pull --ff-only

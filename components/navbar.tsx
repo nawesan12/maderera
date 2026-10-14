@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, type ComponentProps } from "react";
+import { Suspense, useState, useSyncExternalStore, type ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -830,13 +830,26 @@ function CrearCuentaDelTelefono({ cerrar }: { cerrar: () => void }) {
  * igual que en la portada. `aria-current` es además lo que un lector de
  * pantalla anuncia como "página actual".
  *
- * **La ruta se lee acá, en cada enlace, y no en la barra entera.** En las
- * páginas con parámetros —un pedido, un evento— la ruta es un dato del pedido
- * y tiene que ir detrás de un `<Suspense>`. Envolver la barra completa
- * duplicaba sus casi 100 KB en el HTML de todas las páginas: React manda
- * aparte los límites grandes ya resueltos, y con ellos su respaldo. Un enlace
- * suelto pesa poco y su respaldo —el mismo enlace sin marcar— solo se usa en
- * esas páginas.
+ * **La marca se pone recién en el navegador, y sin `<Suspense>`.** En las
+ * páginas con parámetros —un pedido, un evento— la ruta es un dato del pedido,
+ * y leerla en el servidor obligaba a poner cada enlace detrás de un
+ * `<Suspense>`. Eso rompía la hidratación (React #419) en el catálogo y en la
+ * consulta de stock, por un defecto de React con Cache Components:
+ *
+ * - React arma la parte fija de la página y anota hasta qué número de segmento
+ *   usó (`getPostponedState`) **antes** de escribir el HTML.
+ * - Al escribirlo, un límite ya resuelto de más de 500 bytes —«Productos», con
+ *   su flechita— se manda aparte, y para eso toma el número siguiente.
+ * - En cada visita, lo que se arma por pedido arranca desde el número anotado,
+ *   así que el primer límite nuevo de la página —el esqueleto del listado—
+ *   recibe **el mismo número**. Dos `B:5` en el mismo documento: uno de los
+ *   dos queda sin completar y React tira todo lo de alrededor y lo vuelve a
+ *   armar en el navegador.
+ *
+ * Sin límite no hay número que repetir. La marca aparece un instante después
+ * de cargar, en lugar de venir en el HTML; es una raya de dos píxeles. Antes de
+ * volver a envolver algo de la barra en un `<Suspense>`, correr
+ * `scripts/revisar-limites.ts`, que encuentra los números repetidos.
  */
 function EnlaceDeSeccion({
   clase,
@@ -845,12 +858,20 @@ function EnlaceDeSeccion({
   href: string;
   clase: (activa: boolean) => string;
 }) {
-  return (
-    <Suspense fallback={<Link {...props} className={clase(false)} />}>
-      <EnlaceMarcado {...props} clase={clase} />
-    </Suspense>
-  );
+  const enElNavegador = useSyncExternalStore(sinSuscripcion, siempre, nunca);
+  if (!enElNavegador) return <Link {...props} className={clase(false)} />;
+  return <EnlaceMarcado {...props} clase={clase} />;
 }
+
+/*
+ * `useSyncExternalStore` con valores fijos: en el servidor y durante la
+ * hidratación da `false` —el HTML y el primer dibujo del navegador coinciden—,
+ * y después `true`. Es la forma de saber «ya estoy en el navegador» sin un
+ * efecto que dispare un segundo render a mano.
+ */
+const sinSuscripcion = () => () => {};
+const siempre = () => true;
+const nunca = () => false;
 
 function EnlaceMarcado({
   clase,

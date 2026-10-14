@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { esUuid } from "@/lib/uuid";
 import { ArrowLeft } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
@@ -19,6 +20,7 @@ const hora = (d: Date) =>
 
 export default async function CampanaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (!esUuid(id)) notFound();
   const campana = await obtenerCampana(id);
   if (!campana) notFound();
 

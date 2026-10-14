@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { SaltarAlContenido } from "@/components/saltar-al-contenido";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import { Navbar } from "@/components/navbar";
@@ -111,18 +110,18 @@ export default async function PublicLayout({
       </main>
       <Footer />
       <ScrollToTop />
-      <Suspense fallback={null}>
-        <WhatsAppButton enlace={`${whatsapp}?text=${encodeURIComponent("Hola! Quisiera consultar sobre...")}`} />
-      </Suspense>
+      {/* Sin `<Suspense>`: ninguno de los dos espera nada. Lo tenían, y un
+          límite que se resuelve en el build y pesa más de 500 bytes le roba
+          a React el número de segmento que después reusa lo que se arma por
+          pedido —ver `EnlaceDeSeccion` en `components/navbar.tsx`—. */}
+      <WhatsAppButton enlace={`${whatsapp}?text=${encodeURIComponent("Hola! Quisiera consultar sobre...")}`} />
 
       {/* El asistente va al lado del botón de WhatsApp y no encima: son dos
           caminos distintos y quien quiere hablar con una persona tiene que
           poder hacerlo sin pasar por acá. */}
-      <Suspense fallback={null}>
-        <PanelDelAsistente
-          enlaceWhatsapp={`${whatsapp}?text=${encodeURIComponent("Hola! Vengo del asistente de la web y quería consultar por...")}`}
-        />
-      </Suspense>
+      <PanelDelAsistente
+        enlaceWhatsapp={`${whatsapp}?text=${encodeURIComponent("Hola! Vengo del asistente de la web y quería consultar por...")}`}
+      />
     </CarritoProvider>
     </EstadoProvider>
   );

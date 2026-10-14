@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { esUuid } from "@/lib/uuid";
 import { ArrowLeft } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import { obtenerRecepcion } from "@/lib/dal/admin/recepciones";
@@ -32,6 +33,8 @@ export default async function RecepcionPage({
   await requireStaffRole("admin");
 
   const { id } = await params;
+
+  if (!esUuid(id)) notFound();
   const recepcion = await obtenerRecepcion(id);
   if (!recepcion) notFound();
 

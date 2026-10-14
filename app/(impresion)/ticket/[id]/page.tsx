@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Hoja, MUESTRA_DEL_BUILD } from "../../preparando";
 import { requireStaff } from "@/lib/dal/session";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
@@ -28,7 +29,23 @@ export const metadata: Metadata = {
  * cliente, y no hay ninguna razón para que sea una dirección que cualquiera
  * pueda recorrer probando números.
  */
-export default async function TicketPage({
+export async function generateStaticParams() {
+  return MUESTRA_DEL_BUILD;
+}
+
+export default function TicketPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  return (
+    <Hoja que="pedido" params={params}>
+      <Contenido params={params} />
+    </Hoja>
+  );
+}
+
+async function Contenido({
   params,
 }: {
   params: Promise<{ id: string }>;

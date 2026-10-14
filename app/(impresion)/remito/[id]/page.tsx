@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Hoja, MUESTRA_DEL_BUILD } from "../../preparando";
 import { getSession } from "@/lib/dal/session";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import { remitoCompleto } from "@/lib/dal/admin/entregas";
@@ -17,7 +18,23 @@ export const metadata: Metadata = {
  * únicamente los suyos. La verificación va acá, con la comparación contra el
  * dueño hecha antes de mostrar nada.
  */
-export default async function ImprimirRemitoPage({
+export async function generateStaticParams() {
+  return MUESTRA_DEL_BUILD;
+}
+
+export default function ImprimirRemitoPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  return (
+    <Hoja que="remito" params={params}>
+      <Contenido params={params} />
+    </Hoja>
+  );
+}
+
+async function Contenido({
   params,
 }: {
   params: Promise<{ id: string }>;

@@ -204,6 +204,12 @@ services:
       - correo_buzones:/correo/buzones:ro
       - correo_estado:/correo/estado:ro
       - correo_config:/correo/config:ro
+      # Las fotos subidas desde el panel y los adjuntos de WhatsApp, también
+      # en solo lectura. La base guarda dónde están, no los archivos: sin
+      # estos dos, una base restaurada muestra fichas sin fotos y
+      # conversaciones con los adjuntos rotos.
+      - subidas:/archivos/subidas:ro
+      - privado:/archivos/privado:ro
       # La configuración de rclone, si hay copia fuera de la máquina. Va con
       # escritura porque algunos destinos renuevan el token ahí adentro.
       - ./secretos/rclone:/config/rclone

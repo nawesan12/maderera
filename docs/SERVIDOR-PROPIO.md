@@ -825,6 +825,17 @@ dc logs -f respaldo     # al día siguiente tiene que decir «copiado a b2:…»
 
 Allá se guardan 90 días (`RCLONE_DIAS`).
 
+**Las fotos y los adjuntos de WhatsApp también.** La base guarda dónde están,
+no los archivos: restaurar solo la base deja fichas sin fotos. Como nunca se
+reescriben, alcanza con `respaldos/archivos-<fecha>.tar.gz` los domingos (se
+guardan los dos últimos) y, con rclone, una copia diaria a
+`<destino>/archivos/` que sube solo lo nuevo y nunca borra. Para restaurar:
+
+```bash
+docker run --rm -v mjbj_subidas:/archivos/subidas -v mjbj_privado:/archivos/privado \
+  -v ~/maderera/respaldos:/r alpine tar -xzf /r/archivos-<fecha>.tar.gz -C /archivos
+```
+
 **Con el correo propio encendido, el respaldo también empaqueta el correo**:
 `respaldos/correo-<fecha>.tar.gz`, con los buzones, las casillas con sus
 claves y la llave DKIM, y sube a rclone junto con la base. Sin la llave DKIM,

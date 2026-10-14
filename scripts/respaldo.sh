@@ -30,6 +30,12 @@
 # reinstalado tendría los correos y ninguna casilla para leerlos; sin la llave
 # DKIM, habría que cambiar el registro DNS y esperar que se propague.
 #
+# **Y los archivos**: las fotos subidas y los adjuntos de WhatsApp. Nunca se
+# reescriben (cada nombre lleva un UUID), así que no hace falta una copia por
+# día: un `.tar.gz` local los domingos, y fuera de la máquina un `rclone copy`
+# diario que solo sube lo nuevo. `copy` y no `sync`, a propósito: un archivo
+# borrado por error en el servidor no se borra también de la copia.
+#
 # Variables: POSTGRES_USER, POSTGRES_DB, PGPASSWORD (las pone el compose),
 # RESPALDO_DIAS (14 por omisión), RCLONE_REMOTE y RCLONE_DIAS (90),
 # CORREO_RESPALDO (si/no; «si» por omisión).
@@ -71,6 +77,34 @@ respaldar_correo() {
   fi
 }
 
+respaldar_archivos() {
+  hoy="$1"
+  if [ -z "$(ls -A /archivos/subidas 2>/dev/null)$(ls -A /archivos/privado 2>/dev/null)" ]; then
+    return 0
+  fi
+
+  # Domingo (`%u` = 7), o si todavía no hay ninguno.
+  if [ "$(date +%u)" = "7" ] || ! ls "$CARPETA"/archivos-*.tar.gz >/dev/null 2>&1; then
+    destino="$CARPETA/archivos-$hoy.tar.gz"
+    temporal="$destino.parcial"
+    echo "[respaldo] empaquetando las fotos y los adjuntos en $destino"
+    if tar -czf "$temporal" -C /archivos subidas privado && tar -tzf "$temporal" >/dev/null; then
+      mv "$temporal" "$destino"
+      echo "[respaldo] archivos listos: $(du -h "$destino" | cut -f1)"
+    else
+      echo "[respaldo] FALLÓ el respaldo de los archivos de $hoy" >&2
+      rm -f "$temporal"
+    fi
+  fi
+
+  if [ -n "${RCLONE_REMOTE:-}" ] && command -v rclone >/dev/null 2>&1; then
+    for carpeta in subidas privado; do
+      rclone copy "/archivos/$carpeta" "$RCLONE_REMOTE/archivos/$carpeta" ||
+        echo "[respaldo] FALLÓ la copia de $carpeta a $RCLONE_REMOTE" >&2
+    done
+  fi
+}
+
 respaldar() {
   hoy="$(date +%Y-%m-%d)"
   destino="$CARPETA/mjbj-$hoy.dump"
@@ -93,12 +127,15 @@ respaldar() {
   echo "[respaldo] listo: $(du -h "$destino" | cut -f1)"
 
   respaldar_correo "$hoy"
+  respaldar_archivos "$hoy"
 
   # Los de hace más de DIAS días se borran, incluidos los que deja
   # `desplegar.sh` antes de cada migración.
   find "$CARPETA" -name "mjbj-*.dump" -mtime +"$DIAS" -delete
   find "$CARPETA" -name "correo-*.tar.gz" -mtime +"$DIAS" -delete
   find "$CARPETA" -name "antes-de-migrar-*.dump" -mtime +"$DIAS" -delete
+  # Los de archivos son semanales: se guardan los dos últimos domingos.
+  find "$CARPETA" -name "archivos-*.tar.gz" -mtime +15 -delete
 
   if [ -n "${RCLONE_REMOTE:-}" ] && command -v rclone >/dev/null 2>&1; then
     if rclone copyto "$destino" "$RCLONE_REMOTE/mjbj-$hoy.dump"; then

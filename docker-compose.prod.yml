@@ -160,6 +160,8 @@ services:
       REDIRIGIDOS: www.${DOMINIO}${DOMINIO_ALTERNATIVO:+ ${DOMINIO_ALTERNATIVO} www.${DOMINIO_ALTERNATIVO}}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # El mapa de redirecciones del sitio viejo (ver Caddyfile).
+      - ./servidor/caddy/sitio-viejo.caddy:/etc/caddy/sitio-viejo.caddy:ro
       # La misma carpeta que escribe la aplicación: las fotos las sirve Caddy
       # directamente, sin pasar por Node.
       - subidas:/datos/subidas:ro

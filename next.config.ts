@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { redireccionesParaNext } from "./lib/sitio-viejo";
 
 /*
  * Un identificador que cambia con cada build.
@@ -75,6 +76,24 @@ const nextConfig: NextConfig = {
       {
         source: "/checkout",
         destination: "/carrito/confirmar",
+        permanent: true,
+      },
+
+      /*
+       * **El sitio viejo** (`mjbj.ar`, un WordPress). Caddy ya manda cada
+       * dirección vieja a su destino de un salto cuando el pedido entra por
+       * `mjbj.ar`; estas reglas son la red para la que llegue directo a este
+       * dominio. La lista y sus motivos, en `lib/sitio-viejo.ts`.
+       */
+      ...redireccionesParaNext(),
+
+      // El buscador de WordPress (`/?s=fenolico`) al del catálogo. No va en
+      // Caddy porque la palabra buscada tiene que viajar bien escapada, y eso
+      // lo resuelve Next.
+      {
+        source: "/",
+        has: [{ type: "query", key: "s", value: "(?<busqueda>.+)" }],
+        destination: "/catalogo?buscar=:busqueda",
         permanent: true,
       },
     ];

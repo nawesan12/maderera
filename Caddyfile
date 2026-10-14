@@ -16,8 +16,17 @@
 # arma el compose (`REDIRIGIDOS`). Cada nombre necesita su registro DNS
 # apuntando a la misma IP: si falta, Caddy no puede sacar ese certificado y lo
 # reintenta en el registro, sin afectar al dominio principal.
+#
+# **Las direcciones del sitio viejo van de un salto a su equivalente.** Hasta
+# la mudanza, `mjbj.ar` era un WordPress con una página por rubro
+# (`/placas/`, `/techos/`…), y eso es lo que Google tiene indexado. El mapa
+# (`servidor/caddy/sitio-viejo.caddy`, generado desde `lib/sitio-viejo.ts`)
+# manda `/placas/` derecho a `/catalogo?cat=placas`; lo que no está en el mapa
+# conserva su ruta, como antes. Hacerlo acá y no solo en la aplicación ahorra
+# dos saltos por pedido: sin el mapa serían Caddy → Next (saca la barra
+# final) → Next (redirige al destino).
 {$REDIRIGIDOS} {
-	redir https://{$DOMINIO}{uri} permanent
+	import /etc/caddy/sitio-viejo.caddy
 }
 
 # El nombre del servidor de correo. Caddy no le sirve nada a nadie acá: el

@@ -1,0 +1,2085 @@
+{
+  "origen": "https://mjbj.ar",
+  "relevado": "2026-10-14T19:45:37.145Z",
+  "urls": [
+    {
+      "ruta": "/",
+      "tipo": "pagina",
+      "modificada": "2026-05-20T17:24:30+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Bienvenido"
+    },
+    {
+      "ruta": "/bg-header/",
+      "tipo": "adjunto",
+      "titulo": "bg-header",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/bg-veta-negro/",
+      "tipo": "adjunto",
+      "titulo": "bg-veta-negro",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/blocks-sitemap.xml",
+      "tipo": "sitemap",
+      "fuentes": [
+        "sitemap"
+      ]
+    },
+    {
+      "ruta": "/blocks/blog-header/",
+      "tipo": "bloque",
+      "modificada": "2023-12-29T13:06:17+00:00",
+      "fuentes": [
+        "sitemap"
+      ]
+    },
+    {
+      "ruta": "/blocks/features-overview/",
+      "tipo": "bloque",
+      "modificada": "2016-09-04T15:57:34+00:00",
+      "fuentes": [
+        "sitemap"
+      ]
+    },
+    {
+      "ruta": "/blocks/footer-about-us/",
+      "tipo": "bloque",
+      "modificada": "2025-10-09T17:19:25+00:00",
+      "fuentes": [
+        "sitemap"
+      ]
+    },
+    {
+      "ruta": "/blocks/menu-productos/",
+      "tipo": "bloque",
+      "modificada": "2023-12-26T15:25:06+00:00",
+      "fuentes": [
+        "sitemap"
+      ]
+    },
+    {
+      "ruta": "/blocks/shop-header/",
+      "tipo": "bloque",
+      "modificada": "2023-12-29T13:06:38+00:00",
+      "fuentes": [
+        "sitemap"
+      ]
+    },
+    {
+      "ruta": "/blog/",
+      "tipo": "pagina",
+      "titulo": "Blog",
+      "modificada": "2013-08-11T19:17:44",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cart/",
+      "tipo": "pagina",
+      "modificada": "2025-06-24T12:59:43+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Cart"
+    },
+    {
+      "ruta": "/catalogo/",
+      "tipo": "pagina",
+      "modificada": "2023-12-28T15:57:11+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Catalogo"
+    },
+    {
+      "ruta": "/categoria/general/",
+      "tipo": "categoria",
+      "titulo": "General",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/checkout/",
+      "tipo": "pagina",
+      "modificada": "2023-12-20T18:35:49+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Checkout"
+    },
+    {
+      "ruta": "/construccion-en-seco/",
+      "tipo": "pagina",
+      "modificada": "2024-05-29T13:51:29+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Construcción en Seco"
+    },
+    {
+      "ruta": "/construccion-en-seco/banner-construccion-seco2/",
+      "tipo": "adjunto",
+      "titulo": "banner-construccion-seco2",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/construccion-en-seco/eternit/",
+      "tipo": "adjunto",
+      "titulo": "eternit",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/construccion-en-seco/novoplack/",
+      "tipo": "adjunto",
+      "titulo": "novoplack",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/construccion-en-seco/superboard/",
+      "tipo": "adjunto",
+      "titulo": "superboard",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/contactenos/",
+      "tipo": "pagina",
+      "modificada": "2024-12-26T13:28:00+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Contáctenos"
+    },
+    {
+      "ruta": "/cropped-icon-png/",
+      "tipo": "adjunto",
+      "titulo": "cropped-icon.png",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/",
+      "tipo": "pagina",
+      "modificada": "2024-05-29T13:52:47+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Cubiertas"
+    },
+    {
+      "ruta": "/cubiertas/ala/",
+      "tipo": "adjunto",
+      "titulo": "ala",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/banner-cubiertas/",
+      "tipo": "adjunto",
+      "titulo": "banner-cubiertas",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/camel/",
+      "tipo": "adjunto",
+      "titulo": "camel",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/colonial/",
+      "tipo": "adjunto",
+      "titulo": "colonial",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/condor/",
+      "tipo": "adjunto",
+      "titulo": "condor",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/cubre-cocheras/",
+      "tipo": "adjunto",
+      "titulo": "cubre-cocheras",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/eco/",
+      "tipo": "adjunto",
+      "titulo": "eco",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/estilo/",
+      "tipo": "adjunto",
+      "titulo": "estilo",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/galpones/",
+      "tipo": "adjunto",
+      "titulo": "galpones",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/marquesinas/",
+      "tipo": "adjunto",
+      "titulo": "marquesinas",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/omega/",
+      "tipo": "adjunto",
+      "titulo": "omega",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/tejado/",
+      "tipo": "adjunto",
+      "titulo": "tejado",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/cubiertas/tejado5/",
+      "tipo": "adjunto",
+      "titulo": "tejado5",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/decks-y-escaleras/",
+      "tipo": "pagina",
+      "modificada": "2024-05-29T13:53:46+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Decks y Escaleras"
+    },
+    {
+      "ruta": "/decks-y-escaleras/deck-banner/",
+      "tipo": "adjunto",
+      "titulo": "deck-banner",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/decks-y-escaleras/deck-image/",
+      "tipo": "adjunto",
+      "titulo": "deck-image",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/decks-y-escaleras/deck-pvc/",
+      "tipo": "adjunto",
+      "titulo": "deck-pvc",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/decks-y-escaleras/deck-pvc2/",
+      "tipo": "adjunto",
+      "titulo": "deck-pvc2",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/decks-y-escaleras/escalera/",
+      "tipo": "adjunto",
+      "titulo": "escalera",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/dummy-image-1/",
+      "tipo": "adjunto",
+      "titulo": "Dummy Image 1",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/dummy-image-2/",
+      "tipo": "adjunto",
+      "titulo": "Dummy Image 2",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/facebook-btn/",
+      "tipo": "adjunto",
+      "titulo": "facebook-btn",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/ferreteria/",
+      "tipo": "pagina",
+      "modificada": "2024-05-29T13:54:44+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Ferreteria"
+    },
+    {
+      "ruta": "/ferreteria/ferreteria-2/",
+      "tipo": "adjunto",
+      "titulo": "ferreteria",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/ferreteria/marcas-ferreteria/",
+      "tipo": "adjunto",
+      "titulo": "marcas-ferreteria",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/ferreteria/pinturas/",
+      "tipo": "adjunto",
+      "titulo": "pinturas",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/icon/",
+      "tipo": "adjunto",
+      "titulo": "icon",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/banner-seco/",
+      "tipo": "adjunto",
+      "titulo": "banner-seco",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/banner-watsapp/",
+      "tipo": "adjunto",
+      "titulo": "banner-watsapp",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/bbva/",
+      "tipo": "adjunto",
+      "titulo": "bbva",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/bg-veta-gris/",
+      "tipo": "adjunto",
+      "titulo": "bg-veta-gris",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/bgvetagris/",
+      "tipo": "adjunto",
+      "titulo": "bgvetagris",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/cuotasimple/",
+      "tipo": "adjunto",
+      "titulo": "cuotasimple",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/discounts/",
+      "tipo": "adjunto",
+      "titulo": "discounts",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/expresion-natural/",
+      "tipo": "adjunto",
+      "titulo": "expresion-natural",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/home-decks-escaleras-2/",
+      "tipo": "adjunto",
+      "titulo": "home-decks-escaleras",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/home-decks-escaleras/",
+      "tipo": "adjunto",
+      "titulo": "home-decks-escaleras",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/home-ferreteria/",
+      "tipo": "adjunto",
+      "titulo": "home-ferreteria",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/home-molduras/",
+      "tipo": "adjunto",
+      "titulo": "home-molduras",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/linea-life/",
+      "tipo": "adjunto",
+      "titulo": "linea-life",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/pisos/",
+      "tipo": "adjunto",
+      "titulo": "pisos",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/placas/",
+      "tipo": "adjunto",
+      "titulo": "placas",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/portada-mpago/",
+      "tipo": "adjunto",
+      "titulo": "portada-mpago",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/provincia/",
+      "tipo": "adjunto",
+      "titulo": "provincia",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/inicio/techos/",
+      "tipo": "adjunto",
+      "titulo": "techos",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/local-sitemap.xml",
+      "tipo": "sitemap",
+      "fuentes": [
+        "sitemap"
+      ]
+    },
+    {
+      "ruta": "/locations.kml",
+      "tipo": "otro",
+      "modificada": "2025-10-22T13:10:42+00:00",
+      "fuentes": [
+        "sitemap"
+      ]
+    },
+    {
+      "ruta": "/login-bg/",
+      "tipo": "adjunto",
+      "titulo": "login-bg",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/logo_gris/",
+      "tipo": "adjunto",
+      "titulo": "logo_gris",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/logo-maderera/",
+      "tipo": "adjunto",
+      "titulo": "logo-maderera",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/logo/",
+      "tipo": "adjunto",
+      "titulo": "logo",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/maderera-juan-b-justo/",
+      "tipo": "pagina",
+      "modificada": "2025-10-22T11:11:02+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Maderera Juan B Justo"
+    },
+    {
+      "ruta": "/mdh/2016/08/dummy-1.jpg",
+      "tipo": "archivo",
+      "adjunto": "/dummy-image-1/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2016/08/dummy-2.jpg",
+      "tipo": "archivo",
+      "adjunto": "/dummy-image-2/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2016/08/dummy-prod-1.jpg",
+      "tipo": "archivo",
+      "adjunto": "/prod-dummy-image-1/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/ala.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/ala/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/aserradero.jpg",
+      "tipo": "archivo",
+      "adjunto": "/sucursales/aserradero/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-chapas-curvadas.jpg",
+      "tipo": "archivo",
+      "adjunto": "/techos/banner-chapas-curvadas/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-construccion-seco2.jpg",
+      "tipo": "archivo",
+      "adjunto": "/construccion-en-seco/banner-construccion-seco2/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-constructoras.jpg",
+      "tipo": "archivo",
+      "adjunto": "/profesionales-y-constructoras/banner-constructoras/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-cubiertas.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/banner-cubiertas/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-decno-flooring.png",
+      "tipo": "archivo",
+      "adjunto": "/pisos/banner-decno-flooring/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-molduras.jpg",
+      "tipo": "archivo",
+      "adjunto": "/molduras/banner-molduras/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-piso-flotante.jpg",
+      "tipo": "archivo",
+      "adjunto": "/pisos/banner-piso-flotante/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-seco.jpg",
+      "tipo": "archivo",
+      "adjunto": "/inicio/banner-seco/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-sucursales-1.jpg",
+      "tipo": "archivo",
+      "adjunto": "/sucursales/banner-sucursales-1/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-sucursales-2.jpg",
+      "tipo": "archivo",
+      "adjunto": "/sucursales/banner-sucursales-2/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-sucursales-3.jpg",
+      "tipo": "archivo",
+      "adjunto": "/sucursales/banner-sucursales-3/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-techos.jpg",
+      "tipo": "archivo",
+      "adjunto": "/techos/banner-techos/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-tejado-metalico.jpg",
+      "tipo": "archivo",
+      "adjunto": "/techos/banner-tejado-metalico/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/banner-watsapp.png",
+      "tipo": "archivo",
+      "adjunto": "/inicio/banner-watsapp/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/bg-header.png",
+      "tipo": "archivo",
+      "adjunto": "/bg-header/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/bg-veta-gris.png",
+      "tipo": "archivo",
+      "adjunto": "/inicio/bg-veta-gris/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/bg-veta-negro.png",
+      "tipo": "archivo",
+      "adjunto": "/bg-veta-negro/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/bgvetagris.png",
+      "tipo": "archivo",
+      "adjunto": "/inicio/bgvetagris/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/camel.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/camel/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/camion-moldava.jpg",
+      "tipo": "archivo",
+      "adjunto": "/molduras/camion-moldava/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/caoba-silvestre.png",
+      "tipo": "archivo",
+      "adjunto": "/pisos/caoba-silvestre/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/casa-central.jpg",
+      "tipo": "archivo",
+      "adjunto": "/sucursales/casa-central/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/chapadur.jpg",
+      "tipo": "archivo",
+      "adjunto": "/placas/chapadur/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/colonial.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/colonial/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/condor.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/condor/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/cortes.jpg",
+      "tipo": "archivo",
+      "adjunto": "/placas/cortes/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/cropped-icon.png",
+      "tipo": "archivo",
+      "adjunto": "/cropped-icon-png/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/cubre-cocheras.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/cubre-cocheras/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/deck-banner.png",
+      "tipo": "archivo",
+      "adjunto": "/decks-y-escaleras/deck-banner/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/deck-image.jpg",
+      "tipo": "archivo",
+      "adjunto": "/decks-y-escaleras/deck-image/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/deck-pvc.png",
+      "tipo": "archivo",
+      "adjunto": "/decks-y-escaleras/deck-pvc/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/deck-pvc2.png",
+      "tipo": "archivo",
+      "adjunto": "/decks-y-escaleras/deck-pvc2/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/eco.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/eco/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/enchapadora-san-juan.png",
+      "tipo": "archivo",
+      "adjunto": "/placas/enchapadora-san-juan/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/escalera.png",
+      "tipo": "archivo",
+      "adjunto": "/decks-y-escaleras/escalera/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/estilo.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/estilo/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/eternit.png",
+      "tipo": "archivo",
+      "adjunto": "/construccion-en-seco/eternit/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/expresion-natural.jpeg",
+      "tipo": "archivo",
+      "adjunto": "/inicio/expresion-natural/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/facebook-btn.png",
+      "tipo": "archivo",
+      "adjunto": "/facebook-btn/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/fenolico-film.jpg",
+      "tipo": "archivo",
+      "adjunto": "/profesionales-y-constructoras/fenolico-film/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/fenolicos.jpg",
+      "tipo": "archivo",
+      "adjunto": "/placas/fenolicos/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/ferreteria.jpg",
+      "tipo": "archivo",
+      "adjunto": "/ferreteria/ferreteria-2/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/fibroplus.jpg",
+      "tipo": "archivo",
+      "adjunto": "/placas/fibroplus/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/fingerjoint.jpg",
+      "tipo": "archivo",
+      "adjunto": "/placas/fingerjoint/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/galpones.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/galpones/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/haya-tarima.png",
+      "tipo": "archivo",
+      "adjunto": "/pisos/haya-tarima/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/home-decks-escaleras.jpg",
+      "tipo": "archivo",
+      "adjunto": "/inicio/home-decks-escaleras/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/home-ferreteria.jpg",
+      "tipo": "archivo",
+      "adjunto": "/inicio/home-ferreteria/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/home-molduras.jpg",
+      "tipo": "archivo",
+      "adjunto": "/inicio/home-molduras/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/icon.png",
+      "tipo": "archivo",
+      "adjunto": "/icon/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/lapacho-blanco.png",
+      "tipo": "archivo",
+      "adjunto": "/pisos/lapacho-blanco/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/linea-life.png",
+      "tipo": "archivo",
+      "adjunto": "/inicio/linea-life/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/login-bg.png",
+      "tipo": "archivo",
+      "adjunto": "/login-bg/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/logo_gris.png",
+      "tipo": "archivo",
+      "adjunto": "/logo_gris/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/logo.png",
+      "tipo": "archivo",
+      "adjunto": "/logo/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/map.jpg",
+      "tipo": "archivo",
+      "adjunto": "/molduras/map/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/maquinaria.jpg",
+      "tipo": "archivo",
+      "adjunto": "/techos/maquinaria/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/marcas-ferreteria.jpg",
+      "tipo": "archivo",
+      "adjunto": "/ferreteria/marcas-ferreteria/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/marcas-techos.jpg",
+      "tipo": "archivo",
+      "adjunto": "/techos/marcas-techos/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/marquesinas.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/marquesinas/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/mdf.jpg",
+      "tipo": "archivo",
+      "adjunto": "/placas/mdf/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/melaminas.jpg",
+      "tipo": "archivo",
+      "adjunto": "/placas/melaminas/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/moldava-catalogo-de-productos.pdf",
+      "tipo": "archivo",
+      "adjunto": "/moldava-catalogo-de-productos/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/moldava-footer.png",
+      "tipo": "archivo",
+      "adjunto": "/moldava-footer/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/moldava.png",
+      "tipo": "archivo",
+      "adjunto": "/molduras/moldava/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/nogal-dakar.png",
+      "tipo": "archivo",
+      "adjunto": "/pisos/nogal-dakar/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/novoplack.png",
+      "tipo": "archivo",
+      "adjunto": "/construccion-en-seco/novoplack/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/obras-realizadas.jpg",
+      "tipo": "archivo",
+      "adjunto": "/profesionales-y-constructoras/obras-realizadas/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/omega.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/omega/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/ottawa.png",
+      "tipo": "archivo",
+      "adjunto": "/pisos/ottawa/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/pinotea-natural.png",
+      "tipo": "archivo",
+      "adjunto": "/pisos/pinotea-natural/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/pinturas.jpg",
+      "tipo": "archivo",
+      "adjunto": "/ferreteria/pinturas/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/pisos-productos-relacionados.jpg",
+      "tipo": "archivo",
+      "adjunto": "/pisos/pisos-productos-relacionados/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/pisos.jpg",
+      "tipo": "archivo",
+      "adjunto": "/inicio/pisos/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/placas-productos-relacionados.jpg",
+      "tipo": "archivo",
+      "adjunto": "/placas/placas-productos-relacionados/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/placas.jpg",
+      "tipo": "archivo",
+      "adjunto": "/inicio/placas/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/portada-mpago.png",
+      "tipo": "archivo",
+      "adjunto": "/inicio/portada-mpago/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/presupuestos.jpg",
+      "tipo": "archivo",
+      "adjunto": "/profesionales-y-constructoras/presupuestos/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/quienes-somos.jpg",
+      "tipo": "archivo",
+      "adjunto": "/quienes-somos/quienes-somos-2/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/roble-americano.png",
+      "tipo": "archivo",
+      "adjunto": "/pisos/roble-americano/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/sadepan.png",
+      "tipo": "archivo",
+      "adjunto": "/placas/sadepan/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/superboard.png",
+      "tipo": "archivo",
+      "adjunto": "/construccion-en-seco/superboard/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/techos-productos-relacionados.jpg",
+      "tipo": "archivo",
+      "adjunto": "/techos/techos-productos-relacionados/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/techos.jpg",
+      "tipo": "archivo",
+      "adjunto": "/inicio/techos/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/tejado.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/tejado/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/tejado1.png",
+      "tipo": "archivo",
+      "adjunto": "/techos/tejado1/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/tejado2.png",
+      "tipo": "archivo",
+      "adjunto": "/techos/tejado2/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/tejado3.png",
+      "tipo": "archivo",
+      "adjunto": "/techos/tejado3/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/tejado4.png",
+      "tipo": "archivo",
+      "adjunto": "/techos/tejado4/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/tejado5.jpg",
+      "tipo": "archivo",
+      "adjunto": "/cubiertas/tejado5/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/teka-oriental.png",
+      "tipo": "archivo",
+      "adjunto": "/pisos/teka-oriental/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/terciados.jpg",
+      "tipo": "archivo",
+      "adjunto": "/placas/terciados/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/tirantes.jpg",
+      "tipo": "archivo",
+      "adjunto": "/techos/tirantes/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/toronto.png",
+      "tipo": "archivo",
+      "adjunto": "/pisos/toronto/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2023/12/trupan.png",
+      "tipo": "archivo",
+      "adjunto": "/placas/trupan/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2024/07/bbva.png",
+      "tipo": "archivo",
+      "adjunto": "/inicio/bbva/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2024/07/cuotasimple.png",
+      "tipo": "archivo",
+      "adjunto": "/inicio/cuotasimple/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2024/07/discounts.png",
+      "tipo": "archivo",
+      "adjunto": "/inicio/discounts/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2024/07/provincia.jpeg",
+      "tipo": "archivo",
+      "adjunto": "/inicio/provincia/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2025/10/logo-maderera.png",
+      "tipo": "archivo",
+      "adjunto": "/logo-maderera/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/2026/05/home-decks-escaleras.jpeg",
+      "tipo": "archivo",
+      "adjunto": "/inicio/home-decks-escaleras-2/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/mdh/woocommerce-placeholder.png",
+      "tipo": "archivo",
+      "adjunto": "/woocommerce-placeholder/",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/moldava-catalogo-de-productos/",
+      "tipo": "adjunto",
+      "titulo": "moldava-catalogo-de-productos",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/moldava-footer/",
+      "tipo": "adjunto",
+      "titulo": "moldava-footer",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/molduras/",
+      "tipo": "pagina",
+      "modificada": "2024-05-29T13:58:05+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Molduras"
+    },
+    {
+      "ruta": "/molduras/banner-molduras/",
+      "tipo": "adjunto",
+      "titulo": "banner-molduras",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/molduras/camion-moldava/",
+      "tipo": "adjunto",
+      "titulo": "camion-moldava",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/molduras/map/",
+      "tipo": "adjunto",
+      "titulo": "map",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/molduras/moldava/",
+      "tipo": "adjunto",
+      "titulo": "moldava",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/my-account/",
+      "tipo": "pagina",
+      "modificada": "2023-12-22T18:14:48+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Mi Cuenta"
+    },
+    {
+      "ruta": "/my-account/wishlist/",
+      "tipo": "pagina",
+      "modificada": "2013-08-11T16:31:20+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Wishlist"
+    },
+    {
+      "ruta": "/newsletter/",
+      "tipo": "pagina",
+      "modificada": "2023-12-21T16:25:43+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Newsletter"
+    },
+    {
+      "ruta": "/page-sitemap.xml",
+      "tipo": "sitemap",
+      "fuentes": [
+        "sitemap"
+      ]
+    },
+    {
+      "ruta": "/pisos/",
+      "tipo": "pagina",
+      "modificada": "2024-05-29T14:00:05+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Pisos"
+    },
+    {
+      "ruta": "/pisos/banner-decno-flooring/",
+      "tipo": "adjunto",
+      "titulo": "banner-decno-flooring",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/pisos/banner-piso-flotante/",
+      "tipo": "adjunto",
+      "titulo": "banner-piso-flotante",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/pisos/caoba-silvestre/",
+      "tipo": "adjunto",
+      "titulo": "caoba-silvestre",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/pisos/haya-tarima/",
+      "tipo": "adjunto",
+      "titulo": "haya-tarima",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/pisos/lapacho-blanco/",
+      "tipo": "adjunto",
+      "titulo": "lapacho-blanco",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/pisos/nogal-dakar/",
+      "tipo": "adjunto",
+      "titulo": "nogal-dakar",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/pisos/ottawa/",
+      "tipo": "adjunto",
+      "titulo": "ottawa",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/pisos/pinotea-natural/",
+      "tipo": "adjunto",
+      "titulo": "pinotea-natural",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/pisos/pisos-productos-relacionados/",
+      "tipo": "adjunto",
+      "titulo": "pisos-productos-relacionados",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/pisos/roble-americano/",
+      "tipo": "adjunto",
+      "titulo": "roble-americano",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/pisos/teka-oriental/",
+      "tipo": "adjunto",
+      "titulo": "teka-oriental",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/pisos/toronto/",
+      "tipo": "adjunto",
+      "titulo": "toronto",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/placas/",
+      "tipo": "pagina",
+      "modificada": "2024-05-29T14:01:11+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Placas"
+    },
+    {
+      "ruta": "/placas/chapadur/",
+      "tipo": "adjunto",
+      "titulo": "chapadur",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/placas/cortes/",
+      "tipo": "adjunto",
+      "titulo": "cortes",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/placas/enchapadora-san-juan/",
+      "tipo": "adjunto",
+      "titulo": "enchapadora-san-juan",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/placas/fenolicos/",
+      "tipo": "adjunto",
+      "titulo": "fenolicos",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/placas/fibroplus/",
+      "tipo": "adjunto",
+      "titulo": "fibroplus",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/placas/fingerjoint/",
+      "tipo": "adjunto",
+      "titulo": "fingerjoint",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/placas/mdf/",
+      "tipo": "adjunto",
+      "titulo": "mdf",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/placas/melaminas/",
+      "tipo": "adjunto",
+      "titulo": "melaminas",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/placas/placas-productos-relacionados/",
+      "tipo": "adjunto",
+      "titulo": "placas-productos-relacionados",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/placas/sadepan/",
+      "tipo": "adjunto",
+      "titulo": "sadepan",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/placas/terciados/",
+      "tipo": "adjunto",
+      "titulo": "terciados",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/placas/trupan/",
+      "tipo": "adjunto",
+      "titulo": "trupan",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/prod-dummy-image-1/",
+      "tipo": "adjunto",
+      "titulo": "Product Dummy Image",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/product-category/costruccion-en-seco/",
+      "tipo": "categoria-producto",
+      "titulo": "Costruccion en Seco",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/product-category/cubiertas/",
+      "tipo": "categoria-producto",
+      "titulo": "Cubiertas",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/product-category/decks-y-escaleras/",
+      "tipo": "categoria-producto",
+      "titulo": "Decks y Escaleras",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/product-category/ferreteria/",
+      "tipo": "categoria-producto",
+      "titulo": "Ferreteria",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/product-category/molduras/",
+      "tipo": "categoria-producto",
+      "titulo": "Molduras",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/product-category/pisos/",
+      "tipo": "categoria-producto",
+      "titulo": "Pisos",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/product-category/placas/",
+      "tipo": "categoria-producto",
+      "titulo": "Placas",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/product-category/techos/",
+      "tipo": "categoria-producto",
+      "titulo": "Techos",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/profesionales-y-constructoras/",
+      "tipo": "pagina",
+      "modificada": "2024-05-29T14:01:50+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Profesionales y Constructoras"
+    },
+    {
+      "ruta": "/profesionales-y-constructoras/banner-constructoras/",
+      "tipo": "adjunto",
+      "titulo": "banner-constructoras",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/profesionales-y-constructoras/fenolico-film/",
+      "tipo": "adjunto",
+      "titulo": "fenolico-film",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/profesionales-y-constructoras/obras-realizadas/",
+      "tipo": "adjunto",
+      "titulo": "obras-realizadas",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/profesionales-y-constructoras/presupuestos/",
+      "tipo": "adjunto",
+      "titulo": "presupuestos",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/quienes-somos/",
+      "tipo": "pagina",
+      "modificada": "2024-05-29T14:02:37+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Quienes Somos"
+    },
+    {
+      "ruta": "/quienes-somos/quienes-somos-2/",
+      "tipo": "adjunto",
+      "titulo": "quienes-somos",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/sitemap_index.xml",
+      "tipo": "sitemap",
+      "fuentes": [
+        "sitemap"
+      ]
+    },
+    {
+      "ruta": "/sucursales/",
+      "tipo": "pagina",
+      "modificada": "2024-05-29T14:03:15+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Sucursales"
+    },
+    {
+      "ruta": "/sucursales/aserradero/",
+      "tipo": "adjunto",
+      "titulo": "aserradero",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/sucursales/banner-sucursales-1/",
+      "tipo": "adjunto",
+      "titulo": "banner-sucursales-1",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/sucursales/banner-sucursales-2/",
+      "tipo": "adjunto",
+      "titulo": "banner-sucursales-2",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/sucursales/banner-sucursales-3/",
+      "tipo": "adjunto",
+      "titulo": "banner-sucursales-3",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/sucursales/casa-central/",
+      "tipo": "adjunto",
+      "titulo": "casa-central",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/techos/",
+      "tipo": "pagina",
+      "modificada": "2024-05-29T14:03:53+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Techos"
+    },
+    {
+      "ruta": "/techos/banner-chapas-curvadas/",
+      "tipo": "adjunto",
+      "titulo": "banner-chapas-curvadas",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/techos/banner-techos/",
+      "tipo": "adjunto",
+      "titulo": "banner-techos",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/techos/banner-tejado-metalico/",
+      "tipo": "adjunto",
+      "titulo": "banner-tejado-metalico",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/techos/maquinaria/",
+      "tipo": "adjunto",
+      "titulo": "maquinaria",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/techos/marcas-techos/",
+      "tipo": "adjunto",
+      "titulo": "marcas-techos",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/techos/techos-productos-relacionados/",
+      "tipo": "adjunto",
+      "titulo": "techos-productos-relacionados",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/techos/tejado1/",
+      "tipo": "adjunto",
+      "titulo": "tejado1",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/techos/tejado2/",
+      "tipo": "adjunto",
+      "titulo": "tejado2",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/techos/tejado3/",
+      "tipo": "adjunto",
+      "titulo": "tejado3",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/techos/tejado4/",
+      "tipo": "adjunto",
+      "titulo": "tejado4",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/techos/tirantes/",
+      "tipo": "adjunto",
+      "titulo": "tirantes",
+      "fuentes": [
+        "api"
+      ]
+    },
+    {
+      "ruta": "/track-order/",
+      "tipo": "pagina",
+      "modificada": "2013-09-07T23:21:13+00:00",
+      "fuentes": [
+        "sitemap",
+        "api"
+      ],
+      "titulo": "Track your order"
+    },
+    {
+      "ruta": "/woocommerce-placeholder/",
+      "tipo": "adjunto",
+      "titulo": "woocommerce-placeholder",
+      "fuentes": [
+        "api"
+      ]
+    }
+  ]
+}

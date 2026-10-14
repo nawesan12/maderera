@@ -17,6 +17,11 @@ import type { MensajeEmail, ProveedorEmail, ResultadoEmail } from "./tipos";
  * pero el certificado es el público (`mail.<dominio>`): `SMTP_NOMBRE_TLS` le
  * dice contra qué nombre validarlo. Validarlo de verdad, y no apagar la
  * verificación: es la clave de la cuenta la que viaja.
+ *
+ * Anda igual con el correo de Hostinger (Business Email) en vez del servidor
+ * propio: `SMTP_HOST=smtp.hostinger.com`, `SMTP_PUERTO=465` y la casilla.
+ * Hostinger tampoco deja mandar a nombre de otra dirección, y `remitente()`
+ * ya lo resuelve.
  */
 export interface ConfigSmtp {
   host: string;
@@ -37,7 +42,11 @@ export function configSmtp(): ConfigSmtp | null {
     puerto: Number.isInteger(puerto) && puerto > 0 ? puerto : 587,
     usuario,
     clave,
-    nombreTls: process.env.SMTP_NOMBRE_TLS?.trim() || null,
+    // Solo para un nombre interno (`correo`, sin punto). Un servidor público
+    // —`smtp.hostinger.com`— trae el certificado de su propio nombre, y
+    // validarlo contra `mail.<dominio>`, que el compose pone por omisión,
+    // haría fallar todos los envíos.
+    nombreTls: host.includes(".") ? null : process.env.SMTP_NOMBRE_TLS?.trim() || null,
   };
 }
 

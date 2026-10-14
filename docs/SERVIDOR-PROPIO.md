@@ -463,6 +463,49 @@ paga un abono por casilla y no hay nada que mantener. Las dos cosas son
 compatibles con el resto de esta guía: si se elige eso, no se enciende el
 perfil `correo` y listo.
 
+### Con el correo de Hostinger en vez del propio
+
+Si las casillas se contratan en Hostinger (Business Email, en hPanel →
+*Correos*), **la tienda puede mandar sus avisos y campañas por ahí mismo**,
+sin Resend y sin el servidor de correo de este compose:
+
+1. En hPanel, crear las casillas (`ventas@`, `administracion@`) y una para la
+   tienda: `avisos@mjbj.ar`. Si el dominio está en Hostinger, hPanel carga
+   solo los registros MX, SPF y DKIM; si está en otro lado, los muestra para
+   copiarlos. **Confirmar en hPanel** que los tres figuren como verificados
+   antes de mandar nada: sin DKIM, los avisos caen en spam.
+2. Sumar el DMARC a mano (hPanel no siempre lo crea): TXT `_dmarc` con
+   `v=DMARC1; p=none; rua=mailto:postmaster@mjbj.ar`, y endurecerlo como se
+   explica [más abajo](#los-registros-dns).
+3. En `.env.produccion`, **sin** `COMPOSE_PROFILES=correo`:
+
+   ```bash
+   EMAIL_PROVIDER="smtp"
+   SMTP_HOST="smtp.hostinger.com"
+   SMTP_PUERTO="465"
+   SMTP_USUARIO="avisos@mjbj.ar"
+   SMTP_CLAVE="<la clave de la casilla>"
+   EMAIL_REMITENTE="Maderera Juan B. Justo <avisos@mjbj.ar>"
+   ```
+
+   `SMTP_NOMBRE_TLS` no hace falta: con un servidor público la app lo ignora y
+   valida el certificado de Hostinger contra su propio nombre.
+4. Desplegar y mandar una prueba desde `/admin` (un aviso de pedido a una
+   casilla propia). Mirar en Gmail → *Mostrar original* que diga
+   `SPF: PASS`, `DKIM: PASS` y `DMARC: PASS`.
+
+**El ritmo de las campañas** queda en 3 por minuto por omisión, que es seguro.
+El tope que manda ya no es el de la VPS sino **el diario del plan de correo**
+(se ve en hPanel): conviene que `CAMPANAS_POR_MINUTO × 60 × horas de envío`
+quede holgadamente por debajo, dejando lugar a los avisos del día. Si una
+campaña pasa el tope, Hostinger rechaza lo que sobra y la tanda reintenta más
+tarde; no se pierde, pero tarda.
+
+**Programas de correo** con esta opción: entrante `imap.hostinger.com` (993,
+SSL/TLS), saliente `smtp.hostinger.com` (465, SSL/TLS), y el webmail de
+Hostinger en vez de Roundcube. Las secciones que siguen —encenderlo, DNS
+propio, calentar la IP, relay— son solo para el servidor propio.
+
 ### Encenderlo
 
 1. **Puertos**: los del [paso 3](#3-firewall) para el correo, y en el firewall

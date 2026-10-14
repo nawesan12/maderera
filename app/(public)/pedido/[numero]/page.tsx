@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { CargandoSitio } from "@/components/sitio/cargando";
+import { existe } from "@/lib/dal/existencia";
 import { sucursalPublicada } from "@/lib/sucursales";
 import {
   ArrowRight,
@@ -42,6 +45,18 @@ export async function generateMetadata({
   };
 }
 
+/**
+ * Un número para el build, que no existe.
+ *
+ * Con Cache Components, leer el parámetro de una ruta sin esta lista es un dato
+ * por pedido, y obligaría a resolver el 404 detrás de un `<Suspense>` —que es
+ * lo que lo dejaba en 200—. No se arma ningún pedido de antemano: el seguimiento
+ * es de cada uno. El de muestra da 404 en el build y la ruta se verifica igual.
+ */
+export async function generateStaticParams() {
+  return [{ numero: "0" }];
+}
+
 export default async function PedidoConfirmadoPage({
   params,
   searchParams,
@@ -49,8 +64,28 @@ export default async function PedidoConfirmadoPage({
   params: Promise<{ numero: string }>;
   searchParams: Promise<{ t?: string }>;
 }) {
-  const whatsapp = await enlaceWhatsapp();
-  const [{ numero }, { t }] = await Promise.all([params, searchParams]);
+  const { numero } = await params;
+
+  // El 404 se decide acá, con la caché, antes de que salga el esqueleto: lo que
+  // se resuelve detrás del `<Suspense>` ya no puede cambiar el código. Quién
+  // puede ver el pedido —el token o la sesión— se sigue decidiendo adentro.
+  if (!(await existe("pedido-por-numero", numero))) notFound();
+
+  return (
+    <Suspense fallback={<CargandoSitio />}>
+      <Seguimiento numero={numero} searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function Seguimiento({
+  numero,
+  searchParams,
+}: {
+  numero: string;
+  searchParams: Promise<{ t?: string }>;
+}) {
+  const [whatsapp, { t }] = await Promise.all([enlaceWhatsapp(), searchParams]);
 
   // La consulta vive en el DAL, con el control de acceso adentro. Antes estaba
   // suelta acá y filtraba solo por número, que es consecutivo: alcanzaba con

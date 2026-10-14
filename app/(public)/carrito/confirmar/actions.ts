@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
+import { avisarPedidoNuevo } from "@/lib/dal/existencia";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { eq, inArray } from "drizzle-orm";
@@ -477,6 +478,9 @@ export async function confirmarCompra(
   updateTag(ETIQUETAS.catalogo);
   revalidatePath("/carrito");
   revalidatePath("/admin/pedidos");
+  // El seguimiento al que se va a redirigir tiene que existir aunque alguien
+  // haya pedido ese número antes de que lo hubiera (ver `avisarPedidoNuevo`).
+  avisarPedidoNuevo(numeroCreado);
 
   // La confirmación por correo sale con el pedido ya guardado y fuera del
   // camino de la respuesta: quien compró no tiene que esperar a Resend para

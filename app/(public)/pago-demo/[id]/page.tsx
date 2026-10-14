@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { CargandoSitio } from "@/components/sitio/cargando";
+import { existe } from "@/lib/dal/existencia";
 import { CircleAlert, CreditCard, ShieldOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,6 +32,26 @@ export default async function PagoDemoPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+
+  // El 404 antes del esqueleto, desde la caché (ver `lib/dal/existencia.ts`).
+  // De paso, un id que no es un uuid ya no llega a la consulta: Postgres lo
+  // rechazaba con un error y la pantalla era la de «se nos rompió algo».
+  if (!(await existe("pago-demo", id))) notFound();
+
+  return (
+    <Suspense fallback={<CargandoSitio />}>
+      <PagoDemo id={id} />
+    </Suspense>
+  );
+}
+
+/** Un uuid que no es de nadie: ver `generateStaticParams` en `pedido/[numero]`. */
+export async function generateStaticParams() {
+  return [{ id: "00000000-0000-0000-0000-000000000000" }];
+}
+
+async function PagoDemo({ id }: { id: string }) {
+  // El estado del cobro sí es por pedido: cambia cuando se toca un botón.
   const pago = await cobroSimulado(id);
 
   // `cobroSimulado` devuelve null si el cobro no es del proveedor demo: esta

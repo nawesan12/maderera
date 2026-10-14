@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Hoja, MUESTRA_DEL_BUILD } from "../../preparando";
 import { getSession } from "@/lib/dal/session";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import { resumenDeCuenta } from "@/lib/dal/admin/resumen-cuenta";
@@ -18,7 +19,23 @@ export const metadata: Metadata = {
  * cualquiera y el cliente únicamente el suyo. La comparación contra el dueño va
  * antes de mostrar nada, y el identificador de la URL no autoriza por sí solo.
  */
-export default async function ResumenDeCuentaPage({
+export async function generateStaticParams() {
+  return MUESTRA_DEL_BUILD;
+}
+
+export default function ResumenDeCuentaPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  return (
+    <Hoja que="cliente" params={params}>
+      <Contenido params={params} />
+    </Hoja>
+  );
+}
+
+async function Contenido({
   params,
 }: {
   params: Promise<{ id: string }>;

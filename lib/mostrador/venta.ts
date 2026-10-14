@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { avisarPedidoNuevo } from "@/lib/dal/existencia";
 import {
   siguienteNumeroDeCorte,
   siguienteNumeroDePedido,
@@ -341,7 +342,7 @@ export async function registrarVentaDeMostrador(
   }
 
   try {
-    return await db.transaction(async (tx) => {
+    const resultado = await db.transaction(async (tx) => {
       /*
        * El lock serializa los envíos repetidos de la misma venta. Sin él, dos
        * toques simultáneos leen los dos que la clave no existe y los dos siguen;
@@ -678,6 +679,11 @@ export async function registrarVentaDeMostrador(
         lineas,
       };
     });
+
+    // Con la venta ya confirmada: el seguimiento de este número tiene que
+    // existir aunque alguien lo haya pedido antes (ver `avisarPedidoNuevo`).
+    if (resultado.ok && resultado.nueva) avisarPedidoNuevo(resultado.numero);
+    return resultado;
   } catch (error) {
     // Un cheque repetido: la transacción ya volvió atrás entera.
     if (error instanceof ErrorDeCobro) return { ok: false, error: error.message };

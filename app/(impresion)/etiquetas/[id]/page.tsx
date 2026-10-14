@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Hoja, MUESTRA_DEL_BUILD } from "../../preparando";
 import { requireStaff } from "@/lib/dal/session";
 import { obtenerCorte } from "@/lib/dal/admin/cortes";
 import { BotonImprimir } from "@/app/(impresion)/ticket/[id]/boton";
@@ -28,7 +29,23 @@ export const metadata: Metadata = {
  */
 const TOPE = 500;
 
-export default async function EtiquetasPage({
+export async function generateStaticParams() {
+  return MUESTRA_DEL_BUILD;
+}
+
+export default function EtiquetasPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  return (
+    <Hoja que="corte" params={params}>
+      <Contenido params={params} />
+    </Hoja>
+  );
+}
+
+async function Contenido({
   params,
 }: {
   params: Promise<{ id: string }>;

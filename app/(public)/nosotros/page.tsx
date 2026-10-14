@@ -6,7 +6,7 @@ import { Award, Shield, Truck, Users } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { ANIO_FUNDACION, numerosDeLaEmpresa } from "@/lib/dal/catalog";
 import { DatosEstructurados } from "@/components/datos-estructurados";
-import { migasJsonLd } from "@/lib/seo";
+import { migasJsonLd, metadatosDePagina } from "@/lib/seo";
 import { ALCANCE_MOLDAVA, masDeAnios } from "@/lib/empresa";
 
 /**
@@ -24,16 +24,18 @@ import { ALCANCE_MOLDAVA, masDeAnios } from "@/lib/empresa";
  */
 
 export const metadata: Metadata = {
-  title: "Quiénes somos — desde 1981",
-  description:
-    `Empresa familiar fundada en ${ANIO_FUNDACION} en Mar del Plata. ${masDeAnios()} proveyendo madera de calidad. Marca propia Moldava, con entrega en ${ALCANCE_MOLDAVA}.`,
+  ...metadatosDePagina({
+    titulo: "Quiénes somos — maderera familiar desde 1981",
+    descripcion:
+      `Empresa familiar fundada en ${ANIO_FUNDACION} en Mar del Plata. ${masDeAnios()} proveyendo madera de calidad. Marca propia Moldava, con entrega en ${ALCANCE_MOLDAVA}.`,
+    ruta: "/nosotros",
+  }),
   keywords: [
     "maderera juan b justo historia",
     "moldava molduras",
     "empresa madera mar del plata",
     "maderera desde 1981",
   ],
-  alternates: { canonical: "/nosotros" },
 };
 
 /**

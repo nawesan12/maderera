@@ -15,3 +15,15 @@ export async function anioEnCurso(): Promise<number> {
   cacheLife("days");
   return new Date().getFullYear();
 }
+
+/**
+ * La fecha de hoy (`AAAA-MM-DD`), con el mismo criterio que `anioEnCurso`.
+ *
+ * La usa el marcado de producto para el `priceValidUntil`: una semana desde
+ * hoy. Con hasta un día de atraso sigue quedando por delante de la fecha real.
+ */
+export async function hoyEnCurso(): Promise<string> {
+  "use cache";
+  cacheLife("days");
+  return new Date().toISOString().slice(0, 10);
+}

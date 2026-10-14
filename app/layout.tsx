@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import { urlSitio } from "@/lib/seo";
+import { sitioIndexable, urlSitio } from "@/lib/seo";
 import { masDeAnios } from "@/lib/empresa";
 import "./globals.css";
 
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: "%s | Maderera Juan B. Justo",
   },
   description:
-    "Maderera líder en Mar del Plata desde 1981. Techos, placas, pisos, molduras Moldava, ferretería, decks, construcción en seco y más. Presupuestos sin cargo. Dos sucursales: Casa Central y Aserradero.",
+    "Maderera en Mar del Plata desde 1981: techos, placas, pisos, molduras Moldava, ferretería, decks y construcción en seco. Presupuestos sin cargo. Casa Central y Aserradero.",
   keywords: [
     "maderera mar del plata",
     "madera mar del plata",
@@ -49,7 +49,13 @@ export const metadata: Metadata = {
    * y el marcado; acá quedaba la última copia escrita a mano.
    */
   metadataBase: new URL(urlSitio()),
-  alternates: { canonical: "/" },
+  /*
+   * **Sin canónica acá.** Estaba `alternates: { canonical: "/" }`, y Next la
+   * hereda en toda página que no declare la suya: `/corte` y `/stock` le
+   * decían a Google que eran copias de la portada. Cada página declara la suya
+   * con `metadatosDePagina()` (`lib/seo.ts`); la de la portada está en su
+   * página.
+   */
   openGraph: {
     type: "website",
     locale: "es_AR",
@@ -66,7 +72,12 @@ export const metadata: Metadata = {
     title: "Maderera Juan B. Justo | Desde 1981 en Mar del Plata",
     description: `${masDeAnios()} proveyendo madera de calidad en Mar del Plata. Presupuestos sin cargo.`,
   },
-  robots: { index: true, follow: true },
+  // Fuera de producción, `noindex` también en cada página y no solo en
+  // `robots.txt`: una vista previa enlazada desde algún lado igual puede
+  // terminar en el índice si solo se le prohíbe el rastreo.
+  robots: sitioIndexable()
+    ? { index: true, follow: true, "max-image-preview": "large" }
+    : { index: false, follow: false },
   icons: { icon: "/cropped-icon-180x180.png", apple: "/cropped-icon-180x180.png" },
 };
 
@@ -87,7 +98,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="es"
+      lang="es-AR"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >

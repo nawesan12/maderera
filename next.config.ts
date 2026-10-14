@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { redireccionesParaNext } from "./lib/sitio-viejo";
+import { sitioIndexable } from "./lib/seo";
 
 /*
  * Un identificador que cambia con cada build.
@@ -191,6 +192,22 @@ const nextConfig: NextConfig = {
           { key: "Strict-Transport-Security", value: "max-age=63072000" },
         ],
       },
+
+      /*
+       * **Fuera de producción, nada se indexa: tampoco las imágenes ni el
+       * feed.** `robots.txt` prohíbe rastrear y cada página lleva `noindex`,
+       * pero un PNG o un XML no tienen dónde llevar una etiqueta: la cabecera
+       * es lo único que los alcanza. Se decide en el build, como `robots.txt`
+       * (ver `sitioIndexable()`).
+       */
+      ...(sitioIndexable()
+        ? []
+        : [
+            {
+              source: "/:path*",
+              headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+            },
+          ]),
     ];
   },
   images: {

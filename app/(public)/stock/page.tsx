@@ -6,6 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FiltrosStock } from "@/components/catalogo/filtros-stock";
 import { listarCategorias, listarProductosPublicos } from "@/lib/dal/catalog";
 import type { StockLevel } from "@/lib/stock-level";
+import { DatosEstructurados } from "@/components/datos-estructurados";
+import { migasJsonLd } from "@/lib/seo";
 
 interface Params {
   cat?: string;
@@ -37,6 +39,12 @@ export default async function StockPage({
 
   return (
     <div className="min-h-screen">
+      <DatosEstructurados
+        datos={migasJsonLd([
+          { nombre: "Inicio", ruta: "/" },
+          { nombre: "Stock por sucursal", ruta: "/stock" },
+        ])}
+      />
       <div className="bg-brand-gray text-white py-12">
         <div className="contenedor">
           <div className="flex items-center gap-3 mb-2">

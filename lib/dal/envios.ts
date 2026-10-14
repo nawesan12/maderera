@@ -82,7 +82,9 @@ export const listarSucursalesPublicas = cache(
           whatsapp: ficha?.whatsapp ?? null,
           email: ficha?.email ?? null,
           mapUrl: ficha?.mapUrl ?? null,
+          geo: ficha?.geo ?? null,
           imagenUrl: ficha?.imagenUrl ?? null,
+          foto: ficha?.foto ?? null,
           servicios: ficha?.servicios ?? "",
           destacados: ficha?.destacados ?? "",
         };

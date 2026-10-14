@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { metadatosDePagina } from "@/lib/seo";
 import Link from "next/link";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
 import { Download, FileText, Lock } from "lucide-react";
@@ -9,10 +10,12 @@ import {
 } from "@/lib/dal/profesionales";
 
 export const metadata: Metadata = {
-  title: "Documentación técnica",
-  description:
-    "Fichas de producto, tablas de carga e instructivos de colocación de maderas, placas y molduras.",
-  alternates: { canonical: "/documentacion" },
+  ...metadatosDePagina({
+    titulo: "Documentación técnica de maderas, placas y molduras",
+    descripcion:
+      "Fichas de producto, tablas de carga e instructivos de colocación de maderas, placas y molduras, para descargar.",
+    ruta: "/documentacion",
+  }),
 };
 
 /** Peso legible. Avisar antes de que alguien baje 40 MB con datos móviles. */
@@ -49,6 +52,7 @@ export default async function DocumentacionPage() {
   return (
     <div className="min-h-screen bg-sitio-alt">
       <EncabezadoPublico
+        ruta="/documentacion"
         titulo="Documentación"
         bajada="Fichas técnicas, tablas de carga e instructivos, listos para adjuntar al pliego."
       />

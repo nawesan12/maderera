@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { DatosEstructurados } from "@/components/datos-estructurados";
+import { migasJsonLd } from "@/lib/seo";
 
 /**
  * Encabezado de las páginas de contenido.
@@ -10,19 +12,34 @@ import Link from "next/link";
  * Las migas van acá y no en cada página porque son siempre las mismas —Inicio
  * y dónde estás— y porque una miga que existe en el marcado pero no en la
  * pantalla no le sirve a nadie más que al buscador.
+ *
+ * Con `ruta`, las mismas migas salen además como `BreadcrumbList`: lo que se
+ * ve y lo que lee Google, de una sola fuente.
  */
 export function EncabezadoPublico({
   titulo,
   bajada,
   migas = [],
+  ruta,
 }: {
   titulo: string;
+  /** La ruta de la página: si está, emite las migas como datos estructurados. */
+  ruta?: string;
   bajada?: string;
   /** Tramos intermedios entre Inicio y el título, si los hay. */
   migas?: { nombre: string; ruta: string }[];
 }) {
   return (
     <section className="relative overflow-hidden bg-oscuro-marca pb-[42px] pt-[38px] text-white">
+      {ruta && (
+        <DatosEstructurados
+          datos={migasJsonLd([
+            { nombre: "Inicio", ruta: "/" },
+            ...migas,
+            { nombre: titulo, ruta },
+          ])}
+        />
+      )}
       <div
         className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.07)_0_12px,transparent_12px_24px)]"
         aria-hidden="true"

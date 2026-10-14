@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { DatosEstructurados } from "@/components/datos-estructurados";
+import { metadatosDePagina, migasJsonLd } from "@/lib/seo";
 import Link from "next/link";
 import { ArrowRight, Ruler } from "lucide-react";
 import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
@@ -8,9 +10,12 @@ import { VistaDeCorteDeQuienMira } from "./vista";
 import { preciosDePlacas } from "@/lib/dal/visitante";
 
 export const metadata: Metadata = {
-  title: "Corte a Medida Online",
-  description:
-    "Armá tu despiece en milímetros, mirá cómo entra en la placa y comprá el corte hecho. Melamina, MDF, fenólicos y tableros, cortados en el aserradero.",
+  ...metadatosDePagina({
+    titulo: "Corte de placas a medida en Mar del Plata",
+    descripcion:
+      "Armá tu despiece en milímetros, mirá cómo entra en la placa y comprá el corte hecho. Melamina, MDF, fenólicos y tableros cortados en el aserradero.",
+    ruta: "/corte",
+  }),
   keywords: [
     "corte a medida",
     "corte de melamina mar del plata",
@@ -53,19 +58,29 @@ export default async function CortePage() {
 
   return (
     <div className="bg-sitio-alt">
+      <DatosEstructurados
+        datos={migasJsonLd([
+          { nombre: "Inicio", ruta: "/" },
+          { nombre: "Corte a medida", ruta: "/corte" },
+        ])}
+      />
       <div className="contenedor py-10">
         <div className="max-w-2xl">
           <p className="inline-flex items-center gap-2 rounded-full bg-naranja-claro px-3 py-1 text-[13px] font-semibold text-acento-sobre-claro">
             <Ruler className="h-4 w-4" />
-            Corte a medida
+            Melamina, MDF, fenólicos y tableros
           </p>
+          {/* El título dice lo que se busca —«corte de placas a medida»— y
+              la invitación va abajo. Antes el único título era la invitación,
+              y la página no nombraba en ningún encabezado lo que ofrece. */}
           <h1 className="mt-3 text-[34px] font-bold leading-[1.1] tracking-[-0.03em]">
-            Pasá las medidas y mirá cómo entra en la placa
+            Corte de placas a medida
           </h1>
           <p className="mt-2.5 text-base leading-relaxed text-texto-2">
-            Elegí la placa, cargá el despiece en milímetros y vas a ver el
-            dibujo, cuántas placas hacen falta y cuánto sale, antes de comprar.
-            El corte se hace en el aserradero: {HORARIO_CORTES}.
+            Pasá las medidas y mirá cómo entra en la placa: elegí la placa,
+            cargá el despiece en milímetros y vas a ver el dibujo, cuántas
+            placas hacen falta y cuánto sale, antes de comprar. El corte se
+            hace en el aserradero: {HORARIO_CORTES}.
           </p>
         </div>
 

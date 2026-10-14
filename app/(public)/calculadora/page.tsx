@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Calculator } from "lucide-react";
 import { DatosEstructurados } from "@/components/datos-estructurados";
-import { migasJsonLd } from "@/lib/seo";
+import { migasJsonLd, metadatosDePagina } from "@/lib/seo";
 import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
 import { Calculadoras } from "./calculadoras";
 
@@ -20,9 +20,12 @@ import { Calculadoras } from "./calculadoras";
  */
 
 export const metadata: Metadata = {
-  title: "Calculadora de materiales",
-  description:
-    "Calculá los materiales exactos para tu proyecto: techos, placas, pisos y decks. Herramienta gratuita. Los resultados se agregan directo al presupuesto.",
+  ...metadatosDePagina({
+    titulo: "Calculadora de materiales para techos, placas, pisos y decks",
+    descripcion:
+      "Calculá cuántos tirantes, placas, cajas de piso o tablas de deck necesitás para tu obra. Gratis, y el resultado se agrega directo al presupuesto.",
+    ruta: "/calculadora",
+  }),
   keywords: [
     "calculadora madera",
     "calcular materiales techo",
@@ -31,12 +34,6 @@ export const metadata: Metadata = {
     "calculadora deck",
     "materiales construccion",
   ],
-  alternates: { canonical: "/calculadora" },
-  openGraph: {
-    title: "Calculadora de materiales",
-    description:
-      "Herramienta gratuita para calcular materiales de construcción: techos, placas, pisos y decks.",
-  },
 };
 
 export default async function CalculadoraPage() {

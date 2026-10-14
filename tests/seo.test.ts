@@ -93,19 +93,51 @@ describe("marcado de producto", () => {
     imagenes: ["/fotos/fenolico.jpg"],
   };
 
-  it("arma un rango cuando hay varias medidas con precio", () => {
+  it("con varias medidas arma un grupo con una variante por medida", () => {
     const marcado = productoJsonLd({
       ...producto,
       variantes: [
         { sku: "F-18", label: "18mm", precio: "96500.00", disponibilidad: "alto" },
-        { sku: "F-12", label: "12mm", precio: "72000.00", disponibilidad: "bajo" },
+        { sku: "F-12", label: "12mm", precio: "72000.00", disponibilidad: "sin-stock" },
+      ],
+    }) as Record<string, unknown> & { hasVariant: Record<string, Record<string, string>>[] };
+
+    expect(marcado["@type"]).toBe("ProductGroup");
+    expect(marcado.variesBy).toEqual(["https://schema.org/size"]);
+    expect(marcado.hasVariant).toHaveLength(2);
+    expect(marcado.hasVariant[0].offers.price).toBe("96500.00");
+    expect(marcado.hasVariant[0].offers.priceCurrency).toBe("ARS");
+    expect(marcado.hasVariant[1].offers.availability).toContain("OutOfStock");
+    // Cada variante lleva su SKU y su medida.
+    expect(marcado.hasVariant[1]).toMatchObject({ sku: "F-12", size: "12mm" });
+  });
+
+  it("declara condición nueva y hasta cuándo vale el precio", () => {
+    const hoy = new Date("2026-10-14T12:00:00Z");
+    const marcado = productoJsonLd(
+      {
+        ...producto,
+        variantes: [
+          { sku: "F-18", label: "18mm", precio: "96500.00", disponibilidad: "alto" },
+        ],
+      },
+      hoy,
+    ) as Record<string, Record<string, unknown>>;
+
+    expect(marcado.offers.itemCondition).toBe("https://schema.org/NewCondition");
+    expect(marcado.offers.priceValidUntil).toBe("2026-10-21");
+  });
+
+  it("lo que se fabrica a pedido no figura agotado", () => {
+    const marcado = productoJsonLd({
+      ...producto,
+      aPedido: true,
+      variantes: [
+        { sku: "F-18", label: "18mm", precio: "96500.00", disponibilidad: "sin-stock" },
       ],
     }) as Record<string, Record<string, unknown>>;
 
-    expect(marcado.offers["@type"]).toBe("AggregateOffer");
-    expect(marcado.offers.lowPrice).toBe("72000.00");
-    expect(marcado.offers.highPrice).toBe("96500.00");
-    expect(marcado.offers.offerCount).toBe(2);
+    expect(marcado.offers.availability).toBe("https://schema.org/MadeToOrder");
   });
 
   it("usa una oferta suelta cuando hay una sola medida", () => {
@@ -116,6 +148,7 @@ describe("marcado de producto", () => {
       ],
     }) as Record<string, Record<string, unknown>>;
 
+    expect(marcado["@type"]).toBe("Product");
     expect(marcado.offers["@type"]).toBe("Offer");
     expect(marcado.offers.price).toBe("96500.00");
   });

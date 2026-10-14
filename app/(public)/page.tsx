@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { enlaceWhatsapp, numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
@@ -28,6 +29,20 @@ import { SliderDePromos } from "@/components/home/slider-promos";
 import { FranjaBeneficios } from "@/components/franja-beneficios";
 import { BotonCrearCuenta } from "@/components/boton-crear-cuenta";
 import { MARCAS_DE_PAGO, marcaDelMedio, type MarcaDePago } from "@/lib/medios-de-pago";
+import { metadatosDePagina } from "@/lib/seo";
+
+/**
+ * La portada dice primero qué es y dónde: «maderera en Mar del Plata» es lo
+ * que se escribe en el buscador. La marca va al final del título, que es lo
+ * que Google recorta primero si no entra.
+ */
+export const metadata: Metadata = metadatosDePagina({
+  titulo: "Maderera en Mar del Plata desde 1981 | Maderera Juan B. Justo",
+  tituloAbsoluto: true,
+  descripcion:
+    "Maderera en Mar del Plata desde 1981: tirantes, machimbre, placas con corte a medida, molduras Moldava, pisos, decks y ferretería. Casa Central y Aserradero.",
+  ruta: "/",
+});
 
 /**
  * Los años de la empresa se leen al renderizar y no una vez al cargar el

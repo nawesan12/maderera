@@ -14,7 +14,8 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { DatosEstructurados } from "@/components/datos-estructurados";
-import { migasJsonLd, sucursalJsonLd } from "@/lib/seo";
+import { metadatosDePagina, migasJsonLd, sucursalJsonLd } from "@/lib/seo";
+import { REDES } from "@/lib/empresa";
 
 /**
  * Las sucursales, contra la base.
@@ -47,21 +48,19 @@ export async function generateMetadata(): Promise<Metadata> {
     .join(" y ");
 
   return {
-    title: "Sucursales en Mar del Plata",
-    description: sucursales.length
-      ? `Nuestras sucursales en Mar del Plata: ${detalle}. Horarios, servicios y contacto directo.`
-      : "Nuestras sucursales en Mar del Plata. Horarios, servicios y contacto directo.",
+    ...metadatosDePagina({
+      titulo: "Sucursales en Mar del Plata: dirección, horario y teléfono",
+      descripcion: sucursales.length
+        ? `Nuestras sucursales en Mar del Plata: ${detalle}. Horarios, servicios y contacto directo.`
+        : "Nuestras sucursales en Mar del Plata. Horarios, servicios y contacto directo.",
+      ruta: "/sucursales",
+    }),
     keywords: [
       "maderera mar del plata",
       "sucursales maderera",
       "madera mar del plata direccion",
       ...sucursales.map((s) => s.direccion.toLowerCase()),
     ],
-    alternates: { canonical: "/sucursales" },
-    openGraph: {
-      title: "Sucursales | Maderera Juan B. Justo — Mar del Plata",
-      description: sucursales.map((s) => s.nombre).join(" y ") || "Nuestras sucursales",
-    },
   };
 }
 
@@ -86,6 +85,10 @@ export default async function SucursalesPage() {
         email: s.email,
         hours: s.horario,
         whatsapp: s.whatsapp,
+        geo: s.geo,
+        mapa: s.mapUrl,
+        foto: s.foto?.ruta ?? null,
+        redes: [REDES.facebook, REDES.instagram],
       }),
     ),
     migasJsonLd([
@@ -111,9 +114,9 @@ export default async function SucursalesPage() {
         {sucursales.map((sucursal) => {
           const servicios = renglones(sucursal.servicios);
           const destacados = renglones(sucursal.destacados);
-          const comoLlegar = `https://maps.google.com/?q=${encodeURIComponent(
-            sucursal.direccion,
-          )}`;
+          const comoLlegar =
+            sucursal.mapUrl ??
+            `https://maps.google.com/?q=${encodeURIComponent(sucursal.direccion)}`;
 
           return (
             <section
@@ -150,8 +153,9 @@ export default async function SucursalesPage() {
                         3.08:1 y el texto oscuro 5.07:1; sobre el azul del
                         Aserradero es al revés. Así la píldora conserva el color
                         real de cada una en vez de inventarle otro. */}
-                    <span
-                      className="inline-block rounded-full px-4 py-2 text-lg font-bold tracking-[-0.01em]"
+                    <Link
+                      href={`/sucursales/${sucursal.slug}`}
+                      className="inline-block rounded-full px-4 py-2 text-lg font-bold tracking-[-0.01em] hover:underline"
                       style={{
                         backgroundColor:
                           sucursal.slug === "aserradero"
@@ -162,7 +166,7 @@ export default async function SucursalesPage() {
                       }}
                     >
                       {sucursal.nombre}
-                    </span>
+                    </Link>
                     <p className="mt-3 text-sm font-medium uppercase tracking-wider text-white/60">
                       Maderera Juan B. Justo
                     </p>

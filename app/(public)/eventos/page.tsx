@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { metadatosDePagina } from "@/lib/seo";
 import Link from "next/link";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
 import Image from "next/image";
@@ -7,10 +8,12 @@ import { eventosProximos } from "@/lib/dal/profesionales";
 import { fechaLarga, formatearMonto, hora } from "@/lib/formato";
 
 export const metadata: Metadata = {
-  title: "Capacitaciones y eventos",
-  description:
-    "Capacitaciones, charlas técnicas y jornadas de Maderera Juan B. Justo en Mar del Plata. Inscripción online.",
-  alternates: { canonical: "/eventos" },
+  ...metadatosDePagina({
+    titulo: "Capacitaciones y eventos en Mar del Plata",
+    descripcion:
+      "Capacitaciones, charlas técnicas y jornadas de Maderera Juan B. Justo en Mar del Plata, para profesionales y para quien hace su propia obra. Inscripción online.",
+    ruta: "/eventos",
+  }),
 };
 
 /**
@@ -26,6 +29,7 @@ export default async function EventosPage() {
   return (
     <div className="min-h-screen bg-sitio-alt">
       <EncabezadoPublico
+        ruta="/eventos"
         titulo="Capacitaciones y eventos"
         bajada="Jornadas en la sucursal, con cupo limitado."
       />

@@ -4,7 +4,7 @@ import { ArrowRight, Factory, Ruler, Truck } from "lucide-react";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
 import { ProductCard } from "@/components/product-card";
 import { DatosEstructurados } from "@/components/datos-estructurados";
-import { migasJsonLd } from "@/lib/seo";
+import { migasJsonLd, metadatosDePagina } from "@/lib/seo";
 import { listarProductosPublicos, POR_PAGINA } from "@/lib/dal/catalog";
 import { enlaceWhatsapp, numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import { ALCANCE_MOLDAVA } from "@/lib/empresa";
@@ -23,8 +23,12 @@ import { ALCANCE_MOLDAVA } from "@/lib/empresa";
  */
 
 export const metadata: Metadata = {
-  title: "Moldava — molduras y listonería en pino finger joint",
-  description: `Línea propia de Maderera Juan B. Justo: molduras y listonería en pino finger joint, sin nudos, en piezas uniformes de 3,05 m. Venta a consumidor final y mayorista en ${ALCANCE_MOLDAVA}.`,
+  ...metadatosDePagina({
+    titulo: "Moldava — molduras y listonería en pino finger joint",
+    descripcion:
+      `Línea propia de Maderera Juan B. Justo: molduras y listonería en pino finger joint, sin nudos, en piezas uniformes de 3,05 m. Venta minorista y mayorista en ${ALCANCE_MOLDAVA}.`,
+    ruta: "/moldava",
+  }),
   keywords: [
     "moldava",
     "molduras pino finger joint",
@@ -32,11 +36,6 @@ export const metadata: Metadata = {
     "molduras mayorista buenos aires",
     "zocalos pino finger",
   ],
-  alternates: { canonical: "/moldava" },
-  openGraph: {
-    title: "Moldava — molduras y listonería en pino finger joint",
-    description: `Producción propia. Piezas uniformes de 3,05 m, sin nudos. Entrega en puerta en ${ALCANCE_MOLDAVA}.`,
-  },
 };
 
 const PROCESO = [

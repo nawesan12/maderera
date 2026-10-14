@@ -22,9 +22,16 @@ import { combinedStockLevel } from "@/lib/stock-level";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { resenasDelProducto, resumenDeResenas } from "@/lib/dal/resenas";
 import { ResenasDelProducto } from "@/components/catalogo/resenas";
-import { migasJsonLd, productoJsonLd, urlAbsoluta } from "@/lib/seo";
+import {
+  metadatosDePagina,
+  migasJsonLd,
+  precioEnTexto,
+  productoJsonLd,
+  recortar,
+} from "@/lib/seo";
 import { rutasDelCatalogo } from "@/lib/dal/sitemap";
 import { degradar } from "@/lib/degradar";
+import { hoyEnCurso } from "@/lib/reloj";
 
 /**
  * Unas pocas fichas se arman en el build; el resto, en la primera visita.
@@ -66,28 +73,55 @@ export async function generateMetadata({
   const { slug } = await params;
   const producto = await obtenerProductoPublico(slug);
 
-  if (!producto) return { title: "Producto no encontrado" };
+  if (!producto) return { title: "Producto no encontrado", robots: { index: false } };
 
-  // La descripción del catálogo puede venir vacía o larguísima. Google recorta
-  // alrededor de los 160 caracteres, así que se arma una que diga algo aunque
-  // el producto no tenga texto cargado.
-  const descripcion = (
-    producto.description ||
-    `${producto.name} en ${producto.categoryName}. Precio y disponibilidad en Maderera Juan B. Justo, Mar del Plata.`
-  ).slice(0, 300);
+  /*
+   * El título y la descripción con lo que decide la compra: qué es, la marca,
+   * desde cuánto sale y en cuántas medidas. La descripción cargada en el panel
+   * puede venir vacía o ser una línea genérica; los datos de la ficha siempre
+   * están y son distintos en cada producto.
+   */
+  const precios = producto.variantes
+    .map((v) => Number(v.precio))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const desde = precios.length ? Math.min(...precios) : null;
+  const medidas = producto.variantes.length;
 
-  return {
-    title: producto.name,
-    description: descripcion,
-    alternates: { canonical: `/catalogo/${slug}` },
-    openGraph: {
-      type: "website",
-      title: producto.name,
-      description: descripcion,
-      url: urlAbsoluta(`/catalogo/${slug}`),
-      images: producto.imagenes.slice(0, 1),
+  const marca = producto.brand && !producto.name.includes(producto.brand)
+    ? ` ${producto.brand}`
+    : "";
+  const datos = [
+    desde
+      ? `${medidas > 1 ? "Desde " : ""}${precioEnTexto(desde)} precio final con IVA${medidas > 1 ? `, en ${medidas} medidas` : ""}.`
+      : null,
+    "Retiro en Casa Central o el Aserradero, o envío en Mar del Plata.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return metadatosDePagina({
+    titulo: `${producto.name}${marca} — ${producto.categoryName} en Mar del Plata`,
+    // La primera oración de la descripción cargada, si entra; si no, la
+    // descripción recortada. Después, los datos de la ficha.
+    descripcion: producto.description
+      ? `${primeraOracion(producto.description, 100)} ${datos}`
+      : `${producto.name}${marca}. ${datos}`,
+    ruta: `/catalogo/${slug}`,
+    imagen: {
+      url: `/og/producto/${slug}`,
+      ancho: 1200,
+      alto: 630,
+      alt: producto.name,
     },
-  };
+  });
+}
+
+/** La primera oración, con su punto, o el texto recortado si es muy larga. */
+function primeraOracion(texto: string, limite: number): string {
+  const limpio = texto.replace(/\s+/g, " ").trim();
+  const fin = limpio.search(/[.!?](\s|$)/);
+  if (fin > 0 && fin < limite) return limpio.slice(0, fin + 1);
+  return recortar(limpio, limite);
 }
 
 export default async function ProductoPage({
@@ -106,7 +140,7 @@ export default async function ProductoPage({
     producto.slug,
   );
 
-  const [whatsapp, numeroDelNegocio, resenas, resumenResenas] =
+  const [whatsapp, numeroDelNegocio, resenas, resumenResenas, hoy] =
     await Promise.all([
       enlaceWhatsapp(
         `Hola! Me interesa: ${producto.name}. ¿Podrían darme más información?`,
@@ -114,6 +148,7 @@ export default async function ProductoPage({
       numeroWhatsapp(),
       resenasDelProducto(producto.id),
       resumenDeResenas(producto.id),
+      hoyEnCurso(),
     ]);
 
   // Las medidas se arman de las variantes: si ninguna las tiene cargadas, la
@@ -132,18 +167,29 @@ export default async function ProductoPage({
       brand: producto.brand,
       categoryName: producto.categoryName,
       imagenes: producto.imagenes,
+      aPedido: producto.aPedido,
       resenas: resumenResenas,
       variantes: producto.variantes.map((v) => ({
         sku: v.sku,
         label: v.label,
         precio: v.precio,
         disponibilidad: combinedStockLevel([v.stockCentral, v.stockAserradero]),
+        color: v.color,
+        conMedidas: Boolean(v.largoMm || v.anchoMm || v.espesorMm),
       })),
-    }),
+    }, new Date(`${hoy}T12:00:00Z`)),
     migasJsonLd([
       { nombre: "Inicio", ruta: "/" },
       { nombre: "Catálogo", ruta: "/catalogo" },
       { nombre: producto.categoryName, ruta: `/catalogo?cat=${producto.categorySlug}` },
+      ...(producto.subcategorySlug && producto.subcategoryName
+        ? [
+            {
+              nombre: producto.subcategoryName,
+              ruta: `/catalogo?cat=${producto.categorySlug}&rubro=${producto.subcategorySlug}`,
+            },
+          ]
+        : []),
       { nombre: producto.name, ruta: `/catalogo/${producto.slug}` },
     ]),
   ];
@@ -176,8 +222,21 @@ export default async function ProductoPage({
             >
               {producto.categoryName}
             </Link>
+            {producto.subcategorySlug && producto.subcategoryName && (
+              <>
+                <ChevronRight className="h-3 w-3" />
+                <Link
+                  href={`/catalogo?cat=${producto.categorySlug}&rubro=${producto.subcategorySlug}`}
+                  className="transition-colors hover:text-acento-texto"
+                >
+                  {producto.subcategoryName}
+                </Link>
+              </>
+            )}
             <ChevronRight className="h-3 w-3" />
-            <span className="font-medium text-foreground">{producto.name}</span>
+            <span className="font-medium text-foreground" aria-current="page">
+              {producto.name}
+            </span>
           </nav>
         </div>
       </div>

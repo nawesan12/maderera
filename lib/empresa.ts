@@ -54,3 +54,21 @@ export const LOGO_DOCUMENTOS = {
   alto: 89,
   texto: "Maderera Juan B. Justo",
 } as const;
+
+/**
+ * Las redes de la empresa.
+ *
+ * Son las que enlazaba el sitio viejo (`mjbj.ar`) en el encabezado y el pie,
+ * y la de Instagram se verificó el 14/10/2026: es la cuenta
+ * «MADERERA JUAN B. JUSTO». El sitio nuevo tenía otras dos escritas a mano
+ * desde el prototipo (`madererajbjusto`) que no son de la empresa: una
+ * llevaba a un perfil inexistente, y en el marcado (`sameAs`) le decían a
+ * Google que la maderera era otra cuenta.
+ *
+ * Las usan el pie y los datos estructurados; tenerlas en un solo lugar es lo
+ * que evita que vuelvan a diferir.
+ */
+export const REDES = {
+  facebook: "https://www.facebook.com/juanbjustoplacasymaderas",
+  instagram: "https://www.instagram.com/madererajuanbjusto/",
+} as const;

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
 import { DatosEstructurados } from "@/components/datos-estructurados";
-import { migasJsonLd } from "@/lib/seo";
+import { migasJsonLd, metadatosDePagina } from "@/lib/seo";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import { HORARIO_CORTES } from "@/lib/sucursales";
 
@@ -28,10 +28,12 @@ import { HORARIO_CORTES } from "@/lib/sucursales";
  */
 
 export const metadata: Metadata = {
-  title: "Cambios y devoluciones",
-  description:
-    "Cómo resolvemos un cambio o una devolución en Maderera Juan B. Justo: se mira caso por caso, según el material y el tiempo transcurrido. Escribinos por WhatsApp.",
-  alternates: { canonical: "/cambios-y-devoluciones" },
+  ...metadatosDePagina({
+    titulo: "Cambios y devoluciones",
+    descripcion:
+      "Cómo resolvemos un cambio o una devolución en Maderera Juan B. Justo: se mira caso por caso, según el material y el tiempo transcurrido. Escribinos por WhatsApp.",
+    ruta: "/cambios-y-devoluciones",
+  }),
 };
 
 export default async function CambiosPage() {

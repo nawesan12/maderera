@@ -14,7 +14,7 @@ import {
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { ajuste } from "@/lib/dal/contenido";
 import { DatosEstructurados } from "@/components/datos-estructurados";
-import { migasJsonLd } from "@/lib/seo";
+import { migasJsonLd, metadatosDePagina } from "@/lib/seo";
 import { FormularioContacto } from "./formulario";
 
 /**
@@ -28,15 +28,17 @@ import { FormularioContacto } from "./formulario";
  */
 
 export const metadata: Metadata = {
-  title: "Contacto",
-  description:
-    "Escribinos, llamanos o pasá por cualquiera de nuestras dos sucursales en Mar del Plata. Presupuestos sin cargo y asesoramiento sobre materiales.",
+  ...metadatosDePagina({
+    titulo: "Contacto y presupuestos",
+    descripcion:
+      "Escribinos, llamanos o pasá por nuestras dos sucursales en Mar del Plata: Casa Central y Aserradero. Presupuestos sin cargo y asesoramiento sobre materiales.",
+    ruta: "/contacto",
+  }),
   keywords: [
     "maderera mar del plata contacto",
     "presupuesto madera mar del plata",
     "telefono maderera juan b justo",
   ],
-  alternates: { canonical: "/contacto" },
 };
 
 const ATAJOS = [

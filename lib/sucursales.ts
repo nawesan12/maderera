@@ -27,9 +27,37 @@ export interface SucursalPublicada {
   whatsapp: string;
   email: string | null;
   horario: string;
+  /**
+   * El local en Google Maps.
+   *
+   * Por ahora es una búsqueda por nombre **y** dirección, que cae en la ficha
+   * del negocio y no en el número de la calle a secas (que es lo que hacía
+   * «Cómo llegar» buscando solo la dirección). Lo ideal es el enlace para
+   * compartir del Perfil de Empresa de cada local: lo tiene la clienta y está
+   * anotado en `docs/CAMBIOS.md`. El marcado lo declara como `hasMap`.
+   */
   mapUrl: string | null;
+  /**
+   * Las coordenadas del local, para el marcado (`geo`).
+   *
+   * Salen de los mapas que tenía insertados el sitio viejo
+   * (`mjbj.ar/sucursales`), centrados en la dirección de cada local; la de
+   * Casa Central coincide a pocos metros con la que declaraba su marcado
+   * (Yoast Local). Conviene confirmarlas contra el Perfil de Empresa: está
+   * anotado en `docs/CAMBIOS.md`.
+   */
+  geo: { lat: number; lng: number } | null;
   /** Foto del local. Null muestra la placa de marca. */
   imagenUrl: string | null;
+  /**
+   * La foto del frente que publicaba el sitio viejo, en su tamaño real
+   * (358 px de ancho).
+   *
+   * Va aparte de `imagenUrl` porque es chica: alcanza para el marcado y para
+   * mostrarla a su tamaño en la ficha de la sucursal, no para estirarla al
+   * ancho de una tarjeta. Cuando lleguen las fotos nuevas, reemplazan a esta.
+   */
+  foto: { ruta: string; ancho: number; alto: number } | null;
   /** Uno por renglón, como los espera la página de sucursales. */
   servicios: string;
   destacados: string;
@@ -44,8 +72,11 @@ export const SUCURSALES: SucursalPublicada[] = [
     whatsapp: "5492235903118",
     email: "info@mjbj.com.ar",
     horario: "Lun a Vie 8:00-16:00 · Sáb 8:00-12:00",
-    mapUrl: null,
+    mapUrl:
+      "https://www.google.com/maps/search/?api=1&query=Maderera+Juan+B.+Justo+Av.+Juan+B.+Justo+4153+Mar+del+Plata",
+    geo: { lat: -38.01232, lng: -57.57916 },
     imagenUrl: null,
+    foto: { ruta: "/sucursales/casa-central.jpg", ancho: 358, alto: 239 },
     servicios: [
       "Servicio de corte de placas a medida",
       "Pegado de tapacantos",
@@ -64,8 +95,11 @@ export const SUCURSALES: SucursalPublicada[] = [
     whatsapp: "5492235060817",
     email: "info@mjbj.com.ar",
     horario: "Lun a Vie 8:00-16:00 · Sáb 8:00-12:00",
-    mapUrl: null,
+    mapUrl:
+      "https://www.google.com/maps/search/?api=1&query=Maderera+Juan+B.+Justo+Aserradero+Diagonal+Canosa+61+Mar+del+Plata",
+    geo: { lat: -38.01473, lng: -57.58046 },
     imagenUrl: null,
+    foto: { ruta: "/sucursales/aserradero.jpg", ancho: 358, alto: 238 },
     servicios: [
       "Planta de elaboración propia",
       "Molduras y listonería Moldava — línea completa",

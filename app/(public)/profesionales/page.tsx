@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { metadatosDePagina } from "@/lib/seo";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
@@ -27,10 +28,12 @@ import { fechaLarga, formatearMonto, telefonoParaMarcar } from "@/lib/formato";
 import { FormularioProfesional } from "./formulario";
 
 export const metadata: Metadata = {
-  title: "Portal de profesionales",
-  description:
-    "Lista de precios propia, cuenta corriente, presupuestos express en 24 horas y documentación técnica para arquitectos, constructoras y carpinteros de Mar del Plata.",
-  alternates: { canonical: "/profesionales" },
+  ...metadatosDePagina({
+    titulo: "Portal de profesionales: precios de gremio y cuenta corriente",
+    descripcion:
+      "Lista de precios propia, cuenta corriente, presupuestos express en 24 horas y documentación técnica para arquitectos, constructoras y carpinteros de Mar del Plata.",
+    ruta: "/profesionales",
+  }),
 };
 
 const BENEFICIOS = [
@@ -92,6 +95,7 @@ export default async function ProfesionalesPage() {
   return (
     <div className="min-h-screen">
       <EncabezadoPublico
+        ruta="/profesionales"
         titulo="Portal Profesionales"
         bajada={
           estado.aprobado

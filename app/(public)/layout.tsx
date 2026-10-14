@@ -17,6 +17,7 @@ import { DatosEstructurados } from "@/components/datos-estructurados";
 import { organizacionJsonLd, sitioWebJsonLd } from "@/lib/seo";
 import { degradar } from "@/lib/degradar";
 import { estadoDelVisitante } from "@/lib/dal/visitante";
+import { REDES } from "@/lib/empresa";
 
 export default async function PublicLayout({
   children,
@@ -71,10 +72,10 @@ export default async function PublicLayout({
         "Maderera en Mar del Plata desde 1981. Techos, placas, pisos, molduras Moldava, decks, construcción en seco y ferretería.",
       telefono: ajustes.whatsapp_principal ? `+${ajustes.whatsapp_principal}` : null,
       email: "info@mjbj.com.ar",
-      redes: [
-        "https://facebook.com/madererajbjusto",
-        "https://instagram.com/madererajbjusto",
-      ],
+      // Las cuentas reales (ver `lib/empresa.ts`). Las de antes eran del
+      // prototipo y le decían a Google que la maderera era otra cuenta.
+      redes: [REDES.facebook, REDES.instagram],
+      sucursales: sucursales.map((s) => s.slug),
     }),
     sitioWebJsonLd(),
   ];

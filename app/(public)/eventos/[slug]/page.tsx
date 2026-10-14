@@ -18,6 +18,8 @@ import { degradar } from "@/lib/degradar";
 import { cobrosEnVivo } from "@/lib/pagos";
 import { fechaLarga, hora } from "@/lib/formato";
 import { Anotarse } from "./anotarse";
+import { DatosEstructurados } from "@/components/datos-estructurados";
+import { eventoJsonLd, metadatosDePagina, migasJsonLd } from "@/lib/seo";
 
 export async function generateMetadata({
   params,
@@ -29,16 +31,17 @@ export async function generateMetadata({
 
   if (!evento) return { title: "Evento no encontrado" };
 
-  return {
-    title: evento.titulo,
-    description: evento.resumen ?? undefined,
-    alternates: { canonical: `/eventos/${slug}` },
-    openGraph: {
-      title: evento.titulo,
-      description: evento.resumen ?? undefined,
-      images: evento.imagenUrl ? [{ url: evento.imagenUrl }] : undefined,
-    },
-  };
+  return metadatosDePagina({
+    titulo: evento.titulo,
+    descripcion:
+      evento.resumen ??
+      `${evento.titulo}: capacitación de Maderera Juan B. Justo en Mar del Plata. Inscripción online.`,
+    ruta: `/eventos/${slug}`,
+    imagen: evento.imagenUrl ?? undefined,
+    // Un evento que ya pasó sigue en línea para quien tenga el enlace, pero
+    // no tiene que aparecer en una búsqueda: ya no se puede ir.
+    indexar: !evento.yaPaso,
+  });
 }
 
 /**
@@ -96,6 +99,16 @@ async function FichaDelEvento({ slug }: { slug: string }) {
 
   return (
     <div className="min-h-screen bg-sitio-alt">
+      <DatosEstructurados
+        datos={[
+          eventoJsonLd(evento),
+          migasJsonLd([
+            { nombre: "Inicio", ruta: "/" },
+            { nombre: "Capacitaciones y eventos", ruta: "/eventos" },
+            { nombre: evento.titulo, ruta: `/eventos/${evento.slug}` },
+          ]),
+        ]}
+      />
       <div className="mx-auto px-6 max-w-5xl py-8">
         <Link
           href="/eventos"
@@ -111,7 +124,7 @@ async function FichaDelEvento({ slug }: { slug: string }) {
               <div className="relative mb-6 aspect-[16/9] overflow-hidden rounded-xl bg-muted">
                 <Image
                   src={evento.imagenUrl}
-                  alt=""
+                  alt={evento.titulo}
                   fill
                   sizes="(max-width: 1024px) 100vw, 60vw"
                   className="object-cover"

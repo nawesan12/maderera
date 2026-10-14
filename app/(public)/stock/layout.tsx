@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { metadatosDePagina } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Stock entre Sucursales",
-  description:
-    "Consultá la disponibilidad de productos en tiempo real en Casa Central y Aserradero. Más de 200 productos con stock visible por sucursal.",
+  ...metadatosDePagina({
+    titulo: "Stock por sucursal",
+    descripcion:
+      "Consultá qué hay disponible en Casa Central y en el Aserradero antes de ir: maderas, placas, molduras y ferretería, con el stock al día.",
+    ruta: "/stock",
+  }),
   keywords: [
     "stock madera mar del plata",
     "disponibilidad productos maderera",

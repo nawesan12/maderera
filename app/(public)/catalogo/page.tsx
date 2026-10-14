@@ -17,6 +17,7 @@ import {
 } from "@/components/catalogo/filtros";
 import {
   listarCategorias,
+  listarProductosPublicos,
   marcasDelCatalogo,
   productosEnOferta,
   paginaDeProductosPublica,
@@ -24,7 +25,14 @@ import {
   type OrdenCatalogo,
 } from "@/lib/dal/catalog";
 import { DatosEstructurados } from "@/components/datos-estructurados";
-import { migasJsonLd } from "@/lib/seo";
+import {
+  listaDeProductosJsonLd,
+  metadatosDePagina,
+  migasJsonLd,
+  precioEnTexto,
+  recortar,
+} from "@/lib/seo";
+import { TEXTOS_DE_CATEGORIA, TEXTOS_DE_RUBRO } from "@/lib/textos-categorias";
 
 interface Params {
   cat?: string;
@@ -47,9 +55,14 @@ interface Params {
  *
  * Sin esto, `/catalogo?cat=placas` y `/catalogo?buscar=fenolico` son para
  * Google la misma página que `/catalogo` repetida cien veces, y el sitio
- * compite consigo mismo. Cada categoría es una página propia con su título y
- * su canónica; **la búsqueda y los ordenamientos no se indexan**, porque son
- * combinaciones infinitas de las mismas fichas.
+ * compite consigo mismo. Cada categoría —y cada rubro adentro de una
+ * categoría— es una página propia con su título y su canónica; **la búsqueda,
+ * los ordenamientos, las marcas y las páginas siguientes no se indexan**,
+ * porque son combinaciones infinitas de las mismas fichas.
+ *
+ * El título y la descripción se arman con datos reales: cuántos productos
+ * hay, desde qué precio y en qué rubros. Es lo que hace que el resultado diga
+ * algo distinto de los otros diez de «placas Mar del Plata».
  */
 export async function generateMetadata({
   searchParams,
@@ -57,8 +70,90 @@ export async function generateMetadata({
   searchParams: Promise<Params>;
 }): Promise<Metadata> {
   const params = await searchParams;
+  const resuelto = await resolverFiltro(params);
 
-  const base: Metadata = {
+  /*
+   * Lo que no se indexa.
+   *
+   * Las páginas siguientes contienen a la anterior —"Ver más" agrega, no
+   * reemplaza—, así que indexarlas sería ofrecerle al buscador cinco versiones
+   * del mismo catálogo con la primera repetida en todas. Una categoría o un
+   * rubro que no existe tampoco: es una grilla vacía con el título del
+   * catálogo, lo que Google llama un 404 encubierto. La canónica apunta a lo
+   * más cercano que sí existe.
+   */
+  const sinIndexar =
+    Boolean(params.buscar) ||
+    Boolean(params.orden) ||
+    Boolean(params.ofertas) ||
+    Boolean(params.stock) ||
+    Boolean(params.marca) ||
+    (params.pagina !== undefined && params.pagina !== "1") ||
+    resuelto.desconocido;
+
+  const canonica = resuelto.categoria
+    ? rutaDeFiltro(resuelto.categoria.slug, resuelto.rubro?.slug)
+    : "/catalogo";
+
+  if (sinIndexar) {
+    return metadatosDePagina({
+      titulo: params.buscar
+        ? `Buscar «${recortar(params.buscar, 40)}»`
+        : resuelto.categoria
+          ? `${resuelto.categoria.name} en Mar del Plata`
+          : "Catálogo de productos",
+      descripcion:
+        "Maderas, placas, molduras, pisos y ferretería con precio y stock al día en Maderera Juan B. Justo, Mar del Plata.",
+      ruta: canonica,
+      indexar: false,
+    });
+  }
+
+  if (resuelto.categoria) {
+    const { categoria, rubro } = resuelto;
+    const productos = await listarProductosPublicos({
+      categoria: categoria.slug,
+      subcategoria: rubro?.slug,
+    });
+    const precios = productos
+      .map((p) => Number(p.precioDesde))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const desde = precios.length ? Math.min(...precios) : null;
+    const texto = TEXTOS_DE_CATEGORIA[categoria.slug];
+
+    const nombre = rubro ? rubro.name : (texto?.titulo ?? categoria.name);
+    const cantidad =
+      productos.length === 1 ? "1 producto" : `${productos.length} productos`;
+    const descripcion = [
+      `${nombre} en Mar del Plata.`,
+      productos.length > 0
+        ? `${cantidad}${desde ? ` desde ${precioEnTexto(desde)}` : ""}, con precio final y stock al día en Casa Central y el Aserradero.`
+        : null,
+      rubro ? null : (categoria.description ?? null),
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return metadatosDePagina({
+      titulo: `${nombre} en Mar del Plata`,
+      descripcion,
+      ruta: canonica,
+      imagen: {
+        url: `/og/categoria/${categoria.slug}${rubro ? `?rubro=${rubro.slug}` : ""}`,
+        ancho: 1200,
+        alto: 630,
+        alt: `${nombre} — Maderera Juan B. Justo`,
+      },
+    });
+  }
+
+  return {
+    ...metadatosDePagina({
+      titulo: "Catálogo de maderas, placas y materiales",
+      descripcion:
+        "Techos, placas, pisos, molduras, ferretería, decks, construcción en seco y cubiertas, con precio final y stock al día en Mar del Plata.",
+      ruta: "/catalogo",
+    }),
     keywords: [
       "madera mar del plata",
       "placas melamina",
@@ -71,60 +166,36 @@ export async function generateMetadata({
       "maderera",
     ],
   };
+}
 
-  /*
-   * Las páginas siguientes no se indexan.
-   *
-   * Cada una contiene a la anterior —"Ver más" agrega, no reemplaza—, así que
-   * indexarlas sería ofrecerle al buscador cinco versiones del mismo catálogo
-   * con la primera repetida en todas. La canónica apunta a la página uno, que
-   * es la que tiene que aparecer.
-   */
-  if (
-    params.buscar ||
-    params.orden ||
-    params.ofertas ||
-    params.stock ||
-    (params.pagina && params.pagina !== "1")
-  ) {
-    return {
-      ...base,
-      title: params.buscar ? `Buscar "${params.buscar}"` : "Catálogo de productos",
-      robots: { index: false, follow: true },
-      alternates: { canonical: "/catalogo" },
-    };
-  }
+/** `/catalogo?cat=placas` o `/catalogo?cat=placas&rubro=melaminas`. */
+function rutaDeFiltro(categoria: string, rubro?: string): string {
+  return rubro
+    ? `/catalogo?cat=${categoria}&rubro=${rubro}`
+    : `/catalogo?cat=${categoria}`;
+}
 
-  if (params.cat && params.cat !== "todos") {
-    const categorias = await listarCategorias();
-    const categoria = categorias.find((c) => c.slug === params.cat);
+/**
+ * La categoría y el rubro pedidos, si existen.
+ *
+ * `desconocido` es una categoría o un rubro que vino en la URL y no está:
+ * un enlace viejo o mal escrito. Esa página no se indexa.
+ */
+async function resolverFiltro(params: Params) {
+  const pideCategoria = Boolean(params.cat && params.cat !== "todos");
+  const categoria = pideCategoria
+    ? (await listarCategorias()).find((c) => c.slug === params.cat)
+    : undefined;
 
-    if (categoria) {
-      const descripcion =
-        categoria.description ||
-        `${categoria.name} en Maderera Juan B. Justo, Mar del Plata. Precios y disponibilidad por sucursal.`;
-
-      return {
-        ...base,
-        title: `${categoria.name} en Mar del Plata`,
-        description: descripcion,
-        alternates: { canonical: `/catalogo?cat=${categoria.slug}` },
-        openGraph: { title: `${categoria.name} | Maderera Juan B. Justo`, description: descripcion },
-      };
-    }
-  }
+  const pideRubro = Boolean(categoria && params.rubro && params.rubro !== "todos");
+  const rubro = pideRubro
+    ? (await rubrosDeCategoria(categoria!.slug)).find((r) => r.slug === params.rubro)
+    : undefined;
 
   return {
-    ...base,
-    title: "Catálogo de productos",
-    description:
-      "Explorá nuestro catálogo completo: techos, placas, pisos, molduras, ferretería, decks, construcción en seco y cubiertas. Stock disponible en Mar del Plata.",
-    alternates: { canonical: "/catalogo" },
-    openGraph: {
-      title: "Catálogo de productos",
-      description:
-        "Productos para construcción y carpintería, con stock consultable entre sucursales.",
-    },
+    categoria,
+    rubro,
+    desconocido: (pideCategoria && !categoria) || (pideRubro && !rubro),
   };
 }
 
@@ -152,24 +223,37 @@ async function Catalogo({
   searchParams: Promise<Params>;
 }) {
   const params = await searchParams;
+  const { categoria: categoriaActual, rubro: rubroActual } =
+    await resolverFiltro(params);
 
-  const categoriaActual =
-    params.cat && params.cat !== "todos"
-      ? (await listarCategorias()).find((c) => c.slug === params.cat)
-      : undefined;
-
-  const migas = migasJsonLd([
+  // Las migas dicen dónde está la persona, hasta el rubro. Son las mismas en
+  // la cabecera y en el marcado.
+  const tramos = [
     { nombre: "Inicio", ruta: "/" },
     { nombre: "Catálogo", ruta: "/catalogo" },
     ...(categoriaActual
-      ? [{ nombre: categoriaActual.name, ruta: `/catalogo?cat=${categoriaActual.slug}` }]
+      ? [{ nombre: categoriaActual.name, ruta: rutaDeFiltro(categoriaActual.slug) }]
       : []),
-  ]);
+    ...(categoriaActual && rubroActual
+      ? [{ nombre: rubroActual.name, ruta: rutaDeFiltro(categoriaActual.slug, rubroActual.slug) }]
+      : []),
+  ];
+
+  const texto = categoriaActual ? TEXTOS_DE_CATEGORIA[categoriaActual.slug] : undefined;
+  const titulo = rubroActual
+    ? rubroActual.name
+    : categoriaActual
+      ? (texto?.titulo ?? categoriaActual.name)
+      : "Catálogo";
+  const bajada = rubroActual
+    ? (TEXTOS_DE_RUBRO[rubroActual.slug] ?? categoriaActual?.description ?? null)
+    : (categoriaActual?.description ??
+      "Maderas, placas, molduras y todo lo que necesita tu obra, con precios y disponibilidad al día.");
 
   return (
     <div className="min-h-screen bg-sitio-alt">
-      <DatosEstructurados datos={migas} />
-      <Encabezado />
+      <DatosEstructurados datos={migasJsonLd(tramos)} />
+      <Encabezado titulo={titulo} bajada={bajada} tramos={tramos} />
       <FranjaBeneficios tono="claro" />
 
       <div className="contenedor py-8">
@@ -186,12 +270,35 @@ async function Catalogo({
             <Resultados params={params} />
           </Suspense>
         </div>
+
+        {categoriaActual && texto && !params.buscar && (
+          <SobreLaCategoria
+            slug={categoriaActual.slug}
+            nombre={categoriaActual.name}
+            texto={texto}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-function Encabezado() {
+/**
+ * La cabecera del listado, con el nombre de lo que se está mirando.
+ *
+ * Decía «Catálogo» en todas las categorías: la página de placas no tenía
+ * ningún encabezado que dijera «placas», que es lo primero que mira el
+ * buscador para saber de qué trata.
+ */
+function Encabezado({
+  titulo,
+  bajada,
+  tramos,
+}: {
+  titulo: string;
+  bajada: string | null;
+  tramos: { nombre: string; ruta: string }[];
+}) {
   return (
     <div className="relative overflow-hidden bg-oscuro-marca pb-11 pt-10 text-white">
       <div
@@ -203,26 +310,139 @@ function Encabezado() {
             que declara el marcado y lo que ve la persona coinciden. */}
         <nav
           aria-label="Dónde estás"
-          className="flex items-center gap-2 text-[13.5px] text-white/60"
+          className="flex flex-wrap items-center gap-2 text-[13.5px] text-white/60"
         >
-          <Link href="/" className="transition-colors hover:text-white">
-            Inicio
-          </Link>
-          <span aria-hidden="true">&rsaquo;</span>
-          <span className="text-white">Catálogo</span>
+          {tramos.slice(0, -1).map((t) => (
+            <span key={t.ruta} className="flex items-center gap-2">
+              <Link href={t.ruta} className="transition-colors hover:text-white">
+                {t.nombre}
+              </Link>
+              <span aria-hidden="true">&rsaquo;</span>
+            </span>
+          ))}
+          <span className="text-white" aria-current="page">
+            {tramos[tramos.length - 1].nombre}
+          </span>
         </nav>
-        <h1 className="mt-3.5 text-[42px] font-extrabold tracking-[-0.035em]">
-          Catálogo
+        <h1 className="mt-3.5 text-[34px] font-extrabold leading-[1.1] tracking-[-0.035em] sm:text-[42px]">
+          {titulo}
         </h1>
-        <p className="mt-2 max-w-[520px] text-[17px] text-white/70">
-          Maderas, placas, molduras y todo lo que necesita tu obra, con precios
-          y disponibilidad al día.
-        </p>
+        {bajada && (
+          <p className="mt-2 max-w-[620px] text-[17px] text-white/70">{bajada}</p>
+        )}
       </div>
     </div>
   );
 }
 
+/**
+ * Qué es la categoría y qué se consigue, debajo de la grilla.
+ *
+ * Abajo y no arriba a propósito: quien llega a comprar ve los productos
+ * primero, y quien todavía no sabe qué necesita —o el buscador— encuentra la
+ * explicación al final. Los enlaces a las herramientas son los que esa
+ * persona va a necesitar después: el armador de cortes para las placas, la
+ * calculadora para el techo.
+ */
+async function SobreLaCategoria({
+  slug,
+  nombre,
+  texto,
+}: {
+  slug: string;
+  nombre: string;
+  texto: (typeof TEXTOS_DE_CATEGORIA)[string];
+}) {
+  const [rubros, categorias] = await Promise.all([
+    rubrosDeCategoria(slug),
+    listarCategorias(),
+  ]);
+  const otras = categorias.filter((c) => c.slug !== slug && c.productCount > 0);
+
+  const herramientas: { ruta: string; texto: string }[] = [
+    ...(slug === "placas" ? [{ ruta: "/corte", texto: "Armar un corte a medida" }] : []),
+    ...(slug === "molduras" ? [{ ruta: "/moldava", texto: "Conocer la línea Moldava" }] : []),
+    ...(["techos", "placas", "pisos", "decks-y-escaleras"].includes(slug)
+      ? [{ ruta: "/calculadora", texto: "Calcular cuánto material necesito" }]
+      : []),
+    { ruta: "/sucursales", texto: "Dónde retirar: nuestras sucursales" },
+  ];
+
+  return (
+    <section
+      aria-labelledby="sobre-la-categoria"
+      className="mt-12 grid gap-8 rounded-[14px] border border-linea bg-card p-7 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
+    >
+      <div>
+        <h2 id="sobre-la-categoria" className="text-2xl font-bold tracking-[-0.025em]">
+          {texto.titulo} en Mar del Plata
+        </h2>
+        {texto.parrafos.map((p) => (
+          <p key={p.slice(0, 24)} className="mt-3 text-[15.5px] leading-relaxed text-texto-2">
+            {p}
+          </p>
+        ))}
+
+        <ul className="mt-4 grid gap-x-6 gap-y-1.5 text-[15px] sm:grid-cols-2">
+          {texto.incluye.map((item) => (
+            <li key={item} className="flex items-start gap-2">
+              <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-orange" />
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="space-y-6">
+        {rubros.length > 0 && (
+          <nav aria-label={`Rubros de ${nombre}`}>
+            <h3 className="text-[15px] font-semibold">Rubros de {nombre}</h3>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {rubros.map((r) => (
+                <li key={r.slug}>
+                  <Link
+                    href={rutaDeFiltro(slug, r.slug)}
+                    className="inline-flex h-9 items-center rounded-full bg-chip px-3.5 text-sm font-medium text-texto-2 hover:text-texto-1"
+                  >
+                    {r.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
+
+        <nav aria-label="Herramientas">
+          <h3 className="text-[15px] font-semibold">También te puede servir</h3>
+          <ul className="mt-2 space-y-1.5 text-[15px]">
+            {herramientas.map((h) => (
+              <li key={h.ruta}>
+                <Link href={h.ruta} className="font-medium text-acento-texto hover:underline">
+                  {h.texto}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {otras.length > 0 && (
+          <nav aria-label="Otras categorías">
+            <h3 className="text-[15px] font-semibold">Otras categorías</h3>
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[15px]">
+              {otras.map((c) => (
+                <li key={c.slug}>
+                  <Link href={rutaDeFiltro(c.slug)} className="text-texto-2 hover:text-texto-1 hover:underline">
+                    {c.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
+      </div>
+    </section>
+  );
+}
 
 /**
  * El panel de filtros, que va en dos lugares: el cajón del teléfono y la
@@ -358,8 +578,21 @@ async function Resultados({ params }: { params: Params }) {
 
   const enOferta = productos.filter((p) => p.descuento !== null).length;
 
+  // En la página de una categoría, la lista de fichas en el orden en que se
+  // ven. Solo ahí: una búsqueda o un orden distinto no se indexan.
+  const esPaginaIndexable =
+    params.cat && !params.buscar && !params.orden && !params.ofertas && !params.stock && !params.marca;
+
   return (
     <div>
+      {esPaginaIndexable && (
+        <DatosEstructurados
+          datos={listaDeProductosJsonLd(
+            productos[0]?.categoryName ?? "Catálogo",
+            productos.map((p) => p.slug),
+          )}
+        />
+      )}
       {/* Al gremio hay que decirle que su precio existe y está detrás del
           ingreso. A quien ya entró no: vería un cartel que no es cierto. */}
       {/* La misma navegación de la portada, en la forma que corresponde acá.

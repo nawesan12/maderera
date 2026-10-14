@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { esUuid } from "@/lib/uuid";
 import { ArrowLeft } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
@@ -32,6 +33,8 @@ export default async function ProveedorPage({
   await requireStaffRole("admin");
 
   const { id } = await params;
+
+  if (!esUuid(id)) notFound();
   const [proveedor, perfil, condiciones] = await Promise.all([
     obtenerProveedor(id),
     perfilDelProveedor(id),

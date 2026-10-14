@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { esUuid } from "@/lib/uuid";
 import { MapPin, Scissors, Store, Truck } from "lucide-react";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
@@ -34,6 +35,7 @@ export default async function FichaPedidoPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  if (!esUuid(id)) notFound();
   const [usuario, pedido] = await Promise.all([
     requireStaff(),
     obtenerPedido(id),

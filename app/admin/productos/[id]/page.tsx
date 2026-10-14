@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { esUuid } from "@/lib/uuid";
 import {
   ArrowLeft,
   ExternalLink,
@@ -27,6 +28,7 @@ export default async function EditarProductoPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  if (!esUuid(id)) notFound();
   const [producto, categorias, rubros, sugeridos, candidatos, imputaciones] =
     await Promise.all([
       obtenerProductoAdmin(id),

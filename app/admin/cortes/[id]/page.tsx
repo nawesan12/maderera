@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { esUuid } from "@/lib/uuid";
 import { ArrowLeft, Download, Flame, Map, Tags } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_CORTE, Pasos } from "@/components/admin/pasos";
@@ -31,6 +32,7 @@ export default async function FichaCortePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  if (!esUuid(id)) notFound();
   const corte = await obtenerCorte(id);
 
   if (!corte) notFound();

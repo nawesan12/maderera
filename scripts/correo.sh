@@ -3,8 +3,8 @@
 # Las casillas de correo propias: altas, bajas, claves, alias, DKIM y los
 # registros DNS. Se corre en el servidor, desde la carpeta del proyecto:
 #
-#   scripts/correo.sh alta ventas@mjbj.ar
-#   scripts/correo.sh alias info@mjbj.ar ventas@mjbj.ar,admin@mjbj.ar
+#   scripts/correo.sh alta ventas@mjbj.com.ar
+#   scripts/correo.sh alias info@mjbj.com.ar ventas@mjbj.com.ar,admin@mjbj.com.ar
 #   scripts/correo.sh dns
 #
 # Es una capa fina sobre `setup`, la herramienta de docker-mailserver, con dos

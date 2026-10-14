@@ -10,10 +10,13 @@
 # forma de que un día digan cosas distintas. La única excepción es
 # `/subidas/`, que Caddy sirve del disco sin pasar por Next (ver abajo).
 
-# El `www` lleva al dominio sin `www`. Necesita su propio registro DNS
-# apuntando a la misma IP: si no existe, Caddy no puede sacar el certificado y
-# lo reintenta en el registro, sin afectar al dominio principal.
-www.{$DOMINIO} {
+# El `www` lleva al dominio sin `www`, y lo mismo el dominio alternativo
+# (`mjbj.ar`, con y sin `www`, cuando el principal es `mjbj.com.ar`): un 301
+# conserva lo que Google ya tiene indexado y los enlaces viejos. La lista la
+# arma el compose (`REDIRIGIDOS`). Cada nombre necesita su registro DNS
+# apuntando a la misma IP: si falta, Caddy no puede sacar ese certificado y lo
+# reintenta en el registro, sin afectar al dominio principal.
+{$REDIRIGIDOS} {
 	redir https://{$DOMINIO}{uri} permanent
 }
 

@@ -25,7 +25,7 @@ import type { StockLevel } from "@/lib/stock-level";
 export function urlSitio(): string {
   const explicita = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;
   if (explicita) return explicita.replace(/\/$/, "");
-  return "https://mjbj.ar";
+  return "https://mjbj.com.ar";
 }
 
 export function urlAbsoluta(ruta: string): string {

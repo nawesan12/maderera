@@ -25,7 +25,7 @@ Sin esa variable la integración está apagada y los endpoints responden 404.
 ## En la PC del taller
 
 ```bash
-MJBJ_URL=https://mjbj.ar \
+MJBJ_URL=https://mjbj.com.ar \
 MJBJ_TOKEN=<el mismo token> \
 MJBJ_CARPETA="C:/CutRite/Entrada" \
 node agente.mjs

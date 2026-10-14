@@ -50,7 +50,7 @@ export function problemasDeArranque(
 
   if (!url) {
     problemas.push(
-      "Falta APP_URL: es la URL pública del sitio (por ejemplo https://mjbj.ar) y sin ella Mercado Pago, los correos y el sitemap arman enlaces a localhost.",
+      "Falta APP_URL: es la URL pública del sitio (por ejemplo https://mjbj.com.ar) y sin ella Mercado Pago, los correos y el sitemap arman enlaces a localhost.",
     );
   } else if (!URL.canParse(url)) {
     problemas.push(`APP_URL no es una URL válida: «${url}».`);

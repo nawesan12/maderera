@@ -55,7 +55,7 @@ alguien tiene que mirar de vez en cuando que sigan andando (ver
 
 - Una VPS de Hostinger con **Ubuntu 24.04**. La KVM 2 (2 vCPU, 8 GB) sobra; la
   KVM 1 (4 GB) alcanza. Lo más pesado es el build, no el tráfico.
-- Acceso al DNS del dominio. En esta guía el dominio es `mjbj.ar`; donde diga
+- Acceso al DNS del dominio. En esta guía el dominio es `mjbj.com.ar`; donde diga
   eso va el real.
 - La connection string **directa** de Neon (sin `-pooler` en el host). Está en
   `.env.local` como `DATABASE_URL_UNPOOLED`.
@@ -209,6 +209,13 @@ En el proveedor del dominio:
 | A | `@` | `<IP>` | 300 |
 | A | `www` | `<IP>` | 300 |
 
+Y en el **otro dominio**, `mjbj.ar`, los mismos dos registros A apuntando a la
+misma IP, con `DOMINIO_ALTERNATIVO="mjbj.ar"` en el paso 8: Caddy le saca su
+certificado y lo redirige con un 301 a `mjbj.com.ar`, con y sin `www`. El sitio
+viejo está en `mjbj.ar`, y el 301 hace que Google pase lo que tiene indexado al
+dominio nuevo en vez de empezar de cero. **No apuntarlo hasta el día de la
+mudanza** (paso 12): hasta entonces, `mjbj.ar` sigue siendo el sitio viejo.
+
 **Sin registro AAAA** (IPv6), o borrarlo si existe. Docker no tiene IPv6
 activado por omisión: un visitante que entra por IPv6 llega a Caddy con la IP
 interna de Docker en vez de la suya, y entonces el límite de frecuencia y
@@ -218,7 +225,7 @@ fail2ban ven a todos esos visitantes como uno solo.
 todavía apunta a Vercel, Let's Encrypt lo rechaza; después de cinco rechazos
 hay que esperar una hora. Para probar todo **antes** de cambiar el dominio
 principal, la forma cómoda es un subdominio de prueba: un registro A
-`nuevo.mjbj.ar → <IP>`, y `DOMINIO="nuevo.mjbj.ar"` en el paso 8. El día de la
+`nuevo.mjbj.com.ar → <IP>`, y `DOMINIO="nuevo.mjbj.com.ar"` en el paso 8. El día de la
 mudanza se cambia `DOMINIO` y se apunta el dominio principal (paso 12).
 
 Bajar el TTL a 300 **un día antes** de la mudanza hace que el cambio se
@@ -260,12 +267,12 @@ Lo que cambia respecto del ejemplo (el resto, con los valores de Vercel):
 
 | Variable | Valor |
 |---|---|
-| `APP_URL` | `https://mjbj.ar` — **obligatoria**: sin ella el servidor no arranca |
-| `BETTER_AUTH_URL` | `https://mjbj.ar` |
+| `APP_URL` | `https://mjbj.com.ar` — **obligatoria**: sin ella el servidor no arranca |
+| `BETTER_AUTH_URL` | `https://mjbj.com.ar` |
 | `BETTER_AUTH_SECRET` | **el mismo de Vercel**: si cambia, se cierran todas las sesiones |
 | `APP_ENV` | `production` |
 | `SEO_INDEXAR` | `si` o `no`, **siempre declarada**: se hornea en el build |
-| `DOMINIO` | `mjbj.ar` (o el subdominio de prueba) |
+| `DOMINIO` | `mjbj.com.ar` (o el subdominio de prueba) |
 | `POSTGRES_USER` / `POSTGRES_DB` | `mjbj` / `mjbj` |
 | `POSTGRES_PASSWORD` | `openssl rand -hex 32` (solo letras y números: va adentro de una URL) |
 | `TAREAS_SECRETO` | `openssl rand -base64 32` — **obligatoria**: sin ella el compose no levanta |
@@ -378,10 +385,10 @@ estaba. Al final levanta Caddy y el respaldo.
 mirar el contenido.
 
 ```bash
-curl -sI https://mjbj.ar | head -20       # 200, Strict-Transport-Security, X-Frame-Options
-curl -s https://mjbj.ar/robots.txt        # con SEO_INDEXAR=no tiene que decir Disallow: /
-curl -s https://mjbj.ar | grep -o '<title>[^<]*'
-curl -sI https://mjbj.ar/wp-login.php     # 404, y en el registro de Caddy
+curl -sI https://mjbj.com.ar | head -20       # 200, Strict-Transport-Security, X-Frame-Options
+curl -s https://mjbj.com.ar/robots.txt        # con SEO_INDEXAR=no tiene que decir Disallow: /
+curl -s https://mjbj.com.ar | grep -o '<title>[^<]*'
+curl -sI https://mjbj.com.ar/wp-login.php     # 404, y en el registro de Caddy
 dc ps                                      # app «healthy»
 ```
 
@@ -396,17 +403,23 @@ Si se probó con un subdominio:
 1. `DOMINIO`, `APP_URL` y `BETTER_AUTH_URL` en `.env.produccion` pasan al
    dominio real.
 2. En el DNS, el registro A de `@` y el de `www` pasan a `<IP>` (borrar los
-   que apuntaban a Vercel).
+   que apuntaban a Vercel). Lo mismo en `mjbj.ar` (`@` y `www`), con
+   `DOMINIO_ALTERNATIVO="mjbj.ar"` en `.env.produccion`.
 3. `./scripts/desplegar.sh --sin-pull` (las URLs se hornean en el build).
-4. `dc logs -f web` hasta ver `certificate obtained successfully` para los dos
-   nombres.
+4. `dc logs -f web` hasta ver `certificate obtained successfully` para cada
+   nombre (cuatro con el dominio alternativo).
+5. `curl -sI https://mjbj.ar/catalogo` tiene que dar `301` con
+   `location: https://mjbj.com.ar/catalogo`.
+6. **Google Search Console**: dar de alta `mjbj.com.ar` y, desde la propiedad
+   de `mjbj.ar`, usar *Cambio de dirección* hacia la nueva. Con el 301 y eso,
+   Google muda el índice en semanas en vez de meses.
 
 Y lo que apunta al sitio desde afuera:
 
 - **Mercado Pago** → Tus integraciones → Webhooks:
-  `https://mjbj.ar/api/pagos/webhook`. Las preferencias nuevas ya mandan la
+  `https://mjbj.com.ar/api/pagos/webhook`. Las preferencias nuevas ya mandan la
   URL correcta (sale de `APP_URL`).
-- **Meta** → la app de WhatsApp → Webhooks: `https://mjbj.ar/api/whatsapp/webhook`.
+- **Meta** → la app de WhatsApp → Webhooks: `https://mjbj.com.ar/api/whatsapp/webhook`.
 - **El agente del taller**, en la PC del aserradero: `MJBJ_URL` (ver
   `agente-taller/README.md`).
 - **Resend**: no cambia (es por dominio de correo, no del sitio).
@@ -470,12 +483,12 @@ Si las casillas se contratan en Hostinger (Business Email, en hPanel →
 sin Resend y sin el servidor de correo de este compose:
 
 1. En hPanel, crear las casillas (`ventas@`, `administracion@`) y una para la
-   tienda: `avisos@mjbj.ar`. Si el dominio está en Hostinger, hPanel carga
+   tienda: `avisos@mjbj.com.ar`. Si el dominio está en Hostinger, hPanel carga
    solo los registros MX, SPF y DKIM; si está en otro lado, los muestra para
    copiarlos. **Confirmar en hPanel** que los tres figuren como verificados
    antes de mandar nada: sin DKIM, los avisos caen en spam.
 2. Sumar el DMARC a mano (hPanel no siempre lo crea): TXT `_dmarc` con
-   `v=DMARC1; p=none; rua=mailto:postmaster@mjbj.ar`, y endurecerlo como se
+   `v=DMARC1; p=none; rua=mailto:postmaster@mjbj.com.ar`, y endurecerlo como se
    explica [más abajo](#los-registros-dns).
 3. En `.env.produccion`, **sin** `COMPOSE_PROFILES=correo`:
 
@@ -483,9 +496,9 @@ sin Resend y sin el servidor de correo de este compose:
    EMAIL_PROVIDER="smtp"
    SMTP_HOST="smtp.hostinger.com"
    SMTP_PUERTO="465"
-   SMTP_USUARIO="avisos@mjbj.ar"
+   SMTP_USUARIO="avisos@mjbj.com.ar"
    SMTP_CLAVE="<la clave de la casilla>"
-   EMAIL_REMITENTE="Maderera Juan B. Justo <avisos@mjbj.ar>"
+   EMAIL_REMITENTE="Maderera Juan B. Justo <avisos@mjbj.com.ar>"
    ```
 
    `SMTP_NOMBRE_TLS` no hace falta: con un servidor público la app lo ignora y
@@ -511,10 +524,10 @@ propio, calentar la IP, relay— son solo para el servidor propio.
 1. **Puertos**: los del [paso 3](#3-firewall) para el correo, y en el firewall
    de hPanel si está activo.
 2. **DNS**: los registros de [abajo](#los-registros-dns), salvo el DKIM, que
-   sale en el paso 5. Esperar a que propaguen (`dig +short mail.mjbj.ar`
+   sale en el paso 5. Esperar a que propaguen (`dig +short mail.mjbj.com.ar`
    tiene que dar la IP).
 3. **PTR (DNS inverso)**: hPanel → VPS → Configuración → **Dirección IP** →
-   *Set PTR record* junto a la IPv4, con el valor `mail.mjbj.ar`
+   *Set PTR record* junto a la IPv4, con el valor `mail.mjbj.com.ar`
    ([ayuda de Hostinger](https://www.hostinger.com/support/4805528-how-to-setup-reverse-dns-on-vps/)).
    Sin esto, Gmail rechaza o manda a spam casi todo.
 4. En `.env.produccion`:
@@ -530,7 +543,7 @@ propio, calentar la IP, relay— son solo para el servidor propio.
    apaga si arranca sin ninguna (y vuelve a intentar, en bucle):
 
    ```bash
-   scripts/correo.sh alta postmaster@mjbj.ar
+   scripts/correo.sh alta postmaster@mjbj.com.ar
    scripts/correo.sh dkim        # genera la llave y muestra el registro DNS
    ```
 
@@ -539,9 +552,9 @@ propio, calentar la IP, relay— son solo para el servidor propio.
 6. Las casillas de verdad y los alias:
 
    ```bash
-   scripts/correo.sh alta ventas@mjbj.ar
-   scripts/correo.sh alta administracion@mjbj.ar
-   scripts/correo.sh alias info@mjbj.ar ventas@mjbj.ar,administracion@mjbj.ar
+   scripts/correo.sh alta ventas@mjbj.com.ar
+   scripts/correo.sh alta administracion@mjbj.com.ar
+   scripts/correo.sh alias info@mjbj.com.ar ventas@mjbj.com.ar,administracion@mjbj.com.ar
    ```
 
    `alta` sin clave genera una de 20 caracteres y la muestra **una sola vez**.
@@ -552,9 +565,9 @@ propio, calentar la IP, relay— son solo para el servidor propio.
 
    ```bash
    EMAIL_PROVIDER="smtp"
-   SMTP_USUARIO="avisos@mjbj.ar"
+   SMTP_USUARIO="avisos@mjbj.com.ar"
    SMTP_CLAVE="<la que dio «alta»>"
-   EMAIL_REMITENTE="Maderera Juan B. Justo <avisos@mjbj.ar>"
+   EMAIL_REMITENTE="Maderera Juan B. Justo <avisos@mjbj.com.ar>"
    ```
 
    **El remitente tiene que ser la misma casilla** (o un alias suyo): el
@@ -568,19 +581,19 @@ propio, calentar la IP, relay— son solo para el servidor propio.
 
 ### Los registros DNS
 
-`scripts/correo.sh dns` los imprime con la IP del servidor. Para `mjbj.ar`:
+`scripts/correo.sh dns` los imprime con la IP del servidor. Para `mjbj.com.ar`:
 
 | Tipo | Nombre | Valor | Para qué |
 |---|---|---|---|
 | A | `mail` | IP de la VPS | El servidor de correo |
 | A | `webmail` | IP de la VPS | El webmail |
 | A | `autoconfig` | IP de la VPS | Que Thunderbird se configure solo |
-| MX | `@` | `mail.mjbj.ar` (prioridad 10) | Adónde se entrega el correo para `@mjbj.ar` |
-| TXT | `@` | `v=spf1 mx -all` | Solo el servidor del MX puede mandar como `@mjbj.ar` |
+| MX | `@` | `mail.mjbj.com.ar` (prioridad 10) | Adónde se entrega el correo para `@mjbj.com.ar` |
+| TXT | `@` | `v=spf1 mx -all` | Solo el servidor del MX puede mandar como `@mjbj.com.ar` |
 | TXT | `mail._domainkey` | lo da `scripts/correo.sh dkim` | La firma DKIM de lo que sale |
-| TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:postmaster@mjbj.ar; adkim=s; aspf=s` | Qué hacer con lo que no pasa SPF/DKIM, y adónde mandar los reportes |
-| SRV | `_submissions._tcp` | `0 1 465 mail.mjbj.ar` | Programas que buscan solos dónde mandar |
-| SRV | `_imaps._tcp` | `0 1 993 mail.mjbj.ar` | Programas que buscan solos dónde leer |
+| TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:postmaster@mjbj.com.ar; adkim=s; aspf=s` | Qué hacer con lo que no pasa SPF/DKIM, y adónde mandar los reportes |
+| SRV | `_submissions._tcp` | `0 1 465 mail.mjbj.com.ar` | Programas que buscan solos dónde mandar |
+| SRV | `_imaps._tcp` | `0 1 993 mail.mjbj.com.ar` | Programas que buscan solos dónde leer |
 
 Y el **PTR** de la IP, que no es un registro del dominio sino de Hostinger
 (paso 3 de arriba).
@@ -600,8 +613,8 @@ que pide Resend se cargan aparte —usa su propio subdominio— y estos no cambi
 
 | | Servidor | Puerto | Cifrado | Usuario |
 |---|---|---|---|---|
-| Entrante (IMAP) | `mail.mjbj.ar` | 993 | SSL/TLS | la dirección completa |
-| Saliente (SMTP) | `mail.mjbj.ar` | 465 | SSL/TLS | la dirección completa |
+| Entrante (IMAP) | `mail.mjbj.com.ar` | 993 | SSL/TLS | la dirección completa |
+| Saliente (SMTP) | `mail.mjbj.com.ar` | 465 | SSL/TLS | la dirección completa |
 
 (587 con STARTTLS también anda, para los programas que lo prefieren.)
 
@@ -612,7 +625,7 @@ que pide Resend se cargan aparte —usa su propio subdominio— y estos no cambi
   **Personal (IMAP)**, con la tabla.
 - **Mail del iPhone**: *Ajustes* → *Mail* → *Cuentas* → *Añadir* → *Otra* →
   *Añadir cuenta de correo*, tipo **IMAP**, con la tabla.
-- **Navegador**: `https://webmail.mjbj.ar`.
+- **Navegador**: `https://webmail.mjbj.com.ar`.
 
 ### Calentar la IP
 

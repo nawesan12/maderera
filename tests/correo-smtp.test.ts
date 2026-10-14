@@ -13,14 +13,14 @@ describe("configSmtp", () => {
   function entorno(host: string, puerto: string) {
     vi.stubEnv("SMTP_HOST", host);
     vi.stubEnv("SMTP_PUERTO", puerto);
-    vi.stubEnv("SMTP_USUARIO", "avisos@mjbj.ar");
+    vi.stubEnv("SMTP_USUARIO", "avisos@mjbj.com.ar");
     vi.stubEnv("SMTP_CLAVE", "x");
-    vi.stubEnv("SMTP_NOMBRE_TLS", "mail.mjbj.ar");
+    vi.stubEnv("SMTP_NOMBRE_TLS", "mail.mjbj.com.ar");
   }
 
   it("con el contenedor propio, valida contra el nombre público", () => {
     entorno("correo", "587");
-    expect(configSmtp()).toMatchObject({ host: "correo", puerto: 587, nombreTls: "mail.mjbj.ar" });
+    expect(configSmtp()).toMatchObject({ host: "correo", puerto: 587, nombreTls: "mail.mjbj.com.ar" });
   });
 
   it("con Hostinger, ignora el nombre TLS del compose", () => {

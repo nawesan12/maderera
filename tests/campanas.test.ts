@@ -21,8 +21,8 @@ describe("el cuerpo de una campaña", () => {
   });
 
   it("las direcciones se vuelven enlaces, sin comerse el punto final", () => {
-    const [p] = cuerpoComoParrafos("Mirá https://mjbj.ar/catalogo.");
-    expect(p).toContain('href="https://mjbj.ar/catalogo"');
+    const [p] = cuerpoComoParrafos("Mirá https://mjbj.com.ar/catalogo.");
+    expect(p).toContain('href="https://mjbj.com.ar/catalogo"');
     expect(p.endsWith(".")).toBe(true);
   });
 });

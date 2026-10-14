@@ -5,7 +5,7 @@ import "server-only";
  *
  * Variables (`.env.local`):
  *   RESEND_API_KEY     clave de la cuenta de Resend
- *   EMAIL_REMITENTE    "Maderera Juan B. Justo <pedidos@mjbj.ar>"
+ *   EMAIL_REMITENTE    "Maderera Juan B. Justo <pedidos@mjbj.com.ar>"
  *   EMAIL_RESPUESTAS   a dónde contestan los clientes, si difiere del remitente
  *   EMAIL_PROVIDER=demo  fuerza el proveedor de demostración
  *
@@ -20,7 +20,7 @@ export interface ConfigEmail {
   responderA: string | null;
 }
 
-const REMITENTE_POR_DEFECTO = "Maderera Juan B. Justo <pedidos@mjbj.ar>";
+const REMITENTE_POR_DEFECTO = "Maderera Juan B. Justo <pedidos@mjbj.com.ar>";
 
 export function configEmail(): ConfigEmail | null {
   const apiKey = process.env.RESEND_API_KEY;

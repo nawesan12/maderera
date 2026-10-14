@@ -18,11 +18,11 @@ describe("arranque fuera de Vercel", () => {
   });
 
   it("no arranca con una APP_URL que no es URL", () => {
-    expect(problemasDeArranque({ ...produccion, APP_URL: "mjbj.ar" })).toHaveLength(1);
+    expect(problemasDeArranque({ ...produccion, APP_URL: "mjbj.com.ar" })).toHaveLength(1);
   });
 
   it("arranca con APP_URL", () => {
-    expect(problemasDeArranque({ ...produccion, APP_URL: "https://mjbj.ar" })).toEqual([]);
+    expect(problemasDeArranque({ ...produccion, APP_URL: "https://mjbj.com.ar" })).toEqual([]);
   });
 
   it("en Vercel y en desarrollo no exige nada", () => {
@@ -33,7 +33,7 @@ describe("arranque fuera de Vercel", () => {
   });
 
   it("avisa si SEO_INDEXAR y APP_ENV no están declarados, sin frenar", () => {
-    expect(avisosDeArranque({ ...produccion, APP_URL: "https://mjbj.ar" })).toHaveLength(2);
+    expect(avisosDeArranque({ ...produccion, APP_URL: "https://mjbj.com.ar" })).toHaveLength(2);
     expect(
       avisosDeArranque({
         ...produccion,

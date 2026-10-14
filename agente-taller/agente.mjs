@@ -23,7 +23,7 @@
  *    atómico en el mismo sistema de archivos, así que o está entero o no está.
  *
  * Uso:
- *   MJBJ_URL=https://mjbj.ar \
+ *   MJBJ_URL=https://mjbj.com.ar \
  *   MJBJ_TOKEN=xxxxx \
  *   MJBJ_CARPETA="C:/CutRite/Entrada" \
  *   node agente.mjs

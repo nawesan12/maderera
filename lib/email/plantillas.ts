@@ -183,7 +183,7 @@ export function envolver(opciones: OpcionesEnvoltura): {
     <tr><td style="padding:18px 28px;background:${MARCA.crema};border-top:1px solid ${MARCA.borde};font-family:${FUENTE};font-size:12px;color:${MARCA.grisSuave};line-height:1.6;">
       Casa Central · Av. Juan B. Justo 4153 · (0223) 474-3328<br>
       Aserradero · Canosa 61 · (0223) 483-0535<br>
-      <a href="${sitio}" style="color:${MARCA.naranjaOscuro};text-decoration:none;">mjbj.ar</a>
+      <a href="${sitio}" style="color:${MARCA.naranjaOscuro};text-decoration:none;">${new URL(sitio).host}</a>
       ${opciones.pie ? `<br><br>${opciones.pie.html}` : ""}
     </td></tr>
   </table>

@@ -156,6 +156,8 @@ services:
       - "443:443/udp"
     environment:
       DOMINIO: ${DOMINIO:?Falta DOMINIO en .env.produccion}
+      # Los nombres que redirigen al principal, separados por espacio.
+      REDIRIGIDOS: www.${DOMINIO}${DOMINIO_ALTERNATIVO:+ ${DOMINIO_ALTERNATIVO} www.${DOMINIO_ALTERNATIVO}}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # La misma carpeta que escribe la aplicación: las fotos las sirve Caddy

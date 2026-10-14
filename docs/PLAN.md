@@ -585,7 +585,7 @@ código de migración, probado de punta a punta) y 1.10 en su parte escrita.
 
 | # | Qué | Cláusula | Depende de |
 |---|---|---|---|
-| 1 | **Dominio, SSL y despliegue** en `mjbj.ar`. | 1.8 | Acceso al dominio |
+| 1 | **Dominio, SSL y despliegue** en `mjbj.com.ar` (`mjbj.ar` redirige). | 1.8 | Acceso al dominio |
 | 2 | **Capacitación presencial.** Las guías escritas ya están; falta la sesión con la gente. | 1.10 | Fecha con el cliente |
 | 3 | **Soporte post-lanzamiento**: un mes. | 1.11 | Arranca al lanzar |
 
@@ -751,7 +751,7 @@ y sirve como maqueta de referencia para el resto.
 | Sesión | Cookies de Better Auth + `proxy.ts` para chequeos optimistas | En Next 16 el middleware se llama **Proxy** (`proxy.ts` en la raíz). Solo redirecciones; la verificación real va en el DAL |
 | Facturación | `@afipsdk/afip.js` o `@ramiidv/arca-facturacion` (a evaluar en S1) | Manejan WSAA + WSFEv1 y el firmado del ticket de acceso |
 | Pagos | Mercado Pago Checkout Pro + webhook | — |
-| Email | Resend (3.000/mes gratis, requiere verificar `mjbj.ar`) | — |
+| Email | Resend (3.000/mes gratis, requiere verificar `mjbj.com.ar`) | — |
 | Deploy | A definir — ver riesgo R5 | — |
 
 ### 3.2 Reglas de arquitectura (no negociables durante el desarrollo)
@@ -869,7 +869,7 @@ montar la infraestructura sin perder el hito.
 |---|---|
 | S10 | ✅ Portal de clientes completo: cuenta corriente, pedidos y presupuestos (4ª pasada), más facturas y remitos en PDF, pago online de deuda y firma digital de acopio desde el celular (7ª pasada). |
 | S11 | ✅ Portal de profesionales completo: registro con validación de CUIT, aprobación con lista y límite, precios diferenciados con descuentos por volumen, presupuestos express con SLA, documentación técnica y eventos con inscripción y pago (octava pasada, 26/08). |
-| S12 | Migración definitiva de Quality Software, verificación de integridad, SEO y performance, dominio `mjbj.ar` + SSL, capacitación presencial y guías escritas. **Lanzamiento.** |
+| S12 | Migración definitiva de Quality Software, verificación de integridad, SEO y performance, dominio `mjbj.com.ar` + SSL, capacitación presencial y guías escritas. **Lanzamiento.** |
 
 Garantía: **13/11/2026 → 13/12/2026**. A partir de ahí, soporte solo bajo acuerdo escrito
 aparte (14.2).
@@ -915,7 +915,7 @@ escrito invocando 5.3.
 - [ ] Credenciales de Mercado Pago (producción y test)
 - [ ] Cuenta bancaria y alias para transferencias
 - [ ] Cuentas de Andreani / CDI, o la tabla de tarifas por zona
-- [ ] Acceso al dominio `mjbj.ar` (registrante y DNS)
+- [ ] Acceso a los dominios `mjbj.com.ar` y `mjbj.ar` (registrante y DNS)
 - [ ] Definición sobre WhatsApp Business API (ver R4)
 - [ ] **Confirmar el número de WhatsApp del negocio.** El ajuste guarda `542235903118` y
       el código traía `5492235903118` como valor por defecto. Para un celular argentino el

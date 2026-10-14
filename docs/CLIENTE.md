@@ -102,7 +102,7 @@ actuales.
 
 | Acceso | Quién lo tiene | Fecha comprometida |
 |---|---|---|
-| Dominio `mjbj.ar` | Administración | 15/09/2026 |
+| Dominios `mjbj.com.ar` y `mjbj.ar` | Administración | 15/09/2026 |
 | Hosting actual | Administración | 15/09/2026 |
 | Redes sociales | Lole y Leo | 15/09/2026 |
 | Google Business | Lole | 15/09/2026 |

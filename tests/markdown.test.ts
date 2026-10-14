@@ -25,8 +25,8 @@ describe("markdownAHtml", () => {
   });
 
   it("acepta enlaces http y relativos", () => {
-    expect(markdownAHtml("[a](https://mjbj.ar)")).toContain(
-      '<a href="https://mjbj.ar">a</a>',
+    expect(markdownAHtml("[a](https://mjbj.com.ar)")).toContain(
+      '<a href="https://mjbj.com.ar">a</a>',
     );
     expect(markdownAHtml("[b](/catalogo)")).toContain('<a href="/catalogo">b</a>');
   });

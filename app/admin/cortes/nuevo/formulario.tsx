@@ -145,6 +145,7 @@ export function FormularioCorte({
     mitad,
   });
 
+  const claveDeLasPiezas = JSON.stringify(validas);
   const paraElPlano = useMemo(
     () =>
       validas.map((p) => ({
@@ -160,7 +161,7 @@ export function FormularioCorte({
     // esa, y compararla por JSON evita rehacer el plano por una identidad nueva
     // del array cuando los números no cambiaron.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [JSON.stringify(validas)],
+    [claveDeLasPiezas],
   );
 
   // El disco de este trabajo: arranca con el general y se puede cambiar. El
@@ -186,10 +187,10 @@ export function FormularioCorte({
 
   const placasDelPlano = Math.max(1, plano.placas.length);
 
-  // Mientras nadie lo pise a mano, el campo sigue al plano.
-  useEffect(() => {
-    if (!placasTocado) setPlacas(placasDelPlano);
-  }, [placasDelPlano, placasTocado]);
+  // Mientras nadie lo pise a mano, el campo sigue al plano. Se ajusta durante
+  // el render y no en un efecto: con el efecto, cada cambio del plano dibujaba
+  // una vez el número viejo y otra el nuevo.
+  if (!placasTocado && placas !== placasDelPlano) setPlacas(placasDelPlano);
 
   function actualizar(
     indice: number,

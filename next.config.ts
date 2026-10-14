@@ -18,6 +18,16 @@ const idDeBuild =
 const nextConfig: NextConfig = {
   cacheComponents: true,
   /**
+   * El prefetch de siempre, por enlace.
+   *
+   * Desde 16.3 Next avisa si no se elige: con `true` prefetchea un solo
+   * «esqueleto» por ruta en vez de cada enlace. Se deja en `false` para que la
+   * actualización a 16.4 —que trajo el arreglo de las páginas 404, ver
+   * `lib/dal/existencia.ts`— no cambie además cómo navega el sitio. Pasar a
+   * `true` es una decisión aparte, para probar con el panel y el mostrador.
+   */
+  partialPrefetching: false,
+  /**
    * Empaquetado para servidor propio.
    *
    * `standalone` deja en `.next/standalone` un servidor con solo las

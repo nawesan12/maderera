@@ -27,7 +27,13 @@ export function FiltrosStock({
   const [, startTransition] = useTransition();
   const [texto, setTexto] = useState(busquedaActual);
 
-  useEffect(() => setTexto(busquedaActual), [busquedaActual]);
+  // Si la búsqueda cambia desde afuera —el botón de atrás, un enlace—, el campo
+  // la sigue. Durante el render y no en un efecto, que la dibujaba dos veces.
+  const [busquedaPrevia, setBusquedaPrevia] = useState(busquedaActual);
+  if (busquedaPrevia !== busquedaActual) {
+    setBusquedaPrevia(busquedaActual);
+    setTexto(busquedaActual);
+  }
 
   function actualizar(cambios: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());

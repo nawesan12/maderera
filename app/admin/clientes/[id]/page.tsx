@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { ArrowLeft, Download, MessageCircle, Printer } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { enlaceDeWhatsapp } from "@/lib/formato";
@@ -239,6 +240,7 @@ export default async function FichaClientePage({
                   <Download className="h-4 w-4" />
                   Resumen en PDF
                 </a>
+                <MandarPorWhatsapp tipo="cuenta" id={cliente.id} compacto />
               </span>
             </div>
 

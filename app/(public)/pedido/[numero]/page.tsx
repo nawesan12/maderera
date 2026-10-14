@@ -49,8 +49,9 @@ export default async function PedidoConfirmadoPage({
   params: Promise<{ numero: string }>;
   searchParams: Promise<{ t?: string }>;
 }) {
-  const whatsapp = await enlaceWhatsapp();
   const [{ numero }, { t }] = await Promise.all([params, searchParams]);
+  // Con el número puesto: es lo primero que se le pregunta a quien escribe.
+  const whatsapp = await enlaceWhatsapp(`Hola! Consulto por mi pedido ${numero.slice(0, 20)}.`);
 
   // La consulta vive en el DAL, con el control de acceso adentro. Antes estaba
   // suelta acá y filtraba solo por número, que es consecutivo: alcanzaba con

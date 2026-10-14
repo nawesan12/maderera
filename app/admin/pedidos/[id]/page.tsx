@@ -19,6 +19,7 @@ import { remitosDelPedido } from "@/lib/dal/admin/entregas";
 import { cortesDelPedido } from "@/lib/dal/admin/cortes";
 import { margenDeLinea } from "@/lib/compras/costo";
 import { requireStaff } from "@/lib/dal/session";
+import { puedeEntrar } from "@/lib/roles";
 
 const MEDIOS: Record<string, string> = {
   mercado_pago: "Mercado Pago",
@@ -283,6 +284,7 @@ export default async function FichaPedidoPage({
 
         <div className="lg:col-start-1">
           <Entregas
+            whatsapp={puedeEntrar("/admin/whatsapp", usuario.staffRole)}
             orderId={pedido.id}
             tipoEntrega={pedido.tipoEntrega}
             pendientes={pendientes}

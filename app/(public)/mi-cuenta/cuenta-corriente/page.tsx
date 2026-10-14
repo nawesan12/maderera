@@ -15,7 +15,7 @@ export default async function CuentaCorrientePage({
 }: {
   searchParams: Promise<{ pago?: string }>;
 }) {
-  const whatsapp = await enlaceWhatsapp();
+  const whatsapp = await enlaceWhatsapp("Hola! Consulto por mi cuenta corriente.");
   const [cuenta, banco, { pago }, cliente] = await Promise.all([
     miCuentaCorriente(),
     datosParaTransferir(),

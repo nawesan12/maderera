@@ -21,6 +21,7 @@ import {
 import { fechaHora } from "@/components/admin/formato";
 import type { RenglonPendiente } from "@/lib/entregas";
 import type { RemitoListado } from "@/lib/dal/admin/entregas";
+import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 
 const inicial: EstadoEntrega = {};
 
@@ -40,11 +41,14 @@ export function Entregas({
   tipoEntrega,
   pendientes,
   remitos,
+  whatsapp = false,
 }: {
   orderId: string;
   tipoEntrega: string;
   pendientes: RenglonPendiente[];
   remitos: RemitoListado[];
+  /** Si quien mira puede usar la bandeja: depósito ve los remitos, pero no manda WhatsApp. */
+  whatsapp?: boolean;
 }) {
   const [estado, preparar, preparando] = useActionState(
     prepararRemito,
@@ -120,6 +124,7 @@ export function Entregas({
               key={remito.id}
               remito={remito}
               orderId={orderId}
+              whatsapp={whatsapp}
               /*
                * Un remito dejó acopio si después de él quedaba algo: o porque
                * hubo otro remito más nuevo —la lista viene del más nuevo al
@@ -259,9 +264,11 @@ function FilaRemito({
   remito,
   orderId,
   dejaAcopio,
+  whatsapp,
 }: {
   remito: RemitoListado;
   orderId: string;
+  whatsapp: boolean;
   /** Si después de este remito quedaba mercadería guardada. */
   dejaAcopio: boolean;
 }) {
@@ -322,6 +329,8 @@ function FilaRemito({
           <Download className="h-4 w-4" />
           PDF
         </a>
+
+        {whatsapp && remito.estado !== "anulada" && <MandarPorWhatsapp tipo="remito" id={remito.id} compacto />}
 
         {remito.firmaToken && (
           <LinkDeFirma ruta={`/firmar/${remito.firmaToken}`} compacto />

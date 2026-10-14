@@ -46,8 +46,8 @@ export default async function DetallePedidoPage({
 }: {
   params: Promise<{ numero: string }>;
 }) {
-  const whatsapp = await enlaceWhatsapp();
   const { numero } = await params;
+  const whatsapp = await enlaceWhatsapp(`Hola! Consulto por mi pedido ${numero.slice(0, 20)}.`);
   const pedido = await miPedido(numero);
   const ficha = pedido?.sucursalSlug
     ? sucursalPublicada(pedido.sucursalSlug)

@@ -78,13 +78,19 @@ export function VistaDelCarrito({
   const subtotalCortes = cortes.reduce((total, c) => total + c.total, 0);
   const totalGeneral = subtotal + subtotalCortes;
 
+  // Los cortes van también: antes el mensaje solo listaba los productos, y
+  // quien pedía un corte a medida mandaba «quiero un presupuesto por:» y nada.
   const mensajeWhatsapp = encodeURIComponent(
-    `Hola! Quiero un presupuesto por:\n\n${items
-      .map(
+    `Hola! Quiero un presupuesto por:\n\n${[
+      ...items.map(
         (i) =>
           `· ${i.descripcion}: ${i.cantidad} ${i.unidad.replace("_", " ")}`,
-      )
-      .join("\n")}\n\nGracias.`,
+      ),
+      ...cortes.map(
+        (c) =>
+          `· Corte a medida en ${c.material}: ${c.piezas} ${c.piezas === 1 ? "pieza" : "piezas"} (${c.placas} ${c.placas === 1 ? "placa" : "placas"})${c.cantoDescripcion ? `, canto ${c.cantoDescripcion}` : ""}`,
+      ),
+    ].join("\n")}\n\nGracias.`,
   );
 
   if (items.length === 0 && cortes.length === 0) {

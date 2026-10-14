@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { FileDown } from "lucide-react";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
@@ -42,6 +43,7 @@ export default async function FichaPresupuestoPage({
               <FileDown className="h-5 w-5" />
               Descargar PDF
             </a>
+            <MandarPorWhatsapp tipo="presupuesto" id={p.id} />
             <AccionesPresupuesto id={p.id} estado={p.estado} />
           </>
         }

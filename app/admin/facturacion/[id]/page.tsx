@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { notFound } from "next/navigation";
 import {
   ArrowLeft,
@@ -119,6 +120,7 @@ export default async function FichaComprobantePage({
             <Download className="h-5 w-5" />
             PDF
           </a>
+          <MandarPorWhatsapp tipo="comprobante" id={comprobante.id} />
         </div>
       </div>
 

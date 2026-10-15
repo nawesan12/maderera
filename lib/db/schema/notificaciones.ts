@@ -37,10 +37,20 @@ export const avisosEmail = pgTable(
   (t) => [uniqueIndex("email_avisos_evento_idx").on(t.evento)],
 );
 
+/**
+ * Por dónde salió un aviso.
+ *
+ * `whatsapp` es la Cloud API de Meta (se cobra); `whatsapp_manual` es el botón
+ * «Avisar por WhatsApp», que abre la app del teléfono con el texto escrito y lo
+ * manda una persona (gratis). Van separados porque el automático tiene que
+ * saber si alguien ya avisó a mano, y porque la cuenta de lo que se gasta en
+ * Meta no puede mezclar uno con otro.
+ */
 export const canalNotificacion = pgEnum("canal_notificacion", [
   "email",
   "whatsapp",
   "push",
+  "whatsapp_manual",
 ]);
 
 /**
@@ -114,12 +124,15 @@ export const notificationsLog = pgTable(
     estado: estadoNotificacion().notNull(),
     proveedorMensajeId: text(),
     error: text(),
+    /** Quién lo mandó, cuando lo mandó una persona (el botón gratis). */
+    usuarioId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("notifications_log_entidad_idx").on(t.entidadTipo, t.entidadId),
     index("notifications_log_created_idx").on(t.createdAt),
     index("notifications_log_canal_idx").on(t.canal),
+    index("notifications_log_evento_idx").on(t.evento, t.entidadId),
   ],
 );
 

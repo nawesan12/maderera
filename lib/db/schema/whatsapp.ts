@@ -4,6 +4,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   text,
@@ -201,6 +202,12 @@ export const mensajes = pgTable(
      * coexistencia) o `sistema` (la confirmación de una baja).
      */
     origen: text(),
+    /**
+     * Si entró con el historial que manda Meta al conectar el número en
+     * coexistencia (webhook `history`). Lo importado no avisa a nadie, no
+     * cuenta como no leído y no abre la ventana de 24 h.
+     */
+    importado: boolean().notNull().default(false),
     /** Si salió como plantilla aprobada, cuál. */
     plantilla: text(),
     /** Quién lo mandó desde el panel. Null si lo generó un aviso automático. */
@@ -240,6 +247,25 @@ export const sesionWhatsapp = pgTable("whatsapp_sesion", {
   /** El último chequeo de la configuración, para no repetirlo en cada visita. */
   diagnostico: jsonb().$type<Record<string, unknown>>(),
   diagnosticoAt: timestamp({ withTimezone: true }),
+  /**
+   * El tope de gasto del mes en Meta, en dólares. Al llegar, los avisos
+   * automáticos dejan de salir por WhatsApp hasta el mes siguiente (el correo
+   * sigue), y los envíos desde la bandeja piden confirmación.
+   */
+  topeMensualUsd: numeric({ precision: 10, scale: 2 }).notNull().default("10"),
+  /**
+   * Lo que cobra Meta por mensaje según la categoría, en USD. Editable porque
+   * Meta cambia los precios cada trimestre; null es «las de siempre»
+   * (`TARIFAS_POR_OMISION` en `lib/whatsapp/costos.ts`).
+   */
+  tarifas: jsonb().$type<Record<string, number>>(),
+  /**
+   * El mes («2026-10») en que ya se avisó al admin que se pasó el 80 % y el
+   * 100 % del tope. Se marca con un `update … where` para que dos procesos a
+   * la vez no manden el aviso dos veces.
+   */
+  topeAviso80: text(),
+  topeAviso100: text(),
   updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
 

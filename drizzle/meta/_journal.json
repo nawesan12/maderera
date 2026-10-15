@@ -547,6 +547,13 @@
       "when": 1792009717026,
       "tag": "0077_whatsapp_completo",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1792022398908,
+      "tag": "0078_whatsapp_costo_minimo",
+      "breakpoints": true
     }
   ]
 }

@@ -193,6 +193,28 @@ export default async function FichaCortePage({
             </div>
           </header>
 
+          {/* El programa para WinCut, en prueba. Va aparte de los otros
+              botones y con su aviso a la vista: si la máquina lo lee mal,
+              corta mal una placa, y eso solo lo evita mirar el dibujo en la
+              pantalla de la máquina antes de arrancar. Ver docs/PTX.md. */}
+          {plano.placas.length > 0 && (
+            <div className="estado-marca flex flex-wrap items-center justify-between gap-3 border-b border-linea bg-[var(--estado-fondo)] px-5 py-3">
+              <p className="max-w-2xl text-base">
+                <strong>En prueba:</strong> el programa para la seccionadora
+                todavía no se probó en la máquina del taller. Antes de cortar,
+                el operario tiene que abrirlo en WinCut y comparar el dibujo de
+                la pantalla con la hoja de corte.
+              </p>
+              <a
+                href={`/api/cortes/${corte.id}/ptx`}
+                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-current bg-card px-3.5 text-base font-medium transition-colors hover:bg-muted"
+              >
+                <Download className="h-4 w-4" />
+                Programa para la máquina (.PTX) — prueba
+              </a>
+            </div>
+          )}
+
           <div className="grid gap-px bg-linea sm:grid-cols-4">
             <Cifra
               valor={String(plano.placas.length)}

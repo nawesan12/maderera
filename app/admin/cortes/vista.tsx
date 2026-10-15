@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Flame, Scissors } from "lucide-react";
+import { Flame, ListChecks, Scissors } from "lucide-react";
 import {
   ColumnaTablero,
   TarjetaTablero,
@@ -123,6 +123,19 @@ function TarjetaCorte({
       <p className="mt-2 text-sm text-muted-foreground">
         {corte.sucursal} · {haceCuanto(corte.createdAt)}
       </p>
+
+      {/* La hoja de la seccionadora, a un toque desde la tarjeta: en /taller
+          es lo primero que se abre antes de cargar la placa. */}
+      {corte.piezas > 0 && (
+        <Link
+          href={`/hoja-de-corte/${corte.id}`}
+          target="_blank"
+          className="mt-2.5 inline-flex h-10 items-center gap-1.5 self-start rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <ListChecks className="h-4 w-4" />
+          Hoja de corte
+        </Link>
+      )}
 
       <div className="mt-auto border-t pt-3">
         <AccionesCorte

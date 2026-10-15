@@ -72,6 +72,7 @@ async function Contenido({
     <PlanoImpreso
       plano={plano}
       corte={{
+        id: corte.id,
         numero: corte.numero,
         cliente: corte.cliente,
         material: corte.material,

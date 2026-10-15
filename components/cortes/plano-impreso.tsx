@@ -29,6 +29,8 @@ export function PlanoImpreso({
 }: {
   plano: PlanoDeCorte;
   corte: {
+    /** Para enlazar la hoja de la seccionadora. */
+    id?: string;
     numero: string;
     cliente: string;
     material: string;
@@ -81,8 +83,14 @@ export function PlanoImpreso({
             {fechaCorta.format(corte.createdAt)}
           </p>
         </div>
-        <div className="no-imprimir">
+        <div className="no-imprimir" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <BotonImprimir />
+          {/* La secuencia para tipear en la seccionadora, del mismo plano. */}
+          {corte.id && (
+            <a href={`/hoja-de-corte/${corte.id}`} className="boton-imprimir">
+              Hoja para la seccionadora
+            </a>
+          )}
         </div>
       </div>
 

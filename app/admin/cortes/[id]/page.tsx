@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
-import { ArrowLeft, Download, Flame, Map, Tags } from "lucide-react";
+import { ArrowLeft, Download, Flame, ListChecks, Map, Tags } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_CORTE, Pasos } from "@/components/admin/pasos";
 import { fechaHora, plural } from "@/components/admin/formato";
@@ -163,6 +163,16 @@ export default async function FichaCortePage({
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              {/* Lo que tipea el operario en el semiautomático de WinCut, en
+                  el orden de la máquina: reemplaza a Cutty, que no anda. */}
+              <Link
+                href={`/hoja-de-corte/${corte.id}`}
+                target="_blank"
+                className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+              >
+                <ListChecks className="h-4 w-4" />
+                Hoja para la seccionadora
+              </Link>
               <Link
                 href={`/plano/${corte.id}`}
                 target="_blank"

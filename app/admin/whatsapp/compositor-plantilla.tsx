@@ -1,8 +1,10 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2, Send, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Send, Smartphone, X } from "lucide-react";
 import { enviarPlantilla, type EstadoWhatsapp } from "./actions";
+import { ConfirmarTope } from "./confirmar-tope";
+import { enlaceWaMe } from "@/lib/whatsapp/aviso-manual";
 import { camposFaltantes, nombreLegible, sugerirValores, vistaPrevia } from "@/lib/whatsapp/plantillas";
 import type { PlantillaDisponible } from "@/lib/whatsapp/catalogo";
 import type { DocumentoListado } from "@/lib/whatsapp/documentos";
@@ -61,9 +63,12 @@ export function CompositorPlantilla({
   documentos,
   ventanaAbierta,
   onCerrar,
+  waId = null,
 }: {
   conversacionId: string;
   nombre: string;
+  /** El número del cliente, para mandarlo desde el teléfono. Null si no se conoce. */
+  waId?: string | null;
   plantillas: PlantillaDisponible[];
   conocidos: Record<string, string>;
   documentos: DocumentoListado[];
@@ -95,6 +100,7 @@ export function CompositorPlantilla({
   const faltan = plantilla ? camposFaltantes(plantilla, valores) : [];
   const faltaDocumento = plantilla?.encabezadoMedia === "document" && !documento;
   const texto = plantilla ? vistaPrevia(plantilla, valores) : "";
+  const gratis = waId && texto ? enlaceWaMe(`+${waId}`, texto) : null;
   const pdfs = documentos;
 
   return (
@@ -212,10 +218,28 @@ export function CompositorPlantilla({
               {estado.error}
             </p>
           )}
+          {estado.requiereConfirmacionTope && <ConfirmarTope gratis={gratis} />}
           {estado.ok && (
             <p role="status" className="flex items-center gap-2 text-base text-green-800">
               <CheckCircle2 className="h-5 w-5" />
               {estado.ok}
+            </p>
+          )}
+
+          {/* Desde la app del teléfono no hay ventana de 24 h ni plantilla que
+              aprobar, y no se cobra: el mismo texto, gratis. */}
+          {gratis && !estado.requiereConfirmacionTope && (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              Por la API se cobra.
+              <a
+                href={gratis}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 font-medium text-brand-green hover:underline"
+              >
+                <Smartphone className="h-4 w-4" />
+                Mandarlo desde el teléfono (gratis)
+              </a>
             </p>
           )}
 

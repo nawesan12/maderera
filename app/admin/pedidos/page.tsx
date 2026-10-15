@@ -9,6 +9,10 @@ import {
 import { haceCuanto, moneda, plural } from "@/components/admin/formato";
 import { BuscadorPedidos } from "./buscador";
 import { listarPedidos, type PedidoListado } from "@/lib/dal/admin/ventas";
+import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
+import { requireStaff } from "@/lib/dal/session";
+import { puedeEntrar } from "@/lib/roles";
+import { avisosManuales, type AvisoManualListo } from "@/lib/whatsapp/aviso-manual-datos";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { AccionesPedido } from "./acciones";
 
@@ -30,6 +34,18 @@ export default async function PedidosPage({
     listarPedidos({ busqueda: params.buscar, sucursal: params.sucursal }),
     listarSucursalesPublicas(),
   ]);
+
+  // En «listo» y «en camino» el cliente tiene que enterarse: el botón gratis
+  // va en la tarjeta, sin entrar al pedido.
+  // Solo para quien atiende el WhatsApp de la maderera (no depósito).
+  const atiende = puedeEntrar("/admin/whatsapp", (await requireStaff()).staffRole);
+  const [avisosListo, avisosEnCamino] = atiende
+    ? await Promise.all([
+        avisosManuales("listo", "order", pedidos.filter((p) => p.estado === "listo").map((p) => p.id)),
+        avisosManuales("en-camino", "order", pedidos.filter((p) => p.estado === "en-camino").map((p) => p.id)),
+      ])
+    : [{}, {}];
+  const avisos = { ...avisosListo, ...avisosEnCamino };
 
   const entregados = pedidos.filter((p) => p.estado === "entregado");
   const activos = pedidos.filter(
@@ -88,7 +104,7 @@ export default async function PedidosPage({
                   vacio={columna.vacio}
                 >
                   {enColumna.map((pedido) => (
-                    <TarjetaPedido key={pedido.id} pedido={pedido} />
+                    <TarjetaPedido key={pedido.id} pedido={pedido} aviso={avisos[pedido.id] ?? null} />
                   ))}
                 </ColumnaTablero>
               );
@@ -132,7 +148,7 @@ export default async function PedidosPage({
   );
 }
 
-function TarjetaPedido({ pedido }: { pedido: PedidoListado }) {
+function TarjetaPedido({ pedido, aviso }: { pedido: PedidoListado; aviso: AvisoManualListo | null }) {
   const sinCobrar = pedido.estadoPago !== "pagado";
 
   return (
@@ -180,6 +196,12 @@ function TarjetaPedido({ pedido }: { pedido: PedidoListado }) {
         <p className="estado-espera mt-2 inline-flex self-start rounded-full bg-[var(--estado-fondo)] px-2 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
           Sin cobrar
         </p>
+      )}
+
+      {aviso && (
+        <div className="mt-3">
+          <AvisarPorWhatsapp aviso={aviso} compacto />
+        </div>
       )}
 
       <div className="mt-auto border-t pt-3">

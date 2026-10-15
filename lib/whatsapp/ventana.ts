@@ -3,8 +3,13 @@
  *
  * Es la regla que más condiciona la bandeja: desde el último mensaje del
  * cliente hay 24 horas para contestarle lo que sea —texto, fotos, el PDF del
- * presupuesto— sin costo. Pasado ese plazo WhatsApp solo deja mandar una
- * plantilla aprobada, y esa se cobra. Lo usan el servidor (para decidir qué
+ * presupuesto—. Pasado ese plazo WhatsApp solo deja mandar una plantilla
+ * aprobada. Desde el 1/10/2026 las dos cosas se cobran (ver `costos.ts`).
+ *
+ * **Solo un mensaje del cliente abre la ventana.** Con el número en
+ * coexistencia, lo que el personal escribe desde la app del teléfono no la
+ * abre, no la estira ni se cobra (lo dice Meta en «Onboarding WhatsApp
+ * Business app users»): por eso los ecos no tocan `ultimoEntranteAt`. Lo usan el servidor (para decidir qué
  * mandar) y el navegador (para decirlo en pantalla), así que es puro.
  */
 
@@ -63,8 +68,8 @@ export type DecisionDeEnvio =
  * Cómo sale un aviso automático.
  *
  * - Si el número pidió la baja, no sale nada: ni gratis ni pago.
- * - Dentro de la ventana y con texto libre cargado, sale como mensaje común,
- *   que no se cobra.
+ * - Dentro de la ventana y con texto libre cargado, sale como mensaje común
+ *   (que desde el 1/10/2026 se cobra como uno de utilidad).
  * - Si no, sale la plantilla (la que se cobra según su categoría), y si no hay
  *   plantilla aprobada no sale: un aviso que Meta rechazaría no se intenta.
  */

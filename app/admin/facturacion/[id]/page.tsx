@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
+import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
+import { avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
 import {
@@ -69,6 +71,9 @@ export default async function FichaComprobantePage({
   const comprobante = await obtenerComprobante(id);
 
   if (!comprobante) notFound();
+
+  // Solo lo que ya tiene número de verdad se le manda al cliente.
+  const aviso = comprobante.estado !== "borrador" ? await avisoManual("documento", { tipo: "invoice", id }) : null;
 
   const discrimina = discriminaIva(comprobante.tipo);
   const totalIva =
@@ -158,6 +163,15 @@ export default async function FichaComprobantePage({
               />
             </div>
           )}
+        </section>
+      )}
+
+      {aviso && (
+        <section className="tarjeta p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Mandársela por WhatsApp
+          </h2>
+          <AvisarPorWhatsapp aviso={aviso} atajo />
         </section>
       )}
 

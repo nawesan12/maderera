@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
+import { avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
+import { requireStaff } from "@/lib/dal/session";
+import { puedeEntrar } from "@/lib/roles";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
 import { ArrowLeft, Download, Flame, Map, Tags } from "lucide-react";
@@ -82,6 +86,14 @@ export default async function FichaCortePage({
     fraccion: fraccionDePlaca(corte.medida.mitad, corte.precioMediaPct ?? 50),
   });
 
+  // Terminado: el cliente tiene que enterarse para venir a buscarlo.
+  // Solo para quien atiende el WhatsApp de la maderera (no el aserradero ni depósito).
+  const atiende = puedeEntrar("/admin/whatsapp", (await requireStaff()).staffRole);
+  const aviso =
+    atiende && corte.estado === "terminado"
+      ? await avisoManual("corte_listo", { tipo: "cutting_order", id: corte.id })
+      : null;
+
   const superficie =
     corte.piezas.reduce(
       (s, p) => s + (p.largoMm * p.anchoMm * p.cantidad) / 1_000_000,
@@ -133,6 +145,15 @@ export default async function FichaCortePage({
       <section className="tarjeta p-5">
         <Pasos etapas={ETAPAS_CORTE} actual={corte.estado} />
       </section>
+
+      {aviso && (
+        <section className={aviso.yaAvisado ? "tarjeta p-5" : "tarjeta-atencion p-5"}>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Avisarle que está terminado
+          </h2>
+          <AvisarPorWhatsapp aviso={aviso} atajo />
+        </section>
+      )}
 
       {/* Cómo entra en la placa y cuánto sale.
           Va arriba de todo porque es lo que se contesta primero cuando alguien

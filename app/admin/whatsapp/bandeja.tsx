@@ -11,6 +11,7 @@ import { NuevaConversacion } from "./nueva-conversacion";
 import type { ConversacionListada, DetalleConversacion, FiltroBandeja } from "@/lib/dal/admin/whatsapp";
 import type { PlantillaDisponible } from "@/lib/whatsapp/catalogo";
 import { useEnVivo } from "@/lib/vivo/use-en-vivo";
+import { dolares } from "@/lib/whatsapp/costos";
 
 export interface Persona {
   id: string;
@@ -46,6 +47,7 @@ export function Bandeja({
   usuarioId,
   modoDemo,
   pantallaCompleta = false,
+  gasto = null,
 }: {
   conversaciones: ConversacionListada[];
   detalle: DetalleConversacion | null;
@@ -56,6 +58,8 @@ export function Bandeja({
   usuarioId: string;
   modoDemo: boolean;
   pantallaCompleta?: boolean;
+  /** Lo que va del mes en Meta contra el tope, para decirlo chico. */
+  gasto?: { usd: number; tope: number; proporcion: number; alcanzado: boolean } | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -153,6 +157,19 @@ export function Bandeja({
               );
             })}
           </nav>
+
+          {/* Chico, pero siempre a la vista: contestar por acá cuesta, desde
+              el teléfono no. */}
+          {gasto && (
+            <p
+              className={`text-sm ${gasto.alcanzado ? "estado-problema font-medium text-[var(--estado-tinta)]" : gasto.proporcion >= 0.8 ? "estado-espera font-medium text-[var(--estado-tinta)]" : "text-muted-foreground"}`}
+              data-gasto-whatsapp
+            >
+              Meta este mes: <span className="tabular">{dolares(gasto.usd)}</span> de{" "}
+              <span className="tabular">{dolares(gasto.tope)}</span>
+              {gasto.alcanzado ? " · tope alcanzado: contestá desde el teléfono" : " · desde el teléfono es gratis"}
+            </p>
+          )}
         </div>
 
         {abriendoNueva && <NuevaConversacion onCerrar={() => setAbriendoNueva(false)} />}

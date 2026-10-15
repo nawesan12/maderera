@@ -21,7 +21,9 @@ export type Accion =
   /** El destinatario no puede recibirlo: avisarle por otro medio. */
   | "otro-medio"
   /** Revisar el contenido: la plantilla o el archivo. */
-  | "revisar";
+  | "revisar"
+  /** Se pasó el tope del mes: confirmar que se quiere pagar, o mandarlo gratis desde el teléfono. */
+  | "tope";
 
 export interface ErrorExplicado {
   codigo: number | null;

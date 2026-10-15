@@ -21,6 +21,9 @@ import { cortesDelPedido } from "@/lib/dal/admin/cortes";
 import { margenDeLinea } from "@/lib/compras/costo";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
+import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
+import { avisoManual, avisosManuales } from "@/lib/whatsapp/aviso-manual-datos";
+import type { EventoManual } from "@/lib/whatsapp/aviso-manual";
 
 const MEDIOS: Record<string, string> = {
   mercado_pago: "Mercado Pago",
@@ -57,11 +60,25 @@ export default async function FichaPedidoPage({
   const datosFactura = await pedidoParaFacturar(id);
   const facturado = datosFactura?.yaFacturado ?? null;
 
-  const [pendientes, remitos, cortes] = await Promise.all([
+  // El aviso que corresponde al estado: lo que el cliente tiene que saber ahora.
+  // Solo para quien atiende el WhatsApp de la maderera (no depósito).
+  const eventoAviso = puedeEntrar("/admin/whatsapp", usuario.staffRole) ? (EVENTO_DEL_ESTADO[pedido.estado] ?? null) : null;
+
+  const [pendientes, remitos, cortes, aviso] = await Promise.all([
     saldoDeAcopio(id),
     remitosDelPedido(id),
     cortesDelPedido(id),
+    eventoAviso ? avisoManual(eventoAviso, { tipo: "order", id }) : null,
   ]);
+
+  // El remito también se manda gratis, desde la app del teléfono.
+  const avisosRemito = puedeEntrar("/admin/whatsapp", usuario.staffRole)
+    ? await avisosManuales(
+        "documento",
+        "delivery",
+        remitos.filter((r) => r.estado !== "anulada").map((r) => r.id),
+      )
+    : {};
 
   const etapas =
     pedido.tipoEntrega === "retiro" ? ETAPAS_RETIRO : ETAPAS_PEDIDO;
@@ -126,6 +143,23 @@ export default async function FichaPedidoPage({
           cancelado={pedido.estado === "cancelado"}
         />
       </section>
+
+      {/* Avisarle al cliente, gratis, desde WhatsApp Business. Lo que pide una
+          decisión —listo o en camino y todavía sin avisar— va con borde de acento. */}
+      {aviso && (
+        <section
+          className={
+            (pedido.estado === "listo" || pedido.estado === "en-camino") && !aviso.yaAvisado
+              ? "tarjeta-atencion p-5"
+              : "tarjeta p-5"
+          }
+        >
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Avisarle: {aviso.titulo.toLowerCase()}
+          </h2>
+          <AvisarPorWhatsapp aviso={aviso} atajo />
+        </section>
+      )}
 
       {/* `items-start` para que la tarjeta del detalle no se estire hasta la
           altura de la columna lateral y deje un vacío abajo. */}
@@ -287,6 +321,7 @@ export default async function FichaPedidoPage({
         <div className="lg:col-start-1">
           <Entregas
             whatsapp={puedeEntrar("/admin/whatsapp", usuario.staffRole)}
+            avisos={avisosRemito}
             orderId={pedido.id}
             tipoEntrega={pedido.tipoEntrega}
             pendientes={pendientes}
@@ -437,3 +472,12 @@ function calcularMargen(
 
   return { neto, costo, ganancia: neto - costo, sinCosto };
 }
+
+/** Qué aviso le corresponde al pedido según dónde está. */
+const EVENTO_DEL_ESTADO: Partial<Record<string, EventoManual>> = {
+  pendiente: "pedido_recibido",
+  preparando: "preparando",
+  listo: "listo",
+  "en-camino": "en-camino",
+  entregado: "entregado",
+};

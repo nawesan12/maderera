@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Loader2, MessageCircle, Send, X } from "lucide-react";
 import { enviarDocumentoAlCliente, type EstadoWhatsapp } from "./actions";
+import { ConfirmarTope } from "./confirmar-tope";
 
 const inicial: EstadoWhatsapp & { conversacionId?: string } = {};
 
@@ -14,6 +15,11 @@ const inicial: EstadoWhatsapp & { conversacionId?: string } = {};
  * los está mirando, sin ir a buscar la conversación: al teléfono de la ficha
  * (o al que se escriba). Sale por la misma puerta que desde la bandeja, así
  * que respeta la ventana de 24 h y queda en la conversación del cliente.
+ *
+ * **Este se cobra** (la Cloud API de Meta, desde el 1/10/2026 también dentro
+ * de las 24 h); por eso dice «se cobra», y al lado está el gratis
+ * (`components/admin/avisar-por-whatsapp.tsx`), que lo manda una persona desde
+ * la app del teléfono. Con el tope del mes pasado pide confirmar.
  */
 export function MandarPorWhatsapp({
   tipo,
@@ -33,10 +39,12 @@ export function MandarPorWhatsapp({
       <button
         type="button"
         onClick={() => setAbierto(true)}
+        title="Sale por la Cloud API de Meta con el PDF pegado, y Meta lo cobra. «Avisar por WhatsApp» lo manda desde el teléfono, gratis."
         className={`inline-flex ${alto} items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted`}
       >
         <MessageCircle className="h-4 w-4 text-brand-green" />
-        Por WhatsApp
+        PDF por la API
+        <span className="text-sm font-normal text-muted-foreground">se cobra</span>
       </button>
     );
   }
@@ -75,6 +83,11 @@ export function MandarPorWhatsapp({
         <p role="alert" className="w-full text-base text-red-700">
           {estado.error}
         </p>
+      )}
+      {estado.requiereConfirmacionTope && (
+        <div className="w-full">
+          <ConfirmarTope />
+        </div>
       )}
       {estado.ok && (
         <p role="status" className="flex w-full items-center gap-1.5 text-base text-green-800">

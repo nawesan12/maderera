@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
+import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
+import { avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
 import { FileDown } from "lucide-react";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
@@ -16,7 +18,10 @@ export default async function FichaPresupuestoPage({
 }) {
   const { id } = await params;
   if (!esUuid(id)) notFound();
-  const p = await obtenerPresupuesto(id);
+  const [p, aviso] = await Promise.all([
+    obtenerPresupuesto(id),
+    avisoManual("presupuesto_listo", { tipo: "quote", id }),
+  ]);
 
   if (!p) notFound();
 
@@ -50,6 +55,15 @@ export default async function FichaPresupuestoPage({
           </>
         }
       />
+
+      {aviso && (
+        <section className="tarjeta p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Mandárselo por WhatsApp
+          </h2>
+          <AvisarPorWhatsapp aviso={aviso} atajo />
+        </section>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <section className="tarjeta overflow-hidden">

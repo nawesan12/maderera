@@ -8,6 +8,8 @@ import {
 import { haceCuanto } from "@/components/admin/formato";
 import type { CorteListado } from "@/lib/dal/admin/cortes";
 import { AccionesCorte } from "./acciones";
+import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
+import type { AvisoManualListo } from "@/lib/whatsapp/aviso-manual-datos";
 
 /**
  * La cola de corte.
@@ -25,7 +27,14 @@ const COLUMNAS = [
   { estado: "retirado", titulo: "Retirados", vacio: "Nada retirado hoy." },
 ] as const;
 
-export function TableroDeCortes({ cortes }: { cortes: CorteListado[] }) {
+export function TableroDeCortes({
+  cortes,
+  avisos = {},
+}: {
+  cortes: CorteListado[];
+  /** El aviso gratis de «corte terminado», por id de corte. */
+  avisos?: Record<string, AvisoManualListo>;
+}) {
   return (
     <>
     {cortes.length === 0 ? (
@@ -58,6 +67,7 @@ export function TableroDeCortes({ cortes }: { cortes: CorteListado[] }) {
                   key={corte.id}
                   corte={corte}
                   posicion={columna.estado === "en-cola" ? i + 1 : undefined}
+                  aviso={avisos[corte.id] ?? null}
                 />
               ))}
             </ColumnaTablero>
@@ -72,9 +82,11 @@ export function TableroDeCortes({ cortes }: { cortes: CorteListado[] }) {
 function TarjetaCorte({
   corte,
   posicion,
+  aviso,
 }: {
   corte: CorteListado;
   posicion?: number;
+  aviso: AvisoManualListo | null;
 }) {
   return (
     <TarjetaTablero destacada={corte.urgente}>
@@ -123,6 +135,12 @@ function TarjetaCorte({
       <p className="mt-2 text-sm text-muted-foreground">
         {corte.sucursal} · {haceCuanto(corte.createdAt)}
       </p>
+
+      {aviso && (
+        <div className="mt-3">
+          <AvisarPorWhatsapp aviso={aviso} compacto />
+        </div>
+      )}
 
       <div className="mt-auto border-t pt-3">
         <AccionesCorte

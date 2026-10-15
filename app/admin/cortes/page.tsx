@@ -5,6 +5,9 @@ import { plural } from "@/components/admin/formato";
 import { listarCortes } from "@/lib/dal/admin/cortes";
 import { BuscadorCortes } from "./buscador";
 import { TableroDeCortes } from "./vista";
+import { avisosManuales } from "@/lib/whatsapp/aviso-manual-datos";
+import { requireStaff } from "@/lib/dal/session";
+import { puedeEntrar } from "@/lib/roles";
 import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 
 export default async function CortesPage({
@@ -14,6 +17,17 @@ export default async function CortesPage({
 }) {
   const params = await searchParams;
   const cortes = await listarCortes({ busqueda: params.buscar });
+  // Los terminados esperan que el cliente venga a buscarlos: el aviso gratis
+  // va en su tarjeta. En `/taller` no, que es la pantalla de la máquina.
+  // Y solo para quien atiende el WhatsApp de la maderera.
+  const atiende = puedeEntrar("/admin/whatsapp", (await requireStaff()).staffRole);
+  const avisos = atiende
+    ? await avisosManuales(
+        "corte_listo",
+        "cutting_order",
+        cortes.filter((c) => c.estado === "terminado").map((c) => c.id),
+      )
+    : {};
 
   const pendientes = cortes.filter((c) =>
     ["en-cola", "en-proceso"].includes(c.estado),
@@ -78,7 +92,7 @@ export default async function CortesPage({
           Antes esta pantalla no se actualizaba nunca: quien cortaba tenía que
           recargarla para enterarse. */}
       <RefrescarEnVivo canales={["taller"]} sinConexionCadaMs={60_000} />
-      <TableroDeCortes cortes={cortes} />
+      <TableroDeCortes cortes={cortes} avisos={avisos} />
     </div>
   );
 }

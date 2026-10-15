@@ -11,6 +11,8 @@
  * distinto de un lado y del otro es un error que nadie reporta pero todos notan.
  */
 
+import { aWaId } from "@/lib/whatsapp/numeros";
+
 export const moneda = new Intl.NumberFormat("es-AR", {
   style: "currency",
   currency: "ARS",
@@ -290,6 +292,12 @@ export function telefonoParaMarcar(telefono: string): string {
  * una regla en dos lados y uno de los dos atrasado.
  */
 export function whatsappDestino(telefono: string): string {
+  // La regla completa vive en `lib/whatsapp/numeros.ts` (la usan la bandeja y
+  // el botón «Avisar por WhatsApp»): este enlace tiene que dar el mismo número.
+  // Lo de abajo queda para lo que esa regla no reconoce.
+  const reconocido = aWaId(telefono);
+  if (reconocido) return reconocido;
+
   let n = telefono.replace(/\D/g, "");
 
   if (n.startsWith("549")) return n;

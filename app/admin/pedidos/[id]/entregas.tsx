@@ -22,6 +22,8 @@ import { fechaHora } from "@/components/admin/formato";
 import type { RenglonPendiente } from "@/lib/entregas";
 import type { RemitoListado } from "@/lib/dal/admin/entregas";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
+import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
+import type { AvisoManualListo } from "@/lib/whatsapp/aviso-manual-datos";
 
 const inicial: EstadoEntrega = {};
 
@@ -42,6 +44,7 @@ export function Entregas({
   pendientes,
   remitos,
   whatsapp = false,
+  avisos = {},
 }: {
   orderId: string;
   tipoEntrega: string;
@@ -49,6 +52,8 @@ export function Entregas({
   remitos: RemitoListado[];
   /** Si quien mira puede usar la bandeja: depósito ve los remitos, pero no manda WhatsApp. */
   whatsapp?: boolean;
+  /** El aviso gratis de cada remito, por id. */
+  avisos?: Record<string, AvisoManualListo>;
 }) {
   const [estado, preparar, preparando] = useActionState(
     prepararRemito,
@@ -125,6 +130,7 @@ export function Entregas({
               remito={remito}
               orderId={orderId}
               whatsapp={whatsapp}
+              aviso={avisos[remito.id] ?? null}
               /*
                * Un remito dejó acopio si después de él quedaba algo: o porque
                * hubo otro remito más nuevo —la lista viene del más nuevo al
@@ -265,10 +271,12 @@ function FilaRemito({
   orderId,
   dejaAcopio,
   whatsapp,
+  aviso,
 }: {
   remito: RemitoListado;
   orderId: string;
   whatsapp: boolean;
+  aviso: AvisoManualListo | null;
   /** Si después de este remito quedaba mercadería guardada. */
   dejaAcopio: boolean;
 }) {
@@ -360,6 +368,11 @@ function FilaRemito({
       )}
       {estado.ok && (
         <p className="w-full text-base text-muted-foreground">{estado.ok}</p>
+      )}
+      {aviso && (
+        <div className="w-full">
+          <AvisarPorWhatsapp aviso={aviso} compacto />
+        </div>
       )}
     </li>
   );

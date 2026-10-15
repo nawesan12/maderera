@@ -12,6 +12,7 @@ import { conversacionDe } from "./ingesta";
 import { guardarMedioPrivado } from "./medios";
 import { armarComponentes, completar, sugerirValores, vistaPrevia } from "./plantillas";
 import { decidirEnvio, ventanaAbierta } from "./ventana";
+import { MOTIVO_TOPE } from "./costos";
 
 /**
  * Avisos automáticos por WhatsApp.
@@ -23,12 +24,16 @@ import { decidirEnvio, ventanaAbierta } from "./ventana";
  * 1. **Nunca frena la operación.** Si WhatsApp falla, el pedido igual avanza.
  * 2. **Nacen apagados y se prenden por tipo de aviso.** Cada uno cuesta plata:
  *    una plantilla `UTILITY` a Argentina sale USD 0,026, y desde el 1/10/2026
- *    también se cobra el mensaje común dentro de la ventana (pasado el cupo
- *    gratuito del mes). Se prende a conciencia, desde la configuración.
+ *    el mensaje común dentro de la ventana cuesta lo mismo. Se prende a
+ *    conciencia, desde la configuración. Lo gratis es el botón «Avisar por
+ *    WhatsApp» (`aviso-manual.ts`), que lo manda una persona desde la app.
  * 3. **Quien pidió la baja no recibe nada.** Ni gratis ni pago.
- * 4. **Dentro de la ventana va texto libre** si hay uno cargado: entra en el
- *    cupo gratuito de servicio y se lee como un mensaje de persona. Fuera de
- *    ella, solo la plantilla aprobada.
+ * 4. **Dentro de la ventana va texto libre** si hay uno cargado: se lee como un
+ *    mensaje de persona. Fuera de ella, solo la plantilla aprobada.
+ * 5. **No se repite lo que ya se avisó a mano**, y **al llegar al tope del mes
+ *    deja de salir por WhatsApp** (`gasto.ts`): queda en la bitácora como
+ *    omitido, para avisar con el botón gratis. El correo sale igual: va por
+ *    otro lado y no depende de esto.
  *
  * Todo queda en `notifications_log` con canal `whatsapp`, igual que el correo:
  * «¿le avisamos?» se contesta mirando la bitácora de avisos.
@@ -96,6 +101,22 @@ export const EVENTOS_WHATSAPP = [
 
 export type EventoWhatsapp = (typeof EVENTOS_WHATSAPP)[number]["evento"];
 
+/** Si alguien ya mandó este aviso a mano, con el botón gratis. */
+async function yaSeAvisoAMano(evento: string, entidadId: string): Promise<boolean> {
+  const [fila] = await db
+    .select({ id: notificationsLog.id })
+    .from(notificationsLog)
+    .where(
+      and(
+        eq(notificationsLog.canal, "whatsapp_manual"),
+        eq(notificationsLog.evento, evento),
+        eq(notificationsLog.entidadId, entidadId),
+      ),
+    )
+    .limit(1);
+  return Boolean(fila);
+}
+
 function log(evento: string, detalle?: string) {
   console.info(JSON.stringify({ scope: "whatsapp.avisos", evento, detalle }));
 }
@@ -152,6 +173,19 @@ export async function avisarPorWhatsapp(opciones: {
     if (!opciones.telefono) return registrar("omitida", "Sin teléfono en la ficha ni en el pedido.", "-");
     const waJid = aJid(opciones.telefono);
     if (!waJid) return registrar("omitida", `Teléfono que no se entiende: «${opciones.telefono}».`, opciones.telefono);
+
+    if (!opciones.forzar) {
+      const entidadId = opciones.entidad?.id ?? opciones.orderId ?? null;
+      if (entidadId && (await yaSeAvisoAMano(opciones.evento, entidadId))) {
+        log("omitido", `${opciones.evento}: ya se avisó a mano`);
+        return registrar("omitida", "Ya se avisó a mano desde WhatsApp Business.", waJid);
+      }
+      const { topeAlcanzado } = await import("./gasto");
+      if (await topeAlcanzado()) {
+        log("omitido", `${opciones.evento}: tope mensual`);
+        return registrar("omitida", MOTIVO_TOPE, waJid);
+      }
+    }
 
     const primerNombre = (opciones.nombre ?? "").trim().split(/\s+/)[0] || "";
     const valores = { nombre: primerNombre || "qué tal", ...opciones.valores };

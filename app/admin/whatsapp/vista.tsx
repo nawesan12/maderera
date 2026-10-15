@@ -2,6 +2,7 @@ import { after } from "next/server";
 import {
   contarBandeja,
   estadoWhatsapp,
+  gastoParaLaBandeja,
   listarConversaciones,
   listarPlantillas,
   marcarLeidaSilencioso,
@@ -38,12 +39,13 @@ export async function VistaWhatsapp({
   const pedido = filtro === "cerradas" ? "resueltas" : filtro;
   const vista: FiltroBandeja = FILTROS.includes(pedido as FiltroBandeja) ? (pedido as FiltroBandeja) : "todas";
 
-  const [conversaciones, estado, plantillas, contadores, personal] = await Promise.all([
+  const [conversaciones, estado, plantillas, contadores, personal, gasto] = await Promise.all([
     listarConversaciones(vista),
     estadoWhatsapp(),
     listarPlantillas(),
     contarBandeja(),
     personalDeLaBandeja(),
+    gastoParaLaBandeja(),
   ]);
 
   // La conversación abierta se elige por la URL, así el enlace a una charla
@@ -78,6 +80,7 @@ export async function VistaWhatsapp({
         usuarioId={usuario.userId}
         modoDemo={estado.proveedor === "demo"}
         pantallaCompleta={pantallaCompleta}
+        gasto={gasto}
       />
     </>
   );

@@ -27,7 +27,23 @@ import type { ErrorDeEnvio, MensajeSaliente } from "./tipos";
  * Antes era al revés —mandar y recién guardar si salía—, y un mensaje que Meta
  * rechazaba por la ventana o por un token vencido desaparecía: quien lo había
  * escrito tenía que volver a tipearlo, si se acordaba.
+ *
+ * **El tope del mes.** Lo que manda una persona desde la bandeja no se frena en
+ * silencio: si el gasto del mes ya llegó al tope, vuelve sin mandar con
+ * `accion: "tope"` y la pantalla pide confirmarlo (y ofrece contestar desde el
+ * teléfono, que es gratis). Los avisos automáticos se cortan antes, en
+ * `avisos.ts`; la confirmación de una baja sale siempre, porque la exige la
+ * política de WhatsApp.
  */
+
+/** Lo que vuelve cuando el tope frena un envío de la bandeja. */
+export const ERROR_TOPE: ErrorDeEnvio = {
+  codigo: null,
+  texto:
+    "Este mes ya se llegó al tope de gasto de WhatsApp. Si lo mandás por acá, Meta lo cobra igual. Gratis: contestá desde la app del teléfono.",
+  accion: "tope",
+  detalle: null,
+};
 
 export interface RegistroSaliente {
   /** Lo que se muestra en la burbuja: el texto, el epígrafe o la plantilla completada. */
@@ -62,7 +78,14 @@ export async function enviarYRegistrar(opciones: {
   enviadoPorUserId?: string | null;
   /** Reintento de un mensaje fallido: se actualiza esa fila en vez de crear otra. */
   reintentoDe?: string | null;
+  /** Desde la bandeja: la persona ya confirmó que lo manda aunque se pasó el tope. */
+  confirmarTope?: boolean;
 }): Promise<ResultadoSaliente> {
+  if (opciones.origen === "panel" && !opciones.confirmarTope) {
+    const { topeAlcanzado } = await import("./gasto");
+    if (await topeAlcanzado()) return { mensajeId: opciones.reintentoDe ?? "", error: ERROR_TOPE };
+  }
+
   const ahora = new Date();
   const cuerpo = limpiar(opciones.registro.cuerpo);
 
@@ -138,6 +161,11 @@ export async function enviarYRegistrar(opciones: {
     .update(mensajes)
     .set({ waMessageId: resultado.waMessageId, estado: "enviado", estadoAt: new Date() })
     .where(eq(mensajes.id, mensajeId));
+
+  // Cada mensaje que sale puede pasar el 80 % o el 100 % del tope: el aviso
+  // al admin sale una vez por umbral y por mes, y nunca frena el envío.
+  const { revisarUmbrales } = await import("./gasto");
+  await revisarUmbrales();
 
   return { mensajeId, waMessageId: resultado.waMessageId };
 }

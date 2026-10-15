@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   accountMovements,
@@ -148,6 +148,8 @@ export interface MensajeDeLaBandeja {
   enviadoPor: string | null;
   cobroCategoria: string | null;
   cobrable: boolean | null;
+  /** Entró con el historial de la app del teléfono (coexistencia). */
+  importado: boolean;
   ocurridoAt: Date;
 }
 
@@ -241,6 +243,7 @@ export async function obtenerConversacion(id: string) {
       enviadoPor,
       cobroCategoria: m.cobroCategoria,
       cobrable: m.cobrable,
+      importado: m.importado,
       ocurridoAt: m.ocurridoAt,
     };
   });
@@ -381,29 +384,80 @@ export async function personalDeLaBandeja() {
 }
 
 /**
- * Lo que Meta dice que cobró este mes, contado de los estados.
+ * Lo que va del mes en Meta contra el tope, para la configuración.
  *
- * No reemplaza la factura de Meta, pero contesta «¿cuánto nos está costando?»
- * sin esperarla. Los de servicio se cuentan aparte porque los primeros del mes
- * no se cobran: Meta los informa como `free_customer_service`.
+ * Sale de `lib/whatsapp/gasto.ts`, la misma cuenta con la que los avisos
+ * automáticos deciden si salen: si la pantalla contara distinto, diría «te
+ * queda plata» mientras los avisos ya se cortaron.
  */
 export async function gastoDelMes() {
   await requireStaffRole("admin");
-  const inicio = new Date();
-  inicio.setDate(1);
-  inicio.setHours(0, 0, 0, 0);
+  const { gastoDelMes: calcular } = await import("@/lib/whatsapp/gasto");
+  return calcular();
+}
 
-  const filas = await db
-    .select({
-      categoria: mensajes.cobroCategoria,
-      cobrable: mensajes.cobrable,
-      total: sql<number>`count(*)::int`,
-    })
-    .from(mensajes)
-    .where(and(eq(mensajes.direccion, "saliente"), gte(mensajes.createdAt, inicio), isNotNull(mensajes.cobroCategoria)))
-    .groupBy(mensajes.cobroCategoria, mensajes.cobrable);
+/** Lo mismo, chico, para la bandeja: cuánto va y si ya se llegó al tope. */
+export async function gastoParaLaBandeja() {
+  await requireBandeja();
+  const { gastoDelMes: calcular } = await import("@/lib/whatsapp/gasto");
+  const gasto = await calcular();
+  return { usd: gasto.usd, tope: gasto.tope, proporcion: gasto.proporcion, alcanzado: gasto.alcanzado };
+}
 
-  return filas.map((f) => ({ categoria: f.categoria ?? "?", cobrable: Boolean(f.cobrable), total: Number(f.total) }));
+/**
+ * Los avisos automáticos que este mes no salieron por WhatsApp por el tope,
+ * con lo que hace falta para avisar a mano: a quién, si le llegó el correo, y
+ * dónde está el botón gratis.
+ */
+export async function avisosCortadosPorTope() {
+  await requireStaffRole("admin");
+  const { inicioDelMesArgentino, MOTIVO_TOPE } = await import("@/lib/whatsapp/costos");
+  const { rows } = await db.execute<{
+    id: string;
+    evento: string;
+    destinatario: string;
+    asunto: string | null;
+    entidad_tipo: string | null;
+    entidad_id: string | null;
+    created_at: string;
+    correo: string | null;
+    manual: string | null;
+    cliente_de_recibo: string | null;
+  }>(sql`
+    select n.id, n.evento, n.destinatario, n.asunto, n.entidad_tipo, n.entidad_id, n.created_at,
+      (select e.estado::text from notifications_log e
+        where e.canal = 'email' and e.evento = n.evento and e.entidad_id = n.entidad_id
+        order by e.created_at desc limit 1) as correo,
+      (select m.created_at::text from notifications_log m
+        where m.canal = 'whatsapp_manual' and m.evento = n.evento and m.entidad_id = n.entidad_id
+        order by m.created_at desc limit 1) as manual,
+      (select r.customer_id::text from receipts r where n.entidad_tipo = 'receipt' and r.id = n.entidad_id) as cliente_de_recibo
+    from notifications_log n
+    where n.canal = 'whatsapp' and n.estado = 'omitida' and n.error = ${MOTIVO_TOPE}
+      and n.created_at >= ${inicioDelMesArgentino().toISOString()}::timestamptz
+    order by n.created_at desc
+    limit 100
+  `);
+
+  const enlace = (f: (typeof rows)[number]) => {
+    if (!f.entidad_id) return null;
+    if (f.entidad_tipo === "order") return `/admin/pedidos/${f.entidad_id}`;
+    if (f.entidad_tipo === "quote") return `/admin/presupuestos/${f.entidad_id}`;
+    if (f.entidad_tipo === "cheque") return "/admin/cheques";
+    if (f.entidad_tipo === "receipt" && f.cliente_de_recibo) return `/admin/clientes/${f.cliente_de_recibo}`;
+    return null;
+  };
+
+  return rows.map((f) => ({
+    id: f.id,
+    evento: f.evento,
+    destinatario: f.destinatario,
+    asunto: f.asunto,
+    fecha: new Date(f.created_at),
+    correo: f.correo === "enviada" || f.correo === "simulada" ? ("salio" as const) : f.correo ? ("fallo" as const) : ("sin-correo" as const),
+    avisadoAMano: Boolean(f.manual),
+    enlace: enlace(f),
+  }));
 }
 
 /** Los números que pidieron no recibir avisos. */

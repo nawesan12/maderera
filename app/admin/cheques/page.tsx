@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
+import { avisosManuales, type AvisoManualListo } from "@/lib/whatsapp/aviso-manual-datos";
 import Link from "next/link";
 import { Banknote } from "lucide-react";
 import { etiquetaDeCircuito } from "@/lib/circuito";
@@ -42,6 +44,17 @@ export default async function ChequesPage() {
   );
   const terminados = filas.filter(
     (c) => !["informado", "cartera", "depositado", "entregado"].includes(c.estado),
+  );
+
+  // Un cheque del cliente que rebotó: hay que avisarle, y desde el teléfono es
+  // gratis. Solo los recibidos de un cliente cargado, los últimos veinte.
+  const avisos = await avisosManuales(
+    "cheque_rechazado",
+    "cheque",
+    terminados
+      .filter((c) => c.estado === "rechazado" && c.sentido === "recibido" && c.customerId)
+      .slice(0, 20)
+      .map((c) => c.id),
   );
 
   const porVencer = vivos.filter((c) => enDias(c.fechaPago) <= DIAS_DE_AVISO);
@@ -137,7 +150,7 @@ export default async function ChequesPage() {
             }
           >
             {terminados.map((c) => (
-              <Tarjeta key={c.id} cheque={c} dias={null} apagado />
+              <Tarjeta key={c.id} cheque={c} dias={null} apagado={!avisos[c.id]} aviso={avisos[c.id] ?? null} />
             ))}
           </GrupoListado>
         </>
@@ -160,10 +173,12 @@ function Tarjeta({
   cheque: c,
   dias,
   apagado = false,
+  aviso = null,
 }: {
   cheque: ChequeListado;
   dias: number | null;
   apagado?: boolean;
+  aviso?: AvisoManualListo | null;
 }) {
   const vencido = dias !== null && dias < 0;
 
@@ -243,6 +258,11 @@ function Tarjeta({
           <p className="estado-problema mt-1 text-sm font-medium">
             Rechazado: {c.motivoRechazo}
           </p>
+        )}
+        {aviso && (
+          <div className="mt-2.5">
+            <AvisarPorWhatsapp aviso={aviso} compacto />
+          </div>
         )}
       </div>
 

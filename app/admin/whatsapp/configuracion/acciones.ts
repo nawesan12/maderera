@@ -14,6 +14,7 @@ import { enviarYRegistrar } from "@/lib/whatsapp/envio";
 import { conversacionDe } from "@/lib/whatsapp/ingesta";
 import { armarComponentes, sugerirValores, vistaPrevia } from "@/lib/whatsapp/plantillas";
 import { ventanaAbierta } from "@/lib/whatsapp/ventana";
+import { CATEGORIAS_COBRO } from "@/lib/whatsapp/costos";
 
 export interface EstadoAviso {
   error?: string;
@@ -128,6 +129,8 @@ export async function mensajeDePrueba(_previo: EstadoAviso, formData: FormData):
       registro: { cuerpo },
       origen: "panel",
       enviadoPorUserId: usuario.userId,
+      // Es el admin probando la conexión, con el gasto a la vista: no se pregunta.
+      confirmarTope: true,
     });
   } else {
     const plantilla =
@@ -145,6 +148,7 @@ export async function mensajeDePrueba(_previo: EstadoAviso, formData: FormData):
       registro: { cuerpo: vistaPrevia(plantilla, valores), plantilla: plantilla.nombre },
       origen: "panel",
       enviadoPorUserId: usuario.userId,
+      confirmarTope: true,
     });
   }
 
@@ -153,4 +157,56 @@ export async function mensajeDePrueba(_previo: EstadoAviso, formData: FormData):
   return {
     ok: `Enviado${abierta ? "" : " con plantilla"}. Fijate en la bandeja cómo cambia el estado (enviado, entregado, leído).`,
   };
+}
+
+/** Un importe en dólares como lo escribe la gente: «10», «0,026», «0.0618». */
+const usd = z
+  .string()
+  .trim()
+  .transform((v) => Number(v.replace(",", ".")))
+  .refine((n) => Number.isFinite(n) && n >= 0, "Escribí un número.");
+
+/**
+ * Guarda el tope del mes y las tarifas de Meta.
+ *
+ * Solo administración: es la decisión de cuánta plata se le deja gastar a la
+ * plataforma en Meta. Si el tope sube por encima de lo gastado, las marcas de
+ * los avisos de 80 % y 100 % se borran para que vuelvan a avisar al llegar.
+ */
+export async function guardarTope(_previo: EstadoAviso, formData: FormData): Promise<EstadoAviso> {
+  const usuario = await requireStaffRole("admin");
+
+  const parsed = z
+    .object({
+      tope: usd.refine((n) => n <= 10_000, "El tope parece demasiado alto."),
+      ...Object.fromEntries(CATEGORIAS_COBRO.map((c) => [c, usd.refine((n) => n < 10, "Esa tarifa parece demasiado alta.")])),
+    })
+    .safeParse(Object.fromEntries(["tope", ...CATEGORIAS_COBRO].map((k) => [k, String(formData.get(k) ?? "")])));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revisá los números." };
+
+  const { tope, ...tarifas } = parsed.data as Record<string, number>;
+  const valores = {
+    topeMensualUsd: tope.toFixed(2),
+    tarifas,
+    // Con otro tope, los avisos de 80 % y 100 % se vuelven a evaluar.
+    topeAviso80: null,
+    topeAviso100: null,
+    updatedAt: new Date(),
+  };
+  const actualizadas = await db.update(sesionWhatsapp).set(valores).returning({ id: sesionWhatsapp.id });
+  if (actualizadas.length === 0) await db.insert(sesionWhatsapp).values(valores);
+
+  await registrarEnBitacora({
+    sesion: usuario,
+    accion: "editar",
+    entidad: "whatsapp",
+    descripcion: `Tope de WhatsApp: USD ${tope.toFixed(2)} por mes`,
+  });
+
+  const { revisarUmbrales } = await import("@/lib/whatsapp/gasto");
+  await revisarUmbrales();
+
+  revalidatePath("/admin/whatsapp/configuracion");
+  revalidatePath("/admin/whatsapp");
+  return { ok: "Guardado." };
 }

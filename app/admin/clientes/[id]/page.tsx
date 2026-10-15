@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
+import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
+import { avisoDelUltimoRecibo, avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
 import { ArrowLeft, Download, MessageCircle, Printer } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { enlaceDeWhatsapp } from "@/lib/formato";
@@ -48,6 +50,14 @@ export default async function FichaClientePage({
 
   if (!cliente) notFound();
   const esAdmin = usuario.staffRole === "admin";
+
+  const [recordatorio, resumenCuenta, recibo] = await Promise.all([
+    cliente.saldo > 0
+      ? avisoManual("recordatorio_saldo", { tipo: "customer", id }, { saldo: moneda.format(cliente.saldo) })
+      : null,
+    avisoManual("documento", { tipo: "customer", id }),
+    avisoDelUltimoRecibo(id),
+  ]);
 
   const limite = Number(cliente.limiteCredito);
   const excedido = limite > 0 && cliente.saldo > limite;
@@ -219,6 +229,29 @@ export default async function FichaClientePage({
 
         {/* Actividad */}
         <div className="space-y-4">
+          {/* Lo que se le manda por WhatsApp desde el teléfono, gratis: el
+              recordatorio del saldo si debe, y el resumen de la cuenta. */}
+          {(recordatorio || resumenCuenta || recibo) && (
+            <section className="tarjeta space-y-4 p-5">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Avisarle por WhatsApp
+              </h2>
+              {recibo && (
+                <div>
+                  <p className="mb-1.5 text-base font-medium">El recibo {recibo.referencia} que se acaba de hacer</p>
+                  <AvisarPorWhatsapp aviso={recibo} atajo={!recordatorio} />
+                </div>
+              )}
+              {recordatorio && <AvisarPorWhatsapp aviso={recordatorio} atajo />}
+              {resumenCuenta && (
+                <div>
+                  <p className="mb-1.5 text-base font-medium">El resumen de la cuenta</p>
+                  <AvisarPorWhatsapp aviso={resumenCuenta} compacto />
+                </div>
+              )}
+            </section>
+          )}
+
           <section className="tarjeta overflow-hidden">
             <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-4">
               <h2 className="text-base font-medium">Movimientos</h2>

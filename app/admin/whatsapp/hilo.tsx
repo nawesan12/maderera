@@ -42,6 +42,8 @@ import type { Persona } from "./bandeja";
 import type { DetalleConversacion, MensajeDeLaBandeja } from "@/lib/dal/admin/whatsapp";
 import type { PlantillaDisponible } from "@/lib/whatsapp/catalogo";
 import { restanteLegible } from "@/lib/whatsapp/ventana";
+import { enlaceWaMe } from "@/lib/whatsapp/aviso-manual";
+import { ConfirmarTope } from "./confirmar-tope";
 
 const estadoInicial: EstadoWhatsapp = {};
 
@@ -72,7 +74,18 @@ export function Hilo({
   const pathname = usePathname();
   const parametros = useSearchParams();
 
-  const [estado, accionResponder, enviando] = useActionState(responder, estadoInicial);
+  /*
+   * El texto va controlado: React vacía los formularios al terminar una
+   * acción, aunque haya fallado, y lo escrito tiene que quedarse para
+   * reintentar o para confirmar con el tope pasado. Se borra solo si salió.
+   */
+  const [texto, setTexto] = useState("");
+  const [, iniciarRespuesta] = useTransition();
+  const [estado, accionResponder, enviando] = useActionState(async (previo: EstadoWhatsapp, datos: FormData) => {
+    const resultado = await responder(previo, datos);
+    if (!resultado.error) setTexto("");
+    return resultado;
+  }, estadoInicial);
   /**
    * Qué compositor se muestra. «auto» deja que lo decida la ventana y el
    * último envío: fuera de las 24 h, o si Meta rechazó por eso, aparece el
@@ -82,6 +95,29 @@ export function Hilo({
   const [modo, setModo] = useState<"auto" | "texto" | "plantilla" | "documento">("auto");
   const [citado, setCitado] = useState<Citado | null>(null);
 
+  /*
+   * Contestar desde la app del teléfono (WhatsApp Business, Desktop o Web con
+   * el número de la maderera): gratis, sin ventana de 24 h y sin plantilla.
+   * Con la coexistencia lo que se manda desde ahí vuelve a esta bandeja como
+   * «desde el teléfono»; sin ella, queda solo en el teléfono.
+   */
+  const waId = detalle.sinNumero ? null : detalle.waJid.split("@")[0];
+  const gratis = waId ? enlaceWaMe(`+${waId}`) : null;
+  /** Lo que se está escribiendo viaja al teléfono: se arma al tocar, no en cada tecla. */
+  const conLoEscrito = () => (waId ? enlaceWaMe(`+${waId}`, texto.trim() || null) : null);
+  const telefonoRef = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    function alApretar(e: KeyboardEvent) {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.code !== "KeyW") return;
+      if (document.querySelector('[role="dialog"][data-open], [role="alertdialog"][data-open]')) return;
+      if (!telefonoRef.current) return;
+      e.preventDefault();
+      telefonoRef.current.click();
+    }
+    window.addEventListener("keydown", alApretar);
+    return () => window.removeEventListener("keydown", alApretar);
+  }, []);
+
   const ventanaAbierta = detalle.ventanaAbierta;
   const conPlantilla =
     modo === "plantilla" || (modo === "auto" && (!ventanaAbierta || Boolean(estado.requierePlantilla)));
@@ -90,6 +126,7 @@ export function Hilo({
   const formRef = useRef<HTMLFormElement>(null);
   const campoRef = useRef<HTMLTextAreaElement>(null);
 
+
   // Al abrir y al llegar un mensaje nuevo, al final: lo último dicho es lo
   // que se está por contestar.
   useEffect(() => {
@@ -97,10 +134,8 @@ export function Hilo({
   }, [detalle.mensajes.length]);
 
   // Después de mandar, el campo queda vacío y con el foco: contestar tres
-  // cosas seguidas es lo normal. Si falló, lo escrito se queda.
-  useEffect(() => {
-    if (!enviando && !estado.error) formRef.current?.reset();
-  }, [enviando, estado.error]);
+  // cosas seguidas es lo normal. Si falló, lo escrito se queda (lo borra la
+  // acción, solo cuando salió: ver `setTexto` arriba).
 
   function volverALista() {
     const nuevos = new URLSearchParams(parametros.toString());
@@ -229,6 +264,7 @@ export function Hilo({
           documentos={detalle.documentos}
           ventanaAbierta={ventanaAbierta}
           onCerrar={() => setModo("auto")}
+          gratis={gratis}
         />
       ) : conPlantilla ? (
         <CompositorPlantilla
@@ -240,14 +276,21 @@ export function Hilo({
           conocidos={detalle.conocidos}
           documentos={detalle.documentos}
           onCerrar={ventanaAbierta ? () => setModo("texto") : null}
+          waId={waId}
         />
       ) : (
         <form
           ref={formRef}
-          action={(datos) => {
+          onSubmit={(e) => {
+            // Con `onSubmit` y no `action`: React vacía el formulario después
+            // de una acción aunque haya fallado, y lo escrito tiene que
+            // quedarse para reintentar o confirmar con el tope pasado. Se
+            // borra recién cuando salió (`setTexto` en la acción).
+            e.preventDefault();
+            const datos = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
             // La cita ya viajó en el formulario: se saca de la vista al mandar.
             setCitado(null);
-            accionResponder(datos);
+            iniciarRespuesta(() => accionResponder(datos));
           }}
           className="border-t p-3"
         >
@@ -263,6 +306,7 @@ export function Hilo({
               {estado.error}
             </p>
           )}
+          {estado.requiereConfirmacionTope && <ConfirmarTope gratis={gratis} armar={conLoEscrito} />}
 
           {citado && (
             <div className="mb-2 flex items-start gap-2 rounded-lg border-l-4 border-brand-green bg-muted/60 px-3 py-2">
@@ -292,6 +336,8 @@ export function Hilo({
               placeholder="Escribí tu respuesta…"
               aria-label="Respuesta"
               className="block min-h-[2.75rem] w-full resize-y rounded-lg border bg-background px-3 py-2.5 text-base"
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
               onKeyDown={(e) => {
                 // Enter manda, Shift+Enter hace salto de línea: es lo que la
                 // mano ya sabe hacer de usar WhatsApp todo el día.
@@ -313,13 +359,33 @@ export function Hilo({
               <span className="hidden sm:inline">Documento</span>
             </button>
               <span className="flex-1" />
+            {gratis && (
+              <a
+                ref={telefonoRef}
+                href={gratis}
+                onClick={(e) => {
+                  e.currentTarget.href = conLoEscrito() ?? gratis;
+                }}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-keyshortcuts="Alt+W"
+                title="Abre el chat en WhatsApp Business (teléfono, Desktop o Web) con lo que escribiste. No se cobra. (Alt + W)"
+                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-brand-green/40 px-3 text-base font-medium text-brand-green transition-colors hover:bg-brand-green/10"
+              >
+                <Smartphone className="h-5 w-5" />
+                <span className="hidden sm:inline">Contestar desde el teléfono</span>
+                <span className="text-sm font-normal">gratis</span>
+              </a>
+            )}
             <button
               type="submit"
               disabled={enviando}
+              title="Sale por la Cloud API de Meta: desde el 1/10/2026 se cobra también dentro de las 24 h."
               className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
             >
               {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
               Enviar
+              <span className="hidden text-sm font-normal text-white/85 sm:inline">se cobra</span>
             </button>
             </div>
           </div>
@@ -475,6 +541,10 @@ function Procedencia({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
   else if (mensaje.origen === "sistema") partes.push("Respuesta automática");
   else if (mensaje.enviadoPor) partes.push(mensaje.enviadoPor);
   if (mensaje.plantilla) partes.push("mensaje preparado");
+  // Lo del teléfono no se cobra; lo de la API sí: que se vea en la burbuja.
+  if (mensaje.origen === "telefono") partes.push("gratis");
+  if (mensaje.datos?.editado) partes.push("editado");
+  if (mensaje.importado) partes.push("del historial");
 
   if (partes.length === 0) return null;
   return (
@@ -505,11 +575,11 @@ function FalloDeEnvio({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
       <button
         type="button"
         disabled={pendiente}
-        onClick={() => iniciar(async () => setResultado(await reintentarMensaje(mensaje.id)))}
+        onClick={() => iniciar(async () => setResultado(await reintentarMensaje(mensaje.id, Boolean(resultado.requiereConfirmacionTope))))}
         className="mt-1.5 inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-300 bg-white px-2.5 font-medium hover:bg-red-50 disabled:opacity-60"
       >
         {pendiente ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
-        Reintentar
+        {resultado.requiereConfirmacionTope ? "Reintentar igual (se cobra)" : "Reintentar"}
       </button>
       {resultado.error && <p className="mt-1">{resultado.error}</p>}
     </div>
@@ -629,7 +699,7 @@ function AdjuntarArchivo({ conversacionId, citado }: { conversacionId: string; c
   const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function mandar(archivo: File) {
+  async function mandar(archivo: File, confirmarTope = false) {
     setSubiendo(true);
     setError(null);
     try {
@@ -637,8 +707,15 @@ function AdjuntarArchivo({ conversacionId, citado }: { conversacionId: string; c
       form.set("conversacionId", conversacionId);
       form.set("archivo", archivo);
       if (citado) form.set("citado", citado);
+      if (confirmarTope) form.set("confirmarTope", "si");
       const res = await fetch("/api/whatsapp/enviar-archivo", { method: "POST", body: form });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      const json = (await res.json().catch(() => ({}))) as { error?: string; requiereConfirmacionTope?: boolean };
+      // Con el tope del mes pasado se pregunta antes de pagar.
+      if (json.requiereConfirmacionTope && !confirmarTope) {
+        if (window.confirm(`${json.error}\n\n¿Mandarlo igual por la API?`)) return void (await mandar(archivo, true));
+        setError(json.error ?? null);
+        return;
+      }
       if (!res.ok) setError(json.error ?? "No se pudo mandar el archivo.");
       router.refresh();
     } catch {

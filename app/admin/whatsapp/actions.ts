@@ -11,7 +11,8 @@ import { proveedorWhatsapp } from "@/lib/whatsapp";
 import { plantillaDisponible } from "@/lib/whatsapp/catalogo";
 import { aJid } from "@/lib/whatsapp/config";
 import { documentoPdf, esTipoDeDocumento } from "@/lib/whatsapp/documentos";
-import { enviarYRegistrar } from "@/lib/whatsapp/envio";
+import { enviarYRegistrar, ERROR_TOPE } from "@/lib/whatsapp/envio";
+import { topeAlcanzado } from "@/lib/whatsapp/gasto";
 import { conversacionDe } from "@/lib/whatsapp/ingesta";
 import { guardarMedioPrivado } from "@/lib/whatsapp/medios";
 import { destinoDeJid, numeroLegible, sinNumero, waIdDeJid } from "@/lib/whatsapp/numeros";
@@ -37,9 +38,29 @@ export interface EstadoWhatsapp {
   ok?: string;
   /** Hay que usar plantilla: fuera de la ventana, o Meta lo rechazó por eso. */
   requierePlantilla?: boolean;
+  /**
+   * Se pasó el tope de gasto del mes: no se mandó. La pantalla ofrece
+   * mandarlo igual (vuelve con `confirmarTope=si`) o contestar desde el
+   * teléfono, que es gratis.
+   */
+  requiereConfirmacionTope?: boolean;
 }
 
 const MAX_MENSAJE = 4096;
+
+/** Si la persona confirmó que lo manda aunque se pasó el tope. */
+function confirmoTope(formData: FormData): boolean {
+  return formData.get("confirmarTope") === "si";
+}
+
+/** El error de un envío, dicho para la pantalla. */
+function errorDeEnvio(error: { texto: string; accion: string }): EstadoWhatsapp {
+  return {
+    error: error.texto,
+    requierePlantilla: error.accion === "plantilla",
+    requiereConfirmacionTope: error.accion === "tope",
+  };
+}
 
 function refrescar() {
   revalidatePath("/admin/whatsapp");
@@ -82,12 +103,11 @@ export async function responder(_previo: EstadoWhatsapp, formData: FormData): Pr
     registro: { cuerpo: cuerpo.data, citado },
     origen: "panel",
     enviadoPorUserId: usuario.userId,
+    confirmarTope: confirmoTope(formData),
   });
 
   refrescar();
-  if (resultado.error) {
-    return { error: resultado.error.texto, requierePlantilla: resultado.error.accion === "plantilla" };
-  }
+  if (resultado.error) return errorDeEnvio(resultado.error);
   return {};
 }
 
@@ -117,6 +137,7 @@ export async function enviarPlantilla(_previo: EstadoWhatsapp, formData: FormDat
   if (camposFaltantes(plantilla, valores).length > 0) {
     return { error: "Completá todos los datos del mensaje preparado." };
   }
+  if (!confirmoTope(formData) && (await topeAlcanzado())) return errorDeEnvio(ERROR_TOPE);
 
   let media: { id: string; nombre: string; referencia: string; bytes: number } | null = null;
   if (plantilla.encabezadoMedia === "document") {
@@ -151,10 +172,11 @@ export async function enviarPlantilla(_previo: EstadoWhatsapp, formData: FormDat
     },
     origen: "panel",
     enviadoPorUserId: usuario.userId,
+    confirmarTope: confirmoTope(formData),
   });
 
   refrescar();
-  if (resultado.error) return { error: resultado.error.texto };
+  if (resultado.error) return errorDeEnvio(resultado.error);
   return { ok: "Mensaje enviado." };
 }
 
@@ -174,6 +196,7 @@ export async function enviarDocumento(_previo: EstadoWhatsapp, formData: FormDat
     id: String(formData.get("id") ?? ""),
     epigrafe: String(formData.get("epigrafe") ?? "").slice(0, 1000),
     usuarioId: usuario.userId,
+    confirmarTope: confirmoTope(formData),
   });
   refrescar();
   return resultado;
@@ -185,10 +208,13 @@ async function mandarDocumento(opciones: {
   id: string;
   epigrafe: string;
   usuarioId: string;
+  confirmarTope: boolean;
 }): Promise<EstadoWhatsapp> {
   const conversacion = await laConversacion(opciones.conversacionId);
   if (!conversacion) return { error: "No encontramos esa conversación." };
   if (!esTipoDeDocumento(opciones.tipo)) return { error: "Elegí qué documento mandar." };
+  // Antes de armar y subir el PDF: si no va a salir, que no se suba.
+  if (!opciones.confirmarTope && (await topeAlcanzado())) return errorDeEnvio(ERROR_TOPE);
 
   const doc = await documentoPdf({ tipo: opciones.tipo, id: opciones.id });
   if (!doc) return { error: "No encontramos ese documento." };
@@ -246,9 +272,11 @@ async function mandarDocumento(opciones: {
     registro: { cuerpo, media: registroMedia, plantilla: plantillaUsada, datos },
     origen: "panel",
     enviadoPorUserId: opciones.usuarioId,
+    // Ya se miró arriba, antes de subir el PDF.
+    confirmarTope: true,
   });
 
-  if (resultado.error) return { error: resultado.error.texto };
+  if (resultado.error) return errorDeEnvio(resultado.error);
   return { ok: `${doc.nombre} enviado.` };
 }
 
@@ -306,13 +334,14 @@ export async function enviarDocumentoAlCliente(
     id,
     epigrafe: String(formData.get("epigrafe") ?? `Te mandamos ${doc.descripcion}.`),
     usuarioId: usuario.userId,
+    confirmarTope: confirmoTope(formData),
   });
   refrescar();
   return { ...resultado, conversacionId: conversacion.id };
 }
 
 /** Vuelve a mandar un mensaje que no salió, tal cual se había pedido. */
-export async function reintentarMensaje(mensajeId: string): Promise<EstadoWhatsapp> {
+export async function reintentarMensaje(mensajeId: string, confirmarTope = false): Promise<EstadoWhatsapp> {
   const usuario = await requireBandeja();
   if (!z.string().uuid().safeParse(mensajeId).success) return { error: "Mensaje inválido." };
 
@@ -339,9 +368,10 @@ export async function reintentarMensaje(mensajeId: string): Promise<EstadoWhatsa
     origen: "panel",
     enviadoPorUserId: usuario.userId,
     reintentoDe: mensajeId,
+    confirmarTope,
   });
   refrescar();
-  return resultado.error ? { error: resultado.error.texto } : { ok: "Enviado." };
+  return resultado.error ? errorDeEnvio(resultado.error) : { ok: "Enviado." };
 }
 
 /** Pone (o saca) un emoji sobre un mensaje del cliente. */

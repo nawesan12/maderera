@@ -2,7 +2,8 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, Loader2, Send } from "lucide-react";
-import { diagnosticar, mensajeDePrueba, sincronizar, type EstadoAviso } from "./acciones";
+import { diagnosticar, guardarTope, mensajeDePrueba, sincronizar, type EstadoAviso } from "./acciones";
+import { CATEGORIAS_COBRO, NOMBRE_CATEGORIA, type CategoriaCobro } from "@/lib/whatsapp/costos";
 
 function Resultado({ estado }: { estado: EstadoAviso }) {
   if (estado.error) {
@@ -78,6 +79,51 @@ export function MensajeDePrueba() {
         Mandar mensaje de prueba
       </button>
       <Resultado estado={estado} />
+    </form>
+  );
+}
+
+/** El tope del mes y las tarifas por categoría, en USD. */
+export function FormularioTope({ tope, tarifas }: { tope: number; tarifas: Record<CategoriaCobro, number> }) {
+  const [estado, accion, pendiente] = useActionState(guardarTope, {});
+  const coma = (n: number) => String(n).replace(".", ",");
+  return (
+    <form action={accion} className="space-y-3">
+      <div className="flex flex-wrap gap-3">
+        <label className="block">
+          <span className="text-sm text-muted-foreground">Tope por mes (USD)</span>
+          <input
+            name="tope"
+            required
+            inputMode="decimal"
+            defaultValue={coma(tope)}
+            className="tabular mt-0.5 block h-10 w-32 rounded-lg border bg-background px-2.5 text-base"
+          />
+        </label>
+        {CATEGORIAS_COBRO.map((c) => (
+          <label key={c} className="block">
+            <span className="text-sm text-muted-foreground">{NOMBRE_CATEGORIA[c]}</span>
+            <input
+              name={c}
+              required
+              inputMode="decimal"
+              defaultValue={coma(tarifas[c])}
+              className="tabular mt-0.5 block h-10 w-32 rounded-lg border bg-background px-2.5 text-base"
+            />
+          </label>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          disabled={pendiente}
+          className="inline-flex h-10 items-center gap-2 rounded-lg border bg-background px-3.5 text-base font-medium transition-colors hover:bg-muted disabled:opacity-60"
+        >
+          {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
+          Guardar tope y tarifas
+        </button>
+        <Resultado estado={estado} />
+      </div>
     </form>
   );
 }

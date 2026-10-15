@@ -5,7 +5,8 @@ import { conversaciones } from "@/lib/db/schema";
 import { staffOrNull } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
 import { proveedorWhatsapp } from "@/lib/whatsapp";
-import { enviarYRegistrar } from "@/lib/whatsapp/envio";
+import { enviarYRegistrar, ERROR_TOPE } from "@/lib/whatsapp/envio";
+import { topeAlcanzado } from "@/lib/whatsapp/gasto";
 import { guardarMedioPrivado, limpiarMime, tipoParaEnviar } from "@/lib/whatsapp/medios";
 import { ventanaAbierta } from "@/lib/whatsapp/ventana";
 
@@ -90,6 +91,12 @@ export async function POST(request: Request) {
     );
   }
 
+  // Con el tope del mes pasado, ni se sube: la pantalla pide confirmar.
+  const confirmarTope = form.get("confirmarTope") === "si";
+  if (!confirmarTope && (await topeAlcanzado())) {
+    return NextResponse.json({ error: ERROR_TOPE.texto, requiereConfirmacionTope: true }, { status: 409 });
+  }
+
   const nombre = archivo.name.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "archivo";
   const subido = await proveedorWhatsapp().subirMedia(bytes, mime, nombre);
   if (subido.error || !subido.id) return error(subido.error?.texto ?? "WhatsApp no aceptó el archivo.", 502);
@@ -107,11 +114,16 @@ export async function POST(request: Request) {
     },
     origen: "panel",
     enviadoPorUserId: sesion.userId,
+    confirmarTope: true,
   });
 
   if (resultado.error) {
     return NextResponse.json(
-      { error: resultado.error.texto, requierePlantilla: resultado.error.accion === "plantilla" },
+      {
+        error: resultado.error.texto,
+        requierePlantilla: resultado.error.accion === "plantilla",
+        requiereConfirmacionTope: resultado.error.accion === "tope",
+      },
       { status: 502 },
     );
   }

@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, FileText, Loader2, Send, X } from "lucide-react";
+import { ConfirmarTope } from "./confirmar-tope";
 import { enviarDocumento, type EstadoWhatsapp } from "./actions";
 import type { DocumentoListado } from "@/lib/whatsapp/documentos";
 
@@ -22,11 +23,14 @@ export function ElegirDocumento({
   documentos,
   ventanaAbierta,
   onCerrar,
+  gratis = null,
 }: {
   conversacionId: string;
   documentos: DocumentoListado[];
   ventanaAbierta: boolean;
   onCerrar: () => void;
+  /** El chat del cliente en la app del teléfono (wa.me), para mandarlo gratis. */
+  gratis?: string | null;
 }) {
   const [estado, accion, enviando] = useActionState(enviarDocumento, estadoInicial);
   const [elegido, setElegido] = useState<string>("");
@@ -117,6 +121,7 @@ export function ElegirDocumento({
               {estado.error}
             </p>
           )}
+          {estado.requiereConfirmacionTope && <ConfirmarTope gratis={gratis} />}
           {estado.ok && (
             <p role="status" className="flex items-center gap-2 text-base text-green-800">
               <CheckCircle2 className="h-5 w-5" />

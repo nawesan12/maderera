@@ -306,7 +306,9 @@ describe("el archivo", () => {
       }
       verificarPtx(trabajo(piezas), 2750, 1830, [3.2, 4.4, 5][caso % 3]!);
     }
-  });
+    // Doscientos planos con búsqueda: con toda la suite en paralelo pasa de
+    // los cinco segundos de vitest.
+  }, 60_000);
 });
 
 describe("para Windows XP", () => {

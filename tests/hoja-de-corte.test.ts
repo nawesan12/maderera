@@ -460,7 +460,9 @@ describe("despieces al azar", () => {
       });
       verificarHoja(plano, armarHojaDeCorte(plano));
     }
-  });
+    // Doscientos planos con búsqueda: con toda la suite en paralelo pasa de
+    // los cinco segundos de vitest.
+  }, 60_000);
 });
 
 describe("lo que no se puede cortar", () => {

@@ -6,7 +6,16 @@ import { conversaciones, mensajes, sesionWhatsapp } from "@/lib/db/schema";
 import { configCloud, secretoDeLaApp } from "./config";
 import { firmaValida as validarFirma } from "./firma";
 import { proveedorWhatsapp } from "./index";
-import { actualizarEstadoMensaje, ingresarEntrante, registrarEco, registrarSenal } from "./ingesta";
+import {
+  actualizarEstadoMensaje,
+  aplicarCambioDeEco,
+  completarMediosDelHistorial,
+  importarHistorial,
+  ingresarEntrante,
+  registrarEco,
+  registrarSenal,
+  sincronizarContactos,
+} from "./ingesta";
 import { guardarMedioPrivado, limpiarMime, TAMANO_MAXIMO_MEDIO } from "./medios";
 import { jidDeBsuid, jidDeWaId } from "./numeros";
 import { leerPayload, type EstadoDeMeta, type MensajeDeMeta } from "./payload";
@@ -44,11 +53,12 @@ export async function procesarPayload(payload: PayloadWebhook): Promise<void> {
   const eventos = leerPayload(payload);
   await registrarSenal(true);
 
+  let huboCobro = false;
   for (const evento of eventos) {
     // El número tiene que ser el nuestro: un webhook mal configurado puede
     // mandar eventos de otro número del mismo portafolio.
     if (
-      (evento.tipo === "mensaje" || evento.tipo === "estado" || evento.tipo === "eco") &&
+      "phoneNumberId" in evento &&
       config &&
       evento.phoneNumberId &&
       evento.phoneNumberId !== config.phoneNumberId
@@ -60,6 +70,7 @@ export async function procesarPayload(payload: PayloadWebhook): Promise<void> {
     switch (evento.tipo) {
       case "estado":
         await aplicarEstado(evento.estado, 0);
+        if (evento.estado.cobro?.cobrable) huboCobro = true;
         break;
 
       case "mensaje": {
@@ -69,11 +80,60 @@ export async function procesarPayload(payload: PayloadWebhook): Promise<void> {
       }
 
       case "eco": {
+        // Lo que el personal contestó desde la app del teléfono: no se cobra,
+        // no abre la ventana y no avisa a nadie (lo escribió el que avisaría).
         const m = evento.mensaje;
-        const id = await registrarEco({ ...m, waJidDestino: jidDeWaId(m.para) });
+        const destino = m.para ? jidDeWaId(m.para) : jidDeBsuid(m.paraUsuario!);
+        const id = await registrarEco({ ...m, waJidDestino: destino });
         if (id && m.media) await descargarMedio(id);
         break;
       }
+
+      case "eco-cambio":
+        await aplicarCambioDeEco(evento);
+        break;
+
+      case "historial": {
+        const nuevos = await importarHistorial(evento.parte);
+        log(
+          "historial",
+          `fase ${evento.parte.fase ?? "?"}, parte ${evento.parte.orden ?? "?"}, ${evento.parte.progreso ?? "?"} %: ${nuevos} mensajes nuevos`,
+        );
+        break;
+      }
+
+      case "historial-medios":
+        for (const id of await completarMediosDelHistorial(evento.mensajes)) await descargarMedio(id);
+        break;
+
+      case "historial-error":
+        // 2593109: el negocio eligió no compartir el historial al conectar.
+        log("historial_error", `${evento.codigo ?? "?"}: ${evento.detalle}`);
+        break;
+
+      case "contactos":
+        log("contactos", `${await sincronizarContactos(evento.contactos)} conversaciones con nombre`);
+        break;
+
+      case "cuenta":
+        // Meta corta la coexistencia si el teléfono no abre la app en ~14 días
+        // (PARTNER_REMOVED con PRIMARY_INACTIVITY). Desde ese momento lo que se
+        // conteste en el teléfono ya no llega a la bandeja.
+        if (evento.evento === "PARTNER_REMOVED" || evento.evento === "ACCOUNT_OFFBOARDED") {
+          const { avisarAlPanel } = await import("@/lib/notificaciones/push");
+          await avisarAlPanel({
+            titulo: "Se cortó la conexión de WhatsApp con el teléfono",
+            cuerpo:
+              evento.motivo === "PRIMARY_INACTIVITY"
+                ? "El teléfono no abrió la app de WhatsApp Business en dos semanas y Meta cortó la coexistencia. Hay que volver a conectarlo."
+                : "Meta desconectó el número de la plataforma. Revisá la configuración.",
+            url: "/admin/whatsapp/configuracion",
+            etiqueta: "whatsapp-cuenta",
+            para: { pantalla: "/admin/whatsapp/configuracion" },
+          });
+        }
+        log("cuenta", `${evento.evento}${evento.motivo ? ` (${evento.motivo})` : ""}`);
+        break;
 
       case "plantilla": {
         const { actualizarEstadoPlantilla } = await import("./catalogo");
@@ -105,6 +165,12 @@ export async function procesarPayload(payload: PayloadWebhook): Promise<void> {
         log("campo_sin_manejar", evento.campo);
         break;
     }
+  }
+
+  // Meta confirmó un cobro: puede haber pasado el 80 % o el 100 % del tope.
+  if (huboCobro) {
+    const { revisarUmbrales } = await import("./gasto");
+    await revisarUmbrales();
   }
 }
 

@@ -24,6 +24,9 @@
  *   POST /_simulador/error   {"codigo":190}               token vencido (401)
  *   POST /_simulador/error   {"codigo":131026,"tarde":true}  sale, y después llega «failed»
  *   POST /_simulador/entrante {"tipo":"imagen","de":"5492235550123"}  un cliente escribe
+ *   POST /_simulador/entrante {"tipo":"eco","de":"5492235550123","texto":"…"}  el personal contesta desde el teléfono
+ *   POST /_simulador/entrante {"tipo":"historial","de":"5492235550123"}  llega el historial de la app
+ *   POST /_simulador/entrante {"tipo":"agenda","de":"5492235550123","nombre":"…"}  la agenda de la app
  *   GET  /_simulador/enviados                              lo que mandó la aplicación
  *
  * Los ids de adjunto que terminan en `0000` no se pueden bajar (404), para
@@ -259,6 +262,13 @@ const servidor = createServer(async (req, res) => {
           sistema: () => P.sistema(base),
           "sin-numero": () => P.texto({ ...base, de: null, usuario: "AR.0123456789ABCDEF", cuerpo: datos.texto }),
           eco: () => P.ecoDelTelefono({ phoneNumberId: PNID, para: datos.de, cuerpo: datos.texto }),
+          "eco-foto": () => P.ecoConImagen({ phoneNumberId: PNID, para: datos.de, mediaId: datos.mediaId }),
+          historial: () =>
+            P.historial({
+              phoneNumberId: PNID,
+              ...(datos.de ? { hilos: [{ cliente: datos.de, mensajes: [{ delNegocio: false, cuerpo: datos.texto ?? "Hola, ¿abren el sábado?" }, { delNegocio: true, cuerpo: "Sí, de 8 a 12." }] }] } : {}),
+            }),
+          agenda: () => P.contactosDeLaApp({ phoneNumberId: PNID, contactos: [{ telefono: datos.de ?? "5492235550123", nombre: datos.nombre ?? "Marta Gómez" }] }),
         };
         const construir = constructores[datos.tipo ?? "texto"];
         if (!construir) return responder(res, 400, { error: `Tipos: ${Object.keys(constructores).join(", ")}` });

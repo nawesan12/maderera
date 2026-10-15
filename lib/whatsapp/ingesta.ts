@@ -3,9 +3,9 @@ import "server-only";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { conversaciones, customers, mensajes, orders, sesionWhatsapp } from "@/lib/db/schema";
-import { mismoNumero, numeroNacional, sinNumero, waIdDeJid } from "./numeros";
+import { jidDeWaId, mismoNumero, numeroNacional, sinNumero, waIdDeJid } from "./numeros";
 import { explicarError } from "./errores";
-import type { EstadoDeMeta, MensajeDeMeta } from "./payload";
+import type { ContactoDeLaApp, EstadoDeMeta, MensajeDeMeta, ParteDeHistorial } from "./payload";
 
 /**
  * La entrada a la bandeja: mensajes, estados y conversaciones.
@@ -280,7 +280,17 @@ export async function ingresarEntrante(
  * Lo que el negocio escribió desde la app del teléfono (coexistencia).
  *
  * Entra como saliente, con origen `telefono`, para que quien mire la bandeja
- * vea la conversación completa y no le conteste dos veces lo mismo.
+ * vea la conversación completa y no le conteste dos veces lo mismo. Tres cosas
+ * que lo distinguen de un saliente de la API:
+ *
+ * - **No se cobra**: Meta no factura lo que sale de la app, así que va con
+ *   `cobrable = false` y no suma al gasto del mes.
+ * - **No abre la ventana de 24 h** ni la estira: solo un mensaje del cliente
+ *   la abre (`ultimoEntranteAt` no se toca).
+ * - **Quien contestó desde el teléfono ya leyó**: los no leídos vuelven a cero.
+ *
+ * Repetido no entra dos veces: el corte es el mismo índice único de
+ * `waMessageId` que el de los entrantes.
  */
 export async function registrarEco(m: MensajeDeMeta & { waJidDestino: string }): Promise<string | null> {
   const conversacion = await conversacionDe(m.waJidDestino);
@@ -297,12 +307,14 @@ export async function registrarEco(m: MensajeDeMeta & { waJidDestino: string }):
       cuerpo,
       mediaTipo: m.media?.tipo ?? null,
       mediaMime: m.media?.mime ?? null,
-      mediaNombre: m.media?.nombre ?? null,
+      mediaNombre: m.media?.nombre ? limpiar(m.media.nombre).slice(0, 200) : null,
       mediaId: m.media?.id ?? null,
       mediaEstado: m.media ? "pendiente" : null,
+      citadoWaMessageId: m.citado,
       datos: m.datos,
       estado: "enviado",
       origen: "telefono",
+      cobrable: false,
       ocurridoAt: ocurrido,
     })
     .onConflictDoNothing({ target: mensajes.waMessageId })
@@ -312,10 +324,217 @@ export async function registrarEco(m: MensajeDeMeta & { waJidDestino: string }):
 
   await db
     .update(conversaciones)
-    .set({ ultimoMensajeAt: ocurrido, ultimoMensajePreview: resumen(cuerpo, m.tipo), updatedAt: new Date() })
+    .set({
+      ultimoMensajeAt: sql`greatest(${conversaciones.ultimoMensajeAt}, ${ocurrido.toISOString()}::timestamptz)`,
+      ultimoMensajePreview: resumen(cuerpo, m.tipo),
+      noLeidos: 0,
+      updatedAt: new Date(),
+    })
     .where(eq(conversaciones.id, conversacion.id));
 
   return mensaje.id;
+}
+
+/**
+ * Un mensaje del teléfono que se editó o se borró después de mandarlo.
+ *
+ * Se cambia la burbuja que ya está: el cliente ve el texto nuevo, o «se
+ * eliminó este mensaje», y la bandeja tiene que mostrar lo mismo.
+ */
+export async function aplicarCambioDeEco(cambio: {
+  cambio: "editado" | "eliminado";
+  original: string;
+  texto: string | null;
+}): Promise<boolean> {
+  const [actual] = await db
+    .select({ id: mensajes.id, datos: mensajes.datos })
+    .from(mensajes)
+    .where(eq(mensajes.waMessageId, cambio.original))
+    .limit(1);
+  if (!actual) return false;
+
+  await db
+    .update(mensajes)
+    .set(
+      cambio.cambio === "eliminado"
+        ? {
+            cuerpo: "Se eliminó este mensaje desde el teléfono.",
+            datos: { ...(actual.datos ?? {}), eliminado: true },
+          }
+        : {
+            ...(cambio.texto !== null ? { cuerpo: limpiar(cambio.texto) } : {}),
+            datos: { ...(actual.datos ?? {}), editado: true },
+          },
+    )
+    .where(eq(mensajes.id, actual.id));
+  return true;
+}
+
+const ESTADO_DEL_HISTORIAL: Record<string, "pendiente" | "enviado" | "entregado" | "leido" | "fallido"> = {
+  PENDING: "pendiente",
+  SENT: "enviado",
+  DELIVERED: "entregado",
+  READ: "leido",
+  PLAYED: "leido",
+  ERROR: "fallido",
+};
+
+/**
+ * Importa una parte del historial de la app del teléfono.
+ *
+ * Al conectar el número en coexistencia Meta manda hasta seis meses de chats,
+ * en partes que pueden llegar desordenadas y repetidas. Cada mensaje entra con
+ * su id de WhatsApp —el mismo índice único corta lo repetido— y con
+ * `importado = true`. Lo importado es pasado: **no avisa a nadie** (ni push ni
+ * BAJA), no suma no leídos, no reabre conversaciones resueltas y no abre la
+ * ventana de 24 h (la abre solo un mensaje nuevo del cliente por la API). Lo
+ * que el negocio escribió desde la app entra como saliente del teléfono, sin
+ * cobro.
+ *
+ * Cada hilo va en una transacción: el aviso en vivo a la bandeja (los
+ * triggers de `0074_vivo`) sale una vez por conversación y no una por mensaje.
+ *
+ * @returns cuántos mensajes nuevos entraron.
+ */
+export async function importarHistorial(parte: ParteDeHistorial): Promise<number> {
+  let nuevos = 0;
+
+  for (const hilo of parte.hilos) {
+    if (hilo.mensajes.length === 0) continue;
+    const waJid = jidDeWaId(hilo.waId);
+    const conversacion = await conversacionDe(waJid);
+
+    const insertados = await db.transaction(async (tx) => {
+      const filas: {
+        id: string;
+        ocurridoAt: Date;
+        cuerpo: string;
+        tipo: string;
+      }[] = [];
+      // De a 500: un hilo de seis meses puede pasar el tope de parámetros de Postgres.
+      for (let i = 0; i < hilo.mensajes.length; i += 500) {
+        const tanda = await tx
+          .insert(mensajes)
+          .values(
+            hilo.mensajes.slice(i, i + 500).map((m) => ({
+              conversacionId: conversacion.id,
+              direccion: m.delNegocio ? ("saliente" as const) : ("entrante" as const),
+              waMessageId: m.waMessageId,
+              tipo: m.tipo,
+              cuerpo: limpiar(m.texto),
+              mediaTipo: m.media?.tipo ?? null,
+              mediaMime: m.media?.mime ?? null,
+              mediaNombre: m.media?.nombre ? limpiar(m.media.nombre).slice(0, 200) : null,
+              mediaId: m.media?.id ?? null,
+              mediaEstado: m.media ? "pendiente" : null,
+              citadoWaMessageId: m.citado,
+              datos: m.datos,
+              estado: m.delNegocio
+                ? (ESTADO_DEL_HISTORIAL[m.estadoHistorial ?? ""] ?? "enviado")
+                : ("entregado" as const),
+              origen: m.delNegocio ? "telefono" : "cliente",
+              cobrable: m.delNegocio ? false : null,
+              importado: true,
+              ocurridoAt: m.ocurrido ? new Date(m.ocurrido) : new Date(),
+            })),
+          )
+          .onConflictDoNothing({ target: mensajes.waMessageId })
+          .returning({
+            id: mensajes.id,
+            ocurridoAt: mensajes.ocurridoAt,
+            cuerpo: mensajes.cuerpo,
+            tipo: mensajes.tipo,
+          });
+        filas.push(...tanda);
+      }
+
+      // El último mensaje de la charla, si lo importado es más nuevo que lo que había.
+      const ultimo = filas.reduce<(typeof filas)[number] | null>(
+        (a, f) => (!a || f.ocurridoAt > a.ocurridoAt ? f : a),
+        null,
+      );
+      if (ultimo) {
+        await tx
+          .update(conversaciones)
+          .set({
+            ultimoMensajePreview: sql`case when ${conversaciones.ultimoMensajeAt} is null or ${conversaciones.ultimoMensajeAt} < ${ultimo.ocurridoAt.toISOString()}::timestamptz then ${resumen(ultimo.cuerpo, ultimo.tipo)} else ${conversaciones.ultimoMensajePreview} end`,
+            ultimoMensajeAt: sql`greatest(${conversaciones.ultimoMensajeAt}, ${ultimo.ocurridoAt.toISOString()}::timestamptz)`,
+          })
+          .where(eq(conversaciones.id, conversacion.id));
+      }
+      return filas.length;
+    });
+    nuevos += insertados;
+  }
+
+  return nuevos;
+}
+
+/**
+ * Los adjuntos del historial, que Meta manda después y aparte.
+ *
+ * En el historial un archivo viene como `media_placeholder`; si es de las
+ * últimas dos semanas, llega otro payload con el mismo id y el adjunto de
+ * verdad. Se completa la burbuja que ya está y se devuelven los ids para
+ * bajarlos.
+ */
+export async function completarMediosDelHistorial(lista: MensajeDeMeta[]): Promise<string[]> {
+  const completados: string[] = [];
+  for (const m of lista) {
+    if (!m.media) continue;
+    const [fila] = await db
+      .update(mensajes)
+      .set({
+        tipo: m.tipo,
+        ...(m.texto ? { cuerpo: limpiar(m.texto) } : { cuerpo: "" }),
+        mediaTipo: m.media.tipo,
+        mediaMime: m.media.mime,
+        mediaNombre: m.media.nombre ? limpiar(m.media.nombre).slice(0, 200) : null,
+        mediaId: m.media.id,
+        mediaEstado: "pendiente",
+      })
+      .where(and(eq(mensajes.waMessageId, m.waMessageId), eq(mensajes.importado, true), isNull(mensajes.mediaUrl)))
+      .returning({ id: mensajes.id, conversacionId: mensajes.conversacionId, cuerpo: mensajes.cuerpo, tipo: mensajes.tipo });
+    if (!fila) continue;
+    completados.push(fila.id);
+    // Si la lista mostraba «un archivo que llega en un rato», ahora dice qué es.
+    await db
+      .update(conversaciones)
+      .set({ ultimoMensajePreview: resumen(fila.cuerpo, fila.tipo) })
+      .where(
+        and(
+          eq(conversaciones.id, fila.conversacionId),
+          sql`${conversaciones.ultimoMensajePreview} like '(Un archivo del historial%'`,
+        ),
+      );
+  }
+  return completados;
+}
+
+/**
+ * Los contactos de la agenda de la app del teléfono.
+ *
+ * Sirven para ponerle nombre a una conversación que no lo tiene —alguien que
+ * todavía no escribió por la API y del que solo se conoce el número—, que es
+ * como el personal lo tiene agendado. No se crean conversaciones ni fichas: la
+ * ficha se encuentra sola por el teléfono (`clientePorTelefono`), y una agenda
+ * de 2.000 contactos no son 2.000 clientes. Las bajas de la agenda se ignoran.
+ *
+ * @returns cuántas conversaciones quedaron con nombre.
+ */
+export async function sincronizarContactos(contactos: ContactoDeLaApp[]): Promise<number> {
+  let nombradas = 0;
+  for (const c of contactos) {
+    if (c.accion !== "add" || !c.nombre?.trim()) continue;
+    const waJid = jidDeWaId(c.telefono);
+    const actualizadas = await db
+      .update(conversaciones)
+      .set({ displayName: limpiar(c.nombre).slice(0, 120) })
+      .where(and(eq(conversaciones.waJid, waJid), isNull(conversaciones.displayName)))
+      .returning({ id: conversaciones.id });
+    nombradas += actualizadas.length;
+  }
+  return nombradas;
 }
 
 /**

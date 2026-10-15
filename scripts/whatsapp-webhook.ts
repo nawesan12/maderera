@@ -7,6 +7,20 @@
  *   npm run whatsapp:webhook -- texto --firma-mala       (tiene que dar 401)
  *   npm run whatsapp:webhook -- verificar                (el GET de alta del webhook)
  *
+ * Coexistencia (el número en la app del teléfono y en la plataforma a la vez):
+ *
+ *   npm run whatsapp:webhook -- eco --de 5492235550123 --texto "Te lo dejo separado"
+ *   npm run whatsapp:webhook -- eco --repetir            (el mismo eco dos veces: entra uno)
+ *   npm run whatsapp:webhook -- eco --sin to             (eco sin destinatario: se descarta)
+ *   npm run whatsapp:webhook -- eco-foto --de 5492235550123
+ *   npm run whatsapp:webhook -- eco-borrado --original <wamid>
+ *   npm run whatsapp:webhook -- eco-editado --original <wamid> --texto "Mejor el lunes"
+ *   npm run whatsapp:webhook -- historial --de 5492235550123 [--repetir]
+ *   npm run whatsapp:webhook -- historial-medio --id <wamid del media_placeholder>
+ *   npm run whatsapp:webhook -- historial-rechazado
+ *   npm run whatsapp:webhook -- agenda --de 5492235550123 --nombre "Marta (obra Alem)"
+ *   npm run whatsapp:webhook -- coexistencia-cortada
+ *
  * Los payloads salen de `tests/fixtures/whatsapp/payloads.ts`, con la forma de
  * la documentación de Meta. Firma con `WHATSAPP_APP_SECRET` (de `.env.local`)
  * y apunta a `SIMULADOR_APP_URL` (por omisión, el dev server en el 3103).
@@ -61,7 +75,44 @@ async function mandar() {
       }),
     plantilla: () => P.plantillaAprobada({ phoneNumberId: PNID, nombre: opcion("nombre") ?? "pedido_listo", evento: opcion("evento") }),
     calidad: () => P.calidad({ evento: opcion("evento") }),
-    eco: () => P.ecoDelTelefono({ phoneNumberId: PNID, para: opcion("de"), cuerpo: opcion("texto") }),
+    eco: () =>
+      P.ecoDelTelefono({
+        phoneNumberId: PNID,
+        para: opcion("de"),
+        cuerpo: opcion("texto"),
+        id: opcion("id"),
+        sinCampo: opcion("sin") as "to" | "id" | "from" | undefined,
+      }),
+    "eco-foto": () => P.ecoConImagen({ phoneNumberId: PNID, para: opcion("de"), mediaId: opcion("media") }),
+    "eco-borrado": () => P.ecoCambio({ phoneNumberId: PNID, original: opcion("original") ?? "", cambio: "revoke" }),
+    "eco-editado": () =>
+      P.ecoCambio({ phoneNumberId: PNID, original: opcion("original") ?? "", cambio: "edit", cuerpo: opcion("texto") }),
+    historial: () =>
+      P.historial({
+        phoneNumberId: PNID,
+        ...(opcion("de")
+          ? {
+              hilos: [
+                {
+                  cliente: opcion("de")!,
+                  mensajes: [
+                    { delNegocio: false, cuerpo: "Hola, ¿cuánto sale la placa de MDF de 18?", id: "wamid.HISTORIAL-1", ts: Math.floor(Date.now() / 1000) - 86_400 * 3 },
+                    { delNegocio: true, cuerpo: "Hola, $ 48.500 la entera.", id: "wamid.HISTORIAL-2", ts: Math.floor(Date.now() / 1000) - 86_400 * 3 + 600 },
+                    { delNegocio: true, tipo: "media_placeholder" as const, id: "wamid.HISTORIAL-3", ts: Math.floor(Date.now() / 1000) - 86_400 * 3 + 700 },
+                  ],
+                },
+              ],
+            }
+          : {}),
+      }),
+    "historial-medio": () => P.historialMedio({ phoneNumberId: PNID, id: opcion("id") ?? "wamid.HISTORIAL-3", mediaId: opcion("media") }),
+    "historial-rechazado": () => P.historialRechazado({ phoneNumberId: PNID }),
+    agenda: () =>
+      P.contactosDeLaApp({
+        phoneNumberId: PNID,
+        contactos: [{ telefono: opcion("de") ?? "5492235550123", nombre: opcion("nombre") ?? "Marta Gómez (obra Alem)" }],
+      }),
+    "coexistencia-cortada": () => P.coexistenciaCortada(),
   };
 
   const construir = constructores[tipo];

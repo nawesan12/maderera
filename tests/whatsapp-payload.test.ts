@@ -186,3 +186,155 @@ describe("leerPayload: usuarios sin número (BSUID)", () => {
     expect(leerPayload(payload)[0]).toMatchObject({ tipo: "estado", estado: { estado: "played" } });
   });
 });
+
+describe("leerPayload: coexistencia", () => {
+  it("el eco del ejemplo literal de Meta", () => {
+    // Copiado de la referencia de `smb_message_echoes`.
+    const literal = {
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: "102290129340398",
+          changes: [
+            {
+              value: {
+                messaging_product: "whatsapp",
+                metadata: { display_phone_number: "15550783881", phone_number_id: "106540352242922" },
+                message_echoes: [
+                  {
+                    from: "15550783881",
+                    to: "16505551234",
+                    id: "wamid.HBgLMTY0NjcwNDM1OTUVAgARGBIyNDlBOEI5QUQ4NDc0N0FCNjMA",
+                    timestamp: "1739321024",
+                    type: "text",
+                    text: { body: "Here's the info you requested! https://www.meta.com/quest/quest-3/" },
+                  },
+                ],
+              },
+              field: "smb_message_echoes",
+            },
+          ],
+        },
+      ],
+    };
+    const [evento] = leerPayload(literal);
+    expect(evento).toMatchObject({
+      tipo: "eco",
+      phoneNumberId: "106540352242922",
+      mensaje: {
+        para: "16505551234",
+        waMessageId: "wamid.HBgLMTY0NjcwNDM1OTUVAgARGBIyNDlBOEI5QUQ4NDc0N0FCNjMA",
+        tipo: "text",
+        ocurrido: 1_739_321_024_000,
+      },
+    });
+  });
+
+  it("un eco con foto trae el adjunto para bajarlo", () => {
+    const [evento] = leerPayload(P.ecoConImagen({ mediaId: "999" }));
+    expect(evento).toMatchObject({ tipo: "eco", mensaje: { tipo: "image", media: { id: "999", tipo: "image" } } });
+  });
+
+  it("un eco sin `from` entra igual (es el negocio); sin `to` o sin `id` se descarta", () => {
+    expect(leerPayload(P.ecoDelTelefono({ sinCampo: "from" }))[0]).toMatchObject({ tipo: "eco" });
+    expect(leerPayload(P.ecoDelTelefono({ sinCampo: "to" }))).toEqual([]);
+    expect(leerPayload(P.ecoDelTelefono({ sinCampo: "id" }))).toEqual([]);
+  });
+
+  it("borrar y editar desde el teléfono", () => {
+    expect(leerPayload(P.ecoCambio({ original: "wamid.A", cambio: "revoke" }))[0]).toEqual({
+      tipo: "eco-cambio",
+      phoneNumberId: P.CONSTANTES.PHONE_NUMBER_ID,
+      cambio: "eliminado",
+      original: "wamid.A",
+      texto: null,
+    });
+    expect(leerPayload(P.ecoCambio({ original: "wamid.A", cambio: "edit", cuerpo: "Mejor el lunes" }))[0]).toMatchObject({
+      cambio: "editado",
+      texto: "Mejor el lunes",
+    });
+  });
+
+  it("el historial: de quién es cada mensaje sale de comparar `from` con el número del negocio", () => {
+    const [evento] = leerPayload(P.historial());
+    if (evento.tipo !== "historial") throw new Error(evento.tipo);
+    expect(evento.parte).toMatchObject({ fase: 0, orden: 1, progreso: 100 });
+    const [hilo] = evento.parte.hilos;
+    expect(hilo.waId).toBe("5492235550123");
+    expect(hilo.mensajes.map((m) => [m.delNegocio, m.tipo, m.estadoHistorial])).toEqual([
+      [false, "text", "READ"],
+      [true, "text", "READ"],
+      [true, "media_placeholder", "DELIVERED"],
+    ]);
+    // El adjunto todavía no llegó: un texto que lo dice, no el de «no se puede ver».
+    expect(hilo.mensajes[2].texto).toMatch(/historial del teléfono/);
+  });
+
+  it("el negocio con el número sin el 9 sigue siendo el negocio", () => {
+    const payload = P.historial({ hilos: [{ cliente: "5492235550123", mensajes: [{ delNegocio: true }] }] });
+    const v = payload.entry[0].changes[0].value as unknown as {
+      metadata: { display_phone_number: string };
+      history: { threads: { messages: { from: string }[] }[] }[];
+    };
+    v.metadata.display_phone_number = "542235903118";
+    expect(v.history[0].threads[0].messages[0].from).toBe("5492235903118");
+    const [evento] = leerPayload(payload);
+    if (evento.tipo !== "historial") throw new Error(evento.tipo);
+    expect(evento.parte.hilos[0].mensajes[0].delNegocio).toBe(true);
+  });
+
+  it("los adjuntos del historial llegan aparte, con el mismo id", () => {
+    const [evento] = leerPayload(P.historialMedio({ id: "wamid.PLACEHOLDER", mediaId: "24230790383178626" }));
+    expect(evento).toMatchObject({
+      tipo: "historial-medios",
+      mensajes: [{ waMessageId: "wamid.PLACEHOLDER", media: { id: "24230790383178626" } }],
+    });
+  });
+
+  it("historial rechazado por el negocio", () => {
+    expect(leerPayload(P.historialRechazado())[0]).toMatchObject({
+      tipo: "historial-error",
+      codigo: 2593109,
+      detalle: "History sharing is turned off by the business",
+    });
+  });
+
+  it("la agenda de la app: altas con nombre, bajas sin él", () => {
+    const [evento] = leerPayload(
+      P.contactosDeLaApp({
+        contactos: [
+          { telefono: "5492235550123", nombre: "Marta Gómez" },
+          { telefono: "5492235550199", accion: "remove" },
+        ],
+      }),
+    );
+    expect(evento).toEqual({
+      tipo: "contactos",
+      phoneNumberId: P.CONSTANTES.PHONE_NUMBER_ID,
+      contactos: [
+        { telefono: "5492235550123", nombre: "Marta Gómez", accion: "add" },
+        { telefono: "5492235550199", nombre: null, accion: "remove" },
+      ],
+    });
+  });
+
+  it("Meta cortó la coexistencia por inactividad del teléfono", () => {
+    expect(leerPayload(P.coexistenciaCortada())[0]).toEqual({
+      tipo: "cuenta",
+      evento: "PARTNER_REMOVED",
+      motivo: "PRIMARY_INACTIVITY",
+    });
+  });
+
+  it("historial con basura adentro: lo que se entiende entra, lo demás no", () => {
+    const payload = P.historial();
+    const v = payload.entry[0].changes[0].value as unknown as { history: { threads: unknown[] }[] };
+    v.history[0].threads.push({ messages: [{ id: "x" }] }, "basura", { id: "5492235550777", messages: "no" });
+    const [evento] = leerPayload(payload);
+    if (evento.tipo !== "historial") throw new Error(evento.tipo);
+    expect(evento.parte.hilos.map((h) => [h.waId, h.mensajes.length])).toEqual([
+      ["5492235550123", 3],
+      ["5492235550777", 0],
+    ]);
+  });
+});

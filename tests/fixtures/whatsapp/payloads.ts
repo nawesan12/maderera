@@ -245,7 +245,8 @@ export type EstadoMeta = "sent" | "delivered" | "read" | "failed";
  * Desde julio de 2025 `pricing` informa el cobro por mensaje
  * (`pricing_model: "PMP"`), con la categoría y si se factura. Desde el
  * 1/10/2026 el servicio también se cobra: viene `billable: true, type:
- * "regular"`; los que entran en lo gratuito, `free_customer_service`.
+ * "regular"`, y es lo que se manda por omisión. Lo que Meta no cobra (lo que
+ * llega desde un anuncio, por ejemplo) se prueba con `cobrable: false`.
  */
 export function estado(
   o: Base & {
@@ -254,13 +255,13 @@ export function estado(
     para?: string;
     ts?: number;
     categoria?: "service" | "utility" | "marketing" | "authentication";
-    /** Si Meta lo factura. Por omisión: todo menos el servicio. */
+    /** Si Meta lo factura. Por omisión, sí: desde el 1/10/2026 se cobra todo. */
     cobrable?: boolean;
     error?: { code: number; title: string; message?: string; details?: string };
   },
 ) {
   const categoria = o.categoria ?? "service";
-  const facturable = o.cobrable ?? categoria !== "service";
+  const facturable = o.cobrable ?? true;
   return envolver(o, "messages", {
     statuses: [
       {
@@ -332,20 +333,212 @@ export function calidad(o: Base & { evento?: string; limite?: string } = {}) {
   };
 }
 
-/** Lo que el negocio escribió desde la app del teléfono, con el número en coexistencia. */
-export function ecoDelTelefono(o: Base & { para?: string; cuerpo?: string; id?: string } = {}) {
+/* -------------------------------------------------------------------------- */
+/* Coexistencia                                                                */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * La forma sale de la referencia de webhooks de Meta (revisada el 14/10/2026):
+ * developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/
+ * `smb_message_echoes`, `history` y `smb_app_state_sync`, y de la guía
+ * «Onboarding WhatsApp Business app users» (coexistencia).
+ */
+
+/**
+ * Lo que el negocio escribió desde la app del teléfono, con el número en
+ * coexistencia (`smb_message_echoes`). `from` es el negocio y `to` el cliente;
+ * no trae `pricing` porque no se cobra.
+ */
+export function ecoDelTelefono(
+  o: Base & { para?: string; cuerpo?: string; id?: string; ts?: number; sinCampo?: "to" | "id" | "from" } = {},
+) {
+  const eco: Record<string, unknown> = {
+    from: o.telefonoNegocio ?? TELEFONO_NEGOCIO,
+    to: o.para ?? "5492235550123",
+    id: o.id ?? wamid(),
+    timestamp: String(o.ts ?? ahora()),
+    type: "text",
+    text: { body: o.cuerpo ?? "Sí, te lo dejamos separado hasta el sábado." },
+  };
+  // Para probar el camino que falla: un eco al que le falta un campo.
+  if (o.sinCampo) delete eco[o.sinCampo];
+  return envolver(o, "smb_message_echoes", { message_echoes: [eco] });
+}
+
+/** Un eco con una foto mandada desde el teléfono. */
+export function ecoConImagen(o: Base & { para?: string; mediaId?: string } = {}) {
   return envolver(o, "smb_message_echoes", {
     message_echoes: [
       {
         from: o.telefonoNegocio ?? TELEFONO_NEGOCIO,
         to: o.para ?? "5492235550123",
-        id: o.id ?? wamid(),
+        id: wamid(),
         timestamp: String(ahora()),
-        type: "text",
-        text: { body: o.cuerpo ?? "Sí, te lo dejamos separado hasta el sábado." },
+        type: "image",
+        image: {
+          caption: "Así lo tenemos en el depósito",
+          mime_type: "image/jpeg",
+          sha256: "Dq3lTZ0w8nFqUmXmJ2c3sAvXcLq6KjVd2t3oFpPpJfE=",
+          id: o.mediaId ?? "1037543291543636",
+        },
       },
     ],
   });
+}
+
+/** Desde la app se borró (`revoke`) o se editó (`edit`) un mensaje ya mandado. */
+export function ecoCambio(o: Base & { original: string; cambio: "revoke" | "edit"; cuerpo?: string; para?: string }) {
+  const base = {
+    from: o.telefonoNegocio ?? TELEFONO_NEGOCIO,
+    to: o.para ?? "5492235550123",
+    id: wamid(),
+    timestamp: String(ahora()),
+    type: o.cambio,
+  };
+  return envolver(o, "smb_message_echoes", {
+    message_echoes: [
+      o.cambio === "revoke"
+        ? { ...base, revoke: { original_message_id: o.original } }
+        : {
+            ...base,
+            edit: {
+              original_message_id: o.original,
+              message: { type: "text", text: { body: o.cuerpo ?? "Mejor el lunes." } },
+            },
+          },
+    ],
+  });
+}
+
+export interface MensajeDeHistorialFixture {
+  /** Si lo escribió el negocio (from = el negocio) o el cliente. */
+  delNegocio?: boolean;
+  id?: string;
+  cuerpo?: string;
+  ts?: number;
+  tipo?: "text" | "media_placeholder";
+  estado?: "SENT" | "DELIVERED" | "READ" | "PLAYED" | "PENDING" | "ERROR";
+}
+
+/**
+ * Una parte del historial de chats (`history`), como la manda Meta al conectar
+ * el número en coexistencia: hilos por cliente con sus mensajes.
+ */
+export function historial(
+  o: Base & {
+    hilos?: { cliente: string; mensajes: MensajeDeHistorialFixture[] }[];
+    fase?: number;
+    parte?: number;
+    progreso?: number;
+  } = {},
+) {
+  const negocio = o.telefonoNegocio ?? TELEFONO_NEGOCIO;
+  const hilos = o.hilos ?? [
+    {
+      cliente: "5492235550123",
+      mensajes: [
+        { delNegocio: false, cuerpo: "Hola, ¿cuánto sale la placa de MDF de 18?", ts: ahora() - 86_400 * 3 },
+        { delNegocio: true, cuerpo: "Hola Marta, $ 48.500 la entera.", ts: ahora() - 86_400 * 3 + 600, estado: "READ" },
+        { delNegocio: true, tipo: "media_placeholder", ts: ahora() - 86_400 * 3 + 700, estado: "DELIVERED" },
+      ],
+    },
+  ];
+  return envolver(o, "history", {
+    history: [
+      {
+        metadata: { phase: o.fase ?? 0, chunk_order: o.parte ?? 1, progress: o.progreso ?? 100 },
+        threads: hilos.map((h) => ({
+          id: h.cliente,
+          messages: h.mensajes.map((m) => ({
+            from: m.delNegocio ? negocio : h.cliente,
+            id: m.id ?? wamid(),
+            timestamp: String(m.ts ?? ahora()),
+            type: m.tipo ?? "text",
+            ...((m.tipo ?? "text") === "text" ? { text: { body: m.cuerpo ?? "Gracias" } } : {}),
+            history_context: { status: m.estado ?? "READ" },
+          })),
+        })),
+      },
+    ],
+  });
+}
+
+/** El adjunto de un `media_placeholder` del historial, que llega después y aparte. */
+export function historialMedio(o: Base & { id: string; de?: string; mediaId?: string }) {
+  return envolver(o, "history", {
+    messages: [
+      {
+        from: o.de ?? o.telefonoNegocio ?? TELEFONO_NEGOCIO,
+        id: o.id,
+        timestamp: String(ahora()),
+        type: "image",
+        image: {
+          caption: "La placa que te comenté",
+          mime_type: "image/jpeg",
+          sha256: "3f9d94d399fa61c191bc1d4ca71375a035cd9b9f5b1128e1f0963a415c16b0cc",
+          id: o.mediaId ?? "1037543291543636",
+        },
+      },
+    ],
+  });
+}
+
+/** El negocio eligió no compartir el historial al conectar (error 2593109). */
+export function historialRechazado(o: Base = {}) {
+  return envolver(o, "history", {
+    history: [
+      {
+        errors: [
+          {
+            code: 2593109,
+            title: "History sync is turned off by the business from the WhatsApp Business App",
+            message: "History sync is turned off by the business from the WhatsApp Business App",
+            error_data: { details: "History sharing is turned off by the business" },
+          },
+        ],
+      },
+    ],
+  });
+}
+
+/** Contactos de la agenda de la app (`smb_app_state_sync`). */
+export function contactosDeLaApp(
+  o: Base & { contactos?: { telefono: string; nombre?: string; accion?: "add" | "remove" }[] } = {},
+) {
+  const contactos = o.contactos ?? [{ telefono: "5492235550123", nombre: "Marta Gómez (obra Alem)" }];
+  return envolver(o, "smb_app_state_sync", {
+    state_sync: contactos.map((c) => ({
+      type: "contact",
+      contact:
+        (c.accion ?? "add") === "remove"
+          ? { phone_number: c.telefono }
+          : { full_name: c.nombre ?? "Sin nombre", first_name: (c.nombre ?? "Sin").split(" ")[0], phone_number: c.telefono },
+      action: c.accion ?? "add",
+      metadata: { timestamp: String(ahora()) },
+    })),
+  });
+}
+
+/** Meta cortó la coexistencia porque el teléfono no abrió la app en ~14 días. */
+export function coexistenciaCortada(o: Base = {}) {
+  return {
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: o.wabaId ?? WABA_ID,
+        time: ahora(),
+        changes: [
+          {
+            value: {
+              event: "PARTNER_REMOVED",
+              disconnection_info: { reason: "PRIMARY_INACTIVITY", initiated_by: "SYSTEM" },
+            },
+            field: "account_update",
+          },
+        ],
+      },
+    ],
+  };
 }
 
 export const CONSTANTES = { PHONE_NUMBER_ID, TELEFONO_NEGOCIO, WABA_ID };

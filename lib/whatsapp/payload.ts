@@ -22,6 +22,27 @@
  * - `order`, `system`, `unsupported` y cualquier tipo que Meta agregue: entran
  *   con un texto que dice qué fue, para que nadie crea que el cliente no
  *   escribió.
+ *
+ * Y los campos de la **coexistencia** (el mismo número en la app del teléfono
+ * y en la plataforma), con la forma de la referencia de webhooks de Meta
+ * (`smb_message_echoes`, `history`, `smb_app_state_sync`, revisada el
+ * 14/10/2026):
+ *
+ * - `smb_message_echoes`: lo que el personal manda desde la app. Cada ítem de
+ *   `message_echoes[]` es un mensaje con `from` (el negocio), `to` (el
+ *   cliente), `id`, `timestamp` y el contenido según `type`; también llegan
+ *   `edit` y `revoke` sobre uno anterior. No traen `pricing`: no se cobran.
+ * - `history`: los chats de los últimos seis meses, en partes. `history[]`
+ *   trae `metadata` (`phase` 0, 1 o 2: hasta un día, hasta 90 y hasta 180;
+ *   `chunk_order`; `progress` de 0 a 100) y `threads[]`, uno por cliente
+ *   (`id` es su número) con sus `messages[]`. Quién escribió se sabe por
+ *   `from`: el número del negocio o el del cliente. Los adjuntos llegan como
+ *   `media_placeholder` y, si son de las últimas dos semanas, después llega
+ *   otro `history` con `messages[]` y el adjunto de verdad, con el mismo id.
+ *   Si el negocio no quiso compartir el historial, llega un error 2593109.
+ * - `smb_app_state_sync`: los contactos de la agenda del teléfono
+ *   (`state_sync[]` con `contact.full_name`, `contact.phone_number` y
+ *   `action` `add` o `remove`).
  */
 
 export type TipoMensaje =
@@ -39,6 +60,8 @@ export type TipoMensaje =
   | "order"
   | "system"
   | "template"
+  /** Del historial: un adjunto que todavía no llegó (viene aparte, si llega). */
+  | "media_placeholder"
   | "unsupported";
 
 export type TipoMediaMeta = "image" | "document" | "audio" | "video" | "sticker";
@@ -113,7 +136,25 @@ export type EventoWebhook =
    * coexistencia (campo `smb_message_echoes`): hay que guardarlo como saliente,
    * o la bandeja mostraría al cliente hablando solo.
    */
-  | { tipo: "eco"; phoneNumberId: string | null; mensaje: MensajeDeMeta & { para: string } }
+  | { tipo: "eco"; phoneNumberId: string | null; mensaje: EcoDeMeta }
+  /** Desde la app se editó o se borró un mensaje que ya había salido. */
+  | {
+      tipo: "eco-cambio";
+      phoneNumberId: string | null;
+      cambio: "editado" | "eliminado";
+      original: string;
+      texto: string | null;
+    }
+  /** Una parte del historial de chats de la app, al conectar en coexistencia. */
+  | { tipo: "historial"; phoneNumberId: string | null; parte: ParteDeHistorial }
+  /** Los adjuntos del historial, que llegan después y aparte. */
+  | { tipo: "historial-medios"; phoneNumberId: string | null; mensajes: MensajeDeMeta[] }
+  /** El negocio no compartió el historial (2593109) u otro error del historial. */
+  | { tipo: "historial-error"; phoneNumberId: string | null; codigo: number | null; detalle: string }
+  /** Contactos de la agenda de la app del teléfono. */
+  | { tipo: "contactos"; phoneNumberId: string | null; contactos: ContactoDeLaApp[] }
+  /** Cambios de la cuenta: sobre todo, que Meta cortó la coexistencia. */
+  | { tipo: "cuenta"; evento: string; motivo: string | null }
   | {
       tipo: "plantilla";
       nombre: string;
@@ -129,6 +170,36 @@ export type EventoWebhook =
       limite: string | null;
     }
   | { tipo: "otro"; campo: string };
+
+/** Un eco: el mensaje y a quién se lo mandó el negocio. */
+export interface EcoDeMeta extends MensajeDeMeta {
+  /** El número del cliente (`to`). */
+  para: string | null;
+  /** El BSUID del cliente, si Meta lo manda en vez del número. */
+  paraUsuario: string | null;
+}
+
+export interface MensajeDeHistorial extends MensajeDeMeta {
+  /** Lo escribió el negocio (desde la app), no el cliente. */
+  delNegocio: boolean;
+  /** `history_context.status`: SENT, DELIVERED, READ, PLAYED, PENDING, ERROR. */
+  estadoHistorial: string | null;
+}
+
+export interface ParteDeHistorial {
+  /** 0: el último día; 1: hasta 90 días; 2: hasta 180. */
+  fase: number | null;
+  orden: number | null;
+  /** De 0 a 100; 100 es que terminó. */
+  progreso: number | null;
+  hilos: { waId: string; mensajes: MensajeDeHistorial[] }[];
+}
+
+export interface ContactoDeLaApp {
+  telefono: string;
+  nombre: string | null;
+  accion: string;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Lectura defensiva                                                           */
@@ -180,6 +251,7 @@ const TIPOS_CONOCIDOS = new Set<string>([
   "reaction",
   "order",
   "system",
+  "media_placeholder",
   "unsupported",
 ]);
 
@@ -267,6 +339,13 @@ function leerContenido(
     case "audio":
     case "sticker":
       return { texto: "", datos: null, reaccion: null };
+
+    case "media_placeholder":
+      return {
+        texto: "(Un archivo del historial del teléfono. Si es de las últimas dos semanas, llega en un rato.)",
+        datos: null,
+        reaccion: null,
+      };
 
     case "location": {
       const u = obj(m.location);
@@ -361,11 +440,11 @@ function leerContenido(
   }
 }
 
-function leerMensaje(m: Obj, nombres: Map<string, string>): MensajeDeMeta | null {
+function leerMensaje(m: Obj, nombres: Map<string, string>, sinRemitente = false): MensajeDeMeta | null {
   const de = texto(m.from) ?? "";
   const usuarioMeta = texto(m.from_user_id);
   const id = texto(m.id);
-  if ((!de && !usuarioMeta) || !id) return null;
+  if ((!de && !usuarioMeta && !sinRemitente) || !id) return null;
 
   const tipoOriginal = texto(m.type) ?? "unsupported";
   const tipo = (TIPOS_CONOCIDOS.has(tipoOriginal) ? tipoOriginal : "unsupported") as TipoMensaje;
@@ -498,10 +577,42 @@ export function leerPayload(crudo: unknown): EventoWebhook[] {
 
       if (campo === "smb_message_echoes") {
         for (const m of lista(valor.message_echoes)) {
-          const o = obj(m);
-          const para = texto(o?.to);
-          const mensaje = o && leerMensaje(o, new Map());
-          if (mensaje && para) eventos.push({ tipo: "eco", phoneNumberId, mensaje: { ...mensaje, para } });
+          const evento = leerEco(obj(m), phoneNumberId);
+          if (evento) eventos.push(evento);
+        }
+        continue;
+      }
+
+      if (campo === "history") {
+        eventos.push(...leerHistorial(valor, phoneNumberId));
+        continue;
+      }
+
+      if (campo === "smb_app_state_sync") {
+        const contactos: ContactoDeLaApp[] = [];
+        for (const item of lista(valor.state_sync)) {
+          const o = obj(item);
+          const contacto = obj(o?.contact);
+          const telefono = texto(contacto?.phone_number);
+          if (!o || texto(o.type) !== "contact" || !telefono) continue;
+          contactos.push({
+            telefono,
+            nombre: texto(contacto?.full_name) ?? texto(contacto?.first_name),
+            accion: texto(o.action) ?? "add",
+          });
+        }
+        if (contactos.length) eventos.push({ tipo: "contactos", phoneNumberId, contactos });
+        continue;
+      }
+
+      if (campo === "account_update") {
+        const evento = texto(valor.event);
+        if (evento) {
+          eventos.push({
+            tipo: "cuenta",
+            evento,
+            motivo: texto(obj(valor.disconnection_info)?.reason) ?? texto(valor.reason),
+          });
         }
         continue;
       }
@@ -534,6 +645,115 @@ export function leerPayload(crudo: unknown): EventoWebhook[] {
 
       eventos.push({ tipo: "otro", campo });
     }
+  }
+
+  return eventos;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Coexistencia                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Un eco de la app. Sin id o sin destinatario no hay nada que guardar: se
+ * descarta. El `from` no hace falta (es el negocio), así que su falta no lo
+ * tira.
+ */
+function leerEco(o: Obj | null, phoneNumberId: string | null): EventoWebhook | null {
+  if (!o) return null;
+  const tipo = texto(o.type);
+
+  if (tipo === "revoke" || tipo === "edit") {
+    const contenido = obj(o[tipo]);
+    const original = texto(contenido?.original_message_id);
+    if (!original) return null;
+    let nuevo: string | null = null;
+    if (tipo === "edit") {
+      const mensaje = obj(contenido?.message);
+      if (mensaje) nuevo = leerContenido(mensaje, texto(mensaje.type) ?? "text").texto;
+    }
+    return {
+      tipo: "eco-cambio",
+      phoneNumberId,
+      cambio: tipo === "edit" ? "editado" : "eliminado",
+      original,
+      texto: nuevo,
+    };
+  }
+
+  const para = texto(o.to);
+  const paraUsuario = texto(o.to_user_id);
+  if (!para && !paraUsuario) return null;
+  const mensaje = leerMensaje(o, new Map(), true);
+  if (!mensaje) return null;
+  return { tipo: "eco", phoneNumberId, mensaje: { ...mensaje, para, paraUsuario } };
+}
+
+/** Los dígitos, para comparar el `from` con el número del negocio. */
+function digitos(valor: string | null): string {
+  return (valor ?? "").replace(/\D/g, "");
+}
+
+/** Si dos números son el mismo, con o sin el 9 de los celulares argentinos. */
+function mismoTelefono(a: string, b: string): boolean {
+  const x = digitos(a);
+  const y = digitos(b);
+  if (!x || !y) return false;
+  const sinNueve = (d: string) => (d.startsWith("549") ? `54${d.slice(3)}` : d);
+  return sinNueve(x) === sinNueve(y);
+}
+
+function leerHistorial(valor: Obj, phoneNumberId: string | null): EventoWebhook[] {
+  const eventos: EventoWebhook[] = [];
+  const negocio = texto(obj(valor.metadata)?.display_phone_number);
+
+  // Los adjuntos que llegan después: `messages[]` suelto, sin hilos.
+  const sueltos = lista(valor.messages)
+    .map((m) => obj(m) && leerMensaje(obj(m)!, new Map()))
+    .filter((m): m is MensajeDeMeta => Boolean(m && m.media));
+  if (sueltos.length) eventos.push({ tipo: "historial-medios", phoneNumberId, mensajes: sueltos });
+
+  for (const parteCruda of lista(valor.history)) {
+    const parte = obj(parteCruda);
+    if (!parte) continue;
+
+    const error = obj(lista(parte.errors)[0]);
+    if (error) {
+      eventos.push({
+        tipo: "historial-error",
+        phoneNumberId,
+        codigo: numero(error.code),
+        detalle: texto(obj(error.error_data)?.details) ?? texto(error.title) ?? texto(error.message) ?? "Error del historial",
+      });
+      continue;
+    }
+
+    const meta = obj(parte.metadata);
+    const hilos: ParteDeHistorial["hilos"] = [];
+    for (const hiloCrudo of lista(parte.threads)) {
+      const hilo = obj(hiloCrudo);
+      const waId = texto(hilo?.id);
+      if (!hilo || !waId) continue;
+      const mensajes: MensajeDeHistorial[] = [];
+      for (const m of lista(hilo.messages)) {
+        const o = obj(m);
+        const leido = o && leerMensaje(o, new Map());
+        if (!leido) continue;
+        mensajes.push({
+          ...leido,
+          // Si no se sabe el número del negocio, es del negocio lo que no vino del cliente.
+          delNegocio: negocio ? mismoTelefono(leido.de, negocio) : !mismoTelefono(leido.de, waId),
+          estadoHistorial: texto(obj(o.history_context)?.status),
+        });
+      }
+      hilos.push({ waId, mensajes });
+    }
+
+    eventos.push({
+      tipo: "historial",
+      phoneNumberId,
+      parte: { fase: numero(meta?.phase), orden: numero(meta?.chunk_order), progreso: numero(meta?.progress), hilos },
+    });
   }
 
   return eventos;

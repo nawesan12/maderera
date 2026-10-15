@@ -29,7 +29,10 @@ la documentación oficial de Meta el **14/10/2026**
 - **Bajas**: quien escribe BAJA deja de recibir avisos (se registra y se le
   confirma); con ALTA vuelve. También se carga desde la conversación.
 - **Configuración** (solo admin): chequeo real contra Meta, mensaje de prueba,
-  gasto del mes, estado de cada plantilla y lista de bajas.
+  gasto del mes contra el tope, estado de cada plantilla y lista de bajas.
+- **Botón «Avisar por WhatsApp» (gratis)** en pedidos, cortes, cheques,
+  presupuestos, facturas, remitos y la ficha del cliente: abre la app del
+  teléfono con el mensaje escrito (ver «Qué cuesta»).
 
 El código: `lib/whatsapp/` (adaptador, webhook, plantillas, ventana, números),
 `app/admin/whatsapp/` (pantallas), `app/api/whatsapp/` (webhook, adjuntos,
@@ -53,8 +56,8 @@ teléfono.** Hay tres caminos:
    Solution Partner o Tech Provider** (el alta va por *Embedded Signup*): un
    negocio que se integra directo, como este, no la puede activar solo. Lo que
    trae: se sincronizan los chats de los últimos 6 meses y los contactos; lo
-   que se escribe desde el teléfono llega a la bandeja (la plataforma ya lo
-   guarda: webhook `smb_message_echoes`); la velocidad queda fija en 20
+   que se escribe desde el teléfono llega a la bandeja (ver «Coexistencia: lo
+   que llega del teléfono» más abajo); la velocidad queda fija en 20
    mensajes por segundo (de sobra). Lo que se pierde en la app: mensajes
    temporales, «ver una vez», ubicación en tiempo real y crear listas de
    difusión (las que hay quedan de solo lectura). Si el teléfono no abre la app
@@ -71,28 +74,116 @@ costo razonable.
 
 ## Qué cuesta (Argentina, vigente desde el 1/10/2026)
 
-Meta cobra **por mensaje entregado**, según la categoría, en dólares:
+Meta cobra **por mensaje entregado por la Cloud API**, según la categoría, en
+dólares (hoja de precios oficial de Meta, y
+`developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages`):
 
 | Qué | USD por mensaje |
 |---|---|
 | Plantilla de **utilidad** (avisos de pedido, recibo, presupuesto) | 0,026 |
 | Plantilla de **marketing** (promociones) | 0,0618 |
 | Plantilla de autenticación | 0,026 |
-| **Respuesta dentro de las 24 h** (servicio) | 0,026 |
+| **Respuesta dentro de las 24 h** (servicio), texto o archivo | 0,026 |
 
-**Cambió el 1/10/2026:** hasta septiembre, contestar dentro de las 24 h era
-gratis, y las plantillas de utilidad dentro de la ventana también. Desde
-octubre Meta cobra las dos. Según la documentación de precios hay un cupo de
-mensajes de servicio gratis por número y por mes (1.000) —la configuración de
-la plataforma muestra cuántos fueron gratis y cuántos cobrados, con lo que
-informa Meta en cada estado—. Lo que llega desde un anuncio de Facebook o
-Instagram que abre WhatsApp es gratis durante esa ventana.
+**Cambió el 1/10/2026:** hasta septiembre contestar dentro de las 24 h era
+gratis; desde octubre cuesta lo mismo que una plantilla de utilidad. Lo único
+que sigue sin cobrarse por la API es lo que llega desde un anuncio de Facebook
+o Instagram que abre WhatsApp, durante esa ventana.
+
+Terceros mencionan **«1.000 respuestas gratis por mes»**: no está en la página
+oficial de precios de Meta (revisada el 14/10/2026), así que la plataforma no lo
+cuenta. Y aunque existiera, no cubriría las plantillas, que es lo que usan los
+avisos.
 
 **Hay que cargar un medio de pago en Meta**: sin él, Meta dejó de entregar
 incluso las respuestas desde el 1/10/2026.
 
-Para una maderera, la cuenta es chica: 300 avisos de «pedido listo» por mes son
-unos USD 8.
+### Lo que es gratis
+
+- **Todo lo que se manda desde la app WhatsApp Business** (el teléfono, o
+  WhatsApp Desktop / Web con el número de la maderera). Con coexistencia o sin
+  ninguna API. Meta lo dice así en la guía de coexistencia: *«los mensajes que
+  el negocio manda desde la app de WhatsApp Business siguen siendo gratis»*, y
+  no abren, no estiran ni afectan la ventana de 24 h de la API.
+- **El correo** (los avisos salen siempre también por correo, por la casilla
+  propia).
+- **El botón «Avisar por WhatsApp»** de la plataforma: abre
+  `https://wa.me/<número del cliente>?text=<mensaje>` en otra pestaña, con el
+  texto ya escrito, y la persona solo toca enviar en su WhatsApp. No pasa por
+  Meta, así que anda aunque no haya nada conectado. Está en:
+  - el pedido y su tarjeta del tablero (recibido, preparando, **listo**, **en
+    camino**, entregado), con el enlace de seguimiento con token
+    (`/pedido/<número>?t=…`, el mismo del correo);
+  - el corte **terminado** (ficha y tablero de `/admin/cortes`; en `/taller` no);
+  - el **cheque rechazado** (`/admin/cheques`);
+  - el presupuesto, la factura, el remito (con el enlace para firmarlo, si está
+    sin firmar), el resumen de cuenta, el **recordatorio de saldo** y el recibo
+    recién hecho (ficha del cliente).
+
+  El texto sale de las mismas plantillas (`lib/whatsapp/plantillas-base.ts`),
+  rellenado con los datos reales: el cliente lee lo mismo salga por donde
+  salga. **Un PDF no viaja por wa.me**: salvo el pedido (que tiene su enlace con
+  token), los papeles no tienen una dirección pública y no se inventa una; el
+  botón ofrece «PDF para adjuntar» y avisa que hay que adjuntarlo en el chat.
+  Cada uso queda en la bitácora de avisos con el canal `whatsapp_manual` y quién
+  lo mandó; el botón pasa a «Volver a avisar» y **el aviso automático no manda
+  el mismo evento si ya se avisó a mano**. Atajo: `Alt + W` en las fichas.
+  Lo ven los roles de la bandeja (admin y vendedor); depósito y aserradero no.
+- **«Contestar desde el teléfono (gratis)»** en la bandeja: abre el chat del
+  cliente en WhatsApp Business con lo que se haya escrito en el campo (`Alt +
+  W`). Desde la app no hay ventana de 24 h ni plantilla que aprobar. En el
+  compositor de plantillas está «Mandarlo desde el teléfono (gratis)» con el
+  texto completo.
+
+### Cuánto sale por mes, según qué avisos automáticos se prendan
+
+Ejemplo con 300 pedidos por mes (100 con envío), 150 pagos y 100 presupuestos,
+a USD 0,026 cada mensaje:
+
+| Avisos automáticos prendidos | Mensajes | USD por mes |
+|---|---|---|
+| Ninguno (botón gratis + correo) | 0 | **0** |
+| Solo «listo» | 300 | 7,80 |
+| «Listo» y «en camino» | 400 | 10,40 |
+| Recibido, preparando, listo y entregado | 1.200 | 31,20 |
+| Los cinco de pedido, más recibo y presupuesto | 1.550 | 40,30 |
+| Además, contestar 600 consultas por la bandeja (API) | +600 | +15,60 |
+
+Más impuestos. Contestar desde el teléfono no suma nada.
+
+### La recomendación
+
+1. **Coexistencia**: el número sigue en la app del teléfono y además en la
+   plataforma. La atención del día a día se hace desde el teléfono (gratis), y
+   lo que se escribe ahí aparece igual en la bandeja (ver más abajo).
+2. **Botón gratis** para los avisos: el vendedor marca el pedido listo y toca
+   «Avisar por WhatsApp».
+3. **Avisos automáticos apagados**, y el **correo** prendido (es gratis).
+4. **Un tope de gasto** por si alguien prende algo.
+
+### El tope de gasto
+
+En `/admin/whatsapp/configuracion` (solo admin), «Lo que va del mes»:
+
+- **Tope por mes en USD** (por omisión 10) y **las tarifas por categoría**
+  (utilidad, servicio y autenticación 0,026; marketing 0,0618), editables
+  porque Meta las cambia cada trimestre. Un tope de 0 es «por la API, ningún
+  aviso automático».
+- El gasto sale de los mensajes que Meta informa como cobrables en cada estado
+  (`pricing.billable`), más una estimación de lo que acaba de salir y Meta
+  todavía no informó. El mes es el de Argentina (empieza a las 00:00 del día 1,
+  hora de Buenos Aires, aunque el servidor esté en UTC). Barra de gastado/tope.
+- **Al llegar al tope**: los avisos automáticos **dejan de salir por WhatsApp**
+  hasta el mes siguiente y quedan en la bitácora como omitidos («Tope mensual de
+  WhatsApp alcanzado»); **el correo sale igual**. La configuración lista los que
+  no salieron, si le llegó el correo («No tiene correo: avisale a mano») y el
+  enlace a donde está el botón gratis. La ficha del pedido también lo dice.
+- **Lo que se manda desde la bandeja por la API no se bloquea en silencio**:
+  con el tope pasado, pide confirmación («Mandar igual por la API (se cobra)») y
+  ofrece contestar desde el teléfono. La confirmación de una BAJA sale siempre.
+- **Aviso al teléfono del admin** (push) al 80 % y al 100 %, una sola vez por
+  umbral y por mes. Cambiar el tope vuelve a habilitar esos avisos.
+- La bandeja muestra, chico, «Meta este mes: USD x de USD y».
 
 ## El trámite, paso a paso
 
@@ -176,7 +267,9 @@ En la app → WhatsApp → Configuración → Webhook:
 - Token de verificación: una clave inventada (`openssl rand -hex 24`), la misma
   que va en `WHATSAPP_WEBHOOK_SECRET`.
 - Campos: **`messages`** y **`message_template_status_update`** (además,
-  `phone_number_quality_update` para enterarse si baja la calidad).
+  `phone_number_quality_update` para enterarse si baja la calidad, y con
+  coexistencia `smb_message_echoes`, `history`, `smb_app_state_sync` y
+  `account_update`).
 
 Meta llama a la URL para verificarla: la plataforma ya tiene que estar
 desplegada con `WHATSAPP_WEBHOOK_SECRET`. Después hay que **suscribir la app a
@@ -260,10 +353,62 @@ concreta.
 
 ### 11. Prender los avisos (la clienta decide)
 
-En la configuración, uno por uno. Lo razonable para empezar: **«Cuando queda
-listo»** (el que más llamadas evita) y **«Cuando se registra un pago»**. Si el
+En la configuración, uno por uno. Lo recomendado es **dejarlos apagados** y usar
+el botón gratis (ver «Qué cuesta»); si se prende alguno, que sea **«Cuando
+queda listo»** (el que más llamadas evita), con el tope configurado. Si el
 cliente escribió hace menos de 24 h sale el texto común (editable); si no, la
 plantilla.
+
+## Coexistencia: lo que llega del teléfono
+
+Con el número en coexistencia Meta manda tres webhooks más (hay que pedirle al
+partner que los suscriba). La forma está tomada de la referencia oficial
+(`…/whatsapp/webhooks/reference/smb_message_echoes`, `history` y
+`smb_app_state_sync`, y la guía «Onboarding WhatsApp Business app users»):
+
+- **`smb_message_echoes`**: lo que el personal manda desde la app. Cada ítem de
+  `message_echoes[]` trae `from` (el negocio), `to` (el cliente), `id`,
+  `timestamp`, `type` y el contenido. Entra en la conversación como saliente
+  «Desde el teléfono · gratis», **no se cobra** (no suma al gasto), **no abre ni
+  estira la ventana de 24 h** (solo un mensaje del cliente la abre) y pone los no
+  leídos en cero. Un eco repetido no entra dos veces (mismo índice único del id).
+  Un eco sin destinatario o sin id se descarta. También llegan `edit` y
+  `revoke`: la burbuja cambia o dice «Se eliminó este mensaje». Aparece en la
+  bandeja en vivo, como los demás.
+- **`history`**: hasta seis meses de chats, en partes (`phase` 0, 1 y 2;
+  `chunk_order`; `progress` hasta 100), con `threads[]` por cliente. Quién
+  escribió se sabe comparando `from` con el número del negocio. Se importa sin
+  duplicar, marcado como «del historial» (`importado`), **sin avisos ni push**,
+  sin no leídos y sin abrir la ventana. Los adjuntos llegan como
+  `media_placeholder` y, si son de las últimas dos semanas, después llega otro
+  `history` con el archivo, que se baja. Si el negocio no compartió el
+  historial llega el error 2593109 y queda en el registro. Meta da **24 horas**
+  desde el alta para sincronizar el historial.
+- **`smb_app_state_sync`**: la agenda del teléfono. Se usa para ponerle el
+  nombre agendado a una conversación que no tenía; la ficha del cliente se
+  encuentra sola por el teléfono. Las bajas de la agenda se ignoran.
+- **`account_update`** con `PARTNER_REMOVED` (`PRIMARY_INACTIVITY`): Meta cortó
+  la coexistencia porque el teléfono no abrió la app en ~14 días. Avisa al
+  teléfono del admin.
+
+Para probarlo:
+
+```bash
+npm run whatsapp:webhook -- eco --de 5492235550123 --texto "Te lo dejo separado"
+npm run whatsapp:webhook -- eco --repetir            # entra uno solo
+npm run whatsapp:webhook -- eco --sin to             # se descarta
+npm run whatsapp:webhook -- eco-editado --original <wamid> --texto "Mejor el lunes"
+npm run whatsapp:webhook -- eco-borrado --original <wamid>
+npm run whatsapp:webhook -- historial --de 5492235550123 --repetir
+npm run whatsapp:webhook -- historial-medio --id wamid.HISTORIAL-3
+npm run whatsapp:webhook -- historial-rechazado
+npm run whatsapp:webhook -- agenda --de 5492235550123 --nombre "Marta (obra Alem)"
+npm run whatsapp:webhook -- coexistencia-cortada
+```
+
+o con el simulador: `curl -X POST localhost:3199/_simulador/entrante -d
+'{"tipo":"eco","de":"5492235550123","texto":"…"}'` (también `historial` y
+`agenda`).
 
 ## Consentimiento
 

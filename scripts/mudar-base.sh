@@ -29,6 +29,12 @@ cd "$(dirname "$0")/.."
 
 ENTORNO=.env.produccion
 COMPOSE=(docker compose --env-file "$ENTORNO" -f docker-compose.prod.yml)
+# Para ensayar la mudanza en otra máquina: un compose más que pisa lo que ahí
+# no puede ser igual (puertos ocupados, rutas). En el servidor no se declara.
+# Ver «Ensayar en otra máquina» en docs/SERVIDOR-PROPIO.md.
+if [ -n "${COMPOSE_ENSAYO:-}" ]; then
+  COMPOSE+=(-f "$COMPOSE_ENSAYO")
+fi
 
 if [ -z "${NEON_URL:-}" ]; then
   echo "Falta NEON_URL (la connection string directa de Neon). Ver el encabezado de este script." >&2
@@ -43,11 +49,31 @@ if [[ "$NEON_URL" == *-pooler* ]]; then
   exit 1
 fi
 
-# La misma versión de Postgres que corre en el servidor: un `pg_dump` más viejo
-# que la base de origen se niega a volcarla.
-IMAGEN_PG=postgres:17-alpine
+# La misma versión de Postgres que corre en el servidor (`db` en
+# docker-compose.prod.yml). Neon corre la 18: un `pg_dump` más viejo que la base
+# de origen se niega a volcarla, y un `pg_restore` más viejo que el volcado no
+# lo puede leer.
+IMAGEN_PG=postgres:18-alpine
 VOLCADO="respaldos/neon-$(date +%Y-%m-%d-%H%M).dump"
 mkdir -p respaldos
+
+# La versión se mira antes de preguntar nada: si Neon pasó a una versión
+# mayor más nueva que la del servidor, `pg_dump` corta con un error en inglés
+# después de las dos confirmaciones. Mejor decirlo acá y en castellano.
+version_origen="$(docker run --rm -e NEON_URL "$IMAGEN_PG" \
+  sh -c 'psql "$NEON_URL" -XAtc "show server_version_num"')" || {
+  echo "No se pudo conectar a Neon con NEON_URL (el error, arriba)." >&2
+  exit 1
+}
+mayor_origen=$((version_origen / 10000))
+mayor_local="$(docker run --rm "$IMAGEN_PG" sh -c 'pg_dump --version' | sed -E 's/[^0-9]*([0-9]+).*/\1/')"
+if [ "$mayor_origen" -gt "$mayor_local" ]; then
+  echo "Neon corre Postgres $mayor_origen y este servidor, $mayor_local." >&2
+  echo "Subir la imagen de \`db\` y de \`respaldo\` en docker-compose.prod.yml y IMAGEN_PG" >&2
+  echo "en este script a postgres:$mayor_origen-alpine antes de mudar." >&2
+  exit 1
+fi
+echo "  Neon corre Postgres $mayor_origen; el servidor, $mayor_local."
 
 origen_host="$(sed -E 's#^[a-z]+://[^@]*@([^/:?]+).*#\1#' <<<"$NEON_URL")"
 
@@ -56,7 +82,9 @@ echo "Destino: el contenedor db de este servidor"
 echo
 echo "Se va a BORRAR todo lo que haya en la base del servidor y reemplazarlo"
 echo "por lo de Neon."
-read -r -p "¿Seguir? Escribí «mudar» para confirmar: " respuesta
+# `|| true`: sin terminal (la entrada se terminó), `read` falla y con `set -e`
+# el script cortaría sin decir nada. Así cae en «Cancelado».
+read -r -p "¿Seguir? Escribí «mudar» para confirmar: " respuesta || true
 if [ "$respuesta" != "mudar" ]; then
   echo "Cancelado. No se tocó nada."
   exit 1
@@ -78,10 +106,10 @@ echo "→ Levantando la base del servidor"
 # —una prueba, una mudanza anterior—, que se pueda volver.
 previo="respaldos/antes-de-mudar-$(date +%Y-%m-%d-%H%M).dump"
 # shellcheck disable=SC2016 # las variables las expande el shell del contenedor
-"${COMPOSE[@]}" exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -F c' > "$previo"
+"${COMPOSE[@]}" exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -F c' < /dev/null > "$previo"
 echo "  lo que había quedó en $previo"
 
-read -r -p "Último aviso: ¿reemplazar la base del servidor? [s/N] " respuesta
+read -r -p "Último aviso: ¿reemplazar la base del servidor? [s/N] " respuesta || true
 if [ "$respuesta" != "s" ] && [ "$respuesta" != "S" ]; then
   echo "Cancelado. El volcado de Neon quedó en $VOLCADO."
   exit 1

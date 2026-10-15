@@ -24,6 +24,11 @@ node_modules
 .playwright-mcp
 screenshots
 tests
+# Salvo los mensajes de ejemplo de WhatsApp: los importan el simulador y
+# `scripts/whatsapp-webhook.ts`, y `next build` chequea los tipos de todo
+# `scripts/`. Sin esta línea el build de la imagen falla (y en local no se ve,
+# porque ahí `tests/` está).
+!tests/fixtures/whatsapp/payloads.ts
 agente-taller
 *.png
 *.pdf

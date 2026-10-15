@@ -13,7 +13,7 @@ propio todo eso corre en una sola máquina, en cinco contenedores:
 
 | Contenedor | Qué hace | Reemplaza a |
 |---|---|---|
-| `db` | Postgres 17 | Neon |
+| `db` | Postgres 18, la misma versión mayor que Neon | Neon |
 | `app` | La aplicación (Next, empaquetado `standalone`) | Vercel |
 | `web` | Caddy: HTTPS con certificado automático, comprime, sirve las fotos | El CDN de Vercel |
 | `respaldo` | Un volcado diario de la base, con copia fuera de la máquina opcional | Los respaldos de Neon |
@@ -872,7 +872,9 @@ Una vez por mes, cinco minutos:
 - `docker image prune -f` y `docker builder prune -f --filter until=720h`: los
   builds viejos ocupan disco.
 - Imágenes de base: `dc pull db web respaldo && dc up -d db web respaldo`
-  (actualiza Postgres 17 y Caddy 2 dentro de la misma versión mayor).
+  (actualiza Postgres 18 y Caddy 2 dentro de la misma versión mayor). Pasar
+  de la 18 a la 19 no es cambiar el número: los datos de una versión mayor no
+  los lee la siguiente, y hay que volcar y restaurar (o `pg_upgrade`).
 - Con el correo propio, ver además [su mantenimiento](#mantenimiento-del-correo).
 
 Las actualizaciones del sistema y el certificado son automáticos.

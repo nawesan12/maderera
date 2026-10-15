@@ -27,6 +27,12 @@ cd "$(dirname "$0")/.."
 
 ENTORNO=.env.produccion
 COMPOSE=(docker compose --env-file "$ENTORNO" -f docker-compose.prod.yml)
+# Para ensayar la mudanza en otra máquina: un compose más que pisa lo que ahí
+# no puede ser igual (puertos ocupados, rutas). En el servidor no se declara.
+# Ver «Ensayar en otra máquina» en docs/SERVIDOR-PROPIO.md.
+if [ -n "${COMPOSE_ENSAYO:-}" ]; then
+  COMPOSE+=(-f "$COMPOSE_ENSAYO")
+fi
 
 if [ ! -f "$ENTORNO" ]; then
   echo "Falta $ENTORNO. Copiá .env.example y completalo (ver docs/SERVIDOR-PROPIO.md)." >&2
@@ -98,7 +104,7 @@ echo "→ Respaldando la base antes de migrar"
 mkdir -p respaldos
 respaldo="respaldos/antes-de-migrar-$(date +%Y-%m-%d-%H%M).dump"
 # shellcheck disable=SC2016 # las variables las expande el shell del contenedor
-"${COMPOSE[@]}" exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -F c' > "$respaldo"
+"${COMPOSE[@]}" exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -F c' < /dev/null > "$respaldo"
 echo "  $respaldo ($(du -h "$respaldo" | cut -f1))"
 
 echo "→ Migrando"

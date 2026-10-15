@@ -20,14 +20,23 @@ name: mjbj
 
 services:
   db:
-    image: postgres:17-alpine
+    # **La misma versión mayor que Neon** (18): un `pg_dump` más viejo que la
+    # base de origen se niega a volcarla, y un `pg_restore` más viejo que el
+    # volcado no lo lee. Si se cambia acá, cambiar también `respaldo` (abajo) e
+    # `IMAGEN_PG` en scripts/mudar-base.sh.
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?Falta POSTGRES_USER en .env.produccion}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env.produccion}
       POSTGRES_DB: ${POSTGRES_DB:?Falta POSTGRES_DB en .env.produccion}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Desde la 18 la imagen guarda los datos en `/var/lib/postgresql/18/docker`
+      # y el volumen va en `/var/lib/postgresql`, un nivel más arriba: así una
+      # actualización a la 19 deja la carpeta de la 18 al lado y se puede
+      # migrar con `pg_upgrade`. Montarlo en `.../data`, como hasta la 17, hace
+      # que la imagen no arranque.
+      - pgdata:/var/lib/postgresql
     # **Solo en loopback.** El puerto se publica para que el build de la
     # aplicación pueda consultar la base —Next prerenderiza páginas que leen
     # los ajustes y las sucursales— y para `scripts/mudar-base.sh`. Con
@@ -179,7 +188,8 @@ services:
       - /var/log/caddy:/var/log/caddy
 
   respaldo:
-    image: postgres:17-alpine
+    # La misma que `db`: `pg_dump` tiene que ser de la versión de la base.
+    image: postgres:18-alpine
     restart: unless-stopped
     depends_on:
       db:

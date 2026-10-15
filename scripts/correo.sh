@@ -19,6 +19,12 @@ cd "$(dirname "$0")/.."
 
 ENTORNO=.env.produccion
 COMPOSE=(docker compose --env-file "$ENTORNO" -f docker-compose.prod.yml)
+# Para ensayar la mudanza en otra máquina: un compose más que pisa lo que ahí
+# no puede ser igual (puertos ocupados, rutas). En el servidor no se declara.
+# Ver «Ensayar en otra máquina» en docs/SERVIDOR-PROPIO.md.
+if [ -n "${COMPOSE_ENSAYO:-}" ]; then
+  COMPOSE+=(-f "$COMPOSE_ENSAYO")
+fi
 
 if [ ! -f "$ENTORNO" ]; then
   echo "Falta $ENTORNO (ver docs/SERVIDOR-PROPIO.md)." >&2

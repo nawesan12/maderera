@@ -200,8 +200,13 @@ async function main() {
     }
 
     if (urls.size === 0) {
-      console.log("No hay URLs de Vercel Blob en la base. Nada que mudar.");
-      await mudarAdjuntosDeWhatsapp(cliente);
+      // La frase de «nada que mudar» es la señal de la guía para dar de baja
+      // Blob: solo puede salir si tampoco quedan adjuntos de WhatsApp, que
+      // están en una columna que la búsqueda de arriba saltea a propósito.
+      const adjuntos = await mudarAdjuntosDeWhatsapp(cliente);
+      if (adjuntos === 0) {
+        console.log("No hay URLs de Vercel Blob en la base. Nada que mudar.");
+      }
       return;
     }
 
@@ -248,6 +253,7 @@ async function main() {
     }
 
     if (PROBAR) {
+      await mudarAdjuntosDeWhatsapp(cliente);
       console.log("\nPara hacer la mudanza, correr de nuevo sin --probar.");
       return;
     }
@@ -300,16 +306,19 @@ async function main() {
  * `privado:<nombre>`, que es lo que lee `/api/whatsapp/medios/<id>`. Se
  * mudan los de Blob y los que quedaron en la carpeta pública de antes.
  */
-async function mudarAdjuntosDeWhatsapp(cliente: Client) {
+async function mudarAdjuntosDeWhatsapp(cliente: Client): Promise<number> {
   const privada = process.env.CARPETA_PRIVADA || path.join(process.cwd(), ".privado", "whatsapp");
   const { rows } = await cliente.query<{ id: string; media_url: string }>(
     `SELECT id, media_url FROM whatsapp_mensajes
       WHERE media_url LIKE 'https://%blob.vercel-storage.com/%' OR media_url LIKE '/subidas/whatsapp-%'`,
   );
-  if (rows.length === 0) return;
+  if (rows.length === 0) return 0;
 
   console.log(`\nAdjuntos de WhatsApp a mudar a ${privada}: ${rows.length}`);
-  if (PROBAR) return;
+  if (PROBAR) {
+    for (const fila of rows) console.log(`  movería ${fila.media_url}`);
+    return rows.length;
+  }
   await mkdir(privada, { recursive: true });
 
   let mudados = 0;
@@ -332,6 +341,7 @@ async function mudarAdjuntosDeWhatsapp(cliente: Client) {
     }
   }
   console.log(`Adjuntos de WhatsApp mudados: ${mudados} de ${rows.length}.`);
+  return rows.length - mudados;
 }
 
 main().catch((error) => {

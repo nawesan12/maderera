@@ -5,7 +5,7 @@ import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
-import { ArrowLeft, Download, Flame, Map, Tags } from "lucide-react";
+import { ArrowLeft, Download, Flame, ListChecks, Map, Tags } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_CORTE, Pasos } from "@/components/admin/pasos";
 import { fechaHora, plural } from "@/components/admin/formato";
@@ -184,6 +184,16 @@ export default async function FichaCortePage({
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              {/* Lo que tipea el operario en el semiautomático de WinCut, en
+                  el orden de la máquina: reemplaza a Cutty, que no anda. */}
+              <Link
+                href={`/hoja-de-corte/${corte.id}`}
+                target="_blank"
+                className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+              >
+                <ListChecks className="h-4 w-4" />
+                Hoja para la seccionadora
+              </Link>
               <Link
                 href={`/plano/${corte.id}`}
                 target="_blank"
@@ -203,6 +213,28 @@ export default async function FichaCortePage({
               </a>
             </div>
           </header>
+
+          {/* El programa para WinCut, en prueba. Va aparte de los otros
+              botones y con su aviso a la vista: si la máquina lo lee mal,
+              corta mal una placa, y eso solo lo evita mirar el dibujo en la
+              pantalla de la máquina antes de arrancar. Ver docs/PTX.md. */}
+          {plano.placas.length > 0 && (
+            <div className="estado-marca flex flex-wrap items-center justify-between gap-3 border-b border-linea bg-[var(--estado-fondo)] px-5 py-3">
+              <p className="max-w-2xl text-base">
+                <strong>En prueba:</strong> el programa para la seccionadora
+                todavía no se probó en la máquina del taller. Antes de cortar,
+                el operario tiene que abrirlo en WinCut y comparar el dibujo de
+                la pantalla con la hoja de corte.
+              </p>
+              <a
+                href={`/api/cortes/${corte.id}/ptx`}
+                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-current bg-card px-3.5 text-base font-medium transition-colors hover:bg-muted"
+              >
+                <Download className="h-4 w-4" />
+                Programa para la máquina (.PTX) — prueba
+              </a>
+            </div>
+          )}
 
           <div className="grid gap-px bg-linea sm:grid-cols-4">
             <Cifra

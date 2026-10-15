@@ -1,0 +1,3 @@
+# Los programas de ejemplo para la seccionadora van con CRLF, como los lee
+# Windows XP: que git no los toque nunca.
+*.PTX -text

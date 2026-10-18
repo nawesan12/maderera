@@ -116,7 +116,12 @@ if ! "${COMPOSE[@]}" --profile herramientas run --rm migrador; then
 fi
 
 echo "→ Construyendo la aplicación"
-if ! "${COMPOSE[@]}" build app; then
+# Con bake, no con `compose build`: la app se construye con `network: host`
+# para llegar a la base, y desde Compose v5 eso es un permiso que hay que dar
+# con `--allow=network.host`, que `compose build` no acepta (corta con
+# «additional privileges requested»). Compose arma la definición y bake la
+# construye con el permiso.
+if ! "${COMPOSE[@]}" build --print app | docker buildx bake -f - --allow=network.host; then
   echo >&2
   echo "El build FALLÓ después de migrar. La aplicación anterior sigue corriendo." >&2
   exit 1

@@ -97,8 +97,16 @@ fi
 # revés el riesgo es menor —la versión que sigue corriendo convive un par de
 # minutos con columnas que no conoce—, y si el build falla después de migrar,
 # la anterior sigue sirviendo.
-echo "→ Construyendo el migrador"
-"${COMPOSE[@]}" --profile herramientas build migrador
+# El secreto con que el worker de Go le avisa a Next qué revalidar. Si falta
+# se genera una vez: es entre dos servicios de esta misma máquina y nadie lo
+# tiene que tipear.
+if ! grep -Eq '^REVALIDAR_SECRETO=.+' "$ENTORNO"; then
+  echo "REVALIDAR_SECRETO=\"$(openssl rand -hex 32)\"" >> "$ENTORNO"
+  echo "→ Generé REVALIDAR_SECRETO en $ENTORNO"
+fi
+
+echo "→ Construyendo el backend en Go"
+"${COMPOSE[@]}" build api
 
 echo "→ Respaldando la base antes de migrar"
 mkdir -p respaldos
@@ -107,13 +115,22 @@ respaldo="respaldos/antes-de-migrar-$(date +%Y-%m-%d-%H%M).dump"
 "${COMPOSE[@]}" exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -F c' < /dev/null > "$respaldo"
 echo "  $respaldo ($(du -h "$respaldo" | cut -f1))"
 
-echo "→ Migrando"
-if ! "${COMPOSE[@]}" --profile herramientas run --rm migrador; then
+echo "→ Migrando (goose)"
+if ! "${COMPOSE[@]}" --profile herramientas run --rm migrar; then
   echo >&2
   echo "La migración FALLÓ. No se tocó la aplicación: sigue corriendo la versión anterior." >&2
   echo "El respaldo de antes de migrar está en $respaldo." >&2
   exit 1
 fi
+
+# Go primero: la aplicación nueva le pide la sesión (y, tanda por tanda, los
+# datos), así que tiene que estar arriba antes de que Next arranque.
+echo "→ Cambiando la API y el worker por los nuevos"
+if ! "${COMPOSE[@]}" up -d --no-deps --wait --wait-timeout 120 api; then
+  echo "La API nueva no arrancó. Ver: dc logs api" >&2
+  exit 1
+fi
+"${COMPOSE[@]}" up -d --no-deps worker
 
 echo "→ Construyendo la aplicación"
 # Con bake, no con `compose build`: la app se construye con `network: host`

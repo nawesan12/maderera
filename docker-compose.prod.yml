@@ -70,6 +70,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      api:
+        condition: service_healthy
     env_file:
       - .env.produccion
     environment:
@@ -98,6 +100,9 @@ services:
       SMTP_HOST: ${SMTP_HOST:-correo}
       SMTP_PUERTO: ${SMTP_PUERTO:-587}
       SMTP_NOMBRE_TLS: ${SMTP_NOMBRE_TLS:-mail.${CORREO_DOMINIO:-${DOMINIO}}}
+      # La API de Go (backend/, docs/go/PLAN.md): la sesión y, tanda por
+      # tanda, todo lo que la aplicación leía de la base. Por la red interna.
+      API_URL: http://api:8080
       # El certificado de ARCA, como archivos de solo lectura (ver el volumen
       # abajo). Si todavía no están, la facturación sigue con el proveedor
       # interno, igual que sin variables.
@@ -137,8 +142,77 @@ services:
       start_period: 30s
       retries: 3
 
-  # Las migraciones y los scripts de mudanza. No queda corriendo: el perfil
-  # `herramientas` hace que `up` lo ignore, y se usa con `run --rm`.
+  # **El backend en Go** (backend/, docs/go/PLAN.md). Una sola imagen con un
+  # binario, `mjbj`, que cada servicio corre con su papel. Distroless: sin
+  # shell, sin paquetes, unos 20 MB.
+  #
+  # La API atiende /api/v1 (y /api/vivo, el tiempo real) detrás de Caddy, y la
+  # aplicación de Next le pide los datos por la red interna. Sin `ports`, como
+  # la aplicación: solo Caddy y Next le hablan.
+  api:
+    build:
+      context: ./backend
+    image: mjbj-go:${GIT_SHA:-local}
+    command: ["api"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.produccion
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_SSL: "off"
+      CARPETA_SUBIDAS: /datos/subidas
+    volumes:
+      - subidas:/datos/subidas
+    expose:
+      - "8080"
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "/mjbj", "salud", "http://127.0.0.1:8080/salud"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  # La cola de trabajos y las tareas periódicas que ya son de Go. Le avisa a
+  # Next qué volver a armar (next.revalidar) por la red interna.
+  worker:
+    image: mjbj-go:${GIT_SHA:-local}
+    command: ["worker"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.produccion
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_SSL: "off"
+      NEXT_URL: http://app:3000
+      CARPETA_SUBIDAS: /datos/subidas
+    volumes:
+      - subidas:/datos/subidas
+    stop_grace_period: 30s
+
+  # Las migraciones, con goose (backend/db/migraciones; la primera vez adopta
+  # las 79 de drizzle). Como el migrador viejo: el perfil `herramientas` hace
+  # que `up` lo ignore, y se usa con `run --rm`.
+  migrar:
+    profiles: ["herramientas"]
+    image: mjbj-go:${GIT_SHA:-local}
+    command: ["migrar"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_SSL: "off"
+
+  # Los scripts de mudanza en TypeScript (scripts/mudar-subidas.ts). Las
+  # migraciones ya no corren acá: las hace `migrar`, con goose. No queda
+  # corriendo: el perfil `herramientas` hace que `up` lo ignore.
   migrador:
     profiles: ["herramientas"]
     build:

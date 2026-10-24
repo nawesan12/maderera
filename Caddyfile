@@ -141,6 +141,19 @@ autoconfig.{$CORREO_DOMINIO} {
 		file_server
 	}
 
+	# La API de Go (servicio `api`). /api/vivo es el tiempo real del panel:
+	# la dirección que ya usan las pantallas, ahora servida por Go. Sin buffer
+	# (flush_interval -1) para que los eventos lleguen al instante.
+	@go path /api/v1/* /api/vivo
+	handle @go {
+		request_body {
+			max_size 25MB
+		}
+		reverse_proxy api:8080 {
+			flush_interval -1
+		}
+	}
+
 	# Todo lo demás va a la aplicación.
 	handle {
 		# Lo que Next ya marca como inmutable —los JS y CSS con hash en el

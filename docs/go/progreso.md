@@ -19,6 +19,11 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 - Las URLs que llama alguien de afuera (webhooks, mostrador offline, agente
   del taller, `/baja`, `/api/tareas`) no cambian.
 - Al terminar una sesión: actualizar la tabla de abajo y anotar lo aprendido.
+- **Al cerrar cada tanda, un benchmark TypeScript contra Go** (pedido de
+  Nahuel, 24/10/2026): el mismo trabajo medido de los dos lados, en la misma
+  máquina y contra la misma base —latencia p50/p95/p99, pedidos por segundo,
+  memoria y CPU—, con el script en `bench/<tanda>/` para poder repetirlo, y
+  los números en la sección «Benchmarks» de abajo.
 
 ## Estado
 
@@ -51,6 +56,10 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 - [x] Probado contra docker-mailserver 16.0.1 local (curl y navegador)
 - [x] Roundcube afuera
 - [ ] Encendido en la VPS (espera los registros DNS y el PTR)
+
+## Benchmarks
+
+(uno por tanda, al cerrarla)
 
 ## Lo aprendido
 

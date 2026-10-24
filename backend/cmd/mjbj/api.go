@@ -11,6 +11,7 @@ import (
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/vivo"
 )
 
 type configAPI struct {
@@ -25,7 +26,8 @@ func correrAPI() error {
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx, parar := context.WithCancel(context.Background())
+	defer parar()
 	pool, err := cfg.Base.Pool(ctx)
 	if err != nil {
 		return err
@@ -44,6 +46,16 @@ func correrAPI() error {
 		}
 		_, _ = w.Write([]byte("ok"))
 	})
+
+	// El tiempo real: una conexión LISTEN por proceso, repartida por SSE.
+	urlBase, err := cfg.Base.URLConexion()
+	if err != nil {
+		return err
+	}
+	central := vivo.Nueva(urlBase, log)
+	go central.Correr(ctx)
+	m.Handle("GET /api/v1/vivo", central)
+	m.Handle("GET /api/vivo", central) // la dirección que usan hoy las pantallas
 
 	// Lo que no es de ningún dominio: 404, en el mismo formato que el resto.
 	m.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {

@@ -120,8 +120,19 @@ interface Tomado extends Record<string, unknown> {
   max_intentos: number;
 }
 
+/*
+ * **Solo los tipos que este lado sabe hacer.** La cola la comparte con el
+ * worker de Go (backend/internal/cola) durante la mudanza: cada tipo de
+ * trabajo es de uno solo, y si los dos tomaran de todo, el de Go agarraría
+ * un `pago.aviso` que todavía no sabe procesar. Ver docs/go/progreso.md.
+ */
+const TIPOS_PROPIOS = Object.keys(MANEJADORES);
+
 async function tomarUno(soloId?: string): Promise<Tomado | null> {
-  const filtro = soloId ? sql`and id = ${soloId}` : sql``;
+  const filtro = sql`and tipo in (${sql.join(
+    TIPOS_PROPIOS.map((t) => sql`${t}`),
+    sql`, `,
+  )}) ${soloId ? sql`and id = ${soloId}` : sql``}`;
   const { rows } = await db.execute<Tomado>(sql`
     update trabajos
        set estado = 'procesando',

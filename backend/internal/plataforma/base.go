@@ -38,6 +38,10 @@ func (c ConfigBase) url() (string, error) {
 	return u.String(), nil
 }
 
+// URLConexion es la URL con el ajuste de SSL aplicado, para quien necesita
+// una conexión suelta (el LISTEN del tiempo real).
+func (c ConfigBase) URLConexion() (string, error) { return c.url() }
+
 // Pool abre el pool de conexiones y prueba que la base responda: si no
 // responde al arrancar, mejor saberlo ahí que en el primer pedido.
 func (c ConfigBase) Pool(ctx context.Context) (*pgxpool.Pool, error) {

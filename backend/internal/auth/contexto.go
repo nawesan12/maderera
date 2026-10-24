@@ -28,6 +28,12 @@ func (s *Servicio) Middleware(sig http.Handler) http.Handler {
 	})
 }
 
+// ConSesion deja una sesión en el contexto (lo hace el middleware; los tests
+// de otros paquetes lo usan para no pasar por la cookie).
+func ConSesion(ctx context.Context, s *Sesion) context.Context {
+	return context.WithValue(ctx, claveSesion{}, s)
+}
+
 // DeContexto es la sesión del pedido, o nil.
 func DeContexto(ctx context.Context) *Sesion {
 	s, _ := ctx.Value(claveSesion{}).(*Sesion)

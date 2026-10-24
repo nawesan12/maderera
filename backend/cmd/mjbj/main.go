@@ -29,6 +29,8 @@ func main() {
 		err = correrCorreo()
 	case "api":
 		err = correrAPI()
+	case "worker":
+		err = correrWorker()
 	case "migrar":
 		err = correrMigrar()
 	case "salud":
@@ -47,6 +49,7 @@ func uso() {
 	fmt.Fprintln(os.Stderr, `Uso: mjbj <servicio>
 
   api             la API (/api/v1), detrás de Caddy
+  worker          la cola de trabajos y las tareas periódicas
   correo          el webmail (correo.<dominio>)
   migrar          aplica las migraciones de la base (y adopta las de drizzle)
   salud <url>     pide la URL y sale con error si no responde 200 (para el

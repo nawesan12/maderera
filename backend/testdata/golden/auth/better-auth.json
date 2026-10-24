@@ -1,0 +1,224 @@
+{
+  "secreto": "secreto-de-prueba-mjbj-con-32-caracteres-o-mas",
+  "generado": "2026-10-24T22:50:15.201Z",
+  "http": {
+    "baseURL": "http://localhost:3100",
+    "email": "golden-http-1792882215210@prueba.test",
+    "clave": "Clave con ñ y tilde á 2026",
+    "userId": "sULVfarabdFfH1MQO6rY78iUJaxdjtkY",
+    "cookiesAlta": [
+      "better-auth.session_token=p5JGVE37KEScSiPvJZadc75pELayWRg3.WrTWQMANq7DJUwSujbS7qgQc6TcH4698nk0MRJSHHFg%3D; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax"
+    ],
+    "cookiesEntrada": [
+      "better-auth.session_token=r32lfddySRGAlcEbs6aVxZu3l4VFoVCC.N4RGIxryU2NTRbGg5CAPUDLS0CWAVQURPxAQ20PnIM4%3D; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax"
+    ],
+    "user": [
+      {
+        "id": "sULVfarabdFfH1MQO6rY78iUJaxdjtkY",
+        "name": "Golden http",
+        "email": "golden-http-1792882215210@prueba.test",
+        "email_verified": false,
+        "image": null,
+        "created_at": "2026-10-24 22:50:15.417",
+        "updated_at": "2026-10-24 22:50:15.417"
+      }
+    ],
+    "account": [
+      {
+        "id": "hdRKtuSav7XO0Mn9BlkS8YA76YTtx9Hy",
+        "issuer": "local:credential",
+        "account_id": "sULVfarabdFfH1MQO6rY78iUJaxdjtkY",
+        "provider_id": "credential",
+        "user_id": "sULVfarabdFfH1MQO6rY78iUJaxdjtkY",
+        "password": "c6bd3772d450483275da22e7c7ea8931:5376bc57cc170b5d749df7d77ed3e1c6a05c725a0623d180cb7e50d411b4aefb46ba2d5773e0c976044d9dfd305d33e688046eeffc05619ec008c306dc2b8afc",
+        "created_at": "2026-10-24 22:50:15.424",
+        "updated_at": "2026-10-24 22:50:15.424"
+      }
+    ],
+    "session": [
+      {
+        "id": "V0wHQD3xQbVU02ip226yrI3ow17BftGl",
+        "token": "p5JGVE37KEScSiPvJZadc75pELayWRg3",
+        "expires_at": "2026-11-23 22:50:15.431",
+        "created_at": "2026-10-24 22:50:15.431",
+        "updated_at": "2026-10-24 22:50:15.431",
+        "ip_address": "",
+        "user_agent": "",
+        "user_id": "sULVfarabdFfH1MQO6rY78iUJaxdjtkY"
+      },
+      {
+        "id": "x0fZIdSe1eyH2XAeM2qkeOCqhZh5s1OC",
+        "token": "r32lfddySRGAlcEbs6aVxZu3l4VFoVCC",
+        "expires_at": "2026-11-23 22:50:15.58",
+        "created_at": "2026-10-24 22:50:15.58",
+        "updated_at": "2026-10-24 22:50:15.58",
+        "ip_address": "",
+        "user_agent": "",
+        "user_id": "sULVfarabdFfH1MQO6rY78iUJaxdjtkY"
+      }
+    ],
+    "profiles": [
+      {
+        "user_id": "sULVfarabdFfH1MQO6rY78iUJaxdjtkY",
+        "role": "cliente",
+        "staff_role": null,
+        "condicion_iva": "consumidor_final"
+      }
+    ],
+    "getSession": {
+      "session": {
+        "expiresAt": "2026-11-23T22:50:15.580Z",
+        "token": "r32lfddySRGAlcEbs6aVxZu3l4VFoVCC",
+        "createdAt": "2026-10-24T22:50:15.580Z",
+        "updatedAt": "2026-10-24T22:50:15.580Z",
+        "ipAddress": "",
+        "userAgent": "",
+        "userId": "sULVfarabdFfH1MQO6rY78iUJaxdjtkY",
+        "id": "x0fZIdSe1eyH2XAeM2qkeOCqhZh5s1OC"
+      },
+      "user": {
+        "name": "Golden http",
+        "email": "golden-http-1792882215210@prueba.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": "2026-10-24T22:50:15.417Z",
+        "updatedAt": "2026-10-24T22:50:15.417Z",
+        "id": "sULVfarabdFfH1MQO6rY78iUJaxdjtkY"
+      }
+    }
+  },
+  "https": {
+    "baseURL": "https://mjbj.com.ar",
+    "email": "golden-https-1792882215605@prueba.test",
+    "clave": "Clave con ñ y tilde á 2026",
+    "userId": "BhJxmjZsdxJm5RiytihKgvb7rWVqx5MY",
+    "cookiesAlta": [
+      "__Secure-better-auth.session_token=KQMv00LqYy2iNG4bnqmh8fPkBmcnuYvJ.UioEbQOBU9semASqq8a%2F11ClcdHe7b5364WLQ2eRMQQ%3D; Max-Age=2592000; Path=/; HttpOnly; Secure; SameSite=Lax"
+    ],
+    "cookiesEntrada": [
+      "__Secure-better-auth.session_token=jcRF7NjngjHmUUFg2nNj1NXKwuhQiuFl.KEtaTKMWJj1Uu8ZPlY6ni9YKoPWfAWKvTytlZmLSt84%3D; Max-Age=2592000; Path=/; HttpOnly; Secure; SameSite=Lax"
+    ],
+    "user": [
+      {
+        "id": "BhJxmjZsdxJm5RiytihKgvb7rWVqx5MY",
+        "name": "Golden https",
+        "email": "golden-https-1792882215605@prueba.test",
+        "email_verified": false,
+        "image": null,
+        "created_at": "2026-10-24 22:50:15.7",
+        "updated_at": "2026-10-24 22:50:15.7"
+      }
+    ],
+    "account": [
+      {
+        "id": "RFn3KeSeMkkirsY4logJ144yqOCLteNs",
+        "issuer": "local:credential",
+        "account_id": "BhJxmjZsdxJm5RiytihKgvb7rWVqx5MY",
+        "provider_id": "credential",
+        "user_id": "BhJxmjZsdxJm5RiytihKgvb7rWVqx5MY",
+        "password": "9efb622833ed6f46ef9a915ae95fc76a:f1780e8d9e2a5c729f864335fd3c7746cc280b09ff3536934b899c7dc22ce5cbab5cc9e5135ffd56afa8ad91f1d7cc4420a41b5ee1077830debd61c8343fafb5",
+        "created_at": "2026-10-24 22:50:15.703",
+        "updated_at": "2026-10-24 22:50:15.703"
+      }
+    ],
+    "session": [
+      {
+        "id": "Lt2A3ESzNl3G62Fudok1jO62gnTu7dIQ",
+        "token": "KQMv00LqYy2iNG4bnqmh8fPkBmcnuYvJ",
+        "expires_at": "2026-11-23 22:50:15.706",
+        "created_at": "2026-10-24 22:50:15.706",
+        "updated_at": "2026-10-24 22:50:15.706",
+        "ip_address": "",
+        "user_agent": "",
+        "user_id": "BhJxmjZsdxJm5RiytihKgvb7rWVqx5MY"
+      },
+      {
+        "id": "RqmLc3ccE5pYeGxrPY4sea2sbqUXLbR9",
+        "token": "jcRF7NjngjHmUUFg2nNj1NXKwuhQiuFl",
+        "expires_at": "2026-11-23 22:50:15.811",
+        "created_at": "2026-10-24 22:50:15.811",
+        "updated_at": "2026-10-24 22:50:15.811",
+        "ip_address": "",
+        "user_agent": "",
+        "user_id": "BhJxmjZsdxJm5RiytihKgvb7rWVqx5MY"
+      }
+    ],
+    "profiles": [
+      {
+        "user_id": "BhJxmjZsdxJm5RiytihKgvb7rWVqx5MY",
+        "role": "cliente",
+        "staff_role": null,
+        "condicion_iva": "consumidor_final"
+      }
+    ],
+    "getSession": {
+      "session": {
+        "expiresAt": "2026-11-23T22:50:15.811Z",
+        "token": "jcRF7NjngjHmUUFg2nNj1NXKwuhQiuFl",
+        "createdAt": "2026-10-24T22:50:15.811Z",
+        "updatedAt": "2026-10-24T22:50:15.811Z",
+        "ipAddress": "",
+        "userAgent": "",
+        "userId": "BhJxmjZsdxJm5RiytihKgvb7rWVqx5MY",
+        "id": "RqmLc3ccE5pYeGxrPY4sea2sbqUXLbR9"
+      },
+      "user": {
+        "name": "Golden https",
+        "email": "golden-https-1792882215605@prueba.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": "2026-10-24T22:50:15.700Z",
+        "updatedAt": "2026-10-24T22:50:15.700Z",
+        "id": "BhJxmjZsdxJm5RiytihKgvb7rWVqx5MY"
+      }
+    }
+  },
+  "hashes": [
+    {
+      "clave": "maderera2026",
+      "hash": "fc40dc20f5f568ae252ad33478337590:6c5e5cb21b3992b46081b1b8aa3349555222889afb485f04005603378f151c6796f49ad6c63845b81ad9d53b029ca93b9c873fb017a202c941bd7369c1a5fd5e"
+    },
+    {
+      "clave": "Clave con ñ y tilde á",
+      "hash": "09c6b88a06ef819addd25b68ba3d97b6:69ef4832e201387ea978b99a0af4282f3e392ba7b118d2157fc9e3eb8f2eafcec3bfc44b856df1538d82807a0c0f02edfc5fb7baa65e5eb03c9dcd6b4d0b18b1"
+    },
+    {
+      "clave": "café",
+      "hash": "5e560135fef88ae939a4e61fd3797076:c8c2b163ff9ed3b0259120d4420f72ab0d83f006694102925bb232b082fb4a4af0fb044e449a1d01c6b8b3f122cc24c3d9a937b6b7d9b5125747222633a0d31f"
+    },
+    {
+      "clave": "café",
+      "hash": "e4edb7adaba09ea22efc44783816d7fd:c4a5e7a0eee2dc23da162fee5dfc55b139f6975bc25d16a83819d0e4a467799e1c69e909357df4d8b37aad678c7158d934c24feb068f7a1d6adab8ec4bafa70c"
+    },
+    {
+      "clave": "ｆｕｌｌｗｉｄｔｈ",
+      "hash": "aad70619132874014cad2ba213f26df4:290491b3038f5be5a2aee3dc146bc76ffd19db678b4c8e1588b03e3eeb10e85ab7ea38462811e5bd595908dd920787035c71dd73d470f3cfacf139c58aee66c4"
+    },
+    {
+      "clave": "🔑 llave",
+      "hash": "5e1a00389efd4f18bb8264c1b30b7bf9:0aa3a6e62fc17802672f4e377d79b3e6e300d07f5e9d8af61bd615b2d15027da435a289cddc4574ee11d0f2243034ae8d489cc9292f8ea06052650c0f23e6078"
+    },
+    {
+      "clave": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "hash": "f33dee731da04cc3a9772eb368689718:0cb8a65393099b23781da5189fd52b8a99fe5c8fbcae1d4de16308269b202152ede2288271798af091aeaa2ffb8acf18cf34f17f6d657626ba711cef436ccb80"
+    }
+  ],
+  "firmas": [
+    {
+      "valor": "abc",
+      "firmado": "abc.rO6H0JHIJO%2FCmRkf%2FSq5CqDLq7d15WTrW%2BKHUZeKODA%3D"
+    },
+    {
+      "valor": "Tk9QZ3JlYXRUb2tlbjEyMzQ1Njc4OTAxMjM0NTY",
+      "firmado": "Tk9QZ3JlYXRUb2tlbjEyMzQ1Njc4OTAxMjM0NTY.tWurgrwjCowA4VcnC2D6xFGkGnVS%2FkoJjKlTsdyuurg%3D"
+    },
+    {
+      "valor": "a.b.c",
+      "firmado": "a.b.c.FH9sSuvCFvcoYHwWrb5cMWlniGERt1gApKGsqPEs6nI%3D"
+    },
+    {
+      "valor": "ñ",
+      "firmado": "%C3%B1.J%2FDJzFMjOYpqizCHIYbPeDWCFUIGTfzDbTC9lWmoRWs%3D"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+# Las consultas de la base, en SQL a mano (db/consultas/<dominio>.sql), y sqlc
+# genera el Go tipado en internal/sqlc. El esquema lo lee de las mismas
+# migraciones que aplica goose: no hay una segunda definición que se desfase.
+#
+#   cd backend && sqlc generate
+#
+# Los numeric salen como jsmath.Num (float64 leído como lo leía el
+# TypeScript, ver internal/jsmath), los timestamps como time.Time en UTC, y
+# lo que admite nulo, como puntero.
+version: "2"
+sql:
+  - engine: postgresql
+    schema: db/migraciones
+    queries: db/consultas
+    gen:
+      go:
+        package: sqlc
+        out: internal/sqlc
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        emit_enum_valid_method: true
+        emit_all_enum_values: true
+        emit_json_tags: true
+        json_tags_case_style: camel
+        overrides:
+          - db_type: pg_catalog.numeric
+            go_type: mjbj/internal/jsmath.Num
+          - db_type: pg_catalog.numeric
+            nullable: true
+            go_type:
+              import: mjbj/internal/jsmath
+              type: Num
+              pointer: true
+          - db_type: pg_catalog.timestamp
+            go_type: time.Time
+          - db_type: pg_catalog.timestamp
+            nullable: true
+            go_type:
+              import: time
+              type: Time
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              import: time
+              type: Time
+              pointer: true
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: jsonb
+            go_type: encoding/json.RawMessage
+          - db_type: jsonb
+            nullable: true
+            go_type: encoding/json.RawMessage

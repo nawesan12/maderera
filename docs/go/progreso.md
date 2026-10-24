@@ -29,8 +29,8 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 
 | # | Tanda | Rama | Estado |
 |---|---|---|---|
-| 0 | Correo (`correo.mjbj.com.ar`) | `go-correo` | en curso |
-| 1 | Base común | | |
+| 0 | Correo (`correo.mjbj.com.ar`) | `go-correo` | hecha (falta encenderla en la VPS: DNS y PTR) |
+| 1 | Base común | `go-base` | hecha (falta desplegarla; E2E de Playwright pendiente) |
 | 2 | Catálogo público y contenido | | |
 | 3 | Productos, precios, stock, acopio | | |
 | 4 | Clientes, cuenta corriente, cheques, cobros | | |
@@ -57,9 +57,43 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 - [x] Roundcube afuera
 - [ ] Encendido en la VPS (espera los registros DNS y el PTR)
 
+## Tanda 1: la base común
+
+- [x] goose: las 79 de drizzle convertidas, esquema idéntico, adopción de la base
+- [x] sqlc (numeric → jsmath.Num, timestamps UTC) y `internal/pruebas`
+- [x] jsmath: idéntico a JS bit a bit en 6027 casos
+- [x] Sesión compatible con better-auth (golden en los dos sentidos), entrar,
+      registrarse, salir, cambiar la clave; `mjbj usuario staff|cliente`
+- [x] API con OpenAPI (oapi-codegen), validación de contrato encadenable, problem+json
+- [x] limites, cola (cada lado sus tipos), tareas, worker, next.revalidar
+- [x] vivo (SSE) en Go; la ruta de Next y lib/vivo/escucha.ts, borradas
+- [x] email, push, subidas, roles (golden de ACCESO)
+- [x] Next: getSession, entrar, registrarse y salir por la API; better-auth
+      fuera de la aplicación (queda de desarrollo, para los golden)
+- [x] Despliegue: api, worker, migrar (goose), Caddy, desplegar.sh
+- [ ] E2E con Playwright (login primero; un flujo más por tanda)
+- [ ] Desplegar en la VPS y probar una cookie real de producción
+- Queda en TS hasta su tanda: `lib/limites` (lo usan otras acciones; cuenta
+  en la misma tabla que Go) y las tareas de `lib/tareas` (el cron sigue
+  pegándole a Next).
+
 ## Benchmarks
 
-(uno por tanda, al cerrarla)
+Uno por tanda, al cerrarla. Detalle y cómo repetirlos: `bench/<tanda>/README.md`.
+
+### Tanda 1 (24/10/2026, Mac i7 6 núcleos, Postgres 18 en Docker)
+
+| Prueba | TypeScript | Go | Go / TS |
+|---|---:|---:|---:|
+| Leer la sesión, 50 a la vez: pedidos/s | 829 | 4989 | **6,0×** |
+| ídem, p50 / p99 | 56,8 / 101,1 ms | 9,4 / 20,4 ms | **6× / 5× menos** |
+| ídem, memoria máx. | 324 MB | 83 MB | **3,9× menos** |
+| Entrar con clave (scrypt), 2 hilos: por s | 26,6 | 22,9 | 0,9× (empate) |
+| La cola, 2000 trabajos vacíos: por s | 276 | 340 | 1,2× |
+
+Lo que pasa en cada pedido es donde Go gana de verdad (un núcleo contra
+todos, y una consulta con join contra las varias de better-auth). Lo que
+manda scrypt o Postgres, empata.
 
 ## Lo aprendido
 

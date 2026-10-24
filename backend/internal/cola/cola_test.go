@@ -136,3 +136,29 @@ func TestDosProcesosNoRepiten(t *testing.T) {
 		}
 	}
 }
+
+// El benchmark de la tanda 1 (bench/tanda1): 2000 trabajos vacíos, un
+// proceso tomando de a uno. Mide lo que cuesta la cola en sí (tomar, marcar
+// hecho), no los trabajos.
+func BenchmarkCola2000(b *testing.B) {
+	pool := pruebas.Base(b)
+	q := sqlc.New(pool)
+	ctx := context.Background()
+	c := Nueva(q, silencio)
+	c.Registrar("bench.vacio", func(context.Context, json.RawMessage) error { return nil })
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		_, _ = pool.Exec(ctx, `insert into trabajos (tipo, carga) select 'bench.vacio', '{}'::jsonb from generate_series(1, 2000)`)
+		b.StartTimer()
+		for {
+			r, err := c.Procesar(ctx, 500)
+			if err != nil {
+				b.Fatal(err)
+			}
+			if r.Hechos == 0 {
+				break
+			}
+		}
+	}
+	b.ReportMetric(2000*float64(b.N)/b.Elapsed().Seconds(), "trabajos/s")
+}

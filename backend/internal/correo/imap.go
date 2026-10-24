@@ -291,11 +291,11 @@ type Pagina struct {
 const porPagina = 50
 
 var opcionesResumen = &imap.FetchOptions{
-	UID:           true,
-	Flags:         true,
-	Envelope:      true,
-	InternalDate:  true,
-	RFC822Size:    true,
+	UID:          true,
+	Flags:        true,
+	Envelope:     true,
+	InternalDate: true,
+	RFC822Size:   true,
 	// Extendida: sin ella el servidor no manda el Content-Disposition, y no
 	// se puede saber qué partes son adjuntos.
 	BodyStructure: &imap.FetchItemBodyStructure{Extended: true},

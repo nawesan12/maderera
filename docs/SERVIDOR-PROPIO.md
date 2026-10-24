@@ -19,9 +19,9 @@ propio todo eso corre en una sola máquina, en cinco contenedores:
 | `respaldo` | Un volcado diario de la base, con copia fuera de la máquina opcional | Los respaldos de Neon |
 | `cron` | Llama a las tareas programadas a horario (`servidor/cron/crontab`) | Nada: en Vercel no había |
 | `correo` | **Opcional.** Las casillas propias: recibe, guarda y manda correo (docker-mailserver) | Resend para los avisos; Gmail para las casillas |
-| `webmail` | **Opcional.** Leer el correo desde el navegador (Roundcube) | — |
+| `correo-web` | **Opcional.** Leer el correo desde el navegador (el webmail propio, en Go) | — |
 
-`correo` y `webmail` solo levantan con `COMPOSE_PROFILES=correo` en
+`correo` y `correo-web` solo levantan con `COMPOSE_PROFILES=correo` en
 `.env.produccion`: ver [Correo propio](#14-correo-propio-opcional) antes de
 encenderlos.
 
@@ -47,7 +47,8 @@ alguien tiene que mirar de vez en cuando que sigan andando (ver
 | `scripts/mudar-subidas.ts` | Una vez: trae los archivos de Vercel Blob |
 | `servidor/fail2ban/` | El filtro y las cárceles de fail2ban |
 | `servidor/cron/` | El crontab y el script que dispara cada tarea |
-| `servidor/correo/`, `servidor/webmail/` | La configuración del correo propio (sin nada secreto) |
+| `servidor/correo/` | La configuración del correo propio (sin nada secreto) |
+| `backend/` | El backend en Go; por ahora, el webmail (`mjbj correo`). Ver `docs/go/` |
 | `scripts/correo.sh` | Casillas, alias, DKIM, relay y los registros DNS del correo |
 | `.github/workflows/desplegar.yml` | Desplegar desde GitHub, apagado por omisión |
 
@@ -491,7 +492,7 @@ Casillas con el dominio de la maderera —`ventas@`, `administracion@`— que se
 leen desde el teléfono, la PC o el navegador, y por las que salen también los
 avisos y las campañas de la tienda. Corre en dos contenedores más: `correo`
 (docker-mailserver: Postfix para mandar y recibir, Dovecot para leer, Rspamd
-contra el spam y para firmar) y `webmail` (Roundcube).
+contra el spam y para firmar) y `correo-web` (el webmail, en `correo.<dominio>`).
 
 ### Antes de decidir
 
@@ -560,7 +561,7 @@ tarde; no se pierde, pero tarda.
 
 **Programas de correo** con esta opción: entrante `imap.hostinger.com` (993,
 SSL/TLS), saliente `smtp.hostinger.com` (465, SSL/TLS), y el webmail de
-Hostinger en vez de Roundcube. Las secciones que siguen —encenderlo, DNS
+Hostinger en vez del propio. Las secciones que siguen —encenderlo, DNS
 propio, calentar la IP, relay— son solo para el servidor propio.
 
 ### Encenderlo
@@ -578,6 +579,7 @@ propio, calentar la IP, relay— son solo para el servidor propio.
 
    ```bash
    COMPOSE_PROFILES="correo"
+   CORREO_CLAVE="$(openssl rand -base64 32)"   # la clave de las sesiones del webmail
    ```
 
    y desplegar (`./scripts/desplegar.sh`). Caddy saca el certificado de
@@ -631,7 +633,7 @@ la dirección de prueba y las casillas siguen en el proveedor de antes**: en
 correo usa el `DOMINIO` del sitio.
 
 Lo único que hace falta en el DNS para eso son los registros A de `mail`,
-`webmail` y `autoconfig` (en Cloudflare, «Solo DNS», sin nube naranja: el
+`correo` y `autoconfig` (en Cloudflare, «Solo DNS», sin nube naranja: el
 correo no pasa por el proxy). **El MX, el SPF y el DKIM del proveedor viejo
 no se tocan**: el correo sigue llegando allá, y las casillas nuevas se
 llenan con una copia. Con el PTR y los puertos del paso 3, el resto es
@@ -664,7 +666,7 @@ una «contraseña de aplicación» de Zoho, no la de siempre.
 | Tipo | Nombre | Valor | Para qué |
 |---|---|---|---|
 | A | `mail` | IP de la VPS | El servidor de correo |
-| A | `webmail` | IP de la VPS | El webmail |
+| A | `correo` | IP de la VPS | El webmail |
 | A | `autoconfig` | IP de la VPS | Que Thunderbird se configure solo |
 | MX | `@` | `mail.mjbj.com.ar` (prioridad 10) | Adónde se entrega el correo para `@mjbj.com.ar` |
 | TXT | `@` | `v=spf1 mx -all` | Solo el servidor del MX puede mandar como `@mjbj.com.ar` |
@@ -703,7 +705,7 @@ que pide Resend se cargan aparte —usa su propio subdominio— y estos no cambi
   **Personal (IMAP)**, con la tabla.
 - **Mail del iPhone**: *Ajustes* → *Mail* → *Cuentas* → *Añadir* → *Otra* →
   *Añadir cuenta de correo*, tipo **IMAP**, con la tabla.
-- **Navegador**: `https://webmail.mjbj.com.ar`.
+- **Navegador**: `https://correo.mjbj.com.ar`.
 
 ### Calentar la IP
 
@@ -775,11 +777,13 @@ después.
   ClamAV solo pide más de 1 GB de memoria.
 - **El certificado lo saca Caddy**: el mismo que ya renueva el del sitio. El
   correo lo lee de su volumen y se recarga solo cuando cambia (probado).
-- **Roundcube sin root, con su propia base SQLite**: no comparte nada con la
-  tienda.
+- **El webmail es propio (Go + Svelte) y no tiene base**: la sesión es una
+  cookie sellada con `CORREO_CLAVE`, así que el correo se lee aunque la base
+  de la tienda esté caída. Corre sin root en una imagen distroless.
 - **El fail2ban del correo no banea redes privadas**: el webmail entra a
   Dovecot desde una IP interna, y banearla dejaría el webmail afuera para
-  todos. El webmail se defiende solo: 3 intentos por minuto por IP real.
+  todos. El webmail se defiende solo: cinco fallos en un cuarto de hora,
+  por IP real y por casilla.
 - **Perfil `correo`**: el servidor anda igual sin él, y apagarlo es sacar una
   línea de `.env.produccion`.
 
@@ -829,7 +833,7 @@ hay que volcarlo antes con `pg_dump` y cargarlo allá.
 | La cola de trabajos | `select tipo, estado, intentos, ultimo_error from trabajos where estado <> 'hecho'` |
 | Los baneados | `sudo fail2ban-client status caddy-sondas` |
 | El correo | `dc logs -f correo`; la cola, `scripts/correo.sh cola`; baneados, `scripts/correo.sh baneados` |
-| El webmail | `dc logs -f webmail` y `/var/log/caddy/webmail.log` |
+| El webmail | `dc logs -f correo-web` y `/var/log/caddy/webmail.log` |
 | El estado | `dc ps` (la app tiene que decir `healthy`) |
 | El disco | `df -h` y `docker system df` |
 | Docker mismo | `journalctl -u docker` |

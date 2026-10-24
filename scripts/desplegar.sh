@@ -146,7 +146,14 @@ echo "→ Levantando el resto"
 # eso se pregunta antes qué servicios ve el compose.
 if "${COMPOSE[@]}" config --services | grep -qx correo; then
   echo "→ Levantando el correo"
-  "${COMPOSE[@]}" up -d --no-deps correo webmail
+  if ! grep -qE '^CORREO_CLAVE=.+' "$ENTORNO"; then
+    echo >&2
+    echo "  Falta CORREO_CLAVE en $ENTORNO (la clave de las sesiones del webmail):" >&2
+    echo "    echo \"CORREO_CLAVE=\$(openssl rand -base64 32)\" >> $ENTORNO" >&2
+    exit 1
+  fi
+  "${COMPOSE[@]}" build correo-web
+  "${COMPOSE[@]}" up -d --no-deps --remove-orphans correo correo-web
 
   # **La primera vez, el servidor de correo se apaga si en dos minutos no
   # tiene ninguna casilla** (y vuelve a arrancar y a esperar, en bucle). Se

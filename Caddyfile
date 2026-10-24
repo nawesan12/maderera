@@ -44,11 +44,12 @@ mail.{$CORREO_DOMINIO} {
 	tls {
 		ca https://acme-v02.api.letsencrypt.org/directory
 	}
-	respond "Servidor de correo de {$CORREO_DOMINIO}. Para leer el correo: https://webmail.{$CORREO_DOMINIO}" 200
+	respond "Servidor de correo de {$CORREO_DOMINIO}. Para leer el correo: https://correo.{$CORREO_DOMINIO}" 200
 }
 
-# El webmail (Roundcube, servicio `webmail`, solo con el perfil `correo`).
-webmail.{$CORREO_DOMINIO} {
+# El webmail (servicio `correo-web`, el binario de Go; solo con el perfil
+# `correo`). Las cabeceras de seguridad y la CSP las pone el propio servicio.
+correo.{$CORREO_DOMINIO} {
 	log {
 		output file /var/log/caddy/webmail.log {
 			roll_size 10MiB
@@ -62,7 +63,7 @@ webmail.{$CORREO_DOMINIO} {
 	request_body {
 		max_size 40MB
 	}
-	reverse_proxy webmail:8000
+	reverse_proxy correo-web:8090
 	encode zstd gzip
 }
 

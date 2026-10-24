@@ -1,0 +1,153 @@
+/*
+ * Los colores salen de la marca del sitio (app/globals.css): naranja de la
+ * maderera, verde y grises cálidos. Todo va en variables para el modo
+ * oscuro; ningún componente escribe un color a mano.
+ */
+:root {
+  --naranja: oklch(0.68 0.19 48);
+  --naranja-fuerte: oklch(0.58 0.18 44);
+  --naranja-suave: oklch(0.95 0.04 60);
+  --verde: oklch(0.55 0.12 148);
+
+  --fondo: oklch(0.985 0.004 70);
+  --superficie: #fff;
+  --superficie-2: oklch(0.965 0.006 70);
+  --borde: oklch(0.9 0.008 70);
+  --texto: oklch(0.22 0.01 60);
+  --texto-2: oklch(0.45 0.012 60);
+  --texto-3: oklch(0.6 0.01 60);
+  --seleccion: oklch(0.95 0.035 60);
+  --peligro: oklch(0.55 0.2 27);
+  --sombra: 0 1px 2px oklch(0.2 0.01 60 / 0.06), 0 8px 24px oklch(0.2 0.01 60 / 0.08);
+
+  --radio: 10px;
+  --fuente: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --naranja-suave: oklch(0.32 0.06 50);
+    --fondo: oklch(0.17 0.008 60);
+    --superficie: oklch(0.21 0.008 60);
+    --superficie-2: oklch(0.25 0.01 60);
+    --borde: oklch(0.32 0.01 60);
+    --texto: oklch(0.94 0.006 70);
+    --texto-2: oklch(0.75 0.01 70);
+    --texto-3: oklch(0.6 0.01 70);
+    --seleccion: oklch(0.3 0.05 55);
+    --sombra: 0 1px 2px #0006, 0 8px 24px #0008;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--fondo);
+  color: var(--texto);
+  font: 15px/1.45 var(--fuente);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--naranja);
+  outline-offset: 2px;
+}
+
+.boton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  border-radius: 8px;
+  padding: 0.45em 0.85em;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.boton:hover {
+  background: var(--superficie-2);
+}
+.boton.principal {
+  background: var(--naranja);
+  border-color: var(--naranja);
+  color: #fff;
+}
+.boton.principal:hover {
+  background: var(--naranja-fuerte);
+}
+.boton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.icono {
+  display: inline-grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--texto-2);
+}
+.icono:hover {
+  background: var(--superficie-2);
+  color: var(--texto);
+}
+
+.campo {
+  width: 100%;
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  border-radius: 8px;
+  padding: 0.55em 0.7em;
+}
+.campo:focus {
+  outline: none;
+  border-color: var(--naranja);
+  box-shadow: 0 0 0 3px var(--naranja-suave);
+}
+
+.tecla {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 0.35em;
+  border: 1px solid var(--borde);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  text-align: center;
+  color: var(--texto-2);
+  background: var(--superficie);
+}
+
+.oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}

@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -22,6 +23,8 @@ func main() {
 	switch os.Args[1] {
 	case "correo":
 		err = correrCorreo()
+	case "salud":
+		err = salud(os.Args[2:])
 	default:
 		uso()
 		os.Exit(2)
@@ -35,7 +38,9 @@ func main() {
 func uso() {
 	fmt.Fprintln(os.Stderr, `Uso: mjbj <servicio>
 
-  correo   el webmail (correo.<dominio>)`)
+  correo          el webmail (correo.<dominio>)
+  salud <url>     pide la URL y sale con error si no responde 200 (para el
+                  healthcheck de Docker: la imagen no tiene curl)`)
 }
 
 func correrCorreo() error {
@@ -54,4 +59,20 @@ func correrCorreo() error {
 		}
 	}()
 	return plataforma.Servir(cfg.Escuchar, app.Rutas(), log)
+}
+
+func salud(args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("uso: mjbj salud <url>")
+	}
+	cliente := &http.Client{Timeout: 5 * time.Second}
+	r, err := cliente.Get(args[0])
+	if err != nil {
+		return err
+	}
+	_ = r.Body.Close()
+	if r.StatusCode != http.StatusOK {
+		return fmt.Errorf("respondió %d", r.StatusCode)
+	}
+	return nil
 }

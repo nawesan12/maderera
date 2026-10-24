@@ -1,11 +1,12 @@
 # Lo que fail2ban del servidor de correo no banea nunca.
 #
-# **Las redes privadas, porque ahí está el webmail.** Roundcube le habla a
-# Dovecot desde su contenedor, así que para el servidor de correo todos los
-# que entran por el webmail vienen de la misma IP privada. Seis claves mal
-# puestas —de seis personas distintas, en una semana— banearían esa IP y el
-# webmail dejaría de andar para todos. La protección del webmail contra quien
-# prueba claves la hace Roundcube con su propio límite por IP real
-# (`login_rate_limit`, ver servidor/webmail/maderera.inc.php).
+# **Las redes privadas, porque ahí está el webmail.** El webmail
+# (`correo-web`) le habla a Dovecot desde su contenedor, así que para el
+# servidor de correo todos los que entran por el webmail vienen de la misma
+# IP privada. Seis claves mal puestas —de seis personas distintas, en una
+# semana— banearían esa IP y el webmail dejaría de andar para todos. La
+# protección del webmail contra quien prueba claves la hace el propio webmail,
+# con la IP real: cinco fallos en un cuarto de hora por IP y por casilla
+# (backend/internal/correo/sesion.go).
 [DEFAULT]
 ignoreip = 127.0.0.1/8 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16

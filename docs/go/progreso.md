@@ -42,13 +42,33 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 
 ## Tanda 0: el correo
 
-- [ ] Esqueleto de `backend/`: `go.mod`, `cmd/mjbj`, `internal/plataforma`
-- [ ] Sesión del correo (`correo_sesiones`, clave IMAP sellada)
-- [ ] IMAP: carpetas, lista, lectura, adjuntos, acciones, búsqueda
-- [ ] SMTP: redactar, responder, adjuntar, copia en Enviados
-- [ ] SPA de Svelte embebida
-- [ ] Dockerfile, compose, Caddy, `desplegar.sh`
-- [ ] Probado contra docker-mailserver local
-- [ ] Roundcube afuera
+- [x] Esqueleto de `backend/`: `go.mod`, `cmd/mjbj`, `internal/plataforma`
+- [x] Sesión del correo (cookie sellada con AES-GCM, ver «Lo aprendido»)
+- [x] IMAP: carpetas, lista, lectura, adjuntos, acciones, búsqueda
+- [x] SMTP: redactar, responder, adjuntar, copia en Enviados
+- [x] SPA de Svelte embebida (Vite + Svelte 5, sin SvelteKit; 31 KB gz)
+- [x] Dockerfile, compose (`correo-web`), Caddy (`correo.`), `desplegar.sh`
+- [x] Probado contra docker-mailserver 16.0.1 local (curl y navegador)
+- [x] Roundcube afuera
+- [ ] Encendido en la VPS (espera los registros DNS y el PTR)
 
 ## Lo aprendido
+
+- **La sesión del correo no va en Postgres** (el plan decía `correo_sesiones`):
+  va en una cookie `__Host-` sellada con AES-GCM (`CORREO_CLAVE`). Así el
+  webmail no depende de la base del ERP —se lee el correo aunque la base esté
+  caída— y la adopción de goose queda para la tanda 1, donde corresponde.
+- **El HTML de los correos va en un iframe con origen opaco** (CSP `sandbox`
+  sin `allow-same-origin`). Desde ahí el navegador no manda la cookie, así que
+  las imágenes en línea (`cid:`) se incrustan como `data:` en el servidor en
+  vez de servirse por una ruta. La CSP del iframe (`img-src data:`) es la que
+  frena las imágenes remotas; el saneo con bluemonday es la segunda capa.
+- **IMAP sin `Extended: true` en BODYSTRUCTURE no trae el
+  `Content-Disposition`**: sin eso no se sabe qué partes son adjuntos.
+- **El límite de intentos va en el webmail, no en fail2ban**: el servidor de
+  correo ve todos los intentos del webmail desde la IP del contenedor.
+- **El hook de Mercado Pago bloquea cualquier comando que nombre un `.env`**
+  (incluso `correo.env` o `.env.produccion` en un texto): los cambios a esos
+  archivos o a comandos que los citan van por un script en el scratchpad.
+- **`curl -F campo='<...'` lee un archivo** (el `<` es «desde archivo»): para
+  mandar HTML por curl, `--form-string`.

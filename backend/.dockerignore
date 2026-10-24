@@ -1,0 +1,5 @@
+# Lo que no viaja al build: las dependencias y el build de la SPA se arman
+# adentro de la imagen.
+web/correo/node_modules
+web/correo/dist
+**/*_test.go

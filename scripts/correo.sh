@@ -198,7 +198,7 @@ Reemplazá <IP> si no salió sola: $ip
   Tipo  Nombre                     Valor
   ----  -------------------------  ---------------------------------------------
   A     mail                       $ip
-  A     webmail                    $ip
+  A     correo                     $ip
   A     autoconfig                 $ip
   MX    @                          mail.$DOMINIO   (prioridad 10)
   TXT   @                          v=spf1 mx -all

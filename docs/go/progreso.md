@@ -79,5 +79,12 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 - **El hook de Mercado Pago bloquea cualquier comando que nombre un `.env`**
   (incluso `correo.env` o `.env.produccion` en un texto): los cambios a esos
   archivos o a comandos que los citan van por un script en el scratchpad.
+- **«Next.js encountered uncached data» en desarrollo** es la validación de
+  navegación instantánea (`validationLevel: 'warning'`), no un error: dice que
+  la página espera datos sin caché fuera de un `<Suspense>`. Pasaba igual con
+  las consultas a la base, solo que Next no las veía; ahora que los datos
+  llegan por fetch, se ven. No rompe el build (la página ya es dinámica por la
+  cookie). Se mejora página por página con `<Suspense>` o `"use cache"` donde
+  valga la pena; no esconderlo con un fetch que Next no vea.
 - **`curl -F campo='<...'` lee un archivo** (el `<` es «desde archivo»): para
   mandar HTML por curl, `--form-string`.

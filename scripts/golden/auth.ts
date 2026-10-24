@@ -22,7 +22,7 @@ import { hashPassword } from "better-auth/crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { Pool } from "pg";
-import { buildAuthOptions } from "../../lib/auth-options";
+import { buildAuthOptions } from "./auth-opciones";
 import * as schema from "../../lib/db/schema";
 
 const url = process.env.MJBJ_PRUEBA_BASE;
@@ -90,6 +90,7 @@ async function main() {
   // Firmas de cookie (better-call): HMAC-SHA256 en base64, dentro de encodeURIComponent.
   // No está entre las exportaciones públicas de better-call: se importa el
   // archivo, que es el mismo código que firma la cookie de sesión.
+  // @ts-expect-error -- archivo interno de better-call, sin declaración de tipos
   const { signCookieValue } = await import("../../node_modules/better-call/dist/crypto.mjs");
   salida.firmas = await Promise.all(
     ["abc", "Tk9QZ3JlYXRUb2tlbjEyMzQ1Njc4OTAxMjM0NTY", "a.b.c", "ñ"].map(async (valor) => ({

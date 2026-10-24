@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getSessionCookie } from "better-auth/cookies";
 import { SENAL_ESTADO } from "@/lib/senal-navegador";
 
 /**
@@ -28,7 +27,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const sessionCookie = getSessionCookie(request);
+  // Solo si está la cookie: si es válida lo decide Go en cada página
+  // (lib/dal/session.ts). Es la de siempre, con el prefijo seguro en https.
+  const sessionCookie =
+    request.cookies.get("__Secure-better-auth.session_token") ??
+    request.cookies.get("better-auth.session_token");
 
   if (!sessionCookie) {
     const url = new URL("/ingresar", request.url);

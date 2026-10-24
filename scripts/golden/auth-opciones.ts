@@ -1,7 +1,7 @@
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import type { BetterAuthOptions } from "better-auth";
-import * as schema from "./db/schema";
+import * as schema from "../../lib/db/schema";
 
 /**
  * Configuración de Better Auth, separada de `lib/auth.ts` a propósito.

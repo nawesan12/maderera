@@ -8,7 +8,7 @@ import { betterAuth } from "better-auth";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
-import { buildAuthOptions } from "../../lib/auth-options";
+import { buildAuthOptions } from "./auth-opciones";
 import * as schema from "../../lib/db/schema";
 
 const [cookie, userId] = readFileSync(process.argv[2], "utf8").trim().split("\n");

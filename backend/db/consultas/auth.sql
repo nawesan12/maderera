@@ -62,3 +62,34 @@ DELETE FROM session WHERE user_id = $1 AND token <> $2;
 -- después pedidos y presupuestos (app/(auth)/registro/actions.ts).
 INSERT INTO customers (user_id, nombre, email, telefono, tipo, limite_credito, notas)
 VALUES ($1, $2, $3, $4, 'particular', 0, 'Cuenta creada desde el sitio.');
+
+-- Para los comandos de alta a mano (mjbj usuario staff|cliente), que
+-- reemplazan a lib/db/create-staff.ts y create-cliente.ts.
+
+-- name: UsuarioPorCorreo :one
+SELECT u.id, u.name,
+       EXISTS (SELECT 1 FROM account a WHERE a.user_id = u.id AND a.provider_id = 'credential') AS con_clave
+FROM "user" u WHERE u.email = $1;
+
+-- name: BorrarUsuario :exec
+DELETE FROM "user" WHERE id = $1;
+
+-- name: HacerStaff :exec
+INSERT INTO profiles (user_id, role, staff_role) VALUES ($1, 'staff', $2)
+ON CONFLICT (user_id) DO UPDATE SET role = 'staff', staff_role = EXCLUDED.staff_role, updated_at = now();
+
+-- name: FichaSinUsuarioPorCorreo :one
+SELECT id, nombre, tipo FROM customers WHERE email = $1 AND user_id IS NULL LIMIT 1;
+
+-- name: VincularFicha :exec
+UPDATE customers SET user_id = $2, updated_at = now() WHERE id = $1;
+
+-- name: HacerProfesional :exec
+UPDATE profiles SET role = 'profesional', updated_at = now() WHERE user_id = $1;
+
+-- name: TieneFicha :one
+SELECT EXISTS (SELECT 1 FROM customers WHERE user_id = $1);
+
+-- name: CrearFichaManual :exec
+INSERT INTO customers (user_id, nombre, email, tipo, limite_credito, notas)
+VALUES ($1, $2, $3, 'particular', 0, 'Cuenta creada con cliente:create.');

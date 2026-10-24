@@ -31,6 +31,8 @@ func main() {
 		err = correrAPI()
 	case "worker":
 		err = correrWorker()
+	case "usuario":
+		err = correrUsuario(os.Args[2:])
 	case "migrar":
 		err = correrMigrar()
 	case "salud":
@@ -52,6 +54,7 @@ func uso() {
   worker          la cola de trabajos y las tareas periódicas
   correo          el webmail (correo.<dominio>)
   migrar          aplica las migraciones de la base (y adopta las de drizzle)
+  usuario         alta a mano: «usuario staff …» o «usuario cliente …»
   salud <url>     pide la URL y sale con error si no responde 200 (para el
                   healthcheck de Docker: la imagen no tiene curl)`)
 }

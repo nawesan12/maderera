@@ -33,6 +33,15 @@ func (q *Queries) BorrarSesion(ctx context.Context, token string) error {
 	return err
 }
 
+const borrarUsuario = `-- name: BorrarUsuario :exec
+DELETE FROM "user" WHERE id = $1
+`
+
+func (q *Queries) BorrarUsuario(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, borrarUsuario, id)
+	return err
+}
+
 const cambiarClave = `-- name: CambiarClave :exec
 UPDATE account SET password = $2, updated_at = $3
 WHERE user_id = $1 AND provider_id = 'credential'
@@ -94,6 +103,22 @@ func (q *Queries) CrearCuentaConClave(ctx context.Context, arg CrearCuentaConCla
 		arg.Password,
 		arg.CreatedAt,
 	)
+	return err
+}
+
+const crearFichaManual = `-- name: CrearFichaManual :exec
+INSERT INTO customers (user_id, nombre, email, tipo, limite_credito, notas)
+VALUES ($1, $2, $3, 'particular', 0, 'Cuenta creada con cliente:create.')
+`
+
+type CrearFichaManualParams struct {
+	UserID *string `json:"userId"`
+	Nombre string  `json:"nombre"`
+	Email  *string `json:"email"`
+}
+
+func (q *Queries) CrearFichaManual(ctx context.Context, arg CrearFichaManualParams) error {
+	_, err := q.db.Exec(ctx, crearFichaManual, arg.UserID, arg.Nombre, arg.Email)
 	return err
 }
 
@@ -196,6 +221,47 @@ func (q *Queries) ExisteCorreo(ctx context.Context, email string) (bool, error) 
 	return exists, err
 }
 
+const fichaSinUsuarioPorCorreo = `-- name: FichaSinUsuarioPorCorreo :one
+SELECT id, nombre, tipo FROM customers WHERE email = $1 AND user_id IS NULL LIMIT 1
+`
+
+type FichaSinUsuarioPorCorreoRow struct {
+	ID     string      `json:"id"`
+	Nombre string      `json:"nombre"`
+	Tipo   TipoCliente `json:"tipo"`
+}
+
+func (q *Queries) FichaSinUsuarioPorCorreo(ctx context.Context, email *string) (FichaSinUsuarioPorCorreoRow, error) {
+	row := q.db.QueryRow(ctx, fichaSinUsuarioPorCorreo, email)
+	var i FichaSinUsuarioPorCorreoRow
+	err := row.Scan(&i.ID, &i.Nombre, &i.Tipo)
+	return i, err
+}
+
+const hacerProfesional = `-- name: HacerProfesional :exec
+UPDATE profiles SET role = 'profesional', updated_at = now() WHERE user_id = $1
+`
+
+func (q *Queries) HacerProfesional(ctx context.Context, userID string) error {
+	_, err := q.db.Exec(ctx, hacerProfesional, userID)
+	return err
+}
+
+const hacerStaff = `-- name: HacerStaff :exec
+INSERT INTO profiles (user_id, role, staff_role) VALUES ($1, 'staff', $2)
+ON CONFLICT (user_id) DO UPDATE SET role = 'staff', staff_role = EXCLUDED.staff_role, updated_at = now()
+`
+
+type HacerStaffParams struct {
+	UserID    string     `json:"userId"`
+	StaffRole *StaffRole `json:"staffRole"`
+}
+
+func (q *Queries) HacerStaff(ctx context.Context, arg HacerStaffParams) error {
+	_, err := q.db.Exec(ctx, hacerStaff, arg.UserID, arg.StaffRole)
+	return err
+}
+
 const renovarSesion = `-- name: RenovarSesion :one
 UPDATE session SET expires_at = $2, updated_at = $3
 WHERE token = $1
@@ -260,4 +326,51 @@ func (q *Queries) SesionPorToken(ctx context.Context, token string) (SesionPorTo
 		&i.PriceListID,
 	)
 	return i, err
+}
+
+const tieneFicha = `-- name: TieneFicha :one
+SELECT EXISTS (SELECT 1 FROM customers WHERE user_id = $1)
+`
+
+func (q *Queries) TieneFicha(ctx context.Context, userID *string) (bool, error) {
+	row := q.db.QueryRow(ctx, tieneFicha, userID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const usuarioPorCorreo = `-- name: UsuarioPorCorreo :one
+
+SELECT u.id, u.name,
+       EXISTS (SELECT 1 FROM account a WHERE a.user_id = u.id AND a.provider_id = 'credential') AS con_clave
+FROM "user" u WHERE u.email = $1
+`
+
+type UsuarioPorCorreoRow struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	ConClave bool   `json:"conClave"`
+}
+
+// Para los comandos de alta a mano (mjbj usuario staff|cliente), que
+// reemplazan a lib/db/create-staff.ts y create-cliente.ts.
+func (q *Queries) UsuarioPorCorreo(ctx context.Context, email string) (UsuarioPorCorreoRow, error) {
+	row := q.db.QueryRow(ctx, usuarioPorCorreo, email)
+	var i UsuarioPorCorreoRow
+	err := row.Scan(&i.ID, &i.Name, &i.ConClave)
+	return i, err
+}
+
+const vincularFicha = `-- name: VincularFicha :exec
+UPDATE customers SET user_id = $2, updated_at = now() WHERE id = $1
+`
+
+type VincularFichaParams struct {
+	ID     string  `json:"id"`
+	UserID *string `json:"userId"`
+}
+
+func (q *Queries) VincularFicha(ctx context.Context, arg VincularFichaParams) error {
+	_, err := q.db.Exec(ctx, vincularFicha, arg.ID, arg.UserID)
+	return err
 }

@@ -1,21 +1,17 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { APIError } from "better-auth/api";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
 import { renovarSenal } from "@/lib/senal-cliente";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { profiles } from "@/lib/db/schema";
 import { adoptarCarritoAnonimo } from "@/lib/dal/carrito";
-import { avisoDeEspera, permitidoPorAmbos, soltar } from "@/lib/limites";
+import { inicioDelRol } from "@/lib/roles";
+import { api, copiarCookies, mensajeDe, type Problema } from "@/lib/api/servidor";
 
-const ingresoSchema = z.object({
-  email: z.email({ message: "Revisá el correo, no parece válido." }),
-  password: z.string().min(1, { message: "Escribí tu contraseña." }),
-  volver: z.string().optional(),
-});
+/*
+ * Entrar es de la API de Go (backend/internal/auth): valida, cuenta los
+ * intentos por IP y por correo, y abre la sesión. Acá queda lo que es de Next:
+ * pasarle la cookie al navegador, el carrito armado antes de entrar y a dónde
+ * ir después.
+ */
 
 export interface EstadoIngreso {
   error?: string;
@@ -25,96 +21,44 @@ export async function ingresar(
   _estadoPrevio: EstadoIngreso,
   formData: FormData,
 ): Promise<EstadoIngreso> {
-  const parsed = ingresoSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-    volver: formData.get("volver") ?? undefined,
-  });
+  const correo = String(formData.get("email") ?? "");
+  const clave = String(formData.get("password") ?? "");
+  const volver = formData.get("volver");
 
-  if (!parsed.success) {
-    return {
-      error:
-        parsed.error.issues[0]?.message ??
-        "Revisá el correo y la contraseña.",
-    };
-  }
-
-  /*
-   * El freno, antes de tocar la contraseña.
-   *
-   * Este formulario **no tenía ningún límite**. El que trae Better Auth no se
-   * aplica: vive en su ruta HTTP y acá se llama `auth.api.signInEmail` directo
-   * desde la acción, así que nunca pasaba por ahí. Parecía protegido y no lo
-   * estaba.
-   *
-   * Se cuenta por IP **y** por correo: solo por IP deja pasar al que prueba una
-   * contraseña contra mil cuentas desde mil lugares, y solo por correo, al que
-   * prueba mil contraseñas contra una cuenta rotando de IP.
-   */
-  const puede = await permitidoPorAmbos("ingresar", {
-    nombre: "correo",
-    valor: parsed.data.email,
-  });
-
-  if (!puede.permitido) return { error: avisoDeEspera(puede) };
-
-  let userId: string;
-
+  let respuesta;
   try {
-    const ingreso = await auth.api.signInEmail({
-      body: { email: parsed.data.email, password: parsed.data.password },
-      // Deja que Better Auth escriba la cookie de sesión en la respuesta.
-      asResponse: false,
-      headers: new Headers(),
-    });
-    userId = ingreso.user.id;
-
-    // Acertó: la cuenta se suelta. Si no, alguien que se equivoca dos veces y
-    // después entra bien arrastraría el límite el resto de la ventana.
-    await soltar("ingresar", `correo:${parsed.data.email.toLowerCase()}`);
-    // El encabezado se dibuja en el navegador porque el HTML viene del CDN:
-    // sin la señal prendida, no sabría que ahora hay un nombre que mostrar.
-    await renovarSenal();
+    respuesta = await (await api()).POST("/api/v1/sesion", { body: { correo, clave } });
   } catch (error) {
-    if (error instanceof APIError) {
-      // El mensaje es deliberadamente vago: distinguir "no existe ese mail" de
-      // "la contraseña está mal" le confirma a un atacante qué cuentas existen.
-      return { error: "El correo o la contraseña no coinciden." };
-    }
-
-    // Cualquier otro error se registra pero no se propaga: un fallo del login
-    // tiene que devolver una pantalla que se pueda leer, no un 500. Pasó de
-    // verdad con una cuenta cuyo hash quedó en un formato que Better Auth ya no
-    // valida ("Invalid password hash"): el formulario tiraba error de servidor
-    // y no había forma de saber qué estaba mal.
+    // Go no respondió. Un fallo del login tiene que devolver una pantalla que
+    // se pueda leer, no un 500.
     console.error(
       JSON.stringify({
         scope: "auth.ingresar",
-        evento: "error_inesperado",
+        evento: "api_sin_respuesta",
         detalle: error instanceof Error ? error.message : "desconocido",
       }),
     );
-
-    return {
-      error:
-        "No pudimos validar tus datos. Si el problema sigue, escribinos y lo revisamos.",
-    };
+    return { error: "No pudimos validar tus datos. Si el problema sigue, escribinos y lo revisamos." };
   }
 
+  if (!respuesta.data) {
+    // 422 (datos o clave), 429 (demasiados intentos) o un 500: el mensaje lo
+    // arma Go. Para correo o clave equivocados es deliberadamente vago:
+    // distinguirlos le confirmaría a un atacante qué cuentas existen.
+    return { error: mensajeDe(respuesta.error as Problema | undefined, "No pudimos validar tus datos. Si el problema sigue, escribinos y lo revisamos.") };
+  }
+
+  await copiarCookies(respuesta.response);
+  const sesion = respuesta.data;
+  // El encabezado se dibuja en el navegador porque el HTML viene del CDN: sin
+  // la señal prendida, no sabría que ahora hay un nombre que mostrar.
+  await renovarSenal();
   // El presupuesto armado antes de entrar se le pasa a la cuenta.
-  await adoptarCarritoAnonimo(userId);
+  await adoptarCarritoAnonimo(sesion.userId);
 
-  const destino = parsed.data.volver;
-  if (destino && destino.startsWith("/")) redirect(destino);
+  if (typeof volver === "string" && volver.startsWith("/") && !volver.startsWith("//")) redirect(volver);
 
-  // Sin destino explícito, cada quien va a donde le sirve: el personal al
-  // panel, el cliente a su cuenta. Mandar a todos a `/admin` hacía que un
-  // cliente rebotara a la home apenas entraba, sin entender por qué.
-  const [perfil] = await db
-    .select({ role: profiles.role })
-    .from(profiles)
-    .where(eq(profiles.userId, userId))
-    .limit(1);
-
-  redirect(perfil?.role === "staff" ? "/admin" : "/mi-cuenta");
+  // Sin destino explícito, cada quien va a donde le sirve: el personal a su
+  // pantalla, el cliente a su cuenta.
+  redirect(sesion.rol === "staff" ? inicioDelRol(sesion.rolStaff) : "/mi-cuenta");
 }

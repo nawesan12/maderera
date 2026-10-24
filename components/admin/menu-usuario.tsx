@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { authClient } from "@/lib/auth-client";
+import { cerrarSesion as salirDeLaApi } from "@/lib/api/salir";
 
 export function MenuUsuario({
   nombre,
@@ -26,7 +26,7 @@ export function MenuUsuario({
 
   async function cerrarSesion() {
     setSaliendo(true);
-    await authClient.signOut();
+    await salirDeLaApi();
     router.push("/ingresar");
     router.refresh();
   }

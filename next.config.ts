@@ -123,7 +123,15 @@ const nextConfig: NextConfig = {
    */
   async rewrites() {
     return {
-      beforeFiles: [],
+      /*
+       * La API de Go (backend/, docs/go/PLAN.md). En el servidor Caddy manda
+       * /api/v1 derecho a Go y esto no se usa; en desarrollo, sin Caddy, es lo
+       * que hace que el navegador llegue a la API por el mismo origen (con la
+       * misma cookie).
+       */
+      beforeFiles: [
+        { source: "/api/v1/:ruta*", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/v1/:ruta*` },
+      ],
       afterFiles: [],
       fallback: [
         { source: "/subidas/:archivo", destination: "/api/subidas/:archivo" },

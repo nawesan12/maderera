@@ -256,11 +256,19 @@ func (s *Servicio) sesionDe(ctx context.Context, token string) (*Sesion, error) 
 	return ses, nil
 }
 
-// Registrar crea el usuario, su cuenta con clave y su perfil de cliente, y
-// abre la sesión: lo mismo que signUpEmail con autoSignIn.
-func (s *Servicio) Registrar(ctx context.Context, w http.ResponseWriter, nombre, correo, clave, ip, agente string) (*Sesion, error) {
-	correo = normalizarCorreo(correo)
-	hash, err := hashearClave(clave)
+// Alta es lo que se pide para registrarse.
+type Alta struct {
+	Nombre, Correo, Telefono, Clave string
+}
+
+// Registrar crea el usuario, su cuenta con clave, su perfil de cliente y su
+// ficha comercial, todo en una transacción, y abre la sesión: lo que hacían
+// signUpEmail (con autoSignIn) y la acción de registro de Next juntos.
+func (s *Servicio) Registrar(ctx context.Context, w http.ResponseWriter, a Alta, ip, agente string) (*Sesion, error) {
+	correo := normalizarCorreo(a.Correo)
+	nombre := strings.TrimSpace(a.Nombre)
+	telefono := strings.TrimSpace(a.Telefono)
+	hash, err := hashearClave(a.Clave)
 	if err != nil {
 		return nil, err
 	}
@@ -276,13 +284,20 @@ func (s *Servicio) Registrar(ctx context.Context, w http.ResponseWriter, nombre,
 		}
 		ahora := s.ahora()
 		id := nuevoID()
-		if err := q.CrearUsuario(ctx, sqlc.CrearUsuarioParams{ID: id, Name: strings.TrimSpace(nombre), Email: correo, CreatedAt: ahora}); err != nil {
+		if err := q.CrearUsuario(ctx, sqlc.CrearUsuarioParams{ID: id, Name: nombre, Email: correo, CreatedAt: ahora}); err != nil {
 			return err
 		}
 		if err := q.CrearCuentaConClave(ctx, sqlc.CrearCuentaConClaveParams{ID: nuevoID(), AccountID: id, Password: &hash, CreatedAt: ahora}); err != nil {
 			return err
 		}
 		if err := q.CrearPerfilDeCliente(ctx, id); err != nil {
+			return err
+		}
+		var tel *string
+		if telefono != "" {
+			tel = &telefono
+		}
+		if err := q.CrearClienteDeRegistro(ctx, sqlc.CrearClienteDeRegistroParams{UserID: &id, Nombre: nombre, Email: &correo, Telefono: tel}); err != nil {
 			return err
 		}
 		token, err = s.crearSesion(ctx, q, id, ip, agente, true)

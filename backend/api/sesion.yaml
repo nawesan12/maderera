@@ -1,0 +1,127 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Sesión
+  version: "1"
+  description: |
+    Entrar, registrarse, salir y saber quién pide. La sesión es una cookie
+    httpOnly (compatible con la de better-auth): ninguna de estas rutas
+    devuelve el token.
+paths:
+  /api/v1/sesion:
+    get:
+      operationId: VerSesion
+      summary: Quién pide
+      responses:
+        "200":
+          description: La sesión vigente
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sesion" }
+        "401": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: Entrar
+      summary: Entrar con correo y clave
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Entrada" }
+      responses:
+        "200":
+          description: Entró; la cookie va en Set-Cookie
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sesion" }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
+    delete:
+      operationId: Salir
+      summary: Salir
+      responses:
+        "204": { description: Salió (y se borró la cookie) }
+  /api/v1/sesion/clave:
+    put:
+      operationId: CambiarClave
+      summary: Cambiar la clave (cierra las otras sesiones)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CambioDeClave" }
+      responses:
+        "204": { description: Cambiada }
+        "401": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/registro:
+    post:
+      operationId: Registrarse
+      summary: Crear una cuenta de cliente y entrar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Registro" }
+      responses:
+        "201":
+          description: Creada; la cookie va en Set-Cookie
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sesion" }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457), con los mensajes por campo en `errores`
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores:
+          type: object
+          additionalProperties: { type: string }
+    Sesion:
+      type: object
+      required: [userId, nombre, correo, rol, rolStaff, listaDePrecios]
+      properties:
+        userId: { type: string }
+        nombre: { type: string }
+        correo: { type: string }
+        rol: { type: string, enum: [cliente, profesional, staff] }
+        rolStaff:
+          type: string
+          nullable: true
+          enum: [admin, vendedor, deposito, aserradero]
+        listaDePrecios: { type: string, nullable: true, description: id de la lista de precios del profesional }
+    Entrada:
+      type: object
+      required: [correo, clave]
+      additionalProperties: false
+      properties:
+        correo: { type: string }
+        clave: { type: string }
+        recordar: { type: boolean, default: true }
+    Registro:
+      type: object
+      required: [nombre, correo, clave]
+      additionalProperties: false
+      properties:
+        nombre: { type: string }
+        correo: { type: string }
+        telefono: { type: string, description: para coordinar las entregas }
+        clave: { type: string }
+    CambioDeClave:
+      type: object
+      required: [actual, nueva]
+      additionalProperties: false
+      properties:
+        actual: { type: string }
+        nueva: { type: string }

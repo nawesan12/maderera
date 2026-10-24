@@ -49,6 +49,30 @@ func (q *Queries) CambiarClave(ctx context.Context, arg CambiarClaveParams) erro
 	return err
 }
 
+const crearClienteDeRegistro = `-- name: CrearClienteDeRegistro :exec
+INSERT INTO customers (user_id, nombre, email, telefono, tipo, limite_credito, notas)
+VALUES ($1, $2, $3, $4, 'particular', 0, 'Cuenta creada desde el sitio.')
+`
+
+type CrearClienteDeRegistroParams struct {
+	UserID   *string `json:"userId"`
+	Nombre   string  `json:"nombre"`
+	Email    *string `json:"email"`
+	Telefono *string `json:"telefono"`
+}
+
+// La ficha comercial de quien se registra desde el sitio: de ahí cuelgan
+// después pedidos y presupuestos (app/(auth)/registro/actions.ts).
+func (q *Queries) CrearClienteDeRegistro(ctx context.Context, arg CrearClienteDeRegistroParams) error {
+	_, err := q.db.Exec(ctx, crearClienteDeRegistro,
+		arg.UserID,
+		arg.Nombre,
+		arg.Email,
+		arg.Telefono,
+	)
+	return err
+}
+
 const crearCuentaConClave = `-- name: CrearCuentaConClave :exec
 INSERT INTO account (id, issuer, account_id, provider_id, user_id, password, created_at, updated_at)
 VALUES ($1, 'local:credential', $2, 'credential', $2, $3, $4, $4)

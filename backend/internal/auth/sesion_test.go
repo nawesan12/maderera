@@ -148,19 +148,24 @@ func TestEntrarRegistrarSalir(t *testing.T) {
 
 	// Registrar: usuario, cuenta, perfil de cliente y sesión, como signUpEmail.
 	w = httptest.NewRecorder()
-	nuevo, err := s.Registrar(ctx, w, " Ana Gómez ", "Ana@Prueba.Test", "una clave larga", "", "")
+	nuevo, err := s.Registrar(ctx, w, Alta{Nombre: " Ana Gómez ", Correo: "Ana@Prueba.Test", Telefono: "223 590-3118", Clave: "una clave larga"}, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if nuevo.Correo != "ana@prueba.test" || nuevo.Nombre != "Ana Gómez" || nuevo.Rol != sqlc.UserRoleCliente {
 		t.Errorf("registrado: %+v", nuevo)
 	}
+	var tel, notas string
+	_ = pool.QueryRow(ctx, `select telefono, notas from customers where user_id = $1`, nuevo.UserID).Scan(&tel, &notas)
+	if tel != "223 590-3118" || notas != "Cuenta creada desde el sitio." {
+		t.Errorf("la ficha de cliente: %q %q", tel, notas)
+	}
 	var issuer, cuenta string
 	_ = pool.QueryRow(ctx, `select issuer, account_id from account where user_id = $1`, nuevo.UserID).Scan(&issuer, &cuenta)
 	if issuer != "local:credential" || cuenta != nuevo.UserID {
 		t.Errorf("la cuenta no quedó como la deja better-auth: issuer=%q account_id=%q", issuer, cuenta)
 	}
-	if _, err := s.Registrar(ctx, httptest.NewRecorder(), "Otra", "ANA@prueba.test", "otra clave larga", "", ""); !errors.Is(err, ErrCorreoUsado) {
+	if _, err := s.Registrar(ctx, httptest.NewRecorder(), Alta{Nombre: "Otra", Correo: "ANA@prueba.test", Clave: "otra clave larga"}, "", ""); !errors.Is(err, ErrCorreoUsado) {
 		t.Errorf("registró dos veces el mismo correo: %v", err)
 	}
 	pedido := pedidoConCookies(setCookies(w))

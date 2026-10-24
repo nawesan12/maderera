@@ -56,3 +56,9 @@ WHERE user_id = $1 AND provider_id = 'credential';
 
 -- name: BorrarOtrasSesiones :exec
 DELETE FROM session WHERE user_id = $1 AND token <> $2;
+
+-- name: CrearClienteDeRegistro :exec
+-- La ficha comercial de quien se registra desde el sitio: de ahí cuelgan
+-- después pedidos y presupuestos (app/(auth)/registro/actions.ts).
+INSERT INTO customers (user_id, nombre, email, telefono, tipo, limite_credito, notas)
+VALUES ($1, $2, $3, $4, 'particular', 0, 'Cuenta creada desde el sitio.');

@@ -27,7 +27,7 @@ func TestCookieParaBetterAuth(t *testing.T) {
 	defer pool.Close()
 	s := Nuevo(Config{Secreto: g.Secreto, URL: "https://mjbj.com.ar"}, pool)
 	w := httptest.NewRecorder()
-	ses, err := s.Registrar(context.Background(), w, "Cruzada", "cruzada-"+nuevoID()[:8]+"@prueba.test", "una clave larga", "", "")
+	ses, err := s.Registrar(context.Background(), w, Alta{Nombre: "Cruzada", Correo: "cruzada-" + nuevoID()[:8] + "@prueba.test", Clave: "una clave larga"}, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

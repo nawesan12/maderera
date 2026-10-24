@@ -40,15 +40,15 @@
 #
 # Si el correo propio no está encendido y el registro DNS de `mail` no existe,
 # Caddy reintenta en el registro sin afectar al sitio.
-mail.{$DOMINIO} {
+mail.{$CORREO_DOMINIO} {
 	tls {
 		ca https://acme-v02.api.letsencrypt.org/directory
 	}
-	respond "Servidor de correo de {$DOMINIO}. Para leer el correo: https://webmail.{$DOMINIO}" 200
+	respond "Servidor de correo de {$CORREO_DOMINIO}. Para leer el correo: https://webmail.{$CORREO_DOMINIO}" 200
 }
 
 # El webmail (Roundcube, servicio `webmail`, solo con el perfil `correo`).
-webmail.{$DOMINIO} {
+webmail.{$CORREO_DOMINIO} {
 	log {
 		output file /var/log/caddy/webmail.log {
 			roll_size 10MiB
@@ -69,24 +69,24 @@ webmail.{$DOMINIO} {
 # La configuración automática de Thunderbird (y de otros que leen el mismo
 # formato): se pone la dirección y la clave, y el programa encuentra solo el
 # servidor, los puertos y el cifrado. Necesita el registro DNS `autoconfig`.
-autoconfig.{$DOMINIO} {
+autoconfig.{$CORREO_DOMINIO} {
 	handle /mail/config-v1.1.xml {
 		header Content-Type "application/xml; charset=utf-8"
 		respond <<XML
 			<?xml version="1.0" encoding="UTF-8"?>
 			<clientConfig version="1.1">
-			  <emailProvider id="{$DOMINIO}">
-			    <domain>{$DOMINIO}</domain>
+			  <emailProvider id="{$CORREO_DOMINIO}">
+			    <domain>{$CORREO_DOMINIO}</domain>
 			    <displayName>Maderera Juan B. Justo</displayName>
 			    <incomingServer type="imap">
-			      <hostname>mail.{$DOMINIO}</hostname>
+			      <hostname>mail.{$CORREO_DOMINIO}</hostname>
 			      <port>993</port>
 			      <socketType>SSL</socketType>
 			      <username>%EMAILADDRESS%</username>
 			      <authentication>password-cleartext</authentication>
 			    </incomingServer>
 			    <outgoingServer type="smtp">
-			      <hostname>mail.{$DOMINIO}</hostname>
+			      <hostname>mail.{$CORREO_DOMINIO}</hostname>
 			      <port>465</port>
 			      <socketType>SSL</socketType>
 			      <username>%EMAILADDRESS%</username>

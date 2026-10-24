@@ -31,8 +31,14 @@ if [ ! -f "$ENTORNO" ]; then
   exit 1
 fi
 
-# El dominio, del mismo archivo que usa el compose. Sin comillas.
-DOMINIO="$(grep -E '^DOMINIO=' "$ENTORNO" | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'")"
+# El dominio de las casillas, del mismo archivo que usa el compose. Es
+# CORREO_DOMINIO si está (el correo puede montarse en el dominio real antes de
+# que el sitio se mude a él) y si no, el del sitio. Sin comillas.
+leer_variable() {
+  grep -E "^$1=" "$ENTORNO" | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'"
+}
+DOMINIO="$(leer_variable CORREO_DOMINIO)"
+[ -n "$DOMINIO" ] || DOMINIO="$(leer_variable DOMINIO)"
 if [ -z "$DOMINIO" ]; then
   echo "En $ENTORNO falta DOMINIO." >&2
   exit 1

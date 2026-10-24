@@ -74,3 +74,6 @@ agente-taller/estado.json
 
 # Los adjuntos de WhatsApp en desarrollo (ver lib/whatsapp/medios.ts).
 /.privado/
+
+# Programas reales de la seccionadora: los nombres traen clientes y obras.
+/docs/cprg/

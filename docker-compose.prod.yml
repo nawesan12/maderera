@@ -97,7 +97,7 @@ services:
       # público: el certificado es de `mail.<dominio>`, no de `correo`.
       SMTP_HOST: ${SMTP_HOST:-correo}
       SMTP_PUERTO: ${SMTP_PUERTO:-587}
-      SMTP_NOMBRE_TLS: ${SMTP_NOMBRE_TLS:-mail.${DOMINIO}}
+      SMTP_NOMBRE_TLS: ${SMTP_NOMBRE_TLS:-mail.${CORREO_DOMINIO:-${DOMINIO}}}
       # El certificado de ARCA, como archivos de solo lectura (ver el volumen
       # abajo). Si todavía no están, la facturación sigue con el proveedor
       # interno, igual que sin variables.
@@ -174,6 +174,10 @@ services:
       DOMINIO: ${DOMINIO:?Falta DOMINIO en .env.produccion}
       # Los nombres que redirigen al principal, separados por espacio.
       REDIRIGIDOS: www.${DOMINIO}${DOMINIO_ALTERNATIVO:+ ${DOMINIO_ALTERNATIVO} www.${DOMINIO_ALTERNATIVO}}
+      # El dominio de las casillas (`mail.`, `webmail.`, `autoconfig.`). Es
+      # el del sitio salvo que se diga otro: así el correo se puede montar en
+      # `mjbj.com.ar` mientras el sitio sigue en una dirección de prueba.
+      CORREO_DOMINIO: ${CORREO_DOMINIO:-${DOMINIO}}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # El mapa de redirecciones del sitio viejo (ver Caddyfile).
@@ -263,19 +267,19 @@ services:
     # El nombre con que se presenta a los otros servidores. Tiene que coincidir
     # con el registro A de `mail`, con el PTR de la IP (lo configura Hostinger)
     # y con el certificado: si no, Gmail lo trata como sospechoso.
-    hostname: mail.${DOMINIO}
+    hostname: mail.${CORREO_DOMINIO:-${DOMINIO}}
     restart: unless-stopped
     env_file:
       - ./servidor/correo/correo.env
     environment:
-      POSTMASTER_ADDRESS: postmaster@${DOMINIO}
+      POSTMASTER_ADDRESS: postmaster@${CORREO_DOMINIO:-${DOMINIO}}
       # El certificado lo saca y lo renueva Caddy (bloque `mail.` del
       # Caddyfile), y acá se lee de su volumen. Con `SSL_TYPE=manual` el
       # servidor de correo vigila esos archivos y se recarga solo cuando Caddy
       # los renueva. La ruta lleva el emisor: por eso el Caddyfile fija Let's
       # Encrypt para ese nombre y no deja que caiga en otro.
-      SSL_CERT_PATH: ${CORREO_CERTIFICADO:-/srv/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${DOMINIO}/mail.${DOMINIO}.crt}
-      SSL_KEY_PATH: ${CORREO_CLAVE_CERTIFICADO:-/srv/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${DOMINIO}/mail.${DOMINIO}.key}
+      SSL_CERT_PATH: ${CORREO_CERTIFICADO:-/srv/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${CORREO_DOMINIO:-${DOMINIO}}/mail.${CORREO_DOMINIO:-${DOMINIO}}.crt}
+      SSL_KEY_PATH: ${CORREO_CLAVE_CERTIFICADO:-/srv/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${CORREO_DOMINIO:-${DOMINIO}}/mail.${CORREO_DOMINIO:-${DOMINIO}}.key}
     # **Publicados a internet, a diferencia de la aplicación.** 25 para
     # recibir de otros servidores, 465 y 587 para que las personas manden, 993
     # para leer. No 143 ni 110: son IMAP y POP sin cifrar, y no hay ningún
@@ -312,7 +316,7 @@ services:
         # conecta por ese nombre y el certificado coincide, así que la conexión
         # interna también va verificada.
         aliases:
-          - mail.${DOMINIO}
+          - mail.${CORREO_DOMINIO:-${DOMINIO}}
 
   # El webmail: leer y mandar desde el navegador, sin configurar nada. Para
   # el mostrador o una PC prestada; en el teléfono conviene la aplicación de
@@ -324,9 +328,9 @@ services:
     depends_on:
       - correo
     environment:
-      ROUNDCUBEMAIL_DEFAULT_HOST: ssl://mail.${DOMINIO}
+      ROUNDCUBEMAIL_DEFAULT_HOST: ssl://mail.${CORREO_DOMINIO:-${DOMINIO}}
       ROUNDCUBEMAIL_DEFAULT_PORT: "993"
-      ROUNDCUBEMAIL_SMTP_SERVER: tls://mail.${DOMINIO}
+      ROUNDCUBEMAIL_SMTP_SERVER: tls://mail.${CORREO_DOMINIO:-${DOMINIO}}
       ROUNDCUBEMAIL_SMTP_PORT: "587"
       # Sus propias tablas (libreta de direcciones, preferencias) en SQLite y no
       # en la base de la tienda: no tienen nada que ver, y así un problema de

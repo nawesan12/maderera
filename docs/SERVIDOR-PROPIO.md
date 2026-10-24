@@ -623,6 +623,40 @@ propio, calentar la IP, relay— son solo para el servidor propio.
    desde el webmail y desde la tienda. Tiene que dar 9/10 o más; lo que falte
    lo dice con nombre y apellido (casi siempre, un registro DNS).
 
+### Montarlo antes de mudar el dominio
+
+El correo se puede encender en el dominio real **mientras el sitio sigue en
+la dirección de prueba y las casillas siguen en el proveedor de antes**: en
+`.env.produccion`, `CORREO_DOMINIO="mjbj.com.ar"`. Sin esa variable, el
+correo usa el `DOMINIO` del sitio.
+
+Lo único que hace falta en el DNS para eso son los registros A de `mail`,
+`webmail` y `autoconfig` (en Cloudflare, «Solo DNS», sin nube naranja: el
+correo no pasa por el proxy). **El MX, el SPF y el DKIM del proveedor viejo
+no se tocan**: el correo sigue llegando allá, y las casillas nuevas se
+llenan con una copia. Con el PTR y los puertos del paso 3, el resto es
+[Encenderlo](#encenderlo) igual.
+
+### Mudar las casillas desde otro proveedor
+
+Por cada casilla: crearla acá (`scripts/correo.sh alta`) y copiar su correo
+con `scripts/traer-correo.sh`, que corre imapsync. Copia solo lo que falta y
+no borra nada en el origen, así que se corre dos veces:
+
+1. **Ahora**, con el MX todavía en el proveedor viejo: la pasada larga.
+   `scripts/traer-correo.sh ventas@mjbj.com.ar` pide la clave de cada lado.
+2. **El día del cambio**: se cambia el MX (y SPF, DKIM, DMARC: [abajo](#los-registros-dns)),
+   y se vuelve a correr por cada casilla para traer lo que entró en el medio.
+   Durante un día o dos todavía puede entrar algo allá (el DNS tarda en
+   propagarse): una tercera pasada al otro día lo recoge.
+
+**Zoho, que es lo que usa hoy mjbj.com.ar**, da IMAP solo en los planes
+pagos (`imappro.zoho.com`, el servidor por omisión del script). En el plan
+gratis las cuentas nuevas no pueden activarlo: o se paga un mes de Mail Lite
+para mudar, o se exporta cada casilla desde la configuración de Zoho y se
+importa a mano. Si la cuenta tiene doble factor, la clave para imapsync es
+una «contraseña de aplicación» de Zoho, no la de siempre.
+
 ### Los registros DNS
 
 `scripts/correo.sh dns` los imprime con la IP del servidor. Para `mjbj.com.ar`:

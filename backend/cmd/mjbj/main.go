@@ -9,7 +9,11 @@ import (
 	"os"
 	"time"
 
+	"context"
+
+	"mjbj/db"
 	"mjbj/internal/correo"
+	"mjbj/internal/migrar"
 	"mjbj/internal/plataforma"
 	webcorreo "mjbj/web/correo"
 )
@@ -23,6 +27,8 @@ func main() {
 	switch os.Args[1] {
 	case "correo":
 		err = correrCorreo()
+	case "migrar":
+		err = correrMigrar()
 	case "salud":
 		err = salud(os.Args[2:])
 	default:
@@ -39,6 +45,7 @@ func uso() {
 	fmt.Fprintln(os.Stderr, `Uso: mjbj <servicio>
 
   correo          el webmail (correo.<dominio>)
+  migrar          aplica las migraciones de la base (y adopta las de drizzle)
   salud <url>     pide la URL y sale con error si no responde 200 (para el
                   healthcheck de Docker: la imagen no tiene curl)`)
 }
@@ -74,5 +81,24 @@ func salud(args []string) error {
 	if r.StatusCode != http.StatusOK {
 		return fmt.Errorf("respondió %d", r.StatusCode)
 	}
+	return nil
+}
+
+func correrMigrar() error {
+	log := plataforma.Registro("migrar")
+	cfg, err := plataforma.Cargar[plataforma.ConfigBase]()
+	if err != nil {
+		return err
+	}
+	base, err := cfg.SQL()
+	if err != nil {
+		return err
+	}
+	defer base.Close()
+	version, err := migrar.Correr(context.Background(), base, db.Migraciones, log)
+	if err != nil {
+		return err
+	}
+	log.Info("base al día", "version", version)
 	return nil
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 )
 
@@ -36,14 +37,14 @@ const (
 	Precios  Canal = "precios"
 )
 
-// Quién recibe cada canal: los roles de la pantalla que lo muestra, según
-// ACCESO en lib/roles.ts (/admin/whatsapp, /admin/cortes, /admin/pedidos,
-// /mostrador). Una pantalla que no se puede abrir no recibe sus avisos.
+// Quién recibe cada canal: los roles de la pantalla que lo muestra
+// (PANTALLA_DEL_CANAL en lib/vivo/canales.ts), según el mapa de permisos del
+// panel. Una pantalla que no se puede abrir no recibe sus avisos.
 var rolesDelCanal = map[Canal][]sqlc.StaffRole{
-	WhatsApp: {sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor},
-	Taller:   {sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor, sqlc.StaffRoleDeposito, sqlc.StaffRoleAserradero},
-	Pedidos:  {sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor, sqlc.StaffRoleDeposito},
-	Precios:  {sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor},
+	WhatsApp: roles.QuienEntra("/admin/whatsapp"),
+	Taller:   roles.QuienEntra("/admin/cortes"),
+	Pedidos:  roles.QuienEntra("/admin/pedidos"),
+	Precios:  roles.QuienEntra("/mostrador"),
 }
 
 // Evento es lo que manda el trigger.

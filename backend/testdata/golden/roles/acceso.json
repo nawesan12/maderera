@@ -1,0 +1,3674 @@
+{
+ "acceso": {
+  "/admin": [
+   "admin",
+   "vendedor",
+   "deposito"
+  ],
+  "/admin/pedidos": [
+   "admin",
+   "vendedor",
+   "deposito"
+  ],
+  "/admin/whatsapp": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/whatsapp/configuracion": [
+   "admin"
+  ],
+  "/admin/presupuestos": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/cortes": [
+   "admin",
+   "vendedor",
+   "deposito",
+   "aserradero"
+  ],
+  "/mostrador": [
+   "admin",
+   "vendedor"
+  ],
+  "/atencion": [
+   "admin",
+   "vendedor"
+  ],
+  "/taller": [
+   "admin",
+   "vendedor",
+   "deposito",
+   "aserradero"
+  ],
+  "/admin/productos": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/stock": [
+   "admin",
+   "vendedor",
+   "deposito"
+  ],
+  "/admin/precios": [
+   "admin"
+  ],
+  "/admin/calculadoras": [
+   "admin"
+  ],
+  "/admin/clientes": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/profesionales": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/documentacion": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/contenido": [
+   "admin"
+  ],
+  "/admin/eventos": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/pagos": [
+   "admin"
+  ],
+  "/admin/facturacion": [
+   "admin"
+  ],
+  "/admin/arca": [
+   "admin"
+  ],
+  "/admin/avisos": [
+   "admin"
+  ],
+  "/admin/campanas": [
+   "admin"
+  ],
+  "/admin/caja": [
+   "admin"
+  ],
+  "/admin/proveedores": [
+   "admin"
+  ],
+  "/admin/recepciones": [
+   "admin"
+  ],
+  "/admin/compras": [
+   "admin"
+  ],
+  "/admin/compras/ordenes": [
+   "admin"
+  ],
+  "/admin/compras/facturas": [
+   "admin"
+  ],
+  "/admin/compras/pagos": [
+   "admin"
+  ],
+  "/admin/compras/gastos": [
+   "admin"
+  ],
+  "/admin/cheques": [
+   "admin"
+  ],
+  "/admin/cierre": [
+   "admin"
+  ],
+  "/admin/reportes": [
+   "admin"
+  ],
+  "/admin/sucursales": [
+   "admin"
+  ],
+  "/admin/envios": [
+   "admin"
+  ],
+  "/admin/cortes/tarifas": [
+   "admin"
+  ],
+  "/admin/precios/formas-de-pago": [
+   "admin"
+  ],
+  "/admin/migracion": [
+   "admin"
+  ],
+  "/admin/bitacora": [
+   "admin"
+  ],
+  "/admin/ayuda": [
+   "admin",
+   "vendedor",
+   "deposito",
+   "aserradero"
+  ]
+ },
+ "quienEntra": {
+  "/": null,
+  "/admin": [
+   "admin",
+   "vendedor",
+   "deposito"
+  ],
+  "/admin/algo": null,
+  "/admin/arca": [
+   "admin"
+  ],
+  "/admin/arca/algo": null,
+  "/admin/arca/nuevo/123": null,
+  "/admin/avisos": [
+   "admin"
+  ],
+  "/admin/avisos/algo": null,
+  "/admin/avisos/nuevo/123": null,
+  "/admin/ayuda": [
+   "admin",
+   "vendedor",
+   "deposito",
+   "aserradero"
+  ],
+  "/admin/ayuda/algo": null,
+  "/admin/ayuda/nuevo/123": null,
+  "/admin/bitacora": [
+   "admin"
+  ],
+  "/admin/bitacora/algo": null,
+  "/admin/bitacora/nuevo/123": null,
+  "/admin/caja": [
+   "admin"
+  ],
+  "/admin/caja/algo": null,
+  "/admin/caja/nuevo/123": null,
+  "/admin/calculadoras": [
+   "admin"
+  ],
+  "/admin/calculadoras/algo": null,
+  "/admin/calculadoras/nuevo/123": null,
+  "/admin/campanas": [
+   "admin"
+  ],
+  "/admin/campanas/algo": null,
+  "/admin/campanas/nuevo/123": null,
+  "/admin/cheques": [
+   "admin"
+  ],
+  "/admin/cheques/algo": null,
+  "/admin/cheques/nuevo/123": null,
+  "/admin/cierre": [
+   "admin"
+  ],
+  "/admin/cierre/algo": null,
+  "/admin/cierre/nuevo/123": null,
+  "/admin/clientes": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/clientes/algo": null,
+  "/admin/clientes/nuevo/123": null,
+  "/admin/compras": [
+   "admin"
+  ],
+  "/admin/compras/algo": null,
+  "/admin/compras/facturas": [
+   "admin"
+  ],
+  "/admin/compras/facturas/algo": null,
+  "/admin/compras/facturas/nuevo/123": null,
+  "/admin/compras/gastos": [
+   "admin"
+  ],
+  "/admin/compras/gastos/algo": null,
+  "/admin/compras/gastos/nuevo/123": null,
+  "/admin/compras/nuevo/123": null,
+  "/admin/compras/ordenes": [
+   "admin"
+  ],
+  "/admin/compras/ordenes/algo": null,
+  "/admin/compras/ordenes/nuevo/123": null,
+  "/admin/compras/pagos": [
+   "admin"
+  ],
+  "/admin/compras/pagos/algo": null,
+  "/admin/compras/pagos/certificado/12": null,
+  "/admin/compras/pagos/nuevo/123": null,
+  "/admin/contenido": [
+   "admin"
+  ],
+  "/admin/contenido/algo": null,
+  "/admin/contenido/nuevo/123": null,
+  "/admin/cortes": [
+   "admin",
+   "vendedor",
+   "deposito",
+   "aserradero"
+  ],
+  "/admin/cortes/algo": null,
+  "/admin/cortes/nuevo/123": null,
+  "/admin/cortes/tarifas": [
+   "admin"
+  ],
+  "/admin/cortes/tarifas/algo": null,
+  "/admin/cortes/tarifas/nuevo/123": null,
+  "/admin/cortes/tarifas/x": null,
+  "/admin/documentacion": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/documentacion/algo": null,
+  "/admin/documentacion/nuevo/123": null,
+  "/admin/envios": [
+   "admin"
+  ],
+  "/admin/envios/algo": null,
+  "/admin/envios/nuevo/123": null,
+  "/admin/eventos": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/eventos/algo": null,
+  "/admin/eventos/nuevo/123": null,
+  "/admin/facturacion": [
+   "admin"
+  ],
+  "/admin/facturacion/algo": null,
+  "/admin/facturacion/nuevo/123": null,
+  "/admin/migracion": [
+   "admin"
+  ],
+  "/admin/migracion/algo": null,
+  "/admin/migracion/nuevo/123": null,
+  "/admin/nada": null,
+  "/admin/nuevo/123": null,
+  "/admin/pagos": [
+   "admin"
+  ],
+  "/admin/pagos/algo": null,
+  "/admin/pagos/nuevo/123": null,
+  "/admin/pedidos": [
+   "admin",
+   "vendedor",
+   "deposito"
+  ],
+  "/admin/pedidos/algo": null,
+  "/admin/pedidos/nuevo/123": null,
+  "/admin/precios": [
+   "admin"
+  ],
+  "/admin/precios/algo": null,
+  "/admin/precios/formas-de-pago": [
+   "admin"
+  ],
+  "/admin/precios/formas-de-pago/algo": null,
+  "/admin/precios/formas-de-pago/nuevo/123": null,
+  "/admin/precios/nuevo/123": null,
+  "/admin/presupuestos": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/presupuestos/algo": null,
+  "/admin/presupuestos/nuevo/123": null,
+  "/admin/productos": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/productos/algo": null,
+  "/admin/productos/nuevo/123": null,
+  "/admin/profesionales": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/profesionales/algo": null,
+  "/admin/profesionales/nuevo/123": null,
+  "/admin/proveedores": [
+   "admin"
+  ],
+  "/admin/proveedores/algo": null,
+  "/admin/proveedores/nuevo/123": null,
+  "/admin/recepciones": [
+   "admin"
+  ],
+  "/admin/recepciones/algo": null,
+  "/admin/recepciones/nuevo/123": null,
+  "/admin/reportes": [
+   "admin"
+  ],
+  "/admin/reportes/algo": null,
+  "/admin/reportes/nuevo/123": null,
+  "/admin/stock": [
+   "admin",
+   "vendedor",
+   "deposito"
+  ],
+  "/admin/stock/algo": null,
+  "/admin/stock/nuevo/123": null,
+  "/admin/sucursales": [
+   "admin"
+  ],
+  "/admin/sucursales/algo": null,
+  "/admin/sucursales/nuevo/123": null,
+  "/admin/whatsapp": [
+   "admin",
+   "vendedor"
+  ],
+  "/admin/whatsapp/algo": null,
+  "/admin/whatsapp/configuracion": [
+   "admin"
+  ],
+  "/admin/whatsapp/configuracion/algo": null,
+  "/admin/whatsapp/configuracion/nuevo/123": null,
+  "/admin/whatsapp/configuracion/plantillas": null,
+  "/admin/whatsapp/nuevo/123": null,
+  "/adminx": null,
+  "/atencion": [
+   "admin",
+   "vendedor"
+  ],
+  "/atencion/algo": null,
+  "/atencion/nuevo/123": null,
+  "/mi-cuenta": null,
+  "/mostrador": [
+   "admin",
+   "vendedor"
+  ],
+  "/mostrador/algo": null,
+  "/mostrador/nuevo/123": null,
+  "/mostradorx": null,
+  "/taller": [
+   "admin",
+   "vendedor",
+   "deposito",
+   "aserradero"
+  ],
+  "/taller/algo": null,
+  "/taller/nuevo/123": null
+ },
+ "inicio": {
+  "admin": "/admin",
+  "vendedor": "/admin",
+  "deposito": "/admin",
+  "aserradero": "/taller",
+  "null": "/admin"
+ },
+ "matriz": [
+  {
+   "ruta": "/",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/algo",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/arca",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/arca",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/arca",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/arca",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/arca",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/arca/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/arca/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/arca/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/arca/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/arca/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/arca/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/arca/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/arca/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/arca/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/arca/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/avisos",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/avisos",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/avisos",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/avisos",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/avisos",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/avisos/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/avisos/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/avisos/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/avisos/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/avisos/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/avisos/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/avisos/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/avisos/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/avisos/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/avisos/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/ayuda",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/ayuda",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/ayuda",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/ayuda",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/ayuda",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/ayuda/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/ayuda/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/ayuda/algo",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/ayuda/algo",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/ayuda/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/ayuda/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/ayuda/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/ayuda/nuevo/123",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/ayuda/nuevo/123",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/ayuda/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/bitacora",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/bitacora",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/bitacora",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/bitacora",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/bitacora",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/bitacora/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/bitacora/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/bitacora/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/bitacora/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/bitacora/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/bitacora/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/bitacora/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/bitacora/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/bitacora/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/bitacora/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/caja",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/caja",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/caja",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/caja",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/caja",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/caja/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/caja/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/caja/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/caja/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/caja/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/caja/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/caja/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/caja/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/caja/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/caja/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/calculadoras",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/calculadoras",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/calculadoras",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/calculadoras",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/calculadoras",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/calculadoras/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/calculadoras/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/calculadoras/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/calculadoras/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/calculadoras/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/calculadoras/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/calculadoras/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/calculadoras/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/calculadoras/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/calculadoras/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/campanas",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/campanas",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/campanas",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/campanas",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/campanas",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/campanas/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/campanas/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/campanas/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/campanas/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/campanas/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/campanas/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/campanas/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/campanas/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/campanas/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/campanas/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cheques",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cheques",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cheques",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cheques",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cheques",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cheques/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cheques/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cheques/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cheques/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cheques/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cheques/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cheques/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cheques/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cheques/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cheques/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cierre",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cierre",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cierre",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cierre",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cierre",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cierre/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cierre/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cierre/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cierre/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cierre/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cierre/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cierre/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cierre/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cierre/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cierre/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/clientes",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/clientes",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/clientes",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/clientes",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/clientes",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/clientes/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/clientes/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/clientes/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/clientes/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/clientes/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/clientes/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/clientes/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/clientes/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/clientes/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/clientes/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/facturas",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/facturas",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/facturas",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/facturas",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/facturas",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/facturas/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/facturas/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/facturas/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/facturas/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/facturas/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/facturas/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/facturas/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/facturas/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/facturas/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/facturas/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/gastos",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/gastos",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/gastos",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/gastos",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/gastos",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/gastos/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/gastos/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/gastos/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/gastos/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/gastos/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/gastos/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/gastos/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/gastos/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/gastos/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/gastos/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/ordenes",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/ordenes",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/ordenes",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/ordenes",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/ordenes",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/ordenes/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/ordenes/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/ordenes/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/ordenes/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/ordenes/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/ordenes/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/ordenes/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/ordenes/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/ordenes/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/ordenes/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/pagos",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/pagos/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos/certificado/12",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/pagos/certificado/12",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos/certificado/12",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos/certificado/12",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos/certificado/12",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/compras/pagos/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/compras/pagos/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/contenido",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/contenido",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/contenido",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/contenido",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/contenido",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/contenido/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/contenido/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/contenido/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/contenido/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/contenido/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/contenido/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/contenido/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/contenido/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/contenido/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/contenido/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/algo",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/algo",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/123",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/123",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/tarifas",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/x",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/x",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/x",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/x",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/tarifas/x",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/documentacion",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/documentacion",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/documentacion",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/documentacion",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/documentacion",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/documentacion/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/documentacion/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/documentacion/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/documentacion/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/documentacion/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/documentacion/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/documentacion/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/documentacion/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/documentacion/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/documentacion/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/envios",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/envios",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/envios",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/envios",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/envios",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/envios/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/envios/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/envios/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/envios/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/envios/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/envios/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/envios/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/envios/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/envios/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/envios/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/eventos",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/eventos",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/eventos",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/eventos",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/eventos",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/eventos/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/eventos/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/eventos/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/eventos/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/eventos/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/eventos/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/eventos/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/eventos/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/eventos/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/eventos/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/facturacion",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/facturacion",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/facturacion",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/facturacion",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/facturacion",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/facturacion/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/facturacion/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/facturacion/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/facturacion/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/facturacion/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/facturacion/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/facturacion/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/facturacion/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/facturacion/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/facturacion/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/migracion",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/migracion",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/migracion",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/migracion",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/migracion",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/migracion/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/migracion/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/migracion/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/migracion/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/migracion/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/migracion/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/migracion/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/migracion/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/migracion/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/migracion/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/nada",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/nada",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/nada",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/nada",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/nada",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/nuevo/123",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pagos",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/pagos",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pagos",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pagos",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pagos",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pagos/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/pagos/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pagos/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pagos/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pagos/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pagos/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/pagos/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pagos/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pagos/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pagos/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pedidos",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/pedidos",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/pedidos",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/pedidos",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pedidos",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pedidos/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/pedidos/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/pedidos/algo",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/pedidos/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pedidos/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pedidos/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/pedidos/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/pedidos/nuevo/123",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/pedidos/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/pedidos/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/precios",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/precios/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/formas-de-pago/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/precios/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/precios/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/presupuestos",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/presupuestos",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/presupuestos",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/presupuestos",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/presupuestos",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/presupuestos/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/presupuestos/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/presupuestos/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/presupuestos/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/presupuestos/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/presupuestos/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/presupuestos/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/presupuestos/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/presupuestos/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/presupuestos/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/productos",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/productos",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/productos",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/productos",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/productos",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/productos/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/productos/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/productos/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/productos/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/productos/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/productos/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/productos/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/productos/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/productos/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/productos/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/profesionales",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/profesionales",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/profesionales",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/profesionales",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/profesionales",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/profesionales/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/profesionales/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/profesionales/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/profesionales/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/profesionales/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/profesionales/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/profesionales/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/profesionales/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/profesionales/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/profesionales/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/proveedores",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/proveedores",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/proveedores",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/proveedores",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/proveedores",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/proveedores/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/proveedores/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/proveedores/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/proveedores/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/proveedores/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/proveedores/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/proveedores/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/proveedores/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/proveedores/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/proveedores/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/recepciones",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/recepciones",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/recepciones",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/recepciones",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/recepciones",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/recepciones/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/recepciones/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/recepciones/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/recepciones/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/recepciones/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/recepciones/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/recepciones/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/recepciones/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/recepciones/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/recepciones/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reportes",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/reportes",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reportes",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reportes",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reportes",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reportes/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/reportes/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reportes/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reportes/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reportes/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reportes/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/reportes/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reportes/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reportes/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reportes/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/stock",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/stock",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/stock",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/stock",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/stock",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/stock/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/stock/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/stock/algo",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/stock/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/stock/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/stock/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/stock/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/stock/nuevo/123",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/stock/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/stock/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sucursales",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/sucursales",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sucursales",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sucursales",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sucursales",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sucursales/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/sucursales/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sucursales/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sucursales/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sucursales/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sucursales/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/sucursales/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sucursales/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sucursales/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sucursales/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/whatsapp",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/whatsapp",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/whatsapp/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/whatsapp/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/plantillas",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/plantillas",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/plantillas",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/plantillas",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/configuracion/plantillas",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/whatsapp/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/whatsapp/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/whatsapp/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/adminx",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/adminx",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/adminx",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/adminx",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/adminx",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/atencion",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/atencion",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/atencion",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/atencion",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/atencion",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/atencion/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/atencion/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/atencion/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/atencion/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/atencion/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/atencion/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/atencion/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/atencion/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/atencion/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/atencion/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/mi-cuenta",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/mi-cuenta",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/mi-cuenta",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/mi-cuenta",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/mi-cuenta",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/mostrador",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/mostrador",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/mostrador",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/mostrador",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/mostrador",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/mostrador/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/mostrador/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/mostrador/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/mostrador/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/mostrador/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/mostrador/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/mostrador/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/mostrador/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/mostrador/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/mostrador/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/mostradorx",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/mostradorx",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/mostradorx",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/mostradorx",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/mostradorx",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/taller",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/taller",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/taller",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/taller",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/taller",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/taller/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/taller/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/taller/algo",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/taller/algo",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/taller/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/taller/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/taller/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/taller/nuevo/123",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/taller/nuevo/123",
+   "rol": "aserradero",
+   "puede": true
+  },
+  {
+   "ruta": "/taller/nuevo/123",
+   "rol": null,
+   "puede": false
+  }
+ ]
+}

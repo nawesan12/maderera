@@ -8,6 +8,7 @@ import (
 
 	"mjbj/internal/cola"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/push"
 	"mjbj/internal/revalidar"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/tareas"
@@ -16,6 +17,7 @@ import (
 type configWorker struct {
 	Base      plataforma.ConfigBase
 	Revalidar revalidar.Config
+	Push      push.Config
 }
 
 // El worker: la cola (los tipos que ya son de Go) y las tareas periódicas
@@ -36,7 +38,17 @@ func correrWorker() error {
 	defer pool.Close()
 	q := sqlc.New(pool)
 
+	avisos := push.Nuevo(cfg.Push, q, log)
 	c := cola.Nueva(q, log)
+	c.AlFallar = func(ctx context.Context, tipo, mensaje string) {
+		if len(mensaje) > 140 {
+			mensaje = mensaje[:140]
+		}
+		avisos.Avisar(ctx, push.Aviso{
+			Titulo: "Un trabajo automático no se pudo hacer", Cuerpo: tipo + ": " + mensaje,
+			URL: "/admin/sistema", Etiqueta: "trabajo-fallido",
+		})
+	}
 	c.Registrar(revalidar.Tipo, revalidar.Manejador(cfg.Revalidar))
 
 	// Las tareas que ya son de Go. Cada tanda suma las suyas.

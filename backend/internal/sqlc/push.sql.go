@@ -115,7 +115,7 @@ func (q *Queries) SuscripcionesDeRoles(ctx context.Context, roles []string) ([]S
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SuscripcionesDeRolesRow
+	items := []SuscripcionesDeRolesRow{}
 	for rows.Next() {
 		var i SuscripcionesDeRolesRow
 		if err := rows.Scan(
@@ -154,7 +154,7 @@ func (q *Queries) SuscripcionesDeUsuario(ctx context.Context, userID string) ([]
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SuscripcionesDeUsuarioRow
+	items := []SuscripcionesDeUsuarioRow{}
 	for rows.Next() {
 		var i SuscripcionesDeUsuarioRow
 		if err := rows.Scan(
@@ -190,7 +190,7 @@ func (q *Queries) TodasLasSuscripciones(ctx context.Context) ([]TodasLasSuscripc
 		return nil, err
 	}
 	defer rows.Close()
-	var items []TodasLasSuscripcionesRow
+	items := []TodasLasSuscripcionesRow{}
 	for rows.Next() {
 		var i TodasLasSuscripcionesRow
 		if err := rows.Scan(

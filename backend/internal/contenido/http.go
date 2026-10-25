@@ -11,15 +11,20 @@ import (
 
 	"mjbj/internal/api/contenidoapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/bitacora"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
+	"mjbj/internal/sqlc"
 )
 
 // API son las rutas del contenido (api/contenido.yaml).
-type API struct{ s *Servicio }
+type API struct {
+	s      *Servicio
+	google ConfigGoogle
+}
 
 // NuevaAPI arma los handlers.
-func NuevaAPI(s *Servicio) *API { return &API{s: s} }
+func NuevaAPI(s *Servicio, google ConfigGoogle) *API { return &API{s: s, google: google} }
 
 var _ contenidoapi.StrictServerInterface = (*API)(nil)
 
@@ -38,7 +43,7 @@ func (o respuesta) escribir(w http.ResponseWriter) error {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(o.codigo)
-	return json.NewEncoder(w).Encode(o.v)
+	return json.NewEncoder(w).Encode(plataforma.SinNulos(o.v))
 }
 
 func ok(v any) respuesta     { return respuesta{http.StatusOK, v} }
@@ -64,6 +69,24 @@ func (o respuesta) VisitAdminPromosResponse(w http.ResponseWriter) error        
 func (o respuesta) VisitCrearPromoResponse(w http.ResponseWriter) error         { return o.escribir(w) }
 func (o respuesta) VisitEditarPromoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
 func (o respuesta) VisitBorrarPromoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
+func (o respuesta) VisitResenasDelNegocioResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitResumenDelNegocioResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitAdminResenasDelNegocioResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitCrearResenaDelNegocioResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitEditarResenaDelNegocioResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitPublicarResenaDelNegocioResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitBorrarResenaDelNegocioResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitTraerDeGoogleResponse(w http.ResponseWriter) error { return o.escribir(w) }
 
 // Las rutas del panel son de quien puede abrir /admin/contenido (ACCESO).
 func admin(ctx context.Context) (*auth.Sesion, error) {
@@ -317,4 +340,90 @@ func (a *API) BorrarPromo(ctx context.Context, r contenidoapi.BorrarPromoRequest
 		return nil, err
 	}
 	return listo(), a.s.BorrarPromo(ctx, ses, r.Id.String())
+}
+
+// --- las reseñas del negocio ---
+
+func (a *API) ResenasDelNegocio(ctx context.Context, _ contenidoapi.ResenasDelNegocioRequestObject) (contenidoapi.ResenasDelNegocioResponseObject, error) {
+	v, err := a.s.ResenasDelNegocio(ctx)
+	return ok(v), err
+}
+
+func (a *API) ResumenDelNegocio(ctx context.Context, _ contenidoapi.ResumenDelNegocioRequestObject) (contenidoapi.ResumenDelNegocioResponseObject, error) {
+	v, err := a.s.ResumenDelNegocio(ctx)
+	return ok(v), err
+}
+
+func (a *API) AdminResenasDelNegocio(ctx context.Context, _ contenidoapi.AdminResenasDelNegocioRequestObject) (contenidoapi.AdminResenasDelNegocioResponseObject, error) {
+	if _, err := admin(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.q.ResenasDelNegocioTodas(ctx)
+	return ok(v), err
+}
+
+func formNegocio(id string, b *contenidoapi.FormResenaNegocio) FormResenaNegocio {
+	f := FormResenaNegocio{ID: id, Autor: b.Autor, Texto: b.Texto, Estrellas: b.Estrellas, Publicada: b.Publicada}
+	if b.Fecha != nil {
+		f.Fecha = *b.Fecha
+	}
+	return f
+}
+
+func (a *API) CrearResenaDelNegocio(ctx context.Context, r contenidoapi.CrearResenaDelNegocioRequestObject) (contenidoapi.CrearResenaDelNegocioResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pub, err := a.s.GuardarResenaNegocio(ctx, ses, formNegocio("", r.Body))
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]bool{"publicada": pub}), nil
+}
+
+func (a *API) EditarResenaDelNegocio(ctx context.Context, r contenidoapi.EditarResenaDelNegocioRequestObject) (contenidoapi.EditarResenaDelNegocioResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pub, err := a.s.GuardarResenaNegocio(ctx, ses, formNegocio(r.Id.String(), r.Body))
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]bool{"publicada": pub}), nil
+}
+
+func (a *API) PublicarResenaDelNegocio(ctx context.Context, r contenidoapi.PublicarResenaDelNegocioRequestObject) (contenidoapi.PublicarResenaDelNegocioResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return listo(), a.s.PublicarResenaNegocio(ctx, ses, r.Id.String(), r.Body.Publicada)
+}
+
+func (a *API) BorrarResenaDelNegocio(ctx context.Context, r contenidoapi.BorrarResenaDelNegocioRequestObject) (contenidoapi.BorrarResenaDelNegocioResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return listo(), a.s.BorrarResenaNegocio(ctx, ses, r.Id.String())
+}
+
+func (a *API) TraerDeGoogle(ctx context.Context, _ contenidoapi.TraerDeGoogleRequestObject) (contenidoapi.TraerDeGoogleResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	r, err := a.s.SincronizarGoogle(ctx, a.google)
+	var eg *ErrGoogle
+	if errors.As(err, &eg) {
+		return nil, plataforma.NuevoProblema(http.StatusUnprocessableEntity, eg.Mensaje)
+	}
+	if err != nil {
+		return nil, err
+	}
+	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaCrear, "resena", "",
+		"Trajo "+strconv.Itoa(r.Nuevas)+" reseñas nuevas de Google", nil)
+	return ok(r), nil
 }

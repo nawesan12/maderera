@@ -229,6 +229,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/contenido/negocio/resenas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ResenasDelNegocio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contenido/negocio/resumen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ResumenDelNegocio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/contenido/negocio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminResenasDelNegocio"];
+        put?: never;
+        post: operations["CrearResenaDelNegocio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/contenido/negocio/google": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Trae las reseñas nuevas de Google (entran sin publicar) */
+        post: operations["TraerDeGoogle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/contenido/negocio/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["EditarResenaDelNegocio"];
+        post?: never;
+        delete: operations["BorrarResenaDelNegocio"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/contenido/negocio/{id}/publicar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PublicarResenaDelNegocio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -351,6 +448,50 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        ResenaDelNegocio: {
+            id: string;
+            autor: string;
+            estrellas: number;
+            texto: string;
+            /** Format: date-time */
+            fecha: string;
+            /** @enum {string} */
+            origen: "manual" | "google";
+            fotoUrl: string | null;
+        };
+        ResenaDelNegocioCompleta: {
+            id: string;
+            autor: string;
+            estrellas: number;
+            texto: string;
+            /** Format: date-time */
+            fecha: string;
+            /** @enum {string} */
+            origen: "manual" | "google";
+            externoId: string | null;
+            fotoUrl: string | null;
+            publicada: boolean;
+            orden: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ResumenNegocio: {
+            promedio: number;
+            cuantas: number;
+        } | null;
+        Publicada: {
+            publicada: boolean;
+        };
+        FormResenaNegocio: {
+            autor: string;
+            estrellas: number;
+            texto: string;
+            /** @description AAAA-MM-DD */
+            fecha?: string;
+            publicada: boolean;
         };
         FormBanner: {
             ubicacion: string;
@@ -837,6 +978,188 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Borrada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    ResenasDelNegocio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las publicadas, hasta 12 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResenaDelNegocio"][];
+                };
+            };
+        };
+    };
+    ResumenDelNegocio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El promedio, o null si no hay ninguna publicada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumenNegocio"];
+                };
+            };
+        };
+    };
+    AdminResenasDelNegocio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Todas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResenaDelNegocioCompleta"][];
+                };
+            };
+        };
+    };
+    CrearResenaDelNegocio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FormResenaNegocio"];
+            };
+        };
+        responses: {
+            /** @description Guardada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Publicada"];
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    TraerDeGoogle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lo que trajo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        traidas: number;
+                        nuevas: number;
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    EditarResenaDelNegocio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FormResenaNegocio"];
+            };
+        };
+        responses: {
+            /** @description Guardada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Publicada"];
+                };
+            };
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    BorrarResenaDelNegocio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicarResenaDelNegocio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Publicada"];
+            };
+        };
+        responses: {
+            /** @description Hecho */
             204: {
                 headers: {
                     [name: string]: unknown;

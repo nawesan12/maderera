@@ -61,6 +61,42 @@ func (e PromoVigenteQuienPaga) Valid() bool {
 	}
 }
 
+// Defines values for ResenaDelNegocioOrigen.
+const (
+	ResenaDelNegocioOrigenGoogle ResenaDelNegocioOrigen = "google"
+	ResenaDelNegocioOrigenManual ResenaDelNegocioOrigen = "manual"
+)
+
+// Valid indicates whether the value is a known member of the ResenaDelNegocioOrigen enum.
+func (e ResenaDelNegocioOrigen) Valid() bool {
+	switch e {
+	case ResenaDelNegocioOrigenGoogle:
+		return true
+	case ResenaDelNegocioOrigenManual:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResenaDelNegocioCompletaOrigen.
+const (
+	ResenaDelNegocioCompletaOrigenGoogle ResenaDelNegocioCompletaOrigen = "google"
+	ResenaDelNegocioCompletaOrigenManual ResenaDelNegocioCompletaOrigen = "manual"
+)
+
+// Valid indicates whether the value is a known member of the ResenaDelNegocioCompletaOrigen enum.
+func (e ResenaDelNegocioCompletaOrigen) Valid() bool {
+	switch e {
+	case ResenaDelNegocioCompletaOrigenGoogle:
+		return true
+	case ResenaDelNegocioCompletaOrigenManual:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ResenaParaModerarEstado.
 const (
 	ResenaParaModerarEstadoPendiente ResenaParaModerarEstado = "pendiente"
@@ -207,6 +243,17 @@ type FormPromo struct {
 	VigenciaHasta *string `json:"vigenciaHasta,omitempty"`
 }
 
+// FormResenaNegocio defines model for FormResenaNegocio.
+type FormResenaNegocio struct {
+	Autor     string `json:"autor"`
+	Estrellas int    `json:"estrellas"`
+
+	// Fecha AAAA-MM-DD
+	Fecha     *string `json:"fecha,omitempty"`
+	Publicada bool    `json:"publicada"`
+	Texto     string  `json:"texto"`
+}
+
 // Problema defines model for Problema.
 type Problema struct {
 	Detail  *string            `json:"detail,omitempty"`
@@ -251,6 +298,11 @@ type PromoVigente struct {
 // PromoVigenteQuienPaga defines model for PromoVigente.QuienPaga.
 type PromoVigenteQuienPaga string
 
+// Publicada defines model for Publicada.
+type Publicada struct {
+	Publicada bool `json:"publicada"`
+}
+
 // Resena defines model for Resena.
 type Resena struct {
 	Estrellas int       `json:"estrellas"`
@@ -259,6 +311,39 @@ type Resena struct {
 	Nombre    string    `json:"nombre"`
 	Texto     string    `json:"texto"`
 }
+
+// ResenaDelNegocio defines model for ResenaDelNegocio.
+type ResenaDelNegocio struct {
+	Autor     string                 `json:"autor"`
+	Estrellas int                    `json:"estrellas"`
+	Fecha     time.Time              `json:"fecha"`
+	FotoUrl   *string                `json:"fotoUrl"`
+	Id        string                 `json:"id"`
+	Origen    ResenaDelNegocioOrigen `json:"origen"`
+	Texto     string                 `json:"texto"`
+}
+
+// ResenaDelNegocioOrigen defines model for ResenaDelNegocio.Origen.
+type ResenaDelNegocioOrigen string
+
+// ResenaDelNegocioCompleta defines model for ResenaDelNegocioCompleta.
+type ResenaDelNegocioCompleta struct {
+	Autor     string                         `json:"autor"`
+	CreatedAt time.Time                      `json:"createdAt"`
+	Estrellas int                            `json:"estrellas"`
+	ExternoId *string                        `json:"externoId"`
+	Fecha     time.Time                      `json:"fecha"`
+	FotoUrl   *string                        `json:"fotoUrl"`
+	Id        string                         `json:"id"`
+	Orden     int                            `json:"orden"`
+	Origen    ResenaDelNegocioCompletaOrigen `json:"origen"`
+	Publicada bool                           `json:"publicada"`
+	Texto     string                         `json:"texto"`
+	UpdatedAt time.Time                      `json:"updatedAt"`
+}
+
+// ResenaDelNegocioCompletaOrigen defines model for ResenaDelNegocioCompleta.Origen.
+type ResenaDelNegocioCompletaOrigen string
 
 // ResenaParaModerar defines model for ResenaParaModerar.
 type ResenaParaModerar struct {
@@ -292,6 +377,12 @@ type Resumen struct {
 	Cantidad int            `json:"cantidad"`
 	Promedio float32        `json:"promedio"`
 	Reparto  map[string]int `json:"reparto"`
+}
+
+// ResumenNegocio defines model for ResumenNegocio.
+type ResumenNegocio struct {
+	Cuantas  int     `json:"cuantas"`
+	Promedio float32 `json:"promedio"`
 }
 
 // Ubicacion defines model for Ubicacion.
@@ -333,6 +424,15 @@ type CrearBannerMultipartRequestBody = FormBanner
 // EditarBannerMultipartRequestBody defines body for EditarBanner for multipart/form-data ContentType.
 type EditarBannerMultipartRequestBody = FormBanner
 
+// CrearResenaDelNegocioJSONRequestBody defines body for CrearResenaDelNegocio for application/json ContentType.
+type CrearResenaDelNegocioJSONRequestBody = FormResenaNegocio
+
+// EditarResenaDelNegocioJSONRequestBody defines body for EditarResenaDelNegocio for application/json ContentType.
+type EditarResenaDelNegocioJSONRequestBody = FormResenaNegocio
+
+// PublicarResenaDelNegocioJSONRequestBody defines body for PublicarResenaDelNegocio for application/json ContentType.
+type PublicarResenaDelNegocioJSONRequestBody = Publicada
+
 // CrearPromoMultipartRequestBody defines body for CrearPromo for multipart/form-data ContentType.
 type CrearPromoMultipartRequestBody = FormPromo
 
@@ -366,6 +466,24 @@ type ServerInterface interface {
 	// (PUT /api/v1/admin/contenido/banners/{id})
 	EditarBanner(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 
+	// (GET /api/v1/admin/contenido/negocio)
+	AdminResenasDelNegocio(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/admin/contenido/negocio)
+	CrearResenaDelNegocio(w http.ResponseWriter, r *http.Request)
+	// TraerDeGoogle Trae las reseñas nuevas de Google (entran sin publicar)
+	// (POST /api/v1/admin/contenido/negocio/google)
+	TraerDeGoogle(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /api/v1/admin/contenido/negocio/{id})
+	BorrarResenaDelNegocio(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (PUT /api/v1/admin/contenido/negocio/{id})
+	EditarResenaDelNegocio(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (POST /api/v1/admin/contenido/negocio/{id}/publicar)
+	PublicarResenaDelNegocio(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
 	// (GET /api/v1/admin/contenido/promos)
 	AdminPromos(w http.ResponseWriter, r *http.Request)
 
@@ -395,6 +513,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/contenido/mis-resenas)
 	DejarResena(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/contenido/negocio/resenas)
+	ResenasDelNegocio(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/contenido/negocio/resumen)
+	ResumenDelNegocio(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/contenido/productos/{id}/resenas)
 	ResenasDelProducto(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -526,6 +650,126 @@ func (siw *ServerInterfaceWrapper) EditarBanner(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.EditarBanner(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminResenasDelNegocio operation middleware
+func (siw *ServerInterfaceWrapper) AdminResenasDelNegocio(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminResenasDelNegocio(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CrearResenaDelNegocio operation middleware
+func (siw *ServerInterfaceWrapper) CrearResenaDelNegocio(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CrearResenaDelNegocio(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TraerDeGoogle operation middleware
+func (siw *ServerInterfaceWrapper) TraerDeGoogle(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TraerDeGoogle(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BorrarResenaDelNegocio operation middleware
+func (siw *ServerInterfaceWrapper) BorrarResenaDelNegocio(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BorrarResenaDelNegocio(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EditarResenaDelNegocio operation middleware
+func (siw *ServerInterfaceWrapper) EditarResenaDelNegocio(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EditarResenaDelNegocio(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PublicarResenaDelNegocio operation middleware
+func (siw *ServerInterfaceWrapper) PublicarResenaDelNegocio(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PublicarResenaDelNegocio(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -721,6 +965,34 @@ func (siw *ServerInterfaceWrapper) DejarResena(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DejarResena(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResenasDelNegocio operation middleware
+func (siw *ServerInterfaceWrapper) ResenasDelNegocio(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResenasDelNegocio(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumenDelNegocio operation middleware
+func (siw *ServerInterfaceWrapper) ResumenDelNegocio(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumenDelNegocio(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -935,6 +1207,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/contenido/promos", wrapper.CrearPromo)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/admin/contenido/promos/{id}", wrapper.BorrarPromo)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/contenido/promos/{id}", wrapper.EditarPromo)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/negocio/resenas", wrapper.ResenasDelNegocio)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/negocio/resumen", wrapper.ResumenDelNegocio)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/contenido/negocio", wrapper.AdminResenasDelNegocio)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/contenido/negocio", wrapper.CrearResenaDelNegocio)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/contenido/negocio/google", wrapper.TraerDeGoogle)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/admin/contenido/negocio/{id}", wrapper.BorrarResenaDelNegocio)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/contenido/negocio/{id}", wrapper.EditarResenaDelNegocio)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/contenido/negocio/{id}/publicar", wrapper.PublicarResenaDelNegocio)
 
 	return m
 }
@@ -1137,6 +1417,207 @@ func (response EditarBanner422ApplicationProblemPlusJSONResponse) VisitEditarBan
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminResenasDelNegocioRequestObject struct {
+}
+
+type AdminResenasDelNegocioResponseObject interface {
+	VisitAdminResenasDelNegocioResponse(w http.ResponseWriter) error
+}
+
+type AdminResenasDelNegocio200JSONResponse []ResenaDelNegocioCompleta
+
+func (response AdminResenasDelNegocio200JSONResponse) VisitAdminResenasDelNegocioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearResenaDelNegocioRequestObject struct {
+	Body *CrearResenaDelNegocioJSONRequestBody
+}
+
+type CrearResenaDelNegocioResponseObject interface {
+	VisitCrearResenaDelNegocioResponse(w http.ResponseWriter) error
+}
+
+type CrearResenaDelNegocio200JSONResponse Publicada
+
+func (response CrearResenaDelNegocio200JSONResponse) VisitCrearResenaDelNegocioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearResenaDelNegocio422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response CrearResenaDelNegocio422ApplicationProblemPlusJSONResponse) VisitCrearResenaDelNegocioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TraerDeGoogleRequestObject struct {
+}
+
+type TraerDeGoogleResponseObject interface {
+	VisitTraerDeGoogleResponse(w http.ResponseWriter) error
+}
+
+type TraerDeGoogle200JSONResponse struct {
+	Nuevas  int `json:"nuevas"`
+	Traidas int `json:"traidas"`
+}
+
+func (response TraerDeGoogle200JSONResponse) VisitTraerDeGoogleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TraerDeGoogle422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response TraerDeGoogle422ApplicationProblemPlusJSONResponse) VisitTraerDeGoogleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BorrarResenaDelNegocioRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type BorrarResenaDelNegocioResponseObject interface {
+	VisitBorrarResenaDelNegocioResponse(w http.ResponseWriter) error
+}
+
+type BorrarResenaDelNegocio204Response struct {
+}
+
+func (response BorrarResenaDelNegocio204Response) VisitBorrarResenaDelNegocioResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type EditarResenaDelNegocioRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *EditarResenaDelNegocioJSONRequestBody
+}
+
+type EditarResenaDelNegocioResponseObject interface {
+	VisitEditarResenaDelNegocioResponse(w http.ResponseWriter) error
+}
+
+type EditarResenaDelNegocio200JSONResponse Publicada
+
+func (response EditarResenaDelNegocio200JSONResponse) VisitEditarResenaDelNegocioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditarResenaDelNegocio404ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response EditarResenaDelNegocio404ApplicationProblemPlusJSONResponse) VisitEditarResenaDelNegocioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditarResenaDelNegocio422ApplicationProblemPlusJSONResponse Problema
+
+func (response EditarResenaDelNegocio422ApplicationProblemPlusJSONResponse) VisitEditarResenaDelNegocioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublicarResenaDelNegocioRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *PublicarResenaDelNegocioJSONRequestBody
+}
+
+type PublicarResenaDelNegocioResponseObject interface {
+	VisitPublicarResenaDelNegocioResponse(w http.ResponseWriter) error
+}
+
+type PublicarResenaDelNegocio204Response struct {
+}
+
+func (response PublicarResenaDelNegocio204Response) VisitPublicarResenaDelNegocioResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type PublicarResenaDelNegocio404ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response PublicarResenaDelNegocio404ApplicationProblemPlusJSONResponse) VisitPublicarResenaDelNegocioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1479,6 +1960,48 @@ func (response DejarResena422ApplicationProblemPlusJSONResponse) VisitDejarResen
 	return err
 }
 
+type ResenasDelNegocioRequestObject struct {
+}
+
+type ResenasDelNegocioResponseObject interface {
+	VisitResenasDelNegocioResponse(w http.ResponseWriter) error
+}
+
+type ResenasDelNegocio200JSONResponse []ResenaDelNegocio
+
+func (response ResenasDelNegocio200JSONResponse) VisitResenasDelNegocioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumenDelNegocioRequestObject struct {
+}
+
+type ResumenDelNegocioResponseObject interface {
+	VisitResumenDelNegocioResponse(w http.ResponseWriter) error
+}
+
+type ResumenDelNegocio200JSONResponse ResumenNegocio
+
+func (response ResumenDelNegocio200JSONResponse) VisitResumenDelNegocioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ResenasDelProductoRequestObject struct {
 	Id openapi_types.UUID `json:"id"`
 }
@@ -1565,6 +2088,24 @@ type StrictServerInterface interface {
 	// (PUT /api/v1/admin/contenido/banners/{id})
 	EditarBanner(ctx context.Context, request EditarBannerRequestObject) (EditarBannerResponseObject, error)
 
+	// (GET /api/v1/admin/contenido/negocio)
+	AdminResenasDelNegocio(ctx context.Context, request AdminResenasDelNegocioRequestObject) (AdminResenasDelNegocioResponseObject, error)
+
+	// (POST /api/v1/admin/contenido/negocio)
+	CrearResenaDelNegocio(ctx context.Context, request CrearResenaDelNegocioRequestObject) (CrearResenaDelNegocioResponseObject, error)
+	// TraerDeGoogle Trae las reseñas nuevas de Google (entran sin publicar)
+	// (POST /api/v1/admin/contenido/negocio/google)
+	TraerDeGoogle(ctx context.Context, request TraerDeGoogleRequestObject) (TraerDeGoogleResponseObject, error)
+
+	// (DELETE /api/v1/admin/contenido/negocio/{id})
+	BorrarResenaDelNegocio(ctx context.Context, request BorrarResenaDelNegocioRequestObject) (BorrarResenaDelNegocioResponseObject, error)
+
+	// (PUT /api/v1/admin/contenido/negocio/{id})
+	EditarResenaDelNegocio(ctx context.Context, request EditarResenaDelNegocioRequestObject) (EditarResenaDelNegocioResponseObject, error)
+
+	// (POST /api/v1/admin/contenido/negocio/{id}/publicar)
+	PublicarResenaDelNegocio(ctx context.Context, request PublicarResenaDelNegocioRequestObject) (PublicarResenaDelNegocioResponseObject, error)
+
 	// (GET /api/v1/admin/contenido/promos)
 	AdminPromos(ctx context.Context, request AdminPromosRequestObject) (AdminPromosResponseObject, error)
 
@@ -1594,6 +2135,12 @@ type StrictServerInterface interface {
 
 	// (POST /api/v1/contenido/mis-resenas)
 	DejarResena(ctx context.Context, request DejarResenaRequestObject) (DejarResenaResponseObject, error)
+
+	// (GET /api/v1/contenido/negocio/resenas)
+	ResenasDelNegocio(ctx context.Context, request ResenasDelNegocioRequestObject) (ResenasDelNegocioResponseObject, error)
+
+	// (GET /api/v1/contenido/negocio/resumen)
+	ResumenDelNegocio(ctx context.Context, request ResumenDelNegocioRequestObject) (ResumenDelNegocioResponseObject, error)
 
 	// (GET /api/v1/contenido/productos/{id}/resenas)
 	ResenasDelProducto(ctx context.Context, request ResenasDelProductoRequestObject) (ResenasDelProductoResponseObject, error)
@@ -1808,6 +2355,177 @@ func (sh *strictHandler) EditarBanner(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(EditarBannerResponseObject); ok {
 		if err := validResponse.VisitEditarBannerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminResenasDelNegocio operation middleware
+func (sh *strictHandler) AdminResenasDelNegocio(w http.ResponseWriter, r *http.Request) {
+	var request AdminResenasDelNegocioRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminResenasDelNegocio(ctx, request.(AdminResenasDelNegocioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminResenasDelNegocio")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminResenasDelNegocioResponseObject); ok {
+		if err := validResponse.VisitAdminResenasDelNegocioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CrearResenaDelNegocio operation middleware
+func (sh *strictHandler) CrearResenaDelNegocio(w http.ResponseWriter, r *http.Request) {
+	var request CrearResenaDelNegocioRequestObject
+
+	var body CrearResenaDelNegocioJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CrearResenaDelNegocio(ctx, request.(CrearResenaDelNegocioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CrearResenaDelNegocio")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CrearResenaDelNegocioResponseObject); ok {
+		if err := validResponse.VisitCrearResenaDelNegocioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TraerDeGoogle operation middleware
+func (sh *strictHandler) TraerDeGoogle(w http.ResponseWriter, r *http.Request) {
+	var request TraerDeGoogleRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TraerDeGoogle(ctx, request.(TraerDeGoogleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TraerDeGoogle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TraerDeGoogleResponseObject); ok {
+		if err := validResponse.VisitTraerDeGoogleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// BorrarResenaDelNegocio operation middleware
+func (sh *strictHandler) BorrarResenaDelNegocio(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request BorrarResenaDelNegocioRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.BorrarResenaDelNegocio(ctx, request.(BorrarResenaDelNegocioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "BorrarResenaDelNegocio")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BorrarResenaDelNegocioResponseObject); ok {
+		if err := validResponse.VisitBorrarResenaDelNegocioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EditarResenaDelNegocio operation middleware
+func (sh *strictHandler) EditarResenaDelNegocio(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request EditarResenaDelNegocioRequestObject
+
+	request.Id = id
+
+	var body EditarResenaDelNegocioJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EditarResenaDelNegocio(ctx, request.(EditarResenaDelNegocioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EditarResenaDelNegocio")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EditarResenaDelNegocioResponseObject); ok {
+		if err := validResponse.VisitEditarResenaDelNegocioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PublicarResenaDelNegocio operation middleware
+func (sh *strictHandler) PublicarResenaDelNegocio(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request PublicarResenaDelNegocioRequestObject
+
+	request.Id = id
+
+	var body PublicarResenaDelNegocioJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PublicarResenaDelNegocio(ctx, request.(PublicarResenaDelNegocioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PublicarResenaDelNegocio")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PublicarResenaDelNegocioResponseObject); ok {
+		if err := validResponse.VisitPublicarResenaDelNegocioResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2091,6 +2809,54 @@ func (sh *strictHandler) DejarResena(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ResenasDelNegocio operation middleware
+func (sh *strictHandler) ResenasDelNegocio(w http.ResponseWriter, r *http.Request) {
+	var request ResenasDelNegocioRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResenasDelNegocio(ctx, request.(ResenasDelNegocioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResenasDelNegocio")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResenasDelNegocioResponseObject); ok {
+		if err := validResponse.VisitResenasDelNegocioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResumenDelNegocio operation middleware
+func (sh *strictHandler) ResumenDelNegocio(w http.ResponseWriter, r *http.Request) {
+	var request ResumenDelNegocioRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResumenDelNegocio(ctx, request.(ResumenDelNegocioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResumenDelNegocio")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResumenDelNegocioResponseObject); ok {
+		if err := validResponse.VisitResumenDelNegocioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ResenasDelProducto operation middleware
 func (sh *strictHandler) ResenasDelProducto(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	var request ResenasDelProductoRequestObject
@@ -2172,40 +2938,46 @@ func (sh *strictHandler) Promos(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"NR459GSk/FHGUIzVIxEy9596ZC2Xvw0A",
+	"5FvNkty2EX4VFJODVKE0K1mulOe2Wsm2XFKyka1cLB16iN5ZbJEABYBTHm9NVU55gLyBL7m4ckjpkINv",
+	"u2/iJ0mB4A9mBiQx3NnxVHKTliDQ/fXXP+jmXEeJyHLBkWsVTa8jiSoXXGH5n3MpZilmYP6dCK6Ra/NP",
+	"yPOUJaCZ4JPcLvnDlRLcPFPJZfXC7yVeRNPod5P2gIl9qibNxqvVKo4oqkSy3OwXTaOXUgpJHrz98ox8",
+	"8ezzPz6MzJLqRbPv6VWhNJp/5VLkKDWzwiYpLMo/62WO0TRSWjI+j9r9E2ZF5EWawizFaKplgfH2+iKn",
+	"oJGelspeCJmBjqaR+dsjzTKMPK8sIBXSc/gqjiR+LJhEGk2/r2Ssl69L5p77oTlCzK4w0eaI58A5ym29",
+	"IdEFpOxHoCJc3hlcAQUvWshTSDAIKNTsY4Havw+j/j9nMEf+TqZBJ2j8QYuXjUTbz5kuUjEMPKORI27z",
+	"XgNEo/b6ka648RrS3RY6E1meohZeS7GFK+xMiBSBDxgkkbgrHSkqip3Lh+26JwpcgtIwXoy9MEhIitzZ",
+	"h3GNc5R3IlccFTOWQB1Q+iLdu2bhmMDiY3F79N0ZbXlSG6oGK66Z6nJvKDydCf5tWsy3Wa+qv65HeUxJ",
+	"LgUtEm2OyUECkbiAlFGQRBXkgiWXEE2NeYdQKQ/wifSlkFlP1Kx8cV2um58Fv/mFKEZQ6dufSAYyMf6+",
+	"Wwxt/G9989PT09NHb948evEi6vW6kV62y2GWBWs8nDEOchkF+NAe4vOGC/Vb2KV8tWOXvc+lyMS9mJui",
+	"hjTtqDAYKO+DnWDOkDI/Vt0G+Fgw5Ocwh66nGuSrRojRyvfYccHmyBMGX+9Oww0zW/2dUNYq12Xut6iQ",
+	"w59wLhILHVDKzMmQnjsEuIBUYbzJiUJ7a7Y4QqUlpikof964wORyR03jKC9mpmim4M//pSMNe4KV2ZWw",
+	"ftU9wYeWW8uv42CIzVI/EFIKiaobWM87WycrDbrogFIzneKw2nZZs1WHfpmoai/YrfYaVWCNCQb7qGfC",
+	"g4QD81qUQF5kBtQZ8EREccSFEloKF9awAD7imrQZK8YUhr6iaCt01AaqzLF5tAvJekl0hxKopOBfzTm+",
+	"++kxUuZeeDGQEG5+pnSSZROAm18M3mQBye2/RFitt1dje23ohukdkklveN9Qoj9Q25S2zZ/QpBTmiR3E",
+	"4iKbSewu9QJv2tU2/jxlJe1W/QWmTkLfd84Og+dCaBHqXh1QCsmqqqt2rAx4ASbGzIWYp+j3qx1Q7isG",
+	"rL6NFK1GIbj3pNFO/Eck0QGT4Q8aJRevaJAVfgsDd+bbcbYfWSLuqa+wE5ta27RQugq0eTQ8fVoWnoOE",
+	"N4KiBM+tfRzJqs5obYocOWVljl6XWBolf1wPy8Fk7eBIJkwV8bbcWQSRrScC8yJDKc6RMurnQdNR6XtY",
+	"d2nuFHrc3o2770Dor4yxicuGai5puokySz1F1l3QM4yVr2gfeB1PVRekS7CyUhFSFjRnVDs6YNaybSHl",
+	"nNABVZGhd+yx4VnANaNA/ezOpdgsInmRzexDiTlILQIuic6OG5JuQ1EXeY1g7UE9ijqFw4C+BXDd5cw9",
+	"6vYIWu3ok+6d2+uq49CFBH4FxoOE1DYEJaAhFXPhiUDmZMYvPD2s14J8LJCkQDKgKFECQco0EIopUcYe",
+	"RDFOCk4oqjxlOC9wSqAco6nYtGEzgxlH9Z6b2h8kAxWTWdk5VWRJJCq8/TcoQrFp2qrH5DUoIgsNikwg",
+	"Z5PFkwnQjPHJr3/7J1GCv+fm/PJP5MHp2dnLb/9sNqgW2XEio+Lh4/dVW8+YKnrzzfNvyM1/yFn93FTz",
+	"KJVV9UnppzlyyFk0jT57fPL4MwMg6MvSlOuCNGdMKmXNkjmWycNwoZxgGpeOTs3602pRvD4EfXpy0jP/",
+	"3J57Mo2ZGhoL2LMcRwApYekbh34nqFAkFaq2mFm0iodUnVyXs8aVvZt4VP6qAElBVoLYFnyGGqWKpt9f",
+	"R8ycbXCN4ohDZkSsh5ct/61jtapvUvaDXYxKPxd0uROKO1y9Amevdtm2d65WmyqtthjwbNvrLH5UGBs+",
+	"O3nWZfBmI2fmHUfPnj7d5YVeg1d+2s/t59WiQ3B7Ywy6E8drZcpFuVAefc4kgrRnRH38yopUM5MwJqZQ",
+	"fETB3mfCPlBwRkdjCWLkpOKerD25ZnRlz0xR4zZKz4WUDkzD3s1or2s3xXZRlCu9rj4ESSnUKJcp6eAL",
+	"Yy9Npju0nsdKuaOJSbwtw7pjki1cldPuOUR06ux1hMUpGI5NmydE47PgEF/Wx19BtDnZmwBtq9QDVUXF",
+	"+2LWpGqjTK87LPGdBJQv8Cu77I4obNwxC1x03Ry0BEb9DzdHWtXKuN7PX5l4S30t4WpUZokjVWQZyGWF",
+	"EElBteW9FcQU6RY28gC5lsDL60PVKZEPoxDzhKUnj6ccU6Iazju/mQL/1+HkCDJbSfBJ7RPdYahS6n+J",
+	"KBt2GlGmfI3J5bgisMcwZRtj4BZ0btccosxY/xwhtLYo47HTkBmsNcpj7vcaZI+40y1o715ojR2YZWqM",
+	"jiy17PsOdFg1j5RuR5MnpL3cBN2ADnjvcadrAUHptVMemk4xy1AKG6TqIZoKA8ImzMwZ7HmDWiWbFfbI",
+	"k+QOLUrPENI7eIyd4aRvCGnHZsO9zuq8cc3O/ZV09TfhHmZZQ4+Mgw7ddujx76e9P/Y7yG0Iyn46+fXv",
+	"/yC2Nd2l2FCDt+3t+rzlY4Fy2bqL+yl1t9cE/qJh9eGOYO7QTw4KV20HmUBKgEkkyAkqIJXet594J84Z",
+	"U4+GwvYbpprp8yHjtpljBgLQTOjKcV05J1YEuZY4ByqUdbgno9sGVQsCU5KkZaAi5m15+4ksSV4gxTph",
+	"2EmqN8q/wCsnxh8m/vZ9vOFM/gfyxcaXAIOrA7+pcEf/7ai/lXpcIH9yiED+lwLp7ae2HiAlAxZMWV/b",
+	"mWzmhS8OV7dt3+yHQsBxtK1Dq7emzlAxKX8oRJ48DYGg/mqkCwLzfH8QDGjuftnh+8VwSurvMGIiiPnw",
+	"w/yohQtyCUvCGZ8XHFokOtVvIqctVsOJcL7+S7YDXzLvjW1jOGbuBp+fkOz2p7qfvAPcYaRrb01HD3YA",
+	"rwcITZYm1VZfPt2V3X0NskP3xurfSYRyrG2KkYV91TJrtfrvAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

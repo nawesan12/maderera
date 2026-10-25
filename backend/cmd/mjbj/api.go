@@ -24,6 +24,7 @@ type configAPI struct {
 	Base     plataforma.ConfigBase
 	Auth     auth.Config
 	Subidas  subidas.Config
+	Google   contenido.ConfigGoogle
 }
 
 func correrAPI() error {
@@ -91,7 +92,7 @@ func correrAPI() error {
 	)
 
 	contenidoapi.HandlerWithOptions(
-		contenidoapi.NewStrictHandlerWithOptions(contenido.NuevaAPI(contenido.Nuevo(pool, subidas.Nuevo(cfg.Subidas), log)),
+		contenidoapi.NewStrictHandlerWithOptions(contenido.NuevaAPI(contenido.Nuevo(pool, subidas.Nuevo(cfg.Subidas), log), cfg.Google),
 			[]contenidoapi.StrictMiddlewareFunc{plataforma.ConPedido[contenidoapi.StrictHandlerFunc]},
 			contenidoapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

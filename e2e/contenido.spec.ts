@@ -50,3 +50,25 @@ test("un banner cargado en el panel sale en la portada, y al borrarlo se va", as
   await page.goto("/");
   await expect(page.getByText(titulo)).toHaveCount(0);
 });
+
+test("una reseña del negocio cargada a mano sale en la portada, y al borrarla se va", async ({ page }) => {
+  test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
+  const autor = `Prueba ${Date.now()}`;
+  await entrarComoAdmin(page);
+  await page.goto("/admin/contenido/resenas-negocio");
+
+  await page.locator("input[name=autor]").fill(autor);
+  await page.locator("textarea[name=texto]").fill("Muy buena atención y la madera llegó a tiempo.");
+  await page.locator("input[name=publicada]").check();
+  await page.getByRole("button", { name: "Guardar", exact: true }).click();
+  await expect(page.getByText("Publicada.").first()).toBeVisible();
+
+  await page.goto("/");
+  await expect(page.getByText(autor)).toBeVisible();
+
+  await page.goto("/admin/contenido/resenas-negocio");
+  await page.getByRole("button", { name: `Borrar la reseña de ${autor}` }).click();
+  await expect(page.getByRole("button", { name: `Borrar la reseña de ${autor}` })).toHaveCount(0);
+  await page.goto("/");
+  await expect(page.getByText(autor)).toHaveCount(0);
+});

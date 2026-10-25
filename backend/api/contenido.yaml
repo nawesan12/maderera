@@ -236,6 +236,100 @@ paths:
       responses:
         "204": { description: Borrada }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/contenido/negocio/resenas:
+    get:
+      operationId: ResenasDelNegocio
+      responses:
+        "200":
+          description: Las publicadas, hasta 12
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ResenaDelNegocio" } }
+  /api/v1/contenido/negocio/resumen:
+    get:
+      operationId: ResumenDelNegocio
+      responses:
+        "200":
+          description: El promedio, o null si no hay ninguna publicada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResumenNegocio" }
+  /api/v1/admin/contenido/negocio:
+    get:
+      operationId: AdminResenasDelNegocio
+      responses:
+        "200":
+          description: Todas
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ResenaDelNegocioCompleta" } }
+    post:
+      operationId: CrearResenaDelNegocio
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormResenaNegocio" }
+      responses:
+        "200":
+          description: Guardada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Publicada" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/negocio/google:
+    post:
+      operationId: TraerDeGoogle
+      summary: Trae las reseñas nuevas de Google (entran sin publicar)
+      responses:
+        "200":
+          description: Lo que trajo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [traidas, nuevas]
+                properties:
+                  traidas: { type: integer }
+                  nuevas: { type: integer }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/negocio/{id}:
+    put:
+      operationId: EditarResenaDelNegocio
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormResenaNegocio" }
+      responses:
+        "200":
+          description: Guardada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Publicada" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+    delete:
+      operationId: BorrarResenaDelNegocio
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Borrada }
+  /api/v1/admin/contenido/negocio/{id}/publicar:
+    post:
+      operationId: PublicarResenaDelNegocio
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Publicada" }
+      responses:
+        "204": { description: Hecho }
+        "404": { $ref: "#/components/responses/Problema" }
 components:
   responses:
     Problema:
@@ -365,6 +459,56 @@ components:
         activo: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    ResenaDelNegocio:
+      type: object
+      required: [id, autor, estrellas, texto, fecha, origen, fotoUrl]
+      properties:
+        id: { type: string }
+        autor: { type: string }
+        estrellas: { type: integer }
+        texto: { type: string }
+        fecha: { type: string, format: date-time }
+        origen: { type: string, enum: [manual, google] }
+        fotoUrl: { type: string, nullable: true }
+    ResenaDelNegocioCompleta:
+      type: object
+      required: [id, autor, estrellas, texto, fecha, origen, externoId, fotoUrl, publicada, orden, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        autor: { type: string }
+        estrellas: { type: integer }
+        texto: { type: string }
+        fecha: { type: string, format: date-time }
+        origen: { type: string, enum: [manual, google] }
+        externoId: { type: string, nullable: true }
+        fotoUrl: { type: string, nullable: true }
+        publicada: { type: boolean }
+        orden: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ResumenNegocio:
+      type: object
+      nullable: true
+      required: [promedio, cuantas]
+      properties:
+        promedio: { type: number }
+        cuantas: { type: integer }
+    Publicada:
+      type: object
+      required: [publicada]
+      additionalProperties: false
+      properties:
+        publicada: { type: boolean }
+    FormResenaNegocio:
+      type: object
+      required: [autor, estrellas, texto, publicada]
+      additionalProperties: false
+      properties:
+        autor: { type: string }
+        estrellas: { type: integer }
+        texto: { type: string }
+        fecha: { type: string, description: AAAA-MM-DD }
+        publicada: { type: boolean }
     FormBanner:
       type: object
       required: [ubicacion, titulo]

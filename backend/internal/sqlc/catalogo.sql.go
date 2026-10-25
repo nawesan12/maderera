@@ -36,7 +36,7 @@ func (q *Queries) Categorias(ctx context.Context) ([]CategoriasRow, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CategoriasRow
+	items := []CategoriasRow{}
 	for rows.Next() {
 		var i CategoriasRow
 		if err := rows.Scan(
@@ -70,7 +70,7 @@ func (q *Queries) ComplementariosDe(ctx context.Context, productos []string) ([]
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	items := []string{}
 	for rows.Next() {
 		var related_product_id string
 		if err := rows.Scan(&related_product_id); err != nil {
@@ -175,7 +175,7 @@ func (q *Queries) Marcas(ctx context.Context, categoria *string) ([]MarcasRow, e
 		return nil, err
 	}
 	defer rows.Close()
-	var items []MarcasRow
+	items := []MarcasRow{}
 	for rows.Next() {
 		var i MarcasRow
 		if err := rows.Scan(&i.Nombre, &i.ProductCount); err != nil {
@@ -244,7 +244,7 @@ func (q *Queries) PreciosDeVariante(ctx context.Context, arg PreciosDeVariantePa
 		return nil, err
 	}
 	defer rows.Close()
-	var items []PreciosDeVarianteRow
+	items := []PreciosDeVarianteRow{}
 	for rows.Next() {
 		var i PreciosDeVarianteRow
 		if err := rows.Scan(&i.ID, &i.Precio); err != nil {
@@ -268,7 +268,7 @@ func (q *Queries) ProductosDeVariantes(ctx context.Context, ids []string) ([]str
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	items := []string{}
 	for rows.Next() {
 		var product_id string
 		if err := rows.Scan(&product_id); err != nil {
@@ -304,7 +304,7 @@ func (q *Queries) RubrosDeCategoria(ctx context.Context, slug string) ([]RubrosD
 		return nil, err
 	}
 	defer rows.Close()
-	var items []RubrosDeCategoriaRow
+	items := []RubrosDeCategoriaRow{}
 	for rows.Next() {
 		var i RubrosDeCategoriaRow
 		if err := rows.Scan(&i.Slug, &i.Name, &i.ProductCount); err != nil {
@@ -333,7 +333,7 @@ func (q *Queries) Vinculos(ctx context.Context, productID string) ([]VinculosRow
 		return nil, err
 	}
 	defer rows.Close()
-	var items []VinculosRow
+	items := []VinculosRow{}
 	for rows.Next() {
 		var i VinculosRow
 		if err := rows.Scan(&i.RelatedProductID, &i.Tipo); err != nil {

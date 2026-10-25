@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"mjbj/internal/cola"
+	"mjbj/internal/contenido"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/push"
 	"mjbj/internal/revalidar"
@@ -18,6 +20,7 @@ type configWorker struct {
 	Base      plataforma.ConfigBase
 	Revalidar revalidar.Config
 	Push      push.Config
+	Google    contenido.ConfigGoogle
 }
 
 // El worker: la cola (los tipos que ya son de Go) y las tareas periódicas
@@ -52,7 +55,22 @@ func correrWorker() error {
 	c.Registrar(revalidar.Tipo, revalidar.Manejador(cfg.Revalidar))
 
 	// Las tareas que ya son de Go. Cada tanda suma las suyas.
-	var lista []tareas.Tarea
+	lista := []tareas.Tarea{{
+		// Las reseñas nuevas de Google entran sin publicar; la parte de
+		// candidatos a baja de la tarea «semanal» sigue en TS hasta la tanda 3.
+		Nombre: "resenas-google", Frecuencia: tareas.Semana, DesdeHora: 6, DesdeDia: time.Monday,
+		Ejecutar: func(ctx context.Context) (map[string]any, error) {
+			r, err := contenido.Nuevo(pool, nil, log).SincronizarGoogle(ctx, cfg.Google)
+			var eg *contenido.ErrGoogle
+			if errors.As(err, &eg) {
+				return map[string]any{"resenasNuevas": 0, "resenasError": eg.Mensaje}, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"resenasNuevas": r.Nuevas, "resenasError": nil}, nil
+		},
+	}}
 
 	log.Info("worker andando")
 	reloj := time.NewTicker(2 * time.Second)

@@ -24,7 +24,7 @@ func (q *Queries) Ajustes(ctx context.Context) ([]SiteSetting, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SiteSetting
+	items := []SiteSetting{}
 	for rows.Next() {
 		var i SiteSetting
 		if err := rows.Scan(
@@ -94,7 +94,7 @@ func (q *Queries) BannersPublicados(ctx context.Context, ubicacion UbicacionBann
 		return nil, err
 	}
 	defer rows.Close()
-	var items []BannersPublicadosRow
+	items := []BannersPublicadosRow{}
 	for rows.Next() {
 		var i BannersPublicadosRow
 		if err := rows.Scan(
@@ -127,7 +127,7 @@ func (q *Queries) BannersTodos(ctx context.Context) ([]Banner, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Banner
+	items := []Banner{}
 	for rows.Next() {
 		var i Banner
 		if err := rows.Scan(
@@ -172,6 +172,18 @@ DELETE FROM bank_promotions WHERE id = $1
 func (q *Queries) BorrarPromo(ctx context.Context, id string) error {
 	_, err := q.db.Exec(ctx, borrarPromo, id)
 	return err
+}
+
+const borrarResenaDelNegocio = `-- name: BorrarResenaDelNegocio :execrows
+DELETE FROM business_reviews WHERE id = $1
+`
+
+func (q *Queries) BorrarResenaDelNegocio(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.Exec(ctx, borrarResenaDelNegocio, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const clienteDelUsuario = `-- name: ClienteDelUsuario :one
@@ -294,6 +306,32 @@ func (q *Queries) CrearResena(ctx context.Context, arg CrearResenaParams) (strin
 	return id, err
 }
 
+const crearResenaDelNegocio = `-- name: CrearResenaDelNegocio :one
+INSERT INTO business_reviews (autor, estrellas, texto, fecha, publicada)
+VALUES ($1, $2, $3, $4, $5) RETURNING id
+`
+
+type CrearResenaDelNegocioParams struct {
+	Autor     string    `json:"autor"`
+	Estrellas int32     `json:"estrellas"`
+	Texto     string    `json:"texto"`
+	Fecha     time.Time `json:"fecha"`
+	Publicada bool      `json:"publicada"`
+}
+
+func (q *Queries) CrearResenaDelNegocio(ctx context.Context, arg CrearResenaDelNegocioParams) (string, error) {
+	row := q.db.QueryRow(ctx, crearResenaDelNegocio,
+		arg.Autor,
+		arg.Estrellas,
+		arg.Texto,
+		arg.Fecha,
+		arg.Publicada,
+	)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
 const editarBanner = `-- name: EditarBanner :exec
 UPDATE banners SET ubicacion = $2, etiqueta = $3, titulo = $4, bajada = $5, enlace = $6, texto_enlace = $7,
   desde = $8, hasta = $9, orden = $10, activo = $11, imagen_url = $12, updated_at = now()
@@ -368,6 +406,35 @@ func (q *Queries) EditarPromo(ctx context.Context, arg EditarPromoParams) error 
 	return err
 }
 
+const editarResenaDelNegocio = `-- name: EditarResenaDelNegocio :execrows
+UPDATE business_reviews SET autor = $2, estrellas = $3, texto = $4, fecha = $5, publicada = $6, updated_at = now()
+WHERE id = $1
+`
+
+type EditarResenaDelNegocioParams struct {
+	ID        string    `json:"id"`
+	Autor     string    `json:"autor"`
+	Estrellas int32     `json:"estrellas"`
+	Texto     string    `json:"texto"`
+	Fecha     time.Time `json:"fecha"`
+	Publicada bool      `json:"publicada"`
+}
+
+func (q *Queries) EditarResenaDelNegocio(ctx context.Context, arg EditarResenaDelNegocioParams) (int64, error) {
+	result, err := q.db.Exec(ctx, editarResenaDelNegocio,
+		arg.ID,
+		arg.Autor,
+		arg.Estrellas,
+		arg.Texto,
+		arg.Fecha,
+		arg.Publicada,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const guardarAjuste = `-- name: GuardarAjuste :execrows
 UPDATE site_settings SET valor = $2, updated_at = now() WHERE clave = $1
 `
@@ -383,6 +450,38 @@ func (q *Queries) GuardarAjuste(ctx context.Context, arg GuardarAjusteParams) (i
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const guardarResenaDeGoogle = `-- name: GuardarResenaDeGoogle :one
+INSERT INTO business_reviews (autor, estrellas, texto, fecha, origen, externo_id, foto_url, publicada)
+VALUES ($1, $2, $3, $4, 'google', $5, $6, false)
+ON CONFLICT (externo_id) DO NOTHING
+RETURNING id
+`
+
+type GuardarResenaDeGoogleParams struct {
+	Autor     string    `json:"autor"`
+	Estrellas int32     `json:"estrellas"`
+	Texto     string    `json:"texto"`
+	Fecha     time.Time `json:"fecha"`
+	ExternoID *string   `json:"externoId"`
+	FotoUrl   *string   `json:"fotoUrl"`
+}
+
+// Una vez por reseña de Google (externo_id): las que ya estaban no se tocan,
+// y las nuevas entran sin publicar hasta que alguien las revise.
+func (q *Queries) GuardarResenaDeGoogle(ctx context.Context, arg GuardarResenaDeGoogleParams) (string, error) {
+	row := q.db.QueryRow(ctx, guardarResenaDeGoogle,
+		arg.Autor,
+		arg.Estrellas,
+		arg.Texto,
+		arg.Fecha,
+		arg.ExternoID,
+		arg.FotoUrl,
+	)
+	var id string
+	err := row.Scan(&id)
+	return id, err
 }
 
 const moderarResena = `-- name: ModerarResena :one
@@ -437,7 +536,7 @@ func (q *Queries) ProductosResenables(ctx context.Context, customerID string) ([
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ProductosResenablesRow
+	items := []ProductosResenablesRow{}
 	for rows.Next() {
 		var i ProductosResenablesRow
 		if err := rows.Scan(
@@ -492,7 +591,7 @@ func (q *Queries) PromosTodas(ctx context.Context) ([]BankPromotion, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []BankPromotion
+	items := []BankPromotion{}
 	for rows.Next() {
 		var i BankPromotion
 		if err := rows.Scan(
@@ -543,7 +642,7 @@ func (q *Queries) PromosVigentes(ctx context.Context) ([]PromosVigentesRow, erro
 		return nil, err
 	}
 	defer rows.Close()
-	var items []PromosVigentesRow
+	items := []PromosVigentesRow{}
 	for rows.Next() {
 		var i PromosVigentesRow
 		if err := rows.Scan(
@@ -564,6 +663,23 @@ func (q *Queries) PromosVigentes(ctx context.Context) ([]PromosVigentesRow, erro
 		return nil, err
 	}
 	return items, nil
+}
+
+const publicarResenaDelNegocio = `-- name: PublicarResenaDelNegocio :execrows
+UPDATE business_reviews SET publicada = $2, updated_at = now() WHERE id = $1
+`
+
+type PublicarResenaDelNegocioParams struct {
+	ID        string `json:"id"`
+	Publicada bool   `json:"publicada"`
+}
+
+func (q *Queries) PublicarResenaDelNegocio(ctx context.Context, arg PublicarResenaDelNegocioParams) (int64, error) {
+	result, err := q.db.Exec(ctx, publicarResenaDelNegocio, arg.ID, arg.Publicada)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const puedeResenar = `-- name: PuedeResenar :one
@@ -605,10 +721,91 @@ func (q *Queries) RepartoDeResenas(ctx context.Context, productID string) ([]Rep
 		return nil, err
 	}
 	defer rows.Close()
-	var items []RepartoDeResenasRow
+	items := []RepartoDeResenasRow{}
 	for rows.Next() {
 		var i RepartoDeResenasRow
 		if err := rows.Scan(&i.Estrellas, &i.Cuantas); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const resenasDelNegocio = `-- name: ResenasDelNegocio :many
+SELECT id, autor, estrellas, texto, fecha, origen, foto_url
+FROM business_reviews WHERE publicada
+ORDER BY orden, fecha DESC LIMIT 12
+`
+
+type ResenasDelNegocioRow struct {
+	ID        string       `json:"id"`
+	Autor     string       `json:"autor"`
+	Estrellas int32        `json:"estrellas"`
+	Texto     string       `json:"texto"`
+	Fecha     time.Time    `json:"fecha"`
+	Origen    OrigenResena `json:"origen"`
+	FotoUrl   *string      `json:"fotoUrl"`
+}
+
+func (q *Queries) ResenasDelNegocio(ctx context.Context) ([]ResenasDelNegocioRow, error) {
+	rows, err := q.db.Query(ctx, resenasDelNegocio)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ResenasDelNegocioRow{}
+	for rows.Next() {
+		var i ResenasDelNegocioRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Autor,
+			&i.Estrellas,
+			&i.Texto,
+			&i.Fecha,
+			&i.Origen,
+			&i.FotoUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const resenasDelNegocioTodas = `-- name: ResenasDelNegocioTodas :many
+SELECT id, autor, estrellas, texto, fecha, origen, externo_id, foto_url, publicada, orden, created_at, updated_at FROM business_reviews ORDER BY orden, fecha DESC
+`
+
+func (q *Queries) ResenasDelNegocioTodas(ctx context.Context) ([]BusinessReview, error) {
+	rows, err := q.db.Query(ctx, resenasDelNegocioTodas)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BusinessReview{}
+	for rows.Next() {
+		var i BusinessReview
+		if err := rows.Scan(
+			&i.ID,
+			&i.Autor,
+			&i.Estrellas,
+			&i.Texto,
+			&i.Fecha,
+			&i.Origen,
+			&i.ExternoID,
+			&i.FotoUrl,
+			&i.Publicada,
+			&i.Orden,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -648,7 +845,7 @@ func (q *Queries) ResenasParaModerar(ctx context.Context) ([]ResenasParaModerarR
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ResenasParaModerarRow
+	items := []ResenasParaModerarRow{}
 	for rows.Next() {
 		var i ResenasParaModerarRow
 		if err := rows.Scan(
@@ -693,7 +890,7 @@ func (q *Queries) ResenasPublicadas(ctx context.Context, productID string) ([]Re
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ResenasPublicadasRow
+	items := []ResenasPublicadasRow{}
 	for rows.Next() {
 		var i ResenasPublicadasRow
 		if err := rows.Scan(
@@ -711,6 +908,24 @@ func (q *Queries) ResenasPublicadas(ctx context.Context, productID string) ([]Re
 		return nil, err
 	}
 	return items, nil
+}
+
+const resumenDelNegocio = `-- name: ResumenDelNegocio :one
+SELECT coalesce(avg(estrellas)::text, '0') AS promedio, count(*)::int AS cuantas
+FROM business_reviews WHERE publicada
+`
+
+type ResumenDelNegocioRow struct {
+	Promedio interface{} `json:"promedio"`
+	Cuantas  int32       `json:"cuantas"`
+}
+
+// El promedio como texto: el TS lo leía con Number() y lo redondeaba él.
+func (q *Queries) ResumenDelNegocio(ctx context.Context) (ResumenDelNegocioRow, error) {
+	row := q.db.QueryRow(ctx, resumenDelNegocio)
+	var i ResumenDelNegocioRow
+	err := row.Scan(&i.Promedio, &i.Cuantas)
+	return i, err
 }
 
 const slugDeProducto = `-- name: SlugDeProducto :one

@@ -1,14 +1,14 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
-import { db } from "@/lib/db";
-import { businessReviews } from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
-import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { ETIQUETAS } from "@/lib/cache-publico";
-import { sincronizarResenasDeGoogle } from "@/lib/google/resenas";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+
+/*
+ * Las reseñas del negocio. Las guarda la API de Go
+ * (backend/internal/contenido/negocio.go) con su línea en la bitácora; acá
+ * queda revalidar.
+ */
 
 export interface EstadoResena {
   error?: string;
@@ -21,150 +21,51 @@ function refrescar() {
   revalidatePath("/");
 }
 
-const esquema = z.object({
-  id: z.string().uuid().optional(),
-  autor: z.string().trim().min(2, "Poné quién la escribió.").max(120),
-  estrellas: z.coerce.number().int().min(1).max(5),
-  texto: z.string().trim().min(10, "Copiá el texto de la reseña.").max(1500),
-  fecha: z.string().trim().optional(),
-  publicada: z.boolean(),
-});
-
-/**
- * Carga o edita una reseña del negocio.
- *
- * Las que se copian de Google entran por acá: el equipo elige cuáles pone al
- * frente en vez de mostrar las cinco que Google devuelve, que no siempre son
- * las que uno pondría.
- */
-export async function guardarResenaDelNegocio(
-  _previo: EstadoResena,
-  formData: FormData,
-): Promise<EstadoResena> {
-  const usuario = await requireStaff();
-
-  const parsed = esquema.safeParse({
-    id: (formData.get("id") as string) || undefined,
-    autor: formData.get("autor"),
-    estrellas: formData.get("estrellas") ?? 5,
-    texto: formData.get("texto"),
-    fecha: (formData.get("fecha") as string) || undefined,
+export async function guardarResenaDelNegocio(_previo: EstadoResena, formData: FormData): Promise<EstadoResena> {
+  const id = String(formData.get("id") ?? "");
+  const fecha = String(formData.get("fecha") ?? "").trim();
+  const body = {
+    autor: String(formData.get("autor") ?? ""),
+    estrellas: Number(formData.get("estrellas") ?? 5),
+    texto: String(formData.get("texto") ?? ""),
     publicada: formData.get("publicada") === "on",
-  });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
-  }
-
-  const d = parsed.data;
-  const valores = {
-    autor: d.autor,
-    estrellas: d.estrellas,
-    texto: d.texto,
-    // Al mediodía, como el resto de las fechas que se cargan sin hora.
-    fecha: d.fecha ? new Date(`${d.fecha}T12:00:00`) : new Date(),
-    publicada: d.publicada,
-    updatedAt: new Date(),
+    ...(fecha ? { fecha } : {}),
   };
-
-  if (d.id) {
-    await db
-      .update(businessReviews)
-      .set(valores)
-      .where(eq(businessReviews.id, d.id));
-  } else {
-    await db.insert(businessReviews).values(valores);
-  }
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: d.id ? "editar" : "crear",
-    entidad: "resena",
-    entidadId: d.id ?? null,
-    descripcion: `Reseña del negocio de ${d.autor}${d.publicada ? " (publicada)" : ""}`,
-  });
-
+  const cliente = await api();
+  const r = id
+    ? await cliente.PUT("/api/v1/admin/contenido/negocio/{id}", { params: { path: { id } }, body })
+    : await cliente.POST("/api/v1/admin/contenido/negocio", { body });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
   refrescar();
-  return { ok: d.publicada ? "Publicada." : "Guardada, sin publicar." };
+  return { ok: r.data.publicada ? "Publicada." : "Guardada, sin publicar." };
 }
 
-/** Publica o esconde una reseña, sin abrir el formulario. */
-export async function publicarResena(
-  id: string,
-  publicada: boolean,
-): Promise<EstadoResena> {
-  const usuario = await requireStaff();
-
-  const parsed = z
-    .object({ id: z.string().uuid(), publicada: z.boolean() })
-    .safeParse({ id, publicada });
-
-  if (!parsed.success) return { error: "No se pudo actualizar." };
-
-  await db
-    .update(businessReviews)
-    .set({ publicada: parsed.data.publicada, updatedAt: new Date() })
-    .where(eq(businessReviews.id, parsed.data.id));
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "cambiar_estado",
-    entidad: "resena",
-    entidadId: parsed.data.id,
-    descripcion: parsed.data.publicada
-      ? "Publicó una reseña del negocio"
-      : "Sacó del sitio una reseña del negocio",
+export async function publicarResena(id: string, publicada: boolean): Promise<EstadoResena> {
+  const r = await (await api()).POST("/api/v1/admin/contenido/negocio/{id}/publicar", {
+    params: { path: { id } },
+    body: { publicada },
   });
-
+  if (r.error) return { error: "No se pudo actualizar." };
   refrescar();
-  return { ok: parsed.data.publicada ? "Publicada." : "Sacada del sitio." };
+  return { ok: publicada ? "Publicada." : "Sacada del sitio." };
 }
 
-export async function borrarResenaDelNegocio(
-  id: string,
-): Promise<EstadoResena> {
-  const usuario = await requireStaff();
-
-  await db.delete(businessReviews).where(eq(businessReviews.id, id));
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "eliminar",
-    entidad: "resena",
-    entidadId: id,
-    descripcion: "Borró una reseña del negocio",
-  });
-
+export async function borrarResenaDelNegocio(id: string): Promise<EstadoResena> {
+  const r = await (await api()).DELETE("/api/v1/admin/contenido/negocio/{id}", { params: { path: { id } } });
+  if (!r.response.ok) return { error: "No se pudo borrar." };
   refrescar();
   return { ok: "Borrada." };
 }
 
-/**
- * Trae las reseñas nuevas de Google.
- *
- * Sin claves configuradas no falla: lo dice y no hace nada. Las que trae quedan
- * sin publicar hasta que alguien las lea.
- */
 export async function traerDeGoogle(): Promise<EstadoResena> {
-  const usuario = await requireStaff();
-
-  const resultado = await sincronizarResenasDeGoogle();
-
-  if (resultado.error) return { error: resultado.error };
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "crear",
-    entidad: "resena",
-    descripcion: `Trajo ${resultado.nuevas} reseñas nuevas de Google`,
-  });
-
+  const r = await (await api()).POST("/api/v1/admin/contenido/negocio/google");
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo hablar con Google.") };
   refrescar();
-
+  const { nuevas, traidas } = r.data;
   return {
     ok:
-      resultado.nuevas > 0
-        ? `Llegaron ${resultado.nuevas} reseñas nuevas. Revisalas y publicá las que quieras mostrar.`
-        : `Google devolvió ${resultado.traidas} reseñas y ya estaban todas cargadas.`,
+      nuevas > 0
+        ? `Llegaron ${nuevas} reseñas nuevas. Revisalas y publicá las que quieras mostrar.`
+        : `Google devolvió ${traidas} reseñas y ya estaban todas cargadas.`,
   };
 }

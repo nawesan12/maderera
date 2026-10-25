@@ -6,6 +6,7 @@ package plataforma
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 )
 
 // Problema es un error HTTP con el formato de RFC 9457
@@ -59,7 +60,18 @@ func EscribirJSON(w http.ResponseWriter, estado int, cuerpo any) {
 		w.Header().Set("Cache-Control", "no-store")
 	}
 	w.WriteHeader(estado)
-	_ = json.NewEncoder(w).Encode(cuerpo)
+	_ = json.NewEncoder(w).Encode(SinNulos(cuerpo))
+}
+
+// SinNulos cambia una lista nil por una vacía: en JSON, nil sale `null` y
+// el contrato (y quien hace `.map`) espera `[]`. sqlc ya devuelve listas
+// vacías (emit_empty_slices); esto cubre las que arma el código.
+func SinNulos(v any) any {
+	r := reflect.ValueOf(v)
+	if r.Kind() == reflect.Slice && r.IsNil() {
+		return reflect.MakeSlice(r.Type(), 0, 0).Interface()
+	}
+	return v
 }
 
 // LeerJSON decodifica el cuerpo con un tope de tamaño y sin campos de más:

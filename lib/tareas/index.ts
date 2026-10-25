@@ -13,7 +13,6 @@ import { avisarAlPanel } from "@/lib/notificaciones/push";
 import { pendientesDelRol } from "@/lib/dal/admin/pendientes";
 import { candidatosDeBajaDelSistema } from "@/lib/dal/admin/products";
 import { mesesSinVenderDelSistema } from "@/lib/dal/admin/parametros-catalogo";
-import { sincronizarResenasDeGoogle } from "@/lib/google/resenas";
 import { sincronizarPlantillas } from "@/lib/whatsapp/catalogo";
 import { proveedorWhatsapp } from "@/lib/whatsapp";
 import { periodoDe, type Frecuencia } from "./periodo";
@@ -109,9 +108,9 @@ export const TAREAS = {
 
   semanal: {
     frecuencia: "semana",
-    descripcion: "Trae las reseñas nuevas de Google y avisa cuántos productos son candidatos a baja.",
+    // Las reseñas de Google las trae el worker de Go (tarea «resenas-google»).
+    descripcion: "Avisa cuántos productos son candidatos a baja.",
     ejecutar: async () => {
-      const resenas = await sincronizarResenasDeGoogle();
       const candidatos = await candidatosDeBajaDelSistema({
         mesesSinVender: await mesesSinVenderDelSistema(),
       });
@@ -126,8 +125,6 @@ export const TAREAS = {
       }
 
       return {
-        resenasNuevas: resenas.nuevas,
-        resenasError: resenas.error ?? null,
         candidatosDeBaja: candidatos.length,
       };
     },

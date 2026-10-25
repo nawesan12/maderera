@@ -35,14 +35,16 @@ type entorno struct {
 	ses     *auth.Servicio
 }
 
-func armar(t *testing.T) *entorno {
+func armar(t *testing.T) *entorno { return armarCon(t, ConfigGoogle{}) }
+
+func armarCon(t *testing.T, google ConfigGoogle) *entorno {
 	t.Helper()
 	pool := pruebas.Base(t)
 	carpeta := t.TempDir()
 	ses := auth.Nuevo(auth.Config{Secreto: "secreto-de-prueba-de-contenido-32-caracteres", URL: "http://localhost"}, pool)
 	m := http.NewServeMux()
 	contenidoapi.HandlerWithOptions(
-		contenidoapi.NewStrictHandlerWithOptions(NuevaAPI(Nuevo(pool, subidas.Nuevo(subidas.Config{Carpeta: carpeta}), silencio)),
+		contenidoapi.NewStrictHandlerWithOptions(NuevaAPI(Nuevo(pool, subidas.Nuevo(subidas.Config{Carpeta: carpeta}), silencio), google),
 			[]contenidoapi.StrictMiddlewareFunc{plataforma.ConPedido[contenidoapi.StrictHandlerFunc]},
 			contenidoapi.StrictHTTPServerOptions{RequestErrorHandlerFunc: plataforma.ErrorDePedido, ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(silencio)}),
 		contenidoapi.StdHTTPServerOptions{BaseRouter: m},
@@ -281,5 +283,93 @@ func TestAjustesYResenas(t *testing.T) {
 	otro := e.cliente(t, "otro@prueba.test", "cliente")
 	if c, _ := pedir(t, otro, "POST", u+"contenido/mis-resenas", resena); c != 422 {
 		t.Errorf("reseñó sin haber comprado: %d", c)
+	}
+}
+
+func TestResenasDelNegocio(t *testing.T) {
+	// Google falso: dos reseñas, una sin texto (no entra).
+	falso := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Goog-Api-Key") != "clave" || r.URL.Path != "/lugar-1" {
+			w.WriteHeader(403)
+			return
+		}
+		_, _ = w.Write([]byte(`{"reviews":[
+			{"name":"places/1/reviews/a","rating":4.6,"originalText":{"text":" Muy buena atención "},"publishTime":"2026-09-01T10:00:00Z","authorAttribution":{"displayName":"Ana","photoUri":"https://foto"}},
+			{"name":"places/1/reviews/b","rating":5,"text":{"text":""}}]}`))
+	}))
+	defer falso.Close()
+	e := armarCon(t, ConfigGoogle{Clave: "clave", Lugar: "lugar-1", URL: falso.URL + "/"})
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	anon := &http.Client{}
+	u := e.srv.URL + "/api/v1/"
+
+	if _, b := pedir(t, anon, "GET", u+"contenido/negocio/resumen", nil); string(b) != "null\n" {
+		t.Errorf("resumen vacío: %s", b)
+	}
+	for vuelta, nuevas := range []string{`"nuevas":1`, `"nuevas":0`} {
+		c, b := pedir(t, adm, "POST", u+"admin/contenido/negocio/google", nil)
+		if c != 200 || !strings.Contains(string(b), `"traidas":2`) || !strings.Contains(string(b), nuevas) {
+			t.Fatalf("vuelta %d de Google: %d %s", vuelta, c, b)
+		}
+	}
+	// Entró sin publicar.
+	if _, b := pedir(t, anon, "GET", u+"contenido/negocio/resenas", nil); string(b) != "[]\n" {
+		t.Errorf("una reseña de Google sin revisar ya se ve: %s", b)
+	}
+	if c, b := pedir(t, adm, "POST", u+"admin/contenido/negocio", map[string]any{"autor": "Carlos", "estrellas": 3, "texto": "Corto", "publicada": true}); c != 422 {
+		t.Errorf("texto corto: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "POST", u+"admin/contenido/negocio", map[string]any{"autor": "Carlos", "estrellas": 5, "texto": "Excelente madera y buen precio", "fecha": "2026-10-01", "publicada": true}); c != 200 || !strings.Contains(string(b), `"publicada":true`) {
+		t.Fatalf("cargar a mano: %d %s", c, b)
+	}
+	_, b := pedir(t, adm, "GET", u+"admin/contenido/negocio", nil)
+	var todas []struct {
+		ID, Autor, Origen string
+		Estrellas         int
+		Fecha             time.Time
+	}
+	_ = json.Unmarshal(b, &todas)
+	if len(todas) != 2 {
+		t.Fatalf("todas: %s", b)
+	}
+	for _, r := range todas {
+		if r.Autor == "Ana" {
+			if r.Estrellas != 5 || r.Origen != "google" {
+				t.Errorf("la de Google: %+v", r)
+			}
+			if c, _ := pedir(t, adm, "POST", u+"admin/contenido/negocio/"+r.ID+"/publicar", map[string]bool{"publicada": true}); c != 204 {
+				t.Error("publicar")
+			}
+		} else if got := r.Fecha.In(argentina).Format("2006-01-02 15"); got != "2026-10-01 12" {
+			t.Errorf("la fecha cargada a mano quedó %s, tenía que ser el mediodía de acá", got)
+		}
+	}
+	if _, b := pedir(t, anon, "GET", u+"contenido/negocio/resumen", nil); !strings.Contains(string(b), `"promedio":5`) || !strings.Contains(string(b), `"cuantas":2`) {
+		t.Errorf("resumen: %s", b)
+	}
+	if _, b := pedir(t, anon, "GET", u+"contenido/negocio/resenas", nil); !strings.Contains(string(b), `"texto":"Muy buena atención"`) {
+		t.Errorf("publicadas: %s", b)
+	}
+
+	sinClave := armar(t)
+	adm2 := sinClave.cliente(t, "admin@prueba.test", "admin")
+	if c, b := pedir(t, adm2, "POST", sinClave.srv.URL+"/api/v1/admin/contenido/negocio/google", nil); c != 422 || !strings.Contains(string(b), "GOOGLE_PLACES_API_KEY") {
+		t.Errorf("sin clave: %d %s", c, b)
+	}
+}
+
+// Con la base vacía, toda lista sale `[]` y no `null` (la pantalla hace .map).
+func TestListasVacias(t *testing.T) {
+	e := armar(t)
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	for _, ruta := range []string{
+		"contenido/promos", "contenido/banners?ubicacion=portada", "contenido/negocio/resenas",
+		"contenido/productos/00000000-0000-0000-0000-000000000000/resenas", "contenido/mis-resenas",
+		"admin/contenido/ajustes", "admin/contenido/resenas", "admin/contenido/banners",
+		"admin/contenido/promos", "admin/contenido/negocio",
+	} {
+		if c, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/"+ruta, nil); c != 200 || string(b) != "[]\n" {
+			t.Errorf("%s: %d %s", ruta, c, b)
+		}
 	}
 }

@@ -113,3 +113,38 @@ LIMIT 200;
 -- name: ModerarResena :one
 UPDATE product_reviews SET estado = $2, motivo_rechazo = $3, resuelto_por = $4, updated_at = now()
 WHERE id = $1 RETURNING product_id;
+
+-- name: ResenasDelNegocio :many
+SELECT id, autor, estrellas, texto, fecha, origen, foto_url
+FROM business_reviews WHERE publicada
+ORDER BY orden, fecha DESC LIMIT 12;
+
+-- name: ResumenDelNegocio :one
+-- El promedio como texto: el TS lo leía con Number() y lo redondeaba él.
+SELECT coalesce(avg(estrellas)::text, '0') AS promedio, count(*)::int AS cuantas
+FROM business_reviews WHERE publicada;
+
+-- name: ResenasDelNegocioTodas :many
+SELECT * FROM business_reviews ORDER BY orden, fecha DESC;
+
+-- name: CrearResenaDelNegocio :one
+INSERT INTO business_reviews (autor, estrellas, texto, fecha, publicada)
+VALUES ($1, $2, $3, $4, $5) RETURNING id;
+
+-- name: EditarResenaDelNegocio :execrows
+UPDATE business_reviews SET autor = $2, estrellas = $3, texto = $4, fecha = $5, publicada = $6, updated_at = now()
+WHERE id = $1;
+
+-- name: PublicarResenaDelNegocio :execrows
+UPDATE business_reviews SET publicada = $2, updated_at = now() WHERE id = $1;
+
+-- name: BorrarResenaDelNegocio :execrows
+DELETE FROM business_reviews WHERE id = $1;
+
+-- name: GuardarResenaDeGoogle :one
+-- Una vez por reseña de Google (externo_id): las que ya estaban no se tocan,
+-- y las nuevas entran sin publicar hasta que alguien las revise.
+INSERT INTO business_reviews (autor, estrellas, texto, fecha, origen, externo_id, foto_url, publicada)
+VALUES ($1, $2, $3, $4, 'google', $5, $6, false)
+ON CONFLICT (externo_id) DO NOTHING
+RETURNING id;

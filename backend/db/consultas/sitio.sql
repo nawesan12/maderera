@@ -85,3 +85,16 @@ SELECT slug, updated_at AS actualizada, imagen_url FROM events WHERE estado = 'p
 -- name: RegistrarConsultaWeb :exec
 INSERT INTO notifications_log (canal, evento, destinatario, asunto, estado, proveedor_mensaje_id, error)
 VALUES ('email', 'consulta_web', $1, $2, $3, $4, $5);
+
+-- name: SucursalesActivas :many
+-- Solo las filas: la ficha publicada (dirección, horario, teléfonos) es una
+-- constante de lib/sucursales.ts, y Next la junta con esto.
+SELECT id, slug, name AS nombre, sort_order FROM branches WHERE active ORDER BY sort_order;
+
+-- name: ZonasDeEnvio :many
+SELECT id, nombre, costo, envio_gratis_desde, demora_estimada, a_cotizar
+FROM shipping_zones WHERE activa ORDER BY orden;
+
+-- name: EscalasDePago :many
+SELECT medio, desde_monto, porcentaje, etiqueta
+FROM payment_discounts WHERE activo ORDER BY medio, desde_monto;

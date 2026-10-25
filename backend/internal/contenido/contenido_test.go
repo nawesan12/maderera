@@ -388,6 +388,8 @@ func TestListasVacias(t *testing.T) {
 		"contenido/productos/00000000-0000-0000-0000-000000000000/resenas", "contenido/mis-resenas",
 		"admin/contenido/ajustes", "admin/contenido/resenas", "admin/contenido/banners",
 		"admin/contenido/promos", "admin/contenido/negocio",
+		"contenido/sucursales", "contenido/zonas-envio", "contenido/escalas-pago",
+		"contenido/eventos", "contenido/documentos",
 	} {
 		if c, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/"+ruta, nil); c != 200 || string(b) != "[]\n" {
 			t.Errorf("%s: %d %s", ruta, c, b)
@@ -503,3 +505,24 @@ func TestContacto(t *testing.T) {
 		t.Errorf("la cuarta: %d %s", c, b)
 	}
 }
+
+func TestSucursalesEnviosYEscalas(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	anon := &http.Client{}
+	u := e.srv.URL + "/api/v1/contenido/"
+	_, _ = e.pool.Exec(ctx, `insert into branches (slug, name, sort_order, active) values ('aserradero', 'Aserradero', 2, true), ('casa-central', 'Casa Central', 1, true), ('vieja', 'Vieja', 0, false)`)
+	if _, b := pedir(t, anon, "GET", u+"sucursales", nil); !strings.HasPrefix(b2s(b), `[{"id":`) || strings.Index(b2s(b), "casa-central") > strings.Index(b2s(b), "aserradero") || strings.Contains(b2s(b), "vieja") {
+		t.Errorf("sucursales: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `insert into shipping_zones (nombre, costo, envio_gratis_desde, orden, activa) values ('Mar del Plata', 5000.5, 300000, 1, true)`)
+	if _, b := pedir(t, anon, "GET", u+"zonas-envio", nil); !strings.Contains(b2s(b), `"costo":5000.5`) || !strings.Contains(b2s(b), `"envioGratisDesde":300000`) {
+		t.Errorf("zonas: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `insert into payment_discounts (medio, desde_monto, porcentaje, etiqueta, activo) values ('efectivo', 0, 10, 'Contado', true)`)
+	if _, b := pedir(t, anon, "GET", u+"escalas-pago", nil); b2s(b) != `[{"medio":"efectivo","desdeMonto":0,"porcentaje":10,"etiqueta":"Contado"}]`+"\n" {
+		t.Errorf("escalas: %s", b)
+	}
+}
+
+func b2s(b []byte) string { return string(b) }

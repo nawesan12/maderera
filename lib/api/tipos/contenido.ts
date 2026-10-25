@@ -456,6 +456,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/contenido/sucursales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Las sucursales activas (solo la fila; la ficha publicada la pone Next) */
+        get: operations["Sucursales"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contenido/zonas-envio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ZonasDeEnvio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contenido/escalas-pago": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Los descuentos por medio de pago y monto */
+        get: operations["EscalasDePago"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1524,6 +1574,83 @@ export interface operations {
             };
             422: components["responses"]["Problema"];
             429: components["responses"]["Problema"];
+        };
+    };
+    Sucursales: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Por orden */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        slug: string;
+                        nombre: string;
+                        sortOrder: number;
+                    }[];
+                };
+            };
+        };
+    };
+    ZonasDeEnvio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las activas, por orden */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        nombre: string;
+                        costo: number;
+                        envioGratisDesde: number;
+                        demoraEstimada: string | null;
+                        aCotizar: boolean;
+                    }[];
+                };
+            };
+        };
+    };
+    EscalasDePago: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las activas, por medio y monto */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        medio: string;
+                        desdeMonto: number;
+                        porcentaje: number;
+                        etiqueta: string;
+                    }[];
+                };
+            };
         };
     };
 }

@@ -173,6 +173,34 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Portada" }
+  /api/v1/catalogo/mi-lista:
+    get:
+      operationId: MiLista
+      summary: Las filas de la lista de precios en PDF, con los precios de quien pide
+      description: Exige sesión, y frena a 10 por hora por usuario.
+      responses:
+        "200":
+          description: El título y las filas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [titulo, filas]
+                properties:
+                  titulo: { type: string }
+                  filas:
+                    type: array
+                    items:
+                      type: object
+                      required: [sku, producto, medida, categoria, precio]
+                      properties:
+                        sku: { type: string }
+                        producto: { type: string }
+                        medida: { type: string }
+                        categoria: { type: string }
+                        precio: { type: string, nullable: true }
+        "401": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
 components:
   parameters:
     filtro_categoria: { name: categoria, in: query, schema: { type: string } }

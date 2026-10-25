@@ -1,9 +1,7 @@
 import { cache } from "react";
 import "server-only";
 
-import { asc, eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { branches, shippingZones } from "@/lib/db/schema";
+import { apiPublica, datos } from "@/lib/api/servidor";
 import { sucursalPublicada } from "@/lib/sucursales";
 import type { ZonaEnvio } from "@/lib/envios";
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
@@ -15,56 +13,17 @@ export { calcularEnvio, type ZonaEnvio } from "@/lib/envios";
 /** Zonas activas, ordenadas de más cerca a más lejos. */
 export const listarZonasDeEnvio = cachearPublico(
   async function listarZonasDeEnvio(): Promise<ZonaEnvio[]> {
-  const filas = await db
-    .select()
-    .from(shippingZones)
-    .where(eq(shippingZones.activa, true))
-    .orderBy(asc(shippingZones.orden));
-
-  return filas.map((z) => ({
-    id: z.id,
-    nombre: z.nombre,
-    costo: Number(z.costo),
-    envioGratisDesde: Number(z.envioGratisDesde),
-    demoraEstimada: z.demoraEstimada,
-    aCotizar: z.aCotizar,
-  }));
+    return datos(await apiPublica.GET("/api/v1/contenido/zonas-envio"));
   },
   ["zonas-de-envio"],
   ETIQUETAS.sucursales,
 );
 
-/**
- * Las sucursales tal como las ve el público.
- *
- * **La ficha publicada no sale de la base**: dirección, teléfono, horario,
- * servicios y destacados viven en `lib/sucursales.ts`. Son dos locales que la
- * maderera tiene desde hace décadas, y tenerlos como columnas editables no
- * agregaba flexibilidad real: agregaba una pantalla, un camino de caché que
- * invalidar y tres versiones distintas del domicilio del aserradero
- * conviviendo en el sitio.
- *
- * De la base sale lo único que la base sabe: **qué id tiene cada sucursal y si
- * está activa**. El `id` es el que usan el stock, los pedidos, la caja y los
- * puntos de venta, y es lo que el carrito manda al elegir retiro; el `slug`
- * es el que une la fila con su ficha publicada.
- *
- * Memoizada para toda la request: el pie del sitio la pide en cada página
- * pública y encima cinco páginas la piden por su cuenta.
- */
 export const listarSucursalesPublicas = cache(
   cachearPublico(
     async () => {
-      const filas = await db
-        .select({
-          id: branches.id,
-          slug: branches.slug,
-          nombre: branches.name,
-          sortOrder: branches.sortOrder,
-        })
-        .from(branches)
-        .where(eq(branches.active, true))
-        .orderBy(asc(branches.sortOrder));
+      // Las filas las da la API de Go; la ficha publicada es la constante.
+      const filas = datos(await apiPublica.GET("/api/v1/contenido/sucursales"));
 
       return filas.map((fila) => {
         const ficha = sucursalPublicada(fila.slug);

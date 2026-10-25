@@ -85,7 +85,7 @@ func correrAPI() error {
 	)
 
 	catalogoapi.HandlerWithOptions(
-		catalogoapi.NewStrictHandlerWithOptions(catalogo.NuevaAPI(catalogo.Nuevo(pool)),
+		catalogoapi.NewStrictHandlerWithOptions(catalogo.NuevaAPI(catalogo.Nuevo(pool), lim),
 			[]catalogoapi.StrictMiddlewareFunc{plataforma.ConPedido[catalogoapi.StrictHandlerFunc]},
 			catalogoapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

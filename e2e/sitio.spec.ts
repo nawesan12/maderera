@@ -46,3 +46,22 @@ test("el sitemap lista fichas y categorías", async ({ request }) => {
   expect(xml).toMatch(/\/catalogo\/[a-z0-9-]+<\/loc>/);
   expect(xml).toContain("/catalogo?cat=");
 });
+
+test("la lista de precios en PDF exige sesión y sale con la sesión", async ({ page, request }) => {
+  expect((await request.get("/mi-lista-de-precios")).status()).toBe(401);
+  await page.goto("/ingresar");
+  await page.getByLabel("Correo electrónico").fill(process.env.E2E_CORREO ?? "admin@mjbj.com.ar");
+  await page.getByLabel("Contraseña").fill(process.env.E2E_CLAVE ?? "Admin1234");
+  await page.getByRole("button", { name: "Ingresar" }).click();
+  await expect(page).toHaveURL(/\/admin/);
+  const r = await page.request.get("/mi-lista-de-precios");
+  expect(r.status()).toBe(200);
+  expect(r.headers()["content-type"]).toBe("application/pdf");
+  expect((await r.body()).subarray(0, 5).toString()).toBe("%PDF-");
+});
+
+test("las sucursales salen con su ficha", async ({ page }) => {
+  await page.goto("/sucursales");
+  await expect(page.getByText("Juan B. Justo 4153").first()).toBeVisible();
+  await expect(page.getByText("Canosa 61").first()).toBeVisible();
+});

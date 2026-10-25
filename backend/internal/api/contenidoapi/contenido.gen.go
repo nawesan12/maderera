@@ -667,6 +667,9 @@ type ServerInterface interface {
 	// DocumentosReservados Cuántos hay reservados para profesionales, sin decir cuáles
 	// (GET /api/v1/contenido/documentos/reservados)
 	DocumentosReservados(w http.ResponseWriter, r *http.Request)
+	// EscalasDePago Los descuentos por medio de pago y monto
+	// (GET /api/v1/contenido/escalas-pago)
+	EscalasDePago(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/contenido/eventos)
 	EventosProximos(w http.ResponseWriter, r *http.Request)
@@ -703,6 +706,12 @@ type ServerInterface interface {
 
 	// (GET /api/v1/contenido/sitemap/{seccion})
 	Sitemap(w http.ResponseWriter, r *http.Request, seccion SitemapParamsSeccion)
+	// Sucursales Las sucursales activas (solo la fila; la ficha publicada la pone Next)
+	// (GET /api/v1/contenido/sucursales)
+	Sucursales(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/contenido/zonas-envio)
+	ZonasDeEnvio(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -1163,6 +1172,20 @@ func (siw *ServerInterfaceWrapper) DocumentosReservados(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// EscalasDePago operation middleware
+func (siw *ServerInterfaceWrapper) EscalasDePago(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EscalasDePago(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // EventosProximos operation middleware
 func (siw *ServerInterfaceWrapper) EventosProximos(w http.ResponseWriter, r *http.Request) {
 
@@ -1410,6 +1433,34 @@ func (siw *ServerInterfaceWrapper) Sitemap(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// Sucursales operation middleware
+func (siw *ServerInterfaceWrapper) Sucursales(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Sucursales(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ZonasDeEnvio operation middleware
+func (siw *ServerInterfaceWrapper) ZonasDeEnvio(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ZonasDeEnvio(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1565,6 +1616,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/eventos/{slug}/visible", wrapper.EventoVisible)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/sitemap/{seccion}", wrapper.Sitemap)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/contenido/contacto", wrapper.EnviarConsulta)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/sucursales", wrapper.Sucursales)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/zonas-envio", wrapper.ZonasDeEnvio)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/escalas-pago", wrapper.EscalasDePago)
 
 	return m
 }
@@ -2303,6 +2357,32 @@ func (response DocumentosReservados200JSONResponse) VisitDocumentosReservadosRes
 	return err
 }
 
+type EscalasDePagoRequestObject struct {
+}
+
+type EscalasDePagoResponseObject interface {
+	VisitEscalasDePagoResponse(w http.ResponseWriter) error
+}
+
+type EscalasDePago200JSONResponse []struct {
+	DesdeMonto float32 `json:"desdeMonto"`
+	Etiqueta   string  `json:"etiqueta"`
+	Medio      string  `json:"medio"`
+	Porcentaje float32 `json:"porcentaje"`
+}
+
+func (response EscalasDePago200JSONResponse) VisitEscalasDePagoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type EventosProximosRequestObject struct {
 }
 
@@ -2638,6 +2718,60 @@ func (response Sitemap200JSONResponse) VisitSitemapResponse(w http.ResponseWrite
 	return err
 }
 
+type SucursalesRequestObject struct {
+}
+
+type SucursalesResponseObject interface {
+	VisitSucursalesResponse(w http.ResponseWriter) error
+}
+
+type Sucursales200JSONResponse []struct {
+	Id        string `json:"id"`
+	Nombre    string `json:"nombre"`
+	Slug      string `json:"slug"`
+	SortOrder int    `json:"sortOrder"`
+}
+
+func (response Sucursales200JSONResponse) VisitSucursalesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ZonasDeEnvioRequestObject struct {
+}
+
+type ZonasDeEnvioResponseObject interface {
+	VisitZonasDeEnvioResponse(w http.ResponseWriter) error
+}
+
+type ZonasDeEnvio200JSONResponse []struct {
+	ACotizar         bool    `json:"aCotizar"`
+	Costo            float32 `json:"costo"`
+	DemoraEstimada   *string `json:"demoraEstimada"`
+	EnvioGratisDesde float32 `json:"envioGratisDesde"`
+	Id               string  `json:"id"`
+	Nombre           string  `json:"nombre"`
+}
+
+func (response ZonasDeEnvio200JSONResponse) VisitZonasDeEnvioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
@@ -2709,6 +2843,9 @@ type StrictServerInterface interface {
 	// DocumentosReservados Cuántos hay reservados para profesionales, sin decir cuáles
 	// (GET /api/v1/contenido/documentos/reservados)
 	DocumentosReservados(ctx context.Context, request DocumentosReservadosRequestObject) (DocumentosReservadosResponseObject, error)
+	// EscalasDePago Los descuentos por medio de pago y monto
+	// (GET /api/v1/contenido/escalas-pago)
+	EscalasDePago(ctx context.Context, request EscalasDePagoRequestObject) (EscalasDePagoResponseObject, error)
 
 	// (GET /api/v1/contenido/eventos)
 	EventosProximos(ctx context.Context, request EventosProximosRequestObject) (EventosProximosResponseObject, error)
@@ -2745,6 +2882,12 @@ type StrictServerInterface interface {
 
 	// (GET /api/v1/contenido/sitemap/{seccion})
 	Sitemap(ctx context.Context, request SitemapRequestObject) (SitemapResponseObject, error)
+	// Sucursales Las sucursales activas (solo la fila; la ficha publicada la pone Next)
+	// (GET /api/v1/contenido/sucursales)
+	Sucursales(ctx context.Context, request SucursalesRequestObject) (SucursalesResponseObject, error)
+
+	// (GET /api/v1/contenido/zonas-envio)
+	ZonasDeEnvio(ctx context.Context, request ZonasDeEnvioRequestObject) (ZonasDeEnvioResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -3428,6 +3571,30 @@ func (sh *strictHandler) DocumentosReservados(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// EscalasDePago operation middleware
+func (sh *strictHandler) EscalasDePago(w http.ResponseWriter, r *http.Request) {
+	var request EscalasDePagoRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EscalasDePago(ctx, request.(EscalasDePagoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EscalasDePago")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EscalasDePagoResponseObject); ok {
+		if err := validResponse.VisitEscalasDePagoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // EventosProximos operation middleware
 func (sh *strictHandler) EventosProximos(w http.ResponseWriter, r *http.Request) {
 	var request EventosProximosRequestObject
@@ -3735,66 +3902,118 @@ func (sh *strictHandler) Sitemap(w http.ResponseWriter, r *http.Request, seccion
 	}
 }
 
+// Sucursales operation middleware
+func (sh *strictHandler) Sucursales(w http.ResponseWriter, r *http.Request) {
+	var request SucursalesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Sucursales(ctx, request.(SucursalesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Sucursales")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SucursalesResponseObject); ok {
+		if err := validResponse.VisitSucursalesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ZonasDeEnvio operation middleware
+func (sh *strictHandler) ZonasDeEnvio(w http.ResponseWriter, r *http.Request) {
+	var request ZonasDeEnvioRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ZonasDeEnvio(ctx, request.(ZonasDeEnvioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ZonasDeEnvio")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ZonasDeEnvioResponseObject); ok {
+		if err := validResponse.VisitZonasDeEnvioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"NQA=",
+	"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",
+	"/ie1InZSWyzhZP79dwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

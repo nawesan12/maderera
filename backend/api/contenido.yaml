@@ -433,6 +433,64 @@ paths:
                   resultado: { type: string, enum: [enviada, simulada, fallida] }
         "422": { $ref: "#/components/responses/Problema" }
         "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/contenido/sucursales:
+    get:
+      operationId: Sucursales
+      summary: Las sucursales activas (solo la fila; la ficha publicada la pone Next)
+      responses:
+        "200":
+          description: Por orden
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, slug, nombre, sortOrder]
+                  properties:
+                    id: { type: string }
+                    slug: { type: string }
+                    nombre: { type: string }
+                    sortOrder: { type: integer }
+  /api/v1/contenido/zonas-envio:
+    get:
+      operationId: ZonasDeEnvio
+      responses:
+        "200":
+          description: Las activas, por orden
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, nombre, costo, envioGratisDesde, demoraEstimada, aCotizar]
+                  properties:
+                    id: { type: string }
+                    nombre: { type: string }
+                    costo: { type: number }
+                    envioGratisDesde: { type: number }
+                    demoraEstimada: { type: string, nullable: true }
+                    aCotizar: { type: boolean }
+  /api/v1/contenido/escalas-pago:
+    get:
+      operationId: EscalasDePago
+      summary: Los descuentos por medio de pago y monto
+      responses:
+        "200":
+          description: Las activas, por medio y monto
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [medio, desdeMonto, porcentaje, etiqueta]
+                  properties:
+                    medio: { type: string }
+                    desdeMonto: { type: number }
+                    porcentaje: { type: number }
+                    etiqueta: { type: string }
 components:
   responses:
     Problema:

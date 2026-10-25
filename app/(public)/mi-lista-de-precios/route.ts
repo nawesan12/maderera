@@ -1,15 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
-import { db } from "@/lib/db";
-import {
-  categories,
-  priceListItems,
-  productVariants,
-  products,
-} from "@/lib/db/schema";
-import { getSession } from "@/lib/dal/session";
-import { avisoDeEspera, permitido } from "@/lib/limites";
-import { listaVigente } from "@/lib/dal/precios-sesion";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 import { pdfDeListaDePrecios } from "@/lib/pdf/lista-precios";
 
@@ -20,75 +9,32 @@ import { pdfDeListaDePrecios } from "@/lib/pdf/lista-precios";
  * "Listas de precios PDF". Un mayorista que quiere cotizar una obra necesita
  * la lista entera en un papel, no ir producto por producto por el catálogo.
  *
- * **Cada uno baja la suya.** La lista sale de `listaVigente()`, que es la
- * misma función que resuelve el precio del catálogo: quien tiene lista
+ * **Cada uno baja la suya.** La lista sale de `Vigente` en Go, la misma
+ * función que resuelve el precio del catálogo: quien tiene lista
  * profesional baja los precios profesionales y quien no, los de público. Es la
  * regla que evita el peor error de este módulo —una lista mayorista servida a
  * cualquiera—, y por eso se resuelve en el servidor y nunca desde un parámetro
  * de la URL.
  */
 export async function GET() {
-  // Exige sesión: sin esto la lista profesional quedaría a un link de
-  // distancia de cualquiera que lo adivine.
-  const sesion = await getSession();
-  if (!sesion) {
-    return new Response("Necesitás iniciar sesión.", { status: 401 });
+  // Las filas, con los precios de quien pide, las da la API de Go
+  // (backend/internal/catalogo/milista.go): exige sesión —sin esto la lista
+  // profesional quedaría a un link de cualquiera— y frena a 10 por hora. El
+  // PDF lo arma el TS hasta que se muden los PDF (tanda 12).
+  const r = await (await api()).GET("/api/v1/catalogo/mi-lista");
+  if (!r.data) {
+    const estado = r.response.status;
+    const texto =
+      estado === 401 ? "Necesitás iniciar sesión." : mensajeDe(r.error as Problema | undefined);
+    return new Response(texto, { status: estado === 401 || estado === 429 ? estado : 500 });
   }
-
-  /*
-   * El freno.
-   *
-   * Este documento recorre **todas** las variantes activas con cinco uniones y
-   * arma un PDF de la lista entera: es el trabajo más caro que se puede pedir
-   * desde afuera del panel, y alcanza con registrarse —que es gratis y no pide
-   * confirmar el correo—. Diez por hora es más de lo que nadie necesita.
-   */
-  const puede = await permitido("listaDePrecios", `usuario:${sesion.userId}`);
-
-  if (!puede.permitido) {
-    return new Response(avisoDeEspera(puede), { status: 429 });
-  }
-
-  const lista = await listaVigente();
-
-  const propia = alias(priceListItems, "precio_propio");
-  const general = alias(priceListItems, "precio_general");
-
-  const filas = await db
-    .select({
-      sku: productVariants.sku,
-      producto: products.name,
-      medida: productVariants.label,
-      categoria: categories.name,
-      // El mismo respaldo que el catálogo: la lista propia manda y la general
-      // cubre lo que esa lista no tenga cargado.
-      precio: sql<string | null>`coalesce(${propia.price}, ${general.price})`,
-    })
-    .from(productVariants)
-    .innerJoin(products, eq(products.id, productVariants.productId))
-    .innerJoin(categories, eq(categories.id, products.categoryId))
-    .leftJoin(
-      propia,
-      lista.id
-        ? sql`${propia.variantId} = ${productVariants.id} and ${propia.priceListId} = ${lista.id}`
-        : sql`false`,
-    )
-    .leftJoin(
-      general,
-      lista.generalId
-        ? sql`${general.variantId} = ${productVariants.id} and ${general.priceListId} = ${lista.generalId}`
-        : sql`false`,
-    )
-    .where(sql`${products.active} and ${productVariants.active}`)
-    .orderBy(asc(categories.sortOrder), asc(products.name), asc(productVariants.sortOrder));
 
   const emisor = await obtenerConfiguracionFiscal();
-
   const pdf = await pdfDeListaDePrecios({
-    titulo: lista.esDiferenciada ? `Lista ${lista.nombre}` : "Lista de precios",
+    titulo: r.data.titulo,
     emisor,
     leyendaIva: "Precios finales con IVA incluido",
-    filas,
+    filas: r.data.filas,
   });
 
   return new Response(pdf as BodyInit, {

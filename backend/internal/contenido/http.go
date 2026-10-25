@@ -76,6 +76,9 @@ func (o respuesta) VisitAdminPromosResponse(w http.ResponseWriter) error        
 func (o respuesta) VisitCrearPromoResponse(w http.ResponseWriter) error         { return o.escribir(w) }
 func (o respuesta) VisitEditarPromoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
 func (o respuesta) VisitBorrarPromoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
+func (o respuesta) VisitSucursalesResponse(w http.ResponseWriter) error         { return o.escribir(w) }
+func (o respuesta) VisitZonasDeEnvioResponse(w http.ResponseWriter) error       { return o.escribir(w) }
+func (o respuesta) VisitEscalasDePagoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
 func (o respuesta) VisitDocumentosResponse(w http.ResponseWriter) error         { return o.escribir(w) }
 func (o respuesta) VisitDocumentosReservadosResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
@@ -507,4 +510,21 @@ func (a *API) EnviarConsulta(ctx context.Context, r contenidoapi.EnviarConsultaR
 		return nil, err
 	}
 	return ok(map[string]ResultadoConsulta{"resultado": res}), nil
+}
+
+// --- sucursales, envíos y descuentos por medio de pago ---
+
+func (a *API) Sucursales(ctx context.Context, _ contenidoapi.SucursalesRequestObject) (contenidoapi.SucursalesResponseObject, error) {
+	v, err := a.s.q.SucursalesActivas(ctx)
+	return ok(v), err
+}
+
+func (a *API) ZonasDeEnvio(ctx context.Context, _ contenidoapi.ZonasDeEnvioRequestObject) (contenidoapi.ZonasDeEnvioResponseObject, error) {
+	v, err := a.s.q.ZonasDeEnvio(ctx)
+	return ok(v), err
+}
+
+func (a *API) EscalasDePago(ctx context.Context, _ contenidoapi.EscalasDePagoRequestObject) (contenidoapi.EscalasDePagoResponseObject, error) {
+	v, err := a.s.q.EscalasDePago(ctx)
+	return ok(v), err
 }

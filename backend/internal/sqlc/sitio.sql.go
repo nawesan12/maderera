@@ -92,6 +92,43 @@ func (q *Queries) EsProfesionalAprobado(ctx context.Context, userID *string) (bo
 	return exists, err
 }
 
+const escalasDePago = `-- name: EscalasDePago :many
+SELECT medio, desde_monto, porcentaje, etiqueta
+FROM payment_discounts WHERE activo ORDER BY medio, desde_monto
+`
+
+type EscalasDePagoRow struct {
+	Medio      MedioPago  `json:"medio"`
+	DesdeMonto jsmath.Num `json:"desdeMonto"`
+	Porcentaje jsmath.Num `json:"porcentaje"`
+	Etiqueta   string     `json:"etiqueta"`
+}
+
+func (q *Queries) EscalasDePago(ctx context.Context) ([]EscalasDePagoRow, error) {
+	rows, err := q.db.Query(ctx, escalasDePago)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EscalasDePagoRow{}
+	for rows.Next() {
+		var i EscalasDePagoRow
+		if err := rows.Scan(
+			&i.Medio,
+			&i.DesdeMonto,
+			&i.Porcentaje,
+			&i.Etiqueta,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const eventoPorSlug = `-- name: EventoPorSlug :one
 SELECT e.id, e.slug, e.titulo, e.resumen, e.descripcion, e.imagen_url, e.lugar, e.inicia, e.termina, e.cupo,
        e.precio, e.solo_profesionales, e.estado,
@@ -394,6 +431,85 @@ func (q *Queries) SlugsDeEventosVisibles(ctx context.Context, limit int32) ([]st
 			return nil, err
 		}
 		items = append(items, slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const sucursalesActivas = `-- name: SucursalesActivas :many
+SELECT id, slug, name AS nombre, sort_order FROM branches WHERE active ORDER BY sort_order
+`
+
+type SucursalesActivasRow struct {
+	ID        string `json:"id"`
+	Slug      string `json:"slug"`
+	Nombre    string `json:"nombre"`
+	SortOrder int32  `json:"sortOrder"`
+}
+
+// Solo las filas: la ficha publicada (dirección, horario, teléfonos) es una
+// constante de lib/sucursales.ts, y Next la junta con esto.
+func (q *Queries) SucursalesActivas(ctx context.Context) ([]SucursalesActivasRow, error) {
+	rows, err := q.db.Query(ctx, sucursalesActivas)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SucursalesActivasRow{}
+	for rows.Next() {
+		var i SucursalesActivasRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Nombre,
+			&i.SortOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const zonasDeEnvio = `-- name: ZonasDeEnvio :many
+SELECT id, nombre, costo, envio_gratis_desde, demora_estimada, a_cotizar
+FROM shipping_zones WHERE activa ORDER BY orden
+`
+
+type ZonasDeEnvioRow struct {
+	ID               string     `json:"id"`
+	Nombre           string     `json:"nombre"`
+	Costo            jsmath.Num `json:"costo"`
+	EnvioGratisDesde jsmath.Num `json:"envioGratisDesde"`
+	DemoraEstimada   *string    `json:"demoraEstimada"`
+	ACotizar         bool       `json:"aCotizar"`
+}
+
+func (q *Queries) ZonasDeEnvio(ctx context.Context) ([]ZonasDeEnvioRow, error) {
+	rows, err := q.db.Query(ctx, zonasDeEnvio)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ZonasDeEnvioRow{}
+	for rows.Next() {
+		var i ZonasDeEnvioRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nombre,
+			&i.Costo,
+			&i.EnvioGratisDesde,
+			&i.DemoraEstimada,
+			&i.ACotizar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"mjbj/internal/limites"
 	"net/http"
 	"strings"
 
@@ -13,10 +14,13 @@ import (
 )
 
 // API son las rutas del catálogo (api/catalogo.yaml).
-type API struct{ s *Servicio }
+type API struct {
+	s   *Servicio
+	lim *limites.Limitador
+}
 
 // NuevaAPI arma los handlers.
-func NuevaAPI(s *Servicio) *API { return &API{s: s} }
+func NuevaAPI(s *Servicio, lim *limites.Limitador) *API { return &API{s: s, lim: lim} }
 
 var _ catalogoapi.StrictServerInterface = (*API)(nil)
 
@@ -32,6 +36,7 @@ func (o ok) escribir(w http.ResponseWriter) error {
 	return json.NewEncoder(w).Encode(plataforma.SinNulos(o.v))
 }
 
+func (o ok) VisitMiListaResponse(w http.ResponseWriter) error            { return o.escribir(w) }
 func (o ok) VisitListaVigenteResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o ok) VisitCategoriasResponse(w http.ResponseWriter) error         { return o.escribir(w) }
 func (o ok) VisitMarcasResponse(w http.ResponseWriter) error             { return o.escribir(w) }
@@ -203,4 +208,29 @@ func enumTexto[T ~string](v *T) string {
 		return ""
 	}
 	return string(*v)
+}
+
+// MiLista son las filas del PDF de /mi-lista-de-precios. Exige sesión: sin
+// esto la lista profesional quedaría a un link de cualquiera.
+func (a *API) MiLista(ctx context.Context, _ catalogoapi.MiListaRequestObject) (catalogoapi.MiListaResponseObject, error) {
+	ses, err := auth.Exigir(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if v := a.lim.Permitido(ctx, limites.ListaDePrecios, "usuario:"+ses.UserID); !v.Permitido {
+		return nil, plataforma.NuevoProblema(http.StatusTooManyRequests, limites.AvisoDeEspera(v))
+	}
+	l, err := a.s.Vigente(ctx, ses)
+	if err != nil {
+		return nil, err
+	}
+	filas, err := a.s.FilasDeMiLista(ctx, l)
+	if err != nil {
+		return nil, err
+	}
+	titulo := "Lista de precios"
+	if l.EsDiferenciada && l.Nombre != nil {
+		titulo = "Lista " + *l.Nombre
+	}
+	return ok{map[string]any{"titulo": titulo, "filas": plataforma.SinNulos(filas)}}, nil
 }

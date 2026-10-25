@@ -30,7 +30,8 @@
     "whatsapp:webhook": "tsx --env-file-if-exists=.env.local scripts/whatsapp-webhook.ts",
     "api:gen": "cd backend && go generate ./api && cd .. && for f in backend/api/*.yaml; do case $f in *.gen.yaml) ;; *) openapi-typescript --default-non-nullable false $f -o lib/api/tipos/$(basename $f .yaml).ts ;; esac; done",
     "api:dev": "sh -c 'set -a; . ./.env.local; set +a; cd backend && go run ./cmd/mjbj api'",
-    "worker:dev": "sh -c 'set -a; . ./.env.local; set +a; cd backend && go run ./cmd/mjbj worker'"
+    "worker:dev": "sh -c 'set -a; . ./.env.local; set +a; cd backend && go run ./cmd/mjbj worker'",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
@@ -61,6 +62,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/node-forge": "^1.3.14",

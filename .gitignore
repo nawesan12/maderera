@@ -77,3 +77,7 @@ agente-taller/estado.json
 
 # Programas reales de la seccionadora: los nombres traen clientes y obras.
 /docs/cprg/
+
+# Las pruebas de punta a punta (Playwright)
+/test-results
+/playwright-report

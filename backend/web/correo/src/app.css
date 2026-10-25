@@ -1,44 +1,183 @@
 /*
- * Los colores salen de la marca del sitio (app/globals.css): naranja de la
- * maderera, verde y grises cálidos. Todo va en variables para el modo
- * oscuro; ningún componente escribe un color a mano.
+ * Los tokens del diseño v2 (docs/diseno/correo/design_handoff_correo_mjbj,
+ * clase `Component`): claro en :root, oscuro por preferencia del sistema o
+ * elegido a mano (html[data-tema]). Ningún componente escribe un color a
+ * mano salvo los que el diseño fija igual en los dos temas (el naranja del
+ * avatar, el visor siempre oscuro).
  */
+@import "@fontsource-variable/geist/wght.css";
+@import "@fontsource-variable/geist-mono/wght.css";
+
 :root {
-  --naranja: oklch(0.68 0.19 48);
-  --naranja-fuerte: oklch(0.58 0.18 44);
-  --naranja-suave: oklch(0.95 0.04 60);
-  --verde: oklch(0.55 0.12 148);
+  --side: oklch(0.855 0.05 74);
+  --srch: oklch(0.985 0.008 80 / 0.9);
+  --bg: #f3f2ef;
+  --card: #ffffff;
+  --hun: #f3f1ed;
+  --cli: #faf8f5;
+  --fg: oklch(0.15 0.01 60);
+  --mut: oklch(0.42 0.012 60);
+  --t3: oklch(0.552 0.022 70);
+  --ln: oklch(0.8 0.012 70);
+  --ls: oklch(0.9 0.008 72);
+  --mu: oklch(0.95 0.008 75);
+  --pop: #ffffff;
+  --sel: oklch(0.68 0.19 48 / 0.09);
+  --side-act: oklch(0.985 0.008 80 / 0.7);
+  --acc: oklch(0.58 0.19 45);
+  --accT: oklch(0.52 0.18 40);
+  --accBg: oklch(0.68 0.19 48 / 0.13);
+  --espBg: #fdf0d5;
+  --espT: #8a5a08;
+  --infBg: #e2ebfb;
+  --infT: #1d4ed8;
+  --marBg: #fdeada;
+  --marT: #a8480a;
+  --okBg: #dcf3e3;
+  --okT: #186b39;
+  --prBg: #fbe4e2;
+  --prT: #b3261e;
+  --ceBg: #ecebe8;
+  --ceT: #5c564e;
+  --sh: 0 1px 2px rgb(70 45 20 / 0.12), 0 10px 30px -12px rgb(70 45 20 / 0.35);
+  --popsh: 0 20px 50px -12px rgb(40 30 20 / 0.35);
+  --avC: oklch(0.55 0.12 148 / 0.15);
+  --avCT: oklch(0.42 0.12 148);
+  --toast: oklch(0.24 0.01 60);
+  --toastT: oklch(0.97 0.005 80);
+  --panel: oklch(0.99 0.006 80 / 0.86);
+  --panelSh: 0 1px 2px rgb(70 45 20 / 0.12), 0 12px 30px -14px rgb(70 45 20 / 0.4);
+  --itemAct: oklch(0.68 0.19 48 / 0.12);
+  --itemSh: inset 3px 0 0 var(--acc);
+  /* El cuadradito de color de cada carpeta, por tono. */
+  --sq45: oklch(0.5 0.16 45);
+  --sq80: oklch(0.5 0.12 80);
+  --sq250: oklch(0.47 0.14 250);
+  --sq60: oklch(0.45 0.03 60);
+  --sq300: oklch(0.47 0.14 300);
+  --sq150: oklch(0.45 0.11 150);
+  --sq25: oklch(0.5 0.16 25);
+  --tex: var(--tex-claro);
+  --texS: 1000px 320px;
+  --texC: var(--grano-claro);
+  --avatar: oklch(0.68 0.19 48);
 
-  --fondo: oklch(0.985 0.004 70);
-  --superficie: #fff;
-  --superficie-2: oklch(0.965 0.006 70);
-  --borde: oklch(0.9 0.008 70);
-  --texto: oklch(0.22 0.01 60);
-  --texto-2: oklch(0.45 0.012 60);
-  --texto-3: oklch(0.6 0.01 60);
-  --seleccion: oklch(0.95 0.035 60);
-  --peligro: oklch(0.55 0.2 27);
-  --sombra: 0 1px 2px oklch(0.2 0.01 60 / 0.06), 0 8px 24px oklch(0.2 0.01 60 / 0.08);
-
-  --radio: 10px;
-  --fuente: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --py: 18px;
+  --fuente: "Geist Variable", Geist, ui-sans-serif, system-ui, sans-serif;
+  --mono: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
   color-scheme: light;
 }
 
+:root[data-densidad="media"] {
+  --py: 14px;
+}
+:root[data-densidad="compacta"] {
+  --py: 10px;
+}
+
+/* Oscuro: el del sistema (si no se eligió claro) o el elegido a mano. Los
+   dos bloques son iguales: CSS no deja compartirlos sin un preprocesador. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --naranja-suave: oklch(0.32 0.06 50);
-    --fondo: oklch(0.17 0.008 60);
-    --superficie: oklch(0.21 0.008 60);
-    --superficie-2: oklch(0.25 0.01 60);
-    --borde: oklch(0.32 0.01 60);
-    --texto: oklch(0.94 0.006 70);
-    --texto-2: oklch(0.75 0.01 70);
-    --texto-3: oklch(0.6 0.01 70);
-    --seleccion: oklch(0.3 0.05 55);
-    --sombra: 0 1px 2px #0006, 0 8px 24px #0008;
+  :root:not([data-tema="claro"]) {
+    --side: oklch(0.165 0.018 55);
+    --srch: oklch(0.23 0.014 60 / 0.9);
+    --bg: oklch(0.13 0.01 60);
+    --card: oklch(0.18 0.01 60);
+    --hun: oklch(0.21 0.01 60);
+    --cli: oklch(0.165 0.01 60);
+    --fg: oklch(0.96 0.005 80);
+    --mut: oklch(0.72 0.01 60);
+    --t3: oklch(0.62 0.012 65);
+    --ln: oklch(1 0 0 / 20%);
+    --ls: oklch(1 0 0 / 11%);
+    --mu: oklch(0.25 0.01 60);
+    --pop: oklch(0.22 0.01 60);
+    --sel: oklch(0.68 0.19 48 / 0.13);
+    --side-act: oklch(0.68 0.19 48 / 0.2);
+    --accT: oklch(0.74 0.13 52);
+    --accBg: oklch(0.68 0.19 48 / 0.2);
+    --espBg: oklch(0.27 0.05 75);
+    --espT: oklch(0.82 0.11 75);
+    --infBg: oklch(0.27 0.055 265);
+    --infT: oklch(0.82 0.1 265);
+    --marBg: oklch(0.27 0.05 45);
+    --marT: oklch(0.82 0.11 45);
+    --okBg: oklch(0.27 0.044 150);
+    --okT: oklch(0.8 0.1 150);
+    --prBg: oklch(0.27 0.05 25);
+    --prT: oklch(0.82 0.11 25);
+    --ceBg: oklch(0.25 0.004 70);
+    --ceT: oklch(0.78 0.01 70);
+    --sh: none;
+    --popsh: 0 20px 50px -12px rgb(0 0 0 / 0.8);
+    --avC: oklch(0.55 0.12 148 / 0.24);
+    --avCT: oklch(0.8 0.12 148);
+    --toast: oklch(0.3 0.01 60);
+    --panel: oklch(0.2 0.012 60 / 0.82);
+    --panelSh: 0 0 0 1px oklch(1 0 0 / 0.08), 0 12px 30px -14px rgb(0 0 0 / 0.6);
+    --itemAct: oklch(0.68 0.19 48 / 0.18);
+    --sq45: oklch(0.78 0.13 50);
+    --sq80: oklch(0.8 0.12 85);
+    --sq250: oklch(0.78 0.11 250);
+    --sq60: oklch(0.78 0.02 60);
+    --sq300: oklch(0.78 0.11 300);
+    --sq150: oklch(0.78 0.1 150);
+    --sq25: oklch(0.78 0.12 25);
+    --tex: var(--tex-oscuro);
+    --texS: 160px 160px, 700px 220px, 700px 220px;
+    --texC: var(--grano-oscuro);
     color-scheme: dark;
   }
+}
+:root[data-tema="oscuro"] {
+  --side: oklch(0.165 0.018 55);
+  --srch: oklch(0.23 0.014 60 / 0.9);
+  --bg: oklch(0.13 0.01 60);
+  --card: oklch(0.18 0.01 60);
+  --hun: oklch(0.21 0.01 60);
+  --cli: oklch(0.165 0.01 60);
+  --fg: oklch(0.96 0.005 80);
+  --mut: oklch(0.72 0.01 60);
+  --t3: oklch(0.62 0.012 65);
+  --ln: oklch(1 0 0 / 20%);
+  --ls: oklch(1 0 0 / 11%);
+  --mu: oklch(0.25 0.01 60);
+  --pop: oklch(0.22 0.01 60);
+  --sel: oklch(0.68 0.19 48 / 0.13);
+  --side-act: oklch(0.68 0.19 48 / 0.2);
+  --accT: oklch(0.74 0.13 52);
+  --accBg: oklch(0.68 0.19 48 / 0.2);
+  --espBg: oklch(0.27 0.05 75);
+  --espT: oklch(0.82 0.11 75);
+  --infBg: oklch(0.27 0.055 265);
+  --infT: oklch(0.82 0.1 265);
+  --marBg: oklch(0.27 0.05 45);
+  --marT: oklch(0.82 0.11 45);
+  --okBg: oklch(0.27 0.044 150);
+  --okT: oklch(0.8 0.1 150);
+  --prBg: oklch(0.27 0.05 25);
+  --prT: oklch(0.82 0.11 25);
+  --ceBg: oklch(0.25 0.004 70);
+  --ceT: oklch(0.78 0.01 70);
+  --sh: none;
+  --popsh: 0 20px 50px -12px rgb(0 0 0 / 0.8);
+  --avC: oklch(0.55 0.12 148 / 0.24);
+  --avCT: oklch(0.8 0.12 148);
+  --toast: oklch(0.3 0.01 60);
+  --panel: oklch(0.2 0.012 60 / 0.82);
+  --panelSh: 0 0 0 1px oklch(1 0 0 / 0.08), 0 12px 30px -14px rgb(0 0 0 / 0.6);
+  --itemAct: oklch(0.68 0.19 48 / 0.18);
+  --sq45: oklch(0.78 0.13 50);
+  --sq80: oklch(0.8 0.12 85);
+  --sq250: oklch(0.78 0.11 250);
+  --sq60: oklch(0.78 0.02 60);
+  --sq300: oklch(0.78 0.11 300);
+  --sq150: oklch(0.78 0.1 150);
+  --sq25: oklch(0.78 0.12 25);
+  --tex: var(--tex-oscuro);
+  --texS: 160px 160px, 700px 220px, 700px 220px;
+  --texC: var(--grano-oscuro);
+  color-scheme: dark;
 }
 
 * {
@@ -49,10 +188,11 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: var(--fondo);
-  color: var(--texto);
-  font: 15px/1.45 var(--fuente);
+  background-color: var(--side);
+  color: var(--fg);
+  font: 16px/1.5 var(--fuente);
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #app {
@@ -71,32 +211,48 @@ button {
   cursor: pointer;
 }
 
+a {
+  color: var(--accT);
+}
+
 :focus-visible {
-  outline: 2px solid var(--naranja);
+  outline: 2px solid var(--acc);
   outline-offset: 2px;
 }
 
+.mono {
+  font-family: var(--mono);
+}
+
+/* Botones: el de contorno r999 (Responder, Reenviar), el lleno de acento y
+   el de ícono 42×42. */
 .boton {
   display: inline-flex;
   align-items: center;
-  gap: 0.4em;
-  border: 1px solid var(--borde);
-  background: var(--superficie);
-  border-radius: 8px;
-  padding: 0.45em 0.85em;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--ln);
+  background: transparent;
+  border-radius: 999px;
+  font-size: 16px;
   font-weight: 500;
   white-space: nowrap;
+  text-decoration: none;
+  color: var(--fg);
 }
 .boton:hover {
-  background: var(--superficie-2);
+  background: var(--sel);
 }
 .boton.principal {
-  background: var(--naranja);
-  border-color: var(--naranja);
+  background: var(--acc);
+  border-color: transparent;
   color: #fff;
+  font-weight: 600;
 }
 .boton.principal:hover {
-  background: var(--naranja-fuerte);
+  background: oklch(0.54 0.19 44);
 }
 .boton:disabled {
   opacity: 0.55;
@@ -106,42 +262,202 @@ button {
 .icono {
   display: inline-grid;
   place-items: center;
-  width: 2.1rem;
-  height: 2.1rem;
+  width: 42px;
+  height: 42px;
+  flex: none;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
-  color: var(--texto-2);
+  color: var(--mut);
 }
 .icono:hover {
-  background: var(--superficie-2);
-  color: var(--texto);
+  background: var(--sel);
+  color: var(--fg);
+}
+
+.enlace {
+  border: 0;
+  background: transparent;
+  padding: 4px 2px;
+  color: var(--accT);
+  font-weight: 600;
+  text-decoration: none;
+}
+.enlace:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .campo {
   width: 100%;
-  border: 1px solid var(--borde);
-  background: var(--superficie);
-  border-radius: 8px;
-  padding: 0.55em 0.7em;
+  min-height: 50px;
+  border: 1px solid var(--ln);
+  background: var(--card);
+  border-radius: 12px;
+  padding: 0 14px;
+  font-size: 17px;
+}
+textarea.campo {
+  padding: 12px 14px;
+  line-height: 1.6;
 }
 .campo:focus {
   outline: none;
-  border-color: var(--naranja);
-  box-shadow: 0 0 0 3px var(--naranja-suave);
+  border-color: var(--acc);
+  box-shadow: 0 0 0 3px var(--accBg);
+}
+
+/* Las etiquetas de estado («Pedido abierto», «Debe»), por familia. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  white-space: nowrap;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 14px;
+  line-height: 24px;
+  font-weight: 500;
+  background: var(--ceBg);
+  color: var(--ceT);
+}
+.chip.esp {
+  background: var(--espBg);
+  color: var(--espT);
+}
+.chip.inf {
+  background: var(--infBg);
+  color: var(--infT);
+}
+.chip.mar {
+  background: var(--marBg);
+  color: var(--marT);
+}
+.chip.ok {
+  background: var(--okBg);
+  color: var(--okT);
+}
+.chip.pr {
+  background: var(--prBg);
+  color: var(--prT);
+}
+.chip.vio {
+  background: oklch(0.6 0.13 300 / 0.15);
+  color: oklch(0.48 0.14 300);
+}
+:root[data-tema="oscuro"] .chip.vio {
+  color: oklch(0.8 0.11 300);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) .chip.vio {
+    color: oklch(0.8 0.11 300);
+  }
+}
+
+.contador {
+  min-width: 26px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--mu);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.avatar {
+  flex: none;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  background: var(--mu);
+  color: var(--mut);
+}
+.avatar.cliente {
+  background: var(--avC);
+  color: var(--avCT);
+}
+.avatar.proveedor {
+  background: var(--infBg);
+  color: var(--infT);
+}
+
+/* Menús y popovers: --pop con su sombra. */
+.menu-flotante {
+  background: var(--pop);
+  border-radius: 14px;
+  box-shadow: var(--popsh), 0 0 0 1px var(--ls);
+  padding: 6px 0;
+  z-index: 20;
+}
+.item-menu {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  font-size: 16px;
+  text-align: left;
+  color: var(--fg);
+}
+.item-menu:hover,
+.item-menu:focus-visible {
+  background: var(--sel);
+  outline: none;
+}
+.item-menu svg {
+  color: var(--mut);
+  flex: none;
 }
 
 .tecla {
   display: inline-block;
-  min-width: 1.4em;
-  padding: 0 0.35em;
-  border: 1px solid var(--borde);
+  min-width: 1.5em;
+  padding: 0 0.4em;
+  border: 1px solid var(--ln);
   border-bottom-width: 2px;
-  border-radius: 4px;
-  font-size: 0.8em;
+  border-radius: 5px;
+  font: 13px/1.6 var(--mono);
   text-align: center;
-  color: var(--texto-2);
-  background: var(--superficie);
+  color: var(--mut);
+  background: var(--card);
+}
+
+.casilla {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 6px;
+  display: inline-grid;
+  place-items: center;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ln);
+  color: #fff;
+}
+.casilla.marcada {
+  background: var(--acc);
+  box-shadow: none;
+}
+
+.esqueleto {
+  background: var(--mu);
+  border-radius: 6px;
+  animation: latido 1.4s ease-in-out infinite;
+}
+@keyframes latido {
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .oculto {
@@ -150,4 +466,14 @@ button {
   height: 1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

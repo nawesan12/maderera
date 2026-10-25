@@ -1,143 +1,91 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { api, ErrorApi, type Direccion } from "../lib/api";
-  import { bandeja } from "../lib/estado.svelte";
-  import { direccionCompleta, fechaLarga, nombreDe, tamano } from "../lib/formato";
+  import { onMount, untrack } from "svelte";
+  import { ErrorApi, type Direccion } from "../lib/api";
+  import { bandeja, type Redaccion } from "../lib/estado.svelte";
+  import { preferencias } from "../lib/preferencias.svelte";
+  import { armar, iniciar, mencionaAdjunto, separar, traerAdjuntos, TOPE_ADJUNTOS } from "../lib/borrador";
+  import { tamano } from "../lib/formato";
   import Icono from "./Icono.svelte";
+  import Destinatarios from "./Destinatarios.svelte";
 
-  const TOPE = 18 * 1024 * 1024;
-  const r = bandeja.redaccion!;
-  const base = r.base;
+  // Una ventana de redactar (2b): abajo a la derecha, se minimiza a una
+  // pestaña y puede haber varias. En el teléfono ocupa toda la pantalla.
+  let { ventana }: { ventana: Redaccion } = $props();
+
+  // La ventana se arma una vez con lo que trae; después manda lo escrito.
+  const r = untrack(() => ventana);
   const yo = (bandeja.correo ?? "").toLowerCase();
+  const remitente = preferencias.remitente(yo);
+  const inicio = iniciar(r.modo, r.base, yo);
+  const firma = remitente.firma ? `\n\n-- \n${remitente.firma}` : "";
 
-  // El nombre con que sale y la firma, por casilla, en este navegador.
-  const claveAjustes = `correo:ajustes:${yo}`;
-  const ajustes: { nombre: string; firma: string } = (() => {
-    try {
-      return { nombre: "", firma: "", ...JSON.parse(localStorage.getItem(claveAjustes) ?? "{}") };
-    } catch {
-      return { nombre: "", firma: "" };
-    }
-  })();
-
-  const lista = (ds: Direccion[]) => ds.map(direccionCompleta).join(", ");
-  const sinMi = (ds: Direccion[]) => ds.filter((d) => d.correo.toLowerCase() !== yo);
-  const firma = ajustes.firma ? `\n\n-- \n${ajustes.firma}` : "";
-
-  function citar(texto: string) {
-    return texto
-      .split("\n")
-      .map((l) => (l.startsWith(">") ? ">" + l : "> " + l))
-      .join("\n");
-  }
-
-  function prefijo(asunto: string, p: string) {
-    return new RegExp(`^(${p}|re|rv|fwd?):`, "i").test(asunto.trim()) ? asunto : `${p}: ${asunto}`;
-  }
-
-  let para = $state("");
-  let cc = $state("");
-  let cco = $state("");
-  let asunto = $state("");
-  let texto = $state(firma);
-  let verCopias = $state(false);
+  let para = $state<Direccion[]>(r.para ? separar(r.para) : inicio.para);
+  let cc = $state<Direccion[]>(inicio.cc);
+  let cco = $state<Direccion[]>([]);
+  let asunto = $state(inicio.asunto);
+  let texto = $state(r.texto ?? "");
+  let verCopias = $state(inicio.cc.length > 0);
   let archivos = $state<File[]>([]);
   let enviando = $state(false);
   let errores = $state<Record<string, string>>({});
   let general = $state("");
   let descartar = $state(false);
-  let nombre = $state(ajustes.nombre);
-  let editarRemitente = $state(false);
-  let firmaEditable = $state(ajustes.firma);
   let arrastrando = $state(false);
-
-  if (base) {
-    const remitente = base.responderA.length ? base.responderA : base.de;
-    const encabezado = `\n\nEl ${fechaLarga(base.fecha)}, ${nombreDe(base.de[0])} escribió:\n`;
-    if (r.modo === "responder") {
-      para = lista(remitente);
-      asunto = prefijo(base.asunto, "Re");
-      texto = firma + encabezado + citar(base.texto);
-    } else if (r.modo === "responder-todos") {
-      para = lista(sinMi([...remitente, ...base.para]));
-      const copia = lista(sinMi(base.cc));
-      cc = copia;
-      verCopias = !!copia;
-      asunto = prefijo(base.asunto, "Re");
-      texto = firma + encabezado + citar(base.texto);
-    } else if (r.modo === "reenviar") {
-      asunto = prefijo(base.asunto, "Rv");
-      texto =
-        firma +
-        "\n\n---------- Mensaje reenviado ----------\n" +
-        `De: ${lista(base.de)}\nFecha: ${fechaLarga(base.fecha)}\nAsunto: ${base.asunto}\nPara: ${lista(base.para)}\n\n` +
-        base.texto;
-    }
-  }
-
-  const pesoTotal = $derived(archivos.reduce((s, f) => s + f.size, 0));
-  const titulo = { nuevo: "Mensaje nuevo", responder: "Responder", "responder-todos": "Responder a todos", reenviar: "Reenviar" }[r.modo];
-  const conContenido = $derived(!!(para || asunto || archivos.length || texto.trim() !== firma.trim()));
+  let grande = $state(false);
+  let ignorarAviso = $state(false);
 
   let campoTexto: HTMLTextAreaElement;
-  let campoPara: HTMLInputElement;
+  let campoAsunto: HTMLInputElement;
+  let elegirArchivos = $state<HTMLInputElement>();
+  let destPara: Destinatarios;
+  let destCc = $state<Destinatarios>();
+  let destCco = $state<Destinatarios>();
+
+  const titulo = $derived(asunto.trim() || { nuevo: "Mensaje nuevo", responder: "Responder", "responder-todos": "Responder a todos", reenviar: "Reenviar" }[r.modo]);
+  $effect(() => bandeja.titularVentana(r.id, titulo));
+
+  const minimizada = $derived(!!bandeja.ventanas.find((v) => v.id === r.id)?.minimizada);
+  const pesoTotal = $derived(archivos.reduce((s, f) => s + f.size, 0));
+  const palabraAdjunto = $derived(archivos.length || ignorarAviso ? "" : mencionaAdjunto(texto));
+  const conContenido = $derived(!!(para.length || asunto.trim() || archivos.length || texto.trim()));
 
   onMount(() => {
-    // Al responder, se escribe arriba de la cita; en uno nuevo, primero el destinatario.
-    if (r.modo === "responder" || r.modo === "responder-todos") {
-      campoTexto.focus();
-      campoTexto.setSelectionRange(0, 0);
-      campoTexto.scrollTop = 0;
-    } else campoPara.focus();
-
+    if (r.modo === "responder" || r.modo === "responder-todos" || (r.para && !asunto)) {
+      (r.para ? campoAsunto : campoTexto).focus();
+    }
     // Reenviar lleva los adjuntos del original: se bajan y se vuelven a subir.
-    if (r.modo === "reenviar" && base?.adjuntos.length) {
-      void Promise.all(
-        base.adjuntos.map(async (a) => {
-          const resp = await fetch(api.urlAdjunto(r.carpeta ?? bandeja.carpeta, base.uid, a.indice));
-          if (!resp.ok) throw new Error();
-          return new File([await resp.blob()], a.nombre, { type: a.tipo });
-        }),
-      )
+    if (r.modo === "reenviar" && r.base?.adjuntos.length) {
+      traerAdjuntos(r.base, r.carpeta ?? bandeja.carpeta)
         .then((fs) => (archivos = [...fs, ...archivos]))
         .catch(() => (general = "No se pudieron traer los adjuntos del original."));
     }
   });
 
   function sumar(lista: FileList | null) {
-    if (!lista) return;
-    archivos = [...archivos, ...lista];
+    if (lista) archivos = [...archivos, ...lista];
   }
 
   async function enviar() {
+    destPara.confirmar();
+    destCc?.confirmar();
+    destCco?.confirmar();
     errores = {};
     general = "";
-    if (pesoTotal > TOPE) {
+    if (destPara.pendiente()) {
+      errores = { para: `«${destPara.pendiente()}» no es una dirección de correo.` };
+      return;
+    }
+    if (pesoTotal > TOPE_ADJUNTOS) {
       errores = { adjuntos: "Los adjuntos pasan los 18 MB. Mandalos en dos correos." };
       return;
     }
     enviando = true;
-    const f = new FormData();
-    f.set("nombre", nombre.trim());
-    f.set("para", para);
-    f.set("cc", cc);
-    f.set("cco", cco);
-    f.set("asunto", asunto);
-    f.set("texto", texto);
-    if (base && r.modo !== "reenviar") {
-      if (base.messageId) {
-        f.set("enRespuestaA", base.messageId);
-        f.set("referencias", [...(base.referencias ?? []), base.messageId].join(" "));
-      }
-      f.set("carpeta", r.carpeta ?? "");
-      f.set("uid", String(base.uid));
-    }
-    for (const a of archivos) f.append("adjuntos", a, a.name);
+    const completo = texto + firma + (inicio.anterior ? `\n\n${inicio.anterior}` : "");
+    const datos = armar({ nombre: remitente.nombre, para, cc, cco, asunto, texto: completo, archivos, modo: r.modo, base: r.base, carpeta: r.carpeta });
     try {
-      await api.enviar(f);
-      bandeja.redaccion = null;
-      bandeja.avisar("Enviado");
-      void bandeja.refrescar();
+      const como = await bandeja.enviar(datos, asunto);
+      bandeja.cerrarVentana(r.id);
+      bandeja.avisar(como === "enviado" ? "Enviado" : "Sin conexión: sale apenas vuelva");
     } catch (e) {
       if (e instanceof ErrorApi && Object.keys(e.errores).length) {
         errores = e.errores;
@@ -148,17 +96,12 @@
     }
   }
 
-  function guardarRemitente() {
-    localStorage.setItem(claveAjustes, JSON.stringify({ nombre: nombre.trim(), firma: firmaEditable.trim() }));
-    editarRemitente = false;
-  }
-
   function cerrar() {
     if (conContenido && !descartar) {
       descartar = true;
       return;
     }
-    bandeja.redaccion = null;
+    bandeja.cerrarVentana(r.id);
   }
 
   function tecla(e: KeyboardEvent) {
@@ -167,16 +110,22 @@
       void enviar();
     } else if (e.key === "Escape") {
       e.preventDefault();
-      cerrar();
+      e.stopPropagation();
+      if (descartar) descartar = false;
+      else bandeja.alternarVentana(r.id);
     }
   }
+
+  // El aviso de adjunto con la palabra resaltada en el texto, como en el
+  // diseño: se arma un espejo del textarea con la palabra marcada.
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
   class="redactar"
+  class:minimizada
+  class:grande
   role="dialog"
-  aria-modal="true"
   aria-label={titulo}
   tabindex="-1"
   onkeydown={tecla}
@@ -200,58 +149,75 @@
   >
     <header>
       <h2>{titulo}</h2>
-      <button type="button" class="icono" aria-label="Cerrar" onclick={cerrar}><Icono nombre="cerrar" /></button>
+      <button type="button" class="icono" aria-label="Minimizar" title="Minimizar (Esc)" onclick={() => bandeja.alternarVentana(r.id)}><Icono nombre="minimizar" tamano={20} /></button>
+      <button type="button" class="icono agrandar" aria-label={grande ? "Achicar" : "Agrandar"} onclick={() => (grande = !grande)}><Icono nombre="agrandar" tamano={18} /></button>
+      <button type="button" class="icono" aria-label="Cerrar" onclick={cerrar}><Icono nombre="cerrar" tamano={20} /></button>
     </header>
 
-    <div class="remitente">
+    <div class="linea">
       <span class="etiqueta">De</span>
-      {#if editarRemitente}
-        <div class="ajustes">
-          <input class="campo" placeholder="Nombre con que sale (ej. Ventas · Maderera Juan B. Justo)" bind:value={nombre} />
-          <textarea class="campo" rows="3" placeholder="Firma" bind:value={firmaEditable}></textarea>
-          <div><button type="button" class="boton" onclick={guardarRemitente}>Guardar</button></div>
-        </div>
-      {:else}
-        <span class="yo">{nombre ? `${nombre} <${yo}>` : yo}</span>
-        <button type="button" class="enlace" onclick={() => (editarRemitente = true)}>Nombre y firma</button>
-      {/if}
+      <span class="yo"><span class="punto"></span>{remitente.nombre ? `${remitente.nombre} — ${yo}` : yo}</span>
     </div>
 
-    <label class="linea">
-      <span class="etiqueta">Para</span>
-      <input bind:this={campoPara} bind:value={para} placeholder="jose@ejemplo.com, otra@ejemplo.com" autocomplete="email" aria-invalid={!!errores.para} />
-      {#if !verCopias}<button type="button" class="enlace" onclick={() => (verCopias = true)}>Cc Cco</button>{/if}
-    </label>
+    <div class="linea">
+      <label class="etiqueta" for="para-{r.id}">Para</label>
+      <Destinatarios bind:this={destPara} bind:lista={para} id="para-{r.id}" invalido={!!errores.para} enfocar={r.modo === "nuevo" && !r.para} />
+      {#if !verCopias}<button type="button" class="enlace copias" onclick={() => (verCopias = true)}>Cc  Cco</button>{/if}
+    </div>
     {#if errores.para}<p class="error">{errores.para}</p>{/if}
     {#if verCopias}
-      <label class="linea"><span class="etiqueta">Cc</span><input bind:value={cc} aria-invalid={!!errores.cc} /></label>
+      <div class="linea">
+        <label class="etiqueta" for="cc-{r.id}">Cc</label>
+        <Destinatarios bind:this={destCc} bind:lista={cc} id="cc-{r.id}" invalido={!!errores.cc} />
+      </div>
       {#if errores.cc}<p class="error">{errores.cc}</p>{/if}
-      <label class="linea"><span class="etiqueta">Cco</span><input bind:value={cco} aria-invalid={!!errores.cco} /></label>
+      <div class="linea">
+        <label class="etiqueta" for="cco-{r.id}">Cco</label>
+        <Destinatarios bind:this={destCco} bind:lista={cco} id="cco-{r.id}" invalido={!!errores.cco} />
+      </div>
       {#if errores.cco}<p class="error">{errores.cco}</p>{/if}
     {/if}
-    <label class="linea">
-      <span class="etiqueta">Asunto</span>
-      <input bind:value={asunto} aria-invalid={!!errores.asunto} />
-    </label>
+    <div class="linea">
+      <label class="etiqueta" for="asunto-{r.id}">Asunto</label>
+      <input id="asunto-{r.id}" class="asunto" bind:this={campoAsunto} bind:value={asunto} aria-invalid={!!errores.asunto} />
+    </div>
     {#if errores.asunto}<p class="error">{errores.asunto}</p>{/if}
 
-    <textarea bind:this={campoTexto} bind:value={texto} class="texto" aria-label="Mensaje"></textarea>
+    <div class="cuerpo">
+      <textarea bind:this={campoTexto} bind:value={texto} aria-label="Mensaje" placeholder="Escribí el mensaje"></textarea>
+      {#if remitente.firma}
+        <div class="firma">
+          <img src="/logo.png" alt="" width="44" height="44" />
+          <div>{#each remitente.firma.split("\n") as l, i (i)}<div class:primera={i === 0}>{l}</div>{/each}</div>
+        </div>
+      {/if}
+      {#if inicio.anterior}
+        <div class="anterior">{inicio.encabezado}</div>
+      {/if}
+    </div>
 
     {#if archivos.length}
       <ul class="adjuntos">
         {#each archivos as a, i (i)}
           <li>
-            <Icono nombre="clip" tamano={14} />
+            <Icono nombre="clip" tamano={15} />
             <span class="nombre">{a.name}</span>
             <span class="peso">{tamano(a.size)}</span>
-            <button type="button" class="quitar" aria-label="Quitar {a.name}" onclick={() => (archivos = archivos.filter((_, j) => j !== i))}>
-              <Icono nombre="cerrar" tamano={14} />
-            </button>
+            <button type="button" class="quitar" aria-label="Quitar {a.name}" onclick={() => (archivos = archivos.filter((_, j) => j !== i))}><Icono nombre="cerrar" tamano={14} /></button>
           </li>
         {/each}
       </ul>
     {/if}
-    {#if errores.adjuntos || pesoTotal > TOPE}<p class="error">{errores.adjuntos ?? "Los adjuntos pasan los 18 MB."}</p>{/if}
+
+    {#if palabraAdjunto}
+      <div class="aviso-adjunto" role="status">
+        <Icono nombre="clip" tamano={20} />
+        <span>Dice «{palabraAdjunto}», pero no agregaste ningún archivo.</span>
+        <button type="button" class="enlace" onclick={() => elegirArchivos?.click()}>Adjuntar</button>
+        <button type="button" class="icono chico" aria-label="No hace falta" title="No hace falta" onclick={() => (ignorarAviso = true)}><Icono nombre="cerrar" tamano={16} /></button>
+      </div>
+    {/if}
+    {#if errores.adjuntos || pesoTotal > TOPE_ADJUNTOS}<p class="error">{errores.adjuntos ?? "Los adjuntos pasan los 18 MB."}</p>{/if}
     {#if general}<p class="error" role="alert">{general}</p>{/if}
 
     <footer>
@@ -260,15 +226,15 @@
         <button type="button" class="boton" onclick={() => (descartar = false)}>Seguir escribiendo</button>
         <button type="button" class="boton peligro" onclick={cerrar}>Descartar</button>
       {:else}
-        <button class="boton principal" disabled={enviando}>
-          <Icono nombre="enviados" />
+        <button class="boton principal enviar" disabled={enviando} title="Enviar (⌘/Ctrl + Enter)">
           {enviando ? "Enviando…" : "Enviar"}
         </button>
-        <span class="tecla atajo">⌘/Ctrl + Enter</span>
-        <label class="boton adjuntar">
-          <Icono nombre="clip" /> Adjuntar
-          <input type="file" multiple class="oculto" onchange={(e) => sumar((e.target as HTMLInputElement).files)} />
+        <label class="herramienta">
+          <Icono nombre="clip" tamano={20} /><span>Adjuntar</span>
+          <input bind:this={elegirArchivos} type="file" multiple class="oculto" onchange={(e) => sumar((e.target as HTMLInputElement).files)} />
         </label>
+        <span class="atajo"><span class="tecla">⌘ Enter</span></span>
+        <button type="button" class="icono tacho" aria-label="Descartar" title="Descartar" onclick={cerrar}><Icono nombre="papelera" tamano={20} /></button>
       {/if}
     </footer>
   </form>
@@ -277,128 +243,185 @@
 <style>
   .redactar {
     position: fixed;
-    inset: 0;
+    right: 24px;
+    bottom: 0;
     z-index: 40;
-    display: grid;
-    place-items: end end;
-    padding: 16px;
-    pointer-events: none;
+    width: 664px;
+    height: min(760px, calc(100vh - 24px));
+    max-width: calc(100vw - 48px);
+  }
+  .redactar.minimizada {
+    display: none;
+  }
+  .redactar.grande {
+    right: 50%;
+    bottom: 50%;
+    transform: translate(50%, 50%);
+    width: min(1040px, calc(100vw - 64px));
+    height: min(860px, calc(100vh - 64px));
+  }
+  .redactar.grande form {
+    border-radius: 14px;
+  }
+  .redactar.grande header {
+    border-radius: 14px 14px 0 0;
   }
   form {
-    pointer-events: auto;
-    width: min(640px, 100%);
-    height: min(640px, calc(100vh - 32px));
+    height: 100%;
     display: flex;
     flex-direction: column;
-    background: var(--superficie);
-    border: 1px solid var(--borde);
-    border-radius: 14px;
-    box-shadow: var(--sombra), 0 24px 64px oklch(0.2 0.01 60 / 0.18);
+    background-color: var(--card);
+    background-image: var(--texC);
+    background-size: 180px 180px;
+    border-radius: 14px 14px 0 0;
+    box-shadow:
+      var(--popsh),
+      0 0 0 1px var(--ls);
     overflow: hidden;
   }
   form.arrastrando {
-    outline: 3px dashed var(--naranja);
+    outline: 3px dashed var(--acc);
     outline-offset: -8px;
   }
   header {
+    height: 52px;
+    flex: none;
     display: flex;
     align-items: center;
-    padding: 8px 8px 8px 18px;
-    background: var(--superficie-2);
-    border-bottom: 1px solid var(--borde);
+    gap: 2px;
+    padding: 0 6px 0 20px;
+    background: var(--toast);
+    color: var(--toastT);
   }
   h2 {
     flex: 1;
+    min-width: 0;
     margin: 0;
-    font-size: 1rem;
+    font-size: 16px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .remitente,
+  header .icono {
+    color: inherit;
+    width: 40px;
+    height: 40px;
+  }
+  header .icono:hover {
+    background: oklch(1 0 0 / 0.12);
+    color: inherit;
+  }
   .linea {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 0 18px;
-    border-bottom: 1px solid var(--borde);
-    min-height: 44px;
-  }
-  .remitente {
-    flex-wrap: wrap;
-    padding-top: 6px;
-    padding-bottom: 6px;
+    gap: 12px;
+    min-height: 54px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--ls);
+    font-size: 16px;
   }
   .etiqueta {
-    width: 3.5em;
+    width: 56px;
     flex: none;
-    color: var(--texto-3);
-    font-size: 0.9rem;
+    color: var(--mut);
   }
   .yo {
-    flex: 1;
-    color: var(--texto-2);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .ajustes {
-    flex: 1;
-    display: grid;
-    gap: 8px;
-    min-width: 240px;
+  .punto {
+    width: 10px;
+    height: 10px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--avatar);
   }
-  .linea input {
+  .copias {
+    font-size: 15px;
+    color: var(--mut);
+    font-weight: 500;
+    white-space: pre;
+    min-height: 40px;
+  }
+  .asunto {
     flex: 1;
     min-width: 0;
+    height: 52px;
     border: 0;
     background: transparent;
-    padding: 10px 0;
     outline: none;
+    font-size: 16px;
   }
-  .linea input[aria-invalid="true"] {
-    color: var(--peligro);
-  }
-  .enlace {
-    border: 0;
-    background: transparent;
-    color: var(--naranja-fuerte);
-    font-size: 0.88rem;
-    font-weight: 600;
-    padding: 4px;
-  }
-  .texto {
+  .cuerpo {
     flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 20px 10px;
+    overflow-y: auto;
+  }
+  textarea {
+    flex: 1;
+    min-height: 140px;
     border: 0;
     resize: none;
-    padding: 14px 18px;
+    padding: 0;
     background: transparent;
     outline: none;
-    line-height: 1.55;
-    font-size: 1rem;
+    font-size: 17px;
+    line-height: 1.65;
   }
-  .error {
-    margin: 6px 18px;
-    color: var(--peligro);
-    font-size: 0.88rem;
+  .firma {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    margin-top: 8px;
+    font-size: 15px;
+    line-height: 1.45;
+    color: var(--mut);
+  }
+  .firma img {
+    border-radius: 8px;
+    flex: none;
+  }
+  .firma .primera {
+    color: var(--fg);
+    font-weight: 600;
+    font-size: 16px;
+  }
+  .anterior {
+    margin-top: 12px;
+    padding: 8px 12px;
+    border-left: 3px solid var(--ls);
+    font-size: 14px;
+    color: var(--mut);
   }
   .adjuntos {
     list-style: none;
     margin: 0;
-    padding: 8px 18px;
+    padding: 8px 20px;
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    border-top: 1px solid var(--borde);
+    gap: 8px;
     max-height: 120px;
     overflow-y: auto;
   }
   .adjuntos li {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 4px 4px 10px;
-    background: var(--superficie-2);
-    border: 1px solid var(--borde);
-    border-radius: 8px;
-    font-size: 0.88rem;
+    gap: 8px;
+    height: 36px;
+    padding: 0 4px 0 10px;
+    border: 1px solid var(--ls);
+    border-radius: 10px;
+    font-size: 14px;
     max-width: 100%;
   }
   .adjuntos .nombre {
@@ -408,24 +431,81 @@
     max-width: 24ch;
   }
   .peso {
-    color: var(--texto-3);
+    color: var(--mut);
   }
   .quitar {
-    border: 0;
-    background: transparent;
-    color: var(--texto-3);
     display: grid;
-    padding: 4px;
-    border-radius: 6px;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--mut);
+    padding: 0;
+  }
+  .aviso-adjunto {
+    margin: 0 20px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 8px 8px 16px;
+    min-height: 48px;
+    border-radius: 12px;
+    background: var(--espBg);
+    color: var(--espT);
+    font-size: 16px;
+  }
+  .aviso-adjunto span {
+    flex: 1;
+  }
+  .aviso-adjunto .enlace {
+    color: inherit;
+    font-size: 16px;
+  }
+  .icono.chico {
+    width: 34px;
+    height: 34px;
+    color: inherit;
+  }
+  .error {
+    margin: 6px 20px;
+    color: var(--prT);
+    font-size: 15px;
   }
   footer {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--borde);
+    gap: 6px;
+    padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+    flex: none;
   }
-  .adjuntar {
+  .enviar {
+    height: 48px;
+    padding: 0 26px;
+    font-size: 17px;
+  }
+  .herramienta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 12px;
+    margin-left: 8px;
+    border-radius: 10px;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .herramienta :global(svg) {
+    color: var(--mut);
+  }
+  .herramienta:hover {
+    background: var(--sel);
+  }
+  .atajo {
+    margin-left: 4px;
+  }
+  .tacho {
     margin-left: auto;
   }
   .pregunta {
@@ -433,20 +513,29 @@
     font-weight: 600;
   }
   .peligro {
-    color: var(--peligro);
+    color: var(--prT);
   }
-  @media (max-width: 720px) {
-    .redactar {
-      padding: 0;
-    }
-    form {
-      width: 100%;
-      height: 100%;
-      border-radius: 0;
-      border: 0;
-    }
+  @media (max-width: 1080px) {
+    .agrandar,
     .atajo {
       display: none;
+    }
+  }
+  @media (max-width: 720px) {
+    .redactar,
+    .redactar.grande {
+      inset: 0;
+      transform: none;
+      width: 100%;
+      height: 100%;
+      max-width: none;
+    }
+    form {
+      border-radius: 0;
+    }
+    header {
+      padding-top: env(safe-area-inset-top);
+      height: calc(56px + env(safe-area-inset-top));
     }
   }
 </style>

@@ -250,3 +250,46 @@ func TestSepararDirecciones(t *testing.T) {
 		t.Errorf("%v", got)
 	}
 }
+
+func TestEtiquetas(t *testing.T) {
+	for _, nombre := range []string{"Presupuesto", "Pedido abierto", "Reclamación", "Año 2026", "a_b&c$"} {
+		f, ok := palabraClave(nombre)
+		if !ok {
+			t.Fatalf("%q no se pudo codificar", nombre)
+		}
+		for i := 0; i < len(f); i++ {
+			if !esAtomo(f[i]) {
+				t.Fatalf("%q quedó %q, que no es un átomo", nombre, f)
+			}
+		}
+		vuelta, ok := etiquetaDe(f)
+		if !ok || vuelta != nombre {
+			t.Fatalf("%q → %q → %q", nombre, f, vuelta)
+		}
+	}
+	if _, ok := etiquetaDe("$Forwarded"); ok {
+		t.Fatal("$Forwarded no es una etiqueta")
+	}
+	if _, ok := palabraClave("   "); ok {
+		t.Fatal("una etiqueta vacía no vale")
+	}
+}
+
+func TestVista(t *testing.T) {
+	casos := []struct {
+		p    parteTexto
+		in   string
+		want string
+	}{
+		{parteTexto{codificado: "7bit"}, "Hola Diego,\n\nva el presupuesto.\n\nEl vie, 24 oct a las 9:42, Martín escribió:\n> algo", "Hola Diego, va el presupuesto."},
+		{parteTexto{codificado: "quoted-printable", juego: "utf-8"}, "Te paso el despiece en PDF. Las piezas de 2600 van con la veta =\na lo largo y las de 7=C3=", "Te paso el despiece en PDF. Las piezas de 2600 van con la veta a lo largo y las de 7"},
+		{parteTexto{codificado: "base64"}, "SG9sYSwgwr9jb3J0YW4gZmVuw7NsaWNvPw==", "Hola, ¿cortan fenólico?"},
+		{parteTexto{codificado: "8bit", esHTML: true}, "<p>Hola <b>Ana</b></p><div>¿Cómo va?</div>", "Hola Ana ¿Cómo va?"},
+		{parteTexto{codificado: "quoted-printable", juego: "iso-8859-1"}, "Ma=F1ana", "Mañana"},
+	}
+	for _, c := range casos {
+		if got := decodificarVista(c.p, []byte(c.in)); got != c.want {
+			t.Errorf("decodificarVista(%q) = %q, quería %q", c.in, got, c.want)
+		}
+	}
+}

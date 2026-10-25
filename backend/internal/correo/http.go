@@ -221,18 +221,20 @@ func (a *App) carpetas(w http.ResponseWriter, r *http.Request, cred Credenciales
 }
 
 func (a *App) lista(w http.ResponseWriter, r *http.Request, cred Credenciales) {
-	carpeta := r.PathValue("carpeta")
-	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
-		res, err := a.srv.Buscar(r.Context(), cred, carpeta, q)
-		if err != nil {
-			a.fallar(w, r, err)
-			return
-		}
-		plataforma.EscribirJSON(w, http.StatusOK, Pagina{Mensajes: res, Total: uint32(len(res)), Pagina: 1, Paginas: 1})
-		return
+	q := r.URL.Query()
+	f := Filtro{
+		Texto:        strings.TrimSpace(q.Get("q")),
+		SinLeer:      q.Get("filtro") == "sin-leer",
+		SinResponder: q.Get("filtro") == "sin-responder",
+		Destacados:   q.Get("filtro") == "destacados",
+		ConAdjuntos:  q.Get("adjuntos") == "si",
+		De:           strings.TrimSpace(q.Get("de")),
 	}
-	pagina, _ := strconv.Atoi(r.URL.Query().Get("pagina"))
-	res, err := a.srv.Lista(r.Context(), cred, carpeta, pagina)
+	if dias, err := strconv.Atoi(q.Get("dias")); err == nil && dias > 0 && dias <= 3650 {
+		f.Desde = time.Now().AddDate(0, 0, -dias)
+	}
+	pagina, _ := strconv.Atoi(q.Get("pagina"))
+	res, err := a.srv.Lista(r.Context(), cred, r.PathValue("carpeta"), f, pagina)
 	if err != nil {
 		a.fallar(w, r, err)
 		return
@@ -323,7 +325,14 @@ func (a *App) adjunto(w http.ResponseWriter, r *http.Request, cred Credenciales)
 	h.Set("Content-Disposition", mime.FormatMediaType(disposicion, map[string]string{"filename": path.Base(parte.Nombre)}))
 	h.Set("Content-Length", strconv.Itoa(len(parte.Datos)))
 	h.Set("Cache-Control", "private, max-age=3600")
-	h.Set("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; plugin-types application/pdf; sandbox")
+	csp := "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'; sandbox"
+	if tipo == "application/pdf" {
+		// El visor de PDF de Chrome no arranca en un documento con
+		// `sandbox`, y el visor del correo (2i) lo muestra en un iframe. Un
+		// PDF no ejecuta nada en este origen: lo dibuja el navegador.
+		csp = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'"
+	}
+	h.Set("Content-Security-Policy", csp)
 	_, _ = w.Write(parte.Datos)
 }
 
@@ -336,6 +345,7 @@ type pedidoAcciones struct {
 var accionesValidas = map[Accion]bool{
 	AccionLeido: true, AccionNoLeido: true, AccionDestacar: true, AccionNoDestacar: true,
 	AccionArchivar: true, AccionPapelera: true, AccionSpam: true, AccionMover: true, AccionRestaurar: true,
+	AccionEtiquetar: true, AccionDesetiquetar: true,
 }
 
 func (a *App) acciones(w http.ResponseWriter, r *http.Request, cred Credenciales) {

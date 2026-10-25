@@ -275,6 +275,55 @@ func TestEtiquetas(t *testing.T) {
 	}
 }
 
+func TestSospecha(t *testing.T) {
+	crudo := "From: Mercado Pago <avisos@mercadopag0-seguridad.test>\r\nTo: ventas@mjbj.com.ar\r\nSubject: Tu cuenta\r\n" +
+		"MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=b\r\n\r\n" +
+		"--b\r\nContent-Type: text/html; charset=utf-8\r\n\r\n" +
+		`<p>Verificá en <a href="https://mp-verificacion-cuentas.xyz/login">www.mercadopago.com/verificar</a> o <a href="https://mjbj.com.ar">acá</a>.</p>` + "\r\n" +
+		"--b\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"comprobante.pdf.exe\"\r\n\r\nMZ\r\n--b--\r\n"
+	m, _, err := parsear([]byte(crudo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Sospecha == nil {
+		t.Fatal("tendría que ser sospechoso")
+	}
+	for _, quiero := range []string{"Mercado Pago", "mercadopag0-seguridad.test", "enlaces", "comprobante.pdf.exe"} {
+		if !strings.Contains(m.Sospecha.Motivo, quiero) {
+			t.Errorf("el motivo %q no dice %q", m.Sospecha.Motivo, quiero)
+		}
+	}
+	if len(m.Sospecha.Enlaces) != 1 || m.Sospecha.Enlaces[0].Destino != "mp-verificacion-cuentas.xyz" {
+		t.Errorf("enlaces: %+v", m.Sospecha.Enlaces)
+	}
+	if len(m.Adjuntos) != 1 || !m.Adjuntos[0].Bloqueado {
+		t.Errorf("el .exe tiene que quedar bloqueado: %+v", m.Adjuntos)
+	}
+	marcado := sanear(m.html, nil)
+	if !strings.Contains(marcado, `data-enganoso="Este enlace no va a mercadopago.com: lleva a mp-verificacion-cuentas.xyz"`) {
+		t.Errorf("el enlace engañoso no quedó marcado: %s", marcado)
+	}
+	if strings.Count(marcado, "data-enganoso") != 1 {
+		t.Errorf("«acá» no promete destino y no se marca: %s", marcado)
+	}
+
+	// El mismo nombre desde el dominio de verdad no es sospechoso.
+	bueno := strings.Replace(crudo, "mercadopag0-seguridad.test", "mercadopago.com.ar", 1)
+	bueno = strings.Replace(bueno, "https://mp-verificacion-cuentas.xyz/login", "https://www.mercadopago.com/verificar", 1)
+	bueno = strings.Replace(bueno, "comprobante.pdf.exe", "comprobante.pdf", 1)
+	if m, _, _ := parsear([]byte(bueno)); m.Sospecha != nil {
+		t.Errorf("no tendría que ser sospechoso: %+v", m.Sospecha)
+	}
+}
+
+func TestNombreUnico(t *testing.T) {
+	usados := map[string]int{}
+	got := []string{nombreUnico("foto.jpg", usados), nombreUnico("foto.jpg", usados), nombreUnico("plano.pdf", usados)}
+	if strings.Join(got, "|") != "foto.jpg|foto (2).jpg|plano.pdf" {
+		t.Errorf("%v", got)
+	}
+}
+
 func TestVista(t *testing.T) {
 	casos := []struct {
 		p    parteTexto

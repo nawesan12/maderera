@@ -1,6 +1,8 @@
 package correo
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/base64"
@@ -95,6 +97,7 @@ func (a *App) Rutas() http.Handler {
 	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}", a.conSesion(a.mensaje))
 	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}/html", a.conSesion(a.html))
 	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}/adjuntos/{indice}", a.conSesion(a.adjunto))
+	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}/adjuntos.zip", a.conSesion(a.zip))
 	m.HandleFunc("POST /api/carpetas/{carpeta}/acciones", a.conSesion(a.acciones))
 	m.HandleFunc("POST /api/enviar", a.conSesion(a.enviar))
 
@@ -132,6 +135,8 @@ func (a *App) fallar(w http.ResponseWriter, r *http.Request, err error) {
 		// La clave cambió desde otro lado mientras la sesión seguía abierta.
 		a.sesiones.Cerrar(w)
 		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusUnauthorized, "La clave de la casilla cambió. Volvé a entrar."))
+	case errors.Is(err, ErrBloqueado):
+		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusForbidden, "Ese adjunto es un programa y no se puede bajar: puede ser un virus."))
 	case errors.Is(err, ErrNoExiste):
 		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusNotFound, "Ese mensaje o carpeta ya no está."))
 	case errors.Is(err, ErrRechazado):
@@ -265,7 +270,7 @@ func (a *App) mensaje(w http.ResponseWriter, r *http.Request, cred Credenciales)
 // saneo sino la CSP: sin scripts, sin formularios, sin pedidos a ningún lado
 // salvo las imágenes remotas cuando la persona las permite.
 const documentoHTML = `<!doctype html><html lang="es"><head><meta charset="utf-8"><base target="_blank">
-<style>html{color-scheme:light}body{margin:0;padding:16px;font:15px/1.5 system-ui,sans-serif;color:#1c1917;background:#fff;overflow-wrap:anywhere}img{max-width:100%%;height:auto}table{max-width:100%%}blockquote{margin:0 0 0 .5em;padding-left:.75em;border-left:3px solid #e7e5e4;color:#57534e}</style>
+<style>html{color-scheme:light}body{margin:0;padding:16px;font:15px/1.5 system-ui,sans-serif;color:#1c1917;background:#fff;overflow-wrap:anywhere}img{max-width:100%%;height:auto}table{max-width:100%%}blockquote{margin:0 0 0 .5em;padding-left:.75em;border-left:3px solid #e7e5e4;color:#57534e}a[data-enganoso]{position:relative;color:#a8480a;text-decoration-style:dotted;text-underline-offset:3px}a[data-enganoso]:hover::after,a[data-enganoso]:focus::after{content:attr(data-enganoso);position:absolute;left:0;top:calc(100%% + 8px);z-index:2;width:max-content;max-width:320px;padding:10px 12px;border-radius:10px;background:#fff;color:#b3261e;font:600 14px/1.45 system-ui,sans-serif;box-shadow:0 20px 50px -12px rgb(40 30 20/.35),0 0 0 1px #e8e4de;white-space:normal}</style>
 </head><body>%s</body></html>`
 
 func (a *App) html(w http.ResponseWriter, r *http.Request, cred Credenciales) {
@@ -334,6 +339,67 @@ func (a *App) adjunto(w http.ResponseWriter, r *http.Request, cred Credenciales)
 	}
 	h.Set("Content-Security-Policy", csp)
 	_, _ = w.Write(parte.Datos)
+}
+
+// zip baja varios adjuntos juntos (2g, «Descargar todo»). Se arma en
+// memoria —los adjuntos ya están en memoria al desarmar el mensaje, y el
+// servidor de correo no acepta más de 25 MB— para mandar el largo y que la
+// pantalla muestre el avance.
+func (a *App) zip(w http.ResponseWriter, r *http.Request, cred Credenciales) {
+	uid, ok := uidDe(r)
+	if !ok {
+		a.fallar(w, r, ErrNoExiste)
+		return
+	}
+	var indices []int
+	for _, t := range strings.Split(r.URL.Query().Get("i"), ",") {
+		if n, err := strconv.Atoi(strings.TrimSpace(t)); err == nil && n >= 0 {
+			indices = append(indices, n)
+		}
+	}
+	partes, err := a.srv.Varios(r.Context(), cred, r.PathValue("carpeta"), uid, indices)
+	if err != nil {
+		a.fallar(w, r, err)
+		return
+	}
+	var buf bytes.Buffer
+	z := zip.NewWriter(&buf)
+	usados := map[string]int{}
+	for _, p := range partes {
+		nombre := nombreUnico(path.Base(p.Nombre), usados)
+		f, err := z.CreateHeader(&zip.FileHeader{Name: nombre, Method: zip.Deflate, Modified: time.Now()})
+		if err == nil {
+			_, err = f.Write(p.Datos)
+		}
+		if err != nil {
+			a.fallar(w, r, err)
+			return
+		}
+	}
+	if err := z.Close(); err != nil {
+		a.fallar(w, r, err)
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", "application/zip")
+	h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": "adjuntos.zip"}))
+	h.Set("Content-Length", strconv.Itoa(buf.Len()))
+	h.Set("Cache-Control", "private, no-store")
+	_, _ = w.Write(buf.Bytes())
+}
+
+// nombreUnico evita que dos adjuntos con el mismo nombre se pisen en el
+// .zip: el segundo «foto.jpg» pasa a «foto (2).jpg».
+func nombreUnico(nombre string, usados map[string]int) string {
+	if nombre == "" || nombre == "." || nombre == "/" {
+		nombre = "adjunto"
+	}
+	usados[nombre]++
+	if n := usados[nombre]; n > 1 {
+		ext := path.Ext(nombre)
+		return fmt.Sprintf("%s (%d)%s", strings.TrimSuffix(nombre, ext), n, ext)
+	}
+	return nombre
 }
 
 type pedidoAcciones struct {

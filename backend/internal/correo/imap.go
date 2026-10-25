@@ -50,6 +50,9 @@ var ErrCredenciales = errors.New("la casilla o la clave no son correctas")
 // otro programa, o la dirección está mal).
 var ErrNoExiste = errors.New("no existe")
 
+// ErrBloqueado es un adjunto que es un programa: no se entrega.
+var ErrBloqueado = errors.New("adjunto bloqueado")
+
 type conexion struct {
 	c *imapclient.Client
 }
@@ -372,7 +375,7 @@ func (f Filtro) criterio() *imap.SearchCriteria {
 	// Cada palabra tiene que aparecer en algún lado: «placas fenólicas juan»
 	// encuentra el correo de Juan que habla de placas fenólicas.
 	for _, palabra := range strings.Fields(f.Texto) {
-		c.And(&imap.SearchCriteria{Text: []string{palabra}})
+		c.And(cualquiera(variantes(palabra)))
 	}
 	if f.SinLeer {
 		c.NotFlag = append(c.NotFlag, imap.FlagSeen)
@@ -397,6 +400,51 @@ func (f Filtro) criterio() *imap.SearchCriteria {
 		c.Header = append(c.Header, imap.SearchCriteriaHeaderField{Key: "Content-Type", Value: "multipart/mixed"})
 	}
 	return c
+}
+
+// cualquiera arma «aparece alguna de estas palabras» con los OR de IMAP,
+// que son de a dos.
+func cualquiera(palabras []string) *imap.SearchCriteria {
+	if len(palabras) == 1 {
+		return &imap.SearchCriteria{Text: palabras}
+	}
+	return &imap.SearchCriteria{Or: [][2]imap.SearchCriteria{{
+		{Text: palabras[:1]},
+		*cualquiera(palabras[1:]),
+	}}}
+}
+
+var (
+	conTilde = map[rune]rune{'a': 'á', 'e': 'é', 'i': 'í', 'o': 'ó', 'u': 'ú', 'n': 'ñ'}
+	sinTilde = strings.NewReplacer("á", "a", "é", "e", "í", "i", "ó", "o", "ú", "u", "ü", "u", "ñ", "n",
+		"Á", "A", "É", "E", "Í", "I", "Ó", "O", "Ú", "U", "Ñ", "N")
+)
+
+// variantes son las formas de una palabra con y sin tilde: el IMAP compara
+// sin mayúsculas pero con tildes, y la gente escribe «fenolico» buscando
+// «fenólico» (y al revés). En castellano una palabra lleva a lo sumo una
+// tilde, así que alcanza con probar una por vez: «fenolico» busca también
+// «fénolico», «fenólico», «fenolíco»…, todo en un solo SEARCH.
+func variantes(palabra string) []string {
+	base := strings.ToLower(sinTilde.Replace(palabra))
+	out := []string{palabra}
+	if base != strings.ToLower(palabra) {
+		out = append(out, base)
+	}
+	letras := []rune(base)
+	if len(letras) > 30 {
+		return out
+	}
+	for i, r := range letras {
+		if t, ok := conTilde[r]; ok {
+			v := append([]rune(nil), letras...)
+			v[i] = t
+			if s := string(v); !strings.EqualFold(s, palabra) {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
 }
 
 // Lista devuelve una página de la carpeta, la 1 es la de los más nuevos.

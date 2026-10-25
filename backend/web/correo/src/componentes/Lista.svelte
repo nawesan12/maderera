@@ -411,8 +411,10 @@
   .envoltura:has(.debajo) .fila {
     background: var(--card);
   }
-  .fila:hover {
-    background: var(--sel);
+  @media (hover: hover) {
+    .fila:hover {
+      background: var(--sel);
+    }
   }
   .fila.abierto,
   .fila.marcado {

@@ -219,7 +219,7 @@
               <div class="resumen-adj">
                 <Icono nombre="clip" tamano={18} />
                 <strong>{cuantos(archivos.length, "adjunto", "adjuntos")}</strong>
-                <span>{tamano(pesoTotal)}</span>
+                {#if pesoTotal}<span>{tamano(pesoTotal)}</span>{/if}
                 {#if archivos.filter((a) => !a.bloqueado).length > 1}
                   <div class="con-menu derecha">
                     <button class="descargar-todo" class:abierto={descargas} onclick={(e) => (e.stopPropagation(), (descargas = !descargas))}>
@@ -530,8 +530,8 @@
   iframe {
     width: 100%;
     max-width: 760px;
-    min-height: 480px;
-    flex: 1 0 480px;
+    min-height: 320px;
+    flex: 1 0 320px;
     border: 1px solid var(--ls);
     border-radius: 10px;
     background: #fff;

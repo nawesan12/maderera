@@ -41,7 +41,12 @@
       Enter: () => bandeja.foco && !bandeja.uidAbierto && bandeja.abrir(bandeja.foco),
       o: () => bandeja.foco && bandeja.abrir(bandeja.foco),
       u: () => bandeja.cerrar(),
-      Escape: () => (verAtajos ? (verAtajos = false) : bandeja.cerrar()),
+      Escape: () => {
+        if (verAtajos) verAtajos = false;
+        else if (bandeja.menuAbierto) bandeja.menuAbierto = false;
+        else if (bandeja.ajustesAbiertos) bandeja.ajustesAbiertos = false;
+        else bandeja.cerrar();
+      },
       c: () => bandeja.redactar("nuevo"),
       r: () => m && bandeja.responderEnLinea("responder", m),
       a: () => m && bandeja.responderEnLinea("responder-todos", m),

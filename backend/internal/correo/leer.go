@@ -34,7 +34,9 @@ type Adjunto struct {
 	Tipo    string `json:"tipo"`
 	Tamano  int    `json:"tamano"`
 	EnLinea bool   `json:"enLinea"` // una imagen dentro del cuerpo (cid:)
-	cid     string
+	// Bloqueado es un programa (.exe, .scr…): no se deja bajar (sospecha.go).
+	Bloqueado bool `json:"bloqueado,omitempty"`
+	cid       string
 }
 
 // Mensaje es un mensaje abierto.
@@ -51,7 +53,9 @@ type Mensaje struct {
 	// mandó el correo que se abrió, y desde dónde.
 	ImagenesRemotas bool      `json:"imagenesRemotas"`
 	Adjuntos        []Adjunto `json:"adjuntos"`
-	html            string
+	// Sospecha es por qué parece una estafa; nil si no hay nada raro.
+	Sospecha *Sospecha `json:"sospecha,omitempty"`
+	html     string
 }
 
 // tope de lo que se procesa de un mensaje: más de esto no es un correo, es
@@ -125,6 +129,10 @@ func parsear(crudo []byte) (*Mensaje, [][]byte, error) {
 	}
 	m.Texto = strings.TrimSpace(strings.ReplaceAll(texto.String(), "\r\n", "\n"))
 	m.html = html.String()
+	for i := range m.Adjuntos {
+		m.Adjuntos[i].Bloqueado = esPrograma(m.Adjuntos[i].Nombre)
+	}
+	m.Sospecha = analizar(h, m.De, m.html, m.Adjuntos)
 	m.TieneHTML = strings.TrimSpace(m.html) != ""
 	m.ImagenesRemotas = m.TieneHTML && reRemoto.MatchString(m.html)
 	if m.Texto == "" && m.TieneHTML {
@@ -228,10 +236,45 @@ func (s *Servidor) Adjunto(ctx context.Context, cred Credenciales, carpeta strin
 	}
 	for _, a := range m.Adjuntos {
 		if (cid != "" && a.cid == cid) || (cid == "" && a.Indice == indice) {
+			if a.Bloqueado {
+				return nil, ErrBloqueado
+			}
 			return &Parte{Nombre: a.Nombre, Tipo: a.Tipo, Datos: datos[a.Indice]}, nil
 		}
 	}
 	return nil, ErrNoExiste
+}
+
+// Varios devuelve los adjuntos pedidos por índice, en el orden del
+// mensaje, para bajarlos juntos. Los programas bloqueados se saltean.
+func (s *Servidor) Varios(ctx context.Context, cred Credenciales, carpeta string, uid uint32, indices []int) ([]Parte, error) {
+	cx, err := s.conectar(ctx, cred)
+	if err != nil {
+		return nil, err
+	}
+	defer cx.cerrar()
+	crudo, _, err := cx.crudo(carpeta, uid, false)
+	if err != nil {
+		return nil, err
+	}
+	m, datos, err := parsear(crudo)
+	if err != nil {
+		return nil, err
+	}
+	pedidos := map[int]bool{}
+	for _, i := range indices {
+		pedidos[i] = true
+	}
+	var out []Parte
+	for _, a := range m.Adjuntos {
+		if pedidos[a.Indice] && !a.Bloqueado {
+			out = append(out, Parte{Nombre: a.Nombre, Tipo: a.Tipo, Datos: datos[a.Indice]})
+		}
+	}
+	if len(out) == 0 {
+		return nil, ErrNoExiste
+	}
+	return out, nil
 }
 
 // HTML devuelve el cuerpo HTML ya saneado, con las imágenes en línea
@@ -296,7 +339,7 @@ func sanear(html string, enLinea map[string]string) string {
 		}
 		return s
 	})
-	return politica.Sanitize(conImagenes)
+	return marcarEnganosos(politica.Sanitize(conImagenes))
 }
 
 var reEtiquetas = regexp.MustCompile(`(?s)<style.*?</style>|<script.*?</script>|<[^>]+>`)

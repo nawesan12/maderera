@@ -98,3 +98,20 @@ FROM shipping_zones WHERE activa ORDER BY orden;
 -- name: EscalasDePago :many
 SELECT medio, desde_monto, porcentaje, etiqueta
 FROM payment_discounts WHERE activo ORDER BY medio, desde_monto;
+
+-- name: DocumentosDelPanel :many
+SELECT id, titulo, descripcion, categoria, url, formato, tamano_bytes, solo_profesionales, activo, created_at
+FROM technical_documents ORDER BY activo DESC, categoria, titulo;
+
+-- name: CategoriasDeDocumentos :many
+SELECT DISTINCT categoria FROM technical_documents WHERE activo ORDER BY categoria;
+
+-- name: CrearDocumento :one
+INSERT INTO technical_documents (titulo, descripcion, categoria, url, formato, tamano_bytes, solo_profesionales)
+VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id;
+
+-- name: DocumentoSoloProfesionales :execrows
+UPDATE technical_documents SET solo_profesionales = $2, updated_at = now() WHERE id = $1;
+
+-- name: DocumentoActivo :execrows
+UPDATE technical_documents SET activo = $2, updated_at = now() WHERE id = $1;

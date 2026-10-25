@@ -48,6 +48,7 @@ test("el sitemap lista fichas y categorías", async ({ request }) => {
 });
 
 test("la lista de precios en PDF exige sesión y sale con la sesión", async ({ page, request }) => {
+  test.skip(test.info().project.name === "telefono", "no depende del dispositivo");
   expect((await request.get("/mi-lista-de-precios")).status()).toBe(401);
   await page.goto("/ingresar");
   await page.getByLabel("Correo electrónico").fill(process.env.E2E_CORREO ?? "admin@mjbj.com.ar");

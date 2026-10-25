@@ -526,3 +526,63 @@ func TestSucursalesEnviosYEscalas(t *testing.T) {
 }
 
 func b2s(b []byte) string { return string(b) }
+
+func TestPanelDeDocumentacion(t *testing.T) {
+	e := armar(t)
+	adm := e.cliente(t, "vendedor@prueba.test", "admin")
+	dep := e.cliente(t, "deposito@prueba.test", "deposito")
+	u := e.srv.URL + "/api/v1/admin/documentos"
+	pdf := append([]byte("%PDF-1.7\n"), make([]byte, 200)...)
+	form := func(tipo string, datos []byte) formulario {
+		var b bytes.Buffer
+		w := multipart.NewWriter(&b)
+		_ = w.WriteField("titulo", "Tabla de cargas")
+		_ = w.WriteField("soloProfesionales", "on")
+		p, _ := w.CreatePart(map[string][]string{
+			"Content-Disposition": {`form-data; name="archivo"; filename="x"`}, "Content-Type": {tipo},
+		})
+		_, _ = p.Write(datos)
+		_ = w.Close()
+		return formulario{b.Bytes(), w.FormDataContentType()}
+	}
+	if c, _ := pedir(t, dep, "GET", u, nil); c != 403 {
+		t.Errorf("depósito entró al panel de documentación: %d", c)
+	}
+	// Un .exe que dice ser PDF no pasa.
+	if c, b := pedir(t, adm, "POST", u, form("application/pdf", []byte("MZ\x90\x00"))); c != 422 || !strings.Contains(string(b), "Subí un PDF") {
+		t.Errorf("un ejecutable disfrazado: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "POST", u, form("application/pdf", pdf)); c != 204 {
+		t.Fatalf("subir: %d %s", c, b)
+	}
+	_, b := pedir(t, adm, "GET", u, nil)
+	var docs []struct {
+		ID, URL, Formato, Categoria string
+		TamanoBytes                 int
+		SoloProfesionales, Activo   bool
+	}
+	_ = json.Unmarshal(b, &docs)
+	if len(docs) != 1 || docs[0].Formato != "pdf" || docs[0].Categoria != "general" || docs[0].TamanoBytes != len(pdf) || !docs[0].SoloProfesionales || !strings.HasPrefix(docs[0].URL, "/subidas/tecnica-") {
+		t.Fatalf("el documento: %s", b)
+	}
+	if _, err := os.Stat(filepath.Join(e.carpeta, strings.TrimPrefix(docs[0].URL, "/subidas/"))); err != nil {
+		t.Error("el archivo no quedó en disco")
+	}
+	// Abrirlo a todos y darlo de baja: el público lo ve y después no.
+	anon := &http.Client{}
+	if c, _ := pedir(t, adm, "POST", u+"/"+docs[0].ID+"/visibilidad", map[string]bool{"soloProfesionales": false}); c != 204 {
+		t.Fatal("visibilidad")
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); !strings.Contains(string(b), "Tabla de cargas") {
+		t.Errorf("abierto a todos y no se ve: %s", b)
+	}
+	if c, _ := pedir(t, adm, "POST", u+"/"+docs[0].ID+"/activo", map[string]bool{"activo": false}); c != 204 {
+		t.Fatal("baja")
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); string(b) != "[]\n" {
+		t.Errorf("dado de baja y se ve: %s", b)
+	}
+	if _, b := pedir(t, adm, "GET", u+"/categorias", nil); string(b) != "[]\n" {
+		t.Errorf("categorías con todo de baja: %s", b)
+	}
+}

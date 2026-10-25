@@ -309,11 +309,20 @@ func (s *Servicio) guardarImagen(img *Imagen, prefijo string) (*string, error) {
 		return nil, nil
 	}
 	url, err := s.disco.GuardarImagen(img.Datos, img.Tipo, prefijo)
+	if err != nil {
+		return nil, subidaInvalida("imagen", err)
+	}
+	return &url, nil
+}
+
+// subidaInvalida: un archivo que el disco rechaza (vacío, pesado, de otro
+// tipo) es un error del formulario, con su mensaje en el campo.
+func subidaInvalida(campo string, err error) error {
 	var e *subidas.ErrSubida
 	if errors.As(err, &e) {
-		return nil, plataforma.Invalido(map[string]string{"imagen": e.Mensaje})
+		return plataforma.Invalido(map[string]string{campo: e.Mensaje})
 	}
-	return &url, err
+	return err
 }
 
 func (s *Servicio) borrarImagenVieja(previa *string, nueva *string) {

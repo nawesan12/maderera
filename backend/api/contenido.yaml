@@ -491,6 +491,77 @@ paths:
                     desdeMonto: { type: number }
                     porcentaje: { type: number }
                     etiqueta: { type: string }
+  /api/v1/admin/documentos:
+    get:
+      operationId: AdminDocumentos
+      responses:
+        "200":
+          description: Todos, primero los activos
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/DocumentoDelPanel" } }
+    post:
+      operationId: SubirDocumento
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                titulo: { type: string }
+                descripcion: { type: string }
+                categoria: { type: string }
+                soloProfesionales: { type: string, description: «on» si está marcado }
+                archivo: { type: string, format: binary }
+      responses:
+        "204": { description: Publicado }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/documentos/categorias:
+    get:
+      operationId: CategoriasDeDocumentos
+      responses:
+        "200":
+          description: Las categorías en uso
+          content:
+            application/json:
+              schema: { type: array, items: { type: string } }
+  /api/v1/admin/documentos/{id}/visibilidad:
+    post:
+      operationId: VisibilidadDocumento
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [soloProfesionales]
+              additionalProperties: false
+              properties:
+                soloProfesionales: { type: boolean }
+      responses:
+        "204": { description: Hecho }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/documentos/{id}/activo:
+    post:
+      operationId: ActivarDocumento
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [activo]
+              additionalProperties: false
+              properties:
+                activo: { type: boolean }
+      responses:
+        "204": { description: Hecho }
+        "404": { $ref: "#/components/responses/Problema" }
 components:
   responses:
     Problema:
@@ -721,6 +792,20 @@ components:
         ruta: { type: string }
         actualizada: { type: string, format: date-time }
         imagenes: { type: array, items: { type: string } }
+    DocumentoDelPanel:
+      type: object
+      required: [id, titulo, descripcion, categoria, url, formato, tamanoBytes, soloProfesionales, activo, createdAt]
+      properties:
+        id: { type: string }
+        titulo: { type: string }
+        descripcion: { type: string, nullable: true }
+        categoria: { type: string }
+        url: { type: string }
+        formato: { type: string }
+        tamanoBytes: { type: integer, nullable: true }
+        soloProfesionales: { type: boolean }
+        activo: { type: boolean }
+        createdAt: { type: string, format: date-time }
     FormBanner:
       type: object
       required: [ubicacion, titulo]

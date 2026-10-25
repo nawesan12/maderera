@@ -267,6 +267,20 @@ type ConSlug struct {
 	Slug string `json:"slug"`
 }
 
+// DocumentoDelPanel defines model for DocumentoDelPanel.
+type DocumentoDelPanel struct {
+	Activo            bool      `json:"activo"`
+	Categoria         string    `json:"categoria"`
+	CreatedAt         time.Time `json:"createdAt"`
+	Descripcion       *string   `json:"descripcion"`
+	Formato           string    `json:"formato"`
+	Id                string    `json:"id"`
+	SoloProfesionales bool      `json:"soloProfesionales"`
+	TamanoBytes       *int      `json:"tamanoBytes"`
+	Titulo            string    `json:"titulo"`
+	Url               string    `json:"url"`
+}
+
 // DocumentoTecnico defines model for DocumentoTecnico.
 type DocumentoTecnico struct {
 	Categoria         string  `json:"categoria"`
@@ -530,6 +544,27 @@ type ModerarResenaJSONBody struct {
 // ModerarResenaJSONBodyEstado defines parameters for ModerarResena.
 type ModerarResenaJSONBodyEstado string
 
+// SubirDocumentoMultipartBody defines parameters for SubirDocumento.
+type SubirDocumentoMultipartBody struct {
+	Archivo     *openapi_types.File `json:"archivo,omitempty"`
+	Categoria   *string             `json:"categoria,omitempty"`
+	Descripcion *string             `json:"descripcion,omitempty"`
+
+	// SoloProfesionales «on» si está marcado
+	SoloProfesionales *string `json:"soloProfesionales,omitempty"`
+	Titulo            *string `json:"titulo,omitempty"`
+}
+
+// ActivarDocumentoJSONBody defines parameters for ActivarDocumento.
+type ActivarDocumentoJSONBody struct {
+	Activo bool `json:"activo"`
+}
+
+// VisibilidadDocumentoJSONBody defines parameters for VisibilidadDocumento.
+type VisibilidadDocumentoJSONBody struct {
+	SoloProfesionales bool `json:"soloProfesionales"`
+}
+
 // BannersParams defines parameters for Banners.
 type BannersParams struct {
 	Ubicacion Ubicacion `form:"ubicacion" json:"ubicacion"`
@@ -589,6 +624,15 @@ type EditarPromoMultipartRequestBody = FormPromo
 
 // ModerarResenaJSONRequestBody defines body for ModerarResena for application/json ContentType.
 type ModerarResenaJSONRequestBody ModerarResenaJSONBody
+
+// SubirDocumentoMultipartRequestBody defines body for SubirDocumento for multipart/form-data ContentType.
+type SubirDocumentoMultipartRequestBody SubirDocumentoMultipartBody
+
+// ActivarDocumentoJSONRequestBody defines body for ActivarDocumento for application/json ContentType.
+type ActivarDocumentoJSONRequestBody ActivarDocumentoJSONBody
+
+// VisibilidadDocumentoJSONRequestBody defines body for VisibilidadDocumento for application/json ContentType.
+type VisibilidadDocumentoJSONRequestBody VisibilidadDocumentoJSONBody
 
 // EnviarConsultaJSONRequestBody defines body for EnviarConsulta for application/json ContentType.
 type EnviarConsultaJSONRequestBody EnviarConsultaJSONBody
@@ -652,6 +696,21 @@ type ServerInterface interface {
 
 	// (POST /api/v1/admin/contenido/resenas/{id}/moderar)
 	ModerarResena(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (GET /api/v1/admin/documentos)
+	AdminDocumentos(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/admin/documentos)
+	SubirDocumento(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/admin/documentos/categorias)
+	CategoriasDeDocumentos(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/admin/documentos/{id}/activo)
+	ActivarDocumento(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (POST /api/v1/admin/documentos/{id}/visibilidad)
+	VisibilidadDocumento(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 
 	// (GET /api/v1/contenido/ajustes)
 	Ajustes(w http.ResponseWriter, r *http.Request)
@@ -1074,6 +1133,100 @@ func (siw *ServerInterfaceWrapper) ModerarResena(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ModerarResena(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminDocumentos operation middleware
+func (siw *ServerInterfaceWrapper) AdminDocumentos(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDocumentos(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SubirDocumento operation middleware
+func (siw *ServerInterfaceWrapper) SubirDocumento(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SubirDocumento(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CategoriasDeDocumentos operation middleware
+func (siw *ServerInterfaceWrapper) CategoriasDeDocumentos(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CategoriasDeDocumentos(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ActivarDocumento operation middleware
+func (siw *ServerInterfaceWrapper) ActivarDocumento(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ActivarDocumento(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VisibilidadDocumento operation middleware
+func (siw *ServerInterfaceWrapper) VisibilidadDocumento(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VisibilidadDocumento(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1619,6 +1772,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/sucursales", wrapper.Sucursales)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/zonas-envio", wrapper.ZonasDeEnvio)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/escalas-pago", wrapper.EscalasDePago)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/documentos", wrapper.AdminDocumentos)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/documentos", wrapper.SubirDocumento)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/documentos/categorias", wrapper.CategoriasDeDocumentos)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/documentos/{id}/visibilidad", wrapper.VisibilidadDocumento)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/documentos/{id}/activo", wrapper.ActivarDocumento)
 
 	return m
 }
@@ -2207,6 +2365,146 @@ type ModerarResena404ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ModerarResena404ApplicationProblemPlusJSONResponse) VisitModerarResenaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDocumentosRequestObject struct {
+}
+
+type AdminDocumentosResponseObject interface {
+	VisitAdminDocumentosResponse(w http.ResponseWriter) error
+}
+
+type AdminDocumentos200JSONResponse []DocumentoDelPanel
+
+func (response AdminDocumentos200JSONResponse) VisitAdminDocumentosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubirDocumentoRequestObject struct {
+	Body *multipart.Reader
+}
+
+type SubirDocumentoResponseObject interface {
+	VisitSubirDocumentoResponse(w http.ResponseWriter) error
+}
+
+type SubirDocumento204Response struct {
+}
+
+func (response SubirDocumento204Response) VisitSubirDocumentoResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type SubirDocumento422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response SubirDocumento422ApplicationProblemPlusJSONResponse) VisitSubirDocumentoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CategoriasDeDocumentosRequestObject struct {
+}
+
+type CategoriasDeDocumentosResponseObject interface {
+	VisitCategoriasDeDocumentosResponse(w http.ResponseWriter) error
+}
+
+type CategoriasDeDocumentos200JSONResponse []string
+
+func (response CategoriasDeDocumentos200JSONResponse) VisitCategoriasDeDocumentosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActivarDocumentoRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *ActivarDocumentoJSONRequestBody
+}
+
+type ActivarDocumentoResponseObject interface {
+	VisitActivarDocumentoResponse(w http.ResponseWriter) error
+}
+
+type ActivarDocumento204Response struct {
+}
+
+func (response ActivarDocumento204Response) VisitActivarDocumentoResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ActivarDocumento404ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response ActivarDocumento404ApplicationProblemPlusJSONResponse) VisitActivarDocumentoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VisibilidadDocumentoRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *VisibilidadDocumentoJSONRequestBody
+}
+
+type VisibilidadDocumentoResponseObject interface {
+	VisitVisibilidadDocumentoResponse(w http.ResponseWriter) error
+}
+
+type VisibilidadDocumento204Response struct {
+}
+
+func (response VisibilidadDocumento204Response) VisitVisibilidadDocumentoResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type VisibilidadDocumento404ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response VisibilidadDocumento404ApplicationProblemPlusJSONResponse) VisitVisibilidadDocumentoResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -2829,6 +3127,21 @@ type StrictServerInterface interface {
 	// (POST /api/v1/admin/contenido/resenas/{id}/moderar)
 	ModerarResena(ctx context.Context, request ModerarResenaRequestObject) (ModerarResenaResponseObject, error)
 
+	// (GET /api/v1/admin/documentos)
+	AdminDocumentos(ctx context.Context, request AdminDocumentosRequestObject) (AdminDocumentosResponseObject, error)
+
+	// (POST /api/v1/admin/documentos)
+	SubirDocumento(ctx context.Context, request SubirDocumentoRequestObject) (SubirDocumentoResponseObject, error)
+
+	// (GET /api/v1/admin/documentos/categorias)
+	CategoriasDeDocumentos(ctx context.Context, request CategoriasDeDocumentosRequestObject) (CategoriasDeDocumentosResponseObject, error)
+
+	// (POST /api/v1/admin/documentos/{id}/activo)
+	ActivarDocumento(ctx context.Context, request ActivarDocumentoRequestObject) (ActivarDocumentoResponseObject, error)
+
+	// (POST /api/v1/admin/documentos/{id}/visibilidad)
+	VisibilidadDocumento(ctx context.Context, request VisibilidadDocumentoRequestObject) (VisibilidadDocumentoResponseObject, error)
+
 	// (GET /api/v1/contenido/ajustes)
 	Ajustes(ctx context.Context, request AjustesRequestObject) (AjustesResponseObject, error)
 
@@ -3442,6 +3755,151 @@ func (sh *strictHandler) ModerarResena(w http.ResponseWriter, r *http.Request, i
 	}
 }
 
+// AdminDocumentos operation middleware
+func (sh *strictHandler) AdminDocumentos(w http.ResponseWriter, r *http.Request) {
+	var request AdminDocumentosRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDocumentos(ctx, request.(AdminDocumentosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDocumentos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDocumentosResponseObject); ok {
+		if err := validResponse.VisitAdminDocumentosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SubirDocumento operation middleware
+func (sh *strictHandler) SubirDocumento(w http.ResponseWriter, r *http.Request) {
+	var request SubirDocumentoRequestObject
+
+	if reader, err := r.MultipartReader(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
+		return
+	} else {
+		request.Body = reader
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SubirDocumento(ctx, request.(SubirDocumentoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SubirDocumento")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SubirDocumentoResponseObject); ok {
+		if err := validResponse.VisitSubirDocumentoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CategoriasDeDocumentos operation middleware
+func (sh *strictHandler) CategoriasDeDocumentos(w http.ResponseWriter, r *http.Request) {
+	var request CategoriasDeDocumentosRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CategoriasDeDocumentos(ctx, request.(CategoriasDeDocumentosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CategoriasDeDocumentos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CategoriasDeDocumentosResponseObject); ok {
+		if err := validResponse.VisitCategoriasDeDocumentosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ActivarDocumento operation middleware
+func (sh *strictHandler) ActivarDocumento(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request ActivarDocumentoRequestObject
+
+	request.Id = id
+
+	var body ActivarDocumentoJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ActivarDocumento(ctx, request.(ActivarDocumentoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ActivarDocumento")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ActivarDocumentoResponseObject); ok {
+		if err := validResponse.VisitActivarDocumentoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// VisibilidadDocumento operation middleware
+func (sh *strictHandler) VisibilidadDocumento(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request VisibilidadDocumentoRequestObject
+
+	request.Id = id
+
+	var body VisibilidadDocumentoJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.VisibilidadDocumento(ctx, request.(VisibilidadDocumentoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "VisibilidadDocumento")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(VisibilidadDocumentoResponseObject); ok {
+		if err := validResponse.VisitVisibilidadDocumentoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Ajustes operation middleware
 func (sh *strictHandler) Ajustes(w http.ResponseWriter, r *http.Request) {
 	var request AjustesRequestObject
@@ -3955,65 +4413,68 @@ func (sh *strictHandler) ZonasDeEnvio(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"5FxPbxy3Ff8qxLQHG115ZcdBEeUkS0riIE42dpICTXx4O/O0osAhxyRn4bUhoKd+gH4DXwoEQQ+FDz3k",
-	"Zn2TfJKC5Pzd4cxwV6uN0Pok73D4/v343uPj47yNYpFmgiPXKjp6G0lUmeAK7X9mUswZpmD+jgXXyLX5",
-	"E7KM0Rg0FXyauSF/ulSCm2cqvihe+KPE8+go+sO0JjB1T9W0mvjq6moSJahiSTMzX3QUnUkpJLn3/LMT",
-	"8snjj/98PzJDihfNvMeXudJo/sqkyFBq6piNGSztz3qVYXQUKS0pX0T1/DF1LPKcMZgzjI60zHHSHZ9n",
-	"CWhMjq2w50KmoKOjyPx2oGmKkeeVJTAhPcSvJpHEVzmVmERHPxY8lsPbnDXpvqxIiPklxtqQeAKco+zK",
-	"DbHOgdE3kIhwfudwCQl4tYWcQYxBikJNX+Wo/fPQxP9zCgvk30sWREHjay3OKo66z6nOmRhXPE2iBrvV",
-	"e5UiKrHbJJvsTlqa7rfQiUgzhlp4LUWXTWbnQjAEPmKQWOKmcExQJdg7fNyuO4LABSgN27OxEwQJmSBv",
-	"zEO5xgXKG4FrEuVzGkPpUIY83ffVwG0ciw/FNembI9rhpDRUqaxJidQm9sbc04ngL1i+6KJeFb+2vTwy",
-	"kkmR5LE2ZDKQQCQugdEEJFE5OafxBURHxrxjWrEEfCydijhPkWvxHcacxp4VGYPGhZAUdhI3nEXFJt5Q",
-	"CSZmUpyjooIDQ9UY1fAOGlLg4slKoxrgpAntAehK5vndh7QKUu0wVSvNTVYL3mbUJ53PTGdLY6MTwU9R",
-	"A2N2LQJj35xHRz8OLy735iyfM2Pdq8m6eTc1ICpdRFHkeWr0kNm5zY+TKEYpi7+Ax8jaYaCeJaVP+SDd",
-	"NpM10TDQeCOb0m1uau2uYAbKG3TWJmobuZhxXZpqvi6pl5UpS4N0l1ueCb8r3omrp5zGFMKjJHWCaaGK",
-	"BPecyhQSUGRFXuVIQFGlKUpjReeI2j7sOSqUS/NC5FuDLF+ADGI8kxjTpmZ4ns7dJBKV8WFB05Sedmsv",
-	"gzKl/AYBe6NszHLbcDKlpO0I5ZRY2bZmcuLQVCnPJ2XLxL7F8ZmQ6UBeXWRrbat/+EXwD78SRQkqff2O",
-	"pCALB7FJll1laO3Jj4+Pjw+ePTs4PY0G87It87BNiDkrtMAwpxzkKgrIsnaQwa8lWcOIaiZFxYx99p5J",
-	"kYpbMXdSx6/uMwpqwMUFqjnFhPp11W+AVzlFPoMF9D3VIJ9WTGwt/IAdl3SBPKbwxeYwXDOzk7/hNGrh",
-	"+sxtnDSHr3EhChcLSUK19RCzBgDOgalOaIZce3f1NjxKZKxl04brP8f4YkNJJ1WuAX3e+bUO8K2O5yaH",
-	"5atNCj5tNas963mUBsr8ipBSSFT9ivW806GsNOi8R5WaaobjYrth1VQ98qWi2J3DZrvzrbbg2ziDXaRB",
-	"4U6ioeaWlyiz3znwWESTiAsltGzF0DAHvkUhbd1XbJOJ+NKNjusoDVSYY510UyXtlOQGm2QLwR8MHV8F",
-	"8y5C5lZwMRIQPvySJNM0nQJ8+NXomywhvv6XCKsG7NTYXhs23fQGwWTQva8JMeyoXUjr4ic0KAXujvzA",
-	"4iKdS+xP9QKz/2Iaf5xynPaLfoqsEdB3HbPD1HMutAjemCY97pgWWVe5sFLgORgfsxBiwdC/rjbQ8lAy",
-	"4OStuKglCtH7QBjt1f8WQXTEZPhao+TiaRJWnvsdDNwbb7ez/ZYp4o4qzxuhqbZNrcqmAHUcDQ+fDoUz",
-	"kPBMJCjBs2vfDmTrVT/kCbUxus2xNEK+abvlYLD2YCQVJot4bmcWQWAb8MA8T1GKGSa0p6JY1dyHHr7o",
-	"qyNt4nqa1f3mvCOuv647tvSyJloTNP1AmTNPknUT7RnEyqfJkPJ6nvaW5lbgeE1CSrQ1jap8Vimz5K2j",
-	"qQaFHlX1FRjXz0q4pgkkfnRnUqwnkc0iZgZSi4BNYmPGNU67qiiTvIqxmtCAoI3EYUTeHLjuW8wD4g4w",
-	"Wszo5S7X8IJqTCEbOuLfJH+zWaybwEw8uBcHKWFl/i9zbw1xTSg7atLiq0HQJ9/3zVpe6WfPJfBL82om",
-	"pHaTxKCBiYXvZMUwQfm5p0b3lbD1egYkhQQlSiCYUA0kQUaUwRtRlJOckwRVxigucjwiYBtJ1MQcRKYG",
-	"ExzVT9zsbUBSUBMyt5VhcxogUeH1v0GRBKtjS/WAfAWKGFUoMoWMTpcPp5CklE9/+9s/iRL8J27o25/I",
-	"veOTk7MX35gJikGuoYYm4v6Dn4qypYFi9OzLJ1+SD/8hJ+Vzs1tBqZyoD60fypBDRqOj6KMHhw8+sgeo",
-	"+sIauM1IRWNaCGuGLNAGRwMw28NjXFZ0bMYfF4Mm7TagR4eHAx1A3c6fCm1DZ3eOVheC3Yag70QiFGFC",
-	"lRYzg64mY6JO39pumyu39/KI/HkOMgFZMOIOoVPUKJU9eKSGttFrNIk4pIbFsn2nXgrOcdSir0P2pRuM",
-	"Sj8RyWojLW6wtQzsPnLDuqvz6mpdpKsOAh53V53TXyKMDR8fPu4zeDVRo+trEj1+9GiTFwYNXqzTYWw/",
-	"KQbtA9trjUAbYbwUxg7KhPLIcyIRpKMRDeErzZmmJiBOTcQ4SMC59rAWvcbR2LYAMXwm4pasPX1LkytH",
-	"k6HGrpaeCCkbahpf3TQZXNpV1M1zO9K71MdUYpnaaslYOPjc2JmJdPuW865C7s74JF6nmf0+ySXmqlHO",
-	"2od36q3lhPkpGPdN6xSi7aPgGF7ax3tBsDncGQN1KdijqgKKt4WsaVEmOnrbY4nvJKA8xc/dsBtqYW0P",
-	"neOyb2ekJdDE/3D9yK4YOSnn82cm3lRfS7jcKrJMIpWnKchVoSHCQNXpvWPEJOlObeQeci2B2+1DUQmS",
-	"96MQ84SFJ89KuUuBajzu/G4C/F+7kzsQ2SzAp+Wa6HdDhVD/S0BZs9MWacoXGF9slwQOGMaWMUZ2QTM3",
-	"Zh9pRrvdIjS3sP64UZAZzTUsmdvdBjkSN9oF7XwVOmMHRplSR3cstOx6D7RfMe8o3O5MnJBucxO0A9rj",
-	"vqd5ehjglL5qpIemUkxTlMI5qfKQUIUpwgXMtHFw6XVqBW+O2TseJDcoUfZfrWgfrE4ah6/eyxVirUuv",
-	"p9bZeyNivyldeSvKgyxn6C39YANuG9T4d1Pe37bPs6sCW08nv/39H8SVpvsEGyvw1rVd32p5laNc1cul",
-	"2Srev2oC7/RdvbyhMjeoJwe5q7qCTIARoBIJcoIKSCH39Xveq2fzFxTdAX7vdMaXFOSJ4CpnGqL9uI60",
-	"r/k4Ra7gEgf6KjZvYWN4LniAg6m7GCx7FcGaq334nramJFqztP0sGpNZz6pomjP35zkwc9XSd8raFrOe",
-	"MqQ6821+/TPJQF2/J7HgBBmJhZQoHpAPv5TUP/xKUNkiDhfkAlbFEPMCxoYSMT/xJUWO5C8XoNVxlj3Y",
-	"IjsxL3yyA7ealNdI+x3QaT1kH/6gc7E10DO4jmX1qT1oksXtNaGIEky4Sx4kqy9QrVXLzAS1Koi+/tnS",
-	"dqa07bMko+Z8PMcEybIo+A2pc1qzEKDZ5/XgG+q4U5f0ZH2k6ippa+Ekv35n5TfIbajQ3mDOmrfPJrZo",
-	"mGBMJYnz63cMVY9GUMXAQB1ksOg/MDhzg05xZkbtCmWd+7IJPhNc+9t4Bu+Y9beQZ0LGyHXbUfd0y5St",
-	"Mg1OWhM0mPB1mYRk83YR2GReSGLpkRVJLSkP4FHFuQN8PdyAHBbt1zxWXQ77DHdXVs2keE33VZNZvzAd",
-	"5DWqO9CV185AgRT9eUQh+sGSKjpnAxmpyY3VKRaqCMvfGE2pHu7CSOE1TU30+/jwcBKllLv/Peze0t1d",
-	"/jbSWeVXrWnis8cNrFauEpzM3TGxnNgH6fU7dzQhVLkDHVP99K2Z+moEfDMhi57M8V1m0W+4YevLLW2r",
-	"Op8M8Ptw+xGJiU1FGBBa3mO/fm/8chGzUip3uAVrq39aLIARM/xQjLqTZui0pHYU/YISfE2VRrIy+EVV",
-	"wbdXTSlVB2P1oWdUVW28+ywQGUuEesayFdCGBNtwqwhyLXFh8xQLq4dbn08WZ50mi2a2IkLM2/L6PVkV",
-	"WVZRmXItqd4N2yleNopJ+yn0DHXBN1qoRwpTay3Vo6MDm9PrSZs90zXX2+3aHu6jYvRtjsn1+7rwSCwC",
-	"jI+xm/qNwWZe+GR/BeLuEeKYC7gb/TGhiWVV0FQTYr+4QB4+ClFB2X7fpwLzfHcqGJG82SLv+zif/WyT",
-	"TYMnRBDTQW82jsVOnlO+yDnUmugVv/KcrioeDoRZ+6NRez7NujW0bYMxcwjx8WGdHYLaQN1hoKuPZ+68",
-	"sgNwPQJosjKhtrhCclN0D53E7/sQvrxwHoqx+vSdLN2r/chS7s7K9K3C2LzTv+Uob7cEZbluskFAlfXN",
-	"6sZI48tkRrnl/vvl77WwGzd6AjXv7pIk9iaLVcFQsV7lcS4VDG6v6yG3UzDa/I74wDeqpP5GJigDOgep",
-	"7wJcPcE2laGZkMRdSF3LwUGRWtNl8YjcsyVTZraYDD51f8QXDd9gfjKIIF/ja32/p0T0RnBQB6ZA31/3",
-	"+6uwge/MDrodK8KJ0PQNyJ5vnwjVUw9MMBUSzpSmaXEzLeDLoksqPjfiqdPyC1ideTdF1eD3BRz7Hsod",
-	"/ie1InZSWyzhZP79dwA=",
+	"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",
+	"PpZ8x8od+meVIHaSWyzgpP/9YwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

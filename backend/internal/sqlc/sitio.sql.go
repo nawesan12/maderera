@@ -13,6 +13,143 @@ import (
 	"mjbj/internal/jsmath"
 )
 
+const categoriasDeDocumentos = `-- name: CategoriasDeDocumentos :many
+SELECT DISTINCT categoria FROM technical_documents WHERE activo ORDER BY categoria
+`
+
+func (q *Queries) CategoriasDeDocumentos(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, categoriasDeDocumentos)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var categoria string
+		if err := rows.Scan(&categoria); err != nil {
+			return nil, err
+		}
+		items = append(items, categoria)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const crearDocumento = `-- name: CrearDocumento :one
+INSERT INTO technical_documents (titulo, descripcion, categoria, url, formato, tamano_bytes, solo_profesionales)
+VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id
+`
+
+type CrearDocumentoParams struct {
+	Titulo            string  `json:"titulo"`
+	Descripcion       *string `json:"descripcion"`
+	Categoria         string  `json:"categoria"`
+	Url               string  `json:"url"`
+	Formato           string  `json:"formato"`
+	TamanoBytes       *int32  `json:"tamanoBytes"`
+	SoloProfesionales bool    `json:"soloProfesionales"`
+}
+
+func (q *Queries) CrearDocumento(ctx context.Context, arg CrearDocumentoParams) (string, error) {
+	row := q.db.QueryRow(ctx, crearDocumento,
+		arg.Titulo,
+		arg.Descripcion,
+		arg.Categoria,
+		arg.Url,
+		arg.Formato,
+		arg.TamanoBytes,
+		arg.SoloProfesionales,
+	)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
+const documentoActivo = `-- name: DocumentoActivo :execrows
+UPDATE technical_documents SET activo = $2, updated_at = now() WHERE id = $1
+`
+
+type DocumentoActivoParams struct {
+	ID     string `json:"id"`
+	Activo bool   `json:"activo"`
+}
+
+func (q *Queries) DocumentoActivo(ctx context.Context, arg DocumentoActivoParams) (int64, error) {
+	result, err := q.db.Exec(ctx, documentoActivo, arg.ID, arg.Activo)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const documentoSoloProfesionales = `-- name: DocumentoSoloProfesionales :execrows
+UPDATE technical_documents SET solo_profesionales = $2, updated_at = now() WHERE id = $1
+`
+
+type DocumentoSoloProfesionalesParams struct {
+	ID                string `json:"id"`
+	SoloProfesionales bool   `json:"soloProfesionales"`
+}
+
+func (q *Queries) DocumentoSoloProfesionales(ctx context.Context, arg DocumentoSoloProfesionalesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, documentoSoloProfesionales, arg.ID, arg.SoloProfesionales)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const documentosDelPanel = `-- name: DocumentosDelPanel :many
+SELECT id, titulo, descripcion, categoria, url, formato, tamano_bytes, solo_profesionales, activo, created_at
+FROM technical_documents ORDER BY activo DESC, categoria, titulo
+`
+
+type DocumentosDelPanelRow struct {
+	ID                string    `json:"id"`
+	Titulo            string    `json:"titulo"`
+	Descripcion       *string   `json:"descripcion"`
+	Categoria         string    `json:"categoria"`
+	Url               string    `json:"url"`
+	Formato           string    `json:"formato"`
+	TamanoBytes       *int32    `json:"tamanoBytes"`
+	SoloProfesionales bool      `json:"soloProfesionales"`
+	Activo            bool      `json:"activo"`
+	CreatedAt         time.Time `json:"createdAt"`
+}
+
+func (q *Queries) DocumentosDelPanel(ctx context.Context) ([]DocumentosDelPanelRow, error) {
+	rows, err := q.db.Query(ctx, documentosDelPanel)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DocumentosDelPanelRow{}
+	for rows.Next() {
+		var i DocumentosDelPanelRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Titulo,
+			&i.Descripcion,
+			&i.Categoria,
+			&i.Url,
+			&i.Formato,
+			&i.TamanoBytes,
+			&i.SoloProfesionales,
+			&i.Activo,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const documentosReservados = `-- name: DocumentosReservados :one
 SELECT count(*)::int FROM technical_documents WHERE activo AND solo_profesionales
 `

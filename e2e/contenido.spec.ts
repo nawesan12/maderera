@@ -72,3 +72,40 @@ test("una reseña del negocio cargada a mano sale en la portada, y al borrarla s
   await page.goto("/");
   await expect(page.getByText(autor)).toHaveCount(0);
 });
+
+test("un documento publicado sale en /documentacion, y dado de baja se va", async ({ page }) => {
+  test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
+  const titulo = `Prueba de documento ${Date.now()}`;
+  await entrarComoAdmin(page);
+  await page.goto("/admin/documentacion");
+  const subir = page.locator("form").filter({ has: page.locator("input[name=archivo]") });
+  await subir.locator("input[name=titulo]").fill(titulo);
+  await subir.locator("input[name=archivo]").setInputFiles({
+    name: "ficha.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4\n%%EOF\n"),
+  });
+  const reservado = subir.locator("input[name=soloProfesionales]");
+  if (await reservado.isChecked()) await reservado.uncheck();
+  await subir.getByRole("button", { name: "Publicar", exact: true }).click();
+  await expect(page.getByText("Documento publicado.")).toBeVisible();
+
+  await page.goto("/documentacion");
+  await expect(page.getByText(titulo)).toBeVisible();
+
+  await page.goto("/admin/documentacion");
+  const fila = page
+    .locator("li, tr, article, div")
+    .filter({ hasText: titulo })
+    .filter({ has: page.getByRole("button", { name: "Dar de baja" }) })
+    .last();
+  await fila.getByRole("button", { name: "Dar de baja" }).click();
+  await page.getByRole("button", { name: "Sí, darlo de baja" }).click();
+
+  // La pantalla no confirma la baja con un texto; se ve en el sitio.
+  await expect
+    .poll(async () => (await page.request.get("/documentacion").then((r) => r.text())).includes(titulo), {
+      timeout: 15_000,
+    })
+    .toBe(false);
+});

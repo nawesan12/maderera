@@ -76,10 +76,19 @@ func (o respuesta) VisitAdminPromosResponse(w http.ResponseWriter) error        
 func (o respuesta) VisitCrearPromoResponse(w http.ResponseWriter) error         { return o.escribir(w) }
 func (o respuesta) VisitEditarPromoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
 func (o respuesta) VisitBorrarPromoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
-func (o respuesta) VisitSucursalesResponse(w http.ResponseWriter) error         { return o.escribir(w) }
-func (o respuesta) VisitZonasDeEnvioResponse(w http.ResponseWriter) error       { return o.escribir(w) }
-func (o respuesta) VisitEscalasDePagoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
-func (o respuesta) VisitDocumentosResponse(w http.ResponseWriter) error         { return o.escribir(w) }
+func (o respuesta) VisitAdminDocumentosResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitCategoriasDeDocumentosResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitSubirDocumentoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitVisibilidadDocumentoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitActivarDocumentoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitSucursalesResponse(w http.ResponseWriter) error       { return o.escribir(w) }
+func (o respuesta) VisitZonasDeEnvioResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitEscalasDePagoResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitDocumentosResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o respuesta) VisitDocumentosReservadosResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -229,11 +238,20 @@ func (a *API) AdminPromos(ctx context.Context, _ contenidoapi.AdminPromosRequest
 	return ok(v), err
 }
 
-// Los formularios con imagen llegan en multipart. Tope: la imagen (8 MB) y
-// los textos.
-const topeFormulario = 9 << 20
+// Los formularios con archivo llegan en multipart. El tope es el del archivo
+// (el del disco: 8 MB una imagen, 16 MB un adjunto) más 1 MB de textos.
+type conArchivo struct {
+	campo string // el input type=file
+	tope  int64
+	aviso string // si pesa de más
+}
 
-func leerFormulario(r *multipart.Reader) (map[string]string, *Imagen, error) {
+var (
+	conImagen    = conArchivo{"imagen", 9 << 20, "La imagen pesa más de 8 MB."}
+	conDocumento = conArchivo{"archivo", 17 << 20, "El archivo pesa más de 16 MB."}
+)
+
+func leerFormulario(r *multipart.Reader, f conArchivo) (map[string]string, *Imagen, error) {
 	campos := map[string]string{}
 	var img *Imagen
 	leido := int64(0)
@@ -245,15 +263,15 @@ func leerFormulario(r *multipart.Reader) (map[string]string, *Imagen, error) {
 		if err != nil {
 			return nil, nil, plataforma.NuevoProblema(http.StatusBadRequest, "El formulario llegó cortado.")
 		}
-		datos, err := io.ReadAll(io.LimitReader(p, topeFormulario-leido+1))
+		datos, err := io.ReadAll(io.LimitReader(p, f.tope-leido+1))
 		if err != nil {
 			return nil, nil, err
 		}
 		leido += int64(len(datos))
-		if leido > topeFormulario {
-			return nil, nil, plataforma.Invalido(map[string]string{"imagen": "La imagen pesa más de 8 MB."})
+		if leido > f.tope {
+			return nil, nil, plataforma.Invalido(map[string]string{f.campo: f.aviso})
 		}
-		if p.FormName() == "imagen" {
+		if p.FormName() == f.campo {
 			if len(datos) > 0 {
 				img = &Imagen{Datos: datos, Tipo: p.Header.Get("Content-Type")}
 			}
@@ -275,7 +293,7 @@ func entero(v string) int {
 func marcado(v string) bool { return v == "on" || v == "true" }
 
 func formBanner(id string, r *multipart.Reader) (FormBanner, error) {
-	c, img, err := leerFormulario(r)
+	c, img, err := leerFormulario(r, conImagen)
 	if err != nil {
 		return FormBanner{}, err
 	}
@@ -287,7 +305,7 @@ func formBanner(id string, r *multipart.Reader) (FormBanner, error) {
 }
 
 func formPromo(id string, r *multipart.Reader) (FormPromo, error) {
-	c, img, err := leerFormulario(r)
+	c, img, err := leerFormulario(r, conImagen)
 	if err != nil {
 		return FormPromo{}, err
 	}
@@ -527,4 +545,57 @@ func (a *API) ZonasDeEnvio(ctx context.Context, _ contenidoapi.ZonasDeEnvioReque
 func (a *API) EscalasDePago(ctx context.Context, _ contenidoapi.EscalasDePagoRequestObject) (contenidoapi.EscalasDePagoResponseObject, error) {
 	v, err := a.s.q.EscalasDePago(ctx)
 	return ok(v), err
+}
+
+// --- el panel de documentación ---
+
+func panelDocumentos(ctx context.Context) (*auth.Sesion, error) {
+	return auth.Exigir(ctx, roles.QuienEntra("/admin/documentacion")...)
+}
+
+func (a *API) AdminDocumentos(ctx context.Context, _ contenidoapi.AdminDocumentosRequestObject) (contenidoapi.AdminDocumentosResponseObject, error) {
+	if _, err := panelDocumentos(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.q.DocumentosDelPanel(ctx)
+	return ok(v), err
+}
+
+func (a *API) CategoriasDeDocumentos(ctx context.Context, _ contenidoapi.CategoriasDeDocumentosRequestObject) (contenidoapi.CategoriasDeDocumentosResponseObject, error) {
+	if _, err := panelDocumentos(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.q.CategoriasDeDocumentos(ctx)
+	return ok(v), err
+}
+
+func (a *API) SubirDocumento(ctx context.Context, r contenidoapi.SubirDocumentoRequestObject) (contenidoapi.SubirDocumentoResponseObject, error) {
+	ses, err := panelDocumentos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c, archivo, err := leerFormulario(r.Body, conDocumento)
+	if err != nil {
+		return nil, err
+	}
+	return listo(), a.s.SubirDocumento(ctx, ses, FormDocumento{
+		Titulo: c["titulo"], Descripcion: c["descripcion"], Categoria: c["categoria"],
+		SoloProfesionales: marcado(c["soloProfesionales"]), Archivo: archivo,
+	})
+}
+
+func (a *API) VisibilidadDocumento(ctx context.Context, r contenidoapi.VisibilidadDocumentoRequestObject) (contenidoapi.VisibilidadDocumentoResponseObject, error) {
+	ses, err := panelDocumentos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return listo(), a.s.VisibilidadDocumento(ctx, ses, r.Id.String(), r.Body.SoloProfesionales)
+}
+
+func (a *API) ActivarDocumento(ctx context.Context, r contenidoapi.ActivarDocumentoRequestObject) (contenidoapi.ActivarDocumentoResponseObject, error) {
+	ses, err := panelDocumentos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return listo(), a.s.ActivarDocumento(ctx, ses, r.Id.String(), r.Body.Activo)
 }

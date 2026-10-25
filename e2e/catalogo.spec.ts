@@ -42,3 +42,8 @@ test("la API no deja ver el precio de otra lista sin sesión", async ({ request 
   const precios = await (await request.get("/api/v1/catalogo/precios-por-variante")).json();
   expect(precios).toEqual({});
 });
+
+test("desde afuera no se pueden pedir los precios de una lista", async ({ request }) => {
+  const r = await request.get("/api/v1/catalogo/productos?lista=00000000-0000-0000-0000-000000000001");
+  expect(r.status()).toBe(403);
+});

@@ -3,7 +3,8 @@ import "server-only";
 
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 import { normalizarBusqueda } from "@/lib/busqueda";
-import { api, apiPublica, datos } from "@/lib/api/servidor";
+import { api, apiInterna, apiPublica, datos } from "@/lib/api/servidor";
+import { listaVigente } from "@/lib/dal/precios-sesion";
 import type { StockLevel } from "@/lib/stock-level";
 
 /**
@@ -214,12 +215,29 @@ export async function listarProductosPublicos(filtros: FiltrosCatalogo = {}): Pr
   return productosPublicosCacheados(claveDeFiltros(filtros));
 }
 
-/** El catálogo a la lista de quien mira. No se cachea entre personas. */
+/*
+ * La caché **por lista**, como la tenía el TS: la clave es la lista y su
+ * factor, no la persona, así que todos los profesionales con la misma lista
+ * comparten el resultado, y la invalida la misma etiqueta que las escrituras
+ * del catálogo. El factor va en la clave: si cambia el porcentaje de una lista
+ * derivada, lo viejo deja de servirse. Sin esto, cada carga del catálogo de un
+ * profesional armaba los 2000 productos de nuevo.
+ */
+const productosPorListaCacheados = cachearPublico(
+  async (filtros: FiltrosCatalogo, lista: string, _factor: number): Promise<ProductoListado[]> =>
+    datos(
+      await apiInterna.GET("/api/v1/catalogo/productos", { params: { query: { ...consulta(filtros), lista } } }),
+    ) as ProductoListado[],
+  ["catalogo", "productos-por-lista"],
+  ETIQUETAS.catalogo,
+);
+
+/** El catálogo a la lista de quien mira. */
 export async function listarProductos(filtros: FiltrosCatalogo = {}): Promise<ProductoListado[]> {
   if (filtros.ids && filtros.ids.length === 0) return [];
-  return datos(
-    await (await api()).GET("/api/v1/catalogo/productos", { params: { query: consulta(filtros) } }),
-  ) as ProductoListado[];
+  const lista = await listaVigente();
+  if (!lista.esDiferenciada || !lista.id) return listarProductosPublicos(filtros);
+  return productosPorListaCacheados(claveDeFiltros(filtros), lista.id, lista.factorDerivado);
 }
 
 /**
@@ -277,8 +295,18 @@ export const obtenerProductoPublico = cache(
  * lista general: no hay nada que corregir.
  */
 export async function preciosPropiosPorVariante(): Promise<Record<string, string>> {
-  return datos(await (await api()).GET("/api/v1/catalogo/precios-por-variante"));
+  const lista = await listaVigente();
+  if (!lista.esDiferenciada || !lista.id) return {};
+  return preciosPorListaCacheados(lista.id, lista.factorDerivado);
 }
+
+/** Por lista, como el listado. */
+const preciosPorListaCacheados = cachearPublico(
+  async (lista: string, _factor: number): Promise<Record<string, string>> =>
+    datos(await apiInterna.GET("/api/v1/catalogo/precios-por-variante", { params: { query: { lista } } })),
+  ["catalogo", "precios-por-lista"],
+  ETIQUETAS.catalogo,
+);
 
 /**
  * Los sugeridos de una ficha: los que cargó el vendedor, y si no cargó

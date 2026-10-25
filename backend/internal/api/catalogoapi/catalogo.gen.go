@@ -417,6 +417,9 @@ type FiltroCategoria = string
 // FiltroIds defines model for filtro_ids.
 type FiltroIds = string
 
+// FiltroLista defines model for filtro_lista.
+type FiltroLista = openapi_types.UUID
+
 // FiltroMarca defines model for filtro_marca.
 type FiltroMarca = string
 
@@ -446,6 +449,14 @@ type MarcasParams struct {
 	Categoria *string `form:"categoria,omitempty" json:"categoria,omitempty"`
 }
 
+// PreciosPorVarianteParams defines parameters for PreciosPorVariante.
+type PreciosPorVarianteParams struct {
+	// Lista Los precios de esta lista, sin mirar la sesión. Solo con
+	// `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
+	// los guarda en su caché por lista); si no, 403.
+	Lista *FiltroLista `form:"lista,omitempty" json:"lista,omitempty"`
+}
+
 // ProductosParams defines parameters for Productos.
 type ProductosParams struct {
 	Categoria    *FiltroCategoria      `form:"categoria,omitempty" json:"categoria,omitempty"`
@@ -461,6 +472,11 @@ type ProductosParams struct {
 
 	// Publico Precios de la lista general, sin mirar la sesión (lo que se cachea para todos)
 	Publico *FiltroPublico `form:"publico,omitempty" json:"publico,omitempty"`
+
+	// Lista Los precios de esta lista, sin mirar la sesión. Solo con
+	// `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
+	// los guarda en su caché por lista); si no, 403.
+	Lista *FiltroLista `form:"lista,omitempty" json:"lista,omitempty"`
 }
 
 // ProductosParamsStock defines parameters for Productos.
@@ -484,7 +500,12 @@ type PaginaDeProductosParams struct {
 
 	// Publico Precios de la lista general, sin mirar la sesión (lo que se cachea para todos)
 	Publico *FiltroPublico `form:"publico,omitempty" json:"publico,omitempty"`
-	Pagina  *int           `form:"pagina,omitempty" json:"pagina,omitempty"`
+
+	// Lista Los precios de esta lista, sin mirar la sesión. Solo con
+	// `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
+	// los guarda en su caché por lista); si no, 403.
+	Lista  *FiltroLista `form:"lista,omitempty" json:"lista,omitempty"`
+	Pagina *int         `form:"pagina,omitempty" json:"pagina,omitempty"`
 }
 
 // PaginaDeProductosParamsStock defines parameters for PaginaDeProductos.
@@ -504,6 +525,11 @@ type SugeridosParams struct {
 type ProductoParams struct {
 	// Publico Precios de la lista general, sin mirar la sesión (lo que se cachea para todos)
 	Publico *FiltroPublico `form:"publico,omitempty" json:"publico,omitempty"`
+
+	// Lista Los precios de esta lista, sin mirar la sesión. Solo con
+	// `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
+	// los guarda en su caché por lista); si no, 403.
+	Lista *FiltroLista `form:"lista,omitempty" json:"lista,omitempty"`
 }
 
 // RubrosParams defines parameters for Rubros.
@@ -539,7 +565,7 @@ type ServerInterface interface {
 	Portada(w http.ResponseWriter, r *http.Request)
 	// PreciosPorVariante El precio de cada variante para la lista de quien pide (vacío si es la general)
 	// (GET /api/v1/catalogo/precios-por-variante)
-	PreciosPorVariante(w http.ResponseWriter, r *http.Request)
+	PreciosPorVariante(w http.ResponseWriter, r *http.Request, params PreciosPorVarianteParams)
 	// Productos El listado filtrado y ordenado
 	// (GET /api/v1/catalogo/productos)
 	Productos(w http.ResponseWriter, r *http.Request, params ProductosParams)
@@ -686,8 +712,27 @@ func (siw *ServerInterfaceWrapper) Portada(w http.ResponseWriter, r *http.Reques
 // PreciosPorVariante operation middleware
 func (siw *ServerInterfaceWrapper) PreciosPorVariante(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PreciosPorVarianteParams
+
+	// ------------- Optional query parameter "lista" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "lista", r.URL.Query(), &params.Lista, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lista"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lista", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.PreciosPorVariante(w, r)
+		siw.Handler.PreciosPorVariante(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -819,6 +864,19 @@ func (siw *ServerInterfaceWrapper) Productos(w http.ResponseWriter, r *http.Requ
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "publico"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "publico", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "lista" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "lista", r.URL.Query(), &params.Lista, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lista"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lista", Err: err})
 		}
 		return
 	}
@@ -960,6 +1018,19 @@ func (siw *ServerInterfaceWrapper) PaginaDeProductos(w http.ResponseWriter, r *h
 		return
 	}
 
+	// ------------- Optional query parameter "lista" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "lista", r.URL.Query(), &params.Lista, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lista"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lista", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "pagina" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "pagina", r.URL.Query(), &params.Pagina, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
@@ -1079,6 +1150,19 @@ func (siw *ServerInterfaceWrapper) Producto(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "publico"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "publico", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "lista" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "lista", r.URL.Query(), &params.Lista, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lista"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lista", Err: err})
 		}
 		return
 	}
@@ -1455,6 +1539,7 @@ func (response Portada200JSONResponse) VisitPortadaResponse(w http.ResponseWrite
 }
 
 type PreciosPorVarianteRequestObject struct {
+	Params PreciosPorVarianteParams
 }
 
 type PreciosPorVarianteResponseObject interface {
@@ -1863,8 +1948,10 @@ func (sh *strictHandler) Portada(w http.ResponseWriter, r *http.Request) {
 }
 
 // PreciosPorVariante operation middleware
-func (sh *strictHandler) PreciosPorVariante(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) PreciosPorVariante(w http.ResponseWriter, r *http.Request, params PreciosPorVarianteParams) {
 	var request PreciosPorVarianteRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.PreciosPorVariante(ctx, request.(PreciosPorVarianteRequestObject))
@@ -2023,51 +2110,53 @@ func (sh *strictHandler) Rubros(w http.ResponseWriter, r *http.Request, params R
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -377,6 +377,12 @@ export interface components {
         filtro_marca: string;
         /** @description Un conjunto puntual de productos (por id, separados por coma). Vacío es «ninguno». */
         filtro_ids: string;
+        /**
+         * @description Los precios de esta lista, sin mirar la sesión. Solo con
+         *     `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
+         *     los guarda en su caché por lista); si no, 403.
+         */
+        filtro_lista: string;
         /** @description Precios de la lista general, sin mirar la sesión (lo que se cachea para todos) */
         filtro_publico: boolean;
     };
@@ -484,6 +490,12 @@ export interface operations {
                 ids?: components["parameters"]["filtro_ids"];
                 /** @description Precios de la lista general, sin mirar la sesión (lo que se cachea para todos) */
                 publico?: components["parameters"]["filtro_publico"];
+                /**
+                 * @description Los precios de esta lista, sin mirar la sesión. Solo con
+                 *     `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
+                 *     los guarda en su caché por lista); si no, 403.
+                 */
+                lista?: components["parameters"]["filtro_lista"];
             };
             header?: never;
             path?: never;
@@ -516,6 +528,12 @@ export interface operations {
                 ids?: components["parameters"]["filtro_ids"];
                 /** @description Precios de la lista general, sin mirar la sesión (lo que se cachea para todos) */
                 publico?: components["parameters"]["filtro_publico"];
+                /**
+                 * @description Los precios de esta lista, sin mirar la sesión. Solo con
+                 *     `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
+                 *     los guarda en su caché por lista); si no, 403.
+                 */
+                lista?: components["parameters"]["filtro_lista"];
                 pagina?: number;
             };
             header?: never;
@@ -540,6 +558,12 @@ export interface operations {
             query?: {
                 /** @description Precios de la lista general, sin mirar la sesión (lo que se cachea para todos) */
                 publico?: components["parameters"]["filtro_publico"];
+                /**
+                 * @description Los precios de esta lista, sin mirar la sesión. Solo con
+                 *     `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
+                 *     los guarda en su caché por lista); si no, 403.
+                 */
+                lista?: components["parameters"]["filtro_lista"];
             };
             header?: never;
             path: {
@@ -589,7 +613,14 @@ export interface operations {
     };
     PreciosPorVariante: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Los precios de esta lista, sin mirar la sesión. Solo con
+                 *     `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
+                 *     los guarda en su caché por lista); si no, 403.
+                 */
+                lista?: components["parameters"]["filtro_lista"];
+            };
             header?: never;
             path?: never;
             cookie?: never;

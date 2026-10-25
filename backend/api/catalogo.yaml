@@ -68,6 +68,7 @@ paths:
         - $ref: "#/components/parameters/filtro_marca"
         - $ref: "#/components/parameters/filtro_ids"
         - $ref: "#/components/parameters/filtro_publico"
+        - $ref: "#/components/parameters/filtro_lista"
       responses:
         "200":
           description: Los productos
@@ -88,6 +89,7 @@ paths:
         - $ref: "#/components/parameters/filtro_marca"
         - $ref: "#/components/parameters/filtro_ids"
         - $ref: "#/components/parameters/filtro_publico"
+        - $ref: "#/components/parameters/filtro_lista"
         - { name: pagina, in: query, schema: { type: integer, default: 1 } }
       responses:
         "200":
@@ -102,6 +104,7 @@ paths:
       parameters:
         - { name: slug, in: path, required: true, schema: { type: string } }
         - $ref: "#/components/parameters/filtro_publico"
+        - $ref: "#/components/parameters/filtro_lista"
       responses:
         "200":
           description: La ficha
@@ -128,6 +131,8 @@ paths:
     get:
       operationId: PreciosPorVariante
       summary: El precio de cada variante para la lista de quien pide (vacío si es la general)
+      parameters:
+        - $ref: "#/components/parameters/filtro_lista"
       responses:
         "200":
           description: Variante → precio
@@ -215,6 +220,14 @@ components:
       in: query
       description: Un conjunto puntual de productos (por id, separados por coma). Vacío es «ninguno».
       schema: { type: string }
+    filtro_lista:
+      name: lista
+      in: query
+      description: |
+        Los precios de esta lista, sin mirar la sesión. Solo con
+        `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
+        los guarda en su caché por lista); si no, 403.
+      schema: { type: string, format: uuid }
     filtro_publico:
       name: publico
       in: query

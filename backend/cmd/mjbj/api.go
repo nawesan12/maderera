@@ -28,6 +28,7 @@ type configAPI struct {
 	Google   contenido.ConfigGoogle
 	Contacto contenido.ConfigContacto
 	Email    email.Config
+	Interna  plataforma.ConfigInterna
 }
 
 func correrAPI() error {
@@ -85,7 +86,7 @@ func correrAPI() error {
 	)
 
 	catalogoapi.HandlerWithOptions(
-		catalogoapi.NewStrictHandlerWithOptions(catalogo.NuevaAPI(catalogo.Nuevo(pool), lim),
+		catalogoapi.NewStrictHandlerWithOptions(catalogo.NuevaAPI(catalogo.Nuevo(pool), lim, cfg.Interna),
 			[]catalogoapi.StrictMiddlewareFunc{plataforma.ConPedido[catalogoapi.StrictHandlerFunc]},
 			catalogoapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

@@ -63,6 +63,18 @@ export const api = cache(async () =>
 export const apiPublica = createClient<paths>({ baseUrl: API_URL, cache: "no-store" });
 
 /**
+ * Para lo que solo puede pedir el servidor de Next: los precios de una lista
+ * dada (`lista=<id>`), sin la cookie de nadie, para guardarlos en la caché por
+ * lista. Va con el secreto que comparte con la API (API_SECRETO_INTERNO); sin
+ * él, Go contesta 403. Nunca se usa con datos de una persona.
+ */
+export const apiInterna = createClient<paths>({
+  baseUrl: API_URL,
+  cache: "no-store",
+  headers: { Authorization: `Bearer ${process.env.API_SECRETO_INTERNO ?? ""}` },
+});
+
+/**
  * Lo que devolvió la API, o un error si no. Para las lecturas: en la API un
  * error es de verdad (la base, un bug), y una página que lo tape mostraría un
  * catálogo vacío como si lo estuviera.

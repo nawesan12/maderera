@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -284,12 +286,14 @@ func (s *Servicio) consultarProductos(ctx context.Context, f Filtros, l listaPar
 	for i, p := range listado {
 		ids[i] = p.ID
 	}
-	imagenes, err := s.primerasImagenes(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	variantes, err := s.variantesConStockYPrecio(ctx, ids, l)
-	if err != nil {
+	// Las imágenes y las variantes no dependen una de otra: van a la vez, por
+	// dos conexiones del pool.
+	var imagenes map[string]string
+	var variantes []*varianteListado
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) { imagenes, err = s.primerasImagenes(gctx, ids); return })
+	g.Go(func() (err error) { variantes, err = s.variantesConStockYPrecio(gctx, ids, l); return })
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 	porProducto := map[string][]*varianteListado{}
@@ -395,11 +399,17 @@ func deref(s *string) string {
 	return *s
 }
 
-var colador = collate.New(language.Spanish)
+// coladores: un collate.Collator no se puede usar desde dos goroutines a la
+// vez (guarda estado de la comparación en curso), y con un solo colador
+// compartido, dos pedidos ordenando juntos entraban en pánico. Cada orden toma
+// uno del pool y lo devuelve.
+var coladores = sync.Pool{New: func() any { return collate.New(language.Spanish) }}
 
 // ordenar es la del TS, con un orden estable como el sort de JS: lo que
 // empata conserva el orden de la base.
 func ordenar(ps []ProductoListado, orden string) {
+	colador := coladores.Get().(*collate.Collator)
+	defer coladores.Put(colador)
 	switch orden {
 	case "precio-asc", "precio-desc":
 		signo := 1.0

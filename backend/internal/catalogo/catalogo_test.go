@@ -40,7 +40,7 @@ func armar(t *testing.T) *entorno {
 	ses := auth.Nuevo(auth.Config{Secreto: "secreto-de-prueba-del-catalogo-32-caracteres", URL: "http://localhost"}, pool)
 	m := http.NewServeMux()
 	catalogoapi.HandlerWithOptions(
-		catalogoapi.NewStrictHandlerWithOptions(NuevaAPI(Nuevo(pool), limites.Nuevo(sqlc.New(pool), silencio)),
+		catalogoapi.NewStrictHandlerWithOptions(NuevaAPI(Nuevo(pool), limites.Nuevo(sqlc.New(pool), silencio), plataforma.ConfigInterna{Secreto: "interno-de-prueba"}),
 			[]catalogoapi.StrictMiddlewareFunc{plataforma.ConPedido[catalogoapi.StrictHandlerFunc]},
 			catalogoapi.StrictHTTPServerOptions{RequestErrorHandlerFunc: plataforma.ErrorDePedido, ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(silencio)}),
 		catalogoapi.StdHTTPServerOptions{BaseRouter: m},
@@ -194,5 +194,66 @@ func TestMiLista(t *testing.T) {
 	}
 	if c, _ := pedir(t, ana, u); c != 429 {
 		t.Errorf("la undécima: %d", c)
+	}
+}
+
+// Next cachea el listado por lista (no por persona) y pide los precios de
+// una lista con el secreto interno. Sin el secreto, nadie más puede.
+func TestListaPedidaPorElSitio(t *testing.T) {
+	e := armar(t)
+	pro := e.sembrar(t)
+	u := e.srv.URL + "/api/v1/catalogo/productos?busqueda=fenolico&lista=" + pro
+	con := func(secreto string) (int, string) {
+		req, _ := http.NewRequest("GET", u, nil)
+		if secreto != "" {
+			req.Header.Set("Authorization", "Bearer "+secreto)
+		}
+		r, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Body.Close()
+		b, _ := io.ReadAll(r.Body)
+		return r.StatusCode, string(b)
+	}
+	if c, _ := con(""); c != 403 {
+		t.Errorf("sin secreto: %d", c)
+	}
+	if c, _ := con("otro-secreto"); c != 403 {
+		t.Errorf("con un secreto falso: %d", c)
+	}
+	if c, b := con("interno-de-prueba"); c != 200 || !strings.Contains(b, `"precioDesde":"76050"`) {
+		t.Errorf("con el secreto: %d %s", c, b)
+	}
+	req, _ := http.NewRequest("GET", e.srv.URL+"/api/v1/catalogo/precios-por-variante?lista="+pro, nil)
+	req.Header.Set("Authorization", "Bearer interno-de-prueba")
+	r, _ := http.DefaultClient.Do(req)
+	b, _ := io.ReadAll(r.Body)
+	r.Body.Close()
+	if !strings.Contains(string(b), `"76050.00"`) {
+		t.Errorf("precios por variante de la lista: %s", b)
+	}
+}
+
+// Muchos pedidos ordenando a la vez: con un collator compartido esto entraba
+// en pánico bajo carga (lo encontró el benchmark de la tanda 2).
+func TestOrdenarEnParalelo(t *testing.T) {
+	base := make([]ProductoListado, 300)
+	for i := range base {
+		base[i].Name = []string{"Fenólico", "fenolico", "Ñandubay", "álamo", "Melamina", "Zócalo"}[i%6] + strings.Repeat("x", i%7)
+	}
+	hecho := make(chan struct{})
+	for range 32 {
+		go func() {
+			defer func() { hecho <- struct{}{} }()
+			for range 50 {
+				ps := append([]ProductoListado(nil), base...)
+				ordenar(ps, "nombre")
+				ordenar(ps, "relevancia")
+			}
+		}()
+	}
+	for range 32 {
+		<-hecho
 	}
 }

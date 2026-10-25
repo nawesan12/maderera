@@ -1,0 +1,3 @@
+
+# Binarios que deja go test -cpuprofile
+*.test

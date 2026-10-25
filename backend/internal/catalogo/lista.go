@@ -97,6 +97,27 @@ func (s *Servicio) Vigente(ctx context.Context, ses *auth.Sesion) (Lista, error)
 // Vista es cómo se muestra el precio: "final" (con IVA, lo que se paga) o
 // "neto" (para el responsable inscripto y las listas diferenciadas). Los
 // precios guardados no cambian: siguen siendo finales.
+// Dada es una lista por su id, para la caché de Next (ver
+// plataforma.ConfigInterna). Una lista que no existe o está apagada es la
+// general, como en Vigente.
+func (s *Servicio) Dada(ctx context.Context, id string) (Lista, error) {
+	general, err := s.General(ctx)
+	if err != nil || (general.ID != nil && id == *general.ID) {
+		return general, err
+	}
+	propia, err := s.q.ListaPorID(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return general, nil
+	}
+	if err != nil {
+		return Lista{}, err
+	}
+	return Lista{
+		ID: &propia.ID, GeneralID: general.ID, Nombre: &propia.Name,
+		EsDiferenciada: true, FactorDerivado: FactorDeLista(propia.PorcentajeSobreGeneral),
+	}, nil
+}
+
 func (s *Servicio) Vista(ctx context.Context, ses *auth.Sesion, lista Lista) (string, error) {
 	if ses == nil {
 		return "final", nil

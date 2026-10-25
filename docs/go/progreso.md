@@ -31,7 +31,7 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 |---|---|---|---|
 | 0 | Correo (`correo.mjbj.com.ar`) | `go-correo` | hecha (falta encenderla en la VPS: DNS y PTR) |
 | 1 | Base común | `go-base` | hecha (falta desplegarla; E2E de Playwright pendiente) |
-| 2 | Catálogo público y contenido | | |
+| 2 | Catálogo público y contenido | `go-catalogo` | hecha (falta desplegarla; el secreto `API_SECRETO_INTERNO` va en el entorno de la VPS) |
 | 3 | Productos, precios, stock, acopio | | |
 | 4 | Clientes, cuenta corriente, cheques, cobros | | |
 | 5 | Mostrador, caja, ventas, entregas | | |
@@ -71,11 +71,35 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 - [x] Next: getSession, entrar, registrarse y salir por la API; better-auth
       fuera de la aplicación (queda de desarrollo, para los golden)
 - [x] Despliegue: api, worker, migrar (goose), Caddy, desplegar.sh
-- [ ] E2E con Playwright (login primero; un flujo más por tanda)
+- [x] E2E con Playwright (login primero; un flujo más por tanda)
 - [ ] Desplegar en la VPS y probar una cookie real de producción
 - Queda en TS hasta su tanda: `lib/limites` (lo usan otras acciones; cuenta
   en la misma tabla que Go) y las tareas de `lib/tareas` (el cron sigue
   pegándole a Next).
+
+## Tanda 2: el catálogo público y el contenido
+
+- [x] Catálogo: lista por sesión, productos, búsqueda sin tildes, ficha,
+      sugeridos, complementos, portada (sombra 143/143 contra el TS)
+- [x] Contenido: ajustes, promociones, banners con imagen, reseñas de
+      productos (dejar y moderar) y del negocio (con Google Places, la tarea
+      `resenas-google` en el worker de Go)
+- [x] Documentos técnicos (lo público y el panel), lecturas de eventos,
+      sitemap, contacto (con la plantilla de los correos en Go, golden byte a
+      byte), sucursales, zonas de envío, escalas por medio de pago
+- [x] `/mi-lista-de-precios`: las filas desde Go, con el factor de la lista
+      derivada (el TS lo ignoraba); el PDF sigue en TS hasta la tanda 12
+- [x] Caché por lista para el profesional (`API_SECRETO_INTERNO`)
+- [x] Pruebas: Go contra la base y el contrato en cada respuesta
+      (`pruebas.ConContrato`), y 30 E2E en escritorio y teléfono
+- [x] Benchmark (`bench/tanda2`)
+- [ ] Desplegar en la VPS: agregar `API_SECRETO_INTERNO` al entorno de `api`
+      y `app` antes del despliegue
+- Queda en TS hasta su tanda: la inscripción a eventos y su panel (cobran
+  por Mercado Pago, tanda 6, y avisan con lo de profesionales, tanda 10),
+  `estadoProfesional` (tanda 10; el mismo criterio está en Go en
+  `EsProfesionalAprobado`, se juntan ahí), `lib/dal/visitante.ts` (combina
+  catálogo con carrito y cortes) y el PDF de la lista.
 
 ## Benchmarks
 
@@ -94,6 +118,22 @@ Uno por tanda, al cerrarla. Detalle y cómo repetirlos: `bench/<tanda>/README.md
 Lo que pasa en cada pedido es donde Go gana de verdad (un núcleo contra
 todos, y una consulta con join contra las varias de better-auth). Lo que
 manda scrypt o Postgres, empata.
+
+### Tanda 2 (24/10/2026, misma Mac, 2000 productos, sin caché en ninguno)
+
+| Prueba, 50 a la vez | TypeScript | Go | Go / TS |
+|---|---:|---:|---:|
+| Catálogo entero: pedidos/s | 5 | 23 | **4,6×** |
+| ídem, p50 | 10,0 s | 2,2 s | **4,6× menos** |
+| Búsqueda: pedidos/s | 33 | 46 | 1,4× |
+| Ficha: pedidos/s | 442 | 1126 | **2,5×** |
+| ídem, p50 / p99 | 96 / 372 ms | 40 / 115 ms | **2,4× / 3,2× menos** |
+| Memoria máx. | 237–383 MB | 135–178 MB | ~2× menos |
+
+TS se queda sin CPU (un núcleo); Go espera a Postgres. Donde manda la base
+(la búsqueda con `ILIKE`) la diferencia se achica. El benchmark encontró un
+pánico de concurrencia en Go y la caché por lista que se había perdido: ver
+`bench/tanda2/README.md`.
 
 ## Lo aprendido
 
@@ -122,3 +162,29 @@ manda scrypt o Postgres, empata.
   valga la pena; no esconderlo con un fetch que Next no vea.
 - **`curl -F campo='<...'` lee un archivo** (el `<` es «desde archivo»): para
   mandar HTML por curl, `--form-string`.
+- **Un `collate.Collator` no se comparte entre goroutines**: guarda el estado
+  de la comparación en curso. Uno global para ordenar por nombre andaba en
+  las pruebas y entraba en pánico con 50 pedidos a la vez. Va en un
+  `sync.Pool`. En general: todo lo global que tenga métodos con estado
+  (collators, `rand.Rand`, buffers) se revisa con `-race` y una prueba en
+  paralelo.
+- **Una caché de Next con clave por algo que no es la persona se pierde fácil
+  al mudar**: el TS cacheaba el listado del profesional por lista, y el
+  envoltorio nuevo llamaba a Go con la cookie y sin caché. Al mudar un DAL,
+  mirar qué estaba en `cachearPublico` y con qué clave, no solo qué devuelve.
+  Para pedirle a Go los precios de una lista sin cookie está `apiInterna`
+  (`API_SECRETO_INTERNO`); Go no acepta `lista=` sin él.
+- **sqlc devuelve `nil` en una consulta `:many` sin filas** si no se le pide
+  `emit_empty_slices`, y en JSON eso es `null`: el panel hacía `.map` y no
+  cargaba. Está activado, y `plataforma.SinNulos` cubre las listas que arma
+  el código. `TestListasVacias` recorre las rutas con la base vacía.
+- **sqlc pierde la nulabilidad de una columna con cast** (`coalesce(...)::text`,
+  `nullif` lo infiere como `bool`): para esas, SQL a mano con pgx
+  (`catalogo/milista.go`).
+- **Turbopack en desarrollo puede quedarse con una versión vieja de un
+  módulo** en una ruta (el sitemap veía `lib/api/servidor.ts` sin los exports
+  nuevos: `apiPublica` era `undefined`). Si un import existe y llega
+  `undefined`, reiniciar `next dev` antes de buscar el bug.
+- **Las server actions agregan campos al FormData** (`$ACTION_REF_1`,
+  `$ACTION_1:0`): el validador de la API rechaza las partes que el contrato no
+  declara. `soloCampos()` los saca antes de mandar un multipart a Go.

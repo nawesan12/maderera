@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"mjbj/internal/limites"
 	"net/http"
 	"strings"
@@ -15,12 +16,15 @@ import (
 
 // API son las rutas del catálogo (api/catalogo.yaml).
 type API struct {
-	s   *Servicio
-	lim *limites.Limitador
+	s       *Servicio
+	lim     *limites.Limitador
+	interna plataforma.ConfigInterna
 }
 
 // NuevaAPI arma los handlers.
-func NuevaAPI(s *Servicio, lim *limites.Limitador) *API { return &API{s: s, lim: lim} }
+func NuevaAPI(s *Servicio, lim *limites.Limitador, interna plataforma.ConfigInterna) *API {
+	return &API{s: s, lim: lim, interna: interna}
+}
 
 var _ catalogoapi.StrictServerInterface = (*API)(nil)
 
@@ -54,7 +58,16 @@ func (o ok) VisitPortadaResponse(w http.ResponseWriter) error            { retur
 // **Con publico=true no se mira la cookie**: es lo que Next guarda en su
 // caché compartida, y un precio de lista propia ahí se le serviría a
 // cualquiera.
-func (a *API) lista(ctx context.Context, publico *bool) (Lista, error) {
+// lista es la que se aplica: la general con publico=true; la pedida con
+// lista=<id>, que solo acepta un pedido de Next con el secreto interno (si no,
+// cualquiera vería los precios de otra lista); si no, la de la sesión.
+func (a *API) lista(ctx context.Context, publico *bool, pedida *openapi_types.UUID) (Lista, error) {
+	if pedida != nil {
+		if !a.interna.EsInterno(plataforma.PedidoDe(ctx)) {
+			return Lista{}, plataforma.NuevoProblema(http.StatusForbidden, "La lista solo la puede pedir el sitio.")
+		}
+		return a.s.Dada(ctx, pedida.String())
+	}
 	if publico != nil && *publico {
 		return a.s.General(ctx)
 	}
@@ -120,7 +133,7 @@ func (a *API) Rubros(ctx context.Context, r catalogoapi.RubrosRequestObject) (ca
 
 func (a *API) Productos(ctx context.Context, r catalogoapi.ProductosRequestObject) (catalogoapi.ProductosResponseObject, error) {
 	p := r.Params
-	l, err := a.lista(ctx, p.Publico)
+	l, err := a.lista(ctx, p.Publico, p.Lista)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +145,7 @@ func (a *API) Productos(ctx context.Context, r catalogoapi.ProductosRequestObjec
 
 func (a *API) PaginaDeProductos(ctx context.Context, r catalogoapi.PaginaDeProductosRequestObject) (catalogoapi.PaginaDeProductosResponseObject, error) {
 	p := r.Params
-	l, err := a.lista(ctx, p.Publico)
+	l, err := a.lista(ctx, p.Publico, p.Lista)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +163,7 @@ func (a *API) PaginaDeProductos(ctx context.Context, r catalogoapi.PaginaDeProdu
 }
 
 func (a *API) Producto(ctx context.Context, r catalogoapi.ProductoRequestObject) (catalogoapi.ProductoResponseObject, error) {
-	l, err := a.lista(ctx, r.Params.Publico)
+	l, err := a.lista(ctx, r.Params.Publico, r.Params.Lista)
 	if err != nil {
 		return nil, err
 	}
@@ -170,8 +183,8 @@ func (a *API) Sugeridos(ctx context.Context, r catalogoapi.SugeridosRequestObjec
 	return ok{s}, err
 }
 
-func (a *API) PreciosPorVariante(ctx context.Context, _ catalogoapi.PreciosPorVarianteRequestObject) (catalogoapi.PreciosPorVarianteResponseObject, error) {
-	l, err := a.s.Vigente(ctx, auth.DeContexto(ctx))
+func (a *API) PreciosPorVariante(ctx context.Context, r catalogoapi.PreciosPorVarianteRequestObject) (catalogoapi.PreciosPorVarianteResponseObject, error) {
+	l, err := a.lista(ctx, nil, r.Params.Lista)
 	if err != nil {
 		return nil, err
 	}

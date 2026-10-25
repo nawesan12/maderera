@@ -2,47 +2,31 @@ import { cache } from "react";
 import "server-only";
 
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
-
-import { and, asc, count, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
-import { coincideBusqueda, normalizarBusqueda } from "@/lib/busqueda";
-import { db } from "@/lib/db";
-import {
-  branches,
-  categories,
-  inventory,
-  priceListItems,
-  productImages,
-  productVariants,
-  products,
-  relatedProducts,
-  subcategories,
-} from "@/lib/db/schema";
-import {
-  listaGeneral,
-  listaVigente,
-  type ListaVigente,
-} from "@/lib/dal/precios-sesion";
-import { aniosDeTrayectoria } from "@/lib/empresa";
-import {
-  combinedStockLevel,
-  disponible,
-  stockLevel,
-  type StockLevel,
-} from "@/lib/stock-level";
+import { normalizarBusqueda } from "@/lib/busqueda";
+import { api, apiPublica, datos } from "@/lib/api/servidor";
+import type { StockLevel } from "@/lib/stock-level";
 
 /**
- * Consultas del catálogo público.
+ * El catálogo público.
  *
- * Todo lo de acá es información abierta: lo mismo que ve cualquiera que entre al
- * sitio. Los precios que devuelve son siempre los de la lista general; los precios
- * de profesional NO salen por estas funciones, para que ningún cambio futuro los
- * filtre sin querer a una página pública.
+ * **La lógica vive en la API de Go** (backend/internal/catalogo): el precio
+ * por lista con su respaldo a la general y el factor de las listas derivadas,
+ * la oferta de la variante más barata, el stock combinado de las sucursales y
+ * el orden. Acá quedan los nombres y tipos que usan las páginas, y la caché
+ * de Next.
  *
- * Por ahora se consulta en cada request. Son candidatas naturales a `use cache` con
- * `cacheTag("catalogo")`, pero eso exige activar `cacheComponents` en la config, lo
- * que cambia el modelo de renderizado de todo el sitio: se decide al cerrar la
- * tienda online, no antes.
+ * Dos reglas que no se aflojan:
+ *
+ * - **Lo que se guarda en la caché compartida se pide sin la sesión**
+ *   (`apiPublica`, `publico=true`): a precio de público, igual para todos. Un
+ *   precio de lista propia ahí se le serviría a cualquiera.
+ * - Lo que depende de quién mira (`listarProductos`, los precios por variante,
+ *   los complementos del carrito) se pide con la cookie y no se cachea entre
+ *   personas.
+ *
+ * Las respuestas de Go tienen exactamente estas formas: se compararon campo
+ * por campo con la implementación anterior en TypeScript (143 casos, con
+ * ofertas vencidas y vigentes y una lista derivada) antes de reemplazarla.
  */
 
 export interface ProductoListado {
@@ -80,665 +64,21 @@ export interface ProductoListado {
   hayStock: boolean;
 }
 
-export type OrdenCatalogo =
-  | "relevancia"
-  | "precio-asc"
-  | "precio-desc"
-  | "nombre";
+export type OrdenCatalogo = "relevancia" | "precio-asc" | "precio-desc" | "nombre";
 
 export interface FiltrosCatalogo {
   categoria?: string;
-  /**
-   * El rubro dentro de la categoría, por slug.
-   *
-   * Ferretería son ~1000 SKUs según el brief: sin este nivel, esa categoría es
-   * una grilla donde no se encuentra un tarugo.
-   */
+  /** El rubro dentro de la categoría, por slug. */
   subcategoria?: string;
   busqueda?: string;
   stock?: "todos" | "en-stock" | "casa-central" | "aserradero";
   orden?: OrdenCatalogo;
   /** Solo los que están en oferta. */
   soloOfertas?: boolean;
-  /**
-   * Solo los de una marca.
-   *
-   * Lo usa la sección de Moldava, que el cliente pidió como sección destacada
-   * propia. Se compara sin distinguir mayúsculas ni tildes por la misma razón
-   * que la búsqueda: la marca se carga a mano en cada producto.
-   */
+  /** Solo los de una marca (la sección de Moldava). */
   marca?: string;
-  /**
-   * Un conjunto puntual de productos, por id.
-   *
-   * Lo usan los sugeridos: el vendedor eligió cuáles van, así que no hay filtro
-   * que los describa. Se resuelven por acá y no con una consulta propia para que
-   * la tarjeta traiga el mismo precio, la misma oferta y el mismo stock que en
-   * el resto del catálogo.
-   */
+  /** Un conjunto puntual de productos, por id (los sugeridos). */
   ids?: string[];
-}
-
-/**
- * Los productos en oferta, memoizados.
- *
- * El catálogo arma el panel de filtros dos veces —el cajón del teléfono y la
- * columna del escritorio— y las dos necesitan cuántas ofertas hay. Sin esto son
- * seis consultas por carga para el mismo número.
- *
- * Va como función sin argumentos y no como `listarProductos({ soloOfertas })`
- * memoizada, porque `cache()` compara los argumentos por referencia y un objeto
- * literal nuevo en cada llamada nunca acierta.
- *
- * **Es la lista y no un `count`** a propósito: "en oferta" no es que exista una
- * variante rebajada, es que la rebaja esté en la variante más barata, y encima
- * el precio depende de la lista de la sesión. Un conteo por SQL daría un número
- * distinto del que después muestra la grilla.
- */
-export const productosEnOferta = cache(() =>
-  listarProductos({ soloOfertas: true }),
-);
-
-/** Categorías con la cantidad real de productos activos. */
-/*
- * Memoizada: el catálogo arma el panel de filtros dos veces —una para el cajón
- * del teléfono y otra para la columna del escritorio— y las dos piden las
- * categorías.
- */
-export const listarCategorias = cache(
-  cachearPublico(
-    async () => {
-      return db
-        .select({
-          id: categories.id,
-          slug: categories.slug,
-          name: categories.name,
-          description: categories.description,
-          icon: categories.icon,
-          image: categories.image,
-          // El prototipo tenía este número escrito a mano y desactualizado.
-          productCount: count(products.id),
-        })
-        .from(categories)
-        .leftJoin(
-          products,
-          and(eq(products.categoryId, categories.id), eq(products.active, true)),
-        )
-        .where(eq(categories.active, true))
-        .groupBy(categories.id)
-        .orderBy(asc(categories.sortOrder));
-    },
-    ["categorias"],
-    ETIQUETAS.catalogo,
-  ),
-);
-
-/**
- * Las marcas del catálogo, o las de una categoría.
- *
- * La clienta mandó la plancha de logos que tenía el sitio anterior
- * (`marcas-ferreteria.jpg`) pidiendo darles lugar. **Los logos sueltos todavía
- * no están** —esa imagen es una sola con todos juntos—, así que la franja se
- * arma con los nombres, que ya viven en `products.brand`. Cuando lleguen los
- * archivos se les agrega la imagen y la lista no cambia.
- *
- * Cada marca lleva al catálogo filtrado por ella. Ese filtro existía en el DAL
- * desde hacía tiempo y **no había forma de llegar a él**: la página ni siquiera
- * leía el parámetro.
- */
-export const marcasDelCatalogo = cache(
-  cachearPublico(
-    async (categoria?: string) => {
-      return db
-        .select({
-          nombre: products.brand,
-          productCount: count(products.id),
-        })
-        .from(products)
-        .innerJoin(categories, eq(categories.id, products.categoryId))
-        .where(
-          and(
-            eq(products.active, true),
-            isNotNull(products.brand),
-            ne(products.brand, ""),
-            categoria ? eq(categories.slug, categoria) : undefined,
-          ),
-        )
-        .groupBy(products.brand)
-        .orderBy(desc(count(products.id)), asc(products.brand))
-        // `brand` es nullable en el tipo aunque el `where` ya lo descarta:
-        // se estrecha acá para que quien la use no arrastre el `null`.
-        .then((filas) =>
-          filas.map((f) => ({ nombre: f.nombre ?? "", productCount: f.productCount })),
-        );
-    },
-    ["marcas"],
-    ETIQUETAS.catalogo,
-  ),
-);
-
-/**
- * Los rubros de una categoría, con cuántos productos activos tiene cada uno.
- *
- * Devuelve solo los que tienen algo cargado: un rubro vacío en el panel de
- * filtros es un enlace a una grilla sin resultados. Los 43 de ferretería van a
- * ir apareciendo a medida que se carguen los productos, sin que nadie tenga que
- * activarlos a mano.
- */
-export const rubrosDeCategoria = cache(
-  cachearPublico(
-    async (categoria: string) => {
-      return db
-        .select({
-          slug: subcategories.slug,
-          name: subcategories.name,
-          productCount: count(products.id),
-        })
-        .from(subcategories)
-        .innerJoin(categories, eq(categories.id, subcategories.categoryId))
-        .innerJoin(
-          products,
-          and(
-            eq(products.subcategoryId, subcategories.id),
-            eq(products.active, true),
-          ),
-        )
-        .where(
-          and(eq(categories.slug, categoria), eq(subcategories.active, true)),
-        )
-        .groupBy(subcategories.id)
-        .orderBy(asc(subcategories.sortOrder), asc(subcategories.name));
-    },
-    ["subcategorias"],
-    ETIQUETAS.catalogo,
-  ),
-);
-
-/**
- * Trae el catálogo ya filtrado desde la base.
- *
- * El prototipo mandaba el array completo al navegador y filtraba ahí. Con más de
- * doscientos productos y varias variantes cada uno eso es un bundle enorme y una
- * fuga de datos: el visitante recibía el catálogo entero aunque mirara una sola
- * categoría.
- */
-async function consultarProductos(
-  filtros: FiltrosCatalogo,
-  lista: Pick<ListaVigente, "id" | "generalId" | "factorDerivado">,
-): Promise<ProductoListado[]> {
-  const condiciones = [eq(products.active, true)];
-
-  if (filtros.ids) {
-    // Sin esto, un array vacío se traduce a `in ()` y devolvería el catálogo
-    // entero en vez de nada.
-    if (filtros.ids.length === 0) return [];
-    condiciones.push(inArray(products.id, filtros.ids));
-  }
-
-  if (filtros.categoria && filtros.categoria !== "todos") {
-    condiciones.push(eq(categories.slug, filtros.categoria));
-  }
-
-  if (filtros.subcategoria && filtros.subcategoria !== "todos") {
-    condiciones.push(eq(subcategories.slug, filtros.subcategoria));
-  }
-
-  if (filtros.busqueda) {
-    const coincidencia = coincideBusqueda(filtros.busqueda, [
-      products.name,
-      products.description,
-      products.subcategory,
-      products.brand,
-      categories.name,
-    ]);
-    if (coincidencia) condiciones.push(coincidencia);
-  }
-
-  const filas = await db
-    .select({
-      id: products.id,
-      slug: products.slug,
-      name: products.name,
-      description: products.description,
-      subcategory: products.subcategory,
-      brand: products.brand,
-      unit: products.unit,
-      alicuotaIva: products.alicuotaIva,
-      aPedido: products.aPedido,
-      formaDeVenta: products.formaDeVenta,
-      precioMediaPct: products.precioMediaPct,
-      featured: products.featured,
-      categorySlug: categories.slug,
-      categoryName: categories.name,
-      subcategorySlug: subcategories.slug,
-      subcategoryName: subcategories.name,
-    })
-    .from(products)
-    .innerJoin(categories, eq(categories.id, products.categoryId))
-    // `left` y no `inner`: hay productos sin rubro asignado, y con un inner join
-    // desaparecerían del catálogo.
-    .leftJoin(subcategories, eq(subcategories.id, products.subcategoryId))
-    .where(and(...condiciones))
-    .orderBy(asc(categories.sortOrder), asc(products.name));
-
-  if (filas.length === 0) return [];
-
-  const ids = filas.map((f) => f.id);
-  const [imagenes, variantes] = await Promise.all([
-    db
-      .select({ productId: productImages.productId, url: productImages.url })
-      .from(productImages)
-      .where(inArray(productImages.productId, ids))
-      .orderBy(asc(productImages.sortOrder)),
-    variantesConStockYPrecio(ids, lista),
-  ]);
-
-  const primeraImagen = new Map<string, string>();
-  for (const img of imagenes) {
-    if (!primeraImagen.has(img.productId)) {
-      primeraImagen.set(img.productId, img.url);
-    }
-  }
-
-  const listado = filas.map((fila) => {
-    const propias = variantes.filter((v) => v.productId === fila.id);
-    const conPrecio = propias
-      .map((v) => ({
-        precio: Number(v.precio ?? 0),
-        anterior: v.precioAnterior !== null ? Number(v.precioAnterior) : null,
-      }))
-      .filter((p) => p.precio > 0);
-
-    // El "desde" es la variante más barata, y la oferta que se muestra es la de
-    // esa misma variante: mezclar el precio de una con el descuento de otra
-    // anunciaría una rebaja que no existe.
-    const masBarata =
-      conPrecio.length > 0
-        ? conPrecio.reduce((a, b) => (b.precio < a.precio ? b : a))
-        : null;
-
-    const enOferta =
-      masBarata?.anterior != null && masBarata.anterior > masBarata.precio;
-
-    const stockCentral = combinedStockLevel(propias.map((v) => v.stockCentral));
-    const stockAserradero = combinedStockLevel(
-      propias.map((v) => v.stockAserradero),
-    );
-
-    return {
-      ...fila,
-      image: primeraImagen.get(fila.id) ?? null,
-      precioDesde: masBarata ? String(masBarata.precio) : null,
-      precioAnterior: enOferta ? String(masBarata.anterior) : null,
-      descuento: enOferta
-        ? Math.round((1 - masBarata.precio / masBarata.anterior!) * 100)
-        : null,
-      labels: propias.map((v) => v.label),
-      stockCentral,
-      stockAserradero,
-      hayStock:
-        stockCentral !== "sin-stock" || stockAserradero !== "sin-stock",
-    };
-  });
-
-  const filtroStock = filtros.stock ?? "todos";
-
-  let resultado = listado;
-
-  if (filtroStock !== "todos") {
-    resultado = resultado.filter((p) => {
-      if (filtroStock === "casa-central") return p.stockCentral !== "sin-stock";
-      if (filtroStock === "aserradero") return p.stockAserradero !== "sin-stock";
-      return p.hayStock;
-    });
-  }
-
-  if (filtros.soloOfertas) {
-    resultado = resultado.filter((p) => p.descuento !== null);
-  }
-
-  if (filtros.marca) {
-    const buscada = filtros.marca.toLowerCase();
-    resultado = resultado.filter(
-      (p) => (p.brand ?? "").toLowerCase() === buscada,
-    );
-  }
-
-  return ordenar(resultado, filtros.orden ?? "relevancia");
-}
-
-/**
- * El catálogo, cacheado **por lista de precios**.
- *
- * La regla de `precios-sesion.ts` es que un precio profesional no puede salir
- * de un caché compartido, y sigue en pie: lo que se comparte acá es el
- * resultado *para una lista determinada*, y la lista viaja en los argumentos,
- * así que forma parte de la clave. Dos visitantes con la misma lista ven lo
- * mismo porque **es** lo mismo; a uno con lista propia no se le puede servir la
- * entrada de otro, porque su clave es otra.
- *
- * Lo que se resuelve fuera del caché, en cada pedido, es *qué lista le toca a
- * quien mira*: eso sí depende de la sesión y por eso `listaVigente()` queda del
- * lado de afuera.
- *
- * Lo que esto evita: el catálogo entero —productos, imágenes, variantes,
- * precios y stock, tres consultas— se rehacía en cada visita a la portada y a
- * cada página del catálogo, aunque nadie hubiera tocado un precio en semanas.
- */
-const productosCacheados = cachearPublico(
-  consultarProductos,
-  ["catalogo", "productos"],
-  ETIQUETAS.catalogo,
-);
-
-/**
- * Trae el catálogo ya filtrado.
- *
- * El prototipo mandaba el array completo al navegador y filtraba ahí. Con más
- * de doscientos productos y varias variantes cada uno eso es un bundle enorme y
- * una fuga de datos: el visitante recibía el catálogo entero aunque mirara una
- * sola categoría.
- */
-/**
- * El catálogo **sin preguntar quién mira**, siempre a precio de público.
- *
- * Es lo que hace que la portada y el catálogo se puedan servir estáticos: leer
- * la sesión obliga a armar la página en cada visita, y esa era la única razón
- * por la que lo hacían. Acá la lista es la general —la misma para todo el
- * mundo, la que ya es pública— así que el resultado se puede guardar en el CDN
- * sin filtrarle a nadie el precio de otro.
- *
- * **Al profesional no se le esconde su precio**: la página sale con el de
- * público y el suyo llega en la misma respuesta, resuelto por pedido en
- * `lib/dal/visitante.ts`, que sí mira la sesión.
- */
-export async function listarProductosPublicos(
-  filtros: FiltrosCatalogo = {},
-): Promise<ProductoListado[]> {
-  const general = await listaGeneral();
-  const id = general?.id ?? null;
-  return productosCacheados(conBusquedaNormalizada(filtros), {
-    id,
-    generalId: id,
-    factorDerivado: 1,
-  });
-}
-
-export async function listarProductos(
-  filtros: FiltrosCatalogo = {},
-): Promise<ProductoListado[]> {
-  const lista = await listaVigente();
-  return productosCacheados(conBusquedaNormalizada(filtros), {
-    id: lista.id,
-    generalId: lista.generalId,
-    // En la clave del caché a propósito: si la clienta ajusta el porcentaje de
-    // una lista derivada, el factor cambia y el caché viejo deja de servirse.
-    factorDerivado: lista.factorDerivado,
-  });
-}
-
-/**
- * Los mismos filtros, con el término de búsqueda en su forma canónica.
- *
- * Los filtros son la clave del caché: sin esto, cada variante de escritura del
- * mismo término es una entrada nueva y tres consultas más. Ver
- * `normalizarBusqueda`.
- */
-function conBusquedaNormalizada(filtros: FiltrosCatalogo): FiltrosCatalogo {
-  if (!filtros.busqueda) return filtros;
-  return { ...filtros, busqueda: normalizarBusqueda(filtros.busqueda) };
-}
-
-/** Cuántos productos entran en una página del catálogo. */
-export const POR_PAGINA = 24;
-
-/**
- * Cuántas páginas de "ver más" se pueden acumular en una sola respuesta.
- *
- * Cinco son 120 productos, del orden de 745 KB de HTML medidos. Más que eso no
- * lo lee nadie de corrido: a esa altura se busca o se filtra.
- */
-export const TOPE_PAGINAS = 5;
-
-/**
- * Una página del catálogo, con el total para poder decir "viste N de M".
- *
- * **El recorte es acá y no en la consulta**, y eso es a propósito. Tres de los
- * filtros —disponibilidad, ofertas y el orden por precio— dependen de datos que
- * se arman después de traer las filas: el stock combinado de las dos
- * sucursales, y sobre todo el precio, que sale de la lista de la sesión y
- * decide si un producto está en oferta. Un `limit` en SQL cortaría antes de que
- * eso exista y devolvería páginas de tamaño equivocado, o peor, productos que
- * el filtro después descarta.
- *
- * Lo que esto resuelve es lo que se medió: con 312 productos la grilla completa
- * son del orden de 1,6 MB de HTML por carga. La base sigue leyendo el conjunto
- * filtrado entero, que con este catálogo es barato. Si algún día son varios
- * miles, el trabajo es mover el precio de lista y la regla de oferta a la
- * consulta, y recién ahí paginar en SQL.
- *
- * **El tope no es decorativo.** Como "ver más" acumula, el número de página
- * viene de la URL y nadie lo estaba acotando, cualquiera podía escribir
- * `?pagina=9999` y hacer que el servidor armara el catálogo entero en una sola
- * respuesta. Medido con 2025 productos: 250 KB en la primera página, 2,5 MB en
- * la veinte, **10,4 MB con `pagina=9999`**. En un celular eso no es lento, es
- * inusable. Con el tope, el techo de una respuesta queda en `TOPE_PAGINAS`
- * páginas y de ahí en más la pantalla invita a filtrar, que es como se busca en
- * un catálogo de ese tamaño.
- */
-export interface PaginaDeCatalogo {
-  productos: ProductoListado[];
-  total: number;
-  hayMas: boolean;
-  topeAlcanzado: boolean;
-}
-
-/**
- * La misma página, **sin preguntar quién mira**.
- *
- * Es a `paginaDeProductos` lo que `listarProductosPublicos` es a
- * `listarProductos`, y existe por el mismo motivo: el catálogo sale con el
- * precio de público y el navegador lo corrige para quien tiene lista propia.
- * El recorte es idéntico —lo hace `recortar`—; lo único que cambia es de dónde
- * salen los precios.
- */
-export async function paginaDeProductosPublica(
-  filtros: FiltrosCatalogo = {},
-  pagina = 1,
-): Promise<PaginaDeCatalogo> {
-  return recortar(await listarProductosPublicos(filtros), pagina);
-}
-
-export async function paginaDeProductos(
-  filtros: FiltrosCatalogo = {},
-  pagina = 1,
-): Promise<PaginaDeCatalogo> {
-  return recortar(await listarProductos(filtros), pagina);
-}
-
-function recortar(
-  todos: ProductoListado[],
-  pagina: number,
-): PaginaDeCatalogo {
-  const pedida = Math.max(1, Math.floor(pagina) || 1);
-  const acotada = Math.min(pedida, TOPE_PAGINAS);
-  const hasta = acotada * POR_PAGINA;
-  const quedanAfuera = todos.length > hasta;
-
-  return {
-    productos: todos.slice(0, hasta),
-    total: todos.length,
-    // Hay más para ver *y* todavía se puede pedir otra página.
-    hayMas: quedanAfuera && acotada < TOPE_PAGINAS,
-    // Se llegó al techo y aun así quedó catálogo sin mostrar.
-    topeAlcanzado: quedanAfuera && acotada >= TOPE_PAGINAS,
-  };
-}
-
-/**
- * Ordena el listado.
- *
- * Por defecto manda la relevancia comercial: primero lo que está en oferta,
- * después lo destacado y al final lo que no tiene stock, porque mostrar arriba
- * algo que no se puede comprar es la forma más rápida de que alguien se vaya.
- */
-function ordenar(
-  productos: ProductoListado[],
-  orden: OrdenCatalogo,
-): ProductoListado[] {
-  const lista = [...productos];
-
-  if (orden === "precio-asc" || orden === "precio-desc") {
-    const signo = orden === "precio-asc" ? 1 : -1;
-    return lista.sort((a, b) => {
-      // Lo que no tiene precio va al final en los dos sentidos.
-      if (a.precioDesde === null) return 1;
-      if (b.precioDesde === null) return -1;
-      return (Number(a.precioDesde) - Number(b.precioDesde)) * signo;
-    });
-  }
-
-  if (orden === "nombre") {
-    return lista.sort((a, b) => a.name.localeCompare(b.name, "es"));
-  }
-
-  return lista.sort((a, b) => {
-    if (a.hayStock !== b.hayStock) return a.hayStock ? -1 : 1;
-    if ((a.descuento !== null) !== (b.descuento !== null)) {
-      return a.descuento !== null ? -1 : 1;
-    }
-    if (a.featured !== b.featured) return a.featured ? -1 : 1;
-    return a.name.localeCompare(b.name, "es");
-  });
-}
-
-/**
- * Variantes con su precio y su stock por sucursal.
- *
- * La lista se filtra en el join y no con un LEFT JOIN abierto contra
- * `price_lists`: sin el filtro, las filas de la lista profesional entran con su
- * precio y terminan pisando al público. Es un error que no se ve —la página
- * muestra un número plausible— pero publica el precio mayorista.
- *
- * El precio sale de la lista que corresponde a quien está mirando —general para
- * el público, la propia para un profesional aprobado— y **cae a la general
- * cuando la lista alternativa no tiene ese producto cargado**. Sin ese respaldo,
- * un profesional vería medio catálogo sin precio, que es peor que verlo al
- * precio de público.
- */
-async function variantesConStockYPrecio(
-  productIds: string[],
-  lista: Pick<ListaVigente, "id" | "generalId" | "factorDerivado">,
-) {
-
-  // Dos joins con alias: uno a la lista vigente y otro a la general. Traer las
-  // dos filas en la misma consulta es lo que permite el respaldo sin una
-  // segunda vuelta a la base por cada producto sin precio propio.
-  const propia = alias(priceListItems, "precio_propio");
-  const general = alias(priceListItems, "precio_general");
-
-  // El factor de una lista derivada (la constructora, −N % de la general).
-  // Con factor 1 la expresión devuelve el precio general tal cual.
-  const factor = lista.factorDerivado ?? 1;
-
-  const filas = await db
-    .select({
-      productId: productVariants.productId,
-      variantId: productVariants.id,
-      label: productVariants.label,
-      sortOrder: productVariants.sortOrder,
-      precio: sql<string | null>`coalesce(${propia.price}, round((${general.price} * ${factor})::numeric, 2))`,
-      precioAnterior: sql<string | null>`coalesce(${propia.precioAnterior}, round((${general.precioAnterior} * ${factor})::numeric, 2))`,
-      // `sql<string>` y no `Date`: Drizzle solo convierte a Date las columnas
-      // que se seleccionan directo, no las que salen de una expresión. Tiparlo
-      // como Date compila y explota en tiempo de ejecución al llamar getTime().
-      ofertaHasta: sql<string | null>`coalesce(${propia.ofertaHasta}, ${general.ofertaHasta})`,
-      branchSlug: branches.slug,
-      qty: inventory.qty,
-      reservado: inventory.reservado,
-      minQty: inventory.minQty,
-    })
-    .from(productVariants)
-    .leftJoin(
-      propia,
-      lista.id
-        ? and(
-            eq(propia.variantId, productVariants.id),
-            eq(propia.priceListId, lista.id),
-          )
-        : sql`false`,
-    )
-    .leftJoin(
-      general,
-      lista.generalId
-        ? and(
-            eq(general.variantId, productVariants.id),
-            eq(general.priceListId, lista.generalId),
-          )
-        : sql`false`,
-    )
-    .leftJoin(inventory, eq(inventory.variantId, productVariants.id))
-    .leftJoin(branches, eq(branches.id, inventory.branchId))
-    .where(
-      and(
-        inArray(productVariants.productId, productIds),
-        eq(productVariants.active, true),
-      ),
-    )
-    .orderBy(asc(productVariants.sortOrder));
-
-  // Una variante aparece una vez por sucursal; se colapsan en un registro.
-  const ahora = Date.now();
-
-  const porVariante = new Map<
-    string,
-    {
-      productId: string;
-      label: string;
-      precio: string | null;
-      precioAnterior: string | null;
-      stockCentral: StockLevel;
-      stockAserradero: StockLevel;
-    }
-  >();
-
-  for (const fila of filas) {
-    const actual = porVariante.get(fila.variantId) ?? {
-      productId: fila.productId,
-      label: fila.label,
-      precio: fila.precio,
-      precioAnterior: null as string | null,
-      stockCentral: "sin-stock" as StockLevel,
-      stockAserradero: "sin-stock" as StockLevel,
-    };
-
-    if (fila.precio !== null) actual.precio = fila.precio;
-
-    // La oferta vale solo si no venció: una promoción que quedó cargada de un
-    // mes atrás no puede seguir mostrando un tachado.
-    const vigente =
-      fila.ofertaHasta === null ||
-      new Date(fila.ofertaHasta).getTime() > ahora;
-
-    if (fila.precioAnterior !== null && vigente) {
-      actual.precioAnterior = fila.precioAnterior;
-    }
-
-    if (fila.branchSlug && fila.qty !== null && fila.minQty !== null) {
-      // Disponible, no físico: lo comprometido en pedidos sin retirar no se
-      // puede volver a vender.
-      const nivel = stockLevel(
-        disponible(fila.qty, fila.reservado ?? 0),
-        fila.minQty,
-      );
-      if (fila.branchSlug === "casa-central") actual.stockCentral = nivel;
-      if (fila.branchSlug === "aserradero") actual.stockAserradero = nivel;
-    }
-
-    porVariante.set(fila.variantId, actual);
-  }
-
-  return [...porVariante.values()];
 }
 
 export interface VarianteDetalle {
@@ -756,11 +96,8 @@ export interface VarianteDetalle {
   stockCentral: StockLevel;
   stockAserradero: StockLevel;
   /**
-   * Cuántas unidades quedan entre las dos sucursales.
-   *
-   * La ficha lo muestra **solo cuando el nivel es bajo**, como promoción. Con
-   * stock alto el número no promociona nada y sí le dice a la competencia
-   * cuánto hay en el galpón, así que ahí sigue sin verse.
+   * Cuántas unidades quedan entre las dos sucursales. La ficha lo muestra
+   * solo cuando el nivel es bajo, como promoción.
    */
   disponibles: number;
 }
@@ -771,18 +108,13 @@ export interface ProductoDetalle {
   name: string;
   description: string;
   subcategory: string | null;
-  /** Slug del rubro, para poder enlazar al filtro desde la tarjeta. */
   subcategorySlug: string | null;
   subcategoryName: string | null;
   brand: string | null;
   unit: string;
-  /** Con qué alícuota se factura. La vitrina la necesita para desagregar bien. */
   alicuotaIva: string;
-  /** Se fabrica a pedido: la ficha lo dice en vez de mostrarlo como agotado. */
   aPedido: boolean;
-  /** Cómo se vende la placa: entera, entera o media, por m². */
   formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
-  /** Precio de la media placa, en % de la entera. */
   precioMediaPct: number;
   featured: boolean;
   categorySlug: string;
@@ -791,310 +123,11 @@ export interface ProductoDetalle {
   variantes: VarianteDetalle[];
 }
 
-/**
- * La ficha, para una lista de precios dada.
- *
- * La lista entra por argumento y no se resuelve adentro, igual que en el
- * listado: así el resultado se puede cachear y la clave incluye la lista, que
- * es lo que impide servirle a uno la ficha con los precios de otro.
- */
-async function consultarProducto(
-  slug: string,
-  lista: { id: string | null; generalId: string | null; factorDerivado: number },
-): Promise<ProductoDetalle | null> {
-  const [fila] = await db
-    .select({
-      id: products.id,
-      slug: products.slug,
-      name: products.name,
-      description: products.description,
-      subcategory: products.subcategory,
-      brand: products.brand,
-      unit: products.unit,
-      alicuotaIva: products.alicuotaIva,
-      aPedido: products.aPedido,
-      formaDeVenta: products.formaDeVenta,
-      precioMediaPct: products.precioMediaPct,
-      featured: products.featured,
-      categorySlug: categories.slug,
-      categoryName: categories.name,
-      subcategorySlug: subcategories.slug,
-      subcategoryName: subcategories.name,
-    })
-    .from(products)
-    .innerJoin(categories, eq(categories.id, products.categoryId))
-    .leftJoin(subcategories, eq(subcategories.id, products.subcategoryId))
-    .where(and(eq(products.slug, slug), eq(products.active, true)))
-    .limit(1);
-
-  if (!fila) return null;
-
-  const propia = alias(priceListItems, "precio_propio");
-  const general = alias(priceListItems, "precio_general");
-
-  const [imagenes, variantesCrudas] = await Promise.all([
-    db
-      .select({ url: productImages.url })
-      .from(productImages)
-      .where(eq(productImages.productId, fila.id))
-      .orderBy(asc(productImages.sortOrder)),
-    db
-      .select({
-        id: productVariants.id,
-        sku: productVariants.sku,
-        label: productVariants.label,
-        material: productVariants.material,
-        color: productVariants.color,
-        terminacion: productVariants.terminacion,
-        calidad: productVariants.calidad,
-        largoMm: productVariants.largoMm,
-        anchoMm: productVariants.anchoMm,
-        espesorMm: productVariants.espesorMm,
-        sortOrder: productVariants.sortOrder,
-        // Mismo respaldo que en el listado: la lista propia manda, la general
-        // —con el factor de una lista derivada— cubre lo que falte.
-        precio: sql<string | null>`coalesce(${propia.price}, round((${general.price} * ${lista.factorDerivado ?? 1})::numeric, 2))`,
-        branchSlug: branches.slug,
-        qty: inventory.qty,
-        reservado: inventory.reservado,
-        minQty: inventory.minQty,
-      })
-      .from(productVariants)
-      .leftJoin(
-        propia,
-        lista.id
-          ? and(
-              eq(propia.variantId, productVariants.id),
-              eq(propia.priceListId, lista.id),
-            )
-          : sql`false`,
-      )
-      .leftJoin(
-        general,
-        lista.generalId
-          ? and(
-              eq(general.variantId, productVariants.id),
-              eq(general.priceListId, lista.generalId),
-            )
-          : sql`false`,
-      )
-      .leftJoin(inventory, eq(inventory.variantId, productVariants.id))
-      .leftJoin(branches, eq(branches.id, inventory.branchId))
-      .where(
-        and(
-          eq(productVariants.productId, fila.id),
-          eq(productVariants.active, true),
-        ),
-      )
-      .orderBy(asc(productVariants.sortOrder)),
-  ]);
-
-  const porVariante = new Map<string, VarianteDetalle>();
-  for (const v of variantesCrudas) {
-    const actual = porVariante.get(v.id) ?? {
-      id: v.id,
-      sku: v.sku,
-      label: v.label,
-      material: v.material,
-      color: v.color,
-      terminacion: v.terminacion,
-      calidad: v.calidad,
-      largoMm: v.largoMm,
-      anchoMm: v.anchoMm,
-      espesorMm: v.espesorMm,
-      precio: null,
-      stockCentral: "sin-stock" as StockLevel,
-      stockAserradero: "sin-stock" as StockLevel,
-      disponibles: 0,
-    };
-
-    // El join ya restringe el precio a la lista general.
-    if (v.precio !== null) actual.precio = v.precio;
-
-    if (v.branchSlug && v.qty !== null && v.minQty !== null) {
-      const libre = disponible(v.qty, v.reservado ?? 0);
-      const nivel = stockLevel(libre, v.minQty);
-      if (v.branchSlug === "casa-central") actual.stockCentral = nivel;
-      if (v.branchSlug === "aserradero") actual.stockAserradero = nivel;
-      // Suma de las dos sucursales: es lo que se puede llevar hoy, sin importar
-      // de qué galpón salga.
-      actual.disponibles += libre;
-    }
-
-    porVariante.set(v.id, actual);
-  }
-
-  return {
-    ...fila,
-    imagenes: imagenes.map((i) => i.url),
-    variantes: [...porVariante.values()],
-  };
-}
-
-/**
- * La ficha, cacheada y compartida entre visitas.
- *
- * Eran nueve consultas por visita —producto, imágenes, variantes, precios,
- * stock, relacionados y reseñas— y tres de ellas repetidas, porque
- * `generateMetadata` pide la misma ficha que después arma la página.
- */
-const productoCacheado = cachearPublico(
-  consultarProducto,
-  ["catalogo", "producto"],
-  ETIQUETAS.catalogo,
-);
-
-/**
- * Ficha completa de un producto. Devuelve null si no existe o está dado de baja.
- *
- * Memoizada por pedido con `cache()` además del caché compartido: la página y
- * su `generateMetadata` piden la misma ficha, y sin esto se resolvía dos veces
- * en la misma carga.
- */
-export const obtenerProducto = cache(
-  async (slug: string): Promise<ProductoDetalle | null> => {
-    const lista = await listaVigente();
-    return productoCacheado(slug, {
-      id: lista.id,
-      generalId: lista.generalId,
-      factorDerivado: lista.factorDerivado,
-    });
-  },
-);
-
-/**
- * La ficha **a precio de público**, la misma para todo el que entre.
- *
- * Es la gemela de `listarProductosPublicos` y existe por lo mismo: sin
- * preguntar quién mira, el HTML de la ficha es uno solo y se puede servir de la
- * caché en vez de armarlo en cada visita.
- *
- * **Ya se había escrito una vez y se borró**, con este argumento: la ficha
- * muestra el precio de *cada variante*, y lo que corregía el precio solo sabía
- * de un precio por producto. Eso ya no es cierto: `preciosPropiosPorVariante`
- * da el mapa por variante, y `preciosDeFicha` (`lib/dal/visitante.ts`) le
- * pasa a la ficha las de ese producto.
- *
- * El otro argumento de entonces era que la ficha ya hacía cero consultas para
- * el visitante sin sesión. Sigue siendo verdad y sigue sin ser el punto: no
- * consultar la base no es no gastar. Armar la ficha entera —galería, variantes,
- * reseñas, sugeridos, datos estructurados— es tiempo de CPU, se paga en cada
- * visita, y con trescientas fichas recorridas por los buscadores eso es todos
- * los días.
- */
-export const obtenerProductoPublico = cache(
-  async (slug: string): Promise<ProductoDetalle | null> => {
-    const general = await listaGeneral();
-    const id = general?.id ?? null;
-    return productoCacheado(slug, { id, generalId: id, factorDerivado: 1 });
-  },
-);
-
-/**
- * Qué precio tiene cada variante para la lista de quien pide.
- *
- * Es lo que permite que la ficha se sirva a precio de público y el navegador la
- * corrija: la tarjeta del listado se arregla con un precio por producto, pero
- * la ficha muestra el de la medida elegida y necesita el detalle.
- *
- * **Solo devuelve algo para una lista diferenciada.** Para el público —y para
- * el cliente con cuenta que compra a precio de lista general— no hay nada que
- * corregir, y un mapa vacío es la respuesta correcta y la más barata.
- *
- * Cacheado por lista, con la misma regla de siempre: la lista viaja en la clave,
- * así que la entrada de uno nunca se le puede servir a otro.
- */
-const preciosDeVarianteCacheados = cachearPublico(
-  async (
-    lista: Pick<ListaVigente, "id" | "generalId" | "factorDerivado">,
-  ): Promise<Record<string, string>> => {
-    const propia = alias(priceListItems, "precio_propio");
-    const general = alias(priceListItems, "precio_general");
-
-    const filas = await db
-      .select({
-        id: productVariants.id,
-        precio: sql<
-          string | null
-        >`coalesce(${propia.price}, round((${general.price} * ${lista.factorDerivado ?? 1})::numeric, 2))`,
-      })
-      .from(productVariants)
-      .innerJoin(
-        products,
-        and(
-          eq(products.id, productVariants.productId),
-          eq(products.active, true),
-        ),
-      )
-      .leftJoin(
-        propia,
-        lista.id
-          ? and(
-              eq(propia.variantId, productVariants.id),
-              eq(propia.priceListId, lista.id),
-            )
-          : sql`false`,
-      )
-      .leftJoin(
-        general,
-        lista.generalId
-          ? and(
-              eq(general.variantId, productVariants.id),
-              eq(general.priceListId, lista.generalId),
-            )
-          : sql`false`,
-      )
-      .where(eq(productVariants.active, true));
-
-    const mapa: Record<string, string> = {};
-    for (const f of filas) if (f.precio !== null) mapa[f.id] = f.precio;
-    return mapa;
-  },
-  ["catalogo", "precios-variante"],
-  ETIQUETAS.catalogo,
-);
-
-export async function preciosPropiosPorVariante(): Promise<
-  Record<string, string>
-> {
-  const lista = await listaVigente();
-  if (!lista.esDiferenciada) return {};
-  return preciosDeVarianteCacheados({
-    id: lista.id,
-    generalId: lista.generalId,
-    factorDerivado: lista.factorDerivado,
-  });
-}
-
-/**
- * Con qué productos está vinculado, según lo que cargó el vendedor.
- *
- * Cacheado: es una lista corta que cambia cuando alguien la edita en el panel,
- * y se pedía en cada visita a cada ficha.
- */
-const vinculosCacheados = cachearPublico(
-  async (productId: string) =>
-    db
-      .select({
-        relatedProductId: relatedProducts.relatedProductId,
-        tipo: relatedProducts.tipo,
-        orden: relatedProducts.orden,
-      })
-      .from(relatedProducts)
-      .where(eq(relatedProducts.productId, productId))
-      .orderBy(asc(relatedProducts.orden)),
-  ["catalogo", "vinculos"],
-  ETIQUETAS.catalogo,
-);
-
-/** Otros productos de la misma categoría, para el bloque de relacionados. */
-export async function productosRelacionados(
-  categorySlug: string,
-  excluirSlug: string,
-  limite = 4,
-): Promise<ProductoListado[]> {
-  const todos = await listarProductos({ categoria: categorySlug });
-  return todos.filter((p) => p.slug !== excluirSlug).slice(0, limite);
+export interface PaginaDeCatalogo {
+  productos: ProductoListado[];
+  total: number;
+  hayMas: boolean;
+  topeAlcanzado: boolean;
 }
 
 export interface Sugeridos {
@@ -1106,206 +139,194 @@ export interface Sugeridos {
   similaresPorCategoria: boolean;
 }
 
-/**
- * Los productos sugeridos de una ficha (cláusula 1.3).
- *
- * Se cargan a mano desde el panel porque el criterio lo tiene el vendedor:
- * ninguna heurística sabe que a un deck de grandis le corresponde ese fijador y
- * no otro. Pero una ficha sin nada cargado no puede quedar vacía —son
- * doscientos productos y la carga va a ser gradual—, así que los **similares**
- * caen a otros de la misma categoría.
- *
- * Los complementarios no tienen respaldo automático: sugerir un complemento
- * equivocado es peor que no sugerir ninguno. "También podés necesitar" al lado
- * de algo que no sirve para este producto quema la confianza de todo el bloque.
- *
- * Los inactivos y los sin stock quedan afuera: `listarProductos` ya filtra por
- * `active`, y acá se manda al fondo lo que no se puede comprar.
- */
-export async function productosSugeridos(
-  productId: string,
-  categorySlug: string,
-  excluirSlug: string,
-  limite = 4,
-): Promise<Sugeridos> {
-  const vinculos = await vinculosCacheados(productId);
+/** Cuántos productos entran en una página del catálogo (el de Go: PorPagina). */
+export const POR_PAGINA = 24;
 
-  const idsComplementarios = vinculos
-    .filter((v) => v.tipo === "complementario")
-    .map((v) => v.relatedProductId);
-  const idsSimilares = vinculos
-    .filter((v) => v.tipo === "similar")
-    .map((v) => v.relatedProductId);
-
-  /*
-   * A precio de público, como la ficha que los muestra: son tarjetas de
-   * producto y el navegador les corrige el precio igual que en el catálogo.
-   * Preguntar acá qué lista corresponde ataría la ficha entera a la sesión.
-   */
-  const [cargados, deCategoria] = await Promise.all([
-    listarProductosPublicos({ ids: [...idsComplementarios, ...idsSimilares] }),
-    idsSimilares.length === 0
-      ? listarProductosPublicos({ categoria: categorySlug })
-      : Promise.resolve([]),
-  ]);
-
-  /** Devuelve los productos en el orden en que los cargó el vendedor. */
-  const enOrden = (ids: string[]) =>
-    ids
-      .map((id) => cargados.find((p) => p.id === id))
-      .filter((p): p is ProductoListado => p !== undefined)
-      .slice(0, limite);
-
-  const similares = enOrden(idsSimilares);
-
-  return {
-    complementarios: enOrden(idsComplementarios),
-    similares:
-      similares.length > 0
-        ? similares
-        : deCategoria.filter((p) => p.slug !== excluirSlug).slice(0, limite),
-    similaresPorCategoria: idsSimilares.length === 0,
-  };
-}
-
-/**
- * Complementos de lo que ya está en el carrito.
- *
- * El momento de acordarse del sellador es cuando el deck ya está en la lista,
- * no cuando se estaba mirando la ficha. Por eso el bloque va también acá, y por
- * eso solo muestra **complementarios**: ofrecer alternativas a esta altura es
- * invitar a deshacer una decisión que la persona ya tomó.
- *
- * Se excluye lo que ya está en el carrito —sugerir algo que ya se agregó hace
- * ver el bloque como ruido— y no hay respaldo por categoría: si nadie cargó
- * complementos, no se muestra nada.
- */
-export async function complementosDelCarrito(
-  variantIds: string[],
-  limite = 4,
-): Promise<ProductoListado[]> {
-  const ids = variantIds.filter(Boolean);
-  if (ids.length === 0) return [];
-
-  // De las variantes del carrito a sus productos, y de ahí a los complementos.
-  const enElCarrito = await db
-    .selectDistinct({ productId: productVariants.productId })
-    .from(productVariants)
-    .where(inArray(productVariants.id, ids));
-
-  const propios = enElCarrito.map((p) => p.productId);
-  if (propios.length === 0) return [];
-
-  const vinculos = await db
-    .select({ relatedProductId: relatedProducts.relatedProductId })
-    .from(relatedProducts)
-    .where(
-      and(
-        inArray(relatedProducts.productId, propios),
-        eq(relatedProducts.tipo, "complementario"),
-      ),
-    )
-    .orderBy(asc(relatedProducts.orden));
-
-  const yaEsta = new Set(propios);
-  const candidatos = [
-    ...new Set(
-      vinculos
-        .map((v) => v.relatedProductId)
-        .filter((id) => !yaEsta.has(id)),
-    ),
-  ];
-
-  if (candidatos.length === 0) return [];
-
-  const productos = await listarProductos({ ids: candidatos });
-
-  // Lo que no se puede comprar no se sugiere: mandar a alguien a una ficha sin
-  // stock desde su propio carrito es peor que no sugerir nada.
-  return productos.filter((p) => p.hayStock).slice(0, limite);
-}
-
-/**
- * Todo lo que la portada necesita, en una sola pasada.
- *
- * Se resuelve acá y no en cada sección para no repetir la consulta de productos
- * tres veces: las ofertas, los destacados y los conteos salen del mismo listado.
- */
-/**
- * El año de fundación vive en `lib/empresa.ts`, junto al resto de lo que el
- * sitio afirma sobre la empresa. Se reexporta acá porque media docena de
- * módulos ya lo importaban desde este archivo.
- */
+/** El año de fundación vive en `lib/empresa.ts`; se reexporta por los que ya lo importaban de acá. */
 export { ANIO_FUNDACION } from "@/lib/empresa";
 
-/**
- * Los números que la página "Nosotros" muestra en grande.
- *
- * Salen de la base y del calendario, no de constantes: decían "43 años" en
- * 2026 —eran 45— y "200+ productos" con un catálogo que tenía otra cantidad.
- * Un número inventado en la página institucional es de las pocas cosas que un
- * visitante puede verificar solo, y desmiente todo lo demás.
- *
- * La hora se lee acá y no durante el render de la página, que es donde sería
- * una impureza.
- */
-export const numerosDeLaEmpresa = cache(
-  cachearPublico(async () => {
-  /*
-   * Los cuatro conteos en una sola consulta y no en cuatro en paralelo.
-   *
-   * Paralelas no tardan más, pero son cuatro viajes y cuatro conexiones del
-   * pool por cada carga de la portada y de "Nosotros", que es de lo que más se
-   * pide. Contar cuatro tablas chicas es trabajo que Postgres hace de una.
-   */
-  const [fila] = await db
-    .select({
-      productos: sql<number>`(select count(*) from ${products} where ${products.active})::int`,
-      medidas: sql<number>`(select count(*) from ${productVariants} where ${productVariants.active})::int`,
-      sucursales: sql<number>`(select count(*) from ${branches} where ${branches.active})::int`,
-      rubros: sql<number>`(select count(*) from ${categories} where ${categories.active})::int`,
-    })
-    .from(sql`(select 1) as x`);
-
+/** Los filtros como parámetros de la API. */
+function consulta(filtros: FiltrosCatalogo) {
   return {
-    anios: aniosDeTrayectoria(),
-    productos: fila?.productos ?? 0,
-    medidas: fila?.medidas ?? 0,
-    sucursales: fila?.sucursales ?? 0,
-    rubros: fila?.rubros ?? 0,
+    categoria: filtros.categoria,
+    subcategoria: filtros.subcategoria,
+    busqueda: filtros.busqueda ? normalizarBusqueda(filtros.busqueda) : undefined,
+    stock: filtros.stock,
+    orden: filtros.orden,
+    soloOfertas: filtros.soloOfertas,
+    marca: filtros.marca,
+    ids: filtros.ids?.join(","),
   };
-  },
-  ["numeros-de-la-empresa"],
-  ETIQUETAS.catalogo,
+}
+
+/** Los mismos filtros con la búsqueda canónica: son la clave de la caché. */
+function claveDeFiltros(filtros: FiltrosCatalogo): FiltrosCatalogo {
+  return filtros.busqueda ? { ...filtros, busqueda: normalizarBusqueda(filtros.busqueda) } : filtros;
+}
+
+/** Categorías con la cantidad real de productos activos. */
+export const listarCategorias = cache(
+  cachearPublico(
+    async () => datos(await apiPublica.GET("/api/v1/catalogo/categorias")),
+    ["categorias"],
+    ETIQUETAS.catalogo,
   ),
 );
 
-export async function datosDePortada() {
-  const [categorias, todos] = await Promise.all([
-    listarCategorias(),
-    // Pública a propósito: es lo que deja la portada armada de antemano. El
-    // precio del profesional llega aparte, en cada tarjeta.
-    listarProductosPublicos(),
-  ]);
+/** Las marcas del catálogo, o las de una categoría. */
+export const marcasDelCatalogo = cache(
+  cachearPublico(
+    async (categoria?: string) =>
+      datos(await apiPublica.GET("/api/v1/catalogo/marcas", { params: { query: { categoria } } })),
+    ["marcas"],
+    ETIQUETAS.catalogo,
+  ),
+);
 
-  const ofertas = todos.filter((p) => p.descuento !== null).slice(0, 4);
+/** Los rubros de una categoría que tienen algo cargado. */
+export const rubrosDeCategoria = cache(
+  cachearPublico(
+    async (categoria: string) =>
+      datos(await apiPublica.GET("/api/v1/catalogo/rubros", { params: { query: { categoria } } })),
+    ["subcategorias"],
+    ETIQUETAS.catalogo,
+  ),
+);
 
-  // Si no hay ofertas cargadas, la sección se llena con los destacados en vez
-  // de quedar vacía: una portada con un hueco se lee como que algo falló.
-  const destacados = todos
-    .filter((p) => p.featured && p.hayStock && !ofertas.includes(p))
-    .slice(0, 4);
+const productosPublicosCacheados = cachearPublico(
+  async (filtros: FiltrosCatalogo): Promise<ProductoListado[]> =>
+    datos(
+      await apiPublica.GET("/api/v1/catalogo/productos", {
+        params: { query: { ...consulta(filtros), publico: true } },
+      }),
+    ) as ProductoListado[],
+  ["catalogo", "productos"],
+  ETIQUETAS.catalogo,
+);
 
-  const conStock = todos.filter((p) => p.hayStock).length;
-
-  return {
-    categorias,
-    ofertas,
-    destacados:
-      destacados.length > 0
-        ? destacados
-        : todos.filter((p) => p.hayStock).slice(0, 4),
-    totalProductos: todos.length,
-    conStock,
-  };
+/**
+ * El catálogo **sin preguntar quién mira**, siempre a precio de público. Es lo
+ * que deja servir la portada y el catálogo desde la caché; el precio del
+ * profesional llega aparte, en `lib/dal/visitante.ts`.
+ */
+export async function listarProductosPublicos(filtros: FiltrosCatalogo = {}): Promise<ProductoListado[]> {
+  if (filtros.ids && filtros.ids.length === 0) return [];
+  return productosPublicosCacheados(claveDeFiltros(filtros));
 }
+
+/** El catálogo a la lista de quien mira. No se cachea entre personas. */
+export async function listarProductos(filtros: FiltrosCatalogo = {}): Promise<ProductoListado[]> {
+  if (filtros.ids && filtros.ids.length === 0) return [];
+  return datos(
+    await (await api()).GET("/api/v1/catalogo/productos", { params: { query: consulta(filtros) } }),
+  ) as ProductoListado[];
+}
+
+/**
+ * Los productos en oferta para quien mira, memoizados: el catálogo arma el
+ * panel de filtros dos veces (el cajón del teléfono y la columna del
+ * escritorio) y las dos los piden.
+ */
+export const productosEnOferta = cache(() => listarProductos({ soloOfertas: true }));
+
+/**
+ * Una página del catálogo a precio de público, con el total para decir «viste
+ * N de M». El recorte y el tope (5 páginas, que evita ?pagina=9999) los hace Go.
+ */
+const paginaCacheada = cachearPublico(
+  async (filtros: FiltrosCatalogo, pagina: number): Promise<PaginaDeCatalogo> => {
+    if (filtros.ids && filtros.ids.length === 0) {
+      return { productos: [], total: 0, hayMas: false, topeAlcanzado: false };
+    }
+    return datos(
+      await apiPublica.GET("/api/v1/catalogo/productos/pagina", {
+        params: { query: { ...consulta(filtros), pagina: Math.max(1, Math.floor(pagina) || 1), publico: true } },
+      }),
+    ) as PaginaDeCatalogo;
+  },
+  ["catalogo", "pagina"],
+  ETIQUETAS.catalogo,
+);
+
+export function paginaDeProductosPublica(filtros: FiltrosCatalogo = {}, pagina = 1): Promise<PaginaDeCatalogo> {
+  return paginaCacheada(claveDeFiltros(filtros), pagina);
+}
+
+/**
+ * La ficha **a precio de público**, la misma para todo el que entre (el precio
+ * de la lista propia lo corrige `preciosDeFicha`). Null si no existe o está
+ * dada de baja. Memoizada por pedido: la página y su `generateMetadata` piden
+ * la misma.
+ */
+export const obtenerProductoPublico = cache(
+  cachearPublico(
+    async (slug: string): Promise<ProductoDetalle | null> => {
+      const r = await apiPublica.GET("/api/v1/catalogo/productos/{slug}", {
+        params: { path: { slug }, query: { publico: true } },
+      });
+      if (r.response.status === 404) return null;
+      return datos(r) as ProductoDetalle;
+    },
+    ["catalogo", "producto"],
+    ETIQUETAS.catalogo,
+  ),
+);
+
+/**
+ * Qué precio tiene cada variante para la lista de quien pide. Vacío para la
+ * lista general: no hay nada que corregir.
+ */
+export async function preciosPropiosPorVariante(): Promise<Record<string, string>> {
+  return datos(await (await api()).GET("/api/v1/catalogo/precios-por-variante"));
+}
+
+/**
+ * Los sugeridos de una ficha: los que cargó el vendedor, y si no cargó
+ * similares, otros de la categoría. A precio de público, como la ficha.
+ */
+const sugeridosCacheados = cachearPublico(
+  async (productId: string, categorySlug: string, excluirSlug: string, limite: number): Promise<Sugeridos> =>
+    datos(
+      await apiPublica.GET("/api/v1/catalogo/productos/{id}/sugeridos", {
+        params: { path: { id: productId }, query: { categoria: categorySlug, excluir: excluirSlug, limite } },
+      }),
+    ) as Sugeridos,
+  ["catalogo", "sugeridos"],
+  ETIQUETAS.catalogo,
+);
+
+export function productosSugeridos(productId: string, categorySlug: string, excluirSlug: string, limite = 4): Promise<Sugeridos> {
+  return sugeridosCacheados(productId, categorySlug, excluirSlug, limite);
+}
+
+/** Complementos de lo que ya está en el carrito, con stock, a la lista de quien mira. */
+export async function complementosDelCarrito(variantIds: string[], limite = 4): Promise<ProductoListado[]> {
+  const variantes = variantIds.filter(Boolean);
+  if (variantes.length === 0) return [];
+  return datos(
+    await (await api()).POST("/api/v1/catalogo/complementos", { body: { variantes, limite } }),
+  ) as ProductoListado[];
+}
+
+/** Los números que la página «Nosotros» muestra en grande, contados en la base. */
+export const numerosDeLaEmpresa = cache(
+  cachearPublico(
+    async () => datos(await apiPublica.GET("/api/v1/catalogo/numeros")),
+    ["numeros-de-la-empresa"],
+    ETIQUETAS.catalogo,
+  ),
+);
+
+/** Todo lo que la portada necesita, en una sola pasada y a precio de público. */
+export const datosDePortada = cachearPublico(
+  async () => {
+    const p = datos(await apiPublica.GET("/api/v1/catalogo/portada"));
+    return {
+      ...p,
+      ofertas: p.ofertas as ProductoListado[],
+      destacados: p.destacados as ProductoListado[],
+    };
+  },
+  ["portada"],
+  ETIQUETAS.catalogo,
+);

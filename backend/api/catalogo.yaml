@@ -1,0 +1,349 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Catálogo
+  version: "1"
+  description: |
+    El catálogo público: categorías, productos, fichas, precios por lista,
+    sugeridos y la portada. Las formas son las de lib/dal/catalog.ts (los
+    nombres de campo y los precios como texto), para que las páginas de Next
+    no cambien.
+
+    **Precios.** Sin `publico=true`, los precios salen de la lista de quien
+    pide (la del perfil, la de su ficha, o la general). Con `publico=true`,
+    siempre de la general: es lo que Next guarda en su caché compartida, y por
+    eso nunca puede depender de la cookie.
+paths:
+  /api/v1/catalogo/lista:
+    get:
+      operationId: ListaVigente
+      summary: Qué lista de precios le toca a quien pide, y cómo se muestran
+      responses:
+        "200":
+          description: La lista y la vista
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ListaYVista" }
+  /api/v1/catalogo/categorias:
+    get:
+      operationId: Categorias
+      responses:
+        "200":
+          description: Las categorías activas, con cuántos productos tiene cada una
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Categoria" } }
+  /api/v1/catalogo/marcas:
+    get:
+      operationId: Marcas
+      parameters:
+        - { name: categoria, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Las marcas, de más a menos productos
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Marca" } }
+  /api/v1/catalogo/rubros:
+    get:
+      operationId: Rubros
+      parameters:
+        - { name: categoria, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Los rubros de la categoría que tienen productos
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Rubro" } }
+  /api/v1/catalogo/productos:
+    get:
+      operationId: Productos
+      summary: El listado filtrado y ordenado
+      parameters:
+        - $ref: "#/components/parameters/filtro_categoria"
+        - $ref: "#/components/parameters/filtro_subcategoria"
+        - $ref: "#/components/parameters/filtro_busqueda"
+        - $ref: "#/components/parameters/filtro_stock"
+        - $ref: "#/components/parameters/filtro_orden"
+        - $ref: "#/components/parameters/filtro_soloOfertas"
+        - $ref: "#/components/parameters/filtro_marca"
+        - $ref: "#/components/parameters/filtro_ids"
+        - $ref: "#/components/parameters/filtro_publico"
+      responses:
+        "200":
+          description: Los productos
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ProductoListado" } }
+  /api/v1/catalogo/productos/pagina:
+    get:
+      operationId: PaginaDeProductos
+      summary: Una página del listado (24 por página, hasta 5 acumuladas)
+      parameters:
+        - $ref: "#/components/parameters/filtro_categoria"
+        - $ref: "#/components/parameters/filtro_subcategoria"
+        - $ref: "#/components/parameters/filtro_busqueda"
+        - $ref: "#/components/parameters/filtro_stock"
+        - $ref: "#/components/parameters/filtro_orden"
+        - $ref: "#/components/parameters/filtro_soloOfertas"
+        - $ref: "#/components/parameters/filtro_marca"
+        - $ref: "#/components/parameters/filtro_ids"
+        - $ref: "#/components/parameters/filtro_publico"
+        - { name: pagina, in: query, schema: { type: integer, default: 1 } }
+      responses:
+        "200":
+          description: La página
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaginaDeCatalogo" }
+  /api/v1/catalogo/productos/{slug}:
+    get:
+      operationId: Producto
+      summary: La ficha
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+        - $ref: "#/components/parameters/filtro_publico"
+      responses:
+        "200":
+          description: La ficha
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductoDetalle" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/catalogo/productos/{id}/sugeridos:
+    get:
+      operationId: Sugeridos
+      summary: Complementarios y similares de una ficha, a precio de público
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: categoria, in: query, required: true, schema: { type: string } }
+        - { name: excluir, in: query, required: true, schema: { type: string } }
+        - { name: limite, in: query, schema: { type: integer, default: 4, minimum: 1, maximum: 24 } }
+      responses:
+        "200":
+          description: Los sugeridos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sugeridos" }
+  /api/v1/catalogo/precios-por-variante:
+    get:
+      operationId: PreciosPorVariante
+      summary: El precio de cada variante para la lista de quien pide (vacío si es la general)
+      responses:
+        "200":
+          description: Variante → precio
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: { type: string } }
+  /api/v1/catalogo/complementos:
+    post:
+      operationId: Complementos
+      summary: Los complementarios de lo que hay en el carrito
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantes]
+              additionalProperties: false
+              properties:
+                variantes: { type: array, maxItems: 200, items: { type: string } }
+                limite: { type: integer, default: 4, minimum: 1, maximum: 24 }
+      responses:
+        "200":
+          description: Los complementos con stock
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ProductoListado" } }
+  /api/v1/catalogo/numeros:
+    get:
+      operationId: Numeros
+      responses:
+        "200":
+          description: Los números de la empresa
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Numeros" }
+  /api/v1/catalogo/portada:
+    get:
+      operationId: Portada
+      responses:
+        "200":
+          description: Todo lo de la portada, a precio de público
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Portada" }
+components:
+  parameters:
+    filtro_categoria: { name: categoria, in: query, schema: { type: string } }
+    filtro_subcategoria: { name: subcategoria, in: query, schema: { type: string } }
+    filtro_busqueda: { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+    filtro_stock: { name: stock, in: query, schema: { type: string, enum: [todos, en-stock, casa-central, aserradero] } }
+    filtro_orden: { name: orden, in: query, schema: { type: string, enum: [relevancia, precio-asc, precio-desc, nombre] } }
+    filtro_soloOfertas: { name: soloOfertas, in: query, schema: { type: boolean } }
+    filtro_marca: { name: marca, in: query, schema: { type: string } }
+    filtro_ids:
+      name: ids
+      in: query
+      description: Un conjunto puntual de productos (por id, separados por coma). Vacío es «ninguno».
+      schema: { type: string }
+    filtro_publico:
+      name: publico
+      in: query
+      description: Precios de la lista general, sin mirar la sesión (lo que se cachea para todos)
+      schema: { type: boolean }
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    NivelStock: { type: string, enum: [alto, medio, bajo, sin-stock] }
+    ListaYVista:
+      type: object
+      required: [lista, vista]
+      properties:
+        lista:
+          type: object
+          required: [id, generalId, nombre, esDiferenciada, factorDerivado]
+          properties:
+            id: { type: string, nullable: true }
+            generalId: { type: string, nullable: true }
+            nombre: { type: string, nullable: true }
+            esDiferenciada: { type: boolean }
+            factorDerivado: { type: number }
+        vista: { type: string, enum: [final, neto] }
+    Categoria:
+      type: object
+      required: [id, slug, name, description, icon, image, productCount]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        icon: { type: string, nullable: true }
+        image: { type: string, nullable: true }
+        productCount: { type: integer }
+    Marca:
+      type: object
+      required: [nombre, productCount]
+      properties:
+        nombre: { type: string }
+        productCount: { type: integer }
+    Rubro:
+      type: object
+      required: [slug, name, productCount]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        productCount: { type: integer }
+    ProductoListado:
+      type: object
+      required: [id, slug, name, description, subcategory, subcategorySlug, subcategoryName, brand, unit, alicuotaIva, aPedido, formaDeVenta, precioMediaPct, featured, categorySlug, categoryName, image, precioDesde, precioAnterior, descuento, labels, stockCentral, stockAserradero, hayStock]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        subcategory: { type: string, nullable: true }
+        subcategorySlug: { type: string, nullable: true }
+        subcategoryName: { type: string, nullable: true }
+        brand: { type: string, nullable: true }
+        unit: { type: string }
+        alicuotaIva: { type: string }
+        aPedido: { type: boolean }
+        formaDeVenta: { type: string, enum: [entera, entera_o_media, metro_cuadrado] }
+        precioMediaPct: { type: number }
+        featured: { type: boolean }
+        categorySlug: { type: string }
+        categoryName: { type: string }
+        image: { type: string, nullable: true }
+        precioDesde: { type: string, nullable: true }
+        precioAnterior: { type: string, nullable: true }
+        descuento: { type: number, nullable: true }
+        labels: { type: array, items: { type: string } }
+        stockCentral: { $ref: "#/components/schemas/NivelStock" }
+        stockAserradero: { $ref: "#/components/schemas/NivelStock" }
+        hayStock: { type: boolean }
+    PaginaDeCatalogo:
+      type: object
+      required: [productos, total, hayMas, topeAlcanzado]
+      properties:
+        productos: { type: array, items: { $ref: "#/components/schemas/ProductoListado" } }
+        total: { type: integer }
+        hayMas: { type: boolean }
+        topeAlcanzado: { type: boolean }
+    VarianteDetalle:
+      type: object
+      required: [id, sku, label, material, color, terminacion, calidad, largoMm, anchoMm, espesorMm, precio, stockCentral, stockAserradero, disponibles]
+      properties:
+        id: { type: string }
+        sku: { type: string }
+        label: { type: string }
+        material: { type: string, nullable: true }
+        color: { type: string, nullable: true }
+        terminacion: { type: string, nullable: true }
+        calidad: { type: string, nullable: true }
+        largoMm: { type: integer, nullable: true }
+        anchoMm: { type: integer, nullable: true }
+        espesorMm: { type: integer, nullable: true }
+        precio: { type: string, nullable: true }
+        stockCentral: { $ref: "#/components/schemas/NivelStock" }
+        stockAserradero: { $ref: "#/components/schemas/NivelStock" }
+        disponibles: { type: number }
+    ProductoDetalle:
+      type: object
+      required: [id, slug, name, description, subcategory, subcategorySlug, subcategoryName, brand, unit, alicuotaIva, aPedido, formaDeVenta, precioMediaPct, featured, categorySlug, categoryName, imagenes, variantes]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        subcategory: { type: string, nullable: true }
+        subcategorySlug: { type: string, nullable: true }
+        subcategoryName: { type: string, nullable: true }
+        brand: { type: string, nullable: true }
+        unit: { type: string }
+        alicuotaIva: { type: string }
+        aPedido: { type: boolean }
+        formaDeVenta: { type: string, enum: [entera, entera_o_media, metro_cuadrado] }
+        precioMediaPct: { type: number }
+        featured: { type: boolean }
+        categorySlug: { type: string }
+        categoryName: { type: string }
+        imagenes: { type: array, items: { type: string } }
+        variantes: { type: array, items: { $ref: "#/components/schemas/VarianteDetalle" } }
+    Sugeridos:
+      type: object
+      required: [complementarios, similares, similaresPorCategoria]
+      properties:
+        complementarios: { type: array, items: { $ref: "#/components/schemas/ProductoListado" } }
+        similares: { type: array, items: { $ref: "#/components/schemas/ProductoListado" } }
+        similaresPorCategoria: { type: boolean }
+    Numeros:
+      type: object
+      required: [anios, productos, medidas, sucursales, rubros]
+      properties:
+        anios: { type: integer }
+        productos: { type: integer }
+        medidas: { type: integer }
+        sucursales: { type: integer }
+        rubros: { type: integer }
+    Portada:
+      type: object
+      required: [categorias, ofertas, destacados, totalProductos, conStock]
+      properties:
+        categorias: { type: array, items: { $ref: "#/components/schemas/Categoria" } }
+        ofertas: { type: array, items: { $ref: "#/components/schemas/ProductoListado" } }
+        destacados: { type: array, items: { $ref: "#/components/schemas/ProductoListado" } }
+        totalProductos: { type: integer }
+        conStock: { type: integer }

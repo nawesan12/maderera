@@ -51,6 +51,29 @@ export const api = cache(async () =>
   createClient<paths>({ baseUrl: API_URL, cache: "no-store", headers: await cabecerasDelPedido() }),
 );
 
+/**
+ * El cliente **sin la sesión**, para lo que Next guarda en su caché compartida
+ * (cachearPublico): la portada, el catálogo, las fichas a precio de público.
+ *
+ * No manda la cookie a propósito, y las rutas que dependen de la lista se
+ * piden con `publico=true`: una respuesta con los precios de un profesional
+ * guardada en esa caché se le serviría a cualquiera. No lee nada de la
+ * petición, así que sirve también en el prerender del build.
+ */
+export const apiPublica = createClient<paths>({ baseUrl: API_URL, cache: "no-store" });
+
+/**
+ * Lo que devolvió la API, o un error si no. Para las lecturas: en la API un
+ * error es de verdad (la base, un bug), y una página que lo tape mostraría un
+ * catálogo vacío como si lo estuviera.
+ */
+export function datos<T>(r: { data?: T; error?: unknown; response: Response }): T {
+  if (r.data === undefined) {
+    throw new Error(`La API respondió ${r.response.status} en ${new URL(r.response.url).pathname}`);
+  }
+  return r.data;
+}
+
 /** El problem+json de la API (RFC 9457), con los errores por campo. */
 export interface Problema {
   title: string;

@@ -6,8 +6,10 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
+	"mjbj/internal/api/catalogoapi"
 	"mjbj/internal/api/sesionapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/catalogo"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -74,10 +76,20 @@ func correrAPI() error {
 		sesionapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	catalogoapi.HandlerWithOptions(
+		catalogoapi.NewStrictHandlerWithOptions(catalogo.NuevaAPI(catalogo.Nuevo(pool)),
+			[]catalogoapi.StrictMiddlewareFunc{plataforma.ConPedido[catalogoapi.StrictHandlerFunc]},
+			catalogoapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		catalogoapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
-	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger} {
+	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger} {
 		s, err := spec()
 		if err != nil {
 			return err

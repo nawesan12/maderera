@@ -56,6 +56,12 @@ func TestComoJS(t *testing.T) {
 			t.Fatalf("%q: %v", c.Texto, err)
 		}
 		revisar("ParseFloat", x, n, deBits(t, c.Numero))
+		if got := Texto(x); got != c.Texto {
+			fallos++
+			if fallos <= 20 {
+				t.Errorf("Texto(%v) = %q, String() de JS da %q", x, got, c.Texto)
+			}
+		}
 	}
 	if fallos > 0 {
 		t.Fatalf("%d diferencias con JS", fallos)

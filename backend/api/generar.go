@@ -5,3 +5,4 @@
 package api
 
 //go:generate go tool oapi-codegen -config sesion.gen.yaml sesion.yaml
+//go:generate go tool oapi-codegen -config catalogo.gen.yaml catalogo.yaml

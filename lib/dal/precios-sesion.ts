@@ -1,12 +1,8 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { customers, priceLists, profiles } from "@/lib/db/schema";
-import { getSession } from "@/lib/dal/session";
-import { factorDeLista } from "@/lib/precios/derivada";
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
+import { api, apiPublica, datos } from "@/lib/api/servidor";
 
 /**
  * Qué lista de precios corresponde a quien está mirando.
@@ -65,87 +61,22 @@ export interface ListaVigente {
  * obligaba a ir a la base en cada carga, para leer siempre la misma fila.
  */
 export const listaGeneral = cachearPublico(
-  async () => {
-    const [fila] = await db
-      .select({ id: priceLists.id, nombre: priceLists.name })
-      .from(priceLists)
-      .where(and(eq(priceLists.isDefault, true), eq(priceLists.active, true)))
-      .limit(1);
-    return fila ?? null;
+  async (): Promise<{ id: string; nombre: string } | null> => {
+    // Sin la cookie: lo que contesta es la lista general.
+    const { lista } = datos(await apiPublica.GET("/api/v1/catalogo/lista"));
+    return lista.id ? { id: lista.id, nombre: lista.nombre ?? "" } : null;
   },
   ["lista-de-precios-general"],
   ETIQUETAS.catalogo,
 );
 
-export const listaVigente = cache(async (): Promise<ListaVigente> => {
-  const general = await listaGeneral();
+/**
+ * La lista y la vista de quien mira, de una sola vez por pedido. Las resuelve
+ * la API de Go (backend/internal/catalogo/lista.go) con el orden de arriba.
+ */
+const listaYVista = cache(async () => datos(await (await api()).GET("/api/v1/catalogo/lista")));
 
-  const generalId = general?.id ?? null;
-  const sesion = await getSession();
-
-  if (!sesion) {
-    return {
-      id: generalId,
-      generalId,
-      nombre: general?.nombre ?? null,
-      esDiferenciada: false,
-      factorDerivado: 1,
-    };
-  }
-
-  let elegida = sesion.priceListId;
-
-  if (!elegida) {
-    const [ficha] = await db
-      .select({ priceListId: customers.priceListId })
-      .from(customers)
-      .where(and(eq(customers.userId, sesion.userId), eq(customers.active, true)))
-      .limit(1);
-
-    elegida = ficha?.priceListId ?? null;
-  }
-
-  if (!elegida || elegida === generalId) {
-    return {
-      id: generalId,
-      generalId,
-      nombre: general?.nombre ?? null,
-      esDiferenciada: false,
-      factorDerivado: 1,
-    };
-  }
-
-  // Una lista dada de baja no se aplica: se cae a la general en vez de dejar el
-  // catálogo sin precios.
-  const [propia] = await db
-    .select({
-      id: priceLists.id,
-      nombre: priceLists.name,
-      porcentajeSobreGeneral: priceLists.porcentajeSobreGeneral,
-    })
-    .from(priceLists)
-    .where(and(eq(priceLists.id, elegida), eq(priceLists.active, true)))
-    .limit(1);
-
-  if (!propia) {
-    return {
-      id: generalId,
-      generalId,
-      nombre: general?.nombre ?? null,
-      esDiferenciada: false,
-      factorDerivado: 1,
-    };
-  }
-
-  return {
-    id: propia.id,
-    generalId,
-    nombre: propia.nombre,
-    esDiferenciada: true,
-    factorDerivado: factorDeLista(propia.porcentajeSobreGeneral),
-  };
-});
-
+export const listaVigente = cache(async (): Promise<ListaVigente> => (await listaYVista()).lista);
 
 /* -------------------------------------------------------------------------- */
 /* Con IVA o sin IVA                                                           */
@@ -173,29 +104,4 @@ export const listaVigente = cache(async (): Promise<ListaVigente> => {
  */
 export type VistaDePrecio = "final" | "neto";
 
-export const vistaDePrecio = cache(async (): Promise<VistaDePrecio> => {
-  const sesion = await getSession();
-  if (!sesion) return "final";
-
-  // Una lista diferenciada ya implica gremio: es la decisión que tomó quien
-  // aprobó al profesional, y no hace falta que además haya cargado la
-  // condición frente al IVA.
-  const lista = await listaVigente();
-  if (lista.esDiferenciada) return "neto";
-
-  const [perfil] = await db
-    .select({ condicionIva: profiles.condicionIva })
-    .from(profiles)
-    .where(eq(profiles.userId, sesion.userId))
-    .limit(1);
-
-  if (perfil?.condicionIva === "responsable_inscripto") return "neto";
-
-  const [ficha] = await db
-    .select({ condicionIva: customers.condicionIva })
-    .from(customers)
-    .where(and(eq(customers.userId, sesion.userId), eq(customers.active, true)))
-    .limit(1);
-
-  return ficha?.condicionIva === "responsable_inscripto" ? "neto" : "final";
-});
+export const vistaDePrecio = cache(async (): Promise<VistaDePrecio> => (await listaYVista()).vista);

@@ -16,7 +16,11 @@
 // `float64(x*y) + z`: la conversión explícita obliga a redondear el producto.
 package jsmath
 
-import "math"
+import (
+	"math"
+	"strconv"
+	"strings"
+)
 
 // Epsilon es Number.EPSILON.
 const Epsilon = 2.220446049250313e-16
@@ -50,4 +54,24 @@ func Redondear2(n float64) float64 {
 // `redondear` de lo fiscal (lib/fiscal/impuestos.ts).
 func Redondear2Eps(n float64) float64 {
 	return Round(float64((n+Epsilon)*100)) / 100
+}
+
+// Texto es String(n) de JS para los números de todos los días (importes,
+// porcentajes): la representación más corta que vuelve al mismo float. Fuera
+// de [1e-6, 1e21) JS pasa a notación exponencial; acá también, con el mismo
+// formato («1e+21», «1e-7»).
+func Texto(n float64) string {
+	if n == 0 {
+		return "0" // también el -0: String(-0) es "0"
+	}
+	a := math.Abs(n)
+	if a >= 1e21 || a < 1e-6 {
+		s := strconv.FormatFloat(n, 'e', -1, 64)
+		// Go escribe «1e+21» y «1e-07»; JS, «1e+21» y «1e-7».
+		mant, exp, _ := strings.Cut(s, "e")
+		signo := exp[0]
+		exp = strings.TrimLeft(exp[1:], "0")
+		return mant + "e" + string(signo) + exp
+	}
+	return strconv.FormatFloat(n, 'f', -1, 64)
 }

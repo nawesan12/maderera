@@ -81,3 +81,6 @@ agente-taller/estado.json
 # Las pruebas de punta a punta (Playwright)
 /test-results
 /playwright-report
+
+# La sesión que guardan las pruebas de punta a punta
+e2e/.auth/

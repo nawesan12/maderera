@@ -1,12 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { SESION_ADMIN } from "./sesion-guardada";
 
 /*
  * El contenido del sitio, de punta a punta: el admin carga un banner con
  * imagen en el panel, la API de Go lo guarda (backend/internal/contenido) y
  * la portada lo muestra; al borrarlo, desaparece.
  */
-const correo = process.env.E2E_CORREO ?? "admin@mjbj.com.ar";
-const clave = process.env.E2E_CLAVE ?? "Admin1234";
 
 // Un PNG de 1×1.
 const png = Buffer.from(
@@ -14,18 +13,13 @@ const png = Buffer.from(
   "base64",
 );
 
-async function entrarComoAdmin(page: Page) {
-  await page.goto("/ingresar");
-  await page.getByLabel("Correo electrónico").fill(correo);
-  await page.getByLabel("Contraseña").fill(clave);
-  await page.getByRole("button", { name: "Ingresar" }).click();
-  await expect(page).toHaveURL(/\/admin/);
-}
+
+// El panel, con la sesión del admin que guardó autenticar.setup.ts.
+test.use({ storageState: SESION_ADMIN });
 
 test("un banner cargado en el panel sale en la portada, y al borrarlo se va", async ({ page }) => {
   test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
   const titulo = `Prueba de banner ${Date.now()}`;
-  await entrarComoAdmin(page);
   await page.goto("/admin/contenido/banners");
 
   const nuevo = page.locator("form").filter({ has: page.getByRole("button", { name: "Crear banner" }) }).first();
@@ -54,7 +48,6 @@ test("un banner cargado en el panel sale en la portada, y al borrarlo se va", as
 test("una reseña del negocio cargada a mano sale en la portada, y al borrarla se va", async ({ page }) => {
   test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
   const autor = `Prueba ${Date.now()}`;
-  await entrarComoAdmin(page);
   await page.goto("/admin/contenido/resenas-negocio");
 
   await page.locator("input[name=autor]").fill(autor);
@@ -76,7 +69,6 @@ test("una reseña del negocio cargada a mano sale en la portada, y al borrarla s
 test("un documento publicado sale en /documentacion, y dado de baja se va", async ({ page }) => {
   test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
   const titulo = `Prueba de documento ${Date.now()}`;
-  await entrarComoAdmin(page);
   await page.goto("/admin/documentacion");
   const subir = page.locator("form").filter({ has: page.locator("input[name=archivo]") });
   await subir.locator("input[name=titulo]").fill(titulo);

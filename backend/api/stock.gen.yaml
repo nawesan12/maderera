@@ -1,0 +1,7 @@
+package: stockapi
+output: ../internal/api/stockapi/stock.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+  embedded-spec: true

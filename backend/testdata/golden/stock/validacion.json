@@ -1,0 +1,283 @@
+{
+ "transferencias": [
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "abc"
+   },
+   "error": "Invalid input: expected number, received NaN"
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": ""
+   },
+   "error": "Invalid input: expected number, received NaN"
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "0"
+   },
+   "error": "La cantidad tiene que ser mayor a cero."
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "-1"
+   },
+   "error": "La cantidad tiene que ser mayor a cero."
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "2,5"
+   },
+   "cantidad": 2.5,
+   "nota": null
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "1e3"
+   },
+   "error": "Invalid input: expected number, received NaN"
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "2."
+   },
+   "error": "Invalid input: expected number, received NaN"
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": " 3 "
+   },
+   "cantidad": 3,
+   "nota": null
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "0,0004"
+   },
+   "error": "La cantidad tiene que ser mayor a cero."
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "1,2345"
+   },
+   "cantidad": 1.235,
+   "nota": null
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "1.000"
+   },
+   "cantidad": 1,
+   "nota": null
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "12"
+   },
+   "cantidad": 12,
+   "nota": null
+  },
+  {
+   "entrada": {
+    "variantId": "",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "1"
+   },
+   "error": "Elegí un producto."
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "x",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "1"
+   },
+   "error": "Elegí la sucursal de origen."
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "",
+    "cantidad": "abc"
+   },
+   "error": "Elegí la sucursal de destino."
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "1",
+    "nota": "  Para la obra  "
+   },
+   "cantidad": 1,
+   "nota": "Para la obra"
+  },
+  {
+   "entrada": {
+    "variantId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "origenId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "destinoId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "cantidad": "1",
+    "nota": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   },
+   "error": "Too big: expected string to have <=300 characters"
+  }
+ ],
+ "lecturas": [
+  {
+   "t": "2,5",
+   "n": 2.5
+  },
+  {
+   "t": "2.5",
+   "n": 2.5
+  },
+  {
+   "t": "2",
+   "n": 2
+  },
+  {
+   "t": "",
+   "n": "NaN"
+  },
+  {
+   "t": " 7 ",
+   "n": 7
+  },
+  {
+   "t": "-3",
+   "n": -3
+  },
+  {
+   "t": "1,2,3",
+   "n": "NaN"
+  },
+  {
+   "t": "abc",
+   "n": "NaN"
+  },
+  {
+   "t": "1e3",
+   "n": "NaN"
+  },
+  {
+   "t": ".5",
+   "n": "NaN"
+  },
+  {
+   "t": "5.",
+   "n": "NaN"
+  }
+ ],
+ "redondeos": [
+  {
+   "v": 0.30000000000000004,
+   "r": 0.3
+  },
+  {
+   "v": 1.0005,
+   "r": 1.001
+  },
+  {
+   "v": 2.4999,
+   "r": 2.5
+  },
+  {
+   "v": 1234.56789,
+   "r": 1234.568
+  },
+  {
+   "v": -0.0005,
+   "r": 0
+  },
+  {
+   "v": 7,
+   "r": 7
+  }
+ ],
+ "unidades": [
+  {
+   "u": "unidad",
+   "larga": "unidad"
+  },
+  {
+   "u": "metro_lineal",
+   "larga": "metro"
+  },
+  {
+   "u": "metro_cuadrado",
+   "larga": "metro cuadrado"
+  },
+  {
+   "u": "tabla",
+   "larga": "tabla"
+  },
+  {
+   "u": "placa",
+   "larga": "placa"
+  },
+  {
+   "u": "kg",
+   "larga": "kilo"
+  },
+  {
+   "u": "litro",
+   "larga": "litro"
+  },
+  {
+   "u": "par",
+   "larga": "par"
+  },
+  {
+   "u": "juego",
+   "larga": "juego"
+  },
+  {
+   "u": "rollo",
+   "larga": "rollo"
+  },
+  {
+   "u": "otra_cosa",
+   "larga": "otra cosa"
+  }
+ ]
+}

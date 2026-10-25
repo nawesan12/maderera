@@ -8,16 +8,20 @@ import (
 
 	"mjbj/internal/api/catalogoapi"
 	"mjbj/internal/api/contenidoapi"
+	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/api/productosapi"
 	"mjbj/internal/api/sesionapi"
+	"mjbj/internal/api/stockapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/catalogo"
 	"mjbj/internal/contenido"
 	"mjbj/internal/email"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/precios"
 	"mjbj/internal/productos"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/stock"
 	"mjbj/internal/subidas"
 	"mjbj/internal/vivo"
 )
@@ -117,10 +121,35 @@ func correrAPI() error {
 		productosapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// El lector de planillas (internal/planilla) se está portando: mientras
+	// tanto la vista previa de la importación avisa en vez de leer.
+	sinLector := func([]byte) ([]precios.FilaLeida, string) {
+		return nil, "La importación de planillas vuelve en la próxima actualización."
+	}
+	preciosapi.HandlerWithOptions(
+		preciosapi.NewStrictHandlerWithOptions(precios.NuevaAPI(precios.Nuevo(pool, log), sinLector),
+			[]preciosapi.StrictMiddlewareFunc{plataforma.ConPedido[preciosapi.StrictHandlerFunc]},
+			preciosapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		preciosapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
+	stockapi.HandlerWithOptions(
+		stockapi.NewStrictHandlerWithOptions(stock.NuevaAPI(stock.Nuevo(pool, log)),
+			[]stockapi.StrictMiddlewareFunc{plataforma.ConPedido[stockapi.StrictHandlerFunc]},
+			stockapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		stockapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
-	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger, productosapi.GetSwagger} {
+	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger, productosapi.GetSwagger, stockapi.GetSwagger, preciosapi.GetSwagger} {
 		s, err := spec()
 		if err != nil {
 			return err

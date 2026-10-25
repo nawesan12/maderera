@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { SESION_ADMIN } from "./sesion-guardada";
 
 /*
  * La ficha de producto, de punta a punta: se carga desde el panel con una
@@ -6,21 +7,14 @@ import { expect, test, type Page } from "@playwright/test";
  * (backend/internal/productos), sale en el listado del panel y en el
  * catálogo, y al editarla el stock cambia. Al final se da de baja.
  */
-const correo = process.env.E2E_CORREO ?? "admin@mjbj.com.ar";
-const clave = process.env.E2E_CLAVE ?? "Admin1234";
 
-async function entrar(page: Page) {
-  await page.goto("/ingresar");
-  await page.getByLabel("Correo electrónico").fill(correo);
-  await page.getByLabel("Contraseña").fill(clave);
-  await page.getByRole("button", { name: "Ingresar" }).click();
-  await expect(page).toHaveURL(/\/admin/);
-}
+
+// El panel, con la sesión del admin que guardó autenticar.setup.ts.
+test.use({ storageState: SESION_ADMIN });
 
 test("un producto cargado en el panel sale en el catálogo, y su stock se edita", async ({ page }) => {
   test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
   const nombre = `Prueba de producto ${Date.now()}`;
-  await entrar(page);
   await page.goto("/admin/productos/nuevo");
 
   await page.locator("#name").fill(nombre);

@@ -24,8 +24,10 @@ export default defineConfig({
     locale: "es-AR",
   },
   projects: [
-    { name: "escritorio", use: { ...devices["Desktop Chrome"] } },
-    { name: "telefono", use: { ...devices["Pixel 7"] } },
+    // Entra una vez y guarda la sesión del admin (ver e2e/autenticar.setup.ts).
+    { name: "sesion", testMatch: /autenticar\.setup\.ts/ },
+    { name: "escritorio", use: { ...devices["Desktop Chrome"] }, dependencies: ["sesion"] },
+    { name: "telefono", use: { ...devices["Pixel 7"] }, dependencies: ["sesion"] },
   ],
   webServer: [
     {

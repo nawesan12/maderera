@@ -52,6 +52,55 @@ func (q *Queries) AgregarSugerido(ctx context.Context, arg AgregarSugeridoParams
 	return id, err
 }
 
+const alertasDeStock = `-- name: AlertasDeStock :many
+SELECT v.id AS variant_id, p.name AS product_name, v.label, b.name AS branch_name, i.qty, i.reservado, i.min_qty
+FROM inventory i
+JOIN product_variants v ON v.id = i.variant_id
+JOIN products p ON p.id = v.product_id
+JOIN branches b ON b.id = i.branch_id
+WHERE p.active AND v.active AND i.min_qty > 0 AND i.qty - i.reservado <= i.min_qty
+ORDER BY i.qty - i.reservado
+LIMIT $1
+`
+
+type AlertasDeStockRow struct {
+	VariantID   string     `json:"variantId"`
+	ProductName string     `json:"productName"`
+	Label       string     `json:"label"`
+	BranchName  string     `json:"branchName"`
+	Qty         jsmath.Num `json:"qty"`
+	Reservado   jsmath.Num `json:"reservado"`
+	MinQty      jsmath.Num `json:"minQty"`
+}
+
+func (q *Queries) AlertasDeStock(ctx context.Context, limit int32) ([]AlertasDeStockRow, error) {
+	rows, err := q.db.Query(ctx, alertasDeStock, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AlertasDeStockRow{}
+	for rows.Next() {
+		var i AlertasDeStockRow
+		if err := rows.Scan(
+			&i.VariantID,
+			&i.ProductName,
+			&i.Label,
+			&i.BranchName,
+			&i.Qty,
+			&i.Reservado,
+			&i.MinQty,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const bloquearStock = `-- name: BloquearStock :exec
 SELECT pg_advisory_xact_lock(hashtext($1::text || $2::text))
 `
@@ -532,6 +581,23 @@ func (q *Queries) EngancharPorTexto(ctx context.Context, arg EngancharPorTextoPa
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const fijarCantidad = `-- name: FijarCantidad :exec
+INSERT INTO inventory (variant_id, branch_id, qty, min_qty, updated_at)
+VALUES ($1, $2, $3, 0, now())
+ON CONFLICT (variant_id, branch_id) DO UPDATE SET qty = excluded.qty, updated_at = now()
+`
+
+type FijarCantidadParams struct {
+	VariantID string     `json:"variantId"`
+	BranchID  string     `json:"branchId"`
+	Qty       jsmath.Num `json:"qty"`
+}
+
+func (q *Queries) FijarCantidad(ctx context.Context, arg FijarCantidadParams) error {
+	_, err := q.db.Exec(ctx, fijarCantidad, arg.VariantID, arg.BranchID, arg.Qty)
+	return err
 }
 
 const fijarStock = `-- name: FijarStock :exec
@@ -1050,6 +1116,43 @@ func (q *Queries) StockDeVariantes(ctx context.Context, ids []string) ([]StockDe
 	return items, nil
 }
 
+const stockYReservado = `-- name: StockYReservado :one
+SELECT qty, reservado FROM inventory WHERE variant_id = $1 AND branch_id = $2
+`
+
+type StockYReservadoParams struct {
+	VariantID string `json:"variantId"`
+	BranchID  string `json:"branchId"`
+}
+
+type StockYReservadoRow struct {
+	Qty       jsmath.Num `json:"qty"`
+	Reservado jsmath.Num `json:"reservado"`
+}
+
+func (q *Queries) StockYReservado(ctx context.Context, arg StockYReservadoParams) (StockYReservadoRow, error) {
+	row := q.db.QueryRow(ctx, stockYReservado, arg.VariantID, arg.BranchID)
+	var i StockYReservadoRow
+	err := row.Scan(&i.Qty, &i.Reservado)
+	return i, err
+}
+
+const sucursalPorSlug = `-- name: SucursalPorSlug :one
+SELECT id, name FROM branches WHERE slug = $1
+`
+
+type SucursalPorSlugRow struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func (q *Queries) SucursalPorSlug(ctx context.Context, slug string) (SucursalPorSlugRow, error) {
+	row := q.db.QueryRow(ctx, sucursalPorSlug, slug)
+	var i SucursalPorSlugRow
+	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
 const sucursales = `-- name: Sucursales :many
 SELECT id, slug FROM branches ORDER BY sort_order
 `
@@ -1069,6 +1172,38 @@ func (q *Queries) Sucursales(ctx context.Context) ([]SucursalesRow, error) {
 	for rows.Next() {
 		var i SucursalesRow
 		if err := rows.Scan(&i.ID, &i.Slug); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const sucursalesTodas = `-- name: SucursalesTodas :many
+SELECT id, slug, name, sort_order, active, created_at, fondo_base FROM branches ORDER BY sort_order
+`
+
+func (q *Queries) SucursalesTodas(ctx context.Context) ([]Branch, error) {
+	rows, err := q.db.Query(ctx, sucursalesTodas)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Branch{}
+	for rows.Next() {
+		var i Branch
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Name,
+			&i.SortOrder,
+			&i.Active,
+			&i.CreatedAt,
+			&i.FondoBase,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1162,6 +1297,23 @@ func (q *Queries) SugeridosDelProducto(ctx context.Context, productID string) ([
 	return items, nil
 }
 
+const sumarCantidad = `-- name: SumarCantidad :exec
+INSERT INTO inventory (variant_id, branch_id, qty, min_qty, updated_at)
+VALUES ($1, $2, $3, 0, now())
+ON CONFLICT (variant_id, branch_id) DO UPDATE SET qty = inventory.qty + excluded.qty, updated_at = now()
+`
+
+type SumarCantidadParams struct {
+	VariantID string     `json:"variantId"`
+	BranchID  string     `json:"branchId"`
+	Qty       jsmath.Num `json:"qty"`
+}
+
+func (q *Queries) SumarCantidad(ctx context.Context, arg SumarCantidadParams) error {
+	_, err := q.db.Exec(ctx, sumarCantidad, arg.VariantID, arg.BranchID, arg.Qty)
+	return err
+}
+
 const ultimoOrdenSugerido = `-- name: UltimoOrdenSugerido :one
 SELECT coalesce(max(orden), -1)::int FROM related_products WHERE product_id = $1 AND tipo = $2
 `
@@ -1176,6 +1328,69 @@ func (q *Queries) UltimoOrdenSugerido(ctx context.Context, arg UltimoOrdenSugeri
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const ultimosMovimientos = `-- name: UltimosMovimientos :many
+SELECT m.id, p.id AS product_id, p.name AS product_name, v.label, b.name AS branch_name, m.type, m.qty, m.note, m.created_at
+FROM inventory_movements m
+JOIN product_variants v ON v.id = m.variant_id
+JOIN products p ON p.id = v.product_id
+JOIN branches b ON b.id = m.branch_id
+ORDER BY m.created_at DESC
+LIMIT $1
+`
+
+type UltimosMovimientosRow struct {
+	ID          string       `json:"id"`
+	ProductID   string       `json:"productId"`
+	ProductName string       `json:"productName"`
+	Label       string       `json:"label"`
+	BranchName  string       `json:"branchName"`
+	Type        MovementType `json:"type"`
+	Qty         jsmath.Num   `json:"qty"`
+	Note        *string      `json:"note"`
+	CreatedAt   time.Time    `json:"createdAt"`
+}
+
+func (q *Queries) UltimosMovimientos(ctx context.Context, limit int32) ([]UltimosMovimientosRow, error) {
+	rows, err := q.db.Query(ctx, ultimosMovimientos, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UltimosMovimientosRow{}
+	for rows.Next() {
+		var i UltimosMovimientosRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProductID,
+			&i.ProductName,
+			&i.Label,
+			&i.BranchName,
+			&i.Type,
+			&i.Qty,
+			&i.Note,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const unidadDeVariante = `-- name: UnidadDeVariante :one
+SELECT p.unit::text FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1
+`
+
+func (q *Queries) UnidadDeVariante(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRow(ctx, unidadDeVariante, id)
+	var p_unit string
+	err := row.Scan(&p_unit)
+	return p_unit, err
 }
 
 const variantesDelProducto = `-- name: VariantesDelProducto :many

@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Layers } from "lucide-react";
-import { asc, eq, sql } from "drizzle-orm";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { db } from "@/lib/db";
-import { priceListItems, priceLists } from "@/lib/db/schema";
+import { listarListasDePrecios } from "@/lib/dal/admin/precios";
 import { requireStaffRole } from "@/lib/dal/session";
 import { EditorDeLista } from "./editor";
 
@@ -21,19 +19,16 @@ export const metadata: Metadata = { title: "Listas de precios" };
 export default async function ListasDePreciosPage() {
   await requireStaffRole("admin");
 
-  const filas = await db
-    .select({
-      id: priceLists.id,
-      nombre: priceLists.name,
-      isDefault: priceLists.isDefault,
-      porcentaje: priceLists.porcentajeSobreGeneral,
-      itemsPropios: sql<number>`count(${priceListItems.id})::int`,
-    })
-    .from(priceLists)
-    .leftJoin(priceListItems, eq(priceListItems.priceListId, priceLists.id))
-    .where(eq(priceLists.active, true))
-    .groupBy(priceLists.id)
-    .orderBy(asc(priceLists.createdAt));
+  const filas = (await listarListasDePrecios())
+    .filter((l) => l.active)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map((l) => ({
+      id: l.id,
+      nombre: l.name,
+      isDefault: l.isDefault,
+      porcentaje: l.porcentajeSobreGeneral,
+      itemsPropios: l.itemsPropios,
+    }));
 
   const general = filas.find((l) => l.isDefault);
   const derivables = filas.filter((l) => !l.isDefault);

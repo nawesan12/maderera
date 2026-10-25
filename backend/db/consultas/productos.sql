@@ -190,3 +190,44 @@ ON CONFLICT (clave) DO UPDATE SET valor = excluded.valor, updated_at = now();
 
 -- name: ImputacionesUsadas :many
 SELECT DISTINCT imputacion::text FROM products WHERE imputacion IS NOT NULL ORDER BY 1;
+
+-- name: UnidadDeVariante :one
+SELECT p.unit::text FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1;
+
+-- name: SucursalPorSlug :one
+SELECT id, name FROM branches WHERE slug = $1;
+
+-- name: StockYReservado :one
+SELECT qty, reservado FROM inventory WHERE variant_id = $1 AND branch_id = $2;
+
+-- name: FijarCantidad :exec
+INSERT INTO inventory (variant_id, branch_id, qty, min_qty, updated_at)
+VALUES ($1, $2, $3, 0, now())
+ON CONFLICT (variant_id, branch_id) DO UPDATE SET qty = excluded.qty, updated_at = now();
+
+-- name: SumarCantidad :exec
+INSERT INTO inventory (variant_id, branch_id, qty, min_qty, updated_at)
+VALUES ($1, $2, $3, 0, now())
+ON CONFLICT (variant_id, branch_id) DO UPDATE SET qty = inventory.qty + excluded.qty, updated_at = now();
+
+-- name: AlertasDeStock :many
+SELECT v.id AS variant_id, p.name AS product_name, v.label, b.name AS branch_name, i.qty, i.reservado, i.min_qty
+FROM inventory i
+JOIN product_variants v ON v.id = i.variant_id
+JOIN products p ON p.id = v.product_id
+JOIN branches b ON b.id = i.branch_id
+WHERE p.active AND v.active AND i.min_qty > 0 AND i.qty - i.reservado <= i.min_qty
+ORDER BY i.qty - i.reservado
+LIMIT $1;
+
+-- name: UltimosMovimientos :many
+SELECT m.id, p.id AS product_id, p.name AS product_name, v.label, b.name AS branch_name, m.type, m.qty, m.note, m.created_at
+FROM inventory_movements m
+JOIN product_variants v ON v.id = m.variant_id
+JOIN products p ON p.id = v.product_id
+JOIN branches b ON b.id = m.branch_id
+ORDER BY m.created_at DESC
+LIMIT $1;
+
+-- name: SucursalesTodas :many
+SELECT * FROM branches ORDER BY sort_order;

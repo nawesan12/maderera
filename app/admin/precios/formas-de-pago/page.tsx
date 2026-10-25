@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { asc } from "drizzle-orm";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { db } from "@/lib/db";
-import { paymentDiscounts } from "@/lib/db/schema";
+import { descuentosDePago } from "@/lib/dal/admin/precios";
 import { requireStaffRole } from "@/lib/dal/session";
 import { EditorDeDescuento } from "./editor";
 import { MEDIOS } from "./medios";
@@ -21,10 +19,7 @@ export const metadata: Metadata = { title: "Descuentos por forma de pago" };
 export default async function FormasDePagoPage() {
   await requireStaffRole("admin");
 
-  const escalones = await db
-    .select()
-    .from(paymentDiscounts)
-    .orderBy(asc(paymentDiscounts.medio), asc(paymentDiscounts.desdeMonto));
+  const escalones = await descuentosDePago();
 
   const nombreDeMedio = (valor: string) =>
     MEDIOS.find((m) => m.valor === valor)?.etiqueta ?? valor;

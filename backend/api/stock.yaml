@@ -1,0 +1,178 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Stock
+  version: "1"
+  description: |
+    El stock del panel: la grilla por sucursal, las alertas, los últimos
+    movimientos, el ajuste rápido y la transferencia entre sucursales. Cada
+    cambio toma el candado del stock (el de las reservas) y deja su
+    movimiento. Leer: cualquier persona del panel; cambiar: quien entra a
+    /admin/stock (admin, vendedor y depósito).
+paths:
+  /api/v1/admin/stock:
+    get:
+      operationId: GrillaDeStock
+      parameters:
+        - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: categoria, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Las medidas activas con su stock en las dos sucursales
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/FilaStock" } }
+  /api/v1/admin/stock/alertas:
+    get:
+      operationId: AlertasDeStock
+      parameters:
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 8 } }
+      responses:
+        "200":
+          description: Las que llegaron a su mínimo, las más justas primero
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [variantId, productName, label, branchName, qty, reservado, minQty]
+                  properties:
+                    variantId: { type: string }
+                    productName: { type: string }
+                    label: { type: string }
+                    branchName: { type: string }
+                    qty: { type: number }
+                    reservado: { type: number }
+                    minQty: { type: number }
+  /api/v1/admin/stock/movimientos:
+    get:
+      operationId: UltimosMovimientos
+      parameters:
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 10 } }
+      responses:
+        "200":
+          description: Los últimos movimientos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, productId, productName, label, branchName, type, qty, note, createdAt]
+                  properties:
+                    id: { type: string }
+                    productId: { type: string }
+                    productName: { type: string }
+                    label: { type: string }
+                    branchName: { type: string }
+                    type: { type: string }
+                    qty: { type: number }
+                    note: { type: string, nullable: true }
+                    createdAt: { type: string, format: date-time }
+  /api/v1/admin/stock/ajuste:
+    post:
+      operationId: AjustarStock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantId, branchSlug, cantidad]
+              additionalProperties: false
+              properties:
+                variantId: { type: string }
+                branchSlug: { type: string }
+                cantidad: { type: number, description: lo que se suma (o resta) }
+      responses:
+        "200":
+          description: El cambio («Casa Central 3 → 5»), o vacío si la cantidad era cero
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: string }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/stock/transferencia:
+    post:
+      operationId: TransferirStock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantId, origenId, destinoId, cantidad]
+              additionalProperties: false
+              properties:
+                variantId: { type: string }
+                origenId: { type: string }
+                destinoId: { type: string }
+                cantidad: { type: string }
+                nota: { type: string }
+      responses:
+        "204": { description: Registrada }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/sucursales:
+    get:
+      operationId: SucursalesDelPanel
+      responses:
+        "200":
+          description: Todas, por orden
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, slug, name, sortOrder, active, createdAt, fondoBase]
+                  properties:
+                    id: { type: string }
+                    slug: { type: string }
+                    name: { type: string }
+                    sortOrder: { type: integer }
+                    active: { type: boolean }
+                    createdAt: { type: string, format: date-time }
+                    fondoBase: { type: string }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    Nivel: { type: string, enum: [alto, medio, bajo, sin-stock] }
+    FilaStock:
+      type: object
+      required: [variantId, productId, productSlug, productName, label, sku, categoryName, unidad, largoMm, imagen, qtyCentral,
+        qtyAserradero, reservadoCentral, reservadoAserradero, minCentral, minAserradero, nivelCentral, nivelAserradero, total]
+      properties:
+        variantId: { type: string }
+        productId: { type: string }
+        productSlug: { type: string }
+        productName: { type: string }
+        label: { type: string }
+        sku: { type: string }
+        categoryName: { type: string }
+        unidad: { type: string }
+        largoMm: { type: integer, nullable: true }
+        imagen: { type: string, nullable: true }
+        qtyCentral: { type: number }
+        qtyAserradero: { type: number }
+        reservadoCentral: { type: number }
+        reservadoAserradero: { type: number }
+        minCentral: { type: number }
+        minAserradero: { type: number }
+        nivelCentral: { $ref: "#/components/schemas/Nivel" }
+        nivelAserradero: { $ref: "#/components/schemas/Nivel" }
+        total: { type: number }

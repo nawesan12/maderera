@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { SESION_ADMIN } from "./sesion-guardada";
 
 /*
  * Lo que queda del sitio público después de la tanda 2: contacto, eventos,
@@ -47,14 +48,11 @@ test("el sitemap lista fichas y categorías", async ({ request }) => {
   expect(xml).toContain("/catalogo?cat=");
 });
 
-test("la lista de precios en PDF exige sesión y sale con la sesión", async ({ page, request }) => {
+test("la lista de precios en PDF exige sesión y sale con la sesión", async ({ browser, request }) => {
   test.skip(test.info().project.name === "telefono", "no depende del dispositivo");
   expect((await request.get("/mi-lista-de-precios")).status()).toBe(401);
-  await page.goto("/ingresar");
-  await page.getByLabel("Correo electrónico").fill(process.env.E2E_CORREO ?? "admin@mjbj.com.ar");
-  await page.getByLabel("Contraseña").fill(process.env.E2E_CLAVE ?? "Admin1234");
-  await page.getByRole("button", { name: "Ingresar" }).click();
-  await expect(page).toHaveURL(/\/admin/);
+  const contexto = await browser.newContext({ storageState: SESION_ADMIN });
+  const page = await contexto.newPage();
   const r = await page.request.get("/mi-lista-de-precios");
   expect(r.status()).toBe(200);
   expect(r.headers()["content-type"]).toBe("application/pdf");

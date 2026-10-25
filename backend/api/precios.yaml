@@ -1,0 +1,305 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Precios
+  version: "1"
+  description: |
+    La gestión de precios del panel: la grilla con las dos listas, el
+    historial, editar un precio, el ajuste masivo, la importación de
+    planillas, las listas derivadas y los descuentos por medio de pago.
+
+    Permisos: leer, cualquier persona del panel (las tarifas de cortes y la
+    exportación usan las listas y la grilla); escribir, quien entra a
+    /admin/precios (el admin).
+paths:
+  /api/v1/admin/precios:
+    get:
+      operationId: GrillaDePrecios
+      parameters:
+        - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: categoria, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Las medidas activas con sus precios
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/FilaPrecio" } }
+  /api/v1/admin/precios/historial:
+    get:
+      operationId: HistorialDePrecios
+      parameters:
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 40 } }
+      responses:
+        "200":
+          description: Los últimos cambios
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CambioDePrecio" } }
+  /api/v1/admin/precios/listas:
+    get:
+      operationId: ListasDePrecios
+      responses:
+        "200":
+          description: Todas, la general primero
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ListaDePrecios" } }
+  /api/v1/admin/precios/listas/{id}/porcentaje:
+    put:
+      operationId: FijarPorcentajeDeLista
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [porcentaje]
+              additionalProperties: false
+              properties:
+                porcentaje: { type: string, description: «general −N %»; vacío deja de derivarse }
+      responses:
+        "200":
+          description: Guardado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Mensaje" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/precios/rubros:
+    get:
+      operationId: RubrosParaAjuste
+      responses:
+        "200":
+          description: Los rubros activos, para filtrar el ajuste
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [slug, name, categorySlug]
+                  properties:
+                    slug: { type: string }
+                    name: { type: string }
+                    categorySlug: { type: string }
+  /api/v1/admin/precios/editar:
+    post:
+      operationId: EditarPrecio
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantId, priceListId, precio]
+              additionalProperties: false
+              properties:
+                variantId: { type: string }
+                priceListId: { type: string }
+                precio: { type: string }
+      responses:
+        "204": { description: Guardado }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/precios/ajuste:
+    post:
+      operationId: AjustarPrecios
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [porcentaje]
+              additionalProperties: false
+              properties:
+                porcentaje: { type: string }
+                categoria: { type: string }
+                rubro: { type: string }
+                listaSlug: { type: string }
+                base: { type: string }
+                redondeo: { type: string }
+                motivo: { type: string }
+      responses:
+        "200":
+          description: Cuántos cambiaron
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Mensaje" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/precios/importar/previa:
+    post:
+      operationId: PrevisualizarImportacion
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                archivo: { type: string, format: binary }
+      responses:
+        "200":
+          description: Cómo queda cada fila contra la base (o el error de lectura)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VistaPrevia" }
+  /api/v1/admin/precios/importar:
+    post:
+      operationId: ConfirmarImportacion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cambios]
+              additionalProperties: false
+              properties:
+                cambios:
+                  type: array
+                  items:
+                    type: object
+                    required: [sku]
+                    properties:
+                      sku: { type: string }
+                      generalNuevo: { type: string }
+                      profesionalNuevo: { type: string }
+      responses:
+        "200":
+          description: Cuántos se aplicaron
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Mensaje" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/precios/descuentos:
+    get:
+      operationId: DescuentosDePago
+      responses:
+        "200":
+          description: Todos los escalones, por medio y monto
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, medio, desdeMonto, porcentaje, etiqueta, activo, createdAt]
+                  properties:
+                    id: { type: string }
+                    medio: { type: string }
+                    desdeMonto: { type: string }
+                    porcentaje: { type: string }
+                    etiqueta: { type: string }
+                    activo: { type: boolean }
+                    createdAt: { type: string, format: date-time }
+    post:
+      operationId: GuardarDescuentoDePago
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [medio, desdeMonto, porcentaje, etiqueta, activo]
+              additionalProperties: false
+              properties:
+                id: { type: string }
+                medio: { type: string }
+                desdeMonto: { type: string }
+                porcentaje: { type: string }
+                etiqueta: { type: string }
+                activo: { type: boolean }
+      responses:
+        "204": { description: Guardado }
+        "422": { $ref: "#/components/responses/Problema" }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    Mensaje:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: string }
+    FilaPrecio:
+      type: object
+      required: [variantId, productId, sku, producto, medida, categoria, categoriaSlug, unidad, imagen, precioGeneral,
+        precioProfesional, brecha, actualizado, desactualizado]
+      properties:
+        variantId: { type: string }
+        productId: { type: string }
+        sku: { type: string }
+        producto: { type: string }
+        medida: { type: string }
+        categoria: { type: string }
+        categoriaSlug: { type: string }
+        unidad: { type: string }
+        imagen: { type: string, nullable: true }
+        precioGeneral: { type: string }
+        precioProfesional: { type: string }
+        brecha: { type: number, nullable: true, description: «la profesional es N % más barata» }
+        actualizado: { type: string, format: date-time, nullable: true }
+        desactualizado: { type: boolean }
+    CambioDePrecio:
+      type: object
+      required: [id, sku, producto, medida, lista, precioAnterior, precioNuevo, origen, motivo, createdAt]
+      properties:
+        id: { type: string }
+        sku: { type: string }
+        producto: { type: string }
+        medida: { type: string }
+        lista: { type: string }
+        precioAnterior: { type: string, nullable: true }
+        precioNuevo: { type: string }
+        origen: { type: string, enum: [manual, ajuste_masivo, importacion] }
+        motivo: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    ListaDePrecios:
+      type: object
+      required: [id, slug, name, isDefault, active, createdAt, porcentajeSobreGeneral, itemsPropios]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        isDefault: { type: boolean }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        porcentajeSobreGeneral: { type: string, nullable: true }
+        itemsPropios: { type: integer, description: los precios propios cargados; el resto sale de la general }
+    VistaPrevia:
+      type: object
+      required: [filas, cambian, iguales, problemas]
+      properties:
+        filas:
+          type: array
+          items:
+            type: object
+            required: [linea, sku, estado]
+            properties:
+              linea: { type: integer }
+              sku: { type: string }
+              producto: { type: string }
+              medida: { type: string }
+              generalActual: { type: string }
+              generalNuevo: { type: string }
+              profesionalActual: { type: string }
+              profesionalNuevo: { type: string }
+              estado: { type: string, enum: [cambia, igual, sin-sku, error] }
+              detalle: { type: string }
+        cambian: { type: integer }
+        iguales: { type: integer }
+        problemas: { type: integer }
+        error: { type: string }

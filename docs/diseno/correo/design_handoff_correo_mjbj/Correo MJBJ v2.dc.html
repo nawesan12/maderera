@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/lucide-static@0.460.0/font/lucide.css">
+<style>body{margin:0;background:#e6e3de;font-family:Geist,ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}a{color:oklch(0.52 0.18 40)}a:hover{color:oklch(0.45 0.18 40)}*{box-sizing:border-box}</style>
+</helmet>
+<section id="t2" style="padding:48px 56px 64px;display:flex;flex-direction:column;gap:56px;font-family:Geist,ui-sans-serif,system-ui,sans-serif;color:oklch(0.15 0.01 60)">
+
+<div style="max-width:980px">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <a href="#t2" style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">2</a>
+    <span style="font-size:14px;font-weight:600">Correo de MJBJ · v2, un cliente de correo de verdad</span>
+  </div>
+  <div style="font-size:36px;line-height:1.15;font-weight:600;letter-spacing:-0.02em">Una sola pantalla: carpetas, lista y el correo abierto.</div>
+  <p style="margin:14px 0 0;font-size:17px;line-height:1.55;color:oklch(0.40 0.012 60);text-wrap:pretty">El correo tiene su propio menú, sin las secciones del panel. Al panel se vuelve con un botón arriba. La letra es más grande y cada fila muestra solo lo necesario: quién escribió, el asunto y la primera línea. Del panel quedan la tipografía, los colores y la ficha del cliente, que aparece a la derecha solo cuando el remitente es cliente.</p>
+</div>
+
+<sc-for list="{{ grupos }}" as="g" hint-placeholder-count="3">
+<div id="{{ g.id }}" style="display:flex;flex-direction:column;gap:18px;scroll-margin-top:16px">
+  <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+    <a href="{{ g.href }}" style="font:600 12px 'Geist Mono',monospace;padding:3px 8px;background:#1a1a1a;color:#fff;border-radius:5px;text-decoration:none">{{ g.badge }}</a>
+    <span style="font-size:24px;font-weight:600;letter-spacing:-0.01em">{{ g.titulo }}</span>
+    <span style="font-size:16px;color:oklch(0.40 0.012 60);max-width:900px">{{ g.nota }}</span>
+  </div>
+  <div style="display:flex;gap:40px;align-items:flex-start">
+  <sc-for list="{{ g.items }}" as="b" hint-placeholder-count="2">
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <span style="font:500 13px 'Geist Mono',monospace;color:oklch(0.40 0.012 60)">{{ b.tema }}</span>
+    <div style="{{ b.vars }}">
+    <div style="width:1600px;height:1000px;display:flex;flex-direction:column;position:relative;overflow:hidden;background-color:var(--side);background-image:var(--tex);background-size:var(--texS);color:var(--fg);font-family:Geist,ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.5;border-radius:6px;box-shadow:0 2px 10px rgb(40 30 20 / .12)">
+
+      <sc-if value="{{ b.base }}">
+      <div style="height:72px;flex:none;display:flex;align-items:center;gap:16px;padding:0 20px">
+        <div style="width:236px;flex:none;display:flex;align-items:center;gap:12px;padding-left:6px">
+          <img src="public/cropped-icon-180x180.png" alt="" style="width:36px;height:36px;border-radius:8px">
+          <div style="line-height:1.2"><div style="font-size:19px;font-weight:600">Correo</div><div style="font-size:14px;color:var(--mut)">Maderera JBJ</div></div>
+        </div>
+        <div style="width:720px;height:50px;display:flex;align-items:center;gap:12px;padding:0 16px;border-radius:12px;background:var(--srch);color:var(--mut);font-size:17px;box-shadow:{{ b.srchSh }}">
+          <i class="icon-search" style="font-size:20px;line-height:1"></i>
+          <sc-if value="{{ b.noBusca }}"><span style="flex:1">Buscar en el correo</span></sc-if>
+          <sc-if value="{{ b.busqueda }}"><span style="flex:1;color:var(--fg)">fenólico<span style="display:inline-block;width:1.5px;height:20px;background:var(--acc);vertical-align:-4px;margin-left:1px"></span></span><i class="icon-x" style="font-size:20px;line-height:1"></i></sc-if>
+          <i class="icon-sliders-horizontal" style="font-size:20px;line-height:1"></i>
+        </div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--mut)">
+          <span style="display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 14px;border-radius:10px;font-size:16px;color:var(--fg)"><i class="icon-layout-grid" style="font-size:19px;line-height:1"></i>Volver al panel</span>
+          <span style="width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center"><i class="{{ b.ic }}" style="font-size:21px;line-height:1"></i></span>
+          <span style="width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center"><i class="icon-settings" style="font-size:21px;line-height:1"></i></span>
+          <div style="width:40px;height:40px;margin-left:6px;border-radius:50%;background:oklch(0.68 0.19 48);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">MG</div>
+        </div>
+      </div>
+
+      <div style="flex:1;min-height:0;display:flex">
+        <div style="width:272px;flex:none;display:flex;flex-direction:column;padding:4px 14px 16px 16px">
+          <div style="display:flex;align-items:center;justify-content:center;gap:12px;height:58px;border-radius:16px;background:var(--acc);color:#fff;font-size:18px;font-weight:600;box-shadow:0 2px 0 oklch(0.45 0.17 42), 0 8px 20px -8px rgb(120 50 10 / .55)"><i class="icon-pencil" style="font-size:21px;line-height:1"></i>Redactar</div>
+          <div style="margin-top:14px;flex:1;min-height:0;display:flex;flex-direction:column;padding:8px;border-radius:16px;background:var(--panel);box-shadow:var(--panelSh);backdrop-filter:blur(8px)">
+            <sc-for list="{{ carpetas }}" as="c" hint-placeholder-count="8">
+            <div style="display:flex;align-items:center;gap:12px;height:46px;padding:0 10px 0 8px;border-radius:10px;font-size:16px;background:{{ c.bg }};box-shadow:{{ c.ish }};color:{{ c.fg }};font-weight:{{ c.fw }}">
+              <span style="width:32px;height:32px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center;background:{{ c.sqBg }};color:{{ c.sqFg }}"><i class="{{ c.ic }}" style="font-size:17px;line-height:1"></i></span>
+              <span style="flex:1">{{ c.l }}</span>
+              <sc-if value="{{ c.n }}"><span style="min-width:26px;height:24px;padding:0 8px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;background:{{ c.cnBg }};color:{{ c.cnFg }}">{{ c.n }}</span></sc-if>
+            </div>
+            </sc-for>
+            <div style="height:1px;background:var(--ls);margin:10px 8px"></div>
+            <div style="padding:2px 10px 6px;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)">Casillas</div>
+            <sc-for list="{{ casillas }}" as="c" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:12px;min-height:50px;padding:4px 10px 4px 8px;border-radius:10px">
+              <span style="width:32px;height:32px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center;background:{{ c.c }};color:#fff;font-size:14px;font-weight:700">{{ c.ini }}</span>
+              <span style="flex:1;min-width:0;line-height:1.25"><span style="display:block;font-size:16px;font-weight:500">{{ c.nombre }}</span><span style="display:block;font-size:13px;color:var(--mut)">{{ c.l }}</span></span>
+              <sc-if value="{{ c.n }}"><span style="min-width:26px;height:24px;padding:0 8px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;background:var(--mu)">{{ c.n }}</span></sc-if>
+            </div>
+            </sc-for>
+            <div style="margin-top:auto;padding:10px 10px 4px;font-size:14px;color:var(--mut)">
+              <div style="height:6px;border-radius:3px;background:var(--mu);overflow:hidden"><div style="width:21%;height:100%;border-radius:3px;background:var(--acc)"></div></div>
+              <div style="margin-top:6px">2,1 GB de 10 GB usados</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;min-width:0;margin:0 16px 16px 0;display:grid;grid-template-columns:460px minmax(0,1fr) 300px;background-color:var(--card);background-image:var(--texC);background-size:180px 180px;border-radius:14px;overflow:hidden;box-shadow:var(--sh)">
+          <div style="display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--ls)">
+            <div style="display:flex;align-items:center;gap:4px;height:56px;flex:none;padding:0 12px 0 16px;border-bottom:1px solid var(--ls)">
+              <sc-for list="{{ pestanas }}" as="f" hint-placeholder-count="3">
+              <span style="display:inline-flex;align-items:center;gap:7px;height:56px;padding:0 12px;white-space:nowrap;font-size:16px;color:{{ f.fg }};font-weight:{{ f.fw }};box-shadow:{{ f.sh }}">{{ f.t }}<sc-if value="{{ f.n }}"><span style="min-width:24px;height:24px;padding:0 7px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;background:{{ f.nBg }};color:{{ f.nFg }}">{{ f.n }}</span></sc-if></span>
+              </sc-for>
+              <i class="icon-rotate-cw" style="margin-left:auto;font-size:19px;line-height:1;color:var(--mut);padding:8px"></i>
+            </div>
+            <div style="flex:1;min-height:0;overflow:hidden">
+              <sc-for list="{{ filas }}" as="r" hint-placeholder-count="8">
+              <div>
+                <sc-if value="{{ r.grupo }}"><div style="padding:14px 20px 6px;font-size:14px;font-weight:600;color:var(--mut)">{{ r.grupo }}</div></sc-if>
+                <div style="display:flex;gap:14px;padding:var(--py) 18px var(--py) 16px;background:{{ r.bg }};box-shadow:{{ r.sh }}">
+                  <div style="width:42px;height:42px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;background:{{ r.avBg }};color:{{ r.avFg }}">{{ r.ini }}</div>
+                  <div style="min-width:0;flex:1;line-height:1.4">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:17px;font-weight:{{ r.fwn }}">{{ r.nom }}</span>
+                      <sc-if value="{{ r.n }}"><span style="font-size:15px;color:var(--mut)">{{ r.n }}</span></sc-if>
+                      <span style="flex:1"></span>
+                      <sc-if value="{{ r.adj }}"><i class="icon-paperclip" style="font-size:16px;line-height:1;color:var(--mut)"></i></sc-if>
+                      <span style="flex:none;font-size:15px;color:{{ r.horaC }};font-weight:{{ r.fwn }}">{{ r.hora }}</span>
+                    </div>
+                    <div style="font-size:16px;font-weight:{{ r.fws }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.asunto }}</div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span style="flex:1;min-width:0;font-size:15px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.prev }}</span>
+                      <sc-if value="{{ r.tag }}"><span style="flex:none;white-space:nowrap;padding:0 9px;border-radius:999px;font-size:14px;line-height:24px;font-weight:500;background:{{ r.tag.bg }};color:{{ r.tag.fg }}">{{ r.tag.t }}</span></sc-if>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;min-height:0">
+            <div style="display:flex;align-items:center;gap:4px;height:56px;flex:none;padding:0 12px;border-bottom:1px solid var(--ls)">
+              <sc-for list="{{ acciones }}" as="h" hint-placeholder-count="4">
+              <span style="display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 12px;border-radius:10px;font-size:16px"><i class="{{ h.ic }}" style="font-size:19px;line-height:1;color:var(--mut)"></i>{{ h.l }}</span>
+              </sc-for>
+              <span style="margin-left:auto;width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center;color:var(--mut)"><i class="icon-ellipsis-vertical" style="font-size:20px;line-height:1"></i></span>
+            </div>
+            <div style="flex:1;min-height:0;overflow:hidden;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+              <div style="font-size:26px;font-weight:600;line-height:1.3;letter-spacing:-0.01em;text-wrap:pretty">Presupuesto de 14 placas de melamina blanca con corte</div>
+              <sc-if value="{{ b.etiquetas }}"><div style="display:flex;gap:8px;margin-top:-6px"><sc-for list="{{ etiqChips }}" as="t" hint-placeholder-count="3"><span style="display:inline-flex;align-items:center;gap:6px;padding:0 6px 0 10px;border-radius:999px;font-size:14px;line-height:28px;font-weight:500;background:{{ t.bg }};color:{{ t.fg }}">{{ t.t }}<i class="icon-x" style="font-size:13px;line-height:1;opacity:.7"></i></span></sc-for></div></sc-if>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--ls);border-bottom:1px solid var(--ls);color:var(--mut);font-size:16px">
+                <span style="display:flex"><span style="width:28px;height:28px;border-radius:50%;background:var(--avC);color:var(--avCT);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;box-shadow:0 0 0 2px var(--card)">M</span><span style="width:28px;height:28px;margin-left:-6px;border-radius:50%;background:oklch(0.68 0.19 48);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;box-shadow:0 0 0 2px var(--card)">D</span></span>
+                <span style="flex:1">3 mensajes anteriores entre Martín Pérez y Diego</span>
+                <span style="color:var(--accT);font-weight:500">Ver todos</span>
+              </div>
+              <div style="display:flex;gap:14px;align-items:flex-start">
+                <div style="width:48px;height:48px;flex:none;border-radius:50%;background:var(--avC);color:var(--avCT);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600">M</div>
+                <div style="flex:1;min-width:0;line-height:1.4">
+                  <div style="font-size:18px;font-weight:600">Martín Pérez</div>
+                  <div style="font-size:15px;color:var(--mut)">carpinteriaperez@gmail.com · para ventas@mjbj.com.ar</div>
+                </div>
+                <span style="font-size:15px;color:var(--mut)">Hoy, 9:42</span>
+                <i class="icon-star" style="font-size:20px;line-height:1;color:var(--mut);padding:4px"></i>
+              </div>
+              <sc-if value="{{ b.leerFull }}">
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:var(--hun);font-size:15px;color:var(--mut)">
+                <i class="icon-image-off" style="font-size:18px;line-height:1"></i><span style="flex:1">Las imágenes de este correo están ocultas.</span><span style="color:var(--accT);font-weight:600">Mostrar imágenes</span>
+              </div>
+              <div style="font-size:17px;line-height:1.65;max-width:700px;display:flex;flex-direction:column;gap:12px">
+                <div>Diego, buenas.</div>
+                <div>Dale, va el presupuesto. Confirmame si el corte lo tienen para el jueves así paso con la camioneta a retirar por Casa Central.</div>
+                <div>Te adjunto el despiece actualizado: cambié dos laterales de 720 a 700 mm y sumé 6 estantes de 560 × 350. ¿El tapacanto lo incluyen o va aparte?</div>
+                <div>Gracias,<br>Martín</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <i class="icon-paperclip" style="font-size:18px;line-height:1;color:var(--mut)"></i>
+                  <span style="font-size:16px;font-weight:600">3 adjuntos</span><span style="font-size:15px;color:var(--mut)">2,4 MB</span>
+                  <span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-size:15px;font-weight:600;color:var(--accT);background:{{ b.dlBg }}"><i class="icon-download" style="font-size:17px;line-height:1"></i>Descargar todo</span>
+                </div>
+                <div style="display:flex;gap:10px">
+                <sc-for list="{{ adjuntos }}" as="a" hint-placeholder-count="3">
+                <div style="position:relative;flex:1;min-width:0;border:1px solid {{ a.bd }};border-radius:10px;overflow:hidden;box-shadow:{{ a.sh }}">
+                  <div style="height:96px;background:repeating-linear-gradient(135deg,var(--hun) 0 8px,var(--mu) 8px 16px);display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',monospace;font-size:12px;color:var(--t3)">{{ a.vp }}</div>
+                  <sc-if value="{{ a.hover }}"><div style="position:absolute;left:0;right:0;top:0;height:96px;background:oklch(0.15 0.01 60 / 0.55);display:flex;align-items:center;justify-content:center;gap:10px"><span style="display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:999px;background:#fff;color:oklch(0.15 0.01 60);font-size:14px;font-weight:600"><i class="icon-eye" style="font-size:16px;line-height:1"></i>Ver</span><span style="width:36px;height:36px;border-radius:50%;background:#fff;color:oklch(0.15 0.01 60);display:flex;align-items:center;justify-content:center"><i class="icon-download" style="font-size:16px;line-height:1"></i></span></div></sc-if>
+                  <div style="padding:9px 10px;display:flex;align-items:center;gap:8px;border-top:1px solid var(--ls)">
+                    <i class="{{ a.ic }}" style="font-size:20px;line-height:1;color:{{ a.c }}"></i>
+                    <div style="flex:1;min-width:0;line-height:1.3"><div style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.n }}</div><div style="font-size:13px;color:var(--mut)">{{ a.m }}</div></div>
+                  </div>
+                </div>
+                </sc-for>
+                </div>
+              </div>
+              <div style="display:flex;gap:12px;margin-top:8px">
+                <span style="display:inline-flex;align-items:center;gap:10px;height:48px;padding:0 22px;border:1px solid var(--ln);border-radius:999px;font-size:17px;font-weight:500"><i class="icon-reply" style="font-size:20px;line-height:1"></i>Responder</span>
+                <span style="display:inline-flex;align-items:center;gap:10px;height:48px;padding:0 22px;border:1px solid var(--ln);border-radius:999px;font-size:17px;font-weight:500"><i class="icon-forward" style="font-size:20px;line-height:1"></i>Reenviar</span>
+              </div>
+              </sc-if>
+              <sc-if value="{{ b.leerComp }}">
+              <div style="font-size:16px;line-height:1.6;color:var(--mut);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Diego, buenas. Dale, va el presupuesto. Confirmame si el corte lo tienen para el jueves así paso con la camioneta a retirar por Casa Central. Te adjunto el despiece actualizado…</div>
+              </sc-if>
+              <sc-if value="{{ b.responder }}">
+              <div style="border-radius:14px;box-shadow:0 0 0 1.5px var(--acc), 0 8px 24px -12px rgb(60 30 10 / .3);overflow:hidden;background:var(--card)">
+                <div style="display:flex;align-items:center;gap:10px;min-height:52px;padding:0 14px;border-bottom:1px solid var(--ls);font-size:16px">
+                  <span style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--accT)"><i class="icon-reply" style="font-size:18px;line-height:1"></i>Responder<i class="icon-chevron-down" style="font-size:15px;line-height:1"></i></span>
+                  <span style="display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 10px 0 3px;border-radius:999px;background:var(--mu);font-size:15px"><span style="width:26px;height:26px;border-radius:50%;background:var(--avC);color:var(--avCT);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">M</span>Martín Pérez</span>
+                  <i class="icon-maximize-2" style="margin-left:auto;font-size:17px;line-height:1;color:var(--mut)"></i>
+                </div>
+                <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+                  <div style="font-size:17px;line-height:1.6">Martín, sí: el corte queda para el jueves a la mañana. El tapacanto de PVC va incluido en el presupuesto. Cuando esté listo te aviso por acá o por WhatsApp.<span style="display:inline-block;width:1.5px;height:20px;background:var(--acc);vertical-align:-4px;margin-left:1px"></span></div>
+                  <div style="font-size:15px;color:var(--mut)">Diego Ramírez · Ventas · Maderera Juan B. Justo</div>
+                  <span style="align-self:flex-start;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:999px;background:var(--mu);font-size:14px;color:var(--mut)"><i class="icon-chevron-up" style="font-size:15px;line-height:1"></i>Ocultar el mensaje anterior</span>
+                  <div style="border-left:3px solid var(--ls);padding:2px 0 2px 14px;font-size:15px;line-height:1.6;color:var(--mut)"><div style="margin-bottom:4px">El vie 24 oct a las 9:42, Martín Pérez escribió:</div>Dale, va el presupuesto. Confirmame si el corte lo tienen para el jueves así paso con la camioneta a retirar por Casa Central. Te adjunto el despiece actualizado…</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;padding:10px 12px;border-top:1px solid var(--ls)">
+                  <span style="display:inline-flex;align-items:stretch;height:46px;border-radius:999px;background:var(--acc);color:#fff;font-size:16px;font-weight:600;overflow:hidden"><span style="display:inline-flex;align-items:center;padding:0 18px 0 22px">Enviar</span><span style="display:inline-flex;align-items:center;padding:0 12px 0 10px;border-left:1px solid oklch(1 0 0 / .3)"><i class="icon-chevron-down" style="font-size:17px;line-height:1"></i></span></span>
+                  <i class="icon-paperclip" style="font-size:20px;line-height:1;color:var(--mut);padding:10px 8px 10px 14px"></i><i class="icon-file-text" style="font-size:20px;line-height:1;color:var(--mut);padding:10px 8px"></i><i class="icon-message-square-text" style="font-size:20px;line-height:1;color:var(--mut);padding:10px 8px"></i>
+                  <span style="margin-left:auto;font-size:14px;color:var(--mut)">Borrador guardado</span><i class="icon-trash-2" style="font-size:19px;line-height:1;color:var(--mut);padding:10px"></i>
+                </div>
+              </div>
+              </sc-if>
+              <sc-if value="{{ b.reenviar }}">
+              <div style="border-radius:14px;box-shadow:0 0 0 1.5px var(--acc), 0 8px 24px -12px rgb(60 30 10 / .3);overflow:hidden;background:var(--card)">
+                <div style="display:flex;align-items:center;gap:10px;min-height:52px;padding:0 14px;border-bottom:1px solid var(--ls);font-size:16px">
+                  <span style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--accT)"><i class="icon-forward" style="font-size:18px;line-height:1"></i>Reenviar<i class="icon-chevron-down" style="font-size:15px;line-height:1"></i></span>
+                  <span style="display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 10px 0 3px;border-radius:999px;background:var(--mu);font-size:15px"><span style="width:26px;height:26px;border-radius:50%;background:oklch(0.55 0.13 250);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">A</span>Aserradero · cortes</span>
+                  <span style="font-size:16px;color:var(--t3)">Agregar otro…</span>
+                </div>
+                <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+                  <div style="font-size:17px;line-height:1.6">Juan, te paso el despiece de Carpintería Pérez para el jueves. Ojo que cambió: los laterales ahora son de 700.</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px">
+                    <span style="display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 10px;border:1px solid var(--ls);border-radius:10px;font-size:14px"><i class="icon-file-text" style="font-size:17px;line-height:1;color:var(--prT)"></i>despiece-cocina-v2.pdf<i class="icon-x" style="font-size:14px;line-height:1;color:var(--mut)"></i></span>
+                    <span style="display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 10px;border:1px solid var(--ls);border-radius:10px;font-size:14px"><i class="icon-file-spreadsheet" style="font-size:17px;line-height:1;color:var(--okT)"></i>medidas-modulos.xlsx<i class="icon-x" style="font-size:14px;line-height:1;color:var(--mut)"></i></span>
+                    <span style="display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 10px;border:1px dashed var(--ln);border-radius:10px;font-size:14px;color:var(--mut);text-decoration:line-through"><i class="icon-image" style="font-size:17px;line-height:1"></i>foto-bajo-mesada.jpg</span>
+                  </div>
+                  <div style="padding:12px 14px;border-radius:10px;background:var(--hun);font-size:15px;line-height:1.55;color:var(--mut)"><div style="font-weight:600;color:var(--fg)">Mensaje reenviado</div>De: Martín Pérez · carpinteriaperez@gmail.com<br>Fecha: viernes 24 de octubre, 9:42<br>Asunto: Presupuesto de 14 placas de melamina blanca con corte</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;padding:10px 12px;border-top:1px solid var(--ls)">
+                  <span style="display:inline-flex;align-items:stretch;height:46px;border-radius:999px;background:var(--acc);color:#fff;font-size:16px;font-weight:600;overflow:hidden"><span style="display:inline-flex;align-items:center;padding:0 18px 0 22px">Enviar</span><span style="display:inline-flex;align-items:center;padding:0 12px 0 10px;border-left:1px solid oklch(1 0 0 / .3)"><i class="icon-chevron-down" style="font-size:17px;line-height:1"></i></span></span>
+                  <i class="icon-paperclip" style="font-size:20px;line-height:1;color:var(--mut);padding:10px 8px 10px 14px"></i><i class="icon-file-text" style="font-size:20px;line-height:1;color:var(--mut);padding:10px 8px"></i><i class="icon-message-square-text" style="font-size:20px;line-height:1;color:var(--mut);padding:10px 8px"></i>
+                  <span style="margin-left:auto;font-size:14px;color:var(--mut)">2 adjuntos · 1,8 MB</span><i class="icon-trash-2" style="font-size:19px;line-height:1;color:var(--mut);padding:10px"></i>
+                </div>
+              </div>
+              </sc-if>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:20px;padding:20px;border-left:1px solid var(--ls);background:var(--cli)">
+            <div style="font-size:14px;font-weight:600;color:var(--mut)">Es cliente</div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:-8px">
+              <div style="width:48px;height:48px;flex:none;border-radius:50%;background:var(--avC);color:var(--avCT);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600">CP</div>
+              <div style="line-height:1.35"><div style="font-size:18px;font-weight:600">Carpintería Pérez</div><div style="font-size:15px;color:var(--mut)">Martín Pérez</div></div>
+            </div>
+            <div>
+              <div style="font-size:15px;color:var(--mut)">Saldo de cuenta corriente</div>
+              <div style="font-size:28px;font-weight:600;letter-spacing:-0.02em;color:var(--accT);line-height:1.3">$ 486.300</div>
+              <div style="font-size:15px;color:var(--mut)">Debe · tiene límite de $ 1.500.000</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="font-size:15px;color:var(--mut)">Pedidos abiertos</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:16px">Pedido 4836</span><span style="padding:2px 10px;border-radius:999px;font-size:14px;font-weight:500;background:var(--espBg);color:var(--espT)">Preparando</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:16px">Pedido 4790</span><span style="padding:2px 10px;border-radius:999px;font-size:14px;font-weight:500;background:var(--okBg);color:var(--okT)">Listo para retirar</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="font-size:15px;color:var(--mut)">Último presupuesto</div>
+              <div style="font-size:16px">P-2025-0412 · $ 742.180</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+              <span style="display:flex;align-items:center;justify-content:center;gap:10px;height:48px;border-radius:12px;background:var(--acc);color:#fff;font-size:16px;font-weight:600"><i class="icon-clipboard-list" style="font-size:19px;line-height:1"></i>Hacer presupuesto</span>
+              <span style="display:flex;align-items:center;justify-content:center;gap:10px;height:48px;border-radius:12px;border:1px solid var(--ln);background:var(--card);font-size:16px;font-weight:500"><i class="icon-truck" style="font-size:19px;line-height:1"></i>Hacer pedido</span>
+              <span style="text-align:center;font-size:15px;color:var(--accT);font-weight:500;margin-top:2px">Ver ficha completa</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      </sc-if>
+
+      <sc-if value="{{ b.redactar }}">
+      <div style="position:absolute;bottom:0;right:704px;width:300px;height:50px;display:flex;align-items:center;gap:12px;padding:0 14px 0 18px;background:var(--toast);color:var(--toastT);border-radius:12px 12px 0 0;box-shadow:var(--popsh);font-size:16px;font-weight:500">
+        <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Re: Pedido 4821</span><i class="icon-chevron-up" style="font-size:20px;line-height:1"></i><i class="icon-x" style="font-size:20px;line-height:1"></i>
+      </div>
+      <div style="position:absolute;bottom:0;right:24px;width:664px;height:760px;display:flex;flex-direction:column;background-color:var(--card);background-image:var(--texC);background-size:180px 180px;border-radius:14px 14px 0 0;box-shadow:var(--popsh),0 0 0 1px var(--ls)">
+        <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:0 10px 0 20px;background:var(--toast);color:var(--toastT);border-radius:14px 14px 0 0;font-size:16px;font-weight:600">
+          <span style="flex:1">Mensaje nuevo</span>
+          <i class="icon-minus" style="font-size:20px;line-height:1;padding:8px"></i><i class="icon-maximize-2" style="font-size:18px;line-height:1;padding:8px"></i><i class="icon-x" style="font-size:20px;line-height:1;padding:8px"></i>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;min-height:54px;padding:0 20px;border-bottom:1px solid var(--ls);font-size:16px">
+          <span style="color:var(--mut);width:56px">De</span>
+          <span style="display:inline-flex;align-items:center;gap:10px;font-weight:500"><span style="width:10px;height:10px;border-radius:50%;background:oklch(0.68 0.19 48)"></span>Ventas — ventas@mjbj.com.ar<i class="icon-chevron-down" style="font-size:18px;line-height:1;color:var(--mut)"></i></span>
+        </div>
+        <div style="position:relative;display:flex;align-items:center;gap:10px;min-height:54px;padding:0 20px;border-bottom:1px solid var(--ls);font-size:16px">
+          <span style="color:var(--mut);width:56px">Para</span>
+          <span style="display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 10px 0 4px;border-radius:999px;background:var(--mu);font-size:16px"><span style="width:26px;height:26px;border-radius:50%;background:var(--avC);color:var(--avCT);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">M</span>Martín Pérez<i class="icon-x" style="font-size:15px;line-height:1;color:var(--mut)"></i></span>
+          <span>rob<span style="display:inline-block;width:1.5px;height:19px;background:var(--acc);vertical-align:-4px;margin-left:1px"></span></span>
+          <span style="margin-left:auto;font-size:15px;color:var(--mut)">Cc  Cco</span>
+          <div style="position:absolute;top:50px;left:84px;width:440px;z-index:2;background:var(--pop);border-radius:12px;box-shadow:var(--popsh),0 0 0 1px var(--ls);overflow:hidden;padding:6px 0">
+            <sc-for list="{{ sugeridos }}" as="s" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:{{ s.bg }}">
+              <span style="width:38px;height:38px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;background:{{ s.avBg }};color:{{ s.avFg }}">{{ s.ini }}</span>
+              <div style="flex:1;min-width:0;line-height:1.35"><div style="font-size:16px;font-weight:500">{{ s.n }}</div><div style="font-size:14px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.d }}</div></div>
+              <span style="font-size:14px;color:var(--mut)">{{ s.t }}</span>
+            </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;min-height:54px;padding:0 20px;border-bottom:1px solid var(--ls);font-size:16px"><span style="color:var(--mut);width:56px">Asunto</span><span>Presupuesto P-2025-0418 · melamina blanca</span></div>
+        <div style="flex:1;min-height:0;padding:18px 20px 10px;font-size:17px;line-height:1.65;display:flex;flex-direction:column;gap:12px">
+          <div>Hola Martín:</div>
+          <div>Te mando <span style="background:var(--espBg);color:var(--espT);border-radius:3px;padding:0 2px">adjunto</span> el presupuesto con los laterales de 700 mm y los 6 estantes. El tapacanto va incluido.</div>
+          <div>El corte queda para el jueves a la mañana; te avisamos cuando esté listo.</div>
+          <div>Saludos,</div>
+          <div style="display:flex;gap:14px;align-items:center;margin-top:8px;font-size:15px;line-height:1.45;color:var(--mut)">
+            <img src="public/cropped-icon-180x180.png" alt="" style="width:44px;height:44px;border-radius:8px">
+            <div><div style="color:var(--fg);font-weight:600;font-size:16px">Diego Ramírez · Ventas</div><div>Maderera Juan B. Justo · Casa Central</div><div>Av. Juan B. Justo 4153, Mar del Plata · (0223) 474-3328</div></div>
+          </div>
+        </div>
+        <div style="margin:0 20px 12px;display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;background:var(--espBg);color:var(--espT);font-size:16px">
+          <i class="icon-paperclip" style="font-size:20px;line-height:1"></i><span style="flex:1">Dice «adjunto», pero no agregaste ningún archivo.</span><span style="font-weight:600">Adjuntar</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding:12px 16px 16px">
+          <span style="display:inline-flex;align-items:stretch;height:48px;border-radius:999px;background:var(--acc);color:#fff;font-size:17px;font-weight:600;overflow:hidden">
+            <span style="display:inline-flex;align-items:center;padding:0 22px 0 26px">Enviar</span>
+            <span style="display:inline-flex;align-items:center;padding:0 14px 0 12px;border-left:1px solid oklch(1 0 0 / .3)"><i class="icon-chevron-down" style="font-size:18px;line-height:1"></i></span>
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 12px;margin-left:8px;border-radius:10px;font-size:15px"><i class="icon-paperclip" style="font-size:20px;line-height:1;color:var(--mut)"></i>Adjuntar</span>
+          <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 12px;border-radius:10px;font-size:15px"><i class="icon-file-text" style="font-size:20px;line-height:1;color:var(--mut)"></i>Del panel</span>
+          <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 12px;border-radius:10px;font-size:15px"><i class="icon-message-square-text" style="font-size:20px;line-height:1;color:var(--mut)"></i>Respuestas</span>
+          <i class="icon-trash-2" style="font-size:20px;line-height:1;color:var(--mut);margin-left:auto;padding:10px"></i>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ b.etiquetas }}">
+      <div style="position:absolute;top:126px;left:1010px;width:270px;z-index:6;background:var(--pop);border-radius:14px;box-shadow:var(--popsh),0 0 0 1px var(--ls);padding:6px 0">
+        <sc-for list="{{ menuMas }}" as="m" hint-placeholder-count="6">
+        <div style="display:flex;align-items:center;gap:12px;height:46px;padding:0 16px;font-size:16px;background:{{ m.bg }}"><i class="{{ m.ic }}" style="font-size:19px;line-height:1;color:var(--mut)"></i><span style="flex:1">{{ m.l }}</span><sc-if value="{{ m.sub }}"><i class="icon-chevron-right" style="font-size:17px;line-height:1;color:var(--mut)"></i></sc-if></div>
+        </sc-for>
+      </div>
+      <div style="position:absolute;top:212px;left:716px;width:300px;z-index:6;background:var(--pop);border-radius:14px;box-shadow:var(--popsh),0 0 0 1px var(--ls);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;height:52px;padding:0 16px;border-bottom:1px solid var(--ls);font-size:16px"><i class="icon-search" style="font-size:17px;line-height:1;color:var(--mut)"></i><span style="color:var(--t3)">Buscar o crear etiqueta</span></div>
+        <div style="padding:6px 0">
+        <sc-for list="{{ etiq }}" as="e" hint-placeholder-count="7">
+        <div style="display:flex;align-items:center;gap:12px;height:44px;padding:0 16px;font-size:16px">
+          <span style="width:22px;height:22px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;background:{{ e.cb }};box-shadow:{{ e.cbb }};color:#fff"><sc-if value="{{ e.on }}"><i class="icon-check" style="font-size:15px;line-height:1"></i></sc-if></span>
+          <span style="width:10px;height:10px;border-radius:3px;background:{{ e.c }}"></span><span style="flex:1">{{ e.l }}</span><sc-if value="{{ e.nueva }}"><span style="font-size:13px;color:var(--mut)">nueva</span></sc-if>
+        </div>
+        </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--ls);font-size:15px;font-weight:600;color:var(--accT)"><i class="icon-plus" style="font-size:16px;line-height:1"></i>Crear etiqueta</div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ b.imprimir }}">
+      <div style="position:absolute;inset:0;z-index:6;background:oklch(0.12 0.01 60 / 0.55)"></div>
+      <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:7;width:1080px;height:760px;display:grid;grid-template-columns:540px 1fr;background:var(--card);border-radius:18px;overflow:hidden;box-shadow:var(--popsh)">
+        <div style="background:var(--mu);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px">
+          <div style="width:440px;height:620px;background:#fff;color:#1a1a1a;box-shadow:0 10px 30px -10px rgb(0 0 0 / .35);padding:34px 36px;display:flex;flex-direction:column;gap:12px;font-size:13px;line-height:1.5">
+            <div style="display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:2px solid #1a1a1a"><img src="public/cropped-icon-180x180.png" alt="" style="width:30px;height:30px;border-radius:6px"><div style="flex:1;line-height:1.25"><div style="font-weight:700;font-size:14px">Maderera Juan B. Justo</div><div style="color:#666;font-size:12px">ventas@mjbj.com.ar</div></div><div style="font-size:12px;color:#666">24/10/2026</div></div>
+            <div style="font-size:16px;font-weight:700;line-height:1.3">Presupuesto de 14 placas de melamina blanca con corte</div>
+            <div style="color:#555;font-size:12px;line-height:1.5">De: Martín Pérez &lt;carpinteriaperez@gmail.com&gt;<br>Para: ventas@mjbj.com.ar<br>Fecha: viernes 24 de octubre de 2026, 9:42</div>
+            <div style="display:flex;flex-direction:column;gap:8px"><div>Diego, buenas.</div><div>Dale, va el presupuesto. Confirmame si el corte lo tienen para el jueves así paso con la camioneta a retirar por Casa Central.</div><div>Te adjunto el despiece actualizado: cambié dos laterales de 720 a 700 mm y sumé 6 estantes de 560 × 350. ¿El tapacanto lo incluyen o va aparte?</div><div>Gracias,<br>Martín</div></div>
+            <div style="margin-top:auto;padding-top:10px;border-top:1px solid #ddd;color:#555;font-size:12px">Adjuntos: despiece-cocina-v2.pdf (se imprime a continuación) · medidas-modulos.xlsx · foto-bajo-mesada.jpg</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:var(--mut)"><i class="icon-chevron-left" style="font-size:18px;line-height:1"></i>Hoja 1 de 5<i class="icon-chevron-right" style="font-size:18px;line-height:1"></i></div>
+        </div>
+        <div style="padding:30px 32px;display:flex;flex-direction:column;gap:22px">
+          <div style="display:flex;align-items:center"><span style="flex:1;font-size:24px;font-weight:600">Imprimir</span><i class="icon-x" style="font-size:22px;line-height:1;color:var(--mut)"></i></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:15px;color:var(--mut)">Qué imprimir</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div style="padding:12px 14px;border-radius:12px;box-shadow:0 0 0 2px var(--acc);background:var(--sel)"><div style="font-size:16px;font-weight:600">Solo este correo</div><div style="font-size:14px;color:var(--mut)">1 hoja</div></div>
+              <div style="padding:12px 14px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--ln)"><div style="font-size:16px;font-weight:500">Toda la conversación</div><div style="font-size:14px;color:var(--mut)">4 correos · 3 hojas</div></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:15px;color:var(--mut);margin-bottom:4px">Imprimir también los adjuntos</div>
+            <sc-for list="{{ impAdj }}" as="a" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:12px;min-height:46px;opacity:{{ a.op }}">
+              <span style="width:22px;height:22px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;background:{{ a.cb }};box-shadow:{{ a.cbb }};color:#fff"><sc-if value="{{ a.on }}"><i class="icon-check" style="font-size:15px;line-height:1"></i></sc-if></span>
+              <i class="{{ a.ic }}" style="font-size:20px;line-height:1;color:{{ a.c }}"></i>
+              <div style="flex:1;line-height:1.3"><div style="font-size:16px">{{ a.n }}</div><div style="font-size:14px;color:var(--mut)">{{ a.d }}</div></div>
+            </div>
+            </sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 150px;gap:12px">
+            <div><div style="font-size:15px;color:var(--mut);margin-bottom:6px">Impresora</div><div style="height:50px;display:flex;align-items:center;gap:10px;padding:0 14px;border:1px solid var(--ln);border-radius:12px;font-size:16px"><i class="icon-printer" style="font-size:18px;line-height:1;color:var(--mut)"></i><span style="flex:1">Mostrador · Casa Central</span><i class="icon-chevron-down" style="font-size:17px;line-height:1;color:var(--mut)"></i></div></div>
+            <div><div style="font-size:15px;color:var(--mut);margin-bottom:6px">Copias</div><div style="height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 6px;border:1px solid var(--ln);border-radius:12px;font-size:17px"><i class="icon-minus" style="font-size:17px;line-height:1;padding:8px;color:var(--mut)"></i>1<i class="icon-plus" style="font-size:17px;line-height:1;padding:8px;color:var(--mut)"></i></div></div>
+          </div>
+          <div style="margin-top:auto;display:flex;align-items:center;gap:10px">
+            <span style="font-size:16px;color:var(--mut);font-weight:500;padding:0 6px">Cancelar</span>
+            <span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;height:50px;padding:0 20px;border:1px solid var(--ln);border-radius:999px;font-size:16px;font-weight:500"><i class="icon-file-down" style="font-size:18px;line-height:1"></i>Guardar como PDF</span>
+            <span style="display:inline-flex;align-items:center;gap:8px;height:50px;padding:0 26px;border-radius:999px;background:var(--acc);color:#fff;font-size:16px;font-weight:600"><i class="icon-printer" style="font-size:18px;line-height:1"></i>Imprimir 5 hojas</span>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ b.programar }}">
+      <div style="position:absolute;left:916px;bottom:80px;width:420px;z-index:6;background:var(--pop);border-radius:16px;box-shadow:var(--popsh),0 0 0 1px var(--ls);overflow:hidden">
+        <div style="padding:16px 18px 8px;font-size:18px;font-weight:600">Programar el envío</div>
+        <sc-for list="{{ progOpc }}" as="o" hint-placeholder-count="3">
+        <div style="display:flex;align-items:baseline;gap:10px;padding:11px 18px;background:{{ o.bg }};box-shadow:{{ o.sh }}"><i class="icon-clock" style="font-size:17px;line-height:1;color:var(--mut)"></i><span style="font-size:16px;font-weight:500">{{ o.t }}</span><span style="font-size:14px;color:var(--mut)">{{ o.d }}</span></div>
+        </sc-for>
+        <div style="margin-top:6px;padding:12px 18px 4px;border-top:1px solid var(--ls);display:flex;align-items:center"><span style="flex:1;font-size:16px;font-weight:600">Octubre 2026</span><i class="icon-chevron-left" style="font-size:18px;line-height:1;color:var(--mut);padding:6px"></i><i class="icon-chevron-right" style="font-size:18px;line-height:1;color:var(--mut);padding:6px"></i></div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:4px 14px 8px;text-align:center">
+          <span style="font-size:13px;color:var(--mut);line-height:28px">L</span><span style="font-size:13px;color:var(--mut);line-height:28px">M</span><span style="font-size:13px;color:var(--mut);line-height:28px">M</span><span style="font-size:13px;color:var(--mut);line-height:28px">J</span><span style="font-size:13px;color:var(--mut);line-height:28px">V</span><span style="font-size:13px;color:var(--mut);line-height:28px">S</span><span style="font-size:13px;color:var(--mut);line-height:28px">D</span>
+          <sc-for list="{{ dias }}" as="d" hint-placeholder-count="35">
+          <span style="height:38px;display:flex;align-items:center;justify-content:center;border-radius:999px;font-size:15px;background:{{ d.bg }};color:{{ d.fg }};font-weight:{{ d.fw }};box-shadow:{{ d.bd }}">{{ d.n }}</span>
+          </sc-for>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;padding:4px 16px 14px">
+          <sc-for list="{{ horas }}" as="x" hint-placeholder-count="5"><span style="height:36px;display:inline-flex;align-items:center;padding:0 12px;border-radius:999px;font-size:15px;border:1px solid {{ x.bd }};background:{{ x.bg }};color:{{ x.fg }};font-weight:{{ x.fw }}">{{ x.h }}</span></sc-for>
+          <span style="height:36px;display:inline-flex;align-items:center;padding:0 12px;border-radius:999px;font-size:15px;color:var(--mut)">Otra hora</span>
+        </div>
+        <div style="padding:12px 16px 16px;border-top:1px solid var(--ls)"><span style="display:flex;align-items:center;justify-content:center;gap:8px;height:50px;border-radius:12px;background:var(--acc);color:#fff;font-size:16px;font-weight:600"><i class="icon-calendar-clock" style="font-size:18px;line-height:1"></i>Mandarlo el lunes 26 a las 8:00</span></div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ b.descargas }}">
+      <div style="position:absolute;top:452px;left:780px;width:460px;z-index:5;background:var(--pop);border-radius:16px;box-shadow:var(--popsh),0 0 0 1px var(--ls);overflow:hidden">
+        <div style="padding:18px 20px 10px"><div style="font-size:18px;font-weight:600">Descargar adjuntos</div><div style="font-size:15px;color:var(--mut)">Elegí cuáles. Se bajan juntos en una carpeta comprimida.</div></div>
+        <sc-for list="{{ adjDesc }}" as="a" hint-placeholder-count="3">
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 20px">
+          <span style="width:22px;height:22px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;background:{{ a.cb }};box-shadow:{{ a.cbb }};color:#fff"><sc-if value="{{ a.on }}"><i class="icon-check" style="font-size:15px;line-height:1"></i></sc-if></span>
+          <i class="{{ a.ic }}" style="font-size:22px;line-height:1;color:{{ a.c }}"></i>
+          <span style="flex:1;min-width:0;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.n }}</span>
+          <span style="font-size:15px;color:var(--mut)">{{ a.s }}</span>
+        </div>
+        </sc-for>
+        <div style="display:flex;flex-direction:column;gap:10px;padding:14px 20px 18px;border-top:1px solid var(--ls);margin-top:6px">
+          <span style="display:flex;align-items:center;justify-content:center;gap:10px;height:50px;border-radius:12px;background:var(--acc);color:#fff;font-size:16px;font-weight:600"><i class="icon-download" style="font-size:19px;line-height:1"></i>Descargar 2 archivos · 2,4 MB</span>
+          <span style="display:flex;align-items:center;justify-content:center;gap:10px;height:48px;border-radius:12px;border:1px solid var(--ln);font-size:16px;font-weight:500"><i class="icon-user-round" style="font-size:19px;line-height:1"></i>Guardar en la ficha de Carpintería Pérez</span>
+          <span style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;color:var(--accT);font-weight:500;margin-top:2px"><i class="icon-file-down" style="font-size:17px;line-height:1"></i>Guardar el correo entero como PDF</span>
+        </div>
+      </div>
+      <div style="position:absolute;left:24px;bottom:24px;width:380px;z-index:5;padding:14px 16px;border-radius:14px;background:var(--toast);color:var(--toastT);box-shadow:var(--popsh)">
+        <div style="display:flex;align-items:center;gap:10px;font-size:15px"><i class="icon-folder-down" style="font-size:20px;line-height:1"></i><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Bajando adjuntos-carpinteria-perez.zip</span><span style="font-family:'Geist Mono',monospace;font-size:14px">64%</span></div>
+        <div style="margin-top:10px;height:5px;border-radius:3px;background:oklch(1 0 0 / 0.15);overflow:hidden"><div style="width:64%;height:100%;border-radius:3px;background:oklch(0.75 0.15 55)"></div></div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ b.visor }}">
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;background:oklch(0.14 0.008 60)">
+        
+        <div style="height:68px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px 0 12px;color:#fff">
+          <span style="width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:oklch(1 0 0 / 0.1)"><i class="icon-x" style="font-size:22px;line-height:1"></i></span>
+          <i class="icon-image" style="font-size:24px;line-height:1;color:oklch(0.78 0.11 250)"></i>
+          <div style="line-height:1.3"><div style="font-size:17px;font-weight:600">foto-bajo-mesada.jpg</div><div style="font-size:14px;color:oklch(1 0 0 / 0.65)">620 KB · de Martín Pérez · hoy 9:42</div></div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+            <span style="display:inline-flex;align-items:center;gap:2px;height:44px;padding:0 6px;border-radius:999px;background:oklch(1 0 0 / 0.1);font-size:15px"><i class="icon-zoom-out" style="font-size:18px;line-height:1;padding:8px"></i><span style="font-family:'Geist Mono',monospace;font-size:14px;width:46px;text-align:center">100%</span><i class="icon-zoom-in" style="font-size:18px;line-height:1;padding:8px"></i></span><span style="width:44px;height:44px;border-radius:50%;background:oklch(1 0 0 / 0.1);display:flex;align-items:center;justify-content:center"><i class="icon-rotate-cw" style="font-size:18px;line-height:1"></i></span>
+            <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;background:oklch(1 0 0 / 0.1);font-size:15px;font-weight:500"><i class="icon-printer" style="font-size:18px;line-height:1"></i>Imprimir</span>
+            <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;background:oklch(1 0 0 / 0.1);font-size:15px;font-weight:500"><i class="icon-user-round" style="font-size:18px;line-height:1"></i>Guardar en la ficha</span>
+            <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;border-radius:999px;background:oklch(0.97 0.005 80);color:oklch(0.15 0.01 60);font-size:15px;font-weight:600"><i class="icon-download" style="font-size:18px;line-height:1"></i>Descargar</span>
+          </div>
+        </div>
+        <div style="position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center">
+          <div style="width:1040px;height:700px;border-radius:4px;background:repeating-linear-gradient(135deg,oklch(0.36 0.025 65) 0 12px,oklch(0.32 0.025 65) 12px 24px);display:flex;align-items:center;justify-content:center;font:14px 'Geist Mono',monospace;color:oklch(1 0 0 / 0.7);box-shadow:0 30px 80px -20px rgb(0 0 0 / .7)">foto del bajo mesada · 1600 × 1077</div>
+          <span style="position:absolute;left:28px;top:50%;width:56px;height:56px;margin-top:-28px;border-radius:50%;background:oklch(1 0 0 / 0.12);color:#fff;display:flex;align-items:center;justify-content:center"><i class="icon-chevron-left" style="font-size:26px;line-height:1"></i></span><span style="position:absolute;right:28px;top:50%;width:56px;height:56px;margin-top:-28px;border-radius:50%;background:oklch(1 0 0 / 0.12);color:#fff;display:flex;align-items:center;justify-content:center"><i class="icon-chevron-right" style="font-size:26px;line-height:1"></i></span>
+        </div>
+        
+        <div style="height:112px;flex:none;display:flex;align-items:center;justify-content:center;gap:12px;color:#fff">
+          <sc-for list="{{ tira }}" as="t" hint-placeholder-count="3">
+          <div style="width:120px;display:flex;flex-direction:column;gap:6px;align-items:center;opacity:{{ t.op }}">
+            <div style="width:120px;height:68px;border-radius:8px;background:repeating-linear-gradient(135deg,oklch(0.32 0.01 60) 0 6px,oklch(0.28 0.01 60) 6px 12px);display:flex;align-items:center;justify-content:center;box-shadow:{{ t.sh }}"><i class="{{ t.ic }}" style="font-size:22px;line-height:1;color:{{ t.c }}"></i></div>
+            <span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">{{ t.n }}</span>
+          </div>
+          </sc-for>
+        </div>
+        <div style="position:absolute;left:50%;bottom:122px;transform:translateX(-50%);font-size:14px;color:oklch(1 0 0 / 0.6)">← → para pasar · Esc para cerrar</div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ b.pdf }}">
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;background:oklch(0.14 0.008 60)">
+        
+        <div style="height:68px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px 0 12px;color:#fff">
+          <span style="width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:oklch(1 0 0 / 0.1)"><i class="icon-x" style="font-size:22px;line-height:1"></i></span>
+          <i class="icon-file-text" style="font-size:24px;line-height:1;color:oklch(0.75 0.14 25)"></i>
+          <div style="line-height:1.3"><div style="font-size:17px;font-weight:600">despiece-cocina-v2.pdf</div><div style="font-size:14px;color:oklch(1 0 0 / 0.65)">1,8 MB · 4 páginas · de Martín Pérez</div></div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+            <span style="display:inline-flex;align-items:center;gap:2px;height:44px;padding:0 6px;border-radius:999px;background:oklch(1 0 0 / 0.1);font-size:15px"><i class="icon-zoom-out" style="font-size:18px;line-height:1;padding:8px"></i><span style="font-family:'Geist Mono',monospace;font-size:14px;width:46px;text-align:center">100%</span><i class="icon-zoom-in" style="font-size:18px;line-height:1;padding:8px"></i></span>
+            <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;background:oklch(1 0 0 / 0.1);font-size:15px;font-weight:500"><i class="icon-printer" style="font-size:18px;line-height:1"></i>Imprimir</span>
+            <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;background:oklch(1 0 0 / 0.1);font-size:15px;font-weight:500"><i class="icon-user-round" style="font-size:18px;line-height:1"></i>Guardar en la ficha</span>
+            <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;border-radius:999px;background:oklch(0.97 0.005 80);color:oklch(0.15 0.01 60);font-size:15px;font-weight:600"><i class="icon-download" style="font-size:18px;line-height:1"></i>Descargar</span>
+          </div>
+        </div>
+        <div style="flex:1;min-height:0;display:flex;gap:0">
+          <div style="width:170px;flex:none;padding:16px 0 0 24px;display:flex;flex-direction:column;gap:16px;color:oklch(1 0 0 / 0.7);font-size:13px">
+            <sc-for list="{{ paginas }}" as="pg" hint-placeholder-count="4">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:110px">
+              <div style="width:100px;height:130px;border-radius:3px;background:#fff;box-shadow:{{ pg.sh }};padding:10px 8px;display:flex;flex-direction:column;gap:5px"><span style="height:5px;width:60%;background:#ddd"></span><span style="height:3px;background:#eee"></span><span style="height:3px;background:#eee"></span><span style="height:3px;width:80%;background:#eee"></span><span style="height:3px;background:#eee"></span></div>
+              <span>{{ pg.n }}</span>
+            </div>
+            </sc-for>
+          </div>
+          <div style="position:relative;flex:1;min-width:0;display:flex;justify-content:center;padding-top:16px;overflow:hidden">
+            <div style="width:660px;height:860px;background:#fff;color:#1a1a1a;border-radius:3px;box-shadow:0 30px 80px -20px rgb(0 0 0 / .7);padding:48px 52px;font-size:14px;line-height:1.5">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:22px;font-weight:700">Despiece cocina</div><div style="color:#666">Carpintería Pérez · obra Méndez · versión 2</div></div><div style="text-align:right;color:#666;font-size:13px">20/10/2026<br>Hoja 1 de 4</div></div>
+              <div style="margin-top:26px;display:grid;grid-template-columns:1.6fr 0.5fr 0.7fr 0.7fr 1.4fr;font-size:13px">
+                <span style="font-weight:600;padding:8px 6px;border-bottom:2px solid #1a1a1a">Pieza</span><span style="font-weight:600;padding:8px 6px;border-bottom:2px solid #1a1a1a;text-align:right">Cant.</span><span style="font-weight:600;padding:8px 6px;border-bottom:2px solid #1a1a1a;text-align:right">Largo</span><span style="font-weight:600;padding:8px 6px;border-bottom:2px solid #1a1a1a;text-align:right">Ancho</span><span style="font-weight:600;padding:8px 6px;border-bottom:2px solid #1a1a1a">Material</span>
+                <sc-for list="{{ piezas }}" as="z" hint-placeholder-count="10">
+                <span style="padding:7px 6px;border-bottom:1px solid #e5e5e5">{{ z.p }}</span><span style="padding:7px 6px;border-bottom:1px solid #e5e5e5;text-align:right;font-family:'Geist Mono',monospace">{{ z.c }}</span><span style="padding:7px 6px;border-bottom:1px solid #e5e5e5;text-align:right;font-family:'Geist Mono',monospace">{{ z.l }}</span><span style="padding:7px 6px;border-bottom:1px solid #e5e5e5;text-align:right;font-family:'Geist Mono',monospace">{{ z.a }}</span><span style="padding:7px 6px;border-bottom:1px solid #e5e5e5">{{ z.m }}</span>
+                </sc-for>
+              </div>
+              <div style="margin-top:18px;color:#666;font-size:13px">Medidas en milímetros. Veta a lo largo en piezas de 2600. Tapacanto PVC 0,45 en cantos vistos.</div>
+            </div>
+            <div style="position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;height:48px;padding:0 8px;border-radius:999px;background:oklch(0.24 0.01 60);color:#fff;font-size:15px;box-shadow:0 10px 30px -8px rgb(0 0 0 / .6)"><i class="icon-chevron-left" style="font-size:20px;line-height:1;padding:8px"></i>Página 1 de 4<i class="icon-chevron-right" style="font-size:20px;line-height:1;padding:8px"></i></div>
+          </div>
+          <div style="width:300px;flex:none;padding:16px 24px 0 0;display:flex;flex-direction:column;gap:12px;color:#fff">
+            <div style="padding:18px;border-radius:14px;background:oklch(0.2 0.01 60);box-shadow:0 0 0 1px oklch(1 0 0 / 0.08)">
+              <div style="font-size:16px;font-weight:600">Es un despiece</div>
+              <div style="font-size:15px;color:oklch(1 0 0 / 0.7);margin-top:4px">Encontramos 32 piezas en 4 páginas. Podés pasarlas a un presupuesto o a una orden de corte.</div>
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">
+                <span style="display:flex;align-items:center;justify-content:center;gap:8px;height:46px;border-radius:12px;background:oklch(0.58 0.19 45);font-size:15px;font-weight:600"><i class="icon-clipboard-list" style="font-size:18px;line-height:1"></i>Pasar a un presupuesto</span>
+                <span style="display:flex;align-items:center;justify-content:center;gap:8px;height:46px;border-radius:12px;background:oklch(1 0 0 / 0.1);font-size:15px;font-weight:500"><i class="icon-scissors" style="font-size:18px;line-height:1"></i>Mandar a cortes</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ b.planilla }}">
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;background:oklch(0.14 0.008 60)">
+        
+        <div style="height:68px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px 0 12px;color:#fff">
+          <span style="width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:oklch(1 0 0 / 0.1)"><i class="icon-x" style="font-size:22px;line-height:1"></i></span>
+          <i class="icon-file-spreadsheet" style="font-size:24px;line-height:1;color:oklch(0.78 0.12 150)"></i>
+          <div style="line-height:1.3"><div style="font-size:17px;font-weight:600">medidas-modulos.xlsx</div><div style="font-size:14px;color:oklch(1 0 0 / 0.65)">36 KB · planilla · de Martín Pérez</div></div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+            
+            <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;background:oklch(1 0 0 / 0.1);font-size:15px;font-weight:500"><i class="icon-printer" style="font-size:18px;line-height:1"></i>Imprimir</span>
+            <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;background:oklch(1 0 0 / 0.1);font-size:15px;font-weight:500"><i class="icon-user-round" style="font-size:18px;line-height:1"></i>Guardar en la ficha</span>
+            <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;border-radius:999px;background:oklch(0.97 0.005 80);color:oklch(0.15 0.01 60);font-size:15px;font-weight:600"><i class="icon-download" style="font-size:18px;line-height:1"></i>Descargar</span>
+          </div>
+        </div>
+        <div style="flex:1;min-height:0;display:flex;justify-content:center;padding:12px 0 24px">
+          <div style="width:1240px;display:flex;flex-direction:column;background:#fff;color:#1a1a1a;border-radius:6px;overflow:hidden;box-shadow:0 30px 80px -20px rgb(0 0 0 / .7)">
+            <div style="display:grid;grid-template-columns:52px 1.2fr 1.4fr 0.6fr 0.8fr 0.8fr 1fr 1.2fr;font-size:15px;flex:1;align-content:start">
+              <sc-for list="{{ hojaCols }}" as="hc" hint-placeholder-count="8"><span style="padding:7px 10px;background:#f1efeb;border-right:1px solid #ddd;border-bottom:1px solid #ddd;font-size:13px;color:#666;text-align:center">{{ hc }}</span></sc-for>
+              <sc-for list="{{ hoja }}" as="f" hint-placeholder-count="14">
+              <span style="padding:8px 10px;background:#f1efeb;border-right:1px solid #ddd;border-bottom:1px solid #e8e8e8;font-size:13px;color:#666;text-align:center">{{ f.n }}</span>
+              <span style="padding:8px 10px;border-right:1px solid #eee;border-bottom:1px solid #eee;font-weight:{{ f.fw }}">{{ f.a }}</span>
+              <span style="padding:8px 10px;border-right:1px solid #eee;border-bottom:1px solid #eee;font-weight:{{ f.fw }}">{{ f.b }}</span>
+              <span style="padding:8px 10px;border-right:1px solid #eee;border-bottom:1px solid #eee;text-align:right;font-family:'Geist Mono',monospace;font-weight:{{ f.fw }}">{{ f.c }}</span>
+              <span style="padding:8px 10px;border-right:1px solid #eee;border-bottom:1px solid #eee;text-align:right;font-family:'Geist Mono',monospace;font-weight:{{ f.fw }}">{{ f.d }}</span>
+              <span style="padding:8px 10px;border-right:1px solid #eee;border-bottom:1px solid #eee;text-align:right;font-family:'Geist Mono',monospace;font-weight:{{ f.fw }}">{{ f.e }}</span>
+              <span style="padding:8px 10px;border-right:1px solid #eee;border-bottom:1px solid #eee;font-weight:{{ f.fw }}">{{ f.f }}</span>
+              <span style="padding:8px 10px;border-bottom:1px solid #eee;color:#666;font-weight:{{ f.fw }}">{{ f.g }}</span>
+              </sc-for>
+            </div>
+            <div style="display:flex;align-items:center;gap:2px;height:46px;padding:0 10px;background:#f1efeb;border-top:1px solid #ddd;font-size:15px">
+              <span style="height:46px;display:inline-flex;align-items:center;padding:0 16px;background:#fff;font-weight:600;box-shadow:inset 0 3px 0 oklch(0.58 0.19 45)">Módulos</span>
+              <span style="height:46px;display:inline-flex;align-items:center;padding:0 16px;color:#555">Estantes</span>
+              <span style="height:46px;display:inline-flex;align-items:center;padding:0 16px;color:#555">Herrajes</span>
+              <span style="margin-left:auto;color:#666;font-size:14px">Solo lectura · para editar, descargala</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ b.busqueda }}">
+      <div style="position:absolute;top:124px;left:276px;width:720px;background:var(--pop);border-radius:14px;box-shadow:var(--popsh),0 0 0 1px var(--ls);overflow:hidden">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;padding:14px 18px;border-bottom:1px solid var(--ls)">
+          <sc-for list="{{ filtrosBusqueda }}" as="f" hint-placeholder-count="4">
+          <span style="display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-size:15px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};font-weight:{{ f.fw }}">{{ f.t }}<i class="icon-chevron-down" style="font-size:15px;line-height:1;opacity:.7"></i></span>
+          </sc-for>
+        </div>
+        <sc-for list="{{ resultados }}" as="r" hint-placeholder-count="4">
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 18px;background:{{ r.bg }}">
+          <span style="width:40px;height:40px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;background:{{ r.avBg }};color:{{ r.avFg }}">{{ r.ini }}</span>
+          <div style="flex:1;min-width:0;line-height:1.4">
+            <div style="display:flex;gap:10px;align-items:baseline"><span style="font-size:16px;font-weight:600">{{ r.nom }}</span><span style="font-size:15px;color:var(--mut)">{{ r.meta }}</span></div>
+            <div style="font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.pre }}<mark style="background:var(--accBg);color:var(--accT);font-weight:600;border-radius:3px;padding:0 2px">{{ r.hl }}</mark>{{ r.post }}</div>
+          </div>
+          <sc-if value="{{ r.adj }}"><i class="icon-paperclip" style="font-size:18px;line-height:1;color:var(--mut)"></i></sc-if>
+        </div>
+        </sc-for>
+        <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-top:1px solid var(--ls);font-size:16px;color:var(--accT);font-weight:500"><i class="icon-search" style="font-size:18px;line-height:1"></i>Ver los 7 resultados de «fenólico»</div>
+      </div>
+      </sc-if>
+    </div>
+    </div>
+  </div>
+  </sc-for>
+  </div>
+</div>
+</sc-for>
+
+<div id="t2-telefono" style="display:flex;flex-direction:column;gap:18px;scroll-margin-top:16px">
+  <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+    <a href="#t2-telefono" style="font:600 12px 'Geist Mono',monospace;padding:3px 8px;background:#1a1a1a;color:#fff;border-radius:5px;text-decoration:none">Tel</a>
+    <span style="font-size:24px;font-weight:600;letter-spacing:-0.01em">Teléfono</span>
+    <span style="font-size:16px;color:oklch(0.40 0.012 60);max-width:900px">Bandeja, correo abierto y redactar. Carpetas y casillas en el menú de ☰. Deslizar una fila a la izquierda la archiva.</span>
+  </div>
+  <sc-for list="{{ temas }}" as="b" hint-placeholder-count="2">
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <span style="font:500 13px 'Geist Mono',monospace;color:oklch(0.40 0.012 60)">{{ b.tema }}</span>
+    <div style="{{ b.vars }}">
+    <div style="display:flex;gap:40px;color:var(--fg);font-family:Geist,ui-sans-serif,system-ui,sans-serif;line-height:1.45">
+
+      <div style="width:390px;height:844px;border-radius:48px;border:10px solid var(--frame);background:var(--card);overflow:hidden;position:relative;display:flex;flex-direction:column;box-sizing:content-box">
+        <div style="height:50px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 30px;font-size:16px;font-weight:600"><span>9:41</span><span style="display:flex;gap:5px;align-items:center"><span style="width:17px;height:11px;border-radius:2px;background:var(--fg);opacity:.85"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid var(--fg);opacity:.85"></span></span></div>
+        <div style="margin:4px 16px 8px;height:52px;display:flex;align-items:center;gap:12px;padding:0 8px 0 14px;border-radius:999px;background:var(--srch);font-size:17px;color:var(--mut)">
+          <i class="icon-menu" style="font-size:22px;line-height:1;color:var(--fg)"></i><span style="flex:1">Buscar en el correo</span>
+          <span style="width:38px;height:38px;border-radius:50%;background:oklch(0.68 0.19 48);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">MG</span>
+        </div>
+        <div style="padding:6px 20px 4px;font-size:15px;font-weight:600;color:var(--mut)">Entrada · todas las casillas</div>
+        <div style="flex:1;min-height:0;overflow:hidden">
+          <sc-for list="{{ filasTel }}" as="r" hint-placeholder-count="6">
+          <div style="position:relative;overflow:hidden">
+            <sc-if value="{{ r.swipe }}"><div style="position:absolute;inset:0;background:var(--okT);color:var(--card);display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-right:24px;font-size:16px;font-weight:600"><i class="icon-archive" style="font-size:22px;line-height:1"></i>Archivar</div></sc-if>
+            <div style="position:relative;display:flex;gap:14px;padding:12px 18px 12px 16px;background:var(--card);transform:{{ r.tx }}">
+              <div style="width:44px;height:44px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;background:{{ r.avBg }};color:{{ r.avFg }}">{{ r.ini }}</div>
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;align-items:center;gap:8px"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:17px;font-weight:{{ r.fwn }}">{{ r.nom }}</span><span style="font-size:14px;color:{{ r.horaC }};font-weight:{{ r.fwn }}">{{ r.hora }}</span></div>
+                <div style="font-size:16px;font-weight:{{ r.fws }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.asunto }}</div>
+                <div style="font-size:15px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.prev }}</div>
+              </div>
+            </div>
+          </div>
+          </sc-for>
+        </div>
+        <div style="position:absolute;right:18px;bottom:40px;display:inline-flex;align-items:center;gap:12px;height:60px;padding:0 24px 0 20px;border-radius:18px;background:var(--acc);color:#fff;font-size:17px;font-weight:600;box-shadow:0 6px 18px -4px rgb(80 40 10 / .45)"><i class="icon-pencil" style="font-size:21px;line-height:1"></i>Redactar</div>
+        <div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--fg);opacity:.8"></div>
+      </div>
+
+      <div style="width:390px;height:844px;border-radius:48px;border:10px solid var(--frame);background:var(--card);overflow:hidden;position:relative;display:flex;flex-direction:column;box-sizing:content-box">
+        <div style="height:50px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 30px;font-size:16px;font-weight:600"><span>9:41</span><span style="display:flex;gap:5px;align-items:center"><span style="width:17px;height:11px;border-radius:2px;background:var(--fg);opacity:.85"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid var(--fg);opacity:.85"></span></span></div>
+        <div style="height:56px;flex:none;display:flex;align-items:center;gap:4px;padding:0 8px;color:var(--fg)">
+          <i class="icon-arrow-left" style="font-size:24px;line-height:1;padding:10px"></i><span style="flex:1"></span>
+          <i class="icon-archive" style="font-size:22px;line-height:1;padding:10px"></i><i class="icon-trash-2" style="font-size:22px;line-height:1;padding:10px"></i><i class="icon-ellipsis-vertical" style="font-size:22px;line-height:1;padding:10px"></i>
+        </div>
+        <div style="flex:1;min-height:0;overflow:hidden;padding:4px 20px;display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:23px;font-weight:600;line-height:1.3;letter-spacing:-0.01em">Presupuesto de 14 placas de melamina blanca con corte</div>
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:var(--cli);box-shadow:inset 0 0 0 1px var(--ls)">
+            <div style="flex:1;line-height:1.35"><div style="font-size:16px;font-weight:600">Carpintería Pérez · cliente</div><div style="font-size:15px;color:var(--mut)">Debe <span style="color:var(--accT);font-weight:600">$ 486.300</span> · 2 pedidos abiertos</div></div>
+            <i class="icon-chevron-right" style="font-size:22px;line-height:1;color:var(--mut)"></i>
+          </div>
+          <div style="font-size:15px;color:var(--mut);padding:2px 0">3 mensajes anteriores · <span style="color:var(--accT);font-weight:500">Ver</span></div>
+          <div style="display:flex;gap:12px;align-items:center">
+            <div style="width:44px;height:44px;flex:none;border-radius:50%;background:var(--avC);color:var(--avCT);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600">M</div>
+            <div style="flex:1;line-height:1.35"><div style="font-size:17px;font-weight:600">Martín Pérez</div><div style="font-size:15px;color:var(--mut)">para ventas@ · hoy 9:42</div></div>
+          </div>
+          <div style="font-size:17px;line-height:1.6;display:flex;flex-direction:column;gap:10px">
+            <div>Diego, buenas.</div>
+            <div>Dale, va el presupuesto. Confirmame si el corte lo tienen para el jueves así paso con la camioneta a retirar por Casa Central.</div>
+            <div>Te adjunto el despiece actualizado.</div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <div style="flex:1;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--ls);border-radius:12px"><i class="icon-file-text" style="font-size:22px;line-height:1;color:var(--prT)"></i><div style="min-width:0;line-height:1.3"><div style="font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">despiece-v2.pdf</div><div style="font-size:13px;color:var(--mut)">1,8 MB</div></div></div>
+            <div style="flex:1;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--ls);border-radius:12px"><i class="icon-file-spreadsheet" style="font-size:22px;line-height:1;color:var(--okT)"></i><div style="min-width:0;line-height:1.3"><div style="font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">medidas.xlsx</div><div style="font-size:13px;color:var(--mut)">36 KB</div></div></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:12px 16px 34px;border-top:1px solid var(--ls)">
+          <span style="flex:1;display:flex;align-items:center;justify-content:center;gap:10px;height:52px;border-radius:999px;background:var(--acc);color:#fff;font-size:17px;font-weight:600"><i class="icon-reply" style="font-size:20px;line-height:1"></i>Responder</span>
+          <span style="flex:1;display:flex;align-items:center;justify-content:center;gap:10px;height:52px;border-radius:999px;border:1px solid var(--ln);font-size:17px;font-weight:500"><i class="icon-forward" style="font-size:20px;line-height:1"></i>Reenviar</span>
+        </div>
+        <div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--fg);opacity:.8"></div>
+      </div>
+
+      <div style="width:390px;height:844px;border-radius:48px;border:10px solid var(--frame);background:var(--card);overflow:hidden;position:relative;display:flex;flex-direction:column;box-sizing:content-box">
+        <div style="height:50px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 30px;font-size:16px;font-weight:600"><span>9:41</span><span style="display:flex;gap:5px;align-items:center"><span style="width:17px;height:11px;border-radius:2px;background:var(--fg);opacity:.85"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid var(--fg);opacity:.85"></span></span></div>
+        <div style="height:56px;flex:none;display:flex;align-items:center;gap:4px;padding:0 8px 0 4px">
+          <i class="icon-x" style="font-size:24px;line-height:1;padding:10px"></i><span style="flex:1;font-size:18px;font-weight:600">Redactar</span>
+          <i class="icon-paperclip" style="font-size:22px;line-height:1;padding:10px;color:var(--mut)"></i>
+          <span style="width:46px;height:46px;border-radius:50%;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center"><i class="icon-send" style="font-size:20px;line-height:1"></i></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;min-height:54px;padding:0 20px;border-bottom:1px solid var(--ls);font-size:16px"><span style="color:var(--mut);width:52px">De</span><span style="flex:1;font-weight:500">ventas@mjbj.com.ar</span><i class="icon-chevron-down" style="font-size:18px;line-height:1;color:var(--mut)"></i></div>
+        <div style="display:flex;align-items:center;gap:10px;min-height:54px;padding:0 20px;border-bottom:1px solid var(--ls);font-size:16px"><span style="color:var(--mut);width:52px">Para</span><span style="display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 12px 0 4px;border-radius:999px;background:var(--mu)"><span style="width:26px;height:26px;border-radius:50%;background:var(--avC);color:var(--avCT);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">L</span>Lucía Sosa</span></div>
+        <div style="display:flex;align-items:center;gap:10px;min-height:54px;padding:0 20px;border-bottom:1px solid var(--ls);font-size:16px"><span style="color:var(--mut);width:52px">Asunto</span><span>Re: Corte de fenólico a medida</span></div>
+        <div style="flex:1;min-height:0;padding:16px 20px;font-size:17px;line-height:1.6;display:flex;flex-direction:column;gap:10px">
+          <div>Hola Lucía, sí: cortamos fenólico de 18 mm a medida. Pasame las medidas y te armo el presupuesto.</div>
+          <div>Casa Central: lunes a viernes de 8 a 16 y sábados de 8 a 12.<span style="display:inline-block;width:1.5px;height:20px;background:var(--acc);vertical-align:-4px;margin-left:1px"></span></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;padding:10px 12px;border-radius:12px;background:var(--hun);font-size:15px;color:var(--mut)"><i class="icon-message-square-text" style="font-size:18px;line-height:1"></i>Se insertó la respuesta guardada «Horarios»</div>
+        </div>
+        <div style="display:flex;gap:8px;padding:10px 12px 34px;border-top:1px solid var(--ls);overflow:hidden">
+          <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 14px;border-radius:999px;background:var(--mu);font-size:15px;white-space:nowrap"><i class="icon-message-square-text" style="font-size:18px;line-height:1"></i>Respuestas</span>
+          <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 14px;border-radius:999px;background:var(--mu);font-size:15px;white-space:nowrap"><i class="icon-file-text" style="font-size:18px;line-height:1"></i>Del panel</span>
+          <span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 14px;border-radius:999px;background:var(--mu);font-size:15px;white-space:nowrap"><i class="icon-image" style="font-size:18px;line-height:1"></i>Foto</span>
+        </div>
+        <div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--fg);opacity:.8"></div>
+      </div>
+
+    </div>
+    </div>
+  </div>
+  </sc-for>
+</div>
+
+<div id="2d" style="display:flex;flex-direction:column;gap:28px;scroll-margin-top:16px">
+  <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+    <a href="#2d" style="font:600 12px 'Geist Mono',monospace;padding:3px 8px;background:#1a1a1a;color:#fff;border-radius:5px;text-decoration:none">2d</a>
+    <span style="font-size:24px;font-weight:600;letter-spacing:-0.01em">Estados</span>
+    <span style="font-size:16px;color:oklch(0.40 0.012 60);max-width:900px">Cada estado dentro de la pantalla real, donde aparece de verdad. Tonos tranquilos: solo el correo sospechoso usa rojo.</span>
+  </div>
+  <sc-for list="{{ estados }}" as="e" hint-placeholder-count="5">
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:baseline;gap:12px"><span style="font-size:18px;font-weight:600">{{ e.titulo }}</span><span style="font-size:15px;color:oklch(0.40 0.012 60)">{{ e.nota }}</span></div>
+    <div style="display:flex;gap:32px;align-items:flex-start">
+    <sc-for list="{{ e.items }}" as="b" hint-placeholder-count="2">
+    <div style="{{ b.vars }}">
+    <div style="width:1100px;height:660px;display:flex;flex-direction:column;overflow:hidden;background-color:var(--side);background-image:var(--tex);background-size:var(--texS);color:var(--fg);font-family:Geist,ui-sans-serif,system-ui,sans-serif;font-size:15px;line-height:1.45;border-radius:8px;box-shadow:0 2px 10px rgb(40 30 20 / .12)">
+      <div style="height:62px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px">
+        <div style="width:186px;flex:none;display:flex;align-items:center;gap:10px;padding-left:6px"><img src="public/cropped-icon-180x180.png" alt="" style="width:32px;height:32px;border-radius:7px"><span style="font-size:18px;font-weight:600">Correo</span></div>
+        <div style="width:480px;height:44px;display:flex;align-items:center;gap:10px;padding:0 14px;border-radius:10px;background:var(--srch);color:var(--mut);font-size:16px"><i class="icon-search" style="font-size:18px;line-height:1"></i>Buscar en el correo</div>
+        <div style="margin-left:auto;width:36px;height:36px;border-radius:50%;background:oklch(0.68 0.19 48);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">MG</div>
+      </div>
+      <sc-if value="{{ b.offline }}">
+      <div style="margin:0 12px 10px 222px;height:42px;flex:none;display:flex;align-items:center;gap:10px;padding:0 8px 0 16px;border-radius:10px;background:var(--toast);color:var(--toastT);font-size:15px">
+        <i class="icon-wifi-off" style="font-size:18px;line-height:1"></i><span style="flex:1">Sin conexión. Podés leer lo que ya estaba descargado.</span>
+        <span style="opacity:.75">1 correo espera para salir</span>
+        <span style="height:32px;display:inline-flex;align-items:center;padding:0 12px;border-radius:8px;font-weight:600;color:oklch(0.80 0.13 55)">Reintentar</span>
+      </div>
+      </sc-if>
+      <div style="flex:1;min-height:0;display:flex">
+        <div style="width:222px;flex:none;padding:2px 12px 12px 12px;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;height:50px;border-radius:14px;background:var(--acc);color:#fff;font-size:16px;font-weight:600;box-shadow:0 2px 0 oklch(0.45 0.17 42)"><i class="icon-pencil" style="font-size:18px;line-height:1"></i>Redactar</div>
+          <div style="margin-top:12px;flex:1;display:flex;flex-direction:column;gap:1px;padding:6px;border-radius:14px;background:var(--panel);box-shadow:var(--panelSh)">
+            <sc-for list="{{ carpetas }}" as="c" hint-placeholder-count="8">
+            <div style="display:flex;align-items:center;gap:10px;height:40px;padding:0 8px 0 6px;border-radius:9px;font-size:15px;background:{{ c.bg }};box-shadow:{{ c.ish }};font-weight:{{ c.fw }}"><span style="width:28px;height:28px;flex:none;border-radius:8px;display:flex;align-items:center;justify-content:center;background:{{ c.sqBg }};color:{{ c.sqFg }}"><i class="{{ c.ic }}" style="font-size:15px;line-height:1"></i></span><span style="flex:1">{{ c.l }}</span><sc-if value="{{ c.n }}"><span style="min-width:22px;height:22px;padding:0 7px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;background:{{ c.cnBg }};color:{{ c.cnFg }}">{{ c.n }}</span></sc-if></div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex:1;min-width:0;margin:0 12px 12px 0;display:grid;grid-template-columns:380px minmax(0,1fr);background-color:var(--card);background-image:var(--texC);background-size:180px 180px;border-radius:12px;overflow:hidden;box-shadow:var(--sh)">
+          <div style="position:relative;display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--ls)">
+            <div style="display:flex;align-items:center;gap:2px;height:50px;flex:none;padding:0 8px;border-bottom:1px solid var(--ls)">
+              <sc-for list="{{ b.pest }}" as="f" hint-placeholder-count="3">
+              <span style="display:inline-flex;align-items:center;gap:6px;height:50px;padding:0 10px;white-space:nowrap;font-size:15px;color:{{ f.fg }};font-weight:{{ f.fw }};box-shadow:{{ f.sh }}">{{ f.t }}<sc-if value="{{ f.n }}"><span style="min-width:22px;height:22px;padding:0 6px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;background:{{ f.nBg }};color:{{ f.nFg }}">{{ f.n }}</span></sc-if></span>
+              </sc-for>
+            </div>
+            <sc-if value="{{ b.indet }}"><div style="position:absolute;top:49px;left:0;right:0;height:3px;background:var(--accBg)"><div style="margin-left:28%;width:34%;height:100%;border-radius:2px;background:var(--acc)"></div></div></sc-if>
+            <sc-if value="{{ b.lista }}">
+            <div style="flex:1;min-height:0;overflow:hidden">
+              <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="6">
+              <div style="display:flex;gap:12px;padding:13px 16px 13px 14px;background:{{ r.bg }};box-shadow:{{ r.sh }}">
+                <div style="width:38px;height:38px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;background:{{ r.avBg }};color:{{ r.avFg }}">{{ r.ini }}</div>
+                <div style="min-width:0;flex:1;line-height:1.4">
+                  <div style="display:flex;align-items:center;gap:6px"><sc-if value="{{ r.alerta }}"><i class="icon-shield-alert" style="font-size:16px;line-height:1;color:var(--prT)"></i></sc-if><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px;font-weight:{{ r.fwn }}">{{ r.nom }}</span><span style="font-size:14px;color:{{ r.horaC }};font-weight:{{ r.fwn }}">{{ r.hora }}</span></div>
+                  <div style="font-size:15px;font-weight:{{ r.fws }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.asunto }}</div>
+                  <div style="font-size:14px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.prev }}</div>
+                </div>
+              </div>
+              </sc-for>
+            </div>
+            </sc-if>
+            <sc-if value="{{ b.cargando }}">
+            <div style="flex:1;min-height:0;overflow:hidden;padding-top:4px">
+              <sc-for list="{{ esqueleto }}" as="s" hint-placeholder-count="6">
+              <div style="display:flex;gap:12px;padding:14px 16px 14px 14px">
+                <div style="width:38px;height:38px;flex:none;border-radius:50%;background:var(--mu)"></div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:8px;padding-top:2px">
+                  <div style="display:flex;gap:12px;align-items:center"><div style="height:12px;border-radius:6px;background:var(--mu);width:{{ s.w1 }}"></div><div style="margin-left:auto;width:36px;height:10px;border-radius:5px;background:var(--mu)"></div></div>
+                  <div style="height:10px;border-radius:5px;background:var(--mu);width:{{ s.w2 }}"></div>
+                  <div style="height:10px;border-radius:5px;background:var(--mu);width:50%"></div>
+                </div>
+              </div>
+              </sc-for>
+            </div>
+            </sc-if>
+            <sc-if value="{{ b.vacia }}">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;padding:110px 36px 0;text-align:center;gap:6px">
+              <i class="icon-mail-check" style="font-size:30px;line-height:1;color:var(--mut);margin-bottom:8px"></i>
+              <div style="font-size:17px;font-weight:600">No hay correos sin leer</div>
+              <div style="font-size:15px;color:var(--mut);text-wrap:pretty">Todo lo que llegó ya está leído. El último entró hace 40 minutos.</div>
+              <div style="margin-top:10px;font-size:15px;font-weight:600;color:var(--accT)">Ver todos los correos</div>
+            </div>
+            </sc-if>
+            <sc-if value="{{ b.error }}">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;padding:110px 36px 0;text-align:center;gap:6px">
+              <i class="icon-cloud-off" style="font-size:30px;line-height:1;color:var(--mut);margin-bottom:8px"></i>
+              <div style="font-size:17px;font-weight:600">No pudimos cargar los correos</div>
+              <div style="font-size:15px;color:var(--mut);text-wrap:pretty">El servidor de correo no responde. Volvemos a probar solos en 30 segundos.</div>
+              <div style="margin-top:12px;display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 18px;border:1px solid var(--ln);border-radius:999px;font-size:15px;font-weight:500"><i class="icon-rotate-cw" style="font-size:16px;line-height:1"></i>Reintentar ahora</div>
+              <div style="margin-top:8px;font-size:14px;color:var(--mut)">Si sigue igual, avisale a Martín.</div>
+            </div>
+            </sc-if>
+          </div>
+          <div style="display:flex;flex-direction:column;min-height:0">
+            <sc-if value="{{ b.leerVacio }}">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);font-size:15px"><img src="public/cropped-icon-180x180.png" alt="" style="width:44px;height:44px;border-radius:10px;opacity:.35;filter:grayscale(1)">Elegí un correo para leerlo</div>
+            </sc-if>
+            <sc-if value="{{ b.leerCarga }}">
+            <div style="flex:1;padding:28px 30px;display:flex;flex-direction:column;gap:14px">
+              <div style="height:20px;width:62%;border-radius:6px;background:var(--mu)"></div>
+              <div style="display:flex;gap:12px;align-items:center;margin:8px 0"><div style="width:42px;height:42px;border-radius:50%;background:var(--mu)"></div><div style="flex:1;display:flex;flex-direction:column;gap:8px"><div style="height:12px;width:30%;border-radius:6px;background:var(--mu)"></div><div style="height:10px;width:45%;border-radius:5px;background:var(--mu)"></div></div></div>
+              <div style="height:11px;width:92%;border-radius:5px;background:var(--mu)"></div>
+              <div style="height:11px;width:86%;border-radius:5px;background:var(--mu)"></div>
+              <div style="height:11px;width:70%;border-radius:5px;background:var(--mu)"></div>
+            </div>
+            </sc-if>
+            <sc-if value="{{ b.leerNormal }}">
+            <div style="flex:1;padding:24px 30px;display:flex;flex-direction:column;gap:14px">
+              <div style="font-size:21px;font-weight:600;line-height:1.3">Despiece de la cocina para cortar</div>
+              <div style="display:flex;gap:12px;align-items:center"><div style="width:42px;height:42px;border-radius:50%;background:var(--avC);color:var(--avCT);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">CM</div><div style="flex:1;line-height:1.35"><div style="font-size:16px;font-weight:600">Arq. Carolina Méndez</div><div style="font-size:14px;color:var(--mut)">para ventas@ · hoy 8:20</div></div></div>
+              <div style="font-size:16px;line-height:1.65;display:flex;flex-direction:column;gap:10px"><div>Hola Diego, te paso el despiece en PDF. Son 32 piezas en melamina blanca de 18 mm.</div><div>Las de 2600 van con la veta a lo largo. Si podés, cortalas el lunes así arrancamos el armado el martes.</div></div>
+              <div style="display:flex;align-items:center;gap:10px;align-self:flex-start;padding:10px 14px;border:1px solid var(--ls);border-radius:10px;opacity:.6"><i class="icon-file-text" style="font-size:20px;line-height:1;color:var(--prT)"></i><div style="line-height:1.3"><div style="font-size:15px;font-weight:500">despiece-mendez.pdf</div><div style="font-size:13px;color:var(--mut)">Se descarga cuando vuelva la conexión</div></div></div>
+            </div>
+            </sc-if>
+            <sc-if value="{{ b.leerSosp }}">
+            <div style="flex:1;padding:22px 30px;display:flex;flex-direction:column;gap:14px">
+              <div style="font-size:21px;font-weight:600;line-height:1.3">Tu cuenta fue suspendida temporalmente</div>
+              <div style="display:flex;gap:12px;padding:14px 16px;border-radius:10px;background:var(--prBg);color:var(--prT)">
+                <i class="icon-shield-alert" style="font-size:20px;line-height:1;margin-top:2px"></i>
+                <div style="flex:1;line-height:1.45">
+                  <div style="font-size:16px;font-weight:600">Este correo puede ser una estafa</div>
+                  <div style="font-size:15px">Dice venir de Mercado Pago, pero no pudimos comprobarlo. No toques los enlaces ni pases tu clave.</div>
+                  <div style="display:flex;gap:18px;margin-top:8px;font-size:15px;font-weight:600"><span style="text-decoration:underline;text-underline-offset:3px">Mandar a Spam</span><span style="font-weight:500;opacity:.85">Es de confianza</span></div>
+                </div>
+              </div>
+              <div style="display:flex;gap:12px;align-items:center"><div style="width:42px;height:42px;border-radius:50%;background:var(--mu);color:var(--mut);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">MP</div><div style="flex:1;line-height:1.35"><div style="font-size:16px;font-weight:600">Mercado Pago</div><div style="font-size:14px;color:var(--mut)">avisos@mercadopag0-seguridad.com · 7:12</div></div></div>
+              <div style="font-size:16px;line-height:1.65">Detectamos movimientos inusuales. Para evitar el cierre de tu cuenta, verificá tus datos hoy en <span style="position:relative;color:var(--accT);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px">www.mercadopago.com/verificar<span style="position:absolute;top:30px;left:0;width:320px;padding:10px 12px;border-radius:10px;background:var(--pop);box-shadow:var(--popsh),0 0 0 1px var(--ls);font-size:14px;line-height:1.45;color:var(--fg);text-decoration:none;z-index:2;display:block"><span style="display:block;font-weight:600;color:var(--prT)">Este enlace no va a Mercado Pago</span><span style="display:block;color:var(--mut)">Lleva a mp-verificacion-cuentas.xyz</span></span></span>.</div>
+              <div style="margin-top:56px;display:flex;align-items:center;gap:10px;align-self:flex-start;padding:10px 14px;border:1px solid var(--ls);border-radius:10px;background:var(--hun)"><i class="icon-lock" style="font-size:18px;line-height:1;color:var(--mut)"></i><div style="line-height:1.3"><div style="font-size:15px;font-weight:500">comprobante.pdf.exe</div><div style="font-size:13px;color:var(--mut)">Bloqueado: es un programa, no un documento</div></div></div>
+            </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+    </sc-for>
+    </div>
+  </div>
+  </sc-for>
+</div>
+
+<sc-for list="{{ ajGrupos }}" as="g" hint-placeholder-count="2">
+<div id="{{ g.id }}" style="display:flex;flex-direction:column;gap:18px;scroll-margin-top:16px">
+  <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+    <span style="font:600 12px 'Geist Mono',monospace;padding:3px 8px;background:#1a1a1a;color:#fff;border-radius:5px">{{ g.badge }}</span>
+    <span style="font-size:24px;font-weight:600;letter-spacing:-0.01em">{{ g.titulo }}</span>
+    <span style="font-size:16px;color:oklch(0.40 0.012 60);max-width:900px">{{ g.nota }}</span>
+  </div>
+  <div style="display:flex;gap:40px;align-items:flex-start">
+  <sc-for list="{{ g.items }}" as="b" hint-placeholder-count="2">
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <span style="font:500 13px 'Geist Mono',monospace;color:oklch(0.40 0.012 60)">{{ b.tema }}</span>
+    <div style="{{ b.vars }}">
+    <div style="width:1600px;height:1000px;display:flex;flex-direction:column;overflow:hidden;background-color:var(--side);background-image:var(--tex);background-size:var(--texS);color:var(--fg);font-family:Geist,ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.5;border-radius:6px;box-shadow:0 2px 10px rgb(40 30 20 / .12)">
+      <div style="height:72px;flex:none;display:flex;align-items:center;gap:16px;padding:0 20px">
+        <div style="width:236px;flex:none;display:flex;align-items:center;gap:12px;padding-left:6px">
+          <img src="public/cropped-icon-180x180.png" alt="" style="width:36px;height:36px;border-radius:8px">
+          <div style="line-height:1.2"><div style="font-size:19px;font-weight:600">Correo</div><div style="font-size:14px;color:var(--mut)">Maderera JBJ</div></div>
+        </div>
+        <span style="display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 16px 0 10px;border-radius:10px;font-size:17px;font-weight:500"><i class="icon-arrow-left" style="font-size:20px;line-height:1"></i>Volver al correo</span>
+        <div style="margin-left:auto;width:40px;height:40px;border-radius:50%;background:oklch(0.68 0.19 48);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">MG</div>
+      </div>
+      <div style="flex:1;min-height:0;display:flex">
+        <div style="width:256px;flex:none;padding:4px 12px 16px 14px;display:flex;flex-direction:column;gap:2px">
+          <div style="padding:6px 14px 10px;font-size:24px;font-weight:600;letter-spacing:-0.01em">Ajustes</div>
+          <sc-for list="{{ b.nav }}" as="c" hint-placeholder-count="7">
+          <div style="display:flex;align-items:center;gap:14px;height:46px;padding:0 14px;border-radius:999px;font-size:16px;background:{{ c.bg }};color:{{ c.fg }};font-weight:{{ c.fw }}"><i class="{{ c.ic }}" style="font-size:20px;line-height:1"></i>{{ c.l }}</div>
+          </sc-for>
+        </div>
+        <div style="flex:1;min-width:0;margin:0 16px 16px 0;background-color:var(--card);background-image:var(--texC);background-size:180px 180px;border-radius:14px;box-shadow:var(--sh);overflow:hidden;padding:36px 48px;display:flex;flex-direction:column;gap:28px">
+          <sc-if value="{{ b.vac }}">
+          <div style="max-width:820px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:center;gap:16px">
+              <div style="flex:1"><div style="font-size:22px;font-weight:600">Respuesta automática</div><div style="font-size:16px;color:var(--mut)">Para cuando no estás: vacaciones, feriados, cierre por inventario.</div></div>
+              <span style="width:56px;height:32px;border-radius:999px;background:var(--acc);position:relative"><span style="position:absolute;right:3px;top:3px;width:26px;height:26px;border-radius:50%;background:#fff"></span></span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:14px">
+              <div><div style="font-size:15px;color:var(--mut);margin-bottom:6px">Desde</div><div style="height:50px;display:flex;align-items:center;gap:10px;padding:0 14px;border:1px solid var(--ln);border-radius:12px;font-size:17px"><i class="icon-calendar" style="font-size:18px;line-height:1;color:var(--mut)"></i>26 de diciembre</div></div>
+              <div><div style="font-size:15px;color:var(--mut);margin-bottom:6px">Hasta</div><div style="height:50px;display:flex;align-items:center;gap:10px;padding:0 14px;border:1px solid var(--ln);border-radius:12px;font-size:17px"><i class="icon-calendar" style="font-size:18px;line-height:1;color:var(--mut)"></i>6 de enero</div></div>
+              <div><div style="font-size:15px;color:var(--mut);margin-bottom:6px">Casilla</div><div style="height:50px;display:flex;align-items:center;gap:10px;padding:0 14px;border:1px solid var(--ln);border-radius:12px;font-size:17px"><span style="width:10px;height:10px;border-radius:50%;background:oklch(0.55 0.12 148)"></span><span style="flex:1">martin@mjbj.com.ar</span><i class="icon-chevron-down" style="font-size:18px;line-height:1;color:var(--mut)"></i></div></div>
+            </div>
+            <div><div style="font-size:15px;color:var(--mut);margin-bottom:6px">Mensaje</div><div style="padding:14px 16px;border:1px solid var(--ln);border-radius:12px;font-size:17px;line-height:1.6;min-height:110px">Hola, estoy de vacaciones hasta el 6 de enero. Para presupuestos y pedidos escribí a ventas@mjbj.com.ar o por WhatsApp al (0223) 474-3328. Gracias.</div></div>
+          </div>
+          <div style="height:1px;background:var(--ls);max-width:820px"></div>
+          <div style="max-width:820px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:16px"><div style="flex:1"><div style="font-size:22px;font-weight:600">Reglas</div><div style="font-size:16px;color:var(--mut)">Ordenan solos los correos que llegan.</div></div><span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;border:1px solid var(--ln);border-radius:999px;font-size:16px;font-weight:500"><i class="icon-plus" style="font-size:18px;line-height:1"></i>Nueva regla</span></div>
+            <sc-for list="{{ reglas }}" as="r" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px;border-radius:12px;background:var(--hun);font-size:17px">
+              <span style="color:var(--mut)">{{ r.si }}</span><span style="padding:2px 10px;border-radius:8px;background:var(--card);box-shadow:inset 0 0 0 1px var(--ls);font-weight:500">{{ r.quien }}</span><span style="color:var(--mut)">{{ r.ent }}</span><span style="padding:2px 10px;border-radius:8px;background:var(--card);box-shadow:inset 0 0 0 1px var(--ls);font-weight:500">{{ r.dst }}</span>
+              <i class="icon-pencil" style="margin-left:auto;font-size:18px;line-height:1;color:var(--mut);padding:6px"></i><i class="icon-trash-2" style="font-size:18px;line-height:1;color:var(--mut);padding:6px"></i>
+            </div>
+            </sc-for>
+          </div>
+          <div style="height:1px;background:var(--ls);max-width:820px"></div>
+          <div style="max-width:820px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:16px"><div style="flex:1"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px;font-weight:600">Casillas y alias</span><span style="padding:1px 9px;border-radius:999px;font-size:14px;font-weight:500;background:var(--infBg);color:var(--infT)">Solo administrador</span></div><div style="font-size:16px;color:var(--mut)">Quién lee cada casilla y cuánto espacio le queda.</div></div><span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;border:1px solid var(--ln);border-radius:999px;font-size:16px;font-weight:500"><i class="icon-plus" style="font-size:18px;line-height:1"></i>Agregar</span></div>
+            <sc-for list="{{ casAdmin }}" as="c" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 220px 24px;gap:20px;align-items:center;padding:12px 0;border-bottom:1px solid var(--ls)">
+              <div style="line-height:1.35"><div style="font-size:17px;font-weight:500">{{ c.l }}</div><div style="font-size:15px;color:var(--mut)">{{ c.tipo }}</div></div>
+              <div style="font-size:16px;color:var(--mut)">{{ c.quien }}</div>
+              <div><sc-if value="{{ c.usado }}"><div style="height:8px;border-radius:4px;background:var(--mu);overflow:hidden"><div style="height:100%;border-radius:4px;background:{{ c.c }};width:{{ c.pct }}"></div></div><div style="font-size:15px;color:{{ c.c }};margin-top:4px">{{ c.usado }}</div></sc-if></div>
+              <i class="icon-ellipsis-vertical" style="font-size:20px;line-height:1;color:var(--mut)"></i>
+            </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ b.firma }}">
+          <div style="max-width:880px;display:flex;flex-direction:column;gap:18px">
+            <div><div style="font-size:22px;font-weight:600">Firma</div><div style="font-size:16px;color:var(--mut)">Se agrega sola al final de cada correo. Cada casilla tiene la suya.</div></div>
+            <div style="display:flex;gap:8px"><sc-for list="{{ pestFirma }}" as="p" hint-placeholder-count="3"><span style="height:42px;display:inline-flex;align-items:center;padding:0 18px;border-radius:999px;font-size:16px;border:1px solid {{ p.bd }};background:{{ p.bg }};color:{{ p.fg }};font-weight:{{ p.fw }}">{{ p.t }}</span></sc-for></div>
+            <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:24px;align-items:start">
+              <div style="border:1px solid var(--ln);border-radius:14px;overflow:hidden">
+                <div style="display:flex;align-items:center;gap:2px;padding:6px 8px;border-bottom:1px solid var(--ls);color:var(--mut)"><i class="icon-bold" style="font-size:18px;line-height:1;padding:9px"></i><i class="icon-italic" style="font-size:18px;line-height:1;padding:9px"></i><i class="icon-link" style="font-size:18px;line-height:1;padding:9px"></i><span style="width:1px;height:22px;background:var(--ls);margin:0 6px"></span><span style="display:inline-flex;align-items:center;gap:6px;font-size:15px;color:var(--fg);padding:0 8px"><i class="icon-image" style="font-size:17px;line-height:1"></i>Cambiar logo</span></div>
+                <div style="padding:20px 22px;display:flex;gap:16px;align-items:flex-start">
+                  <img src="public/cropped-icon-180x180.png" alt="" style="width:64px;height:64px;border-radius:12px;flex:none">
+                  <div style="font-size:16px;line-height:1.55;color:var(--mut)"><div style="font-size:18px;font-weight:600;color:var(--fg)">Diego Ramírez</div><div style="color:var(--fg)">Ventas</div><div>Maderera Juan B. Justo · Casa Central</div><div>Av. Juan B. Justo 4153, Mar del Plata</div><div>(0223) 474-3328 · WhatsApp 223 555-0142</div><div style="color:var(--accT)">mjbj.com.ar</div></div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column">
+                <sc-for list="{{ opcFirma }}" as="o" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:14px;min-height:64px;padding:8px 0;border-bottom:1px solid var(--ls)">
+                  <div style="flex:1;line-height:1.35"><div style="font-size:16px">{{ o.l }}</div><sc-if value="{{ o.d }}"><div style="font-size:14px;color:var(--mut)">{{ o.d }}</div></sc-if></div>
+                  <sc-if value="{{ o.toggle }}"><span style="width:52px;height:30px;flex:none;border-radius:999px;position:relative;background:{{ o.tBg }};box-shadow:{{ o.tSh }}"><span style="position:absolute;top:3px;left:{{ o.tX }};width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgb(0 0 0 / .2)"></span></span></sc-if>
+                  <sc-if value="{{ o.select }}"><span style="height:42px;display:inline-flex;align-items:center;gap:8px;padding:0 12px;border:1px solid var(--ln);border-radius:10px;font-size:15px">{{ o.sel }}<i class="icon-chevron-down" style="font-size:16px;line-height:1;color:var(--mut)"></i></span></sc-if>
+                </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="height:1px;background:var(--ls);margin-top:6px"></div>
+            <div style="display:flex;align-items:center;gap:16px"><div style="flex:1"><div style="font-size:22px;font-weight:600">Respuestas guardadas</div><div style="font-size:16px;color:var(--mut)">Textos que se repiten. Se insertan con el botón «Respuestas» o escribiendo el atajo.</div></div><span style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;border:1px solid var(--ln);border-radius:999px;font-size:16px;font-weight:500"><i class="icon-plus" style="font-size:18px;line-height:1"></i>Nueva</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <sc-for list="{{ guardadas }}" as="r" hint-placeholder-count="4">
+              <div style="padding:14px 16px;border-radius:12px;background:var(--hun);line-height:1.4">
+                <div style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-size:16px;font-weight:600">{{ r.t }}</span><span style="font-family:'Geist Mono',monospace;font-size:13px;color:var(--mut);padding:2px 8px;border-radius:6px;background:var(--card)">{{ r.k }}</span></div>
+                <div style="font-size:15px;color:var(--mut);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.d }}</div>
+              </div>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+    </div>
+  </div>
+  </sc-for>
+  </div>
+</div>
+</sc-for>
+
+<div id="2f" style="display:flex;flex-direction:column;gap:18px;scroll-margin-top:16px">
+  <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+    <a href="#2f" style="font:600 12px 'Geist Mono',monospace;padding:3px 8px;background:#1a1a1a;color:#fff;border-radius:5px;text-decoration:none">2f</a>
+    <span style="font-size:24px;font-weight:600;letter-spacing:-0.01em">Teléfono: menú, buscar y aviso</span>
+    <span style="font-size:16px;color:oklch(0.40 0.012 60);max-width:900px">El menú de ☰ tiene carpetas y casillas, y abajo el regreso al panel. El aviso llega como cualquier mensaje del teléfono y abre directo ese correo.</span>
+  </div>
+  <sc-for list="{{ temas }}" as="b" hint-placeholder-count="2">
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <span style="font:500 13px 'Geist Mono',monospace;color:oklch(0.40 0.012 60)">{{ b.tema }}</span>
+    <div style="{{ b.vars }}">
+    <div style="display:flex;gap:40px;color:var(--fg);font-family:Geist,ui-sans-serif,system-ui,sans-serif;line-height:1.45">
+
+      <div style="width:390px;height:844px;border-radius:48px;border:10px solid var(--frame);background:var(--card);overflow:hidden;position:relative;box-sizing:content-box">
+        <div style="position:absolute;inset:0;padding-top:118px;opacity:.5">
+          <sc-for list="{{ filasOff }}" as="r" hint-placeholder-count="4">
+          <div style="display:flex;gap:14px;padding:14px 18px"><div style="width:44px;height:44px;border-radius:50%;background:var(--mu)"></div><div style="flex:1;line-height:1.4"><div style="font-size:17px">{{ r.nom }}</div><div style="font-size:15px;color:var(--mut)">{{ r.asunto }}</div></div></div>
+          </sc-for>
+        </div>
+        <div style="position:absolute;inset:0;background:oklch(0.1 0.01 60 / 0.45)"></div>
+        <div style="position:absolute;top:0;left:0;bottom:0;width:316px;background-color:var(--card);background-image:var(--texC);background-size:160px 160px;display:flex;flex-direction:column;padding:60px 12px 30px;border-radius:0 24px 24px 0;box-shadow:var(--panelSh)">
+          <div style="display:flex;align-items:center;gap:12px;padding:0 12px 16px"><img src="public/cropped-icon-180x180.png" alt="" style="width:36px;height:36px;border-radius:8px"><div style="line-height:1.2"><div style="font-size:19px;font-weight:600">Correo</div><div style="font-size:14px;color:var(--mut)">Maderera JBJ</div></div></div>
+          <sc-for list="{{ carpetas }}" as="c" hint-placeholder-count="8">
+          <div style="display:flex;align-items:center;gap:12px;height:48px;padding:0 10px 0 8px;border-radius:10px;font-size:17px;background:{{ c.bg }};box-shadow:{{ c.ish }};font-weight:{{ c.fw }}"><span style="width:32px;height:32px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center;background:{{ c.sqBg }};color:{{ c.sqFg }}"><i class="{{ c.ic }}" style="font-size:17px;line-height:1"></i></span><span style="flex:1">{{ c.l }}</span><sc-if value="{{ c.n }}"><span style="min-width:26px;height:24px;padding:0 8px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;background:{{ c.cnBg }};color:{{ c.cnFg }}">{{ c.n }}</span></sc-if></div>
+          </sc-for>
+          <div style="height:1px;background:var(--ls);margin:10px 12px"></div>
+          <div style="padding:0 14px 4px;font-size:14px;font-weight:600;color:var(--mut)">Casillas</div>
+          <sc-for list="{{ casillas }}" as="c" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:12px;height:46px;padding:0 10px 0 8px;font-size:17px;font-weight:500"><span style="width:32px;height:32px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center;background:{{ c.c }};color:#fff;font-size:14px;font-weight:700">{{ c.ini }}</span><span style="flex:1">{{ c.nombre }}</span><sc-if value="{{ c.n }}"><span style="min-width:26px;height:24px;padding:0 8px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;background:var(--mu)">{{ c.n }}</span></sc-if></div>
+          </sc-for>
+          <div style="margin-top:auto;display:flex;align-items:center;gap:14px;height:48px;padding:0 14px;font-size:17px;border-radius:999px;background:var(--mu)"><i class="icon-layout-grid" style="font-size:21px;line-height:1"></i>Volver al panel</div>
+        </div>
+      </div>
+
+      <div style="width:390px;height:844px;border-radius:48px;border:10px solid var(--frame);background:var(--card);overflow:hidden;position:relative;display:flex;flex-direction:column;box-sizing:content-box">
+        <div style="height:50px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 30px;font-size:16px;font-weight:600"><span>9:41</span><span style="display:flex;gap:5px;align-items:center"><span style="width:17px;height:11px;border-radius:2px;background:var(--fg);opacity:.85"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid var(--fg);opacity:.85"></span></span></div>
+        <div style="margin:4px 16px 4px;height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;border-radius:999px;background:var(--srch);box-shadow:0 0 0 2px var(--acc);font-size:17px">
+          <i class="icon-arrow-left" style="font-size:22px;line-height:1"></i><span style="flex:1">fenólico<span style="display:inline-block;width:1.5px;height:20px;background:var(--acc);vertical-align:-4px;margin-left:1px"></span></span><i class="icon-x" style="font-size:20px;line-height:1;color:var(--mut)"></i>
+        </div>
+        <div style="display:flex;gap:8px;padding:10px 16px;overflow:hidden">
+          <span style="flex:none;display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-radius:999px;background:var(--accBg);color:var(--accT);font-size:15px;font-weight:600">Último mes<i class="icon-chevron-down" style="font-size:14px;line-height:1"></i></span>
+          <span style="flex:none;display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-radius:999px;border:1px solid var(--ln);font-size:15px">Con adjuntos</span>
+          <span style="flex:none;display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-radius:999px;border:1px solid var(--ln);font-size:15px">De<i class="icon-chevron-down" style="font-size:14px;line-height:1"></i></span>
+        </div>
+        <div style="padding:6px 20px 4px;font-size:15px;font-weight:600;color:var(--mut)">7 resultados</div>
+        <sc-for list="{{ resTel }}" as="r" hint-placeholder-count="4">
+        <div style="display:flex;gap:14px;padding:12px 18px 12px 16px">
+          <span style="width:44px;height:44px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;background:{{ r.avBg }};color:{{ r.avFg }}">{{ r.ini }}</span>
+          <div style="flex:1;min-width:0;line-height:1.4">
+            <div style="display:flex;gap:8px"><span style="flex:1;font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.nom }}</span><span style="font-size:14px;color:var(--mut)">{{ r.meta }}</span></div>
+            <div style="font-size:16px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ r.pre }}<mark style="background:var(--accBg);color:var(--accT);font-weight:600;border-radius:3px;padding:0 2px">{{ r.hl }}</mark>{{ r.post }}</div>
+          </div>
+        </div>
+        </sc-for>
+        <div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--fg);opacity:.8"></div>
+      </div>
+
+      <div style="width:390px;height:844px;border-radius:48px;border:10px solid var(--frame);overflow:hidden;position:relative;box-sizing:content-box;background:repeating-linear-gradient(135deg,oklch(0.30 0.02 60) 0 10px,oklch(0.27 0.02 60) 10px 20px);color:#fff">
+        <div style="position:absolute;top:16px;right:24px;font:12px 'Geist Mono',monospace;opacity:.6">fondo de pantalla</div>
+        <div style="text-align:center;margin-top:90px;line-height:1.1"><div style="font-size:19px;font-weight:500;opacity:.9">viernes 24 de octubre</div><div style="font-size:84px;font-weight:600;letter-spacing:-0.03em">9:41</div></div>
+        <div style="margin:60px 12px 0;padding:14px 16px;border-radius:22px;background:oklch(0.97 0.005 80 / 0.88);color:oklch(0.15 0.01 60);display:flex;gap:12px">
+          <img src="public/cropped-icon-180x180.png" alt="" style="width:40px;height:40px;border-radius:10px;flex:none">
+          <div style="flex:1;min-width:0;line-height:1.35">
+            <div style="display:flex;gap:8px"><span style="flex:1;font-size:16px;font-weight:600">Roberto Fernández</span><span style="font-size:14px;color:oklch(0.40 0.012 60)">ahora</span></div>
+            <div style="font-size:16px">¿Sale hoy el envío a Sierra de los Padres?</div>
+            <div style="font-size:15px;color:oklch(0.40 0.012 60)">ventas@ · es cliente</div>
+          </div>
+        </div>
+        <div style="margin:8px 24px 0;height:18px;border-radius:0 0 18px 18px;background:oklch(0.97 0.005 80 / 0.6)"></div>
+        <div style="text-align:center;margin-top:12px;font-size:15px;opacity:.85">y 2 correos más en el Correo MJBJ</div>
+        <div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:#fff;opacity:.8"></div>
+      </div>
+
+    </div>
+    </div>
+  </div>
+  </sc-for>
+</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;densidad&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Cómoda&quot;,&quot;Media&quot;,&quot;Compacta&quot;],&quot;default&quot;:&quot;Cómoda&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;temas&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Ambos&quot;,&quot;Solo claro&quot;,&quot;Solo oscuro&quot;],&quot;default&quot;:&quot;Ambos&quot;,&quot;tsType&quot;:&quot;string&quot;}}">class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const py = { 'Cómoda': '18px', 'Media': '14px', 'Compacta': '10px' }[p.densidad ?? 'Cómoda'] || '18px';
+    const base = { '--py': py };
+    const L = {
+      '--side': '#f3f2ef', '--srch': 'oklch(0.925 0.008 75)', '--bg': '#f3f2ef', '--card': '#ffffff', '--hun': '#f3f1ed', '--cli': '#faf8f5', '--fg': 'oklch(0.15 0.01 60)',
+      '--mut': 'oklch(0.42 0.012 60)', '--t3': 'oklch(0.552 0.022 70)', '--ln': 'oklch(0.80 0.012 70)', '--ls': 'oklch(0.90 0.008 72)',
+      '--mu': 'oklch(0.95 0.008 75)', '--pop': '#ffffff', '--sel': 'oklch(0.68 0.19 48 / 0.09)', '--side-act': 'oklch(0.68 0.19 48 / 0.15)',
+      '--acc': 'oklch(0.58 0.19 45)', '--accT': 'oklch(0.52 0.18 40)', '--accBg': 'oklch(0.68 0.19 48 / 0.13)',
+      '--espBg': '#fdf0d5', '--espT': '#8a5a08', '--infBg': '#e2ebfb', '--infT': '#1d4ed8', '--marBg': '#fdeada', '--marT': '#a8480a',
+      '--okBg': '#dcf3e3', '--okT': '#186b39', '--prBg': '#fbe4e2', '--prT': '#b3261e', '--ceBg': '#ecebe8', '--ceT': '#5c564e',
+      '--sh': '0 1px 2px rgb(60 50 40 / 0.06)', '--popsh': '0 20px 50px -12px rgb(40 30 20 / 0.35)',
+      '--avC': 'oklch(0.55 0.12 148 / 0.15)', '--avCT': 'oklch(0.42 0.12 148)', '--toast': 'oklch(0.24 0.01 60)', '--toastT': 'oklch(0.97 0.005 80)', '--frame': '#1c1a18'
+    };
+    const D = {
+      '--side': 'oklch(0.13 0.01 60)', '--srch': 'oklch(0.21 0.01 60)', '--bg': 'oklch(0.13 0.01 60)', '--card': 'oklch(0.18 0.01 60)', '--hun': 'oklch(0.21 0.01 60)', '--cli': 'oklch(0.165 0.01 60)', '--fg': 'oklch(0.96 0.005 80)',
+      '--mut': 'oklch(0.72 0.01 60)', '--t3': 'oklch(0.62 0.012 65)', '--ln': 'oklch(1 0 0 / 20%)', '--ls': 'oklch(1 0 0 / 11%)',
+      '--mu': 'oklch(0.25 0.01 60)', '--pop': 'oklch(0.22 0.01 60)', '--sel': 'oklch(0.68 0.19 48 / 0.13)', '--side-act': 'oklch(0.68 0.19 48 / 0.2)',
+      '--acc': 'oklch(0.58 0.19 45)', '--accT': 'oklch(0.74 0.13 52)', '--accBg': 'oklch(0.68 0.19 48 / 0.2)',
+      '--espBg': 'oklch(0.27 0.05 75)', '--espT': 'oklch(0.82 0.11 75)', '--infBg': 'oklch(0.27 0.055 265)', '--infT': 'oklch(0.82 0.10 265)',
+      '--marBg': 'oklch(0.27 0.05 45)', '--marT': 'oklch(0.82 0.11 45)', '--okBg': 'oklch(0.27 0.044 150)', '--okT': 'oklch(0.80 0.10 150)',
+      '--prBg': 'oklch(0.27 0.05 25)', '--prT': 'oklch(0.82 0.11 25)', '--ceBg': 'oklch(0.25 0.004 70)', '--ceT': 'oklch(0.78 0.01 70)',
+      '--sh': 'none', '--popsh': '0 20px 50px -12px rgb(0 0 0 / 0.8)',
+      '--avC': 'oklch(0.55 0.12 148 / 0.24)', '--avCT': 'oklch(0.80 0.12 148)', '--toast': 'oklch(0.30 0.01 60)', '--toastT': 'oklch(0.97 0.005 80)', '--frame': '#0c0b0a'
+    };
+    const svg = (bf, oct, op, w, h) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='${bf}' numOctaves='${oct}' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(#g)' opacity='${op}'/></svg>`)}")`;
+    const svgC = (bf, oct, rgb, k, b, w, h) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='${bf}' numOctaves='${oct}' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 ${rgb[0]} 0 0 0 0 ${rgb[1]} 0 0 0 0 ${rgb[2]} ${k} 0 0 0 ${b}'/></filter><rect width='100%' height='100%' filter='url(#g)'/></svg>`)}")`;
+    const texS = '160px 160px, 700px 220px, 700px 220px';
+    const capa = (id, bf, oct, seed, rgb, k, b) => `<filter id='${id}' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='${bf}' numOctaves='${oct}' seed='${seed}' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 ${rgb[0]} 0 0 0 0 ${rgb[1]} 0 0 0 0 ${rgb[2]} ${k} 0 0 0 ${b}'/></filter><rect width='100%' height='100%' filter='url(#${id})'/>`;
+    const madera = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='1000' height='320'>${capa('a', '0.0016 0.05', 4, 7, [0.52, 0.33, 0.15], 2.6, -1.12)}${capa('b', '0.006 0.32', 3, 2, [0.48, 0.3, 0.13], 1.5, -0.7)}${capa('c', '0.0012 0.018', 2, 11, [1, 0.96, 0.86], 1.6, -0.72)}${capa('d', '0.9', 2, 5, [0.35, 0.22, 0.1], 0.9, -0.38)}</svg>`)}")`;
+    L['--side'] = 'oklch(0.855 0.05 74)'; L['--srch'] = 'oklch(0.985 0.008 80 / 0.9)'; L['--texS'] = '1000px 320px';
+    L['--tex'] = madera;
+    L['--sh'] = '0 1px 2px rgb(70 45 20 / 0.12), 0 10px 30px -12px rgb(70 45 20 / 0.35)';
+    L['--side-act'] = 'oklch(0.985 0.008 80 / 0.7)';
+    L['--texC'] = svgC('0.9', 2, [0.3, 0.2, 0.1], 0.5, -0.2, 160, 160);
+    D['--side'] = 'oklch(0.165 0.018 55)'; D['--srch'] = 'oklch(0.23 0.014 60 / 0.9)'; D['--texS'] = texS;
+    D['--tex'] = [svgC('0.9', 2, [0, 0, 0], 1.2, -0.38, 160, 160), svgC('0.004 0.12', 4, [0.62, 0.45, 0.28], 1.6, -0.82, 700, 220), svgC('0.01 0.35', 2, [0, 0, 0], 1.6, -0.6, 700, 220)].join(', ');
+    D['--texC'] = svgC('0.9', 2, [1, 0.95, 0.85], 0.35, -0.15, 160, 160);
+    let temas = [{ tema: 'Claro', vars: { ...L, ...base }, ic: 'icon-moon' }, { tema: 'Oscuro', vars: { ...D, ...base }, ic: 'icon-sun' }];
+    const tf = p.temas ?? 'Ambos';
+    if (tf === 'Solo claro') temas = [temas[0]];
+    if (tf === 'Solo oscuro') temas = [temas[1]];
+    const con = (f) => temas.map(t => ({ ...t, base: true, leerFull: true, leerComp: false, dlBg: f.descargas ? 'var(--accBg)' : 'transparent', noBusca: !f.busqueda, srchSh: f.busqueda ? '0 0 0 2px var(--acc)' : 'none', ...f }));
+    const visor = (f) => [{ ...temas[0], tema: 'Igual en claro y oscuro: el visor siempre es oscuro para que la foto resalte', base: false, ...f }];
+    const grupos = [
+      { id: '2a', href: '#2a', badge: '2a', titulo: 'Bandeja con el correo abierto', nota: 'Carpetas a la izquierda, lista en el medio, el correo a la derecha. Si el remitente es cliente, al costado aparece su saldo y sus pedidos.', items: con({}) },
+      { id: '2b', href: '#2b', badge: '2b', titulo: 'Redactar', nota: 'Ventana abajo a la derecha; se puede minimizar y abrir otra. Sugiere clientes al escribir el nombre y avisa si falta el adjunto.', items: con({ redactar: true }) },
+      { id: '2c', href: '#2c', badge: '2c', titulo: 'Buscar', nota: 'Los resultados aparecen mientras se escribe. Los filtros son botones, sin palabras raras.', items: con({ busqueda: true }) },
+      { id: '2g', href: '#2g', badge: '2g', titulo: 'Descargar adjuntos', nota: '«Descargar todo» abre la lista para elegir qué bajar, guardarlo en la ficha del cliente o guardar el correo entero como PDF. Abajo, una descarga en curso.', items: con({ descargas: true }) },
+      { id: '2h', href: '#2h', badge: '2h', titulo: 'Ver una foto', nota: 'Al tocar una imagen se abre grande sobre todo. Flechas para pasar entre adjuntos, zoom, girar, imprimir o guardar en la ficha.', items: visor({ visor: true }) },
+      { id: '2i', href: '#2i', badge: '2i', titulo: 'Ver un PDF', nota: 'Se lee sin descargar. Si es un despiece, ofrece pasarlo a un presupuesto o mandarlo a cortes.', items: visor({ pdf: true }) },
+      { id: '2j', href: '#2j', badge: '2j', titulo: 'Ver una planilla', nota: 'La planilla se ve con sus hojas, solo para leer. Para editarla se descarga.', items: visor({ planilla: true }) },
+      { id: '2k', href: '#2k', badge: '2k', titulo: 'Responder dentro del correo', nota: 'Se contesta ahí mismo, debajo del mensaje, sin abrir otra ventana. El texto anterior va plegado y se despliega con un toque.', items: con({ responder: true, leerFull: false, leerComp: true }) },
+      { id: '2l', href: '#2l', badge: '2l', titulo: 'Reenviar', nota: 'Mismo lugar que responder. Los adjuntos se reenvían solos y se puede sacar el que no haga falta. Acá, el despiece al aserradero.', items: con({ reenviar: true, leerFull: false, leerComp: true }) },
+      { id: '2m', href: '#2m', badge: '2m', titulo: 'Imprimir', nota: 'Vista previa de la hoja con el membrete. Se elige si va solo este correo o toda la conversación, y qué adjuntos se imprimen junto.', items: con({ imprimir: true }) },
+      { id: '2n', href: '#2n', badge: '2n', titulo: 'Etiquetas y mover', nota: 'Desde los tres puntos: etiquetar con casillas de colores, crear una etiqueta escribiéndola, o mover a otra carpeta.', items: con({ etiquetas: true }) },
+      { id: '2o', href: '#2o', badge: '2o', titulo: 'Programar el envío', nota: 'La flechita de Enviar. Propone horarios del local (si es fin de semana, el lunes a la apertura) o se elige día y hora.', items: con({ redactar: true, programar: true }) }
+    ];
+    const C = 'var(--fg)';
+    const carp = (l, ic, hue, n, act) => ({ l, ic, n: n || 0, bg: act ? 'var(--itemAct)' : 'transparent', ish: act ? 'var(--itemSh)' : 'none', fg: C, fw: act ? 600 : 500,
+      sqBg: act ? 'var(--acc)' : `oklch(0.66 0.13 ${hue} / 0.18)`, sqFg: act ? '#fff' : `var(--sq${hue})`,
+      cnBg: act ? 'var(--acc)' : 'var(--mu)', cnFg: act ? '#fff' : 'var(--fg)' });
+    const carpetas = [carp('Entrada', 'icon-inbox', 45, 12, true), carp('Destacados', 'icon-star', 80), carp('Enviados', 'icon-send', 250), carp('Borradores', 'icon-file-pen', 60, 2), carp('Programados', 'icon-clock', 300, 1), carp('Archivo', 'icon-archive', 150), carp('Spam', 'icon-shield-alert', 25), carp('Papelera', 'icon-trash-2', 60)];
+    const sqL = { '--sq45': 'oklch(0.5 0.16 45)', '--sq80': 'oklch(0.5 0.12 80)', '--sq250': 'oklch(0.47 0.14 250)', '--sq60': 'oklch(0.45 0.03 60)', '--sq300': 'oklch(0.47 0.14 300)', '--sq150': 'oklch(0.45 0.11 150)', '--sq25': 'oklch(0.5 0.16 25)' };
+    const sqD = { '--sq45': 'oklch(0.78 0.13 50)', '--sq80': 'oklch(0.8 0.12 85)', '--sq250': 'oklch(0.78 0.11 250)', '--sq60': 'oklch(0.78 0.02 60)', '--sq300': 'oklch(0.78 0.11 300)', '--sq150': 'oklch(0.78 0.1 150)', '--sq25': 'oklch(0.78 0.12 25)' };
+    temas.forEach((t, i) => Object.assign(t.vars, i === 0 && t.tema === 'Claro' ? sqL : t.tema === 'Claro' ? sqL : sqD, t.tema === 'Claro'
+      ? { '--panel': 'oklch(0.99 0.006 80 / 0.86)', '--panelSh': '0 1px 2px rgb(70 45 20 / 0.12), 0 12px 30px -14px rgb(70 45 20 / 0.4)', '--itemAct': 'oklch(0.68 0.19 48 / 0.12)', '--itemSh': 'inset 3px 0 0 var(--acc)' }
+      : { '--panel': 'oklch(0.2 0.012 60 / 0.82)', '--panelSh': '0 0 0 1px oklch(1 0 0 / 0.08), 0 12px 30px -14px rgb(0 0 0 / 0.6)', '--itemAct': 'oklch(0.68 0.19 48 / 0.18)', '--itemSh': 'inset 3px 0 0 var(--acc)' }));
+    const BOX = { 'ventas@': 'oklch(0.68 0.19 48)', 'administracion@': 'oklch(0.55 0.13 250)', 'martin@': 'oklch(0.55 0.12 148)', 'info@': 'oklch(0.62 0.08 65)' };
+    const cas = (l, nombre, ini, n) => ({ l, nombre, ini, n: n || 0, c: BOX[l] || 'var(--mut)', bg: 'transparent', fw: 500 });
+    const casillas = [cas('ventas@', 'Ventas', 'V', 7), cas('administracion@', 'Administración', 'A', 3), cas('martin@', 'Martín (vos)', 'M', 2), cas('info@', 'Info · compartida', 'I')];
+    const pest = (t, n, act) => ({ t, n: n || 0, fg: act ? 'var(--accT)' : 'var(--mut)', fw: act ? 600 : 500, sh: act ? 'inset 0 -3px 0 var(--acc)' : 'none', nBg: act ? 'var(--acc)' : 'var(--mu)', nFg: act ? '#fff' : 'var(--fg)' });
+    const pestanas = [pest('Todos', 0, true), pest('Sin leer', 12), pest('Esperan respuesta', 3)];
+    const fam = (t, f) => ({ t, bg: `var(--${f}Bg)`, fg: `var(--${f}T)` });
+    const fila = (o) => ({ ...o, n: o.n || 0, adj: o.adj || 0, grupo: o.grupo || '', tag: o.tag || null,
+      bg: o.act ? 'var(--sel)' : 'transparent', sh: o.act ? 'inset 4px 0 0 var(--acc)' : 'none',
+      fwn: o.unread ? 700 : 400, fws: o.unread ? 600 : 400, horaC: o.unread ? 'var(--accT)' : 'var(--mut)',
+      avBg: o.cli ? 'var(--avC)' : o.prov ? 'var(--infBg)' : 'var(--mu)', avFg: o.cli ? 'var(--avCT)' : o.prov ? 'var(--infT)' : 'var(--mut)',
+      tx: o.swipe ? 'translateX(-130px)' : 'none' });
+    const filas = [
+      fila({ grupo: 'Hoy', act: true, ini: 'CP', nom: 'Carpintería Pérez', cli: true, hora: '9:42', asunto: 'Presupuesto de 14 placas de melamina', prev: 'Dale, va el presupuesto. Confirmame si el corte…', unread: true, n: 4, adj: 3, tag: fam('Pedido abierto', 'esp') }),
+      fila({ ini: 'R', nom: 'Roberto Fernández', cli: true, hora: '9:15', asunto: '¿Sale hoy el envío a Sierra de los Padres?', prev: 'Necesito saber si los tirantes salen hoy porque…', unread: true, n: 2, tag: fam('Espera respuesta', 'esp'), swipe: true }),
+      fila({ ini: 'F', nom: 'Faplac', prov: true, hora: '8:51', asunto: 'Lista de precios de noviembre', prev: 'Adjuntamos la lista vigente desde el 1/11…', unread: true, adj: 1 }),
+      fila({ ini: 'CM', nom: 'Arq. Carolina Méndez', cli: true, hora: '8:20', asunto: 'Despiece de la cocina para cortar', prev: 'Te paso el despiece en PDF. Las piezas de 2600…', adj: 2 }),
+      fila({ grupo: 'Ayer', ini: 'L', nom: 'Lucía Sosa', hora: '18:04', asunto: '¿Cortan fenólico a medida?', prev: 'Hola, quería saber si cortan placas de fenólico…', unread: true }),
+      fila({ ini: 'B', nom: 'Banco Provincia', hora: '15:30', asunto: 'Transferencia recibida por $ 1.250.000', prev: 'Se acreditó una transferencia de RF Construcciones…' }),
+      fila({ ini: 'M', nom: 'Masisa Argentina', prov: true, hora: '11:12', asunto: 'Confirmación de la orden de compra 0193', prev: 'Confirmamos 120 placas de MDF 18 mm, entrega…', adj: 1 }),
+      fila({ ini: 'AT', nom: 'Ana Torres', cli: true, hora: '10:05', asunto: 'Saldo de la cuenta corriente', prev: 'Martín, la semana que viene te transfiero la mitad…', n: 3, tag: fam('Debe', 'pr') })
+    ];
+    const filasTel = filas.slice(0, 7).map(f => ({ ...f, act: false }));
+    const filasEsc = filas.map(f => ({ ...f, tx: 'none' }));
+    const acciones = [{ l: 'Responder', ic: 'icon-reply' }, { l: 'Reenviar', ic: 'icon-forward' }, { l: 'Archivar', ic: 'icon-archive' }, { l: 'Borrar', ic: 'icon-trash-2' }];
+    const adjuntos = [
+      { n: 'despiece-cocina-v2.pdf', m: 'PDF · 1,8 MB', ic: 'icon-file-text', c: 'var(--prT)', vp: 'vista previa · pág. 1' },
+      { n: 'medidas-modulos.xlsx', m: 'Planilla · 36 KB', ic: 'icon-file-spreadsheet', c: 'var(--okT)', vp: 'vista previa · hoja 1' },
+      { n: 'foto-bajo-mesada.jpg', m: 'Foto · 620 KB', ic: 'icon-image', c: 'var(--infT)', vp: 'foto del mueble', hover: true }
+    ].map(a => ({ ...a, hover: !!a.hover, bd: a.hover ? 'var(--ln)' : 'var(--ls)', sh: a.hover ? '0 6px 18px -8px rgb(40 30 20 / .35)' : 'none' }));
+    const chk = (on) => ({ on, cb: on ? 'var(--acc)' : 'transparent', cbb: on ? 'none' : 'inset 0 0 0 1.5px var(--ln)' });
+    const adjDesc = [
+      { n: 'despiece-cocina-v2.pdf', s: '1,8 MB', ic: 'icon-file-text', c: 'var(--prT)', ...chk(true) },
+      { n: 'medidas-modulos.xlsx', s: '36 KB', ic: 'icon-file-spreadsheet', c: 'var(--okT)', ...chk(false) },
+      { n: 'foto-bajo-mesada.jpg', s: '620 KB', ic: 'icon-image', c: 'var(--infT)', ...chk(true) }
+    ];
+    const tira = [
+      { n: 'despiece-cocina-v2.pdf', ic: 'icon-file-text', c: 'oklch(0.75 0.14 25)', op: 0.55, sh: 'none' },
+      { n: 'medidas-modulos.xlsx', ic: 'icon-file-spreadsheet', c: 'oklch(0.78 0.12 150)', op: 0.55, sh: 'none' },
+      { n: 'foto-bajo-mesada.jpg', ic: 'icon-image', c: 'oklch(0.78 0.11 250)', op: 1, sh: '0 0 0 3px oklch(0.68 0.19 48)' }
+    ];
+    const paginas = [1, 2, 3, 4].map(n => ({ n: `Página ${n}`, sh: n === 1 ? '0 0 0 3px oklch(0.68 0.19 48)' : 'none' }));
+    const piezas = [
+      ['Lateral bajo mesada', 4, 700, 560, 'Melamina blanca 18'], ['Base bajo mesada', 2, 1164, 560, 'Melamina blanca 18'], ['Estante', 6, 560, 350, 'Melamina blanca 18'],
+      ['Puerta', 6, 696, 396, 'Melamina blanca 18'], ['Frente cajón', 3, 796, 180, 'Melamina blanca 18'], ['Lateral alacena', 4, 720, 330, 'Melamina blanca 18'],
+      ['Tapa alacena', 2, 1164, 330, 'Melamina blanca 18'], ['Fondo', 4, 1180, 700, 'Fibroplus blanco 3'], ['Zócalo', 2, 2600, 100, 'Melamina blanca 18'], ['Faja superior', 1, 2600, 80, 'Melamina blanca 18']
+    ].map(([p, c, l, a, m]) => ({ p, c, l, a, m }));
+    const hojaCols = ['', 'A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    const hoja = [
+      ['Módulo', 'Pieza', 'Cant.', 'Largo', 'Ancho', 'Tapacanto', 'Nota', 600],
+      ['Bajo 1', 'Lateral', 2, 700, 560, '1 lado largo', ''], ['Bajo 1', 'Base', 1, 1164, 560, 'frente', ''], ['Bajo 1', 'Estante', 2, 560, 350, 'frente', 'regulable'],
+      ['Bajo 2', 'Lateral', 2, 700, 560, '1 lado largo', ''], ['Bajo 2', 'Base', 1, 1164, 560, 'frente', 'lleva bacha'], ['Bajo 2', 'Puerta', 2, 696, 396, '4 lados', 'bisagra cierre suave'],
+      ['Cajonera', 'Frente cajón', 3, 796, 180, '4 lados', 'tirador Gola'], ['Alacena 1', 'Lateral', 2, 720, 330, '1 lado largo', ''], ['Alacena 1', 'Tapa', 2, 1164, 330, 'frente', ''],
+      ['Alacena 1', 'Estante', 2, 560, 350, 'frente', ''], ['Alacena 2', 'Lateral', 2, 720, 330, '1 lado largo', ''], ['Alacena 2', 'Puerta', 4, 696, 396, '4 lados', 'con pistón'],
+      ['General', 'Zócalo', 2, 2600, 100, '1 lado largo', 'veta a lo largo']
+    ].map((r, i) => ({ n: i + 1, a: r[0], b: r[1], c: r[2], d: r[3], e: r[4], f: r[5], g: r[6], fw: i === 0 ? 600 : 400 }));
+    const sugeridos = [
+      { ini: 'R', n: 'Roberto Fernández', d: 'roberto@rfconstrucciones.com.ar', t: 'Cliente', bg: 'var(--sel)', avBg: 'var(--avC)', avFg: 'var(--avCT)' },
+      { ini: 'RM', n: 'Robles Maderas del Sur', d: 'pedidos@roblesmaderas.com.ar', t: 'Proveedor', bg: 'transparent', avBg: 'var(--infBg)', avFg: 'var(--infT)' },
+      { ini: 'RB', n: 'Rocío Benítez', d: 'rocio.benitez@gmail.com', t: 'Contacto', bg: 'transparent', avBg: 'var(--mu)', avFg: 'var(--mut)' }
+    ];
+    const fb = (t, act) => ({ t, bd: act ? 'transparent' : 'var(--ln)', bg: act ? 'var(--accBg)' : 'transparent', fg: act ? 'var(--accT)' : 'var(--fg)', fw: act ? 600 : 400 });
+    const filtrosBusqueda = [fb('De cualquiera'), fb('Último mes', true), fb('Con adjuntos'), fb('Todas las casillas')];
+    const res = (o) => ({ ...o, bg: o.act ? 'var(--sel)' : 'transparent', avBg: o.cli ? 'var(--avC)' : o.prov ? 'var(--infBg)' : 'var(--mu)', avFg: o.cli ? 'var(--avCT)' : o.prov ? 'var(--infT)' : 'var(--mut)' });
+    const resultados = [
+      res({ act: true, ini: 'L', nom: 'Lucía Sosa', meta: 'ayer', pre: '¿Cortan ', hl: 'fenólico', post: ' a medida? Placas de 18 mm para un mueble…' }),
+      res({ prov: true, ini: 'F', nom: 'Fenólicos del Plata', meta: '2 nov', pre: 'Lista de ', hl: 'fenólicos', post: ' de noviembre, 18 y 25 mm', adj: true }),
+      res({ cli: true, ini: 'R', nom: 'Roberto Fernández', meta: '14 oct', pre: '', hl: 'Fenólico', post: ' para encofrado: 40 placas de 18 mm' }),
+      res({ ini: 'D', nom: 'Diego (enviado)', meta: '9 oct', pre: 'Presupuesto de ', hl: 'fenólico', post: ' 18 mm con corte', adj: true })
+    ];
+    const esqueleto = [{ w1: '46%', w2: '78%' }, { w1: '38%', w2: '64%' }, { w1: '52%', w2: '82%' }, { w1: '30%', w2: '70%' }, { w1: '44%', w2: '60%' }, { w1: '36%', w2: '74%' }];
+    const filasOff = filas.slice(3, 7).map(f => ({ ...f, act: false, tx: 'none', bg: 'transparent', sh: 'none' }));
+    const ajNav = [['Firma', 'icon-pen-line'], ['Respuesta automática', 'icon-plane', true], ['Reglas', 'icon-filter'], ['Reenviar correos', 'icon-forward'], ['Avisos en el teléfono', 'icon-bell'], ['Clave y sesiones', 'icon-lock'], ['Casillas y alias', 'icon-at-sign']].map(([l, ic, act]) => ({ l, ic, bg: act ? 'var(--side-act)' : 'transparent', fg: act ? 'var(--accT)' : 'var(--fg)', fw: act ? 600 : 400 }));
+    const reglas = [
+      { si: 'Si llega de', quien: 'Faplac, Masisa o Egger', ent: 'moverlo a', dst: 'Proveedores' },
+      { si: 'Si llega de', quien: 'Banco Provincia', ent: 'ponerle la etiqueta', dst: 'Pagos' },
+      { si: 'Si el asunto dice', quien: 'factura', ent: 'mandarlo a', dst: 'administracion@' }
+    ];
+    const cuota = (l, tipo, quien, usado, pct, c) => ({ l, tipo, quien, usado, pct, c, alias: tipo === 'Alias' });
+    const casAdmin = [
+      cuota('ventas@mjbj.com.ar', 'Casilla', 'Diego, Martín', '4,2 GB de 10 GB', '42%', 'var(--mut)'),
+      cuota('administracion@mjbj.com.ar', 'Casilla', 'Silvia, Martín', '8,7 GB de 10 GB', '87%', 'var(--espT)'),
+      cuota('martin@mjbj.com.ar', 'Casilla', 'Martín', '2,1 GB de 10 GB', '21%', 'var(--mut)'),
+      cuota('info@mjbj.com.ar', 'Alias', 'llega a ventas@ y administracion@', '', '0%', 'var(--mut)')
+    ];
+    const resTel = resultados.slice(0, 4);
+    const base6 = filasEsc.slice(0, 6).map(f => ({ ...f, act: false, bg: 'transparent', sh: 'none', alerta: false }));
+    const off6 = base6.map((f, i) => i === 3 ? { ...f, bg: 'var(--sel)', sh: 'inset 4px 0 0 var(--acc)' } : f);
+    const mp = { ...fila({ ini: 'MP', nom: 'Mercado Pago', hora: '7:12', asunto: 'Tu cuenta fue suspendida temporalmente', prev: 'Detectamos movimientos inusuales. Verificá tus datos…', unread: true, act: true }), alerta: true };
+    const sosp6 = [mp, ...base6.slice(0, 5)];
+    const pTodos = pestanas;
+    const pSinLeer = [pest('Todos'), pest('Sin leer', 0, true), pest('Esperan respuesta', 3)];
+    const est = (o) => ({ ...o, items: temas.map(t => ({ ...t, ...o.f, rows: o.rows || [], pest: o.pest || pTodos })) });
+    const estados = [
+      est({ titulo: 'Sin correos', nota: 'No es un error: confirma que está todo leído y ofrece volver a «Todos».', pest: pSinLeer, f: { vacia: true, leerVacio: true } }),
+      est({ titulo: 'Cargando', nota: 'Filas grises con la misma forma que las reales y una barra fina arriba. Nada salta cuando llegan los datos.', f: { cargando: true, indet: true, leerCarga: true } }),
+      est({ titulo: 'Sin conexión', nota: 'Una franja arriba avisa y se puede seguir leyendo lo ya descargado. Lo que se mande sale después.', rows: off6, f: { lista: true, offline: true, leerNormal: true } }),
+      est({ titulo: 'Error del servidor', nota: 'Dice qué pasó en palabras simples, cuándo se reintenta y deja reintentar ahora.', f: { error: true, leerVacio: true } }),
+      est({ titulo: 'Correo sospechoso', nota: 'Aviso arriba del mensaje, el enlace engañoso explicado al pasar el mouse y el programa adjunto bloqueado.', rows: sosp6, f: { lista: true, leerSosp: true } })
+    ];
+    const mkAj = (activa) => [['Firma', 'icon-pen-line'], ['Respuesta automática', 'icon-plane'], ['Reglas', 'icon-filter'], ['Reenviar correos', 'icon-forward'], ['Avisos en el teléfono', 'icon-bell'], ['Clave y sesiones', 'icon-lock'], ['Casillas y alias', 'icon-at-sign']].map(([l, ic]) => ({ l, ic, bg: l === activa ? 'var(--side-act)' : 'transparent', fg: l === activa ? 'var(--accT)' : 'var(--fg)', fw: l === activa ? 600 : 400 }));
+    const ajGrupos = [
+      { id: '2e', badge: '2e', titulo: 'Ajustes', nota: 'Se entra con la ruedita de arriba. Las reglas se arman como una frase. «Casillas y alias» solo lo ve el administrador.', items: temas.map(t => ({ ...t, vac: true, firma: false, nav: mkAj('Respuesta automática') })) },
+      { id: '2p', badge: '2p', titulo: 'Firma y respuestas guardadas', nota: 'Una firma por casilla, con logo y datos de la sucursal. Se ve tal cual la recibe el cliente. Abajo, las respuestas guardadas con su atajo.', items: temas.map(t => ({ ...t, vac: false, firma: true, nav: mkAj('Firma') })) }
+    ];
+    const pestFirma = [['Ventas', true], ['Administración'], ['Martín']].map(([t, a]) => ({ t, bg: a ? 'var(--acc)' : 'transparent', fg: a ? '#fff' : 'var(--fg)', bd: a ? 'transparent' : 'var(--ln)', fw: a ? 600 : 500 }));
+    const tg = (on) => ({ on, tBg: on ? 'var(--acc)' : 'var(--mu)', tX: on ? '25px' : '3px', tSh: on ? 'none' : 'inset 0 0 0 1px var(--ln)' });
+    const opcFirma = [
+      { l: 'Poner el logo de la maderera', d: '', ...tg(true), sel: '' },
+      { l: 'Datos de la sucursal', d: 'Dirección y teléfono que aparecen abajo', ...tg(false), sel: 'Casa Central' },
+      { l: 'Usarla también al responder y reenviar', d: '', ...tg(true), sel: '' },
+      { l: 'Firma corta en las respuestas', d: 'Solo «Diego · Maderera JBJ»', ...tg(false), sel: '' }
+    ].map(o => ({ ...o, toggle: !o.sel, select: !!o.sel }));
+    const guardadas = [
+      { t: 'Precio de placas', k: ';precios', d: 'Te paso los precios vigentes de placas al día de hoy…' },
+      { t: 'Horarios', k: ';horarios', d: 'Casa Central: lunes a viernes de 8 a 16 y sábados de 8 a 12…' },
+      { t: 'Datos para transferencia', k: ';cbu', d: 'Banco Provincia · CBU 0140 0305 … · Alias MADERERA.JBJ' },
+      { t: 'Zonas y costo de envío', k: ';envio', d: 'Dentro de Mar del Plata el envío es sin cargo desde…' }
+    ];
+    const menuMas = [
+      { l: 'Marcar como no leído', ic: 'icon-mail', sub: false, bg: 'transparent' }, { l: 'Destacar', ic: 'icon-star', sub: false, bg: 'transparent' },
+      { l: 'Etiquetar', ic: 'icon-tag', sub: true, bg: 'var(--sel)' }, { l: 'Mover a', ic: 'icon-folder-input', sub: true, bg: 'transparent' },
+      { l: 'Imprimir', ic: 'icon-printer', sub: false, bg: 'transparent' }, { l: 'Bloquear a este remitente', ic: 'icon-ban', sub: false, bg: 'transparent' }
+    ];
+    const etiq = [['Presupuesto', 'var(--marT)', true], ['Pedido abierto', 'var(--espT)', true], ['Cocinas', 'oklch(0.6 0.13 300)', true, true], ['Proveedor', 'var(--infT)'], ['Pago', 'var(--okT)'], ['Reclamo', 'var(--prT)'], ['Moroso', 'oklch(0.5 0.16 25)']]
+      .map(([l, c, on, nueva]) => ({ l, c, nueva: !!nueva, ...chk(!!on) }));
+    const etiqChips = [['Presupuesto', 'mar'], ['Pedido abierto', 'esp'], ['Cocinas', 'mar']].map(([t, f]) => fam(t, f));
+    const progOpc = [
+      { t: 'Lunes 26 a las 8:00', d: 'cuando abre el local', bg: 'var(--sel)', sh: 'inset 3px 0 0 var(--acc)' },
+      { t: 'Lunes 26 a las 14:00', d: 'después del mediodía', bg: 'transparent', sh: 'none' },
+      { t: 'Martes 27 a las 8:00', d: '', bg: 'transparent', sh: 'none' }
+    ];
+    const dias = [];
+    for (let i = 0; i < 3; i++) dias.push({ n: '', bg: 'transparent', fg: 'var(--fg)', fw: 400, bd: 'none' });
+    for (let d = 1; d <= 31; d++) {
+      const pasado = d < 24, hoy = d === 24, sel = d === 26;
+      dias.push({ n: String(d), bg: sel ? 'var(--acc)' : 'transparent', fg: sel ? '#fff' : pasado ? 'var(--t3)' : 'var(--fg)', fw: sel || hoy ? 700 : 400, bd: hoy ? 'inset 0 0 0 1.5px var(--acc)' : 'none' });
+    }
+    const horas = ['8:00', '9:00', '10:00', '12:00', '14:00'].map((h, i) => ({ h, bg: i === 0 ? 'var(--accBg)' : 'transparent', fg: i === 0 ? 'var(--accT)' : 'var(--fg)', bd: i === 0 ? 'transparent' : 'var(--ln)', fw: i === 0 ? 600 : 400 }));
+    const impAdj = [
+      { n: 'despiece-cocina-v2.pdf', d: '4 páginas', ic: 'icon-file-text', c: 'var(--prT)', op: 1, ...chk(true) },
+      { n: 'foto-bajo-mesada.jpg', d: '1 página', ic: 'icon-image', c: 'var(--infT)', op: 1, ...chk(false) },
+      { n: 'medidas-modulos.xlsx', d: 'Las planillas se imprimen desde el programa', ic: 'icon-file-spreadsheet', c: 'var(--okT)', op: 0.5, ...chk(false) }
+    ];
+    return { ajGrupos, pestFirma, opcFirma, guardadas, menuMas, etiq, etiqChips, progOpc, dias, horas, impAdj, adjDesc, tira, paginas, piezas, hojaCols, hoja, estados, esqueleto, filasOff, ajNav, reglas, casAdmin, resTel, temas, grupos, carpetas, casillas, pestanas, filas: filasEsc, filasTel, acciones, adjuntos, sugeridos, filtrosBusqueda, resultados };
+  }
+}</script>
+</body>
+</html>

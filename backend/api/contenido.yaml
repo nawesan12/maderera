@@ -330,6 +330,109 @@ paths:
       responses:
         "204": { description: Hecho }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/contenido/documentos:
+    get:
+      operationId: Documentos
+      summary: Los documentos técnicos que quien pide puede ver
+      responses:
+        "200":
+          description: Los activos; los reservados solo si es profesional
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/DocumentoTecnico" } }
+  /api/v1/contenido/documentos/reservados:
+    get:
+      operationId: DocumentosReservados
+      summary: Cuántos hay reservados para profesionales, sin decir cuáles
+      responses:
+        "200":
+          description: La cantidad
+          content:
+            application/json:
+              schema: { type: integer }
+  /api/v1/contenido/eventos:
+    get:
+      operationId: EventosProximos
+      responses:
+        "200":
+          description: Los publicados que no pasaron
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/EventoPublico" } }
+  /api/v1/contenido/eventos-visibles:
+    get:
+      operationId: SlugsDeEventos
+      parameters:
+        - { name: limite, in: query, required: true, schema: { type: integer, minimum: 1, maximum: 500 } }
+      responses:
+        "200":
+          description: Los slugs de los que no son borrador, los más nuevos primero
+          content:
+            application/json:
+              schema: { type: array, items: { type: string } }
+  /api/v1/contenido/eventos/{slug}:
+    get:
+      operationId: EventoPorSlug
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: La ficha, con la inscripción de quien mira
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventoConDetalle" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/contenido/eventos/{slug}/visible:
+    get:
+      operationId: EventoVisible
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Si existe y no es borrador
+          content:
+            application/json:
+              schema: { type: boolean }
+  /api/v1/contenido/sitemap/{seccion}:
+    get:
+      operationId: Sitemap
+      parameters:
+        - { name: seccion, in: path, required: true, schema: { type: string, enum: [catalogo, categorias, eventos] } }
+      responses:
+        "200":
+          description: Las rutas de la sección
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/RutaSitemap" } }
+  /api/v1/contenido/contacto:
+    post:
+      operationId: EnviarConsulta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, email, motivo, mensaje]
+              additionalProperties: false
+              properties:
+                nombre: { type: string }
+                email: { type: string }
+                telefono: { type: string }
+                motivo: { type: string }
+                mensaje: { type: string }
+      responses:
+        "200":
+          description: Qué pasó con el correo. «simulada» es que no hay correo conectado y conviene WhatsApp.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resultado]
+                properties:
+                  resultado: { type: string, enum: [enviada, simulada, fallida] }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
 components:
   responses:
     Problema:
@@ -509,6 +612,57 @@ components:
         texto: { type: string }
         fecha: { type: string, description: AAAA-MM-DD }
         publicada: { type: boolean }
+    DocumentoTecnico:
+      type: object
+      required: [id, titulo, descripcion, categoria, url, formato, tamanoBytes, soloProfesionales]
+      properties:
+        id: { type: string }
+        titulo: { type: string }
+        descripcion: { type: string, nullable: true }
+        categoria: { type: string }
+        url: { type: string }
+        formato: { type: string }
+        tamanoBytes: { type: integer, nullable: true }
+        soloProfesionales: { type: boolean }
+    EventoPublico:
+      type: object
+      required: [id, slug, titulo, resumen, imagenUrl, lugar, inicia, termina, cupo, precio, soloProfesionales, inscriptos]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        titulo: { type: string }
+        resumen: { type: string, nullable: true }
+        imagenUrl: { type: string, nullable: true }
+        lugar: { type: string, nullable: true }
+        inicia: { type: string, format: date-time }
+        termina: { type: string, format: date-time, nullable: true }
+        cupo: { type: integer }
+        precio: { type: number }
+        soloProfesionales: { type: boolean }
+        inscriptos: { type: integer, description: Reservadas, confirmadas y que asistieron }
+    EventoConDetalle:
+      allOf:
+        - $ref: "#/components/schemas/EventoPublico"
+        - type: object
+          required: [descripcion, estado, miInscripcion, yaPaso]
+          properties:
+            descripcion: { type: string, nullable: true }
+            estado: { type: string, enum: [publicado, cerrado, cancelado] }
+            miInscripcion:
+              type: object
+              nullable: true
+              required: [id, estado]
+              properties:
+                id: { type: string }
+                estado: { type: string }
+            yaPaso: { type: boolean }
+    RutaSitemap:
+      type: object
+      required: [ruta, actualizada, imagenes]
+      properties:
+        ruta: { type: string }
+        actualizada: { type: string, format: date-time }
+        imagenes: { type: array, items: { type: string } }
     FormBanner:
       type: object
       required: [ubicacion, titulo]

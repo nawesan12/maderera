@@ -326,6 +326,136 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/contenido/documentos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Los documentos técnicos que quien pide puede ver */
+        get: operations["Documentos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contenido/documentos/reservados": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuántos hay reservados para profesionales, sin decir cuáles */
+        get: operations["DocumentosReservados"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contenido/eventos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["EventosProximos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contenido/eventos-visibles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SlugsDeEventos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contenido/eventos/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["EventoPorSlug"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contenido/eventos/{slug}/visible": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["EventoVisible"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contenido/sitemap/{seccion}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["Sitemap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contenido/contacto": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EnviarConsulta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -492,6 +622,49 @@ export interface components {
             /** @description AAAA-MM-DD */
             fecha?: string;
             publicada: boolean;
+        };
+        DocumentoTecnico: {
+            id: string;
+            titulo: string;
+            descripcion: string | null;
+            categoria: string;
+            url: string;
+            formato: string;
+            tamanoBytes: number | null;
+            soloProfesionales: boolean;
+        };
+        EventoPublico: {
+            id: string;
+            slug: string;
+            titulo: string;
+            resumen: string | null;
+            imagenUrl: string | null;
+            lugar: string | null;
+            /** Format: date-time */
+            inicia: string;
+            /** Format: date-time */
+            termina: string | null;
+            cupo: number;
+            precio: number;
+            soloProfesionales: boolean;
+            /** @description Reservadas */
+            inscriptos: number;
+        };
+        EventoConDetalle: components["schemas"]["EventoPublico"] & {
+            descripcion: string | null;
+            /** @enum {string} */
+            estado: "publicado" | "cerrado" | "cancelado";
+            miInscripcion: {
+                id: string;
+                estado: string;
+            } | null;
+            yaPaso: boolean;
+        };
+        RutaSitemap: {
+            ruta: string;
+            /** Format: date-time */
+            actualizada: string;
+            imagenes: string[];
         };
         FormBanner: {
             ubicacion: string;
@@ -1167,6 +1340,190 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Problema"];
+        };
+    };
+    Documentos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los activos; los reservados solo si es profesional */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentoTecnico"][];
+                };
+            };
+        };
+    };
+    DocumentosReservados: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La cantidad */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": number;
+                };
+            };
+        };
+    };
+    EventosProximos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los publicados que no pasaron */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventoPublico"][];
+                };
+            };
+        };
+    };
+    SlugsDeEventos: {
+        parameters: {
+            query: {
+                limite: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los slugs de los que no son borrador, los más nuevos primero */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+        };
+    };
+    EventoPorSlug: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La ficha, con la inscripción de quien mira */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventoConDetalle"];
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    EventoVisible: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Si existe y no es borrador */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": boolean;
+                };
+            };
+        };
+    };
+    Sitemap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                seccion: "catalogo" | "categorias" | "eventos";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las rutas de la sección */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RutaSitemap"][];
+                };
+            };
+        };
+    };
+    EnviarConsulta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    nombre: string;
+                    email: string;
+                    telefono?: string;
+                    motivo: string;
+                    mensaje: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Qué pasó con el correo. «simulada» es que no hay correo conectado y conviene WhatsApp. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        resultado: "enviada" | "simulada" | "fallida";
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+            429: components["responses"]["Problema"];
         };
     };
 }

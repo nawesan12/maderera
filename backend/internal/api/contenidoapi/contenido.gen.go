@@ -25,6 +25,27 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for EventoConDetalleEstado.
+const (
+	Cancelado EventoConDetalleEstado = "cancelado"
+	Cerrado   EventoConDetalleEstado = "cerrado"
+	Publicado EventoConDetalleEstado = "publicado"
+)
+
+// Valid indicates whether the value is a known member of the EventoConDetalleEstado enum.
+func (e EventoConDetalleEstado) Valid() bool {
+	switch e {
+	case Cancelado:
+		return true
+	case Cerrado:
+		return true
+	case Publicado:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PromoCompletaQuienPaga.
 const (
 	PromoCompletaQuienPagaBanco    PromoCompletaQuienPaga = "banco"
@@ -120,19 +141,19 @@ func (e ResenaParaModerarEstado) Valid() bool {
 
 // Defines values for Ubicacion.
 const (
-	Catalogo Ubicacion = "catalogo"
-	Franja   Ubicacion = "franja"
-	Portada  Ubicacion = "portada"
+	UbicacionCatalogo Ubicacion = "catalogo"
+	UbicacionFranja   Ubicacion = "franja"
+	UbicacionPortada  Ubicacion = "portada"
 )
 
 // Valid indicates whether the value is a known member of the Ubicacion enum.
 func (e Ubicacion) Valid() bool {
 	switch e {
-	case Catalogo:
+	case UbicacionCatalogo:
 		return true
-	case Franja:
+	case UbicacionFranja:
 		return true
-	case Portada:
+	case UbicacionPortada:
 		return true
 	default:
 		return false
@@ -154,6 +175,48 @@ func (e ModerarResenaJSONBodyEstado) Valid() bool {
 	case ModerarResenaJSONBodyEstadoPublicada:
 		return true
 	case ModerarResenaJSONBodyEstadoRechazada:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EnviarConsulta200JSONResponseBodyResultado.
+const (
+	Enviada  EnviarConsulta200JSONResponseBodyResultado = "enviada"
+	Fallida  EnviarConsulta200JSONResponseBodyResultado = "fallida"
+	Simulada EnviarConsulta200JSONResponseBodyResultado = "simulada"
+)
+
+// Valid indicates whether the value is a known member of the EnviarConsulta200JSONResponseBodyResultado enum.
+func (e EnviarConsulta200JSONResponseBodyResultado) Valid() bool {
+	switch e {
+	case Enviada:
+		return true
+	case Fallida:
+		return true
+	case Simulada:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SitemapParamsSeccion.
+const (
+	SitemapParamsSeccionCatalogo   SitemapParamsSeccion = "catalogo"
+	SitemapParamsSeccionCategorias SitemapParamsSeccion = "categorias"
+	SitemapParamsSeccionEventos    SitemapParamsSeccion = "eventos"
+)
+
+// Valid indicates whether the value is a known member of the SitemapParamsSeccion enum.
+func (e SitemapParamsSeccion) Valid() bool {
+	switch e {
+	case SitemapParamsSeccionCatalogo:
+		return true
+	case SitemapParamsSeccionCategorias:
+		return true
+	case SitemapParamsSeccionEventos:
 		return true
 	default:
 		return false
@@ -202,6 +265,64 @@ type BannerCompleto struct {
 type ConSlug struct {
 	// Slug el producto
 	Slug string `json:"slug"`
+}
+
+// DocumentoTecnico defines model for DocumentoTecnico.
+type DocumentoTecnico struct {
+	Categoria         string  `json:"categoria"`
+	Descripcion       *string `json:"descripcion"`
+	Formato           string  `json:"formato"`
+	Id                string  `json:"id"`
+	SoloProfesionales bool    `json:"soloProfesionales"`
+	TamanoBytes       *int    `json:"tamanoBytes"`
+	Titulo            string  `json:"titulo"`
+	Url               string  `json:"url"`
+}
+
+// EventoConDetalle defines model for EventoConDetalle.
+type EventoConDetalle struct {
+	Cupo        int                    `json:"cupo"`
+	Descripcion *string                `json:"descripcion"`
+	Estado      EventoConDetalleEstado `json:"estado"`
+	Id          string                 `json:"id"`
+	ImagenUrl   *string                `json:"imagenUrl"`
+	Inicia      time.Time              `json:"inicia"`
+
+	// Inscriptos Reservadas
+	Inscriptos    int     `json:"inscriptos"`
+	Lugar         *string `json:"lugar"`
+	MiInscripcion *struct {
+		Estado string `json:"estado"`
+		Id     string `json:"id"`
+	} `json:"miInscripcion"`
+	Precio            float32    `json:"precio"`
+	Resumen           *string    `json:"resumen"`
+	Slug              string     `json:"slug"`
+	SoloProfesionales bool       `json:"soloProfesionales"`
+	Termina           *time.Time `json:"termina"`
+	Titulo            string     `json:"titulo"`
+	YaPaso            bool       `json:"yaPaso"`
+}
+
+// EventoConDetalleEstado defines model for EventoConDetalle.Estado.
+type EventoConDetalleEstado string
+
+// EventoPublico defines model for EventoPublico.
+type EventoPublico struct {
+	Cupo      int       `json:"cupo"`
+	Id        string    `json:"id"`
+	ImagenUrl *string   `json:"imagenUrl"`
+	Inicia    time.Time `json:"inicia"`
+
+	// Inscriptos Reservadas
+	Inscriptos        int        `json:"inscriptos"`
+	Lugar             *string    `json:"lugar"`
+	Precio            float32    `json:"precio"`
+	Resumen           *string    `json:"resumen"`
+	Slug              string     `json:"slug"`
+	SoloProfesionales bool       `json:"soloProfesionales"`
+	Termina           *time.Time `json:"termina"`
+	Titulo            string     `json:"titulo"`
 }
 
 // FormBanner defines model for FormBanner.
@@ -385,6 +506,13 @@ type ResumenNegocio struct {
 	Promedio float32 `json:"promedio"`
 }
 
+// RutaSitemap defines model for RutaSitemap.
+type RutaSitemap struct {
+	Actualizada time.Time `json:"actualizada"`
+	Imagenes    []string  `json:"imagenes"`
+	Ruta        string    `json:"ruta"`
+}
+
 // Ubicacion defines model for Ubicacion.
 type Ubicacion string
 
@@ -407,6 +535,23 @@ type BannersParams struct {
 	Ubicacion Ubicacion `form:"ubicacion" json:"ubicacion"`
 }
 
+// EnviarConsultaJSONBody defines parameters for EnviarConsulta.
+type EnviarConsultaJSONBody struct {
+	Email    string  `json:"email"`
+	Mensaje  string  `json:"mensaje"`
+	Motivo   string  `json:"motivo"`
+	Nombre   string  `json:"nombre"`
+	Telefono *string `json:"telefono,omitempty"`
+}
+
+// EnviarConsulta200JSONResponseBodyResultado defines parameters for EnviarConsulta.
+type EnviarConsulta200JSONResponseBodyResultado string
+
+// SlugsDeEventosParams defines parameters for SlugsDeEventos.
+type SlugsDeEventosParams struct {
+	Limite int `form:"limite" json:"limite"`
+}
+
 // DejarResenaJSONBody defines parameters for DejarResena.
 type DejarResenaJSONBody struct {
 	Estrellas int                `json:"estrellas"`
@@ -414,6 +559,9 @@ type DejarResenaJSONBody struct {
 	ProductId openapi_types.UUID `json:"productId"`
 	Texto     *string            `json:"texto,omitempty"`
 }
+
+// SitemapParamsSeccion defines parameters for Sitemap.
+type SitemapParamsSeccion string
 
 // GuardarAjusteJSONRequestBody defines body for GuardarAjuste for application/json ContentType.
 type GuardarAjusteJSONRequestBody GuardarAjusteJSONBody
@@ -441,6 +589,9 @@ type EditarPromoMultipartRequestBody = FormPromo
 
 // ModerarResenaJSONRequestBody defines body for ModerarResena for application/json ContentType.
 type ModerarResenaJSONRequestBody ModerarResenaJSONBody
+
+// EnviarConsultaJSONRequestBody defines body for EnviarConsulta for application/json ContentType.
+type EnviarConsultaJSONRequestBody EnviarConsultaJSONBody
 
 // DejarResenaJSONRequestBody defines body for DejarResena for application/json ContentType.
 type DejarResenaJSONRequestBody DejarResenaJSONBody
@@ -507,6 +658,27 @@ type ServerInterface interface {
 
 	// (GET /api/v1/contenido/banners)
 	Banners(w http.ResponseWriter, r *http.Request, params BannersParams)
+
+	// (POST /api/v1/contenido/contacto)
+	EnviarConsulta(w http.ResponseWriter, r *http.Request)
+	// Documentos Los documentos técnicos que quien pide puede ver
+	// (GET /api/v1/contenido/documentos)
+	Documentos(w http.ResponseWriter, r *http.Request)
+	// DocumentosReservados Cuántos hay reservados para profesionales, sin decir cuáles
+	// (GET /api/v1/contenido/documentos/reservados)
+	DocumentosReservados(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/contenido/eventos)
+	EventosProximos(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/contenido/eventos-visibles)
+	SlugsDeEventos(w http.ResponseWriter, r *http.Request, params SlugsDeEventosParams)
+
+	// (GET /api/v1/contenido/eventos/{slug})
+	EventoPorSlug(w http.ResponseWriter, r *http.Request, slug string)
+
+	// (GET /api/v1/contenido/eventos/{slug}/visible)
+	EventoVisible(w http.ResponseWriter, r *http.Request, slug string)
 	// MisResenables Lo que el cliente compró y puede reseñar
 	// (GET /api/v1/contenido/mis-resenas)
 	MisResenables(w http.ResponseWriter, r *http.Request)
@@ -528,6 +700,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/contenido/promos)
 	Promos(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/contenido/sitemap/{seccion})
+	Sitemap(w http.ResponseWriter, r *http.Request, seccion SitemapParamsSeccion)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -946,6 +1121,147 @@ func (siw *ServerInterfaceWrapper) Banners(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// EnviarConsulta operation middleware
+func (siw *ServerInterfaceWrapper) EnviarConsulta(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EnviarConsulta(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Documentos operation middleware
+func (siw *ServerInterfaceWrapper) Documentos(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Documentos(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DocumentosReservados operation middleware
+func (siw *ServerInterfaceWrapper) DocumentosReservados(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DocumentosReservados(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EventosProximos operation middleware
+func (siw *ServerInterfaceWrapper) EventosProximos(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EventosProximos(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SlugsDeEventos operation middleware
+func (siw *ServerInterfaceWrapper) SlugsDeEventos(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SlugsDeEventosParams
+
+	// ------------- Required query parameter "limite" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "limite", r.URL.Query(), &params.Limite, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limite"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limite", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SlugsDeEventos(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EventoPorSlug operation middleware
+func (siw *ServerInterfaceWrapper) EventoPorSlug(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "slug" -------------
+	var slug string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "slug", r.PathValue("slug"), &slug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "slug", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EventoPorSlug(w, r, slug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EventoVisible operation middleware
+func (siw *ServerInterfaceWrapper) EventoVisible(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "slug" -------------
+	var slug string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "slug", r.PathValue("slug"), &slug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "slug", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EventoVisible(w, r, slug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // MisResenables operation middleware
 func (siw *ServerInterfaceWrapper) MisResenables(w http.ResponseWriter, r *http.Request) {
 
@@ -1059,6 +1375,32 @@ func (siw *ServerInterfaceWrapper) Promos(w http.ResponseWriter, r *http.Request
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Promos(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Sitemap operation middleware
+func (siw *ServerInterfaceWrapper) Sitemap(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "seccion" -------------
+	var seccion SitemapParamsSeccion
+
+	err = runtime.BindStyledParameterWithOptions("simple", "seccion", r.PathValue("seccion"), &seccion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "seccion", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Sitemap(w, r, seccion)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1215,6 +1557,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/admin/contenido/negocio/{id}", wrapper.BorrarResenaDelNegocio)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/contenido/negocio/{id}", wrapper.EditarResenaDelNegocio)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/contenido/negocio/{id}/publicar", wrapper.PublicarResenaDelNegocio)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/documentos", wrapper.Documentos)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/documentos/reservados", wrapper.DocumentosReservados)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/eventos", wrapper.EventosProximos)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/eventos-visibles", wrapper.SlugsDeEventos)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/eventos/{slug}", wrapper.EventoPorSlug)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/eventos/{slug}/visible", wrapper.EventoVisible)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/contenido/sitemap/{seccion}", wrapper.Sitemap)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/contenido/contacto", wrapper.EnviarConsulta)
 
 	return m
 }
@@ -1857,6 +2207,205 @@ func (response Banners200JSONResponse) VisitBannersResponse(w http.ResponseWrite
 	return err
 }
 
+type EnviarConsultaRequestObject struct {
+	Body *EnviarConsultaJSONRequestBody
+}
+
+type EnviarConsultaResponseObject interface {
+	VisitEnviarConsultaResponse(w http.ResponseWriter) error
+}
+
+type EnviarConsulta200JSONResponse struct {
+	Resultado EnviarConsulta200JSONResponseBodyResultado `json:"resultado"`
+}
+
+func (response EnviarConsulta200JSONResponse) VisitEnviarConsultaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EnviarConsulta422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response EnviarConsulta422ApplicationProblemPlusJSONResponse) VisitEnviarConsultaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EnviarConsulta429ApplicationProblemPlusJSONResponse Problema
+
+func (response EnviarConsulta429ApplicationProblemPlusJSONResponse) VisitEnviarConsultaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DocumentosRequestObject struct {
+}
+
+type DocumentosResponseObject interface {
+	VisitDocumentosResponse(w http.ResponseWriter) error
+}
+
+type Documentos200JSONResponse []DocumentoTecnico
+
+func (response Documentos200JSONResponse) VisitDocumentosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DocumentosReservadosRequestObject struct {
+}
+
+type DocumentosReservadosResponseObject interface {
+	VisitDocumentosReservadosResponse(w http.ResponseWriter) error
+}
+
+type DocumentosReservados200JSONResponse int
+
+func (response DocumentosReservados200JSONResponse) VisitDocumentosReservadosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EventosProximosRequestObject struct {
+}
+
+type EventosProximosResponseObject interface {
+	VisitEventosProximosResponse(w http.ResponseWriter) error
+}
+
+type EventosProximos200JSONResponse []EventoPublico
+
+func (response EventosProximos200JSONResponse) VisitEventosProximosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SlugsDeEventosRequestObject struct {
+	Params SlugsDeEventosParams
+}
+
+type SlugsDeEventosResponseObject interface {
+	VisitSlugsDeEventosResponse(w http.ResponseWriter) error
+}
+
+type SlugsDeEventos200JSONResponse []string
+
+func (response SlugsDeEventos200JSONResponse) VisitSlugsDeEventosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EventoPorSlugRequestObject struct {
+	Slug string `json:"slug"`
+}
+
+type EventoPorSlugResponseObject interface {
+	VisitEventoPorSlugResponse(w http.ResponseWriter) error
+}
+
+type EventoPorSlug200JSONResponse EventoConDetalle
+
+func (response EventoPorSlug200JSONResponse) VisitEventoPorSlugResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EventoPorSlug404ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response EventoPorSlug404ApplicationProblemPlusJSONResponse) VisitEventoPorSlugResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EventoVisibleRequestObject struct {
+	Slug string `json:"slug"`
+}
+
+type EventoVisibleResponseObject interface {
+	VisitEventoVisibleResponse(w http.ResponseWriter) error
+}
+
+type EventoVisible200JSONResponse bool
+
+func (response EventoVisible200JSONResponse) VisitEventoVisibleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type MisResenablesRequestObject struct {
 }
 
@@ -2067,6 +2616,28 @@ func (response Promos200JSONResponse) VisitPromosResponse(w http.ResponseWriter)
 	return err
 }
 
+type SitemapRequestObject struct {
+	Seccion SitemapParamsSeccion `json:"seccion"`
+}
+
+type SitemapResponseObject interface {
+	VisitSitemapResponse(w http.ResponseWriter) error
+}
+
+type Sitemap200JSONResponse []RutaSitemap
+
+func (response Sitemap200JSONResponse) VisitSitemapResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
@@ -2129,6 +2700,27 @@ type StrictServerInterface interface {
 
 	// (GET /api/v1/contenido/banners)
 	Banners(ctx context.Context, request BannersRequestObject) (BannersResponseObject, error)
+
+	// (POST /api/v1/contenido/contacto)
+	EnviarConsulta(ctx context.Context, request EnviarConsultaRequestObject) (EnviarConsultaResponseObject, error)
+	// Documentos Los documentos técnicos que quien pide puede ver
+	// (GET /api/v1/contenido/documentos)
+	Documentos(ctx context.Context, request DocumentosRequestObject) (DocumentosResponseObject, error)
+	// DocumentosReservados Cuántos hay reservados para profesionales, sin decir cuáles
+	// (GET /api/v1/contenido/documentos/reservados)
+	DocumentosReservados(ctx context.Context, request DocumentosReservadosRequestObject) (DocumentosReservadosResponseObject, error)
+
+	// (GET /api/v1/contenido/eventos)
+	EventosProximos(ctx context.Context, request EventosProximosRequestObject) (EventosProximosResponseObject, error)
+
+	// (GET /api/v1/contenido/eventos-visibles)
+	SlugsDeEventos(ctx context.Context, request SlugsDeEventosRequestObject) (SlugsDeEventosResponseObject, error)
+
+	// (GET /api/v1/contenido/eventos/{slug})
+	EventoPorSlug(ctx context.Context, request EventoPorSlugRequestObject) (EventoPorSlugResponseObject, error)
+
+	// (GET /api/v1/contenido/eventos/{slug}/visible)
+	EventoVisible(ctx context.Context, request EventoVisibleRequestObject) (EventoVisibleResponseObject, error)
 	// MisResenables Lo que el cliente compró y puede reseñar
 	// (GET /api/v1/contenido/mis-resenas)
 	MisResenables(ctx context.Context, request MisResenablesRequestObject) (MisResenablesResponseObject, error)
@@ -2150,6 +2742,9 @@ type StrictServerInterface interface {
 
 	// (GET /api/v1/contenido/promos)
 	Promos(ctx context.Context, request PromosRequestObject) (PromosResponseObject, error)
+
+	// (GET /api/v1/contenido/sitemap/{seccion})
+	Sitemap(ctx context.Context, request SitemapRequestObject) (SitemapResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -2754,6 +3349,187 @@ func (sh *strictHandler) Banners(w http.ResponseWriter, r *http.Request, params 
 	}
 }
 
+// EnviarConsulta operation middleware
+func (sh *strictHandler) EnviarConsulta(w http.ResponseWriter, r *http.Request) {
+	var request EnviarConsultaRequestObject
+
+	var body EnviarConsultaJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EnviarConsulta(ctx, request.(EnviarConsultaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EnviarConsulta")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EnviarConsultaResponseObject); ok {
+		if err := validResponse.VisitEnviarConsultaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Documentos operation middleware
+func (sh *strictHandler) Documentos(w http.ResponseWriter, r *http.Request) {
+	var request DocumentosRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Documentos(ctx, request.(DocumentosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Documentos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DocumentosResponseObject); ok {
+		if err := validResponse.VisitDocumentosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DocumentosReservados operation middleware
+func (sh *strictHandler) DocumentosReservados(w http.ResponseWriter, r *http.Request) {
+	var request DocumentosReservadosRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DocumentosReservados(ctx, request.(DocumentosReservadosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DocumentosReservados")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DocumentosReservadosResponseObject); ok {
+		if err := validResponse.VisitDocumentosReservadosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EventosProximos operation middleware
+func (sh *strictHandler) EventosProximos(w http.ResponseWriter, r *http.Request) {
+	var request EventosProximosRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EventosProximos(ctx, request.(EventosProximosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EventosProximos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EventosProximosResponseObject); ok {
+		if err := validResponse.VisitEventosProximosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SlugsDeEventos operation middleware
+func (sh *strictHandler) SlugsDeEventos(w http.ResponseWriter, r *http.Request, params SlugsDeEventosParams) {
+	var request SlugsDeEventosRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SlugsDeEventos(ctx, request.(SlugsDeEventosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SlugsDeEventos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SlugsDeEventosResponseObject); ok {
+		if err := validResponse.VisitSlugsDeEventosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EventoPorSlug operation middleware
+func (sh *strictHandler) EventoPorSlug(w http.ResponseWriter, r *http.Request, slug string) {
+	var request EventoPorSlugRequestObject
+
+	request.Slug = slug
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EventoPorSlug(ctx, request.(EventoPorSlugRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EventoPorSlug")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EventoPorSlugResponseObject); ok {
+		if err := validResponse.VisitEventoPorSlugResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EventoVisible operation middleware
+func (sh *strictHandler) EventoVisible(w http.ResponseWriter, r *http.Request, slug string) {
+	var request EventoVisibleRequestObject
+
+	request.Slug = slug
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EventoVisible(ctx, request.(EventoVisibleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EventoVisible")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EventoVisibleResponseObject); ok {
+		if err := validResponse.VisitEventoVisibleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // MisResenables operation middleware
 func (sh *strictHandler) MisResenables(w http.ResponseWriter, r *http.Request) {
 	var request MisResenablesRequestObject
@@ -2933,51 +3709,92 @@ func (sh *strictHandler) Promos(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Sitemap operation middleware
+func (sh *strictHandler) Sitemap(w http.ResponseWriter, r *http.Request, seccion SitemapParamsSeccion) {
+	var request SitemapRequestObject
+
+	request.Seccion = seccion
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Sitemap(ctx, request.(SitemapRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Sitemap")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SitemapResponseObject); ok {
+		if err := validResponse.VisitSitemapResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"NQA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

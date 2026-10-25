@@ -12,6 +12,8 @@ import (
 	"mjbj/internal/api/contenidoapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/email"
+	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -19,12 +21,17 @@ import (
 
 // API son las rutas del contenido (api/contenido.yaml).
 type API struct {
-	s      *Servicio
-	google ConfigGoogle
+	s        *Servicio
+	google   ConfigGoogle
+	contacto ConfigContacto
+	envio    email.Proveedor
+	lim      *limites.Limitador
 }
 
 // NuevaAPI arma los handlers.
-func NuevaAPI(s *Servicio, google ConfigGoogle) *API { return &API{s: s, google: google} }
+func NuevaAPI(s *Servicio, google ConfigGoogle, contacto ConfigContacto, envio email.Proveedor, lim *limites.Limitador) *API {
+	return &API{s: s, google: google, contacto: contacto, envio: envio, lim: lim}
+}
 
 var _ contenidoapi.StrictServerInterface = (*API)(nil)
 
@@ -69,8 +76,18 @@ func (o respuesta) VisitAdminPromosResponse(w http.ResponseWriter) error        
 func (o respuesta) VisitCrearPromoResponse(w http.ResponseWriter) error         { return o.escribir(w) }
 func (o respuesta) VisitEditarPromoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
 func (o respuesta) VisitBorrarPromoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
-func (o respuesta) VisitResenasDelNegocioResponse(w http.ResponseWriter) error  { return o.escribir(w) }
-func (o respuesta) VisitResumenDelNegocioResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitDocumentosResponse(w http.ResponseWriter) error         { return o.escribir(w) }
+func (o respuesta) VisitDocumentosReservadosResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitEventosProximosResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+func (o respuesta) VisitSlugsDeEventosResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitEventoPorSlugResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitEventoVisibleResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitSitemapResponse(w http.ResponseWriter) error           { return o.escribir(w) }
+func (o respuesta) VisitEnviarConsultaResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitResenasDelNegocioResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitResumenDelNegocioResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitAdminResenasDelNegocioResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -426,4 +443,68 @@ func (a *API) TraerDeGoogle(ctx context.Context, _ contenidoapi.TraerDeGoogleReq
 	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaCrear, "resena", "",
 		"Trajo "+strconv.Itoa(r.Nuevas)+" reseñas nuevas de Google", nil)
 	return ok(r), nil
+}
+
+// --- documentos, eventos, sitemap y contacto ---
+
+func (a *API) Documentos(ctx context.Context, _ contenidoapi.DocumentosRequestObject) (contenidoapi.DocumentosResponseObject, error) {
+	v, err := a.s.Documentos(ctx, auth.DeContexto(ctx))
+	return ok(v), err
+}
+
+func (a *API) DocumentosReservados(ctx context.Context, _ contenidoapi.DocumentosReservadosRequestObject) (contenidoapi.DocumentosReservadosResponseObject, error) {
+	v, err := a.s.q.DocumentosReservados(ctx)
+	return ok(v), err
+}
+
+func (a *API) EventosProximos(ctx context.Context, _ contenidoapi.EventosProximosRequestObject) (contenidoapi.EventosProximosResponseObject, error) {
+	v, err := a.s.EventosProximos(ctx)
+	return ok(v), err
+}
+
+func (a *API) SlugsDeEventos(ctx context.Context, r contenidoapi.SlugsDeEventosRequestObject) (contenidoapi.SlugsDeEventosResponseObject, error) {
+	v, err := a.s.q.SlugsDeEventosVisibles(ctx, int32(r.Params.Limite))
+	return ok(v), err
+}
+
+func (a *API) EventoPorSlug(ctx context.Context, r contenidoapi.EventoPorSlugRequestObject) (contenidoapi.EventoPorSlugResponseObject, error) {
+	v, err := a.s.EventoPorSlug(ctx, auth.DeContexto(ctx), r.Slug)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "Ese evento no existe.")
+	}
+	return ok(v), nil
+}
+
+func (a *API) EventoVisible(ctx context.Context, r contenidoapi.EventoVisibleRequestObject) (contenidoapi.EventoVisibleResponseObject, error) {
+	v, err := a.s.q.EventoVisible(ctx, r.Slug)
+	return ok(v), err
+}
+
+func (a *API) Sitemap(ctx context.Context, r contenidoapi.SitemapRequestObject) (contenidoapi.SitemapResponseObject, error) {
+	v, err := a.s.Sitemap(ctx, string(r.Seccion))
+	return ok(v), err
+}
+
+func (a *API) EnviarConsulta(ctx context.Context, r contenidoapi.EnviarConsultaRequestObject) (contenidoapi.EnviarConsultaResponseObject, error) {
+	c := Consulta{Nombre: r.Body.Nombre, Email: r.Body.Email, Motivo: r.Body.Motivo, Mensaje: r.Body.Mensaje}
+	if r.Body.Telefono != nil {
+		c.Telefono = *r.Body.Telefono
+	}
+	if err := c.validar(); err != nil {
+		return nil, err
+	}
+	// Por IP y por correo, como el TS: la validación va antes, así un
+	// formulario mal llenado no gasta intentos.
+	ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
+	if v := a.lim.PorAmbos(ctx, limites.Contacto, ip, "correo", c.Email); !v.Permitido {
+		return nil, plataforma.NuevoProblema(http.StatusTooManyRequests, limites.AvisoDeEspera(v))
+	}
+	res, err := a.s.EnviarConsulta(ctx, a.envio, a.contacto, c)
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]ResultadoConsulta{"resultado": res}), nil
 }

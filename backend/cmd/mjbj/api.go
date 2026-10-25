@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/catalogo"
 	"mjbj/internal/contenido"
+	"mjbj/internal/email"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -25,6 +26,8 @@ type configAPI struct {
 	Auth     auth.Config
 	Subidas  subidas.Config
 	Google   contenido.ConfigGoogle
+	Contacto contenido.ConfigContacto
+	Email    email.Config
 }
 
 func correrAPI() error {
@@ -92,7 +95,7 @@ func correrAPI() error {
 	)
 
 	contenidoapi.HandlerWithOptions(
-		contenidoapi.NewStrictHandlerWithOptions(contenido.NuevaAPI(contenido.Nuevo(pool, subidas.Nuevo(cfg.Subidas), log), cfg.Google),
+		contenidoapi.NewStrictHandlerWithOptions(contenido.NuevaAPI(contenido.Nuevo(pool, subidas.Nuevo(cfg.Subidas), log), cfg.Google, cfg.Contacto, email.Elegir(cfg.Email, log), lim),
 			[]contenidoapi.StrictMiddlewareFunc{plataforma.ConPedido[contenidoapi.StrictHandlerFunc]},
 			contenidoapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

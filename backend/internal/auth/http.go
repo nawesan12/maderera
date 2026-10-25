@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/mail"
 	"strings"
 	"unicode/utf8"
 
@@ -34,10 +33,7 @@ func dto(s *Sesion) sesionapi.Sesion {
 }
 
 // Los mensajes son los de los formularios de Next (app/(auth)/…/actions.ts).
-func correoValido(c string) bool {
-	a, err := mail.ParseAddress(strings.TrimSpace(c))
-	return err == nil && a.Address == strings.TrimSpace(c) && strings.Contains(c, ".")
-}
+func correoValido(c string) bool { return plataforma.CorreoValido(strings.TrimSpace(c)) }
 
 func ipYAgente(ctx context.Context) (string, string) {
 	r := plataforma.PedidoDe(ctx)

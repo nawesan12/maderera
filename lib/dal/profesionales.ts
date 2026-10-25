@@ -2,17 +2,11 @@ import "server-only";
 
 import { cache } from "react";
 import { cacheLife, cacheTag } from "next/cache";
-import { and, asc, desc, eq, gte, or, sql } from "drizzle-orm";
+import { desc, eq, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
-import {
-  customers,
-  events,
-  eventRegistrations,
-  priceLists,
-  professionalApplications,
-  technicalDocuments,
-} from "@/lib/db/schema";
+import { api, apiPublica, datos } from "@/lib/api/servidor";
+import { customers, priceLists, professionalApplications } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 
@@ -87,6 +81,8 @@ export const estadoProfesional = cache(async (): Promise<EstadoProfesional> => {
   // La verdad sobre si es profesional está en la ficha, no en la solicitud: un
   // vendedor puede marcar a alguien como profesional desde el mostrador sin que
   // haya pasado nunca por el formulario.
+  // El mismo criterio está en Go (db/consultas/sitio.sql, EsProfesionalAprobado)
+  // para los documentos; se juntan cuando estadoProfesional se mude (tanda 10).
   const aprobado = cliente.tipo === "profesional" && cliente.estado !== "inactivo";
 
   const [lista] = cliente
@@ -142,43 +138,12 @@ export interface DocumentoTecnico {
  */
 
 export async function documentosVisibles(): Promise<DocumentoTecnico[]> {
-  const estado = await estadoProfesional();
-
-  const condiciones = [eq(technicalDocuments.activo, true)];
-
-  if (!estado.aprobado) {
-    condiciones.push(eq(technicalDocuments.soloProfesionales, false));
-  }
-
-  return db
-    .select({
-      id: technicalDocuments.id,
-      titulo: technicalDocuments.titulo,
-      descripcion: technicalDocuments.descripcion,
-      categoria: technicalDocuments.categoria,
-      url: technicalDocuments.url,
-      formato: technicalDocuments.formato,
-      tamanoBytes: technicalDocuments.tamanoBytes,
-      soloProfesionales: technicalDocuments.soloProfesionales,
-    })
-    .from(technicalDocuments)
-    .where(and(...condiciones))
-    .orderBy(asc(technicalDocuments.orden), asc(technicalDocuments.titulo));
+  return datos(await (await api()).GET("/api/v1/contenido/documentos"));
 }
 
 /** Cuántos documentos hay reservados para profesionales, sin mostrar cuáles. */
 export async function documentosReservados(): Promise<number> {
-  const [fila] = await db
-    .select({ cantidad: sql<number>`count(*)::int` })
-    .from(technicalDocuments)
-    .where(
-      and(
-        eq(technicalDocuments.activo, true),
-        eq(technicalDocuments.soloProfesionales, true),
-      ),
-    );
-
-  return fila?.cantidad ?? 0;
+  return datos(await apiPublica.GET("/api/v1/contenido/documentos/reservados"));
 }
 
 export interface EventoPublico {
@@ -207,47 +172,19 @@ export interface EventoPublico {
  * no puede pasar. La inscripción invalida la etiqueta igual, así que el rato es
  * corto.
  */
-async function consultarEventosProximos(): Promise<EventoPublico[]> {
-  const filas = await db
-    .select({
-      id: events.id,
-      slug: events.slug,
-      titulo: events.titulo,
-      resumen: events.resumen,
-      imagenUrl: events.imagenUrl,
-      lugar: events.lugar,
-      inicia: events.inicia,
-      termina: events.termina,
-      cupo: events.cupo,
-      precio: events.precio,
-      soloProfesionales: events.soloProfesionales,
-      inscriptos: sql<number>`(
-        select count(*)::int from event_registrations er
-        where er.event_id = events.id
-          and er.estado in ('reservada', 'confirmada', 'asistio')
-      )`,
-    })
-    .from(events)
-    .where(and(eq(events.estado, "publicado"), gte(events.inicia, new Date())))
-    .orderBy(asc(events.inicia));
-
-  return filas.map((f) => ({ ...f, precio: Number(f.precio) }));
-}
-
 const eventosCacheados = cachearPublico(
-  consultarEventosProximos,
+  async () => datos(await apiPublica.GET("/api/v1/contenido/eventos")),
   ["eventos-proximos"],
   ETIQUETAS.eventos,
 );
 
 export async function eventosProximos(): Promise<EventoPublico[]> {
-  // El caché guarda JSON: las fechas vuelven como texto aunque el tipo diga
-  // `Date`, y todo lo que las formatea o las compara con hoy espera un `Date`.
-  return (await eventosCacheados()).map((e) => ({
-    ...e,
-    inicia: new Date(e.inicia),
-    termina: e.termina ? new Date(e.termina) : null,
-  }));
+  // El caché guarda JSON: las fechas vuelven como texto.
+  return (await eventosCacheados()).map(conFechas);
+}
+
+function conFechas<T extends { inicia: string; termina: string | null }>(e: T) {
+  return { ...e, inicia: new Date(e.inicia), termina: e.termina ? new Date(e.termina) : null };
 }
 
 export interface EventoConDetalle extends EventoPublico {
@@ -263,60 +200,10 @@ export interface EventoConDetalle extends EventoPublico {
   yaPaso: boolean;
 }
 
-export async function eventoPorSlug(
-  slug: string,
-): Promise<EventoConDetalle | null> {
-  const [evento] = await db
-    .select({
-      id: events.id,
-      slug: events.slug,
-      titulo: events.titulo,
-      resumen: events.resumen,
-      descripcion: events.descripcion,
-      imagenUrl: events.imagenUrl,
-      lugar: events.lugar,
-      inicia: events.inicia,
-      termina: events.termina,
-      cupo: events.cupo,
-      precio: events.precio,
-      soloProfesionales: events.soloProfesionales,
-      estado: events.estado,
-      inscriptos: sql<number>`(
-        select count(*)::int from event_registrations er
-        where er.event_id = events.id
-          and er.estado in ('reservada', 'confirmada', 'asistio')
-      )`,
-    })
-    .from(events)
-    .where(eq(events.slug, slug))
-    .limit(1);
-
-  if (!evento || evento.estado === "borrador") return null;
-
-  const sesion = await getSession();
-
-  const [mia] = sesion
-    ? await db
-        .select({
-          id: eventRegistrations.id,
-          estado: eventRegistrations.estado,
-        })
-        .from(eventRegistrations)
-        .where(
-          and(
-            eq(eventRegistrations.eventId, evento.id),
-            eq(eventRegistrations.userId, sesion.userId),
-          ),
-        )
-        .limit(1)
-    : [];
-
-  return {
-    ...evento,
-    precio: Number(evento.precio),
-    miInscripcion: mia ?? null,
-    yaPaso: evento.inicia.getTime() < Date.now(),
-  };
+export async function eventoPorSlug(slug: string): Promise<EventoConDetalle | null> {
+  const r = await (await api()).GET("/api/v1/contenido/eventos/{slug}", { params: { path: { slug } } });
+  if (r.response.status === 404) return null;
+  return conFechas(datos(r));
 }
 
 /**
@@ -333,21 +220,10 @@ export async function eventoVisible(slug: string): Promise<boolean> {
   cacheTag(ETIQUETAS.eventos);
   cacheLife("hours");
 
-  const [fila] = await db
-    .select({ estado: events.estado })
-    .from(events)
-    .where(eq(events.slug, slug))
-    .limit(1);
-  return Boolean(fila && fila.estado !== "borrador");
+  return datos(await apiPublica.GET("/api/v1/contenido/eventos/{slug}/visible", { params: { path: { slug } } }));
 }
 
 /** Algunos eventos visibles, para la muestra del build (ver la ficha). */
 export async function slugsDeEventosVisibles(limite: number): Promise<string[]> {
-  const filas = await db
-    .select({ slug: events.slug })
-    .from(events)
-    .where(sql`${events.estado} <> 'borrador'`)
-    .orderBy(desc(events.inicia))
-    .limit(limite);
-  return filas.map((f) => f.slug);
+  return datos(await apiPublica.GET("/api/v1/contenido/eventos-visibles", { params: { query: { limite } } }));
 }

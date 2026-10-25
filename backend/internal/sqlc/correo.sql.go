@@ -267,7 +267,7 @@ func (q *Queries) CrearSeguimiento(ctx context.Context, arg CrearSeguimientoPara
 
 const fichaPorCorreo = `-- name: FichaPorCorreo :one
 SELECT c.id, c.nombre, c.razon_social, c.cuit, c.tipo::text AS tipo, c.estado::text AS estado,
-  c.limite_credito, c.dias_credito, c.cuenta_bloqueada, c.motivo_bloqueo, c.telefono,
+  c.limite_credito, c.dias_credito, c.cuenta_bloqueada, c.motivo_bloqueo, c.telefono, c.price_list_id,
   (SELECT coalesce(sum(am.monto), 0) FROM account_movements am WHERE am.customer_id = c.id)::numeric AS saldo
 FROM customers c
 WHERE c.active AND lower(c.email) = lower($1::text)
@@ -287,6 +287,7 @@ type FichaPorCorreoRow struct {
 	CuentaBloqueada bool       `json:"cuentaBloqueada"`
 	MotivoBloqueo   *string    `json:"motivoBloqueo"`
 	Telefono        *string    `json:"telefono"`
+	PriceListID     *string    `json:"priceListId"`
 	Saldo           jsmath.Num `json:"saldo"`
 }
 
@@ -309,6 +310,7 @@ func (q *Queries) FichaPorCorreo(ctx context.Context, correo string) (FichaPorCo
 		&i.CuentaBloqueada,
 		&i.MotivoBloqueo,
 		&i.Telefono,
+		&i.PriceListID,
 		&i.Saldo,
 	)
 	return i, err

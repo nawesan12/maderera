@@ -11,6 +11,8 @@
   import EnLinea from "./EnLinea.svelte";
   import Visor from "./Visor.svelte";
   import Conversacion from "./Conversacion.svelte";
+  import PedidoDetectado from "./PedidoDetectado.svelte";
+  import { sesion } from "../lib/sesion.svelte";
   import { equipo } from "../lib/equipo.svelte";
 
   // Por remitente: si alguien permitió las imágenes de un remitente, las
@@ -218,6 +220,10 @@
                 </p>
               {/each}
             </div>
+          {/if}
+
+          {#if sesion.fichas && bandeja.rolActual !== "enviados" && bandeja.rolActual !== "borradores" && !m.sospecha}
+            <PedidoDetectado mensaje={m} nombre={ficha?.nombre} />
           {/if}
 
           {#if archivos.length}

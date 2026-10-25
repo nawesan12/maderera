@@ -25,7 +25,7 @@ WHERE active AND email IS NOT NULL AND lower(email) = ANY(sqlc.arg(correos)::tex
 -- es la suma de los movimientos (positivo = debe), igual que
 -- saldoDeCliente en lib/dal/credito.ts.
 SELECT c.id, c.nombre, c.razon_social, c.cuit, c.tipo::text AS tipo, c.estado::text AS estado,
-  c.limite_credito, c.dias_credito, c.cuenta_bloqueada, c.motivo_bloqueo, c.telefono,
+  c.limite_credito, c.dias_credito, c.cuenta_bloqueada, c.motivo_bloqueo, c.telefono, c.price_list_id,
   (SELECT coalesce(sum(am.monto), 0) FROM account_movements am WHERE am.customer_id = c.id)::numeric AS saldo
 FROM customers c
 WHERE c.active AND lower(c.email) = lower(sqlc.arg(correo)::text)

@@ -3,6 +3,7 @@ package correo
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -315,6 +316,24 @@ func TestSospecha(t *testing.T) {
 		t.Errorf("no tendría que ser sospechoso: %+v", m.Sospecha)
 	}
 }
+
+func TestDetectarRenglones(t *testing.T) {
+	texto := "Hola, necesito 14 placas de melamina blanca 18 mm y 6 estantes de 560 × 350.\n" +
+		"También 40 tirantes de pino 2x4, 3 bolsas de tornillos para madera.\n" +
+		"> 99 placas de algo citado\n" +
+		"Confirmame si el corte lo tienen para el jueves."
+	got := detectarRenglones(texto)
+	var buscados []string
+	for _, r := range got {
+		buscados = append(buscados, fmtCantidad(r.Cantidad)+" "+r.Buscado)
+	}
+	quiero := "14 melamina blanca|40 tirante pino 2x4|3 tornillos madera"
+	if strings.Join(buscados, "|") != quiero {
+		t.Errorf("renglones %q, quería %q", strings.Join(buscados, "|"), quiero)
+	}
+}
+
+func fmtCantidad(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }
 
 func TestNombreUnico(t *testing.T) {
 	usados := map[string]int{}

@@ -202,6 +202,12 @@ export const api = {
       throw e;
     }
   },
+  presupuesto: (texto: string, correo: string) =>
+    pedir<{ renglones: { texto: string; cantidad: number; buscado: string; producto?: { id: string; nombre: string; unidad: string; precio?: string; enlace: string }; alternativas: { id: string; nombre: string; unidad: string; precio?: string; enlace: string }[] }[]; lista?: string; abrir: string }>(
+      "POST",
+      "/api/presupuesto",
+      { texto, correo },
+    ),
   equipo: () => pedir<{ personas: Persona[]; dueno?: string }>("GET", "/api/equipo"),
   hilos: (hilos: string[]) =>
     pedir<Record<string, EstadoHilo>>("GET", "/api/hilos?" + new URLSearchParams(hilos.map((h) => ["h", h]))),

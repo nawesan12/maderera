@@ -112,6 +112,8 @@ func (a *App) Rutas() http.Handler {
 	m.HandleFunc("GET /api/cliente", a.conSesion(a.cliente))
 	m.HandleFunc("GET /api/contactos", a.conSesion(a.contactos))
 
+	m.HandleFunc("POST /api/presupuesto", a.conSesion(a.presupuesto))
+
 	m.HandleFunc("GET /api/equipo", a.conSesion(a.equipo))
 	m.HandleFunc("GET /api/hilos", a.conSesion(a.hilos))
 	m.HandleFunc("PUT /api/hilos", a.conSesion(a.guardarHilo))

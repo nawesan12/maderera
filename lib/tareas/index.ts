@@ -11,8 +11,6 @@ import { limpiarVentanasViejas } from "@/lib/limites";
 import { enviarRecordatorios } from "@/lib/notificaciones/eventos";
 import { avisarAlPanel } from "@/lib/notificaciones/push";
 import { pendientesDelRol } from "@/lib/dal/admin/pendientes";
-import { candidatosDeBajaDelSistema } from "@/lib/dal/admin/products";
-import { mesesSinVenderDelSistema } from "@/lib/dal/admin/parametros-catalogo";
 import { sincronizarPlantillas } from "@/lib/whatsapp/catalogo";
 import { proveedorWhatsapp } from "@/lib/whatsapp";
 import { periodoDe, type Frecuencia } from "./periodo";
@@ -106,29 +104,8 @@ export const TAREAS = {
     },
   },
 
-  semanal: {
-    frecuencia: "semana",
-    // Las reseñas de Google las trae el worker de Go (tarea «resenas-google»).
-    descripcion: "Avisa cuántos productos son candidatos a baja.",
-    ejecutar: async () => {
-      const candidatos = await candidatosDeBajaDelSistema({
-        mesesSinVender: await mesesSinVenderDelSistema(),
-      });
-
-      if (candidatos.length > 0) {
-        await avisarAlPanel({
-          titulo: `${candidatos.length} ${candidatos.length === 1 ? "producto para revisar" : "productos para revisar"}`,
-          cuerpo: "No se venden, no tienen stock o no tienen precio. Revisá si se dan de baja.",
-          url: "/admin/productos/candidatos",
-          etiqueta: "candidatos-baja",
-        });
-      }
-
-      return {
-        candidatosDeBaja: candidatos.length,
-      };
-    },
-  },
+  // La semanal (reseñas de Google y candidatos a baja) la corre el worker de
+  // Go: tareas «resenas-google» y «candidatos-baja».
 } satisfies Record<string, Tarea>;
 
 export type NombreDeTarea = keyof typeof TAREAS;

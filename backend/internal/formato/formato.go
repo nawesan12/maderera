@@ -3,6 +3,8 @@ package formato
 
 import (
 	"math"
+
+	"mjbj/internal/jsmath"
 	"strconv"
 	"strings"
 )
@@ -42,4 +44,24 @@ func Miles(d string) string {
 		b.WriteString(d[i : i+3])
 	}
 	return b.String()
+}
+
+// Cantidad es formatearCantidad (lib/unidades.ts): redondeada a 3 decimales
+// como cantidadDeStock y con el formato es-AR («1.234,568», «-2,5»).
+func Cantidad(v float64) string {
+	v = jsmath.Round(v*1000) / 1000
+	if v == 0 {
+		return "0" // también el -0
+	}
+	signo := ""
+	if v < 0 {
+		signo, v = "-", -v
+	}
+	t := strconv.FormatFloat(v, 'f', 3, 64)
+	entero, dec, _ := strings.Cut(t, ".")
+	dec = strings.TrimRight(dec, "0")
+	if dec != "" {
+		dec = "," + dec
+	}
+	return signo + Miles(entero) + dec
 }

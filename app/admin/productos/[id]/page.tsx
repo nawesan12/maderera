@@ -17,8 +17,8 @@ import {
   listarRubrosAdmin,
   obtenerProductoAdmin,
   sugeridosDelProducto,
+  imputacionesUsadas,
 } from "@/lib/dal/admin/products";
-import { imputacionesUsadas } from "@/lib/dal/admin/parametros-catalogo";
 import { FormularioProducto } from "../formulario";
 import { ProductosSugeridos } from "../sugeridos";
 

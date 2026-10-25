@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowLeft, PackageX } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { candidatosDeBaja } from "@/lib/dal/admin/products";
-import { mesesSinVenderParaBaja } from "@/lib/dal/admin/parametros-catalogo";
 import { AlternarBaja } from "./alternar";
 import { UmbralDeBaja } from "./umbral";
 
@@ -23,8 +22,7 @@ export const metadata = { title: "Candidatos a dar de baja" };
  * cambia lo que ve todo el equipo en esta pantalla.
  */
 export default async function CandidatosPage() {
-  const meses = await mesesSinVenderParaBaja();
-  const candidatos = await candidatosDeBaja({ mesesSinVender: meses });
+  const { meses, candidatos } = await candidatosDeBaja();
 
   return (
     <div className="space-y-6">

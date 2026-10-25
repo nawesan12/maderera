@@ -3,8 +3,8 @@ import { ArrowLeft } from "lucide-react";
 import {
   listarCategoriasAdmin,
   listarRubrosAdmin,
+  imputacionesUsadas,
 } from "@/lib/dal/admin/products";
-import { imputacionesUsadas } from "@/lib/dal/admin/parametros-catalogo";
 import { FormularioProducto } from "../formulario";
 
 export default async function NuevoProductoPage() {

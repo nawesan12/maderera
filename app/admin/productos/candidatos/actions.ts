@@ -1,30 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { guardarMesesSinVender } from "@/lib/dal/admin/parametros-catalogo";
-import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
-import { requireStaffRole } from "@/lib/dal/session";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 
 /**
- * Cambia desde cuántos meses sin venta se señala un producto.
- *
- * Queda en la bitácora: es un parámetro que cambia qué ve todo el equipo en
- * esta pantalla, y en un mes nadie se acuerda de quién lo movió ni por qué la
- * lista pasó de cinco a cuarenta.
+ * Cambia desde cuántos meses sin venta se señala un producto. Solo el admin,
+ * y queda en la bitácora (lo hace la API de Go): es un parámetro que cambia
+ * qué ve todo el equipo en esta pantalla.
  */
 export async function cambiarMesesSinVender(meses: number) {
-  const usuario = await requireStaffRole("admin");
-
-  const resultado = await guardarMesesSinVender(meses);
-  if (resultado.error) return resultado;
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "editar",
-    entidad: "producto",
-    descripcion: `Cambió el umbral de candidatos a baja a ${meses} meses sin ventas`,
-  });
-
+  if (!Number.isInteger(meses)) return { error: "Poné un número de meses entre 1 y 60." };
+  const r = await (await api()).PUT("/api/v1/admin/productos-candidatos", { body: { meses } });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Poné un número de meses entre 1 y 60.") };
   revalidatePath("/admin/productos/candidatos");
-  return resultado;
+  return { ok: r.data.ok };
 }

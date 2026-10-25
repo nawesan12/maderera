@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"mjbj/internal/cola"
 	"mjbj/internal/contenido"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/productos"
 	"mjbj/internal/push"
 	"mjbj/internal/revalidar"
 	"mjbj/internal/sqlc"
@@ -69,6 +71,31 @@ func correrWorker() error {
 				return nil, err
 			}
 			return map[string]any{"resenasNuevas": r.Nuevas, "resenasError": nil}, nil
+		},
+	}, {
+		// Avisa cuántos productos son candidatos a baja (no da de baja nada).
+		Nombre: "candidatos-baja", Frecuencia: tareas.Semana, DesdeHora: 7, DesdeDia: time.Monday,
+		Ejecutar: func(ctx context.Context) (map[string]any, error) {
+			s := productos.Nuevo(pool, nil, log)
+			meses, err := s.MesesSinVender(ctx)
+			if err != nil {
+				return nil, err
+			}
+			c, err := s.Candidatos(ctx, meses, time.Now())
+			if err != nil {
+				return nil, err
+			}
+			if n := len(c); n > 0 {
+				titulo := strconv.Itoa(n) + " productos para revisar"
+				if n == 1 {
+					titulo = "1 producto para revisar"
+				}
+				avisos.Avisar(ctx, push.Aviso{
+					Titulo: titulo, Cuerpo: "No se venden, no tienen stock o no tienen precio. Revisá si se dan de baja.",
+					URL: "/admin/productos/candidatos", Etiqueta: "candidatos-baja",
+				})
+			}
+			return map[string]any{"candidatosDeBaja": len(c)}, nil
 		},
 	}}
 

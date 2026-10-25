@@ -8,6 +8,7 @@ import (
 
 	"mjbj/internal/api/catalogoapi"
 	"mjbj/internal/api/contenidoapi"
+	"mjbj/internal/api/productosapi"
 	"mjbj/internal/api/sesionapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/catalogo"
@@ -15,6 +16,7 @@ import (
 	"mjbj/internal/email"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/productos"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/subidas"
 	"mjbj/internal/vivo"
@@ -105,10 +107,20 @@ func correrAPI() error {
 		contenidoapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	productosapi.HandlerWithOptions(
+		productosapi.NewStrictHandlerWithOptions(productos.NuevaAPI(productos.Nuevo(pool, subidas.Nuevo(cfg.Subidas), log)),
+			[]productosapi.StrictMiddlewareFunc{plataforma.ConPedido[productosapi.StrictHandlerFunc]},
+			productosapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		productosapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
-	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger} {
+	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger, productosapi.GetSwagger} {
 		s, err := spec()
 		if err != nil {
 			return err

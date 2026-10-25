@@ -7,3 +7,4 @@ package api
 //go:generate go tool oapi-codegen -config sesion.gen.yaml sesion.yaml
 //go:generate go tool oapi-codegen -config catalogo.gen.yaml catalogo.yaml
 //go:generate go tool oapi-codegen -config contenido.gen.yaml contenido.yaml
+//go:generate go tool oapi-codegen -config productos.gen.yaml productos.yaml

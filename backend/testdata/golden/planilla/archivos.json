@@ -1,0 +1,2068 @@
+[
+ {
+  "archivo": "utf8-bom-puntoycoma.csv",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Producto",
+     "Medida",
+     "Categoria",
+     "Precio lista",
+     "Precio profesional"
+    ],
+    [
+     "FEN18",
+     "Fenólico 18 mm",
+     "2440 x 1220",
+     "Placas",
+     "84.500,50",
+     "80.275,48"
+    ],
+    [
+     "TIR23",
+     "Tirante 2\" x 3\"",
+     "3,05 m",
+     "Maderas",
+     "12.345,67",
+     "11.111,10"
+    ],
+    [
+     "MDF",
+     "MDF crudo, de 15 mm\ncon salto adentro",
+     "1830 x 2600",
+     "Placas",
+     "$ 1.234",
+     ""
+    ],
+    [
+     "PIN",
+     "Pino 1\" x 4\"",
+     "",
+     "Maderas",
+     "1,234.56",
+     "1234.5"
+    ],
+    [
+     "CLA",
+     "Clavos",
+     "",
+     "Ferretería",
+     "96.500",
+     "(1.500,00)"
+    ],
+    [
+     "SINPRECIO",
+     "Algo",
+     "",
+     "",
+     "abc",
+     "-"
+    ],
+    [
+     "",
+     "Fila sin código",
+     "",
+     "",
+     "100",
+     "200"
+    ],
+    [
+     "NEG",
+     "Negativo",
+     "",
+     "",
+     "-5",
+     "-0,001"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "FEN18",
+    "precioGeneral": "84500.50",
+    "precioProfesional": "80275.48"
+   },
+   {
+    "linea": 3,
+    "sku": "TIR23",
+    "precioGeneral": "12345.67",
+    "precioProfesional": "11111.10"
+   },
+   {
+    "linea": 4,
+    "sku": "MDF",
+    "precioGeneral": "1234.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 5,
+    "sku": "PIN",
+    "precioGeneral": "1234.56",
+    "precioProfesional": "1234.50"
+   },
+   {
+    "linea": 6,
+    "sku": "CLA",
+    "precioGeneral": "96500.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 7,
+    "sku": "SINPRECIO",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   },
+   {
+    "linea": 8,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "Esta fila no tiene código de producto."
+   },
+   {
+    "linea": 9,
+    "sku": "NEG",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   }
+  ]
+ },
+ {
+  "archivo": "utf8-coma.csv",
+  "leida": {
+   "filas": [
+    [
+     "sku",
+     "producto",
+     "precio"
+    ],
+    [
+     "A1",
+     "Tabla, cepillada",
+     "84500.5"
+    ],
+    [
+     "A2",
+     "Con \"comillas\" adentro",
+     "1.234"
+    ],
+    [
+     "A3",
+     "Machimbre 1/2\"",
+     "84.500"
+    ],
+    [
+     "A4",
+     "campo con\nsalto",
+     "12",
+     "5"
+    ],
+    [
+     "A5",
+     "Sin cerrar",
+     "1.000"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "A1",
+    "precioGeneral": "84500.50",
+    "precioProfesional": null
+   },
+   {
+    "linea": 3,
+    "sku": "A2",
+    "precioGeneral": "1234.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 4,
+    "sku": "A3",
+    "precioGeneral": "84500.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 5,
+    "sku": "A4",
+    "precioGeneral": "12.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 6,
+    "sku": "A5",
+    "precioGeneral": "1000.00",
+    "precioProfesional": null
+   }
+  ]
+ },
+ {
+  "archivo": "latin1-tabulador.csv",
+  "leida": {
+   "filas": [
+    [
+     "Código",
+     "Descripción",
+     "Precio lista",
+     "Precio profesional"
+    ],
+    [
+     "SKU-Ñ1",
+     "Cañuelas — Pino",
+     "$ 1.234",
+     "1.100"
+    ],
+    [
+     "SKU-Á2",
+     "Álamo «seco»",
+     "1234,5",
+     ""
+    ],
+    [
+     "SKU-3",
+     "Müller € 2½",
+     "€ 2.500,00",
+     "2.400,00"
+    ],
+    [
+     "SKU-4",
+     "“Comillas tipográficas”",
+     "1,5",
+     "1,25"
+    ]
+   ],
+   "codificacion": "windows-1252"
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "windows1252-todos.csv",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Todos los bytes altos"
+    ],
+    [
+     "X",
+     "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ",
+     "1"
+    ]
+   ],
+   "codificacion": "windows-1252"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "X",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   }
+  ]
+ },
+ {
+  "archivo": "utf8-roto.csv",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Producto",
+     "Precio lista"
+    ],
+    [
+     "R1",
+     "Cañuelas",
+     "10,50"
+    ],
+    [
+     "R2",
+     "â‚",
+     "5"
+    ]
+   ],
+   "codificacion": "windows-1252"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "R1",
+    "precioGeneral": "10.50",
+    "precioProfesional": null
+   },
+   {
+    "linea": 3,
+    "sku": "R2",
+    "precioGeneral": "5.00",
+    "precioProfesional": null
+   }
+  ]
+ },
+ {
+  "archivo": "utf8-doble-bom.csv",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Precio"
+    ],
+    [
+     "B1",
+     "10"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "B1",
+    "precioGeneral": "10.00",
+    "precioProfesional": null
+   }
+  ]
+ },
+ {
+  "archivo": "utf8-triple-bom.csv",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Precio"
+    ],
+    [
+     "B1",
+     "10"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "B1",
+    "precioGeneral": "10.00",
+    "precioProfesional": null
+   }
+  ]
+ },
+ {
+  "archivo": "utf8-cuadruple-bom.csv",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Precio"
+    ],
+    [
+     "B1",
+     "10"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "B1",
+    "precioGeneral": "10.00",
+    "precioProfesional": null
+   }
+  ]
+ },
+ {
+  "archivo": "solo-encabezado.csv",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Producto",
+     "Medida",
+     "Categoria",
+     "Precio lista",
+     "Precio profesional"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "vacio.csv",
+  "leida": {
+   "filas": [],
+   "codificacion": "utf-8"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "solo-saltos.csv",
+  "leida": {
+   "filas": [],
+   "codificacion": "utf-8"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "sin-sku.csv",
+  "leida": {
+   "filas": [
+    [
+     "Producto",
+     "Precio lista"
+    ],
+    [
+     "Fenólico",
+     "100"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "solo-precio.csv",
+  "leida": {
+   "filas": [
+    [
+     "Código SKU",
+     "Precio"
+    ],
+    [
+     "P1",
+     "1.000"
+    ],
+    [
+     "P2",
+     ""
+    ],
+    [
+     "P3",
+     "-3"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "P1",
+    "precioGeneral": "1000.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 3,
+    "sku": "P2",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   },
+   {
+    "linea": 4,
+    "sku": "P3",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   }
+  ]
+ },
+ {
+  "archivo": "cr-solo.csv",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Precio lista"
+    ],
+    [
+     "C1",
+     "10"
+    ],
+    [
+     "C2",
+     "20"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "C1",
+    "precioGeneral": "10.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 3,
+    "sku": "C2",
+    "precioGeneral": "20.00",
+    "precioProfesional": null
+   }
+  ]
+ },
+ {
+  "archivo": "comillas-sueltas.csv",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Medida",
+     "Precio lista"
+    ],
+    [
+     "Q1",
+     "2\" x 4\"",
+     "10"
+    ],
+    [
+     "Q2",
+     "3 x 5\"",
+     "20"
+    ],
+    [
+     "Q3",
+     "",
+     "30"
+    ],
+    [
+     "Q4",
+     "x\"y\"z",
+     "40"
+    ],
+    [
+     "Q5",
+     "algo",
+     "50"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "Q1",
+    "precioGeneral": "10.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 3,
+    "sku": "Q2",
+    "precioGeneral": "20.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 4,
+    "sku": "Q3",
+    "precioGeneral": "30.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 5,
+    "sku": "Q4",
+    "precioGeneral": "40.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 6,
+    "sku": "Q5",
+    "precioGeneral": "50.00",
+    "precioProfesional": null
+   }
+  ]
+ },
+ {
+  "archivo": "sin-salto-final.csv",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Precio lista"
+    ],
+    [
+     "F1",
+     "1"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "F1",
+    "precioGeneral": "1.00",
+    "precioProfesional": null
+   }
+  ]
+ },
+ {
+  "archivo": "empate-separadores.csv",
+  "leida": {
+   "filas": [
+    [
+     "a",
+     "b,c\tSKU"
+    ],
+    [
+     "x",
+     "y,z\t1"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "y,z\t1",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   }
+  ]
+ },
+ {
+  "archivo": "espacios-unicode.csv",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Precio lista"
+    ],
+    [
+     "U1",
+     "10"
+    ],
+    [
+     "U2",
+     "5"
+    ],
+    [
+     "U3",
+     "7"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "U1",
+    "precioGeneral": "10.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 3,
+    "sku": "U2",
+    "precioGeneral": "5.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 4,
+    "sku": "U3",
+    "precioGeneral": "7.00",
+    "precioProfesional": null
+   }
+  ]
+ },
+ {
+  "archivo": "completo.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Producto",
+     "Precio lista",
+     "Precio profesional"
+    ],
+    [
+     "007",
+     "Fenólico 18 mm",
+     "84500.5",
+     "80275.475",
+     "2026-09-03T00:00:00.000Z",
+     "2026-09-03T18:00:00.000Z"
+    ],
+    [
+     "con espacios",
+     "",
+     "12",
+     "",
+     "",
+     "Textocon formato"
+    ],
+    [
+     "VERDADERO",
+     "FALSO",
+     "#N/A",
+     "escrito adentro",
+     "SKUx",
+     ""
+    ],
+    [
+     "Tom & Jerry <b> \"x\" 'y'",
+     "Línea&#10;dos &#x41;   &#65536; &unknown;",
+     "",
+     "Pino",
+     "Con <cdata> & todo",
+     ""
+    ],
+    [
+     "1900-02-27T00:00:00.000Z",
+     "1900-02-27T00:00:00.000Z",
+     "1900-02-28T00:00:00.000Z",
+     "1899-12-30T12:00:00.000Z",
+     "1899-12-31T00:00:00.000Z",
+     "2023-03-14T23:59:59.914Z"
+    ],
+    [
+     "46269",
+     "unodos",
+     "0",
+     "-5",
+     "abc",
+     "46269"
+    ],
+    [
+     "Producto",
+     "Precio lista",
+     "Ñandú _x000D_ escape de Excel",
+     "",
+     "SKU",
+     ""
+    ],
+    [
+     "sin ref",
+     "",
+     "",
+     "pisada",
+     "sigue"
+    ],
+    [],
+    [
+     "",
+     "",
+     ""
+    ],
+    [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "col 27"
+    ],
+    [
+     "15",
+     "hola"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Precios\""
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "007",
+    "precioGeneral": "84500.50",
+    "precioProfesional": "80275475.00"
+   },
+   {
+    "linea": 3,
+    "sku": "con espacios",
+    "precioGeneral": "12.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 4,
+    "sku": "VERDADERO",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   },
+   {
+    "linea": 5,
+    "sku": "Tom & Jerry <b> \"x\" 'y'",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   },
+   {
+    "linea": 6,
+    "sku": "1900-02-27T00:00:00.000Z",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   },
+   {
+    "linea": 7,
+    "sku": "46269",
+    "precioGeneral": "0.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 8,
+    "sku": "Producto",
+    "precioGeneral": "0.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 9,
+    "sku": "sin ref",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   },
+   {
+    "linea": 10,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "Esta fila no tiene código de producto."
+   },
+   {
+    "linea": 11,
+    "sku": "15",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   }
+  ]
+ },
+ {
+  "archivo": "completo-guardado.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Producto",
+     "Precio lista",
+     "Precio profesional"
+    ],
+    [
+     "007",
+     "Fenólico 18 mm",
+     "84500.5",
+     "80275.475",
+     "2026-09-03T00:00:00.000Z",
+     "2026-09-03T18:00:00.000Z"
+    ],
+    [
+     "con espacios",
+     "",
+     "12",
+     "",
+     "",
+     "Textocon formato"
+    ],
+    [
+     "VERDADERO",
+     "FALSO",
+     "#N/A",
+     "escrito adentro",
+     "SKUx",
+     ""
+    ],
+    [
+     "Tom & Jerry <b> \"x\" 'y'",
+     "Línea&#10;dos &#x41;   &#65536; &unknown;",
+     "",
+     "Pino",
+     "Con <cdata> & todo",
+     ""
+    ],
+    [
+     "1900-02-27T00:00:00.000Z",
+     "1900-02-27T00:00:00.000Z",
+     "1900-02-28T00:00:00.000Z",
+     "1899-12-30T12:00:00.000Z",
+     "1899-12-31T00:00:00.000Z",
+     "2023-03-14T23:59:59.914Z"
+    ],
+    [
+     "46269",
+     "unodos",
+     "0",
+     "-5",
+     "abc",
+     "46269"
+    ],
+    [
+     "Producto",
+     "Precio lista",
+     "Ñandú _x000D_ escape de Excel",
+     "",
+     "SKU",
+     ""
+    ],
+    [
+     "sin ref",
+     "",
+     "",
+     "pisada",
+     "sigue"
+    ],
+    [],
+    [
+     "",
+     "",
+     ""
+    ],
+    [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "col 27"
+    ],
+    [
+     "15",
+     "hola"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Precios\""
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "007",
+    "precioGeneral": "84500.50",
+    "precioProfesional": "80275475.00"
+   },
+   {
+    "linea": 3,
+    "sku": "con espacios",
+    "precioGeneral": "12.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 4,
+    "sku": "VERDADERO",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   },
+   {
+    "linea": 5,
+    "sku": "Tom & Jerry <b> \"x\" 'y'",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   },
+   {
+    "linea": 6,
+    "sku": "1900-02-27T00:00:00.000Z",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   },
+   {
+    "linea": 7,
+    "sku": "46269",
+    "precioGeneral": "0.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 8,
+    "sku": "Producto",
+    "precioGeneral": "0.00",
+    "precioProfesional": null
+   },
+   {
+    "linea": 9,
+    "sku": "sin ref",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   },
+   {
+    "linea": 10,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "Esta fila no tiene código de producto."
+   },
+   {
+    "linea": 11,
+    "sku": "15",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   }
+  ]
+ },
+ {
+  "archivo": "precios.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "SKU",
+     "Producto",
+     "Precio lista",
+     "Precio profesional"
+    ],
+    [
+     "FEN18",
+     "Fenólico",
+     "84500.5",
+     "80275.475"
+    ],
+    [
+     "12345",
+     "Tirante 2\" x 3\"",
+     "12.345,67"
+    ],
+    [
+     "SIN",
+     "",
+     "#VALUE!",
+     "-10"
+    ],
+    [
+     "",
+     "Fenólico",
+     "1"
+    ],
+    [
+     "FEC",
+     "",
+     "2026-09-03T00:00:00.000Z",
+     "0.125"
+    ],
+    [
+     "GRANDE",
+     "",
+     "1E+21",
+     "123456789012345680000"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Lista de precios\""
+  },
+  "filas": [
+   {
+    "linea": 2,
+    "sku": "FEN18",
+    "precioGeneral": "84500.50",
+    "precioProfesional": "80275475.00"
+   },
+   {
+    "linea": 3,
+    "sku": "12345",
+    "precioGeneral": "12345.67",
+    "precioProfesional": null
+   },
+   {
+    "linea": 4,
+    "sku": "SIN",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "No se pudo leer ningún precio de esta fila."
+   },
+   {
+    "linea": 5,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "Esta fila no tiene código de producto."
+   },
+   {
+    "linea": 6,
+    "sku": "FEC",
+    "precioGeneral": null,
+    "precioProfesional": "125.00"
+   },
+   {
+    "linea": 7,
+    "sku": "GRANDE",
+    "precioGeneral": "121.00",
+    "precioProfesional": "123456789012345683968.00"
+   }
+  ]
+ },
+ {
+  "archivo": "hojas-orden.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "soy sheet10"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Primera\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "sin-hoja.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: El .xlsx no tiene ninguna hoja que se pueda leer."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "sin-workbook.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "1"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja 1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "sin-compartidos.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "",
+     "2"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "hoja-con-comillas.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "1"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Precios \"2026\" & más\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "hoja-vacia.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": []
+ },
+ {
+  "archivo": "hoja-una-fila.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "",
+     "sola"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "prefijo-x.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-raro.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "ab",
+     "  cdata  ",
+     "xz",
+     "tab"
+    ],
+    [
+     "tab",
+     "simples",
+     "espacios",
+     "x"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "xml-permisivo.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "1",
+     "2"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "xml-sin-cerrar-comentario.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: Comment is not closed."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-sin-cerrar-etiqueta.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: readTagExp returned undefined at position 22. Context: \"<worksheet><sheetData><row r=\"1\"\""
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-sin-cerrar-cdata.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: CDATA is not closed."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-sin-cerrar-cierre.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: Closing Tag is not closed."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-sin-cerrar-pi.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: Pi Tag is not closed."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-constructor.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: [SECURITY] Invalid name: \"constructor\" is a reserved JavaScript keyword that could cause prototype pollution"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-cierre-proto.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: [SECURITY] Invalid name: \"__proto__\" is a reserved JavaScript keyword that could cause prototype pollution"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-tostring.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "1"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "xml-text.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: Invalid tag name: #text"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-anidado.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: Maximum nested tags exceeded"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-anidado-justo.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-doctype-doble.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: Multiple DOCTYPE declarations found."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-doctype-malo.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: Invalid Tag instead of DOCTYPE"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-doctype-abierto.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: Invalid DOCTYPE"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-doctype-cuerpo.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "ok"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "xml-doctype-entidad.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "MJBJ"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "estilos-formatcode-etiqueta.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "1"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "xml-doctype-invalido.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: Invalid DOCTYPE"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-version-11.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "a&#1;b&#9;cde"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "xml-version-10.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "ab&#9;cdefghi"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "xml-entidades-ventana.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "&xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; &yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy; &amp &;amp; && <😀>"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "xml-atributos.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: readTagExp returned undefined at position 150. Context: \"1\"><v>dos r</v></c><c r=E1><v>sin comillas</v></c><c r=\"F1 t=\"s\"><v>0</v></c><c r=\"G1\" s=\"1&amp;\"><v\""
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-arrays.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx · hoja \"Hoja 1\""
+  },
+  "filas": []
+ },
+ {
+  "archivo": "xml-celda-texto.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "",
+     "",
+     "",
+     "ok"
+    ],
+    [],
+    [
+     "con attr",
+     "",
+     "t con attr"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "xml-arroba.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "",
+     "",
+     "tag arroba",
+     "",
+     ""
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Real\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "xml-sheet-nombre-raro.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "1"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja 1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "estilos-raros.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "46269",
+     "2026-09-03T00:00:00.000Z",
+     "46269",
+     "2026-09-03T00:00:00.000Z",
+     "2026-09-03T00:00:00.000Z",
+     "46269"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "estilos-un-xf.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "2026-09-03T12:00:00.000Z"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "estilos-vacios.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "46269"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "fecha-enorme.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: Invalid time value"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "fecha-lejana.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "9999-12-30T00:00:00.000Z",
+     "9999-12-31T12:00:00.000Z",
+     "+275690-09-10T00:00:00.000Z",
+     "1899-12-30T00:00:00.000Z",
+     "1900-01-15T00:00:00.000Z"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "zip-descriptor.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "zip"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "zip-extras.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "zip"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "zip-comentario.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "zip"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "zip-prefijo.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: El .xlsx no tiene ninguna hoja que se pueda leer."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "zip64.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: El archivo usa el formato Zip64, que no se puede leer. Guardalo de nuevo desde Excel."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "zip-offset-afuera.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: Offset is outside the bounds of the DataView"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "zip-offset-corrido.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: El .xlsx no tiene ninguna hoja que se pueda leer."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "zip-cantidad-de-mas.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "zip"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "zip-cantidad-cero.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: El .xlsx no tiene ninguna hoja que se pueda leer."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "zip-solo-pk.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: El archivo no es un .xlsx válido: no se encontró el índice interno."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "zip-sin-indice.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: El archivo no es un .xlsx válido: no se encontró el índice interno."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "zip-truncado.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: El archivo no es un .xlsx válido: no se encontró el índice interno."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "zip-deflate-truncado.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: unexpected end of file"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "zip-deflate-roto.xlsx",
+  "leida": {
+   "filas": [],
+   "codificacion": "xlsx",
+   "error": "No se pudo abrir el Excel: invalid block type"
+  },
+  "filas": []
+ },
+ {
+  "archivo": "zip-metodo-raro.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "zip"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "zip-nombre-latin1.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "la cero"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "zip-duplicado.xlsx",
+  "leida": {
+   "filas": [
+    [
+     "la segunda gana"
+    ]
+   ],
+   "codificacion": "xlsx · hoja \"Hoja1\""
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "viejo.xls",
+  "leida": {
+   "filas": [],
+   "codificacion": "xls",
+   "error": "Esto es un Excel viejo (.xls). Hace falta un Excel (.xlsx) o un CSV: si el sistema anterior solo exporta a este formato, abrilo en Excel y guardalo como .xlsx."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "casi-ole.xls",
+  "leida": {
+   "filas": [
+    [
+     "ÐÏ\u0011à¡±\u001a"
+    ]
+   ],
+   "codificacion": "windows-1252"
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ },
+ {
+  "archivo": "documento.pdf",
+  "leida": {
+   "filas": [],
+   "codificacion": "pdf",
+   "error": "Esto es un PDF. Hace falta un Excel (.xlsx) o un CSV: si el sistema anterior solo exporta a este formato, abrilo en Excel y guardalo como .xlsx."
+  },
+  "filas": []
+ },
+ {
+  "archivo": "casi-pdf.csv",
+  "leida": {
+   "filas": [
+    [
+     "%PD",
+     "F"
+    ],
+    [
+     "1",
+     "2"
+    ]
+   ],
+   "codificacion": "utf-8"
+  },
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
+ }
+]

@@ -194,6 +194,61 @@ func (q *Queries) ClientesEntreCorreos(ctx context.Context, correos []string) ([
 	return items, nil
 }
 
+const correosParaBuscar = `-- name: CorreosParaBuscar :many
+SELECT DISTINCT lower(email)::text AS correo FROM (
+  SELECT c.email FROM customers c
+  WHERE c.active AND c.email IS NOT NULL AND c.email <> '' AND (
+    ($1::text <> '' AND replace(c.cuit, '-', '') = $1::text)
+    OR (length($2::text) >= 3 AND (c.nombre ILIKE '%' || $2::text || '%' OR c.razon_social ILIKE '%' || $2::text || '%'))
+  )
+  UNION ALL
+  SELECT coalesce(nullif(c.email, ''), o.contacto_email) FROM orders o
+  LEFT JOIN customers c ON c.id = o.customer_id
+  WHERE $3::text <> '' AND o.numero = $3::text
+  UNION ALL
+  SELECT coalesce(nullif(c.email, ''), q.contacto_email) FROM quotes q
+  LEFT JOIN customers c ON c.id = q.customer_id
+  WHERE $4::text <> '' AND q.numero = $4::text
+) t
+WHERE email IS NOT NULL AND email <> ''
+LIMIT 20
+`
+
+type CorreosParaBuscarParams struct {
+	Cuit        string `json:"cuit"`
+	Nombre      string `json:"nombre"`
+	Pedido      string `json:"pedido"`
+	Presupuesto string `json:"presupuesto"`
+}
+
+// La búsqueda del correo por cliente, CUIT o número de pedido: los correos
+// de las fichas que coinciden, para buscar también lo que mandaron o se
+// les mandó aunque el texto no lo diga.
+func (q *Queries) CorreosParaBuscar(ctx context.Context, arg CorreosParaBuscarParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, correosParaBuscar,
+		arg.Cuit,
+		arg.Nombre,
+		arg.Pedido,
+		arg.Presupuesto,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var correo string
+		if err := rows.Scan(&correo); err != nil {
+			return nil, err
+		}
+		items = append(items, correo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const crearNota = `-- name: CrearNota :one
 INSERT INTO correo_notas (casilla, hilo, autor_id, autor, texto)
 VALUES ($1, $2, nullif($3::text, ''), $4, $5)
@@ -620,6 +675,53 @@ func (q *Queries) ProveedoresEntreCorreos(ctx context.Context, correos []string)
 			return nil, err
 		}
 		items = append(items, correo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const remitosDeCliente = `-- name: RemitosDeCliente :many
+SELECT d.id, d.numero, d.estado::text AS estado, d.tipo::text AS tipo, o.numero AS pedido
+FROM deliveries d
+JOIN orders o ON o.id = d.order_id
+WHERE o.customer_id = $1 AND (
+  (d.estado = 'entregada' AND d.firmado_at IS NULL) OR d.estado = 'preparada'
+)
+ORDER BY d.created_at DESC
+LIMIT 10
+`
+
+type RemitosDeClienteRow struct {
+	ID     string `json:"id"`
+	Numero string `json:"numero"`
+	Estado string `json:"estado"`
+	Tipo   string `json:"tipo"`
+	Pedido string `json:"pedido"`
+}
+
+// Los remitos que piden algo: entregados sin firmar, o preparados que
+// esperan el retiro.
+func (q *Queries) RemitosDeCliente(ctx context.Context, customerID *string) ([]RemitosDeClienteRow, error) {
+	rows, err := q.db.Query(ctx, remitosDeCliente, customerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RemitosDeClienteRow{}
+	for rows.Next() {
+		var i RemitosDeClienteRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Numero,
+			&i.Estado,
+			&i.Tipo,
+			&i.Pedido,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

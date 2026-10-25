@@ -391,16 +391,36 @@ type Filtro struct {
 	ConAdjuntos  bool
 	Desde        time.Time
 	De           string
+	// Tambien son direcciones: lo que mandaron o se les mandó también
+	// coincide con la búsqueda (buscar por cliente, CUIT o pedido).
+	Tambien []string
 }
 
-func (f Filtro) vacio() bool { return f == Filtro{} }
+func (f Filtro) vacio() bool {
+	return f.Texto == "" && !f.SinLeer && !f.SinResponder && !f.Destacados && !f.ConAdjuntos && f.Desde.IsZero() && f.De == "" && len(f.Tambien) == 0
+}
 
 func (f Filtro) criterio() *imap.SearchCriteria {
 	c := &imap.SearchCriteria{}
 	// Cada palabra tiene que aparecer en algún lado: «placas fenólicas juan»
 	// encuentra el correo de Juan que habla de placas fenólicas.
+	texto := &imap.SearchCriteria{}
 	for _, palabra := range strings.Fields(f.Texto) {
-		c.And(cualquiera(variantes(palabra)))
+		texto.And(cualquiera(variantes(palabra)))
+	}
+	if len(f.Tambien) == 0 {
+		c.And(texto)
+	} else {
+		// El texto, o algo de/para esas direcciones.
+		alguna := texto
+		for _, d := range f.Tambien {
+			de := imap.SearchCriteria{Or: [][2]imap.SearchCriteria{{
+				{Header: []imap.SearchCriteriaHeaderField{{Key: "From", Value: d}}},
+				{Header: []imap.SearchCriteriaHeaderField{{Key: "To", Value: d}}},
+			}}}
+			alguna = &imap.SearchCriteria{Or: [][2]imap.SearchCriteria{{*alguna, de}}}
+		}
+		c.And(alguna)
 	}
 	if f.SinLeer {
 		c.NotFlag = append(c.NotFlag, imap.FlagSeen)

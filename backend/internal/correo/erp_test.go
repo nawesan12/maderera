@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -65,6 +66,8 @@ func armarERP(t *testing.T, conBase bool) *entornoERP {
 			('PED-4836', 'Martín', $1, 'preparando', 100), ('PED-4790', 'Martín', $1, 'listo', 200), ('PED-4001', 'Martín', $1, 'entregado', 300)`, e.cliente)
 		exec(`insert into quotes (numero, contacto_nombre, customer_id, estado, total, created_at) values
 			('P-2026-0411', 'Martín', $1, 'aceptado', 10, now()), ('P-2026-0412', 'Martín', $1, 'enviado', 742180, now() - interval '3 days')`, e.cliente)
+		exec(`update customers set cuit = '30-71234567-8' where id = $1`, e.cliente)
+		exec(`insert into deliveries (numero, order_id, estado, tipo) select 'R-0091', id, 'entregada', 'envio' from orders where numero = 'PED-4836'`)
 		exec(`insert into cheques (sentido, numero, fecha_pago, importe, estado, customer_id) values
 			('recibido', '0001', now() + interval '10 days', 50000, 'cartera', $1), ('recibido', '0002', now(), 1, 'depositado', $1)`, e.cliente)
 		app.ConERP(NuevoERP(pool, "https://mjbj.com.ar", silencio))
@@ -132,6 +135,24 @@ func TestFichaDelRemitente(t *testing.T) {
 	}
 	if len(f.Cheques) != 1 || f.Cheques[0].Numero != "0001" {
 		t.Errorf("cheques por vencer: %+v", f.Cheques)
+	}
+	avisos := fmt.Sprint(f.Avisos)
+	for _, quiero := range []string{"remito R-0091 (pedido 4836) entregado sin firmar", "pedido 4790 está listo para retirar"} {
+		if !strings.Contains(avisos, quiero) {
+			t.Errorf("los avisos no dicen %q: %s", quiero, avisos)
+		}
+	}
+	if strings.Contains(avisos, "cheque") {
+		t.Errorf("un cheque a diez días no es un aviso: %s", avisos)
+	}
+	for q, quiero := range map[string]bool{"4836": true, "PED-4790": true, "carpintería": true, "30-71234567-8": true, "P-2026-412": true, "nadie": false} {
+		got := e.app.erp.CorreosDeBusqueda(context.Background(), "ventas@prueba.test", q)
+		if (len(got) == 1 && got[0] == "carpinteriaperez@gmail.test") != quiero {
+			t.Errorf("buscar %q: %v", q, got)
+		}
+	}
+	if got := e.app.erp.CorreosDeBusqueda(context.Background(), "deposito@prueba.test", "4836"); len(got) != 0 {
+		t.Errorf("el depósito no busca por cliente: %v", got)
 	}
 	if f.Enlaces["presupuesto"] != "https://mjbj.com.ar/admin/presupuestos/nuevo?cliente="+e.cliente {
 		t.Errorf("enlace: %q", f.Enlaces["presupuesto"])

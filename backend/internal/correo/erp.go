@@ -3,8 +3,11 @@ package correo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -163,7 +166,17 @@ type Ficha struct {
 	Pedidos           []PedidoFicha     `json:"pedidos"`
 	Cheques           []ChequeFicha     `json:"cheques"`
 	UltimoPresupuesto *PresupuestoFicha `json:"ultimoPresupuesto,omitempty"`
-	Enlaces           map[string]string `json:"enlaces"`
+	// Avisos son lo que conviene saber antes de contestarle: un remito sin
+	// firmar, un pedido listo, un cheque que vence.
+	Avisos  []AvisoFicha      `json:"avisos"`
+	Enlaces map[string]string `json:"enlaces"`
+}
+
+// AvisoFicha es un aviso de contexto para la conversación.
+type AvisoFicha struct {
+	Texto   string `json:"texto"`
+	Familia string `json:"familia"` // esp, ok, inf, pr (los colores de estado)
+	Enlace  string `json:"enlace,omitempty"`
 }
 
 type PedidoFicha struct {
@@ -221,7 +234,7 @@ func (e *ERP) FichaDe(ctx context.Context, correo string) (*Ficha, error) {
 		Profesional: c.Tipo == "profesional", Estado: c.Estado, Saldo: c.Saldo.F(),
 		LimiteCredito: c.LimiteCredito.F(), DiasCredito: c.DiasCredito,
 		CuentaBloqueada: c.CuentaBloqueada, MotivoBloqueo: texto(c.MotivoBloqueo),
-		Pedidos: []PedidoFicha{}, Cheques: []ChequeFicha{},
+		Pedidos: []PedidoFicha{}, Cheques: []ChequeFicha{}, Avisos: []AvisoFicha{},
 	}
 	pedidos, err := e.q.PedidosAbiertosDeCliente(ctx, &c.ID)
 	if err != nil {
@@ -243,6 +256,11 @@ func (e *ERP) FichaDe(ctx context.Context, correo string) (*Ficha, error) {
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
+	remitos, err := e.q.RemitosDeCliente(ctx, &c.ID)
+	if err != nil {
+		return nil, err
+	}
+	f.Avisos = avisosDe(f, remitos, time.Now())
 	cliente := url.Values{"cliente": {c.ID}}
 	f.Enlaces = map[string]string{
 		"ficha":       e.enlace("/admin/clientes/"+c.ID, nil),
@@ -295,4 +313,95 @@ func (e *ERP) Contactos(ctx context.Context, q string) ([]Contacto, error) {
 		out = append(out, Contacto{Nombre: f.Nombre, Correo: f.Correo})
 	}
 	return out, nil
+}
+
+// avisosDe arma los avisos de contexto de la ficha: lo que el que contesta
+// tiene que saber («tiene un remito sin firmar», «su pedido está listo»).
+func avisosDe(f *Ficha, remitos []sqlc.RemitosDeClienteRow, ahora time.Time) []AvisoFicha {
+	out := []AvisoFicha{}
+	numero := func(n string) string { return strings.TrimPrefix(n, "PED-") }
+	for _, r := range remitos {
+		if r.Estado == "entregada" {
+			out = append(out, AvisoFicha{Texto: "Tiene el remito " + r.Numero + " (pedido " + numero(r.Pedido) + ") entregado sin firmar.", Familia: "esp"})
+		} else if r.Tipo == "retiro" {
+			out = append(out, AvisoFicha{Texto: "El remito " + r.Numero + " (pedido " + numero(r.Pedido) + ") está preparado: espera que lo retire.", Familia: "inf"})
+		}
+	}
+	for _, p := range f.Pedidos {
+		switch p.Estado {
+		case "listo":
+			out = append(out, AvisoFicha{Texto: "Su pedido " + numero(p.Numero) + " está listo para retirar.", Familia: "ok", Enlace: p.Enlace})
+		case "en-camino":
+			out = append(out, AvisoFicha{Texto: "Su pedido " + numero(p.Numero) + " está en camino.", Familia: "inf", Enlace: p.Enlace})
+		}
+	}
+	hoy := time.Date(ahora.Year(), ahora.Month(), ahora.Day(), 0, 0, 0, 0, ahora.Location())
+	for _, ch := range f.Cheques {
+		dias := int(ch.FechaPago.In(ahora.Location()).Sub(hoy).Hours() / 24)
+		switch {
+		case dias < 0:
+			out = append(out, AvisoFicha{Texto: "Tiene un cheque de " + pesosAR(ch.Importe) + " vencido sin depositar.", Familia: "pr"})
+		case dias <= 3:
+			cuando := "en " + strconv.Itoa(dias) + " días"
+			if dias == 0 {
+				cuando = "hoy"
+			} else if dias == 1 {
+				cuando = "mañana"
+			}
+			out = append(out, AvisoFicha{Texto: "Un cheque suyo de " + pesosAR(ch.Importe) + " vence " + cuando + ".", Familia: "esp"})
+		}
+	}
+	if p := f.UltimoPresupuesto; p != nil && p.Estado == "enviado" && p.ValidoHasta != nil {
+		if dias := int(p.ValidoHasta.Sub(hoy).Hours() / 24); dias >= 0 && dias <= 5 {
+			out = append(out, AvisoFicha{Texto: "Su presupuesto " + p.Numero + " vence en " + strconv.Itoa(dias) + " días y no lo contestó.", Familia: "esp", Enlace: p.Enlace})
+		}
+	}
+	if f.CuentaBloqueada {
+		texto := "La cuenta corriente está bloqueada."
+		if f.MotivoBloqueo != "" {
+			texto = "La cuenta corriente está bloqueada: " + f.MotivoBloqueo + "."
+		}
+		out = append(out, AvisoFicha{Texto: texto, Familia: "pr"})
+	} else if f.LimiteCredito > 0 && f.Saldo > f.LimiteCredito {
+		out = append(out, AvisoFicha{Texto: "Debe " + pesosAR(f.Saldo) + ": pasó el límite de " + pesosAR(f.LimiteCredito) + ".", Familia: "pr"})
+	}
+	return out
+}
+
+var (
+	reNumeroPedido      = regexp.MustCompile(`(?i)^(?:ped-?|pedido\s*)?(\d{3,7})$`)
+	reNumeroPresupuesto = regexp.MustCompile(`(?i)^p-?(\d{4})-?(\d{1,4})$`)
+	reSoloCUIT          = regexp.MustCompile(`^\d{2}-?\d{8}-?\d$`)
+)
+
+// CorreosDeBusqueda traduce una búsqueda a las direcciones de los clientes
+// que nombra: por nombre, CUIT, número de pedido (4836, PED-4836) o de
+// presupuesto (P-2026-0412). Solo para staff que ve fichas; si la base no
+// responde, nada (la búsqueda por texto sigue igual).
+func (e *ERP) CorreosDeBusqueda(ctx context.Context, casilla, q string) []string {
+	if !e.VeFichas(ctx, casilla) {
+		return nil
+	}
+	q = strings.TrimSpace(q)
+	p := sqlc.CorreosParaBuscarParams{}
+	switch {
+	case reSoloCUIT.MatchString(q):
+		p.Cuit = strings.ReplaceAll(q, "-", "")
+	case reNumeroPedido.MatchString(q):
+		p.Pedido = "PED-" + reNumeroPedido.FindStringSubmatch(q)[1]
+	case reNumeroPresupuesto.MatchString(q):
+		m := reNumeroPresupuesto.FindStringSubmatch(q)
+		n, _ := strconv.Atoi(m[2])
+		p.Presupuesto = fmt.Sprintf("P-%s-%04d", m[1], n)
+	default:
+		p.Nombre = q
+	}
+	ctx, cancelar := context.WithTimeout(ctx, topeERP)
+	defer cancelar()
+	correos, err := e.q.CorreosParaBuscar(ctx, p)
+	if err != nil {
+		e.log.Warn("correo: buscando clientes", "error", err)
+		return nil
+	}
+	return correos
 }

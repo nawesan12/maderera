@@ -207,6 +207,16 @@
             </button>
           </div>
 
+          {#if ficha?.avisos?.length}
+            <ul class="avisos-contexto" aria-label="Para tener en cuenta">
+              {#each ficha.avisos as a, i (i)}
+                <li class="chip {a.familia}">
+                  {#if a.enlace}<a href={a.enlace} target="_blank" rel="noopener">{a.texto}</a>{:else}{a.texto}{/if}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+
           {#if equipo.activo && bandeja.rolActual !== "enviados" && bandeja.rolActual !== "borradores"}
             <Conversacion mensaje={m} />
           {/if}
@@ -747,6 +757,26 @@
   }
   .conectado {
     max-width: 760px;
+  }
+  .avisos-contexto {
+    list-style: none;
+    margin: -4px 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .avisos-contexto .chip {
+    white-space: normal;
+    line-height: 1.4;
+    padding: 5px 12px;
+    font-size: 15px;
+    border-radius: 10px;
+  }
+  .avisos-contexto a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .responder {
     display: flex;

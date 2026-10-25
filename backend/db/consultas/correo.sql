@@ -66,6 +66,40 @@ WHERE customer_id = $1 AND sentido = 'recibido' AND estado IN ('informado', 'car
 ORDER BY fecha_pago
 LIMIT 10;
 
+-- name: RemitosDeCliente :many
+-- Los remitos que piden algo: entregados sin firmar, o preparados que
+-- esperan el retiro.
+SELECT d.id, d.numero, d.estado::text AS estado, d.tipo::text AS tipo, o.numero AS pedido
+FROM deliveries d
+JOIN orders o ON o.id = d.order_id
+WHERE o.customer_id = $1 AND (
+  (d.estado = 'entregada' AND d.firmado_at IS NULL) OR d.estado = 'preparada'
+)
+ORDER BY d.created_at DESC
+LIMIT 10;
+
+-- name: CorreosParaBuscar :many
+-- La búsqueda del correo por cliente, CUIT o número de pedido: los correos
+-- de las fichas que coinciden, para buscar también lo que mandaron o se
+-- les mandó aunque el texto no lo diga.
+SELECT DISTINCT lower(email)::text AS correo FROM (
+  SELECT c.email FROM customers c
+  WHERE c.active AND c.email IS NOT NULL AND c.email <> '' AND (
+    (sqlc.arg(cuit)::text <> '' AND replace(c.cuit, '-', '') = sqlc.arg(cuit)::text)
+    OR (length(sqlc.arg(nombre)::text) >= 3 AND (c.nombre ILIKE '%' || sqlc.arg(nombre)::text || '%' OR c.razon_social ILIKE '%' || sqlc.arg(nombre)::text || '%'))
+  )
+  UNION ALL
+  SELECT coalesce(nullif(c.email, ''), o.contacto_email) FROM orders o
+  LEFT JOIN customers c ON c.id = o.customer_id
+  WHERE sqlc.arg(pedido)::text <> '' AND o.numero = sqlc.arg(pedido)::text
+  UNION ALL
+  SELECT coalesce(nullif(c.email, ''), q.contacto_email) FROM quotes q
+  LEFT JOIN customers c ON c.id = q.customer_id
+  WHERE sqlc.arg(presupuesto)::text <> '' AND q.numero = sqlc.arg(presupuesto)::text
+) t
+WHERE email IS NOT NULL AND email <> ''
+LIMIT 20;
+
 -- name: BuscarClientesConCorreo :many
 -- Para sugerir en «Para»: clientes activos con correo cuyo nombre, razón
 -- social o correo tienen lo escrito.

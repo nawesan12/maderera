@@ -353,6 +353,9 @@ func (a *App) lista(w http.ResponseWriter, r *http.Request, cred Credenciales) {
 	if dias, err := strconv.Atoi(q.Get("dias")); err == nil && dias > 0 && dias <= 3650 {
 		f.Desde = time.Now().AddDate(0, 0, -dias)
 	}
+	if f.Texto != "" && a.erp != nil {
+		f.Tambien = a.erp.CorreosDeBusqueda(r.Context(), cred.Correo, f.Texto)
+	}
 	pagina, _ := strconv.Atoi(q.Get("pagina"))
 	res, err := a.srv.Lista(r.Context(), cred, r.PathValue("carpeta"), f, pagina)
 	if err != nil {

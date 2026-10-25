@@ -39,6 +39,8 @@ export interface Ficha {
   pedidos: PedidoAbierto[];
   cheques: Cheque[];
   ultimoPresupuesto?: { id: string; numero: string; estado: string; total: number; fecha: string; validoHasta?: string; enlace: string };
+  /** Lo que conviene saber antes de contestar (remito sin firmar, pedido listo…). */
+  avisos: { texto: string; familia: string; enlace?: string }[];
   enlaces: { ficha: string; presupuesto: string; pedido: string; pedidos: string; cheques: string };
 }
 

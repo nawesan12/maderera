@@ -37,7 +37,7 @@
     return [...vistos.values()]
       .filter((d) => d.correo !== yo && (d.correo.includes(n) || nombreDe(d).toLowerCase().includes(n)))
       .slice(0, 5)
-      .map((d) => ({ ...d, tipo: clientes.tipo(d.correo) === "cliente" ? "Cliente" : "Contacto" }));
+      .map((d) => ({ ...d, tipo: { cliente: "Cliente", proveedor: "Proveedor", "": "Contacto" }[clientes.tipo(d.correo)] }));
   }
 
   function buscar() {
@@ -129,7 +129,7 @@
       {#each sugeridos as s, i (s.correo)}
         <li role="option" aria-selected={i === elegido}>
           <button type="button" class:elegido={i === elegido} onmousedown={(e) => (e.preventDefault(), agregar(s))} onmouseenter={() => (elegido = i)}>
-            <span class="avatar {s.tipo === 'Cliente' ? 'cliente' : ''}" style:width="38px" style:height="38px" style:font-size="15px">{iniciales(s)}</span>
+            <span class="avatar {s.tipo === 'Cliente' ? 'cliente' : s.tipo === 'Proveedor' ? 'proveedor' : ''}" style:width="38px" style:height="38px" style:font-size="15px">{iniciales(s)}</span>
             <span class="datos"><strong>{nombreDe(s)}</strong><small>{s.correo}</small></span>
             <span class="tipo">{s.tipo}</span>
           </button>

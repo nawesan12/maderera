@@ -43,11 +43,11 @@ export interface Ficha {
 }
 
 class Clientes {
-  #tipos = $state<Record<string, "cliente">>({});
+  #tipos = $state<Record<string, "cliente" | "proveedor">>({});
   #pedidos = new Set<string>();
   #fichas = new Map<string, Promise<Ficha | null>>();
 
-  tipo(correo?: string): "cliente" | "" {
+  tipo(correo?: string): "cliente" | "proveedor" | "" {
     return (correo && this.#tipos[correo.toLowerCase()]) || "";
   }
 
@@ -62,7 +62,8 @@ class Clientes {
     try {
       const son = await api.remitentes(nuevos);
       const t = { ...this.#tipos };
-      for (const c of son) t[c] = "cliente";
+      for (const c of son.proveedores) t[c] = "proveedor";
+      for (const c of son.clientes) t[c] = "cliente";
       this.#tipos = t;
     } catch {
       for (const c of nuevos) this.#pedidos.delete(c);

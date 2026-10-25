@@ -105,6 +105,7 @@ func (a *App) Rutas() http.Handler {
 	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}/html", a.conSesion(a.html))
 	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}/adjuntos/{indice}", a.conSesion(a.adjunto))
 	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}/adjuntos.zip", a.conSesion(a.zip))
+	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}/adjuntos/{indice}/conectar", a.conSesion(a.conectarAdjunto))
 	m.HandleFunc("POST /api/carpetas/{carpeta}/acciones", a.conSesion(a.acciones))
 	m.HandleFunc("POST /api/enviar", a.conSesion(a.enviar))
 
@@ -282,10 +283,10 @@ func (a *App) remitentes(w http.ResponseWriter, r *http.Request, cred Credencial
 	for i, c := range correos {
 		correos[i] = strings.ToLower(strings.TrimSpace(c))
 	}
-	son, err := a.erp.Clientes(r.Context(), correos)
+	son, err := a.erp.Remitentes(r.Context(), correos)
 	if err != nil {
 		a.log.Warn("correo: remitentes", "error", err)
-		son = []string{}
+		son = Remitentes{Clientes: []string{}, Proveedores: []string{}}
 	}
 	plataforma.EscribirJSON(w, http.StatusOK, son)
 }

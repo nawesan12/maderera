@@ -19,6 +19,13 @@ SELECT DISTINCT lower(email)::text AS correo
 FROM customers
 WHERE active AND email IS NOT NULL AND lower(email) = ANY(sqlc.arg(correos)::text[]);
 
+-- name: ProveedoresEntreCorreos :many
+-- De estos correos, cuáles son de un proveedor activo (para el avatar azul
+-- y para no proponer presupuestos a quien nos vende).
+SELECT DISTINCT lower(email)::text AS correo
+FROM suppliers
+WHERE active AND email IS NOT NULL AND lower(email) = ANY(sqlc.arg(correos)::text[]);
+
 -- name: FichaPorCorreo :one
 -- La ficha del remitente. El correo no es único en customers: si hay
 -- varias, la que tiene cuenta en el sitio y después la más nueva. El saldo

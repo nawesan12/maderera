@@ -157,7 +157,7 @@ func TestFichaDelRemitente(t *testing.T) {
 	}
 
 	_, cuerpo = e.como(t, "ventas@prueba.test", "/api/remitentes?correo=CarpinteriaPerez@gmail.test&correo=otro@x.test")
-	if string(cuerpo) != `["carpinteriaperez@gmail.test"]`+"\n" && string(cuerpo) != `["carpinteriaperez@gmail.test"]` {
+	if !strings.Contains(string(cuerpo), `"clientes":["carpinteriaperez@gmail.test"]`) || !strings.Contains(string(cuerpo), `"proveedores":[]`) {
 		t.Errorf("remitentes: %s", cuerpo)
 	}
 	_, cuerpo = e.como(t, "ventas@prueba.test", "/api/contactos?q=carpin")

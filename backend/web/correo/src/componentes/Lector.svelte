@@ -12,6 +12,8 @@
   import Visor from "./Visor.svelte";
   import Conversacion from "./Conversacion.svelte";
   import PedidoDetectado from "./PedidoDetectado.svelte";
+  import AdjuntoConectado, { conexionDe } from "./AdjuntoConectado.svelte";
+  import type { Conexion } from "../lib/api";
   import { sesion } from "../lib/sesion.svelte";
   import { equipo } from "../lib/equipo.svelte";
 
@@ -90,6 +92,21 @@
   const pesoTotal = $derived(archivos.filter((a) => !a.bloqueado).reduce((s, a) => s + a.tamano, 0));
   const sePuedeVer = (a: Adjunto) => !a.bloqueado && /^(image\/(png|jpeg|gif|webp)|application\/pdf)$/.test(a.tipo);
   const visibles = $derived(archivos.filter(sePuedeVer));
+
+  // Los adjuntos que se conectan con el ERP (despiece, factura, lista,
+  // comprobante): se leen solos al abrir el correo, si la casilla ve fichas.
+  let conexiones = $state<{ adjunto: Adjunto; conexion: Conexion }[]>([]);
+  $effect(() => {
+    const msj = m;
+    conexiones = [];
+    if (!msj || !sesion.fichas || msj.sospecha) return;
+    const candidatos = archivos.filter((a) => !a.bloqueado && /pdf|sheet|excel|csv/.test(a.tipo + a.nombre.toLowerCase())).slice(0, 4);
+    for (const a of candidatos) {
+      void conexionDe(bandeja.carpeta, msj.uid, a.indice, msj.de[0]?.correo ?? "").then((c) => {
+        if (c?.tipo && bandeja.abierto?.uid === msj.uid) conexiones = [...conexiones, { adjunto: a, conexion: c }];
+      });
+    }
+  });
 
   function ver(a: Adjunto) {
     if (!sePuedeVer(a)) return;
@@ -279,6 +296,10 @@
             </section>
           {/if}
 
+          {#each conexiones as x (x.adjunto.indice)}
+            <div class="conectado"><AdjuntoConectado conexion={x.conexion} nombre={x.adjunto.nombre} /></div>
+          {/each}
+
           {#if bandeja.enLinea && bandeja.enLinea.base?.uid === m.uid}
             {#key bandeja.enLinea.id}
               <EnLinea redaccion={bandeja.enLinea} />
@@ -308,7 +329,7 @@
 </article>
 
 {#if visor !== null && m}
-  <Visor mensaje={m} adjuntos={visibles} bind:indice={visor} {ficha} />
+  <Visor mensaje={m} adjuntos={visibles} bind:indice={visor} {ficha} {conexiones} />
 {/if}
 
 <style>
@@ -723,6 +744,9 @@
   .nombre-adj small {
     font-size: 13px;
     color: var(--mut);
+  }
+  .conectado {
+    max-width: 760px;
   }
   .responder {
     display: flex;

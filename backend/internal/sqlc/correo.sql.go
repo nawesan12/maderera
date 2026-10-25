@@ -599,6 +599,34 @@ func (q *Queries) Plantillas(ctx context.Context, casilla string) ([]PlantillasR
 	return items, nil
 }
 
+const proveedoresEntreCorreos = `-- name: ProveedoresEntreCorreos :many
+SELECT DISTINCT lower(email)::text AS correo
+FROM suppliers
+WHERE active AND email IS NOT NULL AND lower(email) = ANY($1::text[])
+`
+
+// De estos correos, cuáles son de un proveedor activo (para el avatar azul
+// y para no proponer presupuestos a quien nos vende).
+func (q *Queries) ProveedoresEntreCorreos(ctx context.Context, correos []string) ([]string, error) {
+	rows, err := q.db.Query(ctx, proveedoresEntreCorreos, correos)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var correo string
+		if err := rows.Scan(&correo); err != nil {
+			return nil, err
+		}
+		items = append(items, correo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const resolverSeguimiento = `-- name: ResolverSeguimiento :execrows
 UPDATE correo_seguimientos SET estado = $1, resuelto_at = now()
 WHERE id = $2 AND casilla = $3 AND estado = 'pendiente'

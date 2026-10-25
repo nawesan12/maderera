@@ -256,11 +256,24 @@ func (e *ERP) FichaDe(ctx context.Context, correo string) (*Ficha, error) {
 	return f, nil
 }
 
-// Clientes devuelve, de los correos dados, los que son de una ficha activa.
-func (e *ERP) Clientes(ctx context.Context, correos []string) ([]string, error) {
+// Remitentes dice, de los correos dados, cuáles son clientes y cuáles
+// proveedores.
+type Remitentes struct {
+	Clientes    []string `json:"clientes"`
+	Proveedores []string `json:"proveedores"`
+}
+
+// Remitentes busca los correos entre los clientes y los proveedores activos.
+func (e *ERP) Remitentes(ctx context.Context, correos []string) (Remitentes, error) {
 	ctx, cancelar := context.WithTimeout(ctx, topeERP)
 	defer cancelar()
-	return e.q.ClientesEntreCorreos(ctx, correos)
+	var r Remitentes
+	var err error
+	if r.Clientes, err = e.q.ClientesEntreCorreos(ctx, correos); err != nil {
+		return r, err
+	}
+	r.Proveedores, err = e.q.ProveedoresEntreCorreos(ctx, correos)
+	return r, err
 }
 
 // Contacto es un cliente para sugerir en «Para».

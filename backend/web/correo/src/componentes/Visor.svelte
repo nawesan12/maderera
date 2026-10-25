@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, type Adjunto, type Mensaje } from "../lib/api";
+  import { api, type Adjunto, type Conexion, type Mensaje } from "../lib/api";
+  import AdjuntoConectado from "./AdjuntoConectado.svelte";
   import { bandeja } from "../lib/estado.svelte";
   import type { Ficha } from "../lib/clientes.svelte";
   import { fechaDelMensaje, nombreDe, tamano, tipoDeAdjunto } from "../lib/formato";
@@ -9,14 +10,20 @@
   // El visor de fotos (2h) y de PDF (2i): sobre todo, siempre oscuro para
   // que lo de adentro resalte. Flechas para pasar entre adjuntos, zoom y
   // girar en las fotos. El PDF lo dibuja el navegador, sin bajarlo.
-  let { mensaje, adjuntos, indice = $bindable(), ficha }: { mensaje: Mensaje; adjuntos: Adjunto[]; indice: number | null; ficha: Ficha | null } =
-    $props();
+  let {
+    mensaje,
+    adjuntos,
+    indice = $bindable(),
+    ficha,
+    conexiones = [],
+  }: { mensaje: Mensaje; adjuntos: Adjunto[]; indice: number | null; ficha: Ficha | null; conexiones?: { adjunto: Adjunto; conexion: Conexion }[] } = $props();
 
   let zoom = $state(1);
   let giro = $state(0);
   const a = $derived(adjuntos[indice ?? 0]);
   const t = $derived(tipoDeAdjunto(a.tipo, a.nombre));
   const esPDF = $derived(a.tipo === "application/pdf");
+  const conexion = $derived(conexiones.find((x) => x.adjunto.indice === a.indice)?.conexion);
   const url = $derived(api.urlAdjunto(bandeja.carpeta, mensaje.uid, a.indice, true));
   let marco: HTMLIFrameElement | undefined = $state();
 
@@ -95,6 +102,9 @@
       <div class="lienzo">
         <img src={url} alt={a.nombre} style:transform="scale({zoom}) rotate({giro}deg)" />
       </div>
+    {/if}
+    {#if conexion}
+      <aside class="lado"><AdjuntoConectado {conexion} oscuro /></aside>
     {/if}
     {#if adjuntos.length > 1}
       <button class="flecha izq" aria-label="Anterior" onclick={() => pasar(-1)}><Icono nombre="flecha-izquierda" tamano={26} /></button>
@@ -265,6 +275,14 @@
     background: #fff;
     box-shadow: 0 30px 80px -20px rgb(0 0 0 / 0.7);
   }
+  .lado {
+    width: 320px;
+    flex: none;
+    align-self: flex-start;
+    margin-left: 24px;
+    max-height: 100%;
+    overflow-y: auto;
+  }
   .flecha {
     position: absolute;
     top: 50%;
@@ -370,7 +388,8 @@
       right: 8px;
     }
     .ayuda,
-    .grupo {
+    .grupo,
+    .lado {
       display: none;
     }
   }

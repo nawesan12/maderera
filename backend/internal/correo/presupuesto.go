@@ -191,6 +191,13 @@ func (a *App) presupuesto(w http.ResponseWriter, r *http.Request, cred Credencia
 		return
 	}
 	out := Presupuesto{Renglones: detectarRenglones(p.Texto), Abrir: a.erp.enlace("/admin/presupuestos/nuevo", nil)}
+	// A un proveedor no se le presupuesta: «120 placas de MDF» es lo que
+	// nos vende.
+	if p.Correo != "" && len(out.Renglones) > 0 {
+		if son, err := a.erp.Remitentes(r.Context(), []string{strings.ToLower(strings.TrimSpace(p.Correo))}); err == nil && len(son.Proveedores) > 0 {
+			out.Renglones = []Renglon{}
+		}
+	}
 	if len(out.Renglones) == 0 {
 		plataforma.EscribirJSON(w, http.StatusOK, out)
 		return

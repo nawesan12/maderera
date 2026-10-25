@@ -133,6 +133,17 @@ async function pedir<T>(metodo: string, ruta: string, cuerpo?: BodyInit | object
 
 const c = (ruta: string) => encodeURIComponent(ruta);
 
+/** Lo que el correo encontró en un adjunto (backend/internal/correo/conectar.go). */
+export interface Conexion {
+  tipo: "" | "despiece" | "factura" | "lista" | "comprobante";
+  titulo: string;
+  detalle: string;
+  datos: [string, string][];
+  piezas?: { nombre: string; cantidad: number; largo: number; ancho: number; material?: string }[];
+  copiar?: string;
+  acciones: { texto: string; enlace: string; icono: string }[];
+}
+
 export interface Persona {
   id: string;
   nombre: string;
@@ -191,7 +202,7 @@ export const api = {
   entrar: (correo: string, clave: string) => pedir<DatosSesion>("POST", "/api/sesion", { correo, clave }),
   /** De estos correos, cuáles son de clientes del ERP. */
   remitentes: (correos: string[]) =>
-    pedir<string[]>("GET", "/api/remitentes?" + new URLSearchParams(correos.map((x) => ["correo", x]))),
+    pedir<{ clientes: string[]; proveedores: string[] }>("GET", "/api/remitentes?" + new URLSearchParams(correos.map((x) => ["correo", x]))),
   /** Clientes del ERP que coinciden con lo escrito, para sugerir en «Para». */
   contactos: (q: string) => pedir<Direccion[]>("GET", "/api/contactos?" + new URLSearchParams({ q })),
   cliente: async (correo: string) => {
@@ -222,6 +233,8 @@ export const api = {
   plantillas: () => pedir<Plantilla[]>("GET", "/api/plantillas"),
   guardarPlantilla: (p: Omit<Plantilla, "id">) => pedir<{ id: string }>("PUT", "/api/plantillas", p),
   borrarPlantilla: (id: string) => pedir<void>("DELETE", `/api/plantillas/${encodeURIComponent(id)}`),
+  conectar: (carpeta: string, uid: number, indice: number, de: string) =>
+    pedir<Conexion>("GET", `/api/carpetas/${c(carpeta)}/mensajes/${uid}/adjuntos/${indice}/conectar?` + new URLSearchParams({ de })),
   urlZip: (carpeta: string, uid: number, indices: number[]) =>
     `/api/carpetas/${c(carpeta)}/mensajes/${uid}/adjuntos.zip?` + new URLSearchParams({ i: indices.join(",") }),
   salir: () => pedir<void>("DELETE", "/api/sesion"),

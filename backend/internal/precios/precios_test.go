@@ -305,3 +305,18 @@ func TestListasYDescuentos(t *testing.T) {
 		t.Errorf("95 %%: %d %s", c, b)
 	}
 }
+
+// Con el lector de verdad: una planilla CSV de las del golden de planilla.
+func TestImportacionConElLectorReal(t *testing.T) {
+	csv := "\uFEFFSKU;Producto;Medida;Categoria;Precio lista;Precio profesional\r\nFEN18;Fenólico;18 mm;Placas;84.500,00;72.000\r\nFEN12;Fenólico;12 mm;Placas;$ 61.500;\r\n;sin código;;;1;\r\n"
+	filas, e := LeerPlanilla([]byte(csv))
+	if e != "" || len(filas) != 3 {
+		t.Fatalf("leer: %v %q", filas, e)
+	}
+	if *filas[0].PrecioGeneral != "84500.00" || *filas[0].PrecioProfesional != "72000.00" || filas[2].Error == "" {
+		t.Errorf("filas: %+v %+v %+v", filas[0], filas[1], filas[2])
+	}
+	if _, e := LeerPlanilla([]byte("%PDF-1.4 algo")); e == "" {
+		t.Error("un PDF tenía que dar error")
+	}
+}

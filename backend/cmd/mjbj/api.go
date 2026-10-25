@@ -121,13 +121,8 @@ func correrAPI() error {
 		productosapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
-	// El lector de planillas (internal/planilla) se está portando: mientras
-	// tanto la vista previa de la importación avisa en vez de leer.
-	sinLector := func([]byte) ([]precios.FilaLeida, string) {
-		return nil, "La importación de planillas vuelve en la próxima actualización."
-	}
 	preciosapi.HandlerWithOptions(
-		preciosapi.NewStrictHandlerWithOptions(precios.NuevaAPI(precios.Nuevo(pool, log), sinLector),
+		preciosapi.NewStrictHandlerWithOptions(precios.NuevaAPI(precios.Nuevo(pool, log), precios.LeerPlanilla),
 			[]preciosapi.StrictMiddlewareFunc{plataforma.ConPedido[preciosapi.StrictHandlerFunc]},
 			preciosapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

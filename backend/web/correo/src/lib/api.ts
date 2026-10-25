@@ -33,6 +33,8 @@ export interface Resumen {
   /** La primera línea de lo que escribió la persona. */
   vista: string;
   etiquetas: string[];
+  /** El Message-ID del primer mensaje de la conversación. */
+  hilo?: string;
 }
 
 /** Lo que achica la lista: la pestaña y los botones de la búsqueda. */
@@ -131,6 +133,59 @@ async function pedir<T>(metodo: string, ruta: string, cuerpo?: BodyInit | object
 
 const c = (ruta: string) => encodeURIComponent(ruta);
 
+export interface Persona {
+  id: string;
+  nombre: string;
+  correo: string;
+  rol: string;
+}
+
+export interface EstadoHilo {
+  hilo: string;
+  estado: "nuevo" | "en-curso" | "esperando" | "resuelto";
+  asignadoA: string;
+  asignadoNombre: string;
+  notas: number;
+}
+
+export interface Nota {
+  id: string;
+  autor: string;
+  texto: string;
+  createdAt: string;
+}
+
+export interface Seguimiento {
+  id: string;
+  hilo: string;
+  para: string;
+  asunto: string;
+  enviado: string;
+  vence: string;
+  vencido: boolean;
+}
+
+export interface Plantilla {
+  id: string;
+  titulo: string;
+  atajo: string;
+  texto: string;
+}
+
+export interface TiempoRespuesta {
+  persona: string;
+  conversaciones: number;
+  medianaSegundos: number;
+}
+
+/** Lo que se manda para identificar una conversación al guardarla. */
+export interface DatosHilo {
+  hilo: string;
+  asunto?: string;
+  remitente?: string;
+  recibido?: string;
+}
+
 export const api = {
   sesion: () => pedir<DatosSesion>("GET", "/api/sesion"),
   entrar: (correo: string, clave: string) => pedir<DatosSesion>("POST", "/api/sesion", { correo, clave }),
@@ -147,6 +202,20 @@ export const api = {
       throw e;
     }
   },
+  equipo: () => pedir<{ personas: Persona[]; dueno?: string }>("GET", "/api/equipo"),
+  hilos: (hilos: string[]) =>
+    pedir<Record<string, EstadoHilo>>("GET", "/api/hilos?" + new URLSearchParams(hilos.map((h) => ["h", h]))),
+  guardarHilo: (d: DatosHilo & { estado?: string; asignadoA?: string; soltar?: boolean }) =>
+    pedir<EstadoHilo>("PUT", "/api/hilos", d),
+  notas: (hilo: string) => pedir<Nota[]>("GET", "/api/hilos/notas?" + new URLSearchParams({ h: hilo })),
+  crearNota: (d: DatosHilo & { autorId: string; texto: string }) => pedir<Nota>("POST", "/api/hilos/notas", d),
+  borrarNota: (id: string) => pedir<void>("DELETE", `/api/hilos/notas/${encodeURIComponent(id)}`),
+  tiempos: (dias = 30) => pedir<TiempoRespuesta[]>("GET", `/api/tiempos?dias=${dias}`),
+  seguimientos: () => pedir<Seguimiento[]>("GET", "/api/seguimientos"),
+  cancelarSeguimiento: (id: string) => pedir<void>("DELETE", `/api/seguimientos/${encodeURIComponent(id)}`),
+  plantillas: () => pedir<Plantilla[]>("GET", "/api/plantillas"),
+  guardarPlantilla: (p: Omit<Plantilla, "id">) => pedir<{ id: string }>("PUT", "/api/plantillas", p),
+  borrarPlantilla: (id: string) => pedir<void>("DELETE", `/api/plantillas/${encodeURIComponent(id)}`),
   urlZip: (carpeta: string, uid: number, indices: number[]) =>
     `/api/carpetas/${c(carpeta)}/mensajes/${uid}/adjuntos.zip?` + new URLSearchParams({ i: indices.join(",") }),
   salir: () => pedir<void>("DELETE", "/api/sesion"),

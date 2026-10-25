@@ -178,7 +178,7 @@
   }
   input {
     flex: 1;
-    min-width: 120px;
+    min-width: 80px;
     height: 34px;
     border: 0;
     background: transparent;

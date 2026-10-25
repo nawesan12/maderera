@@ -3,7 +3,11 @@
   import { ErrorApi, type Direccion } from "../lib/api";
   import { bandeja, type Redaccion } from "../lib/estado.svelte";
   import { preferencias } from "../lib/preferencias.svelte";
-  import { armar, iniciar, mencionaAdjunto, separar, traerAdjuntos, TOPE_ADJUNTOS } from "../lib/borrador";
+  import { armar, expandirAtajo, iniciar, mencionaAdjunto, separar, traerAdjuntos, TOPE_ADJUNTOS } from "../lib/borrador";
+  import { equipo } from "../lib/equipo.svelte";
+  import { clientes, type Ficha } from "../lib/clientes.svelte";
+  import { rellenar } from "../lib/plantillas";
+  import Respuestas from "./Respuestas.svelte";
   import { tamano } from "../lib/formato";
   import Icono from "./Icono.svelte";
   import Destinatarios from "./Destinatarios.svelte";
@@ -33,6 +37,26 @@
   let arrastrando = $state(false);
   let grande = $state(false);
   let ignorarAviso = $state(false);
+  let seguimiento = $state(0);
+  let insertada = $state("");
+  // La ficha del primer destinatario, para los datos vivos de las respuestas.
+  let ficha: Ficha | null = null;
+  $effect(() => {
+    const c = para[0]?.correo ?? r.base?.de[0]?.correo ?? "";
+    if (c) void clientes.ficha(c).then((f) => (ficha = f));
+  });
+  const nombreDestino = $derived(para[0]?.nombre ?? "");
+
+  function insertar(t: string, titulo: string) {
+    texto = (texto.trimEnd() ? texto.trimEnd() + "\n\n" : "") + rellenar(t, ficha, nombreDestino);
+    insertada = titulo;
+    campoTexto?.focus();
+  }
+
+  function alEscribir() {
+    const nuevo = expandirAtajo(texto, equipo.plantillas, (t) => rellenar(t, ficha, nombreDestino));
+    if (nuevo !== null) texto = nuevo;
+  }
 
   let campoTexto: HTMLTextAreaElement;
   let campoAsunto: HTMLInputElement;
@@ -81,7 +105,10 @@
     }
     enviando = true;
     const completo = texto + firma + (inicio.anterior ? `\n\n${inicio.anterior}` : "");
-    const datos = armar({ nombre: remitente.nombre, para, cc, cco, asunto, texto: completo, archivos, modo: r.modo, base: r.base, carpeta: r.carpeta });
+    const datos = armar({
+      nombre: remitente.nombre, para, cc, cco, asunto, texto: completo, archivos, modo: r.modo, base: r.base, carpeta: r.carpeta,
+      seguimiento, persona: equipo.yo,
+    });
     try {
       const como = await bandeja.enviar(datos, asunto);
       bandeja.cerrarVentana(r.id);
@@ -184,7 +211,10 @@
     {#if errores.asunto}<p class="error">{errores.asunto}</p>{/if}
 
     <div class="cuerpo">
-      <textarea bind:this={campoTexto} bind:value={texto} aria-label="Mensaje" placeholder="Escribí el mensaje"></textarea>
+      <textarea bind:this={campoTexto} bind:value={texto} oninput={alEscribir} aria-label="Mensaje" placeholder="Escribí el mensaje"></textarea>
+      {#if insertada}
+        <div class="insertada" role="status"><Icono nombre="respuestas" tamano={18} />Se insertó la respuesta guardada «{insertada}»</div>
+      {/if}
       {#if remitente.firma}
         <div class="firma">
           <img src="/logo.png" alt="" width="44" height="44" />
@@ -233,6 +263,7 @@
           <Icono nombre="clip" tamano={20} /><span>Adjuntar</span>
           <input bind:this={elegirArchivos} type="file" multiple class="oculto" onchange={(e) => sumar((e.target as HTMLInputElement).files)} />
         </label>
+        <Respuestas oninsertar={insertar} bind:seguimiento compacto />
         <span class="atajo"><span class="tecla">⌘ Enter</span></span>
         <button type="button" class="icono tacho" aria-label="Descartar" title="Descartar" onclick={cerrar}><Icono nombre="papelera" tamano={20} /></button>
       {/if}
@@ -395,6 +426,17 @@
     color: var(--fg);
     font-weight: 600;
     font-size: 16px;
+  }
+  .insertada {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--hun);
+    font-size: 15px;
+    color: var(--mut);
   }
   .anterior {
     margin-top: 12px;

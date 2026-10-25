@@ -3,7 +3,11 @@
   import { ErrorApi, type Direccion } from "../lib/api";
   import { bandeja, type ModoRedactar, type Redaccion } from "../lib/estado.svelte";
   import { preferencias } from "../lib/preferencias.svelte";
-  import { armar, iniciar, mencionaAdjunto, traerAdjuntos, TOPE_ADJUNTOS, unir } from "../lib/borrador";
+  import { armar, expandirAtajo, iniciar, mencionaAdjunto, traerAdjuntos, TOPE_ADJUNTOS, unir } from "../lib/borrador";
+  import { equipo } from "../lib/equipo.svelte";
+  import { clientes, type Ficha } from "../lib/clientes.svelte";
+  import { rellenar } from "../lib/plantillas";
+  import Respuestas from "./Respuestas.svelte";
   import { fechaLarga, nombreDe, tamano, tipoDeAdjunto } from "../lib/formato";
   import Icono from "./Icono.svelte";
   import Destinatarios from "./Destinatarios.svelte";
@@ -32,6 +36,20 @@
   let originales = $state<{ archivo: File | null; nombre: string; tipo: string; tamano: number; quitado: boolean }[]>([]);
   let nuevos = $state<File[]>([]);
   let ignorarAviso = $state(false);
+  let seguimiento = $state(0);
+  let ficha: Ficha | null = null;
+  void clientes.ficha(base.de[0]?.correo ?? "").then((f) => (ficha = f));
+  const nombreDestino = base.de[0]?.nombre ?? "";
+
+  function insertar(t: string) {
+    texto = (texto.trimEnd() ? texto.trimEnd() + "\n\n" : "") + rellenar(t, ficha, nombreDestino);
+    campo?.focus();
+  }
+
+  function alEscribir() {
+    const nuevo = expandirAtajo(texto, equipo.plantillas, (t) => rellenar(t, ficha, nombreDestino));
+    if (nuevo !== null) texto = nuevo;
+  }
   let campo: HTMLTextAreaElement;
   let destPara = $state<Destinatarios>();
   let elegir: HTMLInputElement;
@@ -87,6 +105,8 @@
       modo,
       base,
       carpeta: redaccion.carpeta,
+      seguimiento,
+      persona: equipo.yo,
     });
     try {
       const como = await bandeja.enviar(datos, inicio.asunto);
@@ -148,7 +168,7 @@
   {#if errores.para}<p class="error">{errores.para}</p>{/if}
 
   <div class="cuerpo">
-    <textarea bind:this={campo} bind:value={texto} aria-label="Tu respuesta" placeholder={modo === "reenviar" ? "Agregá unas líneas, si hace falta" : "Escribí la respuesta"} rows="4"></textarea>
+    <textarea bind:this={campo} bind:value={texto} oninput={alEscribir} aria-label="Tu respuesta" placeholder={modo === "reenviar" ? "Agregá unas líneas, si hace falta" : "Escribí la respuesta"} rows="4"></textarea>
     {#if remitente.firma}<div class="firma">{remitente.firma.split("\n").join(" · ")}</div>{/if}
 
     {#if modo === "reenviar"}
@@ -213,6 +233,7 @@
       <span class="oculto">Adjuntar</span>
       <input bind:this={elegir} type="file" multiple class="oculto" onchange={(e) => (nuevos = [...nuevos, ...((e.target as HTMLInputElement).files ?? [])])} />
     </label>
+    <Respuestas oninsertar={insertar} bind:seguimiento compacto />
     <span class="estado">
       {#if archivos.length}{archivos.length === 1 ? "1 adjunto" : `${archivos.length} adjuntos`} · {tamano(peso)}{/if}
     </span>

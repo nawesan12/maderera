@@ -101,6 +101,10 @@ export interface Envio {
   modo: ModoRedactar;
   base?: Mensaje;
   carpeta?: string;
+  /** Días para el aviso «si no contesta» (0: sin aviso). */
+  seguimiento?: number;
+  /** Quién del equipo lo manda (casilla compartida). */
+  persona?: string;
 }
 
 export function armar(e: Envio): FormData {
@@ -119,8 +123,27 @@ export function armar(e: Envio): FormData {
     f.set("carpeta", e.carpeta ?? "");
     f.set("uid", String(e.base.uid));
   }
+  if (e.base) {
+    f.set("recibido", e.base.fecha);
+    f.set("remitente", e.base.de[0]?.correo ?? "");
+  }
+  if (e.persona) f.set("persona", e.persona);
+  if (e.seguimiento) f.set("seguimiento", String(e.seguimiento));
   for (const a of e.archivos) f.append("adjuntos", a, a.name);
   return f;
+}
+
+/**
+ * Si lo último que se escribió es el atajo de una respuesta guardada
+ * seguido de un espacio («;precios »), devuelve el texto con la respuesta
+ * en su lugar.
+ */
+export function expandirAtajo(texto: string, plantillas: { atajo: string; texto: string }[], rellenar: (t: string) => string): string | null {
+  const m = texto.match(/(^|\s)(\S+)([ \n])$/);
+  if (!m) return null;
+  const p = plantillas.find((x) => x.atajo && x.atajo === m[2]);
+  if (!p) return null;
+  return texto.slice(0, texto.length - m[2].length - 1) + rellenar(p.texto) + m[3];
 }
 
 /** Los adjuntos del original, bajados para volver a mandarlos (reenviar). */

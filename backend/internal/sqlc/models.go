@@ -5084,6 +5084,53 @@ type ConfiguracionFiscal struct {
 	UpdatedAt              time.Time    `json:"updatedAt"`
 }
 
+type CorreoHilo struct {
+	Casilla       string     `json:"casilla"`
+	Hilo          string     `json:"hilo"`
+	Asunto        string     `json:"asunto"`
+	Remitente     string     `json:"remitente"`
+	Estado        string     `json:"estado"`
+	AsignadoA     *string    `json:"asignadoA"`
+	RecibidoAt    *time.Time `json:"recibidoAt"`
+	RespondidoAt  *time.Time `json:"respondidoAt"`
+	RespondidoPor *string    `json:"respondidoPor"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+}
+
+type CorreoNota struct {
+	ID        string    `json:"id"`
+	Casilla   string    `json:"casilla"`
+	Hilo      string    `json:"hilo"`
+	AutorID   *string   `json:"autorId"`
+	Autor     string    `json:"autor"`
+	Texto     string    `json:"texto"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type CorreoPlantilla struct {
+	ID        string    `json:"id"`
+	Casilla   string    `json:"casilla"`
+	Titulo    string    `json:"titulo"`
+	Atajo     string    `json:"atajo"`
+	Texto     string    `json:"texto"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type CorreoSeguimiento struct {
+	ID         string     `json:"id"`
+	Casilla    string     `json:"casilla"`
+	Hilo       string     `json:"hilo"`
+	Para       string     `json:"para"`
+	Asunto     string     `json:"asunto"`
+	EnviadoAt  time.Time  `json:"enviadoAt"`
+	VenceAt    time.Time  `json:"venceAt"`
+	CreadoPor  *string    `json:"creadoPor"`
+	Estado     string     `json:"estado"`
+	ResueltoAt *time.Time `json:"resueltoAt"`
+	CreatedAt  time.Time  `json:"createdAt"`
+}
+
 type CostHistory struct {
 	ID               string     `json:"id"`
 	VariantID        string     `json:"variantId"`

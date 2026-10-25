@@ -12,6 +12,76 @@ import (
 	"mjbj/internal/jsmath"
 )
 
+const anotarRespuesta = `-- name: AnotarRespuesta :exec
+INSERT INTO correo_hilos (casilla, hilo, asunto, remitente, estado, asignado_a, recibido_at, respondido_at, respondido_por)
+VALUES ($1, $2, $3, $4, 'esperando',
+  nullif($5::text, ''), $6, now(), nullif($5::text, ''))
+ON CONFLICT (casilla, hilo) DO UPDATE SET
+  respondido_at = coalesce(correo_hilos.respondido_at, now()),
+  respondido_por = coalesce(correo_hilos.respondido_por, excluded.respondido_por),
+  asignado_a = coalesce(correo_hilos.asignado_a, excluded.asignado_a),
+  recibido_at = coalesce(correo_hilos.recibido_at, excluded.recibido_at),
+  estado = CASE WHEN correo_hilos.estado IN ('nuevo', 'en-curso') THEN 'esperando' ELSE correo_hilos.estado END,
+  updated_at = now()
+`
+
+type AnotarRespuestaParams struct {
+	Casilla    string     `json:"casilla"`
+	Hilo       string     `json:"hilo"`
+	Asunto     string     `json:"asunto"`
+	Remitente  string     `json:"remitente"`
+	Persona    string     `json:"persona"`
+	RecibidoAt *time.Time `json:"recibidoAt"`
+}
+
+// Al contestar desde el correo: la primera respuesta queda para el tiempo
+// de respuesta, y una conversación nueva pasa a «esperando al cliente».
+func (q *Queries) AnotarRespuesta(ctx context.Context, arg AnotarRespuestaParams) error {
+	_, err := q.db.Exec(ctx, anotarRespuesta,
+		arg.Casilla,
+		arg.Hilo,
+		arg.Asunto,
+		arg.Remitente,
+		arg.Persona,
+		arg.RecibidoAt,
+	)
+	return err
+}
+
+const borrarNota = `-- name: BorrarNota :execrows
+DELETE FROM correo_notas WHERE id = $1 AND casilla = $2
+`
+
+type BorrarNotaParams struct {
+	ID      string `json:"id"`
+	Casilla string `json:"casilla"`
+}
+
+func (q *Queries) BorrarNota(ctx context.Context, arg BorrarNotaParams) (int64, error) {
+	result, err := q.db.Exec(ctx, borrarNota, arg.ID, arg.Casilla)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const borrarPlantilla = `-- name: BorrarPlantilla :execrows
+DELETE FROM correo_plantillas WHERE id = $1 AND casilla = $2
+`
+
+type BorrarPlantillaParams struct {
+	ID      string `json:"id"`
+	Casilla string `json:"casilla"`
+}
+
+func (q *Queries) BorrarPlantilla(ctx context.Context, arg BorrarPlantillaParams) (int64, error) {
+	result, err := q.db.Exec(ctx, borrarPlantilla, arg.ID, arg.Casilla)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const buscarClientesConCorreo = `-- name: BuscarClientesConCorreo :many
 SELECT id, nombre, lower(email)::text AS correo
 FROM customers
@@ -124,6 +194,77 @@ func (q *Queries) ClientesEntreCorreos(ctx context.Context, correos []string) ([
 	return items, nil
 }
 
+const crearNota = `-- name: CrearNota :one
+INSERT INTO correo_notas (casilla, hilo, autor_id, autor, texto)
+VALUES ($1, $2, nullif($3::text, ''), $4, $5)
+RETURNING id, autor, texto, created_at
+`
+
+type CrearNotaParams struct {
+	Casilla string `json:"casilla"`
+	Hilo    string `json:"hilo"`
+	AutorID string `json:"autorId"`
+	Autor   string `json:"autor"`
+	Texto   string `json:"texto"`
+}
+
+type CrearNotaRow struct {
+	ID        string    `json:"id"`
+	Autor     string    `json:"autor"`
+	Texto     string    `json:"texto"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+func (q *Queries) CrearNota(ctx context.Context, arg CrearNotaParams) (CrearNotaRow, error) {
+	row := q.db.QueryRow(ctx, crearNota,
+		arg.Casilla,
+		arg.Hilo,
+		arg.AutorID,
+		arg.Autor,
+		arg.Texto,
+	)
+	var i CrearNotaRow
+	err := row.Scan(
+		&i.ID,
+		&i.Autor,
+		&i.Texto,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const crearSeguimiento = `-- name: CrearSeguimiento :one
+INSERT INTO correo_seguimientos (casilla, hilo, para, asunto, enviado_at, vence_at, creado_por)
+VALUES ($1, $2, $3, $4, $5, $6,
+  nullif($7::text, ''))
+RETURNING id
+`
+
+type CrearSeguimientoParams struct {
+	Casilla   string    `json:"casilla"`
+	Hilo      string    `json:"hilo"`
+	Para      string    `json:"para"`
+	Asunto    string    `json:"asunto"`
+	EnviadoAt time.Time `json:"enviadoAt"`
+	VenceAt   time.Time `json:"venceAt"`
+	CreadoPor string    `json:"creadoPor"`
+}
+
+func (q *Queries) CrearSeguimiento(ctx context.Context, arg CrearSeguimientoParams) (string, error) {
+	row := q.db.QueryRow(ctx, crearSeguimiento,
+		arg.Casilla,
+		arg.Hilo,
+		arg.Para,
+		arg.Asunto,
+		arg.EnviadoAt,
+		arg.VenceAt,
+		arg.CreadoPor,
+	)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
 const fichaPorCorreo = `-- name: FichaPorCorreo :one
 SELECT c.id, c.nombre, c.razon_social, c.cuit, c.tipo::text AS tipo, c.estado::text AS estado,
   c.limite_credito, c.dias_credito, c.cuenta_bloqueada, c.motivo_bloqueo, c.telefono,
@@ -173,6 +314,165 @@ func (q *Queries) FichaPorCorreo(ctx context.Context, correo string) (FichaPorCo
 	return i, err
 }
 
+const guardarHilo = `-- name: GuardarHilo :exec
+INSERT INTO correo_hilos (casilla, hilo, asunto, remitente, estado, asignado_a, recibido_at)
+VALUES ($1, $2, $3, $4,
+  coalesce(nullif($5::text, ''), 'nuevo'), nullif($6::text, ''), $7)
+ON CONFLICT (casilla, hilo) DO UPDATE SET
+  estado = coalesce(nullif($5::text, ''), correo_hilos.estado),
+  asignado_a = CASE WHEN $8::bool THEN NULL
+    ELSE coalesce(nullif($6::text, ''), correo_hilos.asignado_a) END,
+  asunto = CASE WHEN correo_hilos.asunto = '' THEN excluded.asunto ELSE correo_hilos.asunto END,
+  remitente = CASE WHEN correo_hilos.remitente = '' THEN excluded.remitente ELSE correo_hilos.remitente END,
+  recibido_at = coalesce(correo_hilos.recibido_at, excluded.recibido_at),
+  updated_at = now()
+`
+
+type GuardarHiloParams struct {
+	Casilla    string     `json:"casilla"`
+	Hilo       string     `json:"hilo"`
+	Asunto     string     `json:"asunto"`
+	Remitente  string     `json:"remitente"`
+	Estado     string     `json:"estado"`
+	AsignadoA  string     `json:"asignadoA"`
+	RecibidoAt *time.Time `json:"recibidoAt"`
+	Soltar     bool       `json:"soltar"`
+}
+
+// Asigna y cambia el estado. Un estado o un asignado vacíos no se tocan:
+// se cambia uno sin pisar el otro. `soltar` deja la conversación sin dueño.
+func (q *Queries) GuardarHilo(ctx context.Context, arg GuardarHiloParams) error {
+	_, err := q.db.Exec(ctx, guardarHilo,
+		arg.Casilla,
+		arg.Hilo,
+		arg.Asunto,
+		arg.Remitente,
+		arg.Estado,
+		arg.AsignadoA,
+		arg.RecibidoAt,
+		arg.Soltar,
+	)
+	return err
+}
+
+const guardarPlantilla = `-- name: GuardarPlantilla :one
+INSERT INTO correo_plantillas (casilla, titulo, atajo, texto)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (casilla, titulo) DO UPDATE SET atajo = excluded.atajo, texto = excluded.texto, updated_at = now()
+RETURNING id
+`
+
+type GuardarPlantillaParams struct {
+	Casilla string `json:"casilla"`
+	Titulo  string `json:"titulo"`
+	Atajo   string `json:"atajo"`
+	Texto   string `json:"texto"`
+}
+
+func (q *Queries) GuardarPlantilla(ctx context.Context, arg GuardarPlantillaParams) (string, error) {
+	row := q.db.QueryRow(ctx, guardarPlantilla,
+		arg.Casilla,
+		arg.Titulo,
+		arg.Atajo,
+		arg.Texto,
+	)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
+const hilosDe = `-- name: HilosDe :many
+
+SELECT h.hilo, h.estado, coalesce(h.asignado_a, '')::text AS asignado_a, coalesce(u.name, '')::text AS asignado_nombre,
+  (SELECT count(*) FROM correo_notas n WHERE n.casilla = h.casilla AND n.hilo = h.hilo)::int AS notas
+FROM correo_hilos h
+LEFT JOIN "user" u ON u.id = h.asignado_a
+WHERE h.casilla = $1 AND h.hilo = ANY($2::text[])
+`
+
+type HilosDeParams struct {
+	Casilla string   `json:"casilla"`
+	Hilos   []string `json:"hilos"`
+}
+
+type HilosDeRow struct {
+	Hilo           string `json:"hilo"`
+	Estado         string `json:"estado"`
+	AsignadoA      string `json:"asignadoA"`
+	AsignadoNombre string `json:"asignadoNombre"`
+	Notas          int32  `json:"notas"`
+}
+
+// --- Lo propio del correo: conversaciones, notas, seguimientos, plantillas.
+func (q *Queries) HilosDe(ctx context.Context, arg HilosDeParams) ([]HilosDeRow, error) {
+	rows, err := q.db.Query(ctx, hilosDe, arg.Casilla, arg.Hilos)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HilosDeRow{}
+	for rows.Next() {
+		var i HilosDeRow
+		if err := rows.Scan(
+			&i.Hilo,
+			&i.Estado,
+			&i.AsignadoA,
+			&i.AsignadoNombre,
+			&i.Notas,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const notasDe = `-- name: NotasDe :many
+SELECT id, autor, texto, created_at FROM correo_notas
+WHERE casilla = $1 AND hilo = $2
+ORDER BY created_at
+`
+
+type NotasDeParams struct {
+	Casilla string `json:"casilla"`
+	Hilo    string `json:"hilo"`
+}
+
+type NotasDeRow struct {
+	ID        string    `json:"id"`
+	Autor     string    `json:"autor"`
+	Texto     string    `json:"texto"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+func (q *Queries) NotasDe(ctx context.Context, arg NotasDeParams) ([]NotasDeRow, error) {
+	rows, err := q.db.Query(ctx, notasDe, arg.Casilla, arg.Hilo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NotasDeRow{}
+	for rows.Next() {
+		var i NotasDeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Autor,
+			&i.Texto,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pedidosAbiertosDeCliente = `-- name: PedidosAbiertosDeCliente :many
 SELECT id, numero, estado::text AS estado, total, created_at
 FROM orders
@@ -217,6 +517,105 @@ func (q *Queries) PedidosAbiertosDeCliente(ctx context.Context, customerID *stri
 	return items, nil
 }
 
+const personasDelCorreo = `-- name: PersonasDelCorreo :many
+SELECT u.id, u.name AS nombre, lower(u.email)::text AS correo, p.staff_role::text AS rol
+FROM "user" u
+JOIN profiles p ON p.user_id = u.id
+WHERE p.role = 'staff' AND p.staff_role IN ('admin', 'vendedor')
+ORDER BY u.name
+`
+
+type PersonasDelCorreoRow struct {
+	ID     string `json:"id"`
+	Nombre string `json:"nombre"`
+	Correo string `json:"correo"`
+	Rol    string `json:"rol"`
+}
+
+// La gente de staff a la que se le puede asignar una conversación.
+func (q *Queries) PersonasDelCorreo(ctx context.Context) ([]PersonasDelCorreoRow, error) {
+	rows, err := q.db.Query(ctx, personasDelCorreo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PersonasDelCorreoRow{}
+	for rows.Next() {
+		var i PersonasDelCorreoRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nombre,
+			&i.Correo,
+			&i.Rol,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const plantillas = `-- name: Plantillas :many
+SELECT id, titulo, atajo, texto, updated_at FROM correo_plantillas
+WHERE casilla = $1 ORDER BY titulo
+`
+
+type PlantillasRow struct {
+	ID        string    `json:"id"`
+	Titulo    string    `json:"titulo"`
+	Atajo     string    `json:"atajo"`
+	Texto     string    `json:"texto"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+func (q *Queries) Plantillas(ctx context.Context, casilla string) ([]PlantillasRow, error) {
+	rows, err := q.db.Query(ctx, plantillas, casilla)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PlantillasRow{}
+	for rows.Next() {
+		var i PlantillasRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Titulo,
+			&i.Atajo,
+			&i.Texto,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const resolverSeguimiento = `-- name: ResolverSeguimiento :execrows
+UPDATE correo_seguimientos SET estado = $1, resuelto_at = now()
+WHERE id = $2 AND casilla = $3 AND estado = 'pendiente'
+`
+
+type ResolverSeguimientoParams struct {
+	Estado  string `json:"estado"`
+	ID      string `json:"id"`
+	Casilla string `json:"casilla"`
+}
+
+func (q *Queries) ResolverSeguimiento(ctx context.Context, arg ResolverSeguimientoParams) (int64, error) {
+	result, err := q.db.Exec(ctx, resolverSeguimiento, arg.Estado, arg.ID, arg.Casilla)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const rolDeCasilla = `-- name: RolDeCasilla :one
 
 SELECT p.staff_role::text AS rol, u.id AS usuario, u.name AS nombre
@@ -244,6 +643,94 @@ func (q *Queries) RolDeCasilla(ctx context.Context, correo string) (RolDeCasilla
 	var i RolDeCasillaRow
 	err := row.Scan(&i.Rol, &i.Usuario, &i.Nombre)
 	return i, err
+}
+
+const seguimientosPendientes = `-- name: SeguimientosPendientes :many
+SELECT id, hilo, para, asunto, enviado_at, vence_at FROM correo_seguimientos
+WHERE casilla = $1 AND estado = 'pendiente'
+ORDER BY vence_at
+`
+
+type SeguimientosPendientesRow struct {
+	ID        string    `json:"id"`
+	Hilo      string    `json:"hilo"`
+	Para      string    `json:"para"`
+	Asunto    string    `json:"asunto"`
+	EnviadoAt time.Time `json:"enviadoAt"`
+	VenceAt   time.Time `json:"venceAt"`
+}
+
+func (q *Queries) SeguimientosPendientes(ctx context.Context, casilla string) ([]SeguimientosPendientesRow, error) {
+	rows, err := q.db.Query(ctx, seguimientosPendientes, casilla)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SeguimientosPendientesRow{}
+	for rows.Next() {
+		var i SeguimientosPendientesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Hilo,
+			&i.Para,
+			&i.Asunto,
+			&i.EnviadoAt,
+			&i.VenceAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const tiemposDeRespuesta = `-- name: TiemposDeRespuesta :many
+SELECT coalesce(u.name, 'Sin nombre')::text AS persona, count(*)::int AS conversaciones,
+  (percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM h.respondido_at - h.recibido_at)))::float8 AS mediana_segundos
+FROM correo_hilos h
+LEFT JOIN "user" u ON u.id = h.respondido_por
+WHERE h.casilla = $1 AND h.respondido_at IS NOT NULL AND h.recibido_at IS NOT NULL
+  AND h.respondido_at >= now() - make_interval(days => $2::int)
+  AND h.respondido_at >= h.recibido_at
+GROUP BY u.name
+ORDER BY mediana_segundos
+`
+
+type TiemposDeRespuestaParams struct {
+	Casilla string `json:"casilla"`
+	Dias    int32  `json:"dias"`
+}
+
+type TiemposDeRespuestaRow struct {
+	Persona         string  `json:"persona"`
+	Conversaciones  int32   `json:"conversaciones"`
+	MedianaSegundos float64 `json:"medianaSegundos"`
+}
+
+// Cuánto se tarda en contestar, por persona, en los últimos N días: la
+// mediana y cuántas conversaciones. Solo las que se contestaron desde el
+// correo y tienen la fecha de llegada.
+func (q *Queries) TiemposDeRespuesta(ctx context.Context, arg TiemposDeRespuestaParams) ([]TiemposDeRespuestaRow, error) {
+	rows, err := q.db.Query(ctx, tiemposDeRespuesta, arg.Casilla, arg.Dias)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TiemposDeRespuestaRow{}
+	for rows.Next() {
+		var i TiemposDeRespuestaRow
+		if err := rows.Scan(&i.Persona, &i.Conversaciones, &i.MedianaSegundos); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const ultimoPresupuestoDeCliente = `-- name: UltimoPresupuestoDeCliente :one

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"mime"
 	"net"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -285,6 +286,9 @@ type Resumen struct {
 	Vista string `json:"vista"`
 	// Etiquetas son las palabras clave de IMAP, ya legibles (etiquetas.go).
 	Etiquetas []string `json:"etiquetas"`
+	// Hilo es el Message-ID del primer mensaje de la conversación (el
+	// primero de References, o el propio): la clave de equipo.go.
+	Hilo string `json:"hilo,omitempty"`
 }
 
 // Pagina es una página de la bandeja, de la más nueva a la más vieja.
@@ -306,6 +310,26 @@ var opcionesResumen = &imap.FetchOptions{
 	// Extendida: sin ella el servidor no manda el Content-Disposition, y no
 	// se puede saber qué partes son adjuntos.
 	BodyStructure: &imap.FetchItemBodyStructure{Extended: true},
+	BodySection:   []*imap.FetchItemBodySection{seccionReferencias},
+}
+
+// References no viene en el sobre: se pide aparte, solo ese encabezado.
+var seccionReferencias = &imap.FetchItemBodySection{
+	Specifier: imap.PartSpecifierHeader, HeaderFields: []string{"References"}, Peek: true,
+}
+
+var reMessageID = regexp.MustCompile(`<([^<>\s]+)>`)
+
+// hiloDe es la clave de la conversación: el primer Message-ID de
+// References, si no el In-Reply-To, si no el propio.
+func hiloDe(referencias []byte, enRespuestaA []string, propio string) string {
+	if m := reMessageID.FindSubmatch(referencias); m != nil {
+		return string(m[1])
+	}
+	if len(enRespuestaA) > 0 && enRespuestaA[0] != "" {
+		return strings.Trim(enRespuestaA[0], "<> ")
+	}
+	return strings.Trim(propio, "<> ")
 }
 
 func resumir(m *imapclient.FetchMessageBuffer) Resumen {
@@ -317,6 +341,7 @@ func resumir(m *imapclient.FetchMessageBuffer) Resumen {
 		if !e.Date.IsZero() {
 			r.Fecha = e.Date
 		}
+		r.Hilo = hiloDe(m.FindBodySection(seccionReferencias), e.InReplyTo, e.MessageID)
 	}
 	for _, f := range m.Flags {
 		switch f {

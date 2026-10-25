@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"mjbj/internal/auth"
 	"mjbj/internal/pruebas"
@@ -76,11 +77,23 @@ func armarERP(t *testing.T, conBase bool) *entornoERP {
 // como pide algo con la sesión de esa casilla.
 func (e *entornoERP) como(t *testing.T, casilla, ruta string) (int, []byte) {
 	t.Helper()
+	return e.pedido(t, casilla, "GET", ruta, "")
+}
+
+func (e *entornoERP) pedido(t *testing.T, casilla, metodo, ruta, cuerpo string) (int, []byte) {
+	t.Helper()
 	w := httptest.NewRecorder()
 	if err := e.app.sesiones.Iniciar(w, Credenciales{Correo: casilla, Clave: "x"}); err != nil {
 		t.Fatal(err)
 	}
-	req, _ := http.NewRequest("GET", e.srv.URL+ruta, nil)
+	var lector io.Reader
+	if cuerpo != "" {
+		lector = strings.NewReader(cuerpo)
+	}
+	req, _ := http.NewRequest(metodo, e.srv.URL+ruta, lector)
+	if cuerpo != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	for _, c := range w.Result().Cookies() {
 		req.AddCookie(c)
 	}
@@ -187,5 +200,99 @@ func TestBaseCaida(t *testing.T) {
 	defer erp.Cerrar()
 	if erp.VeFichas(context.Background(), "ventas@prueba.test") {
 		t.Error("sin base no se ve ninguna ficha")
+	}
+}
+
+// La casilla compartida: asignar, cambiar el estado, notas internas, el
+// tiempo de respuesta y las respuestas guardadas. Una casilla que no es de
+// staff no ve ni toca nada.
+func TestEquipo(t *testing.T) {
+	e := armarERP(t, true)
+	_, cuerpo := e.como(t, "ventas@prueba.test", "/api/equipo")
+	var eq struct {
+		Personas []struct{ ID, Nombre string }
+		Dueno    string
+	}
+	if err := json.Unmarshal(cuerpo, &eq); err != nil || len(eq.Personas) != 2 || eq.Dueno == "" {
+		t.Fatalf("equipo: %s", cuerpo)
+	}
+	var diego, martin string
+	for _, p := range eq.Personas {
+		if p.ID == eq.Dueno {
+			diego = p.ID
+		} else {
+			martin = p.ID
+		}
+	}
+
+	estado, cuerpo := e.pedido(t, "ventas@prueba.test", "PUT", "/api/hilos",
+		`{"hilo":"<raiz@x.test>","asunto":"Presupuesto","remitente":"carpinteriaperez@gmail.test","estado":"en-curso","asignadoA":"`+martin+`"}`)
+	if estado != 200 || !strings.Contains(string(cuerpo), `"estado":"en-curso"`) || !strings.Contains(string(cuerpo), "Diego admin") {
+		t.Fatalf("asignar: %d %s", estado, cuerpo)
+	}
+	// Cambiar el estado no pisa al asignado.
+	_, cuerpo = e.pedido(t, "ventas@prueba.test", "PUT", "/api/hilos", `{"hilo":"raiz@x.test","estado":"esperando"}`)
+	if !strings.Contains(string(cuerpo), `"asignadoA":"`+martin+`"`) || !strings.Contains(string(cuerpo), `"estado":"esperando"`) {
+		t.Errorf("estado: %s", cuerpo)
+	}
+	if estado, _ := e.pedido(t, "ventas@prueba.test", "PUT", "/api/hilos", `{"hilo":"raiz@x.test","asignadoA":"cualquiera"}`); estado != 400 && estado != 422 {
+		t.Errorf("asignar a alguien de afuera: %d", estado)
+	}
+	if estado, _ := e.pedido(t, "ventas@prueba.test", "PUT", "/api/hilos", `{"hilo":"raiz@x.test","estado":"inventado"}`); estado != 400 && estado != 422 {
+		t.Errorf("estado inventado: %d", estado)
+	}
+
+	estado, cuerpo = e.pedido(t, "ventas@prueba.test", "POST", "/api/hilos/notas", `{"hilo":"raiz@x.test","autorId":"`+diego+`","texto":"Ojo: debe la mitad."}`)
+	if estado != 201 || !strings.Contains(string(cuerpo), `"autor":"Diego vendedor"`) {
+		t.Fatalf("nota: %d %s", estado, cuerpo)
+	}
+	_, cuerpo = e.como(t, "ventas@prueba.test", "/api/hilos?h=raiz@x.test&h=otro@x.test")
+	if !strings.Contains(string(cuerpo), `"notas":1`) {
+		t.Errorf("hilos: %s", cuerpo)
+	}
+	// Otra casilla no ve las notas de esta.
+	_, cuerpo = e.como(t, "admin@prueba.test", "/api/hilos/notas?h=raiz@x.test")
+	if strings.Contains(string(cuerpo), "debe la mitad") {
+		t.Errorf("las notas son de la casilla: %s", cuerpo)
+	}
+	for _, casilla := range []string{"juan@cliente.test", "info@prueba.test"} {
+		if estado, _ := e.como(t, casilla, "/api/hilos/notas?h=raiz@x.test"); estado != 404 {
+			t.Errorf("%s vio notas: %d", casilla, estado)
+		}
+		if estado, _ := e.pedido(t, casilla, "PUT", "/api/hilos", `{"hilo":"raiz@x.test","estado":"resuelto"}`); estado != 404 {
+			t.Errorf("%s cambió un hilo: %d", casilla, estado)
+		}
+	}
+
+	// Contestar desde el correo anota la primera respuesta y quién.
+	hace := time.Now().Add(-2 * time.Hour).Format(time.RFC3339)
+	b := &Borrador{Asunto: "Re: Presupuesto", EnRespuestaA: "segundo@x.test", Referencias: []string{"nuevo@x.test", "segundo@x.test"}, Para: []string{"Juan <juan@x.test>"}, MessageID: "propio@mjbj"}
+	campos := map[string]string{"persona": diego, "recibido": hace, "remitente": "juan@x.test", "seguimiento": "3"}
+	e.app.despuesDeEnviar(context.Background(), Credenciales{Correo: "ventas@prueba.test"}, b, func(k string) string { return campos[k] })
+	_, cuerpo = e.como(t, "ventas@prueba.test", "/api/tiempos?dias=30")
+	var tiempos []struct {
+		Persona         string
+		Conversaciones  int
+		MedianaSegundos float64
+	}
+	if err := json.Unmarshal(cuerpo, &tiempos); err != nil || len(tiempos) != 1 || tiempos[0].Persona != "Diego vendedor" ||
+		tiempos[0].MedianaSegundos < 7100 || tiempos[0].MedianaSegundos > 7300 {
+		t.Errorf("tiempos: %s", cuerpo)
+	}
+	_, cuerpo = e.como(t, "ventas@prueba.test", "/api/hilos?h=nuevo@x.test")
+	if !strings.Contains(string(cuerpo), `"estado":"esperando"`) || !strings.Contains(string(cuerpo), `"asignadoA":"`+diego+`"`) {
+		t.Errorf("la respuesta deja la conversación esperando al cliente: %s", cuerpo)
+	}
+
+	// Respuestas guardadas.
+	if estado, cuerpo := e.pedido(t, "ventas@prueba.test", "PUT", "/api/plantillas", `{"titulo":"Saldo","atajo":";saldo","texto":"Hola {nombre}, tu saldo es {saldo}."}`); estado != 200 {
+		t.Fatalf("plantilla: %d %s", estado, cuerpo)
+	}
+	_, cuerpo = e.como(t, "ventas@prueba.test", "/api/plantillas")
+	if !strings.Contains(string(cuerpo), `"atajo":";saldo"`) {
+		t.Errorf("plantillas: %s", cuerpo)
+	}
+	if estado, _ := e.pedido(t, "ventas@prueba.test", "PUT", "/api/plantillas", `{"titulo":"","texto":""}`); estado != 400 && estado != 422 {
+		t.Errorf("plantilla vacía: %d", estado)
 	}
 }

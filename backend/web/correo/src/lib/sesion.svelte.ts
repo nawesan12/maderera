@@ -10,17 +10,21 @@ export interface DatosSesion {
   fichas?: boolean;
   /** Quién del staff es dueño de la casilla, si se sabe. */
   persona?: string;
+  /** Si están la casilla compartida, los seguimientos y las respuestas guardadas. */
+  equipo?: boolean;
 }
 
 class Sesion {
   panel = $state("");
   fichas = $state(false);
   persona = $state("");
+  equipo = $state(false);
 
   tomar(d: DatosSesion) {
     this.panel = d.panel ?? "";
     this.fichas = !!d.fichas;
     this.persona = d.persona ?? "";
+    this.equipo = !!d.equipo;
   }
 }
 

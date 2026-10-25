@@ -5,6 +5,8 @@
   import { familiaDe } from "../lib/etiquetas";
   import { fechaCorta, grupoDeFecha, iniciales, nombreDe } from "../lib/formato";
   import Icono from "./Icono.svelte";
+  import { equipo, familiaEstado, nombresEstado } from "../lib/equipo.svelte";
+  import { sesion } from "../lib/sesion.svelte";
 
   // En Enviados y Borradores importa a quién se mandó, no quién lo mandó.
   const mostrarPara = $derived(bandeja.rolActual === "enviados" || bandeja.rolActual === "borradores");
@@ -30,6 +32,15 @@
     const uid = bandeja.foco;
     if (uid) document.querySelector(`[data-uid="${uid}"]`)?.scrollIntoView({ block: "nearest" });
   });
+
+  // El estado de cada conversación en el equipo.
+  $effect(() => {
+    void equipo.conocer(bandeja.mensajes.map((m) => m.hilo));
+  });
+
+  // Los seguimientos vencidos: «no contestó», arriba de la entrada.
+  const vencidos = $derived(bandeja.rolActual === "entrada" && !bandeja.q ? equipo.seguimientos.filter((s) => s.vencido) : []);
+  const diasDesde = (iso: string) => Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 864e5));
 
   // Los remitentes de la página, para saber cuáles son clientes.
   $effect(() => {
@@ -93,6 +104,19 @@
     <h2 class="titulo-tel">{bandeja.carpetaActual?.nombre ?? ""}</h2>
   {:else}
     <h2 class="titulo-tel">Entrada · {bandeja.correo?.replace(/@.*/, "@")}</h2>
+  {/if}
+
+  {#if vencidos.length}
+    <div class="seguimientos" role="status">
+      {#each vencidos.slice(0, 3) as s (s.id)}
+        <div class="seguimiento">
+          <Icono nombre="reloj" tamano={18} />
+          <span class="que"><strong>{s.para}</strong> no contestó «{s.asunto || "(sin asunto)"}» · hace {diasDesde(s.enviado)} días</span>
+          <button class="enlace" onclick={() => bandeja.redactar("nuevo", undefined, s.para)}>Escribirle</button>
+          <button class="icono chico" aria-label="Ya está, sacar el aviso" title="Ya está" onclick={() => equipo.cancelarSeguimiento(s.id)}><Icono nombre="cerrar" tamano={16} /></button>
+        </div>
+      {/each}
+    </div>
   {/if}
 
   {#if bandeja.marcados.size}
@@ -215,7 +239,12 @@
                 <span class="asunto">{m.asunto || "(sin asunto)"}</span>
                 <span class="l3">
                   <span class="vista">{m.vista || " "}</span>
-                  {#if m.etiquetas?.length}<span class="chip {familiaDe(m.etiquetas[0])}">{m.etiquetas[0]}</span>{/if}
+                  {#if sesion.equipo && m.hilo && equipo.hilos[m.hilo] && (equipo.hilos[m.hilo].estado !== "nuevo" || equipo.hilos[m.hilo].asignadoA)}
+                    {@const h = equipo.hilos[m.hilo]}
+                    <span class="chip {familiaEstado[h.estado]}" title={nombresEstado[h.estado]}>
+                      {h.asignadoA ? (h.asignadoA === equipo.yo ? "Vos" : h.asignadoNombre.split(" ")[0]) : nombresEstado[h.estado]}{#if h.asignadoA && h.estado === "resuelto"} · ✓{/if}
+                    </span>
+                  {:else if m.etiquetas?.length}<span class="chip {familiaDe(m.etiquetas[0])}">{m.etiquetas[0]}</span>{/if}
                 </span>
               </button>
               <button
@@ -344,6 +373,37 @@
   }
   .titulo-tel {
     display: none;
+  }
+  .seguimientos {
+    display: grid;
+    gap: 6px;
+    padding: 10px 12px 4px;
+  }
+  .seguimiento {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 6px 6px 12px;
+    border-radius: 10px;
+    background: var(--espBg);
+    color: var(--espT);
+    font-size: 15px;
+  }
+  .seguimiento .que {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .seguimiento .enlace {
+    color: inherit;
+    font-size: 15px;
+  }
+  .seguimiento .icono.chico {
+    width: 32px;
+    height: 32px;
+    color: inherit;
   }
   .lote {
     display: flex;

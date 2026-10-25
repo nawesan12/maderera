@@ -112,6 +112,19 @@ func (a *App) Rutas() http.Handler {
 	m.HandleFunc("GET /api/cliente", a.conSesion(a.cliente))
 	m.HandleFunc("GET /api/contactos", a.conSesion(a.contactos))
 
+	m.HandleFunc("GET /api/equipo", a.conSesion(a.equipo))
+	m.HandleFunc("GET /api/hilos", a.conSesion(a.hilos))
+	m.HandleFunc("PUT /api/hilos", a.conSesion(a.guardarHilo))
+	m.HandleFunc("GET /api/hilos/notas", a.conSesion(a.notas))
+	m.HandleFunc("POST /api/hilos/notas", a.conSesion(a.crearNota))
+	m.HandleFunc("DELETE /api/hilos/notas/{id}", a.conSesion(a.borrarNota))
+	m.HandleFunc("GET /api/tiempos", a.conSesion(a.tiempos))
+	m.HandleFunc("GET /api/seguimientos", a.conSesion(a.seguimientos))
+	m.HandleFunc("DELETE /api/seguimientos/{id}", a.conSesion(a.cancelarSeguimiento))
+	m.HandleFunc("GET /api/plantillas", a.conSesion(a.plantillas))
+	m.HandleFunc("PUT /api/plantillas", a.conSesion(a.guardarPlantilla))
+	m.HandleFunc("DELETE /api/plantillas/{id}", a.conSesion(a.borrarPlantilla))
+
 	m.Handle("GET /", a.spa())
 	return plataforma.Cadena(m, a.log)
 }
@@ -175,6 +188,9 @@ type respuestaSesion struct {
 	Fichas bool `json:"fichas"`
 	// Persona es quién del staff es dueño de la casilla, si se sabe.
 	Persona string `json:"persona,omitempty"`
+	// Equipo dice si están las funciones de casilla compartida (asignar,
+	// notas, seguimientos, respuestas guardadas): base y casilla de staff.
+	Equipo bool `json:"equipo"`
 }
 
 func (a *App) datosSesion(ctx context.Context, correo string) respuestaSesion {
@@ -187,6 +203,7 @@ func (a *App) datosSesion(ctx context.Context, correo string) respuestaSesion {
 	}
 	rol, _, nombre := a.erp.Staff(ctx, correo)
 	r.Fichas = rol == "admin" || rol == "vendedor"
+	r.Equipo = rol != ""
 	r.Persona = nombre
 	return r
 }
@@ -595,6 +612,7 @@ func (a *App) enviar(w http.ResponseWriter, r *http.Request, cred Credenciales) 
 		a.fallar(w, r, err)
 		return
 	}
+	a.despuesDeEnviar(r.Context(), cred, b, valor)
 	w.WriteHeader(http.StatusNoContent)
 }
 

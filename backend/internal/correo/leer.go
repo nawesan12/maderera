@@ -77,6 +77,15 @@ func parsear(crudo []byte) (*Mensaje, [][]byte, error) {
 	m.ResponderA = desdeMail(h, "Reply-To")
 	m.MessageID, _ = h.MessageID()
 	m.Referencias, _ = h.MsgIDList("References")
+	enRespuestaA, _ := h.MsgIDList("In-Reply-To")
+	switch {
+	case len(m.Referencias) > 0:
+		m.Hilo = m.Referencias[0]
+	case len(enRespuestaA) > 0:
+		m.Hilo = enRespuestaA[0]
+	default:
+		m.Hilo = m.MessageID
+	}
 
 	var datos [][]byte
 	var texto, html strings.Builder

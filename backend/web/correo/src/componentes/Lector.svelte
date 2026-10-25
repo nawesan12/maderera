@@ -10,6 +10,8 @@
   import FichaCliente from "./FichaCliente.svelte";
   import EnLinea from "./EnLinea.svelte";
   import Visor from "./Visor.svelte";
+  import Conversacion from "./Conversacion.svelte";
+  import { equipo } from "../lib/equipo.svelte";
 
   // Por remitente: si alguien permitió las imágenes de un remitente, las
   // siguientes de ese mismo se ven solas.
@@ -185,6 +187,10 @@
               <Icono nombre="estrella" tamano={20} relleno={m.destacado} />
             </button>
           </div>
+
+          {#if equipo.activo && bandeja.rolActual !== "enviados" && bandeja.rolActual !== "borradores"}
+            <Conversacion mensaje={m} />
+          {/if}
 
           {#if m.tieneHtml && m.imagenesRemotas && !verImagenes}
             <div class="aviso-imagenes">

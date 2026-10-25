@@ -10,19 +10,24 @@
   import Atajos from "./Atajos.svelte";
   import Ajustes from "./Ajustes.svelte";
   import Icono from "./Icono.svelte";
+  import { equipo } from "../lib/equipo.svelte";
 
   let verAtajos = $state(false);
 
   onMount(() => {
     void bandeja.iniciar();
+    void equipo.iniciar();
     // Sin IDLE ni push todavía: cada minuto, y al volver a la pestaña.
     const reloj = setInterval(() => void bandeja.refrescar(), 60_000);
+    // Los seguimientos cada cinco minutos: cada pedido mira el IMAP.
+    const relojSeguimientos = setInterval(() => !document.hidden && void equipo.cargarSeguimientos(), 300_000);
     const alVolver = () => {
       if (!document.hidden) void bandeja.refrescar();
     };
     document.addEventListener("visibilitychange", alVolver);
     return () => {
       clearInterval(reloj);
+      clearInterval(relojSeguimientos);
       document.removeEventListener("visibilitychange", alVolver);
     };
   });

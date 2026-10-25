@@ -32,7 +32,7 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 | 0 | Correo (`correo.mjbj.com.ar`) | `go-correo` | hecha (falta encenderla en la VPS: DNS y PTR) |
 | 1 | Base común | `go-base` | hecha (falta desplegarla; E2E de Playwright pendiente) |
 | 2 | Catálogo público y contenido | `go-catalogo` | hecha (falta desplegarla; el secreto `API_SECRETO_INTERNO` va en el entorno de la VPS) |
-| 3 | Productos, precios, stock, acopio | | |
+| 3 | Productos, precios, stock, acopio | `go-productos` | casi hecha: falta mudar el informe de reposición (lee ventas: va con la tanda 5) y el ajuste masivo en lote |
 | 4 | Clientes, cuenta corriente, cheques, cobros | | |
 | 5 | Mostrador, caja, ventas, entregas | | |
 | 6 | Carrito, checkout, Mercado Pago | | |
@@ -101,6 +101,34 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
   `EsProfesionalAprobado`, se juntan ahí), `lib/dal/visitante.ts` (combina
   catálogo con carrito y cortes) y el PDF de la lista.
 
+## Tanda 3: productos, precios y stock
+
+- [x] Productos (internal/productos): listado, ficha con medidas, precios y
+      stock (validación igual a zod, golden de 57 formularios), imágenes,
+      sugeridos, rubros, candidatos a baja (tarea semanal en el worker de Go)
+- [x] Precios (internal/precios): grilla, historial, editar, ajuste masivo,
+      listas derivadas, descuentos por medio de pago, importación de planillas
+      (internal/planilla: CSV y XLSX, golden de 11.344 casos)
+- [x] Stock (internal/stock): grilla, alertas, movimientos, ajuste rápido,
+      transferencia
+- [x] Candados de stock en la ficha y la transferencia (el TS no los tomaba),
+      transferencia contra lo disponible y no contra el físico
+- [x] Benchmark (`bench/tanda3`)
+- [ ] El ajuste masivo en lote: hoy son tres consultas por precio (20–30 s
+      para 6400 en la Mac)
+- [ ] El informe de reposición (lib/dal/admin/reposicion.ts): lee ventas,
+      va con la tanda 5
+- Queda en TS hasta su tanda: el acopio y las reservas (tanda 5), las
+  recepciones de compras (tanda 8), las tarifas de cortes (tanda 11), los PDF
+  de listas (tanda 12) y lib/csv.ts, lib/xlsx.ts y lib/planilla.ts (los usan
+  la migración de ISIS y las listas de proveedores).
+- Bugs del TS que el lector de Go reproduce a propósito (se arreglan cuando
+  se mude la migración, tanda 13): las fechas de un .xlsx salen un día antes;
+  se lee el sheetN.xml primero en orden alfabético (sheet10 antes que
+  sheet2); se pierden los espacios de xml:space="preserve"; los &#NN; quedan
+  escritos; con prefijo de espacio de nombres (<x:worksheet>) la planilla sale
+  vacía; «0,125» se lee como 125.
+
 ## Benchmarks
 
 Uno por tanda, al cerrarla. Detalle y cómo repetirlos: `bench/<tanda>/README.md`.
@@ -134,6 +162,16 @@ TS se queda sin CPU (un núcleo); Go espera a Postgres. Donde manda la base
 (la búsqueda con `ILIKE`) la diferencia se achica. El benchmark encontró un
 pánico de concurrencia en Go y la caché por lista que se había perdido: ver
 `bench/tanda2/README.md`.
+
+### Tanda 3 (25/10/2026, misma Mac, 2000 productos, 20 a la vez)
+
+| Prueba | TypeScript | Go | Go / TS |
+|---|---:|---:|---:|
+| Grilla de productos: pedidos/s | 9,3 | 27,0 | **2,9×** |
+| Grilla de precios: pedidos/s | 1,0 | 30,1 | **30×** (el TS cruzaba listas en n²) |
+| Grilla de stock: pedidos/s | 8,7 | 23,3 | **2,7×** |
+| Memoria máx. | 295–504 MB | 87–140 MB | ~3,5× menos |
+| Ajuste masivo de 6400 precios | 32–45 s | 21–33 s | 1,4× (lento en los dos: va en lote) |
 
 ## Lo aprendido
 
@@ -188,3 +226,18 @@ pánico de concurrencia en Go y la caché por lista que se había perdido: ver
 - **Las server actions agregan campos al FormData** (`$ACTION_REF_1`,
   `$ACTION_1:0`): el validador de la API rechaza las partes que el contrato no
   declara. `soloCampos()` los saca antes de mandar un multipart a Go.
+- **Que una prueba de concurrencia pase no prueba nada si no falla sin el
+  arreglo.** La primera prueba del candado de la ficha pasaba igual sin el
+  candado: dos ediciones de la ficha ya se ordenaban por el UPDATE del
+  producto. La carrera real era ficha contra venta. Antes de dar por buena
+  una prueba de concurrencia, correrla sin el arreglo y verla fallar.
+- **zod 4 rechaza NaN con el mensaje de tipo** («Invalid input: expected
+  number, received NaN»), antes de `.finite(...)`; los refinamientos de un
+  objeto (`superRefine`) solo corren si todo lo demás validó; los mensajes
+  de un enum siguen el orden de las claves de un objeto JS (primero las que
+  parecen enteros: "0"|"21"|"10.5"). Los golden de las validaciones los
+  sacan del esquema real.
+- **toFixed de JS no es FormatFloat**: en el empate exacto JS sube y Go va al
+  par. `jsmath.ToFixed`.
+- **Las e2e entran una sola vez** (`e2e/autenticar.setup.ts`, storageState):
+  con una entrada por prueba, la suite pasaba el freno de 10 cada 5 minutos.

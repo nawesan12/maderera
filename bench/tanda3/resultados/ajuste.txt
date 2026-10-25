@@ -1,0 +1,6 @@
+ajuste-go-1 24.284448
+ajuste-ts-1 37.716193
+ajuste-go-2 33.176950
+ajuste-ts-2 44.892497
+ajuste-go-3 21.211715
+ajuste-ts-3 32.409540

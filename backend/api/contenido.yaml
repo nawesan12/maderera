@@ -1,0 +1,396 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Contenido
+  version: "1"
+  description: |
+    Lo que la maderera edita del sitio sin un despliegue: ajustes, promociones
+    bancarias, banners y reseñas de productos. Las rutas /api/v1/admin/… son
+    del admin (ACCESO de /admin/contenido).
+paths:
+  /api/v1/contenido/ajustes:
+    get:
+      operationId: Ajustes
+      responses:
+        "200":
+          description: clave → valor
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: { type: string } }
+  /api/v1/contenido/promos:
+    get:
+      operationId: Promos
+      responses:
+        "200":
+          description: Las promociones vigentes
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PromoVigente" } }
+  /api/v1/contenido/banners:
+    get:
+      operationId: Banners
+      parameters:
+        - name: ubicacion
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/Ubicacion" }
+      responses:
+        "200":
+          description: Los banners al aire en esa ubicación
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Banner" } }
+  /api/v1/contenido/productos/{id}/resenas:
+    get:
+      operationId: ResenasDelProducto
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Las publicadas, las 50 más nuevas
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Resena" } }
+  /api/v1/contenido/productos/{id}/resumen:
+    get:
+      operationId: ResumenDeResenas
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: El promedio y el reparto, o null si no hay ninguna publicada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Resumen" }
+  /api/v1/contenido/mis-resenas:
+    get:
+      operationId: MisResenables
+      summary: Lo que el cliente compró y puede reseñar
+      responses:
+        "200":
+          description: Los productos de pedidos entregados
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Resenable" } }
+        "401": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: DejarResena
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, orderId, estrellas]
+              additionalProperties: false
+              properties:
+                productId: { type: string, format: uuid }
+                orderId: { type: string, format: uuid }
+                estrellas: { type: integer }
+                texto: { type: string }
+      responses:
+        "201":
+          description: Quedó pendiente de revisión
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConSlug" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "409": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/ajustes:
+    get:
+      operationId: AdminAjustes
+      responses:
+        "200":
+          description: Todos los ajustes
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Ajuste" } }
+  /api/v1/admin/contenido/ajustes/{clave}:
+    put:
+      operationId: GuardarAjuste
+      parameters:
+        - { name: clave, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [valor]
+              additionalProperties: false
+              properties:
+                valor: { type: string }
+      responses:
+        "204": { description: Guardado }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/resenas:
+    get:
+      operationId: AdminResenas
+      responses:
+        "200":
+          description: Las reseñas, primero las pendientes
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ResenaParaModerar" } }
+  /api/v1/admin/contenido/resenas/{id}/moderar:
+    post:
+      operationId: ModerarResena
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              additionalProperties: false
+              properties:
+                estado: { type: string, enum: [publicada, rechazada, pendiente] }
+                motivo: { type: string }
+      responses:
+        "200":
+          description: Moderada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConSlug" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/banners:
+    get:
+      operationId: AdminBanners
+      responses:
+        "200":
+          description: Todos los banners
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/BannerCompleto" } }
+    post:
+      operationId: CrearBanner
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/FormBanner" }
+      responses:
+        "204": { description: Creado }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/banners/{id}:
+    put:
+      operationId: EditarBanner
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/FormBanner" }
+      responses:
+        "204": { description: Guardado }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+    delete:
+      operationId: BorrarBanner
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Borrado }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/promos:
+    get:
+      operationId: AdminPromos
+      responses:
+        "200":
+          description: Todas las promociones
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PromoCompleta" } }
+    post:
+      operationId: CrearPromo
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/FormPromo" }
+      responses:
+        "204": { description: Creada }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/promos/{id}:
+    put:
+      operationId: EditarPromo
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/FormPromo" }
+      responses:
+        "204": { description: Guardada }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+    delete:
+      operationId: BorrarPromo
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Borrada }
+        "404": { $ref: "#/components/responses/Problema" }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    Ubicacion: { type: string, enum: [franja, portada, catalogo] }
+    ConSlug:
+      type: object
+      required: [slug]
+      properties:
+        slug: { type: string, description: el producto, para revalidar su ficha }
+    PromoVigente:
+      type: object
+      required: [id, medio, titulo, detalle, dias, vigenciaHasta, quienPaga, imagenUrl]
+      properties:
+        id: { type: string }
+        medio: { type: string }
+        titulo: { type: string }
+        detalle: { type: string }
+        dias: { type: string }
+        vigenciaHasta: { type: string, description: «dd/mm/aa», o vacío }
+        quienPaga: { type: string, enum: [banco, nosotros] }
+        imagenUrl: { type: string, nullable: true }
+    Banner:
+      type: object
+      required: [id, etiqueta, titulo, bajada, enlace, textoEnlace, imagenUrl, actualizado]
+      properties:
+        id: { type: string }
+        etiqueta: { type: string }
+        titulo: { type: string }
+        bajada: { type: string }
+        enlace: { type: string, nullable: true }
+        textoEnlace: { type: string }
+        imagenUrl: { type: string, nullable: true }
+        actualizado: { type: string, format: date-time }
+    Resena:
+      type: object
+      required: [id, nombre, estrellas, texto, fecha]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        estrellas: { type: integer }
+        texto: { type: string }
+        fecha: { type: string, format: date-time }
+    Resumen:
+      type: object
+      nullable: true
+      required: [promedio, cantidad, reparto]
+      properties:
+        promedio: { type: number }
+        cantidad: { type: integer }
+        reparto: { type: object, additionalProperties: { type: integer } }
+    Resenable:
+      type: object
+      required: [productId, slug, nombre, orderId, numeroPedido, yaResenado]
+      properties:
+        productId: { type: string }
+        slug: { type: string }
+        nombre: { type: string }
+        orderId: { type: string }
+        numeroPedido: { type: string }
+        yaResenado: { type: boolean }
+    Ajuste:
+      type: object
+      required: [clave, valor, descripcion, updatedAt]
+      properties:
+        clave: { type: string }
+        valor: { type: string }
+        descripcion: { type: string, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    ResenaParaModerar:
+      type: object
+      required: [id, producto, productoSlug, nombre, estrellas, texto, estado, motivoRechazo, numeroPedido, createdAt]
+      properties:
+        id: { type: string }
+        producto: { type: string }
+        productoSlug: { type: string }
+        nombre: { type: string }
+        estrellas: { type: integer }
+        texto: { type: string }
+        estado: { type: string, enum: [pendiente, publicada, rechazada] }
+        motivoRechazo: { type: string, nullable: true }
+        numeroPedido: { type: string }
+        createdAt: { type: string, format: date-time }
+    BannerCompleto:
+      type: object
+      required: [id, ubicacion, etiqueta, titulo, bajada, enlace, textoEnlace, imagenUrl, desde, hasta, orden, activo, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        ubicacion: { $ref: "#/components/schemas/Ubicacion" }
+        etiqueta: { type: string }
+        titulo: { type: string }
+        bajada: { type: string }
+        enlace: { type: string, nullable: true }
+        textoEnlace: { type: string }
+        imagenUrl: { type: string, nullable: true }
+        desde: { type: string, format: date-time, nullable: true }
+        hasta: { type: string, format: date-time, nullable: true }
+        orden: { type: integer }
+        activo: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PromoCompleta:
+      type: object
+      required: [id, medio, titulo, detalle, dias, vigenciaHasta, quienPaga, imagenUrl, orden, activo, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        medio: { type: string }
+        titulo: { type: string }
+        detalle: { type: string }
+        dias: { type: string }
+        vigenciaHasta: { type: string, format: date-time, nullable: true }
+        quienPaga: { type: string, enum: [banco, nosotros] }
+        imagenUrl: { type: string, nullable: true }
+        orden: { type: integer }
+        activo: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    FormBanner:
+      type: object
+      required: [ubicacion, titulo]
+      properties:
+        ubicacion: { type: string }
+        etiqueta: { type: string }
+        titulo: { type: string }
+        bajada: { type: string }
+        enlace: { type: string }
+        textoEnlace: { type: string }
+        desde: { type: string, description: AAAA-MM-DD }
+        hasta: { type: string, description: AAAA-MM-DD }
+        orden: { type: string }
+        activo: { type: string, description: «on» si está marcado }
+        imagen: { type: string, format: binary }
+    FormPromo:
+      type: object
+      required: [medio, titulo, quienPaga]
+      properties:
+        medio: { type: string }
+        titulo: { type: string }
+        detalle: { type: string }
+        dias: { type: string }
+        quienPaga: { type: string }
+        vigenciaHasta: { type: string, description: AAAA-MM-DD }
+        orden: { type: string }
+        activo: { type: string, description: «on» si está marcado }
+        quitarImagen: { type: string, description: «on» si está marcado }
+        imagen: { type: string, format: binary }

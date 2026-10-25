@@ -1,19 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Landmark } from "lucide-react";
-import { asc, desc } from "drizzle-orm";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { db } from "@/lib/db";
-import { bankPromotions } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { fechaParaInput, listarPromosDelPanel } from "@/lib/dal/admin/contenido";
 import { EditorDePromo } from "./editor";
 
 export const metadata: Metadata = { title: "Promociones bancarias" };
 
 /** "2026-09-05", que es lo que espera un input de fecha. */
-function paraInput(fecha: Date | null): string {
-  return fecha ? fecha.toISOString().slice(0, 10) : "";
-}
+const paraInput = fechaParaInput;
 
 /**
  * Las promociones bancarias que anuncia la portada.
@@ -30,10 +26,7 @@ function paraInput(fecha: Date | null): string {
 export default async function PromocionesPage() {
   await requireStaff();
 
-  const filas = await db
-    .select()
-    .from(bankPromotions)
-    .orderBy(asc(bankPromotions.orden), desc(bankPromotions.createdAt));
+  const filas = await listarPromosDelPanel();
 
   const ahora = new Date();
   const alAire = (p: (typeof filas)[number]) =>

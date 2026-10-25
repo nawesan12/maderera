@@ -1,20 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Megaphone } from "lucide-react";
-import { asc, desc } from "drizzle-orm";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { db } from "@/lib/db";
-import { banners } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { fechaParaInput, listarBannersDelPanel } from "@/lib/dal/admin/contenido";
 import { EditorDeBanner } from "./editor";
 import { UBICACIONES } from "./ubicaciones";
 
 export const metadata: Metadata = { title: "Avisos y promociones" };
 
 /** "2026-09-05", que es lo que espera un input de fecha. */
-function paraInput(fecha: Date | null): string {
-  return fecha ? fecha.toISOString().slice(0, 10) : "";
-}
+const paraInput = fechaParaInput;
 
 /**
  * Los avisos y promociones del sitio.
@@ -31,10 +27,7 @@ function paraInput(fecha: Date | null): string {
 export default async function BannersPage() {
   await requireStaff();
 
-  const filas = await db
-    .select()
-    .from(banners)
-    .orderBy(asc(banners.ubicacion), asc(banners.orden), desc(banners.createdAt));
+  const filas = await listarBannersDelPanel();
 
   const ahora = new Date();
   const alAire = (b: (typeof filas)[number]) =>

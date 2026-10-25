@@ -5,6 +5,7 @@
  */
 import type { paths as Sesion, components as ComponentesSesion } from "./sesion";
 import type { paths as Catalogo, components as ComponentesCatalogo } from "./catalogo";
+import type { paths as Contenido, components as ComponentesContenido } from "./contenido";
 
-export type paths = Sesion & Catalogo;
-export type Esquemas = ComponentesSesion["schemas"] & ComponentesCatalogo["schemas"];
+export type paths = Sesion & Catalogo & Contenido;
+export type Esquemas = ComponentesSesion["schemas"] & ComponentesCatalogo["schemas"] & ComponentesContenido["schemas"];

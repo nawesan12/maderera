@@ -1,37 +1,20 @@
 import "server-only";
 
-import { asc, desc, eq, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import {
-  orders,
-  productReviews,
-  products,
-  siteSettings,
-} from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
+import { api, datos } from "@/lib/api/servidor";
 
 /**
- * Lo que el panel edita del sitio.
- *
- * Tenía el blog y los testimonios. Los dos salieron el 7/9/2026 por pedido de
- * la clienta: las notas las había escrito el prototipo y los testimonios eran
- * personas inventadas. Lo que la gente opina ahora sale de las reseñas de
- * compra verificada, que es el mismo dato sin el problema de tener que
- * conseguir a alguien que lo firme.
+ * Lo que lee el panel de contenido. Lo sirve la API de Go
+ * (backend/internal/contenido), que exige el rol de quien puede abrir
+ * /admin/contenido.
  */
 
+const fecha = (v: string) => new Date(v);
+const fechaONull = (v: string | null) => (v ? new Date(v) : null);
+
 export async function listarAjustes() {
-  await requireStaff();
-
-  return db
-    .select()
-    .from(siteSettings)
-    .orderBy(asc(siteSettings.clave));
+  const filas = datos(await (await api()).GET("/api/v1/admin/contenido/ajustes"));
+  return filas.map((f) => ({ ...f, updatedAt: fecha(f.updatedAt) }));
 }
-
-/* -------------------------------------------------------------------------- */
-/* Reseñas                                                                     */
-/* -------------------------------------------------------------------------- */
 
 export interface ResenaParaModerar {
   id: string;
@@ -46,37 +29,40 @@ export interface ResenaParaModerar {
   createdAt: Date;
 }
 
-/**
- * Las reseñas para revisar, las pendientes primero.
- *
- * Todas son de compra verificada —el modelo no admite otra cosa—, así que lo
- * que se revisa no es si la persona compró sino qué escribió: un insulto o el
- * teléfono de un competidor firmado en la ficha de un producto queda ahí hasta
- * que alguien lo vea.
- */
+/** Las reseñas, primero las pendientes. */
 export async function listarResenas(): Promise<ResenaParaModerar[]> {
-  await requireStaff();
+  const filas = datos(await (await api()).GET("/api/v1/admin/contenido/resenas"));
+  return filas.map((f) => ({ ...f, createdAt: fecha(f.createdAt) }));
+}
 
-  return db
-    .select({
-      id: productReviews.id,
-      producto: products.name,
-      productoSlug: products.slug,
-      nombre: productReviews.nombre,
-      estrellas: productReviews.estrellas,
-      texto: productReviews.texto,
-      estado: productReviews.estado,
-      motivoRechazo: productReviews.motivoRechazo,
-      numeroPedido: orders.numero,
-      createdAt: productReviews.createdAt,
-    })
-    .from(productReviews)
-    .innerJoin(products, eq(products.id, productReviews.productId))
-    .innerJoin(orders, eq(orders.id, productReviews.orderId))
-    // Las pendientes arriba: es lo único que requiere una decisión.
-    .orderBy(
-      sql`case when ${productReviews.estado} = 'pendiente' then 0 else 1 end`,
-      desc(productReviews.createdAt),
-    )
-    .limit(200);
+/** Todos los banners, por ubicación y orden. */
+export async function listarBannersDelPanel() {
+  const filas = datos(await (await api()).GET("/api/v1/admin/contenido/banners"));
+  return filas.map((f) => ({
+    ...f,
+    desde: fechaONull(f.desde),
+    hasta: fechaONull(f.hasta),
+    createdAt: fecha(f.createdAt),
+    updatedAt: fecha(f.updatedAt),
+  }));
+}
+
+/** Todas las promociones bancarias. */
+export async function listarPromosDelPanel() {
+  const filas = datos(await (await api()).GET("/api/v1/admin/contenido/promos"));
+  return filas.map((f) => ({
+    ...f,
+    vigenciaHasta: fechaONull(f.vigenciaHasta),
+    createdAt: fecha(f.createdAt),
+    updatedAt: fecha(f.updatedAt),
+  }));
+}
+
+/**
+ * Una fecha para un `<input type="date">`, en el día de Buenos Aires: con
+ * toISOString (UTC) una promo que vence a las 23:59 de acá se mostraba con el
+ * día siguiente.
+ */
+export function fechaParaInput(f: Date | null): string {
+  return f ? f.toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }) : "";
 }

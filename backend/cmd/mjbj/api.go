@@ -7,12 +7,15 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 
 	"mjbj/internal/api/catalogoapi"
+	"mjbj/internal/api/contenidoapi"
 	"mjbj/internal/api/sesionapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/catalogo"
+	"mjbj/internal/contenido"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/subidas"
 	"mjbj/internal/vivo"
 )
 
@@ -20,6 +23,7 @@ type configAPI struct {
 	Escuchar string `env:"API_ESCUCHAR" envDefault:":8080"`
 	Base     plataforma.ConfigBase
 	Auth     auth.Config
+	Subidas  subidas.Config
 }
 
 func correrAPI() error {
@@ -86,10 +90,20 @@ func correrAPI() error {
 		catalogoapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	contenidoapi.HandlerWithOptions(
+		contenidoapi.NewStrictHandlerWithOptions(contenido.NuevaAPI(contenido.Nuevo(pool, subidas.Nuevo(cfg.Subidas), log)),
+			[]contenidoapi.StrictMiddlewareFunc{plataforma.ConPedido[contenidoapi.StrictHandlerFunc]},
+			contenidoapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		contenidoapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
-	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger} {
+	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger} {
 		s, err := spec()
 		if err != nil {
 			return err

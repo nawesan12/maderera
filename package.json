@@ -29,8 +29,8 @@
     "whatsapp:simulador": "tsx --env-file-if-exists=.env.local scripts/simulador-meta.ts",
     "whatsapp:webhook": "tsx --env-file-if-exists=.env.local scripts/whatsapp-webhook.ts",
     "api:gen": "cd backend && go generate ./api && cd .. && for f in backend/api/*.yaml; do case $f in *.gen.yaml) ;; *) openapi-typescript --default-non-nullable false $f -o lib/api/tipos/$(basename $f .yaml).ts ;; esac; done",
-    "api:dev": "sh -c 'set -a; . ./.env.local; set +a; cd backend && go run ./cmd/mjbj api'",
-    "worker:dev": "sh -c 'set -a; . ./.env.local; set +a; cd backend && go run ./cmd/mjbj worker'",
+    "api:dev": "sh -c 'set -a; . ./.env.local; set +a; export CARPETA_SUBIDAS=\"${CARPETA_SUBIDAS:-$PWD/public/subidas}\"; cd backend && go run ./cmd/mjbj api'",
+    "worker:dev": "sh -c 'set -a; . ./.env.local; set +a; export CARPETA_SUBIDAS=\"${CARPETA_SUBIDAS:-$PWD/public/subidas}\"; cd backend && go run ./cmd/mjbj worker'",
     "e2e": "playwright test"
   },
   "dependencies": {

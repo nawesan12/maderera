@@ -74,6 +74,24 @@ export function datos<T>(r: { data?: T; error?: unknown; response: Response }): 
   return r.data;
 }
 
+/**
+ * Para mandar un formulario con archivos (multipart) como llegó a la server
+ * action: openapi-fetch lo serializa como JSON si no se le dice otra cosa.
+ *
+ *   { body: soloCampos(formData) as never, ...comoFormulario }
+ */
+export const comoFormulario = { bodySerializer: (b: unknown) => b as FormData };
+
+/**
+ * El formulario sin los campos que agrega Next (`$ACTION_REF_1`, `$ACTION_1:0`):
+ * el validador de la API rechaza las partes que el contrato no declara.
+ */
+export function soloCampos(formData: FormData): FormData {
+  const limpio = new FormData();
+  for (const [clave, valor] of formData) if (!clave.startsWith("$")) limpio.append(clave, valor);
+  return limpio;
+}
+
 /** El problem+json de la API (RFC 9457), con los errores por campo. */
 export interface Problema {
   title: string;

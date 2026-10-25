@@ -38,6 +38,8 @@ type Config struct {
 	// Un PEM con la CA del certificado del servidor de correo, solo para
 	// probar contra uno con certificado propio. En producción va vacío.
 	CA string `env:"CORREO_CA"`
+	// La conexión, opcional, con el ERP (erp.go).
+	ERP ConfigERP
 }
 
 // App es el webmail: la API y la SPA.
@@ -47,7 +49,12 @@ type App struct {
 	intentos *Intentos
 	log      *slog.Logger
 	estatico fs.FS
+	// erp es nil si no hay base: el correo anda igual, sin fichas.
+	erp *ERP
 }
+
+// ConERP conecta la app con el ERP (puede ser nil).
+func (a *App) ConERP(e *ERP) { a.erp = e }
 
 // Nueva arma la app. `estatico` es la SPA ya compilada.
 func Nueva(cfg Config, estatico fs.FS, log *slog.Logger) (*App, error) {
@@ -100,6 +107,10 @@ func (a *App) Rutas() http.Handler {
 	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}/adjuntos.zip", a.conSesion(a.zip))
 	m.HandleFunc("POST /api/carpetas/{carpeta}/acciones", a.conSesion(a.acciones))
 	m.HandleFunc("POST /api/enviar", a.conSesion(a.enviar))
+
+	m.HandleFunc("GET /api/remitentes", a.conSesion(a.remitentes))
+	m.HandleFunc("GET /api/cliente", a.conSesion(a.cliente))
+	m.HandleFunc("GET /api/contactos", a.conSesion(a.contactos))
 
 	m.Handle("GET /", a.spa())
 	return plataforma.Cadena(m, a.log)
@@ -158,6 +169,26 @@ type pedidoEntrar struct {
 
 type respuestaSesion struct {
 	Correo string `json:"correo"`
+	// Panel es la dirección del panel para «Volver al panel».
+	Panel string `json:"panel,omitempty"`
+	// Fichas dice si la casilla ve las fichas de clientes del ERP.
+	Fichas bool `json:"fichas"`
+	// Persona es quién del staff es dueño de la casilla, si se sabe.
+	Persona string `json:"persona,omitempty"`
+}
+
+func (a *App) datosSesion(ctx context.Context, correo string) respuestaSesion {
+	r := respuestaSesion{Correo: correo}
+	if a.erp == nil {
+		return r
+	}
+	if p := a.erp.Panel(); p != "" {
+		r.Panel = p + "/admin"
+	}
+	rol, _, nombre := a.erp.Staff(ctx, correo)
+	r.Fichas = rol == "admin" || rol == "vendedor"
+	r.Persona = nombre
+	return r
 }
 
 func (a *App) entrar(w http.ResponseWriter, r *http.Request) {
@@ -202,11 +233,75 @@ func (a *App) entrar(w http.ResponseWriter, r *http.Request) {
 		a.fallar(w, r, err)
 		return
 	}
-	plataforma.EscribirJSON(w, http.StatusOK, respuestaSesion{Correo: cred.Correo})
+	plataforma.EscribirJSON(w, http.StatusOK, a.datosSesion(r.Context(), cred.Correo))
 }
 
-func (a *App) sesion(w http.ResponseWriter, _ *http.Request, cred Credenciales) {
-	plataforma.EscribirJSON(w, http.StatusOK, respuestaSesion{Correo: cred.Correo})
+func (a *App) sesion(w http.ResponseWriter, r *http.Request, cred Credenciales) {
+	plataforma.EscribirJSON(w, http.StatusOK, a.datosSesion(r.Context(), cred.Correo))
+}
+
+// --- el ERP ---
+
+// conFichas corta acá si no hay ERP o si la casilla no puede ver clientes.
+// Para afuera, «no podés» y «no hay base» son lo mismo: un 404, sin datos.
+func (a *App) conFichas(w http.ResponseWriter, r *http.Request, cred Credenciales) bool {
+	if a.erp == nil || !a.erp.VeFichas(r.Context(), cred.Correo) {
+		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusNotFound, "No hay fichas para mostrar."))
+		return false
+	}
+	return true
+}
+
+func (a *App) remitentes(w http.ResponseWriter, r *http.Request, cred Credenciales) {
+	if !a.conFichas(w, r, cred) {
+		return
+	}
+	correos := r.URL.Query()["correo"]
+	if len(correos) > 200 {
+		correos = correos[:200]
+	}
+	for i, c := range correos {
+		correos[i] = strings.ToLower(strings.TrimSpace(c))
+	}
+	son, err := a.erp.Clientes(r.Context(), correos)
+	if err != nil {
+		a.log.Warn("correo: remitentes", "error", err)
+		son = []string{}
+	}
+	plataforma.EscribirJSON(w, http.StatusOK, son)
+}
+
+func (a *App) cliente(w http.ResponseWriter, r *http.Request, cred Credenciales) {
+	if !a.conFichas(w, r, cred) {
+		return
+	}
+	f, err := a.erp.FichaDe(r.Context(), r.URL.Query().Get("correo"))
+	if err != nil {
+		if !errors.Is(err, ErrSinFicha) {
+			a.log.Warn("correo: ficha", "error", err)
+		}
+		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusNotFound, "No es cliente."))
+		return
+	}
+	w.Header().Set("Cache-Control", "private, max-age=60")
+	plataforma.EscribirJSON(w, http.StatusOK, f)
+}
+
+func (a *App) contactos(w http.ResponseWriter, r *http.Request, cred Credenciales) {
+	if !a.conFichas(w, r, cred) {
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len([]rune(q)) < 2 {
+		plataforma.EscribirJSON(w, http.StatusOK, []Contacto{})
+		return
+	}
+	lista, err := a.erp.Contactos(r.Context(), q)
+	if err != nil {
+		a.log.Warn("correo: contactos", "error", err)
+		lista = []Contacto{}
+	}
+	plataforma.EscribirJSON(w, http.StatusOK, lista)
 }
 
 func (a *App) salir(w http.ResponseWriter, _ *http.Request) {

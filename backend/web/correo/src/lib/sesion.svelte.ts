@@ -8,15 +8,19 @@ export interface DatosSesion {
   panel?: string;
   /** Si la casilla es de staff con permiso para ver clientes. */
   fichas?: boolean;
+  /** Quién del staff es dueño de la casilla, si se sabe. */
+  persona?: string;
 }
 
 class Sesion {
   panel = $state("");
   fichas = $state(false);
+  persona = $state("");
 
   tomar(d: DatosSesion) {
     this.panel = d.panel ?? "";
     this.fichas = !!d.fichas;
+    this.persona = d.persona ?? "";
   }
 }
 

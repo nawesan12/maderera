@@ -69,6 +69,15 @@ func correrCorreo() error {
 	if err != nil {
 		return err
 	}
+	// La base es opcional: sin ella (o caída) el correo anda igual, sin las
+	// fichas de clientes.
+	erp, err := correo.AbrirERP(cfg.ERP, log)
+	if err != nil {
+		log.Warn("correo sin ERP: DATABASE_URL no sirve", "error", err)
+	} else if erp != nil {
+		defer erp.Cerrar()
+		app.ConERP(erp)
+	}
 	go func() {
 		for range time.Tick(10 * time.Minute) {
 			app.Barrer()

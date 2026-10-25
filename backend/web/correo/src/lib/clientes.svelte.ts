@@ -10,20 +10,36 @@ export interface PedidoAbierto {
   numero: string;
   estado: string;
   total: number;
+  fecha: string;
+  enlace: string;
 }
 
+export interface Cheque {
+  id: string;
+  numero: string;
+  banco?: string;
+  fechaPago: string;
+  importe: number;
+  estado: string;
+}
+
+/** La ficha del remitente (backend/internal/correo/erp.go). */
 export interface Ficha {
   id: string;
   nombre: string;
   razonSocial?: string;
-  contacto?: string;
+  cuit?: string;
+  profesional: boolean;
+  estado: string;
   saldo: number;
   limiteCredito: number;
-  estado: string;
+  diasCredito: number;
   cuentaBloqueada: boolean;
+  motivoBloqueo?: string;
   pedidos: PedidoAbierto[];
-  ultimoPresupuesto?: { id: string; numero: string; total: number };
-  enlaces: { ficha: string; presupuesto: string; pedido: string; pedidos: string };
+  cheques: Cheque[];
+  ultimoPresupuesto?: { id: string; numero: string; estado: string; total: number; fecha: string; validoHasta?: string; enlace: string };
+  enlaces: { ficha: string; presupuesto: string; pedido: string; pedidos: string; cheques: string };
 }
 
 class Clientes {

@@ -35,6 +35,25 @@
     return ficha.limiteCredito > 0 ? `Al día · límite de ${pesos(ficha.limiteCredito)}` : "Al día";
   });
   const pedidos = $derived(ficha.pedidos.length === 1 ? "1 pedido abierto" : `${ficha.pedidos.length} pedidos abiertos`);
+
+  const diaMes = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short" });
+  function vence(iso: string): string {
+    const d = new Date(iso);
+    const dias = Math.round((new Date(d.toDateString()).getTime() - new Date(new Date().toDateString()).getTime()) / 864e5);
+    if (dias < 0) return "venció";
+    if (dias === 0) return "vence hoy";
+    if (dias === 1) return "vence mañana";
+    if (dias <= 7) return `vence en ${dias} días`;
+    return `vence el ${diaMes.format(d).replace(".", "")}`;
+  }
+  const estadosPresupuesto: Record<string, string> = {
+    pendiente: "Pendiente",
+    revision: "En revisión",
+    enviado: "Enviado, sin respuesta",
+    aceptado: "Aceptado",
+    rechazado: "Rechazado",
+    vencido: "Vencido",
+  };
 </script>
 
 {#if compacta}
@@ -55,7 +74,8 @@
       <span class="avatar cliente" style:width="48px" style:height="48px" style:font-size="17px">{iniciales({ nombre: ficha.nombre, correo: "" })}</span>
       <div>
         <strong>{ficha.nombre}</strong>
-        {#if ficha.contacto || ficha.razonSocial}<span>{ficha.contacto || ficha.razonSocial}</span>{/if}
+        {#if ficha.razonSocial && ficha.razonSocial !== ficha.nombre}<span>{ficha.razonSocial}</span>{/if}
+        {#if ficha.profesional}<span class="chip inf pro">Profesional</span>{/if}
       </div>
     </div>
     <div class="bloque">
@@ -67,17 +87,28 @@
       <span class="rotulo">Pedidos abiertos</span>
       {#each ficha.pedidos.slice(0, 5) as p (p.id)}
         {@const [nombre, familia] = estados[p.estado] ?? [p.estado, "ce"]}
-        <div class="pedido"><span>Pedido {p.numero.replace(/^PED-/, "")}</span><span class="chip {familia}">{nombre}</span></div>
+        <a class="pedido" href={p.enlace} target="_blank" rel="noopener"><span>Pedido {p.numero.replace(/^PED-/, "")}</span><span class="chip {familia}">{nombre}</span></a>
       {:else}
         <span class="ninguno">Ninguno</span>
       {/each}
       {#if ficha.pedidos.length > 5}<a class="enlace mas" href={ficha.enlaces.pedidos} target="_blank" rel="noopener">y {ficha.pedidos.length - 5} más</a>{/if}
     </div>
-    {#if ficha.ultimoPresupuesto}
-      <div class="bloque">
-        <span class="rotulo">Último presupuesto</span>
-        <span>{ficha.ultimoPresupuesto.numero} · {pesos(ficha.ultimoPresupuesto.total)}</span>
+    {#if ficha.cheques.length}
+      <div class="bloque pedidos">
+        <span class="rotulo">Cheques por vencer</span>
+        {#each ficha.cheques.slice(0, 3) as c (c.id)}
+          <div class="pedido"><span>{pesos(c.importe)}</span><span class="vence" class:ya={new Date(c.fechaPago) < new Date()}>{vence(c.fechaPago)}</span></div>
+        {/each}
+        {#if ficha.cheques.length > 3}<a class="enlace mas" href={ficha.enlaces.cheques} target="_blank" rel="noopener">y {ficha.cheques.length - 3} más</a>{/if}
       </div>
+    {/if}
+    {#if ficha.ultimoPresupuesto}
+      {@const p = ficha.ultimoPresupuesto}
+      <a class="bloque presupuesto" href={p.enlace} target="_blank" rel="noopener">
+        <span class="rotulo">Último presupuesto</span>
+        <span>{p.numero} · {pesos(p.total)}</span>
+        <span class="rotulo" class:espera={p.estado === "enviado"}>{estadosPresupuesto[p.estado] ?? p.estado}</span>
+      </a>
     {/if}
     <div class="botones">
       <a class="boton principal" href={ficha.enlaces.presupuesto} target="_blank" rel="noopener"><Icono nombre="presupuesto" tamano={19} />Hacer presupuesto</a>
@@ -146,6 +177,40 @@
   }
   .pedidos {
     gap: 10px;
+  }
+  .pro {
+    justify-self: start;
+    margin-top: 4px;
+    line-height: 22px;
+  }
+  .vence {
+    font-size: 15px;
+    color: var(--mut);
+  }
+  .vence.ya {
+    color: var(--prT);
+    font-weight: 600;
+  }
+  .presupuesto {
+    color: inherit;
+    text-decoration: none;
+    border-radius: 8px;
+  }
+  .presupuesto:hover span:nth-child(2) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .espera {
+    color: var(--espT);
+    font-weight: 500;
+  }
+  a.pedido {
+    color: inherit;
+    text-decoration: none;
+  }
+  a.pedido:hover > span:first-child {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .pedido {
     display: flex;

@@ -6,6 +6,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
+	"mjbj/internal/api/cajaapi"
 	"mjbj/internal/api/catalogoapi"
 	"mjbj/internal/api/comprasapi"
 	"mjbj/internal/api/contenidoapi"
@@ -14,10 +15,12 @@ import (
 	"mjbj/internal/api/documentosapi"
 	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/api/productosapi"
+	"mjbj/internal/api/reportesapi"
 	"mjbj/internal/api/sesionapi"
 	"mjbj/internal/api/stockapi"
 	"mjbj/internal/api/whatsappapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/caja"
 	"mjbj/internal/catalogo"
 	"mjbj/internal/clientes"
 	"mjbj/internal/cobros"
@@ -32,6 +35,7 @@ import (
 	"mjbj/internal/precios"
 	"mjbj/internal/productos"
 	"mjbj/internal/push"
+	"mjbj/internal/reportes"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/stock"
 	"mjbj/internal/subidas"
@@ -216,6 +220,27 @@ func correrAPI() error {
 		whatsappapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// Tanda 5, parte D: la caja del panel, y los reportes, el cierre del mes
+	// y el inicio del panel.
+	cajaapi.HandlerWithOptions(
+		cajaapi.NewStrictHandlerWithOptions(caja.NuevaPanelAPI(caja.NuevoPanel(pool, log)),
+			[]cajaapi.StrictMiddlewareFunc{plataforma.ConPedido[cajaapi.StrictHandlerFunc]},
+			cajaapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		cajaapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+	reportesapi.HandlerWithOptions(
+		reportesapi.NewStrictHandlerWithOptions(reportes.NuevaAPI(reportes.Nuevo(pool, log), cfg.Interna),
+			[]reportesapi.StrictMiddlewareFunc{plataforma.ConPedido[reportesapi.StrictHandlerFunc]},
+			reportesapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		reportesapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
@@ -264,6 +289,19 @@ func correrAPI() error {
 	}
 
 	for _, spec := range []func() (*openapi3.T, error){whatsappapi.GetSwagger} {
+		s, err := spec()
+		if err != nil {
+			return err
+		}
+		validar, err := plataforma.ValidarContra(s)
+		if err != nil {
+			return err
+		}
+		h = validar(h)
+	}
+
+	// Los contratos de la caja del panel y de los reportes (tanda 5, parte D).
+	for _, spec := range []func() (*openapi3.T, error){cajaapi.GetSwagger, reportesapi.GetSwagger} {
 		s, err := spec()
 		if err != nil {
 			return err

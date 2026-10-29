@@ -299,6 +299,23 @@ func TestGoldenSeries(t *testing.T) {
 	}
 }
 
+// La caja usa su propia copia del mes argentino (caja no puede importar
+// reportes): tiene que dar lo mismo que el TS en hora argentina.
+func TestGoldenMesDeLaCaja(t *testing.T) {
+	var ms []struct {
+		Valor        string
+		Ahora        time.Time
+		Desde, Hasta time.Time
+	}
+	leer(t, "mensuales-art.json", &ms)
+	for i, m := range ms {
+		d, h := caja.MesArgentino(m.Valor, m.Ahora)
+		if !d.Equal(m.Desde) || !h.Equal(m.Hasta) {
+			t.Fatalf("%d %q: %v %v, TS %v %v", i, m.Valor, d, h, m.Desde, m.Hasta)
+		}
+	}
+}
+
 func TestGoldenCaja(t *testing.T) {
 	var turnos []struct {
 		AbiertaAt        time.Time

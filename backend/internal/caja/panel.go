@@ -500,6 +500,34 @@ func (p *Panel) AsignarVentaAlTurno(ctx context.Context, ses *auth.Sesion, order
 // sinCandadoDeAsignacion: solo para ver fallar la prueba de concurrencia.
 var sinCandadoDeAsignacion = false
 
+// MesArgentino es leerPeriodoMensual («aaaa-mm», o el mes de `ahora`) en
+// hora argentina: el primer instante del mes y el último milisegundo. El TS
+// cortaba en la zona de Next (UTC): una venta del 31 a las 22 caía en el mes
+// siguiente.
+func MesArgentino(valor string, ahora time.Time) (time.Time, time.Time) {
+	a := ahora.In(Argentina)
+	anioTexto, resto, _ := strings.Cut(valor, "-")
+	mesTexto, _, _ := strings.Cut(resto, "-")
+	numeroONulo := func(t string) int {
+		n := jsmath.Numero(t)
+		if n != n {
+			return 0
+		}
+		return int(n)
+	}
+	anio := numeroONulo(anioTexto)
+	if anio == 0 {
+		anio = a.Year()
+	}
+	mes := numeroONulo(mesTexto)
+	if mes == 0 {
+		mes = int(a.Month())
+	}
+	mes = min(max(mes, 1), 12)
+	return time.Date(anio, time.Month(mes), 1, 0, 0, 0, 0, Argentina),
+		time.Date(anio, time.Month(mes)+1, 0, 23, 59, 59, 999_000_000, Argentina)
+}
+
 // MsjFondoBaseInvalido es el único error del cambio fijo.
 const MsjFondoBaseInvalido = "Revisá el monto: tiene que ser un número de cero para arriba."
 

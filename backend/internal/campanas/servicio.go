@@ -121,7 +121,12 @@ func condicion(seg Segmento, desde int) (string, []any) {
 func (s *Servicio) Contar(ctx context.Context, seg Segmento) (int, error) {
 	cond, args := condicion(seg, 1)
 	var n int
-	err := s.pool.QueryRow(ctx, `select count(distinct lower(c.email))::int from customers c where `+cond, args...).Scan(&n)
+	// Sin la caché de sentencias de pgx: con el plan genérico (que Postgres
+	// elige después de cinco ejecuciones) no ve qué tipo y qué rubros se
+	// piden y el conteo tardaba más que en TS (bench/tanda10). Un plan por
+	// pedido, como hacía node-postgres.
+	err := s.pool.QueryRow(ctx, `select count(distinct lower(c.email))::int from customers c where `+cond,
+		append([]any{pgx.QueryExecModeExec}, args...)...).Scan(&n)
 	return n, err
 }
 

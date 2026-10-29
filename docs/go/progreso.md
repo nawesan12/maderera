@@ -129,6 +129,86 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
   escritos; con prefijo de espacio de nombres (<x:worksheet>) la planilla sale
   vacía; «0,125» se lee como 125.
 
+## Tanda 11: cortes
+
+Rama `go-cortes` (desde 9a17128 de `go-productos`).
+
+- [x] El motor en Go (`internal/cortes`): el plano guillotina con la regla de
+      la media placa, la búsqueda con semilla y tope de trabajo, las fijadas,
+      la hoja de corte en el orden de la máquina, el PTX, la lista para el
+      optimizador, la tarifa, el presupuesto, la placa, la sierra y las
+      calculadoras. **Golden** (`scripts/golden/cortes.ts` →
+      `testdata/golden/cortes`): 1761 planos (el banco del benchmark y 1500 al
+      azar con fijadas, veta, discos, semillas y presupuestos), 600 listas y
+      el PTX byte a byte, 600 presupuestos, 1500 cargos y 3000 cálculos. Go da
+      lo mismo exacto.
+- [x] La cola y la ficha, el alta (CRT- con el candado de siempre, en el
+      paquete compartido `internal/numeracion`), avanzar, urgente, pasadas,
+      acomodo a mano, cambio de disco, formatos (con la vista previa), tarifas,
+      parámetros de las calculadoras, placas cortables por lista, sugerencias
+      de la calculadora, la cotización del corte del sitio (con el freno
+      «corte») y los cortes del carrito al confirmar (ruta interna con el
+      secreto y la cookie de quien compra).
+- [x] **Las rutas del agente del taller no cambian**: `/api/cortes/pendientes`,
+      `/api/cortes/{id}/lista` y `/api/cortes/{id}/ptx` las atiende Go en la
+      misma dirección (Caddy con `@cortesGo`, rewrite en `next.config.ts` para
+      desarrollo). Mismo token (`CORTES_AGENTE_TOKEN`, que `api` ya recibe por
+      el env_file), mismo 404 sin token, mismo CSV con BOM.
+- [x] **El plano en vivo lo calcula Go**: el mostrador, el alta del panel, el
+      acomodo y `/corte` le mandan el despiece a `/api/v1/cortes/plano`
+      (`lib/cortes/en-vivo.ts`, espera de 120 ms y cancela el anterior). Las
+      calculadoras del sitio y la vista previa del formato, igual.
+- [x] Next: los DAL y las acciones son envoltorios; se borraron
+      `lib/cortes/{plano,secuencia,ptx,formatos,presupuesto,agente}.ts`,
+      `lib/calculations.ts`, las tres rutas del agente y sus tests. La copia
+      textual del TS queda en `bench/tanda11/ts` (la usan el golden y el
+      benchmark). Los tipos salen del contrato (`lib/cortes/tipos.ts`).
+- [x] Pruebas de Go contra la base con el contrato en cada respuesta; la de
+      numeración concurrente (20 altas a la vez) falla sin el candado.
+- [x] E2E escrita (`e2e/cortes.spec.ts`), **sin correr**: los servidores de
+      desarrollo son compartidos.
+- [x] Benchmark (`bench/tanda11`).
+- Queda en TS hasta su tanda: el PDF del reporte y de la hoja (tanda 12; los
+  datos ya vienen de Go), la escritura de `cart_cortes` y la confirmación del
+  pedido (tanda 6), y lo que usa el mostrador en el navegador
+  (`lib/cortes/tarifa.ts`, `placa.ts`, `sierra.ts`, tanda 5: son las mismas
+  cuentas que Go, cubiertas por el golden). Leen `cutting_orders` desde otros
+  módulos, y se mudan con ellos: la venta y la anulación del mostrador, el
+  resumen y los pendientes del panel, sucursales, el buscador del panel,
+  existencia, los avisos y documentos de WhatsApp y `lib/reportes-cortes.ts`.
+- El `.CPrg` queda fuera: es un formato cifrado (ver la memoria de cortes).
+- **Bug arreglado: la fecha del PTX salía en UTC.** El contenedor de Next no
+  tiene `TZ` y `getDate()` daba el día UTC: un trabajo cargado después de las
+  21 h salía con la fecha de mañana. Go la escribe en hora argentina; el
+  golden se genera con `TZ=America/Argentina/Buenos_Aires` y falla si Go usa
+  UTC.
+- **Arreglos menores**: un formato con nombre repetido daba 500 (ahora avisa);
+  una fijada con placa < 1 rompía el plano (el contrato la rechaza); un tope
+  de 5000 piezas para el plano en vivo.
+- Lo aprendido:
+  - **Un número del contrato sin `format: double` es `float32` en Go**
+    (oapi-codegen): 4,4 mm de sierra llegaba como 4.400000095. En cortes
+    todos los `number` llevan `format: double`. Las otras tandas lo tienen
+    igual (stock: `cantidad`); conviene revisarlo.
+  - Dos dominios con el mismo nombre de esquema (`Ficha` en productos y en
+    cortes) se cruzan en `Esquemas` de `lib/api/tipos/index.ts`: el de
+    cortes se llama `FichaCorte`.
+  - Un motor que corría en el navegador también se muda: el golden asegura
+    que es el mismo cálculo, y el navegador lo pide por HTTP con espera y
+    cancelación. De a uno tarda lo mismo que antes (~12 ms).
+
+- Benchmark (29/10/2026, misma Mac; detalle en `bench/tanda11/README.md`):
+
+| Prueba | TypeScript | Go | Go / TS |
+|---|---:|---:|---:|
+| Banco de 200 despieces con búsqueda: ms por despiece | 16,2 | 11,4 | **1,4×** |
+| ídem, el peor despiece | 150 ms | 56 ms | **2,7× menos** |
+| Placas del banco (heurística / búsqueda) | 559 / 534 | 559 / 534 | idénticas |
+| Plano por HTTP, 20 a la vez: pedidos/s | 28,3 | 174,5 | **6,2×** |
+| ídem, p50 / p99 | 454 / 2944 ms | 110 / 266 ms | **4× / 11× menos** |
+| ídem, memoria máx. | 154 MB | 53 MB | 2,9× menos |
+| Plano por HTTP, de a uno: p50 | 12,8 ms | 12,1 ms | empate |
+
 ## Benchmarks
 
 Uno por tanda, al cerrarla. Detalle y cómo repetirlos: `bench/<tanda>/README.md`.

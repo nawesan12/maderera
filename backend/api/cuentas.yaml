@@ -45,7 +45,7 @@ paths:
           description: La ficha
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Ficha" }
+              schema: { $ref: "#/components/schemas/FichaDeCliente" }
         "404": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/clientes/{id}/historial:
     parameters:
@@ -71,7 +71,7 @@ paths:
           description: El resumen para imprimir
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Resumen" }
+              schema: { $ref: "#/components/schemas/ResumenDeCuenta" }
         "404": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/clientes/{id}/credito:
     parameters:
@@ -543,7 +543,7 @@ components:
         estado: { type: string }
         total: { type: string }
         createdAt: { type: string, format: date-time }
-    Ficha:
+    FichaDeCliente:
       type: object
       required: [id, userId, nombre, razonSocial, cuit, condicionIva, email, telefono, direccion, rubro, tipo, estado, priceListId,
         limiteCredito, asesor, notas, active, createdAt, updatedAt, codigoLegacy, sellerId, diasCredito, cuentaBloqueada,
@@ -635,7 +635,7 @@ components:
         desde: { type: integer }
         hasta: { type: integer, nullable: true }
         monto: { type: number }
-    Resumen:
+    ResumenDeCuenta:
       type: object
       required: [cliente, movimientos, saldo, aging]
       properties:

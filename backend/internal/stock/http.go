@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"mjbj/internal/api/stockapi"
 	"mjbj/internal/auth"
@@ -127,4 +128,27 @@ func (a *API) SucursalesDelPanel(ctx context.Context, _ stockapi.SucursalesDelPa
 			"createdAt": b.CreatedAt, "fondoBase": strconv.FormatFloat(float64(b.FondoBase), 'f', 2, 64)}
 	}
 	return ok(out), nil
+}
+
+func (o respuesta) VisitMetricasDeSucursalesResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitSinSucursalAsignadaResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+func (a *API) MetricasDeSucursales(ctx context.Context, _ stockapi.MetricasDeSucursalesRequestObject) (stockapi.MetricasDeSucursalesResponseObject, error) {
+	if _, err := auth.ExigirStaff(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.MetricasPorSucursal(ctx, time.Now())
+	return ok(v), err
+}
+
+func (a *API) SinSucursalAsignada(ctx context.Context, _ stockapi.SinSucursalAsignadaRequestObject) (stockapi.SinSucursalAsignadaResponseObject, error) {
+	if _, err := auth.ExigirStaff(ctx); err != nil {
+		return nil, err
+	}
+	p, c, err := a.s.SinSucursal(ctx)
+	return ok(map[string]int{"pedidos": p, "cortes": c}), err
 }

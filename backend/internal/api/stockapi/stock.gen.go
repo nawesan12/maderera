@@ -141,6 +141,12 @@ type ServerInterface interface {
 
 	// (GET /api/v1/admin/sucursales)
 	SucursalesDelPanel(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/admin/sucursales/metricas)
+	MetricasDeSucursales(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/admin/sucursales/sin-asignar)
+	SinSucursalAsignada(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -306,6 +312,34 @@ func (siw *ServerInterfaceWrapper) SucursalesDelPanel(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// MetricasDeSucursales operation middleware
+func (siw *ServerInterfaceWrapper) MetricasDeSucursales(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MetricasDeSucursales(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SinSucursalAsignada operation middleware
+func (siw *ServerInterfaceWrapper) SinSucursalAsignada(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SinSucursalAsignada(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -432,6 +466,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/stock/ajuste", wrapper.AjustarStock)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/stock/transferencia", wrapper.TransferirStock)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/sucursales", wrapper.SucursalesDelPanel)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/sucursales/metricas", wrapper.MetricasDeSucursales)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/sucursales/sin-asignar", wrapper.SinSucursalAsignada)
 
 	return m
 }
@@ -623,6 +659,64 @@ func (response SucursalesDelPanel200JSONResponse) VisitSucursalesDelPanelRespons
 	return err
 }
 
+type MetricasDeSucursalesRequestObject struct {
+}
+
+type MetricasDeSucursalesResponseObject interface {
+	VisitMetricasDeSucursalesResponse(w http.ResponseWriter) error
+}
+
+type MetricasDeSucursales200JSONResponse []struct {
+	Active             bool    `json:"active"`
+	ClientesAtendidos  int     `json:"clientesAtendidos"`
+	CortesEnCola       int     `json:"cortesEnCola"`
+	Id                 string  `json:"id"`
+	Nombre             string  `json:"nombre"`
+	PedidosAbiertos    int     `json:"pedidosAbiertos"`
+	PedidosHoy         int     `json:"pedidosHoy"`
+	ProductosStockBajo int     `json:"productosStockBajo"`
+	Slug               string  `json:"slug"`
+	SortOrder          int     `json:"sortOrder"`
+	StockValor         float64 `json:"stockValor"`
+	VentasHoy          float64 `json:"ventasHoy"`
+}
+
+func (response MetricasDeSucursales200JSONResponse) VisitMetricasDeSucursalesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SinSucursalAsignadaRequestObject struct {
+}
+
+type SinSucursalAsignadaResponseObject interface {
+	VisitSinSucursalAsignadaResponse(w http.ResponseWriter) error
+}
+
+type SinSucursalAsignada200JSONResponse struct {
+	Cortes  int `json:"cortes"`
+	Pedidos int `json:"pedidos"`
+}
+
+func (response SinSucursalAsignada200JSONResponse) VisitSinSucursalAsignadaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
@@ -643,6 +737,12 @@ type StrictServerInterface interface {
 
 	// (GET /api/v1/admin/sucursales)
 	SucursalesDelPanel(ctx context.Context, request SucursalesDelPanelRequestObject) (SucursalesDelPanelResponseObject, error)
+
+	// (GET /api/v1/admin/sucursales/metricas)
+	MetricasDeSucursales(ctx context.Context, request MetricasDeSucursalesRequestObject) (MetricasDeSucursalesResponseObject, error)
+
+	// (GET /api/v1/admin/sucursales/sin-asignar)
+	SinSucursalAsignada(ctx context.Context, request SinSucursalAsignadaRequestObject) (SinSucursalAsignadaResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -848,34 +948,86 @@ func (sh *strictHandler) SucursalesDelPanel(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// MetricasDeSucursales operation middleware
+func (sh *strictHandler) MetricasDeSucursales(w http.ResponseWriter, r *http.Request) {
+	var request MetricasDeSucursalesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MetricasDeSucursales(ctx, request.(MetricasDeSucursalesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MetricasDeSucursales")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MetricasDeSucursalesResponseObject); ok {
+		if err := validResponse.VisitMetricasDeSucursalesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SinSucursalAsignada operation middleware
+func (sh *strictHandler) SinSucursalAsignada(w http.ResponseWriter, r *http.Request) {
+	var request SinSucursalAsignadaRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SinSucursalAsignada(ctx, request.(SinSucursalAsignadaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SinSucursalAsignada")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SinSucursalAsignadaResponseObject); ok {
+		if err := validResponse.VisitSinSucursalAsignadaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

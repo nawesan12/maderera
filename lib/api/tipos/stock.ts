@@ -100,6 +100,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/sucursales/metricas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MetricasDeSucursales"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sucursales/sin-asignar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SinSucursalAsignada"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -340,6 +372,64 @@ export interface operations {
                         createdAt: string;
                         fondoBase: string;
                     }[];
+                };
+            };
+        };
+    };
+    MetricasDeSucursales: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los números de cada sucursal (hoy es el día argentino) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        slug: string;
+                        nombre: string;
+                        sortOrder: number;
+                        active: boolean;
+                        /** Format: double */
+                        ventasHoy: number;
+                        pedidosHoy: number;
+                        clientesAtendidos: number;
+                        pedidosAbiertos: number;
+                        cortesEnCola: number;
+                        /** Format: double */
+                        stockValor: number;
+                        productosStockBajo: number;
+                    }[];
+                };
+            };
+        };
+    };
+    SinSucursalAsignada: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pedidos abiertos y cortes en cola sin sucursal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        pedidos: number;
+                        cortes: number;
+                    };
                 };
             };
         };

@@ -17,3 +17,10 @@ test("la bitácora lista y filtra lo que se hizo en el panel", async ({ page }) 
   await page.goto("/admin/bitacora?dias=3650&buscar=cuenta%20corriente");
   await expect(page.getByText(/cuenta corriente/i).first()).toBeVisible();
 });
+
+test("las sucursales muestran sus números", async ({ page }) => {
+  test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
+  await page.goto("/admin/sucursales");
+  await expect(page.getByRole("heading", { name: "Sucursales", level: 1 })).toBeVisible();
+  await expect(page.getByText("Casa Central").first()).toBeVisible();
+});

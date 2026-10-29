@@ -135,6 +135,47 @@ paths:
                     active: { type: boolean }
                     createdAt: { type: string, format: date-time }
                     fondoBase: { type: string }
+  /api/v1/admin/sucursales/metricas:
+    get:
+      operationId: MetricasDeSucursales
+      responses:
+        "200":
+          description: Los números de cada sucursal (hoy es el día argentino)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, slug, nombre, sortOrder, active, ventasHoy, pedidosHoy, clientesAtendidos, pedidosAbiertos, cortesEnCola,
+                    stockValor, productosStockBajo]
+                  properties:
+                    id: { type: string }
+                    slug: { type: string }
+                    nombre: { type: string }
+                    sortOrder: { type: integer }
+                    active: { type: boolean }
+                    ventasHoy: { type: number, format: double }
+                    pedidosHoy: { type: integer }
+                    clientesAtendidos: { type: integer }
+                    pedidosAbiertos: { type: integer }
+                    cortesEnCola: { type: integer }
+                    stockValor: { type: number, format: double }
+                    productosStockBajo: { type: integer }
+  /api/v1/admin/sucursales/sin-asignar:
+    get:
+      operationId: SinSucursalAsignada
+      responses:
+        "200":
+          description: Pedidos abiertos y cortes en cola sin sucursal
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pedidos, cortes]
+                properties:
+                  pedidos: { type: integer }
+                  cortes: { type: integer }
 components:
   responses:
     Problema:

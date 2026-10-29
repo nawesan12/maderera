@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/api/cortesapi"
 	"mjbj/internal/api/cuentasapi"
 	"mjbj/internal/api/documentosapi"
+	"mjbj/internal/api/entregasapi"
 	"mjbj/internal/api/mostradorapi"
 	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/api/productosapi"
@@ -29,6 +30,7 @@ import (
 	"mjbj/internal/cuentas"
 	"mjbj/internal/documentos"
 	"mjbj/internal/email"
+	"mjbj/internal/entregas"
 	"mjbj/internal/limites"
 	"mjbj/internal/mostrador"
 	"mjbj/internal/pedidos"
@@ -246,6 +248,17 @@ func correrAPI() error {
 		ventasapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// Entregas, acopio, remitos, la firma y las zonas de envío (tanda 5).
+	entregasapi.HandlerWithOptions(
+		entregasapi.NewStrictHandlerWithOptions(entregas.NuevaAPI(entregas.Nuevo(pool, log), cfg.Interna),
+			[]entregasapi.StrictMiddlewareFunc{plataforma.ConPedido[entregasapi.StrictHandlerFunc]},
+			entregasapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		entregasapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
@@ -316,6 +329,16 @@ func correrAPI() error {
 
 	// El contrato de pedidos y presupuestos (tanda 5), aparte.
 	if s, err := ventasapi.GetSwagger(); err != nil {
+		return err
+	} else if validar, err := plataforma.ValidarContra(s); err != nil {
+		return err
+	} else {
+		h = validar(h)
+	}
+
+	// El contrato de entregas (tanda 5), aparte para no tocar las listas de
+	// arriba.
+	if s, err := entregasapi.GetSwagger(); err != nil {
 		return err
 	} else if validar, err := plataforma.ValidarContra(s); err != nil {
 		return err

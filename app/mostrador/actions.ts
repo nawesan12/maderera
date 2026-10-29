@@ -4,10 +4,8 @@ import { revalidatePath } from "next/cache";
 import { api, datos, mensajeDe, type Problema } from "@/lib/api/servidor";
 import type { Esquemas } from "@/lib/api/tipos";
 import { requireStaff } from "@/lib/dal/session";
-import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { avisarPedidoNuevo } from "@/lib/dal/existencia";
 import { emitirParaLaVenta, letraQueSaldria } from "@/lib/mostrador/comprobante";
-import { ErrorDeEntrega, remitoDeConstancia } from "@/lib/entregas";
 import type { CorteDeMostrador, ResultadoDeMostrador } from "@/lib/mostrador/tipos";
 import type { LineaDeVenta, MedioDeMostrador, PagoDeVenta } from "@/lib/mostrador/importes";
 
@@ -16,8 +14,8 @@ import type { LineaDeVenta, MedioDeMostrador, PagoDeVenta } from "@/lib/mostrado
  * el alta rápida, el presupuesto y el cobro de la cuenta los hace la API de Go
  * (backend/internal/mostrador): una venta pasa entera o no pasa, repetible
  * por su clave, con los mismos candados de siempre. Quedan acá el
- * comprobante fiscal (facturación sigue en TS, tanda 7), el remito de
- * constancia (entregas) y las revalidaciones de Next.
+ * comprobante fiscal (facturación sigue en TS, tanda 7) y las
+ * revalidaciones de Next.
  */
 
 export interface EstadoMostrador {
@@ -231,33 +229,14 @@ export async function emitirRemitoDeVenta(
   orderId: string,
   receptorNombre?: string | null,
 ): Promise<EstadoMostrador & { remitoId?: string; remitoNumero?: string }> {
-  const usuario = await requireStaff();
-
-  try {
-    const remito = await remitoDeConstancia({
-      orderId,
-      receptorNombre,
-      usuarioId: usuario.userId,
-    });
-
-    await registrarEnBitacora({
-      sesion: usuario,
-      accion: "crear",
-      entidad: "remito",
-      entidadId: remito.id,
-      descripcion: `Remito ${remito.numero} emitido desde el mostrador`,
-    });
-
-    refrescar();
-    return {
-      ok: `Remito ${remito.numero} emitido.`,
-      remitoId: remito.id,
-      remitoNumero: remito.numero,
-    };
-  } catch (e) {
-    if (e instanceof ErrorDeEntrega) return { error: e.message };
-    throw e;
-  }
+  // Lo emite Go (backend/internal/entregas), con su bitácora.
+  const r = await (await api()).POST("/api/v1/mostrador/pedidos/{id}/remito", {
+    params: { path: { id: orderId } },
+    body: { receptorNombre: receptorNombre ?? null },
+  });
+  if (!r.data) return error(r);
+  refrescar();
+  return { ok: r.data.ok, remitoId: r.data.remitoId, remitoNumero: r.data.remitoNumero };
 }
 
 /**

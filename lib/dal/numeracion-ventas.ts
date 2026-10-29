@@ -53,7 +53,7 @@ type Transaccion = Parameters<
  * - `hashtext(...)` —ventas, anulaciones, stock, eventos— devuelve un `int4`:
  *   cae en ±2.147.483.647. Lo usan `lib/mostrador/venta.ts`, `anular.ts`,
  *   `lib/inventario/reservas.ts` y `lib/eventos/index.ts`.
- * - `lib/entregas/index.ts` usa el literal `918273645`, que está adentro de ese
+ * - Los remitos (`numeracion.SerieRemitos`, en Go) usan `918273645`, adentro de ese
  *   mismo rango.
  * - `lib/fiscal/numeracion.ts` arma `(hash % 1e6) * 1e4 + puntoVenta`: cae en
  *   0…9.999.999.999.

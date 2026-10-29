@@ -1,3 +1,7 @@
+// Copia del generador que se borró de lib/pdf al mudar las entregas a Go
+// (tanda 5, rama go-mostrador-entregas): queda solo para regenerar los golden
+// (scripts/golden/pdf/remito.ts). El documento de verdad es
+// backend/internal/pdf/remito.go.
 import "server-only";
 
 import {
@@ -16,7 +20,7 @@ import {
   nuevaHoja,
   recuadro,
   serializar,
-} from "./hoja";
+} from "@/lib/pdf/hoja";
 import { fechaHora, fechaSolaCorta, formatearUnidad } from "@/lib/formato";
 import type { RemitoCompleto } from "@/lib/dal/admin/entregas";
 import { lineasDeLaFactura } from "@/lib/entregas/factura-del-remito";

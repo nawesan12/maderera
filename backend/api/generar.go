@@ -11,3 +11,4 @@ package api
 //go:generate go tool oapi-codegen -config precios.gen.yaml precios.yaml
 //go:generate go tool oapi-codegen -config stock.gen.yaml stock.yaml
 //go:generate go tool oapi-codegen -config cuentas.gen.yaml cuentas.yaml
+//go:generate go tool oapi-codegen -config documentos.gen.yaml documentos.yaml

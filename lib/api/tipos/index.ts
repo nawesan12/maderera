@@ -10,12 +10,14 @@ import type { paths as Productos, components as ComponentesProductos } from "./p
 import type { paths as Precios, components as ComponentesPrecios } from "./precios";
 import type { paths as Stock, components as ComponentesStock } from "./stock";
 import type { paths as Cuentas, components as ComponentesCuentas } from "./cuentas";
+import type { paths as Documentos, components as ComponentesDocumentos } from "./documentos";
 
-export type paths = Sesion & Catalogo & Contenido & Productos & Precios & Stock & Cuentas;
+export type paths = Sesion & Catalogo & Contenido & Productos & Precios & Stock & Cuentas & Documentos;
 export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesCatalogo["schemas"] &
   ComponentesContenido["schemas"] &
   ComponentesProductos["schemas"] &
   ComponentesPrecios["schemas"] &
   ComponentesStock["schemas"] &
-  ComponentesCuentas["schemas"];
+  ComponentesCuentas["schemas"] &
+  ComponentesDocumentos["schemas"];

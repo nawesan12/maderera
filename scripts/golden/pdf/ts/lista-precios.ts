@@ -1,3 +1,7 @@
+// Copia del generador que se borró de lib/pdf al mudar la lista de precios a
+// Go (tanda 12, rama go-pdf): queda solo para regenerar los golden
+// (scripts/golden/pdf/lista-precios.ts). El documento de verdad es
+// backend/internal/pdf/lista.go.
 import "server-only";
 
 import {
@@ -11,7 +15,7 @@ import {
   nuevaHoja,
   serializar,
   type Hoja,
-} from "./hoja";
+} from "@/lib/pdf/hoja";
 import { moneda } from "@/lib/formato";
 
 /**

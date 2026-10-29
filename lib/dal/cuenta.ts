@@ -289,36 +289,14 @@ export interface ComprobantePropio {
 }
 
 /**
- * Facturas y notas de crédito del cliente.
- *
- * Se muestran solo las que ya se emitieron: un borrador es trabajo interno del
- * mostrador y todavía puede cambiar, así que no tiene por qué verlo el cliente.
+ * Facturas y notas de crédito del cliente. Las lee Go con la cookie
+ * (backend/internal/facturacion): solo las de su ficha y sin borradores (un
+ * borrador es trabajo interno del mostrador y todavía puede cambiar).
  */
 export async function misComprobantes(): Promise<ComprobantePropio[]> {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return [];
-
-  const filas = await db
-    .select({
-      id: invoices.id,
-      tipo: invoices.tipo,
-      puntoVenta: invoices.puntoVenta,
-      numero: invoices.numero,
-      estado: invoices.estado,
-      total: invoices.total,
-      cae: invoices.cae,
-      fechaEmision: invoices.fechaEmision,
-    })
-    .from(invoices)
-    .where(
-      and(
-        eq(invoices.customerId, cliente.id),
-        sql`${invoices.estado} <> 'borrador'`,
-      ),
-    )
-    .orderBy(desc(invoices.fechaEmision));
-
-  return filas.map((f) => ({ ...f, total: Number(f.total) }));
+  const r = await (await api()).GET("/api/v1/cuenta/comprobantes");
+  if (r.response.status === 401) return [];
+  return datos(r).map((f) => ({ ...f, fechaEmision: new Date(f.fechaEmision) }));
 }
 
 /* -------------------------------------------------------------------------- */

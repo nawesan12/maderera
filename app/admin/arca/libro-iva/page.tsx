@@ -31,9 +31,11 @@ export default async function LibroIvaPage({
   const hoy = new Date();
   // La misma lectura que usa la exportación: estaba escrita dos veces con la
   // fórmula copiada, que es como una arregla un borde y la otra no.
-  const { anio, mes, desde, hasta } = leerPeriodoMensual(periodo, hoy);
+  const { anio, mes } = leerPeriodoMensual(periodo, hoy);
 
-  const libro = await libroIvaVentas(desde, hasta);
+  // El mes lo corta Go en hora argentina (una factura de las 22 del último
+  // día es de ese mes, no del siguiente).
+  const libro = await libroIvaVentas(`${anio}-${String(mes).padStart(2, "0")}`);
 
   // Últimos doce meses para el selector.
   const periodos = Array.from({ length: 12 }, (_, i) => {

@@ -672,6 +672,14 @@ aprobación, estado profesional, eventos e inscripción) e `internal/zod`
 `api/campanas.yaml` y `api/profesionales.yaml`. Falta correr la e2e
 (`e2e/campanas.spec.ts`) al integrar.
 
+## Tanda 7: facturación electrónica con ARCA (rama `go-arca`)
+
+Hecha el 29/10/2026 desde `go-cuentas` (56ef2a1). Contrato
+`backend/api/facturacion.yaml`; la lógica pura en `backend/internal/fiscal`
+(con el simulador de ARCA en `internal/fiscal/simulador` y
+`cmd/simulador-arca`) y la base en `backend/internal/facturacion`. Sin
+migraciones nuevas: el pedido de CAE se anota en `arca_log` antes de mandarlo.
+
 ### Inventario
 
 | TS | Ahora |
@@ -792,3 +800,172 @@ en todos.
   venir».
 - **`pkill -f <patrón>` mata también el shell que lo ejecuta** si el patrón
   aparece en su propia línea de comandos.
+
+| `lib/fiscal/impuestos.ts`, `comprobantes.ts` | quedan (los usan el navegador —el formulario de la factura—, los precios, el presupuesto y el mostrador); Go tiene su gemelo con golden |
+| `lib/fiscal/notas.ts`, `numeracion.ts`, `qr.ts`, `proveedores/*` (WSAA con node-forge, WSFEv1) | Go; borrados (copias en `scripts/golden/originales/fiscal-*.ts` y `scripts/golden/pdf/ts/qr.ts`) |
+| `lib/fiscal/emitir.ts` | Go; queda como envoltorio con las mismas firmas (`emitirComprobante`, `autorizarComprobante`, `obtenerConfiguracionFiscal`) para el mostrador y las hojas, por las rutas internas |
+| `lib/dal/admin/facturacion.ts`, `app/admin/facturacion/actions.ts` | envoltorios de Go |
+| `app/admin/arca/libro-iva/exportar`, el libro IVA | Go arma el CSV (con `internal/csvexcel`) y corta el mes en hora argentina |
+| `app/api/comprobantes/[id]/pdf`, `lib/pdf/comprobante.ts` | el PDF de `internal/pdf` con los datos de Go; `lib/pdf/comprobante.ts` borrado (copia en `scripts/golden/pdf/ts`) |
+| `misComprobantes` (`lib/dal/cuenta.ts`) | envoltorio de `GET /api/v1/cuenta/comprobantes` |
+| `lib/notificaciones/fiscal.ts` (el PDF por correo) | el trabajo `factura.aviso` lo encola Go al emitir y al autorizar; lo atiende el TS pidiéndole el PDF a Go |
+| `lib/fiscal/comprobantes-compra.ts` | queda (compras, tanda 8) |
+| `app/admin/arca/retenciones/*` | ya estaba en Go (tandas 4 y 8) |
+
+### El CAE fuera de la transacción
+
+El orden es el del TS: **numerar y guardar** (transacción con el candado de
+`claveDeLock`, la misma clave del TS) → **pedir el CAE** (sin transacción
+abierta) → **guardar el CAE**. Lo que el TS no cubría:
+
+- **El corte entre el CAE y el guardado** (el proceso muere, o la respuesta de
+  ARCA no llega): el comprobante quedaba «emitido» sin CAE; al reintentar, el
+  TS volvía a pedir el mismo número, ARCA lo rechazaba por repetido (10016) y
+  quedaba «rechazado» con el CAE perdido. Go, si el anterior no tiene CAE o
+  ARCA contesta 10016, pregunta el último autorizado; si el número ya está del
+  lado de ARCA lo consulta (`FECompConsultar`) y adopta el CAE si el documento
+  y el total coinciden. `TestCorteEntreElCaeYElGuardado` y
+  `TestRespuestaPerdida` (corta la conexión del simulador).
+- **Los pedidos van de a uno** (un mutex en el proceso y
+  `pg_advisory_lock(1_000_000_003_001)` de sesión, sin transacción): ARCA
+  solo acepta el número siguiente, y con ventas simultáneas el TS los mandaba
+  desordenados; el primer 10016 dejaba rechazados todos los siguientes. Si hay
+  anteriores sin CAE, se autorizan primero y en orden. Si el anterior ya tiene
+  CAE, una sola llamada. `TestAutorizarVeinteALaVez`, `TestAutorizarEnOrden`.
+- El pedido queda en `arca_log` **antes** de mandarlo y con el `invoice_id`
+  (el TS lo anotaba después y sin el comprobante).
+
+### Golden (`TZ=America/Argentina/Buenos_Aires npx tsx scripts/golden/fiscal.ts`)
+
+4000 desagregados, 1000 totales, 1000 emisiones (con la percepción de IIBB o
+los tributos dados), 1200 notas de crédito (renglones, prorrateo, tope),
+1500 sueltas, 500 débitos, la letra, el documento, el número, 1500 fechas de
+ARCA, 1000 claves de candado, **800 sobres de FECAESolicitar byte a byte**,
+2005 respuestas leídas como fast-xml-parser, 300 tickets del WSAA y 300 TRA,
+80 libros IVA con su CSV y 6500 formularios por los esquemas de zod (primer
+error y su campo). Go da lo mismo en todos. Con la zona argentina a
+propósito: ver «Arreglado».
+
+### Pruebas
+
+Contra la base y el simulador, con el contrato en cada respuesta: la ida y
+vuelta (emitir a mano, CAE, QR, PDF, ticket reusado), el corte, la respuesta
+perdida, 20 a la vez (**sin el candado fallan 17 de 20**:
+`MJBJ_PRUEBA_SIN_CANDADO=1 go test -run TestNumeracionConcurrente`), el orden,
+el proveedor interno, notas y anulación con la cuenta corriente, el cobro
+(recibo por `cobros.EmitirRecibo`, cuenta corriente por `cobros.Credito`),
+facturar un pedido una sola vez, el portal y las rutas internas, el libro en
+hora argentina y el emisor con los puntos de venta. `go test -race` en verde.
+E2E escrita (`e2e/facturacion.spec.ts`), sin correr: no emite nada.
+
+### Arreglado (cada uno con su prueba)
+
+- **La fecha que va a ARCA** (`CbteFch`, la del comprobante asociado y la del
+  QR), la de la hoja impresa y la del PDF, **en hora argentina**: el TS usaba
+  la zona del proceso (UTC en el contenedor) y desde las 21 h mandaba la fecha
+  de mañana. El vencimiento del CAE se guarda a la medianoche argentina (el TS
+  lo guardaba a la de UTC y se mostraba un día antes).
+- **El libro IVA ventas por mes argentino**: una factura de las 22 del último
+  día caía en el libro del mes siguiente. `TestLibroIvaEnHoraArgentina`.
+- **Facturar un pedido dos veces** con dos clics: el TS miraba si ya tenía
+  comprobante fuera de la transacción. Ahora se bloquea el pedido.
+  `TestFacturarPedidoUnaSolaVez` (5 a la vez, uno solo).
+- **El listado de facturación se caía** en cuanto un comprobante tenía un
+  cobro: `array_agg(distinct medio)` de un enum vuelve de node-postgres como
+  el texto `{efectivo}` y `.filter` no existe. Lo encontró el benchmark.
+- **Dos tickets del WSAA a la vez**: ARCA no da otro mientras haya uno vigente
+  y el segundo pedido fallaba. Candado `1_000_000_003_002`.
+- La fila de `configuracion_fiscal` se podía crear dos veces (candado
+  `1_000_000_003_003`); la deuda de una factura manual se anotaba fuera de su
+  transacción; una fecha de inicio de actividades inválida daba 500.
+
+### Reproducido a propósito (anotado, sin arreglar)
+
+- Sin certificado, autorizar marca el comprobante **«rechazado»** con «Emitido
+  sin autorización de ARCA…» (el proveedor interno; así lo hacía el TS).
+- En la factura C, `ImpNeto` va con el total: si llevara tributos o exento,
+  ARCA la rechazaría (no cierra). La maderera es responsable inscripta.
+- Una alícuota fuera de 0/10,5/21/27 (la carga manual la acepta) va a ARCA
+  como el Id 5 (21 %).
+- El CSV del libro IVA ventas **cambió de formato** (es el de compras, con
+  `internal/csvexcel`): CRLF, encabezados entre comillas, fecha dd/mm/aaaa.
+
+### Para el mostrador (tanda 5)
+
+- En Go: `facturacion.Nuevo(pool, log).EmitirParaLaVenta(ctx,
+  facturacion.PedidoDeComprobante{…})` **después** de confirmar la venta,
+  nunca adentro (no tira: devuelve el aviso y si quedó autorizado), y
+  `LetraQueSaldria(ctx, customerID, cuit)` para decir la letra antes de
+  cobrar. El alta rápida de clientes está en `internal/clientes/alta.go`
+  (`PorDocumento`, `CrearRapido`).
+- Mientras siga en TS: `lib/mostrador/comprobante.ts` funciona igual
+  (`emitirComprobante`, `autorizarComprobante` y `obtenerConfiguracionFiscal`
+  de `lib/fiscal/emitir.ts` llaman a Go), o directo
+  `POST /api/v1/interno/facturacion/venta` y
+  `GET /api/v1/interno/facturacion/letra` con `API_SECRETO_INTERNO`.
+
+### Benchmark (29/10/2026, misma Mac; detalle en `bench/tanda7/README.md`)
+
+| Prueba, 20 a la vez | TypeScript | Go | |
+|---|---:|---:|---|
+| Emitir y pedir el CAE (ARCA simulado, 60–180 ms) | 9,7/s, **0 de 217 con CAE** | 6,4/s, **145 de 145 con CAE** | el TS se desordena y ARCA rechaza en cascada |
+| Libro IVA de un mes en CSV | 8,5/s, p50 2,2 s | **40/s, p50 440 ms** | **4,7×** |
+| Listado (200 con cobros) | 150,6/s* | 120,6/s | empate (manda Postgres; Go además lee la sesión) |
+| Memoria máx. | 149–264 MB | 37–118 MB | ~2–4× menos |
+
+\* El TS de antes fallaba el 100 % (el bug del `array_agg`); se midió con el
+arreglo puesto en la copia del banco.
+
+### Homologación con el certificado real
+
+Hoy no hay certificado (es de la clienta). Lo que ya está probado contra ARCA
+de verdad: el TLS de Go con los cuatro servidores, `FEDummy` en homologación
+con el sobre y la lectura de Go (`MJBJ_ARCA_REAL=1 go test -run
+TestHomologacionReal ./internal/fiscal/`), y el WSAA de homologación leyendo
+el CMS que firma Go (con un certificado autofirmado contesta «Certificado no
+emitido por AC de confianza»: el formato lo acepta). Para homologar:
+
+1. Subir el CSR de homologación (`~/Trabajo/Codigo/Misc/mjbj-arca/homologacion`)
+   en WSASS, bajar el `.crt` y **delegar el servicio `wsfe`** a ese
+   certificado. Dar de alta un punto de venta para web services en
+   homologación.
+2. Con el certificado y la clave en una carpeta propia (en producción,
+   `secretos/arca/`, legible por el usuario 65532 de la imagen de Go: el
+   compose ya los monta en `api`):
+   `ARCA_CUIT=30589445259 ARCA_AMBIENTE=homologacion ARCA_CERTIFICADO_ARCHIVO=… ARCA_CLAVE_PRIVADA_ARCHIVO=… MJBJ_ARCA_REAL=1 MJBJ_ARCA_PV=<punto> go test -run TestHomologacionReal -v ./internal/fiscal/`
+   (pide el ticket y el último autorizado del punto).
+3. Con la API local y esas variables, cargar el emisor y el punto de venta en
+   `/admin/arca` (el número inicial = el último de ARCA), emitir una factura B
+   a consumidor final, una A a un CUIT de prueba, una nota de crédito parcial
+   y una de débito, y autorizarlas desde el panel. Mirar `arca_log`.
+4. Probar el corte: apagar la API justo después de autorizar (o cortar la red)
+   y reintentar: tiene que recuperar el CAE con `FECompConsultar` y no pedir
+   otro.
+5. Para producción: el certificado de producción, `ARCA_AMBIENTE=produccion`,
+   los puntos 15, 17 y 20 en modalidad web services y el número inicial de
+   cada uno.
+
+### Pendiente
+
+- [ ] Correr la E2E (`e2e/facturacion.spec.ts`) y homologar (arriba).
+- [ ] El candado del CAE es uno solo para todos los puntos de venta: alcanza
+      para una maderera; si hiciera falta, uno por punto y tipo, y pedir
+      varios comprobantes en un solo `FECAESolicitar` (`CantReg`).
+- [ ] Leen `invoices` desde otros módulos y se mudan con ellos: la caja y las
+      entregas (tanda 5), el cierre mensual, el buscador del panel, los
+      asientos y los pendientes.
+- [ ] El comprobante en PDF sigue sin cortar de página (tanda 12).
+
+### Lo aprendido
+
+- **Una transacción que pide otra conexión del pool se puede quedar
+  esperando para siempre**: con 20 emisiones a la vez, cada una con su
+  transacción abierta, la lectura del emisor por el pool no conseguía
+  conexión. Adentro de una transacción, todo por la transacción. Y un
+  candado de sesión que se espera con una conexión tomada hace lo mismo: el
+  pedido de CAE espera primero un mutex del proceso, sin conexión.
+- **node-forge firma el CMS con los atributos sin ordenar** y smallstep/pkcs7
+  los reordena para verificar: el simulador verifica como OpenSSL (y ARCA),
+  sobre los bytes que llegaron.
+- **Un simulador con demora pareja esconde el desorden**: con 60 ms fijos el
+  TS no perdía un CAE; con 60–180 ms, todos. El simulador tiene `-variacion`.

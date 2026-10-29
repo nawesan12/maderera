@@ -1,0 +1,684 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Facturación electrónica (ARCA)
+  version: "1"
+  description: |
+    Los comprobantes: emitirlos (desde un pedido o a mano), pedir el CAE a
+    ARCA, las notas de crédito y débito, cobrarlos, el libro IVA ventas; los
+    datos del emisor y los puntos de venta; los comprobantes del portal y el
+    PDF. Leer y emitir: cualquier persona del panel; anular, las notas, el
+    emisor y los puntos de venta: solo el admin. El emisor, el comprobante y
+    su PDF los puede pedir también el servidor de Next con el secreto interno
+    (las hojas impresas, los avisos, WhatsApp), y las rutas /interno son solo
+    para él (el mostrador, mientras siga en TypeScript).
+paths:
+  /api/v1/fiscal/emisor:
+    get:
+      operationId: EmisorFiscal
+      description: Los datos fiscales de la empresa (configuracion_fiscal), creando la fila la primera vez. El personal o el servidor de Next.
+      responses:
+        "200":
+          description: El emisor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmisorFiscal" }
+        "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/emisor:
+    put:
+      operationId: GuardarEmisorFiscal
+      description: Solo el admin. Los campos del formulario de /admin/arca.
+      requestBody: { $ref: "#/components/requestBodies/CamposDeFormulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/puntos-de-venta:
+    get:
+      operationId: ListarPuntosDeVenta
+      responses:
+        "200":
+          description: Por número
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PuntoDeVenta" } }
+    post:
+      operationId: GuardarPuntoDeVenta
+      description: Alta o edición (con id). Solo el admin.
+      requestBody: { $ref: "#/components/requestBodies/CamposDeFormulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/arca:
+    get:
+      operationId: EstadoDeArca
+      description: Si se habla con ARCA (y si contesta) o con el proveedor interno, y qué credencial falta.
+      responses:
+        "200":
+          description: El estado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EstadoArca" }
+  /api/v1/admin/facturacion/resumen:
+    get:
+      operationId: ResumenDeFacturacion
+      parameters:
+        - { name: desde, in: query, schema: { type: string, format: date-time } }
+        - { name: hasta, in: query, description: exclusive, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Lo facturado en el período y lo que falta autorizar
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResumenDeFacturacion" }
+  /api/v1/admin/facturacion/comprobantes:
+    get:
+      operationId: ListarComprobantes
+      parameters:
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: desde, in: query, schema: { type: string, format: date-time } }
+        - { name: hasta, in: query, description: inclusive, schema: { type: string, format: date-time } }
+        - { name: cobro, in: query, schema: { type: string, enum: [contado, cuenta, todos] } }
+        - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: tope, in: query, schema: { type: integer, minimum: 1, maximum: 2000 } }
+      responses:
+        "200":
+          description: Del más nuevo al más viejo
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ComprobanteListado" } }
+    post:
+      operationId: EmitirComprobanteManual
+      description: La venta que no pasó por un pedido. Devuelve el id del comprobante emitido.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [campos, lineas]
+              additionalProperties: false
+              properties:
+                campos: { type: object, additionalProperties: { type: string } }
+                lineas: { $ref: "#/components/schemas/LineasManuales" }
+      responses:
+        "200": { $ref: "#/components/responses/Emitido" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/comprobantes/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: ComprobanteCompleto
+      description: El comprobante con renglones, cobros y tributos. El personal, el cliente dueño (a otro, 404) o el servidor de Next.
+      responses:
+        "200":
+          description: El comprobante
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComprobanteCompleto" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/comprobantes/{id}/pdf:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: ComprobanteEnPdf
+      description: El comprobante en PDF. El personal, el cliente dueño (a otro, 404) o el servidor de Next.
+      responses:
+        "200":
+          description: El PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/comprobantes/{id}/autorizar:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: AutorizarComprobante
+      description: Pide el CAE a ARCA (fuera de toda transacción, de a uno). Si ARCA rechaza, `error` trae el motivo.
+      responses:
+        "200":
+          description: El resultado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResultadoDeAutorizacion" }
+  /api/v1/admin/facturacion/comprobantes/{id}/anular:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: AnularComprobante
+      description: Nota de crédito por lo que falte acreditar, que anula el original. Solo el admin.
+      requestBody: { $ref: "#/components/requestBodies/CamposDeFormulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Emitido" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/comprobantes/{id}/nota-de-credito:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: NotaDeCreditoParcial
+      description: Una nota de crédito por parte de los renglones. No anula el original. Solo el admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [motivo, parciales]
+              additionalProperties: false
+              properties:
+                motivo: { type: string }
+                parciales:
+                  type: array
+                  items:
+                    type: object
+                    required: [itemId, cantidad]
+                    properties:
+                      itemId: { type: string }
+                      cantidad: { type: number, format: double, nullable: true }
+      responses:
+        "200": { $ref: "#/components/responses/Emitido" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/comprobantes/{id}/nota-de-debito:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: NotaDeDebito
+      description: Le carga algo más al cliente (un flete, intereses), con el importe final con IVA. Solo el admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [motivo, concepto, importe, alicuota]
+              additionalProperties: false
+              properties:
+                motivo: { type: string }
+                concepto: { type: string }
+                importe: { type: number, format: double, nullable: true }
+                alicuota: { type: number, format: double, nullable: true }
+      responses:
+        "200": { $ref: "#/components/responses/Emitido" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/comprobantes/{id}/cobros:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: CobrarComprobante
+      description: Cobrar con recibo (las partes van a EmitirRecibo) o pasar a cuenta corriente (modo cuenta_corriente, con el control de crédito).
+      requestBody: { $ref: "#/components/requestBodies/CamposDeFormulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/libro-iva:
+    get:
+      operationId: LibroIvaVentas
+      parameters:
+        - { name: periodo, in: query, description: aaaa-mm en hora argentina (si falta, el mes en curso), schema: { type: string } }
+      responses:
+        "200":
+          description: Los comprobantes del mes (las notas de crédito en negativo) y los totales
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibroIvaVentas" }
+  /api/v1/admin/facturacion/libro-iva/csv:
+    get:
+      operationId: LibroIvaVentasCsv
+      parameters:
+        - { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso), schema: { type: string } }
+      responses:
+        "200":
+          description: El libro en CSV para Excel en español
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+  /api/v1/admin/facturacion/pedidos/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: PedidoParaFacturar
+      responses:
+        "200":
+          description: El pedido, sus renglones con la alícuota del producto y si ya tiene comprobante
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PedidoParaFacturar" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/pedidos/{id}/facturar:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: FacturarPedido
+      responses:
+        "200": { $ref: "#/components/responses/Emitido" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/cuenta/comprobantes:
+    get:
+      operationId: MisComprobantes
+      description: Los comprobantes de la ficha de quien tiene la sesión, sin borradores.
+      responses:
+        "200":
+          description: Del más nuevo al más viejo
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ComprobantePropio" } }
+        "401": { $ref: "#/components/responses/Problema" }
+  /api/v1/interno/facturacion/comprobantes:
+    post:
+      operationId: EmitirComprobanteInterno
+      description: emitirComprobante para el TypeScript que sigue llamándolo (el mostrador). Solo el servidor de Next.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DatosDeEmision" }
+      responses:
+        "200":
+          description: El id, o el motivo por el que no se emitió
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invoiceId: { type: string }
+                  error: { type: string }
+        "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/interno/facturacion/comprobantes/{id}/autorizar:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: AutorizarComprobanteInterno
+      description: autorizarComprobante para el TypeScript. Solo el servidor de Next.
+      responses:
+        "200":
+          description: El resultado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResultadoDeAutorizacion" }
+        "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/interno/facturacion/venta:
+    post:
+      operationId: ComprobanteDeLaVenta
+      description: emitirParaLaVenta del mostrador entero (emitir y autorizar, sin tirar). Solo el servidor de Next.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PedidoDeComprobante" }
+      responses:
+        "200":
+          description: Qué pasó
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResultadoDeLaVenta" }
+        "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/interno/facturacion/letra:
+    get:
+      operationId: LetraQueSaldria
+      description: letraQueSaldria del mostrador. Solo el servidor de Next.
+      parameters:
+        - { name: customerId, in: query, schema: { type: string, format: uuid } }
+        - { name: cuit, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: La letra y la condición del receptor
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [letra, receptor]
+                properties:
+                  letra: { type: string }
+                  receptor: { type: string }
+        "403": { $ref: "#/components/responses/Problema" }
+components:
+  requestBodies:
+    CamposDeFormulario:
+      description: Los campos de un FormData, como texto (un campo que no vino no está)
+      required: true
+      content:
+        application/json:
+          schema: { type: object, additionalProperties: { type: string } }
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+    Ok:
+      description: Hecho, con el mensaje para la pantalla
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ok]
+            properties:
+              ok: { type: string }
+              receiptId: { type: string }
+    Emitido:
+      description: El comprobante emitido (o el original, si anular solo cambió el estado)
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [invoiceId]
+            properties:
+              invoiceId: { type: string }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    EmisorFiscal:
+      type: object
+      required: [id, razonSocial, nombreFantasia, cuit, condicionIva, domicilio, localidad, codigoPostal, telefono, email, ingresosBrutos, regimenIibb, alicuotaPercepcionIibb, percibeIibb, inicioActividades, leyenda, updatedAt]
+      properties:
+        id: { type: string }
+        razonSocial: { type: string }
+        nombreFantasia: { type: string, nullable: true }
+        cuit: { type: string, nullable: true }
+        condicionIva: { $ref: "#/components/schemas/CondicionIva" }
+        domicilio: { type: string, nullable: true }
+        localidad: { type: string }
+        codigoPostal: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        ingresosBrutos: { type: string, nullable: true }
+        regimenIibb: { type: string, enum: [local, convenio_multilateral, exento, no_inscripto] }
+        alicuotaPercepcionIibb: { type: string }
+        percibeIibb: { type: boolean }
+        inicioActividades: { type: string, format: date-time, nullable: true }
+        leyenda: { type: string, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    CondicionIva: { type: string, enum: [responsable_inscripto, monotributista, exento, consumidor_final, no_categorizado] }
+    TipoComprobante: { type: string, enum: [factura_a, factura_b, factura_c, nota_credito_a, nota_credito_b, nota_credito_c, nota_debito_a, nota_debito_b, nota_debito_c] }
+    EstadoComprobante: { type: string, enum: [borrador, emitida, autorizada, anulada, rechazada] }
+    PuntoDeVenta:
+      type: object
+      required: [id, numero, nombre, modalidad, activo, numeroInicial, branchId, sucursal]
+      properties:
+        id: { type: string }
+        numero: { type: integer }
+        nombre: { type: string }
+        modalidad: { type: string }
+        activo: { type: boolean }
+        numeroInicial: { type: integer }
+        branchId: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+    EstadoArca:
+      type: object
+      required: [id, operativo, ambiente, cuit, detalle, servicioArriba, hayCertificado, hayClave]
+      properties:
+        id: { type: string, enum: [arca, interno] }
+        operativo: { type: boolean }
+        ambiente: { type: string, enum: [homologacion, produccion], nullable: true }
+        cuit: { type: string, nullable: true }
+        detalle: { type: string, nullable: true }
+        servicioArriba: { type: boolean, nullable: true }
+        hayCertificado: { type: boolean }
+        hayClave: { type: boolean }
+    ResumenDeFacturacion:
+      type: object
+      required: [cantidadMes, totalMes, ivaMes, pendientesDeAutorizar]
+      properties:
+        cantidadMes: { type: integer }
+        totalMes: { type: number, format: double }
+        ivaMes: { type: number, format: double }
+        pendientesDeAutorizar: { type: integer }
+    ComprobanteListado:
+      type: object
+      required: [id, tipo, puntoVenta, numero, estado, receptorNombre, receptorCuit, total, cobrado, cae, fechaEmision, fechaVencimiento, medios]
+      properties:
+        id: { type: string }
+        tipo: { $ref: "#/components/schemas/TipoComprobante" }
+        puntoVenta: { type: integer }
+        numero: { type: integer }
+        estado: { $ref: "#/components/schemas/EstadoComprobante" }
+        receptorNombre: { type: string }
+        receptorCuit: { type: string, nullable: true }
+        total: { type: number, format: double }
+        cobrado: { type: number, format: double }
+        cae: { type: string, nullable: true }
+        fechaEmision: { type: string, format: date-time }
+        fechaVencimiento: { type: string, format: date-time, nullable: true }
+        medios: { type: array, items: { type: string } }
+    LineasManuales:
+      description: Los renglones como los mandaba el FormData (getAll de cada campo, en paralelo)
+      type: object
+      required: [descripcion, cantidad, precio, alicuota]
+      additionalProperties: false
+      properties:
+        descripcion: { type: array, items: { type: string } }
+        cantidad: { type: array, items: { type: string } }
+        precio: { type: array, items: { type: string } }
+        alicuota: { type: array, items: { type: string } }
+    ItemDeComprobante:
+      type: object
+      required: [id, invoiceId, descripcion, unidad, cantidad, precioUnitario, alicuotaIva, neto, iva, subtotal, invoiceItemOrigenId, orden]
+      properties:
+        id: { type: string }
+        invoiceId: { type: string }
+        descripcion: { type: string }
+        unidad: { type: string }
+        cantidad: { type: string }
+        precioUnitario: { type: string }
+        alicuotaIva: { type: string }
+        neto: { type: string }
+        iva: { type: string }
+        subtotal: { type: string }
+        invoiceItemOrigenId: { type: string, nullable: true }
+        orden: { type: integer }
+    CobroDeComprobante:
+      type: object
+      required: [id, invoiceId, medio, monto, referencia, receiptId, fecha, createdByUserId, createdAt]
+      properties:
+        id: { type: string }
+        invoiceId: { type: string }
+        medio: { type: string, enum: [efectivo, transferencia, mercado_pago, tarjeta, cheque, cuenta_corriente] }
+        monto: { type: string }
+        referencia: { type: string, nullable: true }
+        receiptId: { type: string, nullable: true }
+        fecha: { type: string, format: date-time }
+        createdByUserId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    TributoDeComprobante:
+      type: object
+      required: [id, invoiceId, codigo, descripcion, baseImponible, alicuota, importe]
+      properties:
+        id: { type: string }
+        invoiceId: { type: string }
+        codigo: { type: string }
+        descripcion: { type: string }
+        baseImponible: { type: string }
+        alicuota: { type: string }
+        importe: { type: string }
+    ComprobanteCompleto:
+      type: object
+      required: [id, tipo, puntoVenta, numero, estado, customerId, orderId, receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio, neto, iva21, iva105, iva27, exento, tributosTotal, total, cae, caeVencimiento, observacionesArca, comprobanteOrigenId, acreditado, debitado, fechaEmision, fechaVencimiento, observaciones, puntoVentaNombre, sucursal, items, cobros, tributos, cobrado, saldo, qrUrl]
+      properties:
+        id: { type: string }
+        tipo: { $ref: "#/components/schemas/TipoComprobante" }
+        puntoVenta: { type: integer }
+        numero: { type: integer }
+        estado: { $ref: "#/components/schemas/EstadoComprobante" }
+        customerId: { type: string, nullable: true }
+        orderId: { type: string, nullable: true }
+        receptorNombre: { type: string }
+        receptorCuit: { type: string, nullable: true }
+        receptorCondicionIva: { $ref: "#/components/schemas/CondicionIva" }
+        receptorDomicilio: { type: string, nullable: true }
+        neto: { type: string }
+        iva21: { type: string }
+        iva105: { type: string }
+        iva27: { type: string }
+        exento: { type: string }
+        tributosTotal: { type: string }
+        total: { type: string }
+        cae: { type: string, nullable: true }
+        caeVencimiento: { type: string, format: date-time, nullable: true }
+        observacionesArca: { type: string, nullable: true }
+        comprobanteOrigenId: { type: string, nullable: true }
+        acreditado: { type: string }
+        debitado: { type: string }
+        fechaEmision: { type: string, format: date-time }
+        fechaVencimiento: { type: string, format: date-time, nullable: true }
+        observaciones: { type: string, nullable: true }
+        puntoVentaNombre: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+        items: { type: array, items: { $ref: "#/components/schemas/ItemDeComprobante" } }
+        cobros: { type: array, items: { $ref: "#/components/schemas/CobroDeComprobante" } }
+        tributos: { type: array, items: { $ref: "#/components/schemas/TributoDeComprobante" } }
+        cobrado: { type: number, format: double }
+        saldo: { type: number, format: double }
+        qrUrl: { type: string, nullable: true, description: El enlace de verificación de ARCA (solo con CAE) }
+    ResultadoDeAutorizacion:
+      type: object
+      properties:
+        ok: { type: string }
+        error: { type: string }
+    RenglonLibroVentas:
+      type: object
+      required: [id, fechaEmision, tipo, puntoVenta, numero, receptorNombre, receptorCuit, receptorCondicionIva, neto, iva21, iva105, iva27, exento, tributos, total, cae, estado]
+      properties:
+        id: { type: string }
+        fechaEmision: { type: string, format: date-time }
+        tipo: { $ref: "#/components/schemas/TipoComprobante" }
+        puntoVenta: { type: integer }
+        numero: { type: integer }
+        receptorNombre: { type: string }
+        receptorCuit: { type: string, nullable: true }
+        receptorCondicionIva: { type: string }
+        neto: { type: number, format: double }
+        iva21: { type: number, format: double }
+        iva105: { type: number, format: double }
+        iva27: { type: number, format: double }
+        exento: { type: number, format: double }
+        tributos: { type: number, format: double }
+        total: { type: number, format: double }
+        cae: { type: string, nullable: true }
+        estado: { type: string }
+    LibroIvaVentas:
+      type: object
+      required: [filas, totales, desde, hasta, clave]
+      properties:
+        filas: { type: array, items: { $ref: "#/components/schemas/RenglonLibroVentas" } }
+        totales:
+          type: object
+          required: [neto, iva21, iva105, iva27, exento, tributos, total]
+          properties:
+            neto: { type: number, format: double }
+            iva21: { type: number, format: double }
+            iva105: { type: number, format: double }
+            iva27: { type: number, format: double }
+            exento: { type: number, format: double }
+            tributos: { type: number, format: double }
+            total: { type: number, format: double }
+        desde: { type: string, format: date-time }
+        hasta: { type: string, format: date-time }
+        clave: { type: string }
+    PedidoParaFacturar:
+      type: object
+      required: [pedido, items, yaFacturado]
+      properties:
+        pedido:
+          type: object
+          required: [id, numero, customerId, contactoNombre, costoEnvio, zonaEnvio, total, clienteNombre, clienteRazonSocial, clienteCuit, clienteCondicionIva, clienteDireccion]
+          properties:
+            id: { type: string }
+            numero: { type: string }
+            customerId: { type: string, nullable: true }
+            contactoNombre: { type: string }
+            costoEnvio: { type: string }
+            zonaEnvio: { type: string, nullable: true }
+            total: { type: string }
+            clienteNombre: { type: string, nullable: true }
+            clienteRazonSocial: { type: string, nullable: true }
+            clienteCuit: { type: string, nullable: true }
+            clienteCondicionIva: { type: string, nullable: true }
+            clienteDireccion: { type: string, nullable: true }
+        items:
+          type: array
+          items:
+            type: object
+            required: [descripcion, unidad, cantidad, precioUnitario, alicuota]
+            properties:
+              descripcion: { type: string }
+              unidad: { type: string }
+              cantidad: { type: string }
+              precioUnitario: { type: string }
+              alicuota: { type: string, nullable: true }
+        yaFacturado:
+          type: object
+          nullable: true
+          required: [id, numero, tipo]
+          properties:
+            id: { type: string }
+            numero: { type: integer }
+            tipo: { type: string }
+    ComprobantePropio:
+      type: object
+      required: [id, tipo, puntoVenta, numero, estado, total, cae, fechaEmision]
+      properties:
+        id: { type: string }
+        tipo: { type: string }
+        puntoVenta: { type: integer }
+        numero: { type: integer }
+        estado: { type: string }
+        total: { type: number, format: double }
+        cae: { type: string, nullable: true }
+        fechaEmision: { type: string, format: date-time }
+    LineaDeEmision:
+      type: object
+      required: [descripcion, cantidad, precioFinalUnitario]
+      properties:
+        descripcion: { type: string }
+        unidad: { type: string }
+        cantidad: { type: number, format: double }
+        precioFinalUnitario: { type: number, format: double }
+        alicuota: { type: number, format: double }
+        itemOrigenId: { type: string, nullable: true }
+    DatosDeEmision:
+      type: object
+      required: [receptorNombre, receptorCondicionIva, lineas]
+      properties:
+        customerId: { type: string, nullable: true }
+        orderId: { type: string, nullable: true }
+        receptorNombre: { type: string }
+        receptorCuit: { type: string, nullable: true }
+        receptorCondicionIva: { $ref: "#/components/schemas/CondicionIva" }
+        receptorDomicilio: { type: string, nullable: true }
+        lineas: { type: array, items: { $ref: "#/components/schemas/LineaDeEmision" } }
+        puntoVentaId: { type: string, nullable: true }
+        fechaVencimiento: { type: string, format: date-time, nullable: true }
+        observaciones: { type: string, nullable: true }
+        createdByUserId: { type: string, nullable: true }
+    PedidoDeComprobante:
+      type: object
+      required: [orderId, receptorNombre, lineas, usuarioId]
+      properties:
+        orderId: { type: string, format: uuid }
+        customerId: { type: string, nullable: true }
+        receptorNombre: { type: string }
+        cuit: { type: string, nullable: true }
+        usuarioId: { type: string }
+        lineas:
+          type: array
+          items:
+            type: object
+            required: [descripcion, unidad, cantidad, precioUnitario]
+            properties:
+              descripcion: { type: string }
+              unidad: { type: string }
+              cantidad: { type: number, format: double }
+              precioUnitario: { type: number, format: double }
+    ResultadoDeLaVenta:
+      type: object
+      required: [aviso, autorizado]
+      properties:
+        invoiceId: { type: string }
+        aviso: { type: string }
+        autorizado: { type: boolean }

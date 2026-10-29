@@ -1,0 +1,33 @@
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 434    19.409075/s
+    checks_succeeded...: 50.00% 217 out of 434
+    checks_failed......: 50.00% 217 out of 434
+
+    ✓ 200
+    ✗ autorizado
+      ↳  0% — ✓ 0 / ✗ 217
+
+    CUSTOM
+    sin_cae........................: 217   9.704538/s
+
+    HTTP
+    http_req_duration..............: avg=1.94s p(50)=811.51ms p(95)=10.4s p(99)=10.88s max=10.99s
+      { expected_response:true }...: avg=1.94s p(50)=811.51ms p(95)=10.4s p(99)=10.88s max=10.99s
+    http_req_failed................: 0.00% 0 out of 217
+    http_reqs......................: 217   9.704538/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.95s p(50)=811.73ms p(95)=10.4s p(99)=10.88s max=10.99s
+    iterations.....................: 217   9.704538/s
+    vus............................: 4     min=4        max=20
+    vus_max........................: 20    min=20       max=20
+
+    NETWORK
+    data_received..................: 83 kB 3.7 kB/s
+    data_sent......................: 31 kB 1.4 kB/s
+
+
+

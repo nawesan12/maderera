@@ -21,3 +21,4 @@ package api
 //go:generate go tool oapi-codegen -config campanas.gen.yaml campanas.yaml
 //go:generate go tool oapi-codegen -config profesionales.gen.yaml profesionales.yaml
 //go:generate go tool oapi-codegen -config buscador.gen.yaml buscador.yaml
+//go:generate go tool oapi-codegen -config facturacion.gen.yaml facturacion.yaml

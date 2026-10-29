@@ -177,9 +177,15 @@ services:
       SMTP_HOST: ${SMTP_HOST:-correo}
       SMTP_PUERTO: ${SMTP_PUERTO:-587}
       SMTP_NOMBRE_TLS: ${SMTP_NOMBRE_TLS:-mail.${CORREO_DOMINIO:-${DOMINIO}}}
+      # El certificado de ARCA (tanda 7: el CAE lo pide Go). Los mismos archivos
+      # que `app`; ARCA_CUIT y ARCA_AMBIENTE vienen de .env.produccion.
+      ARCA_CERTIFICADO_ARCHIVO: /run/secrets/arca/arca.crt
+      ARCA_CLAVE_PRIVADA_ARCHIVO: /run/secrets/arca/arca.key
     volumes:
       - subidas:/datos/subidas
       - privado:/datos/privado
+      # Solo lectura; el usuario de la imagen (nonroot, 65532) tiene que poder leerlos.
+      - ./secretos/arca:/run/secrets/arca:ro
     expose:
       - "8080"
     # **Solo en loopback**, como la base: para que el build de la aplicación

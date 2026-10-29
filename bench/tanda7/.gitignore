@@ -1,0 +1,4 @@
+bin/
+arca/
+resultados/*.json
+*.log

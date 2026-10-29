@@ -20,6 +20,7 @@ import type { paths as Whatsapp, components as ComponentesWhatsapp } from "./wha
 import type { paths as Campanas, components as ComponentesCampanas } from "./campanas";
 import type { paths as Profesionales, components as ComponentesProfesionales } from "./profesionales";
 import type { paths as Buscador, components as ComponentesBuscador } from "./buscador";
+import type { paths as Facturacion, components as ComponentesFacturacion } from "./facturacion";
 
 export type paths = Sesion &
   Catalogo &
@@ -37,7 +38,8 @@ export type paths = Sesion &
   Whatsapp &
   Campanas &
   Profesionales &
-  Buscador;
+  Buscador &
+  Facturacion;
 export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesCatalogo["schemas"] &
   ComponentesContenido["schemas"] &
@@ -54,4 +56,5 @@ export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesWhatsapp["schemas"] &
   ComponentesCampanas["schemas"] &
   ComponentesProfesionales["schemas"] &
-  ComponentesBuscador["schemas"];
+  ComponentesBuscador["schemas"] &
+  ComponentesFacturacion["schemas"];

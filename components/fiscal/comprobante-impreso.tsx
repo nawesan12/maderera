@@ -1,5 +1,5 @@
 import { BotonImprimir } from "./boton-imprimir";
-import { qrSvg } from "@/lib/fiscal/qr";
+import QRCode from "qrcode";
 import {
   discriminaIva,
   letraDe,
@@ -14,8 +14,20 @@ import {
   formatearUnidad,
   moneda,
 } from "@/lib/formato";
-import type { ConfiguracionFiscal } from "@/lib/db/schema";
+import type { EmisorFiscal } from "@/lib/dal/admin/facturacion";
 import { LogoEmisor } from "@/components/impresion/logo-emisor";
+
+/**
+ * La fecha del comprobante es el día en Argentina: la misma que se le informó
+ * a ARCA. `fechaCorta` usa la zona del proceso, y Next corre en UTC: desde las
+ * 21 la hoja decía mañana.
+ */
+const fechaArgentina = new Intl.DateTimeFormat("es-AR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "2-digit",
+  timeZone: "America/Argentina/Buenos_Aires",
+});
 
 const CONDICIONES: Record<string, string> = {
   responsable_inscripto: "Responsable inscripto",
@@ -46,6 +58,8 @@ interface ComprobanteImprimible {
   fechaEmision: Date;
   fechaVencimiento: Date | null;
   observaciones: string | null;
+  /** El enlace de verificación de ARCA, que arma Go (solo con CAE). */
+  qrUrl: string | null;
   items: {
     id: string;
     descripcion: string;
@@ -79,24 +93,17 @@ export async function ComprobanteImpreso({
   emisor,
 }: {
   comprobante: ComprobanteImprimible;
-  emisor: ConfiguracionFiscal;
+  emisor: EmisorFiscal;
 }) {
   const letra = letraDe(comprobante.tipo);
   const discrimina = discriminaIva(comprobante.tipo);
   const anulada = comprobante.estado === "anulada";
 
+  // El QR va como SVG para no depender de una petición más al imprimir. La
+  // dirección (con la fecha que se le informó a ARCA) la arma Go.
   const qr =
-    comprobante.cae && emisor.cuit
-      ? await qrSvg({
-          fecha: comprobante.fechaEmision,
-          cuitEmisor: emisor.cuit,
-          puntoVenta: comprobante.puntoVenta,
-          tipo: comprobante.tipo,
-          numero: comprobante.numero,
-          total: Number(comprobante.total),
-          receptorCuit: comprobante.receptorCuit,
-          cae: comprobante.cae,
-        })
+    comprobante.cae && comprobante.qrUrl
+      ? await QRCode.toString(comprobante.qrUrl, { type: "svg", margin: 0, errorCorrectionLevel: "M" })
       : null;
 
   return (
@@ -155,7 +162,7 @@ export async function ComprobanteImpreso({
               {numeroFormateado(comprobante.puntoVenta, comprobante.numero)}
             </p>
             <p className="datos">
-              Fecha de emisión: {fechaCorta.format(comprobante.fechaEmision)}
+              Fecha de emisión: {fechaArgentina.format(comprobante.fechaEmision)}
               {comprobante.fechaVencimiento && (
                 <>
                   <br />
@@ -306,7 +313,7 @@ export async function ComprobanteImpreso({
                   <p>
                     <strong>Vencimiento del CAE:</strong>{" "}
                     <span className="mono">
-                      {fechaCorta.format(comprobante.caeVencimiento)}
+                      {fechaArgentina.format(comprobante.caeVencimiento)}
                     </span>
                   </p>
                 )}

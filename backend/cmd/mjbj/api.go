@@ -16,6 +16,7 @@ import (
 	"mjbj/internal/api/cuentasapi"
 	"mjbj/internal/api/documentosapi"
 	"mjbj/internal/api/existenciaapi"
+	"mjbj/internal/api/facturacionapi"
 	"mjbj/internal/api/portalapi"
 	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/api/productosapi"
@@ -38,6 +39,7 @@ import (
 	"mjbj/internal/documentos"
 	"mjbj/internal/email"
 	"mjbj/internal/existencia"
+	"mjbj/internal/facturacion"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/portal"
@@ -302,10 +304,21 @@ func correrAPI() error {
 		buscadorapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// Facturación electrónica con ARCA (tanda 7).
+	facturacionapi.HandlerWithOptions(
+		facturacionapi.NewStrictHandlerWithOptions(facturacion.NuevaAPI(facturacion.Nuevo(pool, log), cfg.Interna),
+			[]facturacionapi.StrictMiddlewareFunc{plataforma.ConPedido[facturacionapi.StrictHandlerFunc]},
+			facturacionapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		facturacionapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
-	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger, productosapi.GetSwagger, stockapi.GetSwagger, preciosapi.GetSwagger, cuentasapi.GetSwagger, bitacoraapi.GetSwagger, portalapi.GetSwagger, existenciaapi.GetSwagger, buscadorapi.GetSwagger} {
+	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger, productosapi.GetSwagger, stockapi.GetSwagger, preciosapi.GetSwagger, cuentasapi.GetSwagger, bitacoraapi.GetSwagger, portalapi.GetSwagger, existenciaapi.GetSwagger, buscadorapi.GetSwagger, facturacionapi.GetSwagger} {
 		s, err := spec()
 		if err != nil {
 			return err

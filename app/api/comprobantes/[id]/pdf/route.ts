@@ -1,65 +1,23 @@
 import { NextResponse } from "next/server";
-import {
-  comprobanteDelCliente,
-  configuracionFiscalActual,
-  obtenerComprobante,
-} from "@/lib/dal/admin/facturacion";
-import { getSession } from "@/lib/dal/session";
-import { clienteDeLaSesion } from "@/lib/dal/cuenta";
-import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
-import { comprobantePdf } from "@/lib/pdf/comprobante";
-import { numeroFormateado } from "@/lib/fiscal/comprobantes";
+import { api } from "@/lib/api/servidor";
 
 /**
- * Descarga del comprobante en PDF (cláusula 1.6).
- *
- * La misma regla de siempre: el personal descarga cualquiera, el cliente
- * únicamente los suyos, y el filtro por dueño va dentro de la consulta. Sin
- * sesión no se responde 401 sino 404: un 401 le confirmaría a quien prueba ids
- * al azar que ese comprobante existe.
+ * Descarga del comprobante en PDF (cláusula 1.6). Lo arma Go
+ * (backend/internal/facturacion, con internal/pdf y el QR de ARCA) con la
+ * misma regla de siempre: el personal descarga cualquiera y el cliente
+ * únicamente los suyos. A quien no puede verlo se le contesta 404: un 401 o un
+ * 403 le confirmaría que el comprobante existe. La ruta queda para que la
+ * dirección no cambie.
  */
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const sesion = await getSession();
-
-  if (!sesion) return new NextResponse("No encontrado", { status: 404 });
-
-  const esStaff = sesion.role === "staff";
-
-  let comprobante = null;
-  let emisor = null;
-
-  if (esStaff) {
-    [comprobante, emisor] = await Promise.all([
-      obtenerComprobante(id),
-      configuracionFiscalActual(),
-    ]);
-  } else {
-    const cliente = await clienteDeLaSesion();
-    if (!cliente) return new NextResponse("No encontrado", { status: 404 });
-
-    [comprobante, emisor] = await Promise.all([
-      comprobanteDelCliente(id, cliente.id),
-      obtenerConfiguracionFiscal(),
-    ]);
-  }
-
-  if (!comprobante) return new NextResponse("No encontrado", { status: 404 });
-
-  const pdf = await comprobantePdf(comprobante, emisor);
-
-  const nombre = `${comprobante.tipo.toUpperCase()}-${numeroFormateado(
-    comprobante.puntoVenta,
-    comprobante.numero,
-  ).replace(/\s/g, "")}.pdf`;
-
-  return new NextResponse(pdf as BodyInit, {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return new NextResponse("No encontrado", { status: 404 });
+  const r = await (await api()).GET("/api/v1/comprobantes/{id}/pdf", { params: { path: { id } }, parseAs: "stream" });
+  if (!r.data) return new NextResponse("No encontrado", { status: 404 });
+  return new Response(r.data, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${nombre}"`,
+      "Content-Disposition": r.response.headers.get("Content-Disposition") ?? "attachment",
       // Documentación fiscal: nunca se cachea en un intermediario compartido.
       "Cache-Control": "private, no-store",
     },

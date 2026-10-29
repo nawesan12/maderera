@@ -28,15 +28,15 @@ import (
 var silencio = slog.New(slog.NewTextHandler(io.Discard, nil))
 
 type entorno struct {
-	srv              *httptest.Server
-	pool             *pgxpool.Pool
-	ses              *auth.Servicio
-	svc              *Servicio
-	central, otra    string
-	placa, tornillo  string
-	general, profe   string
-	cliente, mayor   string
-	u                string
+	srv             *httptest.Server
+	pool            *pgxpool.Pool
+	ses             *auth.Servicio
+	svc             *Servicio
+	central, otra   string
+	placa, tornillo string
+	general, profe  string
+	cliente, mayor  string
+	u               string
 }
 
 func armar(t *testing.T) *entorno {

@@ -374,9 +374,16 @@ type Descarga struct {
 func (s *Servicio) Descargar(ctx context.Context, ses *auth.Sesion, lote []VentaPedida) Descarga {
 	out := Descarga{Resultados: []ResultadoDeCola{}}
 	for _, v := range lote {
+		// Quien vendió, no quien drena, si es alguien real. El TS lo decía y
+		// no lo miraba: con un usuario que ya no existe, la caja (y el
+		// movimiento de caja, con su clave foránea) fallaban y la venta
+		// quedaba en «reintentar» para siempre.
 		usuario := ses.UserID
-		if v.UsuarioID != nil {
-			usuario = *v.UsuarioID
+		if v.UsuarioID != nil && *v.UsuarioID != ses.UserID {
+			var existe bool
+			if err := s.pool.QueryRow(ctx, `SELECT exists(SELECT 1 FROM "user" WHERE id = $1)`, *v.UsuarioID).Scan(&existe); err == nil && existe {
+				usuario = *v.UsuarioID
+			}
 		}
 		v.Autorizado = true
 		r, err := s.RegistrarVenta(ctx, v, usuario)

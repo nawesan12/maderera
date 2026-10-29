@@ -32,7 +32,7 @@ import {
   type MedioDeMostrador,
   type PagoDeVenta,
 } from "../../lib/mostrador/importes";
-import { medioDeMostradorSchema, pagoDeMostradorSchema } from "../../lib/mostrador/esquemas";
+import { medioDeMostradorSchema, pagoDeMostradorSchema } from "./originales/esquemas-mostrador";
 import { descuentoPorMedioDePago, medioPermitido, montoDelDescuentoDePago, type EscalaDePago } from "../../lib/precios/medio-pago";
 import { factorDeStock, precioDeMedia, unidadesDeStock, type ProductoQueSeVende } from "../../lib/ventas/forma-de-venta";
 import { fechaAcotada } from "../../lib/mostrador/offline/numero-provisorio";

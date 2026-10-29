@@ -1,7 +1,7 @@
 /**
  * El precio que le toca a una variante, resuelto en el navegador.
  *
- * Es el `coalesce(precio_propio, precio_general)` de `lib/mostrador/buscar.ts`
+ * Es el `coalesce(precio_propio, precio_general)` del buscador del mostrador (Go)
  * escrito en TypeScript: la lista del cliente si tiene precio cargado para esa
  * variante, y la general como respaldo.
  *

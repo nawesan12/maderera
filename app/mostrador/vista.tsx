@@ -4,8 +4,8 @@ import { useActionState, useCallback, useEffect, useMemo, useRef, useState, useT
 import { toast } from "sonner";
 import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
 import { CorteAMedida } from "./corte-a-medida";
-import type { CorteDeMostrador } from "@/lib/mostrador/venta";
-import type { ResultadoDeMostrador } from "@/lib/mostrador/buscar";
+import type { CorteDeMostrador } from "@/lib/mostrador/tipos";
+import type { ResultadoDeMostrador } from "@/lib/mostrador/tipos";
 import type { PromoVigente } from "@/lib/dal/contenido";
 import { PromosDelBanco } from "./promos";
 import { enfocar, useAtajos, AyudaDeAtajos, type Campo } from "./atajos";
@@ -70,7 +70,7 @@ import {
   type TipoDescuento,
 } from "@/lib/mostrador/importes";
 import type { ChequeDePago, MedioDeMostrador } from "@/lib/mostrador/importes";
-import type { RenglonDelCierre } from "@/lib/mostrador/caja";
+import type { RenglonDelCierre } from "@/lib/mostrador/tipos";
 import {
   nombreDeLaDiferencia,
   TOLERANCIA_ARQUEO,

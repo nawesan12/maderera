@@ -114,10 +114,10 @@ type reglaNumero struct {
 	mensaje string
 }
 
-func entero() reglaNumero              { return reglaNumero{tipo: "int"} }
-func positivo(m string) reglaNumero    { return reglaNumero{">", 0, m} }
-func minimo(n float64) reglaNumero     { return reglaNumero{">=", n, ""} }
-func maximo(n float64) reglaNumero     { return reglaNumero{"<=", n, ""} }
+func entero() reglaNumero                       { return reglaNumero{tipo: "int"} }
+func positivo(m string) reglaNumero             { return reglaNumero{">", 0, m} }
+func minimo(n float64) reglaNumero              { return reglaNumero{">=", n, ""} }
+func maximo(n float64) reglaNumero              { return reglaNumero{"<=", n, ""} }
 func minimoMsj(n float64, m string) reglaNumero { return reglaNumero{">=", n, m} }
 
 // numero es z.coerce.number() con sus controles. `defecto` es el .default().

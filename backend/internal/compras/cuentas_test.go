@@ -67,7 +67,7 @@ func TestCostoComoTS(t *testing.T) {
 		Recepciones []struct {
 			Inicial map[string]struct{ CantidadBase, CostoPromedio string }
 			Pasos   []struct {
-				Items []struct{ VariantID, Cantidad, CostoUnitario, AlicuotaIva string }
+				Items  []struct{ VariantID, Cantidad, CostoUnitario, AlicuotaIva string }
 				Gastos string
 				Lineas []struct {
 					CostoConGastos, CantidadAnterior, CostoAnterior, CostoResultante, CantidadNueva string
@@ -152,7 +152,7 @@ func TestRetencionesComoTS(t *testing.T) {
 					Importe  float64
 					Alicuota string
 				}
-				Neto, Retenido          float64
+				Neto, Retenido            float64
 				TotalGuardado, Movimiento string
 			}
 		}
@@ -293,12 +293,12 @@ func TestFiscalComoTS(t *testing.T) {
 	var g struct {
 		Libros []struct {
 			Filas []struct {
-				FechaEmision                                                  time.Time
-				Tipo                                                          string
-				PuntoVenta, Numero                                            int64
-				Proveedor                                                     string
-				Cuit, Cae                                                     *string
-				Neto, Iva21, Iva105, Iva27, Exento, Percepciones, Total       string
+				FechaEmision                                            time.Time
+				Tipo                                                    string
+				PuntoVenta, Numero                                      int64
+				Proveedor                                               string
+				Cuit, Cae                                               *string
+				Neto, Iva21, Iva105, Iva27, Exento, Percepciones, Total string
 			}
 			Totales    TotalesLibro
 			Computable float64
@@ -307,11 +307,11 @@ func TestFiscalComoTS(t *testing.T) {
 		}
 		CsvRetenciones []struct {
 			Filas []struct {
-				Fecha                                  time.Time
-				Numero, Impuesto, CodigoRegimen        string
-				Proveedor                              string
-				Cuit                                   *string
-				Base, Alicuota, Importe                string
+				Fecha                           time.Time
+				Numero, Impuesto, CodigoRegimen string
+				Proveedor                       string
+				Cuit                            *string
+				Base, Alicuota, Importe         string
 			}
 			Csv string
 		}
@@ -328,10 +328,10 @@ func TestFiscalComoTS(t *testing.T) {
 			Texto              string
 		}
 		Periodos []struct {
-			V           *string
-			Anio, Mes   int
+			V            *string
+			Anio, Mes    int
 			Desde, Hasta time.Time
-			Clave       string
+			Clave        string
 		}
 		Vencimientos []struct {
 			Fecha                string

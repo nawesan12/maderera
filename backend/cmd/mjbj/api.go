@@ -7,6 +7,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 
 	"mjbj/internal/api/catalogoapi"
+	"mjbj/internal/api/comprasapi"
 	"mjbj/internal/api/contenidoapi"
 	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/api/productosapi"
@@ -14,6 +15,7 @@ import (
 	"mjbj/internal/api/stockapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/catalogo"
+	"mjbj/internal/compras"
 	"mjbj/internal/contenido"
 	"mjbj/internal/email"
 	"mjbj/internal/limites"
@@ -141,6 +143,17 @@ func correrAPI() error {
 		stockapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// Compras, proveedores y retenciones (tanda 8).
+	comprasapi.HandlerWithOptions(
+		comprasapi.NewStrictHandlerWithOptions(compras.NuevaAPI(compras.Nuevo(pool, log)),
+			[]comprasapi.StrictMiddlewareFunc{plataforma.ConPedido[comprasapi.StrictHandlerFunc]},
+			comprasapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		comprasapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
@@ -153,6 +166,15 @@ func correrAPI() error {
 		if err != nil {
 			return err
 		}
+		h = validar(h)
+	}
+
+	// El contrato de compras (tanda 8), aparte para no tocar la lista de arriba.
+	if s, err := comprasapi.GetSwagger(); err != nil {
+		return err
+	} else if validar, err := plataforma.ValidarContra(s); err != nil {
+		return err
+	} else {
 		h = validar(h)
 	}
 

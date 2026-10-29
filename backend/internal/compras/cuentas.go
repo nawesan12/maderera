@@ -491,10 +491,10 @@ func armarCsv(encabezados []string, filas [][]string, totales []string) string {
 // Periodo es leerPeriodoMensual de lib/periodos.ts, en UTC (la zona de Next
 // en producción): el mes pedido como «2026-03», o el de `ahora`.
 type Periodo struct {
-	Anio, Mes   int
-	Desde       time.Time
-	Hasta       time.Time
-	Clave       string
+	Anio, Mes int
+	Desde     time.Time
+	Hasta     time.Time
+	Clave     string
 }
 
 // LeerPeriodoMensual lee «aaaa-mm».

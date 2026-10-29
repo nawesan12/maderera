@@ -147,8 +147,36 @@ func NumeroJS(v any, esta bool) float64 {
 			return 1
 		}
 		return 0
+	case []any:
+		return jsmath.Numero(TextoJS(x)) // Number([]) es 0, Number([5]) es 5
 	}
 	return math.NaN()
+}
+
+// TextoJS es String(v) de JS para lo que llega por JSON.
+func TextoJS(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return "null"
+	case string:
+		return x
+	case float64:
+		return jsmath.Texto(x)
+	case bool:
+		if x {
+			return "true"
+		}
+		return "false"
+	case []any:
+		partes := make([]string, len(x))
+		for i, e := range x {
+			if e != nil {
+				partes[i] = TextoJS(e)
+			}
+		}
+		return strings.Join(partes, ",")
+	}
+	return "[object Object]"
 }
 
 // Regla es un control de z.number() en el orden en que se escribió.

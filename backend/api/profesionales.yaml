@@ -1,0 +1,303 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Profesionales y eventos
+  version: "1"
+  description: |
+    El portal de profesionales (la solicitud pública, el estado de quien
+    mira, y el panel que aprueba o rechaza) y los eventos con cupo (el panel,
+    la inscripción pública con el candado por evento y los avisos). El cobro
+    de un evento con precio sigue en Next (Mercado Pago): acá se reserva el
+    lugar. Panel: el ACCESO de /admin/profesionales y /admin/eventos.
+paths:
+  /api/v1/admin/profesionales/solicitudes:
+    get:
+      operationId: ListarSolicitudesProfesionales
+      responses:
+        "200":
+          description: Las últimas 200, con la ficha que ya existe con ese CUIT
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/SolicitudProfesional" } }
+  /api/v1/admin/profesionales/listas:
+    get:
+      operationId: ListasAsignables
+      responses:
+        "200":
+          description: Las listas de precios activas
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ListaAsignable" } }
+  /api/v1/admin/profesionales/resumen:
+    get:
+      operationId: ResumenProfesionales
+      responses:
+        "200":
+          description: Pendientes, aprobados este mes y profesionales activos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResumenProfesionales" }
+  /api/v1/admin/profesionales/aprobacion:
+    post:
+      operationId: AprobarSolicitud
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormularioLibre" }
+      responses:
+        "200": { $ref: "#/components/responses/Listo" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/profesionales/rechazo:
+    post:
+      operationId: RechazarSolicitud
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormularioLibre" }
+      responses:
+        "200": { $ref: "#/components/responses/Listo" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/profesionales/solicitud:
+    post:
+      operationId: SolicitarAccesoProfesional
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormularioLibre" }
+      responses:
+        "200": { $ref: "#/components/responses/Listo" }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/profesionales/estado:
+    get:
+      operationId: EstadoProfesional
+      responses:
+        "200":
+          description: Si quien mira es profesional aprobado, su lista y su solicitud en curso
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EstadoProfesional" }
+  /api/v1/admin/eventos:
+    get:
+      operationId: ListarEventosAdmin
+      responses:
+        "200":
+          description: Todos, del más nuevo al más viejo, con sus conteos
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/EventoAdmin" } }
+    post:
+      operationId: CrearEvento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormularioLibre" }
+      responses:
+        "200": { $ref: "#/components/responses/Listo" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/eventos/{id}/asistentes:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: AsistentesDeEvento
+      responses:
+        "200":
+          description: Los anotados, por orden de llegada
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/AsistenteEvento" } }
+  /api/v1/admin/eventos/estado:
+    put:
+      operationId: CambiarEstadoEvento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormularioLibre" }
+      responses:
+        "200": { $ref: "#/components/responses/Listo" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/eventos/asistencia:
+    put:
+      operationId: MarcarAsistencia
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormularioLibre" }
+      responses:
+        "200": { $ref: "#/components/responses/Listo" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/eventos/recordatorios:
+    post:
+      operationId: MandarRecordatorios
+      responses:
+        "200": { $ref: "#/components/responses/Listo" }
+  /api/v1/eventos/inscripcion:
+    post:
+      operationId: AnotarseAEvento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormularioLibre" }
+      responses:
+        "200":
+          description: La inscripción (reservada si hay que pagar)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InscripcionCreada" }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/eventos/aviso-por-pago:
+    post:
+      operationId: AvisarInscripcionPorPago
+      description: Solo el servidor de Next (secreto interno), al acreditarse el pago de una inscripción.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerId]
+              additionalProperties: false
+              properties:
+                customerId: { type: string, format: uuid }
+      responses:
+        "200": { $ref: "#/components/responses/Listo" }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+    Listo:
+      description: Hecho, con el mensaje para la pantalla
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ok]
+            properties:
+              ok: { type: string }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    FormularioLibre:
+      type: object
+      description: Lo del formulario tal como lo mandó la pantalla; Go lo valida como zod
+      additionalProperties: true
+    SolicitudProfesional:
+      type: object
+      required: [id, nombre, razonSocial, documentoTipo, documentoNumero, cuit, email, telefono, rubro, matricula, volumenEstimado,
+        localidad, redSocial, mensaje, estado, motivoRechazo, customerId, clienteExistente, createdAt, resueltoAt]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        razonSocial: { type: string, nullable: true }
+        documentoTipo: { type: string, enum: [dni, cuit] }
+        documentoNumero: { type: string }
+        cuit: { type: string, nullable: true }
+        email: { type: string }
+        telefono: { type: string }
+        rubro: { type: string }
+        matricula: { type: string, nullable: true }
+        volumenEstimado: { type: string, nullable: true }
+        localidad: { type: string, nullable: true }
+        redSocial: { type: string, nullable: true }
+        mensaje: { type: string, nullable: true }
+        estado: { type: string, enum: [pendiente, aprobada, rechazada] }
+        motivoRechazo: { type: string, nullable: true }
+        customerId: { type: string, nullable: true }
+        clienteExistente:
+          type: object
+          nullable: true
+          required: [id, nombre]
+          properties:
+            id: { type: string }
+            nombre: { type: string }
+        createdAt: { type: string, format: date-time }
+        resueltoAt: { type: string, format: date-time, nullable: true }
+    ListaAsignable:
+      type: object
+      required: [id, nombre, esGeneral]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        esGeneral: { type: boolean }
+    ResumenProfesionales:
+      type: object
+      required: [pendientes, aprobadosMes, clientesProfesionales]
+      properties:
+        pendientes: { type: integer }
+        aprobadosMes: { type: integer }
+        clientesProfesionales: { type: integer }
+    EstadoProfesional:
+      type: object
+      required: [aprobado, customerId, nombre, priceListId, nombreLista, limiteCredito, solicitud]
+      properties:
+        aprobado: { type: boolean }
+        customerId: { type: string, nullable: true }
+        nombre: { type: string, nullable: true }
+        priceListId: { type: string, nullable: true }
+        nombreLista: { type: string, nullable: true }
+        limiteCredito: { type: number, format: double }
+        solicitud:
+          type: object
+          nullable: true
+          required: [id, estado, motivoRechazo, createdAt]
+          properties:
+            id: { type: string }
+            estado: { type: string, enum: [pendiente, aprobada, rechazada] }
+            motivoRechazo: { type: string, nullable: true }
+            createdAt: { type: string, format: date-time }
+    EventoAdmin:
+      type: object
+      required: [id, slug, titulo, resumen, lugar, sucursal, inicia, termina, cupo, precio, soloProfesionales, estado, inscriptos,
+        confirmados, reservados, recaudado, proximo]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        titulo: { type: string }
+        resumen: { type: string, nullable: true }
+        lugar: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+        inicia: { type: string, format: date-time }
+        termina: { type: string, format: date-time, nullable: true }
+        cupo: { type: integer }
+        precio: { type: number, format: double }
+        soloProfesionales: { type: boolean }
+        estado: { type: string }
+        inscriptos: { type: integer }
+        confirmados: { type: integer }
+        reservados: { type: integer }
+        recaudado: { type: number, format: double }
+        proximo: { type: boolean }
+    AsistenteEvento:
+      type: object
+      required: [id, nombre, email, telefono, estado, recordadoAt, createdAt]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        email: { type: string }
+        telefono: { type: string, nullable: true }
+        estado: { type: string }
+        recordadoAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    InscripcionCreada:
+      type: object
+      required: [id, requierePago, monto]
+      properties:
+        id: { type: string }
+        requierePago: { type: boolean }
+        monto: { type: number, format: double }

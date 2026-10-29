@@ -15,6 +15,7 @@ import (
 	"mjbj/internal/email"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/productos"
+	"mjbj/internal/profesionales"
 	"mjbj/internal/push"
 	"mjbj/internal/revalidar"
 	"mjbj/internal/sqlc"
@@ -135,6 +136,16 @@ func correrWorker() error {
 	camp := campanas.Nuevo(pool, cfg.Campanas, correoT10, avisos, log)
 	c.Registrar(campanas.TipoTanda, camp.ManejadorTanda())
 	c.Registrar(avisosT10.TipoReintento, avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log).ManejadorReintento())
+	// Los recordatorios de los eventos de mañana (salían de la «diaria» de
+	// lib/tareas, a las 7).
+	eventos := profesionales.Nuevo(pool, avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log), cfg.Campanas.URLDelSitio(), log)
+	lista = append(lista, tareas.Tarea{
+		Nombre: "recordatorios-eventos", Frecuencia: tareas.Dia, DesdeHora: 7,
+		Ejecutar: func(ctx context.Context) (map[string]any, error) {
+			n, err := eventos.EnviarRecordatorios(ctx)
+			return map[string]any{"recordatorios": n}, err
+		},
+	})
 	go func() {
 		minuto := time.NewTicker(time.Minute)
 		defer minuto.Stop()

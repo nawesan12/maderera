@@ -15,6 +15,7 @@ import (
 	"mjbj/internal/api/documentosapi"
 	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/api/productosapi"
+	"mjbj/internal/api/profesionalesapi"
 	"mjbj/internal/api/sesionapi"
 	"mjbj/internal/api/stockapi"
 	"mjbj/internal/api/whatsappapi"
@@ -34,6 +35,7 @@ import (
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
 	"mjbj/internal/productos"
+	"mjbj/internal/profesionales"
 	"mjbj/internal/push"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/stock"
@@ -236,6 +238,17 @@ func correrAPI() error {
 			}),
 		campanasapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
+	// Profesionales y eventos (tanda 10).
+	profesionalesapi.HandlerWithOptions(
+		profesionalesapi.NewStrictHandlerWithOptions(profesionales.NuevaAPI(profesionales.Nuevo(pool,
+			avisos.Nuevo(pool, correoT10, cfg.Email.Remitente, log), cfg.Campanas.URLDelSitio(), log), lim, cfg.Interna),
+			[]profesionalesapi.StrictMiddlewareFunc{plataforma.ConPedido[profesionalesapi.StrictHandlerFunc]},
+			profesionalesapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		profesionalesapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
 
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
@@ -298,6 +311,13 @@ func correrAPI() error {
 
 	// El contrato de la tanda 10 (campañas y avisos), aparte.
 	if s, err := campanasapi.GetSwagger(); err != nil {
+		return err
+	} else if validar, err := plataforma.ValidarContra(s); err != nil {
+		return err
+	} else {
+		h = validar(h)
+	}
+	if s, err := profesionalesapi.GetSwagger(); err != nil {
 		return err
 	} else if validar, err := plataforma.ValidarContra(s); err != nil {
 		return err

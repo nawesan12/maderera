@@ -48,3 +48,12 @@ test("el cliente entra a su cuenta y agrega y borra una dirección", async ({ pa
   await tarjeta.getByRole("button", { name: /Borrar/ }).click();
   await expect(page.getByText("Obra E2E")).toHaveCount(0);
 });
+
+test("el seguimiento de un pedido no se abre con el número solo", async ({ page }) => {
+  test.skip(test.info().project.name === "telefono", "con una pasada alcanza");
+  // Sin el token del enlace (y sin ser el dueño), cualquier número da lo
+  // mismo que uno que no existe: el número es consecutivo y se adivina.
+  for (const numero of ["PED-0001", "PED-0002", "PED-999999"]) {
+    expect((await page.goto(`/pedido/${numero}`))?.status()).toBe(404);
+  }
+});

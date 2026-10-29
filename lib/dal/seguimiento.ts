@@ -3,8 +3,9 @@ import "server-only";
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { branches, orderItems, orders } from "@/lib/db/schema";
+import { orders } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
+import { api, datos } from "@/lib/api/servidor";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 
 /**
@@ -30,61 +31,17 @@ import { clienteDeLaSesion } from "@/lib/dal/cuenta";
  * "Pedido confirmado" una pantalla de no encontrado. Sin esto serían dos
  * consultas idénticas por carga.
  */
-export const pedidoParaSeguimiento = cache(
-  async (numero: string, token?: string) => {
-    const [pedido] = await db
-      .select({
-        id: orders.id,
-        numero: orders.numero,
-        publicToken: orders.publicToken,
-        customerId: orders.customerId,
-        cliente: orders.contactoNombre,
-        telefono: orders.contactoTelefono,
-        tipoEntrega: orders.tipoEntrega,
-        direccionEntrega: orders.direccionEntrega,
-        zonaEnvio: orders.zonaEnvio,
-        costoEnvio: orders.costoEnvio,
-        subtotal: orders.subtotal,
-        total: orders.total,
-        medioPago: orders.medioPago,
-        estadoPago: orders.estadoPago,
-        estado: orders.estado,
-        sucursal: branches.name,
-        sucursalSlug: branches.slug,
-        createdAt: orders.createdAt,
-      })
-      .from(orders)
-      .leftJoin(branches, eq(branches.id, orders.branchId))
-      .where(eq(orders.numero, numero))
-      .limit(1);
-
-    if (!pedido) return null;
-
-    // Comparación de longitud fija sobre dos uuid. No se usa el token en el
-    // `where` para poder distinguir "no existe" de "no autorizado" y devolver lo
-    // mismo en los dos casos: un 404 distinto confirmaría qué números existen.
-    const conToken = Boolean(token) && token === pedido.publicToken;
-
-    if (!conToken) {
-      const sesion = await getSession();
-      if (!sesion) return null;
-
-      // El personal ve cualquiera: es su trabajo.
-      if (sesion.role !== "staff") {
-        const cliente = await clienteDeLaSesion();
-        if (!cliente || pedido.customerId !== cliente.id) return null;
-      }
-    }
-
-    const items = await db
-      .select()
-      .from(orderItems)
-      .where(eq(orderItems.orderId, pedido.id))
-      .orderBy(orderItems.orden);
-
-    return { ...pedido, items };
-  },
-);
+export const pedidoParaSeguimiento = cache(async (numero: string, token?: string) => {
+  // Lo decide Go (backend/internal/portal/seguimiento.go): con el token entra
+  // cualquiera; sin token, el dueño con sesión o el personal. Para el resto,
+  // 404, igual que si no existiera.
+  const r = await (await api()).GET("/api/v1/pedidos/{numero}/seguimiento", {
+    params: { path: { numero: numero.slice(0, 40) }, query: token ? { t: token.slice(0, 64) } : {} },
+  });
+  if (r.response.status === 404 || r.response.status === 400) return null;
+  const p = datos(r);
+  return { ...p, createdAt: new Date(p.createdAt) };
+});
 
 /**
  * Un pedido, solo si quien pregunta puede tocarlo.

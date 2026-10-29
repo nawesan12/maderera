@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -61,18 +62,36 @@ func (e ClienteDelPortalTipo) Valid() bool {
 	}
 }
 
+// Defines values for PedidoSeguidoTipoEntrega.
+const (
+	PedidoSeguidoTipoEntregaEnvio  PedidoSeguidoTipoEntrega = "envio"
+	PedidoSeguidoTipoEntregaRetiro PedidoSeguidoTipoEntrega = "retiro"
+)
+
+// Valid indicates whether the value is a known member of the PedidoSeguidoTipoEntrega enum.
+func (e PedidoSeguidoTipoEntrega) Valid() bool {
+	switch e {
+	case PedidoSeguidoTipoEntregaEnvio:
+		return true
+	case PedidoSeguidoTipoEntregaRetiro:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MisPedidos200JSONResponseBodyTipoEntrega.
 const (
-	Envio  MisPedidos200JSONResponseBodyTipoEntrega = "envio"
-	Retiro MisPedidos200JSONResponseBodyTipoEntrega = "retiro"
+	MisPedidos200JSONResponseBodyTipoEntregaEnvio  MisPedidos200JSONResponseBodyTipoEntrega = "envio"
+	MisPedidos200JSONResponseBodyTipoEntregaRetiro MisPedidos200JSONResponseBodyTipoEntrega = "retiro"
 )
 
 // Valid indicates whether the value is a known member of the MisPedidos200JSONResponseBodyTipoEntrega enum.
 func (e MisPedidos200JSONResponseBodyTipoEntrega) Valid() bool {
 	switch e {
-	case Envio:
+	case MisPedidos200JSONResponseBodyTipoEntregaEnvio:
 		return true
-	case Retiro:
+	case MisPedidos200JSONResponseBodyTipoEntregaRetiro:
 		return true
 	default:
 		return false
@@ -112,6 +131,41 @@ type DireccionDelPortal struct {
 	Notas          *string   `json:"notas"`
 	Predeterminada bool      `json:"predeterminada"`
 }
+
+// PedidoSeguido defines model for PedidoSeguido.
+type PedidoSeguido struct {
+	Cliente          string    `json:"cliente"`
+	CostoEnvio       *string   `json:"costoEnvio"`
+	CreatedAt        time.Time `json:"createdAt"`
+	DireccionEntrega *string   `json:"direccionEntrega"`
+	Estado           string    `json:"estado"`
+	EstadoPago       string    `json:"estadoPago"`
+	Id               string    `json:"id"`
+	Items            []struct {
+		Cantidad       string  `json:"cantidad"`
+		Descripcion    string  `json:"descripcion"`
+		Id             string  `json:"id"`
+		Orden          int     `json:"orden"`
+		PrecioUnitario string  `json:"precioUnitario"`
+		Presentacion   *string `json:"presentacion"`
+		Subtotal       string  `json:"subtotal"`
+		Unidad         string  `json:"unidad"`
+		VariantId      *string `json:"variantId"`
+	} `json:"items"`
+	MedioPago    *string                  `json:"medioPago"`
+	Numero       string                   `json:"numero"`
+	PublicToken  string                   `json:"publicToken"`
+	Subtotal     string                   `json:"subtotal"`
+	Sucursal     *string                  `json:"sucursal"`
+	SucursalSlug *string                  `json:"sucursalSlug"`
+	Telefono     *string                  `json:"telefono"`
+	TipoEntrega  PedidoSeguidoTipoEntrega `json:"tipoEntrega"`
+	Total        string                   `json:"total"`
+	ZonaEnvio    *string                  `json:"zonaEnvio"`
+}
+
+// PedidoSeguidoTipoEntrega defines model for PedidoSeguido.TipoEntrega.
+type PedidoSeguidoTipoEntrega string
 
 // PresupuestoDelPortal defines model for PresupuestoDelPortal.
 type PresupuestoDelPortal struct {
@@ -181,6 +235,11 @@ type ResponderPresupuestoJSONBody struct {
 	Respuesta string `json:"respuesta"`
 }
 
+// SeguirPedidoParams defines parameters for SeguirPedido.
+type SeguirPedidoParams struct {
+	T *string `form:"t,omitempty" json:"t,omitempty"`
+}
+
 // GuardarMisDatosJSONRequestBody defines body for GuardarMisDatos for application/json ContentType.
 type GuardarMisDatosJSONRequestBody GuardarMisDatosJSONBody
 
@@ -222,6 +281,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/cuenta/resumen)
 	MiResumen(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/pedidos/{numero}/seguimiento)
+	SeguirPedido(w http.ResponseWriter, r *http.Request, numero string, params SeguirPedidoParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -409,6 +471,48 @@ func (siw *ServerInterfaceWrapper) MiResumen(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// SeguirPedido operation middleware
+func (siw *ServerInterfaceWrapper) SeguirPedido(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "numero" -------------
+	var numero string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "numero", r.PathValue("numero"), &numero, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "numero", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SeguirPedidoParams
+
+	// ------------- Optional query parameter "t" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "t", r.URL.Query(), &params.T, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "t"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "t", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SeguirPedido(w, r, numero, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -539,6 +643,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/cuenta/direcciones", wrapper.MisDirecciones)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/cuenta/direcciones", wrapper.GuardarDireccion)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/cuenta/direcciones/{id}", wrapper.BorrarDireccion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/pedidos/{numero}/seguimiento", wrapper.SeguirPedido)
 
 	return m
 }
@@ -926,6 +1031,45 @@ func (response MiResumen200JSONResponse) VisitMiResumenResponse(w http.ResponseW
 	return err
 }
 
+type SeguirPedidoRequestObject struct {
+	Numero string `json:"numero"`
+	Params SeguirPedidoParams
+}
+
+type SeguirPedidoResponseObject interface {
+	VisitSeguirPedidoResponse(w http.ResponseWriter) error
+}
+
+type SeguirPedido200JSONResponse PedidoSeguido
+
+func (response SeguirPedido200JSONResponse) VisitSeguirPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SeguirPedido404ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response SeguirPedido404ApplicationProblemPlusJSONResponse) VisitSeguirPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
@@ -958,6 +1102,9 @@ type StrictServerInterface interface {
 
 	// (GET /api/v1/cuenta/resumen)
 	MiResumen(ctx context.Context, request MiResumenRequestObject) (MiResumenResponseObject, error)
+
+	// (GET /api/v1/pedidos/{numero}/seguimiento)
+	SeguirPedido(ctx context.Context, request SeguirPedidoRequestObject) (SeguirPedidoResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -1266,37 +1413,69 @@ func (sh *strictHandler) MiResumen(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// SeguirPedido operation middleware
+func (sh *strictHandler) SeguirPedido(w http.ResponseWriter, r *http.Request, numero string, params SeguirPedidoParams) {
+	var request SeguirPedidoRequestObject
+
+	request.Numero = numero
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SeguirPedido(ctx, request.(SeguirPedidoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SeguirPedido")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SeguirPedidoResponseObject); ok {
+		if err := validResponse.VisitSeguirPedidoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"bnvEPbSiRO5eNKXQzud/DQA=",
+	"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",
+	"XeKPpKUo8zvLSJvNLwMA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

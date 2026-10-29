@@ -179,3 +179,16 @@ func (a *API) BorrarDireccion(ctx context.Context, r portalapi.BorrarDireccionRe
 	}
 	return hecho("Dirección eliminada."), nil
 }
+
+func (o respuesta) VisitSeguirPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+func (a *API) SeguirPedido(ctx context.Context, r portalapi.SeguirPedidoRequestObject) (portalapi.SeguirPedidoResponseObject, error) {
+	p, err := a.s.Seguir(ctx, auth.DeContexto(ctx), r.Numero, texto(r.Params.T))
+	if errors.Is(err, ErrNoEsta) {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "No encontramos ese pedido.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return respuesta{p}, nil
+}

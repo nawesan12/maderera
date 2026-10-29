@@ -157,3 +157,63 @@ func TestMiCuenta(t *testing.T) {
 		t.Errorf("presupuesto: %s", b)
 	}
 }
+
+func TestSeguimientoDelPedido(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	juan, idJuan := e.web(t, "juan@prueba.test")
+	ana, _ := e.web(t, "ana@prueba.test")
+	if _, err := e.ses.AltaDeStaff(ctx, "vendedor@prueba.test", "una clave larga", "Vendedor", "vendedor"); err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	if _, err := e.ses.Entrar(ctx, w, "vendedor@prueba.test", "una clave larga", "", "", true); err != nil {
+		t.Fatal(err)
+	}
+	jar, _ := cookiejar.New(nil)
+	u0, _ := http.NewRequest("GET", e.srv.URL, nil)
+	jar.SetCookies(u0.URL, w.Result().Cookies())
+	staff := &http.Client{Jar: jar}
+
+	var token, pedido string
+	if err := e.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, contacto_telefono, customer_id, total, subtotal, public_token)
+		values ('PED-0042', 'Juan', '223 555', $1, 1210, 1210, gen_random_uuid()) returning public_token::text, id`, idJuan).Scan(&token, &pedido); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into order_items (order_id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden, costo_unitario)
+		values ($1, 'Fenólico 18 mm', 'placa', 1, 1210, 1210, 0, 700)`, pedido); err != nil {
+		t.Fatal(err)
+	}
+	u := e.srv.URL + "/api/v1/pedidos/"
+	casos := []struct {
+		nombre string
+		c      *http.Client
+		ruta   string
+		codigo int
+	}{
+		{"con el token, sin sesión", http.DefaultClient, "PED-0042/seguimiento?t=" + token, 200},
+		{"sin token ni sesión", http.DefaultClient, "PED-0042/seguimiento", 404},
+		{"token equivocado", http.DefaultClient, "PED-0042/seguimiento?t=00000000-0000-0000-0000-000000000000", 404},
+		{"el dueño sin token", juan, "PED-0042/seguimiento", 200},
+		{"otro cliente sin token", ana, "PED-0042/seguimiento", 404},
+		{"el personal", staff, "PED-0042/seguimiento", 200},
+		{"uno que no existe", http.DefaultClient, "PED-9999/seguimiento?t=" + token, 404},
+	}
+	var cuerpo404 string
+	for _, c := range casos {
+		codigo, b := pedir(t, c.c, "GET", u+c.ruta, nil)
+		if codigo != c.codigo {
+			t.Errorf("%s: %d %s", c.nombre, codigo, b)
+		}
+		if codigo == 200 && (!strings.Contains(b, "Fenólico 18 mm") || strings.Contains(b, "costoUnitario") || strings.Contains(b, "alicuota") || strings.Contains(b, "700.00")) {
+			t.Errorf("%s: %s", c.nombre, b)
+		}
+		// El que no existe y el que no corresponde contestan igual.
+		if codigo == 404 {
+			if cuerpo404 != "" && b != cuerpo404 {
+				t.Errorf("%s: el 404 dice otra cosa: %s / %s", c.nombre, b, cuerpo404)
+			}
+			cuerpo404 = b
+		}
+	}
+}

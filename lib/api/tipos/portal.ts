@@ -154,6 +154,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pedidos/{numero}/seguimiento": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                numero: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * @description La página pública de un pedido. Entra quien trae el token del enlace;
+         *     sin token, el dueño con sesión o el personal. A cualquier otro, 404
+         *     (igual que si no existiera).
+         */
+        get: operations["SeguirPedido"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -220,6 +243,38 @@ export interface components {
             predeterminada: boolean;
             /** Format: date-time */
             createdAt: string;
+        };
+        PedidoSeguido: {
+            id: string;
+            numero: string;
+            publicToken: string;
+            cliente: string;
+            telefono: string | null;
+            /** @enum {string} */
+            tipoEntrega: "retiro" | "envio";
+            direccionEntrega: string | null;
+            zonaEnvio: string | null;
+            costoEnvio: string | null;
+            subtotal: string;
+            total: string;
+            medioPago: string | null;
+            estadoPago: string;
+            estado: string;
+            sucursal: string | null;
+            sucursalSlug: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            items: {
+                id: string;
+                variantId: string | null;
+                descripcion: string;
+                unidad: string;
+                cantidad: string;
+                precioUnitario: string;
+                subtotal: string;
+                presentacion: string | null;
+                orden: number;
+            }[];
         };
     };
     responses: {
@@ -493,6 +548,31 @@ export interface operations {
             200: components["responses"]["Hecho"];
             401: components["responses"]["Problema"];
             422: components["responses"]["Problema"];
+        };
+    };
+    SeguirPedido: {
+        parameters: {
+            query?: {
+                t?: string;
+            };
+            header?: never;
+            path: {
+                numero: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El pedido con sus renglones */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PedidoSeguido"];
+                };
+            };
+            404: components["responses"]["Problema"];
         };
     };
 }

@@ -171,6 +171,24 @@ paths:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/pedidos/{numero}/seguimiento:
+    parameters:
+      - { name: numero, in: path, required: true, schema: { type: string, maxLength: 40 } }
+    get:
+      operationId: SeguirPedido
+      description: |
+        La página pública de un pedido. Entra quien trae el token del enlace;
+        sin token, el dueño con sesión o el personal. A cualquier otro, 404
+        (igual que si no existiera).
+      parameters:
+        - { name: t, in: query, schema: { type: string, maxLength: 64 } }
+      responses:
+        "200":
+          description: El pedido con sus renglones
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PedidoSeguido" }
+        "404": { $ref: "#/components/responses/Problema" }
 components:
   responses:
     Problema:
@@ -252,3 +270,40 @@ components:
         notas: { type: string, nullable: true }
         predeterminada: { type: boolean }
         createdAt: { type: string, format: date-time }
+    PedidoSeguido:
+      type: object
+      required: [id, numero, publicToken, cliente, telefono, tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, total,
+        medioPago, estadoPago, estado, sucursal, sucursalSlug, createdAt, items]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        publicToken: { type: string }
+        cliente: { type: string }
+        telefono: { type: string, nullable: true }
+        tipoEntrega: { type: string, enum: [retiro, envio] }
+        direccionEntrega: { type: string, nullable: true }
+        zonaEnvio: { type: string, nullable: true }
+        costoEnvio: { type: string, nullable: true }
+        subtotal: { type: string }
+        total: { type: string }
+        medioPago: { type: string, nullable: true }
+        estadoPago: { type: string }
+        estado: { type: string }
+        sucursal: { type: string, nullable: true }
+        sucursalSlug: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, variantId, descripcion, unidad, cantidad, precioUnitario, subtotal, presentacion, orden]
+            properties:
+              id: { type: string }
+              variantId: { type: string, nullable: true }
+              descripcion: { type: string }
+              unidad: { type: string }
+              cantidad: { type: string }
+              precioUnitario: { type: string }
+              subtotal: { type: string }
+              presentacion: { type: string, nullable: true }
+              orden: { type: integer }

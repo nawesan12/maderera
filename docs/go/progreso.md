@@ -631,3 +631,32 @@ API —140 en el catálogo (listado y búsqueda), 40 en el panel, 20 con el
 tiempo real abierto—: 9229 pedidos, **0 fallos, p50 5 ms, p95 9,5 ms, p99
 134 ms**, 101 MB de memoria. Falta sumarle el mostrador cuando la tanda 5
 esté, y correrla en la VPS (la de desarrollo es una Mac de 6 núcleos).
+
+## Lo que no era de ninguna tanda (29/10/2026, rama `go-cuentas`)
+
+Mudado a Go mientras corrían las tandas 5, 7, 10 y 13:
+- **Bitácora** (`internal/bitacora`, `api/bitacora.yaml`): la pantalla, sus
+  filtros y la campanita. La escritura queda en TS mientras haya acciones de
+  TS que anotan. «Hace N días» contaba desde la medianoche UTC.
+- **Mi cuenta** (`internal/portal`, `api/portal.yaml`): la ficha, el
+  resumen, pedidos, presupuestos (y responderlos), datos y direcciones.
+  Quedan en TS el detalle de un pedido (lee el acopio, tanda 5), volver a
+  pedir (carrito, tanda 6), los comprobantes (tanda 7) y la baja de novedades
+  (campañas, tanda 10).
+- **Seguimiento público de un pedido** (`internal/portal/seguimiento.go`):
+  token en tiempo constante, el mismo 404 para «no existe» y «no es tuyo», y
+  los renglones sin costo ni alícuota.
+- **Métricas de las sucursales** (`internal/stock/sucursales.go`), con el día
+  argentino.
+- **«¿Existe esto?»** (`internal/existencia`), solo con el secreto interno.
+- **Cola**: un trigger avisa cada trabajo nuevo y el worker se despierta en
+  el acto (migración 00081); si una pasada llena el tope, sigue de largo.
+- **Contratos**: todo `number` es `double` (había 111 en float32) y
+  `api/contratos_test.go` lo vigila.
+- **WhatsApp**: índice parcial para el gasto del mes (migración 00082).
+
+Queda en TS sin tanda asignada, para el corte final: el buscador del panel
+(`lib/dal/admin/busqueda-panel.ts`, lee de todos los dominios: va después de
+la 5), `lib/dal/admin/reportes.ts` (si la 5 no lo mudó), `/api/diagnostico`,
+`lib/tareas` y `lib/cola` (los trabajos que todavía atiende el TS), y la
+escritura de la bitácora.

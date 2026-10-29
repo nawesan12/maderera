@@ -166,9 +166,15 @@ services:
       CARPETA_SUBIDAS: /datos/subidas
       # Los adjuntos de WhatsApp: los sirve /api/whatsapp/medios/<id>, con sesión.
       CARPETA_PRIVADA: /datos/privado
+      # El certificado de ARCA (tanda 7: el CAE lo pide Go). Los mismos archivos
+      # que `app`; ARCA_CUIT y ARCA_AMBIENTE vienen de .env.produccion.
+      ARCA_CERTIFICADO_ARCHIVO: /run/secrets/arca/arca.crt
+      ARCA_CLAVE_PRIVADA_ARCHIVO: /run/secrets/arca/arca.key
     volumes:
       - subidas:/datos/subidas
       - privado:/datos/privado
+      # Solo lectura; el usuario de la imagen (nonroot, 65532) tiene que poder leerlos.
+      - ./secretos/arca:/run/secrets/arca:ro
     expose:
       - "8080"
     stop_grace_period: 30s

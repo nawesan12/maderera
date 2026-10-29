@@ -1,0 +1,6 @@
+emitir-go        req/s=    4.2  p50= 4327.1ms  p95= 6132.8ms  p99= 6380.8ms  fallos=0.00%  sin_cae=0/105  memoria_max=34MB  cpu_media=2%
+emitir-ts        req/s=    3.3  p50= 4050.8ms  p95=12252.2ms  p99=12956.2ms  fallos=0.00%  sin_cae=76/76  memoria_max=105MB  cpu_media=5%
+libro-go         req/s=   40.2  p50=  432.0ms  p95=  902.5ms  p99= 1495.3ms  fallos=0.00%  sin_cae=0/814  memoria_max=118MB  cpu_media=149%
+libro-ts         req/s=   10.2  p50= 1573.5ms  p95= 4364.8ms  p99= 7524.7ms  fallos=0.00%  sin_cae=0/226  memoria_max=240MB  cpu_media=43%
+listado-go       req/s=  101.1  p50=  184.8ms  p95=  354.2ms  p99=  442.1ms  fallos=0.00%  sin_cae=0/2046  memoria_max=55MB  cpu_media=26%
+listado-ts       req/s=  108.4  p50=  172.4ms  p95=  333.1ms  p99=  476.9ms  fallos=100.00%  sin_cae=0/2179  memoria_max=193MB  cpu_media=24%

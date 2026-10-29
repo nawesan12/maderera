@@ -5,8 +5,8 @@ import {
   detectarSeparador,
   formatoBinario,
   partirPlanilla,
-} from "@/lib/csv";
-import { leerXlsx } from "@/lib/xlsx";
+} from "../../../scripts/golden/originales/csv";
+import { leerXlsx } from "../../../scripts/golden/originales/xlsx";
 
 /**
  * Una planilla subida, venga como CSV o como .xlsx.

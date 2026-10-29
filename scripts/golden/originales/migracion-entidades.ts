@@ -17,7 +17,7 @@
  */
 
 import { cuitValido, soloDigitos } from "../../../lib/cuit";
-import { interpretarNumero, normalizarEncabezado } from "../../../lib/csv";
+import { interpretarNumero, normalizarEncabezado } from "./csv";
 
 export type ClaveEntidad =
   | "clientes"

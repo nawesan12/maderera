@@ -15,15 +15,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  ENTIDADES,
-  LOTE,
-  definicionDe,
   faltantes,
   type ClaveEntidad,
+  type Control,
+  type DefinicionesDeMigracion,
   type Mapeo,
-} from "@/lib/migracion/entidades";
-import type { Control } from "@/lib/migracion/ejecutar";
-import type { RechazoMigracion } from "@/lib/db/schema";
+  type RechazoMigracion,
+} from "@/lib/migracion/tipos";
 import {
   analizarArchivo,
   cerrarCorrida,
@@ -103,7 +101,13 @@ function descargarRechazos(entidad: ClaveEntidad, rechazos: RechazoMigracion[]) 
   URL.revokeObjectURL(url);
 }
 
-export function AsistenteMigracion() {
+export function AsistenteMigracion({
+  definiciones,
+}: {
+  /** Las entidades con sus campos y el tamaño del lote, de la API de Go. */
+  definiciones: DefinicionesDeMigracion;
+}) {
+  const { entidades: ENTIDADES, lote: LOTE } = definiciones;
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -120,7 +124,10 @@ export function AsistenteMigracion() {
   const [leyendo, startLectura] = useTransition();
   const [validando, startValidacion] = useTransition();
 
-  const definicion = useMemo(() => definicionDe(entidad), [entidad]);
+  const definicion = useMemo(
+    () => ENTIDADES.find((e) => e.clave === entidad) ?? ENTIDADES[0],
+    [ENTIDADES, entidad],
+  );
   const filas = analisis?.filas ?? [];
   const sinMapear = faltantes(definicion, mapeo);
 

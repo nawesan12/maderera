@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deflateRawSync, crc32 } from "node:zlib";
-import { leerXlsx } from "@/lib/xlsx";
+import { leerXlsx } from "../scripts/golden/originales/xlsx";
 
 /**
  * Los tests arman un .xlsx de verdad, byte por byte.

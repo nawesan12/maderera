@@ -3,12 +3,13 @@ import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { fechaHora } from "@/components/admin/formato";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
+  definicionesDeMigracion,
   estadoDelSistema,
   historialDeMigraciones,
 } from "@/lib/dal/admin/migracion";
 import { AsistenteMigracion } from "./asistente";
 
-import type { ClaveEntidad } from "@/lib/migracion/entidades";
+import type { ClaveEntidad } from "@/lib/migracion/tipos";
 
 export const metadata = { title: "Migración de datos · Panel" };
 
@@ -34,9 +35,10 @@ export default async function MigracionPage() {
   // servidor y no esta pantalla.
   await requireStaffRole("admin");
 
-  const [estado, historial] = await Promise.all([
+  const [estado, historial, definiciones] = await Promise.all([
     estadoDelSistema(),
     historialDeMigraciones(),
+    definicionesDeMigracion(),
   ]);
 
   return (
@@ -71,7 +73,7 @@ export default async function MigracionPage() {
 
       <div className="mt-6 grid gap-6 2xl:grid-cols-[1fr_360px]">
         <div className="rounded-xl border bg-card p-5">
-          <AsistenteMigracion />
+          <AsistenteMigracion definiciones={definiciones} />
         </div>
 
         <aside>

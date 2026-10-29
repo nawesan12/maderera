@@ -6,13 +6,13 @@ import {
   interpretarNumero,
   normalizarEncabezado,
   partirPlanilla,
-} from "@/lib/csv";
+} from "../scripts/golden/originales/csv";
 import {
   automapear,
   definicionDe,
   faltantes,
   normalizarFilas,
-} from "@/lib/migracion/entidades";
+} from "../scripts/golden/originales/migracion-entidades";
 
 /**
  * La migración corre una sola vez y contra datos que no volvemos a ver: si lee

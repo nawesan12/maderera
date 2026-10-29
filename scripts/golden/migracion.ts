@@ -775,7 +775,7 @@ function muestras(): { archivo: string; entidad: ClaveEntidad; datos: Buffer }[]
 
 async function main() {
   const m: Entidades = await import("./originales/migracion-entidades");
-  const { leerPlanilla } = await import("../../lib/planilla");
+  const { leerPlanilla } = await import("./originales/planilla");
   const { digitoVerificador } = await import("../../lib/cuit");
 
   rmSync(DESTINO, { recursive: true, force: true });

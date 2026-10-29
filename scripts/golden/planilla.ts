@@ -761,9 +761,9 @@ function variantesDeflate(n: number): Buffer[] {
 /* -------------------------------------------------------------------------- */
 
 async function main() {
-  const { leerPlanilla } = await import("../../lib/planilla");
-  const csv = await import("../../lib/csv");
-  const precios = await import("../../lib/precios-csv");
+  const { leerPlanilla } = await import("./originales/planilla");
+  const csv = await import("./originales/csv");
+  const precios = await import("./originales/precios-csv");
 
   rmSync(ARCHIVOS, { recursive: true, force: true });
   mkdirSync(ARCHIVOS, { recursive: true });

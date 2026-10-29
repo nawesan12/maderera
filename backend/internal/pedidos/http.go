@@ -20,7 +20,9 @@ type API struct {
 }
 
 // NuevaAPI arma los handlers.
-func NuevaAPI(s *Servicio, interna plataforma.ConfigInterna) *API { return &API{s: s, interna: interna} }
+func NuevaAPI(s *Servicio, interna plataforma.ConfigInterna) *API {
+	return &API{s: s, interna: interna}
+}
 
 var _ ventasapi.StrictServerInterface = (*API)(nil)
 
@@ -47,14 +49,16 @@ func (o respuesta) escribir(w http.ResponseWriter) error {
 
 func ok(v any) respuesta { return respuesta{codigo: http.StatusOK, v: v} }
 
-func (o respuesta) VisitListarPedidosResponse(w http.ResponseWriter) error       { return o.escribir(w) }
-func (o respuesta) VisitFichaDePedidoResponse(w http.ResponseWriter) error       { return o.escribir(w) }
-func (o respuesta) VisitAvanzarPedidoResponse(w http.ResponseWriter) error       { return o.escribir(w) }
-func (o respuesta) VisitCancelarPedidoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
-func (o respuesta) VisitMarcarPedidoCobradoResponse(w http.ResponseWriter) error { return o.escribir(w) }
-func (o respuesta) VisitListarPresupuestosResponse(w http.ResponseWriter) error  { return o.escribir(w) }
-func (o respuesta) VisitCrearPresupuestoResponse(w http.ResponseWriter) error    { return o.escribir(w) }
-func (o respuesta) VisitFichaDePresupuestoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitListarPedidosResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitFichaDePedidoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitAvanzarPedidoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitCancelarPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitMarcarPedidoCobradoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitListarPresupuestosResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCrearPresupuestoResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+func (o respuesta) VisitFichaDePresupuestoResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCambiarEstadoDePresupuestoResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }

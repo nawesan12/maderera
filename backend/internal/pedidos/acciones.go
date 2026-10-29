@@ -56,7 +56,7 @@ func (s *Servicio) anotar(ctx context.Context, ses *auth.Sesion, accion bitacora
 
 type filaDePedido struct {
 	numero, estado, tipoEntrega, estadoPago, total string
-	medioPago, customerID                         *string
+	medioPago, customerID                          *string
 }
 
 // bloquearPedido lee el pedido y bloquea su fila hasta el final de la

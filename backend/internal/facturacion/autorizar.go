@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -12,7 +13,6 @@ import (
 
 	"mjbj/internal/fiscal"
 	"mjbj/internal/formato"
-	"mjbj/internal/jsmath"
 )
 
 // El pedido de CAE (autorizarComprobante). Va **fuera** de la transacción
@@ -127,6 +127,30 @@ func (s *Servicio) Autorizar(ctx context.Context, id string) (string, error) {
 		return "", errEmision("El comprobante está anulado.")
 	}
 	a := &arca{s: s, cfg: cfg}
+	// El camino corto: si el anterior tiene CAE en esta base, este es el
+	// siguiente para ARCA y se pide directo (una sola llamada). Si ARCA dice
+	// que no es el siguiente (10016) —otro sistema numeró, o un CAE se perdió
+	// en un corte—, se va al camino largo.
+	var anteriorConCAE bool
+	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM invoices WHERE punto_venta = $1 AND tipo = $2::tipo_comprobante
+		AND numero = $3 AND cae IS NOT NULL)`, c.puntoVenta, c.tipo, c.numero-1).Scan(&anteriorConCAE); err != nil {
+		return "", err
+	}
+	if anteriorConCAE {
+		r, err := a.pedir(ctx, c)
+		if err != nil {
+			return "", err
+		}
+		if r.Autorizado || !strings.Contains(r.Observaciones, "[10016]") {
+			return a.aplicar(ctx, c, r)
+		}
+	}
+	return a.largo(ctx, c)
+}
+
+// largo pregunta el último autorizado y, según dónde está ARCA, recupera el
+// CAE, autoriza antes los anteriores o pide el de este.
+func (a *arca) largo(ctx context.Context, c *comprobanteArca) (string, error) {
 	ultimo, err := a.ultimo(ctx, c.puntoVenta, c.tipo)
 	if err != nil {
 		return "", err
@@ -258,19 +282,32 @@ func (a *arca) anterior(ctx context.Context, despues *comprobanteArca, n int64) 
 
 // solicitar pide el CAE de un comprobante que es el siguiente para ARCA.
 func (a *arca) solicitar(ctx context.Context, c *comprobanteArca) (string, error) {
-	aut, err := a.s.paraArca(ctx, c)
+	r, err := a.pedir(ctx, c)
 	if err != nil {
 		return "", err
 	}
+	return a.aplicar(ctx, c, r)
+}
+
+// pedir manda FECAESolicitar y devuelve lo que contestó ARCA, sin tocar la base.
+func (a *arca) pedir(ctx context.Context, c *comprobanteArca) (fiscal.Resultado, error) {
+	aut, err := a.s.paraArca(ctx, c)
+	if err != nil {
+		return fiscal.Resultado{}, err
+	}
 	auth, err := a.auth(ctx)
 	if err != nil {
-		return "", sinConexion(err)
+		return fiscal.Resultado{}, sinConexion(err)
 	}
 	body, err := fiscal.Llamar(ctx, a.cfg, a.s.bitacoraArca(), "FECAESolicitar", fiscal.CuerpoAutorizar(*aut, a.cfg.Cuit, auth), &c.id)
 	if err != nil {
-		return "", sinConexion(err)
+		return fiscal.Resultado{}, sinConexion(err)
 	}
-	r := fiscal.LeerAutorizacion(body)
+	return fiscal.LeerAutorizacion(body), nil
+}
+
+// aplicar guarda lo que contestó ARCA: el CAE, o el rechazo con su motivo.
+func (a *arca) aplicar(ctx context.Context, c *comprobanteArca, r fiscal.Resultado) (string, error) {
 	if !r.Autorizado {
 		if _, err := a.s.pool.Exec(ctx, `UPDATE invoices SET estado = 'rechazada', observaciones_arca = $2, updated_at = now()
 			WHERE id = $1 AND cae IS NULL`, c.id, nulo(r.Observaciones)); err != nil {
@@ -428,5 +465,3 @@ func (b bitacoraArca) Despues(ctx context.Context, id string, exito bool, respue
 	}
 	_, _ = b.pool.Exec(ctx, `UPDATE arca_log SET exito = $2, respuesta = $3 WHERE id = $1`, id, exito, respuesta)
 }
-
-var _ = jsmath.Fijo2

@@ -12,13 +12,18 @@
 package simulador
 
 import (
+	"bytes"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
+	"errors"
 	"io"
 	"math"
 	"math/big"
@@ -34,8 +39,11 @@ import (
 
 // Simulador guarda lo autorizado por punto de venta y tipo.
 type Simulador struct {
-	// Demora es lo que tarda cada respuesta (ARCA tarda 100–600 ms).
-	Demora time.Duration
+	// Demora es lo que tarda cada respuesta (ARCA tarda 100–600 ms), más un
+	// azar de hasta Variacion: con la demora pareja los pedidos llegan siempre
+	// en orden, y con ARCA de verdad no.
+	Demora    time.Duration
+	Variacion time.Duration
 	// DuracionTicket es la vigencia del ticket (12 h en ARCA).
 	DuracionTicket time.Duration
 	// Ahora es el reloj (para vencer tickets en las pruebas).
@@ -133,8 +141,13 @@ func (s *Simulador) AntesDeResponder(f func(metodo string)) {
 }
 
 func (s *Simulador) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if s.Demora > 0 {
-		time.Sleep(s.Demora)
+	if s.Demora > 0 || s.Variacion > 0 {
+		d := s.Demora
+		if s.Variacion > 0 {
+			n, _ := rand.Int(rand.Reader, big.NewInt(int64(s.Variacion)))
+			d += time.Duration(n.Int64())
+		}
+		time.Sleep(d)
 	}
 	b, _ := io.ReadAll(r.Body)
 	if strings.Contains(r.URL.Path, "LoginCms") {
@@ -221,7 +234,7 @@ func (s *Simulador) loginCms(w http.ResponseWriter, b []byte) {
 		falla(w, "cms.bad", "No se pudo decodificar el CMS: "+err.Error())
 		return
 	}
-	if err := p7.Verify(); err != nil {
+	if err := p7.Verify(); err != nil && verificarComoOpenSSL(der, p7) != nil {
 		falla(w, "cms.sign.invalid", "Firma inválida o algoritmo no soportado")
 		return
 	}
@@ -281,6 +294,57 @@ func (s *Simulador) loginCms(w http.ResponseWriter, b []byte) {
 	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 	_, _ = io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><soapenv:Body><loginCmsResponse xmlns="http://wsaa.view.sua.dvadac.desa.afip.gov"><loginCmsReturn>`+
 		esc(ta)+`</loginCmsReturn></loginCmsResponse></soapenv:Body></soapenv:Envelope>`)
+}
+
+// verificarComoOpenSSL verifica la firma sobre los atributos firmados tal
+// como vinieron. smallstep/pkcs7 los vuelve a codificar ordenados (DER) antes
+// de verificar, y node-forge —el TS— los manda en el orden en que se cargaron:
+// OpenSSL (y ARCA) verifican los bytes recibidos, así que acá también.
+func verificarComoOpenSSL(der []byte, p7 *pkcs7.PKCS7) error {
+	var ci struct {
+		Tipo      asn1.ObjectIdentifier
+		Contenido asn1.RawValue `asn1:"explicit,tag:0"`
+	}
+	if _, err := asn1.Unmarshal(der, &ci); err != nil {
+		return err
+	}
+	var sd struct {
+		Version   int
+		Digests   asn1.RawValue
+		Encap     asn1.RawValue
+		Certs     asn1.RawValue `asn1:"optional,tag:0"`
+		CRLs      asn1.RawValue `asn1:"optional,tag:1"`
+		Firmantes []struct {
+			Version   int
+			Sid       asn1.RawValue
+			Digest    asn1.RawValue
+			Atributos asn1.RawValue `asn1:"optional,tag:0"`
+			Algoritmo asn1.RawValue
+			Firma     []byte
+		} `asn1:"set"`
+	}
+	if _, err := asn1.Unmarshal(ci.Contenido.Bytes, &sd); err != nil {
+		return err
+	}
+	cert := p7.GetOnlySigner()
+	if len(sd.Firmantes) != 1 || cert == nil {
+		return errors.New("un firmante")
+	}
+	f := sd.Firmantes[0]
+	var resumen []byte
+	if err := p7.UnmarshalSignedAttribute(pkcs7.OIDAttributeMessageDigest, &resumen); err != nil {
+		return err
+	}
+	if h := sha256.Sum256(p7.Content); !bytes.Equal(h[:], resumen) {
+		return errors.New("el messageDigest no es el del contenido")
+	}
+	atributos := append([]byte{0x31}, f.Atributos.FullBytes[1:]...)
+	h := sha256.Sum256(atributos)
+	clave, ok := cert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return errors.New("solo RSA")
+	}
+	return rsa.VerifyPKCS1v15(clave, crypto.SHA256, h[:], f.Firma)
 }
 
 // --- WSFEv1 ---

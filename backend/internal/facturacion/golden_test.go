@@ -98,10 +98,10 @@ func TestGoldenZod(t *testing.T) {
 func TestGoldenLibro(t *testing.T) {
 	var casos []struct {
 		Filas []struct {
-			ID, Tipo, ReceptorNombre                                string
-			FechaEmision                                            time.Time
-			PuntoVenta, Numero                                      int64
-			ReceptorCuit, Cae                                       *string
+			ID, Tipo, ReceptorNombre                            string
+			FechaEmision                                        time.Time
+			PuntoVenta, Numero                                  int64
+			ReceptorCuit, Cae                                   *string
 			Neto, Iva21, Iva105, Iva27, Exento, Tributos, Total string
 		}
 		ConSigno []map[string]any

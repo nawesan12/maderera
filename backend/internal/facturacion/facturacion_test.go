@@ -280,6 +280,24 @@ func TestCorteEntreElCaeYElGuardado(t *testing.T) {
 	if n := e.sim.Llamadas("FECompConsultar"); n != 1 {
 		t.Fatalf("consultas: %d", n)
 	}
+
+	// Lo mismo con el segundo, que va por el camino corto (el anterior tiene
+	// CAE): ARCA rechaza el reintento por repetido (10016) y Go recupera.
+	id2, _ := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "Consumidor final", ReceptorCondicionIva: "consumidor_final",
+		Lineas: []Linea{{LineaEntrada: fiscal.LineaEntrada{Descripcion: "Tirante", Cantidad: 1, PrecioFinalUnitario: 4500}}}})
+	e.s.despuesDelCAE = func(string) error { return corte }
+	if _, err := e.s.Autorizar(ctx, id2); !errors.Is(err, corte) {
+		t.Fatalf("el segundo tendría que cortarse: %v", err)
+	}
+	e.s.despuesDelCAE = nil
+	if _, err := e.s.Autorizar(ctx, id2); err != nil {
+		t.Fatalf("el reintento del segundo: %v", err)
+	}
+	dado2, _ := e.sim.Emitido(3, 6, 2)
+	e.uno(t, `SELECT cae FROM invoices WHERE id = $1 AND estado = 'autorizada'`, &cae, id2)
+	if cae != dado2.Cae {
+		t.Fatalf("segundo: CAE %s, ARCA dio %s", cae, dado2.Cae)
+	}
 }
 
 // Si la respuesta de ARCA no llega (se corta la red después de autorizar),

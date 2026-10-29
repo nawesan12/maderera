@@ -5,11 +5,8 @@ import { esUuid } from "@/lib/uuid";
 import { ArrowLeft } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { obtenerCampana, fallidosDeCampana } from "@/lib/dal/admin/campanas";
+import { estadoDeCampanas, fallidosDeCampana, obtenerCampana } from "@/lib/dal/admin/campanas";
 import { RUBROS_CLIENTE } from "@/lib/rubros-cliente";
-import { describirSegmento } from "@/lib/campanas/segmento";
-import { motivoParaNoEnviar } from "@/lib/campanas/disponible";
-import { armarCorreoDeCampana } from "@/lib/campanas/correo";
 import { EditorDeCampana } from "../editor";
 import { AccionesDeCampana, RefrescarMientrasEnvia } from "./acciones";
 
@@ -58,7 +55,7 @@ export default async function CampanaPage({ params }: { params: Promise<{ id: st
             segmento: campana.segmento,
           }}
           rubros={RUBROS_CLIENTE.map((r) => ({ valor: r.valor, etiqueta: r.etiqueta }))}
-          impedimento={motivoParaNoEnviar()}
+          impedimento={(await estadoDeCampanas()).motivo}
         />
       </div>
     );
@@ -66,7 +63,6 @@ export default async function CampanaPage({ params }: { params: Promise<{ id: st
 
   // Ya salió (o está saliendo): el resultado y el correo tal cual se mandó.
   const fallidos = campana.fallidos > 0 ? await fallidosDeCampana(id) : [];
-  const correo = armarCorreoDeCampana(campana, { email: "cliente@ejemplo.com", nombre: "Cliente" });
   const salieron = campana.enviados + campana.fallidos + campana.omitidos;
   const avance = campana.total > 0 ? Math.round((salieron / campana.total) * 100) : 0;
 
@@ -74,7 +70,7 @@ export default async function CampanaPage({ params }: { params: Promise<{ id: st
     <div>
       {volver}
       {campana.estado === "enviando" && <RefrescarMientrasEnvia />}
-      <EncabezadoPanel titulo={campana.asunto} detalle={describirSegmento(campana.segmento)}>
+      <EncabezadoPanel titulo={campana.asunto} detalle={campana.descripcion}>
         <EtiquetaEstado estado={campana.estado === "enviada" ? "campana_enviada" : campana.estado} />
         <AccionesDeCampana id={campana.id} estado={campana.estado} />
       </EncabezadoPanel>
@@ -125,7 +121,7 @@ export default async function CampanaPage({ params }: { params: Promise<{ id: st
 
         <aside className="tarjeta overflow-hidden lg:self-start">
           <p className="border-b px-4 py-2.5 text-sm text-muted-foreground">El correo que salió</p>
-          <iframe title="El correo enviado" srcDoc={correo.html} sandbox="" className="h-[70vh] w-full bg-white" />
+          <iframe title="El correo enviado" srcDoc={campana.muestra} sandbox="" className="h-[70vh] w-full bg-white" />
         </aside>
       </div>
     </div>

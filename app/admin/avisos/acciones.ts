@@ -1,80 +1,36 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
-import { db } from "@/lib/db";
-import { avisosEmail } from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+
+/*
+ * Prender, apagar y cambiar el texto de un aviso por correo. Lo hace la API
+ * de Go (backend/internal/avisos), con la validación de antes.
+ */
 
 export interface EstadoAvisoEmail {
   error?: string;
   ok?: string;
 }
 
+function resultado(r: { data?: { ok: string }; error?: unknown }): EstadoAvisoEmail {
+  return r.data ? { ok: r.data.ok } : { error: mensajeDe(r.error as Problema | undefined, "Revisá el texto.") };
+}
+
 /** Prende o apaga un aviso por correo. */
-export async function cambiarAvisoEmail(
-  _previo: EstadoAvisoEmail,
-  formData: FormData,
-): Promise<EstadoAvisoEmail> {
-  await requireStaff();
-
-  const parsed = z
-    .object({ id: z.string().uuid(), activo: z.enum(["si", "no"]) })
-    .safeParse({ id: formData.get("id"), activo: formData.get("activo") });
-
-  if (!parsed.success)
-    return {
-      error: "No pudimos identificar ese aviso. Recargá la pantalla y probá de nuevo.",
-    };
-
-  await db
-    .update(avisosEmail)
-    .set({ activo: parsed.data.activo === "si", updatedAt: new Date() })
-    .where(eq(avisosEmail.id, parsed.data.id));
-
-  revalidatePath("/admin/avisos");
-
-  return {
-    ok: parsed.data.activo === "si" ? "Aviso activado." : "Aviso apagado.",
-  };
+export async function cambiarAvisoEmail(_previo: EstadoAvisoEmail, formData: FormData): Promise<EstadoAvisoEmail> {
+  const r = await (await api()).PUT("/api/v1/admin/avisos/activo", {
+    body: { id: formData.get("id"), activo: formData.get("activo") },
+  });
+  if (r.data) revalidatePath("/admin/avisos");
+  return resultado(r);
 }
 
 /** Cambia el asunto y el encabezado de un aviso. */
-export async function guardarTextoAvisoEmail(
-  _previo: EstadoAvisoEmail,
-  formData: FormData,
-): Promise<EstadoAvisoEmail> {
-  await requireStaff();
-
-  const parsed = z
-    .object({
-      id: z.string().uuid(),
-      // El asunto es lo que se ve en la bandeja antes de abrir; vacío hace que
-      // el correo parezca spam.
-      asunto: z.string().trim().min(3, "El asunto no puede quedar vacío.").max(120),
-      encabezado: z.string().trim().max(160).optional(),
-    })
-    .safeParse({
-      id: formData.get("id"),
-      asunto: formData.get("asunto"),
-      encabezado: (formData.get("encabezado") as string) || undefined,
-    });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisá el texto." };
-  }
-
-  await db
-    .update(avisosEmail)
-    .set({
-      asunto: parsed.data.asunto,
-      encabezado: parsed.data.encabezado ?? null,
-      updatedAt: new Date(),
-    })
-    .where(eq(avisosEmail.id, parsed.data.id));
-
-  revalidatePath("/admin/avisos");
-
-  return { ok: "Texto guardado." };
+export async function guardarTextoAvisoEmail(_previo: EstadoAvisoEmail, formData: FormData): Promise<EstadoAvisoEmail> {
+  const r = await (await api()).PUT("/api/v1/admin/avisos/texto", {
+    body: { id: formData.get("id"), asunto: formData.get("asunto"), encabezado: formData.get("encabezado") },
+  });
+  if (r.data) revalidatePath("/admin/avisos");
+  return resultado(r);
 }

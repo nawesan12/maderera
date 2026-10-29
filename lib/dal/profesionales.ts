@@ -2,13 +2,8 @@ import "server-only";
 
 import { cache } from "react";
 import { cacheLife, cacheTag } from "next/cache";
-import { desc, eq, or } from "drizzle-orm";
-import { db } from "@/lib/db";
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 import { api, apiPublica, datos } from "@/lib/api/servidor";
-import { customers, priceLists, professionalApplications } from "@/lib/db/schema";
-import { getSession } from "@/lib/dal/session";
-import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 
 /**
  * Lecturas del portal de profesionales, del lado público.
@@ -38,75 +33,16 @@ export interface EstadoProfesional {
 }
 
 /**
- * En qué situación está quien mira la página.
+ * En qué situación está quien mira la página. Lo responde la API de Go
+ * (backend/internal/profesionales, `Estado`): el mismo criterio que usa para
+ * los documentos y los precios.
  *
  * Memoizado con `cache()` para toda la request: lo consultan la página, el
- * catálogo y el carrito, y sería la misma consulta tres veces.
+ * catálogo y el carrito, y sería el mismo pedido tres veces.
  */
 export const estadoProfesional = cache(async (): Promise<EstadoProfesional> => {
-  const vacio: EstadoProfesional = {
-    aprobado: false,
-    customerId: null,
-    nombre: null,
-    priceListId: null,
-    nombreLista: null,
-    limiteCredito: 0,
-    solicitud: null,
-  };
-
-  const sesion = await getSession();
-  if (!sesion) return vacio;
-
-  const cliente = await clienteDeLaSesion();
-
-  const [solicitud] = await db
-    .select({
-      id: professionalApplications.id,
-      estado: professionalApplications.estado,
-      motivoRechazo: professionalApplications.motivoRechazo,
-      createdAt: professionalApplications.createdAt,
-    })
-    .from(professionalApplications)
-    .where(
-      or(
-        eq(professionalApplications.userId, sesion.userId),
-        cliente ? eq(professionalApplications.customerId, cliente.id) : undefined,
-      ),
-    )
-    .orderBy(desc(professionalApplications.createdAt))
-    .limit(1);
-
-  if (!cliente) return { ...vacio, solicitud: solicitud ?? null };
-
-  // La verdad sobre si es profesional está en la ficha, no en la solicitud: un
-  // vendedor puede marcar a alguien como profesional desde el mostrador sin que
-  // haya pasado nunca por el formulario.
-  // El mismo criterio está en Go (db/consultas/sitio.sql, EsProfesionalAprobado)
-  // para los documentos; se juntan cuando estadoProfesional se mude (tanda 10).
-  const aprobado = cliente.tipo === "profesional" && cliente.estado !== "inactivo";
-
-  const [lista] = cliente
-    ? await db
-        .select({
-          id: priceLists.id,
-          nombre: priceLists.name,
-          priceListId: customers.priceListId,
-        })
-        .from(customers)
-        .leftJoin(priceLists, eq(priceLists.id, customers.priceListId))
-        .where(eq(customers.id, cliente.id))
-        .limit(1)
-    : [];
-
-  return {
-    aprobado,
-    customerId: cliente.id,
-    nombre: cliente.nombre,
-    priceListId: lista?.priceListId ?? null,
-    nombreLista: lista?.nombre ?? null,
-    limiteCredito: cliente.limiteCredito,
-    solicitud: solicitud ?? null,
-  };
+  const e = datos(await (await api()).GET("/api/v1/profesionales/estado"));
+  return { ...e, solicitud: e.solicitud ? { ...e.solicitud, createdAt: new Date(e.solicitud.createdAt) } : null };
 });
 
 export interface DocumentoTecnico {

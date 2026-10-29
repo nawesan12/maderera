@@ -4,9 +4,7 @@ import { Megaphone, Plus } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { Vacio } from "@/components/admin/vacio";
-import { listarCampanas, cantidadDeBajas } from "@/lib/dal/admin/campanas";
-import { describirSegmento } from "@/lib/campanas/segmento";
-import { proveedorEmail } from "@/lib/email";
+import { estadoDeCampanas, listarCampanas } from "@/lib/dal/admin/campanas";
 import { fechaCorta } from "@/lib/formato";
 
 export const metadata: Metadata = { title: "Campañas" };
@@ -19,8 +17,8 @@ export const metadata: Metadata = { title: "Campañas" };
  * números.
  */
 export default async function CampanasPage() {
-  const [lista, bajas] = await Promise.all([listarCampanas(), cantidadDeBajas()]);
-  const proveedor = proveedorEmail();
+  const [lista, estado] = await Promise.all([listarCampanas(), estadoDeCampanas()]);
+  const { bajas } = estado;
 
   return (
     <div className="space-y-6">
@@ -37,7 +35,7 @@ export default async function CampanasPage() {
         </Link>
       </EncabezadoPanel>
 
-      {!proveedor.real && (
+      {!estado.real && (
         <p className="estado-espera rounded-xl bg-[var(--estado-fondo)] px-4 py-3 text-base">
           El envío de correos todavía no está conectado. Se pueden armar campañas y ver cómo
           quedan, pero no salen hasta que se conecte el servidor de correo.
@@ -66,7 +64,7 @@ export default async function CampanasPage() {
                     <div className="min-w-0 flex-1">
                       <h2 className="truncate text-lg font-medium">{c.asunto}</h2>
                       <p className="mt-0.5 text-base text-muted-foreground">
-                        {describirSegmento(c.segmento)}
+                        {c.descripcion}
                       </p>
                     </div>
                     <EtiquetaEstado estado={c.estado === "enviada" ? "campana_enviada" : c.estado} />

@@ -183,6 +183,37 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/OkConId" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mi-cuenta/novedades:
+    get:
+      operationId: MisNovedades
+      description: Si quien entró recibe las campañas (por la dirección de su ficha, o la de su cuenta)
+      responses:
+        "200":
+          description: Si las recibe
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recibe]
+                properties:
+                  recibe: { type: boolean }
+        "401": { $ref: "#/components/responses/Problema" }
+    put:
+      operationId: CambiarMisNovedades
+      description: Se aplica a la dirección de la cuenta y a la de la ficha, si son distintas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recibir]
+              additionalProperties: false
+              properties:
+                recibir: { type: boolean }
+      responses:
+        "200": { $ref: "#/components/responses/OkConId" }
+        "401": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/avisos:
     get:
       operationId: ListarAvisosEmail

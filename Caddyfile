@@ -173,6 +173,14 @@ autoconfig.{$CORREO_DOMINIO} {
 		reverse_proxy api:8080
 	}
 
+	# La baja con un clic de las campañas (RFC 8058, el botón de Gmail): la
+	# URL de los correos que ya salieron no cambia; ahora la atiende Go
+	# (backend/internal/campanas). La página /baja sigue en Next.
+	@baja path /api/baja
+	handle @baja {
+		reverse_proxy api:8080
+	}
+
 	# Todo lo demás va a la aplicación.
 	handle {
 		# Lo que Next ya marca como inmutable —los JS y CSS con hash en el

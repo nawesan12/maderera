@@ -6,9 +6,7 @@ import { db } from "@/lib/db";
 import { tareasCorridas, trabajos } from "@/lib/db/schema";
 import { ETIQUETAS } from "@/lib/cache-publico";
 import { procesarCola } from "@/lib/cola";
-import { iniciarProgramadas } from "@/lib/campanas/envio";
 import { limpiarVentanasViejas } from "@/lib/limites";
-import { enviarRecordatorios } from "@/lib/notificaciones/eventos";
 import { avisarAlPanel } from "@/lib/notificaciones/push";
 import { pendientesDelRol } from "@/lib/dal/admin/pendientes";
 import { periodoDe, type Frecuencia } from "./periodo";
@@ -44,11 +42,8 @@ export const TAREAS = {
   "cada-minuto": {
     frecuencia: null,
     descripcion:
-      "Arranca las campañas programadas y procesa la cola: pagos, mensajes y tandas de correo.",
-    ejecutar: async () => {
-      const campanas = await iniciarProgramadas();
-      return { campanasIniciadas: campanas, ...(await procesarCola({ limite: 100 })) };
-    },
+      "Procesa la cola: pagos y avisos. (Las campañas programadas y sus tandas las manda el worker de Go.)",
+    ejecutar: async () => ({ ...(await procesarCola({ limite: 100 })) }),
   },
 
   "cada-hora": {
@@ -69,9 +64,8 @@ export const TAREAS = {
   diaria: {
     frecuencia: "dia",
     descripcion:
-      "Recordatorios de eventos, el parte del día al panel y la limpieza de tablas que crecen solas.",
+      "El parte del día al panel y la limpieza de tablas que crecen solas. (Los recordatorios de eventos los manda el worker de Go.)",
     ejecutar: async () => {
-      const recordatorios = await enviarRecordatorios();
       const parte = await mandarParteDelDia();
       // Las plantillas de WhatsApp las copia el worker de Go (tarea
       // «plantillas-whatsapp»).
@@ -90,7 +84,6 @@ export const TAREAS = {
         .returning({ id: trabajos.id });
 
       return {
-        recordatorios,
         parte,
         limitesBorrados: limites,
         corridasBorradas: corridas.length,

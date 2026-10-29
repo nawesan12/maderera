@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decidirFicha } from "@/lib/profesionales/fichas";
+import { decidirFicha } from "../scripts/golden/originales/tanda10/fichas";
 
 /**
  * Se prueba porque el defecto que esto arregla no se veía en el código y sí en

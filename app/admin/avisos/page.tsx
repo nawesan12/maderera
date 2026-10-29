@@ -9,7 +9,6 @@ import {
   listarAvisosEmail,
   ultimosAvisosEnviados,
 } from "@/lib/dal/admin/avisos";
-import { sembrarAvisosEmail } from "@/lib/notificaciones/sembrar";
 import { FilaAvisoEmail } from "./fila";
 import { Vacio } from "@/components/admin/vacio";
 
@@ -35,8 +34,6 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
  * avisamos?".
  */
 export default async function AvisosPage() {
-  await sembrarAvisosEmail();
-
   const [avisos, correo, enviados] = await Promise.all([
     listarAvisosEmail(),
     estadoCorreo(),

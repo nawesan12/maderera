@@ -314,6 +314,11 @@ type ConfirmarBajaJSONBody struct {
 	T       string `json:"t"`
 }
 
+// CambiarMisNovedadesJSONBody defines parameters for CambiarMisNovedades.
+type CambiarMisNovedadesJSONBody struct {
+	Recibir bool `json:"recibir"`
+}
+
 // CambiarAvisoEmailJSONRequestBody defines body for CambiarAvisoEmail for application/json ContentType.
 type CambiarAvisoEmailJSONRequestBody = FormularioLibre
 
@@ -343,6 +348,9 @@ type ActivarPushJSONRequestBody ActivarPushJSONBody
 
 // ConfirmarBajaJSONRequestBody defines body for ConfirmarBaja for application/json ContentType.
 type ConfirmarBajaJSONRequestBody ConfirmarBajaJSONBody
+
+// CambiarMisNovedadesJSONRequestBody defines body for CambiarMisNovedades for application/json ContentType.
+type CambiarMisNovedadesJSONRequestBody CambiarMisNovedadesJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -421,6 +429,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/bajas)
 	ConfirmarBaja(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/mi-cuenta/novedades)
+	MisNovedades(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /api/v1/mi-cuenta/novedades)
+	CambiarMisNovedades(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -929,6 +943,34 @@ func (siw *ServerInterfaceWrapper) ConfirmarBaja(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// MisNovedades operation middleware
+func (siw *ServerInterfaceWrapper) MisNovedades(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MisNovedades(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CambiarMisNovedades operation middleware
+func (siw *ServerInterfaceWrapper) CambiarMisNovedades(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CambiarMisNovedades(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1065,6 +1107,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/campanas/{id}/copia", wrapper.DuplicarCampana)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/bajas", wrapper.LeerBaja)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/bajas", wrapper.ConfirmarBaja)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/mi-cuenta/novedades", wrapper.MisNovedades)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/mi-cuenta/novedades", wrapper.CambiarMisNovedades)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/avisos", wrapper.ListarAvisosEmail)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/avisos/correo", wrapper.EstadoDelCorreo)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/avisos/enviados", wrapper.AvisosEnviados)
@@ -1859,6 +1903,83 @@ func (response ConfirmarBaja422ApplicationProblemPlusJSONResponse) VisitConfirma
 	return err
 }
 
+type MisNovedadesRequestObject struct {
+}
+
+type MisNovedadesResponseObject interface {
+	VisitMisNovedadesResponse(w http.ResponseWriter) error
+}
+
+type MisNovedades200JSONResponse struct {
+	Recibe bool `json:"recibe"`
+}
+
+func (response MisNovedades200JSONResponse) VisitMisNovedadesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MisNovedades401ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response MisNovedades401ApplicationProblemPlusJSONResponse) VisitMisNovedadesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarMisNovedadesRequestObject struct {
+	Body *CambiarMisNovedadesJSONRequestBody
+}
+
+type CambiarMisNovedadesResponseObject interface {
+	VisitCambiarMisNovedadesResponse(w http.ResponseWriter) error
+}
+
+type CambiarMisNovedades200JSONResponse struct{ OkConIdJSONResponse }
+
+func (response CambiarMisNovedades200JSONResponse) VisitCambiarMisNovedadesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarMisNovedades401ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response CambiarMisNovedades401ApplicationProblemPlusJSONResponse) VisitCambiarMisNovedadesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
@@ -1936,6 +2057,12 @@ type StrictServerInterface interface {
 
 	// (POST /api/v1/bajas)
 	ConfirmarBaja(ctx context.Context, request ConfirmarBajaRequestObject) (ConfirmarBajaResponseObject, error)
+
+	// (GET /api/v1/mi-cuenta/novedades)
+	MisNovedades(ctx context.Context, request MisNovedadesRequestObject) (MisNovedadesResponseObject, error)
+
+	// (PUT /api/v1/mi-cuenta/novedades)
+	CambiarMisNovedades(ctx context.Context, request CambiarMisNovedadesRequestObject) (CambiarMisNovedadesResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -2667,54 +2794,111 @@ func (sh *strictHandler) ConfirmarBaja(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// MisNovedades operation middleware
+func (sh *strictHandler) MisNovedades(w http.ResponseWriter, r *http.Request) {
+	var request MisNovedadesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MisNovedades(ctx, request.(MisNovedadesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MisNovedades")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MisNovedadesResponseObject); ok {
+		if err := validResponse.VisitMisNovedadesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CambiarMisNovedades operation middleware
+func (sh *strictHandler) CambiarMisNovedades(w http.ResponseWriter, r *http.Request) {
+	var request CambiarMisNovedadesRequestObject
+
+	var body CambiarMisNovedadesJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CambiarMisNovedades(ctx, request.(CambiarMisNovedadesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CambiarMisNovedades")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CambiarMisNovedadesResponseObject); ok {
+		if err := validResponse.VisitCambiarMisNovedadesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"iFDUMHU3Q8Vi8d8BAA==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

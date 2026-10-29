@@ -5,7 +5,7 @@ import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import { formatearCuit } from "@/lib/formato";
 import { FormularioDatos } from "./formulario";
 import { NovedadesPorCorreo } from "./novedades";
-import { estaDadoDeBaja } from "@/lib/campanas/bajas";
+import { api, datos } from "@/lib/api/servidor";
 
 export const metadata: Metadata = { title: "Mis datos" };
 
@@ -14,7 +14,7 @@ export default async function MisDatosPage() {
     verifySession(),
     clienteDeLaSesion(),
   ]);
-  const recibe = !(await estaDadoDeBaja(cliente?.email || sesion.email));
+  const { recibe } = datos(await (await api()).GET("/api/v1/mi-cuenta/novedades"));
 
   return (
     <div className="space-y-5">

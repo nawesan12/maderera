@@ -126,6 +126,12 @@ export async function despacharEmail(despacho: DespachoEmail): Promise<void> {
   }
 }
 
+/**
+ * La carga de `email.reintento`. La encola despacharEmail y la manda el
+ * worker de Go (backend/internal/avisos): si vuelve a rebotar
+ * temporalmente, la cola espera más; si el rechazo es definitivo, queda
+ * registrado y no se insiste.
+ */
 export interface ReintentoDeEmail {
   evento: string;
   para: string;
@@ -135,38 +141,6 @@ export interface ReintentoDeEmail {
   adjuntos?: { nombre: string; tipo: string; base64: string }[];
   entidadTipo: string | null;
   entidadId: string | null;
-}
-
-/**
- * El reintento de un aviso que rebotó temporalmente. Lo corre la cola
- * (`email.reintento`): si vuelve a rebotar temporalmente, tira y la cola
- * espera más; si el rechazo es definitivo, queda registrado y no se insiste.
- */
-export async function reintentarEmail(carga: ReintentoDeEmail): Promise<void> {
-  const resultado = await proveedorEmail().enviar({
-    para: carga.para,
-    asunto: carga.asunto,
-    html: carga.html,
-    texto: carga.texto,
-    adjuntos: carga.adjuntos?.map((a) => ({
-      nombre: a.nombre,
-      tipo: a.tipo,
-      contenido: new Uint8Array(Buffer.from(a.base64, "base64")),
-    })),
-  });
-  if (!resultado.enviado && resultado.temporal) {
-    throw new Error(resultado.error ?? "Rechazo temporal.");
-  }
-  await registrar({
-    evento: carga.evento,
-    para: carga.para,
-    asunto: carga.asunto,
-    entidadTipo: carga.entidadTipo ?? undefined,
-    entidadId: carga.entidadId,
-    estado: resultado.simulado ? "simulada" : resultado.enviado ? "enviada" : "fallida",
-    proveedorMensajeId: resultado.id,
-    error: resultado.error,
-  });
 }
 
 async function registrar(datos: {
@@ -344,9 +318,12 @@ export async function notificarResultadoDePago(resultado: {
     // Una inscripción a un evento tiene su propio correo, con la fecha y el
     // lugar: el genérico de "recibimos tu pago" no le sirve a quien lo que
     // quiere saber es dónde y cuándo tiene que estar.
+    // La arma y la manda Go (backend/internal/profesionales).
     if (resultado.tipo === "inscripcion") {
-      const { notificarInscripcionPorPago } = await import("./eventos");
-      await notificarInscripcionPorPago(resultado);
+      if (resultado.customerId) {
+        const { apiInterna } = await import("@/lib/api/servidor");
+        await apiInterna.POST("/api/v1/eventos/aviso-por-pago", { body: { customerId: resultado.customerId } });
+      }
       return;
     }
 

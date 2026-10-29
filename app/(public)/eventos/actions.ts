@@ -2,116 +2,59 @@
 
 import { revalidatePath, updateTag } from "next/cache";
 import { ETIQUETAS } from "@/lib/cache-publico";
-import { after } from "next/server";
 import { redirect } from "next/navigation";
-import { z } from "zod";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 import { getSession } from "@/lib/dal/session";
-import { avisoDeEspera, permitidoPorAmbos } from "@/lib/limites";
-import { estadoProfesional } from "@/lib/dal/profesionales";
-import { ErrorDeInscripcion, inscribir } from "@/lib/eventos";
 import { ErrorDeCobro, iniciarPagoDeInscripcion } from "@/lib/pagos/crear";
-import { notificarInscripcion } from "@/lib/notificaciones/eventos";
 
 export interface EstadoInscripcion {
   error?: string;
   ok?: string;
 }
 
-const esquema = z.object({
-  eventId: z.string().uuid(),
-  slug: z.string().min(1),
-  nombre: z.string().trim().min(3, "Escribí tu nombre y apellido.").max(120),
-  email: z.string().trim().email("Revisá el correo."),
-  telefono: z.string().trim().max(40).optional(),
-});
-
 /**
  * Inscripción a un evento.
  *
- * Gratuito: queda confirmada de una. Con precio: queda reservada —ocupando
- * lugar— y manda a pagar. La confirmación llega por el mismo `acreditarPago`
- * que cobra un pedido, así que no hay un segundo camino por donde se confirme
- * algo sin que la plata haya entrado.
+ * La toma la API de Go (backend/internal/profesionales/eventos.go): valida
+ * como antes, frena por IP y por correo, y reserva el lugar con el candado
+ * por evento (dos personas al último lugar no entran las dos). Gratuito:
+ * queda confirmada de una y Go manda el correo. Con precio: queda reservada
+ * —ocupando lugar— y acá se arma el cobro de Mercado Pago (tanda 6). La
+ * confirmación llega por el mismo `acreditarPago` que cobra un pedido.
  */
-export async function anotarse(
-  _previo: EstadoInscripcion,
-  formData: FormData,
-): Promise<EstadoInscripcion> {
-  const parsed = esquema.safeParse({
-    eventId: formData.get("eventId"),
-    slug: formData.get("slug"),
-    nombre: formData.get("nombre"),
-    email: formData.get("email"),
-    telefono: (formData.get("telefono") as string) || undefined,
+export async function anotarse(_previo: EstadoInscripcion, formData: FormData): Promise<EstadoInscripcion> {
+  const slug = formData.get("slug");
+  const r = await (await api()).POST("/api/v1/eventos/inscripcion", {
+    body: {
+      eventId: formData.get("eventId"),
+      slug,
+      nombre: formData.get("nombre"),
+      email: formData.get("email"),
+      telefono: formData.get("telefono"),
+    },
   });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No pudimos anotarte. Probá de nuevo en un momento.") };
 
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
+  // La lista de eventos está cacheada entre visitas y trae el conteo de
+  // inscriptos: sin esto, quien acaba de anotarse seguiría viendo el cupo de
+  // antes de anotarse.
+  updateTag(ETIQUETAS.eventos);
+  revalidatePath(`/eventos/${slug}`);
+  revalidatePath("/eventos");
+  revalidatePath("/admin/eventos");
+
+  if (!r.data.requierePago) {
+    return { ok: "Listo, quedaste anotado. Te mandamos los detalles por correo." };
   }
 
-  /*
-   * El freno.
-   *
-   * El evento con precio crea una **preferencia real en Mercado Pago** por cada
-   * inscripción, y el cupo se ocupa al reservar. La regla de negocio ya impide
-   * dos inscripciones con el mismo correo al mismo evento; esto impide las mil
-   * con mil correos distintos desde el mismo lado.
-   */
-  const puede = await permitidoPorAmbos("evento", {
-    nombre: "correo",
-    valor: parsed.data.email,
-  });
-
-  if (!puede.permitido) return { error: avisoDeEspera(puede) };
-
-  const [sesion, profesional] = await Promise.all([
-    getSession(),
-    estadoProfesional(),
-  ]);
-
-  let destino: string | null = null;
-
+  let destino: string;
   try {
-    const inscripcion = await inscribir({
-      eventId: parsed.data.eventId,
-      nombre: parsed.data.nombre,
-      email: parsed.data.email,
-      telefono: parsed.data.telefono,
-      customerId: profesional.customerId,
-      userId: sesion?.userId,
-      esProfesional: profesional.aprobado,
-    });
-
-    // La lista de eventos está cacheada entre visitas y trae el conteo de
-    // inscriptos: sin esto, quien acaba de anotarse seguiría viendo el cupo de
-    // antes de anotarse.
-    updateTag(ETIQUETAS.eventos);
-    revalidatePath(`/eventos/${parsed.data.slug}`);
-    revalidatePath("/eventos");
-    revalidatePath("/admin/eventos");
-
-    if (!inscripcion.requierePago) {
-      after(async () => {
-        await notificarInscripcion(inscripcion.id);
-      });
-
-      return {
-        ok: "Listo, quedaste anotado. Te mandamos los detalles por correo.",
-      };
-    }
-
-    const cobro = await iniciarPagoDeInscripcion(
-      inscripcion.id,
-      sesion?.userId,
-    );
-    destino = cobro.urlPago;
+    const sesion = await getSession();
+    destino = (await iniciarPagoDeInscripcion(r.data.id, sesion?.userId)).urlPago;
   } catch (error) {
-    if (error instanceof ErrorDeInscripcion || error instanceof ErrorDeCobro) {
-      return { error: error.message };
-    }
+    if (error instanceof ErrorDeCobro) return { error: error.message };
     console.error(error);
     return { error: "No pudimos anotarte. Probá de nuevo en un momento." };
   }
-
   redirect(destino);
 }

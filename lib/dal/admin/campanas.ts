@@ -1,88 +1,59 @@
 import "server-only";
 
-import { desc, eq, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { campanas, type Campana } from "@/lib/db/schema";
-import { requireStaffRole } from "@/lib/dal/session";
+import { api, datos } from "@/lib/api/servidor";
+import type { Esquemas } from "@/lib/api/tipos";
 
 /**
- * Lo que lee el panel de campañas. Solo el admin (ver `lib/roles.ts`).
+ * Lo que lee el panel de campañas. Solo el admin (ver `lib/roles.ts`). Lo
+ * sirve la API de Go (backend/internal/campanas): las campañas con sus
+ * conteos, el segmento ya dicho en castellano (`descripcion`) y, en la
+ * ficha, el correo armado para un cliente de muestra (`muestra`).
  */
-export interface ResumenDeCampana extends Campana {
-  total: number;
-  enviados: number;
-  fallidos: number;
-  omitidos: number;
-  pendientes: number;
-}
 
-/*
- * `campanas.id` va escrito a mano y no como `${campanas.id}`: adentro de la
- * subconsulta Drizzle lo escribe sin la tabla, y `"id"` a secas es el del
- * envío, no el de la campaña. Así contaba cero siempre.
- */
-const conteos = {
-  total: sql<number>`(select count(*)::int from campana_envios e where e.campana_id = campanas.id)`,
-  enviados: sql<number>`(select count(*)::int from campana_envios e where e.campana_id = campanas.id and e.estado = 'enviado')`,
-  fallidos: sql<number>`(select count(*)::int from campana_envios e where e.campana_id = campanas.id and e.estado = 'fallido')`,
-  omitidos: sql<number>`(select count(*)::int from campana_envios e where e.campana_id = campanas.id and e.estado = 'omitido')`,
-  pendientes: sql<number>`(select count(*)::int from campana_envios e where e.campana_id = campanas.id and e.estado = 'pendiente')`,
+type ConFechas<T> = Omit<T, "programadaPara" | "iniciadaAt" | "terminadaAt" | "createdAt" | "updatedAt"> & {
+  programadaPara: Date | null;
+  iniciadaAt: Date | null;
+  terminadaAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-export async function listarCampanas(): Promise<ResumenDeCampana[]> {
-  await requireStaffRole("admin");
-  return db
-    .select({ ...campanasColumnas(), ...conteos })
-    .from(campanas)
-    .orderBy(desc(campanas.createdAt))
-    .limit(200);
+export type ResumenDeCampana = ConFechas<Esquemas["CampanaResumen"]>;
+export type DetalleDeCampana = ConFechas<Esquemas["CampanaDetalle"]>;
+export type SegmentoCampana = Esquemas["SegmentoCampana"];
+
+const fecha = (s: string | null | undefined) => (s ? new Date(s) : null);
+
+function conFechas<T extends Esquemas["CampanaResumen"]>(c: T) {
+  return {
+    ...c,
+    programadaPara: fecha(c.programadaPara),
+    iniciadaAt: fecha(c.iniciadaAt),
+    terminadaAt: fecha(c.terminadaAt),
+    createdAt: new Date(c.createdAt),
+    updatedAt: new Date(c.updatedAt),
+  };
 }
 
-export async function obtenerCampana(id: string): Promise<ResumenDeCampana | null> {
-  await requireStaffRole("admin");
-  const [fila] = await db
-    .select({ ...campanasColumnas(), ...conteos })
-    .from(campanas)
-    .where(eq(campanas.id, id))
-    .limit(1);
-  return fila ?? null;
+export async function listarCampanas(): Promise<ResumenDeCampana[]> {
+  return datos(await (await api()).GET("/api/v1/admin/campanas")).map(conFechas);
+}
+
+export async function obtenerCampana(id: string): Promise<DetalleDeCampana | null> {
+  const r = await (await api()).GET("/api/v1/admin/campanas/{id}", { params: { path: { id } } });
+  if (r.response.status === 404) return null;
+  return conFechas(datos(r));
 }
 
 /** Los que no salieron, con el motivo: es lo único que hay que mirar de un envío. */
 export async function fallidosDeCampana(id: string) {
-  await requireStaffRole("admin");
-  const { rows } = await db.execute<{ email: string; nombre: string | null; error: string | null }>(sql`
-    select email, nombre, error from campana_envios
-     where campana_id = ${id} and estado = 'fallido'
-     order by email limit 200
-  `);
-  return rows;
+  return datos(await (await api()).GET("/api/v1/admin/campanas/{id}/fallidos", { params: { path: { id } } }));
 }
 
-/** Cuántas bajas hay, para decirlo al lado del alcance de un segmento. */
-export async function cantidadDeBajas(): Promise<number> {
-  await requireStaffRole("admin");
-  const { rows } = await db.execute<{ n: number }>(sql`select count(*)::int as n from bajas_de_correo`);
-  return rows[0]?.n ?? 0;
-}
-
-function campanasColumnas() {
-  return {
-    id: campanas.id,
-    asunto: campanas.asunto,
-    adelanto: campanas.adelanto,
-    cuerpo: campanas.cuerpo,
-    imagenUrl: campanas.imagenUrl,
-    botonTexto: campanas.botonTexto,
-    botonUrl: campanas.botonUrl,
-    segmento: campanas.segmento,
-    estado: campanas.estado,
-    programadaPara: campanas.programadaPara,
-    creadaPorUserId: campanas.creadaPorUserId,
-    creadaPorNombre: campanas.creadaPorNombre,
-    iniciadaAt: campanas.iniciadaAt,
-    terminadaAt: campanas.terminadaAt,
-    createdAt: campanas.createdAt,
-    updatedAt: campanas.updatedAt,
-  };
+/**
+ * Si las campañas pueden salir (`motivo`, o null), si el envío de correos
+ * está conectado, a cuántas por minuto y cuántas bajas hay.
+ */
+export async function estadoDeCampanas() {
+  return datos(await (await api()).GET("/api/v1/admin/campanas/estado"));
 }

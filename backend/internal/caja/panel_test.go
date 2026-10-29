@@ -190,7 +190,6 @@ func TestCajasConElMismoCodigoALaVez(t *testing.T) {
 	}
 }
 
-
 func (e *entorno) turno(t *testing.T, sucursal, quien string, abierta time.Time, cerrada *time.Time, contado *float64) string {
 	t.Helper()
 	estado := "abierta"

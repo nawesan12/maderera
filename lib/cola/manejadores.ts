@@ -35,6 +35,12 @@ export interface CargasDeTrabajo {
   "recibo.aviso": { receiptId: string };
   /** El aviso al cliente de un cheque suyo rechazado (lo encola Go). */
   "cheque.rechazado": { chequeId: string; porElBanco: boolean };
+  /**
+   * El comprobante en PDF por correo al cliente. Lo encola la API de Go al
+   * emitir y al recibir el CAE (backend/internal/facturacion); el PDF se lo
+   * pide a Go.
+   */
+  "factura.aviso": { invoiceId: string };
 }
 
 export type TipoDeTrabajo = keyof CargasDeTrabajo;
@@ -77,6 +83,10 @@ export const MANEJADORES: {
   "cheque.rechazado": async (carga) => {
     const { notificarChequeRechazado } = await import("@/lib/notificaciones/cobros");
     await notificarChequeRechazado(carga.chequeId, carga.porElBanco);
+  },
+  "factura.aviso": async (carga) => {
+    const { enviarComprobantePorCorreo } = await import("@/lib/notificaciones/fiscal");
+    await enviarComprobantePorCorreo(carga.invoiceId);
   },
   "campana.tanda": async (carga) => {
     const { procesarTanda } = await import("@/lib/campanas/envio");

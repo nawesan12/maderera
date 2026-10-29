@@ -71,17 +71,19 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
     }
 
     case "comprobante": {
-      const { obtenerComprobante } = await import("@/lib/dal/admin/facturacion");
-      const { comprobantePdf } = await import("@/lib/pdf/comprobante");
-      const c = await obtenerComprobante(doc.id);
+      // El PDF lo arma Go (backend/internal/facturacion), como el que baja el panel.
+      const { comprobanteInterno } = await import("@/lib/dal/admin/facturacion");
+      const { pdfDelComprobante } = await import("@/lib/notificaciones/fiscal");
+      const c = await comprobanteInterno(doc.id);
       if (!c) return null;
-      const pdf = await comprobantePdf(c, emisor);
+      const pdf = await pdfDelComprobante(doc.id);
+      if (!pdf) return null;
       const numero = numeroFormateado(c.puntoVenta, c.numero).replace(/\s/g, "");
       return {
-        contenido: new Uint8Array(pdf),
-        nombre: `${c.tipo.toUpperCase()}-${numero}.pdf`,
+        contenido: pdf.contenido,
+        nombre: pdf.nombre,
         descripcion: `la factura ${numero}`,
-        customerId: (c as { customerId?: string | null }).customerId ?? null,
+        customerId: c.customerId ?? null,
         telefono: null,
         contacto: null,
       };

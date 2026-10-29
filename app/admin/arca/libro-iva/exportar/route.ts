@@ -1,91 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { libroIvaVentas } from "@/lib/dal/admin/facturacion";
-import { requireStaff } from "@/lib/dal/session";
+import { api } from "@/lib/api/servidor";
+import { cabecerasCsv } from "@/lib/csv-excel";
 import { leerPeriodoMensual } from "@/lib/periodos";
-import { nombreComprobante, numeroFormateado } from "@/lib/fiscal/comprobantes";
 
 /**
- * Libro IVA ventas en CSV, para mandarle al contador.
- *
- * Separado por punto y coma y con coma decimal: es lo que espera Excel en
- * español. Con coma como separador, un importe como "1.234,56" rompe las
- * columnas y hay que rearmar el archivo a mano.
+ * Libro IVA ventas en CSV, para mandarle al contador. Lo arma la API de Go
+ * (backend/internal/facturacion) con internal/csvexcel, igual que el de
+ * compras: punto y coma, coma decimal, BOM y la fecha en hora argentina.
  */
 export async function GET(request: NextRequest) {
-  await requireStaff();
-
-  const { desde, hasta, clave } = leerPeriodoMensual(
-    request.nextUrl.searchParams.get("periodo"),
-  );
-
-  const libro = await libroIvaVentas(desde, hasta);
-
-  const numero = (valor: number) => valor.toFixed(2).replace(".", ",");
-  const texto = (valor: string | null) => `"${(valor ?? "").replace(/"/g, '""')}"`;
-
-  const lineas = [
-    [
-      "Fecha",
-      "Tipo",
-      "Numero",
-      "Cliente",
-      "CUIT",
-      "Neto",
-      "IVA 21%",
-      "IVA 10,5%",
-      "IVA 27%",
-      "Exento",
-      "Percepciones",
-      "Total",
-      "CAE",
-    ].join(";"),
-  ];
-
-  for (const fila of libro.filas) {
-    lineas.push(
-      [
-        fila.fechaEmision.toISOString().slice(0, 10),
-        texto(nombreComprobante(fila.tipo)),
-        texto(numeroFormateado(fila.puntoVenta, fila.numero)),
-        texto(fila.receptorNombre),
-        texto(fila.receptorCuit),
-        numero(fila.neto),
-        numero(fila.iva21),
-        numero(fila.iva105),
-        numero(fila.iva27),
-        numero(fila.exento),
-        numero(fila.tributos),
-        numero(fila.total),
-        texto(fila.cae),
-      ].join(";"),
-    );
-  }
-
-  lineas.push(
-    [
-      "",
-      "",
-      "",
-      texto("TOTALES"),
-      "",
-      numero(libro.totales.neto),
-      numero(libro.totales.iva21),
-      numero(libro.totales.iva105),
-      numero(libro.totales.iva27),
-      numero(libro.totales.exento),
-      numero(libro.totales.tributos),
-      numero(libro.totales.total),
-      "",
-    ].join(";"),
-  );
-
-  // El BOM hace que Excel abra el archivo en UTF-8 y no rompa los acentos.
-  const contenido = "﻿" + lineas.join("\n");
-
-  return new NextResponse(contenido, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="libro-iva-ventas-${clave}.csv"`,
-    },
+  const crudo = request.nextUrl.searchParams.get("periodo");
+  const r = await (await api()).GET("/api/v1/admin/facturacion/libro-iva/csv", {
+    params: { query: crudo ? { periodo: crudo } : {} },
+    parseAs: "arrayBuffer",
   });
+  if (!r.response.ok || !r.data) {
+    return new NextResponse("No se pudo armar el archivo.", { status: r.response.status === 403 ? 403 : 500 });
+  }
+  const periodo = leerPeriodoMensual(crudo, new Date());
+  return new NextResponse(r.data, { headers: cabecerasCsv(`libro-iva-ventas-${periodo.clave}.csv`) });
 }

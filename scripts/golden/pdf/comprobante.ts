@@ -1,6 +1,6 @@
-import { comprobantePdf, type ComprobantePdf } from "@/lib/pdf/comprobante";
+import { comprobantePdf, type ComprobantePdf } from "./ts/comprobante";
 import type { TipoComprobante } from "@/lib/fiscal/comprobantes";
-import { urlQr } from "@/lib/fiscal/qr";
+import { urlQr } from "./ts/qr";
 import QRCode from "qrcode";
 import { writeFileSync } from "node:fs";
 import type { CasoPdf } from "../pdf";

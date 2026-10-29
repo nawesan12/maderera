@@ -1,3 +1,7 @@
+// Copia del generador que se borró de lib/pdf al mudar la facturación a Go
+// (tanda 7, rama go-arca): queda solo para regenerar los golden
+// (scripts/golden/pdf/comprobante.ts). El documento de verdad es
+// backend/internal/pdf/comprobante.go.
 import "server-only";
 
 import {
@@ -17,8 +21,8 @@ import {
   nuevaHoja,
   recuadro,
   serializar,
-} from "./hoja";
-import { qrPng } from "@/lib/fiscal/qr";
+} from "@/lib/pdf/hoja";
+import { qrPng } from "./qr";
 import {
   discriminaIva,
   letraDe,

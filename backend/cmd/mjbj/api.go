@@ -6,6 +6,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
+	"mjbj/internal/api/bitacoraapi"
 	"mjbj/internal/api/catalogoapi"
 	"mjbj/internal/api/comprasapi"
 	"mjbj/internal/api/contenidoapi"
@@ -18,6 +19,7 @@ import (
 	"mjbj/internal/api/stockapi"
 	"mjbj/internal/api/whatsappapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/bitacora"
 	"mjbj/internal/catalogo"
 	"mjbj/internal/clientes"
 	"mjbj/internal/cobros"
@@ -216,10 +218,21 @@ func correrAPI() error {
 		whatsappapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// La bitácora: quién hizo qué en el panel.
+	bitacoraapi.HandlerWithOptions(
+		bitacoraapi.NewStrictHandlerWithOptions(bitacora.NuevaAPI(pool),
+			[]bitacoraapi.StrictMiddlewareFunc{plataforma.ConPedido[bitacoraapi.StrictHandlerFunc]},
+			bitacoraapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		bitacoraapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
-	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger, productosapi.GetSwagger, stockapi.GetSwagger, preciosapi.GetSwagger, cuentasapi.GetSwagger} {
+	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger, productosapi.GetSwagger, stockapi.GetSwagger, preciosapi.GetSwagger, cuentasapi.GetSwagger, bitacoraapi.GetSwagger} {
 		s, err := spec()
 		if err != nil {
 			return err

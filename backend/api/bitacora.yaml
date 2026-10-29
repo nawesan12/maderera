@@ -1,0 +1,83 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Bitácora
+  version: "1"
+  description: |
+    Quién hizo qué en el panel, y cuándo (la tabla audit_log). Lo escriben
+    las acciones de cada dominio; acá solo se lee. Cualquier persona del
+    panel.
+paths:
+  /api/v1/admin/bitacora:
+    get:
+      operationId: ListarBitacora
+      parameters:
+        - { name: entidad, in: query, schema: { type: string } }
+        - { name: accion, in: query, schema: { type: string } }
+        - { name: usuario, in: query, schema: { type: string } }
+        - { name: dias, in: query, schema: { type: integer, minimum: 0, maximum: 3650 } }
+        - { name: buscar, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 60 } }
+        - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        "200":
+          description: Lo más nuevo primero, con el total para paginar
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [filas, total]
+                properties:
+                  filas: { type: array, items: { $ref: "#/components/schemas/LineaDeBitacora" } }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/bitacora/opciones:
+    get:
+      operationId: OpcionesDeBitacora
+      responses:
+        "200":
+          description: Las entidades y las personas que aparecen, para los filtros
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entidades, personas]
+                properties:
+                  entidades: { type: array, items: { type: string } }
+                  personas:
+                    type: array
+                    items:
+                      type: object
+                      required: [usuarioId, usuarioNombre]
+                      properties:
+                        usuarioId: { type: string }
+                        usuarioNombre: { type: string }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    LineaDeBitacora:
+      type: object
+      required: [id, usuarioId, usuarioNombre, usuarioRol, accion, entidad, entidadId, descripcion, detalle, createdAt]
+      properties:
+        id: { type: string }
+        usuarioId: { type: string, nullable: true }
+        usuarioNombre: { type: string }
+        usuarioRol: { type: string, nullable: true }
+        accion: { type: string, enum: [crear, editar, eliminar, cambiar_estado, cobrar, anular, importar, exportar] }
+        entidad: { type: string }
+        entidadId: { type: string, nullable: true }
+        descripcion: { type: string }
+        detalle: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }

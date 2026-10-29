@@ -1,9 +1,9 @@
 import "server-only";
 
-import { and, desc, eq, gte, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/db/schema";
-import { requireStaff, type SessionUser } from "@/lib/dal/session";
+import { type SessionUser } from "@/lib/dal/session";
+import { api, datos } from "@/lib/api/servidor";
 
 export type AccionAuditoria =
   | "crear"
@@ -67,126 +67,35 @@ export interface FiltroBitacora {
   desplazamiento?: number;
 }
 
+/*
+ * Las lecturas las sirve la API de Go (backend/internal/bitacora). La
+ * escritura de arriba queda mientras haya acciones en TS que anotan.
+ */
+
+const conFecha = <T extends { createdAt: string }>(f: T) => ({ ...f, createdAt: new Date(f.createdAt) });
+
 /** La bitácora, filtrada. Solo la ve el personal. */
 export async function listarBitacora(filtro: FiltroBitacora = {}) {
-  await requireStaff();
-
-  const limite = Math.min(filtro.limite ?? 60, 200);
-  const condiciones: SQL[] = [];
-
-  if (filtro.entidad) condiciones.push(eq(auditLog.entidad, filtro.entidad));
-  if (filtro.accion) condiciones.push(eq(auditLog.accion, filtro.accion));
-  if (filtro.usuarioId) condiciones.push(eq(auditLog.usuarioId, filtro.usuarioId));
-
-  if (filtro.dias && filtro.dias > 0) {
-    const desde = new Date();
-    desde.setDate(desde.getDate() - filtro.dias);
-    desde.setHours(0, 0, 0, 0);
-    condiciones.push(gte(auditLog.createdAt, desde));
-  }
-
-  if (filtro.buscar?.trim()) {
-    const patron = `%${filtro.buscar.trim()}%`;
-    const busqueda = or(
-      ilike(auditLog.descripcion, patron),
-      ilike(auditLog.usuarioNombre, patron),
-    );
-    if (busqueda) condiciones.push(busqueda);
-  }
-
-  const where = condiciones.length > 0 ? and(...condiciones) : undefined;
-
-  const [filas, total] = await Promise.all([
-    db
-      .select({
-        id: auditLog.id,
-        usuarioId: auditLog.usuarioId,
-        usuarioNombre: auditLog.usuarioNombre,
-        usuarioRol: auditLog.usuarioRol,
-        accion: auditLog.accion,
-        entidad: auditLog.entidad,
-        entidadId: auditLog.entidadId,
-        descripcion: auditLog.descripcion,
-        detalle: auditLog.detalle,
-        createdAt: auditLog.createdAt,
-      })
-      .from(auditLog)
-      .where(where)
-      .orderBy(desc(auditLog.createdAt))
-      .limit(limite)
-      .offset(filtro.desplazamiento ?? 0),
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(auditLog)
-      .where(where),
-  ]);
-
-  return { filas, total: total[0]?.n ?? 0 };
-}
-
-/** Las entidades y las personas que aparecen en la bitácora, para armar los filtros. */
-export async function opcionesDeBitacora() {
-  await requireStaff();
-
-  const [entidades, personas] = await Promise.all([
-    db
-      .selectDistinct({ entidad: auditLog.entidad })
-      .from(auditLog)
-      .orderBy(auditLog.entidad),
-    db
-      .selectDistinct({
-        usuarioId: auditLog.usuarioId,
-        usuarioNombre: auditLog.usuarioNombre,
-      })
-      .from(auditLog)
-      .orderBy(auditLog.usuarioNombre),
-  ]);
-
-  return {
-    entidades: entidades.map((e) => e.entidad),
-    personas: personas.filter((p) => p.usuarioId),
+  const query = {
+    ...(filtro.entidad ? { entidad: filtro.entidad } : {}),
+    ...(filtro.accion ? { accion: filtro.accion } : {}),
+    ...(filtro.usuarioId ? { usuario: filtro.usuarioId } : {}),
+    ...(filtro.dias && filtro.dias > 0 ? { dias: Math.min(Math.trunc(filtro.dias), 3650) } : {}),
+    ...(filtro.buscar?.trim() ? { buscar: filtro.buscar.trim().slice(0, 200) } : {}),
+    limite: Math.min(Math.max(Math.trunc(filtro.limite ?? 60), 1), 200),
+    desplazamiento: Math.max(Math.trunc(filtro.desplazamiento ?? 0), 0),
   };
+  const r = datos(await (await api()).GET("/api/v1/admin/bitacora", { params: { query } }));
+  return { filas: r.filas.map(conFecha), total: r.total };
 }
 
-/** El historial de una cosa concreta, para mostrar dentro de su ficha. */
-export async function historialDe(entidad: string, entidadId: string, limite = 20) {
-  await requireStaff();
-
-  return db
-    .select({
-      id: auditLog.id,
-      usuarioNombre: auditLog.usuarioNombre,
-      accion: auditLog.accion,
-      descripcion: auditLog.descripcion,
-      createdAt: auditLog.createdAt,
-    })
-    .from(auditLog)
-    .where(and(eq(auditLog.entidad, entidad), eq(auditLog.entidadId, entidadId)))
-    .orderBy(desc(auditLog.createdAt))
-    .limit(limite);
+/** Las entidades y las personas que aparecen, para los filtros. */
+export async function opcionesDeBitacora() {
+  return datos(await (await api()).GET("/api/v1/admin/bitacora/opciones"));
 }
 
-/**
- * Lo último que pasó en el panel, para la campana de actividad.
- *
- * La campana mostraba cinco avisos escritos a mano en `lib/dashboard-data.ts`,
- * siempre los mismos: "Nuevo presupuesto de Arq. Carolina Méndez, hace 5 min".
- * Ahora sale de acá.
- */
+/** Lo último que pasó en el panel (la campanita y el inicio). */
 export async function actividadReciente(limite = 12) {
-  await requireStaff();
-
-  return db
-    .select({
-      id: auditLog.id,
-      usuarioNombre: auditLog.usuarioNombre,
-      accion: auditLog.accion,
-      entidad: auditLog.entidad,
-      entidadId: auditLog.entidadId,
-      descripcion: auditLog.descripcion,
-      createdAt: auditLog.createdAt,
-    })
-    .from(auditLog)
-    .orderBy(desc(auditLog.createdAt))
-    .limit(limite);
+  const query = { limite: Math.min(Math.max(Math.trunc(limite), 1), 200) };
+  return datos(await (await api()).GET("/api/v1/admin/bitacora", { params: { query } })).filas.map(conFecha);
 }

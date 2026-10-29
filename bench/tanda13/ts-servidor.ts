@@ -34,7 +34,7 @@ async function main() {
         const formulario = await new Request("http://x", {
           method: "POST",
           headers: { "content-type": req.headers["content-type"] ?? "" },
-          body: datos,
+          body: new Uint8Array(datos),
         }).formData();
         const entidad = String(formulario.get("entidad")) as never;
         formulario.delete("entidad");

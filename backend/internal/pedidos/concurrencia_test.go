@@ -121,9 +121,12 @@ func TestLaMismaConversionDosVecesEsUnPedido(t *testing.T) {
 	}
 }
 
-// Diez cancelaciones del mismo pedido a la vez liberan una sola vez. Otro
-// pedido reserva la misma placa: si se liberara dos veces, se comería su
-// reserva (el tope en cero no lo taparía).
+// Diez cancelaciones del mismo pedido a la vez liberan una sola vez y dejan
+// una sola línea en el historial. Otro pedido reserva la misma placa: si se
+// liberara dos veces, se comería su reserva (el tope en cero no lo taparía).
+// Sin el FOR UPDATE la reserva igual se libera una vez —el UPDATE de la fila
+// del pedido ya ordena a las dos— pero el historial junta 2 a 10
+// «cancelado»: es lo que hacía el TS.
 func TestCancelarDosVecesLiberaUnaSola(t *testing.T) {
 	e := armar(t)
 	_, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)

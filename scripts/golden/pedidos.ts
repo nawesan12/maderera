@@ -8,7 +8,8 @@
  *   presupuestos.
  * - `margen.json`: el margen de la ficha del pedido (calcularMargen, copiado
  *   tal cual de app/admin/pedidos/[id]/page.tsx en 295d7f2) sobre
- *   margenDeLinea (lib/compras/costo.ts, el real).
+ *   margenDeLinea (lib/compras/costo.ts, que se borró: la copia textual de
+ *   scripts/golden/originales/costo.ts).
  * - `costo.json`: costoPorUnidadDeVenta (lib/compras/congelar.ts en 295d7f2,
  *   copiado: el archivo importa server-only).
  * - `crear.json`: crearPresupuesto entero salvo la base: los esquemas de zod
@@ -20,7 +21,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { z } from "zod";
 import { estadoDelPlazo } from "../../lib/plazos";
-import { margenDeLinea } from "../../lib/compras/costo";
+import { margenDeLinea } from "./originales/costo";
 
 const SALIDA = "backend/testdata/golden/pedidos";
 mkdirSync(SALIDA, { recursive: true });
@@ -45,6 +46,8 @@ const deltas = [
   0, -1, 1, -59_999, -60_000, 29_999, 30_000, 30_001, 59_999, 60_000, 89_999, 90_000, 3_599_999, 3_600_000,
   3_600_001, -3_599_999, -3_600_000, -3_600_001, 14_399_999, 14_400_000, 86_399_999, 86_400_000, 86_400_001,
   -86_400_000, 172_800_000, 1_000, -7_200_000,
+  // Los de tests/plazos.test.ts: 3 h, 2 días, hace 5 h, 20 min.
+  10_800_000, -18_000_000, 1_200_000,
 ];
 for (let i = 0; i < 4000; i++) {
   const escala = elegir([60_000, 3_600_000, 86_400_000, 864_000_000]);

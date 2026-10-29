@@ -1,3 +1,7 @@
+// Copia del generador que se borró de lib/pdf al mudar los presupuestos a Go
+// (tanda 5, rama go-mostrador-pedidos): queda solo para regenerar los golden
+// (scripts/golden/pdf/presupuesto.ts). El documento de verdad es
+// backend/internal/pdf/presupuesto.go.
 import "server-only";
 
 import {
@@ -16,7 +20,7 @@ import {
   recuadro,
   serializar,
   type Hoja,
-} from "./hoja";
+} from "@/lib/pdf/hoja";
 import { desagregar } from "@/lib/fiscal/impuestos";
 import { fechaSolaCorta, formatearUnidad, moneda } from "@/lib/formato";
 import { SUCURSALES } from "@/lib/sucursales";

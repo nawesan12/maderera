@@ -1,0 +1,482 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Mostrador
+  version: "1"
+  description: |
+    El punto de venta: cobrar (la única función que registra una venta de
+    mostrador, repetible por su clave), anular, la caja del turno, el
+    buscador, el alta rápida de clientes, el presupuesto y el cobro de la
+    cuenta corriente en el mostrador, y la descarga de las ventas hechas sin
+    conexión. Lo pide el servidor de Next con la cookie de quien atiende
+    (cualquier persona del panel, como las acciones de app/mostrador). Las
+    rutas de siempre de la copia local (/api/mostrador/latido, catalogo,
+    clientes, caja/movimientos y caja/vincular) no están en este contrato: las
+    atiende Go con su forma de siempre (internal/mostrador/offline.go).
+paths:
+  /api/v1/mostrador/pantalla:
+    get:
+      operationId: PantallaDelMostrador
+      parameters:
+        - { name: sucursal, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: El turno, sus movimientos y su cierre Z, las ventas de hoy, la lista general y el fondo de cambio
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MostradorPantalla" }
+  /api/v1/mostrador/ventas:
+    post:
+      operationId: CobrarVenta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true, description: "la venta, como la valida el ventaSchema de la acción" }
+      responses:
+        "200":
+          description: La venta hecha (o la que ya estaba con esa clave), o el motivo por el que no se hizo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MostradorResultadoVenta" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/descarga:
+    post:
+      operationId: DescargarVentas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cuerpo]
+              additionalProperties: false
+              properties:
+                cuerpo: { nullable: true, description: "el cuerpo de POST /api/mostrador/ventas tal cual llegó (null si no era JSON)" }
+      responses:
+        "200":
+          description: Lo que pasó con cada venta, en orden
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MostradorDescarga" }
+        "400":
+          description: El cuerpo no tiene la forma de la cola (zod)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MostradorErrorDeCola" }
+  /api/v1/mostrador/ventas/{id}/anular:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: AnularVentaDeMostrador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [motivo]
+              additionalProperties: false
+              properties:
+                motivo: { type: string }
+      responses:
+        "200":
+          description: Anulada; si tenía factura, cuál espera su nota de crédito
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: string }
+                  facturaPendiente: { type: string }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/buscar:
+    get:
+      operationId: BuscarEnMostrador
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: sucursal, in: query, required: true, schema: { type: string } }
+        - { name: cliente, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Hasta 12 variantes
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/MostradorVariante" } }
+  /api/v1/mostrador/precios:
+    post:
+      operationId: PreciosDelCliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantIds]
+              additionalProperties: false
+              properties:
+                variantIds: { type: array, items: { type: string } }
+                customerId: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Variante → precio para ese cliente
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: { type: number, format: double } }
+  /api/v1/mostrador/clientes:
+    get:
+      operationId: BuscarClientesEnMostrador
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Los 8 mejores
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/MostradorCliente" } }
+    post:
+      operationId: AltaRapidaDeCliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: El cliente nuevo, o por qué no (y la ficha que ya tiene ese documento)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MostradorAltaRapida" }
+  /api/v1/mostrador/clientes/recientes:
+    get:
+      operationId: ClientesRecientes
+      parameters:
+        - { name: sucursal, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Los últimos seis atendidos en la sucursal
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/MostradorCliente" } }
+  /api/v1/mostrador/clientes/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: ClienteDelMostrador
+      responses:
+        "200":
+          description: El cliente, o null
+          content:
+            application/json:
+              schema:
+                nullable: true
+                allOf: [{ $ref: "#/components/schemas/MostradorCliente" }]
+  /api/v1/mostrador/clientes/{id}/saldo:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: SaldoDeCuentaEnMostrador
+      responses:
+        "200":
+          description: Lo que debe (positivo)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [saldo]
+                properties:
+                  saldo: { type: number, format: double }
+  /api/v1/mostrador/clientes/{id}/cobro:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: CobrarCuentaEnMostrador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, partes]
+              additionalProperties: false
+              properties:
+                branchId: { type: string }
+                partes: { type: string, description: "el JSON de las partes, como lo arma el formulario" }
+      responses:
+        "200":
+          description: El recibo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, receiptId, numero]
+                properties:
+                  ok: { type: string }
+                  receiptId: { type: string }
+                  numero: { type: string }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/presupuestos:
+    post:
+      operationId: PresupuestoDeMostrador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: El presupuesto emitido
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, quoteId, numero]
+                properties:
+                  ok: { type: string }
+                  quoteId: { type: string }
+                  numero: { type: string }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/caja/abrir:
+    post:
+      operationId: AbrirCaja
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, fondoInicial]
+              additionalProperties: false
+              properties:
+                branchId: { type: string }
+                fondoInicial: { type: number, format: double, nullable: true }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/caja/movimiento:
+    post:
+      operationId: MovimientoDeCaja
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, tipo, monto, motivo]
+              additionalProperties: false
+              properties:
+                sessionId: { type: string }
+                tipo: { type: string, enum: [ingreso, retiro] }
+                monto: { type: number, format: double, nullable: true }
+                motivo: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/caja/cerrar:
+    post:
+      operationId: CerrarCaja
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, contado, notas]
+              additionalProperties: false
+              properties:
+                sessionId: { type: string }
+                contado: { type: number, format: double, nullable: true }
+                notas: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+    Ok:
+      description: Hecho, con el mensaje para la pantalla
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ok]
+            properties:
+              ok: { type: string }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    MostradorLinea:
+      type: object
+      required: [variantId, descripcion, unidad, cantidad, precioUnitario]
+      properties:
+        variantId: { type: string, nullable: true }
+        descripcion: { type: string }
+        unidad: { type: string }
+        cantidad: { type: number, format: double }
+        precioUnitario: { type: number, format: double }
+        presentacion: { type: string, nullable: true }
+    MostradorResultadoVenta:
+      type: object
+      required: [ok, total, nueva]
+      properties:
+        ok: { type: boolean }
+        orderId: { type: string }
+        numero: { type: string }
+        total: { type: number, format: double }
+        nueva: { type: boolean }
+        lineas: { type: array, items: { $ref: "#/components/schemas/MostradorLinea" } }
+        error: { type: string }
+        requiereAutorizacion: { type: boolean }
+    MostradorFiscalPendiente:
+      type: object
+      description: Lo que Next necesita para emitir el comprobante (facturación sigue en TS)
+      required: [customerId, receptorNombre, cuit, lineas]
+      properties:
+        customerId: { type: string, nullable: true }
+        receptorNombre: { type: string }
+        cuit: { type: string, nullable: true }
+        lineas: { type: array, items: { $ref: "#/components/schemas/MostradorLinea" } }
+    MostradorResultadoDeCola:
+      type: object
+      required: [clave, estado]
+      properties:
+        clave: { type: string }
+        estado: { type: string, enum: [sincronizada, rechazada, reintentar] }
+        numero: { type: string }
+        orderId: { type: string }
+        nueva: { type: boolean }
+        motivo: { type: string }
+        fiscal: { $ref: "#/components/schemas/MostradorFiscalPendiente" }
+    MostradorDescarga:
+      type: object
+      required: [resultados, servidorAt]
+      properties:
+        resultados: { type: array, items: { $ref: "#/components/schemas/MostradorResultadoDeCola" } }
+        servidorAt: { type: string }
+    MostradorErrorDeCola:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        detalle: { type: string }
+    MostradorVariante:
+      type: object
+      required: [variantId, sku, producto, medida, unidad, precio, stock, largoMm, anchoMm, color, categoria, formaDeVenta, precioMediaPct]
+      properties:
+        variantId: { type: string }
+        sku: { type: string }
+        producto: { type: string }
+        medida: { type: string }
+        unidad: { type: string }
+        precio: { type: number, format: double }
+        stock: { type: number, format: double }
+        largoMm: { type: integer, nullable: true }
+        anchoMm: { type: integer, nullable: true }
+        color: { type: string, nullable: true }
+        categoria: { type: string, nullable: true }
+        formaDeVenta: { type: string, enum: [entera, entera_o_media, metro_cuadrado] }
+        precioMediaPct: { type: number, format: double }
+    MostradorCliente:
+      type: object
+      required: [id, nombre, razonSocial, cuit, condicionIva, direccion, estado, priceListId]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        razonSocial: { type: string, nullable: true }
+        cuit: { type: string, nullable: true }
+        condicionIva: { type: string }
+        direccion: { type: string, nullable: true }
+        estado: { type: string }
+        limiteCredito: { type: number, format: double }
+        priceListId: { type: string, nullable: true }
+    MostradorAltaRapida:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        cliente:
+          type: object
+          required: [id, nombre, razonSocial, cuit, condicionIva, estado, priceListId, direccion]
+          properties:
+            id: { type: string }
+            nombre: { type: string }
+            razonSocial: { type: string, nullable: true }
+            cuit: { type: string, nullable: true }
+            condicionIva: { type: string }
+            estado: { type: string }
+            priceListId: { type: string, nullable: true }
+            direccion: { type: string, nullable: true }
+        error: { type: string }
+        existente:
+          type: object
+          required: [id, nombre]
+          properties:
+            id: { type: string }
+            nombre: { type: string }
+    MostradorTurno:
+      type: object
+      required: [id, sucursal, branchId, abiertaPor, abiertaAt, esperado, fondoInicial, fondoBase, ventasEnEfectivo, otrosIngresos, retiros, cantidadDeVentas]
+      properties:
+        id: { type: string }
+        sucursal: { type: string }
+        branchId: { type: string }
+        abiertaPor: { type: string }
+        abiertaAt: { type: string, format: date-time }
+        esperado: { type: number, format: double }
+        fondoInicial: { type: number, format: double }
+        fondoBase: { type: number, format: double }
+        ventasEnEfectivo: { type: number, format: double }
+        otrosIngresos: { type: number, format: double }
+        retiros: { type: number, format: double }
+        cantidadDeVentas: { type: integer }
+    MostradorMovimiento:
+      type: object
+      required: [id, tipo, monto, motivo, orderId, createdAt, quien]
+      properties:
+        id: { type: string }
+        tipo: { type: string }
+        monto: { type: number, format: double }
+        motivo: { type: string, nullable: true }
+        orderId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        quien: { type: string, nullable: true }
+    MostradorVentaDeHoy:
+      type: object
+      required: [id, numero, cliente, total, medioPago, estado, createdAt]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        cliente: { type: string }
+        total: { type: number, format: double }
+        medioPago: { type: string, nullable: true }
+        estado: { type: string }
+        createdAt: { type: string, format: date-time }
+    MostradorRenglonDelCierre:
+      type: object
+      required: [medioPago, cantidad, total]
+      properties:
+        medioPago: { type: string }
+        cantidad: { type: integer }
+        total: { type: number, format: double }
+    MostradorPantalla:
+      type: object
+      required: [turno, movimientos, cierre, ventas, listaGeneral, fondoBase]
+      properties:
+        turno:
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/MostradorTurno" }]
+        movimientos: { type: array, items: { $ref: "#/components/schemas/MostradorMovimiento" } }
+        cierre: { type: array, items: { $ref: "#/components/schemas/MostradorRenglonDelCierre" } }
+        ventas: { type: array, items: { $ref: "#/components/schemas/MostradorVentaDeHoy" } }
+        listaGeneral: { type: string, nullable: true }
+        fondoBase: { type: number, format: double }

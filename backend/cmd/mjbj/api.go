@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/api/cortesapi"
 	"mjbj/internal/api/cuentasapi"
 	"mjbj/internal/api/documentosapi"
+	"mjbj/internal/api/mostradorapi"
 	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/api/productosapi"
 	"mjbj/internal/api/sesionapi"
@@ -28,6 +29,7 @@ import (
 	"mjbj/internal/documentos"
 	"mjbj/internal/email"
 	"mjbj/internal/limites"
+	"mjbj/internal/mostrador"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
 	"mjbj/internal/productos"
@@ -216,6 +218,21 @@ func correrAPI() error {
 		whatsappapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// El mostrador (tanda 5): las acciones de app/mostrador por el contrato, y
+	// las rutas de siempre de la copia local (/api/mostrador/latido, catalogo,
+	// clientes, caja/movimientos, caja/vincular) con su forma de siempre.
+	servicioMostrador := mostrador.Nuevo(pool, log)
+	servicioMostrador.Rutas(m)
+	mostradorapi.HandlerWithOptions(
+		mostradorapi.NewStrictHandlerWithOptions(mostrador.NuevaAPI(servicioMostrador),
+			[]mostradorapi.StrictMiddlewareFunc{plataforma.ConPedido[mostradorapi.StrictHandlerFunc]},
+			mostradorapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		mostradorapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
@@ -272,6 +289,15 @@ func correrAPI() error {
 		if err != nil {
 			return err
 		}
+		h = validar(h)
+	}
+
+	// El contrato del mostrador (tanda 5), aparte para no tocar las listas de arriba.
+	if s, err := mostradorapi.GetSwagger(); err != nil {
+		return err
+	} else if validar, err := plataforma.ValidarContra(s); err != nil {
+		return err
+	} else {
 		h = validar(h)
 	}
 

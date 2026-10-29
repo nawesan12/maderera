@@ -65,3 +65,22 @@ UPDATE cheques SET estado = 'anulado', updated_at = now() WHERE id = $1;
 UPDATE receipts SET estado = 'anulado', motivo_anulacion = $2, anulado_at = now(), anulado_por_user_id = $3,
   anulacion_movement_id = $4
 WHERE id = $1;
+
+-- name: PedidoParaCobrar :one
+SELECT id, numero, total::float8 AS total, customer_id, branch_id FROM orders WHERE id = $1;
+
+-- name: PedidoPagado :exec
+UPDATE orders SET estado_pago = 'pagado', updated_at = now() WHERE id = $1;
+
+-- name: BloquearCheque :exec
+SELECT pg_advisory_xact_lock(hashtext(sqlc.arg(cheque)::text));
+
+-- name: ChequeCompleto :one
+SELECT * FROM cheques WHERE id = $1;
+
+-- name: CambiarEstadoDelCheque :exec
+UPDATE cheques SET estado = $2, motivo_rechazo = $3, updated_at = now() WHERE id = $1;
+
+-- name: CargarCheque :exec
+INSERT INTO cheques (sentido, tipo, numero, banco, librador, fecha_pago, importe, estado, customer_id, circuito, notas, created_by_user_id)
+VALUES ($1, $2, $3, $4, $5, $6, sqlc.arg(importe)::text::numeric, $7, $8, $9, $10, $11);

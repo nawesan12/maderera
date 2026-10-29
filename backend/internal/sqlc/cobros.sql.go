@@ -68,6 +68,15 @@ func (q *Queries) AtarMovimientoAlRecibo(ctx context.Context, arg AtarMovimiento
 	return err
 }
 
+const bloquearCheque = `-- name: BloquearCheque :exec
+SELECT pg_advisory_xact_lock(hashtext($1::text))
+`
+
+func (q *Queries) BloquearCheque(ctx context.Context, cheque string) error {
+	_, err := q.db.Exec(ctx, bloquearCheque, cheque)
+	return err
+}
+
 const bloquearRecibo = `-- name: BloquearRecibo :exec
 SELECT pg_advisory_xact_lock(hashtext($1::text))
 `
@@ -106,6 +115,59 @@ func (q *Queries) CajasAbiertas(ctx context.Context) ([]CajasAbiertasRow, error)
 	return items, nil
 }
 
+const cambiarEstadoDelCheque = `-- name: CambiarEstadoDelCheque :exec
+UPDATE cheques SET estado = $2, motivo_rechazo = $3, updated_at = now() WHERE id = $1
+`
+
+type CambiarEstadoDelChequeParams struct {
+	ID            string       `json:"id"`
+	Estado        EstadoCheque `json:"estado"`
+	MotivoRechazo *string      `json:"motivoRechazo"`
+}
+
+func (q *Queries) CambiarEstadoDelCheque(ctx context.Context, arg CambiarEstadoDelChequeParams) error {
+	_, err := q.db.Exec(ctx, cambiarEstadoDelCheque, arg.ID, arg.Estado, arg.MotivoRechazo)
+	return err
+}
+
+const cargarCheque = `-- name: CargarCheque :exec
+INSERT INTO cheques (sentido, tipo, numero, banco, librador, fecha_pago, importe, estado, customer_id, circuito, notas, created_by_user_id)
+VALUES ($1, $2, $3, $4, $5, $6, $12::text::numeric, $7, $8, $9, $10, $11)
+`
+
+type CargarChequeParams struct {
+	Sentido         SentidoCheque `json:"sentido"`
+	Tipo            TipoCheque    `json:"tipo"`
+	Numero          string        `json:"numero"`
+	Banco           *string       `json:"banco"`
+	Librador        *string       `json:"librador"`
+	FechaPago       time.Time     `json:"fechaPago"`
+	Estado          EstadoCheque  `json:"estado"`
+	CustomerID      *string       `json:"customerId"`
+	Circuito        Circuito      `json:"circuito"`
+	Notas           *string       `json:"notas"`
+	CreatedByUserID *string       `json:"createdByUserId"`
+	Importe         string        `json:"importe"`
+}
+
+func (q *Queries) CargarCheque(ctx context.Context, arg CargarChequeParams) error {
+	_, err := q.db.Exec(ctx, cargarCheque,
+		arg.Sentido,
+		arg.Tipo,
+		arg.Numero,
+		arg.Banco,
+		arg.Librador,
+		arg.FechaPago,
+		arg.Estado,
+		arg.CustomerID,
+		arg.Circuito,
+		arg.Notas,
+		arg.CreatedByUserID,
+		arg.Importe,
+	)
+	return err
+}
+
 const chequeACartera = `-- name: ChequeACartera :exec
 UPDATE cheques SET estado = 'cartera', receipt_id = $2, updated_at = now() WHERE id = $1
 `
@@ -118,6 +180,37 @@ type ChequeACarteraParams struct {
 func (q *Queries) ChequeACartera(ctx context.Context, arg ChequeACarteraParams) error {
 	_, err := q.db.Exec(ctx, chequeACartera, arg.ID, arg.ReceiptID)
 	return err
+}
+
+const chequeCompleto = `-- name: ChequeCompleto :one
+SELECT id, sentido, tipo, numero, banco, librador, emision, fecha_pago, importe, estado, customer_id, order_payment_id, notas, created_by_user_id, created_at, updated_at, circuito, receipt_id, motivo_rechazo FROM cheques WHERE id = $1
+`
+
+func (q *Queries) ChequeCompleto(ctx context.Context, id string) (Cheque, error) {
+	row := q.db.QueryRow(ctx, chequeCompleto, id)
+	var i Cheque
+	err := row.Scan(
+		&i.ID,
+		&i.Sentido,
+		&i.Tipo,
+		&i.Numero,
+		&i.Banco,
+		&i.Librador,
+		&i.Emision,
+		&i.FechaPago,
+		&i.Importe,
+		&i.Estado,
+		&i.CustomerID,
+		&i.OrderPaymentID,
+		&i.Notas,
+		&i.CreatedByUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Circuito,
+		&i.ReceiptID,
+		&i.MotivoRechazo,
+	)
+	return i, err
 }
 
 const chequePorID = `-- name: ChequePorID :one
@@ -355,6 +448,40 @@ func (q *Queries) NombreDelCliente(ctx context.Context, id string) (NombreDelCli
 	row := q.db.QueryRow(ctx, nombreDelCliente, id)
 	var i NombreDelClienteRow
 	err := row.Scan(&i.Nombre, &i.RazonSocial)
+	return i, err
+}
+
+const pedidoPagado = `-- name: PedidoPagado :exec
+UPDATE orders SET estado_pago = 'pagado', updated_at = now() WHERE id = $1
+`
+
+func (q *Queries) PedidoPagado(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, pedidoPagado, id)
+	return err
+}
+
+const pedidoParaCobrar = `-- name: PedidoParaCobrar :one
+SELECT id, numero, total::float8 AS total, customer_id, branch_id FROM orders WHERE id = $1
+`
+
+type PedidoParaCobrarRow struct {
+	ID         string  `json:"id"`
+	Numero     string  `json:"numero"`
+	Total      float64 `json:"total"`
+	CustomerID *string `json:"customerId"`
+	BranchID   *string `json:"branchId"`
+}
+
+func (q *Queries) PedidoParaCobrar(ctx context.Context, id string) (PedidoParaCobrarRow, error) {
+	row := q.db.QueryRow(ctx, pedidoParaCobrar, id)
+	var i PedidoParaCobrarRow
+	err := row.Scan(
+		&i.ID,
+		&i.Numero,
+		&i.Total,
+		&i.CustomerID,
+		&i.BranchID,
+	)
 	return i, err
 }
 

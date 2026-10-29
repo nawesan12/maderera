@@ -32,6 +32,14 @@ export interface CargasDeTrabajo {
   "campana.tanda": { campanaId: string };
   /** Un aviso por correo que rebotó temporalmente (ver `despacharEmail`). */
   "email.reintento": ReintentoDeEmail;
+  /**
+   * El aviso de un recibo al cliente (correo y WhatsApp, con el PDF). Lo
+   * encola la API de Go al emitir el recibo, en la misma transacción; lo
+   * atiende el TS mientras el PDF y WhatsApp sigan acá.
+   */
+  "recibo.aviso": { receiptId: string };
+  /** El aviso al cliente de un cheque suyo rechazado (lo encola Go). */
+  "cheque.rechazado": { chequeId: string; porElBanco: boolean };
 }
 
 export type TipoDeTrabajo = keyof CargasDeTrabajo;
@@ -82,6 +90,14 @@ export const MANEJADORES: {
     await reintentarEmail(carga);
   },
 
+  "recibo.aviso": async (carga) => {
+    const { notificarRecibo } = await import("@/lib/notificaciones/cobros");
+    await notificarRecibo(carga.receiptId);
+  },
+  "cheque.rechazado": async (carga) => {
+    const { notificarChequeRechazado } = await import("@/lib/notificaciones/cobros");
+    await notificarChequeRechazado(carga.chequeId, carga.porElBanco);
+  },
   "campana.tanda": async (carga) => {
     const { procesarTanda } = await import("@/lib/campanas/envio");
     await procesarTanda(carga.campanaId);

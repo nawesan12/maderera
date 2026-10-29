@@ -6,8 +6,8 @@ import { enviarPlantilla, type EstadoWhatsapp } from "./actions";
 import { ConfirmarTope } from "./confirmar-tope";
 import { enlaceWaMe } from "@/lib/whatsapp/aviso-manual";
 import { camposFaltantes, nombreLegible, sugerirValores, vistaPrevia } from "@/lib/whatsapp/plantillas";
-import type { PlantillaDisponible } from "@/lib/whatsapp/catalogo";
-import type { DocumentoListado } from "@/lib/whatsapp/documentos";
+import type { PlantillaDisponible } from "@/lib/dal/admin/whatsapp";
+import type { DocumentoListado } from "@/lib/dal/admin/whatsapp";
 import { primerNombre } from "@/lib/formato";
 
 const estadoInicial: EstadoWhatsapp = {};

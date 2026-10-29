@@ -164,8 +164,11 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       DATABASE_SSL: "off"
       CARPETA_SUBIDAS: /datos/subidas
+      # Los adjuntos de WhatsApp: los sirve /api/whatsapp/medios/<id>, con sesión.
+      CARPETA_PRIVADA: /datos/privado
     volumes:
       - subidas:/datos/subidas
+      - privado:/datos/privado
     expose:
       - "8080"
     stop_grace_period: 30s
@@ -192,8 +195,11 @@ services:
       DATABASE_SSL: "off"
       NEXT_URL: http://app:3000
       CARPETA_SUBIDAS: /datos/subidas
+      # El worker baja los adjuntos que mandan los clientes por WhatsApp.
+      CARPETA_PRIVADA: /datos/privado
     volumes:
       - subidas:/datos/subidas
+      - privado:/datos/privado
     stop_grace_period: 30s
 
   # Las migraciones, con goose (backend/db/migraciones; la primera vez adopta

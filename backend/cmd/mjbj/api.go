@@ -16,6 +16,7 @@ import (
 	"mjbj/internal/api/productosapi"
 	"mjbj/internal/api/sesionapi"
 	"mjbj/internal/api/stockapi"
+	"mjbj/internal/api/whatsappapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/catalogo"
 	"mjbj/internal/clientes"
@@ -30,10 +31,12 @@ import (
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
 	"mjbj/internal/productos"
+	"mjbj/internal/push"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/stock"
 	"mjbj/internal/subidas"
 	"mjbj/internal/vivo"
+	"mjbj/internal/whatsapp"
 )
 
 type configAPI struct {
@@ -45,6 +48,8 @@ type configAPI struct {
 	Contacto contenido.ConfigContacto
 	Email    email.Config
 	Interna  plataforma.ConfigInterna
+	WhatsApp whatsapp.Config
+	Push     push.Config
 }
 
 func correrAPI() error {
@@ -197,6 +202,20 @@ func correrAPI() error {
 		comprasapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// WhatsApp: la bandeja por el contrato, y el webhook de Meta, los adjuntos
+	// y el envío de archivos con sus direcciones de siempre.
+	wa := whatsapp.Nuevo(pool, cfg.WhatsApp, push.Nuevo(cfg.Push, q, log), log)
+	wa.Rutas(m)
+	whatsappapi.HandlerWithOptions(
+		whatsappapi.NewStrictHandlerWithOptions(whatsapp.NuevaAPI(wa, cfg.Interna),
+			[]whatsappapi.StrictMiddlewareFunc{plataforma.ConPedido[whatsappapi.StrictHandlerFunc]},
+			whatsappapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		whatsappapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
@@ -241,6 +260,18 @@ func correrAPI() error {
 	} else if validar, err := plataforma.ValidarContra(s); err != nil {
 		return err
 	} else {
+		h = validar(h)
+	}
+
+	for _, spec := range []func() (*openapi3.T, error){whatsappapi.GetSwagger} {
+		s, err := spec()
+		if err != nil {
+			return err
+		}
+		validar, err := plataforma.ValidarContra(s)
+		if err != nil {
+			return err
+		}
 		h = validar(h)
 	}
 

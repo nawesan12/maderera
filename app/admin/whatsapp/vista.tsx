@@ -1,21 +1,6 @@
-import { after } from "next/server";
-import {
-  contarBandeja,
-  estadoWhatsapp,
-  gastoParaLaBandeja,
-  listarConversaciones,
-  listarPlantillas,
-  marcarLeidaSilencioso,
-  obtenerConversacion,
-  personalDeLaBandeja,
-  requireBandeja,
-  type FiltroBandeja,
-} from "@/lib/dal/admin/whatsapp";
-import { proveedorWhatsapp } from "@/lib/whatsapp";
+import { abrirBandeja, requireBandeja } from "@/lib/dal/admin/whatsapp";
 import { Bandeja } from "./bandeja";
 import { AvisoConexion } from "./aviso-conexion";
-
-const FILTROS: FiltroBandeja[] = ["todas", "sin-leer", "mias", "sin-asignar", "resueltas"];
 
 /**
  * La bandeja, compartida por las dos formas de usarla.
@@ -35,34 +20,13 @@ export async function VistaWhatsapp({
   pantallaCompleta?: boolean;
 }) {
   const usuario = await requireBandeja();
-  // «cerradas» era el nombre viejo de «resueltas»: los enlaces guardados siguen andando.
-  const pedido = filtro === "cerradas" ? "resueltas" : filtro;
-  const vista: FiltroBandeja = FILTROS.includes(pedido as FiltroBandeja) ? (pedido as FiltroBandeja) : "todas";
-
-  const [conversaciones, estado, plantillas, contadores, personal, gasto] = await Promise.all([
-    listarConversaciones(vista),
-    estadoWhatsapp(),
-    listarPlantillas(),
-    contarBandeja(),
-    personalDeLaBandeja(),
-    gastoParaLaBandeja(),
-  ]);
-
-  // La conversación abierta se elige por la URL, así el enlace a una charla
+  // Todo en un pedido a la API de Go (backend/internal/whatsapp), que además
+  // normaliza el filtro («cerradas» era el nombre viejo de «resueltas») y,
+  // si la conversación abierta tenía mensajes sin leer, los pone en cero y le
+  // avisa a WhatsApp (los dos tildes azules del lado del cliente). La
+  // conversación abierta se elige por la URL, así el enlace a una charla
   // concreta se puede compartir entre el equipo y sobrevive a recargar.
-  const elegida = chat ?? conversaciones[0]?.id ?? null;
-  const detalle = elegida ? await obtenerConversacion(elegida) : null;
-
-  // Abrirla es haberla leído: se ponen en cero los no leídos y se le avisa a
-  // WhatsApp, que le muestra al cliente los dos tildes azules. En `after()`
-  // para no demorar el render y sin revalidar, que volvería a renderizar esta
-  // misma pantalla en un ciclo.
-  if (detalle && detalle.noLeidos > 0) {
-    after(async () => {
-      const ultimo = await marcarLeidaSilencioso(detalle.id);
-      if (ultimo) await proveedorWhatsapp().marcarLeido(ultimo);
-    });
-  }
+  const { conversaciones, estado, plantillas, contadores, personal, gasto, detalle, filtro: vista } = await abrirBandeja(filtro, chat);
 
   return (
     <>

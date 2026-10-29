@@ -16,6 +16,7 @@ import (
 	"mjbj/internal/revalidar"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/tareas"
+	"mjbj/internal/whatsapp"
 )
 
 type configWorker struct {
@@ -23,6 +24,7 @@ type configWorker struct {
 	Revalidar revalidar.Config
 	Push      push.Config
 	Google    contenido.ConfigGoogle
+	WhatsApp  whatsapp.Config
 }
 
 // El worker: la cola (los tipos que ya son de Go) y las tareas periódicas
@@ -98,6 +100,28 @@ func correrWorker() error {
 			return map[string]any{"candidatosDeBaja": len(c)}, nil
 		},
 	}}
+
+	// WhatsApp: los payloads del webhook, los estados que llegaron antes que
+	// el mensaje y los reintentos de los adjuntos; y la copia diaria de las
+	// plantillas de Meta (por si cambió alguna sin que llegara el webhook).
+	wa := whatsapp.Nuevo(pool, cfg.WhatsApp, avisos, log)
+	wa.Registrar(c)
+	lista = append(lista, tareas.Tarea{
+		Nombre: "plantillas-whatsapp", Frecuencia: tareas.Dia, DesdeHora: 6,
+		Ejecutar: func(ctx context.Context) (map[string]any, error) {
+			if wa.Proveedor().ID() != "cloud" {
+				return map[string]any{"plantillasWhatsapp": "modo demostración"}, nil
+			}
+			r, err := wa.SincronizarPlantillas(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if r.Error != "" {
+				return map[string]any{"plantillasWhatsapp": r.Error}, nil
+			}
+			return map[string]any{"plantillasWhatsapp": r.Total}, nil
+		},
+	})
 
 	log.Info("worker andando")
 	reloj := time.NewTicker(2 * time.Second)

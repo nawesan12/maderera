@@ -138,6 +138,8 @@ const nextConfig: NextConfig = {
         { source: "/api/cortes/pendientes", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/cortes/pendientes` },
         { source: "/api/cortes/:id/lista", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/cortes/:id/lista` },
         { source: "/api/cortes/:id/ptx", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/cortes/:id/ptx` },
+        // WhatsApp también: el webhook de Meta, los adjuntos y el envío de archivos.
+        { source: "/api/whatsapp/:ruta*", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/whatsapp/:ruta*` },
       ],
       afterFiles: [],
       fallback: [

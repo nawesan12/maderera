@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { firmaValida, firmar } from "@/lib/whatsapp/firma";
 import {
   cierreDeVentana,
   decidirEnvio,
@@ -19,34 +18,11 @@ import {
   vistaPrevia,
 } from "@/lib/whatsapp/plantillas";
 import { PLANTILLAS_BASE } from "@/lib/whatsapp/plantillas-base";
-import { esDeCredenciales, esFueraDeVentana, explicarError } from "@/lib/whatsapp/errores";
-import { cuerpoDelMensaje } from "@/lib/whatsapp/proveedor-cloud";
 import * as P from "./fixtures/whatsapp/payloads";
 
-describe("firma del webhook", () => {
-  const secreto = "secreto-de-la-app";
-  const cuerpo = JSON.stringify(P.texto({ cuerpo: "¿Tienen fenólico?" }));
-
-  it("acepta la firma de Meta sobre el cuerpo crudo", () => {
-    expect(firmaValida(cuerpo, firmar(cuerpo, secreto), secreto)).toBe(true);
-    expect(firmaValida(Buffer.from(cuerpo), firmar(cuerpo, secreto), secreto)).toBe(true);
-  });
-
-  it("rechaza otra firma, otro secreto o el cuerpo tocado", () => {
-    expect(firmaValida(cuerpo, firmar(cuerpo, "otro"), secreto)).toBe(false);
-    expect(firmaValida(cuerpo + " ", firmar(cuerpo, secreto), secreto)).toBe(false);
-    // Volver a serializar cambia bytes: la «á» escapada no es la misma firma.
-    const reserializado = JSON.stringify(JSON.parse(cuerpo)).replace("¿", "\\u00bf");
-    expect(firmaValida(reserializado, firmar(cuerpo, secreto), secreto)).toBe(false);
-  });
-
-  it("sin cabecera, sin prefijo o sin secreto, no", () => {
-    expect(firmaValida(cuerpo, null, secreto)).toBe(false);
-    expect(firmaValida(cuerpo, firmar(cuerpo, secreto).replace("sha256=", ""), secreto)).toBe(false);
-    expect(firmaValida(cuerpo, firmar(cuerpo, secreto), null)).toBe(false);
-    expect(firmaValida(cuerpo, "sha256=corta", secreto)).toBe(false);
-  });
-});
+// La firma del webhook, los errores de Meta y el cuerpo de cada envío son de
+// Go (backend/internal/whatsapp): los prueba el golden contra este mismo TS
+// (scripts/golden/whatsapp.ts).
 
 describe("ventana de 24 h", () => {
   const ahora = Date.UTC(2026, 9, 14, 15, 0);
@@ -180,55 +156,5 @@ describe("plantillas", () => {
   it("cuenta variables sin repetir y limpia los valores", () => {
     expect(contarVariables("{{1}} y {{2}} y otra vez {{1}}")).toBe(2);
     expect(valorParaMeta("  a\tb\n\nc      d ")).toBe("a b c   d");
-  });
-});
-
-describe("errores de Meta", () => {
-  it("explica los que importan y dice qué hacer", () => {
-    expect(explicarError(131047)).toMatchObject({ accion: "plantilla" });
-    expect(explicarError(190)).toMatchObject({ accion: "sistema" });
-    expect(explicarError(131026)).toMatchObject({ accion: "otro-medio" });
-    expect(explicarError(130429)).toMatchObject({ accion: "reintentar" });
-    expect(explicarError(999999, "Something").texto).toContain("Something");
-    expect(esFueraDeVentana(131047)).toBe(true);
-    expect(esDeCredenciales(190)).toBe(true);
-  });
-});
-
-describe("cuerpo del envío", () => {
-  it("texto citando un mensaje", () => {
-    expect(cuerpoDelMensaje("5492235550123", { tipo: "texto", cuerpo: "Sí", citado: "wamid.X" })).toEqual({
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      to: "5492235550123",
-      context: { message_id: "wamid.X" },
-      type: "text",
-      text: { body: "Sí", preview_url: false },
-    });
-  });
-
-  it("documento por id, y a un usuario sin número por su BSUID", () => {
-    expect(
-      cuerpoDelMensaje("AR.ABC123", {
-        tipo: "media",
-        clase: "document",
-        media: { id: "77" },
-        epigrafe: "Tu remito",
-        nombreArchivo: "R-1.pdf",
-      }),
-    ).toEqual({
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      recipient: "AR.ABC123",
-      type: "document",
-      document: { id: "77", caption: "Tu remito", filename: "R-1.pdf" },
-    });
-  });
-
-  it("reacción", () => {
-    expect(cuerpoDelMensaje("549223", { tipo: "reaccion", aMensaje: "wamid.Y", emoji: "👍" })).toMatchObject({
-      type: "reaction",
-      reaction: { message_id: "wamid.Y", emoji: "👍" },
-    });
   });
 });

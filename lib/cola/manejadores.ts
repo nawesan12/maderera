@@ -1,8 +1,6 @@
 import "server-only";
 
 import type { NombreProveedorPago } from "@/lib/pagos/tipos";
-import type { PayloadWebhook } from "@/lib/whatsapp/webhook";
-import type { EstadoDeMeta } from "@/lib/whatsapp/payload";
 import type { ReintentoDeEmail } from "@/lib/notificaciones/avisos";
 
 /**
@@ -23,11 +21,8 @@ export interface CargasDeTrabajo {
     url: string;
     firmaVerificada: boolean | null;
   };
-  "whatsapp.payload": { payload: PayloadWebhook };
-  /** Un estado que llegó antes que el id del mensaje (ver `aplicarEstado`). */
-  "whatsapp.estado": { estado: EstadoDeMeta; intento: number };
-  /** Reintento de la descarga de un adjunto (ver `descargarMedio`). */
-  "whatsapp.medio": { mensajeId: string; intento: number };
+  // whatsapp.payload, whatsapp.estado y whatsapp.medio son del worker de Go
+  // (backend/internal/whatsapp): no están acá, así este lado no los toma.
   /** Una tanda de una campaña de correo (ver `lib/campanas/envio.ts`). */
   "campana.tanda": { campanaId: string };
   /** Un aviso por correo que rebotó temporalmente (ver `despacharEmail`). */
@@ -68,21 +63,6 @@ export const MANEJADORES: {
     if (resultado.resultado === "acreditado" || resultado.resultado === "actualizado") {
       await notificarResultadoDePago(resultado);
     }
-  },
-
-  "whatsapp.payload": async (carga) => {
-    const { procesarPayload } = await import("@/lib/whatsapp/webhook");
-    await procesarPayload(carga.payload);
-  },
-
-  "whatsapp.estado": async (carga) => {
-    const { aplicarEstado } = await import("@/lib/whatsapp/webhook");
-    await aplicarEstado(carga.estado, carga.intento);
-  },
-
-  "whatsapp.medio": async (carga) => {
-    const { descargarMedio } = await import("@/lib/whatsapp/webhook");
-    await descargarMedio(carga.mensajeId, carga.intento);
   },
 
   "email.reintento": async (carga) => {

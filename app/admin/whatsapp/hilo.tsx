@@ -40,7 +40,7 @@ import { CompositorPlantilla } from "./compositor-plantilla";
 import { ElegirDocumento } from "./elegir-documento";
 import type { Persona } from "./bandeja";
 import type { DetalleConversacion, MensajeDeLaBandeja } from "@/lib/dal/admin/whatsapp";
-import type { PlantillaDisponible } from "@/lib/whatsapp/catalogo";
+import type { PlantillaDisponible } from "@/lib/dal/admin/whatsapp";
 import { restanteLegible } from "@/lib/whatsapp/ventana";
 import { enlaceWaMe } from "@/lib/whatsapp/aviso-manual";
 import { ConfirmarTope } from "./confirmar-tope";

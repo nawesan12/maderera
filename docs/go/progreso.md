@@ -38,7 +38,10 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 | 6 | Carrito, checkout, Mercado Pago | | |
 | 7 | Facturación ARCA | | |
 | 8 | Compras, proveedores, retenciones | `go-compras` | hecha (29/10), integrada en `go-cuentas`: pagos 6,5×, libro IVA 2,8×; tres bugs de concurrencia arreglados |
-| 9 | WhatsApp | | |
+| 9 | WhatsApp | `go-whatsapp` | hecha (29/10), integrada en `go-cuentas`: webhook 1,4×, cola 1,7×; el worker de Go atiende los trabajos de WhatsApp |
+
+| 8 | Compras, proveedores, retenciones | | |
+| 9 | WhatsApp | `go-whatsapp` | hecha (falta correr la E2E y desplegar: `CARPETA_PRIVADA` en api y worker) |
 | 10 | Campañas, avisos, profesionales, firma | | |
 | 11 | Cortes | `go-cortes` | hecha (29/10), integrada en `go-cuentas`; HTTP 6× con 20 a la vez |
 | 12 | PDF y exportaciones | `go-pdf` | hecha (29/10), integrada en `go-cuentas`: 11 documentos idénticos a pdf-lib; faltan los datos de las tandas 5, 7, 8 y 9 |
@@ -303,6 +306,67 @@ Rama `go-cortes` (desde 9a17128 de `go-productos`).
 | ídem, p50 / p99 | 454 / 2944 ms | 110 / 266 ms | **4× / 11× menos** |
 | ídem, memoria máx. | 154 MB | 53 MB | 2,9× menos |
 | Plano por HTTP, de a uno: p50 | 12,8 ms | 12,1 ms | empate |
+
+## Tanda 9: WhatsApp
+
+- [x] Lógica pura (internal/whatsapp) con golden contra el TS
+      (`scripts/golden/whatsapp.ts`): números, ventana de 24 h, BAJA/ALTA,
+      firma del webhook, costos y tope, errores de Meta, plantillas (leer,
+      completar, componentes), el payload del webhook (1240 casos, los de
+      vitest y mutados al azar), el cuerpo de cada envío, limpiar/resumen, el
+      aviso manual por wa.me y los datos de la sucursal
+- [x] Webhook de Meta en Go con la misma URL (`/api/whatsapp/webhook`):
+      verificación GET, firma sobre los bytes crudos, a la cola y 200
+- [x] Los tres trabajos (`whatsapp.payload`, `whatsapp.estado`,
+      `whatsapp.medio`) en el worker de Go; fuera de `MANEJADORES` (y por eso
+      de `TIPOS_PROPIOS`) de lib/cola
+- [x] Envíos por la Graph API y proveedor de demostración; EnviarYRegistrar
+      como única puerta de salida; adjuntos privados (`/api/whatsapp/medios/<id>`
+      y `/api/whatsapp/enviar-archivo`, mismas direcciones)
+- [x] Plantillas: sincronización (botón, webhook y la tarea diaria
+      `plantillas-whatsapp` del worker; salió de la `diaria` de lib/tareas)
+- [x] Bandeja, configuración, gasto y tope, avisos automáticos (ruta interna
+      con el secreto; el PDF se pide en dos pasos, solo si el aviso sale) y el
+      botón «Avisar por WhatsApp» con su historia
+- [x] Pruebas de Go contra la base y contra un simulador de la Graph API: la
+      ida y vuelta entera, demostración, permisos, coexistencia, estados
+      tardíos, avisos y archivos; el contrato en cada respuesta
+- [x] E2E escrita (`e2e/whatsapp.spec.ts`, en modo demostración); sin correr
+- [x] Benchmark (`bench/tanda9`)
+- [ ] La consulta del gasto del mes recorre los salientes en cada apertura de
+      la bandeja (~28 ms con 40.000 mensajes): un índice parcial o el gasto
+      guardado. Es lo que hoy limita la bandeja, en TS y en Go
+- [ ] El worker toma 100 trabajos cada 2 s: un mensaje entrante tarda hasta
+      2 s en aparecer (el TS lo procesaba en el `after()` de la ruta)
+- Queda en TS: lo que corre en el navegador (plantillas, ventana, costos,
+  números, aviso-manual, plantillas-base; Go tiene su gemelo con golden), los
+  PDF de `documentos.ts` (tanda 12: Next los arma y viajan a Go en el
+  pedido), el alta de ficha desde una conversación (clientes, tanda 4: Next
+  crea la ficha y Go la vincula), `enlace.ts` (el wa.me público del sitio) y
+  los scripts de desarrollo (`simulador-meta.ts`, `whatsapp-webhook.ts`,
+  `seed-whatsapp.ts`), que hablan HTTP o SQL y siguen andando.
+- Los adjuntos de Vercel Blob (de antes de la VPS) ya no se leen: Go lee
+  `privado:` y `/subidas/`.
+- Bug del TS arreglado: `fechaCorta`/`fechaHora` usaban la zona del servidor,
+  y el contenedor de la aplicación corre en UTC (el compose pone `TZ` solo a
+  la base y al cron): la historia del aviso manual decía las 03:05 por las
+  00:05 y la fecha de las plantillas era la de mañana desde las 21. Go dice
+  todo en hora de Argentina (`TestFechasEnHoraArgentina`).
+- Benchmark (29/10/2026, misma Mac, 1500 conversaciones y 30.000 mensajes):
+
+  | Prueba | TypeScript | Go | Go / TS |
+  |---|---:|---:|---:|
+  | Abrir la bandeja, 20 a la vez: pedidos/s | 71,9 | 83,3 | 1,2× (manda Postgres) |
+  | ídem, p99 / memoria máx. | 508 ms / 174 MB | 421 ms / 52 MB | 1,2× / 3,3× menos |
+  | Webhook, 5000 firmados, 50 a la vez: aceptados/s | 2229 | 3198 | **1,4×** |
+  | ídem, p99 / memoria máx. | 52 ms / 162 MB | 34 ms / 42 MB | 1,5× / 3,9× menos |
+  | Procesar 5200 payloads encolados | 115,5 s | 68,6 s | **1,7×** |
+
+- Aprendido: el hook de Mercado Pago también bloquea un `WebhookSecret:
+  "…"` de 20 caracteres o más en un archivo (lo toma por un secreto real):
+  en las pruebas va en una constante. Y en el `Esquemas` de todos los
+  dominios juntos los nombres chocan (`Mensaje` existe en otro): el DAL de
+  WhatsApp usa los esquemas de su propio archivo de tipos.
 
 ## Benchmarks
 

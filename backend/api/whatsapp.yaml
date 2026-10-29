@@ -1,0 +1,857 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · WhatsApp
+  version: "1"
+  description: |
+    La bandeja de WhatsApp del panel, su configuración, el botón «Avisar por
+    WhatsApp» y los avisos automáticos que disparan otros módulos. La bandeja
+    la usa quien entra a /admin/whatsapp (admin y vendedor); la
+    configuración, solo admin; los avisos automáticos, solo Next con el
+    secreto interno.
+
+    Las acciones devuelven 200 con `error`/`ok`: son los mensajes que ve
+    quien atiende (fuera de la ventana, el tope del mes), no errores HTTP.
+
+    El webhook de Meta (/api/whatsapp/webhook), los adjuntos
+    (/api/whatsapp/medios/{id}) y el envío de archivos
+    (/api/whatsapp/enviar-archivo) mantienen su dirección y no están en este
+    contrato: leen el cuerpo crudo o devuelven bytes.
+paths:
+  /api/v1/admin/whatsapp/bandeja:
+    get:
+      operationId: AbrirBandeja
+      description: Todo lo que muestra la bandeja, y la conversación elegida (o la primera). Abrirla es haberla leído.
+      parameters:
+        - { name: filtro, in: query, schema: { type: string, maxLength: 40 } }
+        - { name: chat, in: query, schema: { type: string, maxLength: 64 } }
+      responses:
+        "200":
+          description: La bandeja
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Bandeja" }
+  /api/v1/admin/whatsapp/sin-leer:
+    get:
+      operationId: ConversacionesSinLeer
+      responses:
+        "200":
+          description: Cuántas conversaciones abiertas tienen mensajes sin leer
+          content:
+            application/json:
+              schema: { type: object, required: [total], properties: { total: { type: integer } } }
+  /api/v1/admin/whatsapp/clientes:
+    get:
+      operationId: BuscarClientesParaVincular
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, maxLength: 200 } }
+      responses:
+        "200":
+          description: Hasta ocho fichas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, nombre, telefono, cuit]
+                  properties:
+                    id: { type: string }
+                    nombre: { type: string }
+                    telefono: { type: string, nullable: true }
+                    cuit: { type: string, nullable: true }
+  /api/v1/admin/whatsapp/conversaciones:
+    post:
+      operationId: AbrirConversacion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [telefono]
+              additionalProperties: false
+              properties:
+                telefono: { type: string, maxLength: 100 }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/conversaciones/{id}:
+    get:
+      operationId: ObtenerConversacion
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: La conversación
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DetalleConversacion" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/whatsapp/conversaciones/{id}/responder:
+    post:
+      operationId: Responder
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cuerpo]
+              additionalProperties: false
+              properties:
+                cuerpo: { type: string }
+                citado: { type: string }
+                confirmarTope: { type: boolean }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/conversaciones/{id}/plantilla:
+    post:
+      operationId: EnviarPlantilla
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [plantilla]
+              properties:
+                plantilla: { type: string }
+                idioma: { type: string }
+                valores: { type: string, description: "JSON: clave del campo → valor" }
+                confirmarTope: { type: string }
+                archivo: { type: string, format: binary, description: El PDF del encabezado, armado por Next }
+                archivoNombre: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/conversaciones/{id}/documento:
+    post:
+      operationId: EnviarDocumento
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/FormDocumento" }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/documento-al-cliente:
+    post:
+      operationId: EnviarDocumentoAlCliente
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/FormDocumento" }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/conversaciones/{id}/asignar:
+    post:
+      operationId: AsignarConversacion
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [usuarioId]
+              additionalProperties: false
+              properties:
+                usuarioId: { type: string, description: "«yo», el id de alguien, o vacío para liberarla" }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/conversaciones/{id}/estado:
+    post:
+      operationId: CambiarEstadoConversacion
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              additionalProperties: false
+              properties:
+                estado: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/conversaciones/{id}/vincular:
+    post:
+      operationId: VincularCliente
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerId]
+              additionalProperties: false
+              properties:
+                customerId: { type: string, nullable: true }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/conversaciones/{id}/baja:
+    post:
+      operationId: CambiarBaja
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [baja]
+              additionalProperties: false
+              properties:
+                baja: { type: boolean }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/conversaciones/{id}/simular:
+    post:
+      operationId: SimularEntrante
+      description: Solo en modo demostración. Entra por la misma ingesta que el webhook.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cuerpo]
+              additionalProperties: false
+              properties:
+                cuerpo: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/mensajes/{id}/reintentar:
+    post:
+      operationId: ReintentarMensaje
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                confirmarTope: { type: boolean }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/mensajes/{id}/reaccion:
+    post:
+      operationId: Reaccionar
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [emoji]
+              additionalProperties: false
+              properties:
+                emoji: { type: string, maxLength: 64 }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/mensajes/{id}/descarga:
+    post:
+      operationId: ReintentarDescarga
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/configuracion:
+    get:
+      operationId: ConfiguracionWhatsapp
+      description: Solo admin. La primera vez deja los avisos creados y apagados.
+      responses:
+        "200":
+          description: Todo lo de la configuración
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Configuracion" }
+  /api/v1/admin/whatsapp/avisos/{id}:
+    post:
+      operationId: CambiarAviso
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [activo]
+              additionalProperties: false
+              properties:
+                activo: { type: boolean }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/avisos/{id}/texto:
+    post:
+      operationId: GuardarTextoAviso
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [textoLibre]
+              additionalProperties: false
+              properties:
+                textoLibre: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/plantillas/sincronizar:
+    post:
+      operationId: SincronizarPlantillas
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/diagnostico:
+    post:
+      operationId: DiagnosticarWhatsapp
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/prueba:
+    post:
+      operationId: MensajeDePrueba
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [telefono]
+              additionalProperties: false
+              properties:
+                telefono: { type: string, maxLength: 100 }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/tope:
+    post:
+      operationId: GuardarTope
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tope, utility, service, marketing, authentication]
+              additionalProperties: false
+              properties:
+                tope: { type: string, maxLength: 40 }
+                utility: { type: string, maxLength: 40 }
+                service: { type: string, maxLength: 40 }
+                marketing: { type: string, maxLength: 40 }
+                authentication: { type: string, maxLength: 40 }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/avisos-manuales:
+    get:
+      operationId: AvisosManuales
+      description: El botón «Avisar por WhatsApp» de cada cosa (los que no existen se descartan).
+      parameters:
+        - { name: evento, in: query, required: true, schema: { type: string } }
+        - { name: tipo, in: query, required: true, schema: { type: string } }
+        - { name: ids, in: query, required: true, schema: { type: string, maxLength: 20000 }, description: Separados por coma }
+        - { name: saldo, in: query, schema: { type: string, maxLength: 60 } }
+      responses:
+        "200":
+          description: Por id
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: { $ref: "#/components/schemas/AvisoManual" } }
+  /api/v1/admin/whatsapp/avisos-manuales/ultimo-recibo/{customerId}:
+    get:
+      operationId: AvisoDelUltimoRecibo
+      parameters:
+        - { name: customerId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: El aviso del recibo de los últimos tres días, o null
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvisoManualONulo" }
+  /api/v1/admin/whatsapp/avisos-manuales/registro:
+    post:
+      operationId: RegistrarAvisoManual
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [evento, entidadTipo, entidadId, telefono]
+              additionalProperties: false
+              properties:
+                evento: { type: string }
+                entidadTipo: { type: string }
+                entidadId: { type: string }
+                telefono: { type: string, nullable: true }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/interno/whatsapp/aviso:
+    post:
+      operationId: AvisoAutomatico
+      description: |
+        Solo Next, con el secreto interno. Si el aviso lleva PDF y va a salir,
+        vuelve `falta-documento` hasta que llegue el archivo: así el PDF se
+        arma solo cuando hace falta.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [datos]
+              properties:
+                datos: { type: string, description: "JSON con evento, telefono, nombre, valores, orderId, entidad, forzar, usuarioId y conDocumento" }
+                archivo: { type: string, format: binary }
+                archivoNombre: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/ResultadoAviso" }
+        "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/interno/whatsapp/aviso-pedido:
+    post:
+      operationId: AvisoDePedido
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId, estado]
+              additionalProperties: false
+              properties:
+                orderId: { type: string }
+                estado: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/ResultadoAviso" }
+        "403": { $ref: "#/components/responses/Problema" }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+    Resultado:
+      description: Lo que ve quien atiende
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Resultado" }
+    ResultadoAviso:
+      description: Qué pasó con el aviso
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ResultadoAviso" }
+  schemas:
+    ResultadoAviso:
+      type: object
+      required: [estado, detalle]
+      properties:
+        estado: { type: string, enum: [enviada, simulada, fallida, omitida, falta-documento] }
+        detalle: { type: string }
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    Resultado:
+      type: object
+      properties:
+        error: { type: string }
+        ok: { type: string }
+        requierePlantilla: { type: boolean }
+        requiereConfirmacionTope: { type: boolean }
+        conversacionId: { type: string }
+        mensajeId: { type: string }
+    FormDocumento:
+      type: object
+      required: [tipo, id]
+      properties:
+        tipo: { type: string }
+        id: { type: string }
+        epigrafe: { type: string }
+        telefono: { type: string }
+        confirmarTope: { type: string }
+        archivo: { type: string, format: binary, description: El PDF, armado por Next }
+        archivoNombre: { type: string }
+        descripcion: { type: string }
+        customerId: { type: string }
+        telefonoDelDocumento: { type: string }
+        contacto: { type: string }
+    EstadoConexion:
+      type: object
+      required: [conectado, proveedor, telefono, ultimaSenal, detalle, ultimoWebhookAt]
+      properties:
+        conectado: { type: boolean }
+        proveedor: { type: string, enum: [cloud, demo] }
+        telefono: { type: string, nullable: true }
+        ultimaSenal: { type: number, nullable: true }
+        detalle: { type: string, nullable: true }
+        ultimoWebhookAt: { type: number, nullable: true }
+    ConversacionListada:
+      type: object
+      required: [id, waJid, nombre, displayName, customerId, clienteNombre, clienteTipo, estado, ultimoMensajeAt, ultimoMensajePreview,
+        ultimoEntranteAt, noLeidos, ventanaAbierta, asignadoAUserId, asignadoNombre, baja]
+      properties:
+        id: { type: string }
+        waJid: { type: string }
+        nombre: { type: string }
+        displayName: { type: string, nullable: true }
+        customerId: { type: string, nullable: true }
+        clienteNombre: { type: string, nullable: true }
+        clienteTipo: { type: string, nullable: true }
+        estado: { type: string, enum: [abierta, cerrada] }
+        ultimoMensajeAt: { type: string, format: date-time, nullable: true }
+        ultimoMensajePreview: { type: string, nullable: true }
+        ultimoEntranteAt: { type: string, format: date-time, nullable: true }
+        noLeidos: { type: integer }
+        ventanaAbierta: { type: boolean }
+        asignadoAUserId: { type: string, nullable: true }
+        asignadoNombre: { type: string, nullable: true }
+        baja: { type: boolean }
+    Campo:
+      type: object
+      required: [clave, donde, marcador, ejemplo]
+      properties:
+        clave: { type: string }
+        donde: { type: string, enum: [encabezado, cuerpo, boton] }
+        marcador: { type: string }
+        ejemplo: { type: string, nullable: true }
+        media: { type: string, enum: [document, image, video] }
+        indiceBoton: { type: integer }
+    Plantilla:
+      type: object
+      required: [nombre, idioma, categoria, estado, formato, encabezado, encabezadoMedia, cuerpo, pie, botones, campos, uso]
+      properties:
+        nombre: { type: string }
+        idioma: { type: string }
+        categoria: { type: string, nullable: true }
+        estado: { type: string }
+        formato: { type: string, enum: [POSITIONAL, NAMED] }
+        encabezado: { type: string, nullable: true }
+        encabezadoMedia: { type: string, nullable: true }
+        cuerpo: { type: string }
+        pie: { type: string, nullable: true }
+        botones:
+          type: array
+          items: { type: object, required: [tipo, texto], properties: { tipo: { type: string }, texto: { type: string } } }
+        campos: { type: array, items: { $ref: "#/components/schemas/Campo" } }
+        uso: { type: string, nullable: true }
+    Mensaje:
+      type: object
+      required: [id, direccion, tipo, waMessageId, cuerpo, mediaUrl, mediaTipo, mediaMime, mediaNombre, mediaEstado, mediaBytes, datos, citado,
+        reaccionCliente, reaccionNuestra, estado, errorCodigo, errorDetalle, plantilla, origen, enviadoPor, cobroCategoria, cobrable, importado, ocurridoAt]
+      properties:
+        id: { type: string }
+        direccion: { type: string, enum: [entrante, saliente] }
+        tipo: { type: string }
+        waMessageId: { type: string, nullable: true }
+        cuerpo: { type: string }
+        mediaUrl: { type: string, nullable: true }
+        mediaTipo: { type: string, nullable: true }
+        mediaMime: { type: string, nullable: true }
+        mediaNombre: { type: string, nullable: true }
+        mediaEstado: { type: string, nullable: true }
+        mediaBytes: { type: integer, nullable: true }
+        datos: { type: object, nullable: true, additionalProperties: true }
+        citado:
+          type: object
+          nullable: true
+          required: [id, cuerpo, direccion]
+          properties:
+            id: { type: string }
+            cuerpo: { type: string }
+            direccion: { type: string, enum: [entrante, saliente] }
+        reaccionCliente: { type: string, nullable: true }
+        reaccionNuestra: { type: string, nullable: true }
+        estado: { type: string, enum: [pendiente, enviado, entregado, leido, fallido] }
+        errorCodigo: { type: integer, nullable: true }
+        errorDetalle: { type: string, nullable: true }
+        plantilla: { type: string, nullable: true }
+        origen: { type: string, nullable: true }
+        enviadoPor: { type: string, nullable: true }
+        cobroCategoria: { type: string, nullable: true }
+        cobrable: { type: boolean, nullable: true }
+        importado: { type: boolean }
+        ocurridoAt: { type: string, format: date-time }
+    DocumentoListado:
+      type: object
+      required: [tipo, id, titulo, detalle, descripcion, fecha]
+      properties:
+        tipo: { type: string, enum: [presupuesto, comprobante, remito, recibo, cuenta, corte] }
+        id: { type: string }
+        titulo: { type: string }
+        detalle: { type: string }
+        descripcion: { type: string }
+        fecha: { type: string, format: date-time, nullable: true }
+    DetalleConversacion:
+      type: object
+      required: [id, waJid, displayName, customerId, orderId, estado, notas, ultimoEntranteAt, noLeidos, asignadoAUserId, bajaAt, bajaDetalle,
+        resueltaAt, clienteNombre, clienteTipo, clienteTelefono, clienteEmail, clienteLimite, clienteEstado, conocidos, nombre, sinNumero,
+        ventanaAbierta, mensajes, saldo, limiteCredito, pedidos, documentos]
+      properties:
+        id: { type: string }
+        waJid: { type: string }
+        displayName: { type: string, nullable: true }
+        customerId: { type: string, nullable: true }
+        orderId: { type: string, nullable: true }
+        estado: { type: string, enum: [abierta, cerrada] }
+        notas: { type: string, nullable: true }
+        ultimoEntranteAt: { type: string, format: date-time, nullable: true }
+        noLeidos: { type: integer }
+        asignadoAUserId: { type: string, nullable: true }
+        bajaAt: { type: string, format: date-time, nullable: true }
+        bajaDetalle: { type: string, nullable: true }
+        resueltaAt: { type: string, format: date-time, nullable: true }
+        clienteNombre: { type: string, nullable: true }
+        clienteTipo: { type: string, nullable: true }
+        clienteTelefono: { type: string, nullable: true }
+        clienteEmail: { type: string, nullable: true }
+        clienteLimite: { type: string, nullable: true }
+        clienteEstado: { type: string, nullable: true }
+        conocidos: { type: object, additionalProperties: { type: string } }
+        nombre: { type: string }
+        sinNumero: { type: boolean }
+        ventanaAbierta: { type: boolean }
+        mensajes: { type: array, items: { $ref: "#/components/schemas/Mensaje" } }
+        saldo: { type: number }
+        limiteCredito: { type: number }
+        pedidos:
+          type: array
+          items:
+            type: object
+            required: [id, numero, estado, total, createdAt, sucursal]
+            properties:
+              id: { type: string }
+              numero: { type: string }
+              estado: { type: string }
+              total: { type: string }
+              createdAt: { type: string, format: date-time }
+              sucursal: { type: string, nullable: true }
+        documentos: { type: array, items: { $ref: "#/components/schemas/DocumentoListado" } }
+    GastoChico:
+      type: object
+      required: [usd, tope, proporcion, alcanzado]
+      properties:
+        usd: { type: number }
+        tope: { type: number }
+        proporcion: { type: number }
+        alcanzado: { type: boolean }
+    Bandeja:
+      type: object
+      required: [filtro, conversaciones, contadores, estado, plantillas, personal, gasto, detalle]
+      properties:
+        filtro: { type: string, enum: [todas, sin-leer, mias, sin-asignar, resueltas] }
+        conversaciones: { type: array, items: { $ref: "#/components/schemas/ConversacionListada" } }
+        contadores:
+          type: object
+          required: [sinLeer, mias, sinAsignar]
+          properties:
+            sinLeer: { type: integer }
+            mias: { type: integer }
+            sinAsignar: { type: integer }
+        estado: { $ref: "#/components/schemas/EstadoConexion" }
+        plantillas: { type: array, items: { $ref: "#/components/schemas/Plantilla" } }
+        personal:
+          type: array
+          items: { type: object, required: [id, nombre], properties: { id: { type: string }, nombre: { type: string } } }
+        gasto: { $ref: "#/components/schemas/GastoChico" }
+        detalle:
+          allOf: [{ $ref: "#/components/schemas/DetalleConversacion" }]
+          nullable: true
+    DetalleCategoria:
+      type: object
+      required: [gratis, cobrados, estimados, usd]
+      properties:
+        gratis: { type: integer }
+        cobrados: { type: integer }
+        estimados: { type: integer }
+        usd: { type: number }
+    Tarifas:
+      type: object
+      required: [utility, service, marketing, authentication]
+      properties:
+        utility: { type: number }
+        service: { type: number }
+        marketing: { type: number }
+        authentication: { type: number }
+    GastoDelMes:
+      type: object
+      required: [usd, usdConfirmado, usdEstimado, porCategoria, proporcion, alcanzado, umbral, tope, mes, reinicio, tarifas]
+      properties:
+        usd: { type: number }
+        usdConfirmado: { type: number }
+        usdEstimado: { type: number }
+        porCategoria:
+          type: object
+          required: [utility, service, marketing, authentication]
+          properties:
+            utility: { $ref: "#/components/schemas/DetalleCategoria" }
+            service: { $ref: "#/components/schemas/DetalleCategoria" }
+            marketing: { $ref: "#/components/schemas/DetalleCategoria" }
+            authentication: { $ref: "#/components/schemas/DetalleCategoria" }
+        proporcion: { type: number }
+        alcanzado: { type: boolean }
+        umbral: { type: integer, nullable: true, description: "80, 100 o null" }
+        tope: { type: number }
+        mes: { type: string }
+        reinicio: { type: string, format: date-time }
+        tarifas: { $ref: "#/components/schemas/Tarifas" }
+    Configuracion:
+      type: object
+      required: [estado, avisos, eventos, guardadas, diagnostico, gasto, bajas, cortados, webhookSecreto, firmaSecreto]
+      properties:
+        estado: { $ref: "#/components/schemas/EstadoConexion" }
+        avisos:
+          type: array
+          items:
+            type: object
+            required: [id, evento, plantilla, idioma, textoLibre, activo]
+            properties:
+              id: { type: string }
+              evento: { type: string }
+              plantilla: { type: string }
+              idioma: { type: string }
+              textoLibre: { type: string, nullable: true }
+              activo: { type: boolean }
+        eventos:
+          type: array
+          items:
+            type: object
+            required: [evento, titulo, cuando, plantilla, textoLibre]
+            properties:
+              evento: { type: string }
+              titulo: { type: string }
+              cuando: { type: string }
+              plantilla: { type: string }
+              textoLibre: { type: string }
+        guardadas:
+          type: array
+          items:
+            type: object
+            required: [id, metaId, nombre, idioma, categoria, estado, motivoRechazo, formatoParametros, componentes, sincronizadaAt]
+            properties:
+              id: { type: string }
+              metaId: { type: string, nullable: true }
+              nombre: { type: string }
+              idioma: { type: string }
+              categoria: { type: string, nullable: true }
+              estado: { type: string }
+              motivoRechazo: { type: string, nullable: true }
+              formatoParametros: { type: string }
+              componentes: { type: array, items: {} }
+              sincronizadaAt: { type: string, format: date-time }
+        diagnostico:
+          type: object
+          nullable: true
+          required: [diagnostico, diagnosticoAt, calidad, limite, ultimoWebhookAt]
+          properties:
+            diagnostico:
+              type: object
+              nullable: true
+              required: [puntos, numero]
+              properties:
+                puntos:
+                  type: array
+                  items:
+                    type: object
+                    required: [clave, titulo, estado, detalle]
+                    properties:
+                      clave: { type: string }
+                      titulo: { type: string }
+                      estado: { type: string, enum: [ok, aviso, error] }
+                      detalle: { type: string }
+                numero:
+                  type: object
+                  nullable: true
+                  properties:
+                    telefono: { type: string, nullable: true }
+                    nombreVerificado: { type: string, nullable: true }
+                    calidad: { type: string, nullable: true }
+                    limite: { type: string, nullable: true }
+                    estadoNombre: { type: string, nullable: true }
+                    plataforma: { type: string, nullable: true }
+            diagnosticoAt: { type: string, format: date-time, nullable: true }
+            calidad: { type: string, nullable: true }
+            limite: { type: string, nullable: true }
+            ultimoWebhookAt: { type: string, format: date-time, nullable: true }
+        gasto: { $ref: "#/components/schemas/GastoDelMes" }
+        bajas:
+          type: array
+          items:
+            type: object
+            required: [id, waJid, nombre, bajaAt, bajaDetalle]
+            properties:
+              id: { type: string }
+              waJid: { type: string }
+              nombre: { type: string }
+              bajaAt: { type: string, format: date-time, nullable: true }
+              bajaDetalle: { type: string, nullable: true }
+        cortados:
+          type: array
+          items:
+            type: object
+            required: [id, evento, destinatario, asunto, fecha, correo, avisadoAMano, enlace]
+            properties:
+              id: { type: string }
+              evento: { type: string }
+              destinatario: { type: string }
+              asunto: { type: string, nullable: true }
+              fecha: { type: string, format: date-time }
+              correo: { type: string, enum: [salio, fallo, sin-correo] }
+              avisadoAMano: { type: boolean }
+              enlace: { type: string, nullable: true }
+        webhookSecreto: { type: boolean, description: Si WHATSAPP_WEBHOOK_SECRET está cargado }
+        firmaSecreto: { type: boolean, description: Si WHATSAPP_APP_SECRET está cargado }
+    Historia:
+      type: object
+      required: [canal, estado, texto, atencion]
+      properties:
+        canal: { type: string, enum: [whatsapp, whatsapp_manual, email] }
+        estado: { type: string }
+        texto: { type: string }
+        atencion: { type: boolean }
+    AvisoManual:
+      type: object
+      required: [evento, entidadTipo, entidadId, titulo, texto, href, motivo, telefono, para, referencia, pdf, historia, yaAvisado,
+        automaticoPrendido, costoAutomatico]
+      properties:
+        evento: { type: string }
+        entidadTipo: { type: string }
+        entidadId: { type: string }
+        titulo: { type: string }
+        texto: { type: string }
+        href: { type: string, nullable: true }
+        motivo: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        para: { type: string, nullable: true }
+        referencia: { type: string, nullable: true }
+        pdf: { type: string, nullable: true }
+        historia: { type: array, items: { $ref: "#/components/schemas/Historia" } }
+        yaAvisado: { type: boolean }
+        automaticoPrendido: { type: boolean }
+        costoAutomatico: { type: string }
+    AvisoManualONulo:
+      allOf: [{ $ref: "#/components/schemas/AvisoManual" }]
+      nullable: true

@@ -13,6 +13,7 @@ import type { paths as Cuentas, components as ComponentesCuentas } from "./cuent
 import type { paths as Documentos, components as ComponentesDocumentos } from "./documentos";
 import type { paths as Cortes, components as ComponentesCortes } from "./cortes";
 import type { paths as Compras, components as ComponentesCompras } from "./compras";
+import type { paths as Whatsapp, components as ComponentesWhatsapp } from "./whatsapp";
 
 export type paths = Sesion &
   Catalogo &
@@ -23,7 +24,8 @@ export type paths = Sesion &
   Cuentas &
   Documentos &
   Cortes &
-  Compras;
+  Compras &
+  Whatsapp;
 export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesCatalogo["schemas"] &
   ComponentesContenido["schemas"] &
@@ -33,4 +35,5 @@ export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesCuentas["schemas"] &
   ComponentesDocumentos["schemas"] &
   ComponentesCortes["schemas"] &
-  ComponentesCompras["schemas"];
+  ComponentesCompras["schemas"] &
+  ComponentesWhatsapp["schemas"];

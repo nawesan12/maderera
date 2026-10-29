@@ -1,0 +1,906 @@
+[
+ {
+  "entrada": {
+   "id": null,
+   "asunto": null
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": null,
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": null,
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": null,
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": null,
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": ""
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "ab"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "ab",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "ab",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "ab",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "ab",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": " abc "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": " abc ",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": " abc ",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": " abc ",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": " abc ",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": null
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": null,
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": null,
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": null,
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": null,
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": ""
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "El asunto no puede quedar vacío."
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "El asunto no puede quedar vacío."
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "El asunto no puede quedar vacío."
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "El asunto no puede quedar vacío."
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "El asunto no puede quedar vacío."
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "ab"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "El asunto no puede quedar vacío."
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "ab",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "El asunto no puede quedar vacío."
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "ab",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "El asunto no puede quedar vacío."
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "ab",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "El asunto no puede quedar vacío."
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "ab",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "El asunto no puede quedar vacío."
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": " abc "
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "abc"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": " abc ",
+   "encabezado": "Hola"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "abc",
+   "encabezado": "Hola"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": " abc ",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "abc",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": " abc ",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "encabezado",
+  "mensaje": "Too big: expected string to have <=160 characters"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": " abc ",
+   "encabezado": "  "
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "abc",
+   "encabezado": ""
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "Hola"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "Hola"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "encabezado",
+  "mensaje": "Too big: expected string to have <=160 characters"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "  "
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": ""
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "Too big: expected string to have <=120 characters"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "Too big: expected string to have <=120 characters"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "Too big: expected string to have <=120 characters"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "Too big: expected string to have <=120 characters"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "asunto",
+  "mensaje": "Too big: expected string to have <=120 characters"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": null
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": null,
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": null,
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": null,
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": null,
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": ""
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "ab"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "ab",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "ab",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "ab",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "ab",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": " abc "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": " abc ",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": " abc ",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": " abc ",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": " abc ",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "Hola"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "asunto": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "encabezado": "  "
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ }
+]

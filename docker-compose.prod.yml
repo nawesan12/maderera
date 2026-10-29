@@ -171,6 +171,12 @@ services:
       CARPETA_SUBIDAS: /datos/subidas
       # Los adjuntos de WhatsApp: los sirve /api/whatsapp/medios/<id>, con sesión.
       CARPETA_PRIVADA: /datos/privado
+      # El correo de la app (servicio `correo`), igual que en `app`: sin esto
+      # internal/email cae en el proveedor de demostración (tanda 10: avisos,
+      # campañas y reintentos salen de acá).
+      SMTP_HOST: ${SMTP_HOST:-correo}
+      SMTP_PUERTO: ${SMTP_PUERTO:-587}
+      SMTP_NOMBRE_TLS: ${SMTP_NOMBRE_TLS:-mail.${CORREO_DOMINIO:-${DOMINIO}}}
     volumes:
       - subidas:/datos/subidas
       - privado:/datos/privado
@@ -207,6 +213,12 @@ services:
       CARPETA_SUBIDAS: /datos/subidas
       # El worker baja los adjuntos que mandan los clientes por WhatsApp.
       CARPETA_PRIVADA: /datos/privado
+      # El correo de la app (servicio `correo`), igual que en `app`: sin esto
+      # internal/email cae en el proveedor de demostración (tanda 10: avisos,
+      # campañas y reintentos salen de acá).
+      SMTP_HOST: ${SMTP_HOST:-correo}
+      SMTP_PUERTO: ${SMTP_PUERTO:-587}
+      SMTP_NOMBRE_TLS: ${SMTP_NOMBRE_TLS:-mail.${CORREO_DOMINIO:-${DOMINIO}}}
     volumes:
       - subidas:/datos/subidas
       - privado:/datos/privado

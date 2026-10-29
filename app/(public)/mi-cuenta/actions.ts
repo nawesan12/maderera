@@ -5,9 +5,8 @@ import { redirect } from "next/navigation";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 import { z } from "zod";
 import { verifySession } from "@/lib/dal/session";
-import { clienteDeLaSesion, miPedido } from "@/lib/dal/cuenta";
+import { miPedido } from "@/lib/dal/cuenta";
 import { plural } from "@/lib/formato";
-import { darDeBaja, volverARecibir } from "@/lib/campanas/bajas";
 import { agregarVarios } from "@/app/(public)/carrito-actions";
 
 export interface EstadoAccion {
@@ -139,14 +138,11 @@ export async function borrarDireccion(
 }
 
 export async function cambiarNovedades(recibir: boolean): Promise<{ ok?: string; error?: string }> {
-  const sesion = await verifySession();
-  const cliente = await clienteDeLaSesion();
-  const direcciones = [...new Set([sesion.email, cliente?.email].filter((d): d is string => Boolean(d)))];
-
-  for (const email of direcciones) {
-    if (recibir) await volverARecibir(email);
-    else await darDeBaja(email, "cuenta");
-  }
+  await verifySession();
+  // Lo hace Go (backend/internal/campanas): a la dirección de la cuenta y a
+  // la de la ficha.
+  const r = await (await api()).PUT("/api/v1/mi-cuenta/novedades", { body: { recibir } });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
   revalidatePath("/mi-cuenta/datos");
-  return { ok: recibir ? "Te vamos a mandar las novedades." : "No te vamos a mandar más novedades." };
+  return { ok: r.data.ok };
 }

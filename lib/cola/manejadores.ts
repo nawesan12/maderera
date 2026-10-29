@@ -23,10 +23,7 @@ export interface CargasDeTrabajo {
   };
   // whatsapp.payload, whatsapp.estado y whatsapp.medio son del worker de Go
   // (backend/internal/whatsapp): no están acá, así este lado no los toma.
-  /** Una tanda de una campaña de correo (ver `lib/campanas/envio.ts`). */
-  "campana.tanda": { campanaId: string };
-  /** Un aviso por correo que rebotó temporalmente (ver `despacharEmail`). */
-  "email.reintento": ReintentoDeEmail;
+  // campana.tanda es del worker de Go (backend/internal/campanas).
   /**
    * El aviso de un recibo al cliente (correo y WhatsApp, con el PDF). Lo
    * encola la API de Go al emitir el recibo, en la misma transacción; lo
@@ -37,11 +34,21 @@ export interface CargasDeTrabajo {
   "cheque.rechazado": { chequeId: string; porElBanco: boolean };
 }
 
+/**
+ * Los que el TS encola y atiende el worker de Go: `email.reintento` lo
+ * encola despacharEmail (lib/notificaciones/avisos.ts) y lo manda
+ * backend/internal/avisos.
+ */
+export interface CargasParaGo {
+  "email.reintento": ReintentoDeEmail;
+}
+
 export type TipoDeTrabajo = keyof CargasDeTrabajo;
-export type CargaDe<T extends TipoDeTrabajo> = CargasDeTrabajo[T];
+export type TipoEncolable = TipoDeTrabajo | keyof CargasParaGo;
+export type CargaDe<T extends TipoEncolable> = (CargasDeTrabajo & CargasParaGo)[T];
 
 export const MANEJADORES: {
-  [T in TipoDeTrabajo]: (carga: CargaDe<T>) => Promise<void>;
+  [T in TipoDeTrabajo]: (carga: CargasDeTrabajo[T]) => Promise<void>;
 } = {
   "pago.aviso": async (carga) => {
     const { procesarAviso } = await import("@/lib/pagos/webhook");
@@ -65,11 +72,6 @@ export const MANEJADORES: {
     }
   },
 
-  "email.reintento": async (carga) => {
-    const { reintentarEmail } = await import("@/lib/notificaciones/avisos");
-    await reintentarEmail(carga);
-  },
-
   "recibo.aviso": async (carga) => {
     const { notificarRecibo } = await import("@/lib/notificaciones/cobros");
     await notificarRecibo(carga.receiptId);
@@ -77,9 +79,5 @@ export const MANEJADORES: {
   "cheque.rechazado": async (carga) => {
     const { notificarChequeRechazado } = await import("@/lib/notificaciones/cobros");
     await notificarChequeRechazado(carga.chequeId, carga.porElBanco);
-  },
-  "campana.tanda": async (carga) => {
-    const { procesarTanda } = await import("@/lib/campanas/envio");
-    await procesarTanda(carga.campanaId);
   },
 };

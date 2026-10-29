@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { cuerpoComoParrafos, leerCuerpo } from "@/lib/campanas/cuerpo";
-import { parametrosDeBaja, verificarBaja } from "@/lib/campanas/baja";
-import { describirSegmento, duracionDelEnvio, leerSegmento } from "@/lib/campanas/segmento";
+import { cuerpoComoParrafos, leerCuerpo } from "../scripts/golden/originales/tanda10/campanas/cuerpo";
+import { parametrosDeBaja, verificarBaja } from "../scripts/golden/originales/tanda10/campanas/baja";
+import { describirSegmento, duracionDelEnvio, leerSegmento } from "../scripts/golden/originales/tanda10/campanas/segmento";
 import { RUBROS_CLIENTE } from "@/lib/rubros-cliente";
 
 /**

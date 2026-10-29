@@ -1,0 +1,3012 @@
+[
+ {
+  "cantidad": 0,
+  "porMinuto": 0,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 0,
+  "porMinuto": 1,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 0,
+  "porMinuto": 3,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 0,
+  "porMinuto": 5,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 0,
+  "porMinuto": 60,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 0,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 1,
+  "porMinuto": 0,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 1,
+  "porMinuto": 1,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 1,
+  "porMinuto": 3,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 1,
+  "porMinuto": 5,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 1,
+  "porMinuto": 60,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 1,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 2,
+  "porMinuto": 0,
+  "texto": "unos 2 minutos"
+ },
+ {
+  "cantidad": 2,
+  "porMinuto": 1,
+  "texto": "unos 2 minutos"
+ },
+ {
+  "cantidad": 2,
+  "porMinuto": 3,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 2,
+  "porMinuto": 5,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 2,
+  "porMinuto": 60,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 2,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 3,
+  "porMinuto": 0,
+  "texto": "unos 3 minutos"
+ },
+ {
+  "cantidad": 3,
+  "porMinuto": 1,
+  "texto": "unos 3 minutos"
+ },
+ {
+  "cantidad": 3,
+  "porMinuto": 3,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 3,
+  "porMinuto": 5,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 3,
+  "porMinuto": 60,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 3,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 5,
+  "porMinuto": 0,
+  "texto": "unos 5 minutos"
+ },
+ {
+  "cantidad": 5,
+  "porMinuto": 1,
+  "texto": "unos 5 minutos"
+ },
+ {
+  "cantidad": 5,
+  "porMinuto": 3,
+  "texto": "unos 2 minutos"
+ },
+ {
+  "cantidad": 5,
+  "porMinuto": 5,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 5,
+  "porMinuto": 60,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 5,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 59,
+  "porMinuto": 0,
+  "texto": "unos 59 minutos"
+ },
+ {
+  "cantidad": 59,
+  "porMinuto": 1,
+  "texto": "unos 59 minutos"
+ },
+ {
+  "cantidad": 59,
+  "porMinuto": 3,
+  "texto": "unos 20 minutos"
+ },
+ {
+  "cantidad": 59,
+  "porMinuto": 5,
+  "texto": "unos 12 minutos"
+ },
+ {
+  "cantidad": 59,
+  "porMinuto": 60,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 59,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 60,
+  "porMinuto": 0,
+  "texto": "unas 1 horas"
+ },
+ {
+  "cantidad": 60,
+  "porMinuto": 1,
+  "texto": "unas 1 horas"
+ },
+ {
+  "cantidad": 60,
+  "porMinuto": 3,
+  "texto": "unos 20 minutos"
+ },
+ {
+  "cantidad": 60,
+  "porMinuto": 5,
+  "texto": "unos 12 minutos"
+ },
+ {
+  "cantidad": 60,
+  "porMinuto": 60,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 60,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 61,
+  "porMinuto": 0,
+  "texto": "unas 1 horas"
+ },
+ {
+  "cantidad": 61,
+  "porMinuto": 1,
+  "texto": "unas 1 horas"
+ },
+ {
+  "cantidad": 61,
+  "porMinuto": 3,
+  "texto": "unos 21 minutos"
+ },
+ {
+  "cantidad": 61,
+  "porMinuto": 5,
+  "texto": "unos 13 minutos"
+ },
+ {
+  "cantidad": 61,
+  "porMinuto": 60,
+  "texto": "unos 2 minutos"
+ },
+ {
+  "cantidad": 61,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 119,
+  "porMinuto": 0,
+  "texto": "unas 2 horas"
+ },
+ {
+  "cantidad": 119,
+  "porMinuto": 1,
+  "texto": "unas 2 horas"
+ },
+ {
+  "cantidad": 119,
+  "porMinuto": 3,
+  "texto": "unos 40 minutos"
+ },
+ {
+  "cantidad": 119,
+  "porMinuto": 5,
+  "texto": "unos 24 minutos"
+ },
+ {
+  "cantidad": 119,
+  "porMinuto": 60,
+  "texto": "unos 2 minutos"
+ },
+ {
+  "cantidad": 119,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 120,
+  "porMinuto": 0,
+  "texto": "unas 2 horas"
+ },
+ {
+  "cantidad": 120,
+  "porMinuto": 1,
+  "texto": "unas 2 horas"
+ },
+ {
+  "cantidad": 120,
+  "porMinuto": 3,
+  "texto": "unos 40 minutos"
+ },
+ {
+  "cantidad": 120,
+  "porMinuto": 5,
+  "texto": "unos 24 minutos"
+ },
+ {
+  "cantidad": 120,
+  "porMinuto": 60,
+  "texto": "unos 2 minutos"
+ },
+ {
+  "cantidad": 120,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 179,
+  "porMinuto": 0,
+  "texto": "unas 3 horas"
+ },
+ {
+  "cantidad": 179,
+  "porMinuto": 1,
+  "texto": "unas 3 horas"
+ },
+ {
+  "cantidad": 179,
+  "porMinuto": 3,
+  "texto": "unas 1 horas"
+ },
+ {
+  "cantidad": 179,
+  "porMinuto": 5,
+  "texto": "unos 36 minutos"
+ },
+ {
+  "cantidad": 179,
+  "porMinuto": 60,
+  "texto": "unos 3 minutos"
+ },
+ {
+  "cantidad": 179,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 180,
+  "porMinuto": 0,
+  "texto": "unas 3 horas"
+ },
+ {
+  "cantidad": 180,
+  "porMinuto": 1,
+  "texto": "unas 3 horas"
+ },
+ {
+  "cantidad": 180,
+  "porMinuto": 3,
+  "texto": "unas 1 horas"
+ },
+ {
+  "cantidad": 180,
+  "porMinuto": 5,
+  "texto": "unos 36 minutos"
+ },
+ {
+  "cantidad": 180,
+  "porMinuto": 60,
+  "texto": "unos 3 minutos"
+ },
+ {
+  "cantidad": 180,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 1000,
+  "porMinuto": 0,
+  "texto": "unas 16,7 horas"
+ },
+ {
+  "cantidad": 1000,
+  "porMinuto": 1,
+  "texto": "unas 16,7 horas"
+ },
+ {
+  "cantidad": 1000,
+  "porMinuto": 3,
+  "texto": "unas 5,6 horas"
+ },
+ {
+  "cantidad": 1000,
+  "porMinuto": 5,
+  "texto": "unas 3,3 horas"
+ },
+ {
+  "cantidad": 1000,
+  "porMinuto": 60,
+  "texto": "unos 17 minutos"
+ },
+ {
+  "cantidad": 1000,
+  "porMinuto": 1000,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 5000,
+  "porMinuto": 0,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 5000,
+  "porMinuto": 1,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 5000,
+  "porMinuto": 3,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 5000,
+  "porMinuto": 5,
+  "texto": "unas 16,7 horas"
+ },
+ {
+  "cantidad": 5000,
+  "porMinuto": 60,
+  "texto": "unas 1,4 horas"
+ },
+ {
+  "cantidad": 5000,
+  "porMinuto": 1000,
+  "texto": "unos 5 minutos"
+ },
+ {
+  "cantidad": 100000,
+  "porMinuto": 0,
+  "texto": "unos 70 días"
+ },
+ {
+  "cantidad": 100000,
+  "porMinuto": 1,
+  "texto": "unos 70 días"
+ },
+ {
+  "cantidad": 100000,
+  "porMinuto": 3,
+  "texto": "unos 24 días"
+ },
+ {
+  "cantidad": 100000,
+  "porMinuto": 5,
+  "texto": "unos 14 días"
+ },
+ {
+  "cantidad": 100000,
+  "porMinuto": 60,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 100000,
+  "porMinuto": 1000,
+  "texto": "unas 1,7 horas"
+ },
+ {
+  "cantidad": 4320,
+  "porMinuto": 0,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 4320,
+  "porMinuto": 1,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 4320,
+  "porMinuto": 3,
+  "texto": "unos 1 días"
+ },
+ {
+  "cantidad": 4320,
+  "porMinuto": 5,
+  "texto": "unas 14,4 horas"
+ },
+ {
+  "cantidad": 4320,
+  "porMinuto": 60,
+  "texto": "unas 1,2 horas"
+ },
+ {
+  "cantidad": 4320,
+  "porMinuto": 1000,
+  "texto": "unos 5 minutos"
+ },
+ {
+  "cantidad": 99999,
+  "porMinuto": 0,
+  "texto": "unos 70 días"
+ },
+ {
+  "cantidad": 99999,
+  "porMinuto": 1,
+  "texto": "unos 70 días"
+ },
+ {
+  "cantidad": 99999,
+  "porMinuto": 3,
+  "texto": "unos 24 días"
+ },
+ {
+  "cantidad": 99999,
+  "porMinuto": 5,
+  "texto": "unos 14 días"
+ },
+ {
+  "cantidad": 99999,
+  "porMinuto": 60,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 99999,
+  "porMinuto": 1000,
+  "texto": "unas 1,7 horas"
+ },
+ {
+  "cantidad": 58626,
+  "porMinuto": 84,
+  "texto": "unas 11,6 horas"
+ },
+ {
+  "cantidad": 59854,
+  "porMinuto": 94,
+  "texto": "unas 10,6 horas"
+ },
+ {
+  "cantidad": 4512,
+  "porMinuto": 106,
+  "texto": "unos 43 minutos"
+ },
+ {
+  "cantidad": 87569,
+  "porMinuto": 68,
+  "texto": "unas 21,5 horas"
+ },
+ {
+  "cantidad": 127409,
+  "porMinuto": 45,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 71006,
+  "porMinuto": 53,
+  "texto": "unas 22,3 horas"
+ },
+ {
+  "cantidad": 74060,
+  "porMinuto": 47,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 4614,
+  "porMinuto": 25,
+  "texto": "unas 3,1 horas"
+ },
+ {
+  "cantidad": 118427,
+  "porMinuto": 13,
+  "texto": "unos 7 días"
+ },
+ {
+  "cantidad": 104537,
+  "porMinuto": 42,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 171637,
+  "porMinuto": 62,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 97633,
+  "porMinuto": 77,
+  "texto": "unas 21,1 horas"
+ },
+ {
+  "cantidad": 193934,
+  "porMinuto": 12,
+  "texto": "unos 12 días"
+ },
+ {
+  "cantidad": 155153,
+  "porMinuto": 99,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 176833,
+  "porMinuto": 27,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 58438,
+  "porMinuto": 106,
+  "texto": "unas 9,2 horas"
+ },
+ {
+  "cantidad": 125931,
+  "porMinuto": 43,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 199836,
+  "porMinuto": 62,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 193789,
+  "porMinuto": 34,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 182887,
+  "porMinuto": 59,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 162855,
+  "porMinuto": 40,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 8645,
+  "porMinuto": 40,
+  "texto": "unas 3,6 horas"
+ },
+ {
+  "cantidad": 160806,
+  "porMinuto": 22,
+  "texto": "unos 6 días"
+ },
+ {
+  "cantidad": 26749,
+  "porMinuto": 119,
+  "texto": "unas 3,8 horas"
+ },
+ {
+  "cantidad": 29750,
+  "porMinuto": 64,
+  "texto": "unas 7,8 horas"
+ },
+ {
+  "cantidad": 197965,
+  "porMinuto": 88,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 165176,
+  "porMinuto": 2,
+  "texto": "unos 58 días"
+ },
+ {
+  "cantidad": 126360,
+  "porMinuto": 71,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 77773,
+  "porMinuto": 64,
+  "texto": "unas 20,3 horas"
+ },
+ {
+  "cantidad": 53897,
+  "porMinuto": 27,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 87240,
+  "porMinuto": 16,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 166599,
+  "porMinuto": 74,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 115016,
+  "porMinuto": 25,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 70318,
+  "porMinuto": 9,
+  "texto": "unos 6 días"
+ },
+ {
+  "cantidad": 28958,
+  "porMinuto": 39,
+  "texto": "unas 12,4 horas"
+ },
+ {
+  "cantidad": 120515,
+  "porMinuto": 77,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 159301,
+  "porMinuto": 89,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 95300,
+  "porMinuto": 65,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 192860,
+  "porMinuto": 117,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 15632,
+  "porMinuto": 4,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 106516,
+  "porMinuto": 41,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 161051,
+  "porMinuto": 63,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 160788,
+  "porMinuto": 27,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 145944,
+  "porMinuto": 31,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 161489,
+  "porMinuto": 54,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 73940,
+  "porMinuto": 56,
+  "texto": "unas 22 horas"
+ },
+ {
+  "cantidad": 54962,
+  "porMinuto": 37,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 87409,
+  "porMinuto": 19,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 61457,
+  "porMinuto": 75,
+  "texto": "unas 13,7 horas"
+ },
+ {
+  "cantidad": 181154,
+  "porMinuto": 56,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 147543,
+  "porMinuto": 56,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 153935,
+  "porMinuto": 20,
+  "texto": "unos 6 días"
+ },
+ {
+  "cantidad": 92122,
+  "porMinuto": 43,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 69057,
+  "porMinuto": 46,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 38759,
+  "porMinuto": 26,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 121218,
+  "porMinuto": 25,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 161125,
+  "porMinuto": 92,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 41913,
+  "porMinuto": 22,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 197829,
+  "porMinuto": 16,
+  "texto": "unos 9 días"
+ },
+ {
+  "cantidad": 116546,
+  "porMinuto": 8,
+  "texto": "unos 11 días"
+ },
+ {
+  "cantidad": 168777,
+  "porMinuto": 86,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 96718,
+  "porMinuto": 115,
+  "texto": "unas 14 horas"
+ },
+ {
+  "cantidad": 43700,
+  "porMinuto": 28,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 3737,
+  "porMinuto": 28,
+  "texto": "unas 2,2 horas"
+ },
+ {
+  "cantidad": 185515,
+  "porMinuto": 52,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 182730,
+  "porMinuto": 111,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 35021,
+  "porMinuto": 44,
+  "texto": "unas 13,3 horas"
+ },
+ {
+  "cantidad": 82488,
+  "porMinuto": 81,
+  "texto": "unas 17 horas"
+ },
+ {
+  "cantidad": 178196,
+  "porMinuto": 80,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 45160,
+  "porMinuto": 84,
+  "texto": "unas 9 horas"
+ },
+ {
+  "cantidad": 184722,
+  "porMinuto": 96,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 195017,
+  "porMinuto": 70,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 188299,
+  "porMinuto": 82,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 164590,
+  "porMinuto": 120,
+  "texto": "unas 22,9 horas"
+ },
+ {
+  "cantidad": 193509,
+  "porMinuto": 85,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 165730,
+  "porMinuto": 72,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 25138,
+  "porMinuto": 40,
+  "texto": "unas 10,5 horas"
+ },
+ {
+  "cantidad": 163829,
+  "porMinuto": 91,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 46657,
+  "porMinuto": 81,
+  "texto": "unas 9,6 horas"
+ },
+ {
+  "cantidad": 159900,
+  "porMinuto": 58,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 134725,
+  "porMinuto": 5,
+  "texto": "unos 19 días"
+ },
+ {
+  "cantidad": 159734,
+  "porMinuto": 75,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 4567,
+  "porMinuto": 5,
+  "texto": "unas 15,2 horas"
+ },
+ {
+  "cantidad": 29784,
+  "porMinuto": 18,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 197151,
+  "porMinuto": 108,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 169538,
+  "porMinuto": 114,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 161532,
+  "porMinuto": 69,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 56417,
+  "porMinuto": 117,
+  "texto": "unas 8,1 horas"
+ },
+ {
+  "cantidad": 128381,
+  "porMinuto": 17,
+  "texto": "unos 6 días"
+ },
+ {
+  "cantidad": 176898,
+  "porMinuto": 95,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 127,
+  "porMinuto": 97,
+  "texto": "unos 2 minutos"
+ },
+ {
+  "cantidad": 179657,
+  "porMinuto": 89,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 182802,
+  "porMinuto": 110,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 104764,
+  "porMinuto": 29,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 128429,
+  "porMinuto": 15,
+  "texto": "unos 6 días"
+ },
+ {
+  "cantidad": 81270,
+  "porMinuto": 114,
+  "texto": "unas 11,9 horas"
+ },
+ {
+  "cantidad": 42459,
+  "porMinuto": 95,
+  "texto": "unas 7,5 horas"
+ },
+ {
+  "cantidad": 81874,
+  "porMinuto": 28,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 3750,
+  "porMinuto": 112,
+  "texto": "unos 34 minutos"
+ },
+ {
+  "cantidad": 13939,
+  "porMinuto": 68,
+  "texto": "unas 3,4 horas"
+ },
+ {
+  "cantidad": 83506,
+  "porMinuto": 87,
+  "texto": "unas 16 horas"
+ },
+ {
+  "cantidad": 52411,
+  "porMinuto": 37,
+  "texto": "unas 23,6 horas"
+ },
+ {
+  "cantidad": 129505,
+  "porMinuto": 42,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 119507,
+  "porMinuto": 21,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 133276,
+  "porMinuto": 89,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 129754,
+  "porMinuto": 20,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 15319,
+  "porMinuto": 114,
+  "texto": "unas 2,3 horas"
+ },
+ {
+  "cantidad": 195755,
+  "porMinuto": 79,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 170389,
+  "porMinuto": 25,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 128051,
+  "porMinuto": 109,
+  "texto": "unas 19,6 horas"
+ },
+ {
+  "cantidad": 104061,
+  "porMinuto": 101,
+  "texto": "unas 17,2 horas"
+ },
+ {
+  "cantidad": 71032,
+  "porMinuto": 90,
+  "texto": "unas 13,2 horas"
+ },
+ {
+  "cantidad": 23899,
+  "porMinuto": 39,
+  "texto": "unas 10,2 horas"
+ },
+ {
+  "cantidad": 97235,
+  "porMinuto": 71,
+  "texto": "unas 22,8 horas"
+ },
+ {
+  "cantidad": 16632,
+  "porMinuto": 109,
+  "texto": "unas 2,6 horas"
+ },
+ {
+  "cantidad": 82470,
+  "porMinuto": 3,
+  "texto": "unos 20 días"
+ },
+ {
+  "cantidad": 134109,
+  "porMinuto": 49,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 93778,
+  "porMinuto": 80,
+  "texto": "unas 19,6 horas"
+ },
+ {
+  "cantidad": 181314,
+  "porMinuto": 20,
+  "texto": "unos 7 días"
+ },
+ {
+  "cantidad": 168583,
+  "porMinuto": 119,
+  "texto": "unas 23,6 horas"
+ },
+ {
+  "cantidad": 159040,
+  "porMinuto": 58,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 122009,
+  "porMinuto": 99,
+  "texto": "unas 20,6 horas"
+ },
+ {
+  "cantidad": 53484,
+  "porMinuto": 17,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 42563,
+  "porMinuto": 9,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 87983,
+  "porMinuto": 80,
+  "texto": "unas 18,3 horas"
+ },
+ {
+  "cantidad": 23852,
+  "porMinuto": 20,
+  "texto": "unas 19,9 horas"
+ },
+ {
+  "cantidad": 26732,
+  "porMinuto": 99,
+  "texto": "unas 4,5 horas"
+ },
+ {
+  "cantidad": 185747,
+  "porMinuto": 8,
+  "texto": "unos 17 días"
+ },
+ {
+  "cantidad": 89368,
+  "porMinuto": 109,
+  "texto": "unas 13,7 horas"
+ },
+ {
+  "cantidad": 39867,
+  "porMinuto": 27,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 133130,
+  "porMinuto": 83,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 142288,
+  "porMinuto": 95,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 47847,
+  "porMinuto": 2,
+  "texto": "unos 17 días"
+ },
+ {
+  "cantidad": 167084,
+  "porMinuto": 12,
+  "texto": "unos 10 días"
+ },
+ {
+  "cantidad": 199586,
+  "porMinuto": 58,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 53843,
+  "porMinuto": 102,
+  "texto": "unas 8,8 horas"
+ },
+ {
+  "cantidad": 149570,
+  "porMinuto": 118,
+  "texto": "unas 21,1 horas"
+ },
+ {
+  "cantidad": 80858,
+  "porMinuto": 3,
+  "texto": "unos 19 días"
+ },
+ {
+  "cantidad": 178539,
+  "porMinuto": 44,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 52725,
+  "porMinuto": 26,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 191626,
+  "porMinuto": 13,
+  "texto": "unos 11 días"
+ },
+ {
+  "cantidad": 147133,
+  "porMinuto": 107,
+  "texto": "unas 22,9 horas"
+ },
+ {
+  "cantidad": 162216,
+  "porMinuto": 59,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 42891,
+  "porMinuto": 58,
+  "texto": "unas 12,3 horas"
+ },
+ {
+  "cantidad": 606,
+  "porMinuto": 59,
+  "texto": "unos 11 minutos"
+ },
+ {
+  "cantidad": 10808,
+  "porMinuto": 22,
+  "texto": "unas 8,2 horas"
+ },
+ {
+  "cantidad": 27134,
+  "porMinuto": 81,
+  "texto": "unas 5,6 horas"
+ },
+ {
+  "cantidad": 96532,
+  "porMinuto": 13,
+  "texto": "unos 6 días"
+ },
+ {
+  "cantidad": 88450,
+  "porMinuto": 113,
+  "texto": "unas 13,1 horas"
+ },
+ {
+  "cantidad": 138079,
+  "porMinuto": 9,
+  "texto": "unos 11 días"
+ },
+ {
+  "cantidad": 95181,
+  "porMinuto": 64,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 114600,
+  "porMinuto": 22,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 14937,
+  "porMinuto": 91,
+  "texto": "unas 2,8 horas"
+ },
+ {
+  "cantidad": 160793,
+  "porMinuto": 23,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 39199,
+  "porMinuto": 90,
+  "texto": "unas 7,3 horas"
+ },
+ {
+  "cantidad": 22934,
+  "porMinuto": 96,
+  "texto": "unas 4 horas"
+ },
+ {
+  "cantidad": 152507,
+  "porMinuto": 15,
+  "texto": "unos 8 días"
+ },
+ {
+  "cantidad": 66397,
+  "porMinuto": 83,
+  "texto": "unas 13,3 horas"
+ },
+ {
+  "cantidad": 167093,
+  "porMinuto": 73,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 12504,
+  "porMinuto": 0,
+  "texto": "unos 9 días"
+ },
+ {
+  "cantidad": 96786,
+  "porMinuto": 58,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 98991,
+  "porMinuto": 42,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 156877,
+  "porMinuto": 105,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 35505,
+  "porMinuto": 54,
+  "texto": "unas 11 horas"
+ },
+ {
+  "cantidad": 27132,
+  "porMinuto": 55,
+  "texto": "unas 8,2 horas"
+ },
+ {
+  "cantidad": 48801,
+  "porMinuto": 84,
+  "texto": "unas 9,7 horas"
+ },
+ {
+  "cantidad": 30903,
+  "porMinuto": 37,
+  "texto": "unas 13,9 horas"
+ },
+ {
+  "cantidad": 141590,
+  "porMinuto": 44,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 98995,
+  "porMinuto": 35,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 117689,
+  "porMinuto": 44,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 22794,
+  "porMinuto": 40,
+  "texto": "unas 9,5 horas"
+ },
+ {
+  "cantidad": 15815,
+  "porMinuto": 108,
+  "texto": "unas 2,5 horas"
+ },
+ {
+  "cantidad": 184485,
+  "porMinuto": 0,
+  "texto": "unos 129 días"
+ },
+ {
+  "cantidad": 11831,
+  "porMinuto": 68,
+  "texto": "unas 2,9 horas"
+ },
+ {
+  "cantidad": 176627,
+  "porMinuto": 84,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 146200,
+  "porMinuto": 54,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 93256,
+  "porMinuto": 40,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 171732,
+  "porMinuto": 3,
+  "texto": "unos 40 días"
+ },
+ {
+  "cantidad": 137306,
+  "porMinuto": 15,
+  "texto": "unos 7 días"
+ },
+ {
+  "cantidad": 13466,
+  "porMinuto": 110,
+  "texto": "unas 2,1 horas"
+ },
+ {
+  "cantidad": 30926,
+  "porMinuto": 116,
+  "texto": "unas 4,5 horas"
+ },
+ {
+  "cantidad": 40534,
+  "porMinuto": 9,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 49649,
+  "porMinuto": 34,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 172771,
+  "porMinuto": 118,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 1680,
+  "porMinuto": 81,
+  "texto": "unos 21 minutos"
+ },
+ {
+  "cantidad": 104835,
+  "porMinuto": 90,
+  "texto": "unas 19,4 horas"
+ },
+ {
+  "cantidad": 8121,
+  "porMinuto": 8,
+  "texto": "unas 16,9 horas"
+ },
+ {
+  "cantidad": 9898,
+  "porMinuto": 24,
+  "texto": "unas 6,9 horas"
+ },
+ {
+  "cantidad": 12426,
+  "porMinuto": 120,
+  "texto": "unas 1,7 horas"
+ },
+ {
+  "cantidad": 116577,
+  "porMinuto": 7,
+  "texto": "unos 12 días"
+ },
+ {
+  "cantidad": 71760,
+  "porMinuto": 100,
+  "texto": "unas 12 horas"
+ },
+ {
+  "cantidad": 49385,
+  "porMinuto": 120,
+  "texto": "unas 6,9 horas"
+ },
+ {
+  "cantidad": 151669,
+  "porMinuto": 64,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 149543,
+  "porMinuto": 71,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 0,
+  "porMinuto": 105,
+  "texto": "un minuto"
+ },
+ {
+  "cantidad": 140952,
+  "porMinuto": 25,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 99232,
+  "porMinuto": 7,
+  "texto": "unos 10 días"
+ },
+ {
+  "cantidad": 142769,
+  "porMinuto": 104,
+  "texto": "unas 22,9 horas"
+ },
+ {
+  "cantidad": 145518,
+  "porMinuto": 70,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 130721,
+  "porMinuto": 93,
+  "texto": "unas 23,4 horas"
+ },
+ {
+  "cantidad": 47245,
+  "porMinuto": 26,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 1587,
+  "porMinuto": 118,
+  "texto": "unos 14 minutos"
+ },
+ {
+  "cantidad": 38013,
+  "porMinuto": 29,
+  "texto": "unas 21,9 horas"
+ },
+ {
+  "cantidad": 140884,
+  "porMinuto": 89,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 191565,
+  "porMinuto": 39,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 21867,
+  "porMinuto": 52,
+  "texto": "unas 7 horas"
+ },
+ {
+  "cantidad": 6699,
+  "porMinuto": 22,
+  "texto": "unas 5,1 horas"
+ },
+ {
+  "cantidad": 39740,
+  "porMinuto": 95,
+  "texto": "unas 7 horas"
+ },
+ {
+  "cantidad": 89341,
+  "porMinuto": 80,
+  "texto": "unas 18,6 horas"
+ },
+ {
+  "cantidad": 93108,
+  "porMinuto": 82,
+  "texto": "unas 18,9 horas"
+ },
+ {
+  "cantidad": 66795,
+  "porMinuto": 0,
+  "texto": "unos 47 días"
+ },
+ {
+  "cantidad": 183700,
+  "porMinuto": 23,
+  "texto": "unos 6 días"
+ },
+ {
+  "cantidad": 196121,
+  "porMinuto": 61,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 14095,
+  "porMinuto": 29,
+  "texto": "unas 8,1 horas"
+ },
+ {
+  "cantidad": 140252,
+  "porMinuto": 78,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 198362,
+  "porMinuto": 10,
+  "texto": "unos 14 días"
+ },
+ {
+  "cantidad": 28570,
+  "porMinuto": 59,
+  "texto": "unas 8,1 horas"
+ },
+ {
+  "cantidad": 198200,
+  "porMinuto": 32,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 159003,
+  "porMinuto": 43,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 145879,
+  "porMinuto": 36,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 118418,
+  "porMinuto": 69,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 148547,
+  "porMinuto": 65,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 176498,
+  "porMinuto": 117,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 195029,
+  "porMinuto": 94,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 68915,
+  "porMinuto": 115,
+  "texto": "unas 10 horas"
+ },
+ {
+  "cantidad": 178404,
+  "porMinuto": 12,
+  "texto": "unos 11 días"
+ },
+ {
+  "cantidad": 181911,
+  "porMinuto": 35,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 47200,
+  "porMinuto": 107,
+  "texto": "unas 7,4 horas"
+ },
+ {
+  "cantidad": 107635,
+  "porMinuto": 20,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 101603,
+  "porMinuto": 112,
+  "texto": "unas 15,1 horas"
+ },
+ {
+  "cantidad": 49953,
+  "porMinuto": 50,
+  "texto": "unas 16,7 horas"
+ },
+ {
+  "cantidad": 162897,
+  "porMinuto": 61,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 4400,
+  "porMinuto": 95,
+  "texto": "unos 47 minutos"
+ },
+ {
+  "cantidad": 36760,
+  "porMinuto": 68,
+  "texto": "unas 9 horas"
+ },
+ {
+  "cantidad": 103752,
+  "porMinuto": 89,
+  "texto": "unas 19,4 horas"
+ },
+ {
+  "cantidad": 56654,
+  "porMinuto": 34,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 143618,
+  "porMinuto": 15,
+  "texto": "unos 7 días"
+ },
+ {
+  "cantidad": 120163,
+  "porMinuto": 9,
+  "texto": "unos 10 días"
+ },
+ {
+  "cantidad": 67447,
+  "porMinuto": 21,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 167825,
+  "porMinuto": 110,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 169233,
+  "porMinuto": 5,
+  "texto": "unos 24 días"
+ },
+ {
+  "cantidad": 130463,
+  "porMinuto": 82,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 144694,
+  "porMinuto": 58,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 24502,
+  "porMinuto": 96,
+  "texto": "unas 4,3 horas"
+ },
+ {
+  "cantidad": 23627,
+  "porMinuto": 106,
+  "texto": "unas 3,7 horas"
+ },
+ {
+  "cantidad": 131104,
+  "porMinuto": 1,
+  "texto": "unos 92 días"
+ },
+ {
+  "cantidad": 103521,
+  "porMinuto": 7,
+  "texto": "unos 11 días"
+ },
+ {
+  "cantidad": 194355,
+  "porMinuto": 5,
+  "texto": "unos 27 días"
+ },
+ {
+  "cantidad": 70063,
+  "porMinuto": 22,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 2378,
+  "porMinuto": 99,
+  "texto": "unos 25 minutos"
+ },
+ {
+  "cantidad": 180509,
+  "porMinuto": 107,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 64060,
+  "porMinuto": 40,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 111268,
+  "porMinuto": 48,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 79866,
+  "porMinuto": 41,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 69843,
+  "porMinuto": 54,
+  "texto": "unas 21,6 horas"
+ },
+ {
+  "cantidad": 108060,
+  "porMinuto": 65,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 58242,
+  "porMinuto": 63,
+  "texto": "unas 15,4 horas"
+ },
+ {
+  "cantidad": 160455,
+  "porMinuto": 100,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 197085,
+  "porMinuto": 53,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 23322,
+  "porMinuto": 35,
+  "texto": "unas 11,1 horas"
+ },
+ {
+  "cantidad": 10817,
+  "porMinuto": 34,
+  "texto": "unas 5,3 horas"
+ },
+ {
+  "cantidad": 10712,
+  "porMinuto": 101,
+  "texto": "unas 1,8 horas"
+ },
+ {
+  "cantidad": 112609,
+  "porMinuto": 6,
+  "texto": "unos 14 días"
+ },
+ {
+  "cantidad": 68773,
+  "porMinuto": 98,
+  "texto": "unas 11,7 horas"
+ },
+ {
+  "cantidad": 89764,
+  "porMinuto": 2,
+  "texto": "unos 32 días"
+ },
+ {
+  "cantidad": 69159,
+  "porMinuto": 104,
+  "texto": "unas 11,1 horas"
+ },
+ {
+  "cantidad": 182100,
+  "porMinuto": 16,
+  "texto": "unos 8 días"
+ },
+ {
+  "cantidad": 79911,
+  "porMinuto": 5,
+  "texto": "unos 12 días"
+ },
+ {
+  "cantidad": 176364,
+  "porMinuto": 89,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 177045,
+  "porMinuto": 39,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 38877,
+  "porMinuto": 102,
+  "texto": "unas 6,4 horas"
+ },
+ {
+  "cantidad": 48065,
+  "porMinuto": 85,
+  "texto": "unas 9,4 horas"
+ },
+ {
+  "cantidad": 25373,
+  "porMinuto": 118,
+  "texto": "unas 3,6 horas"
+ },
+ {
+  "cantidad": 63282,
+  "porMinuto": 99,
+  "texto": "unas 10,7 horas"
+ },
+ {
+  "cantidad": 53742,
+  "porMinuto": 24,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 109764,
+  "porMinuto": 103,
+  "texto": "unas 17,8 horas"
+ },
+ {
+  "cantidad": 174172,
+  "porMinuto": 82,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 189703,
+  "porMinuto": 42,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 97475,
+  "porMinuto": 104,
+  "texto": "unas 15,6 horas"
+ },
+ {
+  "cantidad": 81697,
+  "porMinuto": 75,
+  "texto": "unas 18,2 horas"
+ },
+ {
+  "cantidad": 69788,
+  "porMinuto": 29,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 29240,
+  "porMinuto": 100,
+  "texto": "unas 4,9 horas"
+ },
+ {
+  "cantidad": 171418,
+  "porMinuto": 45,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 126333,
+  "porMinuto": 19,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 30571,
+  "porMinuto": 96,
+  "texto": "unas 5,3 horas"
+ },
+ {
+  "cantidad": 147529,
+  "porMinuto": 76,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 142251,
+  "porMinuto": 63,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 38144,
+  "porMinuto": 33,
+  "texto": "unas 19,3 horas"
+ },
+ {
+  "cantidad": 51955,
+  "porMinuto": 67,
+  "texto": "unas 12,9 horas"
+ },
+ {
+  "cantidad": 177478,
+  "porMinuto": 73,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 86949,
+  "porMinuto": 35,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 106360,
+  "porMinuto": 17,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 56967,
+  "porMinuto": 57,
+  "texto": "unas 16,7 horas"
+ },
+ {
+  "cantidad": 30351,
+  "porMinuto": 67,
+  "texto": "unas 7,6 horas"
+ },
+ {
+  "cantidad": 71015,
+  "porMinuto": 73,
+  "texto": "unas 16,2 horas"
+ },
+ {
+  "cantidad": 110973,
+  "porMinuto": 103,
+  "texto": "unas 18 horas"
+ },
+ {
+  "cantidad": 110355,
+  "porMinuto": 21,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 2938,
+  "porMinuto": 11,
+  "texto": "unas 4,5 horas"
+ },
+ {
+  "cantidad": 102044,
+  "porMinuto": 120,
+  "texto": "unas 14,2 horas"
+ },
+ {
+  "cantidad": 193939,
+  "porMinuto": 99,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 29357,
+  "porMinuto": 103,
+  "texto": "unas 4,8 horas"
+ },
+ {
+  "cantidad": 184302,
+  "porMinuto": 90,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 26118,
+  "porMinuto": 115,
+  "texto": "unas 3,8 horas"
+ },
+ {
+  "cantidad": 7096,
+  "porMinuto": 79,
+  "texto": "unas 1,5 horas"
+ },
+ {
+  "cantidad": 86057,
+  "porMinuto": 51,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 9227,
+  "porMinuto": 35,
+  "texto": "unas 4,4 horas"
+ },
+ {
+  "cantidad": 186013,
+  "porMinuto": 63,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 92357,
+  "porMinuto": 49,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 77129,
+  "porMinuto": 103,
+  "texto": "unas 12,5 horas"
+ },
+ {
+  "cantidad": 36096,
+  "porMinuto": 63,
+  "texto": "unas 9,6 horas"
+ },
+ {
+  "cantidad": 14895,
+  "porMinuto": 57,
+  "texto": "unas 4,4 horas"
+ },
+ {
+  "cantidad": 85102,
+  "porMinuto": 27,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 90602,
+  "porMinuto": 86,
+  "texto": "unas 17,6 horas"
+ },
+ {
+  "cantidad": 62249,
+  "porMinuto": 38,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 76979,
+  "porMinuto": 52,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 140652,
+  "porMinuto": 81,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 49055,
+  "porMinuto": 89,
+  "texto": "unas 9,2 horas"
+ },
+ {
+  "cantidad": 197039,
+  "porMinuto": 86,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 192668,
+  "porMinuto": 108,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 140876,
+  "porMinuto": 90,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 1609,
+  "porMinuto": 119,
+  "texto": "unos 14 minutos"
+ },
+ {
+  "cantidad": 80854,
+  "porMinuto": 0,
+  "texto": "unos 57 días"
+ },
+ {
+  "cantidad": 194051,
+  "porMinuto": 117,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 124257,
+  "porMinuto": 77,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 191810,
+  "porMinuto": 87,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 118265,
+  "porMinuto": 25,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 100173,
+  "porMinuto": 76,
+  "texto": "unas 22 horas"
+ },
+ {
+  "cantidad": 136753,
+  "porMinuto": 38,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 192047,
+  "porMinuto": 22,
+  "texto": "unos 7 días"
+ },
+ {
+  "cantidad": 157238,
+  "porMinuto": 37,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 109222,
+  "porMinuto": 94,
+  "texto": "unas 19,4 horas"
+ },
+ {
+  "cantidad": 9784,
+  "porMinuto": 0,
+  "texto": "unos 7 días"
+ },
+ {
+  "cantidad": 12190,
+  "porMinuto": 22,
+  "texto": "unas 9,3 horas"
+ },
+ {
+  "cantidad": 78415,
+  "porMinuto": 99,
+  "texto": "unas 13,2 horas"
+ },
+ {
+  "cantidad": 89084,
+  "porMinuto": 23,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 32703,
+  "porMinuto": 15,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 29522,
+  "porMinuto": 77,
+  "texto": "unas 6,4 horas"
+ },
+ {
+  "cantidad": 30885,
+  "porMinuto": 97,
+  "texto": "unas 5,3 horas"
+ },
+ {
+  "cantidad": 57549,
+  "porMinuto": 102,
+  "texto": "unas 9,4 horas"
+ },
+ {
+  "cantidad": 133423,
+  "porMinuto": 79,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 115104,
+  "porMinuto": 35,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 168177,
+  "porMinuto": 43,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 42172,
+  "porMinuto": 3,
+  "texto": "unos 10 días"
+ },
+ {
+  "cantidad": 96996,
+  "porMinuto": 7,
+  "texto": "unos 10 días"
+ },
+ {
+  "cantidad": 99564,
+  "porMinuto": 106,
+  "texto": "unas 15,7 horas"
+ },
+ {
+  "cantidad": 171894,
+  "porMinuto": 105,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 114301,
+  "porMinuto": 73,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 108055,
+  "porMinuto": 41,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 33241,
+  "porMinuto": 1,
+  "texto": "unos 24 días"
+ },
+ {
+  "cantidad": 134850,
+  "porMinuto": 113,
+  "texto": "unas 19,9 horas"
+ },
+ {
+  "cantidad": 36315,
+  "porMinuto": 37,
+  "texto": "unas 16,4 horas"
+ },
+ {
+  "cantidad": 87346,
+  "porMinuto": 105,
+  "texto": "unas 13,9 horas"
+ },
+ {
+  "cantidad": 112548,
+  "porMinuto": 10,
+  "texto": "unos 8 días"
+ },
+ {
+  "cantidad": 91403,
+  "porMinuto": 4,
+  "texto": "unos 16 días"
+ },
+ {
+  "cantidad": 107937,
+  "porMinuto": 73,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 112033,
+  "porMinuto": 55,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 81192,
+  "porMinuto": 48,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 112019,
+  "porMinuto": 83,
+  "texto": "unas 22,5 horas"
+ },
+ {
+  "cantidad": 145547,
+  "porMinuto": 5,
+  "texto": "unos 21 días"
+ },
+ {
+  "cantidad": 2061,
+  "porMinuto": 49,
+  "texto": "unos 43 minutos"
+ },
+ {
+  "cantidad": 75362,
+  "porMinuto": 6,
+  "texto": "unos 9 días"
+ },
+ {
+  "cantidad": 149171,
+  "porMinuto": 33,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 11877,
+  "porMinuto": 33,
+  "texto": "unas 6 horas"
+ },
+ {
+  "cantidad": 120855,
+  "porMinuto": 51,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 46123,
+  "porMinuto": 79,
+  "texto": "unas 9,7 horas"
+ },
+ {
+  "cantidad": 152236,
+  "porMinuto": 91,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 97019,
+  "porMinuto": 36,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 121918,
+  "porMinuto": 115,
+  "texto": "unas 17,7 horas"
+ },
+ {
+  "cantidad": 101514,
+  "porMinuto": 44,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 179550,
+  "porMinuto": 75,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 166710,
+  "porMinuto": 57,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 9709,
+  "porMinuto": 21,
+  "texto": "unas 7,7 horas"
+ },
+ {
+  "cantidad": 35828,
+  "porMinuto": 75,
+  "texto": "unas 8 horas"
+ },
+ {
+  "cantidad": 160796,
+  "porMinuto": 56,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 189720,
+  "porMinuto": 115,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 47549,
+  "porMinuto": 116,
+  "texto": "unas 6,8 horas"
+ },
+ {
+  "cantidad": 191466,
+  "porMinuto": 37,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 120256,
+  "porMinuto": 116,
+  "texto": "unas 17,3 horas"
+ },
+ {
+  "cantidad": 132660,
+  "porMinuto": 43,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 97122,
+  "porMinuto": 89,
+  "texto": "unas 18,2 horas"
+ },
+ {
+  "cantidad": 190768,
+  "porMinuto": 89,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 182794,
+  "porMinuto": 22,
+  "texto": "unos 6 días"
+ },
+ {
+  "cantidad": 55332,
+  "porMinuto": 44,
+  "texto": "unas 21 horas"
+ },
+ {
+  "cantidad": 51245,
+  "porMinuto": 102,
+  "texto": "unas 8,4 horas"
+ },
+ {
+  "cantidad": 154125,
+  "porMinuto": 6,
+  "texto": "unos 18 días"
+ },
+ {
+  "cantidad": 308,
+  "porMinuto": 1,
+  "texto": "unas 5,1 horas"
+ },
+ {
+  "cantidad": 146280,
+  "porMinuto": 85,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 160705,
+  "porMinuto": 12,
+  "texto": "unos 10 días"
+ },
+ {
+  "cantidad": 130811,
+  "porMinuto": 17,
+  "texto": "unos 6 días"
+ },
+ {
+  "cantidad": 155155,
+  "porMinuto": 94,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 173491,
+  "porMinuto": 81,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 126294,
+  "porMinuto": 110,
+  "texto": "unas 19,2 horas"
+ },
+ {
+  "cantidad": 41405,
+  "porMinuto": 54,
+  "texto": "unas 12,8 horas"
+ },
+ {
+  "cantidad": 21788,
+  "porMinuto": 86,
+  "texto": "unas 4,2 horas"
+ },
+ {
+  "cantidad": 22944,
+  "porMinuto": 24,
+  "texto": "unas 15,9 horas"
+ },
+ {
+  "cantidad": 154193,
+  "porMinuto": 85,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 198992,
+  "porMinuto": 78,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 39975,
+  "porMinuto": 27,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 73222,
+  "porMinuto": 25,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 152987,
+  "porMinuto": 0,
+  "texto": "unos 107 días"
+ },
+ {
+  "cantidad": 166932,
+  "porMinuto": 25,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 110568,
+  "porMinuto": 2,
+  "texto": "unos 39 días"
+ },
+ {
+  "cantidad": 177133,
+  "porMinuto": 93,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 39998,
+  "porMinuto": 87,
+  "texto": "unas 7,7 horas"
+ },
+ {
+  "cantidad": 158868,
+  "porMinuto": 117,
+  "texto": "unas 22,6 horas"
+ },
+ {
+  "cantidad": 154844,
+  "porMinuto": 69,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 124024,
+  "porMinuto": 110,
+  "texto": "unas 18,8 horas"
+ },
+ {
+  "cantidad": 141340,
+  "porMinuto": 5,
+  "texto": "unos 20 días"
+ },
+ {
+  "cantidad": 23698,
+  "porMinuto": 90,
+  "texto": "unas 4,4 horas"
+ },
+ {
+  "cantidad": 162636,
+  "porMinuto": 110,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 75976,
+  "porMinuto": 89,
+  "texto": "unas 14,2 horas"
+ },
+ {
+  "cantidad": 167037,
+  "porMinuto": 49,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 24764,
+  "porMinuto": 18,
+  "texto": "unas 22,9 horas"
+ },
+ {
+  "cantidad": 14428,
+  "porMinuto": 118,
+  "texto": "unas 2,1 horas"
+ },
+ {
+  "cantidad": 161976,
+  "porMinuto": 60,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 17485,
+  "porMinuto": 92,
+  "texto": "unas 3,2 horas"
+ },
+ {
+  "cantidad": 131621,
+  "porMinuto": 44,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 187748,
+  "porMinuto": 47,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 27867,
+  "porMinuto": 26,
+  "texto": "unas 17,9 horas"
+ },
+ {
+  "cantidad": 172003,
+  "porMinuto": 108,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 65807,
+  "porMinuto": 83,
+  "texto": "unas 13,2 horas"
+ },
+ {
+  "cantidad": 101478,
+  "porMinuto": 69,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 77352,
+  "porMinuto": 21,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 98828,
+  "porMinuto": 119,
+  "texto": "unas 13,9 horas"
+ },
+ {
+  "cantidad": 7712,
+  "porMinuto": 79,
+  "texto": "unas 1,6 horas"
+ },
+ {
+  "cantidad": 181551,
+  "porMinuto": 18,
+  "texto": "unos 8 días"
+ },
+ {
+  "cantidad": 118024,
+  "porMinuto": 52,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 133537,
+  "porMinuto": 115,
+  "texto": "unas 19,4 horas"
+ },
+ {
+  "cantidad": 170132,
+  "porMinuto": 77,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 148849,
+  "porMinuto": 24,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 190918,
+  "porMinuto": 63,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 182679,
+  "porMinuto": 105,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 81768,
+  "porMinuto": 55,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 180036,
+  "porMinuto": 78,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 108843,
+  "porMinuto": 82,
+  "texto": "unas 22,1 horas"
+ },
+ {
+  "cantidad": 135635,
+  "porMinuto": 76,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 124357,
+  "porMinuto": 112,
+  "texto": "unas 18,5 horas"
+ },
+ {
+  "cantidad": 170523,
+  "porMinuto": 54,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 83152,
+  "porMinuto": 91,
+  "texto": "unas 15,2 horas"
+ },
+ {
+  "cantidad": 182685,
+  "porMinuto": 90,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 67485,
+  "porMinuto": 62,
+  "texto": "unas 18,2 horas"
+ },
+ {
+  "cantidad": 88107,
+  "porMinuto": 55,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 55247,
+  "porMinuto": 13,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 49931,
+  "porMinuto": 66,
+  "texto": "unas 12,6 horas"
+ },
+ {
+  "cantidad": 122509,
+  "porMinuto": 81,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 39852,
+  "porMinuto": 17,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 133681,
+  "porMinuto": 89,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 19374,
+  "porMinuto": 12,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 178479,
+  "porMinuto": 26,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 195136,
+  "porMinuto": 69,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 179212,
+  "porMinuto": 105,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 179179,
+  "porMinuto": 37,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 4055,
+  "porMinuto": 58,
+  "texto": "unas 1,2 horas"
+ },
+ {
+  "cantidad": 10536,
+  "porMinuto": 49,
+  "texto": "unas 3,6 horas"
+ },
+ {
+  "cantidad": 99815,
+  "porMinuto": 69,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 174211,
+  "porMinuto": 118,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 196311,
+  "porMinuto": 37,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 17499,
+  "porMinuto": 55,
+  "texto": "unas 5,3 horas"
+ },
+ {
+  "cantidad": 15104,
+  "porMinuto": 47,
+  "texto": "unas 5,4 horas"
+ },
+ {
+  "cantidad": 78402,
+  "porMinuto": 12,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 151193,
+  "porMinuto": 21,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 113653,
+  "porMinuto": 54,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 1442,
+  "porMinuto": 83,
+  "texto": "unos 18 minutos"
+ },
+ {
+  "cantidad": 71382,
+  "porMinuto": 70,
+  "texto": "unas 17 horas"
+ },
+ {
+  "cantidad": 112655,
+  "porMinuto": 8,
+  "texto": "unos 10 días"
+ },
+ {
+  "cantidad": 120255,
+  "porMinuto": 1,
+  "texto": "unos 84 días"
+ },
+ {
+  "cantidad": 168058,
+  "porMinuto": 68,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 54452,
+  "porMinuto": 46,
+  "texto": "unas 19,7 horas"
+ },
+ {
+  "cantidad": 78191,
+  "porMinuto": 55,
+  "texto": "unas 23,7 horas"
+ },
+ {
+  "cantidad": 21781,
+  "porMinuto": 62,
+  "texto": "unas 5,9 horas"
+ },
+ {
+  "cantidad": 91616,
+  "porMinuto": 72,
+  "texto": "unas 21,2 horas"
+ },
+ {
+  "cantidad": 127941,
+  "porMinuto": 62,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 106530,
+  "porMinuto": 62,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 12575,
+  "porMinuto": 40,
+  "texto": "unas 5,3 horas"
+ },
+ {
+  "cantidad": 54261,
+  "porMinuto": 84,
+  "texto": "unas 10,8 horas"
+ },
+ {
+  "cantidad": 14643,
+  "porMinuto": 13,
+  "texto": "unas 18,8 horas"
+ },
+ {
+  "cantidad": 181390,
+  "porMinuto": 19,
+  "texto": "unos 7 días"
+ },
+ {
+  "cantidad": 146498,
+  "porMinuto": 53,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 133685,
+  "porMinuto": 19,
+  "texto": "unos 5 días"
+ },
+ {
+  "cantidad": 52112,
+  "porMinuto": 59,
+  "texto": "unas 14,7 horas"
+ },
+ {
+  "cantidad": 107352,
+  "porMinuto": 73,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 55036,
+  "porMinuto": 35,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 25991,
+  "porMinuto": 115,
+  "texto": "unas 3,8 horas"
+ },
+ {
+  "cantidad": 66953,
+  "porMinuto": 87,
+  "texto": "unas 12,8 horas"
+ },
+ {
+  "cantidad": 72069,
+  "porMinuto": 117,
+  "texto": "unas 10,3 horas"
+ },
+ {
+  "cantidad": 10943,
+  "porMinuto": 90,
+  "texto": "unas 2 horas"
+ },
+ {
+  "cantidad": 132887,
+  "porMinuto": 31,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 127217,
+  "porMinuto": 36,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 8615,
+  "porMinuto": 95,
+  "texto": "unas 1,5 horas"
+ },
+ {
+  "cantidad": 182025,
+  "porMinuto": 59,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 179595,
+  "porMinuto": 63,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 31044,
+  "porMinuto": 93,
+  "texto": "unas 5,6 horas"
+ },
+ {
+  "cantidad": 104930,
+  "porMinuto": 119,
+  "texto": "unas 14,7 horas"
+ },
+ {
+  "cantidad": 85386,
+  "porMinuto": 49,
+  "texto": "unos 2 días"
+ },
+ {
+  "cantidad": 41574,
+  "porMinuto": 30,
+  "texto": "unas 23,1 horas"
+ },
+ {
+  "cantidad": 88867,
+  "porMinuto": 103,
+  "texto": "unas 14,4 horas"
+ },
+ {
+  "cantidad": 199711,
+  "porMinuto": 67,
+  "texto": "unos 3 días"
+ },
+ {
+  "cantidad": 161156,
+  "porMinuto": 31,
+  "texto": "unos 4 días"
+ },
+ {
+  "cantidad": 4269,
+  "porMinuto": 74,
+  "texto": "unos 58 minutos"
+ },
+ {
+  "cantidad": 199503,
+  "porMinuto": 44,
+  "texto": "unos 4 días"
+ }
+]

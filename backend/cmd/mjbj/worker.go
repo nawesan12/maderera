@@ -8,10 +8,14 @@ import (
 	"syscall"
 	"time"
 
+	avisosT10 "mjbj/internal/avisos"
+	"mjbj/internal/campanas"
 	"mjbj/internal/cola"
 	"mjbj/internal/contenido"
+	"mjbj/internal/email"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/productos"
+	"mjbj/internal/profesionales"
 	"mjbj/internal/push"
 	"mjbj/internal/revalidar"
 	"mjbj/internal/sqlc"
@@ -25,6 +29,8 @@ type configWorker struct {
 	Push      push.Config
 	Google    contenido.ConfigGoogle
 	WhatsApp  whatsapp.Config
+	Email     email.Config
+	Campanas  campanas.Config
 }
 
 // El worker: la cola (los tipos que ya son de Go) y las tareas periódicas
@@ -122,6 +128,40 @@ func correrWorker() error {
 			return map[string]any{"plantillasWhatsapp": r.Total}, nil
 		},
 	})
+
+	// Campañas y avisos (tanda 10): las tandas de las campañas, los correos
+	// que rebotaron temporalmente (los encola también el despacharEmail del
+	// TS), y cada minuto las campañas programadas cuya hora llegó.
+	correoT10 := email.Elegir(cfg.Email, log)
+	camp := campanas.Nuevo(pool, cfg.Campanas, correoT10, avisos, log)
+	c.Registrar(campanas.TipoTanda, camp.ManejadorTanda())
+	c.Registrar(avisosT10.TipoReintento, avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log).ManejadorReintento())
+	// Los recordatorios de los eventos de mañana (salían de la «diaria» de
+	// lib/tareas, a las 7).
+	eventos := profesionales.Nuevo(pool, avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log), cfg.Campanas.URLDelSitio(), log)
+	lista = append(lista, tareas.Tarea{
+		Nombre: "recordatorios-eventos", Frecuencia: tareas.Dia, DesdeHora: 7,
+		Ejecutar: func(ctx context.Context) (map[string]any, error) {
+			n, err := eventos.EnviarRecordatorios(ctx)
+			return map[string]any{"recordatorios": n}, err
+		},
+	})
+	go func() {
+		minuto := time.NewTicker(time.Minute)
+		defer minuto.Stop()
+		for {
+			if n, err := camp.IniciarProgramadas(ctx); err != nil {
+				log.Error("campañas programadas", "error", err)
+			} else if n > 0 {
+				log.Info("campañas programadas", "iniciadas", n)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-minuto.C:
+			}
+		}
+	}()
 
 	// Un trabajo nuevo despierta al worker en el acto (el trigger de
 	// `trabajos`); la vuelta de 2 s queda para los reintentos que vencen y

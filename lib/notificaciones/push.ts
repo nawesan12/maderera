@@ -1,7 +1,7 @@
 import "server-only";
 
 import webpush from "web-push";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { notificationsLog, profiles, pushSubscriptions } from "@/lib/db/schema";
 import { quienEntra, type RolStaff } from "@/lib/roles";
@@ -50,11 +50,6 @@ export function pushConfigurado(): boolean {
   return Boolean(
     process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY,
   );
-}
-
-/** La clave pública, que es lo único que el navegador necesita para suscribirse. */
-export function clavePublicaDePush(): string | null {
-  return process.env.VAPID_PUBLIC_KEY ?? null;
 }
 
 function configurar() {
@@ -171,47 +166,4 @@ async function registrar(
   });
 }
 
-/** Guarda la suscripción de un dispositivo. Repetirla no la duplica. */
-export async function guardarSuscripcion(datos: {
-  userId: string;
-  endpoint: string;
-  p256dh: string;
-  auth: string;
-  descripcion?: string | null;
-}): Promise<void> {
-  await db
-    .insert(pushSubscriptions)
-    .values({
-      userId: datos.userId,
-      endpoint: datos.endpoint,
-      p256dh: datos.p256dh,
-      auth: datos.auth,
-      descripcion: datos.descripcion ?? null,
-    })
-    // El mismo dispositivo que vuelve a activar los avisos no es uno nuevo: el
-    // navegador puede rotar las claves de cifrado sin cambiar el endpoint.
-    .onConflictDoUpdate({
-      target: pushSubscriptions.endpoint,
-      set: {
-        userId: datos.userId,
-        p256dh: datos.p256dh,
-        auth: datos.auth,
-        ultimaVezAt: new Date(),
-      },
-    });
-}
-
-/** Saca un dispositivo de la lista. */
-export async function borrarSuscripcion(
-  userId: string,
-  endpoint: string,
-): Promise<void> {
-  await db
-    .delete(pushSubscriptions)
-    .where(
-      and(
-        eq(pushSubscriptions.endpoint, endpoint),
-        eq(pushSubscriptions.userId, userId),
-      ),
-    );
-}
+// Suscribir y sacar un dispositivo lo hace Go (backend/internal/avisos).

@@ -17,6 +17,8 @@ import type { paths as Bitacora, components as ComponentesBitacora } from "./bit
 import type { paths as Portal, components as ComponentesPortal } from "./portal";
 import type { paths as Existencia, components as ComponentesExistencia } from "./existencia";
 import type { paths as Whatsapp, components as ComponentesWhatsapp } from "./whatsapp";
+import type { paths as Campanas, components as ComponentesCampanas } from "./campanas";
+import type { paths as Profesionales, components as ComponentesProfesionales } from "./profesionales";
 
 export type paths = Sesion &
   Catalogo &
@@ -28,10 +30,12 @@ export type paths = Sesion &
   Documentos &
   Cortes &
   Compras &
-  Whatsapp &
   Bitacora &
   Portal &
-  Existencia;
+  Existencia &
+  Whatsapp &
+  Campanas &
+  Profesionales;
 export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesCatalogo["schemas"] &
   ComponentesContenido["schemas"] &
@@ -42,7 +46,9 @@ export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesDocumentos["schemas"] &
   ComponentesCortes["schemas"] &
   ComponentesCompras["schemas"] &
-  ComponentesWhatsapp["schemas"] &
   ComponentesBitacora["schemas"] &
   ComponentesPortal["schemas"] &
-  ComponentesExistencia["schemas"];
+  ComponentesExistencia["schemas"] &
+  ComponentesWhatsapp["schemas"] &
+  ComponentesCampanas["schemas"] &
+  ComponentesProfesionales["schemas"];

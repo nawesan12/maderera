@@ -1,17 +1,20 @@
 "use server";
 
-import { requireStaff } from "@/lib/dal/session";
-import {
-  avisarAlPanel,
-  borrarSuscripcion,
-  clavePublicaDePush,
-  guardarSuscripcion,
-  pushConfigurado,
-} from "@/lib/notificaciones/push";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+
+/*
+ * Los avisos al teléfono del panel: suscribir este dispositivo, sacarlo y
+ * mandar una prueba. Lo hace la API de Go (backend/internal/avisos); quien
+ * los manda de verdad (una venta, un mensaje) es cada módulo.
+ */
 
 export interface EstadoPush {
   error?: string;
   ok?: string;
+}
+
+function resultado(r: { data?: { ok: string }; error?: unknown }): EstadoPush {
+  return r.data ? { ok: r.data.ok } : { error: mensajeDe(r.error as Problema | undefined) };
 }
 
 /**
@@ -21,12 +24,9 @@ export interface EstadoPush {
  * para mandar nada: firmar el mensaje necesita la privada, que nunca sale del
  * servidor.
  */
-export async function claveDePush(): Promise<{
-  clave: string | null;
-  configurado: boolean;
-}> {
-  await requireStaff();
-  return { clave: clavePublicaDePush(), configurado: pushConfigurado() };
+export async function claveDePush(): Promise<{ clave: string | null; configurado: boolean }> {
+  const r = await (await api()).GET("/api/v1/admin/push");
+  return r.data ?? { clave: null, configurado: false };
 }
 
 /** Prende los avisos en este dispositivo. */
@@ -36,30 +36,12 @@ export async function activarAvisos(suscripcion: {
   auth: string;
   descripcion?: string;
 }): Promise<EstadoPush> {
-  const usuario = await requireStaff();
-
-  if (!suscripcion.endpoint || !suscripcion.p256dh || !suscripcion.auth) {
-    return { error: "El navegador no devolvió una suscripción completa." };
-  }
-
-  await guardarSuscripcion({
-    userId: usuario.userId,
-    endpoint: suscripcion.endpoint,
-    p256dh: suscripcion.p256dh,
-    auth: suscripcion.auth,
-    descripcion: suscripcion.descripcion,
-  });
-
-  return { ok: "Listo: este dispositivo va a avisar cuando entre una venta." };
+  return resultado(await (await api()).POST("/api/v1/admin/push", { body: suscripcion }));
 }
 
 /** Apaga los avisos en este dispositivo. */
-export async function desactivarAvisos(
-  endpoint: string,
-): Promise<EstadoPush> {
-  const usuario = await requireStaff();
-  await borrarSuscripcion(usuario.userId, endpoint);
-  return { ok: "Este dispositivo dejó de recibir avisos." };
+export async function desactivarAvisos(endpoint: string): Promise<EstadoPush> {
+  return resultado(await (await api()).DELETE("/api/v1/admin/push", { body: { endpoint } }));
 }
 
 /**
@@ -71,21 +53,5 @@ export async function desactivarAvisos(
  * no el sábado que entre la primera venta.
  */
 export async function probarAviso(): Promise<EstadoPush> {
-  await requireStaff();
-
-  if (!pushConfigurado()) {
-    return {
-      error:
-        "Faltan las claves VAPID en el servidor. Hasta que estén, los avisos no salen.",
-    };
-  }
-
-  await avisarAlPanel({
-    titulo: "Prueba de aviso",
-    cuerpo: "Si ves esto, el panel te va a avisar cuando entre una venta.",
-    url: "/admin",
-    etiqueta: "prueba",
-  });
-
-  return { ok: "Aviso mandado. Si no llega en unos segundos, revisá el permiso del navegador." };
+  return resultado(await (await api()).POST("/api/v1/admin/push/prueba"));
 }

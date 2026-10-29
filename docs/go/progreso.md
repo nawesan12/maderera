@@ -42,7 +42,7 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 
 | 8 | Compras, proveedores, retenciones | | |
 | 9 | WhatsApp | `go-whatsapp` | hecha (falta correr la E2E y desplegar: `CARPETA_PRIVADA` en api y worker) |
-| 10 | Campañas, avisos, profesionales, firma | | |
+| 10 | Campañas, avisos, profesionales, firma | `go-campanas` | hecha (29/10), integrada en `go-cuentas`: 3–6,5× pedidos/s, ¼ de la memoria; eventos guardados en UTC y permisos de aprobar arreglados |
 | 11 | Cortes | `go-cortes` | hecha (29/10), integrada en `go-cuentas`; HTTP 6× con 20 a la vez |
 | 12 | PDF y exportaciones | `go-pdf` | hecha (29/10), integrada en `go-cuentas`: 11 documentos idénticos a pdf-lib; faltan los datos de las tandas 5, 7, 8 y 9 |
 | 13 | Migración de ISIS | | |
@@ -660,3 +660,135 @@ Queda en TS sin tanda asignada, para el corte final: el buscador del panel
 la 5), `lib/dal/admin/reportes.ts` (si la 5 no lo mudó), `/api/diagnostico`,
 `lib/tareas` y `lib/cola` (los trabajos que todavía atiende el TS), y la
 escritura de la bitácora.
+
+## Tanda 10: campañas, avisos, profesionales y eventos (rama `go-campanas`)
+
+Hecha el 29/10/2026 desde `go-cuentas` (56ef2a1). Paquetes nuevos:
+`internal/campanas` (campañas, bajas, novedades de Mi cuenta),
+`internal/avisos` (despacho de correos, `email.reintento`, el panel de
+avisos y las suscripciones de push), `internal/profesionales` (solicitudes,
+aprobación, estado profesional, eventos e inscripción) e `internal/zod`
+(validación de formularios de texto como zod 4, compartible). Contratos
+`api/campanas.yaml` y `api/profesionales.yaml`. Falta correr la e2e
+(`e2e/campanas.spec.ts`) al integrar.
+
+### Inventario
+
+| TS | Ahora |
+|---|---|
+| `lib/campanas/{baja,bajas,correo,cuerpo,disponible,envio}.ts`, `lib/dal/admin/campanas.ts`, `app/admin/campanas/actions.ts` | Go; borrados (copias en `scripts/golden/originales/tanda10/`); el DAL y las acciones son envoltorios |
+| `lib/campanas/segmento.ts` | queda solo `SEGMENTO_TODOS` y `duracionDelEnvio` (los usa el editor en el navegador; el gemelo de Go está en el golden) |
+| `campana.tanda` (cola) y `iniciarProgramadas` (tarea `cada-minuto`) | worker de Go: el manejador y una vuelta por minuto |
+| `/api/baja` (RFC 8058, POST da de baja, GET lleva a /baja) | Go, **misma dirección** (Caddy `@baja`, rewrite en `next.config.ts`); `app/api/baja/route.ts` borrado. La página `/baja` y Mi cuenta le preguntan a Go |
+| `lib/dal/admin/avisos.ts`, `app/admin/avisos/{acciones,push-actions}.ts`, `lib/notificaciones/sembrar.ts` | Go (siembra al listar); `sembrar.ts` borrado; `avisosDe` no lo usaba nadie |
+| `email.reintento` (`reintentarEmail`) | worker de Go. Lo sigue encolando `despacharEmail` del TS: `CargasParaGo` en `lib/cola/manejadores.ts` |
+| `lib/notificaciones/{profesionales,eventos}.ts` | Go (`internal/profesionales`, plantillas con golden); borrados |
+| `lib/dal/admin/profesionales.ts`, `app/admin/profesionales/actions.ts`, `app/(public)/profesionales/actions.ts`, `lib/profesionales/fichas.ts`, `estadoProfesional` | Go; envoltorios; `fichas.ts` borrado. `estadoProfesional` pide `/api/v1/profesionales/estado` (se junta con `EsProfesionalAprobado`: mismo criterio) |
+| `lib/dal/admin/eventos.ts`, `app/admin/eventos/actions.ts`, `lib/eventos/index.ts` (`inscribir`), la inscripción pública | Go, con el **mismo candado** `pg_advisory_xact_lock(hashtext(eventId))`; `lib/eventos` borrado (`confirmarInscripcionPorPago` y `cancelarInscripcion` no los usaba nadie) |
+| `enviarRecordatorios` (tarea `diaria`) | worker de Go, tarea `recordatorios-eventos` a las 7; el botón del panel sigue |
+
+Quedan en TS a propósito: `despacharEmail` y los avisos de pedidos, pagos,
+facturas, presupuestos y recibos (tandas 4–7: leen la misma configuración de
+`email_avisos`); `avisarAlPanel` (lo usan módulos en TS; suscribir y borrar
+dispositivos ya es de Go); el cobro de un evento con precio
+(`iniciarPagoDeInscripcion`, Mercado Pago, tanda 6: Go reserva el lugar y
+Next arma la preferencia) y el aviso al acreditarse (`notificarResultadoDePago`
+le pide a Go `/api/v1/eventos/aviso-por-pago` con el secreto interno);
+`lib/dal/admin/pendientes.ts` (lee solicitudes y eventos para el resumen del
+panel, tanda 5); `titulos.ts` (textos de la pantalla). **Firma**: no hay firma
+de correo ni de campañas; la del remito (`app/firmar`) es de la tanda 5 y
+`lib/pagos/firma.ts` es la de Mercado Pago (tanda 6). Los descuentos por
+volumen no existen (se borraron antes; `descuentoPorVolumen` del carrito es
+de la tanda 6).
+
+### Golden
+
+`TZ=America/Argentina/Buenos_Aires npx tsx scripts/golden/campanas.ts` →
+`testdata/golden/campanas/`: 1508 cuerpos (texto a HTML), 410 enlaces de baja
+(firma, verificación con firma ajena, otro secreto, firma corta), 660
+decodificaciones al azar (el `Buffer.from(…, "base64url")` de Node: se saltea
+lo que no es del alfabeto y corta en `=`; el UTF-8 inválido como WHATWG),
+2000 segmentos, 602 duraciones, 400 correos de campaña completos con sus
+cabeceras, `primerNombre`, 18 formularios de zod (12.000 casos, primer error y
+campo), `aSlug`, `decidirFicha` y las 85 plantillas de avisos. Go da lo mismo
+en todos.
+
+### Bugs del TS arreglados (con prueba)
+
+- **Las fechas de los eventos se leían en la zona del servidor**, que en
+  producción es UTC: `new Date("2026-11-05T18:00")` guardaba un evento de las
+  18 como de las 15. Los correos de inscripción y recordatorio decían la hora
+  en UTC («21:00» para uno de las 18), «mañana» de los recordatorios era el de
+  UTC y el sufijo del slug repetido el mes de UTC. Go lee y escribe en hora de
+  Buenos Aires (`TestEventos`, golden con la zona de Argentina).
+- **Permisos**: aprobar una solicitud (que asigna lista de precios y límite de
+  cuenta corriente) y todo el panel de eventos pedían solo ser personal: el
+  depósito y el aserradero, que no entran a esas pantallas, podían hacerlo
+  llamando a la acción. La configuración de avisos, igual (la pantalla es del
+  admin). Ahora cada ruta exige el ACCESO de su pantalla
+  (`TestSolicitudYAprobacion`, `TestAvisos`).
+- «Aprobados este mes» empezaba el mes en UTC: el 1.º antes de las 21 contaba
+  el mes anterior. Ahora el mes de Buenos Aires.
+- Menores: una fecha de fin inválida en un evento daba un error de base (ahora
+  avisa); `motivoParaNoEnviar` ya no mira `PLATAFORMA` (las tandas las manda el
+  worker de Go, siempre está).
+
+### Concurrencia (vistas fallar sin el arreglo)
+
+- `TestInscripcionesSimultaneasRespetanElCupo`: diez al último lugar; sin el
+  candado entran 6–7 (hay que abrir las conexiones antes y largar a la vez: si
+  no, abrirlas espacia los pedidos y la prueba pasa sin candado).
+- `TestTandasSimultaneasNoRepiten`: cuatro tandas a la vez de la misma
+  campaña; sin `FOR UPDATE … SKIP LOCKED` a alguien le llega dos veces.
+
+### Despliegue
+
+- El worker ahora manda correo: necesita `EMAIL_*`/`SMTP_*`, `APP_URL` y
+  `BETTER_AUTH_SECRET` (firma los enlaces de baja; tiene que ser el mismo que
+  el de la app, o los enlaces de los correos que ya salieron dejan de
+  verificar). Los toma de `.env.produccion`; `SMTP_HOST`, `SMTP_PUERTO` y
+  `SMTP_NOMBRE_TLS` solo estaban en `app`: se sumaron a `api` y `worker` en
+  `docker-compose.prod.yml`.
+- `CAMPANAS_POR_MINUTO` sigue igual (3 con SMTP propio, 60 con Resend).
+
+### Benchmark (29/10/2026, misma Mac, 20 a la vez; detalle en `bench/tanda10`)
+
+| Prueba | TypeScript | Go | Go / TS |
+|---|---:|---:|---:|
+| Campañas (60, conteos de 120.000 envíos): pedidos/s | 9,6 | 30,6 | **3,2×** |
+| Alcance de un segmento (20.000 fichas): pedidos/s | 107,2 | 96,7 | 0,9× (manda Postgres) |
+| Solicitudes de profesionales: pedidos/s | 89 | 584 | **6,5×** |
+| Eventos del panel: pedidos/s | 178 | 551 | **3,1×** |
+| Estado profesional (cada página del sitio): pedidos/s | 430 | 1585 | **3,7×** |
+| Memoria máx. | 176–224 MB | 42–58 MB | ~4× menos |
+| Armar el correo de un destinatario (CPU) | 50 µs | 90 µs | **0,55×** (irrelevante con 3 por minuto) |
+
+### Pendiente
+
+- [ ] Correr `e2e/campanas.spec.ts` (no se corrió: los servidores son
+      compartidos).
+- [ ] `internal/email.Escapar`/`Envolver` asignan mucho (98 KB por correo de
+      campaña): si alguna vez se manda sin tope, un `strings.Replacer`.
+- [ ] La tanda 6 se lleva `iniciarPagoDeInscripcion` y el aviso por pago (hoy
+      Next → `/api/v1/eventos/aviso-por-pago`); la 5, `pendientes.ts`.
+- [ ] `despacharEmail` del TS y `avisos.Despachar` de Go conviven (misma
+      tabla, mismo `email.reintento`): se junta cuando se muden los avisos de
+      pedidos y pagos.
+
+### Lo aprendido
+
+- **pgx guarda las sentencias y Postgres pasa al plan genérico después de
+  cinco ejecuciones.** Para una consulta armada con un segmento (tipo,
+  rubros), el genérico no ve los valores y el conteo salía más lento que en TS
+  (node-postgres no reusa sentencias). `pgx.QueryExecModeExec` como primer
+  argumento: un plan por pedido.
+- **Una prueba de concurrencia contra un pool recién creado no es
+  concurrente**: abrir cada conexión tarda más que la transacción, y los
+  pedidos llegan de a uno. Abrir las conexiones antes y largar con un canal.
+- **La validación de zod de los formularios de texto entra en un paquete
+  chico** (`internal/zod`): `String(campo, opcional).Trim().Min().Max()`,
+  `Enum`, `EnteroCoercido` (el `z.coerce.number().int()` con sus cinco
+  mensajes), y el `|| undefined` de las acciones como «"" en un opcional es no
+  venir».
+- **`pkill -f <patrón>` mata también el shell que lo ejecuta** si el patrón
+  aparece en su propia línea de comandos.

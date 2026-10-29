@@ -1,0 +1,235 @@
+[
+ {
+  "entrada": {
+   "id": null,
+   "activo": null
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "activo": "si"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "activo": "no"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "activo": "sí"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "activo": ""
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": "",
+   "activo": null
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "",
+   "activo": "si"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "",
+   "activo": "no"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "",
+   "activo": "sí"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "",
+   "activo": ""
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "activo": null
+  },
+  "ok": false,
+  "campo": "activo",
+  "mensaje": "Invalid option: expected one of \"si\"|\"no\""
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "activo": "si"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "activo": "si"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "activo": "no"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "activo": "no"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "activo": "sí"
+  },
+  "ok": false,
+  "campo": "activo",
+  "mensaje": "Invalid option: expected one of \"si\"|\"no\""
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "activo": ""
+  },
+  "ok": false,
+  "campo": "activo",
+  "mensaje": "Invalid option: expected one of \"si\"|\"no\""
+ },
+ {
+  "entrada": {
+   "id": "no-uuid",
+   "activo": null
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "no-uuid",
+   "activo": "si"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "no-uuid",
+   "activo": "no"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "no-uuid",
+   "activo": "sí"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "no-uuid",
+   "activo": ""
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "8F2B5C1E-1D2A-4C3B-9A8E-111111111111",
+   "activo": null
+  },
+  "ok": false,
+  "campo": "activo",
+  "mensaje": "Invalid option: expected one of \"si\"|\"no\""
+ },
+ {
+  "entrada": {
+   "id": "8F2B5C1E-1D2A-4C3B-9A8E-111111111111",
+   "activo": "si"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8F2B5C1E-1D2A-4C3B-9A8E-111111111111",
+   "activo": "si"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8F2B5C1E-1D2A-4C3B-9A8E-111111111111",
+   "activo": "no"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8F2B5C1E-1D2A-4C3B-9A8E-111111111111",
+   "activo": "no"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8F2B5C1E-1D2A-4C3B-9A8E-111111111111",
+   "activo": "sí"
+  },
+  "ok": false,
+  "campo": "activo",
+  "mensaje": "Invalid option: expected one of \"si\"|\"no\""
+ },
+ {
+  "entrada": {
+   "id": "8F2B5C1E-1D2A-4C3B-9A8E-111111111111",
+   "activo": ""
+  },
+  "ok": false,
+  "campo": "activo",
+  "mensaje": "Invalid option: expected one of \"si\"|\"no\""
+ }
+]

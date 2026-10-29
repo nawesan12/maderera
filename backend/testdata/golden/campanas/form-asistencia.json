@@ -1,0 +1,280 @@
+[
+ {
+  "entrada": {
+   "id": null,
+   "estado": null
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "estado": "borrador"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "estado": "publicado"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "estado": "cerrado"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "estado": "cancelado"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "estado": "asistio"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "estado": "ausente"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "estado": "confirmada"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "estado": "cancelada"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "estado": "otro"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": null
+  },
+  "ok": false,
+  "campo": "estado",
+  "mensaje": "Invalid option: expected one of \"asistio\"|\"ausente\"|\"confirmada\"|\"cancelada\""
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "borrador"
+  },
+  "ok": false,
+  "campo": "estado",
+  "mensaje": "Invalid option: expected one of \"asistio\"|\"ausente\"|\"confirmada\"|\"cancelada\""
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "publicado"
+  },
+  "ok": false,
+  "campo": "estado",
+  "mensaje": "Invalid option: expected one of \"asistio\"|\"ausente\"|\"confirmada\"|\"cancelada\""
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "cerrado"
+  },
+  "ok": false,
+  "campo": "estado",
+  "mensaje": "Invalid option: expected one of \"asistio\"|\"ausente\"|\"confirmada\"|\"cancelada\""
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "cancelado"
+  },
+  "ok": false,
+  "campo": "estado",
+  "mensaje": "Invalid option: expected one of \"asistio\"|\"ausente\"|\"confirmada\"|\"cancelada\""
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "asistio"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "asistio"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "ausente"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "ausente"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "confirmada"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "confirmada"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "cancelada"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "cancelada"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "estado": "otro"
+  },
+  "ok": false,
+  "campo": "estado",
+  "mensaje": "Invalid option: expected one of \"asistio\"|\"ausente\"|\"confirmada\"|\"cancelada\""
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "estado": null
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "estado": "borrador"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "estado": "publicado"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "estado": "cerrado"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "estado": "cancelado"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "estado": "asistio"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "estado": "ausente"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "estado": "confirmada"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "estado": "cancelada"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "estado": "otro"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ }
+]

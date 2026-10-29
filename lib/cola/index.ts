@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { trabajos } from "@/lib/db/schema";
 import { esperaParaElIntento } from "./espera";
-import { MANEJADORES, type TipoDeTrabajo, type CargaDe } from "./manejadores";
+import { MANEJADORES, type TipoDeTrabajo, type TipoEncolable, type CargaDe } from "./manejadores";
 
 /**
  * La cola de trabajos. Ver `lib/db/schema/tareas.ts` para el porqué.
@@ -17,7 +17,7 @@ import { MANEJADORES, type TipoDeTrabajo, type CargaDe } from "./manejadores";
 /** Cuánto tiempo puede tener un procesador un trabajo en la mano. */
 const TOMA_MS = 5 * 60_000;
 
-export async function encolar<T extends TipoDeTrabajo>(
+export async function encolar<T extends TipoEncolable>(
   tipo: T,
   carga: CargaDe<T>,
   /** Para más tarde: así se espacian las tandas de una campaña. */

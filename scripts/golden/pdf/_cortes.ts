@@ -3,7 +3,7 @@
  * despiece sale al azar (con semilla) y el plano lo calcula el optimizador
  * real de lib/cortes.
  */
-import { calcularPlanoDeCorte, type PiezaAcortar, type PlanoDeCorte } from "@/lib/cortes/plano";
+import { calcularPlanoDeCorte, type PiezaAcortar, type PlanoDeCorte } from "../../../bench/tanda11/ts/plano";
 import { azarCon } from "./_azar";
 
 export interface Despiece {

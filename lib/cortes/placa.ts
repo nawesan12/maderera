@@ -14,7 +14,7 @@
  * Es lógica pura: la usa el panel, el mostrador, la hoja impresa y el sitio.
  */
 
-import { MEDIDAS_DE_PLACA } from "@/lib/calculations";
+import { MEDIDAS_DE_PLACA } from "@/lib/cortes/tipos";
 
 /** En qué sentido se parte la placa. Nulo es placa entera. */
 export type Mitad = "largo" | "ancho" | null;

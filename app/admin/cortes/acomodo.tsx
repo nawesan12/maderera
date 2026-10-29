@@ -1,13 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Save } from "lucide-react";
 import { PlanoEditable } from "@/components/cortes/plano-editable";
-import {
-  calcularPlanoDeCorte,
-  type PiezaAcortar,
-  type PiezaFijada,
-} from "@/lib/cortes/plano";
+import type { PiezaAcortar, PiezaFijada } from "@/lib/cortes/tipos";
+import { piezasParaElPlano, usePlano } from "@/lib/cortes/en-vivo";
 import { guardarAcomodoManual } from "./actions";
 
 /**
@@ -18,8 +15,8 @@ import { guardarAcomodoManual } from "./actions";
  * sacarla de la placa nueva. Sin esto había que borrar el corte y cargarlo de
  * nuevo.
  *
- * El plano se recalcula acá, en el navegador, con cada cambio —es geometría
- * pura— y recién se va al servidor al apretar Guardar. Así se puede probar
+ * El plano se recalcula con cada cambio (lo calcula Go, ver
+ * `lib/cortes/en-vivo.ts`) y el acomodo recién se guarda al apretar Guardar. Así se puede probar
  * mover una pieza, ver qué pasa con las placas, y arrepentirse sin haber
  * escrito nada.
  */
@@ -48,23 +45,17 @@ export function AcomodoDelCorte({
     null,
   );
 
-  // Memorizado: el plano ahora incluye la búsqueda (unos milisegundos), y sin
-  // esto se rehacía en cada render, incluidos los del arrastre.
-  const plano = useMemo(
-    () =>
-      calcularPlanoDeCorte({
-        piezas,
-        placaLargo,
-        placaAncho,
-        // El mismo que usó la ficha para presupuestar: si acá se acomodara con
-        // otro espesor, mover una pieza podría cambiar el precio sin que nadie
-        // tocara el despiece.
-        anchoSierra,
-        fijadas,
-        busqueda,
-      }),
-    [piezas, placaLargo, placaAncho, anchoSierra, fijadas, busqueda],
-  );
+  // El mismo disco que usó la ficha para presupuestar: si acá se acomodara
+  // con otro espesor, mover una pieza podría cambiar el precio sin que nadie
+  // tocara el despiece.
+  const { plano } = usePlano({
+    piezas: piezasParaElPlano(piezas),
+    placaLargo,
+    placaAncho,
+    anchoSierra,
+    fijadas,
+    busqueda,
+  });
 
   // Comparado como texto: las dos listas son del mismo origen y el orden no
   // cambia salvo que alguien mueva algo, que es justamente lo que se detecta.

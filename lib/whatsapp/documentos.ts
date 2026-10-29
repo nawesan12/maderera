@@ -137,22 +137,14 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
     }
 
     case "corte": {
-      const { obtenerCorte } = await import("@/lib/dal/admin/cortes");
-      const { calcularPlanoDeCorteSinTrabar, leerAcomodoManual } = await import("@/lib/cortes/plano");
+      const { hojaDelCorte } = await import("@/lib/dal/admin/cortes");
       const { nombreDeLaMitad } = await import("@/lib/cortes/placa");
-      const { metrosDeTapacanto } = await import("@/lib/cortes/tarifa");
       const { cortePdf } = await import("@/lib/pdf/corte");
-      const corte = await obtenerCorte(doc.id);
-      if (!corte) return null;
-      // El mismo cálculo que la descarga del panel (`/api/cortes/[id]/pdf`).
-      const plano = await calcularPlanoDeCorteSinTrabar({
-        piezas: corte.piezas,
-        placaLargo: corte.medida.largo,
-        placaAncho: corte.medida.ancho,
-        anchoSierra: corte.anchoSierraMm,
-        fijadas: leerAcomodoManual(corte.acomodoManual),
-        busqueda: corte.motorPlano >= 2,
-      });
+      // El mismo plano que la descarga del panel (`/api/cortes/[id]/pdf`): lo
+      // arma Go con el disco y el motor del trabajo.
+      const datos = await hojaDelCorte(doc.id);
+      if (!datos) return null;
+      const { corte, plano } = datos;
       const pdf = await cortePdf(
         {
           numero: corte.numero,
@@ -161,7 +153,8 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
           cantoDescripcion: corte.cantoDescripcion,
           deQueSale: nombreDeLaMitad(corte.medida.mitad),
           createdAt: corte.createdAt,
-          metrosCanto: metrosDeTapacanto(corte.piezas),
+          metrosCanto: datos.metrosCanto,
+          superficieSierra: datos.superficies.reduce((t, x) => t + x, 0),
         },
         plano,
         emisor,

@@ -1,5 +1,5 @@
 import { hojaDeCortePdf, type CorteParaHoja } from "@/lib/pdf/hoja-de-corte";
-import { armarHojaDeCorte } from "@/lib/cortes/secuencia";
+import { armarHojaDeCorte } from "../../../bench/tanda11/ts/secuencia";
 import type { CasoPdf } from "../pdf";
 import { despieces, plano } from "./_cortes";
 
@@ -16,6 +16,6 @@ export const casos: CasoPdf[] = despieces(1221).map((d, i) => {
   return {
     nombre: d.nombre,
     datos,
-    generar: () => hojaDeCortePdf(datos.corte, datos.hoja),
+    generar: () => hojaDeCortePdf(datos.corte, datos.hoja as never),
   };
 });

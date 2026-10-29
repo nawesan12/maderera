@@ -154,6 +154,14 @@ autoconfig.{$CORREO_DOMINIO} {
 		}
 	}
 
+	# Las rutas del agente del taller (y la lista y el PTX del panel), con la
+	# misma dirección de siempre: ahora las atiende Go. El PDF y la hoja de
+	# corte (/api/cortes/<id>/pdf y /hoja) siguen en Next hasta la tanda 12.
+	@cortesGo path_regexp ^/api/cortes/(pendientes|[^/]+/(lista|ptx))$
+	handle @cortesGo {
+		reverse_proxy api:8080
+	}
+
 	# Todo lo demás va a la aplicación.
 	handle {
 		# Lo que Next ya marca como inmutable —los JS y CSS con hash en el

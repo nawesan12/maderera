@@ -2,11 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Hoja, MUESTRA_DEL_BUILD } from "../../preparando";
 import { requireStaff } from "@/lib/dal/session";
-import { obtenerCorte } from "@/lib/dal/admin/cortes";
-import {
-  calcularPlanoDeCorteSinTrabar,
-  leerAcomodoManual,
-} from "@/lib/cortes/plano";
+import { hojaDelCorte } from "@/lib/dal/admin/cortes";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
 import { PlanoImpreso } from "@/components/cortes/plano-impreso";
 
@@ -51,26 +47,16 @@ async function Contenido({
   await requireStaff();
 
   const { id } = await params;
-  const corte = await obtenerCorte(id);
-  if (!corte) notFound();
-
-  const plano = await calcularPlanoDeCorteSinTrabar({
-    piezas: corte.piezas,
-    placaLargo: corte.medida.largo,
-    placaAncho: corte.medida.ancho,
-    // El mismo espesor de disco con el que se presupuestó, guardado en el
-    // trabajo: si la hoja del taller usara otro, el patrón dibujado no sería
-    // el que se cobró.
-    anchoSierra: corte.anchoSierraMm,
-    // Lo que alguien corrigió a mano cuando cargó el trabajo.
-    fijadas: leerAcomodoManual(corte.acomodoManual),
-    // Con el motor con que nació el trabajo (ver `cutting_orders.motorPlano`).
-    busqueda: corte.motorPlano >= 2,
-  });
+  // El plano lo arma Go con el disco, lo fijado a mano y el motor con que
+  // nació el trabajo: el mismo que se presupuestó.
+  const datos = await hojaDelCorte(id);
+  if (!datos) notFound();
+  const { corte, plano } = datos;
 
   return (
     <PlanoImpreso
       plano={plano}
+      superficieSierra={datos.superficies.reduce((t, x) => t + x, 0)}
       corte={{
         id: corte.id,
         numero: corte.numero,

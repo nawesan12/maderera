@@ -36,7 +36,7 @@
  * el despiece en el mostrador.
  */
 
-import { ANCHO_DE_SIERRA_MM } from "@/lib/calculations";
+import { ANCHO_DE_SIERRA_MM } from "./calculations";
 
 /**
  * Desde qué medida un sobrante deja de ser viruta y pasa a ser retal.

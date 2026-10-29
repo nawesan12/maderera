@@ -11,22 +11,40 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useCarrito } from "@/lib/carrito-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
-import {
-  calculateRoof,
-  calculateBoards,
-  calculateFloor,
-  calculateDeck,
-  type ParametrosDeCalculo,
-  type RoofResult,
-  type BoardResult,
-  type FloorResult,
-  type DeckResult,
-  type BoardPiece,
-  MEDIDAS_DE_PLACA,
-} from "@/lib/calculations";
+import type { Esquemas } from "@/lib/api/tipos";
+import { MEDIDAS_DE_PLACA, type ParametrosDeCalculo } from "@/lib/cortes/tipos";
 import { buscarSugerencias } from "./actions";
 import type { Sugerencia } from "@/lib/dal/sugerencias";
 import { formatearSierra } from "@/lib/cortes/sierra";
+
+type RoofResult = Esquemas["ResultadoTecho"];
+type BoardResult = Esquemas["ResultadoPlacas"];
+type FloorResult = Esquemas["ResultadoPiso"];
+type DeckResult = Esquemas["ResultadoDeck"];
+type BoardPiece = { ancho: number; largo: number; cantidad: number };
+
+/**
+ * Las cuentas las hace la API de Go (backend/internal/cortes), con los
+ * parámetros que se editan en /admin/calculadoras. Un número que no se puede
+ * leer no se manda: la calculadora queda como estaba.
+ */
+async function calcular<T>(que: "techo" | "placas" | "piso" | "deck", cuerpo: Record<string, unknown>): Promise<T | null> {
+  try {
+    const r = await fetch(`/api/v1/calculadora/${que}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cuerpo),
+    });
+    return r.ok ? ((await r.json()) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+const metros = (v: string) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 && n <= 100000 ? n : null;
+};
 
 function ResultRow({ label, value, unit, onAdd, sugerencia, nota }: {
   label: string;
@@ -242,8 +260,12 @@ export function Calculadoras({
                   <Button
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     disabled={!roofLargo || !roofAncho}
-                    onClick={() => {
-                      const r = calculateRoof(Number(roofLargo), Number(roofAncho), roofType, parametros);
+                    onClick={async () => {
+                      const largo = metros(roofLargo);
+                      const ancho = metros(roofAncho);
+                      if (largo === null || ancho === null) return;
+                      const r = await calcular<RoofResult>("techo", { largo, ancho, tipo: roofType });
+                      if (!r) return;
                       setRoofResult(r);
                       pedirSugerencias([r.tirantes, r.machimbre, r.aislacion, r.membrana, r.clavos]);
                     }}
@@ -399,8 +421,11 @@ export function Calculadoras({
                   </div>
                   <Button
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
-                    onClick={() => {
-                      setBoardResult(calculateBoards(boardPieces.filter(p => p.ancho > 0 && p.largo > 0), boardPlacaAncho, boardPlacaLargo, parametros.anchoSierraMm, parametros.margenSeguridad));
+                    onClick={async () => {
+                      const piezas = boardPieces.filter(p => p.ancho > 0 && p.largo > 0 && Number.isFinite(p.cantidad));
+                      const r = await calcular<BoardResult>("placas", { piezas, placaAncho: boardPlacaAncho, placaLargo: boardPlacaLargo });
+                      if (!r) return;
+                      setBoardResult(r);
                       pedirSugerencias([{ busqueda: "placa melamina" }]);
                     }}
                   >
@@ -469,8 +494,13 @@ export function Calculadoras({
                   <Button
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     disabled={!floorLargo || !floorAncho}
-                    onClick={() => {
-                      setFloorResult(calculateFloor(Number(floorLargo), Number(floorAncho), undefined, parametros.separacionPisoM));
+                    onClick={async () => {
+                      const largo = metros(floorLargo);
+                      const ancho = metros(floorAncho);
+                      if (largo === null || ancho === null) return;
+                      const r = await calcular<FloorResult>("piso", { largo, ancho });
+                      if (!r) return;
+                      setFloorResult(r);
                       pedirSugerencias([
                         { busqueda: "piso melaminico" },
                         { busqueda: "zocalo" },
@@ -574,8 +604,12 @@ export function Calculadoras({
                   <Button
                     className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     disabled={!deckLargo || !deckAncho}
-                    onClick={() => {
-                      const r = calculateDeck(Number(deckLargo), Number(deckAncho), deckMaterial, parametros.deck[deckMaterial], parametros.margenSeguridad, parametros.separacionPisoM);
+                    onClick={async () => {
+                      const largo = metros(deckLargo);
+                      const ancho = metros(deckAncho);
+                      if (largo === null || ancho === null) return;
+                      const r = await calcular<DeckResult>("deck", { largo, ancho, material: deckMaterial });
+                      if (!r) return;
                       setDeckResult(r);
                       pedirSugerencias([r.tablasDeck, r.estructura, r.tornillos, r.protector]);
                     }}

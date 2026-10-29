@@ -1,31 +1,20 @@
 import "server-only";
 
-import { asc, eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { cartCortes } from "@/lib/db/schema";
-import { placaCortable, type PlacaCortable } from "@/lib/dal/cortes-publico";
-import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
-import { calcularPlanoDeCorteSinTrabar, type PiezaAcortar } from "@/lib/cortes/plano";
-import {
-  presupuestarCorte,
-  type PresupuestoDeCorte,
-} from "@/lib/cortes/presupuesto";
-import { fraccionDePlaca, medidaDePlaca, nombreDeLaMitad } from "@/lib/cortes/placa";
+import createClient from "openapi-fetch";
+import { cookies, headers } from "next/headers";
+import { API_URL, datos } from "@/lib/api/servidor";
+import type { paths, Esquemas } from "@/lib/api/tipos";
 import { presentacionDeMitad, type Presentacion } from "@/lib/ventas/forma-de-venta";
 
 /**
  * Los cortes del carrito, listos para convertirse en pedido.
  *
- * **Se recalcula todo.** El carrito guarda el precio que se le mostró a la
- * persona cuando armó el corte, y eso sirve para enseñárselo de vuelta y para
- * avisarle si cambió —igual que con los productos—, pero lo que se cobra sale de
- * volver a buscar la placa con la lista de quien compra, volver a acomodar las
- * piezas con el espesor de sierra configurado y volver a presupuestar. Entre que
- * alguien arma el corte y confirma la compra pueden pasar días, y en el medio
- * puede haber cambiado el precio de la placa o la tarifa de la pasada.
- *
- * Devuelve, por cada corte, las líneas que se cobran y lo que hace falta para
- * abrir la orden en la cola del taller.
+ * **Se recalcula todo, y lo recalcula Go** (/api/v1/cortes/carrito): vuelve a
+ * buscar la placa con la lista de quien compra, a acomodar las piezas con el
+ * disco configurado y a presupuestar. Es una ruta interna —solo el servidor de
+ * Next, con el secreto— que además lleva la cookie de quien compra, porque la
+ * lista es la suya. La confirmación del pedido (tanda 6) sigue en TS y consume
+ * esto adentro de su transacción.
  */
 export interface LineaDeCorte {
   /** Si el material es media placa: descuenta 0,5 por placa del plano. */
@@ -37,199 +26,36 @@ export interface LineaDeCorte {
   precioUnitario: number;
 }
 
-export interface CorteResuelto {
-  id: string;
-  placa: PlacaCortable;
-  piezas: PiezaAcortar[];
+export type CorteResuelto = Omit<Esquemas["CorteResuelto"], "lineas" | "mitad"> & {
   mitad: "largo" | "ancho" | null;
-  cantoDescripcion: string | null;
-  placaLargoMm: number;
-  placaAnchoMm: number;
-  placas: number;
-  pasadas: number;
-  /** El disco con que se armó el plano: el general, el sitio no lo cambia. */
-  anchoSierraMm: number;
-  cuenta: PresupuestoDeCorte;
   lineas: LineaDeCorte[];
-}
+};
 
 export async function resolverCortesDelCarrito(
   cartId: string,
 ): Promise<{ resueltos: CorteResuelto[]; error?: string }> {
-  // El despiece se lee de la base y no del carrito que ya viajó al navegador:
-  // es lo que se va a fabricar, y tiene que salir de la misma fuente que lo
-  // que se cobra.
-  const cortes = await db
-    .select()
-    .from(cartCortes)
-    .where(eq(cartCortes.cartId, cartId))
-    .orderBy(asc(cartCortes.createdAt));
+  const [h, c] = await Promise.all([headers(), cookies()]);
+  const cabeceras: Record<string, string> = { Authorization: `Bearer ${process.env.API_SECRETO_INTERNO ?? ""}` };
+  const cookie = c.toString();
+  if (cookie) cabeceras.cookie = cookie;
+  const ip = h.get("x-forwarded-for") ?? h.get("x-real-ip");
+  if (ip) cabeceras["x-forwarded-for"] = ip;
 
-  if (cortes.length === 0) return { resueltos: [] };
+  const cliente = createClient<paths>({ baseUrl: API_URL, cache: "no-store", headers: cabeceras });
+  const r = datos(await cliente.POST("/api/v1/cortes/carrito", { body: { cartId } }));
+  if (r.error) return { resueltos: [], error: r.error };
 
-  const parametros = await parametrosDeCalculo();
-  const resueltos: CorteResuelto[] = [];
-
-  for (const corte of cortes) {
-    if (!corte.variantId) {
+  return {
+    resueltos: r.resueltos.map((corte) => {
+      const mitad = (corte.mitad as "largo" | "ancho" | null) ?? null;
       return {
-        resueltos: [],
-        error: `El corte de ${corte.materialDescripcion} quedó sin placa. Sacalo del carrito y armalo de nuevo.`,
+        ...corte,
+        mitad,
+        lineas: corte.lineas.map(({ esMaterial, ...l }) => ({
+          ...(esMaterial ? { presentacion: presentacionDeMitad(mitad) } : {}),
+          ...l,
+        })),
       };
-    }
-
-    const placa = await placaCortable(corte.variantId);
-
-    if (!placa) {
-      return {
-        resueltos: [],
-        error: `La placa del corte de ${corte.materialDescripcion} ya no está disponible. Sacalo del carrito y elegí otra.`,
-      };
-    }
-
-    const piezas = leerPiezas(corte.piezas);
-
-    if (piezas.length === 0) {
-      return {
-        resueltos: [],
-        error: `El corte de ${corte.materialDescripcion} no tiene medidas. Sacalo del carrito y armalo de nuevo.`,
-      };
-    }
-
-    const mitad = (corte.mitad as "largo" | "ancho" | null) ?? null;
-
-    if (mitad && !placa.admiteMedia) {
-      return {
-        resueltos: [],
-        error: `${corte.materialDescripcion} se vende solo entera. Sacá el corte del carrito y armalo sobre la placa completa.`,
-      };
-    }
-
-    const medida = medidaDePlaca({
-      varianteLargo: placa.largoMm,
-      varianteAncho: placa.anchoMm,
-      mitad,
-    });
-
-    const plano = await calcularPlanoDeCorteSinTrabar({
-      piezas,
-      placaLargo: medida.largo,
-      placaAncho: medida.ancho,
-      anchoSierra: parametros.anchoSierraMm,
-    });
-
-    if (plano.noEntran.length > 0) {
-      return {
-        resueltos: [],
-        error: `En el corte de ${corte.materialDescripcion} hay medidas que no entran en la placa. Revisalo antes de comprar.`,
-      };
-    }
-
-    const fraccion = fraccionDePlaca(mitad, placa.precioMediaPct);
-    const cuenta = presupuestarCorte({
-      plano,
-      tarifa: {
-        material: placa.descripcion,
-        priceListId: null,
-        precioPorPasada: placa.precioPorPasada,
-        precioPorMetroCanto: placa.precioPorMetroCanto,
-      },
-      precioPorPlaca: placa.precio,
-      piezas,
-      fraccion,
-    });
-
-    const lineas: LineaDeCorte[] = [];
-
-    /*
-     * El material va con su variante: es lo que descuenta stock del estante.
-     *
-     * Media placa descuenta **media placa** desde el 1/10/2026, cuando el stock
-     * pasó a llevar decimales: la otra mitad queda en el depósito y se puede
-     * vender suelta. Antes salía una placa entera y la mitad sobrante quedaba
-     * fuera del sistema.
-     */
-    if (cuenta.placasEnteras > 0) {
-      lineas.push({
-        presentacion: presentacionDeMitad(mitad),
-        variantId: placa.variantId,
-        descripcion: mitad
-          ? `${placa.descripcion} — ${nombreDeLaMitad(mitad).toLowerCase()}`
-          : placa.descripcion,
-        unidad: "unidad",
-        cantidad: cuenta.placasEnteras,
-        precioUnitario: placa.precio * fraccion,
-      });
-    }
-
-    // El corte y el tapacanto van sin variante: no son mercadería y no
-    // descuentan nada del stock.
-    if (cuenta.subtotalCorte > 0) {
-      lineas.push({
-        variantId: null,
-        descripcion: `Corte a medida — ${cuenta.pasadasCobrables} ${
-          cuenta.pasadasCobrables === 1 ? "pasada" : "pasadas"
-        }`,
-        unidad: "pasada",
-        cantidad: cuenta.pasadasCobrables,
-        precioUnitario: cuenta.precioPorPasada,
-      });
-    }
-
-    if (cuenta.subtotalCanto > 0) {
-      lineas.push({
-        variantId: null,
-        descripcion: `Tapacanto pegado${
-          corte.cantoDescripcion ? ` — ${corte.cantoDescripcion}` : ""
-        }`,
-        unidad: "m",
-        cantidad: cuenta.metrosCanto,
-        precioUnitario: placa.precioPorMetroCanto,
-      });
-    }
-
-    resueltos.push({
-      id: corte.id,
-      placa,
-      piezas,
-      mitad,
-      cantoDescripcion: corte.cantoDescripcion,
-      placaLargoMm: medida.largo,
-      placaAnchoMm: medida.ancho,
-      placas: plano.placas.length,
-      pasadas: plano.pasadasCobrables,
-      anchoSierraMm: parametros.anchoSierraMm,
-      cuenta,
-      lineas,
-    });
-  }
-
-  return { resueltos };
-}
-
-/**
- * El despiece guardado como JSON, validado.
- *
- * Tolera basura devolviendo una lista vacía: el que llama lo trata como un
- * corte que hay que rehacer, en vez de romper la compra entera.
- */
-function leerPiezas(crudo: string): PiezaAcortar[] {
-  try {
-    const leidas = JSON.parse(crudo);
-    if (!Array.isArray(leidas)) return [];
-
-    return leidas
-      .map((p) => ({
-        largoMm: Math.round(Number(p?.largoMm) || 0),
-        anchoMm: Math.round(Number(p?.anchoMm) || 0),
-        cantidad: Math.round(Number(p?.cantidad) || 0),
-        respetaVeta: Number(p?.respetaVeta) === 1 ? 1 : 0,
-        cantoLargo: Math.min(2, Math.max(0, Math.round(Number(p?.cantoLargo) || 0))),
-        cantoAncho: Math.min(2, Math.max(0, Math.round(Number(p?.cantoAncho) || 0))),
-        etiqueta: typeof p?.etiqueta === "string" ? p.etiqueta : null,
-      }))
-      .filter((p) => p.largoMm > 0 && p.anchoMm > 0 && p.cantidad > 0);
-  } catch {
-    return [];
-  }
+    }),
+  };
 }

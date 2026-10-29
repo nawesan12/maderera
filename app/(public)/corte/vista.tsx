@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import type { PlacaCortable } from "@/lib/dal/cortes-publico";
 import type { PreciosDePlaca } from "@/lib/dal/visitante";
-import { calcularPlanoDeCorte } from "@/lib/cortes/plano";
-import { presupuestarCorte } from "@/lib/cortes/presupuesto";
+import { usePlano } from "@/lib/cortes/en-vivo";
 import {
   fraccionDePlaca,
   medidaDePlaca,
@@ -146,37 +145,42 @@ function VistaDeCorte({
     [filas],
   );
 
-  const plano = useMemo(
-    () =>
-      calcularPlanoDeCorte({
-        piezas,
-        placaLargo: medida.largo,
-        placaAncho: medida.ancho,
-        anchoSierra,
-      }),
-    [piezas, medida.largo, medida.ancho, anchoSierra],
-  );
+  // El plano y el precio los calcula Go mientras se tipea (ver
+  // `lib/cortes/en-vivo.ts`): el mismo cálculo que vuelve a hacer al agregar
+  // el corte al carrito, con la lista de quien compra.
+  const { plano, cuenta: calculada, calculando } = usePlano({
+    piezas,
+    placaLargo: medida.largo,
+    placaAncho: medida.ancho,
+    anchoSierra,
+    presupuesto: {
+      tarifa: placa
+        ? {
+            material: placa.descripcion,
+            priceListId: null,
+            precioPorPasada: placa.precioPorPasada,
+            precioPorMetroCanto: placa.precioPorMetroCanto,
+          }
+        : undefined,
+      precioPorPlaca: placa?.precio ?? null,
+      fraccion: fraccionDePlaca(mitad, placa?.precioMediaPct),
+    },
+  });
+  const cuenta = calculada ?? {
+    placasEnteras: 0,
+    fraccion: 1,
+    precioPorPlaca: 0,
+    subtotalPlacas: 0,
+    pasadasCobrables: 0,
+    precioPorPasada: 0,
+    subtotalCorte: 0,
+    metrosCanto: 0,
+    subtotalCanto: 0,
+    total: 0,
+    faltan: [],
+  };
 
-  const cuenta = useMemo(
-    () =>
-      presupuestarCorte({
-        plano,
-        tarifa: placa
-          ? {
-              material: placa.descripcion,
-              priceListId: null,
-              precioPorPasada: placa.precioPorPasada,
-              precioPorMetroCanto: placa.precioPorMetroCanto,
-            }
-          : null,
-        precioPorPlaca: placa?.precio ?? null,
-        piezas,
-        fraccion: fraccionDePlaca(mitad, placa?.precioMediaPct),
-      }),
-    [plano, placa, piezas, mitad],
-  );
-
-  const sePuede = piezas.length > 0 && plano.noEntran.length === 0;
+  const sePuede = piezas.length > 0 && plano.noEntran.length === 0 && !calculando;
 
   function actualizar(i: number, campo: keyof Fila, valor: string | boolean) {
     setFilas((previas) =>

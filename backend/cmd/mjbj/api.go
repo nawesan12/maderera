@@ -8,6 +8,7 @@ import (
 
 	"mjbj/internal/api/catalogoapi"
 	"mjbj/internal/api/contenidoapi"
+	"mjbj/internal/api/cortesapi"
 	"mjbj/internal/api/cuentasapi"
 	"mjbj/internal/api/documentosapi"
 	"mjbj/internal/api/preciosapi"
@@ -19,6 +20,7 @@ import (
 	"mjbj/internal/clientes"
 	"mjbj/internal/cobros"
 	"mjbj/internal/contenido"
+	"mjbj/internal/cortes"
 	"mjbj/internal/cuentas"
 	"mjbj/internal/documentos"
 	"mjbj/internal/email"
@@ -168,6 +170,20 @@ func correrAPI() error {
 		documentosapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// Cortes: el plano, la cola del taller, las calculadoras y las rutas de
+	// siempre del agente del taller (/api/cortes/...), que no cambian.
+	apiCortes := cortes.NuevaAPI(cortes.Nuevo(pool, log), lim, cfg.Interna)
+	apiCortes.Registrar(m)
+	cortesapi.HandlerWithOptions(
+		cortesapi.NewStrictHandlerWithOptions(apiCortes,
+			[]cortesapi.StrictMiddlewareFunc{plataforma.ConPedido[cortesapi.StrictHandlerFunc]},
+			cortesapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		cortesapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
@@ -189,6 +205,20 @@ func correrAPI() error {
 	} else if validar, err := plataforma.ValidarContra(s); err != nil {
 		return err
 	} else {
+		h = validar(h)
+	}
+
+	// El contrato de cortes, en su propia línea para no pisar la lista de
+	// arriba (cada tanda suma la suya).
+	{
+		s, err := cortesapi.GetSwagger()
+		if err != nil {
+			return err
+		}
+		validar, err := plataforma.ValidarContra(s)
+		if err != nil {
+			return err
+		}
 		h = validar(h)
 	}
 

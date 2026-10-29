@@ -1,6 +1,6 @@
 "use client";
 
-import type { PlacaDelPlano, PlanoDeCorte } from "@/lib/cortes/plano";
+import type { PlacaDelPlano, PlanoDeCorte } from "@/lib/cortes/tipos";
 
 /**
  * El plano, para mirar.

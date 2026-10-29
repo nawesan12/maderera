@@ -9,6 +9,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"mjbj/internal/jsmath"
 )
 
@@ -273,6 +274,137 @@ func (q *Queries) ChequesDelRecibo(ctx context.Context, receiptID string) ([]*st
 	return items, nil
 }
 
+const chequesSueltos = `-- name: ChequesSueltos :many
+SELECT id, updated_at, tipo::text AS tipo, numero, banco, importe::float8 AS importe, estado::text AS estado, fecha_pago, motivo_rechazo
+FROM cheques
+WHERE customer_id = $1 AND sentido = 'recibido'
+  AND (estado = 'informado' OR (estado = 'rechazado' AND receipt_id IS NULL))
+  AND ($2::timestamptz IS NULL OR created_at >= $2)
+ORDER BY fecha_pago
+`
+
+type ChequesSueltosParams struct {
+	CustomerID *string            `json:"customerId"`
+	Desde      pgtype.Timestamptz `json:"desde"`
+}
+
+type ChequesSueltosRow struct {
+	ID            string    `json:"id"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	Tipo          string    `json:"tipo"`
+	Numero        string    `json:"numero"`
+	Banco         *string   `json:"banco"`
+	Importe       float64   `json:"importe"`
+	Estado        string    `json:"estado"`
+	FechaPago     time.Time `json:"fechaPago"`
+	MotivoRechazo *string   `json:"motivoRechazo"`
+}
+
+func (q *Queries) ChequesSueltos(ctx context.Context, arg ChequesSueltosParams) ([]ChequesSueltosRow, error) {
+	rows, err := q.db.Query(ctx, chequesSueltos, arg.CustomerID, arg.Desde)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChequesSueltosRow{}
+	for rows.Next() {
+		var i ChequesSueltosRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UpdatedAt,
+			&i.Tipo,
+			&i.Numero,
+			&i.Banco,
+			&i.Importe,
+			&i.Estado,
+			&i.FechaPago,
+			&i.MotivoRechazo,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const clienteParaCredito = `-- name: ClienteParaCredito :one
+SELECT limite_credito::float8 AS limite_credito, estado::text AS estado, dias_credito, cuenta_bloqueada, motivo_bloqueo
+FROM customers WHERE id = $1
+`
+
+type ClienteParaCreditoRow struct {
+	LimiteCredito   float64 `json:"limiteCredito"`
+	Estado          string  `json:"estado"`
+	DiasCredito     int32   `json:"diasCredito"`
+	CuentaBloqueada bool    `json:"cuentaBloqueada"`
+	MotivoBloqueo   *string `json:"motivoBloqueo"`
+}
+
+func (q *Queries) ClienteParaCredito(ctx context.Context, id string) (ClienteParaCreditoRow, error) {
+	row := q.db.QueryRow(ctx, clienteParaCredito, id)
+	var i ClienteParaCreditoRow
+	err := row.Scan(
+		&i.LimiteCredito,
+		&i.Estado,
+		&i.DiasCredito,
+		&i.CuentaBloqueada,
+		&i.MotivoBloqueo,
+	)
+	return i, err
+}
+
+const comprasDeContado = `-- name: ComprasDeContado :many
+SELECT id, created_at, numero, total::float8 AS total, estado_pago::text AS estado_pago
+FROM orders
+WHERE customer_id = $1 AND (medio_pago IS NULL OR medio_pago <> 'cuenta_corriente') AND estado <> 'cancelado'
+  AND ($3::timestamptz IS NULL OR created_at >= $3)
+ORDER BY created_at DESC
+LIMIT $2
+`
+
+type ComprasDeContadoParams struct {
+	CustomerID *string            `json:"customerId"`
+	Limit      int32              `json:"limit"`
+	Desde      pgtype.Timestamptz `json:"desde"`
+}
+
+type ComprasDeContadoRow struct {
+	ID         string    `json:"id"`
+	CreatedAt  time.Time `json:"createdAt"`
+	Numero     string    `json:"numero"`
+	Total      float64   `json:"total"`
+	EstadoPago string    `json:"estadoPago"`
+}
+
+func (q *Queries) ComprasDeContado(ctx context.Context, arg ComprasDeContadoParams) ([]ComprasDeContadoRow, error) {
+	rows, err := q.db.Query(ctx, comprasDeContado, arg.CustomerID, arg.Limit, arg.Desde)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComprasDeContadoRow{}
+	for rows.Next() {
+		var i ComprasDeContadoRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.Numero,
+			&i.Total,
+			&i.EstadoPago,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const crearChequeRecibido = `-- name: CrearChequeRecibido :one
 INSERT INTO cheques (sentido, tipo, numero, banco, librador, emision, fecha_pago, importe, estado, customer_id,
   circuito, receipt_id, order_payment_id, created_by_user_id)
@@ -409,6 +541,67 @@ func (q *Queries) EstadoDeCheque(ctx context.Context, id string) (EstadoCheque, 
 	return estado, err
 }
 
+const libroDelCliente = `-- name: LibroDelCliente :many
+SELECT m.id, m.created_at, m.tipo::text AS tipo, m.monto::float8 AS monto, m.detalle, m.referencia,
+  o.id AS pedido_id, r.id AS recibo_id, r.numero AS recibo_numero, r.estado AS recibo_estado
+FROM account_movements m
+LEFT JOIN orders o ON o.numero = m.referencia
+LEFT JOIN receipts r ON r.id = m.receipt_id
+WHERE m.customer_id = $1 AND ($3::timestamptz IS NULL OR m.created_at >= $3)
+ORDER BY m.created_at DESC
+LIMIT $2
+`
+
+type LibroDelClienteParams struct {
+	CustomerID string             `json:"customerId"`
+	Limit      int32              `json:"limit"`
+	Desde      pgtype.Timestamptz `json:"desde"`
+}
+
+type LibroDelClienteRow struct {
+	ID           string        `json:"id"`
+	CreatedAt    time.Time     `json:"createdAt"`
+	Tipo         string        `json:"tipo"`
+	Monto        float64       `json:"monto"`
+	Detalle      *string       `json:"detalle"`
+	Referencia   *string       `json:"referencia"`
+	PedidoID     *string       `json:"pedidoId"`
+	ReciboID     *string       `json:"reciboId"`
+	ReciboNumero *string       `json:"reciboNumero"`
+	ReciboEstado *EstadoRecibo `json:"reciboEstado"`
+}
+
+func (q *Queries) LibroDelCliente(ctx context.Context, arg LibroDelClienteParams) ([]LibroDelClienteRow, error) {
+	rows, err := q.db.Query(ctx, libroDelCliente, arg.CustomerID, arg.Limit, arg.Desde)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LibroDelClienteRow{}
+	for rows.Next() {
+		var i LibroDelClienteRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.Tipo,
+			&i.Monto,
+			&i.Detalle,
+			&i.Referencia,
+			&i.PedidoID,
+			&i.ReciboID,
+			&i.ReciboNumero,
+			&i.ReciboEstado,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const marcarReciboAnulado = `-- name: MarcarReciboAnulado :exec
 UPDATE receipts SET estado = 'anulado', motivo_anulacion = $2, anulado_at = now(), anulado_por_user_id = $3,
   anulacion_movement_id = $4
@@ -432,6 +625,35 @@ func (q *Queries) MarcarReciboAnulado(ctx context.Context, arg MarcarReciboAnula
 	return err
 }
 
+const movimientosParaAging = `-- name: MovimientosParaAging :many
+SELECT monto::float8 AS monto, created_at FROM account_movements WHERE customer_id = $1
+`
+
+type MovimientosParaAgingRow struct {
+	Monto     float64   `json:"monto"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+func (q *Queries) MovimientosParaAging(ctx context.Context, customerID string) ([]MovimientosParaAgingRow, error) {
+	rows, err := q.db.Query(ctx, movimientosParaAging, customerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MovimientosParaAgingRow{}
+	for rows.Next() {
+		var i MovimientosParaAgingRow
+		if err := rows.Scan(&i.Monto, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nombreDelCliente = `-- name: NombreDelCliente :one
 
 SELECT nombre, razon_social FROM customers WHERE id = $1
@@ -449,6 +671,98 @@ func (q *Queries) NombreDelCliente(ctx context.Context, id string) (NombreDelCli
 	var i NombreDelClienteRow
 	err := row.Scan(&i.Nombre, &i.RazonSocial)
 	return i, err
+}
+
+const pagosInformados = `-- name: PagosInformados :many
+SELECT id, created_at, monto::float8 AS monto, estado::text AS estado, medio, motivo_rechazo
+FROM payments
+WHERE customer_id = $1 AND tipo = 'deuda' AND estado IN ('en_revision', 'rechazado')
+  AND ($2::timestamptz IS NULL OR created_at >= $2)
+ORDER BY created_at DESC
+`
+
+type PagosInformadosParams struct {
+	CustomerID *string            `json:"customerId"`
+	Desde      pgtype.Timestamptz `json:"desde"`
+}
+
+type PagosInformadosRow struct {
+	ID            string    `json:"id"`
+	CreatedAt     time.Time `json:"createdAt"`
+	Monto         float64   `json:"monto"`
+	Estado        string    `json:"estado"`
+	Medio         *string   `json:"medio"`
+	MotivoRechazo *string   `json:"motivoRechazo"`
+}
+
+func (q *Queries) PagosInformados(ctx context.Context, arg PagosInformadosParams) ([]PagosInformadosRow, error) {
+	rows, err := q.db.Query(ctx, pagosInformados, arg.CustomerID, arg.Desde)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PagosInformadosRow{}
+	for rows.Next() {
+		var i PagosInformadosRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.Monto,
+			&i.Estado,
+			&i.Medio,
+			&i.MotivoRechazo,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const partesDeRecibos = `-- name: PartesDeRecibos :many
+SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo
+FROM receipt_parts p LEFT JOIN cheques c ON c.id = p.cheque_id
+WHERE p.receipt_id = ANY($1::uuid[])
+ORDER BY p.orden
+`
+
+type PartesDeRecibosRow struct {
+	ReceiptID string      `json:"receiptId"`
+	Medio     string      `json:"medio"`
+	Importe   float64     `json:"importe"`
+	Banco     *string     `json:"banco"`
+	Numero    *string     `json:"numero"`
+	Tipo      *TipoCheque `json:"tipo"`
+}
+
+func (q *Queries) PartesDeRecibos(ctx context.Context, recibos []string) ([]PartesDeRecibosRow, error) {
+	rows, err := q.db.Query(ctx, partesDeRecibos, recibos)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PartesDeRecibosRow{}
+	for rows.Next() {
+		var i PartesDeRecibosRow
+		if err := rows.Scan(
+			&i.ReceiptID,
+			&i.Medio,
+			&i.Importe,
+			&i.Banco,
+			&i.Numero,
+			&i.Tipo,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const pedidoPagado = `-- name: PedidoPagado :exec
@@ -508,4 +822,15 @@ func (q *Queries) ReciboPorID(ctx context.Context, id string) (ReciboPorIDRow, e
 		&i.Estado,
 	)
 	return i, err
+}
+
+const saldoDeCliente = `-- name: SaldoDeCliente :one
+SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1
+`
+
+func (q *Queries) SaldoDeCliente(ctx context.Context, customerID string) (float64, error) {
+	row := q.db.QueryRow(ctx, saldoDeCliente, customerID)
+	var column_1 float64
+	err := row.Scan(&column_1)
+	return column_1, err
 }

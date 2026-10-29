@@ -65,3 +65,71 @@ func Cantidad(v float64) string {
 	}
 	return signo + Miles(entero) + dec
 }
+
+// redondearDecimal redondea un número a d decimales como Intl.NumberFormat:
+// sobre su representación decimal más corta (la de String(n)), con la mitad
+// hacia arriba. Por eso (1.005).toLocaleString da «1,01» y (1.005).toFixed(2)
+// da «1.00»: toFixed mira el valor binario exacto (1.00499…). Devuelve la
+// parte entera y la decimal, sin signo.
+func redondearDecimal(v float64, d int) (entero, dec string) {
+	s := strconv.FormatFloat(math.Abs(v), 'f', -1, 64)
+	e, f, _ := strings.Cut(s, ".")
+	if len(f) <= d {
+		return e, f + strings.Repeat("0", d-len(f))
+	}
+	sube := f[d] >= '5'
+	digitos := []byte(e + f[:d])
+	if sube {
+		i := len(digitos) - 1
+		for ; i >= 0; i-- {
+			if digitos[i] == '9' {
+				digitos[i] = '0'
+				continue
+			}
+			digitos[i]++
+			break
+		}
+		if i < 0 {
+			digitos = append([]byte{'1'}, digitos...)
+		}
+	}
+	return string(digitos[:len(digitos)-d]), string(digitos[len(digitos)-d:])
+}
+
+// Moneda es toLocaleString("es-AR", { style: "currency", currency: "ARS" }):
+// «$ 1.234,56» (con espacio duro), «-$ 1.234,50»; el -0 lleva signo.
+func Moneda(v float64) string {
+	e, d := redondearDecimal(v, 2)
+	signo := ""
+	if math.Signbit(v) {
+		signo = "-"
+	}
+	return signo + "$ " + Miles(e) + "," + d
+}
+
+// Numero es toLocaleString("es-AR") sin opciones: hasta tres decimales, sin
+// ceros al final («1.234,568», «0,5»).
+func Numero(v float64) string {
+	e, d := redondearDecimal(v, 3)
+	d = strings.TrimRight(d, "0")
+	signo := ""
+	if math.Signbit(v) {
+		signo = "-"
+	}
+	t := Miles(e)
+	if d != "" {
+		t += "," + d
+	}
+	return signo + t
+}
+
+// MonedaEntera es Intl con currency ARS y maximumFractionDigits 0:
+// «$ 1.235», «-$ 5».
+func MonedaEntera(v float64) string {
+	e, _ := redondearDecimal(v, 0)
+	signo := ""
+	if math.Signbit(v) {
+		signo = "-"
+	}
+	return signo + "$ " + Miles(e)
+}

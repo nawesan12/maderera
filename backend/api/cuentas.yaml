@@ -1,0 +1,754 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Clientes y cuenta corriente
+  version: "1"
+  description: |
+    La cartera de clientes, su cuenta corriente, los cobros con recibo, los
+    cheques, los vendedores y el seguimiento de cobranza; y la cuenta
+    corriente que ve el cliente en el portal. Cada cobro pasa por
+    EmitirRecibo (la única puerta para la plata de un cliente). Leer:
+    cualquier persona del panel; anular, cargar cheques, movimientos a mano,
+    bloqueo y plazo: solo el admin. El resumen y el recibo los puede pedir
+    también el servidor de Next con el secreto interno (los PDF y los avisos).
+paths:
+  /api/v1/admin/clientes:
+    get:
+      operationId: ListarClientes
+      parameters:
+        - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: tipo, in: query, schema: { type: string } }
+        - { name: rubro, in: query, schema: { type: string } }
+        - { name: vendedor, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Los activos, por nombre
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ClienteListado" } }
+    post:
+      operationId: GuardarCliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormCliente" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/clientes/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: FichaDeCliente
+      responses:
+        "200":
+          description: La ficha
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ficha" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/clientes/{id}/historial:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: HistorialDeCliente
+      parameters:
+        - { name: periodo, in: query, schema: { type: string, enum: ["3m", "6m", "12m", todo] } }
+        - { name: filtro, in: query, schema: { $ref: "#/components/schemas/Filtro" } }
+      responses:
+        "200":
+          description: Los movimientos, del más nuevo al más viejo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Historial" }
+  /api/v1/admin/clientes/{id}/resumen:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: ResumenDeCuenta
+      responses:
+        "200":
+          description: El resumen para imprimir
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Resumen" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/clientes/{id}/credito:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: CreditoDeCliente
+      parameters:
+        - { name: monto, in: query, schema: { type: number, format: double, default: 0 } }
+      responses:
+        "200":
+          description: Si puede comprar a cuenta, y por qué no
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Credito" }
+  /api/v1/admin/clientes/{id}/movimientos:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: RegistrarMovimiento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tipo, monto]
+              additionalProperties: false
+              properties:
+                tipo: { type: string }
+                monto: { type: string }
+                detalle: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/clientes/{id}/cuenta-web:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: VincularCuentaWeb
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cuentaWebId]
+              additionalProperties: false
+              properties:
+                cuentaWebId: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/clientes/{id}/bloqueo:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: BloquearCuenta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bloquear]
+              additionalProperties: false
+              properties:
+                bloquear: { type: boolean }
+                motivo: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/clientes/{id}/plazo:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: CambiarPlazo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dias]
+              additionalProperties: false
+              properties:
+                dias: { type: number, format: double }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/clientes/{id}/cobros:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: CobrarACliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partes]
+              additionalProperties: false
+              properties:
+                orderId: { type: string }
+                concepto: { type: string }
+                partes: { type: string, description: "el JSON de las partes, como lo arma el formulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/recibos/{id}/anular:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: AnularRecibo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [motivo]
+              additionalProperties: false
+              properties:
+                motivo: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/recibos/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: ReciboCompleto
+      description: El personal, el cliente dueño o el servidor de Next.
+      responses:
+        "200":
+          description: El recibo con sus partes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Recibo" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cheques:
+    get:
+      operationId: ListarCheques
+      parameters:
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: sentido, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Los vivos primero, por fecha de pago
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ChequeListado" } }
+    post:
+      operationId: CargarCheque
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                sentido: { type: string }
+                tipo: { type: string }
+                numero: { type: string }
+                banco: { type: string }
+                librador: { type: string }
+                fechaPago: { type: string }
+                importe: { type: string }
+                customerId: { type: string }
+                circuito: { type: string }
+                notas: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cheques/cartera:
+    get:
+      operationId: ChequesEnCartera
+      responses:
+        "200":
+          description: Los recibidos que están en la cartera
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, numero, banco, fechaPago, importe, tipo, cliente]
+                  properties:
+                    id: { type: string }
+                    numero: { type: string }
+                    banco: { type: string, nullable: true }
+                    fechaPago: { type: string, format: date-time }
+                    importe: { type: number }
+                    tipo: { type: string }
+                    cliente: { type: string, nullable: true }
+  /api/v1/admin/cheques/{id}/estado:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: CambiarEstadoDeCheque
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              additionalProperties: false
+              properties:
+                estado: { type: string }
+                motivo: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/vendedores:
+    get:
+      operationId: ListarVendedores
+      parameters:
+        - { name: activos, in: query, schema: { type: boolean, default: false } }
+      responses:
+        "200":
+          description: Por nombre, con cuántos clientes tiene cada uno
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, nombre, tipo, activo, clientes]
+                  properties:
+                    id: { type: string }
+                    nombre: { type: string }
+                    tipo: { type: string, enum: [salon, calle] }
+                    activo: { type: boolean }
+                    clientes: { type: integer }
+    post:
+      operationId: GuardarVendedor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre]
+              additionalProperties: false
+              properties:
+                id: { type: string }
+                nombre: { type: string }
+                tipo: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/vendedores/{id}/alternar:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: AlternarVendedor
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/seguimiento:
+    get:
+      operationId: ListarGestiones
+      parameters:
+        - { name: cerradas, in: query, schema: { type: boolean, default: false } }
+        - { name: cliente, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: La próxima acción más cercana primero
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Gestion" } }
+    post:
+      operationId: CrearGestion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                customerId: { type: string }
+                asunto: { type: string }
+                notas: { type: string }
+                proximaAccion: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/seguimiento/vencidas:
+    get:
+      operationId: GestionesVencidas
+      responses:
+        "200":
+          description: Cuántas abiertas tienen la próxima acción vencida
+          content:
+            application/json:
+              schema: { type: object, required: [cuantas], properties: { cuantas: { type: integer } } }
+  /api/v1/admin/seguimiento/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: MoverGestion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [etapa]
+              additionalProperties: false
+              properties:
+                etapa: { type: string }
+                nota: { type: string }
+                proximaAccion: { type: string }
+      responses:
+        "200":
+          description: Movido; el cliente, para refrescar su ficha
+          content:
+            application/json:
+              schema: { type: object, required: [ok, customerId], properties: { ok: { type: string }, customerId: { type: string } } }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/cuenta/corriente:
+    get:
+      operationId: MiCuentaCorriente
+      responses:
+        "200":
+          description: La cuenta del cliente de la sesión (vacía si no tiene ficha)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [saldo, limiteCredito, disponible, movimientos]
+                properties:
+                  saldo: { type: number }
+                  limiteCredito: { type: number }
+                  disponible: { type: number }
+                  movimientos: { type: array, items: { $ref: "#/components/schemas/MovimientoDelResumen" } }
+        "401": { $ref: "#/components/responses/Problema" }
+  /api/v1/cuenta/movimientos:
+    get:
+      operationId: MisMovimientos
+      parameters:
+        - { name: periodo, in: query, schema: { type: string, enum: ["3m", "6m", "12m", todo] } }
+        - { name: filtro, in: query, schema: { $ref: "#/components/schemas/Filtro" } }
+      responses:
+        "200":
+          description: El historial del cliente de la sesión
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Historial" }
+        "401": { $ref: "#/components/responses/Problema" }
+  /api/v1/cuenta/credito:
+    get:
+      operationId: MiCredito
+      parameters:
+        - { name: monto, in: query, schema: { type: number, format: double, default: 0 } }
+      responses:
+        "200":
+          description: Si puede pagar esta compra con la cuenta corriente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [habilitado, saldo, limiteCredito, disponible, motivo]
+                properties:
+                  habilitado: { type: boolean }
+                  saldo: { type: number }
+                  limiteCredito: { type: number }
+                  disponible: { type: number }
+                  soloSaldoAFavor: { type: boolean }
+                  motivo: { type: string, nullable: true }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+    Ok:
+      description: Hecho, con el mensaje para la pantalla
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ok]
+            properties:
+              ok: { type: string }
+              aviso: { type: string }
+              receiptId: { type: string }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    Filtro: { type: string, enum: [todo, compras, pagos, cheques, ajustes] }
+    FormCliente:
+      type: object
+      required: [nombre]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        razonSocial: { type: string }
+        cuit: { type: string }
+        condicionIva: { type: string }
+        tipo: { type: string }
+        email: { type: string }
+        telefono: { type: string }
+        direccion: { type: string }
+        rubro: { type: string }
+        asesor: { type: string }
+        sellerId: { type: string }
+        limiteCredito: { type: string }
+        priceListId: { type: string }
+        notas: { type: string }
+    Prioridad:
+      type: object
+      required: [urgencia, puntaje, diasVencida]
+      properties:
+        urgencia: { type: string }
+        puntaje: { type: number }
+        diasVencida: { type: integer }
+    ClienteListado:
+      type: object
+      required: [id, nombre, razonSocial, cuit, rubro, tipo, estado, asesor, telefono, email, saldo, limiteCredito, diasCredito,
+        cuentaBloqueada, motivoBloqueo, totalComprado, ultimaCompra, deuda]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        razonSocial: { type: string, nullable: true }
+        cuit: { type: string, nullable: true }
+        rubro: { type: string, nullable: true }
+        tipo: { type: string, enum: [particular, profesional] }
+        estado: { type: string, enum: [activo, moroso, inactivo] }
+        asesor: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        saldo: { type: number }
+        limiteCredito: { type: number }
+        diasCredito: { type: integer }
+        cuentaBloqueada: { type: boolean }
+        motivoBloqueo: { type: string, nullable: true }
+        totalComprado: { type: number }
+        ultimaCompra: { type: string, format: date-time, nullable: true }
+        deuda:
+          type: object
+          nullable: true
+          description: lo vencido y la prioridad de cobranza, solo de quien debe
+          required: [vencido, diasDeLaMasVieja, prioridad]
+          properties:
+            vencido: { type: number }
+            diasDeLaMasVieja: { type: integer, nullable: true }
+            prioridad: { $ref: "#/components/schemas/Prioridad" }
+    Comprobante:
+      type: object
+      required: [id, numero, estado, total, createdAt]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        estado: { type: string }
+        total: { type: string }
+        createdAt: { type: string, format: date-time }
+    Ficha:
+      type: object
+      required: [id, userId, nombre, razonSocial, cuit, condicionIva, email, telefono, direccion, rubro, tipo, estado, priceListId,
+        limiteCredito, asesor, notas, active, createdAt, updatedAt, codigoLegacy, sellerId, diasCredito, cuentaBloqueada,
+        motivoBloqueo, vendedor, cuentaWebSinVincular, saldo, pedidos, presupuestos]
+      properties:
+        id: { type: string }
+        userId: { type: string, nullable: true }
+        nombre: { type: string }
+        razonSocial: { type: string, nullable: true }
+        cuit: { type: string, nullable: true }
+        condicionIva: { type: string, enum: [responsable_inscripto, monotributista, exento, consumidor_final, no_categorizado] }
+        email: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        direccion: { type: string, nullable: true }
+        rubro: { type: string, nullable: true }
+        tipo: { type: string, enum: [particular, profesional] }
+        estado: { type: string, enum: [activo, moroso, inactivo] }
+        priceListId: { type: string, nullable: true }
+        limiteCredito: { type: string }
+        asesor: { type: string, nullable: true }
+        notas: { type: string, nullable: true }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        codigoLegacy: { type: string, nullable: true }
+        sellerId: { type: string, nullable: true }
+        diasCredito: { type: integer }
+        cuentaBloqueada: { type: boolean }
+        motivoBloqueo: { type: string, nullable: true }
+        vendedor: { type: string, nullable: true }
+        cuentaWebSinVincular:
+          type: object
+          nullable: true
+          required: [id, nombre, createdAt]
+          properties:
+            id: { type: string }
+            nombre: { type: string }
+            createdAt: { type: string, format: date-time }
+        saldo: { type: number }
+        pedidos: { type: array, items: { $ref: "#/components/schemas/Comprobante" } }
+        presupuestos: { type: array, items: { $ref: "#/components/schemas/Comprobante" } }
+    MovimientoDelCliente:
+      type: object
+      required: [id, fecha, clase, titulo, detalle, importe, importeInformativo, pedido, recibo]
+      properties:
+        id: { type: string }
+        fecha: { type: string, format: date-time }
+        clase:
+          type: string
+          enum: [compra, pago, nota_credito, nota_debito, ajuste, compra_contado, pago_en_revision, pago_rechazado, cheque_por_recibir, cheque_rechazado]
+        titulo: { type: string }
+        detalle: { type: string, nullable: true }
+        importe: { type: number, nullable: true }
+        importeInformativo: { type: number, nullable: true }
+        pedido:
+          type: object
+          nullable: true
+          required: [id, numero]
+          properties: { id: { type: string }, numero: { type: string } }
+        recibo:
+          type: object
+          nullable: true
+          required: [id, numero, anulado]
+          properties: { id: { type: string }, numero: { type: string }, anulado: { type: boolean } }
+    Historial:
+      type: object
+      required: [movimientos, hayMas, saldo]
+      properties:
+        movimientos: { type: array, items: { $ref: "#/components/schemas/MovimientoDelCliente" } }
+        hayMas: { type: boolean }
+        saldo: { type: number }
+    MovimientoDelResumen:
+      type: object
+      required: [id, fecha, tipo, detalle, referencia, receiptId, monto, saldo]
+      properties:
+        id: { type: string }
+        fecha: { type: string, format: date-time }
+        tipo: { type: string }
+        detalle: { type: string, nullable: true }
+        referencia: { type: string, nullable: true }
+        receiptId: { type: string, nullable: true }
+        monto: { type: number }
+        saldo: { type: number }
+    Tramo:
+      type: object
+      required: [etiqueta, desde, hasta, monto]
+      properties:
+        etiqueta: { type: string }
+        desde: { type: integer }
+        hasta: { type: integer, nullable: true }
+        monto: { type: number }
+    Resumen:
+      type: object
+      required: [cliente, movimientos, saldo, aging]
+      properties:
+        cliente:
+          type: object
+          required: [id, nombre, razonSocial, cuit, direccion, limiteCredito]
+          properties:
+            id: { type: string }
+            nombre: { type: string }
+            razonSocial: { type: string, nullable: true }
+            cuit: { type: string, nullable: true }
+            direccion: { type: string, nullable: true }
+            limiteCredito: { type: number }
+        movimientos: { type: array, items: { $ref: "#/components/schemas/MovimientoDelResumen" } }
+        saldo: { type: number }
+        aging:
+          type: object
+          required: [tramos, total, aFavor, diasDeLaMasVieja]
+          properties:
+            tramos: { type: array, items: { $ref: "#/components/schemas/Tramo" } }
+            total: { type: number }
+            aFavor: { type: number }
+            diasDeLaMasVieja: { type: integer, nullable: true }
+    Credito:
+      type: object
+      required: [puede, saldo, limiteCredito, disponible, diasDeLaMasVieja, motivo, autorizable]
+      properties:
+        puede: { type: boolean }
+        saldo: { type: number }
+        limiteCredito: { type: number }
+        disponible: { type: number }
+        diasDeLaMasVieja: { type: integer, nullable: true }
+        motivo: { type: string, nullable: true }
+        autorizable: { type: boolean }
+        soloSaldoAFavor: { type: boolean }
+    Recibo:
+      type: object
+      required: [id, numero, fecha, estado, origen, concepto, total, recibidoDe, motivoAnulacion, anuladoAt, cliente, partes,
+        saldoDespues, emitidoPor]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        fecha: { type: string, format: date-time }
+        estado: { type: string, enum: [emitido, anulado] }
+        origen: { type: string }
+        concepto: { type: string, nullable: true }
+        total: { type: number }
+        recibidoDe: { type: string }
+        motivoAnulacion: { type: string, nullable: true }
+        anuladoAt: { type: string, format: date-time, nullable: true }
+        cliente:
+          type: object
+          nullable: true
+          required: [id, cuit, direccion]
+          properties:
+            id: { type: string }
+            cuit: { type: string, nullable: true }
+            direccion: { type: string, nullable: true }
+        partes:
+          type: array
+          items:
+            type: object
+            required: [medio, importe, referencia, cheque]
+            properties:
+              medio: { type: string, enum: [efectivo, transferencia, deposito, cheque, echeq, tarjeta_debito, tarjeta_credito, mercado_pago, retencion] }
+              importe: { type: number }
+              referencia: { type: string, nullable: true }
+              cheque:
+                type: object
+                nullable: true
+                required: [id, tipo, numero, banco, librador, fechaPago, estado]
+                properties:
+                  id: { type: string }
+                  tipo: { type: string, enum: [fisico, echeq] }
+                  numero: { type: string }
+                  banco: { type: string, nullable: true }
+                  librador: { type: string, nullable: true }
+                  fechaPago: { type: string, format: date-time }
+                  estado: { type: string }
+        saldoDespues: { type: number, nullable: true }
+        emitidoPor: { type: string, nullable: true }
+    ChequeListado:
+      type: object
+      required: [id, sentido, tipo, numero, banco, librador, fechaPago, importe, estado, cliente, customerId, circuito, proveedor,
+        notas, receiptId, recibo, motivoRechazo]
+      properties:
+        id: { type: string }
+        sentido: { type: string, enum: [recibido, entregado] }
+        tipo: { type: string, enum: [fisico, echeq] }
+        numero: { type: string }
+        banco: { type: string, nullable: true }
+        librador: { type: string, nullable: true }
+        fechaPago: { type: string, format: date-time }
+        importe: { type: number }
+        estado: { type: string }
+        cliente: { type: string, nullable: true }
+        customerId: { type: string, nullable: true }
+        circuito: { type: string }
+        proveedor: { type: string, nullable: true }
+        notas: { type: string, nullable: true }
+        receiptId: { type: string, nullable: true }
+        recibo: { type: string, nullable: true }
+        motivoRechazo: { type: string, nullable: true }
+    Gestion:
+      type: object
+      required: [id, customerId, cliente, etapa, asunto, notas, proximaAccionAt, vencida, createdAt]
+      properties:
+        id: { type: string }
+        customerId: { type: string }
+        cliente: { type: string }
+        etapa: { type: string, enum: [pendiente, hablando, promesa, cerrado] }
+        asunto: { type: string }
+        notas: { type: string, nullable: true }
+        proximaAccionAt: { type: string, format: date-time, nullable: true }
+        vencida: { type: boolean }
+        createdAt: { type: string, format: date-time }

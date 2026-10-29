@@ -84,3 +84,52 @@ UPDATE cheques SET estado = $2, motivo_rechazo = $3, updated_at = now() WHERE id
 -- name: CargarCheque :exec
 INSERT INTO cheques (sentido, tipo, numero, banco, librador, fecha_pago, importe, estado, customer_id, circuito, notas, created_by_user_id)
 VALUES ($1, $2, $3, $4, $5, $6, sqlc.arg(importe)::text::numeric, $7, $8, $9, $10, $11);
+
+-- name: ClienteParaCredito :one
+SELECT limite_credito::float8 AS limite_credito, estado::text AS estado, dias_credito, cuenta_bloqueada, motivo_bloqueo
+FROM customers WHERE id = $1;
+
+-- name: MovimientosParaAging :many
+SELECT monto::float8 AS monto, created_at FROM account_movements WHERE customer_id = $1;
+
+-- name: SaldoDeCliente :one
+SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1;
+
+-- name: LibroDelCliente :many
+SELECT m.id, m.created_at, m.tipo::text AS tipo, m.monto::float8 AS monto, m.detalle, m.referencia,
+  o.id AS pedido_id, r.id AS recibo_id, r.numero AS recibo_numero, r.estado AS recibo_estado
+FROM account_movements m
+LEFT JOIN orders o ON o.numero = m.referencia
+LEFT JOIN receipts r ON r.id = m.receipt_id
+WHERE m.customer_id = $1 AND (sqlc.narg(desde)::timestamptz IS NULL OR m.created_at >= sqlc.narg(desde))
+ORDER BY m.created_at DESC
+LIMIT $2;
+
+-- name: ComprasDeContado :many
+SELECT id, created_at, numero, total::float8 AS total, estado_pago::text AS estado_pago
+FROM orders
+WHERE customer_id = $1 AND (medio_pago IS NULL OR medio_pago <> 'cuenta_corriente') AND estado <> 'cancelado'
+  AND (sqlc.narg(desde)::timestamptz IS NULL OR created_at >= sqlc.narg(desde))
+ORDER BY created_at DESC
+LIMIT $2;
+
+-- name: PagosInformados :many
+SELECT id, created_at, monto::float8 AS monto, estado::text AS estado, medio, motivo_rechazo
+FROM payments
+WHERE customer_id = $1 AND tipo = 'deuda' AND estado IN ('en_revision', 'rechazado')
+  AND (sqlc.narg(desde)::timestamptz IS NULL OR created_at >= sqlc.narg(desde))
+ORDER BY created_at DESC;
+
+-- name: ChequesSueltos :many
+SELECT id, updated_at, tipo::text AS tipo, numero, banco, importe::float8 AS importe, estado::text AS estado, fecha_pago, motivo_rechazo
+FROM cheques
+WHERE customer_id = $1 AND sentido = 'recibido'
+  AND (estado = 'informado' OR (estado = 'rechazado' AND receipt_id IS NULL))
+  AND (sqlc.narg(desde)::timestamptz IS NULL OR created_at >= sqlc.narg(desde))
+ORDER BY fecha_pago;
+
+-- name: PartesDeRecibos :many
+SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo
+FROM receipt_parts p LEFT JOIN cheques c ON c.id = p.cheque_id
+WHERE p.receipt_id = ANY(sqlc.arg(recibos)::uuid[])
+ORDER BY p.orden;

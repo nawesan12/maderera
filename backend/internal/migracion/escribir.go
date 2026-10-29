@@ -50,14 +50,61 @@ func comparable(texto string) string {
 	return strings.Join(campos, " ")
 }
 
-// mismoNombre compara una columna de nombre con un texto ya pasado por
-// comparable. El TS comparaba `lower(nombre) = comparable(texto)`: el
+// porNombre encuentra una ficha por su nombre comparable (y, en productos,
+// su categoría). El TS buscaba `lower(nombre) = comparable(texto)`: el
 // archivo sin tildes contra la base con tildes, y un «José Pérez» sin código
-// ni CUIT no se encontraba nunca y se duplicaba en cada corrida. Se compara
-// también la columna sin tildes ni espacios de más; lo que el TS encontraba
-// se sigue encontrando.
-func mismoNombre(columna, parametro string) string {
-	return fmt.Sprintf(`(lower(%[1]s) = %[2]s OR btrim(regexp_replace(lower(f_unaccent(%[1]s)), '\s+', ' ', 'g')) = %[2]s)`, columna, parametro)
+// ni CUIT no se encontraba nunca y se duplicaba en cada corrida. Acá los dos
+// lados pasan por comparable, así que lo que el TS encontraba se sigue
+// encontrando (si `lower(nombre)` ya era igual, no tenía tildes ni espacios
+// de más) y además lo que tiene tildes.
+//
+// La tabla se lee una vez por lote y se mantiene al día con lo que el lote
+// escribe: comparar con tildes en SQL (f_unaccent + regexp sobre cada fila)
+// recorría la tabla entera por cada fila del archivo, y no hay índice.
+type porNombre struct {
+	consulta string // devuelve id, nombre y el agrupador ("" si no hay)
+	cargado  bool
+	ids      map[string]string // clave → id (el primero, como el LIMIT 1)
+	claves   map[string]string // id → clave
+}
+
+func claveDeNombre(nombre, grupo string) string { return grupo + "\x00" + comparable(nombre) }
+
+func (p *porNombre) buscar(ctx context.Context, tx pgx.Tx, nombre, grupo string) (string, error) {
+	if !p.cargado {
+		p.ids, p.claves = map[string]string{}, map[string]string{}
+		rows, err := tx.Query(ctx, p.consulta)
+		if err != nil {
+			return "", err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id, n, g string
+			if err := rows.Scan(&id, &n, &g); err != nil {
+				return "", err
+			}
+			p.poner(id, claveDeNombre(n, g))
+		}
+		if err := rows.Err(); err != nil {
+			return "", err
+		}
+		p.cargado = true
+	}
+	return p.ids[claveDeNombre(nombre, grupo)], nil
+}
+
+// poner anota (o cambia) el nombre de una ficha que escribió el lote.
+func (p *porNombre) poner(id, clave string) {
+	if p.ids == nil {
+		return
+	}
+	if vieja, ok := p.claves[id]; ok && p.ids[vieja] == id {
+		delete(p.ids, vieja)
+	}
+	p.claves[id] = clave
+	if _, ok := p.ids[clave]; !ok {
+		p.ids[clave] = id
+	}
 }
 
 // nulo es `texto || null`.
@@ -130,7 +177,7 @@ func unID(ctx context.Context, tx pgx.Tx, consulta string, args ...any) (string,
 
 // buscarCliente es la cascada de confianza: el código del sistema viejo, el
 // CUIT y recién al final el nombre.
-func buscarCliente(ctx context.Context, tx pgx.Tx, d map[string]string, porNombre bool) (string, error) {
+func buscarCliente(ctx context.Context, tx pgx.Tx, d map[string]string, nombres *porNombre) (string, error) {
 	if d["codigo"] != "" {
 		if id, err := unID(ctx, tx, `SELECT id FROM customers WHERE codigo_legacy = $1 LIMIT 1`, d["codigo"]); id != "" || err != nil {
 			return id, err
@@ -141,16 +188,17 @@ func buscarCliente(ctx context.Context, tx pgx.Tx, d map[string]string, porNombr
 			return id, err
 		}
 	}
-	if !porNombre {
+	if nombres == nil {
 		return "", nil
 	}
-	return unID(ctx, tx, `SELECT id FROM customers WHERE `+mismoNombre("nombre", "$1")+` LIMIT 1`, comparable(d["nombre"]))
+	return nombres.buscar(ctx, tx, d["nombre"], "")
 }
 
 func aplicarClientes(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resultado) error {
+	nombres := &porNombre{consulta: `SELECT id::text, nombre, '' FROM customers ORDER BY created_at, id`}
 	for _, f := range filas {
 		d := f.Datos
-		id, err := buscarCliente(ctx, tx, d, true)
+		id, err := buscarCliente(ctx, tx, d, nombres)
 		if err != nil {
 			return err
 		}
@@ -166,14 +214,16 @@ func aplicarClientes(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resultad
 				notas = $11, codigo_legacy = $12, updated_at = now() WHERE id = $13`, append(args, id)...)
 			res.Actualizados++
 		} else {
-			_, err = tx.Exec(ctx, `INSERT INTO customers (nombre, razon_social, cuit, condicion_iva, email, telefono, direccion,
+			err = tx.QueryRow(ctx, `INSERT INTO customers (nombre, razon_social, cuit, condicion_iva, email, telefono, direccion,
 				tipo, limite_credito, asesor, notas, codigo_legacy, updated_at)
-				VALUES ($1, $2, $3, $4::condicion_iva, $5, $6, $7, $8::tipo_cliente, $9::numeric, $10, $11, $12, now())`, args...)
+				VALUES ($1, $2, $3, $4::condicion_iva, $5, $6, $7, $8::tipo_cliente, $9::numeric, $10, $11, $12, now())
+				RETURNING id::text`, args...).Scan(&id)
 			res.Creados++
 		}
 		if err != nil {
 			return err
 		}
+		nombres.poner(id, claveDeNombre(d["nombre"], ""))
 	}
 	return nil
 }
@@ -217,6 +267,7 @@ func aplicarProductos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resulta
 		return err
 	}
 
+	nombres := &porNombre{consulta: `SELECT id::text, name, category_id::text FROM products ORDER BY created_at, id`}
 	for _, f := range filas {
 		d := f.Datos
 
@@ -234,8 +285,7 @@ func aplicarProductos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resulta
 
 		// Los renglones con el mismo nombre y categoría son medidas de un
 		// mismo producto.
-		producto, err := unID(ctx, tx, `SELECT id FROM products WHERE `+mismoNombre("name", "$1")+` AND category_id = $2 LIMIT 1`,
-			comparable(d["nombre"]), categoria)
+		producto, err := nombres.buscar(ctx, tx, d["nombre"], categoria)
 		if err != nil {
 			return err
 		}
@@ -253,6 +303,7 @@ func aplicarProductos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resulta
 				slug, d["nombre"], categoria, d["descripcion"], nulo(d["marca"]), d["unidad"], alicuota).Scan(&producto); err != nil {
 				return err
 			}
+			nombres.poner(producto, claveDeNombre(d["nombre"], categoria))
 		}
 
 		variante, err := unID(ctx, tx, `SELECT id FROM product_variants WHERE sku = $1 LIMIT 1`, d["sku"])
@@ -422,7 +473,7 @@ func aplicarStock(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resultado, 
 func aplicarSaldos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resultado, op Opciones) error {
 	for _, f := range filas {
 		d := f.Datos
-		cliente, err := buscarCliente(ctx, tx, d, false)
+		cliente, err := buscarCliente(ctx, tx, d, nil)
 		if err != nil {
 			return err
 		}
@@ -466,6 +517,7 @@ func aplicarSaldos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resultado,
 /* ---------------------------- proveedores ---------------------------- */
 
 func aplicarProveedores(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resultado, op Opciones) error {
+	nombres := &porNombre{consulta: `SELECT id::text, nombre, '' FROM suppliers ORDER BY created_at, id`}
 	for _, f := range filas {
 		d := f.Datos
 
@@ -482,7 +534,7 @@ func aplicarProveedores(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resul
 			}
 		}
 		if proveedor == "" {
-			if proveedor, err = unID(ctx, tx, `SELECT id FROM suppliers WHERE `+mismoNombre("nombre", "$1")+` LIMIT 1`, comparable(d["nombre"])); err != nil {
+			if proveedor, err = nombres.buscar(ctx, tx, d["nombre"], ""); err != nil {
 				return err
 			}
 		}
@@ -506,6 +558,7 @@ func aplicarProveedores(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resul
 		if err != nil {
 			return err
 		}
+		nombres.poner(proveedor, claveDeNombre(d["nombre"], ""))
 
 		// El saldo va aparte: la ficha se actualiza siempre, el movimiento
 		// se carga una sola vez.
@@ -534,7 +587,7 @@ func aplicarProveedores(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resul
 // fichaDelCliente busca la ficha sin frenar la fila si no aparece: el
 // sistema viejo tiene bajas y fusiones que la cartera ya no refleja.
 func fichaDelCliente(ctx context.Context, tx pgx.Tx, codigo, cuit string) (*string, error) {
-	id, err := buscarCliente(ctx, tx, map[string]string{"codigo": codigo, "cuit": cuit}, false)
+	id, err := buscarCliente(ctx, tx, map[string]string{"codigo": codigo, "cuit": cuit}, nil)
 	return nulo(id), err
 }
 

@@ -39,7 +39,6 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 | 7 | Facturación ARCA | `go-arca` | hecha (29/10), integrada en `go-cuentas`: CAE fuera de la transacción y recuperable tras un corte; falta homologar con el certificado real |
 | 8 | Compras, proveedores, retenciones | `go-compras` | hecha (29/10), integrada en `go-cuentas`: pagos 6,5×, libro IVA 2,8×; tres bugs de concurrencia arreglados |
 | 9 | WhatsApp | `go-whatsapp` | hecha (29/10), integrada en `go-cuentas`: webhook 1,4×, cola 1,7×; el worker de Go atiende los trabajos de WhatsApp |
-
 | 10 | Campañas, avisos, profesionales, firma | `go-campanas` | hecha (29/10), integrada en `go-cuentas`: 3–6,5× pedidos/s, ¼ de la memoria; eventos guardados en UTC y permisos de aprobar arreglados |
 | 11 | Cortes | `go-cortes` | hecha (29/10), integrada en `go-cuentas`; HTTP 6× con 20 a la vez |
 | 12 | PDF y exportaciones | `go-pdf` | hecha (29/10), integrada en `go-cuentas`: 11 documentos idénticos a pdf-lib, con sus datos desde Go |

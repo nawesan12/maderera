@@ -155,7 +155,11 @@ const FORMATOS_FECHA = new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 45, 46, 47])
  */
 function fechaDeSerie(serie: number): string {
   const dias = Math.floor(serie);
-  const ajuste = dias > 59 ? -1 : 0;
+  // Arreglado en la tanda 13 (igual que en Go): el serie 25569 ya es el
+  // 1/1/1970 contando el día de más, así que desde el 1/3/1900 no se
+  // descuenta nada; antes de eso falta sumar uno. Restando uno, todas las
+  // fechas de un .xlsx salían un día antes.
+  const ajuste = dias > 59 ? 0 : 1;
   const ms = (dias + ajuste - 25569) * 86400000;
   const fraccion = serie - dias;
   return new Date(ms + Math.round(fraccion * 86400000)).toISOString();

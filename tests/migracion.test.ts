@@ -6,13 +6,13 @@ import {
   interpretarNumero,
   normalizarEncabezado,
   partirPlanilla,
-} from "@/lib/csv";
+} from "../scripts/golden/originales/csv";
 import {
   automapear,
   definicionDe,
   faltantes,
   normalizarFilas,
-} from "@/lib/migracion/entidades";
+} from "../scripts/golden/originales/migracion-entidades";
 
 /**
  * La migración corre una sola vez y contra datos que no volvemos a ver: si lee
@@ -94,6 +94,16 @@ describe("interpretación de números", () => {
     expect(interpretarNumero("$ 96.500")).toBe("96500.00");
     expect(interpretarNumero("1.500.000")).toBe("1500000.00");
     expect(interpretarNumero("12345.67")).toBe("12345.67");
+  });
+
+  it("no lee como miles tres decimales detrás de un cero", () => {
+    // "1,234" son mil doscientos treinta y cuatro, pero "0,125" no puede
+    // ser ciento veinticinco (tanda 13).
+    expect(interpretarNumero("1,234")).toBe("1234.00");
+    expect(interpretarNumero("0,125")).toBe("0.13");
+    expect(interpretarNumero("0.125")).toBe("0.13");
+    expect(interpretarNumero(",125")).toBe("0.13");
+    expect(interpretarNumero("-0,125")).toBe("-0.13");
   });
 
   it("entiende los negativos de la contabilidad", () => {

@@ -19,8 +19,8 @@ import {
 } from "@/lib/db/schema";
 import { requireStaff } from "./sesion";
 import { registrarEnBitacora } from "./sesion";
-import { leerFilas, type FilaImportada } from "@/lib/precios-csv";
-import { leerPlanilla } from "@/lib/planilla";
+import { leerFilas, type FilaImportada } from "../../../scripts/golden/originales/precios-csv";
+import { leerPlanilla } from "../../../scripts/golden/originales/planilla";
 
 export interface EstadoPrecios {
   error?: string;

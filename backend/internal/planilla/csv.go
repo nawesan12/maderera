@@ -214,9 +214,12 @@ func InterpretarNumero(bruto string) (string, bool) {
 			normalizado = strings.ReplaceAll(cuerpo, ",", "")
 		}
 	case tieneComa:
-		// "1,234": tres cifras detrás de la (primera) coma son miles.
-		decimales := strings.Split(cuerpo, ",")[1]
-		if len(decimales) == 3 {
+		// "1,234": tres cifras detrás de la (primera) coma son miles, salvo
+		// que adelante haya un cero o nada ("0,125" no son 125; el TS lo
+		// leía así, arreglado en la tanda 13).
+		partes := strings.Split(cuerpo, ",")
+		enteros, decimales := partes[0], partes[1]
+		if len(decimales) == 3 && enteros != "" && enteros != "0" {
 			normalizado = strings.ReplaceAll(cuerpo, ",", "")
 		} else {
 			normalizado = strings.Replace(cuerpo, ",", ".", 1)
@@ -224,7 +227,8 @@ func InterpretarNumero(bruto string) (string, bool) {
 	case tienePunto:
 		// "96.500" son noventa y seis mil quinientos.
 		decimales := cuerpo[strings.LastIndex(cuerpo, ".")+1:]
-		if len(decimales) == 3 {
+		enteros := cuerpo[:strings.Index(cuerpo, ".")]
+		if len(decimales) == 3 && enteros != "" && enteros != "0" {
 			normalizado = strings.ReplaceAll(cuerpo, ".", "")
 		}
 	}

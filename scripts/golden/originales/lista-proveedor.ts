@@ -18,7 +18,7 @@
  * variante corresponde cada código lo hace el DAL.
  */
 
-import { interpretarNumero, normalizarEncabezado } from "../../../lib/csv";
+import { interpretarNumero, normalizarEncabezado } from "./csv";
 
 /** El IVA con el que se pasa de neto a final cuando la lista viene sin él. */
 const IVA_POR_DEFECTO = 21;

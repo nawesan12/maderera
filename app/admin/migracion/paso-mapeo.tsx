@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { DefinicionEntidad, Mapeo } from "@/lib/migracion/entidades";
+import type { DefinicionEntidad, Mapeo } from "@/lib/migracion/tipos";
 
 const SIN_MAPEAR = "-1";
 

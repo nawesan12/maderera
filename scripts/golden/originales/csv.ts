@@ -220,10 +220,12 @@ export function interpretarNumero(bruto: string): string | null {
         ? cuerpo.replace(/\./g, "").replace(",", ".")
         : cuerpo.replace(/,/g, "");
   } else if (tieneComa) {
-    const [, decimales = ""] = cuerpo.split(",");
+    const [enteros, decimales = ""] = cuerpo.split(",");
     // "1,234" con tres cifras detrás es separador de miles, no una fracción.
+    // Salvo que adelante haya un cero o nada: "0,125" no son ciento
+    // veinticinco (arreglado en la tanda 13, igual que en Go).
     normalizado =
-      decimales.length === 3
+      decimales.length === 3 && enteros !== "" && enteros !== "0"
         ? cuerpo.replace(/,/g, "")
         : cuerpo.replace(",", ".");
   } else if (tienePunto) {
@@ -231,7 +233,9 @@ export function interpretarNumero(bruto: string): string | null {
     // quinientos, no noventa y seis con cincuenta. Es la forma habitual de
     // escribir un precio, así que confundirla dividiría el valor por mil.
     const decimales = cuerpo.slice(cuerpo.lastIndexOf(".") + 1);
-    normalizado = decimales.length === 3 ? cuerpo.replace(/\./g, "") : cuerpo;
+    const enteros = cuerpo.slice(0, cuerpo.indexOf("."));
+    normalizado =
+      decimales.length === 3 && enteros !== "" && enteros !== "0" ? cuerpo.replace(/\./g, "") : cuerpo;
   }
 
   const numero = Number(normalizado);

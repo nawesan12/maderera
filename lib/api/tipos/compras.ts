@@ -655,6 +655,7 @@ export interface components {
             diasPago: number;
             /** @enum {string} */
             estado: "activo" | "inactivo";
+            /** Format: double */
             saldo: number;
             /** Format: date-time */
             ultimoMovimiento: string | null;
@@ -683,15 +684,18 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             convenios: string | null;
+            /** Format: double */
             saldo: number;
             movimientos: {
                 id: string;
                 tipo: string;
+                /** Format: double */
                 monto: number;
                 detalle: string | null;
                 referencia: string | null;
                 /** Format: date-time */
                 createdAt: string;
+                /** Format: double */
                 saldo: number;
             }[];
         };
@@ -714,11 +718,14 @@ export interface components {
             filas: {
                 codigo: string;
                 descripcion: string;
+                /** Format: double */
                 costo: number;
+                /** Format: double */
                 precioSugerido: number;
                 fila: number;
                 variantId: string | null;
                 nuestro: string | null;
+                /** Format: double */
                 precioActual: number | null;
             }[];
             problemas: {
@@ -742,6 +749,7 @@ export interface components {
             supplierId: string;
             sucursal: string | null;
             lineas: number;
+            /** Format: double */
             neto: number;
             pendientes: number;
         };
@@ -783,6 +791,7 @@ export interface components {
             supplierId: string;
             sucursal: string | null;
             lineas: number;
+            /** Format: double */
             neto: number;
         };
         Recepcion: {
@@ -825,29 +834,45 @@ export interface components {
             numero: number;
             proveedor: string;
             cuit: string | null;
+            /** Format: double */
             neto: number;
+            /** Format: double */
             iva21: number;
+            /** Format: double */
             iva105: number;
+            /** Format: double */
             iva27: number;
+            /** Format: double */
             exento: number;
+            /** Format: double */
             percepciones: number;
+            /** Format: double */
             total: number;
             cae: string | null;
         };
         TotalesLibro: {
+            /** Format: double */
             neto: number;
+            /** Format: double */
             iva21: number;
+            /** Format: double */
             iva105: number;
+            /** Format: double */
             iva27: number;
+            /** Format: double */
             exento: number;
+            /** Format: double */
             percepciones: number;
+            /** Format: double */
             total: number;
         };
         PagoListado: {
             id: string;
             /** Format: date-time */
             fecha: string;
+            /** Format: double */
             total: number;
+            /** Format: double */
             neto: number;
             medio: string;
             /** @enum {string} */
@@ -855,12 +880,14 @@ export interface components {
             referencia: string | null;
             proveedor: string;
             supplierId: string;
+            /** Format: double */
             retenido: number;
             certificados: number;
             numerosCertificado: string[];
             facturas: {
                 id: string;
                 numero: string;
+                /** Format: double */
                 importe: number;
             }[];
         };
@@ -1206,8 +1233,11 @@ export interface operations {
                         tipo: string;
                         /** Format: date-time */
                         fechaEmision: string;
+                        /** Format: double */
                         total: number;
+                        /** Format: double */
                         imputado: number;
+                        /** Format: double */
                         saldo: number;
                     }[];
                 };
@@ -1558,6 +1588,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         lineas: number;
+                        /** Format: double */
                         neto: number;
                     };
                 };
@@ -1726,6 +1757,7 @@ export interface operations {
                         certificados: {
                             numero: string;
                             impuesto: string;
+                            /** Format: double */
                             importe: number;
                         }[];
                     };

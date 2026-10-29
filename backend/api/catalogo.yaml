@@ -261,7 +261,7 @@ components:
             generalId: { type: string, nullable: true }
             nombre: { type: string, nullable: true }
             esDiferenciada: { type: boolean }
-            factorDerivado: { type: number }
+            factorDerivado: { type: number, format: double }
         vista: { type: string, enum: [final, neto] }
     Categoria:
       type: object
@@ -303,14 +303,14 @@ components:
         alicuotaIva: { type: string }
         aPedido: { type: boolean }
         formaDeVenta: { type: string, enum: [entera, entera_o_media, metro_cuadrado] }
-        precioMediaPct: { type: number }
+        precioMediaPct: { type: number, format: double }
         featured: { type: boolean }
         categorySlug: { type: string }
         categoryName: { type: string }
         image: { type: string, nullable: true }
         precioDesde: { type: string, nullable: true }
         precioAnterior: { type: string, nullable: true }
-        descuento: { type: number, nullable: true }
+        descuento: { type: number, format: double, nullable: true }
         labels: { type: array, items: { type: string } }
         stockCentral: { $ref: "#/components/schemas/NivelStock" }
         stockAserradero: { $ref: "#/components/schemas/NivelStock" }
@@ -340,7 +340,7 @@ components:
         precio: { type: string, nullable: true }
         stockCentral: { $ref: "#/components/schemas/NivelStock" }
         stockAserradero: { $ref: "#/components/schemas/NivelStock" }
-        disponibles: { type: number }
+        disponibles: { type: number, format: double }
     ProductoDetalle:
       type: object
       required: [id, slug, name, description, subcategory, subcategorySlug, subcategoryName, brand, unit, alicuotaIva, aPedido, formaDeVenta, precioMediaPct, featured, categorySlug, categoryName, imagenes, variantes]
@@ -357,7 +357,7 @@ components:
         alicuotaIva: { type: string }
         aPedido: { type: boolean }
         formaDeVenta: { type: string, enum: [entera, entera_o_media, metro_cuadrado] }
-        precioMediaPct: { type: number }
+        precioMediaPct: { type: number, format: double }
         featured: { type: boolean }
         categorySlug: { type: string }
         categoryName: { type: string }

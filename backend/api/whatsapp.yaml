@@ -506,9 +506,9 @@ components:
         conectado: { type: boolean }
         proveedor: { type: string, enum: [cloud, demo] }
         telefono: { type: string, nullable: true }
-        ultimaSenal: { type: number, nullable: true }
+        ultimaSenal: { type: number, format: double, nullable: true }
         detalle: { type: string, nullable: true }
-        ultimoWebhookAt: { type: number, nullable: true }
+        ultimoWebhookAt: { type: number, format: double, nullable: true }
     ConversacionListada:
       type: object
       required: [id, waJid, nombre, displayName, customerId, clienteNombre, clienteTipo, estado, ultimoMensajeAt, ultimoMensajePreview,
@@ -635,8 +635,8 @@ components:
         sinNumero: { type: boolean }
         ventanaAbierta: { type: boolean }
         mensajes: { type: array, items: { $ref: "#/components/schemas/Mensaje" } }
-        saldo: { type: number }
-        limiteCredito: { type: number }
+        saldo: { type: number, format: double }
+        limiteCredito: { type: number, format: double }
         pedidos:
           type: array
           items:
@@ -654,9 +654,9 @@ components:
       type: object
       required: [usd, tope, proporcion, alcanzado]
       properties:
-        usd: { type: number }
-        tope: { type: number }
-        proporcion: { type: number }
+        usd: { type: number, format: double }
+        tope: { type: number, format: double }
+        proporcion: { type: number, format: double }
         alcanzado: { type: boolean }
     Bandeja:
       type: object
@@ -687,22 +687,22 @@ components:
         gratis: { type: integer }
         cobrados: { type: integer }
         estimados: { type: integer }
-        usd: { type: number }
+        usd: { type: number, format: double }
     Tarifas:
       type: object
       required: [utility, service, marketing, authentication]
       properties:
-        utility: { type: number }
-        service: { type: number }
-        marketing: { type: number }
-        authentication: { type: number }
+        utility: { type: number, format: double }
+        service: { type: number, format: double }
+        marketing: { type: number, format: double }
+        authentication: { type: number, format: double }
     GastoDelMes:
       type: object
       required: [usd, usdConfirmado, usdEstimado, porCategoria, proporcion, alcanzado, umbral, tope, mes, reinicio, tarifas]
       properties:
-        usd: { type: number }
-        usdConfirmado: { type: number }
-        usdEstimado: { type: number }
+        usd: { type: number, format: double }
+        usdConfirmado: { type: number, format: double }
+        usdEstimado: { type: number, format: double }
         porCategoria:
           type: object
           required: [utility, service, marketing, authentication]
@@ -711,10 +711,10 @@ components:
             service: { $ref: "#/components/schemas/DetalleCategoria" }
             marketing: { $ref: "#/components/schemas/DetalleCategoria" }
             authentication: { $ref: "#/components/schemas/DetalleCategoria" }
-        proporcion: { type: number }
+        proporcion: { type: number, format: double }
         alcanzado: { type: boolean }
         umbral: { type: integer, nullable: true, description: "80, 100 o null" }
-        tope: { type: number }
+        tope: { type: number, format: double }
         mes: { type: string }
         reinicio: { type: string, format: date-time }
         tarifas: { $ref: "#/components/schemas/Tarifas" }

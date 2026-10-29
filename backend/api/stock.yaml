@@ -41,9 +41,9 @@ paths:
                     productName: { type: string }
                     label: { type: string }
                     branchName: { type: string }
-                    qty: { type: number }
-                    reservado: { type: number }
-                    minQty: { type: number }
+                    qty: { type: number, format: double }
+                    reservado: { type: number, format: double }
+                    minQty: { type: number, format: double }
   /api/v1/admin/stock/movimientos:
     get:
       operationId: UltimosMovimientos
@@ -66,7 +66,7 @@ paths:
                     label: { type: string }
                     branchName: { type: string }
                     type: { type: string }
-                    qty: { type: number }
+                    qty: { type: number, format: double }
                     note: { type: string, nullable: true }
                     createdAt: { type: string, format: date-time }
   /api/v1/admin/stock/ajuste:
@@ -83,7 +83,7 @@ paths:
               properties:
                 variantId: { type: string }
                 branchSlug: { type: string }
-                cantidad: { type: number, description: lo que se suma (o resta) }
+                cantidad: { type: number, format: double, description: lo que se suma (o resta) }
       responses:
         "200":
           description: El cambio («Casa Central 3 → 5»), o vacío si la cantidad era cero
@@ -167,12 +167,12 @@ components:
         unidad: { type: string }
         largoMm: { type: integer, nullable: true }
         imagen: { type: string, nullable: true }
-        qtyCentral: { type: number }
-        qtyAserradero: { type: number }
-        reservadoCentral: { type: number }
-        reservadoAserradero: { type: number }
-        minCentral: { type: number }
-        minAserradero: { type: number }
+        qtyCentral: { type: number, format: double }
+        qtyAserradero: { type: number, format: double }
+        reservadoCentral: { type: number, format: double }
+        reservadoAserradero: { type: number, format: double }
+        minCentral: { type: number, format: double }
+        minAserradero: { type: number, format: double }
         nivelCentral: { $ref: "#/components/schemas/Nivel" }
         nivelAserradero: { $ref: "#/components/schemas/Nivel" }
-        total: { type: number }
+        total: { type: number, format: double }

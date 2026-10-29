@@ -243,6 +243,7 @@ export interface components {
                 generalId: string | null;
                 nombre: string | null;
                 esDiferenciada: boolean;
+                /** Format: double */
                 factorDerivado: number;
             };
             /** @enum {string} */
@@ -280,6 +281,7 @@ export interface components {
             aPedido: boolean;
             /** @enum {string} */
             formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
+            /** Format: double */
             precioMediaPct: number;
             featured: boolean;
             categorySlug: string;
@@ -287,6 +289,7 @@ export interface components {
             image: string | null;
             precioDesde: string | null;
             precioAnterior: string | null;
+            /** Format: double */
             descuento: number | null;
             labels: string[];
             stockCentral: components["schemas"]["NivelStock"];
@@ -313,6 +316,7 @@ export interface components {
             precio: string | null;
             stockCentral: components["schemas"]["NivelStock"];
             stockAserradero: components["schemas"]["NivelStock"];
+            /** Format: double */
             disponibles: number;
         };
         ProductoDetalle: {
@@ -329,6 +333,7 @@ export interface components {
             aPedido: boolean;
             /** @enum {string} */
             formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
+            /** Format: double */
             precioMediaPct: number;
             featured: boolean;
             categorySlug: string;

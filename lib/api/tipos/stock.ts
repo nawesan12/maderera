@@ -125,14 +125,21 @@ export interface components {
             unidad: string;
             largoMm: number | null;
             imagen: string | null;
+            /** Format: double */
             qtyCentral: number;
+            /** Format: double */
             qtyAserradero: number;
+            /** Format: double */
             reservadoCentral: number;
+            /** Format: double */
             reservadoAserradero: number;
+            /** Format: double */
             minCentral: number;
+            /** Format: double */
             minAserradero: number;
             nivelCentral: components["schemas"]["Nivel"];
             nivelAserradero: components["schemas"]["Nivel"];
+            /** Format: double */
             total: number;
         };
     };
@@ -199,8 +206,11 @@ export interface operations {
                         productName: string;
                         label: string;
                         branchName: string;
+                        /** Format: double */
                         qty: number;
+                        /** Format: double */
                         reservado: number;
+                        /** Format: double */
                         minQty: number;
                     }[];
                 };
@@ -231,6 +241,7 @@ export interface operations {
                         label: string;
                         branchName: string;
                         type: string;
+                        /** Format: double */
                         qty: number;
                         note: string | null;
                         /** Format: date-time */
@@ -252,7 +263,10 @@ export interface operations {
                 "application/json": {
                     variantId: string;
                     branchSlug: string;
-                    /** @description lo que se suma (o resta) */
+                    /**
+                     * Format: double
+                     * @description lo que se suma (o resta)
+                     */
                     cantidad: number;
                 };
             };

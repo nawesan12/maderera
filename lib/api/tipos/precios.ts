@@ -191,7 +191,10 @@ export interface components {
             imagen: string | null;
             precioGeneral: string;
             precioProfesional: string;
-            /** @description «la profesional es N % más barata» */
+            /**
+             * Format: double
+             * @description «la profesional es N % más barata»
+             */
             brecha: number | null;
             /** Format: date-time */
             actualizado: string | null;

@@ -468,8 +468,8 @@ paths:
                   properties:
                     id: { type: string }
                     nombre: { type: string }
-                    costo: { type: number }
-                    envioGratisDesde: { type: number }
+                    costo: { type: number, format: double }
+                    envioGratisDesde: { type: number, format: double }
                     demoraEstimada: { type: string, nullable: true }
                     aCotizar: { type: boolean }
   /api/v1/contenido/escalas-pago:
@@ -488,8 +488,8 @@ paths:
                   required: [medio, desdeMonto, porcentaje, etiqueta]
                   properties:
                     medio: { type: string }
-                    desdeMonto: { type: number }
-                    porcentaje: { type: number }
+                    desdeMonto: { type: number, format: double }
+                    porcentaje: { type: number, format: double }
                     etiqueta: { type: string }
   /api/v1/admin/documentos:
     get:
@@ -622,7 +622,7 @@ components:
       nullable: true
       required: [promedio, cantidad, reparto]
       properties:
-        promedio: { type: number }
+        promedio: { type: number, format: double }
         cantidad: { type: integer }
         reparto: { type: object, additionalProperties: { type: integer } }
     Resenable:
@@ -723,7 +723,7 @@ components:
       nullable: true
       required: [promedio, cuantas]
       properties:
-        promedio: { type: number }
+        promedio: { type: number, format: double }
         cuantas: { type: integer }
     Publicada:
       type: object
@@ -766,7 +766,7 @@ components:
         inicia: { type: string, format: date-time }
         termina: { type: string, format: date-time, nullable: true }
         cupo: { type: integer }
-        precio: { type: number }
+        precio: { type: number, format: double }
         soloProfesionales: { type: boolean }
         inscriptos: { type: integer, description: Reservadas, confirmadas y que asistieron }
     EventoConDetalle:

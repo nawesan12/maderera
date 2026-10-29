@@ -489,6 +489,7 @@ export interface components {
         };
         Prioridad: {
             urgencia: string;
+            /** Format: double */
             puntaje: number;
             diasVencida: number;
         };
@@ -505,16 +506,20 @@ export interface components {
             asesor: string | null;
             telefono: string | null;
             email: string | null;
+            /** Format: double */
             saldo: number;
+            /** Format: double */
             limiteCredito: number;
             diasCredito: number;
             cuentaBloqueada: boolean;
             motivoBloqueo: string | null;
+            /** Format: double */
             totalComprado: number;
             /** Format: date-time */
             ultimaCompra: string | null;
             /** @description lo vencido y la prioridad de cobranza, solo de quien debe */
             deuda: {
+                /** Format: double */
                 vencido: number;
                 diasDeLaMasVieja: number | null;
                 prioridad: components["schemas"]["Prioridad"];
@@ -565,6 +570,7 @@ export interface components {
                 /** Format: date-time */
                 createdAt: string;
             } | null;
+            /** Format: double */
             saldo: number;
             pedidos: components["schemas"]["Comprobante"][];
             presupuestos: components["schemas"]["Comprobante"][];
@@ -577,7 +583,9 @@ export interface components {
             clase: "compra" | "pago" | "nota_credito" | "nota_debito" | "ajuste" | "compra_contado" | "pago_en_revision" | "pago_rechazado" | "cheque_por_recibir" | "cheque_rechazado";
             titulo: string;
             detalle: string | null;
+            /** Format: double */
             importe: number | null;
+            /** Format: double */
             importeInformativo: number | null;
             pedido: {
                 id: string;
@@ -592,6 +600,7 @@ export interface components {
         Historial: {
             movimientos: components["schemas"]["MovimientoDelCliente"][];
             hayMas: boolean;
+            /** Format: double */
             saldo: number;
         };
         MovimientoDelResumen: {
@@ -602,13 +611,16 @@ export interface components {
             detalle: string | null;
             referencia: string | null;
             receiptId: string | null;
+            /** Format: double */
             monto: number;
+            /** Format: double */
             saldo: number;
         };
         Tramo: {
             etiqueta: string;
             desde: number;
             hasta: number | null;
+            /** Format: double */
             monto: number;
         };
         ResumenDeCuenta: {
@@ -618,21 +630,28 @@ export interface components {
                 razonSocial: string | null;
                 cuit: string | null;
                 direccion: string | null;
+                /** Format: double */
                 limiteCredito: number;
             };
             movimientos: components["schemas"]["MovimientoDelResumen"][];
+            /** Format: double */
             saldo: number;
             aging: {
                 tramos: components["schemas"]["Tramo"][];
+                /** Format: double */
                 total: number;
+                /** Format: double */
                 aFavor: number;
                 diasDeLaMasVieja: number | null;
             };
         };
         Credito: {
             puede: boolean;
+            /** Format: double */
             saldo: number;
+            /** Format: double */
             limiteCredito: number;
+            /** Format: double */
             disponible: number;
             diasDeLaMasVieja: number | null;
             motivo: string | null;
@@ -648,6 +667,7 @@ export interface components {
             estado: "emitido" | "anulado";
             origen: string;
             concepto: string | null;
+            /** Format: double */
             total: number;
             recibidoDe: string;
             motivoAnulacion: string | null;
@@ -661,6 +681,7 @@ export interface components {
             partes: {
                 /** @enum {string} */
                 medio: "efectivo" | "transferencia" | "deposito" | "cheque" | "echeq" | "tarjeta_debito" | "tarjeta_credito" | "mercado_pago" | "retencion";
+                /** Format: double */
                 importe: number;
                 referencia: string | null;
                 cheque: {
@@ -675,6 +696,7 @@ export interface components {
                     estado: string;
                 } | null;
             }[];
+            /** Format: double */
             saldoDespues: number | null;
             emitidoPor: string | null;
         };
@@ -689,6 +711,7 @@ export interface components {
             librador: string | null;
             /** Format: date-time */
             fechaPago: string;
+            /** Format: double */
             importe: number;
             estado: string;
             cliente: string | null;
@@ -1188,6 +1211,7 @@ export interface operations {
                         banco: string | null;
                         /** Format: date-time */
                         fechaPago: string;
+                        /** Format: double */
                         importe: number;
                         tipo: string;
                         cliente: string | null;
@@ -1401,8 +1425,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** Format: double */
                         saldo: number;
+                        /** Format: double */
                         limiteCredito: number;
+                        /** Format: double */
                         disponible: number;
                         movimientos: components["schemas"]["MovimientoDelResumen"][];
                     };
@@ -1454,8 +1481,11 @@ export interface operations {
                 content: {
                     "application/json": {
                         habilitado: boolean;
+                        /** Format: double */
                         saldo: number;
+                        /** Format: double */
                         limiteCredito: number;
+                        /** Format: double */
                         disponible: number;
                         soloSaldoAFavor?: boolean;
                         motivo: string | null;

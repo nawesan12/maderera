@@ -250,7 +250,7 @@ components:
         imagen: { type: string, nullable: true }
         precioGeneral: { type: string }
         precioProfesional: { type: string }
-        brecha: { type: number, nullable: true, description: «la profesional es N % más barata» }
+        brecha: { type: number, format: double, nullable: true, description: «la profesional es N % más barata» }
         actualizado: { type: string, format: date-time, nullable: true }
         desactualizado: { type: boolean }
     CambioDePrecio:

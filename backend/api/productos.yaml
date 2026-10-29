@@ -383,7 +383,7 @@ components:
         featured: { type: boolean }
         active: { type: boolean }
         variantes: { type: integer }
-        stockTotal: { type: number }
+        stockTotal: { type: number, format: double }
         imagen: { type: string, nullable: true }
         precioDesde: { type: string, nullable: true }
         sinFoto: { type: boolean }
@@ -455,7 +455,7 @@ components:
         recargoElaboracionPct: { type: string, nullable: true }
         imputacion: { type: string, nullable: true }
         formaDeVenta: { type: string, enum: [entera, entera_o_media, metro_cuadrado] }
-        precioMediaPct: { type: number }
+        precioMediaPct: { type: number, format: double }
         imagen: { type: string }
         galeria:
           type: array
@@ -485,10 +485,10 @@ components:
               calidad: { type: string }
               precioGeneral: { type: string }
               precioProfesional: { type: string }
-              stockCentral: { type: number }
-              stockAserradero: { type: number }
-              minCentral: { type: number }
-              minAserradero: { type: number }
+              stockCentral: { type: number, format: double }
+              stockAserradero: { type: number, format: double }
+              minCentral: { type: number, format: double }
+              minAserradero: { type: number, format: double }
     Sugerido:
       type: object
       required: [id, relatedProductId, nombre, categoria, imagen, activo, tipo, orden]
@@ -510,7 +510,7 @@ components:
         slug: { type: string }
         categoria: { type: string }
         diasSinVender: { type: integer, nullable: true }
-        stock: { type: number }
+        stock: { type: number, format: double }
         variantesSinPrecio: { type: integer }
         variantes: { type: integer }
         motivos: { type: array, items: { type: string } }

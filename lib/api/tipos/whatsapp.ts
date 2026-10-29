@@ -524,8 +524,10 @@ export interface components {
             /** @enum {string} */
             proveedor: "cloud" | "demo";
             telefono: string | null;
+            /** Format: double */
             ultimaSenal: number | null;
             detalle: string | null;
+            /** Format: double */
             ultimoWebhookAt: number | null;
         };
         ConversacionListada: {
@@ -655,7 +657,9 @@ export interface components {
             sinNumero: boolean;
             ventanaAbierta: boolean;
             mensajes: components["schemas"]["Mensaje"][];
+            /** Format: double */
             saldo: number;
+            /** Format: double */
             limiteCredito: number;
             pedidos: {
                 id: string;
@@ -669,8 +673,11 @@ export interface components {
             documentos: components["schemas"]["DocumentoListado"][];
         };
         GastoChico: {
+            /** Format: double */
             usd: number;
+            /** Format: double */
             tope: number;
+            /** Format: double */
             proporcion: number;
             alcanzado: boolean;
         };
@@ -696,17 +703,25 @@ export interface components {
             gratis: number;
             cobrados: number;
             estimados: number;
+            /** Format: double */
             usd: number;
         };
         Tarifas: {
+            /** Format: double */
             utility: number;
+            /** Format: double */
             service: number;
+            /** Format: double */
             marketing: number;
+            /** Format: double */
             authentication: number;
         };
         GastoDelMes: {
+            /** Format: double */
             usd: number;
+            /** Format: double */
             usdConfirmado: number;
+            /** Format: double */
             usdEstimado: number;
             porCategoria: {
                 utility: components["schemas"]["DetalleCategoria"];
@@ -714,10 +729,12 @@ export interface components {
                 marketing: components["schemas"]["DetalleCategoria"];
                 authentication: components["schemas"]["DetalleCategoria"];
             };
+            /** Format: double */
             proporcion: number;
             alcanzado: boolean;
             /** @description 80, 100 o null */
             umbral: number | null;
+            /** Format: double */
             tope: number;
             mes: string;
             /** Format: date-time */

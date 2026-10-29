@@ -319,7 +319,7 @@ paths:
                     numero: { type: string }
                     banco: { type: string, nullable: true }
                     fechaPago: { type: string, format: date-time }
-                    importe: { type: number }
+                    importe: { type: number, format: double }
                     tipo: { type: string }
                     cliente: { type: string, nullable: true }
   /api/v1/admin/cheques/{id}/estado:
@@ -462,9 +462,9 @@ paths:
                 type: object
                 required: [saldo, limiteCredito, disponible, movimientos]
                 properties:
-                  saldo: { type: number }
-                  limiteCredito: { type: number }
-                  disponible: { type: number }
+                  saldo: { type: number, format: double }
+                  limiteCredito: { type: number, format: double }
+                  disponible: { type: number, format: double }
                   movimientos: { type: array, items: { $ref: "#/components/schemas/MovimientoDelResumen" } }
         "401": { $ref: "#/components/responses/Problema" }
   /api/v1/cuenta/movimientos:
@@ -495,9 +495,9 @@ paths:
                 required: [habilitado, saldo, limiteCredito, disponible, motivo]
                 properties:
                   habilitado: { type: boolean }
-                  saldo: { type: number }
-                  limiteCredito: { type: number }
-                  disponible: { type: number }
+                  saldo: { type: number, format: double }
+                  limiteCredito: { type: number, format: double }
+                  disponible: { type: number, format: double }
                   soloSaldoAFavor: { type: boolean }
                   motivo: { type: string, nullable: true }
 components:
@@ -553,7 +553,7 @@ components:
       required: [urgencia, puntaje, diasVencida]
       properties:
         urgencia: { type: string }
-        puntaje: { type: number }
+        puntaje: { type: number, format: double }
         diasVencida: { type: integer }
     ClienteListado:
       type: object
@@ -570,12 +570,12 @@ components:
         asesor: { type: string, nullable: true }
         telefono: { type: string, nullable: true }
         email: { type: string, nullable: true }
-        saldo: { type: number }
-        limiteCredito: { type: number }
+        saldo: { type: number, format: double }
+        limiteCredito: { type: number, format: double }
         diasCredito: { type: integer }
         cuentaBloqueada: { type: boolean }
         motivoBloqueo: { type: string, nullable: true }
-        totalComprado: { type: number }
+        totalComprado: { type: number, format: double }
         ultimaCompra: { type: string, format: date-time, nullable: true }
         deuda:
           type: object
@@ -583,7 +583,7 @@ components:
           description: lo vencido y la prioridad de cobranza, solo de quien debe
           required: [vencido, diasDeLaMasVieja, prioridad]
           properties:
-            vencido: { type: number }
+            vencido: { type: number, format: double }
             diasDeLaMasVieja: { type: integer, nullable: true }
             prioridad: { $ref: "#/components/schemas/Prioridad" }
     Comprobante:
@@ -634,7 +634,7 @@ components:
             id: { type: string }
             nombre: { type: string }
             createdAt: { type: string, format: date-time }
-        saldo: { type: number }
+        saldo: { type: number, format: double }
         pedidos: { type: array, items: { $ref: "#/components/schemas/Comprobante" } }
         presupuestos: { type: array, items: { $ref: "#/components/schemas/Comprobante" } }
     MovimientoDelCliente:
@@ -648,8 +648,8 @@ components:
           enum: [compra, pago, nota_credito, nota_debito, ajuste, compra_contado, pago_en_revision, pago_rechazado, cheque_por_recibir, cheque_rechazado]
         titulo: { type: string }
         detalle: { type: string, nullable: true }
-        importe: { type: number, nullable: true }
-        importeInformativo: { type: number, nullable: true }
+        importe: { type: number, format: double, nullable: true }
+        importeInformativo: { type: number, format: double, nullable: true }
         pedido:
           type: object
           nullable: true
@@ -666,7 +666,7 @@ components:
       properties:
         movimientos: { type: array, items: { $ref: "#/components/schemas/MovimientoDelCliente" } }
         hayMas: { type: boolean }
-        saldo: { type: number }
+        saldo: { type: number, format: double }
     MovimientoDelResumen:
       type: object
       required: [id, fecha, tipo, detalle, referencia, receiptId, monto, saldo]
@@ -677,8 +677,8 @@ components:
         detalle: { type: string, nullable: true }
         referencia: { type: string, nullable: true }
         receiptId: { type: string, nullable: true }
-        monto: { type: number }
-        saldo: { type: number }
+        monto: { type: number, format: double }
+        saldo: { type: number, format: double }
     Tramo:
       type: object
       required: [etiqueta, desde, hasta, monto]
@@ -686,7 +686,7 @@ components:
         etiqueta: { type: string }
         desde: { type: integer }
         hasta: { type: integer, nullable: true }
-        monto: { type: number }
+        monto: { type: number, format: double }
     ResumenDeCuenta:
       type: object
       required: [cliente, movimientos, saldo, aging]
@@ -700,25 +700,25 @@ components:
             razonSocial: { type: string, nullable: true }
             cuit: { type: string, nullable: true }
             direccion: { type: string, nullable: true }
-            limiteCredito: { type: number }
+            limiteCredito: { type: number, format: double }
         movimientos: { type: array, items: { $ref: "#/components/schemas/MovimientoDelResumen" } }
-        saldo: { type: number }
+        saldo: { type: number, format: double }
         aging:
           type: object
           required: [tramos, total, aFavor, diasDeLaMasVieja]
           properties:
             tramos: { type: array, items: { $ref: "#/components/schemas/Tramo" } }
-            total: { type: number }
-            aFavor: { type: number }
+            total: { type: number, format: double }
+            aFavor: { type: number, format: double }
             diasDeLaMasVieja: { type: integer, nullable: true }
     Credito:
       type: object
       required: [puede, saldo, limiteCredito, disponible, diasDeLaMasVieja, motivo, autorizable]
       properties:
         puede: { type: boolean }
-        saldo: { type: number }
-        limiteCredito: { type: number }
-        disponible: { type: number }
+        saldo: { type: number, format: double }
+        limiteCredito: { type: number, format: double }
+        disponible: { type: number, format: double }
         diasDeLaMasVieja: { type: integer, nullable: true }
         motivo: { type: string, nullable: true }
         autorizable: { type: boolean }
@@ -734,7 +734,7 @@ components:
         estado: { type: string, enum: [emitido, anulado] }
         origen: { type: string }
         concepto: { type: string, nullable: true }
-        total: { type: number }
+        total: { type: number, format: double }
         recibidoDe: { type: string }
         motivoAnulacion: { type: string, nullable: true }
         anuladoAt: { type: string, format: date-time, nullable: true }
@@ -753,7 +753,7 @@ components:
             required: [medio, importe, referencia, cheque]
             properties:
               medio: { type: string, enum: [efectivo, transferencia, deposito, cheque, echeq, tarjeta_debito, tarjeta_credito, mercado_pago, retencion] }
-              importe: { type: number }
+              importe: { type: number, format: double }
               referencia: { type: string, nullable: true }
               cheque:
                 type: object
@@ -767,7 +767,7 @@ components:
                   librador: { type: string, nullable: true }
                   fechaPago: { type: string, format: date-time }
                   estado: { type: string }
-        saldoDespues: { type: number, nullable: true }
+        saldoDespues: { type: number, format: double, nullable: true }
         emitidoPor: { type: string, nullable: true }
     ChequeListado:
       type: object
@@ -781,7 +781,7 @@ components:
         banco: { type: string, nullable: true }
         librador: { type: string, nullable: true }
         fechaPago: { type: string, format: date-time }
-        importe: { type: number }
+        importe: { type: number, format: double }
         estado: { type: string }
         cliente: { type: string, nullable: true }
         customerId: { type: string, nullable: true }

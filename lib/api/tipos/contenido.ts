@@ -620,6 +620,7 @@ export interface components {
             fecha: string;
         };
         Resumen: {
+            /** Format: double */
             promedio: number;
             cantidad: number;
             reparto: {
@@ -723,6 +724,7 @@ export interface components {
             updatedAt: string;
         };
         ResumenNegocio: {
+            /** Format: double */
             promedio: number;
             cuantas: number;
         } | null;
@@ -759,6 +761,7 @@ export interface components {
             /** Format: date-time */
             termina: string | null;
             cupo: number;
+            /** Format: double */
             precio: number;
             soloProfesionales: boolean;
             /** @description Reservadas */
@@ -1696,7 +1699,9 @@ export interface operations {
                     "application/json": {
                         id: string;
                         nombre: string;
+                        /** Format: double */
                         costo: number;
+                        /** Format: double */
                         envioGratisDesde: number;
                         demoraEstimada: string | null;
                         aCotizar: boolean;
@@ -1722,7 +1727,9 @@ export interface operations {
                 content: {
                     "application/json": {
                         medio: string;
+                        /** Format: double */
                         desdeMonto: number;
+                        /** Format: double */
                         porcentaje: number;
                         etiqueta: string;
                     }[];

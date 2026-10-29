@@ -300,6 +300,7 @@ export interface components {
             featured: boolean;
             active: boolean;
             variantes: number;
+            /** Format: double */
             stockTotal: number;
             imagen: string | null;
             precioDesde: string | null;
@@ -366,6 +367,7 @@ export interface components {
             imputacion: string | null;
             /** @enum {string} */
             formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
+            /** Format: double */
             precioMediaPct: number;
             imagen: string;
             galeria: {
@@ -386,9 +388,13 @@ export interface components {
                 calidad: string;
                 precioGeneral: string;
                 precioProfesional: string;
+                /** Format: double */
                 stockCentral: number;
+                /** Format: double */
                 stockAserradero: number;
+                /** Format: double */
                 minCentral: number;
+                /** Format: double */
                 minAserradero: number;
             }[];
         };
@@ -409,6 +415,7 @@ export interface components {
             slug: string;
             categoria: string;
             diasSinVender: number | null;
+            /** Format: double */
             stock: number;
             variantesSinPrecio: number;
             variantes: number;

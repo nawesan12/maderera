@@ -143,9 +143,9 @@ paths:
                     numero: { type: string }
                     tipo: { type: string }
                     fechaEmision: { type: string, format: date-time }
-                    total: { type: number }
-                    imputado: { type: number }
-                    saldo: { type: number }
+                    total: { type: number, format: double }
+                    imputado: { type: number, format: double }
+                    saldo: { type: number, format: double }
   /api/v1/admin/proveedores/{id}/acumulado-del-mes:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     get:
@@ -359,7 +359,7 @@ paths:
                 required: [lineas, neto]
                 properties:
                   lineas: { type: integer }
-                  neto: { type: number }
+                  neto: { type: number, format: double }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/recepciones/{id}/anular:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
@@ -462,7 +462,7 @@ paths:
                       properties:
                         numero: { type: string }
                         impuesto: { type: string }
-                        importe: { type: number }
+                        importe: { type: number, format: double }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/compras/pagos/retenciones-csv:
     get:
@@ -675,7 +675,7 @@ components:
         email: { type: string, nullable: true }
         diasPago: { type: integer }
         estado: { type: string, enum: [activo, inactivo] }
-        saldo: { type: number }
+        saldo: { type: number, format: double }
         ultimoMovimiento: { type: string, format: date-time, nullable: true }
     Proveedor:
       type: object
@@ -702,7 +702,7 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         convenios: { type: string, nullable: true }
-        saldo: { type: number }
+        saldo: { type: number, format: double }
         movimientos:
           type: array
           items:
@@ -711,11 +711,11 @@ components:
             properties:
               id: { type: string }
               tipo: { type: string }
-              monto: { type: number }
+              monto: { type: number, format: double }
               detalle: { type: string, nullable: true }
               referencia: { type: string, nullable: true }
               createdAt: { type: string, format: date-time }
-              saldo: { type: number }
+              saldo: { type: number, format: double }
     PerfilDeLista:
       type: object
       nullable: true
@@ -744,12 +744,12 @@ components:
             properties:
               codigo: { type: string }
               descripcion: { type: string }
-              costo: { type: number }
-              precioSugerido: { type: number }
+              costo: { type: number, format: double }
+              precioSugerido: { type: number, format: double }
               fila: { type: integer }
               variantId: { type: string, nullable: true }
               nuestro: { type: string, nullable: true }
-              precioActual: { type: number, nullable: true }
+              precioActual: { type: number, format: double, nullable: true }
         problemas:
           type: array
           items:
@@ -775,7 +775,7 @@ components:
         supplierId: { type: string }
         sucursal: { type: string, nullable: true }
         lineas: { type: integer }
-        neto: { type: number }
+        neto: { type: number, format: double }
         pendientes: { type: integer }
     Orden:
       type: object
@@ -820,7 +820,7 @@ components:
         supplierId: { type: string }
         sucursal: { type: string, nullable: true }
         lineas: { type: integer }
-        neto: { type: number }
+        neto: { type: number, format: double }
     Recepcion:
       type: object
       required: [id, numeroRemito, fecha, estado, gastos, notas, confirmadaAt, supplierId, proveedor, branchId, sucursal, items]
@@ -867,39 +867,39 @@ components:
         numero: { type: integer }
         proveedor: { type: string }
         cuit: { type: string, nullable: true }
-        neto: { type: number }
-        iva21: { type: number }
-        iva105: { type: number }
-        iva27: { type: number }
-        exento: { type: number }
-        percepciones: { type: number }
-        total: { type: number }
+        neto: { type: number, format: double }
+        iva21: { type: number, format: double }
+        iva105: { type: number, format: double }
+        iva27: { type: number, format: double }
+        exento: { type: number, format: double }
+        percepciones: { type: number, format: double }
+        total: { type: number, format: double }
         cae: { type: string, nullable: true }
     TotalesLibro:
       type: object
       required: [neto, iva21, iva105, iva27, exento, percepciones, total]
       properties:
-        neto: { type: number }
-        iva21: { type: number }
-        iva105: { type: number }
-        iva27: { type: number }
-        exento: { type: number }
-        percepciones: { type: number }
-        total: { type: number }
+        neto: { type: number, format: double }
+        iva21: { type: number, format: double }
+        iva105: { type: number, format: double }
+        iva27: { type: number, format: double }
+        exento: { type: number, format: double }
+        percepciones: { type: number, format: double }
+        total: { type: number, format: double }
     PagoListado:
       type: object
       required: [id, fecha, total, neto, medio, circuito, referencia, proveedor, supplierId, retenido, certificados, numerosCertificado, facturas]
       properties:
         id: { type: string }
         fecha: { type: string, format: date-time }
-        total: { type: number }
-        neto: { type: number }
+        total: { type: number, format: double }
+        neto: { type: number, format: double }
         medio: { type: string }
         circuito: { type: string, enum: [blanco, negro] }
         referencia: { type: string, nullable: true }
         proveedor: { type: string }
         supplierId: { type: string }
-        retenido: { type: number }
+        retenido: { type: number, format: double }
         certificados: { type: integer }
         numerosCertificado: { type: array, items: { type: string } }
         facturas:
@@ -910,7 +910,7 @@ components:
             properties:
               id: { type: string }
               numero: { type: string }
-              importe: { type: number }
+              importe: { type: number, format: double }
     Certificado:
       type: object
       required: [numero, fecha, impuesto, codigoRegimen, nombreRegimen, base, alicuota, importe, proveedorNombre, proveedorRazonSocial,

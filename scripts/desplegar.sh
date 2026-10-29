@@ -104,6 +104,14 @@ if ! grep -Eq '^REVALIDAR_SECRETO=.+' "$ENTORNO"; then
   echo "REVALIDAR_SECRETO=\"$(openssl rand -hex 32)\"" >> "$ENTORNO"
   echo "→ Generé REVALIDAR_SECRETO en $ENTORNO"
 fi
+# El secreto con que Next le pide a la API lo que no va con la sesión de
+# nadie: los precios de una lista para la caché, y el recibo y el resumen de
+# cuenta que arman los PDF y los avisos de la cola. Sin él, Go contesta 403.
+# Lo leen los dos (app y api) del mismo archivo.
+if ! grep -Eq '^API_SECRETO_INTERNO=.+' "$ENTORNO"; then
+  echo "API_SECRETO_INTERNO=\"$(openssl rand -hex 32)\"" >> "$ENTORNO"
+  echo "→ Generé API_SECRETO_INTERNO en $ENTORNO"
+fi
 
 echo "→ Construyendo el backend en Go"
 "${COMPOSE[@]}" build api

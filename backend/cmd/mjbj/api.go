@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/api/cortesapi"
 	"mjbj/internal/api/cuentasapi"
 	"mjbj/internal/api/documentosapi"
+	"mjbj/internal/api/facturacionapi"
 	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/api/productosapi"
 	"mjbj/internal/api/sesionapi"
@@ -27,6 +28,7 @@ import (
 	"mjbj/internal/cuentas"
 	"mjbj/internal/documentos"
 	"mjbj/internal/email"
+	"mjbj/internal/facturacion"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
@@ -216,6 +218,17 @@ func correrAPI() error {
 		whatsappapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// Facturación electrónica con ARCA (tanda 7).
+	facturacionapi.HandlerWithOptions(
+		facturacionapi.NewStrictHandlerWithOptions(facturacion.NuevaAPI(facturacion.Nuevo(pool, log), cfg.Interna),
+			[]facturacionapi.StrictMiddlewareFunc{plataforma.ConPedido[facturacionapi.StrictHandlerFunc]},
+			facturacionapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		facturacionapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
@@ -272,6 +285,15 @@ func correrAPI() error {
 		if err != nil {
 			return err
 		}
+		h = validar(h)
+	}
+
+	// El contrato de facturación (tanda 7), aparte para no tocar las listas de arriba.
+	if s, err := facturacionapi.GetSwagger(); err != nil {
+		return err
+	} else if validar, err := plataforma.ValidarContra(s); err != nil {
+		return err
+	} else {
 		h = validar(h)
 	}
 

@@ -16,3 +16,4 @@ package api
 //go:generate go tool oapi-codegen -config compras.gen.yaml compras.yaml
 //go:generate go tool oapi-codegen -config whatsapp.gen.yaml whatsapp.yaml
 //go:generate go tool oapi-codegen -config mostrador.gen.yaml mostrador.yaml
+//go:generate go tool oapi-codegen -config ventas.gen.yaml ventas.yaml

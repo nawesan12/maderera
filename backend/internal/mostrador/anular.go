@@ -65,7 +65,7 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 	}
 	err := tx.QueryRow(ctx, `
 		SELECT numero, origen::text, estado::text, total, medio_pago::text, branch_id, customer_id, notas
-		FROM orders WHERE id::text = $1 LIMIT 1`, id).
+		FROM orders WHERE id::text = $1 LIMIT 1 FOR UPDATE`, id).
 		Scan(&p.numero, &p.origen, &p.estado, &p.total, &p.medio, &p.sucursal, &p.cliente, &p.notas)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return no("No encontramos la venta.")

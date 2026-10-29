@@ -1,0 +1,7 @@
+package: ventasapi
+output: ../internal/api/ventasapi/ventas.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+  embedded-spec: true

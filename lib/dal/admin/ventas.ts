@@ -1,411 +1,122 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import {
-  branches,
-  customers,
-  orderItems,
-  orderPayments,
-  orderStatusHistory,
-  orders,
-  productVariants,
-  products,
-  quoteItems,
-  quotes,
-  sellers,
-} from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
-import { coincideBusqueda } from "@/lib/busqueda";
-import { estadoDelPlazo } from "@/lib/plazos";
+import { api, apiInterna, datos } from "@/lib/api/servidor";
+import type { components } from "@/lib/api/tipos/ventas";
+
+/**
+ * Pedidos y presupuestos del panel. Los lee la API de Go
+ * (backend/internal/pedidos, api/ventas.yaml) con la sesión de quien pide;
+ * acá quedan los mismos nombres y la misma forma de antes, con las fechas
+ * como Date, para no tocar las pantallas.
+ *
+ * Los permisos los decide Go: el tablero y los presupuestos, quien entra a
+ * su pantalla; la ficha de un pedido, todo el personal (la leen también el
+ * ticket impreso y el alta de un corte).
+ */
+
+type Esquemas = components["schemas"];
+
+const fecha = (s: string) => new Date(s);
+const fechaONula = (s: string | null) => (s ? new Date(s) : null);
 
 /* -------------------------------------------------------------------------- */
 /* Presupuestos                                                                */
 /* -------------------------------------------------------------------------- */
 
-export interface PresupuestoListado {
-  id: string;
-  numero: string;
-  cliente: string;
-  empresa: string | null;
-  customerId: string | null;
-  sucursal: string | null;
-  estado: string;
-  origen: string;
-  total: number;
-  items: number;
-  asesor: string | null;
+export interface PresupuestoListado
+  extends Omit<Esquemas["PresupuestoListado"], "createdAt" | "validoHasta" | "respondeHasta" | "necesitaPara"> {
   createdAt: Date;
   validoHasta: Date | null;
-  vencido: boolean;
   /** Compromiso de respuesta. Todos lo tienen; los express, más corto. */
   respondeHasta: Date | null;
   /** Para cuándo lo necesita el cliente. Es lo que de verdad apura. */
   necesitaPara: Date | null;
-  /** Cómo se lee ese plazo: "Quedan 3 h", "Se pasó de hora". */
-  plazo: { texto: string; urgente: boolean; vencido: boolean } | null;
-}
-
-export async function listarPresupuestos(
-  filtros: { busqueda?: string; estado?: string; sucursal?: string } = {},
-): Promise<PresupuestoListado[]> {
-  await requireStaff();
-
-  const condiciones = [];
-  /*
-   * "Abiertos" no es un estado de la tabla sino los tres que todavía esperan
-   * algo —pendiente, en revisión y enviado—. Está acá y no solo en la pantalla
-   * porque es el número que muestra la tarjeta del resumen: si el filtro no
-   * existiera, hacer clic en "4 presupuestos abiertos" abriría una lista de
-   * treinta, y una tarjeta que lleva a otra cosa deja de creerse.
-   */
-  if (filtros.estado === "abiertos") {
-    condiciones.push(inArray(quotes.estado, ["pendiente", "revision", "enviado"]));
-  } else if (filtros.estado && filtros.estado !== "todos") {
-    condiciones.push(eq(quotes.estado, filtros.estado as never));
-  }
-  // "Los presupuestos que se hacen en la central más los que se hacen en
-  // Canosa tienen que estar distinguidos": el corte es por sucursal.
-  if (filtros.sucursal && filtros.sucursal !== "todos") {
-    condiciones.push(eq(branches.slug, filtros.sucursal));
-  }
-  if (filtros.busqueda) {
-    const coincidencia = coincideBusqueda(filtros.busqueda, [
-      quotes.numero,
-      quotes.contactoNombre,
-      customers.razonSocial,
-    ]);
-    if (coincidencia) condiciones.push(coincidencia);
-  }
-
-  const conteo = db
-    .select({
-      quoteId: quoteItems.quoteId,
-      items: sql<number>`count(*)::int`.as("items"),
-    })
-    .from(quoteItems)
-    .groupBy(quoteItems.quoteId)
-    .as("conteo");
-
-  const filas = await db
-    .select({
-      id: quotes.id,
-      numero: quotes.numero,
-      cliente: quotes.contactoNombre,
-      empresa: customers.razonSocial,
-      customerId: quotes.customerId,
-      sucursal: branches.name,
-      estado: quotes.estado,
-      origen: quotes.origen,
-      total: quotes.total,
-      asesor: quotes.asesor,
-      createdAt: quotes.createdAt,
-      validoHasta: quotes.validoHasta,
-      respondeHasta: quotes.respondeHasta,
-      necesitaPara: quotes.necesitaPara,
-      items: conteo.items,
-    })
-    .from(quotes)
-    .leftJoin(customers, eq(customers.id, quotes.customerId))
-    .leftJoin(branches, eq(branches.id, quotes.branchId))
-    .leftJoin(conteo, eq(conteo.quoteId, quotes.id))
-    .where(condiciones.length > 0 ? and(...condiciones) : undefined)
-    // Primero lo que tiene compromiso de respuesta y está más cerca de
-    // vencerlo. Ordenar solo por fecha de alta dejaba un express de hace tres
-    // horas debajo de una consulta suelta de hace dos.
-    .orderBy(
-      sql`case when ${quotes.respondeHasta} is null then 1 else 0 end`,
-      sql`${quotes.respondeHasta} asc nulls last`,
-      // A igual compromiso de respuesta, primero el que tiene la obra más
-      // cerca. Es el dato que el cliente da y que nadie más puede deducir.
-      sql`${quotes.necesitaPara} asc nulls last`,
-      desc(quotes.createdAt),
-    );
-
-  const ahora = new Date();
-
-  return filas.map((f) => ({
-    ...f,
-    total: Number(f.total),
-    items: f.items ?? 0,
-    vencido:
-      f.validoHasta !== null &&
-      f.validoHasta.getTime() < ahora.getTime() &&
-      !["aceptado", "rechazado"].includes(f.estado),
-    plazo:
-      f.respondeHasta && f.estado === "pendiente"
-        ? estadoDelPlazo(f.respondeHasta, ahora)
-        : null,
-  }));
-}
-
-export async function obtenerPresupuesto(id: string) {
-  await requireStaff();
-  return consultarPresupuesto(id);
 }
 
 /**
- * La consulta sola, sin exigir personal.
- *
- * La usa la descarga del PDF, que también sirve al dueño del presupuesto desde
- * su cuenta: la ruta verifica quién pide —staff, o el cliente al que apunta
- * `customerId`— antes de llamar acá. No usar desde una pantalla sin ese
- * control.
+ * "Abiertos" no es un estado de la tabla sino los tres que todavía esperan
+ * algo —pendiente, en revisión y enviado—: es el número de la tarjeta del
+ * resumen, y la tarjeta tiene que llevar a esa misma lista.
  */
-export async function consultarPresupuesto(id: string) {
-  const [presupuesto] = await db
-    .select({
-      id: quotes.id,
-      numero: quotes.numero,
-      cliente: quotes.contactoNombre,
-      email: quotes.contactoEmail,
-      telefono: quotes.contactoTelefono,
-      empresa: customers.razonSocial,
-      customerId: quotes.customerId,
-      // Lo que el presupuesto impreso dice del cliente: el código del sistema
-      // viejo (el "Cod.Cli" al que están acostumbrados), la condición de IVA
-      // que decide si el papel discrimina, y el domicilio.
-      clienteCodigo: customers.codigoLegacy,
-      clienteCuit: customers.cuit,
-      clienteCondicionIva: customers.condicionIva,
-      clienteDireccion: customers.direccion,
-      sucursal: branches.name,
-      sucursalSlug: branches.slug,
-      vendedor: sellers.nombre,
-      estado: quotes.estado,
-      origen: quotes.origen,
-      subtotal: quotes.subtotal,
-      total: quotes.total,
-      notas: quotes.notas,
-      asesor: quotes.asesor,
-      validoHasta: quotes.validoHasta,
-      createdAt: quotes.createdAt,
-    })
-    .from(quotes)
-    .leftJoin(customers, eq(customers.id, quotes.customerId))
-    .leftJoin(branches, eq(branches.id, quotes.branchId))
-    .leftJoin(sellers, eq(sellers.id, quotes.sellerId))
-    .where(eq(quotes.id, id))
-    .limit(1);
-
-  if (!presupuesto) return null;
-
-  // La alícuota sale del producto para poder desagregar el IVA en el PDF de un
-  // responsable inscripto. Las líneas de texto libre no tienen producto y caen
-  // al 21 al imprimir.
-  const items = await db
-    .select({
-      id: quoteItems.id,
-      variantId: quoteItems.variantId,
-      descripcion: quoteItems.descripcion,
-      unidad: quoteItems.unidad,
-      cantidad: quoteItems.cantidad,
-      precioUnitario: quoteItems.precioUnitario,
-      subtotal: quoteItems.subtotal,
-      orden: quoteItems.orden,
-      alicuotaIva: products.alicuotaIva,
-    })
-    .from(quoteItems)
-    .leftJoin(productVariants, eq(productVariants.id, quoteItems.variantId))
-    .leftJoin(products, eq(products.id, productVariants.productId))
-    .where(eq(quoteItems.quoteId, id))
-    .orderBy(asc(quoteItems.orden));
-
-  return { ...presupuesto, items };
+export async function listarPresupuestos(
+  filtros: { busqueda?: string; estado?: string; sucursal?: string } = {},
+): Promise<PresupuestoListado[]> {
+  const r = await (await api()).GET("/api/v1/admin/presupuestos", { params: { query: filtros } });
+  return datos(r).map((p) => ({
+    ...p,
+    createdAt: fecha(p.createdAt),
+    validoHasta: fechaONula(p.validoHasta),
+    respondeHasta: fechaONula(p.respondeHasta),
+    necesitaPara: fechaONula(p.necesitaPara),
+  }));
 }
 
-export type PresupuestoCompleto = NonNullable<
-  Awaited<ReturnType<typeof consultarPresupuesto>>
->;
+export interface PresupuestoCompleto extends Omit<Esquemas["FichaDePresupuesto"], "validoHasta" | "createdAt"> {
+  validoHasta: Date | null;
+  createdAt: Date;
+}
+
+function presupuesto(p: Esquemas["FichaDePresupuesto"]): PresupuestoCompleto {
+  return { ...p, validoHasta: fechaONula(p.validoHasta), createdAt: fecha(p.createdAt) };
+}
+
+export async function obtenerPresupuesto(id: string): Promise<PresupuestoCompleto | null> {
+  const r = await (await api()).GET("/api/v1/admin/presupuestos/{id}", { params: { path: { id } } });
+  if (r.response.status === 404 || r.response.status === 400) return null;
+  return presupuesto(datos(r));
+}
+
+/**
+ * La ficha sin exigir personal, con el secreto interno.
+ *
+ * La usa lo que manda el presupuesto por WhatsApp a su dueño (puede correr en
+ * la cola, sin la cookie de nadie): **quien llama ya decidió que se puede
+ * ver**. No usar desde una pantalla. La descarga del PDF ya no pasa por acá:
+ * Go mira de quién es.
+ */
+export async function consultarPresupuesto(id: string): Promise<PresupuestoCompleto | null> {
+  const r = await apiInterna.GET("/api/v1/admin/presupuestos/{id}", { params: { path: { id } } });
+  if (r.response.status === 404 || r.response.status === 400) return null;
+  return presupuesto(datos(r));
+}
 
 /* -------------------------------------------------------------------------- */
 /* Pedidos                                                                     */
 /* -------------------------------------------------------------------------- */
 
-export interface PedidoListado {
-  id: string;
-  numero: string;
-  cliente: string;
-  empresa: string | null;
-  sucursal: string | null;
-  sucursalSlug: string | null;
-  estado: string;
-  tipoEntrega: string;
-  direccionEntrega: string | null;
-  medioPago: string | null;
-  estadoPago: string;
-  total: number;
-  items: number;
-  /** Para cobrar a cuenta corriente con recibo desde el tablero. */
-  customerId: string | null;
+export interface PedidoListado extends Omit<Esquemas["PedidoListado"], "createdAt"> {
   createdAt: Date;
 }
 
 export async function listarPedidos(
   filtros: { busqueda?: string; estado?: string; sucursal?: string } = {},
 ): Promise<PedidoListado[]> {
-  await requireStaff();
-
-  const condiciones = [];
-  if (filtros.estado && filtros.estado !== "todos") {
-    condiciones.push(eq(orders.estado, filtros.estado as never));
-  }
-  if (filtros.sucursal && filtros.sucursal !== "todas") {
-    condiciones.push(eq(branches.slug, filtros.sucursal));
-  }
-  if (filtros.busqueda) {
-    const coincidencia = coincideBusqueda(filtros.busqueda, [
-      orders.numero,
-      orders.contactoNombre,
-      orders.direccionEntrega,
-      customers.razonSocial,
-    ]);
-    if (coincidencia) condiciones.push(coincidencia);
-  }
-
-  const conteo = db
-    .select({
-      orderId: orderItems.orderId,
-      items: sql<number>`count(*)::int`.as("items"),
-    })
-    .from(orderItems)
-    .groupBy(orderItems.orderId)
-    .as("conteo");
-
-  const filas = await db
-    .select({
-      id: orders.id,
-      numero: orders.numero,
-      cliente: orders.contactoNombre,
-      empresa: customers.razonSocial,
-      sucursal: branches.name,
-      sucursalSlug: branches.slug,
-      estado: orders.estado,
-      tipoEntrega: orders.tipoEntrega,
-      direccionEntrega: orders.direccionEntrega,
-      medioPago: orders.medioPago,
-      estadoPago: orders.estadoPago,
-      total: orders.total,
-      createdAt: orders.createdAt,
-      items: conteo.items,
-      customerId: orders.customerId,
-    })
-    .from(orders)
-    .leftJoin(customers, eq(customers.id, orders.customerId))
-    .leftJoin(branches, eq(branches.id, orders.branchId))
-    .leftJoin(conteo, eq(conteo.orderId, orders.id))
-    .where(condiciones.length > 0 ? and(...condiciones) : undefined)
-    .orderBy(desc(orders.createdAt));
-
-  return filas.map((f) => ({
-    ...f,
-    total: Number(f.total),
-    items: f.items ?? 0,
-  }));
+  const r = await (await api()).GET("/api/v1/admin/pedidos", { params: { query: filtros } });
+  return datos(r).map((p) => ({ ...p, createdAt: fecha(p.createdAt) }));
 }
 
-export async function obtenerPedido(id: string) {
-  await requireStaff();
-
-  const [pedido] = await db
-    .select({
-      id: orders.id,
-      numero: orders.numero,
-      // El número que se llevó el cliente si la venta se hizo sin conexión: es
-      // lo que le permite volver con ese papel y que se lo encuentren.
-      numeroProvisorio: orders.numeroProvisorio,
-      cliente: orders.contactoNombre,
-      email: orders.contactoEmail,
-      telefono: orders.contactoTelefono,
-      empresa: customers.razonSocial,
-      // Para poder abrir un corte ya apuntado a la sucursal del pedido.
-      branchId: orders.branchId,
-      customerId: orders.customerId,
-      sucursal: branches.name,
-      estado: orders.estado,
-      origen: orders.origen,
-      tipoEntrega: orders.tipoEntrega,
-      direccionEntrega: orders.direccionEntrega,
-      zonaEnvio: orders.zonaEnvio,
-      costoEnvio: orders.costoEnvio,
-      subtotal: orders.subtotal,
-      descuento: orders.descuento,
-      descuentoMotivo: orders.descuentoMotivo,
-      total: orders.total,
-      medioPago: orders.medioPago,
-      estadoPago: orders.estadoPago,
-      notas: orders.notas,
-      createdAt: orders.createdAt,
-    })
-    .from(orders)
-    .leftJoin(customers, eq(customers.id, orders.customerId))
-    .leftJoin(branches, eq(branches.id, orders.branchId))
-    .where(eq(orders.id, id))
-    .limit(1);
-
-  if (!pedido) return null;
-
-  const [items, historial, pagos] = await Promise.all([
-    db
-      .select()
-      .from(orderItems)
-      .where(eq(orderItems.orderId, id))
-      .orderBy(asc(orderItems.orden)),
-    db
-      .select()
-      .from(orderStatusHistory)
-      .where(eq(orderStatusHistory.orderId, id))
-      .orderBy(desc(orderStatusHistory.createdAt)),
-    // El detalle de cómo se pagó, con lote y cupón. Vacío en las ventas
-    // anteriores a `order_payments`: ahí `medioPago` cuenta la historia entera.
-    db
-      .select({
-        medio: orderPayments.medio,
-        importe: orderPayments.importe,
-        nroLote: orderPayments.nroLote,
-        nroCupon: orderPayments.nroCupon,
-        cuotas: orderPayments.cuotas,
-        tarjeta: orderPayments.tarjeta,
-      })
-      .from(orderPayments)
-      .where(eq(orderPayments.orderId, id)),
-  ]);
-
-  return { ...pedido, items, historial, pagos };
+export interface PedidoCompleto extends Omit<Esquemas["FichaDePedido"], "createdAt" | "historial"> {
+  createdAt: Date;
+  historial: (Omit<Esquemas["PasoDelPedido"], "createdAt"> & { createdAt: Date })[];
 }
 
-/** Clientes y sucursales para los formularios de alta. */
-export async function opcionesDeVenta() {
-  await requireStaff();
-
-  const [listaClientes, listaSucursales] = await Promise.all([
-    db
-      .select({
-        id: customers.id,
-        nombre: customers.nombre,
-        razonSocial: customers.razonSocial,
-        email: customers.email,
-        telefono: customers.telefono,
-      })
-      .from(customers)
-      .where(eq(customers.active, true))
-      .orderBy(asc(customers.nombre)),
-    db.select().from(branches).orderBy(asc(branches.sortOrder)),
-  ]);
-
-  return { clientes: listaClientes, sucursales: listaSucursales };
+/**
+ * La ficha del pedido con sus líneas, su historial y cómo se pagó. `margen`
+ * viene solo para el admin (y null si ninguna línea tiene costo congelado).
+ */
+export async function obtenerPedido(id: string): Promise<PedidoCompleto | null> {
+  const r = await (await api()).GET("/api/v1/admin/pedidos/{id}", { params: { path: { id } } });
+  if (r.response.status === 404 || r.response.status === 400) return null;
+  const p = datos(r);
+  return {
+    ...p,
+    createdAt: fecha(p.createdAt),
+    historial: p.historial.map((h) => ({ ...h, createdAt: fecha(h.createdAt) })),
+  };
 }
 
 /*
- * La numeración de pedidos y presupuestos se mudó a
- * `lib/dal/numeracion-ventas.ts`, que toma lock sobre la serie y recibe la
- * transacción.
- *
- * Acá había una función que sacaba el número **antes** de abrir la transacción
- * que insertaba la fila, y con un comentario que decía que si dos personas
- * grababan a la vez "una de las dos falla y vuelve a intentar con el
- * siguiente". El reintento no estaba escrito en ninguna parte: lo que pasaba de
- * verdad era que la segunda venta moría contra el índice único, con un error
- * crudo en la cara de quien estaba cobrando.
+ * La numeración de pedidos y presupuestos está en Go (internal/numeracion)
+ * y, mientras el mostrador y el carrito sigan en TS, también en
+ * `lib/dal/numeracion-ventas.ts`: los dos lados toman el mismo candado.
  */
-

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"mjbj/internal/sqlc"
 )
@@ -78,10 +79,8 @@ func Encolar(ctx context.Context, q *sqlc.Queries, tipo string, carga any, en ti
 	if err != nil {
 		return "", err
 	}
-	if en.IsZero() {
-		en = time.Now()
-	}
-	return q.Encolar(ctx, sqlc.EncolarParams{Tipo: tipo, Carga: crudo, ProximoIntentoAt: en})
+	cuando := pgtype.Timestamptz{Time: en, Valid: !en.IsZero()}
+	return q.Encolar(ctx, sqlc.EncolarParams{Tipo: tipo, Carga: crudo, En: cuando})
 }
 
 // Resultado es lo que hizo una pasada.

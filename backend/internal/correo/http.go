@@ -1,6 +1,8 @@
 package correo
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/base64"
@@ -36,6 +38,8 @@ type Config struct {
 	// Un PEM con la CA del certificado del servidor de correo, solo para
 	// probar contra uno con certificado propio. En producción va vacío.
 	CA string `env:"CORREO_CA"`
+	// La conexión, opcional, con el ERP (erp.go).
+	ERP ConfigERP
 }
 
 // App es el webmail: la API y la SPA.
@@ -45,7 +49,12 @@ type App struct {
 	intentos *Intentos
 	log      *slog.Logger
 	estatico fs.FS
+	// erp es nil si no hay base: el correo anda igual, sin fichas.
+	erp *ERP
 }
+
+// ConERP conecta la app con el ERP (puede ser nil).
+func (a *App) ConERP(e *ERP) { a.erp = e }
 
 // Nueva arma la app. `estatico` es la SPA ya compilada.
 func Nueva(cfg Config, estatico fs.FS, log *slog.Logger) (*App, error) {
@@ -95,8 +104,29 @@ func (a *App) Rutas() http.Handler {
 	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}", a.conSesion(a.mensaje))
 	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}/html", a.conSesion(a.html))
 	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}/adjuntos/{indice}", a.conSesion(a.adjunto))
+	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}/adjuntos.zip", a.conSesion(a.zip))
+	m.HandleFunc("GET /api/carpetas/{carpeta}/mensajes/{uid}/adjuntos/{indice}/conectar", a.conSesion(a.conectarAdjunto))
 	m.HandleFunc("POST /api/carpetas/{carpeta}/acciones", a.conSesion(a.acciones))
 	m.HandleFunc("POST /api/enviar", a.conSesion(a.enviar))
+
+	m.HandleFunc("GET /api/remitentes", a.conSesion(a.remitentes))
+	m.HandleFunc("GET /api/cliente", a.conSesion(a.cliente))
+	m.HandleFunc("GET /api/contactos", a.conSesion(a.contactos))
+
+	m.HandleFunc("POST /api/presupuesto", a.conSesion(a.presupuesto))
+
+	m.HandleFunc("GET /api/equipo", a.conSesion(a.equipo))
+	m.HandleFunc("GET /api/hilos", a.conSesion(a.hilos))
+	m.HandleFunc("PUT /api/hilos", a.conSesion(a.guardarHilo))
+	m.HandleFunc("GET /api/hilos/notas", a.conSesion(a.notas))
+	m.HandleFunc("POST /api/hilos/notas", a.conSesion(a.crearNota))
+	m.HandleFunc("DELETE /api/hilos/notas/{id}", a.conSesion(a.borrarNota))
+	m.HandleFunc("GET /api/tiempos", a.conSesion(a.tiempos))
+	m.HandleFunc("GET /api/seguimientos", a.conSesion(a.seguimientos))
+	m.HandleFunc("DELETE /api/seguimientos/{id}", a.conSesion(a.cancelarSeguimiento))
+	m.HandleFunc("GET /api/plantillas", a.conSesion(a.plantillas))
+	m.HandleFunc("PUT /api/plantillas", a.conSesion(a.guardarPlantilla))
+	m.HandleFunc("DELETE /api/plantillas/{id}", a.conSesion(a.borrarPlantilla))
 
 	m.Handle("GET /", a.spa())
 	return plataforma.Cadena(m, a.log)
@@ -132,6 +162,8 @@ func (a *App) fallar(w http.ResponseWriter, r *http.Request, err error) {
 		// La clave cambió desde otro lado mientras la sesión seguía abierta.
 		a.sesiones.Cerrar(w)
 		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusUnauthorized, "La clave de la casilla cambió. Volvé a entrar."))
+	case errors.Is(err, ErrBloqueado):
+		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusForbidden, "Ese adjunto es un programa y no se puede bajar: puede ser un virus."))
 	case errors.Is(err, ErrNoExiste):
 		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusNotFound, "Ese mensaje o carpeta ya no está."))
 	case errors.Is(err, ErrRechazado):
@@ -153,6 +185,30 @@ type pedidoEntrar struct {
 
 type respuestaSesion struct {
 	Correo string `json:"correo"`
+	// Panel es la dirección del panel para «Volver al panel».
+	Panel string `json:"panel,omitempty"`
+	// Fichas dice si la casilla ve las fichas de clientes del ERP.
+	Fichas bool `json:"fichas"`
+	// Persona es quién del staff es dueño de la casilla, si se sabe.
+	Persona string `json:"persona,omitempty"`
+	// Equipo dice si están las funciones de casilla compartida (asignar,
+	// notas, seguimientos, respuestas guardadas): base y casilla de staff.
+	Equipo bool `json:"equipo"`
+}
+
+func (a *App) datosSesion(ctx context.Context, correo string) respuestaSesion {
+	r := respuestaSesion{Correo: correo}
+	if a.erp == nil {
+		return r
+	}
+	if p := a.erp.Panel(); p != "" {
+		r.Panel = p + "/admin"
+	}
+	rol, _, nombre := a.erp.Staff(ctx, correo)
+	r.Fichas = rol == "admin" || rol == "vendedor"
+	r.Equipo = rol != ""
+	r.Persona = nombre
+	return r
 }
 
 func (a *App) entrar(w http.ResponseWriter, r *http.Request) {
@@ -197,11 +253,75 @@ func (a *App) entrar(w http.ResponseWriter, r *http.Request) {
 		a.fallar(w, r, err)
 		return
 	}
-	plataforma.EscribirJSON(w, http.StatusOK, respuestaSesion{Correo: cred.Correo})
+	plataforma.EscribirJSON(w, http.StatusOK, a.datosSesion(r.Context(), cred.Correo))
 }
 
-func (a *App) sesion(w http.ResponseWriter, _ *http.Request, cred Credenciales) {
-	plataforma.EscribirJSON(w, http.StatusOK, respuestaSesion{Correo: cred.Correo})
+func (a *App) sesion(w http.ResponseWriter, r *http.Request, cred Credenciales) {
+	plataforma.EscribirJSON(w, http.StatusOK, a.datosSesion(r.Context(), cred.Correo))
+}
+
+// --- el ERP ---
+
+// conFichas corta acá si no hay ERP o si la casilla no puede ver clientes.
+// Para afuera, «no podés» y «no hay base» son lo mismo: un 404, sin datos.
+func (a *App) conFichas(w http.ResponseWriter, r *http.Request, cred Credenciales) bool {
+	if a.erp == nil || !a.erp.VeFichas(r.Context(), cred.Correo) {
+		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusNotFound, "No hay fichas para mostrar."))
+		return false
+	}
+	return true
+}
+
+func (a *App) remitentes(w http.ResponseWriter, r *http.Request, cred Credenciales) {
+	if !a.conFichas(w, r, cred) {
+		return
+	}
+	correos := r.URL.Query()["correo"]
+	if len(correos) > 200 {
+		correos = correos[:200]
+	}
+	for i, c := range correos {
+		correos[i] = strings.ToLower(strings.TrimSpace(c))
+	}
+	son, err := a.erp.Remitentes(r.Context(), correos)
+	if err != nil {
+		a.log.Warn("correo: remitentes", "error", err)
+		son = Remitentes{Clientes: []string{}, Proveedores: []string{}}
+	}
+	plataforma.EscribirJSON(w, http.StatusOK, son)
+}
+
+func (a *App) cliente(w http.ResponseWriter, r *http.Request, cred Credenciales) {
+	if !a.conFichas(w, r, cred) {
+		return
+	}
+	f, err := a.erp.FichaDe(r.Context(), r.URL.Query().Get("correo"))
+	if err != nil {
+		if !errors.Is(err, ErrSinFicha) {
+			a.log.Warn("correo: ficha", "error", err)
+		}
+		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusNotFound, "No es cliente."))
+		return
+	}
+	w.Header().Set("Cache-Control", "private, max-age=60")
+	plataforma.EscribirJSON(w, http.StatusOK, f)
+}
+
+func (a *App) contactos(w http.ResponseWriter, r *http.Request, cred Credenciales) {
+	if !a.conFichas(w, r, cred) {
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len([]rune(q)) < 2 {
+		plataforma.EscribirJSON(w, http.StatusOK, []Contacto{})
+		return
+	}
+	lista, err := a.erp.Contactos(r.Context(), q)
+	if err != nil {
+		a.log.Warn("correo: contactos", "error", err)
+		lista = []Contacto{}
+	}
+	plataforma.EscribirJSON(w, http.StatusOK, lista)
 }
 
 func (a *App) salir(w http.ResponseWriter, _ *http.Request) {
@@ -221,18 +341,23 @@ func (a *App) carpetas(w http.ResponseWriter, r *http.Request, cred Credenciales
 }
 
 func (a *App) lista(w http.ResponseWriter, r *http.Request, cred Credenciales) {
-	carpeta := r.PathValue("carpeta")
-	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
-		res, err := a.srv.Buscar(r.Context(), cred, carpeta, q)
-		if err != nil {
-			a.fallar(w, r, err)
-			return
-		}
-		plataforma.EscribirJSON(w, http.StatusOK, Pagina{Mensajes: res, Total: uint32(len(res)), Pagina: 1, Paginas: 1})
-		return
+	q := r.URL.Query()
+	f := Filtro{
+		Texto:        strings.TrimSpace(q.Get("q")),
+		SinLeer:      q.Get("filtro") == "sin-leer",
+		SinResponder: q.Get("filtro") == "sin-responder",
+		Destacados:   q.Get("filtro") == "destacados",
+		ConAdjuntos:  q.Get("adjuntos") == "si",
+		De:           strings.TrimSpace(q.Get("de")),
 	}
-	pagina, _ := strconv.Atoi(r.URL.Query().Get("pagina"))
-	res, err := a.srv.Lista(r.Context(), cred, carpeta, pagina)
+	if dias, err := strconv.Atoi(q.Get("dias")); err == nil && dias > 0 && dias <= 3650 {
+		f.Desde = time.Now().AddDate(0, 0, -dias)
+	}
+	if f.Texto != "" && a.erp != nil {
+		f.Tambien = a.erp.CorreosDeBusqueda(r.Context(), cred.Correo, f.Texto)
+	}
+	pagina, _ := strconv.Atoi(q.Get("pagina"))
+	res, err := a.srv.Lista(r.Context(), cred, r.PathValue("carpeta"), f, pagina)
 	if err != nil {
 		a.fallar(w, r, err)
 		return
@@ -263,7 +388,7 @@ func (a *App) mensaje(w http.ResponseWriter, r *http.Request, cred Credenciales)
 // saneo sino la CSP: sin scripts, sin formularios, sin pedidos a ningún lado
 // salvo las imágenes remotas cuando la persona las permite.
 const documentoHTML = `<!doctype html><html lang="es"><head><meta charset="utf-8"><base target="_blank">
-<style>html{color-scheme:light}body{margin:0;padding:16px;font:15px/1.5 system-ui,sans-serif;color:#1c1917;background:#fff;overflow-wrap:anywhere}img{max-width:100%%;height:auto}table{max-width:100%%}blockquote{margin:0 0 0 .5em;padding-left:.75em;border-left:3px solid #e7e5e4;color:#57534e}</style>
+<style>html{color-scheme:light}body{margin:0;padding:16px;font:15px/1.5 system-ui,sans-serif;color:#1c1917;background:#fff;overflow-wrap:anywhere}img{max-width:100%%;height:auto}table{max-width:100%%}blockquote{margin:0 0 0 .5em;padding-left:.75em;border-left:3px solid #e7e5e4;color:#57534e}a[data-enganoso]{position:relative;color:#a8480a;text-decoration-style:dotted;text-underline-offset:3px}a[data-enganoso]:hover::after,a[data-enganoso]:focus::after{content:attr(data-enganoso);position:absolute;left:0;top:calc(100%% + 8px);z-index:2;width:max-content;max-width:320px;padding:10px 12px;border-radius:10px;background:#fff;color:#b3261e;font:600 14px/1.45 system-ui,sans-serif;box-shadow:0 20px 50px -12px rgb(40 30 20/.35),0 0 0 1px #e8e4de;white-space:normal}</style>
 </head><body>%s</body></html>`
 
 func (a *App) html(w http.ResponseWriter, r *http.Request, cred Credenciales) {
@@ -323,8 +448,76 @@ func (a *App) adjunto(w http.ResponseWriter, r *http.Request, cred Credenciales)
 	h.Set("Content-Disposition", mime.FormatMediaType(disposicion, map[string]string{"filename": path.Base(parte.Nombre)}))
 	h.Set("Content-Length", strconv.Itoa(len(parte.Datos)))
 	h.Set("Cache-Control", "private, max-age=3600")
-	h.Set("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; plugin-types application/pdf; sandbox")
+	csp := "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'; sandbox"
+	if tipo == "application/pdf" {
+		// El visor de PDF de Chrome no arranca en un documento con
+		// `sandbox`, y el visor del correo (2i) lo muestra en un iframe. Un
+		// PDF no ejecuta nada en este origen: lo dibuja el navegador.
+		csp = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'"
+	}
+	h.Set("Content-Security-Policy", csp)
 	_, _ = w.Write(parte.Datos)
+}
+
+// zip baja varios adjuntos juntos (2g, «Descargar todo»). Se arma en
+// memoria —los adjuntos ya están en memoria al desarmar el mensaje, y el
+// servidor de correo no acepta más de 25 MB— para mandar el largo y que la
+// pantalla muestre el avance.
+func (a *App) zip(w http.ResponseWriter, r *http.Request, cred Credenciales) {
+	uid, ok := uidDe(r)
+	if !ok {
+		a.fallar(w, r, ErrNoExiste)
+		return
+	}
+	var indices []int
+	for _, t := range strings.Split(r.URL.Query().Get("i"), ",") {
+		if n, err := strconv.Atoi(strings.TrimSpace(t)); err == nil && n >= 0 {
+			indices = append(indices, n)
+		}
+	}
+	partes, err := a.srv.Varios(r.Context(), cred, r.PathValue("carpeta"), uid, indices)
+	if err != nil {
+		a.fallar(w, r, err)
+		return
+	}
+	var buf bytes.Buffer
+	z := zip.NewWriter(&buf)
+	usados := map[string]int{}
+	for _, p := range partes {
+		nombre := nombreUnico(path.Base(p.Nombre), usados)
+		f, err := z.CreateHeader(&zip.FileHeader{Name: nombre, Method: zip.Deflate, Modified: time.Now()})
+		if err == nil {
+			_, err = f.Write(p.Datos)
+		}
+		if err != nil {
+			a.fallar(w, r, err)
+			return
+		}
+	}
+	if err := z.Close(); err != nil {
+		a.fallar(w, r, err)
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", "application/zip")
+	h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": "adjuntos.zip"}))
+	h.Set("Content-Length", strconv.Itoa(buf.Len()))
+	h.Set("Cache-Control", "private, no-store")
+	_, _ = w.Write(buf.Bytes())
+}
+
+// nombreUnico evita que dos adjuntos con el mismo nombre se pisen en el
+// .zip: el segundo «foto.jpg» pasa a «foto (2).jpg».
+func nombreUnico(nombre string, usados map[string]int) string {
+	if nombre == "" || nombre == "." || nombre == "/" {
+		nombre = "adjunto"
+	}
+	usados[nombre]++
+	if n := usados[nombre]; n > 1 {
+		ext := path.Ext(nombre)
+		return fmt.Sprintf("%s (%d)%s", strings.TrimSuffix(nombre, ext), n, ext)
+	}
+	return nombre
 }
 
 type pedidoAcciones struct {
@@ -336,6 +529,7 @@ type pedidoAcciones struct {
 var accionesValidas = map[Accion]bool{
 	AccionLeido: true, AccionNoLeido: true, AccionDestacar: true, AccionNoDestacar: true,
 	AccionArchivar: true, AccionPapelera: true, AccionSpam: true, AccionMover: true, AccionRestaurar: true,
+	AccionEtiquetar: true, AccionDesetiquetar: true,
 }
 
 func (a *App) acciones(w http.ResponseWriter, r *http.Request, cred Credenciales) {
@@ -424,6 +618,7 @@ func (a *App) enviar(w http.ResponseWriter, r *http.Request, cred Credenciales) 
 		a.fallar(w, r, err)
 		return
 	}
+	a.despuesDeEnviar(r.Context(), cred, b, valor)
 	w.WriteHeader(http.StatusNoContent)
 }
 

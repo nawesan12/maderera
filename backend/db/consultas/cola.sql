@@ -2,7 +2,11 @@
 -- (internal/tareas): las mismas tablas que lib/cola y lib/tareas del TS.
 
 -- name: Encolar :one
-INSERT INTO trabajos (tipo, carga, proximo_intento_at) VALUES ($1, $2, $3)
+-- Sin fecha, «ya» es el now() de la base: el mismo reloj contra el que
+-- compara TomarTrabajo (con el de Go, un desfase entre relojes dejaba el
+-- trabajo en el futuro).
+INSERT INTO trabajos (tipo, carga, proximo_intento_at)
+VALUES ($1, $2, coalesce(sqlc.narg(en)::timestamptz, now()))
 RETURNING id;
 
 -- name: TomarTrabajo :one

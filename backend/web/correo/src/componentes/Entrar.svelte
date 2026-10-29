@@ -1,8 +1,17 @@
 <script lang="ts">
   import { api, ErrorApi } from "../lib/api";
   import { bandeja } from "../lib/estado.svelte";
+  import { sesion } from "../lib/sesion.svelte";
 
-  let correo = $state(localStorage.getItem("correo:ultima") ?? "");
+  function ultima(): string {
+    try {
+      return localStorage.getItem("correo:ultima") ?? "";
+    } catch {
+      return "";
+    }
+  }
+
+  let correo = $state(ultima());
   let clave = $state("");
   let enviando = $state(false);
   let errores = $state<Record<string, string>>({});
@@ -15,7 +24,12 @@
     general = "";
     try {
       const s = await api.entrar(correo, clave);
-      localStorage.setItem("correo:ultima", s.correo);
+      try {
+        localStorage.setItem("correo:ultima", s.correo);
+      } catch {
+        // sin almacenamiento: la próxima vez se escribe de nuevo
+      }
+      sesion.tomar(s);
       bandeja.correo = s.correo;
     } catch (err) {
       if (err instanceof ErrorApi && Object.keys(err.errores).length) errores = err.errores;
@@ -30,17 +44,7 @@
 <main>
   <form onsubmit={entrar} novalidate>
     <div class="marca">
-      <span class="logo" aria-hidden="true">
-        <svg viewBox="0 0 32 32" width="40" height="40"
-          ><rect width="32" height="32" rx="8" fill="var(--naranja)" /><path
-            d="M7 11l9 6 9-6M7 10h18v12H7z"
-            fill="none"
-            stroke="#fff"
-            stroke-width="2.2"
-            stroke-linejoin="round"
-          /></svg
-        >
-      </span>
+      <img src="/logo.png" alt="" width="48" height="48" />
       <div>
         <h1>Correo</h1>
         <p>Maderera Juan B. Justo</p>
@@ -87,63 +91,67 @@
     display: grid;
     place-items: center;
     padding: 24px 16px;
-    background:
-      radial-gradient(60rem 30rem at 10% -10%, var(--naranja-suave), transparent 60%),
-      var(--fondo);
+    background-color: var(--side);
+    background-image: var(--tex);
+    background-size: var(--texS);
   }
   form {
-    width: min(100%, 380px);
+    width: min(100%, 420px);
     display: grid;
     gap: 18px;
-    background: var(--superficie);
-    border: 1px solid var(--borde);
+    background-color: var(--card);
+    background-image: var(--texC);
+    background-size: 180px 180px;
     border-radius: 16px;
-    padding: 28px 24px;
-    box-shadow: var(--sombra);
+    padding: 32px 28px;
+    box-shadow: var(--panelSh);
   }
   .marca {
     display: flex;
     gap: 14px;
     align-items: center;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
   }
-  .logo {
-    display: grid;
+  .marca img {
+    border-radius: 10px;
   }
   h1 {
     margin: 0;
-    font-size: 1.5rem;
-    line-height: 1.1;
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.15;
   }
   .marca p {
     margin: 2px 0 0;
-    color: var(--texto-2);
+    color: var(--mut);
+    font-size: 15px;
   }
   label {
     display: grid;
     gap: 6px;
   }
   label span {
-    font-weight: 600;
-    font-size: 0.92rem;
+    font-size: 15px;
+    color: var(--mut);
   }
   small,
   .error {
-    color: var(--peligro);
+    color: var(--prT);
     margin: 0;
+    font-size: 15px;
   }
   input[aria-invalid="true"] {
-    border-color: var(--peligro);
+    border-color: var(--prT);
   }
   button {
-    justify-content: center;
-    padding: 0.7em;
-    font-size: 1rem;
+    min-height: 50px;
+    border-radius: 12px;
+    font-size: 17px;
   }
   .nota {
     margin: 0;
-    font-size: 0.85rem;
-    color: var(--texto-3);
+    font-size: 14px;
+    color: var(--mut);
     text-align: center;
   }
 </style>

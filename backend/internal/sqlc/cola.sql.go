@@ -8,7 +8,8 @@ package sqlc
 import (
 	"context"
 	"encoding/json"
-	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const empezarCorrida = `-- name: EmpezarCorrida :one
@@ -36,20 +37,24 @@ func (q *Queries) EmpezarCorrida(ctx context.Context, arg EmpezarCorridaParams) 
 
 const encolar = `-- name: Encolar :one
 
-INSERT INTO trabajos (tipo, carga, proximo_intento_at) VALUES ($1, $2, $3)
+INSERT INTO trabajos (tipo, carga, proximo_intento_at)
+VALUES ($1, $2, coalesce($3::timestamptz, now()))
 RETURNING id
 `
 
 type EncolarParams struct {
-	Tipo             string          `json:"tipo"`
-	Carga            json.RawMessage `json:"carga"`
-	ProximoIntentoAt time.Time       `json:"proximoIntentoAt"`
+	Tipo  string             `json:"tipo"`
+	Carga json.RawMessage    `json:"carga"`
+	En    pgtype.Timestamptz `json:"en"`
 }
 
 // La cola de trabajos (internal/cola) y las corridas de tareas
 // (internal/tareas): las mismas tablas que lib/cola y lib/tareas del TS.
+// Sin fecha, «ya» es el now() de la base: el mismo reloj contra el que
+// compara TomarTrabajo (con el de Go, un desfase entre relojes dejaba el
+// trabajo en el futuro).
 func (q *Queries) Encolar(ctx context.Context, arg EncolarParams) (string, error) {
-	row := q.db.QueryRow(ctx, encolar, arg.Tipo, arg.Carga, arg.ProximoIntentoAt)
+	row := q.db.QueryRow(ctx, encolar, arg.Tipo, arg.Carga, arg.En)
 	var id string
 	err := row.Scan(&id)
 	return id, err

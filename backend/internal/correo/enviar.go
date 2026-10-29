@@ -29,6 +29,8 @@ type Borrador struct {
 	Carpeta      string   // dónde está el original
 	UID          uint32
 	Adjuntos     []ArchivoAdjunto
+	// MessageID lo completa Enviar con el que le puso al mensaje.
+	MessageID string
 }
 
 // ArchivoAdjunto es un archivo que se sube para mandar.
@@ -106,7 +108,8 @@ func (s *Servidor) Enviar(ctx context.Context, cred Credenciales, b *Borrador, r
 	}
 	m.Subject(b.Asunto)
 	m.SetDate()
-	m.SetMessageIDWithValue(nuevoMessageID(cred.Correo))
+	b.MessageID = nuevoMessageID(cred.Correo)
+	m.SetMessageIDWithValue(b.MessageID)
 	m.SetGenHeader(gomail.HeaderXMailer, "Correo MJBJ")
 	if b.EnRespuestaA != "" {
 		m.SetGenHeaderPreformatted(gomail.HeaderInReplyTo, "<"+b.EnRespuestaA+">")

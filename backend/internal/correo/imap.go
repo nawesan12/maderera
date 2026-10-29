@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"mime"
 	"net"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -49,6 +50,9 @@ var ErrCredenciales = errors.New("la casilla o la clave no son correctas")
 // ErrNoExiste es una carpeta o un mensaje que no está (lo borraron desde
 // otro programa, o la dirección está mal).
 var ErrNoExiste = errors.New("no existe")
+
+// ErrBloqueado es un adjunto que es un programa: no se entrega.
+var ErrBloqueado = errors.New("adjunto bloqueado")
 
 type conexion struct {
 	c *imapclient.Client
@@ -278,6 +282,13 @@ type Resumen struct {
 	Respondido bool        `json:"respondido"`
 	Adjuntos   bool        `json:"adjuntos"`
 	Tamano     int64       `json:"tamano"`
+	// Vista es la primera línea de lo que escribió la persona (vista.go).
+	Vista string `json:"vista"`
+	// Etiquetas son las palabras clave de IMAP, ya legibles (etiquetas.go).
+	Etiquetas []string `json:"etiquetas"`
+	// Hilo es el Message-ID del primer mensaje de la conversación (el
+	// primero de References, o el propio): la clave de equipo.go.
+	Hilo string `json:"hilo,omitempty"`
 }
 
 // Pagina es una página de la bandeja, de la más nueva a la más vieja.
@@ -299,10 +310,30 @@ var opcionesResumen = &imap.FetchOptions{
 	// Extendida: sin ella el servidor no manda el Content-Disposition, y no
 	// se puede saber qué partes son adjuntos.
 	BodyStructure: &imap.FetchItemBodyStructure{Extended: true},
+	BodySection:   []*imap.FetchItemBodySection{seccionReferencias},
+}
+
+// References no viene en el sobre: se pide aparte, solo ese encabezado.
+var seccionReferencias = &imap.FetchItemBodySection{
+	Specifier: imap.PartSpecifierHeader, HeaderFields: []string{"References"}, Peek: true,
+}
+
+var reMessageID = regexp.MustCompile(`<([^<>\s]+)>`)
+
+// hiloDe es la clave de la conversación: el primer Message-ID de
+// References, si no el In-Reply-To, si no el propio.
+func hiloDe(referencias []byte, enRespuestaA []string, propio string) string {
+	if m := reMessageID.FindSubmatch(referencias); m != nil {
+		return string(m[1])
+	}
+	if len(enRespuestaA) > 0 && enRespuestaA[0] != "" {
+		return strings.Trim(enRespuestaA[0], "<> ")
+	}
+	return strings.Trim(propio, "<> ")
 }
 
 func resumir(m *imapclient.FetchMessageBuffer) Resumen {
-	r := Resumen{UID: uint32(m.UID), Tamano: m.RFC822Size, Fecha: m.InternalDate}
+	r := Resumen{UID: uint32(m.UID), Tamano: m.RFC822Size, Fecha: m.InternalDate, Etiquetas: []string{}}
 	if e := m.Envelope; e != nil {
 		r.De = direcciones(e.From)
 		r.Para = direcciones(e.To)
@@ -310,6 +341,7 @@ func resumir(m *imapclient.FetchMessageBuffer) Resumen {
 		if !e.Date.IsZero() {
 			r.Fecha = e.Date
 		}
+		r.Hilo = hiloDe(m.FindBodySection(seccionReferencias), e.InReplyTo, e.MessageID)
 	}
 	for _, f := range m.Flags {
 		switch f {
@@ -319,6 +351,10 @@ func resumir(m *imapclient.FetchMessageBuffer) Resumen {
 			r.Destacado = true
 		case imap.FlagAnswered:
 			r.Respondido = true
+		default:
+			if e, ok := etiquetaDe(f); ok {
+				r.Etiquetas = append(r.Etiquetas, e)
+			}
 		}
 	}
 	r.Adjuntos = tieneAdjuntos(m.BodyStructure)
@@ -345,8 +381,120 @@ func tieneAdjuntos(bs imap.BodyStructure) bool {
 	return encontrado
 }
 
+// Filtro es lo que achica la lista: las pestañas («Sin leer», «Esperan
+// respuesta») y los botones de la búsqueda. El cero es la carpeta entera.
+type Filtro struct {
+	Texto        string
+	SinLeer      bool
+	SinResponder bool
+	Destacados   bool
+	ConAdjuntos  bool
+	Desde        time.Time
+	De           string
+	// Tambien son direcciones: lo que mandaron o se les mandó también
+	// coincide con la búsqueda (buscar por cliente, CUIT o pedido).
+	Tambien []string
+}
+
+func (f Filtro) vacio() bool {
+	return f.Texto == "" && !f.SinLeer && !f.SinResponder && !f.Destacados && !f.ConAdjuntos && f.Desde.IsZero() && f.De == "" && len(f.Tambien) == 0
+}
+
+func (f Filtro) criterio() *imap.SearchCriteria {
+	c := &imap.SearchCriteria{}
+	// Cada palabra tiene que aparecer en algún lado: «placas fenólicas juan»
+	// encuentra el correo de Juan que habla de placas fenólicas.
+	texto := &imap.SearchCriteria{}
+	for _, palabra := range strings.Fields(f.Texto) {
+		texto.And(cualquiera(variantes(palabra)))
+	}
+	if len(f.Tambien) == 0 {
+		c.And(texto)
+	} else {
+		// El texto, o algo de/para esas direcciones.
+		alguna := texto
+		for _, d := range f.Tambien {
+			de := imap.SearchCriteria{Or: [][2]imap.SearchCriteria{{
+				{Header: []imap.SearchCriteriaHeaderField{{Key: "From", Value: d}}},
+				{Header: []imap.SearchCriteriaHeaderField{{Key: "To", Value: d}}},
+			}}}
+			alguna = &imap.SearchCriteria{Or: [][2]imap.SearchCriteria{{*alguna, de}}}
+		}
+		c.And(alguna)
+	}
+	if f.SinLeer {
+		c.NotFlag = append(c.NotFlag, imap.FlagSeen)
+	}
+	if f.SinResponder {
+		c.NotFlag = append(c.NotFlag, imap.FlagAnswered)
+	}
+	if f.Destacados {
+		c.Flag = append(c.Flag, imap.FlagFlagged)
+	}
+	if !f.Desde.IsZero() {
+		c.Since = f.Desde
+	}
+	if f.De != "" {
+		c.Header = append(c.Header, imap.SearchCriteriaHeaderField{Key: "From", Value: f.De})
+	}
+	if f.ConAdjuntos {
+		// IMAP no sabe buscar «tiene adjuntos»; multipart/mixed es lo que
+		// arman todos los programas cuando hay uno. Los que no lo son (un
+		// related con una imagen en línea) se descartan después con la
+		// estructura, que es la que manda.
+		c.Header = append(c.Header, imap.SearchCriteriaHeaderField{Key: "Content-Type", Value: "multipart/mixed"})
+	}
+	return c
+}
+
+// cualquiera arma «aparece alguna de estas palabras» con los OR de IMAP,
+// que son de a dos.
+func cualquiera(palabras []string) *imap.SearchCriteria {
+	if len(palabras) == 1 {
+		return &imap.SearchCriteria{Text: palabras}
+	}
+	return &imap.SearchCriteria{Or: [][2]imap.SearchCriteria{{
+		{Text: palabras[:1]},
+		*cualquiera(palabras[1:]),
+	}}}
+}
+
+var (
+	conTilde = map[rune]rune{'a': 'á', 'e': 'é', 'i': 'í', 'o': 'ó', 'u': 'ú', 'n': 'ñ'}
+	sinTilde = strings.NewReplacer("á", "a", "é", "e", "í", "i", "ó", "o", "ú", "u", "ü", "u", "ñ", "n",
+		"Á", "A", "É", "E", "Í", "I", "Ó", "O", "Ú", "U", "Ñ", "N")
+)
+
+// variantes son las formas de una palabra con y sin tilde: el IMAP compara
+// sin mayúsculas pero con tildes, y la gente escribe «fenolico» buscando
+// «fenólico» (y al revés). En castellano una palabra lleva a lo sumo una
+// tilde, así que alcanza con probar una por vez: «fenolico» busca también
+// «fénolico», «fenólico», «fenolíco»…, todo en un solo SEARCH.
+func variantes(palabra string) []string {
+	base := strings.ToLower(sinTilde.Replace(palabra))
+	out := []string{palabra}
+	if base != strings.ToLower(palabra) {
+		out = append(out, base)
+	}
+	letras := []rune(base)
+	if len(letras) > 30 {
+		return out
+	}
+	for i, r := range letras {
+		if t, ok := conTilde[r]; ok {
+			v := append([]rune(nil), letras...)
+			v[i] = t
+			if s := string(v); !strings.EqualFold(s, palabra) {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
+}
+
 // Lista devuelve una página de la carpeta, la 1 es la de los más nuevos.
-func (s *Servidor) Lista(ctx context.Context, cred Credenciales, carpeta string, pagina int) (*Pagina, error) {
+// Con un filtro, la página es de lo que encontró la búsqueda.
+func (s *Servidor) Lista(ctx context.Context, cred Credenciales, carpeta string, f Filtro, pagina int) (*Pagina, error) {
 	cx, err := s.conectar(ctx, cred)
 	if err != nil {
 		return nil, err
@@ -357,67 +505,56 @@ func (s *Servidor) Lista(ctx context.Context, cred Credenciales, carpeta string,
 	if err != nil {
 		return nil, noExisteSi(err)
 	}
-	total := sel.NumMessages
+	var (
+		total   uint32
+		buscado []imap.UID
+	)
+	if f.vacio() {
+		total = sel.NumMessages
+	} else {
+		datos, err := cx.c.UIDSearch(f.criterio(), nil).Wait()
+		if err != nil {
+			return nil, fmt.Errorf("buscando: %w", err)
+		}
+		buscado = datos.AllUIDs()
+		slices.SortFunc(buscado, func(a, b imap.UID) int { return int(b) - int(a) })
+		total = uint32(len(buscado))
+	}
 	paginas := max(1, int((total+porPagina-1)/porPagina))
 	pagina = min(max(pagina, 1), paginas)
 	out := &Pagina{Total: total, Pagina: pagina, Paginas: paginas, Mensajes: []Resumen{}}
 	if total == 0 {
 		return out, nil
 	}
-	// Los números de secuencia van del más viejo (1) al más nuevo (total).
-	hasta := int64(total) - int64(pagina-1)*porPagina
-	desde := max(1, hasta-porPagina+1)
-	var rango imap.SeqSet
-	rango.AddRange(uint32(desde), uint32(hasta))
-	mensajes, err := cx.c.Fetch(rango, opcionesResumen).Collect()
+	var mensajes []*imapclient.FetchMessageBuffer
+	if f.vacio() {
+		// Los números de secuencia van del más viejo (1) al más nuevo (total).
+		hasta := int64(total) - int64(pagina-1)*porPagina
+		desde := max(1, hasta-porPagina+1)
+		var rango imap.SeqSet
+		rango.AddRange(uint32(desde), uint32(hasta))
+		mensajes, err = cx.c.Fetch(rango, opcionesResumen).Collect()
+	} else {
+		trozo := buscado[(pagina-1)*porPagina : min(len(buscado), pagina*porPagina)]
+		mensajes, err = cx.c.Fetch(imap.UIDSetNum(trozo...), opcionesResumen).Collect()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("trayendo la bandeja: %w", err)
 	}
-	slices.SortFunc(mensajes, func(a, b *imapclient.FetchMessageBuffer) int { return int(b.SeqNum) - int(a.SeqNum) })
+	slices.SortFunc(mensajes, func(a, b *imapclient.FetchMessageBuffer) int {
+		if a.UID != b.UID {
+			return int(b.UID) - int(a.UID)
+		}
+		return int(b.SeqNum) - int(a.SeqNum)
+	})
 	for _, m := range mensajes {
-		out.Mensajes = append(out.Mensajes, resumir(m))
+		r := resumir(m)
+		if f.ConAdjuntos && !r.Adjuntos {
+			continue
+		}
+		out.Mensajes = append(out.Mensajes, r)
 	}
-	return out, nil
-}
-
-// Buscar busca en remitente, destinatario, asunto y texto. Devuelve los 100
-// más nuevos.
-func (s *Servidor) Buscar(ctx context.Context, cred Credenciales, carpeta, texto string) ([]Resumen, error) {
-	cx, err := s.conectar(ctx, cred)
-	if err != nil {
-		return nil, err
-	}
-	defer cx.cerrar()
-	if _, err := cx.c.Select(carpeta, &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
-		return nil, noExisteSi(err)
-	}
-	criterio := &imap.SearchCriteria{}
-	// Cada palabra tiene que aparecer en algún lado: «placas fenólicas juan»
-	// encuentra el correo de Juan que habla de placas fenólicas.
-	for _, palabra := range strings.Fields(texto) {
-		criterio.And(&imap.SearchCriteria{Text: []string{palabra}})
-	}
-	datos, err := cx.c.UIDSearch(criterio, nil).Wait()
-	if err != nil {
-		return nil, fmt.Errorf("buscando: %w", err)
-	}
-	uids := datos.AllUIDs()
-	slices.SortFunc(uids, func(a, b imap.UID) int { return int(b) - int(a) })
-	if len(uids) > 100 {
-		uids = uids[:100]
-	}
-	if len(uids) == 0 {
-		return []Resumen{}, nil
-	}
-	mensajes, err := cx.c.Fetch(imap.UIDSetNum(uids...), opcionesResumen).Collect()
-	if err != nil {
-		return nil, fmt.Errorf("trayendo resultados: %w", err)
-	}
-	slices.SortFunc(mensajes, func(a, b *imapclient.FetchMessageBuffer) int { return int(b.UID) - int(a.UID) })
-	out := make([]Resumen, 0, len(mensajes))
-	for _, m := range mensajes {
-		out = append(out, resumir(m))
-	}
+	cx.agregarVistas(mensajes, out.Mensajes)
 	return out, nil
 }
 
@@ -454,6 +591,10 @@ const (
 	AccionMover      Accion = "mover"
 	// Restaurar devuelve de la papelera o del spam a la entrada.
 	AccionRestaurar Accion = "restaurar"
+	// Etiquetar y desetiquetar ponen o sacan una palabra clave de IMAP; el
+	// nombre de la etiqueta va en `destino`.
+	AccionEtiquetar    Accion = "etiquetar"
+	AccionDesetiquetar Accion = "desetiquetar"
 )
 
 // Aplicar hace la acción sobre los mensajes. En la papelera, «papelera»
@@ -510,6 +651,16 @@ func (s *Servidor) Aplicar(ctx context.Context, cred Credenciales, carpeta strin
 		return moverARol(RolSpam)
 	case AccionRestaurar:
 		return mover("INBOX")
+	case AccionEtiquetar, AccionDesetiquetar:
+		clave, ok := palabraClave(destino)
+		if !ok {
+			return ErrNoExiste
+		}
+		op := imap.StoreFlagsAdd
+		if accion == AccionDesetiquetar {
+			op = imap.StoreFlagsDel
+		}
+		return marcar(op, clave)
 	case AccionMover:
 		if destino == "" {
 			return ErrNoExiste

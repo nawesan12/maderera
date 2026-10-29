@@ -65,16 +65,16 @@
     display: grid;
     place-items: center;
     padding: 16px;
-    background: oklch(0.2 0.01 60 / 0.4);
+    background: oklch(0.12 0.01 60 / 0.55);
   }
   .panel {
     width: min(760px, 100%);
     max-height: 100%;
     overflow-y: auto;
-    background: var(--superficie);
+    background: var(--pop);
     border-radius: 16px;
     padding: 22px 24px;
-    box-shadow: var(--sombra);
+    box-shadow: var(--popsh);
   }
   h2 {
     margin: 0 0 14px;
@@ -88,7 +88,7 @@
   h3 {
     margin: 0 0 8px;
     font-size: 0.9rem;
-    color: var(--texto-2);
+    color: var(--mut);
   }
   dl {
     display: grid;

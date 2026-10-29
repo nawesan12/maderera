@@ -3,6 +3,7 @@ package correo
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -248,5 +249,115 @@ func TestSepararDirecciones(t *testing.T) {
 	got := separarDirecciones(" a@b.com, c@d.com;e@f.com\n ,, ")
 	if strings.Join(got, "|") != "a@b.com|c@d.com|e@f.com" {
 		t.Errorf("%v", got)
+	}
+}
+
+func TestEtiquetas(t *testing.T) {
+	for _, nombre := range []string{"Presupuesto", "Pedido abierto", "Reclamación", "Año 2026", "a_b&c$"} {
+		f, ok := palabraClave(nombre)
+		if !ok {
+			t.Fatalf("%q no se pudo codificar", nombre)
+		}
+		for i := 0; i < len(f); i++ {
+			if !esAtomo(f[i]) {
+				t.Fatalf("%q quedó %q, que no es un átomo", nombre, f)
+			}
+		}
+		vuelta, ok := etiquetaDe(f)
+		if !ok || vuelta != nombre {
+			t.Fatalf("%q → %q → %q", nombre, f, vuelta)
+		}
+	}
+	if _, ok := etiquetaDe("$Forwarded"); ok {
+		t.Fatal("$Forwarded no es una etiqueta")
+	}
+	if _, ok := palabraClave("   "); ok {
+		t.Fatal("una etiqueta vacía no vale")
+	}
+}
+
+func TestSospecha(t *testing.T) {
+	crudo := "From: Mercado Pago <avisos@mercadopag0-seguridad.test>\r\nTo: ventas@mjbj.com.ar\r\nSubject: Tu cuenta\r\n" +
+		"MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=b\r\n\r\n" +
+		"--b\r\nContent-Type: text/html; charset=utf-8\r\n\r\n" +
+		`<p>Verificá en <a href="https://mp-verificacion-cuentas.xyz/login">www.mercadopago.com/verificar</a> o <a href="https://mjbj.com.ar">acá</a>.</p>` + "\r\n" +
+		"--b\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"comprobante.pdf.exe\"\r\n\r\nMZ\r\n--b--\r\n"
+	m, _, err := parsear([]byte(crudo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Sospecha == nil {
+		t.Fatal("tendría que ser sospechoso")
+	}
+	for _, quiero := range []string{"Mercado Pago", "mercadopag0-seguridad.test", "enlaces", "comprobante.pdf.exe"} {
+		if !strings.Contains(m.Sospecha.Motivo, quiero) {
+			t.Errorf("el motivo %q no dice %q", m.Sospecha.Motivo, quiero)
+		}
+	}
+	if len(m.Sospecha.Enlaces) != 1 || m.Sospecha.Enlaces[0].Destino != "mp-verificacion-cuentas.xyz" {
+		t.Errorf("enlaces: %+v", m.Sospecha.Enlaces)
+	}
+	if len(m.Adjuntos) != 1 || !m.Adjuntos[0].Bloqueado {
+		t.Errorf("el .exe tiene que quedar bloqueado: %+v", m.Adjuntos)
+	}
+	marcado := sanear(m.html, nil)
+	if !strings.Contains(marcado, `data-enganoso="Este enlace no va a mercadopago.com: lleva a mp-verificacion-cuentas.xyz"`) {
+		t.Errorf("el enlace engañoso no quedó marcado: %s", marcado)
+	}
+	if strings.Count(marcado, "data-enganoso") != 1 {
+		t.Errorf("«acá» no promete destino y no se marca: %s", marcado)
+	}
+
+	// El mismo nombre desde el dominio de verdad no es sospechoso.
+	bueno := strings.Replace(crudo, "mercadopag0-seguridad.test", "mercadopago.com.ar", 1)
+	bueno = strings.Replace(bueno, "https://mp-verificacion-cuentas.xyz/login", "https://www.mercadopago.com/verificar", 1)
+	bueno = strings.Replace(bueno, "comprobante.pdf.exe", "comprobante.pdf", 1)
+	if m, _, _ := parsear([]byte(bueno)); m.Sospecha != nil {
+		t.Errorf("no tendría que ser sospechoso: %+v", m.Sospecha)
+	}
+}
+
+func TestDetectarRenglones(t *testing.T) {
+	texto := "Hola, necesito 14 placas de melamina blanca 18 mm y 6 estantes de 560 × 350.\n" +
+		"También 40 tirantes de pino 2x4, 3 bolsas de tornillos para madera.\n" +
+		"> 99 placas de algo citado\n" +
+		"Confirmame si el corte lo tienen para el jueves."
+	got := detectarRenglones(texto)
+	var buscados []string
+	for _, r := range got {
+		buscados = append(buscados, fmtCantidad(r.Cantidad)+" "+r.Buscado)
+	}
+	quiero := "14 melamina blanca|40 tirante pino 2x4|3 tornillos madera"
+	if strings.Join(buscados, "|") != quiero {
+		t.Errorf("renglones %q, quería %q", strings.Join(buscados, "|"), quiero)
+	}
+}
+
+func fmtCantidad(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }
+
+func TestNombreUnico(t *testing.T) {
+	usados := map[string]int{}
+	got := []string{nombreUnico("foto.jpg", usados), nombreUnico("foto.jpg", usados), nombreUnico("plano.pdf", usados)}
+	if strings.Join(got, "|") != "foto.jpg|foto (2).jpg|plano.pdf" {
+		t.Errorf("%v", got)
+	}
+}
+
+func TestVista(t *testing.T) {
+	casos := []struct {
+		p    parteTexto
+		in   string
+		want string
+	}{
+		{parteTexto{codificado: "7bit"}, "Hola Diego,\n\nva el presupuesto.\n\nEl vie, 24 oct a las 9:42, Martín escribió:\n> algo", "Hola Diego, va el presupuesto."},
+		{parteTexto{codificado: "quoted-printable", juego: "utf-8"}, "Te paso el despiece en PDF. Las piezas de 2600 van con la veta =\na lo largo y las de 7=C3=", "Te paso el despiece en PDF. Las piezas de 2600 van con la veta a lo largo y las de 7"},
+		{parteTexto{codificado: "base64"}, "SG9sYSwgwr9jb3J0YW4gZmVuw7NsaWNvPw==", "Hola, ¿cortan fenólico?"},
+		{parteTexto{codificado: "8bit", esHTML: true}, "<p>Hola <b>Ana</b></p><div>¿Cómo va?</div>", "Hola Ana ¿Cómo va?"},
+		{parteTexto{codificado: "quoted-printable", juego: "iso-8859-1"}, "Ma=F1ana", "Mañana"},
+	}
+	for _, c := range casos {
+		if got := decodificarVista(c.p, []byte(c.in)); got != c.want {
+			t.Errorf("decodificarVista(%q) = %q, quería %q", c.in, got, c.want)
+		}
 	}
 }

@@ -3,7 +3,9 @@
 import { useActionState } from "react";
 import { Check } from "lucide-react";
 import { guardarAjuste, type EstadoContenido } from "./actions";
-import type { SiteSetting } from "@/lib/db/schema";
+import type { listarAjustes } from "@/lib/dal/admin/contenido";
+
+type SiteSetting = Awaited<ReturnType<typeof listarAjustes>>[number];
 
 const inicial: EstadoContenido = {};
 

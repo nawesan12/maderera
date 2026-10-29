@@ -2,6 +2,16 @@ package main
 
 import (
 	"context"
+	"mjbj/internal/api/cajaapi"
+	"mjbj/internal/api/entregasapi"
+	"mjbj/internal/api/mostradorapi"
+	"mjbj/internal/api/reportesapi"
+	"mjbj/internal/api/ventasapi"
+	"mjbj/internal/caja"
+	"mjbj/internal/entregas"
+	"mjbj/internal/mostrador"
+	"mjbj/internal/pedidos"
+	"mjbj/internal/reportes"
 	"net/http"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -315,6 +325,64 @@ func correrAPI() error {
 		facturacionapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// El mostrador (tanda 5): las acciones de app/mostrador por el contrato, y
+	// las rutas de siempre de la copia local (/api/mostrador/latido, catalogo,
+	// clientes, caja/movimientos, caja/vincular) con su forma de siempre.
+	servicioMostrador := mostrador.Nuevo(pool, log)
+	servicioMostrador.Rutas(m)
+	mostradorapi.HandlerWithOptions(
+		mostradorapi.NewStrictHandlerWithOptions(mostrador.NuevaAPI(servicioMostrador),
+			[]mostradorapi.StrictMiddlewareFunc{plataforma.ConPedido[mostradorapi.StrictHandlerFunc]},
+			mostradorapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		mostradorapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
+	// Pedidos y presupuestos del panel (tanda 5, parte B).
+	ventasapi.HandlerWithOptions(
+		ventasapi.NewStrictHandlerWithOptions(pedidos.NuevaAPI(pedidos.Nuevo(pool, log), cfg.Interna),
+			[]ventasapi.StrictMiddlewareFunc{plataforma.ConPedido[ventasapi.StrictHandlerFunc]},
+			ventasapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		ventasapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
+	// Entregas, acopio, remitos, la firma y las zonas de envío (tanda 5).
+	entregasapi.HandlerWithOptions(
+		entregasapi.NewStrictHandlerWithOptions(entregas.NuevaAPI(entregas.Nuevo(pool, log), cfg.Interna),
+			[]entregasapi.StrictMiddlewareFunc{plataforma.ConPedido[entregasapi.StrictHandlerFunc]},
+			entregasapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		entregasapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
+	// Tanda 5, parte D: la caja del panel, y los reportes, el cierre del mes
+	// y el inicio del panel.
+	cajaapi.HandlerWithOptions(
+		cajaapi.NewStrictHandlerWithOptions(caja.NuevaPanelAPI(caja.NuevoPanel(pool, log)),
+			[]cajaapi.StrictMiddlewareFunc{plataforma.ConPedido[cajaapi.StrictHandlerFunc]},
+			cajaapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		cajaapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+	reportesapi.HandlerWithOptions(
+		reportesapi.NewStrictHandlerWithOptions(reportes.NuevaAPI(reportes.Nuevo(pool, log), cfg.Interna),
+			[]reportesapi.StrictMiddlewareFunc{plataforma.ConPedido[reportesapi.StrictHandlerFunc]},
+			reportesapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		reportesapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
@@ -387,6 +455,47 @@ func correrAPI() error {
 	} else if validar, err := plataforma.ValidarContra(s); err != nil {
 		return err
 	} else {
+		h = validar(h)
+	}
+
+	// El contrato del mostrador (tanda 5), aparte para no tocar las listas de arriba.
+	if s, err := mostradorapi.GetSwagger(); err != nil {
+		return err
+	} else if validar, err := plataforma.ValidarContra(s); err != nil {
+		return err
+	} else {
+		h = validar(h)
+	}
+
+	// El contrato de pedidos y presupuestos (tanda 5), aparte.
+	if s, err := ventasapi.GetSwagger(); err != nil {
+		return err
+	} else if validar, err := plataforma.ValidarContra(s); err != nil {
+		return err
+	} else {
+		h = validar(h)
+	}
+
+	// El contrato de entregas (tanda 5), aparte para no tocar las listas de
+	// arriba.
+	if s, err := entregasapi.GetSwagger(); err != nil {
+		return err
+	} else if validar, err := plataforma.ValidarContra(s); err != nil {
+		return err
+	} else {
+		h = validar(h)
+	}
+
+	// Los contratos de la caja del panel y de los reportes (tanda 5, parte D).
+	for _, spec := range []func() (*openapi3.T, error){cajaapi.GetSwagger, reportesapi.GetSwagger} {
+		s, err := spec()
+		if err != nil {
+			return err
+		}
+		validar, err := plataforma.ValidarContra(s)
+		if err != nil {
+			return err
+		}
 		h = validar(h)
 	}
 

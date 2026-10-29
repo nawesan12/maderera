@@ -19,7 +19,7 @@ import {
 } from "@/lib/cortes/placa";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 import { moneda } from "@/lib/formato";
-import type { CorteDeMostrador } from "@/lib/mostrador/venta";
+import type { CorteDeMostrador } from "@/lib/mostrador/tipos";
 import type { LineaDeVenta } from "@/lib/mostrador/importes";
 import { presentacionDeMitad } from "@/lib/ventas/forma-de-venta";
 import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";

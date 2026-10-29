@@ -1,0 +1,232 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Caja del panel
+  version: "1"
+  description: |
+    La caja vista desde el panel (/admin/caja): los turnos cerrados con su
+    cierre Z, las cajas físicas del mostrador, las ventas que quedaron sin
+    turno, lo emitido en el mostrador y el cambio fijo de cada sucursal.
+
+    Todo es de quien entra a /admin/caja (el admin), menos las sucursales con
+    su turno, que las lee cualquier persona del panel (las usan también las
+    recepciones y las órdenes de compra).
+paths:
+  /api/v1/admin/caja/sucursales:
+    get:
+      operationId: SucursalesConCaja
+      responses:
+        "200":
+          description: Las sucursales activas, en su orden, con el turno abierto si hay
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CajaSucursal" } }
+  /api/v1/admin/caja/sucursales/{id}/fondo-base:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    put:
+      operationId: GuardarFondoBase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                monto: { description: Lo que mandó la pantalla; se lee como z.coerce.number() }
+      responses:
+        "200": { $ref: "#/components/responses/CajaHecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/caja/turnos-cerrados:
+    get:
+      operationId: TurnosCerrados
+      parameters:
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: Los últimos turnos cerrados (30 si no se dice), con lo esperado, lo contado y el cierre Z
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/TurnoCerrado" } }
+  /api/v1/admin/caja/cajas-fisicas:
+    get:
+      operationId: ListarCajasFisicas
+      responses:
+        "200":
+          description: Las máquinas del mostrador, por código
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CajaFisica" } }
+    post:
+      operationId: CrearCajaFisica
+      requestBody:
+        description: El formulario como lo armaba el panel; Go lo valida como zod
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200": { $ref: "#/components/responses/CajaHecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/caja/cajas-fisicas/{id}/baja:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: DarDeBajaCajaFisica
+      responses:
+        "200": { $ref: "#/components/responses/CajaHecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/caja/ventas-sueltas:
+    get:
+      operationId: VentasSinCaja
+      responses:
+        "200":
+          description: Las ventas en efectivo cobradas sin conexión que no cayeron en ningún turno
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CajaVentaSuelta" } }
+  /api/v1/admin/caja/ventas-sueltas/{id}/asignar:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: AsignarVentaAlTurno
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              additionalProperties: false
+              properties:
+                sessionId: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/CajaHecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/caja/turnos-para-asignar:
+    get:
+      operationId: TurnosParaAsignar
+      parameters:
+        - { name: sucursal, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Los últimos 10 turnos de la sucursal, con su etiqueta en hora argentina
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/TurnoParaAsignar" } }
+  /api/v1/admin/caja/emitido:
+    get:
+      operationId: EmitidoPorCaja
+      parameters:
+        - { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso; hora argentina), schema: { type: string } }
+      responses:
+        "200":
+          description: Lo emitido en el mostrador en el mes, lo más nuevo primero (hasta 200)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CajaEmitido" } }
+components:
+  responses:
+    CajaHecho:
+      description: Hecho, con el mensaje para mostrar
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ok]
+            properties:
+              ok: { type: string }
+              id: { type: string }
+              codigo: { type: string }
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    CajaSucursal:
+      type: object
+      required: [id, nombre, fondoBase, turnoId, abiertaAt]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        fondoBase: { type: number, format: double }
+        turnoId: { type: string, nullable: true }
+        abiertaAt: { type: string, format: date-time, nullable: true }
+    CajaRenglonDelCierre:
+      type: object
+      required: [medioPago, cantidad, total]
+      properties:
+        medioPago: { type: string }
+        cantidad: { type: integer }
+        total: { type: number, format: double }
+    TurnoCerrado:
+      type: object
+      required: [id, sucursal, abiertaAt, cerradaAt, contado, notas, abiertaPor, esperado, tardios, cierre]
+      properties:
+        id: { type: string }
+        sucursal: { type: string }
+        abiertaAt: { type: string, format: date-time }
+        cerradaAt: { type: string, format: date-time, nullable: true }
+        contado: { type: number, format: double, nullable: true }
+        notas: { type: string, nullable: true }
+        abiertaPor: { type: string }
+        esperado: { type: number, format: double }
+        tardios: { type: integer, description: Movimientos que entraron después del arqueo }
+        cierre: { type: array, items: { $ref: "#/components/schemas/CajaRenglonDelCierre" } }
+    CajaFisica:
+      type: object
+      required: [id, codigo, nombre, branchId, sucursal, activo, ultimaVezAt, pendientes]
+      properties:
+        id: { type: string }
+        codigo: { type: string }
+        nombre: { type: string, nullable: true }
+        branchId: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+        activo: { type: boolean }
+        ultimaVezAt: { type: string, format: date-time, nullable: true }
+        pendientes: { type: integer }
+    CajaVentaSuelta:
+      type: object
+      required: [id, numero, numeroProvisorio, branchId, sucursal, cliente, total, cobradaAt, createdAt]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        numeroProvisorio: { type: string, nullable: true }
+        branchId: { type: string }
+        sucursal: { type: string, nullable: true }
+        cliente: { type: string }
+        total: { type: number, format: double }
+        cobradaAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    TurnoParaAsignar:
+      type: object
+      required: [id, abiertaAt, cerradaAt, estado, etiqueta]
+      properties:
+        id: { type: string }
+        abiertaAt: { type: string, format: date-time }
+        cerradaAt: { type: string, format: date-time, nullable: true }
+        estado: { type: string }
+        etiqueta: { type: string }
+    CajaEmitido:
+      type: object
+      required: [orderId, numero, numeroProvisorio, cliente, total, medioPago, createdAt, sucursal, operadora, invoiceId, invoicePuntoVenta, invoiceNumero, invoiceTipo]
+      properties:
+        orderId: { type: string }
+        numero: { type: string }
+        numeroProvisorio: { type: string, nullable: true }
+        cliente: { type: string }
+        total: { type: number, format: double }
+        medioPago: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        sucursal: { type: string, nullable: true }
+        operadora: { type: string, nullable: true }
+        invoiceId: { type: string, nullable: true }
+        invoicePuntoVenta: { type: integer, nullable: true }
+        invoiceNumero: { type: integer, format: int64, nullable: true }
+        invoiceTipo: { type: string, nullable: true }

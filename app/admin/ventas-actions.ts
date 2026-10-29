@@ -1,30 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { avisarPedidoNuevo } from "@/lib/dal/existencia";
 import { after } from "next/server";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
-import { db } from "@/lib/db";
-import {
-  customers,
-  orderItems,
-  orderStatusHistory,
-  orders,
-  quoteItems,
-  quotes,
-} from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
-import { costoPorUnidadDeVenta, costosParaCongelar } from "@/lib/compras/congelar";
-import { factoresDeStock } from "@/lib/ventas/factores";
-import {
-  siguienteNumeroDePedido,
-  siguienteNumeroDePresupuesto,
-} from "@/lib/dal/numeracion-ventas";
+import { avisarPedidoNuevo } from "@/lib/dal/existencia";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 import { avisarCambioDePedido } from "@/lib/whatsapp/avisos";
 import { notificarCambioDeEstado } from "@/lib/notificaciones/avisos";
-import { liberarReservas, reservarPedido } from "@/lib/inventario/reservas";
-import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
+
+/**
+ * Pedidos y presupuestos del panel. Lo hace la API de Go
+ * (backend/internal/pedidos): los permisos, los candados, la numeración, la
+ * reserva de la mercadería y la bitácora. Acá quedan la firma de siempre, lo
+ * que Next tiene que revalidar y los avisos al cliente.
+ */
 
 export interface EstadoVenta {
   error?: string;
@@ -38,175 +26,60 @@ function refrescar() {
   revalidatePath("/admin/clientes");
 }
 
+type Respuesta = {
+  data?: { ok: string; id?: string; numero?: string; estado?: string };
+  error?: unknown;
+};
+
+function fallo(r: Respuesta): EstadoVenta {
+  return { error: mensajeDe(r.error as Problema | undefined) };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Estados                                                                     */
 /* -------------------------------------------------------------------------- */
 
-const ORDEN_PEDIDO = [
-  "pendiente",
-  "preparando",
-  "listo",
-  "en-camino",
-  "entregado",
-] as const;
-
 /**
- * Avanza el pedido al siguiente estado.
- *
- * El recorrido es fijo y de una sola dirección: un pedido no vuelve de
- * "entregado" a "preparando". Para deshacer algo hay que cancelar y rehacer, que
- * deja rastro; permitir retroceder en silencio esconde los errores.
- *
- * Un pedido con envío salta de "listo" a "en camino"; uno de retiro pasa
- * directo a "entregado" cuando el cliente lo busca.
+ * Avanza el pedido al siguiente estado. El recorrido es fijo y de una sola
+ * dirección; uno de retiro pasa de "listo" a "entregado", uno con envío a
+ * "en camino".
  */
 export async function avanzarPedido(id: string): Promise<EstadoVenta> {
-  const usuario = await requireStaff();
-
-  const [pedido] = await db
-    .select({
-      estado: orders.estado,
-      tipoEntrega: orders.tipoEntrega,
-      numero: orders.numero,
-    })
-    .from(orders)
-    .where(eq(orders.id, id))
-    .limit(1);
-
-  if (!pedido) return { error: "No se encontró el pedido." };
-  if (pedido.estado === "entregado") {
-    return { error: "El pedido ya está entregado." };
-  }
-  if (pedido.estado === "cancelado") {
-    return { error: "El pedido está cancelado." };
-  }
-
-  const posicion = ORDEN_PEDIDO.indexOf(pedido.estado as never);
-  let siguiente = ORDEN_PEDIDO[posicion + 1];
-
-  if (pedido.estado === "listo" && pedido.tipoEntrega === "retiro") {
-    siguiente = "entregado";
-  }
-
-  if (!siguiente) return { error: "No hay un estado siguiente." };
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(orders)
-      .set({ estado: siguiente, updatedAt: new Date() })
-      .where(eq(orders.id, id));
-
-    await tx.insert(orderStatusHistory).values({
-      orderId: id,
-      estado: siguiente,
-      createdByUserId: usuario.userId,
-    });
-  });
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "cambiar_estado",
-    entidad: "pedido",
-    entidadId: id,
-    descripcion: `${pedido.numero}: ${pedido.estado} → ${siguiente}`,
-  });
+  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/avanzar", { params: { path: { id } } });
+  if (!r.data) return fallo(r);
+  const siguiente = r.data.estado!;
 
   refrescar();
 
-  // Los avisos al cliente salen después de que el cambio quedó guardado, y por
-  // fuera de la transacción: si WhatsApp o el correo no responden, el pedido
-  // igual avanzó. `after()` además los saca del camino de la respuesta, para
-  // que el tablero no espere a un tercero para actualizarse.
-  //
-  // Los dos canales van en paralelo y con `allSettled`: que falle uno no puede
-  // impedir que salga el otro.
+  // Los avisos al cliente salen después de que el cambio quedó guardado, y
+  // por fuera de la respuesta: si WhatsApp o el correo no responden, el
+  // pedido igual avanzó. Los dos canales en paralelo, con allSettled.
   after(async () => {
-    await Promise.allSettled([
-      avisarCambioDePedido(id, siguiente),
-      notificarCambioDeEstado(id, siguiente),
-    ]);
+    await Promise.allSettled([avisarCambioDePedido(id, siguiente), notificarCambioDeEstado(id, siguiente)]);
   });
 
-  const TEXTO: Record<string, string> = {
-    preparando: "en preparación",
-    listo: "listo para retirar",
-    "en-camino": "en camino",
-    entregado: "entregado",
-  };
-
-  return { ok: `${pedido.numero} quedó ${TEXTO[siguiente] ?? siguiente}.` };
+  return { ok: r.data.ok };
 }
 
-export async function cancelarPedido(
-  id: string,
-  motivo?: string,
-): Promise<EstadoVenta> {
-  const usuario = await requireStaff();
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(orders)
-      .set({ estado: "cancelado", updatedAt: new Date() })
-      .where(eq(orders.id, id));
-
-    await tx.insert(orderStatusHistory).values({
-      orderId: id,
-      estado: "cancelado",
-      nota: motivo,
-      createdByUserId: usuario.userId,
-    });
-
-    // La mercadería vuelve a estar disponible. El físico no se toca: nunca
-    // salió del galpón.
-    await liberarReservas(tx, id);
+export async function cancelarPedido(id: string, motivo?: string): Promise<EstadoVenta> {
+  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/cancelar", {
+    params: { path: { id } },
+    body: motivo ? { motivo } : {},
   });
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "anular",
-    entidad: "pedido",
-    entidadId: id,
-    descripcion: `Canceló el pedido${motivo ? `: ${motivo}` : ""}`,
-  });
-
+  if (!r.data) return fallo(r);
   refrescar();
   revalidatePath("/admin/stock");
-  return { ok: "Pedido cancelado. La mercadería reservada quedó disponible." };
+  return { ok: r.data.ok };
 }
 
-const estadoPresupuestoSchema = z.enum([
-  "pendiente",
-  "revision",
-  "enviado",
-  "aceptado",
-  "rechazado",
-  "vencido",
-]);
-
-export async function cambiarEstadoPresupuesto(
-  id: string,
-  estado: string,
-): Promise<EstadoVenta> {
-  const usuario = await requireStaff();
-
-  const parsed = estadoPresupuestoSchema.safeParse(estado);
-  if (!parsed.success) return { error: "Ese estado no existe." };
-
-  await db
-    .update(quotes)
-    .set({ estado: parsed.data, updatedAt: new Date() })
-    .where(eq(quotes.id, id));
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "cambiar_estado",
-    entidad: "presupuesto",
-    entidadId: id,
-    descripcion: `Pasó el presupuesto a ${parsed.data}`,
+export async function cambiarEstadoPresupuesto(id: string, estado: string): Promise<EstadoVenta> {
+  const r = await (await api()).POST("/api/v1/admin/presupuestos/{id}/estado", {
+    params: { path: { id } },
+    body: { estado },
   });
-
+  if (!r.data) return fallo(r);
   refrescar();
-  return { ok: "Presupuesto actualizado." };
+  return { ok: r.data.ok };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -214,127 +87,16 @@ export async function cambiarEstadoPresupuesto(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Convierte un presupuesto aceptado en pedido.
- *
- * Copia las líneas con el precio que tenían: el cliente aceptó ese número, y si
- * el precio de lista subió en el medio, el pedido tiene que respetar lo pactado.
+ * Convierte un presupuesto en pedido, con el precio que tenían las líneas
+ * (el cliente aceptó ese número), y reserva la mercadería.
  */
 export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
-  const usuario = await requireStaff();
-
-  const [presupuesto] = await db
-    .select()
-    .from(quotes)
-    .where(eq(quotes.id, quoteId))
-    .limit(1);
-
-  if (!presupuesto) return { error: "No se encontró el presupuesto." };
-
-  const [yaExiste] = await db
-    .select({ numero: orders.numero })
-    .from(orders)
-    .where(eq(orders.quoteId, quoteId))
-    .limit(1);
-
-  if (yaExiste) {
-    return { error: `Ya se convirtió en el pedido ${yaExiste.numero}.` };
-  }
-
-  const items = await db
-    .select()
-    .from(quoteItems)
-    .where(eq(quoteItems.quoteId, quoteId));
-
-  if (items.length === 0) {
-    return { error: "El presupuesto está vacío: no tiene ningún producto." };
-  }
-
-  // Se asigna adentro de la transacción y se usa afuera, en el mensaje.
-  let numero = "";
-
-  await db.transaction(async (tx) => {
-    // Adentro de la transacción, que es donde el lock de la serie protege algo.
-    numero = await siguienteNumeroDePedido(tx);
-
-    const [pedido] = await tx
-      .insert(orders)
-      .values({
-        numero,
-        customerId: presupuesto.customerId,
-        quoteId: presupuesto.id,
-        contactoNombre: presupuesto.contactoNombre,
-        contactoEmail: presupuesto.contactoEmail,
-        contactoTelefono: presupuesto.contactoTelefono,
-        branchId: presupuesto.branchId,
-        estado: "pendiente",
-        origen: "presupuesto",
-        subtotal: presupuesto.subtotal,
-        total: presupuesto.total,
-        notas: presupuesto.notas,
-        // El pedido hereda el vendedor del presupuesto que el cliente aceptó.
-        sellerId: presupuesto.sellerId,
-        createdByUserId: usuario.userId,
-      })
-      .returning();
-
-    // El costo del momento, congelado: ver `costosParaCongelar`.
-    const costos = await costosParaCongelar(
-      tx,
-      items.map((i) => i.variantId).filter((v): v is string => Boolean(v)),
-    );
-    // Cuánto stock descuenta cada línea, del producto y no del papel.
-    const factores = await factoresDeStock(tx, items);
-
-    await tx.insert(orderItems).values(
-      items.map((item, i) => {
-        const costo = item.variantId ? costos.get(item.variantId) : undefined;
-        const { presentacion, stockPorUnidad } = factores[i]!;
-        return {
-          orderId: pedido.id,
-          variantId: item.variantId,
-          descripcion: item.descripcion,
-          unidad: item.unidad,
-          cantidad: item.cantidad,
-          precioUnitario: item.precioUnitario,
-          subtotal: item.subtotal,
-          presentacion,
-          stockPorUnidad,
-          costoUnitario: costoPorUnidadDeVenta(costo?.costoUnitario, stockPorUnidad),
-          alicuotaIva: costo?.alicuotaIva ?? null,
-          orden: item.orden,
-        };
-      }),
-    );
-
-    await tx.insert(orderStatusHistory).values({
-      orderId: pedido.id,
-      estado: "pendiente",
-      nota: `Generado desde el presupuesto ${presupuesto.numero}`,
-      createdByUserId: usuario.userId,
-    });
-
-    await tx
-      .update(quotes)
-      .set({ estado: "aceptado", updatedAt: new Date() })
-      .where(eq(quotes.id, quoteId));
-
-    // Desde acá la mercadería tiene dueño y deja de estar disponible para el
-    // resto, aunque siga en el galpón hasta que la retiren.
-    await reservarPedido(tx, pedido.id);
-  });
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "crear",
-    entidad: "pedido",
-    entidadId: quoteId,
-    descripcion: `Convirtió el presupuesto ${presupuesto.numero} en el pedido ${numero}`,
-  });
-
+  const r = await (await api()).POST("/api/v1/admin/presupuestos/{id}/pedido", { params: { path: { id: quoteId } } });
+  if (!r.data) return fallo(r);
   refrescar();
   revalidatePath("/admin/stock");
-  avisarPedidoNuevo(numero);
-  return { ok: `Se creó el pedido ${numero}.` };
+  if (r.data.numero) avisarPedidoNuevo(r.data.numero);
+  return { ok: r.data.ok };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -342,50 +104,14 @@ export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Marca un pedido como cobrado.
- *
- * Es para lo que ya se cobró por otro lado —contado, una transferencia ya
- * conciliada— y solo queda anotarlo. **Un pedido a cuenta corriente no pasa
- * por acá**: su cobro baja la deuda, y eso se hace con recibo desde
- * `registrarCobroDeCliente`, que dice con qué se pagó. Antes esta función
- * bajaba la deuda con un movimiento sin medio y sin papel.
+ * Marca un pedido como cobrado: lo que ya se cobró por otro lado. Un pedido a
+ * cuenta corriente no pasa por acá (su cobro va con recibo).
  */
 export async function marcarPagado(id: string): Promise<EstadoVenta> {
-  const usuario = await requireStaff();
-
-  const [pedido] = await db
-    .select()
-    .from(orders)
-    .where(eq(orders.id, id))
-    .limit(1);
-
-  if (!pedido) return { error: "No se encontró el pedido." };
-  if (pedido.estadoPago === "pagado") return { error: "Ya figura como pagado." };
-  if (pedido.medioPago === "cuenta_corriente" && pedido.customerId) {
-    return {
-      error: "Es a cuenta corriente: registrá el cobro con el medio con que pagó, así sale el recibo y baja la deuda.",
-    };
-  }
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(orders)
-      .set({ estadoPago: "pagado", updatedAt: new Date() })
-      .where(eq(orders.id, id));
-
-  });
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "cobrar",
-    entidad: "pedido",
-    entidadId: id,
-    descripcion: `Marcó ${pedido.numero} como cobrado (${pedido.medioPago ?? "sin medio"})`,
-    detalle: { total: pedido.total, medioPago: pedido.medioPago },
-  });
-
+  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/cobrado", { params: { path: { id } } });
+  if (!r.data) return fallo(r);
   refrescar();
-  return { ok: `${pedido.numero} quedó cobrado.` };
+  return { ok: r.data.ok };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -395,162 +121,35 @@ export async function marcarPagado(id: string): Promise<EstadoVenta> {
 /** Quince días, igual que los que nacen en el sitio. */
 const DIAS_DE_VALIDEZ = 15;
 
-const lineaPresupuesto = z.object({
-  variantId: z.string().uuid().nullable(),
-  descripcion: z.string().trim().min(1).max(300),
-  unidad: z.string().trim().max(30).default("unidad"),
-  cantidad: z.coerce.number().positive().max(1_000_000),
-  precioUnitario: z.coerce.number().min(0).max(100_000_000),
-});
-
 /**
- * Carga un presupuesto a mano.
+ * Carga un presupuesto a mano (el que llega por teléfono). Con «Guardar y
+ * pasar a pedido», Go además lo convierte con la misma función que el botón
+ * del listado.
  *
- * Faltaba, y era el agujero más visible del circuito comercial: un presupuesto
- * solo podía nacer del sitio. Quien atiende el teléfono —que es como llega la
- * mitad del trabajo de una maderera— no tenía dónde cargarlo, y terminaba
- * anotándolo en un papel que después nadie encontraba.
- *
- * El origen queda en `telefono`, que ya existía en el enum esperando esto.
+ * A Go le llega lo mismo que antes se le pasaba a zod: los campos del
+ * FormData con sus `|| undefined`, y las líneas leídas con JSON.parse.
  */
-export async function crearPresupuesto(
-  _previo: EstadoVenta,
-  formData: FormData,
-): Promise<EstadoVenta> {
-  const usuario = await requireStaff();
+export async function crearPresupuesto(_previo: EstadoVenta, formData: FormData): Promise<EstadoVenta> {
+  const cabecera = {
+    customerId: (formData.get("customerId") as string) || undefined,
+    contactoNombre: formData.get("contactoNombre"),
+    contactoTelefono: (formData.get("contactoTelefono") as string) || undefined,
+    contactoEmail: (formData.get("contactoEmail") as string) || undefined,
+    branchId: (formData.get("branchId") as string) || undefined,
+    sellerId: (formData.get("sellerId") as string) || undefined,
+    notas: (formData.get("notas") as string) || undefined,
+    diasValidez: formData.get("diasValidez") || DIAS_DE_VALIDEZ,
+  };
+  const lineas: unknown[] = formData.getAll("linea").map((cruda) => JSON.parse(String(cruda)));
+  const convertir = formData.get("convertir") === "si";
 
-  const cabecera = z
-    .object({
-      customerId: z.string().uuid().optional(),
-      contactoNombre: z.string().trim().min(2, "Poné a nombre de quién va.").max(160),
-      contactoTelefono: z.string().trim().max(40).optional(),
-      contactoEmail: z.string().trim().email("Revisá el correo.").optional().or(z.literal("")),
-      branchId: z.string().uuid().optional(),
-      sellerId: z.string().uuid().optional(),
-      notas: z.string().trim().max(1000).optional(),
-      diasValidez: z.coerce.number().int().min(1).max(180).default(DIAS_DE_VALIDEZ),
-    })
-    .safeParse({
-      customerId: (formData.get("customerId") as string) || undefined,
-      contactoNombre: formData.get("contactoNombre"),
-      contactoTelefono: (formData.get("contactoTelefono") as string) || undefined,
-      contactoEmail: (formData.get("contactoEmail") as string) || undefined,
-      branchId: (formData.get("branchId") as string) || undefined,
-      sellerId: (formData.get("sellerId") as string) || undefined,
-      notas: (formData.get("notas") as string) || undefined,
-      diasValidez: formData.get("diasValidez") || DIAS_DE_VALIDEZ,
-    });
-
-  if (!cabecera.success) {
-    return { error: cabecera.error.issues[0]?.message ?? "Revisá los datos." };
-  }
-
-  const crudas = formData.getAll("linea").map(String);
-  const lineas: z.infer<typeof lineaPresupuesto>[] = [];
-
-  for (const cruda of crudas) {
-    const parseada = lineaPresupuesto.safeParse(JSON.parse(cruda));
-    if (!parseada.success) {
-      return { error: "Hay una línea con datos incompletos." };
-    }
-    lineas.push(parseada.data);
-  }
-
-  if (lineas.length === 0) {
-    return { error: "Agregá al menos un producto." };
-  }
-
-  const subtotal = lineas.reduce(
-    (suma, l) => suma + l.cantidad * l.precioUnitario,
-    0,
-  );
-
-  const validoHasta = new Date();
-  validoHasta.setDate(validoHasta.getDate() + cabecera.data.diasValidez);
-
-  // El vendedor de la operación: el que se eligió, o el asignado al cliente.
-  let sellerId = cabecera.data.sellerId ?? null;
-  if (!sellerId && cabecera.data.customerId) {
-    const [ficha] = await db
-      .select({ sellerId: customers.sellerId })
-      .from(customers)
-      .where(eq(customers.id, cabecera.data.customerId))
-      .limit(1);
-    sellerId = ficha?.sellerId ?? null;
-  }
-
-  let numero = "";
-  let quoteId = "";
-
-  await db.transaction(async (tx) => {
-    numero = await siguienteNumeroDePresupuesto(tx);
-
-    const [presupuesto] = await tx
-      .insert(quotes)
-      .values({
-        numero,
-        customerId: cabecera.data.customerId ?? null,
-        contactoNombre: cabecera.data.contactoNombre,
-        contactoEmail: cabecera.data.contactoEmail || null,
-        contactoTelefono: cabecera.data.contactoTelefono ?? null,
-        branchId: cabecera.data.branchId ?? null,
-        estado: "pendiente",
-        origen: "telefono",
-        subtotal: subtotal.toFixed(2),
-        total: subtotal.toFixed(2),
-        notas: cabecera.data.notas ?? null,
-        asesor: usuario.name,
-        sellerId,
-        validoHasta,
-        createdByUserId: usuario.userId,
-      })
-      .returning({ id: quotes.id });
-
-    quoteId = presupuesto.id;
-
-    await tx.insert(quoteItems).values(
-      lineas.map((linea, orden) => ({
-        quoteId: presupuesto.id,
-        variantId: linea.variantId,
-        descripcion: linea.descripcion,
-        unidad: linea.unidad,
-        cantidad: linea.cantidad.toFixed(2),
-        precioUnitario: linea.precioUnitario.toFixed(2),
-        subtotal: (linea.cantidad * linea.precioUnitario).toFixed(2),
-        orden,
-      })),
-    );
-  });
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "crear",
-    entidad: "presupuesto",
-    entidadId: numero,
-    descripcion: `Cargó el presupuesto ${numero} para ${cabecera.data.contactoNombre}`,
-  });
-
-  /*
-   * El atajo para la compra que ya está cerrada.
-   *
-   * Quien llama por teléfono muchas veces no está pidiendo un presupuesto:
-   * está comprando. Obligar a cargarlo, aceptarlo y recién ahí convertirlo son
-   * tres pantallas para una sola decisión que ya se tomó. Se convierte con la
-   * misma función que usa el botón del listado —no hay un segundo camino que
-   * pueda quedar desalineado— y eso reserva el stock, que es lo que importa.
-   */
-  if (formData.get("convertir") === "si") {
-    const conversion = await convertirEnPedido(quoteId);
-
-    if (conversion.error) {
-      return {
-        ok: `Se creó el presupuesto ${numero}, pero no se pudo pasar a pedido: ${conversion.error}`,
-      };
-    }
-
-    return { ok: `${conversion.ok} Salió del presupuesto ${numero}.` };
-  }
+  const r = await (await api()).POST("/api/v1/admin/presupuestos", { body: { cabecera, lineas, convertir } });
+  if (!r.data) return fallo(r);
 
   refrescar();
-  return { ok: `Se creó el presupuesto ${numero}.` };
+  if (convertir && r.data.numero?.startsWith("PED-")) {
+    revalidatePath("/admin/stock");
+    avisarPedidoNuevo(r.data.numero);
+  }
+  return { ok: r.data.ok };
 }

@@ -6,13 +6,13 @@ import { db } from "@/lib/db";
 import {
   branches,
   deliveries,
+  customers,
   invoices,
   orderItems,
   orderStatusHistory,
   orders,
 } from "@/lib/db/schema";
 import { api, datos } from "@/lib/api/servidor";
-import { saldoDeAcopio } from "@/lib/entregas";
 
 /**
  * Portal del cliente.
@@ -121,7 +121,7 @@ export async function miPedido(numero: string) {
 
   if (!pedido) return null;
 
-  const [items, historial, entregas] = await Promise.all([
+  const [items, historial, retiros] = await Promise.all([
     db
       .select()
       .from(orderItems)
@@ -137,26 +137,19 @@ export async function miPedido(numero: string) {
       .from(orderStatusHistory)
       .where(eq(orderStatusHistory.orderId, pedido.id))
       .orderBy(desc(orderStatusHistory.createdAt)),
-    // Los retiros ya hechos. El pedido está filtrado por dueño, así que sus
-    // remitos también lo están.
-    db
-      .select({
-        id: deliveries.id,
-        numero: deliveries.numero,
-        tipo: deliveries.tipo,
-        estado: deliveries.estado,
-        receptorNombre: deliveries.receptorNombre,
-        firmadoAt: deliveries.firmadoAt,
-        createdAt: deliveries.createdAt,
-      })
-      .from(deliveries)
-      .where(eq(deliveries.orderId, pedido.id))
-      .orderBy(desc(deliveries.createdAt)),
+    // Los retiros ya hechos y lo que queda en acopio, renglón por renglón (la
+    // pregunta que un cliente de maderera se hace todo el tiempo: "¿cuánto me
+    // falta retirar?"). Los da Go (backend/internal/entregas), que vuelve a
+    // mirar que el pedido sea del cliente de la sesión.
+    (await api()).GET("/api/v1/mi-cuenta/pedidos/{id}/entregas", { params: { path: { id: pedido.id } } }).then(datos),
   ]);
 
-  // Lo que queda en acopio, renglón por renglón. Es la pregunta que un cliente
-  // de maderera se hace todo el tiempo: "¿cuánto me falta retirar?".
-  const acopio = await saldoDeAcopio(pedido.id);
+  const entregas = retiros.entregas.map((e) => ({
+    ...e,
+    firmadoAt: e.firmadoAt ? new Date(e.firmadoAt) : null,
+    createdAt: new Date(e.createdAt),
+  }));
+  const acopio = retiros.acopio;
   const enAcopio = acopio.filter((a) => a.pendiente > 0.01);
 
   return { ...pedido, items, historial, entregas, acopio, enAcopio };

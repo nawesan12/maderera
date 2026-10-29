@@ -162,6 +162,14 @@ autoconfig.{$CORREO_DOMINIO} {
 		reverse_proxy api:8080
 	}
 
+	# La copia local del mostrador es de Go (backend/internal/mostrador): las
+	# rutas de siempre del sw.js y la cola, con su forma de siempre.
+	# /api/mostrador/config y /api/mostrador/ventas siguen en Next (lo fiscal).
+	@mostradorGo path /api/mostrador/latido /api/mostrador/catalogo /api/mostrador/clientes /api/mostrador/caja/*
+	handle @mostradorGo {
+		reverse_proxy api:8080
+	}
+
 	# WhatsApp es de Go (backend/internal/whatsapp): el webhook de Meta (la
 	# URL dada de alta en Meta no cambia), los adjuntos privados y el envío
 	# de archivos desde la bandeja (hasta 25 MB).

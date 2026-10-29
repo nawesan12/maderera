@@ -2,13 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { z } from "zod";
-import { requireStaff } from "@/lib/dal/session";
-import {
-  anularEntrega,
-  crearEntrega,
-  ErrorDeEntrega,
-} from "@/lib/entregas";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 import { notificarRemitoParaFirmar } from "@/lib/notificaciones/entregas";
 
 export interface EstadoEntrega {
@@ -22,110 +16,56 @@ export interface EstadoEntrega {
 /**
  * Prepara un remito con lo que el cliente se lleva ahora.
  *
- * Las cantidades vienen del formulario pero no mandan: `crearEntrega` las
- * verifica contra lo que queda pendiente antes de tocar nada. Entregar más de
- * lo pedido dejaría el acopio en negativo y el stock descontado de más.
+ * Lo hace Go (backend/internal/entregas): valida el formulario como el
+ * esquema de siempre —en un retiro el documento es obligatorio: la firma sola
+ * no identifica a nadie—, controla las cantidades contra lo que queda en
+ * acopio y saca la mercadería del depósito, todo con el candado de la serie
+ * de remitos.
  */
 export async function prepararRemito(
   _previo: EstadoEntrega,
   formData: FormData,
 ): Promise<EstadoEntrega> {
-  const usuario = await requireStaff();
-
   const orderId = String(formData.get("orderId") ?? "");
-  const tipo = String(formData.get("tipo") ?? "retiro");
-
-  const parsed = z
-    .object({
-      orderId: z.string().uuid(),
-      tipo: z.enum(["retiro", "envio"]),
-      receptorNombre: z.string().trim().max(120).optional(),
-      receptorDocumento: z.string().trim().max(30).optional(),
-      /*
-       * En un retiro el documento es obligatorio.
-       *
-       * El brief lo pone entre lo que cada retiro tiene que registrar, junto
-       * con el saldo restante, el producto, la fecha y la firma. Y tiene una
-       * razón concreta: en un acopio la mercadería la retira quien mande el
-       * cliente —el flete, un oficial— y la firma sola no dice quién fue. Si
-       * después aparece un faltante, el remito firmado por "Juan" no
-       * identifica a nadie.
-       *
-       * En un envío no se pide: la recibe quien esté en la obra y el respaldo
-       * es el remito del transportista.
-       */
-      transportista: z.string().trim().max(80).optional(),
-      numeroSeguimiento: z.string().trim().max(60).optional(),
-      notas: z.string().trim().max(400).optional(),
-    })
-    .safeParse({
-      orderId,
-      tipo,
-      receptorNombre: (formData.get("receptorNombre") as string) || undefined,
-      receptorDocumento:
-        (formData.get("receptorDocumento") as string) || undefined,
-      transportista: (formData.get("transportista") as string) || undefined,
-      numeroSeguimiento:
-        (formData.get("numeroSeguimiento") as string) || undefined,
-      notas: (formData.get("notas") as string) || undefined,
-    });
-
-  if (
-    parsed.success &&
-    parsed.data.tipo === "retiro" &&
-    !parsed.data.receptorDocumento
-  ) {
-    return {
-      error:
-        "Falta el documento de quien retira. En un retiro es obligatorio: la firma sola no identifica a nadie.",
-    };
-  }
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
-  }
 
   // Las cantidades llegan como `cantidad-<orderItemId>`, una por renglón.
-  const lineas: { orderItemId: string; cantidad: number }[] = [];
-
+  const cantidades: { orderItemId: string; valor: string }[] = [];
   for (const [clave, valor] of formData.entries()) {
-    if (!clave.startsWith("cantidad-")) continue;
-
-    const orderItemId = clave.slice("cantidad-".length);
-    const cantidad = Number(String(valor).replace(",", "."));
-
-    if (Number.isFinite(cantidad) && cantidad > 0) {
-      lineas.push({ orderItemId, cantidad });
+    if (clave.startsWith("cantidad-")) {
+      cantidades.push({ orderItemId: clave.slice("cantidad-".length), valor: String(valor) });
     }
   }
 
-  try {
-    const entrega = await crearEntrega({
-      ...parsed.data,
-      lineas,
-      usuarioId: usuario.userId,
-    });
+  const r = await (await api()).POST("/api/v1/admin/remitos", {
+    body: {
+      orderId,
+      tipo: String(formData.get("tipo") ?? "retiro"),
+      receptorNombre: (formData.get("receptorNombre") as string) || undefined,
+      receptorDocumento: (formData.get("receptorDocumento") as string) || undefined,
+      transportista: (formData.get("transportista") as string) || undefined,
+      numeroSeguimiento: (formData.get("numeroSeguimiento") as string) || undefined,
+      notas: (formData.get("notas") as string) || undefined,
+      cantidades,
+    },
+  });
 
-    revalidatePath(`/admin/pedidos/${orderId}`);
-    revalidatePath("/admin/pedidos");
-    revalidatePath("/admin/stock");
-
-    after(async () => {
-      await notificarRemitoParaFirmar(entrega.id);
-    });
-
+  if (!r.data) {
+    if (r.response.status >= 500) console.error(`prepararRemito: la API respondió ${r.response.status}`);
     return {
-      ok: entrega.pedidoCompleto
-        ? `Remito ${entrega.numero} listo. Con esto el pedido queda entregado.`
-        : `Remito ${entrega.numero} listo. Todavía queda mercadería en acopio.`,
-      numero: entrega.numero,
-      linkFirma: `/firmar/${entrega.firmaToken}`,
+      error: r.response.status >= 500 ? "No pudimos preparar el remito." : mensajeDe(r.error as Problema | undefined),
     };
-  } catch (error) {
-    if (error instanceof ErrorDeEntrega) return { error: error.message };
-    console.error(error);
-    return { error: "No pudimos preparar el remito." };
   }
+
+  const entrega = r.data;
+  revalidatePath(`/admin/pedidos/${orderId}`);
+  revalidatePath("/admin/pedidos");
+  revalidatePath("/admin/stock");
+
+  after(async () => {
+    await notificarRemitoParaFirmar(entrega.id);
+  });
+
+  return { ok: entrega.ok, numero: entrega.numero, linkFirma: `/firmar/${entrega.firmaToken}` };
 }
 
 /** Anula un remito y devuelve la mercadería al stock. */
@@ -133,17 +73,16 @@ export async function anularRemito(
   _previo: EstadoEntrega,
   formData: FormData,
 ): Promise<EstadoEntrega> {
-  const usuario = await requireStaff();
-
   const deliveryId = String(formData.get("deliveryId") ?? "");
   const orderId = String(formData.get("orderId") ?? "");
 
   if (!deliveryId) return { error: "Falta el remito." };
 
-  await anularEntrega(deliveryId, usuario.userId);
+  const r = await (await api()).POST("/api/v1/admin/remitos/{id}/anular", { params: { path: { id: deliveryId } } });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
 
   revalidatePath(`/admin/pedidos/${orderId}`);
   revalidatePath("/admin/stock");
 
-  return { ok: "Remito anulado. La mercadería volvió al stock." };
+  return { ok: r.data.ok };
 }

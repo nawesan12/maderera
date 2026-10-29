@@ -1,40 +1,21 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/dal/session";
-import { clienteDeLaSesion } from "@/lib/dal/cuenta";
-import { remitoCompleto } from "@/lib/dal/admin/entregas";
-import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
-import { remitoPdf } from "@/lib/pdf/remito";
+import { api } from "@/lib/api/servidor";
 
-/** Descarga del remito en PDF. Misma regla de propiedad que el comprobante. */
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+/**
+ * Un remito en PDF. Lo arma Go (backend/internal/entregas) con la misma
+ * regla de propiedad de siempre: lo baja el personal, y el cliente solo los
+ * suyos. A quien no puede verlo se le contesta 404 y no 403: un 403 confirma
+ * que el remito existe. Esta ruta queda para que la dirección no cambie.
+ */
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const sesion = await getSession();
-
-  if (!sesion) return new NextResponse("No encontrado", { status: 404 });
-
-  const [remito, emisor] = await Promise.all([
-    remitoCompleto(id),
-    obtenerConfiguracionFiscal(),
-  ]);
-
-  if (!remito) return new NextResponse("No encontrado", { status: 404 });
-
-  if (sesion.role !== "staff") {
-    const cliente = await clienteDeLaSesion();
-    if (!cliente || remito.customerId !== cliente.id) {
-      return new NextResponse("No encontrado", { status: 404 });
-    }
-  }
-
-  const pdf = await remitoPdf(remito, emisor);
-
-  return new NextResponse(pdf as BodyInit, {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return new NextResponse("No encontrado", { status: 404 });
+  const r = await (await api()).GET("/api/v1/remitos/{id}/pdf", { params: { path: { id } }, parseAs: "stream" });
+  if (!r.data) return new NextResponse("No encontrado", { status: 404 });
+  return new Response(r.data, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${remito.numero}.pdf"`,
+      "Content-Disposition": r.response.headers.get("Content-Disposition") ?? "attachment",
       "Cache-Control": "private, no-store",
     },
   });

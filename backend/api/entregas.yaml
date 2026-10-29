@@ -1,0 +1,371 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Entregas
+  version: "1"
+  description: |
+    Entregas y acopio: el saldo de lo que queda por retirar de un pedido, los
+    remitos (preparar, anular y el de constancia del mostrador), la firma con
+    el dedo de quien retira, el remito completo y en PDF, los retiros del
+    portal y las zonas de envío del panel.
+
+    Los formularios llegan como los armaba la acción (un objeto libre) y se
+    validan en Go con las mismas reglas y mensajes que los esquemas de zod.
+
+    Permisos: lo de la ficha del pedido, quien entra a /admin/pedidos; el
+    remito de constancia, quien entra a /mostrador; las zonas, quien entra a
+    /admin/envios. La firma (leer y firmar) es pública: la protege el token
+    del enlace. El remito completo y los datos para avisar los lee el
+    servidor de Next con el secreto interno.
+paths:
+  /api/v1/admin/pedidos/{id}/acopio:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: SaldoDeAcopio
+      description: Qué queda por entregar, renglón por renglón (personal del panel o el servidor de Next)
+      responses:
+        "200":
+          description: Los renglones del pedido, en su orden
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/RenglonDeAcopio" } }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pedidos/{id}/remitos:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: RemitosDelPedido
+      responses:
+        "200":
+          description: Los remitos del pedido, los más nuevos primero
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/RemitoDelPedido" } }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/remitos:
+    post:
+      operationId: PrepararRemito
+      description: |
+        Prepara un remito con lo que se lleva el cliente y saca la mercadería
+        del depósito. El cuerpo es el de prepararRemito: orderId, tipo,
+        receptorNombre, receptorDocumento, transportista, numeroSeguimiento,
+        notas y cantidades ([{orderItemId, valor}], lo que venía en
+        `cantidad-<id>`).
+      requestBody: { $ref: "#/components/requestBodies/FormularioDeEntrega" }
+      responses:
+        "200":
+          description: El remito preparado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RemitoPreparado" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/remitos/{id}/anular:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: AnularRemito
+      description: Anula el remito y devuelve la mercadería al stock. Anular uno ya anulado no hace nada.
+      responses:
+        "200": { $ref: "#/components/responses/HechoEntrega" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/pedidos/{id}/remito:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: RemitoDeConstancia
+      description: |
+        El remito de una venta que ya salió por el mostrador (no toca el
+        stock: se descontó al cobrar). Queda en la bitácora.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                receptorNombre: { type: string, nullable: true }
+      responses:
+        "200":
+          description: El remito emitido
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RemitoDeConstanciaEmitido" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/remitos/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: RemitoCompleto
+      description: El remito para imprimir o mostrar (personal del panel o el servidor de Next, que decide antes quién lo ve)
+      responses:
+        "200":
+          description: El remito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RemitoCompleto" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/remitos/{id}/pdf:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: RemitoPdf
+      description: El remito en PDF. El personal, el servidor de Next o el cliente dueño (a otro se le contesta 404).
+      responses:
+        "200":
+          description: El PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/remitos/{id}/aviso:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: RemitoParaAvisar
+      description: Lo que necesitan los avisos de entrega (solo el servidor de Next)
+      responses:
+        "200":
+          description: El enlace de firma y a quién escribirle
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RemitoParaAvisar" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/firmar/{token}:
+    parameters: [{ name: token, in: path, required: true, schema: { type: string, maxLength: 200 } }]
+    get:
+      operationId: RemitoPorToken
+      description: El remito del enlace de firma (público; el token es lo único que sabe quien firma)
+      responses:
+        "200":
+          description: El remito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RemitoCompleto" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/firmar:
+    post:
+      operationId: FirmarRemito
+      description: |
+        Guarda la firma de quien retira (público). El cuerpo es el de
+        firmarRemito: token, receptorNombre, receptorDocumento y firma (PNG
+        en data URL). `ip` solo se cree si lo manda el servidor de Next con
+        el secreto interno; si no, va la IP de quien pide.
+      requestBody: { $ref: "#/components/requestBodies/FormularioDeEntrega" }
+      responses:
+        "200":
+          description: La firma quedó guardada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RemitoFirmado" }
+        "409": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mi-cuenta/pedidos/{id}/entregas:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: EntregasDeMiPedido
+      description: Los retiros y lo que queda en acopio de un pedido del cliente de la sesión (404 si no es suyo)
+      responses:
+        "200":
+          description: Los retiros y el acopio
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EntregasDelPortal" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/envios:
+    get:
+      operationId: ZonasDeEnvioDelPanel
+      responses:
+        "200":
+          description: Todas las zonas, por orden y nombre
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ZonaDeEnvioDelPanel" } }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: GuardarZonaDeEnvio
+      description: Alta (sin id) o edición. El cuerpo es el de guardarZona.
+      requestBody: { $ref: "#/components/requestBodies/FormularioDeEntrega" }
+      responses:
+        "200": { $ref: "#/components/responses/HechoEntrega" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+components:
+  requestBodies:
+    FormularioDeEntrega:
+      description: El formulario tal como lo armaba la acción; Go lo valida como zod
+      required: true
+      content:
+        application/json:
+          schema: { type: object, additionalProperties: true }
+  responses:
+    HechoEntrega:
+      description: Hecho, con el mensaje para mostrar
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ok]
+            properties:
+              ok: { type: string }
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    RenglonDeAcopio:
+      type: object
+      required: [orderItemId, descripcion, unidad, pedido, entregado, pendiente]
+      properties:
+        orderItemId: { type: string }
+        descripcion: { type: string }
+        unidad: { type: string }
+        pedido: { type: number, format: double }
+        entregado: { type: number, format: double }
+        pendiente: { type: number, format: double }
+    RemitoDelPedido:
+      type: object
+      required: [id, numero, tipo, estado, receptorNombre, firmadoAt, firmaToken, createdAt, transportista, numeroSeguimiento, cantidadLineas]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        tipo: { type: string, enum: [retiro, envio] }
+        estado: { type: string, enum: [preparada, entregada, anulada] }
+        receptorNombre: { type: string, nullable: true }
+        firmadoAt: { type: string, format: date-time, nullable: true }
+        firmaToken: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        transportista: { type: string, nullable: true }
+        numeroSeguimiento: { type: string, nullable: true }
+        cantidadLineas: { type: integer }
+    RemitoPreparado:
+      type: object
+      required: [ok, id, numero, firmaToken, pedidoCompleto]
+      properties:
+        ok: { type: string }
+        id: { type: string }
+        numero: { type: string }
+        firmaToken: { type: string }
+        pedidoCompleto: { type: boolean }
+    RemitoDeConstanciaEmitido:
+      type: object
+      required: [ok, remitoId, remitoNumero]
+      properties:
+        ok: { type: string }
+        remitoId: { type: string }
+        remitoNumero: { type: string }
+    RemitoFirmado:
+      type: object
+      required: [deliveryId, numero]
+      properties:
+        deliveryId: { type: string }
+        numero: { type: string }
+    LineaDelRemito:
+      type: object
+      required: [descripcion, unidad, cantidad]
+      properties:
+        descripcion: { type: string }
+        unidad: { type: string }
+        cantidad: { type: number, format: double }
+    PendienteDelRemito:
+      type: object
+      required: [descripcion, unidad, pendiente]
+      properties:
+        descripcion: { type: string }
+        unidad: { type: string }
+        pendiente: { type: number, format: double }
+    FacturaDelRemito:
+      type: object
+      required: [etiqueta, cae, caeVencimiento]
+      properties:
+        etiqueta: { type: string }
+        cae: { type: string, nullable: true }
+        caeVencimiento: { type: string, format: date-time, nullable: true }
+    RemitoCompleto:
+      type: object
+      required: [id, numero, tipo, estado, receptorNombre, receptorDocumento, firmaUrl, firmadoAt, notas, createdAt, pedidoNumero, pedidoId,
+        clienteNombre, clienteDireccion, customerId, estadoPago, medioPago, sucursal, sucursalDireccion, transportista, numeroSeguimiento,
+        lineas, pendientes, factura]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        tipo: { type: string, enum: [retiro, envio] }
+        estado: { type: string, enum: [preparada, entregada, anulada] }
+        receptorNombre: { type: string, nullable: true }
+        receptorDocumento: { type: string, nullable: true }
+        firmaUrl: { type: string, nullable: true }
+        firmadoAt: { type: string, format: date-time, nullable: true }
+        notas: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        pedidoNumero: { type: string }
+        pedidoId: { type: string }
+        clienteNombre: { type: string }
+        clienteDireccion: { type: string, nullable: true }
+        customerId: { type: string, nullable: true }
+        estadoPago: { type: string }
+        medioPago: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+        sucursalDireccion: { type: string, nullable: true }
+        transportista: { type: string, nullable: true }
+        numeroSeguimiento: { type: string, nullable: true }
+        lineas: { type: array, items: { $ref: "#/components/schemas/LineaDelRemito" } }
+        pendientes: { type: array, items: { $ref: "#/components/schemas/PendienteDelRemito" } }
+        factura:
+          allOf: [{ $ref: "#/components/schemas/FacturaDelRemito" }]
+          nullable: true
+    RemitoParaAvisar:
+      type: object
+      required: [firmaToken, numero, pedidoNumero, nombre, email, emailCliente, estadoPedido]
+      properties:
+        firmaToken: { type: string, nullable: true }
+        numero: { type: string }
+        pedidoNumero: { type: string }
+        nombre: { type: string }
+        email: { type: string, nullable: true }
+        emailCliente: { type: string, nullable: true }
+        estadoPedido: { type: string }
+    RemitoDelPortal:
+      type: object
+      required: [id, numero, tipo, estado, receptorNombre, firmadoAt, createdAt]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        tipo: { type: string, enum: [retiro, envio] }
+        estado: { type: string, enum: [preparada, entregada, anulada] }
+        receptorNombre: { type: string, nullable: true }
+        firmadoAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    EntregasDelPortal:
+      type: object
+      required: [entregas, acopio]
+      properties:
+        entregas: { type: array, items: { $ref: "#/components/schemas/RemitoDelPortal" } }
+        acopio: { type: array, items: { $ref: "#/components/schemas/RenglonDeAcopio" } }
+    ZonaDeEnvioDelPanel:
+      type: object
+      required: [id, nombre, cobertura, demoraEstimada, aCotizar, costo, envioGratisDesde, orden, activa]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        cobertura: { type: string }
+        demoraEstimada: { type: string, nullable: true }
+        aCotizar: { type: boolean }
+        costo: { type: string }
+        envioGratisDesde: { type: string }
+        orden: { type: string }
+        activa: { type: boolean }

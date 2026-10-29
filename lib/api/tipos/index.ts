@@ -21,6 +21,11 @@ import type { paths as Campanas, components as ComponentesCampanas } from "./cam
 import type { paths as Profesionales, components as ComponentesProfesionales } from "./profesionales";
 import type { paths as Buscador, components as ComponentesBuscador } from "./buscador";
 import type { paths as Facturacion, components as ComponentesFacturacion } from "./facturacion";
+import type { paths as Mostrador, components as ComponentesMostrador } from "./mostrador";
+import type { paths as Ventas, components as ComponentesVentas } from "./ventas";
+import type { paths as Entregas, components as ComponentesEntregas } from "./entregas";
+import type { paths as Caja, components as ComponentesCaja } from "./caja";
+import type { paths as Reportes, components as ComponentesReportes } from "./reportes";
 
 export type paths = Sesion &
   Catalogo &
@@ -39,7 +44,12 @@ export type paths = Sesion &
   Campanas &
   Profesionales &
   Buscador &
-  Facturacion;
+  Facturacion &
+  Mostrador &
+  Ventas &
+  Entregas &
+  Caja &
+  Reportes;
 export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesCatalogo["schemas"] &
   ComponentesContenido["schemas"] &
@@ -57,4 +67,9 @@ export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesCampanas["schemas"] &
   ComponentesProfesionales["schemas"] &
   ComponentesBuscador["schemas"] &
-  ComponentesFacturacion["schemas"];
+  ComponentesFacturacion["schemas"] &
+  ComponentesMostrador["schemas"] &
+  ComponentesVentas["schemas"] &
+  ComponentesEntregas["schemas"] &
+  ComponentesCaja["schemas"] &
+  ComponentesReportes["schemas"];

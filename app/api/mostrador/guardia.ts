@@ -62,12 +62,3 @@ export async function conStaff<T>(
  * verdades.
  */
 export const SIN_CACHE = { "Cache-Control": "private, no-store" } as const;
-
-/** El `?desde=` de un delta, o null para pedir todo. */
-export function leerDesde(url: URL): Date | null {
-  const crudo = url.searchParams.get("desde");
-  if (!crudo) return null;
-
-  const fecha = new Date(crudo);
-  return Number.isNaN(fecha.getTime()) ? null : fecha;
-}

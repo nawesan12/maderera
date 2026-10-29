@@ -54,19 +54,26 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
 
   switch (doc.tipo) {
     case "presupuesto": {
+      // La ficha y el PDF los da Go (backend/internal/pedidos), con el
+      // secreto interno: esto corre también desde la cola, sin cookie.
       const { consultarPresupuesto } = await import("@/lib/dal/admin/ventas");
-      const { datosParaTransferir } = await import("@/lib/dal/pagos");
-      const { presupuestoPdf } = await import("@/lib/pdf/presupuesto");
+      const { apiInterna } = await import("@/lib/api/servidor");
       const p = await consultarPresupuesto(doc.id);
       if (!p) return null;
-      const pdf = await presupuestoPdf(p, emisor, await datosParaTransferir());
+      const r = await apiInterna.GET("/api/v1/presupuestos/{id}/pdf", {
+        params: { path: { id: doc.id } },
+        parseAs: "arrayBuffer",
+      });
+      if (!r.data) throw new Error(`La API respondió ${r.response.status} al PDF del presupuesto`);
       return {
-        contenido: new Uint8Array(pdf),
+        contenido: new Uint8Array(r.data),
         nombre: `${p.numero}.pdf`,
         descripcion: `el presupuesto ${p.numero}`,
         customerId: p.customerId ?? null,
-        telefono: (p as { contactoTelefono?: string | null }).contactoTelefono ?? null,
-        contacto: (p as { contactoNombre?: string | null }).contactoNombre ?? null,
+        // Antes leía `contactoTelefono` y `contactoNombre`, que la ficha no
+        // tiene (se llaman `telefono` y `cliente`): salían siempre null.
+        telefono: p.telefono ?? null,
+        contacto: p.cliente ?? null,
       };
     }
 
@@ -90,13 +97,15 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
     }
 
     case "remito": {
+      // El PDF lo arma Go (backend/internal/entregas), el mismo de la descarga.
       const { remitoCompleto } = await import("@/lib/dal/admin/entregas");
-      const { remitoPdf } = await import("@/lib/pdf/remito");
+      const { apiInterna } = await import("@/lib/api/servidor");
       const r = await remitoCompleto(doc.id);
       if (!r) return null;
-      const pdf = await remitoPdf(r, emisor);
+      const pdf = await apiInterna.GET("/api/v1/remitos/{id}/pdf", { params: { path: { id: doc.id } }, parseAs: "arrayBuffer" });
+      if (!pdf.data) return null;
       return {
-        contenido: new Uint8Array(pdf),
+        contenido: new Uint8Array(pdf.data),
         nombre: `${r.numero}.pdf`,
         descripcion: `el remito ${r.numero}`,
         customerId: r.customerId,

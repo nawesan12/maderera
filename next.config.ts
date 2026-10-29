@@ -142,6 +142,12 @@ const nextConfig: NextConfig = {
         { source: "/api/whatsapp/:ruta*", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/whatsapp/:ruta*` },
         // La baja con un clic de las campañas (RFC 8058), de Go (backend/internal/campanas).
         { source: "/api/baja", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/baja` },
+        // La copia local del mostrador (backend/internal/mostrador): las rutas de
+        // siempre, con su forma de siempre. /config y /ventas siguen en Next.
+        { source: "/api/mostrador/latido", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/mostrador/latido` },
+        { source: "/api/mostrador/catalogo", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/mostrador/catalogo` },
+        { source: "/api/mostrador/clientes", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/mostrador/clientes` },
+        { source: "/api/mostrador/caja/:ruta*", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/mostrador/caja/:ruta*` },
       ],
       afterFiles: [],
       fallback: [

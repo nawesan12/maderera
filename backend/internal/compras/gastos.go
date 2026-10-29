@@ -2,38 +2,21 @@ package compras
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/caja"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
 )
 
 // Los gastos del negocio (lib/dal/admin/gastos.ts). Un gasto en efectivo
-// también sale de la caja del turno que lo contiene.
-//
-// El turno se busca con la misma consulta que turnoQueContiene de
-// lib/mostrador/turno.ts; cuando la caja se mude (tanda 5), esto pasa a
-// llamar a la de Go.
-
-// turnoQueContiene es el turno de la sucursal que estaba abierto en ese
-// momento (el más nuevo si dos se tocan en el borde).
-func turnoQueContiene(ctx context.Context, tx pgx.Tx, sucursal string, momento time.Time) (string, bool, error) {
-	var id string
-	err := tx.QueryRow(ctx, `
-		SELECT id FROM cash_sessions
-		WHERE branch_id = $1 AND abierta_at <= $2 AND (cerrada_at IS NULL OR cerrada_at >= $2)
-		ORDER BY abierta_at DESC LIMIT 1`, sucursal, momento).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", false, nil
-	}
-	return id, err == nil, err
-}
+// también sale de la caja del turno que lo contiene (caja.TurnoQueContiene,
+// la misma regla que una venta sin conexión).
 
 // etiquetaDeCircuito es la de lib/circuito.ts.
 func etiquetaDeCircuito(c string) string {
@@ -76,7 +59,7 @@ func (s *Servicio) CargarGasto(ctx context.Context, ses *auth.Sesion, m map[stri
 		if d.Medio != "efectivo" || d.BranchID == nil {
 			return nil
 		}
-		turno, hay, err := turnoQueContiene(ctx, tx, *d.BranchID, fecha)
+		turno, hay, err := caja.TurnoQueContiene(ctx, tx, *d.BranchID, fecha)
 		if err != nil {
 			return err
 		}

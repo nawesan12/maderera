@@ -1,19 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, isNull } from "drizzle-orm";
-import { z } from "zod";
-import { db } from "@/lib/db";
-import {
-  branches,
-  cashMovements,
-  cashSessions,
-  orders,
-  posDevices,
-} from "@/lib/db/schema";
-import { requireStaff, requireStaffRole } from "@/lib/dal/session";
-import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
-import { crearCajaFisica } from "@/lib/dal/admin/cajas-fisicas";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+
+/*
+ * Las acciones de la caja del panel. Las hace la API de Go
+ * (backend/internal/caja/panel.go), con los mismos mensajes y la misma
+ * bitácora; asignar una venta suelta bloquea el pedido, así dos clics a la vez
+ * no meten dos veces el mismo efectivo en el turno.
+ */
 
 export interface EstadoCajas {
   error?: string;
@@ -25,231 +20,61 @@ function refrescar() {
   revalidatePath("/mostrador");
 }
 
-const altaSchema = z.object({
-  codigo: z
-    .string()
-    .trim()
-    .min(2, "El código es muy corto.")
-    .max(20)
-    // Es lo que se imprime en el ticket del cliente: sin espacios ni acentos,
-    // porque después alguien lo va a tener que dictar por teléfono.
-    .regex(/^[A-Za-z0-9-]+$/, "Usá solo letras, números y guiones."),
-  nombre: z
-    .string()
-    .trim()
-    .max(80)
-    .optional()
-    .transform((v) => (v ? v : null)),
-  branchId: z.string().uuid("Elegí la sucursal."),
-});
-
 /**
- * Da de alta una máquina del mostrador.
- *
- * El código es el que va a salir impreso en las ventas hechas sin conexión
- * (`CAJA1-017`), así que se guarda en mayúsculas y sin adornos: es un dato que
- * alguien va a leer de un papel arrugado y repetir por teléfono.
+ * Da de alta una máquina del mostrador. El código es el que sale impreso en
+ * las ventas hechas sin conexión (`CAJA1-017`): se guarda en mayúsculas.
  */
-export async function crearCaja(
-  datos: z.input<typeof altaSchema>,
-): Promise<EstadoCajas> {
-  const usuario = await requireStaff();
-
-  const leido = altaSchema.safeParse(datos);
-  if (!leido.success) {
-    return { error: leido.error.issues[0]?.message ?? "Revisá los datos." };
-  }
-
-  try {
-    const caja = await crearCajaFisica(leido.data);
-
-    await registrarEnBitacora({
-      sesion: usuario,
-      accion: "crear",
-      entidad: "caja",
-      descripcion: `Dio de alta la caja ${caja.codigo}`,
-    });
-  } catch (error) {
-    if (String(error).includes("pos_devices_codigo_idx")) {
-      return { error: "Ya existe una caja con ese código." };
-    }
-    throw error;
-  }
-
+export async function crearCaja(datos: {
+  codigo: string;
+  nombre?: string;
+  branchId: string;
+}): Promise<EstadoCajas> {
+  const r = await (await api()).POST("/api/v1/admin/caja/cajas-fisicas", { body: { ...datos } });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
   refrescar();
-  return { ok: "Caja creada. Ahora vinculala desde esa máquina." };
+  return { ok: r.data.ok };
 }
 
 /**
- * Da de baja una caja.
- *
- * No se borra: sus ventas viejas siguen apuntando a un número provisorio que
- * lleva ese código, y ese papel puede volver al mostrador dentro de un año.
+ * Da de baja una caja. No se borra: sus ventas viejas siguen apuntando a un
+ * número provisorio que lleva ese código.
  */
 export async function darDeBajaCaja(id: string): Promise<EstadoCajas> {
-  const usuario = await requireStaff();
-
-  const [actual] = await db
-    .select({ codigo: posDevices.codigo, pendientes: posDevices.pendientes })
-    .from(posDevices)
-    .where(eq(posDevices.id, id))
-    .limit(1);
-
-  if (!actual) return { error: "Esa caja no existe." };
-
-  // Una caja con ventas sin subir tiene plata cobrada que todavía no llegó al
-  // sistema. Darla de baja acá deja esas ventas sin una máquina activa que las
-  // empuje, y nadie se entera hasta que no cuadra el cierre.
-  if (actual.pendientes > 0) {
-    return {
-      error: `${actual.codigo} tiene ${actual.pendientes} ${
-        actual.pendientes === 1 ? "venta cobrada" : "ventas cobradas"
-      } que todavía no subieron. Conectá la caja y esperá a que suban antes de darla de baja.`,
-    };
-  }
-
-  const [caja] = await db
-    .update(posDevices)
-    .set({ activo: false })
-    .where(eq(posDevices.id, id))
-    .returning({ codigo: posDevices.codigo });
-
-  if (!caja) return { error: "Esa caja no existe." };
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "cambiar_estado",
-    entidad: "caja",
-    descripcion: `Dio de baja la caja ${caja.codigo}`,
-  });
-
+  const r = await (await api()).POST("/api/v1/admin/caja/cajas-fisicas/{id}/baja", { params: { path: { id } } });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
   refrescar();
-  return { ok: `${caja.codigo} quedó fuera de servicio.` };
+  return { ok: r.data.ok };
 }
 
 /**
- * Mete una venta suelta en un turno.
- *
- * Son las que se cobraron en efectivo sin conexión cuando no había ninguna caja
- * abierta: la plata está en el cajón y la venta está registrada, pero no cae en
- * ningún arqueo. Asignarla es una decisión humana —hay que saber en qué cajón
- * quedó ese efectivo— y por eso no se adivina sola.
+ * Mete una venta suelta en un turno: es una decisión humana —hay que saber en
+ * qué cajón quedó ese efectivo— y por eso no se adivina sola.
  */
-export async function asignarVentaAlTurno(
-  orderId: string,
-  sessionId: string,
-): Promise<EstadoCajas> {
-  const usuario = await requireStaff();
-
-  const resultado = await db.transaction(async (tx) => {
-    /*
-     * Todo adentro: entre leer la venta y anotar el movimiento no puede
-     * colarse un segundo clic, o el mismo efectivo entra dos veces al turno y
-     * el arqueo pasa a mostrar un sobrante inventado.
-     */
-    const [venta] = await tx
-      .select({
-        id: orders.id,
-        numero: orders.numero,
-        total: orders.total,
-        branchId: orders.branchId,
-        cobradaAt: orders.cobradaAt,
-      })
-      .from(orders)
-      .leftJoin(cashMovements, eq(cashMovements.orderId, orders.id))
-      .where(and(eq(orders.id, orderId), isNull(cashMovements.id)))
-      .limit(1);
-
-    if (!venta) return { error: "Esa venta ya está asignada a un turno." };
-
-    const [turno] = await tx
-      .select({ branchId: cashSessions.branchId })
-      .from(cashSessions)
-      .where(eq(cashSessions.id, sessionId))
-      .limit(1);
-
-    if (!turno) return { error: "Ese turno no existe." };
-
-    // Una venta de Casa Central no puede entrar al arqueo de la otra sucursal:
-    // el cajón que se cuenta es el de acá.
-    if (turno.branchId !== venta.branchId) {
-      return { error: "Ese turno es de otra sucursal." };
-    }
-
-    await tx.insert(cashMovements).values({
-      sessionId,
-      tipo: "venta",
-      monto: Number(venta.total).toFixed(2),
-      motivo: venta.numero,
-      orderId: venta.id,
-      creadoPor: usuario.userId,
-      createdAt: venta.cobradaAt ?? undefined,
-    });
-
-    return { numero: venta.numero };
+export async function asignarVentaAlTurno(orderId: string, sessionId: string): Promise<EstadoCajas> {
+  const r = await (await api()).POST("/api/v1/admin/caja/ventas-sueltas/{id}/asignar", {
+    params: { path: { id: orderId } },
+    body: { sessionId },
   });
-
-  if ("error" in resultado) return { error: resultado.error };
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "editar",
-    entidad: "caja",
-    descripcion: `Asignó la venta ${resultado.numero} a un turno de caja`,
-  });
-
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
   refrescar();
-  return { ok: `${resultado.numero} quedó en el turno.` };
+  return { ok: r.data.ok };
 }
 
 /**
- * Fija el cambio que tiene que quedar en el cajón de una sucursal.
- *
- * De la clienta: «siempre se les deja cambio a los mostradores, no puede quedar
- * menos que la base». Es el piso que después hace que el mostrador rechace un
- * retiro que dejaría el cajón sin vuelto para mañana.
- *
- * Solo el administrador: es una decisión de plata, y quien atiende es quien
- * tiene la tentación de bajarla para poder retirar.
+ * Fija el cambio que tiene que quedar en el cajón de una sucursal. Solo el
+ * administrador.
  */
-export async function guardarFondoBase(
-  branchId: string,
-  monto: number,
-): Promise<EstadoCajas> {
-  const usuario = await requireStaffRole("admin");
-
-  const parsed = z
-    .object({
-      branchId: z.string().uuid(),
-      monto: z.coerce.number().min(0).max(10_000_000),
-    })
-    .safeParse({ branchId, monto });
-
-  if (!parsed.success) {
+export async function guardarFondoBase(branchId: string, monto: number): Promise<EstadoCajas> {
+  // Un NaN viajaría como null y Go lo leería como cero: se corta acá, como
+  // lo cortaba zod.
+  if (!Number.isFinite(monto)) {
     return { error: "Revisá el monto: tiene que ser un número de cero para arriba." };
   }
-
-  const [sucursal] = await db
-    .update(branches)
-    .set({ fondoBase: parsed.data.monto.toFixed(2) })
-    .where(eq(branches.id, parsed.data.branchId))
-    .returning({ nombre: branches.name });
-
-  if (!sucursal) return { error: "Esa sucursal no existe." };
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "editar",
-    entidad: "caja",
-    descripcion: `Fijó el cambio fijo de ${sucursal.nombre} en $${parsed.data.monto.toFixed(2)}`,
+  const r = await (await api()).PUT("/api/v1/admin/caja/sucursales/{id}/fondo-base", {
+    params: { path: { id: branchId } },
+    body: { monto },
   });
-
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
   refrescar();
-
-  return {
-    ok:
-      parsed.data.monto > 0
-        ? "Listo: el mostrador no va a poder retirar por debajo de ese monto."
-        : "Listo: sin cambio fijo, no se controla el retiro.",
-  };
+  return { ok: r.data.ok };
 }

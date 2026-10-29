@@ -18,7 +18,6 @@ import { Entregas } from "./entregas";
 import { saldoDeAcopio } from "@/lib/entregas";
 import { remitosDelPedido } from "@/lib/dal/admin/entregas";
 import { cortesDelPedido } from "@/lib/dal/admin/cortes";
-import { margenDeLinea } from "@/lib/compras/costo";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
@@ -50,10 +49,12 @@ export default async function FichaPedidoPage({
   /*
    * El margen es de administración, como los reportes: es el número que no se
    * muestra en el mostrador. La pantalla la ven también vendedores y depósito.
+   * Lo calcula Go (internal/pedidos, MargenDelPedido) y solo se lo manda al
+   * admin.
    */
   const esAdmin = usuario.staffRole === "admin";
 
-  const margen = esAdmin ? calcularMargen(pedido.items) : null;
+  const margen = esAdmin ? pedido.margen : null;
 
   // Si el pedido ya se facturó, el botón se reemplaza por el enlace al
   // comprobante: dos facturas del mismo pedido obligan a anular una.
@@ -429,48 +430,6 @@ export default async function FichaPedidoPage({
       </div>
     </div>
   );
-}
-
-/**
- * El margen del pedido, sumando renglón por renglón.
- *
- * Se apoya en `margenDeLinea`, que compara **neto contra neto** con la alícuota
- * de cada línea: el subtotal lleva IVA adentro y el costo no, y compararlos
- * directo inflaría el margen un 21 % sistemático.
- *
- * Devuelve `null` si ninguna línea tiene costo, que es el caso de todo lo
- * anterior al módulo de compras. Mostrar cero ahí diría que se vendió sin
- * ganancia, que es distinto de no saberlo.
- */
-function calcularMargen(
-  items: { subtotal: string; cantidad: string; alicuotaIva: string | null; costoUnitario: string | null }[],
-) {
-  let neto = 0;
-  let costo = 0;
-  let conCosto = 0;
-  let sinCosto = 0;
-
-  for (const item of items) {
-    const r = margenDeLinea({
-      subtotal: Number(item.subtotal),
-      cantidad: Number(item.cantidad),
-      alicuotaIva: Number(item.alicuotaIva ?? 21),
-      costoUnitario: item.costoUnitario === null ? null : Number(item.costoUnitario),
-    });
-
-    if (r.costoTotal === null) {
-      sinCosto += 1;
-      continue;
-    }
-
-    neto += r.netoVenta;
-    costo += r.costoTotal;
-    conCosto += 1;
-  }
-
-  if (conCosto === 0) return null;
-
-  return { neto, costo, ganancia: neto - costo, sinCosto };
 }
 
 /** Qué aviso le corresponde al pedido según dónde está. */

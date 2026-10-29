@@ -12,9 +12,9 @@ import (
 // monotributista, las leyendas de la casa y el pie con las dos sucursales y
 // los datos para transferir.
 //
-// Espera a la tanda 5 (ventas): hoy lo llaman
-// app/api/presupuestos/[id]/pdf/route.ts y lib/whatsapp/documentos.ts, con
-// consultarPresupuesto de lib/dal/admin/ventas.ts.
+// Lo piden los datos de internal/pedidos (tanda 5): la ruta
+// /api/v1/presupuestos/{id}/pdf, que usan app/api/presupuestos/[id]/pdf
+// y lib/whatsapp/documentos.ts.
 
 // ItemPresupuesto es un renglón (los campos de consultarPresupuesto que usa
 // el PDF). AlicuotaIva es nil en las líneas de texto libre, que caen al 21.

@@ -2,11 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Banknote, Store } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
-import {
-  cierresDeTurnos,
-  sucursalesConCaja,
-  turnosCerrados,
-} from "@/lib/mostrador/caja";
+import { sucursalesConCaja, turnosCerrados } from "@/lib/dal/admin/caja";
 import {
   emitidoPorCaja,
   listarCajasFisicas,
@@ -18,7 +14,7 @@ import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { Vacio } from "@/components/admin/vacio";
 import { leerPeriodoMensual } from "@/lib/periodos";
-import { nombreComprobante } from "@/lib/fiscal/comprobantes";
+import { nombreComprobante, type TipoComprobante } from "@/lib/fiscal/comprobantes";
 import { CajasFisicas } from "./cajas-fisicas";
 import { FondoBase } from "./fondo-base";
 import { VentasSueltas } from "./ventas-sueltas";
@@ -36,6 +32,12 @@ export const metadata: Metadata = { title: "Caja" };
  * ese día; corregirlo después con la calculadora en la mano es exactamente
  * cómo un descuadre deja de verse.
  */
+/**
+ * La hora del negocio: Next corre en UTC y una venta de las 22 decía el día
+ * siguiente.
+ */
+const ZONA = "America/Argentina/Buenos_Aires";
+
 /** Cómo se lee cada medio en el cierre. */
 const MEDIOS: Record<string, string> = {
   efectivo: "Efectivo",
@@ -62,7 +64,7 @@ export default async function CajaPage({
     turnosCerrados(),
     listarCajasFisicas(),
     ventasSinCaja(),
-    emitidoPorCaja(periodo.desde, periodo.hasta),
+    emitidoPorCaja(periodo.clave),
   ]);
 
   /*
@@ -77,24 +79,10 @@ export default async function CajaPage({
     lista.map((t) => ({
       id: t.id,
       branchId: conSueltas[i],
-      etiqueta:
-        new Date(t.abiertaAt).toLocaleDateString("es-AR", {
-          day: "2-digit",
-          month: "2-digit",
-        }) +
-        " " +
-        new Date(t.abiertaAt).toLocaleTimeString("es-AR", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }) +
-        (t.estado === "abierta" ? " (abierto)" : ""),
+      // La etiqueta la escribe Go en hora argentina («5/3 09:00 a. m.»).
+      etiqueta: t.etiqueta,
     })),
   );
-
-  // Cuánto entró por cada medio en cada turno. El arqueo cuenta efectivo
-  // —es lo único que puede faltar del cajón—, pero lo primero que se pregunta
-  // al cerrar el día es cuánto se cobró con tarjeta y cuánto quedó a cuenta.
-  const cierres = await cierresDeTurnos(cerrados.map((t) => t.id));
 
   return (
     <div className="space-y-6">
@@ -170,7 +158,7 @@ export default async function CajaPage({
               <tbody className="divide-y divide-linea">
                 {cerrados.map((t) => {
                   const esperado = Number(t.esperado);
-                  const cierre = cierres.get(t.id) ?? [];
+                  const cierre = t.cierre;
                   const contado = t.contado === null ? null : Number(t.contado);
                   const diferencia = contado === null ? null : contado - esperado;
                   const cuadra = diferencia !== null && Math.abs(diferencia) < 0.01;
@@ -301,11 +289,12 @@ export default async function CajaPage({
                 {emitido.map((v) => (
                   <tr key={v.orderId}>
                     <td className="tabular px-5 py-3 text-muted-foreground">
-                      {v.createdAt.toLocaleDateString("es-AR")}
+                      {v.createdAt.toLocaleDateString("es-AR", { timeZone: ZONA })}
                       <span className="block text-sm">
                         {v.createdAt.toLocaleTimeString("es-AR", {
                           hour: "2-digit",
                           minute: "2-digit",
+                          timeZone: ZONA,
                         })}
                       </span>
                     </td>
@@ -345,7 +334,7 @@ export default async function CajaPage({
                             href={`/admin/facturacion/${v.invoiceId}`}
                             className="hover:text-brand-orange hover:underline"
                           >
-                            {nombreComprobante(v.invoiceTipo!)}{" "}
+                            {nombreComprobante(v.invoiceTipo as TipoComprobante)}{" "}
                             <span className="tabular">
                               {String(v.invoicePuntoVenta).padStart(4, "0")}-
                               {String(v.invoiceNumero).padStart(8, "0")}

@@ -1,4 +1,4 @@
-import { presupuestoPdf } from "@/lib/pdf/presupuesto";
+import { presupuestoPdf } from "./ts/presupuesto";
 import { desagregar } from "@/lib/fiscal/impuestos";
 import type { PresupuestoCompleto } from "@/lib/dal/admin/ventas";
 import type { DatosParaTransferir } from "@/lib/dal/pagos";

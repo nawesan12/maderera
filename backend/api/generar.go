@@ -17,3 +17,4 @@ package api
 //go:generate go tool oapi-codegen -config whatsapp.gen.yaml whatsapp.yaml
 //go:generate go tool oapi-codegen -config bitacora.gen.yaml bitacora.yaml
 //go:generate go tool oapi-codegen -config portal.gen.yaml portal.yaml
+//go:generate go tool oapi-codegen -config existencia.gen.yaml existencia.yaml

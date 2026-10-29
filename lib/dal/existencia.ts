@@ -1,17 +1,8 @@
 import "server-only";
 
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
-import { and, eq } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { apiInterna, datos } from "@/lib/api/servidor";
 import { esUuid } from "@/lib/uuid";
-import {
-  customers,
-  cuttingOrders,
-  deliveries,
-  invoices,
-  orders,
-  payments,
-} from "@/lib/db/schema";
 
 /**
  * Si algo existe, desde la caché, para decidir el 404 **antes** de mandar nada.
@@ -48,70 +39,24 @@ import {
  * y ese error terminaba en la pantalla de «se nos rompió algo» —un 500 de
  * hecho— en vez de un 404.
  */
+/*
+ * La consulta la hace la API de Go (backend/internal/existencia), con el
+ * secreto interno: abierta, dejaría recorrer los números de pedido. La caché
+ * y su invalidación son de Next y quedan acá. `uuid` dice qué claves tienen
+ * que ser un uuid para ni preguntar.
+ */
 const CONSULTAS = {
-  /**
-   * El seguimiento, por número. El número no es un secreto —es consecutivo, va
-   * en el remito y se dice por teléfono—: lo que protege el pedido es el token
-   * del enlace, y eso se sigue controlando adentro. Un número que no existe da
-   * 404; uno que existe pero no corresponde a quien mira muestra la misma
-   * pantalla de «no encontrado», con 200.
-   */
-  "pedido-por-numero": {
-    uuid: false,
-    leer: (numero: string) =>
-      db.select({ id: orders.id }).from(orders).where(eq(orders.numero, numero)).limit(1),
-  },
-  /** El cobro simulado, solo los de demostración (`cobroSimulado`). */
-  "pago-demo": {
-    uuid: true,
-    leer: (id: string) =>
-      db
-        .select({ id: payments.id })
-        .from(payments)
-        .where(and(eq(payments.id, id), eq(payments.proveedor, "demo")))
-        .limit(1),
-  },
-  /** El remito a firmar, por el token del enlace: 24 bytes al azar. */
-  "remito-por-token": {
-    uuid: false,
-    leer: (token: string) =>
-      db
-        .select({ id: deliveries.id })
-        .from(deliveries)
-        .where(eq(deliveries.firmaToken, token))
-        .limit(1),
-  },
-  /** Las hojas para imprimir van por id: uuid, que no se adivina. */
-  comprobante: {
-    uuid: true,
-    leer: (id: string) =>
-      db.select({ id: invoices.id }).from(invoices).where(eq(invoices.id, id)).limit(1),
-  },
-  remito: {
-    uuid: true,
-    leer: (id: string) =>
-      db.select({ id: deliveries.id }).from(deliveries).where(eq(deliveries.id, id)).limit(1),
-  },
-  cliente: {
-    uuid: true,
-    leer: (id: string) =>
-      db.select({ id: customers.id }).from(customers).where(eq(customers.id, id)).limit(1),
-  },
-  corte: {
-    uuid: true,
-    leer: (id: string) =>
-      db
-        .select({ id: cuttingOrders.id })
-        .from(cuttingOrders)
-        .where(eq(cuttingOrders.id, id))
-        .limit(1),
-  },
-  pedido: {
-    uuid: true,
-    leer: (id: string) =>
-      db.select({ id: orders.id }).from(orders).where(eq(orders.id, id)).limit(1),
-  },
+  "pedido-por-numero": { uuid: false },
+  "pago-demo": { uuid: true },
+  "remito-por-token": { uuid: false },
+  comprobante: { uuid: true },
+  remito: { uuid: true },
+  cliente: { uuid: true },
+  corte: { uuid: true },
+  pedido: { uuid: true },
 } as const;
+
+const MUESTRAS_DEL_BUILD = new Set(["0", "sin-remito", "00000000-0000-0000-0000-000000000000"]);
 
 export type QueExiste = keyof typeof CONSULTAS;
 
@@ -135,9 +80,11 @@ export async function existe(que: QueExiste, clave: string): Promise<boolean> {
   cacheLife("days");
 
   if (!claveValida(que, clave)) return false;
+  // Las muestras de `generateStaticParams` («0», «sin-remito», el uuid en
+  // ceros) no son de nadie, y en el build la API no está a mano: no se pregunta.
+  if (MUESTRAS_DEL_BUILD.has(clave) || process.env.NEXT_PHASE === "phase-production-build") return false;
 
-  const [fila] = await CONSULTAS[que].leer(clave);
-  return Boolean(fila);
+  return datos(await apiInterna.GET("/api/v1/interno/existe", { params: { query: { que, clave } } })).existe;
 }
 
 /**

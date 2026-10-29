@@ -13,6 +13,7 @@ import (
 	"mjbj/internal/api/cortesapi"
 	"mjbj/internal/api/cuentasapi"
 	"mjbj/internal/api/documentosapi"
+	"mjbj/internal/api/existenciaapi"
 	"mjbj/internal/api/portalapi"
 	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/api/productosapi"
@@ -30,6 +31,7 @@ import (
 	"mjbj/internal/cuentas"
 	"mjbj/internal/documentos"
 	"mjbj/internal/email"
+	"mjbj/internal/existencia"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/portal"
@@ -242,10 +244,21 @@ func correrAPI() error {
 		portalapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// «¿Existe esto?», para la caché de Next (con el secreto interno).
+	existenciaapi.HandlerWithOptions(
+		existenciaapi.NewStrictHandlerWithOptions(existencia.NuevaAPI(pool, cfg.Interna),
+			[]existenciaapi.StrictMiddlewareFunc{plataforma.ConPedido[existenciaapi.StrictHandlerFunc]},
+			existenciaapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		existenciaapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
-	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger, productosapi.GetSwagger, stockapi.GetSwagger, preciosapi.GetSwagger, cuentasapi.GetSwagger, bitacoraapi.GetSwagger, portalapi.GetSwagger} {
+	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger, productosapi.GetSwagger, stockapi.GetSwagger, preciosapi.GetSwagger, cuentasapi.GetSwagger, bitacoraapi.GetSwagger, portalapi.GetSwagger, existenciaapi.GetSwagger} {
 		s, err := spec()
 		if err != nil {
 			return err

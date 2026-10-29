@@ -56,7 +56,7 @@ test("un presupuesto pasa a pedido, avanza y se cancela", async ({ page }) => {
   await page.goto(`/admin/pedidos?buscar=${encodeURIComponent(pedido)}`);
   await page.getByRole("link", { name: nombre }).first().click();
   await expect(page.getByText(`Generado desde el presupuesto ${numero}`)).toBeVisible();
-  await page.getByRole("button", { name: "Preparar" }).click();
+  await page.getByRole("button", { name: "Preparar", exact: true }).click();
   await expect(page.getByText(`${pedido} quedó en preparación.`)).toBeVisible();
 
   // Se cancela por la API (no hay botón), y avanzarlo ya no se puede.
@@ -78,6 +78,7 @@ test("un presupuesto se rechaza", async ({ page }) => {
   const numero = await cargarPresupuesto(page, nombre);
   await page.goto(`/admin/presupuestos?buscar=${encodeURIComponent(nombre)}`);
   await page.getByRole("link", { name: numero }).click();
+  await expect(page.getByRole("heading", { name: numero })).toBeVisible();
   await page.getByRole("button", { name: "Rechazar" }).click();
   await expect(page.getByText("Presupuesto actualizado.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Pasar a pedido" })).toHaveCount(0);

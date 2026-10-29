@@ -57,7 +57,8 @@ test("una venta en línea desde la pantalla, y su anulación", async ({ page }) 
   await expect(aviso).toBeVisible();
   const numero = (await aviso.textContent())!.match(/PED-\d+/)![0];
 
-  // Anularla desde la lista de ventas de hoy.
+  // Anularla desde la lista de ventas de hoy, que está en el panel de la caja.
+  await page.getByRole("button", { name: /^Caja/ }).click();
   await page.getByRole("button", { name: `Anular ${numero}` }).click();
   await page.getByPlaceholder("Se cargó la medida equivocada").fill("Prueba de punta a punta");
   await page.getByRole("button", { name: "Anular la venta" }).click();

@@ -34,18 +34,16 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 | 2 | Catálogo público y contenido | `go-catalogo` | hecha (falta desplegarla; el secreto `API_SECRETO_INTERNO` va en el entorno de la VPS) |
 | 3 | Productos, precios, stock, acopio | `go-productos` | hecha (el informe de reposición lee ventas: va con la tanda 5) |
 | 4 | Clientes, cuenta corriente, cheques, cobros | `go-cuentas` | hecha (29/10): cartera 4×, historial 1,6×, cheques 2×, cobro 1,5× (bench/tanda4); recibo y resumen en PDF desde Go |
-| 5 | Mostrador, caja, ventas, entregas | | |
+| 5 | Mostrador, caja, ventas, entregas | `go-mostrador` | hecha (29/10), integrada en `go-cuentas`: listado de pedidos 5,4×, ~3× menos memoria; nueve bugs de concurrencia y fechas arreglados; migración 00085 |
 | 6 | Carrito, checkout, Mercado Pago | | |
-| 7 | Facturación ARCA | | |
+| 7 | Facturación ARCA | `go-arca` | hecha (29/10), integrada en `go-cuentas`: CAE fuera de la transacción y recuperable tras un corte; falta homologar con el certificado real |
 | 8 | Compras, proveedores, retenciones | `go-compras` | hecha (29/10), integrada en `go-cuentas`: pagos 6,5×, libro IVA 2,8×; tres bugs de concurrencia arreglados |
 | 9 | WhatsApp | `go-whatsapp` | hecha (29/10), integrada en `go-cuentas`: webhook 1,4×, cola 1,7×; el worker de Go atiende los trabajos de WhatsApp |
 
-| 8 | Compras, proveedores, retenciones | | |
-| 9 | WhatsApp | `go-whatsapp` | hecha (falta correr la E2E y desplegar: `CARPETA_PRIVADA` en api y worker) |
 | 10 | Campañas, avisos, profesionales, firma | `go-campanas` | hecha (29/10), integrada en `go-cuentas`: 3–6,5× pedidos/s, ¼ de la memoria; eventos guardados en UTC y permisos de aprobar arreglados |
 | 11 | Cortes | `go-cortes` | hecha (29/10), integrada en `go-cuentas`; HTTP 6× con 20 a la vez |
-| 12 | PDF y exportaciones | `go-pdf` | hecha (29/10), integrada en `go-cuentas`: 11 documentos idénticos a pdf-lib; faltan los datos de las tandas 5, 7, 8 y 9 |
-| 13 | Migración de ISIS | | |
+| 12 | PDF y exportaciones | `go-pdf` | hecha (29/10), integrada en `go-cuentas`: 11 documentos idénticos a pdf-lib, con sus datos desde Go |
+| 13 | Migración de ISIS | `go-migracion` | hecha (29/10), integrada en `go-cuentas`: repetible sin duplicar; cuatro bugs del TS arreglados |
 | — | Corte final | | |
 
 ## Tanda 0: el correo

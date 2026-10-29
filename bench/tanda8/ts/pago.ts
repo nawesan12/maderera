@@ -1,4 +1,5 @@
-import "server-only";
+// Copiado del commit 9a17128 (antes de la tanda 8), con la sesión cambiada
+// por un stub: ver ../README.md.
 
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -14,7 +15,7 @@ import {
   supplierPayments,
   suppliers,
 } from "@/lib/db/schema";
-import { calcularRetencion, type RegimenDeRetencion } from "./calculo";
+import { calcularRetencion, type RegimenDeRetencion } from "../../../scripts/golden/originales/calculo";
 
 /**
  * Pagarle a un proveedor, con las retenciones que correspondan.

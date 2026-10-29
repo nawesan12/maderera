@@ -1,27 +1,13 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import {
-  productVariants,
-  suppliers,
-  supplierMovements,
-  supplierPriceProfiles,
-  supplierTerms,
-  supplierVariantCodes,
-} from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
-import { coincideBusqueda } from "@/lib/busqueda";
+import { api, datos } from "@/lib/api/servidor";
 
 /**
- * Proveedores y lo que se les debe.
+ * Proveedores y lo que se les debe. Lo sirve la API de Go
+ * (backend/internal/compras).
  *
  * **El signo va al revés que en clientes**: acá positivo es lo que *nosotros*
- * debemos. Es el espejo natural, pero es la clase de detalle que se copia mal
- * al reusar una consulta de cuenta corriente, y el resultado —un saldo con el
- * signo cambiado— igual parece razonable en la pantalla.
- *
- * Como allá, el saldo se suma y no se guarda.
+ * debemos.
  */
 
 export interface ProveedorListado {
@@ -43,272 +29,43 @@ export interface ProveedorListado {
 export async function listarProveedores(
   filtros: { busqueda?: string; estado?: string } = {},
 ): Promise<ProveedorListado[]> {
-  await requireStaff();
-
-  const condiciones = [eq(suppliers.active, true)];
-
-  if (filtros.estado && filtros.estado !== "todos") {
-    condiciones.push(
-      eq(suppliers.estado, filtros.estado as "activo" | "inactivo"),
-    );
-  }
-  if (filtros.busqueda) {
-    const coincidencia = coincideBusqueda(filtros.busqueda, [
-      suppliers.nombre,
-      suppliers.razonSocial,
-      suppliers.cuit,
-      suppliers.rubro,
-      suppliers.contacto,
-    ]);
-    if (coincidencia) condiciones.push(coincidencia);
-  }
-
-  /*
-   * El saldo como subconsulta agrupada, igual que en clientes: una sola pasada
-   * por los movimientos para toda la lista. La alternativa —una consulta de
-   * saldo por proveedor— es el N+1 que hace que la pantalla tarde dos segundos
-   * el día que hay ochenta proveedores.
-   */
-  const saldos = db
-    .select({
-      supplierId: supplierMovements.supplierId,
-      saldo: sql<string>`sum(${supplierMovements.monto})`.as("saldo"),
-      ultimo: sql<Date>`max(${supplierMovements.createdAt})`.as("ultimo_mov"),
-    })
-    .from(supplierMovements)
-    .groupBy(supplierMovements.supplierId)
-    .as("saldos");
-
-  const filas = await db
-    .select({
-      id: suppliers.id,
-      nombre: suppliers.nombre,
-      razonSocial: suppliers.razonSocial,
-      cuit: suppliers.cuit,
-      rubro: suppliers.rubro,
-      contacto: suppliers.contacto,
-      telefono: suppliers.telefono,
-      email: suppliers.email,
-      diasPago: suppliers.diasPago,
-      estado: suppliers.estado,
-      saldo: saldos.saldo,
-      ultimoMovimiento: saldos.ultimo,
-    })
-    .from(suppliers)
-    .leftJoin(saldos, eq(saldos.supplierId, suppliers.id))
-    .where(and(...condiciones))
-    .orderBy(asc(suppliers.nombre));
-
-  return filas.map((f) => ({
-    ...f,
-    saldo: Number(f.saldo ?? 0),
-    ultimoMovimiento: f.ultimoMovimiento ? new Date(f.ultimoMovimiento) : null,
-  }));
+  const query = {
+    ...(filtros.busqueda ? { busqueda: filtros.busqueda.slice(0, 200) } : {}),
+    ...(filtros.estado ? { estado: filtros.estado } : {}),
+  };
+  const filas = datos(await (await api()).GET("/api/v1/admin/proveedores", { params: { query } }));
+  return filas.map((f) => ({ ...f, ultimoMovimiento: f.ultimoMovimiento ? new Date(f.ultimoMovimiento) : null }));
 }
 
 /** La ficha completa, con el libro de la cuenta. */
 export async function obtenerProveedor(id: string) {
-  await requireStaff();
-
-  const [proveedor] = await db
-    .select()
-    .from(suppliers)
-    .where(eq(suppliers.id, id))
-    .limit(1);
-
-  if (!proveedor) return null;
-
-  const movimientos = await db
-    .select({
-      id: supplierMovements.id,
-      tipo: supplierMovements.tipo,
-      monto: supplierMovements.monto,
-      detalle: supplierMovements.detalle,
-      referencia: supplierMovements.referencia,
-      createdAt: supplierMovements.createdAt,
-    })
-    .from(supplierMovements)
-    .where(eq(supplierMovements.supplierId, id))
-    .orderBy(desc(supplierMovements.createdAt))
-    .limit(200);
-
-  /*
-   * El saldo corriente de cada renglón se arma del más viejo al más nuevo y se
-   * devuelve al revés. Sin eso el libro muestra los montos pero no permite
-   * responder la única pregunta que se hace mirándolo: cuánto se le debía el
-   * día de esa factura.
-   */
-  let acumulado = 0;
-  const conSaldo = [...movimientos]
-    .reverse()
-    .map((m) => {
-      acumulado += Number(m.monto);
-      return { ...m, monto: Number(m.monto), saldo: acumulado };
-    })
-    .reverse();
-
+  const r = await (await api()).GET("/api/v1/admin/proveedores/{id}", { params: { path: { id } } });
+  if (r.response.status === 404) return null;
+  const p = datos(r);
   return {
-    ...proveedor,
-    diasPago: proveedor.diasPago,
-    saldo: acumulado,
-    movimientos: conSaldo,
+    ...p,
+    createdAt: new Date(p.createdAt),
+    updatedAt: new Date(p.updatedAt),
+    movimientos: p.movimientos.map((m) => ({ ...m, createdAt: new Date(m.createdAt) })),
   };
 }
 
-/** Para los selectores: nombre y poco más. */
-/**
- * Las condiciones de pago que ofrece un proveedor, por escrito.
- *
- * "Transferencia a 30 días, 5 % de bonificación" es una fila; el formulario
- * de pago las muestra para que la bonificación no dependa de que alguien se
- * acuerde.
- */
+/** Las condiciones de pago que ofrece un proveedor, por escrito. */
 export async function condicionesDelProveedor(supplierId: string) {
-  await requireStaff();
-
-  return db
-    .select({
-      id: supplierTerms.id,
-      modalidad: supplierTerms.modalidad,
-      plazoDias: supplierTerms.plazoDias,
-      bonificacionPct: supplierTerms.bonificacionPct,
-      detalle: supplierTerms.detalle,
-      activo: supplierTerms.activo,
-    })
-    .from(supplierTerms)
-    .where(eq(supplierTerms.supplierId, supplierId))
-    .orderBy(asc(supplierTerms.plazoDias), asc(supplierTerms.modalidad));
+  return datos(
+    await (await api()).GET("/api/v1/admin/proveedores/{id}/condiciones", { params: { path: { id: supplierId } } }),
+  );
 }
 
+/** Para los selectores: nombre y poco más. */
 export async function proveedoresParaElegir() {
-  await requireStaff();
-
-  return db
-    .select({
-      id: suppliers.id,
-      nombre: suppliers.nombre,
-      cuit: suppliers.cuit,
-      condicionIva: suppliers.condicionIva,
-      diasPago: suppliers.diasPago,
-    })
-    .from(suppliers)
-    .where(and(eq(suppliers.active, true), eq(suppliers.estado, "activo")))
-    .orderBy(asc(suppliers.nombre));
+  return datos(await (await api()).GET("/api/v1/admin/compras/proveedores-activos"));
 }
 
-/* -------------------------------------------------------------------------- */
-/* Lista de precios del proveedor                                              */
-/* -------------------------------------------------------------------------- */
-
-/**
- * El perfil que dice cómo viene la planilla de este proveedor.
- *
- * Devuelve `null` si todavía no se definió: la primera importación es la que lo
- * crea, y hasta entonces no hay nada que suponer.
- */
+/** El perfil que dice cómo viene la planilla de este proveedor, o null. */
 export async function perfilDelProveedor(supplierId: string) {
-  await requireStaff();
-
-  const [fila] = await db
-    .select()
-    .from(supplierPriceProfiles)
-    .where(
-      and(
-        eq(supplierPriceProfiles.supplierId, supplierId),
-        eq(supplierPriceProfiles.activo, true),
-      ),
-    )
-    .limit(1);
-
-  return fila ?? null;
-}
-
-export interface CodigoResuelto {
-  codigo: string;
-  variantId: string | null;
-  sku: string | null;
-  descripcion: string | null;
-}
-
-/**
- * A qué variante nuestra corresponde cada código del proveedor.
- *
- * Se resuelve en dos pasos y en este orden: primero por el código que ya se
- * guardó para ese proveedor —que es lo que hace que la segunda importación no
- * haya que mapearla— y después por SKU propio, para el caso en que el
- * proveedor use el mismo código que nosotros.
- *
- * Lo que no aparea queda como `variantId: null` y la pantalla lo muestra: un
- * código que no se pudo aparear es un producto que no se va a actualizar, y
- * enterarse después es enterarse por el margen.
- */
-export async function resolverCodigos(
-  supplierId: string,
-  codigos: string[],
-): Promise<CodigoResuelto[]> {
-  await requireStaff();
-
-  const unicos = [...new Set(codigos.map((c) => c.trim()).filter(Boolean))];
-  if (unicos.length === 0) return [];
-
-  const [guardados, porSku] = await Promise.all([
-    db
-      .select({
-        codigo: supplierVariantCodes.codigo,
-        variantId: supplierVariantCodes.variantId,
-        sku: productVariants.sku,
-        label: productVariants.label,
-      })
-      .from(supplierVariantCodes)
-      .innerJoin(
-        productVariants,
-        eq(productVariants.id, supplierVariantCodes.variantId),
-      )
-      .where(
-        and(
-          eq(supplierVariantCodes.supplierId, supplierId),
-          inArray(supplierVariantCodes.codigo, unicos),
-        ),
-      ),
-    db
-      .select({
-        sku: productVariants.sku,
-        variantId: productVariants.id,
-        label: productVariants.label,
-      })
-      .from(productVariants)
-      .where(
-        and(
-          eq(productVariants.active, true),
-          inArray(productVariants.sku, unicos),
-        ),
-      ),
-  ]);
-
-  const porCodigo = new Map(guardados.map((g) => [g.codigo, g]));
-  const porSkuMapa = new Map(porSku.map((v) => [v.sku, v]));
-
-  return unicos.map((codigo) => {
-    const guardado = porCodigo.get(codigo);
-    if (guardado) {
-      return {
-        codigo,
-        variantId: guardado.variantId,
-        sku: guardado.sku,
-        descripcion: guardado.label,
-      };
-    }
-
-    const propio = porSkuMapa.get(codigo);
-    if (propio) {
-      return {
-        codigo,
-        variantId: propio.variantId,
-        sku: propio.sku,
-        descripcion: propio.label,
-      };
-    }
-
-    return { codigo, variantId: null, sku: null, descripcion: null };
-  });
+  const p = datos(
+    await (await api()).GET("/api/v1/admin/proveedores/{id}/perfil-lista", { params: { path: { id: supplierId } } }),
+  );
+  return p ? { ...p, createdAt: new Date(p.createdAt), updatedAt: new Date(p.updatedAt) } : null;
 }

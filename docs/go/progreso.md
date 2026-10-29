@@ -37,7 +37,7 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 | 5 | Mostrador, caja, ventas, entregas | | |
 | 6 | Carrito, checkout, Mercado Pago | | |
 | 7 | Facturación ARCA | | |
-| 8 | Compras, proveedores, retenciones | | |
+| 8 | Compras, proveedores, retenciones | `go-compras` | hecha (29/10), integrada en `go-cuentas`: pagos 6,5×, libro IVA 2,8×; tres bugs de concurrencia arreglados |
 | 9 | WhatsApp | | |
 | 10 | Campañas, avisos, profesionales, firma | | |
 | 11 | Cortes | `go-cortes` | hecha (29/10), integrada en `go-cuentas`; HTTP 6× con 20 a la vez |
@@ -434,3 +434,113 @@ pánico de concurrencia en Go y la caché por lista que se había perdido: ver
 - Bug arreglado: el límite de crédito con formato argentino («1.500.000»
   daba 0). `internal/formato` imita Intl de es-AR (golden de 3017 números).
 - E2E `e2e/cuentas.spec.ts`; toda la batería: 26 en verde.
+
+## Tanda 8: compras, proveedores y retenciones (rama `go-compras`)
+
+Hecha el 29/10/2026 en `backend/internal/compras` (contrato
+`backend/api/compras.yaml`). Falta correr la e2e (`e2e/compras.spec.ts`) al
+integrar.
+
+### Inventario (lo que había en TS y adónde fue)
+
+| TS | Qué hacía | Ahora |
+|---|---|---|
+| `lib/dal/admin/proveedores.ts` | listado con saldo, ficha con el libro, condiciones, para elegir, perfil de la lista, resolver códigos | Go; el DAL es un envoltorio |
+| `app/admin/proveedores/actions.ts`, `[id]/condiciones-actions.ts` | ficha (alta/edición), movimientos de cuenta, baja, condiciones, convenios | Go; las acciones son envoltorios |
+| `app/admin/proveedores/lista-precios/actions.ts`, `lib/precios/lista-proveedor.ts` | vista previa (planilla + perfil + apareo) y aplicar | Go (con `internal/planilla`); el TS se borró |
+| `lib/dal/admin/ordenes-compra.ts`, `app/admin/compras/ordenes/actions.ts` | órdenes: listar, ver, crear (serie `OC-n`), enviar, anular, recibir; lo que está por llegar | Go (`internal/numeracion`, compartido con la tanda 4) |
+| `lib/dal/admin/recepciones.ts`, `app/admin/recepciones/actions.ts`, `lib/compras/recepcion.ts` | recepciones: listar, ver, buscar mercadería, crear, confirmar (stock + costo + deuda), anular | Go; `recepcion.ts` se borró |
+| `lib/compras/costo.ts` | `mezclarCosto`, `prorratearGastos`, `margenDeLinea` | las dos primeras a Go (se borraron); el margen queda (lo usan las ventas) |
+| `lib/compras/congelar.ts` | el costo que se congela en una venta | queda: corre dentro de las ventas (tandas 5 y 6) |
+| `lib/dal/admin/pagos-proveedor.ts`, `app/admin/compras/pagos/actions.ts`, `lib/retenciones/pago.ts`, `lib/retenciones/calculo.ts` | pagos con retenciones, imputaciones, partes y cheques; regímenes; acumulado del mes; certificado | Go; `pago.ts` y `calcularRetencion` se borraron (quedan el tipo y `REGIMENES_INICIALES` para la semilla) |
+| `app/admin/compras/pagos/exportar/route.ts`, `app/admin/arca/libro-iva-compras/exportar/route.ts` | los CSV | Go arma el archivo; la ruta de Next le pone las cabeceras |
+| `app/admin/compras/pagos/certificado/[numero]/route.ts` | el PDF del certificado | los datos de Go; el PDF queda en TS (tanda 12) |
+| `lib/dal/admin/compras-fiscal.ts`, `app/admin/compras/facturas/actions.ts` | libro IVA compras, facturas de compra (carga con la deuda) | Go |
+| `lib/dal/admin/retenciones-sufridas.ts`, `app/admin/arca/retenciones/*` | listar, crédito por impuesto, regímenes (alícuotas), **cargar** | Go, **menos la carga**: emite un recibo, espera `internal/cobros` de la tanda 4 |
+| `lib/dal/admin/gastos.ts`, `app/admin/compras/gastos/actions.ts` | gastos (con su salida de caja si es efectivo), por categoría, por circuito | Go; el turno se busca con la misma consulta de `turnoQueContiene` (se junta con la caja en la tanda 5) |
+| `lib/dal/numeracion-ventas.ts` | `siguienteNumeroDeOrdenDeCompra` | se borró (está en `internal/numeracion`) |
+
+Quedan en TS porque son de otra tanda y solo leen estas tablas:
+`lib/dal/admin/cierre-mensual.ts`, `lib/contable/asientos.ts`,
+`lib/dal/admin/busqueda-panel.ts`, `lib/dal/admin/pendientes.ts`, las
+semillas y la migración de ISIS.
+
+### Golden
+
+`scripts/golden/compras.ts` (con `TZ=UTC`, como Next en producción) corre el
+TS real —las copias de lo que se borró están en `scripts/golden/originales`,
+con sus pruebas de vitest— sobre 3000 costos, 3000 prorrateos, 300 cadenas de
+recepciones (con el estado guardado como numeric), 5000 retenciones, 400
+meses de pagos (el acumulado sumado como Postgres), 3000 controles de pago
+(imputaciones y partes), 1500 listas de proveedor, 200 libros IVA con su CSV
+byte a byte, 150 CSV de retenciones, 500 saldos corrientes, 2000 facturas con
+saldo, períodos, vencimientos, `formatearMonto` y 2184 formularios por los
+esquemas de zod (primer error con su campo, o los datos leídos). Go da lo
+mismo en todos.
+
+### Bugs del TS arreglados (cada uno con su prueba que falla sin el arreglo)
+
+- **Recepciones simultáneas perdían una mezcla del costo.** El candado era
+  el del stock (variante y sucursal) y el costo es por variante: dos
+  recepciones de lo mismo en sucursales distintas leían el mismo costo previo
+  y la segunda pisaba a la primera (sin fila previa, la segunda abortaba con
+  el índice único). Ahora además se bloquea la fila de `variant_costs`.
+  `TestRecepcionesSimultaneasNoPierdenLaMezcla`.
+- **Anular una recepción sin remito no devolvía la deuda.** La nota de crédito
+  sumaba las facturas con la referencia del remito; sin remito no encontraba
+  ninguna. Ahora sale de las líneas de la recepción (lo mismo que se cargó).
+  `TestAnularSinRemitoDevuelveLaDeuda`.
+- **Los pagos a proveedores no tomaban candado.** Dos a la vez repetían el
+  número de certificado (el segundo abortaba con un error crudo), retenían de
+  menos sobre el mismo acumulado del mes e imputaban dos veces el saldo de
+  una factura. Ahora toman `pg_advisory_xact_lock(1_000_000_000_801)`
+  (`compras.SeriePagosAProveedores`; por encima de las series de
+  `numeracion`) y bloquean la factura y el cheque endosado.
+  `TestPagosSimultaneosNumeranSinRepetir`.
+- **Permisos:** aplicar la lista de un proveedor pedía solo ser personal
+  (cualquier vendedor reescribía la lista general); ahora es del admin. Y lo
+  que está por llegar, que lo muestra la grilla de `/admin/stock`, pedía el
+  admin: al depósito y al vendedor la página de stock los mandaba a su
+  inicio. Ahora lo lee quien entra a `/admin/stock`.
+- Menores, sin prueba aparte: editar una condición de pago exige que sea del
+  proveedor de la ficha; las fechas inválidas y los proveedores que no
+  existen dan un 422 con mensaje en vez de un 500.
+
+### Pendiente
+
+- [ ] La carga de una retención sufrida (`cargarRetencionSufrida`): emite un
+      recibo; espera `internal/cobros` de la tanda 4.
+- [ ] El PDF del certificado de retención (tanda 12).
+- [ ] `turnoQueContiene` duplicado en `internal/compras/gastos.go`: se junta
+      con la caja de la tanda 5.
+- [ ] La e2e `e2e/compras.spec.ts` (no se corrió: los servidores son
+      compartidos).
+- Sin cambiar (a propósito, anotado): aplicar la lista del proveedor no deja
+  historial de precios (el TS tampoco); `TotalDeGastos` sale como `clave` y
+  el DAL lo renombra a `categoria`/`circuito`.
+
+### Benchmark (29/10/2026, misma Mac, 20 a la vez; detalle en `bench/tanda8`)
+
+| Prueba | TypeScript | Go | Go / TS |
+|---|---:|---:|---:|
+| Listado de proveedores: pedidos/s | 108,7 | 164,6 | 1,5× |
+| Ficha de un proveedor: pedidos/s | 212,5 | 265,0 | 1,2× |
+| Pagos (60): pedidos/s | 76,7 | 495,2 | **6,5×** (consulta acotada con `LATERAL`) |
+| Libro IVA de un mes en CSV: pedidos/s | 93,2 | 258,2 | **2,8×** |
+| Pagar con retención, 5 a la vez: fallos | **79,8 %** | 0 % | el TS repite el certificado |
+| Memoria máx. | 164–245 MB | 89–91 MB | ~2× menos |
+
+### Lo aprendido
+
+- **Los formularios de las acciones van a Go como objeto libre** y se validan
+  con `internal/compras/zod.go`: faltar, venir en null o con otro tipo dan el
+  error que daba zod (el NaN de JS llega como null). Un contrato con tipos
+  estrictos rechazaba antes que zod y con otro mensaje.
+- **kin-openapi decodifica `text/csv` como CSV con coma** para validar la
+  respuesta, y un archivo con `;` y BOM no pasa. Los CSV salen de Go como
+  `application/octet-stream` y Next les pone sus cabeceras.
+- **El lado TS de un benchmark corre en la zona de la máquina** salvo que se
+  le diga: con la de Argentina, «el mes» empieza tres horas después que en
+  producción (UTC) y los listados por período no coinciden. `TZ=UTC`.
+- **Un `pkill` de otro agente puede tirar tu servidor**: el binario del
+  benchmark lleva nombre propio (`mjbj-t8`).

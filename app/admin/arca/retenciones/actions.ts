@@ -2,9 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { regimenesRetencion } from "@/lib/db/schema";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 import { requireStaffRole } from "@/lib/dal/session";
 import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
 import { cargarRetencionSufrida } from "@/lib/dal/admin/retenciones-sufridas";
@@ -92,78 +90,22 @@ export interface EstadoRegimen {
 }
 
 /**
- * Cambia la alícuota de un régimen de retención.
- *
- * Es lo que permite lo que pidió la clienta —«dejar en 0 los demás sin
- * borrarlos»— sin tocar la base ni desplegar: un régimen con alícuota cero no
- * retiene nada y sigue cargado, con su código, para el día que vuelva a
- * corresponder.
- *
- * Solo el administrador: es el número con el que se le retiene plata a un
- * proveedor y después se le entrega un certificado firmado.
+ * Cambia la alícuota de un régimen de retención (y si está activo). Lo guarda
+ * la API de Go (backend/internal/compras): un régimen en cero no retiene nada
+ * y sigue cargado, con su código, para el día que vuelva a corresponder.
  */
 export async function guardarRegimen(
   _previo: EstadoRegimen,
   formData: FormData,
 ): Promise<EstadoRegimen> {
-  const usuario = await requireStaffRole("admin");
-
-  const parsed = z
-    .object({
-      id: z.string().uuid(),
-      alicuota: z.coerce.number().min(0).max(100),
-      alicuotaNoInscripto: z.coerce.number().min(0).max(100),
-      activo: z.boolean(),
-    })
-    .safeParse({
-      id: formData.get("id"),
-      alicuota: formData.get("alicuota"),
-      alicuotaNoInscripto: formData.get("alicuotaNoInscripto"),
-      activo: formData.get("activo") === "on",
-    });
-
-  if (!parsed.success) {
-    return {
-      error: "Revisá las alícuotas: van en porcentaje, de 0 a 100.",
-    };
+  const campos: Record<string, string> = {};
+  for (const [clave, valor] of formData) {
+    if (!clave.startsWith("$") && typeof valor === "string") campos[clave] = valor;
   }
-
-  const [regimen] = await db
-    .update(regimenesRetencion)
-    .set({
-      alicuota: parsed.data.alicuota.toFixed(3),
-      alicuotaNoInscripto: parsed.data.alicuotaNoInscripto.toFixed(3),
-      activo: parsed.data.activo,
-    })
-    .where(eq(regimenesRetencion.id, parsed.data.id))
-    .returning({
-      codigo: regimenesRetencion.codigo,
-      nombre: regimenesRetencion.nombre,
-    });
-
-  if (!regimen) return { error: "Ese régimen ya no está." };
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "editar",
-    entidad: "retencion",
-    entidadId: parsed.data.id,
-    descripcion: `Dejó ${regimen.nombre} al ${parsed.data.alicuota}%${parsed.data.activo ? "" : " y lo apagó"}`,
-    // Queda quién cambió con cuánto se retiene: es plata de un tercero.
-    detalle: {
-      alicuota: parsed.data.alicuota,
-      alicuotaNoInscripto: parsed.data.alicuotaNoInscripto,
-      activo: parsed.data.activo,
-    },
-  });
+  const r = await (await api()).POST("/api/v1/admin/compras/regimenes", { body: campos });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
 
   revalidatePath("/admin/arca/retenciones");
   revalidatePath("/admin/compras/pagos");
-
-  return {
-    ok:
-      parsed.data.alicuota === 0
-        ? "Listo: queda cargado y no retiene."
-        : "Alícuota actualizada.",
-  };
+  return { ok: r.data.ok };
 }

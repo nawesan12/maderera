@@ -1,3 +1,6 @@
+// Copia textual de lib/precios/lista-proveedor.ts (commit 9a17128), que se borró al mudarse a Go
+// (backend/internal/compras). La corren el golden (scripts/golden/compras.ts)
+// y sus pruebas de vitest: es lo que asegura que Go dé lo mismo que daba.
 /**
  * Lectura de la lista de precios de un proveedor.
  *
@@ -15,7 +18,7 @@
  * variante corresponde cada código lo hace el DAL.
  */
 
-import { interpretarNumero, normalizarEncabezado } from "@/lib/csv";
+import { interpretarNumero, normalizarEncabezado } from "../../../lib/csv";
 
 /** El IVA con el que se pasa de neto a final cuando la lista viene sin él. */
 const IVA_POR_DEFECTO = 21;

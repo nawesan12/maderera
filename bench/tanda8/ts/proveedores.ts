@@ -1,0 +1,315 @@
+// Copiado del commit 9a17128 (antes de la tanda 8), con la sesión cambiada
+// por un stub: ver ../README.md.
+
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  productVariants,
+  suppliers,
+  supplierMovements,
+  supplierPriceProfiles,
+  supplierTerms,
+  supplierVariantCodes,
+} from "@/lib/db/schema";
+import { requireStaff } from "./sesion";
+import { coincideBusqueda } from "@/lib/busqueda";
+
+/**
+ * Proveedores y lo que se les debe.
+ *
+ * **El signo va al revés que en clientes**: acá positivo es lo que *nosotros*
+ * debemos. Es el espejo natural, pero es la clase de detalle que se copia mal
+ * al reusar una consulta de cuenta corriente, y el resultado —un saldo con el
+ * signo cambiado— igual parece razonable en la pantalla.
+ *
+ * Como allá, el saldo se suma y no se guarda.
+ */
+
+export interface ProveedorListado {
+  id: string;
+  nombre: string;
+  razonSocial: string | null;
+  cuit: string | null;
+  rubro: string | null;
+  contacto: string | null;
+  telefono: string | null;
+  email: string | null;
+  diasPago: number;
+  estado: "activo" | "inactivo";
+  /** Positivo: le debemos. */
+  saldo: number;
+  ultimoMovimiento: Date | null;
+}
+
+export async function listarProveedores(
+  filtros: { busqueda?: string; estado?: string } = {},
+): Promise<ProveedorListado[]> {
+  await requireStaff();
+
+  const condiciones = [eq(suppliers.active, true)];
+
+  if (filtros.estado && filtros.estado !== "todos") {
+    condiciones.push(
+      eq(suppliers.estado, filtros.estado as "activo" | "inactivo"),
+    );
+  }
+  if (filtros.busqueda) {
+    const coincidencia = coincideBusqueda(filtros.busqueda, [
+      suppliers.nombre,
+      suppliers.razonSocial,
+      suppliers.cuit,
+      suppliers.rubro,
+      suppliers.contacto,
+    ]);
+    if (coincidencia) condiciones.push(coincidencia);
+  }
+
+  /*
+   * El saldo como subconsulta agrupada, igual que en clientes: una sola pasada
+   * por los movimientos para toda la lista. La alternativa —una consulta de
+   * saldo por proveedor— es el N+1 que hace que la pantalla tarde dos segundos
+   * el día que hay ochenta proveedores.
+   */
+  const saldos = db
+    .select({
+      supplierId: supplierMovements.supplierId,
+      saldo: sql<string>`sum(${supplierMovements.monto})`.as("saldo"),
+      ultimo: sql<Date>`max(${supplierMovements.createdAt})`.as("ultimo_mov"),
+    })
+    .from(supplierMovements)
+    .groupBy(supplierMovements.supplierId)
+    .as("saldos");
+
+  const filas = await db
+    .select({
+      id: suppliers.id,
+      nombre: suppliers.nombre,
+      razonSocial: suppliers.razonSocial,
+      cuit: suppliers.cuit,
+      rubro: suppliers.rubro,
+      contacto: suppliers.contacto,
+      telefono: suppliers.telefono,
+      email: suppliers.email,
+      diasPago: suppliers.diasPago,
+      estado: suppliers.estado,
+      saldo: saldos.saldo,
+      ultimoMovimiento: saldos.ultimo,
+    })
+    .from(suppliers)
+    .leftJoin(saldos, eq(saldos.supplierId, suppliers.id))
+    .where(and(...condiciones))
+    .orderBy(asc(suppliers.nombre));
+
+  return filas.map((f) => ({
+    ...f,
+    saldo: Number(f.saldo ?? 0),
+    ultimoMovimiento: f.ultimoMovimiento ? new Date(f.ultimoMovimiento) : null,
+  }));
+}
+
+/** La ficha completa, con el libro de la cuenta. */
+export async function obtenerProveedor(id: string) {
+  await requireStaff();
+
+  const [proveedor] = await db
+    .select()
+    .from(suppliers)
+    .where(eq(suppliers.id, id))
+    .limit(1);
+
+  if (!proveedor) return null;
+
+  const movimientos = await db
+    .select({
+      id: supplierMovements.id,
+      tipo: supplierMovements.tipo,
+      monto: supplierMovements.monto,
+      detalle: supplierMovements.detalle,
+      referencia: supplierMovements.referencia,
+      createdAt: supplierMovements.createdAt,
+    })
+    .from(supplierMovements)
+    .where(eq(supplierMovements.supplierId, id))
+    .orderBy(desc(supplierMovements.createdAt))
+    .limit(200);
+
+  /*
+   * El saldo corriente de cada renglón se arma del más viejo al más nuevo y se
+   * devuelve al revés. Sin eso el libro muestra los montos pero no permite
+   * responder la única pregunta que se hace mirándolo: cuánto se le debía el
+   * día de esa factura.
+   */
+  let acumulado = 0;
+  const conSaldo = [...movimientos]
+    .reverse()
+    .map((m) => {
+      acumulado += Number(m.monto);
+      return { ...m, monto: Number(m.monto), saldo: acumulado };
+    })
+    .reverse();
+
+  return {
+    ...proveedor,
+    diasPago: proveedor.diasPago,
+    saldo: acumulado,
+    movimientos: conSaldo,
+  };
+}
+
+/** Para los selectores: nombre y poco más. */
+/**
+ * Las condiciones de pago que ofrece un proveedor, por escrito.
+ *
+ * "Transferencia a 30 días, 5 % de bonificación" es una fila; el formulario
+ * de pago las muestra para que la bonificación no dependa de que alguien se
+ * acuerde.
+ */
+export async function condicionesDelProveedor(supplierId: string) {
+  await requireStaff();
+
+  return db
+    .select({
+      id: supplierTerms.id,
+      modalidad: supplierTerms.modalidad,
+      plazoDias: supplierTerms.plazoDias,
+      bonificacionPct: supplierTerms.bonificacionPct,
+      detalle: supplierTerms.detalle,
+      activo: supplierTerms.activo,
+    })
+    .from(supplierTerms)
+    .where(eq(supplierTerms.supplierId, supplierId))
+    .orderBy(asc(supplierTerms.plazoDias), asc(supplierTerms.modalidad));
+}
+
+export async function proveedoresParaElegir() {
+  await requireStaff();
+
+  return db
+    .select({
+      id: suppliers.id,
+      nombre: suppliers.nombre,
+      cuit: suppliers.cuit,
+      condicionIva: suppliers.condicionIva,
+      diasPago: suppliers.diasPago,
+    })
+    .from(suppliers)
+    .where(and(eq(suppliers.active, true), eq(suppliers.estado, "activo")))
+    .orderBy(asc(suppliers.nombre));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Lista de precios del proveedor                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * El perfil que dice cómo viene la planilla de este proveedor.
+ *
+ * Devuelve `null` si todavía no se definió: la primera importación es la que lo
+ * crea, y hasta entonces no hay nada que suponer.
+ */
+export async function perfilDelProveedor(supplierId: string) {
+  await requireStaff();
+
+  const [fila] = await db
+    .select()
+    .from(supplierPriceProfiles)
+    .where(
+      and(
+        eq(supplierPriceProfiles.supplierId, supplierId),
+        eq(supplierPriceProfiles.activo, true),
+      ),
+    )
+    .limit(1);
+
+  return fila ?? null;
+}
+
+export interface CodigoResuelto {
+  codigo: string;
+  variantId: string | null;
+  sku: string | null;
+  descripcion: string | null;
+}
+
+/**
+ * A qué variante nuestra corresponde cada código del proveedor.
+ *
+ * Se resuelve en dos pasos y en este orden: primero por el código que ya se
+ * guardó para ese proveedor —que es lo que hace que la segunda importación no
+ * haya que mapearla— y después por SKU propio, para el caso en que el
+ * proveedor use el mismo código que nosotros.
+ *
+ * Lo que no aparea queda como `variantId: null` y la pantalla lo muestra: un
+ * código que no se pudo aparear es un producto que no se va a actualizar, y
+ * enterarse después es enterarse por el margen.
+ */
+export async function resolverCodigos(
+  supplierId: string,
+  codigos: string[],
+): Promise<CodigoResuelto[]> {
+  await requireStaff();
+
+  const unicos = [...new Set(codigos.map((c) => c.trim()).filter(Boolean))];
+  if (unicos.length === 0) return [];
+
+  const [guardados, porSku] = await Promise.all([
+    db
+      .select({
+        codigo: supplierVariantCodes.codigo,
+        variantId: supplierVariantCodes.variantId,
+        sku: productVariants.sku,
+        label: productVariants.label,
+      })
+      .from(supplierVariantCodes)
+      .innerJoin(
+        productVariants,
+        eq(productVariants.id, supplierVariantCodes.variantId),
+      )
+      .where(
+        and(
+          eq(supplierVariantCodes.supplierId, supplierId),
+          inArray(supplierVariantCodes.codigo, unicos),
+        ),
+      ),
+    db
+      .select({
+        sku: productVariants.sku,
+        variantId: productVariants.id,
+        label: productVariants.label,
+      })
+      .from(productVariants)
+      .where(
+        and(
+          eq(productVariants.active, true),
+          inArray(productVariants.sku, unicos),
+        ),
+      ),
+  ]);
+
+  const porCodigo = new Map(guardados.map((g) => [g.codigo, g]));
+  const porSkuMapa = new Map(porSku.map((v) => [v.sku, v]));
+
+  return unicos.map((codigo) => {
+    const guardado = porCodigo.get(codigo);
+    if (guardado) {
+      return {
+        codigo,
+        variantId: guardado.variantId,
+        sku: guardado.sku,
+        descripcion: guardado.label,
+      };
+    }
+
+    const propio = porSkuMapa.get(codigo);
+    if (propio) {
+      return {
+        codigo,
+        variantId: propio.variantId,
+        sku: propio.sku,
+        descripcion: propio.label,
+      };
+    }
+
+    return { codigo, variantId: null, sku: null, descripcion: null };
+  });
+}

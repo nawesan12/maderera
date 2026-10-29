@@ -4,7 +4,6 @@ import { sql } from "drizzle-orm";
 import {
   cuttingOrders,
   orders,
-  purchaseOrders,
   quotes,
   receipts,
 } from "@/lib/db/schema";
@@ -115,20 +114,10 @@ export async function siguienteNumeroDePresupuesto(
   return `P-${anio}-${String((fila?.maximo ?? 0) + 1).padStart(4, "0")}`;
 }
 
-/** Siguiente `OC-n`, la serie de las órdenes de compra. */
-export async function siguienteNumeroDeOrdenDeCompra(
-  tx: Transaccion,
-): Promise<string> {
-  await tx.execute(sql`select pg_advisory_xact_lock(${SERIE_ORDENES_COMPRA})`);
-
-  const [fila] = await tx
-    .select({
-      maximo: sql<number>`coalesce(max(nullif(regexp_replace(${purchaseOrders.numero}, '\\D', '', 'g'), '')::bigint), 0)::int`,
-    })
-    .from(purchaseOrders);
-
-  return `OC-${Number(fila?.maximo ?? 0) + 1}`;
-}
+/*
+ * La serie `OC-n` de las órdenes de compra se mudó a Go
+ * (backend/internal/numeracion), con la misma clave de candado.
+ */
 
 /** Siguiente `CRT-n`, la serie de las órdenes de corte del aserradero. */
 export async function siguienteNumeroDeCorte(

@@ -12,8 +12,18 @@ import type { paths as Stock, components as ComponentesStock } from "./stock";
 import type { paths as Cuentas, components as ComponentesCuentas } from "./cuentas";
 import type { paths as Documentos, components as ComponentesDocumentos } from "./documentos";
 import type { paths as Cortes, components as ComponentesCortes } from "./cortes";
+import type { paths as Compras, components as ComponentesCompras } from "./compras";
 
-export type paths = Sesion & Catalogo & Contenido & Productos & Precios & Stock & Cuentas & Documentos & Cortes;
+export type paths = Sesion &
+  Catalogo &
+  Contenido &
+  Productos &
+  Precios &
+  Stock &
+  Cuentas &
+  Documentos &
+  Cortes &
+  Compras;
 export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesCatalogo["schemas"] &
   ComponentesContenido["schemas"] &
@@ -22,4 +32,5 @@ export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesStock["schemas"] &
   ComponentesCuentas["schemas"] &
   ComponentesDocumentos["schemas"] &
-  ComponentesCortes["schemas"];
+  ComponentesCortes["schemas"] &
+  ComponentesCompras["schemas"];

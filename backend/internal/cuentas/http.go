@@ -298,6 +298,25 @@ func (a *API) ReciboCompleto(ctx context.Context, r cuentasapi.ReciboCompletoReq
 	return ok(v), err
 }
 
+func (a *API) CargarRetencionSufrida(ctx context.Context, r cuentasapi.CargarRetencionSufridaRequestObject) (cuentasapi.CargarRetencionSufridaResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	b := r.Body
+	m, err := a.cobros.CargarRetencionSufrida(ctx, ses, cobros.FormRetencion{CustomerID: texto(b.CustomerId), Numero: texto(b.Numero),
+		Impuesto: texto(b.Impuesto), CodigoRegimen: texto(b.CodigoRegimen), Base: texto(b.Base), Alicuota: b.Alicuota,
+		Importe: texto(b.Importe), Fecha: texto(b.Fecha), Referencia: texto(b.Referencia)})
+	if err != nil {
+		return nil, err
+	}
+	return mensaje(m), nil
+}
+
+func (o respuesta) VisitCargarRetencionSufridaResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
 /* ----------------------------- cheques ---------------------------- */
 
 func (a *API) ListarCheques(ctx context.Context, r cuentasapi.ListarChequesRequestObject) (cuentasapi.ListarChequesResponseObject, error) {

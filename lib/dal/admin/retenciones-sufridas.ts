@@ -1,10 +1,6 @@
 import "server-only";
 
-import { db } from "@/lib/db";
-import { retencionesSufridas } from "@/lib/db/schema";
 import { api, datos } from "@/lib/api/servidor";
-import { emitirRecibo } from "@/lib/cobros/recibo";
-import { requireStaffRole } from "@/lib/dal/session";
 
 /**
  * Las retenciones que nos practicaron.
@@ -15,96 +11,10 @@ import { requireStaffRole } from "@/lib/dal/session";
  * descuento que se regaló—.
  */
 
-export interface EntradaSufrida {
-  customerId: string;
-  numero: string;
-  impuesto: "ganancias" | "iva" | "suss" | "iibb";
-  codigoRegimen?: string | null;
-  base: number;
-  alicuota?: number | null;
-  importe: number;
-  fecha: Date;
-  referencia?: string | null;
-  usuarioId: string;
-}
-
-export interface ResultadoSufrida {
-  ok: boolean;
-  error?: string;
-}
-
-/**
- * Carga el certificado y salda la cuenta en el mismo acto.
- *
- * Las dos cosas van en una transacción: un certificado cargado que no llegó a
- * la cuenta corriente deja al cliente debiendo plata que ya entregó, y el
- * reclamo llega por teléfono con el papel en la mano.
- */
-export async function cargarRetencionSufrida(
-  entrada: EntradaSufrida,
-): Promise<ResultadoSufrida> {
-  await requireStaffRole("admin");
-
-  if (!Number.isFinite(entrada.importe) || entrada.importe <= 0) {
-    return { ok: false, error: "El importe tiene que ser mayor a cero." };
-  }
-
-  try {
-    await db.transaction(async (tx) => {
-      await tx.insert(retencionesSufridas).values({
-        customerId: entrada.customerId,
-        numero: entrada.numero.trim(),
-        impuesto: entrada.impuesto,
-        codigoRegimen: entrada.codigoRegimen ?? null,
-        base: entrada.base.toFixed(2),
-        alicuota: entrada.alicuota?.toFixed(3) ?? null,
-        importe: entrada.importe.toFixed(2),
-        fecha: entrada.fecha,
-        referencia: entrada.referencia ?? null,
-        createdByUserId: entrada.usuarioId,
-      });
-
-      /*
-       * La retención baja la deuda igual que un pago: para el cliente es plata
-       * que ya entregó, solo que al fisco. Va con recibo, como todo pago —el
-       * cliente lo pide para conciliar con su contador— y el medio dice
-       * «Retención» con el número de certificado.
-       */
-      await emitirRecibo(tx, {
-        customerId: entrada.customerId,
-        origen: "panel",
-        concepto: `Retención de ${entrada.impuesto} · certificado ${entrada.numero.trim()}`,
-        partes: [
-          {
-            medio: "retencion",
-            importe: entrada.importe,
-            referencia: entrada.numero.trim(),
-          },
-        ],
-        usuarioId: entrada.usuarioId,
-      });
-    });
-  } catch (error) {
-    /*
-     * El índice único por cliente y número. Cargar dos veces el mismo papel
-     * saldaría dos veces la misma deuda y computaría dos veces el crédito.
-     */
-    if (String(error).includes("retenciones_sufridas_numero_idx")) {
-      return {
-        ok: false,
-        error: "Ese certificado ya está cargado para este cliente.",
-      };
-    }
-    throw error;
-  }
-
-  return { ok: true };
-}
-
 /*
- * Las lecturas las sirve la API de Go (backend/internal/compras). La carga
- * de arriba sigue acá porque emite un recibo (lib/cobros/recibo.ts): se muda
- * con internal/cobros de la tanda 4.
+ * Las lecturas las sirve la API de Go (backend/internal/compras); la carga,
+ * que emite un recibo, la hace backend/internal/cobros
+ * (app/admin/arca/retenciones/actions.ts).
  */
 
 export async function listarRetencionesSufridas(limite = 60) {

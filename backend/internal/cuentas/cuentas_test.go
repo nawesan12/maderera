@@ -210,6 +210,24 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 		t.Errorf("cheque anulado: %s", b)
 	}
 
+	// Una retención sufrida baja la deuda con su recibo; el mismo certificado
+	// dos veces, no.
+	ret := map[string]string{"customerId": id, "numero": "0001-123", "impuesto": "iibb", "base": "100000", "alicuota": "3", "importe": "3000", "fecha": "2026-10-20"}
+	if c, b := pedir(t, ven, "POST", u+"retenciones-sufridas", ret); c != 403 {
+		t.Errorf("retención del vendedor: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "POST", u+"retenciones-sufridas", ret); c != 200 || !strings.Contains(b, "La cuenta del cliente baja $\u00a03.000.") && !strings.Contains(b, "baja $ 3.000.") {
+		t.Errorf("retención: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "POST", u+"retenciones-sufridas", ret); c != 422 || !strings.Contains(b, "Ese certificado ya está cargado") {
+		t.Errorf("retención repetida: %d %s", c, b)
+	}
+	var medio string
+	_ = e.pool.QueryRow(context.Background(), `select p.medio::text from receipt_parts p join receipts r on r.id = p.receipt_id where r.concepto like 'Retención de iibb%'`).Scan(&medio)
+	if medio != "retencion" {
+		t.Errorf("el recibo de la retención: %q", medio)
+	}
+
 	// Bloqueo, plazo y crédito.
 	if c, b := pedir(t, adm, "PUT", u+"clientes/"+id+"/bloqueo", map[string]any{"bloquear": true, "motivo": "no"}); c != 422 || !strings.Contains(b, "Escribí por qué") {
 		t.Errorf("bloqueo sin motivo: %d %s", c, b)

@@ -242,6 +242,30 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/retenciones-sufridas:
+    post:
+      operationId: CargarRetencionSufrida
+      description: Un certificado de retención que nos entregó un cliente. Baja su deuda con un recibo. Solo el admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                customerId: { type: string }
+                numero: { type: string }
+                impuesto: { type: string }
+                codigoRegimen: { type: string }
+                base: { type: string }
+                alicuota: { type: string }
+                importe: { type: string }
+                fecha: { type: string }
+                referencia: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/cheques:
     get:
       operationId: ListarCheques

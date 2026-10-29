@@ -257,6 +257,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/retenciones-sufridas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Un certificado de retención que nos entregó un cliente. Baja su deuda con un recibo. Solo el admin. */
+        post: operations["CargarRetencionSufrida"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/cheques": {
         parameters: {
             query?: never;
@@ -1070,6 +1087,33 @@ export interface operations {
             };
             401: components["responses"]["Problema"];
             404: components["responses"]["Problema"];
+        };
+    };
+    CargarRetencionSufrida: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    customerId?: string;
+                    numero?: string;
+                    impuesto?: string;
+                    codigoRegimen?: string;
+                    base?: string;
+                    alicuota?: string;
+                    importe?: string;
+                    fecha?: string;
+                    referencia?: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Ok"];
+            422: components["responses"]["Problema"];
         };
     };
     ListarCheques: {

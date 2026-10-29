@@ -260,7 +260,7 @@ func (e *ERP) FichaDe(ctx context.Context, correo string) (*Ficha, error) {
 	if err != nil {
 		return nil, err
 	}
-	f.Avisos = avisosDe(f, remitos, time.Now())
+	f.Avisos = avisosDe(f, remitos, time.Now().In(argentina))
 	cliente := url.Values{"cliente": {c.ID}}
 	f.Enlaces = map[string]string{
 		"ficha":       e.enlace("/admin/clientes/"+c.ID, nil),
@@ -314,6 +314,17 @@ func (e *ERP) Contactos(ctx context.Context, q string) ([]Contacto, error) {
 	}
 	return out, nil
 }
+
+// argentina es la hora de la maderera: el «hoy» de un cheque que vence no
+// puede depender de la zona del contenedor (en el servidor es UTC, y desde
+// las 21 los avisos dirían el día siguiente).
+var argentina = func() *time.Location {
+	l, err := time.LoadLocation("America/Argentina/Buenos_Aires")
+	if err != nil {
+		return time.FixedZone("ART", -3*3600)
+	}
+	return l
+}()
 
 // avisosDe arma los avisos de contexto de la ficha: lo que el que contesta
 // tiene que saber («tiene un remito sin firmar», «su pedido está listo»).

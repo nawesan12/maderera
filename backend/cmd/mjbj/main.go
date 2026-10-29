@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"os"
 	"time"
+	// La base de zonas horarias adentro del binario: la imagen es distroless y
+	// diez paquetes piden America/Argentina/Buenos_Aires.
+	_ "time/tzdata"
 
 	"context"
 

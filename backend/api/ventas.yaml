@@ -1,0 +1,386 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Ventas del panel
+  version: "1"
+  description: |
+    Los pedidos y los presupuestos del panel (tanda 5): el tablero de
+    pedidos y su ficha, avanzar, cancelar y marcar cobrado; el listado de
+    presupuestos y su ficha, aceptarlos o rechazarlos, pasarlos a pedido y
+    cargarlos a mano; y el presupuesto en PDF.
+
+    Leer el tablero y mover un pedido: quien entra a /admin/pedidos. La
+    ficha de un pedido: cualquier persona del panel (la leen también la
+    impresión del ticket y el alta de un corte, que ve el aserradero).
+    Presupuestos: quien entra a /admin/presupuestos; su ficha, además, el
+    servidor de Next con el secreto interno (los avisos por WhatsApp). El
+    PDF: el personal, el cliente dueño del presupuesto o el servidor de Next.
+
+    Las acciones contestan { ok } o un problema con el mensaje para mostrar
+    tal cual (el { error } que devolvían las server actions).
+paths:
+  /api/v1/admin/pedidos:
+    get:
+      operationId: ListarPedidos
+      parameters:
+        - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: sucursal, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Los pedidos, el más nuevo primero
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PedidoListado" } }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pedidos/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      operationId: FichaDePedido
+      responses:
+        "200":
+          description: La ficha con sus líneas, su historial, sus pagos y, para el admin, el margen
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FichaDePedido" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pedidos/{id}/avanzar:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: AvanzarPedido
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pedidos/{id}/cancelar:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: CancelarPedido
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                motivo: { type: string, maxLength: 500 }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pedidos/{id}/cobrado:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: MarcarPedidoCobrado
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/presupuestos:
+    get:
+      operationId: ListarPresupuestos
+      parameters:
+        - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: sucursal, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Primero el compromiso de respuesta más cercano, después la obra más cercana, después lo más nuevo
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PresupuestoListado" } }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: CrearPresupuesto
+      description: |
+        El formulario como lo leía la acción: los campos del FormData con sus
+        `|| undefined` en `cabecera`, las líneas ya pasadas por JSON.parse en
+        `lineas`, y `convertir` si se apretó «Guardar y pasar a pedido».
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cabecera, lineas]
+              additionalProperties: false
+              properties:
+                cabecera: { type: object, additionalProperties: true }
+                lineas: { type: array, maxItems: 500, items: {} }
+                convertir: { type: boolean }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/presupuestos/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      operationId: FichaDePresupuesto
+      responses:
+        "200":
+          description: La ficha con sus líneas (la alícuota sale del producto)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FichaDePresupuesto" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/presupuestos/{id}/estado:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: CambiarEstadoDePresupuesto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              additionalProperties: false
+              properties:
+                estado: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/presupuestos/{id}/pedido:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: ConvertirPresupuestoEnPedido
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/presupuestos/{id}/pdf:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      operationId: PresupuestoPdf
+      description: |
+        El personal baja cualquiera; el cliente, solo los que apuntan a su
+        ficha. A los demás, 404 (no 403: confirmaría que existe).
+      responses:
+        "200":
+          description: El PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Problema" }
+components:
+  responses:
+    Hecho:
+      description: Hecho, con el mensaje para mostrar
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ResultadoDeVenta" }
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    ResultadoDeVenta:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: string }
+        id: { type: string, description: El pedido creado (o el presupuesto, si no se convirtió) }
+        numero: { type: string }
+        estado: { type: string, description: El estado al que llegó el pedido }
+    PlazoDelPresupuesto:
+      type: object
+      required: [texto, urgente, vencido]
+      properties:
+        texto: { type: string }
+        urgente: { type: boolean }
+        vencido: { type: boolean }
+    PresupuestoListado:
+      type: object
+      required: [id, numero, cliente, empresa, customerId, sucursal, estado, origen, total, items, asesor, createdAt, validoHasta,
+        vencido, respondeHasta, necesitaPara, plazo]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        cliente: { type: string }
+        empresa: { type: string, nullable: true }
+        customerId: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+        estado: { type: string }
+        origen: { type: string }
+        total: { type: number, format: double }
+        items: { type: integer }
+        asesor: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        validoHasta: { type: string, format: date-time, nullable: true }
+        vencido: { type: boolean }
+        respondeHasta: { type: string, format: date-time, nullable: true }
+        necesitaPara: { type: string, format: date-time, nullable: true }
+        plazo:
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/PlazoDelPresupuesto" }]
+    ItemDePresupuesto:
+      type: object
+      required: [id, variantId, descripcion, unidad, cantidad, precioUnitario, subtotal, orden, alicuotaIva]
+      properties:
+        id: { type: string }
+        variantId: { type: string, nullable: true }
+        descripcion: { type: string }
+        unidad: { type: string }
+        cantidad: { type: string }
+        precioUnitario: { type: string }
+        subtotal: { type: string }
+        orden: { type: integer }
+        alicuotaIva: { type: string, nullable: true }
+    FichaDePresupuesto:
+      type: object
+      required: [id, numero, cliente, email, telefono, empresa, customerId, clienteCodigo, clienteCuit, clienteCondicionIva,
+        clienteDireccion, sucursal, sucursalSlug, vendedor, estado, origen, subtotal, total, notas, asesor, validoHasta, createdAt, items]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        cliente: { type: string }
+        email: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        empresa: { type: string, nullable: true }
+        customerId: { type: string, nullable: true }
+        clienteCodigo: { type: string, nullable: true }
+        clienteCuit: { type: string, nullable: true }
+        clienteCondicionIva: { type: string, nullable: true }
+        clienteDireccion: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+        sucursalSlug: { type: string, nullable: true }
+        vendedor: { type: string, nullable: true }
+        estado: { type: string }
+        origen: { type: string }
+        subtotal: { type: string }
+        total: { type: string }
+        notas: { type: string, nullable: true }
+        asesor: { type: string, nullable: true }
+        validoHasta: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        items: { type: array, items: { $ref: "#/components/schemas/ItemDePresupuesto" } }
+    PedidoListado:
+      type: object
+      required: [id, numero, cliente, empresa, sucursal, sucursalSlug, estado, tipoEntrega, direccionEntrega, medioPago, estadoPago,
+        total, items, customerId, createdAt]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        cliente: { type: string }
+        empresa: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+        sucursalSlug: { type: string, nullable: true }
+        estado: { type: string }
+        tipoEntrega: { type: string }
+        direccionEntrega: { type: string, nullable: true }
+        medioPago: { type: string, nullable: true }
+        estadoPago: { type: string }
+        total: { type: number, format: double }
+        items: { type: integer }
+        customerId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    ItemDePedido:
+      type: object
+      required: [id, orderId, variantId, descripcion, unidad, cantidad, precioUnitario, subtotal, presentacion, stockPorUnidad,
+        costoUnitario, alicuotaIva, orden]
+      properties:
+        id: { type: string }
+        orderId: { type: string }
+        variantId: { type: string, nullable: true }
+        descripcion: { type: string }
+        unidad: { type: string }
+        cantidad: { type: string }
+        precioUnitario: { type: string }
+        subtotal: { type: string }
+        presentacion: { type: string, nullable: true }
+        stockPorUnidad: { type: number, format: double }
+        costoUnitario: { type: string, nullable: true }
+        alicuotaIva: { type: string, nullable: true }
+        orden: { type: integer }
+    PasoDelPedido:
+      type: object
+      required: [id, orderId, estado, nota, createdByUserId, createdAt]
+      properties:
+        id: { type: string }
+        orderId: { type: string }
+        estado: { type: string }
+        nota: { type: string, nullable: true }
+        createdByUserId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    PagoDelPedido:
+      type: object
+      required: [medio, importe, nroLote, nroCupon, cuotas, tarjeta]
+      properties:
+        medio: { type: string }
+        importe: { type: string }
+        nroLote: { type: string, nullable: true }
+        nroCupon: { type: string, nullable: true }
+        cuotas: { type: integer }
+        tarjeta: { type: string, nullable: true }
+    MargenDelPedido:
+      type: object
+      required: [neto, costo, ganancia, sinCosto]
+      properties:
+        neto: { type: number, format: double }
+        costo: { type: number, format: double }
+        ganancia: { type: number, format: double }
+        sinCosto: { type: integer }
+    FichaDePedido:
+      type: object
+      required: [id, numero, numeroProvisorio, cliente, email, telefono, empresa, branchId, customerId, sucursal, estado, origen,
+        tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, descuento, descuentoMotivo, total, medioPago, estadoPago,
+        notas, createdAt, items, historial, pagos, margen]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        numeroProvisorio: { type: string, nullable: true }
+        cliente: { type: string }
+        email: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        empresa: { type: string, nullable: true }
+        branchId: { type: string, nullable: true }
+        customerId: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+        estado: { type: string }
+        origen: { type: string }
+        tipoEntrega: { type: string }
+        direccionEntrega: { type: string, nullable: true }
+        zonaEnvio: { type: string, nullable: true }
+        costoEnvio: { type: string }
+        subtotal: { type: string }
+        descuento: { type: string }
+        descuentoMotivo: { type: string, nullable: true }
+        total: { type: string }
+        medioPago: { type: string, nullable: true }
+        estadoPago: { type: string }
+        notas: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        items: { type: array, items: { $ref: "#/components/schemas/ItemDePedido" } }
+        historial: { type: array, items: { $ref: "#/components/schemas/PasoDelPedido" } }
+        pagos: { type: array, items: { $ref: "#/components/schemas/PagoDelPedido" } }
+        margen:
+          nullable: true
+          description: Solo para el admin, y solo si alguna línea tiene costo congelado
+          allOf: [{ $ref: "#/components/schemas/MargenDelPedido" }]

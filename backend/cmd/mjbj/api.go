@@ -16,6 +16,7 @@ import (
 	"mjbj/internal/api/productosapi"
 	"mjbj/internal/api/sesionapi"
 	"mjbj/internal/api/stockapi"
+	"mjbj/internal/api/ventasapi"
 	"mjbj/internal/api/whatsappapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/catalogo"
@@ -28,6 +29,7 @@ import (
 	"mjbj/internal/documentos"
 	"mjbj/internal/email"
 	"mjbj/internal/limites"
+	"mjbj/internal/pedidos"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
 	"mjbj/internal/productos"
@@ -216,6 +218,17 @@ func correrAPI() error {
 		whatsappapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// Pedidos y presupuestos del panel (tanda 5, parte B).
+	ventasapi.HandlerWithOptions(
+		ventasapi.NewStrictHandlerWithOptions(pedidos.NuevaAPI(pedidos.Nuevo(pool, log), cfg.Interna),
+			[]ventasapi.StrictMiddlewareFunc{plataforma.ConPedido[ventasapi.StrictHandlerFunc]},
+			ventasapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		ventasapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
@@ -272,6 +285,15 @@ func correrAPI() error {
 		if err != nil {
 			return err
 		}
+		h = validar(h)
+	}
+
+	// El contrato de pedidos y presupuestos (tanda 5), aparte.
+	if s, err := ventasapi.GetSwagger(); err != nil {
+		return err
+	} else if validar, err := plataforma.ValidarContra(s); err != nil {
+		return err
+	} else {
 		h = validar(h)
 	}
 

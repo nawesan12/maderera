@@ -399,6 +399,7 @@ func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, p PedidoDeAjus
 			if err != nil {
 				return err
 			}
+			var lote_ cambiosEnLote
 			for _, a := range actuales {
 				var base float64
 				if p.Base == "precio" {
@@ -413,14 +414,17 @@ func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, p PedidoDeAjus
 					continue
 				}
 				nuevo := jsmath.Fijo2(Ajustar(base, factor, p.Redondeo))
-				hubo, err := cambiar(ctx, q, ses, a.VariantID, l.ID, nuevo, sqlc.PriceChangeSourceAjusteMasivo, &texto, &lote)
-				if err != nil {
-					return err
+				if jsmath.Numero(a.Price) == jsmath.Numero(nuevo) {
+					continue
 				}
-				if hubo {
-					r.Tocados++
-				}
+				lote_.variantes = append(lote_.variantes, a.VariantID)
+				lote_.anteriores = append(lote_.anteriores, a.Price)
+				lote_.nuevos = append(lote_.nuevos, nuevo)
 			}
+			if err := lote_.aplicar(ctx, tx, l.ID, ses.UserID, texto, lote); err != nil {
+				return err
+			}
+			r.Tocados += len(lote_.variantes)
 		}
 		return nil
 	})
@@ -567,4 +571,32 @@ func (s *Servicio) GuardarDescuento(ctx context.Context, ses *auth.Sesion, f For
 		f.Medio+": "+jsmath.Texto(pct)+"% desde $"+d,
 		map[string]any{"medio": f.Medio, "desdeMonto": d, "porcentaje": p, "etiqueta": etiqueta, "activo": f.Activo})
 	return nil
+}
+
+// cambiosEnLote son los precios de una lista que cambian en un ajuste
+// masivo: se escriben con dos consultas (los precios y su historial) en vez
+// de tres por precio. Con 6400 precios eran 20–45 segundos.
+type cambiosEnLote struct{ variantes, anteriores, nuevos []string }
+
+// A mano: sqlc no entiende el unnest de varios arreglos.
+const (
+	fijarPreciosEnLote = `
+		UPDATE price_list_items p SET price = x.nuevo::numeric, updated_at = now()
+		FROM unnest($2::uuid[], $3::text[]) AS x(variante, nuevo)
+		WHERE p.price_list_id = $1 AND p.variant_id = x.variante`
+	anotarPreciosEnLote = `
+		INSERT INTO price_history (variant_id, price_list_id, precio_anterior, precio_nuevo, origen, motivo, lote_id, created_by_user_id)
+		SELECT x.variante, $1, x.anterior::numeric, x.nuevo::numeric, 'ajuste_masivo', $5, $6, $7
+		FROM unnest($2::uuid[], $3::text[], $4::text[]) AS x(variante, anterior, nuevo)`
+)
+
+func (c cambiosEnLote) aplicar(ctx context.Context, tx pgx.Tx, lista, usuario, motivo, lote string) error {
+	if len(c.variantes) == 0 {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, fijarPreciosEnLote, lista, c.variantes, c.nuevos); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, anotarPreciosEnLote, lista, c.variantes, c.anteriores, c.nuevos, motivo, lote, usuario)
+	return err
 }

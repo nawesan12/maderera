@@ -32,7 +32,7 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 | 0 | Correo (`correo.mjbj.com.ar`) | `go-correo` | hecha (falta encenderla en la VPS: DNS y PTR) |
 | 1 | Base común | `go-base` | hecha (falta desplegarla; E2E de Playwright pendiente) |
 | 2 | Catálogo público y contenido | `go-catalogo` | hecha (falta desplegarla; el secreto `API_SECRETO_INTERNO` va en el entorno de la VPS) |
-| 3 | Productos, precios, stock, acopio | `go-productos` | casi hecha: falta mudar el informe de reposición (lee ventas: va con la tanda 5) y el ajuste masivo en lote |
+| 3 | Productos, precios, stock, acopio | `go-productos` | hecha (el informe de reposición lee ventas: va con la tanda 5) |
 | 4 | Clientes, cuenta corriente, cheques, cobros | | |
 | 5 | Mostrador, caja, ventas, entregas | | |
 | 6 | Carrito, checkout, Mercado Pago | | |
@@ -114,8 +114,8 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 - [x] Candados de stock en la ficha y la transferencia (el TS no los tomaba),
       transferencia contra lo disponible y no contra el físico
 - [x] Benchmark (`bench/tanda3`)
-- [ ] El ajuste masivo en lote: hoy son tres consultas por precio (20–30 s
-      para 6400 en la Mac)
+- [x] El ajuste masivo en lote: dos consultas por lista en vez de tres por
+      precio; 6400 precios en ~1 s (antes 21–33 s, y 32–45 s en TS)
 - [ ] El informe de reposición (lib/dal/admin/reposicion.ts): lee ventas,
       va con la tanda 5
 - Queda en TS hasta su tanda: el acopio y las reservas (tanda 5), las
@@ -171,7 +171,7 @@ pánico de concurrencia en Go y la caché por lista que se había perdido: ver
 | Grilla de precios: pedidos/s | 1,0 | 30,1 | **30×** (el TS cruzaba listas en n²) |
 | Grilla de stock: pedidos/s | 8,7 | 23,3 | **2,7×** |
 | Memoria máx. | 295–504 MB | 87–140 MB | ~3,5× menos |
-| Ajuste masivo de 6400 precios | 32–45 s | 21–33 s | 1,4× (lento en los dos: va en lote) |
+| Ajuste masivo de 6400 precios | 32–45 s | ~1 s (en lote) | **~35×** |
 
 ## Lo aprendido
 

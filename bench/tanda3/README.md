@@ -31,11 +31,15 @@ difiere solo en cómo se escribe la fecha: el mismo instante en UTC o en −03).
 | 2 | 33,2 s | 44,9 s |
 | 3 | 21,2 s | 32,4 s |
 
-Go 1,4× más rápido, pero **lento en los dos**: es el algoritmo heredado, que
-por cada precio hace tres idas a la base (leer el anterior, escribir el
-precio, escribir el historial). Lo que sigue es hacerlo en lote (un
-`UPDATE … FROM` y un `INSERT … SELECT` por lista): baja de decenas de segundos
-a menos de uno. Queda anotado en docs/go/progreso.md.
+Go 1,4× más rápido, pero **lento en los dos**: era el algoritmo heredado, que
+por cada precio hacía tres idas a la base (leer el anterior, escribir el
+precio, escribir el historial).
+
+**Después, en lote** (29/10): las cuentas siguen en Go, iguales al TS, y la
+escritura es un `UPDATE … FROM unnest(…)` y un `INSERT … SELECT` por lista.
+Las mismas tres corridas: **1,2 s, 1,0 s y 0,96 s** (contra 21–33 s antes y
+32–45 s en TS): unas 25 veces más rápido que el Go de antes y 35 veces más
+que el TS.
 
 ## Cómo repetirlo
 

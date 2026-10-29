@@ -1,18 +1,6 @@
 import "server-only";
 
-import { randomBytes } from "node:crypto";
-import { and, asc, desc, eq, gt, gte, isNull, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import {
-  branches,
-  cashMovements,
-  cashSessions,
-  invoices,
-  orders,
-  posDevices,
-  user,
-} from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
+import { api, datos } from "@/lib/api/servidor";
 
 /**
  * Las máquinas que venden en el mostrador.
@@ -22,199 +10,50 @@ import { requireStaff } from "@/lib/dal/session";
  * autobautiza, dos terminan llamándose `CAJA1`, y como el número provisorio se
  * imprime en el papel del cliente, dos personas distintas se van del local con
  * el mismo comprobante en la mano.
+ *
+ * Lo del panel lo lee la API de Go (backend/internal/caja/panel.go).
  */
-
-/** Cuánto vale la vida de un latido antes de considerar la caja apagada. */
-const LATIDO_VIGENTE_MIN = 15;
 
 export async function listarCajasFisicas() {
-  await requireStaff();
-
-  return db
-    .select({
-      id: posDevices.id,
-      codigo: posDevices.codigo,
-      nombre: posDevices.nombre,
-      branchId: posDevices.branchId,
-      sucursal: branches.name,
-      activo: posDevices.activo,
-      ultimaVezAt: posDevices.ultimaVezAt,
-      pendientes: posDevices.pendientes,
-    })
-    .from(posDevices)
-    .leftJoin(branches, eq(branches.id, posDevices.branchId))
-    .orderBy(asc(posDevices.codigo));
+  const filas = datos(await (await api()).GET("/api/v1/admin/caja/cajas-fisicas"));
+  return filas.map((c) => ({ ...c, ultimaVezAt: c.ultimaVezAt ? new Date(c.ultimaVezAt) : null }));
 }
 
 /**
- * Da de alta una caja y devuelve su secreto.
- *
- * El secreto se muestra **una sola vez**, al vincular: no autoriza nada por sí
- * solo —la sesión sigue decidiendo quién entra— pero es lo que impide que una
- * máquina se apropie del contador de otra.
- */
-export async function crearCajaFisica(datos: {
-  codigo: string;
-  nombre: string | null;
-  branchId: string | null;
-}) {
-  const codigo = datos.codigo.trim().toUpperCase();
-
-  const [creada] = await db
-    .insert(posDevices)
-    .values({
-      codigo,
-      nombre: datos.nombre?.trim() || null,
-      branchId: datos.branchId,
-      secreto: randomBytes(24).toString("base64url"),
-    })
-    .returning({ id: posDevices.id, secreto: posDevices.secreto });
-
-  return { id: creada.id, codigo, secreto: creada.secreto };
-}
-
-/**
- * Las cajas de una sucursal que reportaron ventas sin subir.
- *
- * Es lo que permite que el cierre de turno avise "CAJA1 tiene 4 ventas sin
- * subir" en vez de cerrar con una diferencia que va a aparecer sola media hora
- * después, cuando ya nadie sepa de dónde salió.
- *
- * Solo cuentan las cajas que dieron señales de vida hace poco: una máquina
- * apagada hace tres semanas con un pendiente colgado no puede bloquear el
- * cierre de todas las noches.
- */
-export async function cajasConPendientes(branchId: string) {
-  return db
-    .select({
-      codigo: posDevices.codigo,
-      pendientes: posDevices.pendientes,
-      ultimaVezAt: posDevices.ultimaVezAt,
-    })
-    .from(posDevices)
-    .where(
-      and(
-        eq(posDevices.branchId, branchId),
-        eq(posDevices.activo, true),
-        gt(posDevices.pendientes, 0),
-        sql`${posDevices.ultimaVezAt} > now() - interval '${sql.raw(String(LATIDO_VIGENTE_MIN))} minutes'`,
-      ),
-    )
-    .orderBy(asc(posDevices.codigo));
-}
-
-/**
- * Ventas en efectivo que no cayeron en ningún turno.
- *
- * Solo pueden ser las que se cobraron sin conexión mientras no había ninguna
- * caja abierta. La venta se guardó igual —la plata se cobró y la mercadería se
- * fue— y el trabajo que queda es humano: decir a qué turno pertenece. Mientras
- * tanto están acá, que es mucho mejor que estar en ningún lado.
+ * Ventas en efectivo que no cayeron en ningún turno: las que se cobraron sin
+ * conexión mientras no había ninguna caja abierta. El trabajo que queda es
+ * humano: decir a qué turno pertenece.
  */
 export async function ventasSinCaja() {
-  await requireStaff();
-
-  const filas = await db
-    .select({
-      id: orders.id,
-      numero: orders.numero,
-      numeroProvisorio: orders.numeroProvisorio,
-      branchId: orders.branchId,
-      sucursal: branches.name,
-      cliente: orders.contactoNombre,
-      total: orders.total,
-      cobradaAt: orders.cobradaAt,
-      createdAt: orders.createdAt,
-    })
-    .from(orders)
-    .leftJoin(branches, eq(branches.id, orders.branchId))
-    .leftJoin(cashMovements, eq(cashMovements.orderId, orders.id))
-    .where(
-      and(
-        eq(orders.medioPago, "efectivo"),
-        eq(orders.origen, "mostrador"),
-        sql`${orders.estado} <> 'cancelado'`,
-        // Solo las diferidas: una venta en línea sin turno no existe, porque
-        // `registrarVentaDeMostrador` la habría rechazado.
-        sql`${orders.cobradaAt} is not null`,
-        isNull(cashMovements.id),
-      ),
-    )
-    .orderBy(desc(orders.cobradaAt))
-    .limit(50);
-
-  /*
-   * `orders.branchId` es opcional en el esquema porque un pedido web puede
-   * nacer sin sucursal asignada. Uno de mostrador nunca: se cobró en un lugar
-   * físico. El filtro deja el tipo limpio para quien lo dibuja.
-   */
-  return filas.filter(
-    (v): v is typeof v & { branchId: string } => v.branchId !== null,
-  );
-}
-
-/** Los turnos a los que se puede mandar una venta suelta. */
-export async function turnosParaAsignar(branchId: string) {
-  return db
-    .select({
-      id: cashSessions.id,
-      abiertaAt: cashSessions.abiertaAt,
-      cerradaAt: cashSessions.cerradaAt,
-      estado: cashSessions.estado,
-    })
-    .from(cashSessions)
-    .where(eq(cashSessions.branchId, branchId))
-    .orderBy(desc(cashSessions.abiertaAt))
-    .limit(10);
+  const filas = datos(await (await api()).GET("/api/v1/admin/caja/ventas-sueltas"));
+  return filas.map((v) => ({
+    ...v,
+    cobradaAt: v.cobradaAt ? new Date(v.cobradaAt) : null,
+    createdAt: new Date(v.createdAt),
+  }));
 }
 
 /**
- * Qué emitió cada caja, para poder levantarlo desde otro equipo.
- *
- * El pedido de la clienta: *"que en cada equipo los comprobantes / remitos /
- * lo que se emita la operadora de la caja pueda levantarlos sin problema"*.
- *
- * Lo sincronizado ya se reimprimía por id, pero **había que saber el id**, y
- * eso significaba encontrar la venta en el listado general de pedidos, que no
- * dice de qué caja salió ni quién la cobró. Acá está por caja y por persona,
- * que es como lo busca quien atiende: "lo cobró Marina en la CAJA2, hace un
- * rato".
- *
- * Incluye el `numeroProvisorio` —el "CAJA1-017" que quedó impreso en el ticket
- * cuando se cobró sin internet—, porque es el número que trae el cliente en la
- * mano cuando vuelve a reclamar algo.
+ * Los turnos a los que se puede mandar una venta suelta, con la etiqueta del
+ * selector ya escrita en hora argentina.
  */
-export async function emitidoPorCaja(desde: Date, hasta: Date) {
-  await requireStaff();
+export async function turnosParaAsignar(branchId: string) {
+  const filas = datos(
+    await (await api()).GET("/api/v1/admin/caja/turnos-para-asignar", { params: { query: { sucursal: branchId } } }),
+  );
+  return filas.map((t) => ({
+    ...t,
+    abiertaAt: new Date(t.abiertaAt),
+    cerradaAt: t.cerradaAt ? new Date(t.cerradaAt) : null,
+  }));
+}
 
-  return db
-    .select({
-      orderId: orders.id,
-      numero: orders.numero,
-      numeroProvisorio: orders.numeroProvisorio,
-      cliente: orders.contactoNombre,
-      total: orders.total,
-      medioPago: orders.medioPago,
-      createdAt: orders.createdAt,
-      sucursal: branches.name,
-      operadora: user.name,
-      /* Si además salió comprobante fiscal, para ofrecer los dos papeles. */
-      invoiceId: invoices.id,
-      invoicePuntoVenta: invoices.puntoVenta,
-      invoiceNumero: invoices.numero,
-      invoiceTipo: invoices.tipo,
-    })
-    .from(orders)
-    .leftJoin(branches, eq(branches.id, orders.branchId))
-    .leftJoin(user, eq(user.id, orders.createdByUserId))
-    .leftJoin(invoices, eq(invoices.orderId, orders.id))
-    .where(
-      and(
-        eq(orders.origen, "mostrador"),
-        gte(orders.createdAt, desde),
-        sql`${orders.createdAt} <= ${hasta}`,
-      ),
-    )
-    .orderBy(desc(orders.createdAt))
-    .limit(200);
+/**
+ * Qué emitió cada caja en el mes (`2026-03`, hora argentina), para poder
+ * levantarlo desde otro equipo: por caja y por persona, con el número
+ * provisorio que trae el cliente en el ticket.
+ */
+export async function emitidoPorCaja(periodo: string) {
+  const filas = datos(await (await api()).GET("/api/v1/admin/caja/emitido", { params: { query: { periodo } } }));
+  return filas.map((v) => ({ ...v, createdAt: new Date(v.createdAt) }));
 }

@@ -1,145 +1,40 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requireStaff } from "@/lib/dal/session";
-import { CORTES, leerCorte, reporteDeVentas } from "@/lib/dal/admin/reportes";
-import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
-import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
-import { etiquetaDeRubro } from "@/lib/rubros-cliente";
+import { api } from "@/lib/api/servidor";
+import { cabecerasCsv } from "@/lib/csv-excel";
 
 /**
- * El reporte en CSV, que es como se lo pide de verdad.
- *
- * Separado por punto y coma y con coma decimal, igual que el libro IVA: es lo
- * que espera Excel en español. Con coma como separador, un importe como
- * "1.234,56" rompe las columnas y hay que rearmar el archivo a mano.
+ * El reporte de ventas en CSV (para trabajar: `;` y coma decimal, como lo
+ * espera Excel en español) o en PDF (para mandar). Los dos los arma la API de
+ * Go (backend/internal/reportes) de la misma consulta y el mismo filtro que
+ * la pantalla, así que no pueden decir cosas distintas.
  */
 export async function GET(request: NextRequest) {
-  await requireStaff();
-
-  const consulta = request.nextUrl.searchParams;
-
-  const corte = leerCorte(consulta.get("corte") ?? undefined);
-  const clave = leerPeriodo(consulta.get("periodo") ?? undefined);
-  const periodo = resolverPeriodo(clave);
-
-  // Los mismos filtros que la pantalla: un archivo que trae otra cosa que lo
-  // que se está mirando es peor que no tener archivo.
-  const filtros = {
-    rubro: consulta.get("rubro") ?? undefined,
-    sucursal: consulta.get("sucursal") ?? undefined,
-  };
-
-  const filas = await reporteDeVentas(corte, periodo, filtros);
-
-  const etiquetaCorte =
-    CORTES.find((c) => c.clave === corte)?.etiqueta ?? "Por producto";
-
-  /*
-   * El PDF es para mandar; el CSV, para trabajar.
-   *
-   * Los dos salen de la misma consulta y del mismo filtro, así que no pueden
-   * decir cosas distintas: el día que uno cambie, cambian los dos.
-   */
-  if (consulta.get("formato") === "pdf") {
-    const [emisor, { reporteDeVentasPdf }] = await Promise.all([
-      obtenerConfiguracionFiscal(),
-      import("@/lib/pdf/reporte-ventas"),
-    ]);
-
-    const acotado = [
-      filtros.rubro ? etiquetaDeRubro(filtros.rubro) : null,
-      filtros.sucursal ? "Una sucursal" : null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-
-    const pdf = await reporteDeVentasPdf({
-      filas,
-      titulo: etiquetaCorte,
-      periodo: periodo.etiqueta,
-      filtros: acotado || null,
-      emisor,
-    });
-
-    return new NextResponse(pdf as BodyInit, {
+  const q = request.nextUrl.searchParams;
+  const formato = q.get("formato") === "pdf" ? "pdf" : "csv";
+  const query = {
+    formato,
+    ...(q.get("corte") ? { corte: q.get("corte")! } : {}),
+    ...(q.get("periodo") ? { periodo: q.get("periodo")! } : {}),
+    ...(q.get("rubro") ? { rubro: q.get("rubro")! } : {}),
+    ...(q.get("sucursal") ? { sucursal: q.get("sucursal")! } : {}),
+  } as const;
+  const r = await (await api()).GET("/api/v1/admin/reportes/ventas/archivo", {
+    params: { query },
+    parseAs: "arrayBuffer",
+  });
+  if (!r.response.ok || !r.data) {
+    return new NextResponse("No se pudo armar el archivo.", { status: r.response.status === 403 ? 403 : 500 });
+  }
+  const disposicion = r.response.headers.get("Content-Disposition") ?? "";
+  const nombre = /filename="([^"]+)"/.exec(disposicion)?.[1] ?? `ventas.${formato}`;
+  if (formato === "pdf") {
+    return new NextResponse(r.data, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="ventas-${corte}-${periodo.clave}.pdf"`,
+        "Content-Disposition": `attachment; filename="${nombre}"`,
         "Cache-Control": "private, no-store",
       },
     });
   }
-
-  const numero = (valor: number) => valor.toFixed(2).replace(".", ",");
-  const texto = (valor: string | null) => `"${(valor ?? "").replace(/"/g, '""')}"`;
-
-  const sinPrefijo = etiquetaCorte.replace("Por ", "");
-  const encabezado = sinPrefijo.charAt(0).toUpperCase() + sinPrefijo.slice(1);
-
-  /*
-   * Las operaciones son enteros y los importes llevan decimales. Exportar "2,00"
-   * donde va "2" obliga a quien abre la planilla a arreglar el formato de la
-   * columna antes de poder sumarla.
-   */
-  const entero = (valor: number) => String(Math.round(valor));
-  const cantidad = corte === "producto" ? numero : entero;
-
-  const lineas = [
-    [
-      texto(encabezado),
-      texto("Detalle"),
-      texto(corte === "producto" ? "Unidades" : "Operaciones"),
-      texto("Total"),
-      texto("Neto sin IVA"),
-      texto("Costo"),
-      texto("Margen"),
-      texto("Renglones sin costo"),
-    ].join(";"),
-    ...filas.map((f) =>
-      [
-        texto(f.etiqueta),
-        texto(f.detalle),
-        cantidad(f.cantidad),
-        numero(f.total),
-        numero(f.netoVenta),
-        // Vacío y no cero: cero diría que costó nada, y el contador que abre
-        // esto tiene que poder distinguir "sin ganancia" de "no se sabe".
-        f.costo === null ? "" : numero(f.costo),
-        f.costo === null ? "" : numero(f.netoVenta - f.costo),
-        entero(f.lineasSinCosto),
-      ].join(";"),
-    ),
-  ];
-
-  const total = filas.reduce((suma, f) => suma + f.total, 0);
-  const costeado = filas.filter((f) => f.costo !== null);
-  const netoTotal = costeado.reduce((s, f) => s + f.netoVenta, 0);
-  const costoTotal = costeado.reduce((s, f) => s + (f.costo ?? 0), 0);
-  const sinCosto = filas.reduce((s, f) => s + f.lineasSinCosto, 0);
-
-  lineas.push(
-    [
-      texto("Total"),
-      texto(""),
-      texto(""),
-      numero(total),
-      numero(netoTotal),
-      costeado.length === 0 ? "" : numero(costoTotal),
-      costeado.length === 0 ? "" : numero(netoTotal - costoTotal),
-      entero(sinCosto),
-    ].join(";"),
-  );
-
-  // El BOM es lo que hace que Excel abra el archivo en UTF-8 y no rompa los
-  // acentos. Sin él, "Melamínica" llega como "MelamÃ­nica".
-  const csv = `﻿${lineas.join("\r\n")}\r\n`;
-
-  const nombre = `ventas-${corte}-${periodo.clave}.csv`;
-
-  return new NextResponse(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${nombre}"`,
-      "Cache-Control": "private, no-store",
-    },
-  });
+  return new NextResponse(r.data, { headers: cabecerasCsv(nombre) });
 }

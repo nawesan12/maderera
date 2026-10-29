@@ -35,9 +35,9 @@ export default async function CierrePage({
   const periodo = leerPeriodoMensual(crudo, new Date());
 
   const [resumen, pendientes, asientos] = await Promise.all([
-    resumenDelMes(periodo.desde, periodo.hasta),
-    pendientesDelCierre(periodo.desde, periodo.hasta),
-    asientosDelPeriodo(periodo.desde, periodo.hasta),
+    resumenDelMes(periodo.clave),
+    pendientesDelCierre(periodo.clave),
+    asientosDelPeriodo(periodo.clave),
   ]);
 
   const etiqueta = new Date(periodo.anio, periodo.mes - 1, 1).toLocaleDateString(

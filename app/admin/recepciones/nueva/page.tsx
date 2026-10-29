@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
-import { sucursalesConCaja } from "@/lib/mostrador/caja";
+import { sucursalesConCaja } from "@/lib/dal/admin/caja";
 import { FormularioRecepcion } from "./formulario";
 
 export const metadata: Metadata = { title: "Nueva recepción" };

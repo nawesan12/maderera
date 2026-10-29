@@ -1,0 +1,377 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Reportes, cierre del mes e inicio del panel
+  version: "1"
+  description: |
+    Los números del panel que leen ventas y caja: el reporte de ventas (con
+    su PDF y su CSV), la reposición (con su PDF y su CSV), el cierre del mes
+    (asientos, pendientes, resumen y el CSV para el estudio) y el inicio del
+    panel (las métricas del admin y lo pendiente de cada rol).
+
+    Los períodos de los reportes y del inicio van en hora argentina; el del
+    cierre, en UTC (ver internal/reportes/cierre.go). Los archivos salen como
+    application/octet-stream o application/pdf: Next les pone las cabeceras.
+
+    Permisos: el reporte, la reposición y el cierre, quien entra a su
+    pantalla (/admin/reportes, /admin/cierre: el admin). El inicio, quien
+    entra a /admin; las métricas, solo el admin (como la pantalla). Lo
+    pendiente es el del rol de la sesión, o el del rol pedido con el secreto
+    interno (la tarea del parte del día corre sin nadie logueado).
+paths:
+  /api/v1/admin/reportes/ventas:
+    get:
+      operationId: ReporteDeVentas
+      parameters:
+        - $ref: "#/components/parameters/Corte"
+        - $ref: "#/components/parameters/Periodo"
+        - $ref: "#/components/parameters/Rubro"
+        - $ref: "#/components/parameters/Sucursal"
+      responses:
+        "200":
+          description: Las filas del corte pedido, sin las canceladas
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ReporteFila" } }
+  /api/v1/admin/reportes/ventas/meses:
+    get:
+      operationId: VentasPorMes
+      parameters:
+        - $ref: "#/components/parameters/Periodo"
+        - $ref: "#/components/parameters/Rubro"
+        - $ref: "#/components/parameters/Sucursal"
+        - { name: meses, in: query, schema: { type: integer, minimum: 1, maximum: 24 } }
+      responses:
+        "200":
+          description: Lo vendido mes a mes (meses argentinos), con los meses sin ventas en cero
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ReporteMes" } }
+  /api/v1/admin/reportes/ventas/archivo:
+    get:
+      operationId: ReporteDeVentasArchivo
+      parameters:
+        - $ref: "#/components/parameters/Corte"
+        - $ref: "#/components/parameters/Periodo"
+        - $ref: "#/components/parameters/Rubro"
+        - $ref: "#/components/parameters/Sucursal"
+        - $ref: "#/components/parameters/Formato"
+      responses:
+        "200":
+          description: El reporte en CSV (para Excel en español) o en PDF
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+  /api/v1/admin/reportes/reposicion:
+    get:
+      operationId: ReporteDeReposicion
+      parameters:
+        - $ref: "#/components/parameters/Dias"
+        - $ref: "#/components/parameters/Objetivo"
+        - $ref: "#/components/parameters/Categoria"
+        - $ref: "#/components/parameters/RubroProducto"
+        - $ref: "#/components/parameters/SucursalSlug"
+      responses:
+        "200":
+          description: El stock de cada medida activa cruzado con lo vendido y lo que convendría comprar
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Reposicion" }
+  /api/v1/admin/reportes/reposicion/archivo:
+    get:
+      operationId: ReporteDeReposicionArchivo
+      parameters:
+        - $ref: "#/components/parameters/Dias"
+        - $ref: "#/components/parameters/Objetivo"
+        - $ref: "#/components/parameters/Categoria"
+        - $ref: "#/components/parameters/RubroProducto"
+        - $ref: "#/components/parameters/SucursalSlug"
+        - $ref: "#/components/parameters/Formato"
+      responses:
+        "200":
+          description: La reposición en CSV o en PDF (la hoja para salir a comprar)
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+  /api/v1/admin/cierre/asientos:
+    get:
+      operationId: AsientosDelPeriodo
+      parameters: [{ $ref: "#/components/parameters/Mes" }]
+      responses:
+        "200":
+          description: Los asientos del mes en orden de fecha, cada uno con si balancea
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CierreAsiento" } }
+  /api/v1/admin/cierre/asientos-csv:
+    get:
+      operationId: AsientosCsv
+      parameters: [{ $ref: "#/components/parameters/Mes" }]
+      responses:
+        "200":
+          description: Los asientos del mes en CSV, un renglón por línea
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+  /api/v1/admin/cierre/pendientes:
+    get:
+      operationId: PendientesDelCierre
+      parameters: [{ $ref: "#/components/parameters/Mes" }]
+      responses:
+        "200":
+          description: Lo que conviene resolver antes de cerrar
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CierrePendiente" } }
+  /api/v1/admin/cierre/resumen:
+    get:
+      operationId: ResumenDelMes
+      parameters: [{ $ref: "#/components/parameters/Mes" }]
+      responses:
+        "200":
+          description: Los números del mes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CierreResumen" }
+  /api/v1/admin/inicio/metricas:
+    get:
+      operationId: MetricasDelResumen
+      parameters: [{ $ref: "#/components/parameters/Periodo" }]
+      responses:
+        "200":
+          description: Las ventas del período contra el anterior y los conteos del momento
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InicioMetricas" }
+  /api/v1/admin/inicio/ventas-por-sucursal:
+    get:
+      operationId: InicioVentasPorSucursal
+      responses:
+        "200":
+          description: Los últimos seis meses, por sucursal
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/InicioMes" } }
+  /api/v1/admin/inicio/reponer:
+    get:
+      operationId: StockParaReponer
+      parameters:
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        "200":
+          description: Lo que quedó en el mínimo o por debajo, lo más urgente primero
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/InicioReponer" } }
+  /api/v1/admin/inicio/actividad:
+    get:
+      operationId: ActividadReciente
+      responses:
+        "200":
+          description: Los últimos presupuestos, los pedidos en curso y los cortes en cola
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InicioActividad" }
+  /api/v1/admin/inicio/pendientes:
+    get:
+      operationId: PendientesDelRol
+      parameters:
+        - { name: rol, in: query, description: Solo con el secreto interno, schema: { type: string, enum: [admin, vendedor, deposito, aserradero] } }
+      responses:
+        "200":
+          description: Lo que hay que hacer hoy, lo urgente arriba
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PendienteDelRol" } }
+components:
+  parameters:
+    Corte: { name: corte, in: query, schema: { type: string } }
+    Periodo: { name: periodo, in: query, description: mes, mes-pasado, trimestre, anio o todo, schema: { type: string } }
+    Rubro: { name: rubro, in: query, description: El rubro del cliente, schema: { type: string } }
+    Sucursal: { name: sucursal, in: query, description: El id de la sucursal, schema: { type: string } }
+    Formato: { name: formato, in: query, schema: { type: string, enum: [csv, pdf] } }
+    Dias: { name: dias, in: query, schema: { type: string } }
+    Objetivo: { name: objetivo, in: query, schema: { type: string } }
+    Categoria: { name: cat, in: query, schema: { type: string } }
+    RubroProducto: { name: rubro, in: query, description: El slug de la subcategoría, schema: { type: string } }
+    SucursalSlug: { name: sucursal, in: query, description: casa-central, aserradero o todos, schema: { type: string } }
+    Mes: { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso), schema: { type: string } }
+  schemas:
+    ReporteFila:
+      type: object
+      required: [clave, etiqueta, detalle, cantidad, total, netoVenta, costo, lineasSinCosto]
+      properties:
+        clave: { type: string }
+        etiqueta: { type: string }
+        detalle: { type: string, nullable: true }
+        cantidad: { type: number, format: double }
+        total: { type: number, format: double }
+        netoVenta: { type: number, format: double, description: Sin IVA, renglón por renglón }
+        costo: { type: number, format: double, nullable: true, description: null si ningún renglón tiene costo }
+        lineasSinCosto: { type: number, format: double }
+    ReporteMes:
+      type: object
+      required: [clave, etiqueta, total]
+      properties:
+        clave: { type: string }
+        etiqueta: { type: string }
+        total: { type: number, format: double }
+    ReposicionFila:
+      type: object
+      required: [variantId, productId, producto, medida, sku, unidad, categoria, categoriaSlug, rubro, disponibleCentral, disponibleAserradero, disponible, vendido, cobertura, sugerido]
+      properties:
+        variantId: { type: string }
+        productId: { type: string }
+        producto: { type: string }
+        medida: { type: string }
+        sku: { type: string, nullable: true }
+        unidad: { type: string }
+        categoria: { type: string }
+        categoriaSlug: { type: string }
+        rubro: { type: string, nullable: true }
+        disponibleCentral: { type: number, format: double }
+        disponibleAserradero: { type: number, format: double }
+        disponible: { type: number, format: double }
+        vendido: { type: number, format: double }
+        cobertura: { type: number, format: double, nullable: true }
+        sugerido: { type: number, format: double }
+    Reposicion:
+      type: object
+      required: [filas, porCategoria, diasDelPeriodo, coberturaObjetivo]
+      properties:
+        filas: { type: array, items: { $ref: "#/components/schemas/ReposicionFila" } }
+        porCategoria:
+          type: array
+          items:
+            type: object
+            required: [nombre, vendido]
+            properties:
+              nombre: { type: string }
+              vendido: { type: number, format: double }
+        diasDelPeriodo: { type: number, format: double }
+        coberturaObjetivo: { type: number, format: double }
+    CierreAsiento:
+      type: object
+      required: [fecha, concepto, renglones, balancea]
+      properties:
+        fecha: { type: string, format: date-time }
+        concepto: { type: string }
+        balancea: { type: boolean }
+        renglones:
+          type: array
+          items:
+            type: object
+            required: [cuenta, nombre, debe, haber]
+            properties:
+              cuenta: { type: string }
+              nombre: { type: string }
+              debe: { type: number, format: double }
+              haber: { type: number, format: double }
+    CierrePendiente:
+      type: object
+      required: [clave, titulo, detalle, cantidad, donde]
+      properties:
+        clave: { type: string }
+        titulo: { type: string }
+        detalle: { type: string }
+        cantidad: { type: integer }
+        donde: { type: string }
+    CierreTotales:
+      type: object
+      required: [total, cantidad]
+      properties:
+        total: { type: number, format: double }
+        cantidad: { type: integer }
+    CierreTotalesConIva:
+      type: object
+      required: [neto, iva, total, cantidad]
+      properties:
+        neto: { type: number, format: double }
+        iva: { type: number, format: double }
+        total: { type: number, format: double }
+        cantidad: { type: integer }
+    CierreResumen:
+      type: object
+      required: [ventas, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva]
+      properties:
+        ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
+        compras: { $ref: "#/components/schemas/CierreTotalesConIva" }
+        gastos: { $ref: "#/components/schemas/CierreTotales" }
+        retencionesPracticadas: { $ref: "#/components/schemas/CierreTotales" }
+        retencionesSufridas: { $ref: "#/components/schemas/CierreTotales" }
+        posicionIva: { type: number, format: double, description: Positivo, hay que depositar }
+    InicioMetricas:
+      type: object
+      required: [ventasMes, variacionVentas, presupuestosPendientes, presupuestosRevision, clientesActivos, reponer, reponerCentral, reponerAserradero, pedidosSinEntregar, clientesConPedido]
+      properties:
+        ventasMes: { type: number, format: double }
+        variacionVentas: { type: number, format: double, nullable: true }
+        presupuestosPendientes: { type: integer }
+        presupuestosRevision: { type: integer }
+        clientesActivos: { type: integer }
+        reponer: { type: integer }
+        reponerCentral: { type: integer }
+        reponerAserradero: { type: integer }
+        pedidosSinEntregar: { type: integer }
+        clientesConPedido: { type: integer }
+    InicioMes:
+      type: object
+      required: [mes, central, aserradero]
+      properties:
+        mes: { type: string }
+        central: { type: number, format: double }
+        aserradero: { type: number, format: double }
+    InicioReponer:
+      type: object
+      required: [variantId, productId, producto, medida, sucursal, qty, minQty]
+      properties:
+        variantId: { type: string }
+        productId: { type: string }
+        producto: { type: string }
+        medida: { type: string }
+        sucursal: { type: string }
+        qty: { type: number, format: double }
+        minQty: { type: number, format: double }
+    InicioActividad:
+      type: object
+      required: [presupuestos, pedidos, cortesEnCola]
+      properties:
+        cortesEnCola: { type: integer }
+        presupuestos:
+          type: array
+          items:
+            type: object
+            required: [id, numero, cliente, estado, total, createdAt]
+            properties:
+              id: { type: string }
+              numero: { type: string }
+              cliente: { type: string }
+              estado: { type: string }
+              total: { type: number, format: double }
+              createdAt: { type: string, format: date-time }
+        pedidos:
+          type: array
+          items:
+            type: object
+            required: [id, numero, cliente, estado, tipoEntrega, total, createdAt]
+            properties:
+              id: { type: string }
+              numero: { type: string }
+              cliente: { type: string }
+              estado: { type: string }
+              tipoEntrega: { type: string }
+              total: { type: number, format: double }
+              createdAt: { type: string, format: date-time }
+    PendienteDelRol:
+      type: object
+      required: [clave, cantidad, texto, href]
+      properties:
+        clave: { type: string }
+        cantidad: { type: integer }
+        texto: { type: string }
+        detalle: { type: string }
+        href: { type: string }
+        urgente: { type: boolean }

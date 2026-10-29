@@ -8,7 +8,7 @@ import {
   asientoDeVenta,
   balancea,
   type Asiento,
-} from "@/lib/contable/asientos";
+} from "@/scripts/golden/originales/asientos";
 
 /**
  * Los asientos para el estudio contable.

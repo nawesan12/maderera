@@ -1,3 +1,6 @@
+// Copia textual de lib/reposicion.ts (commit 295d7f2), que se borró al mudarse a Go
+// (backend/internal/reportes). La corren el golden (scripts/golden/reportes.ts)
+// y sus pruebas de vitest: es lo que asegura que Go dé lo mismo que daba.
 /**
  * La aritmética del reporte de reposición.
  *

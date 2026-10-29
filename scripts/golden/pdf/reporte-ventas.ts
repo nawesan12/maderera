@@ -1,4 +1,4 @@
-import { reporteDeVentasPdf } from "@/lib/pdf/reporte-ventas";
+import { reporteDeVentasPdf } from "./ts/reporte-ventas";
 import type { FilaDeReporte } from "@/lib/dal/admin/reportes";
 import type { CasoPdf } from "../pdf";
 import { EMISOR, EMISOR_LARGO, azarCon } from "./_azar";

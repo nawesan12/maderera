@@ -3,7 +3,7 @@ import {
   diasDeCobertura,
   sugerenciaDeCompra,
   ventaDiaria,
-} from "@/lib/reposicion";
+} from "@/scripts/golden/originales/reposicion";
 
 /**
  * La aritmética del reporte de compras. De acá salen sugerencias que alguien

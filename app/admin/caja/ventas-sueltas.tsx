@@ -12,7 +12,7 @@ interface VentaSuelta {
   branchId: string;
   sucursal: string | null;
   cliente: string;
-  total: string;
+  total: number;
   cobradaAt: Date | null;
 }
 
@@ -90,6 +90,8 @@ export function VentasSueltas({
                     ? new Date(v.cobradaAt).toLocaleString("es-AR", {
                         dateStyle: "short",
                         timeStyle: "short",
+                        // La hora del local: en el servidor (UTC) salía tres horas corrida.
+                        timeZone: "America/Argentina/Buenos_Aires",
                       })
                     : "sin hora"}
                 </p>

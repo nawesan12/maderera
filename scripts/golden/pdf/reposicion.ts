@@ -1,4 +1,4 @@
-import { reposicionPdf } from "@/lib/pdf/reposicion";
+import { reposicionPdf } from "./ts/reposicion";
 import type { ReporteDeReposicion } from "@/lib/dal/admin/reposicion";
 import type { CasoPdf } from "../pdf";
 import { azarCon } from "./_azar";

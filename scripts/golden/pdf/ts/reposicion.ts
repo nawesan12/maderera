@@ -1,3 +1,6 @@
+// Copia del generador que se borró de lib/pdf al mudar los reportes a Go
+// (tanda 5, rama go-mostrador-caja): queda solo para regenerar los golden
+// (scripts/golden/pdf/reposicion.ts). El documento de verdad está en backend/internal/pdf.
 import "server-only";
 
 import {
@@ -11,7 +14,7 @@ import {
   mm,
   nuevaHoja,
   serializar,
-} from "./hoja";
+} from "@/lib/pdf/hoja";
 import { fechaSolaCorta } from "@/lib/formato";
 import type { ReporteDeReposicion } from "@/lib/dal/admin/reposicion";
 

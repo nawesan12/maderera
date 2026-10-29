@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { variantesParaPedir } from "@/lib/dal/admin/recepciones";
-import { sucursalesConCaja } from "@/lib/mostrador/caja";
+import { sucursalesConCaja } from "@/lib/dal/admin/caja";
 import { importeParaEditar } from "@/lib/formato";
 import { FormularioOrden } from "./formulario";
 

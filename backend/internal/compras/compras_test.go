@@ -208,6 +208,15 @@ func TestOrdenYRecepcion(t *testing.T) {
 	if _, b := pedir(t, adm, "GET", e.u+"compras/por-llegar", nil); !strings.Contains(b, `"pendiente":"10.0000"`) {
 		t.Errorf("por llegar: %s", b)
 	}
+	// Lo lee la grilla de stock, que también abren el depósito y el vendedor
+	// (en el TS pedía el admin y la página los echaba).
+	dep := e.staff(t, "deposito@prueba.test", "deposito")
+	if c, b := pedir(t, dep, "GET", e.u+"compras/por-llegar", nil); c != 200 || !strings.Contains(b, `"pendiente":"10.0000"`) {
+		t.Errorf("por llegar, el depósito: %d %s", c, b)
+	}
+	if c, _ := pedir(t, dep, "GET", e.u+"compras/ordenes", nil); c != 403 {
+		t.Errorf("las órdenes siguen siendo del admin: %d", c)
+	}
 	c, b = pedir(t, adm, "POST", e.u+"compras/ordenes/"+orden+"/recibir", map[string]string{"numeroRemito": " R-1 "})
 	if c != 200 {
 		t.Fatalf("recibir: %d %s", c, b)

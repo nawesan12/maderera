@@ -1,11 +1,8 @@
 import "server-only";
 
-import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import {
-  customers,
-  retencionesSufridas,
-} from "@/lib/db/schema";
+import { retencionesSufridas } from "@/lib/db/schema";
+import { api, datos } from "@/lib/api/servidor";
 import { emitirRecibo } from "@/lib/cobros/recibo";
 import { requireStaffRole } from "@/lib/dal/session";
 
@@ -104,51 +101,27 @@ export async function cargarRetencionSufrida(
   return { ok: true };
 }
 
-export async function listarRetencionesSufridas(limite = 60) {
-  await requireStaffRole("admin");
+/*
+ * Las lecturas las sirve la API de Go (backend/internal/compras). La carga
+ * de arriba sigue acá porque emite un recibo (lib/cobros/recibo.ts): se muda
+ * con internal/cobros de la tanda 4.
+ */
 
-  return db
-    .select({
-      id: retencionesSufridas.id,
-      numero: retencionesSufridas.numero,
-      fecha: retencionesSufridas.fecha,
-      impuesto: retencionesSufridas.impuesto,
-      codigoRegimen: retencionesSufridas.codigoRegimen,
-      base: retencionesSufridas.base,
-      alicuota: retencionesSufridas.alicuota,
-      importe: retencionesSufridas.importe,
-      referencia: retencionesSufridas.referencia,
-      cliente: customers.nombre,
-      customerId: retencionesSufridas.customerId,
-      cuit: customers.cuit,
-    })
-    .from(retencionesSufridas)
-    .innerJoin(customers, eq(customers.id, retencionesSufridas.customerId))
-    .orderBy(desc(retencionesSufridas.fecha))
-    .limit(limite);
+export async function listarRetencionesSufridas(limite = 60) {
+  const filas = datos(
+    await (await api()).GET("/api/v1/admin/compras/retenciones-sufridas", { params: { query: { limite } } }),
+  );
+  return filas.map((f) => ({ ...f, fecha: new Date(f.fecha) }));
 }
 
 /**
- * El crédito por retenciones sufridas de un período, por impuesto.
- *
- * Es lo que se descuenta de cada impuesto en la declaración, y por eso se
- * separa: la de Ganancias no se puede aplicar contra el IVA.
+ * El crédito por retenciones sufridas de un período, por impuesto: la de
+ * Ganancias no se puede aplicar contra el IVA.
  */
 export async function creditoPorRetenciones(desde: Date, hasta: Date) {
-  await requireStaffRole("admin");
-
-  return db
-    .select({
-      impuesto: retencionesSufridas.impuesto,
-      cantidad: sql<number>`count(*)::int`,
-      total: sql<string>`sum(${retencionesSufridas.importe})`,
-    })
-    .from(retencionesSufridas)
-    .where(
-      and(
-        gte(retencionesSufridas.fecha, desde),
-        sql`${retencionesSufridas.fecha} <= ${hasta}`,
-      ),
-    )
-    .groupBy(retencionesSufridas.impuesto);
+  return datos(
+    await (await api()).GET("/api/v1/admin/compras/retenciones-sufridas/credito", {
+      params: { query: { desde: desde.toISOString(), hasta: hasta.toISOString() } },
+    }),
+  );
 }

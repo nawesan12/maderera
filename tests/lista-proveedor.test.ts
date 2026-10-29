@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   leerListaDeProveedor,
   type PerfilDeProveedor,
-} from "@/lib/precios/lista-proveedor";
+} from "../scripts/golden/originales/lista-proveedor";
 
 /**
  * Cada proveedor manda su planilla: el perfil dice qué columna es qué, y se

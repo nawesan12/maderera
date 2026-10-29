@@ -1,133 +1,39 @@
 import "server-only";
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import {
-  branches,
-  purchaseOrderItems,
-  purchaseOrders,
-  suppliers,
-} from "@/lib/db/schema";
-import { requireStaffRole } from "@/lib/dal/session";
+import { api, datos } from "@/lib/api/servidor";
 
 /**
- * Las órdenes de compra.
- *
- * Contestan la pregunta que el sistema no podía contestar: **qué está por
- * llegar**. Sin eso, el encargado que ve tres placas en el estante no sabe si
- * pedir más o si el camión sale mañana, y termina pidiendo de nuevo lo que ya
- * venía en camino.
+ * Las órdenes de compra: **qué está por llegar**. Las sirve la API de Go
+ * (backend/internal/compras).
  */
 export async function listarOrdenesDeCompra(limite = 60) {
-  await requireStaffRole("admin");
-
-  const totales = db
-    .select({
-      purchaseOrderId: purchaseOrderItems.purchaseOrderId,
-      lineas: sql<number>`count(*)::int`.as("lineas"),
-      neto: sql<string>`sum(${purchaseOrderItems.cantidad} * ${purchaseOrderItems.costoUnitario})`.as(
-        "neto",
-      ),
-      pendientes: sql<number>`count(*) filter (where ${purchaseOrderItems.cantidadRecibida} < ${purchaseOrderItems.cantidad})::int`.as(
-        "pendientes",
-      ),
-    })
-    .from(purchaseOrderItems)
-    .groupBy(purchaseOrderItems.purchaseOrderId)
-    .as("totales");
-
-  const filas = await db
-    .select({
-      id: purchaseOrders.id,
-      numero: purchaseOrders.numero,
-      estado: purchaseOrders.estado,
-      fechaPrometida: purchaseOrders.fechaPrometida,
-      createdAt: purchaseOrders.createdAt,
-      proveedor: suppliers.nombre,
-      supplierId: purchaseOrders.supplierId,
-      sucursal: branches.name,
-      lineas: totales.lineas,
-      neto: totales.neto,
-      pendientes: totales.pendientes,
-    })
-    .from(purchaseOrders)
-    .innerJoin(suppliers, eq(suppliers.id, purchaseOrders.supplierId))
-    .leftJoin(branches, eq(branches.id, purchaseOrders.branchId))
-    .leftJoin(totales, eq(totales.purchaseOrderId, purchaseOrders.id))
-    .orderBy(desc(purchaseOrders.createdAt))
-    .limit(limite);
-
+  const filas = datos(await (await api()).GET("/api/v1/admin/compras/ordenes", { params: { query: { limite } } }));
   return filas.map((f) => ({
     ...f,
-    lineas: Number(f.lineas ?? 0),
-    neto: Number(f.neto ?? 0),
-    pendientes: Number(f.pendientes ?? 0),
+    fechaPrometida: f.fechaPrometida ? new Date(f.fechaPrometida) : null,
+    createdAt: new Date(f.createdAt),
   }));
 }
 
 export async function obtenerOrdenDeCompra(id: string) {
-  await requireStaffRole("admin");
-
-  const [orden] = await db
-    .select({
-      id: purchaseOrders.id,
-      numero: purchaseOrders.numero,
-      estado: purchaseOrders.estado,
-      fechaPrometida: purchaseOrders.fechaPrometida,
-      notas: purchaseOrders.notas,
-      createdAt: purchaseOrders.createdAt,
-      enviadaAt: purchaseOrders.enviadaAt,
-      supplierId: purchaseOrders.supplierId,
-      proveedor: suppliers.nombre,
-      branchId: purchaseOrders.branchId,
-      sucursal: branches.name,
-    })
-    .from(purchaseOrders)
-    .innerJoin(suppliers, eq(suppliers.id, purchaseOrders.supplierId))
-    .leftJoin(branches, eq(branches.id, purchaseOrders.branchId))
-    .where(eq(purchaseOrders.id, id))
-    .limit(1);
-
-  if (!orden) return null;
-
-  const items = await db
-    .select()
-    .from(purchaseOrderItems)
-    .where(eq(purchaseOrderItems.purchaseOrderId, id))
-    .orderBy(asc(purchaseOrderItems.orden));
-
-  return { ...orden, items };
+  const r = await (await api()).GET("/api/v1/admin/compras/ordenes/{id}", { params: { path: { id } } });
+  if (r.response.status === 404) return null;
+  const o = datos(r);
+  return {
+    ...o,
+    fechaPrometida: o.fechaPrometida ? new Date(o.fechaPrometida) : null,
+    createdAt: new Date(o.createdAt),
+    enviadaAt: o.enviadaAt ? new Date(o.enviadaAt) : null,
+  };
 }
 
 /**
- * Lo que todavía falta recibir, por variante.
- *
- * Es lo que hace útil la orden en el día a día: al reponer stock, saber que ya
- * hay 40 placas pedidas evita el segundo pedido. Se limita a las órdenes vivas
- * —enviadas o parciales—: una orden en borrador no está pedida y una anulada
- * no va a llegar.
+ * Lo que todavía falta recibir, por variante, de las órdenes vivas (enviadas
+ * o parciales).
  */
 export async function loQueEstaPorLlegar(branchId?: string) {
-  await requireStaffRole("admin");
-
-  const condiciones = [
-    sql`${purchaseOrders.estado} in ('enviada', 'parcial')`,
-    sql`${purchaseOrderItems.cantidadRecibida} < ${purchaseOrderItems.cantidad}`,
-  ];
-  if (branchId) condiciones.push(eq(purchaseOrders.branchId, branchId));
-
-  return db
-    .select({
-      variantId: purchaseOrderItems.variantId,
-      descripcion: purchaseOrderItems.descripcion,
-      pendiente: sql<string>`sum(${purchaseOrderItems.cantidad} - ${purchaseOrderItems.cantidadRecibida})`,
-      proximaEntrega: sql<Date | null>`min(${purchaseOrders.fechaPrometida})`,
-    })
-    .from(purchaseOrderItems)
-    .innerJoin(
-      purchaseOrders,
-      eq(purchaseOrders.id, purchaseOrderItems.purchaseOrderId),
-    )
-    .where(and(...condiciones))
-    .groupBy(purchaseOrderItems.variantId, purchaseOrderItems.descripcion);
+  const filas = datos(
+    await (await api()).GET("/api/v1/admin/compras/por-llegar", { params: { query: branchId ? { sucursal: branchId } : {} } }),
+  );
+  return filas.map((f) => ({ ...f, proximaEntrega: f.proximaEntrega ? new Date(f.proximaEntrega) : null }));
 }

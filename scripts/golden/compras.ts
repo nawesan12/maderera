@@ -24,9 +24,9 @@
  */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { z } from "zod";
-import { mezclarCosto, prorratearGastos } from "../../lib/compras/costo";
-import { calcularRetencion, type RegimenDeRetencion } from "../../lib/retenciones/calculo";
-import { leerListaDeProveedor } from "../../lib/precios/lista-proveedor";
+import { mezclarCosto, prorratearGastos } from "./originales/costo";
+import { calcularRetencion, type RegimenDeRetencion } from "./originales/calculo";
+import { leerListaDeProveedor } from "./originales/lista-proveedor";
 import { agregarIva } from "../../lib/fiscal/impuestos";
 import { normalizarNumeroDeCheque, revisarNumeroDeCheque } from "../../lib/cheques/numero";
 import { armarCsv, fechaCsv, numeroCsv, textoCsv } from "../../lib/csv-excel";

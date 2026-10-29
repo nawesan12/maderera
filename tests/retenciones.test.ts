@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calcularRetencion,
   type RegimenDeRetencion,
-} from "@/lib/retenciones/calculo";
+} from "../scripts/golden/originales/calculo";
 
 /**
  * El cálculo de retenciones.

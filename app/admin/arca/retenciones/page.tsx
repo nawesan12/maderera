@@ -10,9 +10,7 @@ import {
 import { listarClientes } from "@/lib/dal/admin/clientes";
 import { leerPeriodoMensual } from "@/lib/periodos";
 import { formatearMonto } from "@/lib/formato";
-import { asc } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { regimenesRetencion } from "@/lib/db/schema";
+import { todosLosRegimenes } from "@/lib/dal/admin/pagos-proveedor";
 import { CargarSufrida } from "./cargar";
 import { Regimenes } from "./regimenes";
 import { Vacio } from "@/components/admin/vacio";
@@ -50,10 +48,7 @@ export default async function RetencionesSufridasPage({
     // Con qué se retiene. Va en esta misma pantalla porque es la única que
     // habla de retenciones, y hasta ahora las alícuotas solo se podían cambiar
     // entrando a la base.
-    db
-      .select()
-      .from(regimenesRetencion)
-      .orderBy(asc(regimenesRetencion.impuesto), asc(regimenesRetencion.codigo)),
+    todosLosRegimenes(),
   ]);
 
   const etiqueta = new Date(periodo.anio, periodo.mes - 1, 1).toLocaleDateString(

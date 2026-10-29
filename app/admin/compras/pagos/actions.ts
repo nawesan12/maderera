@@ -1,16 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
-import { requireStaffRole } from "@/lib/dal/session";
-import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
-import { formatearMonto } from "@/lib/formato";
-import { registrarPagoAProveedor } from "@/lib/retenciones/pago";
-import {
-  acumuladoDelMes,
-  facturasConSaldo,
-} from "@/lib/dal/admin/pagos-proveedor";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+import { acumuladoDelMes, facturasConSaldo } from "@/lib/dal/admin/pagos-proveedor";
 import { chequesEnCartera } from "@/lib/dal/admin/cheques";
+
+/*
+ * Los pagos a proveedores. Los registra la API de Go
+ * (backend/internal/compras): las retenciones con sus certificados (sobre el
+ * acumulado del mes), las imputaciones a facturas, las partes con sus
+ * cheques y un solo movimiento de cuenta por el total, con candado.
+ */
 
 export interface EstadoPago {
   error?: string;
@@ -19,132 +19,35 @@ export interface EstadoPago {
   certificados?: { numero: string; impuesto: string; importe: number }[];
 }
 
-const esquema = z.object({
-  supplierId: z.string().uuid("Elegí el proveedor."),
-  total: z.coerce.number().positive("El pago tiene que ser mayor a cero."),
-  medio: z.enum(["transferencia", "efectivo", "cheque", "echeq"]),
-  /* Por qué circuito de facturación sale el pago. Ver
-     `lib/db/schema/circuito.ts`. Por omisión, el habitual. */
-  circuito: z.enum(["blanco", "negro"]).default("blanco"),
-  referencia: z
-    .string()
-    .trim()
-    .max(80)
-    .optional()
-    .transform((v) => (v ? v : null)),
-  notas: z
-    .string()
-    .trim()
-    .max(500)
-    .optional()
-    .transform((v) => (v ? v : null)),
-  retenciones: z.array(
-    z.object({
-      regimenId: z.string().uuid(),
-      base: z.coerce.number().min(0),
-    }),
-  ),
-  /** Qué facturas cubre. Vacío es un pago a cuenta. */
-  imputaciones: z
-    .array(
-      z.object({
-        purchaseInvoiceId: z.string().uuid(),
-        importe: z.coerce.number().min(0),
-      }),
-    )
-    .max(30)
-    .optional(),
-  /** Con qué sale la plata, cuando se parte en varios medios o hay cheques. */
-  partes: z
-    .array(
-      z.object({
-        medio: z.enum(["transferencia", "efectivo", "cheque", "echeq"]),
-        importe: z.coerce.number().positive(),
-        referencia: z.string().trim().max(80).nullable().optional(),
-        cheque: z
-          .object({
-            tipo: z.enum(["fisico", "echeq"]),
-            numero: z.string().trim().min(1, "Poné el número del cheque.").max(40),
-            banco: z.string().trim().max(60).nullable().optional(),
-            fechaPago: z.coerce.date(),
-          })
-          .nullable()
-          .optional(),
-        chequeId: z.string().uuid().nullable().optional(),
-      }),
-    )
-    .max(6)
-    .optional(),
-});
+export interface DatosPago {
+  supplierId: string;
+  /** Lo que se le imputa a la deuda, retenciones incluidas. */
+  total: number;
+  medio: "transferencia" | "efectivo" | "cheque" | "echeq";
+  circuito?: "blanco" | "negro";
+  referencia?: string;
+  notas?: string;
+  retenciones: { regimenId: string; base: number }[];
+  imputaciones?: { purchaseInvoiceId: string; importe: number }[];
+  partes?: {
+    medio: "transferencia" | "efectivo" | "cheque" | "echeq";
+    importe: number;
+    referencia?: string | null;
+    cheque?: { tipo: "fisico" | "echeq"; numero: string; banco?: string | null; fechaPago: Date } | null;
+    chequeId?: string | null;
+  }[];
+}
 
-/**
- * Registra el pago y emite los certificados.
- *
- * El importe que se carga es **lo que se le imputa a la deuda**, retenciones
- * incluidas. Lo que sale del banco lo calcula el sistema restando lo retenido:
- * pedir los dos números invita a que no coincidan, y cuál de los dos es el
- * bueno no es algo que se pueda deducir después.
- */
-export async function pagarAProveedor(
-  datos: z.input<typeof esquema>,
-): Promise<EstadoPago> {
-  const usuario = await requireStaffRole("admin");
-
-  const leido = esquema.safeParse(datos);
-  if (!leido.success) {
-    return { error: leido.error.issues[0]?.message ?? "Revisá los datos." };
-  }
-
-  const d = leido.data;
-
-  let resultado;
-  try {
-    resultado = await registrarPagoAProveedor({
-      supplierId: d.supplierId,
-      total: d.total,
-      medio: d.medio,
-      circuito: d.circuito,
-      referencia: d.referencia,
-      notas: d.notas,
-      retenciones: d.retenciones.filter((r) => r.base > 0),
-      imputaciones: d.imputaciones?.filter((i) => i.importe > 0),
-      partes: d.partes,
-      usuarioId: usuario.userId,
-    });
-  } catch (error) {
-    // Las validaciones de imputación y de partes abortan la transacción con
-    // un mensaje pensado para mostrarse: saldo excedido, cheque ya endosado,
-    // partes que no suman el neto.
-    return {
-      error:
-        error instanceof Error ? error.message : "No se pudo registrar el pago.",
-    };
-  }
-
-  if (!resultado.ok) return { error: resultado.error };
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "crear",
-    entidad: "pago_proveedor",
-    entidadId: resultado.paymentId,
-    descripcion:
-      `Pagó ${formatearMonto(d.total)} por ${d.medio}` +
-      (resultado.certificados.length > 0
-        ? `, con ${resultado.certificados.length} retenciones`
-        : ""),
+/** Registra el pago y emite los certificados. */
+export async function pagarAProveedor(datos: DatosPago): Promise<EstadoPago> {
+  const r = await (await api()).POST("/api/v1/admin/compras/pagos", {
+    // La fecha del cheque viaja como ISO (una fecha inválida, como null).
+    body: JSON.parse(JSON.stringify(datos)) as Record<string, unknown>,
   });
-
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo registrar el pago.") };
   revalidatePath("/admin/compras/pagos");
-  revalidatePath(`/admin/proveedores/${d.supplierId}`);
-
-  return {
-    ok:
-      resultado.certificados.length > 0
-        ? `Pago registrado. Salieron ${formatearMonto(resultado.neto)} y se retuvieron ${formatearMonto(d.total - resultado.neto)}.`
-        : `Pago registrado por ${formatearMonto(resultado.neto)}.`,
-    certificados: resultado.certificados,
-  };
+  revalidatePath(`/admin/proveedores/${datos.supplierId}`);
+  return { ok: r.data.ok, certificados: r.data.certificados };
 }
 
 /** Lo ya retenido este mes, para mostrarlo antes de pagar. */

@@ -444,8 +444,11 @@ func (a *API) RecibirDeLaOrden(ctx context.Context, r comprasapi.RecibirDeLaOrde
 	return ok(map[string]string{"ok": "Recepción creada en borrador. Revisá las cantidades y confirmala.", "id": id}), nil
 }
 
+// LoQueEstaPorLlegar lo muestra la grilla de /admin/stock, así que lo lee
+// quien entra ahí. El TS pedía el admin: al vendedor y al depósito la página
+// de stock los mandaba de vuelta a su inicio y no la podían abrir.
 func (a *API) LoQueEstaPorLlegar(ctx context.Context, r comprasapi.LoQueEstaPorLlegarRequestObject) (comprasapi.LoQueEstaPorLlegarResponseObject, error) {
-	if _, err := compras(ctx); err != nil {
+	if _, err := admin(ctx, "/admin/stock"); err != nil {
 		return nil, err
 	}
 	sucursal := deTexto(r.Params.Sucursal)

@@ -62,9 +62,9 @@ func verifica(e, t, s string) *string {
 
 func TestGoldenBajas(t *testing.T) {
 	var casos []struct {
-		Email, Normal, E, T                        string
-		Verifica, ConOtraFirma, ConOtroSecreto     *string
-		FirmaCorta, SinFirma                       *string
+		Email, Normal, E, T                    string
+		Verifica, ConOtraFirma, ConOtroSecreto *string
+		FirmaCorta, SinFirma                   *string
 	}
 	leerGolden(t, "bajas.json", &casos)
 	for i, c := range casos {

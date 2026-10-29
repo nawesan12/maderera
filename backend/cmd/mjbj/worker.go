@@ -8,8 +8,11 @@ import (
 	"syscall"
 	"time"
 
+	avisosT10 "mjbj/internal/avisos"
+	"mjbj/internal/campanas"
 	"mjbj/internal/cola"
 	"mjbj/internal/contenido"
+	"mjbj/internal/email"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/productos"
 	"mjbj/internal/push"
@@ -25,6 +28,8 @@ type configWorker struct {
 	Push      push.Config
 	Google    contenido.ConfigGoogle
 	WhatsApp  whatsapp.Config
+	Email     email.Config
+	Campanas  campanas.Config
 }
 
 // El worker: la cola (los tipos que ya son de Go) y las tareas periódicas
@@ -122,6 +127,30 @@ func correrWorker() error {
 			return map[string]any{"plantillasWhatsapp": r.Total}, nil
 		},
 	})
+
+	// Campañas y avisos (tanda 10): las tandas de las campañas, los correos
+	// que rebotaron temporalmente (los encola también el despacharEmail del
+	// TS), y cada minuto las campañas programadas cuya hora llegó.
+	correoT10 := email.Elegir(cfg.Email, log)
+	camp := campanas.Nuevo(pool, cfg.Campanas, correoT10, avisos, log)
+	c.Registrar(campanas.TipoTanda, camp.ManejadorTanda())
+	c.Registrar(avisosT10.TipoReintento, avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log).ManejadorReintento())
+	go func() {
+		minuto := time.NewTicker(time.Minute)
+		defer minuto.Stop()
+		for {
+			if n, err := camp.IniciarProgramadas(ctx); err != nil {
+				log.Error("campañas programadas", "error", err)
+			} else if n > 0 {
+				log.Info("campañas programadas", "iniciadas", n)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-minuto.C:
+			}
+		}
+	}()
 
 	log.Info("worker andando")
 	reloj := time.NewTicker(2 * time.Second)

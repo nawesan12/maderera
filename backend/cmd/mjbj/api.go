@@ -6,6 +6,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
+	"mjbj/internal/api/campanasapi"
 	"mjbj/internal/api/catalogoapi"
 	"mjbj/internal/api/comprasapi"
 	"mjbj/internal/api/contenidoapi"
@@ -18,6 +19,8 @@ import (
 	"mjbj/internal/api/stockapi"
 	"mjbj/internal/api/whatsappapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/avisos"
+	"mjbj/internal/campanas"
 	"mjbj/internal/catalogo"
 	"mjbj/internal/clientes"
 	"mjbj/internal/cobros"
@@ -50,6 +53,7 @@ type configAPI struct {
 	Interna  plataforma.ConfigInterna
 	WhatsApp whatsapp.Config
 	Push     push.Config
+	Campanas campanas.Config
 }
 
 func correrAPI() error {
@@ -216,6 +220,23 @@ func correrAPI() error {
 		whatsappapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// Campañas, bajas y avisos (tanda 10): el contrato, y la baja con un clic
+	// de los correos (POST /api/baja), con su dirección de siempre.
+	correoT10 := email.Elegir(cfg.Email, log)
+	pushT10 := push.Nuevo(cfg.Push, q, log)
+	apiCampanas := campanas.NuevaAPI(campanas.Nuevo(pool, cfg.Campanas, correoT10, pushT10, log),
+		avisos.Nuevo(pool, correoT10, cfg.Email.Remitente, log), pushT10, cfg.Push.Publica)
+	apiCampanas.Registrar(m)
+	campanasapi.HandlerWithOptions(
+		campanasapi.NewStrictHandlerWithOptions(apiCampanas,
+			[]campanasapi.StrictMiddlewareFunc{plataforma.ConPedido[campanasapi.StrictHandlerFunc]},
+			campanasapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		campanasapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
@@ -272,6 +293,15 @@ func correrAPI() error {
 		if err != nil {
 			return err
 		}
+		h = validar(h)
+	}
+
+	// El contrato de la tanda 10 (campañas y avisos), aparte.
+	if s, err := campanasapi.GetSwagger(); err != nil {
+		return err
+	} else if validar, err := plataforma.ValidarContra(s); err != nil {
+		return err
+	} else {
 		h = validar(h)
 	}
 

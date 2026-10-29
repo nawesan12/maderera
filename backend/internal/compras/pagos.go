@@ -57,15 +57,16 @@ func (s *Servicio) ListarPagos(ctx context.Context, limite int) ([]PagoListado, 
 	filas, err := s.pool.Query(ctx, `
 		SELECT p.id, p.fecha, p.total, p.neto, p.medio, p.circuito::text, p.referencia, s.nombre, p.supplier_id,
 		  r.retenido, coalesce(r.certificados, 0), r.numeros, i.facturas
-		FROM supplier_payments p
+		FROM (SELECT * FROM supplier_payments ORDER BY fecha DESC LIMIT $1) p
 		JOIN suppliers s ON s.id = p.supplier_id
-		LEFT JOIN (SELECT payment_id, sum(importe) AS retenido, count(*)::int AS certificados, array_agg(numero ORDER BY numero) AS numeros
-		           FROM retenciones_practicadas GROUP BY payment_id) r ON r.payment_id = p.id
-		LEFT JOIN (SELECT a.payment_id, json_agg(json_build_object('id', f.id, 'numero', f.punto_venta || '-' || f.numero, 'importe', a.importe::text)
+		-- Lo retenido y las facturas, solo de los pagos que se muestran (el TS
+		-- agrupaba todas las retenciones e imputaciones de la historia).
+		LEFT JOIN LATERAL (SELECT sum(importe) AS retenido, count(*)::int AS certificados, array_agg(numero ORDER BY numero) AS numeros
+		           FROM retenciones_practicadas WHERE payment_id = p.id) r ON true
+		LEFT JOIN LATERAL (SELECT json_agg(json_build_object('id', f.id, 'numero', f.punto_venta || '-' || f.numero, 'importe', a.importe::text)
 		             ORDER BY f.fecha_emision) AS facturas
-		           FROM supplier_payment_allocations a JOIN purchase_invoices f ON f.id = a.purchase_invoice_id GROUP BY a.payment_id) i
-		  ON i.payment_id = p.id
-		ORDER BY p.fecha DESC LIMIT $1`, limite)
+		           FROM supplier_payment_allocations a JOIN purchase_invoices f ON f.id = a.purchase_invoice_id WHERE a.payment_id = p.id) i ON true
+		ORDER BY p.fecha DESC`, limite)
 	if err != nil {
 		return nil, err
 	}

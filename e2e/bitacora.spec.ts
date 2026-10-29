@@ -24,3 +24,10 @@ test("las sucursales muestran sus números", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Sucursales", level: 1 })).toBeVisible();
   await expect(page.getByText("Casa Central").first()).toBeVisible();
 });
+
+test("el buscador del panel encuentra un proveedor", async ({ page }) => {
+  test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
+  await page.goto("/admin");
+  await page.getByLabel("Buscar en el panel").fill("Tableros");
+  await expect(page.getByRole("button", { name: /Tableros del Sur/ }).first()).toBeVisible();
+});

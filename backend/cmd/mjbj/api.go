@@ -7,6 +7,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 
 	"mjbj/internal/api/bitacoraapi"
+	"mjbj/internal/api/buscadorapi"
 	"mjbj/internal/api/campanasapi"
 	"mjbj/internal/api/catalogoapi"
 	"mjbj/internal/api/comprasapi"
@@ -25,6 +26,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/avisos"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/buscador"
 	"mjbj/internal/campanas"
 	"mjbj/internal/catalogo"
 	"mjbj/internal/clientes"
@@ -289,10 +291,21 @@ func correrAPI() error {
 		profesionalesapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// El buscador del panel.
+	buscadorapi.HandlerWithOptions(
+		buscadorapi.NewStrictHandlerWithOptions(buscador.NuevaAPI(pool),
+			[]buscadorapi.StrictMiddlewareFunc{plataforma.ConPedido[buscadorapi.StrictHandlerFunc]},
+			buscadorapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		buscadorapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
-	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger, productosapi.GetSwagger, stockapi.GetSwagger, preciosapi.GetSwagger, cuentasapi.GetSwagger, bitacoraapi.GetSwagger, portalapi.GetSwagger, existenciaapi.GetSwagger} {
+	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger, productosapi.GetSwagger, stockapi.GetSwagger, preciosapi.GetSwagger, cuentasapi.GetSwagger, bitacoraapi.GetSwagger, portalapi.GetSwagger, existenciaapi.GetSwagger, buscadorapi.GetSwagger} {
 		s, err := spec()
 		if err != nil {
 			return err

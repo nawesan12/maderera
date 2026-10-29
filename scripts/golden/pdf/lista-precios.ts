@@ -1,4 +1,4 @@
-import { pdfDeListaDePrecios, type FilaDeLista } from "@/lib/pdf/lista-precios";
+import { pdfDeListaDePrecios, type FilaDeLista } from "./ts/lista-precios";
 import type { CasoPdf } from "../pdf";
 import { EMISOR, EMISOR_LARGO, azarCon } from "./_azar";
 

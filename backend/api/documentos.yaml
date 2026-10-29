@@ -1,0 +1,73 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Documentos
+  version: "1"
+  description: |
+    Los PDF y las planillas que el sistema arma para descargar (tanda 12).
+    Hoy, los que tienen sus datos en Go: la lista de precios del cliente y
+    la exportación de precios del panel. Los demás documentos ya están en
+    internal/pdf y se exponen cuando su módulo se mude (ver
+    docs/go/progreso.md, «Tanda 12»).
+paths:
+  /api/v1/documentos/mi-lista-de-precios:
+    get:
+      operationId: MiListaDePreciosPdf
+      summary: La lista de precios de quien pide, en PDF
+      description: |
+        Exige sesión, y frena a 10 por hora por usuario (el mismo freno que
+        las filas de /api/v1/catalogo/mi-lista). Los precios son los de la
+        lista de la sesión: nunca de un parámetro.
+      responses:
+        "200":
+          description: El PDF
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/documentos/precios:
+    get:
+      operationId: ExportarPrecios
+      summary: La grilla de precios del panel, en CSV o en PDF
+      description: |
+        Con los mismos filtros que la pantalla. El CSV (con BOM, `;` y coma
+        decimal) es para trabajarlo y volver a subirlo; el PDF lleva
+        membrete y vigencia, con los precios de la lista pedida. Cualquier
+        persona del panel.
+      parameters:
+        - { name: formato, in: query, schema: { type: string, enum: [csv, pdf], default: csv } }
+        - { name: buscar, in: query, schema: { type: string } }
+        - { name: cat, in: query, schema: { type: string } }
+        - { name: lista, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: El archivo
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores:
+          type: object
+          additionalProperties: { type: string }

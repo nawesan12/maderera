@@ -9,11 +9,13 @@ import type { paths as Contenido, components as ComponentesContenido } from "./c
 import type { paths as Productos, components as ComponentesProductos } from "./productos";
 import type { paths as Precios, components as ComponentesPrecios } from "./precios";
 import type { paths as Stock, components as ComponentesStock } from "./stock";
+import type { paths as Documentos, components as ComponentesDocumentos } from "./documentos";
 
-export type paths = Sesion & Catalogo & Contenido & Productos & Precios & Stock;
+export type paths = Sesion & Catalogo & Contenido & Productos & Precios & Stock & Documentos;
 export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesCatalogo["schemas"] &
   ComponentesContenido["schemas"] &
   ComponentesProductos["schemas"] &
   ComponentesPrecios["schemas"] &
-  ComponentesStock["schemas"];
+  ComponentesStock["schemas"] &
+  ComponentesDocumentos["schemas"];

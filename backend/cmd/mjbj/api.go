@@ -8,6 +8,7 @@ import (
 
 	"mjbj/internal/api/catalogoapi"
 	"mjbj/internal/api/contenidoapi"
+	"mjbj/internal/api/documentosapi"
 	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/api/productosapi"
 	"mjbj/internal/api/sesionapi"
@@ -15,6 +16,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/catalogo"
 	"mjbj/internal/contenido"
+	"mjbj/internal/documentos"
 	"mjbj/internal/email"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
@@ -141,6 +143,17 @@ func correrAPI() error {
 		stockapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// Tanda 12: los PDF y las planillas (internal/documentos, internal/pdf).
+	documentosapi.HandlerWithOptions(
+		documentosapi.NewStrictHandlerWithOptions(documentos.NuevaAPI(pool, lim, log),
+			[]documentosapi.StrictMiddlewareFunc{plataforma.ConPedido[documentosapi.StrictHandlerFunc]},
+			documentosapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		documentosapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
@@ -153,6 +166,15 @@ func correrAPI() error {
 		if err != nil {
 			return err
 		}
+		h = validar(h)
+	}
+	// El contrato de los documentos (tanda 12), aparte para no tocar la
+	// lista de arriba que comparten todas las tandas.
+	if s, err := documentosapi.GetSwagger(); err != nil {
+		return err
+	} else if validar, err := plataforma.ValidarContra(s); err != nil {
+		return err
+	} else {
 		h = validar(h)
 	}
 

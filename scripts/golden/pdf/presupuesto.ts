@@ -81,7 +81,8 @@ for (let i = 0; i < 3000; i++) {
   const a = elegir([21, 10.5, 27, 0, 2.5, 5]);
   casosDesagregar.push({ p, a, ...desagregar(p, a) });
 }
-writeFileSync(
+// El benchmark (bench/tanda12) importa los casos sin reescribir los golden.
+if (!process.env.PDF_GOLDEN_SOLO_LEER) writeFileSync(
   new URL("../../../backend/testdata/golden/pdf/desagregar.json", import.meta.url),
   JSON.stringify(casosDesagregar) + "\n",
 );
@@ -91,7 +92,7 @@ export const casos: CasoPdf[] = [
   caso("consumidor-sin-banco", base({ clienteCondicionIva: null, empresa: null, clienteCuit: null, clienteCodigo: null, clienteDireccion: null, vendedor: null, asesor: "Ana (asesora)", validoHasta: null, sucursal: null, total: "150000.00" }), EMISOR, null),
   caso("monotributo-descuento", base({ clienteCondicionIva: "monotributista", subtotal: "1000000.00", total: "873456.78", notas: "Precio especial por volumen. " + palabras(60) }), EMISOR_LARGO, { ...BANCO, cbu: "", alias: "" }),
   caso("exento", base({ clienteCondicionIva: "exento", vendedor: null, asesor: null }), null, { ...BANCO, banco: "" }),
-  caso("otra-condicion", base({ clienteCondicionIva: "rara_condicion" }), EMISOR, BANCO),
+  caso("otra-condicion", base({ clienteCondicionIva: "rara_condicion" as never }), EMISOR, BANCO),
   caso("muchos-renglones", base({ items: items(90), subtotal: "9999999999.99", total: "9999999999.99" }), EMISOR, BANCO),
   caso("muchos-con-descuento", base({ items: items(45), subtotal: "500000", total: "1", notas: palabras(200) }), EMISOR, BANCO),
   caso("sin-items", base({ items: [], subtotal: "0", total: "0" }), EMISOR, null),

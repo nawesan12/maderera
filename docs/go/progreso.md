@@ -129,6 +129,101 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
   escritos; con prefijo de espacio de nombres (<x:worksheet>) la planilla sale
   vacía; «0,125» se lee como 125.
 
+## Tanda 12: PDF y exportaciones
+
+Rama `go-pdf`. Los 11 documentos de `lib/pdf` están en `backend/internal/pdf`,
+cada uno igual al de pdf-lib **píxel a píxel** (golden de 82 casos: 0,00000 %
+de diferencia en todos, umbral 0,01 %, y el mismo texto con pdftotext).
+
+- [x] La base (`hoja.go`, `escritor.go`): escritura propia de PDF en vez de
+      fpdf, con los mismos operadores y números que pdf-lib y las métricas y
+      el kerning de `@pdf-lib/standard-fonts` (`metricas.gen.go`, de
+      `scripts/golden/metricas-pdf.ts`). fpdf mide sin kerning, ubica el
+      texto desde arriba y redondea coordenadas: corría renglones y cortaba
+      líneas en otro lugar. Medir sin kerning ya da 0,09–0,15 % de píxeles.
+- [x] Golden: `scripts/golden/pdf.ts` (un archivo de casos por documento en
+      `scripts/golden/pdf/`) → `backend/testdata/golden/pdf/<doc>/`;
+      `TestGoldenPDF` rasteriza los dos con `pdftoppm` a 100 ppp y compara
+      (necesita poppler: `brew install poppler`; sin él se saltea, en CI
+      falla). También `formato.json` (moneda, fechas contra Intl), el QR
+      (158 matrices contra qrcode 1.5.4), `desagregar` (3054 casos) e
+      `importeEnLetras`.
+- [x] Expuesto por Go (`api/documentos.yaml`, `internal/documentos`):
+      `GET /api/v1/documentos/mi-lista-de-precios` (sesión, 10 por hora, la
+      lista de la sesión) y `GET /api/v1/documentos/precios?formato=csv|pdf`
+      (staff). Las rutas de Next `/mi-lista-de-precios` y
+      `/admin/precios/exportar` ahora le piden el archivo a Go.
+      `lib/pdf/lista-precios.ts` se borró (queda una copia en
+      `scripts/golden/pdf/ts/` solo para regenerar los golden).
+- [x] `internal/csvexcel`: `lib/csv-excel.ts` (el CSV para Excel de las
+      exportaciones), golden de 12.618 casos.
+- [x] Benchmark (`bench/tanda12`): Go 5–11× más rápido por documento y
+      9–26× más pedidos por segundo con 8 a la vez; 30 MB contra 230–300 MB.
+- No hay planillas XLSX que se escriban: `lib/xlsx.ts` solo lee (la
+  importación de precios ya está en Go, tanda 3; la migración es la 13).
+  Todas las exportaciones son CSV.
+- Esperando a su tanda (el PDF ya está en `internal/pdf`; falta que los
+  datos estén en Go y la ruta le pida el archivo):
+  - Remito (`app/api/remitos/[id]/pdf`, WhatsApp), reposición
+    (`app/admin/reportes/reposicion/exportar`, PDF y su CSV), presupuesto
+    (`app/api/presupuestos/[id]/pdf`, WhatsApp) y reporte de ventas
+    (`app/admin/reportes/exportar`, PDF y CSV): **tanda 5**.
+  - Recibo (`app/api/recibos/[id]/pdf`, `lib/notificaciones/cobros.ts`,
+    WhatsApp) y resumen de cuenta (`app/api/cuenta/[id]/pdf`, WhatsApp):
+    **tanda 4**.
+  - Comprobante (`app/api/comprobantes/[id]/pdf`,
+    `lib/notificaciones/fiscal.ts`, WhatsApp) y el libro IVA en CSV:
+    **tanda 7**.
+  - Certificado de retención (`app/admin/compras/pagos/certificado/[numero]`)
+    y los CSV de pagos y libro IVA compras (con `internal/csvexcel`):
+    **tanda 8**. El de cierre de caja: **tanda 5**.
+  - Plano y hoja de corte (`app/api/cortes/[id]/pdf|hoja`) y la lista de
+    cortes en CSV: **tanda 11** (las piezas de `lib/cortes` que usan van
+    como copias privadas en `corte_partes.go`: se juntan ahí).
+  - Lo que manda documentos por WhatsApp (`lib/whatsapp/documentos.ts`):
+    además, **tanda 9**.
+- Arreglado en Go (con prueba):
+  - Las fechas de «hoy» (vigencia de la lista, emisión de la reposición,
+    firma del remito, `fechaCsv`) salen en hora argentina. El contenedor de
+    Next no tiene TZ: en producción el TS fechaba en UTC, y después de las
+    21 la lista decía mañana y la firma salía tres horas corrida.
+  - Un emoji en un producto o un concepto tiraba la descarga entera del
+    reporte de ventas y del resumen de cuenta (`recortar()` medía sin
+    limpiar y pdf-lib tiraba un error). En Go el carácter no se cuenta al
+    medir y el documento sale.
+- Bugs del TS reproducidos a propósito (se arreglan con su tanda):
+  - El comprobante no corta de página: con muchos renglones el detalle se
+    dibuja encima del pie fiscal (tanda 7).
+  - `importeEnLetras`: 999,995 sale «con 100/100», y desde mil millones se
+    pierden los millones (1.234.567.890 → «treinta y cuatro millones…»)
+    (tanda 4).
+  - Una firma PNG con el CRC roto: UPNG la acepta y la dibuja, Go la
+    rechaza y el remito sale sin firma (no está en el golden).
+- Lo aprendido:
+  - **pdf-lib mide con kerning pero dibuja sin él** (un `Tj` pelado): para
+    que una alineación a la derecha dé igual hay que medir con kerning.
+  - **ICU redondea la tira decimal más corta, no el valor binario**:
+    `21021.995` con dos decimales es «21.022,00» en Intl y «21.021,99» con
+    `toFixed`. Para los importes con decimales de los documentos (no la
+    moneda sin decimales, donde da igual) va `Pesos` de `recibo_partes.go`.
+  - **El Write de las herramientas escribe el BOM literal** si se le pasa
+    `\ufeff` adentro de un string: Go no compila un BOM en medio del
+    archivo. Se arregla con `perl -CSD -pi -e 's/\x{FEFF}/\\ufeff/g'`.
+  - **pdftoppm + PGM alcanzan para un golden visual** sin dependencias de
+    Go: el PGM se lee en veinte líneas.
+
+### Benchmark de la tanda 12 (29/10/2026, misma Mac, sin base)
+
+| Documento (caso más grande) | Go p50 | TS p50 | 8 a la vez, Go / TS |
+|---|---:|---:|---:|
+| Lista de precios (900 renglones) | 25 ms | 145 ms | 104 / 7 por s |
+| Comprobante (60 renglones, QR) | 8 ms | 50 ms | 299 / 14 por s |
+| Remito | 2,1 ms | 14 ms | 1185 / 69 por s |
+| Hoja de corte | 18 ms | 82 ms | 78 / 6 por s |
+| Memoria máx. | 26–37 MB | 214–308 MB | 50–85 / 225–375 MB |
+
+El detalle de los 12 en `bench/tanda12/README.md`.
+
 ## Benchmarks
 
 Uno por tanda, al cerrarla. Detalle y cómo repetirlos: `bench/<tanda>/README.md`.

@@ -125,4 +125,5 @@ function matriz(texto: string) {
   for (let i = 0; i < d.length; i++) if (d[i]) bytes[i >> 3] |= 0x80 >> (i & 7);
   return { version: q.version, mascara: q.maskPattern, lado: q.modules.size, modulos: Buffer.from(bytes).toString("base64") };
 }
-writeFileSync(new URL("../../../backend/testdata/golden/pdf/qr.json", import.meta.url), JSON.stringify(casosQr) + "\n");
+// El benchmark (bench/tanda12) importa los casos sin reescribir los golden.
+if (!process.env.PDF_GOLDEN_SOLO_LEER) writeFileSync(new URL("../../../backend/testdata/golden/pdf/qr.json", import.meta.url), JSON.stringify(casosQr) + "\n");

@@ -1,0 +1,1550 @@
+[
+ {
+  "porCuit": null,
+  "porUsuario": null,
+  "userId": null,
+  "decision": {
+   "destino": null,
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": null,
+  "userId": "",
+  "decision": {
+   "destino": null,
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": null,
+  "userId": "u1",
+  "decision": {
+   "destino": null,
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": null,
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": null,
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": null,
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": null,
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": true
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": true
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A"
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": true
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": null,
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": null,
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": null,
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": true
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": true
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": null
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": true
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": null,
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": null,
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": null,
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "A",
+   "liberar": "B",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": null,
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": null,
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": null,
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": true
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": true
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": true
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": true
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B"
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": null,
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": null,
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": null,
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "A"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": null
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "A",
+   "userId": "u1"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": "A",
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "B"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": null,
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": "",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ },
+ {
+  "porCuit": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "porUsuario": {
+   "id": "B",
+   "userId": "u2"
+  },
+  "userId": "u1",
+  "decision": {
+   "destino": "B",
+   "liberar": null,
+   "vincularCuentaWeb": false
+  }
+ }
+]

@@ -1,0 +1,267 @@
+[
+ {
+  "entrada": {
+   "id": null
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "limiteCredito": "1.500.000"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "limiteCredito": "x"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "limiteCredito": "1.500.000"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "limiteCredito": "x"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "priceListId": "x"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "priceListId": "x",
+   "limiteCredito": "1.500.000"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": null,
+   "priceListId": "x",
+   "limiteCredito": "x"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid input: expected string, received null"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "limiteCredito": "1.500.000"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "limiteCredito": "1.500.000"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "limiteCredito": "x"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "limiteCredito": "x"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "limiteCredito": "1.500.000"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "limiteCredito": "1.500.000"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "limiteCredito": "x"
+  },
+  "ok": true,
+  "datos": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "limiteCredito": "x"
+  }
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "priceListId": "x"
+  },
+  "ok": false,
+  "campo": "priceListId",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "priceListId": "x",
+   "limiteCredito": "1.500.000"
+  },
+  "ok": false,
+  "campo": "priceListId",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "priceListId": "x",
+   "limiteCredito": "x"
+  },
+  "ok": false,
+  "campo": "priceListId",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "limiteCredito": "1.500.000"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "limiteCredito": "x"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "limiteCredito": "1.500.000"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+   "limiteCredito": "x"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "priceListId": "x"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "priceListId": "x",
+   "limiteCredito": "1.500.000"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ },
+ {
+  "entrada": {
+   "id": "x",
+   "priceListId": "x",
+   "limiteCredito": "x"
+  },
+  "ok": false,
+  "campo": "id",
+  "mensaje": "Invalid UUID"
+ }
+]

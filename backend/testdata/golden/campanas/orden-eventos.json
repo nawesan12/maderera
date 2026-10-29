@@ -1,0 +1,18 @@
+[
+ "presupuesto_recibido",
+ "presupuesto_listo",
+ "pedido_recibido",
+ "pago_acreditado",
+ "preparando",
+ "listo",
+ "remito_para_firmar",
+ "en-camino",
+ "entregado",
+ "remito_firmado",
+ "factura_emitida",
+ "solicitud_profesional",
+ "profesional_aprobado",
+ "profesional_rechazado",
+ "inscripcion_evento",
+ "recordatorio_evento"
+]

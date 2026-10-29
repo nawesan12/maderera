@@ -132,14 +132,16 @@ describe("leerXlsx", () => {
 
     const bytes = planilla({
       estilos,
-      // 46269 es el 3 de septiembre de 2026. El mismo número sin formato de
-      // fecha tiene que quedar como número.
-      hoja: `<row r="1"><c r="A1" s="1"><v>46269</v></c><c r="B1" s="0"><v>46269</v></c></row>`,
+      // 46268 es el 3 de septiembre de 2026 (en Excel; esta prueba decía
+      // 46269, que es el 4, y así tapaba que las fechas salían un día antes:
+      // arreglado en la tanda 13). El mismo número sin formato de fecha
+      // tiene que quedar como número.
+      hoja: `<row r="1"><c r="A1" s="1"><v>46268</v></c><c r="B1" s="0"><v>46268</v></c></row>`,
     });
 
     const [fila] = leerXlsx(bytes).filas;
     expect(fila[0].slice(0, 10)).toBe("2026-09-03");
-    expect(fila[1]).toBe("46269");
+    expect(fila[1]).toBe("46268");
   });
 
   it("reconoce los formatos de fecha personalizados", () => {
@@ -150,7 +152,7 @@ describe("leerXlsx", () => {
 
     const bytes = planilla({
       estilos,
-      hoja: `<row r="1"><c r="A1" s="0"><v>46269</v></c></row>`,
+      hoja: `<row r="1"><c r="A1" s="0"><v>46268</v></c></row>`,
     });
 
     expect(leerXlsx(bytes).filas[0][0].slice(0, 10)).toBe("2026-09-03");

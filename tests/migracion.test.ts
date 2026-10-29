@@ -96,6 +96,16 @@ describe("interpretación de números", () => {
     expect(interpretarNumero("12345.67")).toBe("12345.67");
   });
 
+  it("no lee como miles tres decimales detrás de un cero", () => {
+    // "1,234" son mil doscientos treinta y cuatro, pero "0,125" no puede
+    // ser ciento veinticinco (tanda 13).
+    expect(interpretarNumero("1,234")).toBe("1234.00");
+    expect(interpretarNumero("0,125")).toBe("0.13");
+    expect(interpretarNumero("0.125")).toBe("0.13");
+    expect(interpretarNumero(",125")).toBe("0.13");
+    expect(interpretarNumero("-0,125")).toBe("-0.13");
+  });
+
   it("entiende los negativos de la contabilidad", () => {
     // Un saldo a favor sale entre paréntesis de cualquier listado contable.
     expect(interpretarNumero("(1.500,00)")).toBe("-1500.00");

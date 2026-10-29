@@ -198,9 +198,13 @@ func textosCompartidos(archivos map[string][]byte) ([]string, error) {
 // de febrero de 1900 que Excel cree que existió.
 func fechaDeSerie(serie float64) (string, error) {
 	dias := math.Floor(serie)
+	// El serie 25569 ya es el 1/1/1970 contando el día de más: desde el
+	// 1/3/1900 no se descuenta nada, y antes falta sumar uno. El TS restaba
+	// uno y todas las fechas de un .xlsx salían un día antes (arreglado en
+	// la tanda 13, en los dos lados del golden).
 	ajuste := 0.0
-	if dias > 59 {
-		ajuste = -1
+	if dias <= 59 {
+		ajuste = 1
 	}
 	ms := float64(dias+ajuste-25569) * 86400000
 	fraccion := serie - dias

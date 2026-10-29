@@ -608,3 +608,26 @@ mismo en todos.
   producción (UTC) y los listados por período no coinciden. `TZ=UTC`.
 - **Un `pkill` de otro agente puede tirar tu servidor**: el binario del
   benchmark lleva nombre propio (`mjbj-t8`).
+
+## Corte final: lo que ya se ensayó (29/10/2026)
+
+**Restaurar y migrar.** Un volcado de la base de desarrollo (Postgres 17, con
+las 79 migraciones de drizzle) restaurado con `pg_restore --no-owner
+--no-acl` en un Postgres 18 limpio; `mjbj migrar` la adoptó («base adoptada
+de drizzle», 79) y aplicó la 80 en 0,05 s. La API levantó sobre esa base, el
+admin entró con su clave de better-auth (scrypt) y todas las rutas mudadas
+contestaron 200 en 3–35 ms. Para el día del corte, lo mismo contra el
+respaldo de producción:
+
+```sh
+pg_dump -F c … > antes.dump            # o el último de respaldos/
+createdb ensayo && pg_restore -d ensayo --no-owner --no-acl antes.dump
+DATABASE_URL=…/ensayo mjbj migrar
+DATABASE_URL=…/ensayo … mjbj api       # y recorrer el panel
+```
+
+**Carga** (`bench/corte/carga.k6.js`): 200 a la vez durante 60 s contra esa
+API —140 en el catálogo (listado y búsqueda), 40 en el panel, 20 con el
+tiempo real abierto—: 9229 pedidos, **0 fallos, p50 5 ms, p95 9,5 ms, p99
+134 ms**, 101 MB de memoria. Falta sumarle el mostrador cuando la tanda 5
+esté, y correrla en la VPS (la de desarrollo es una Mac de 6 núcleos).

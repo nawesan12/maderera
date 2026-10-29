@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/api/cortesapi"
 	"mjbj/internal/api/cuentasapi"
 	"mjbj/internal/api/documentosapi"
+	"mjbj/internal/api/migracionapi"
 	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/api/productosapi"
 	"mjbj/internal/api/sesionapi"
@@ -28,6 +29,7 @@ import (
 	"mjbj/internal/documentos"
 	"mjbj/internal/email"
 	"mjbj/internal/limites"
+	"mjbj/internal/migracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
 	"mjbj/internal/productos"
@@ -216,6 +218,17 @@ func correrAPI() error {
 		whatsappapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// La migración de ISIS (tanda 13).
+	migracionapi.HandlerWithOptions(
+		migracionapi.NewStrictHandlerWithOptions(migracion.NuevaAPI(migracion.Nuevo(pool, log)),
+			[]migracionapi.StrictMiddlewareFunc{plataforma.ConPedido[migracionapi.StrictHandlerFunc]},
+			migracionapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		migracionapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
@@ -272,6 +285,15 @@ func correrAPI() error {
 		if err != nil {
 			return err
 		}
+		h = validar(h)
+	}
+
+	// El contrato de la migración (tanda 13), en su propia línea.
+	if s, err := migracionapi.GetSwagger(); err != nil {
+		return err
+	} else if validar, err := plataforma.ValidarContra(s); err != nil {
+		return err
+	} else {
 		h = validar(h)
 	}
 

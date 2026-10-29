@@ -373,6 +373,8 @@ type Ficha struct {
 	Plano       Plano              `json:"plano"`
 	Superficies []float64          `json:"superficies"`
 	Cuenta      PresupuestoDeCorte `json:"cuenta"`
+	// Fijadas es el acomodo a mano guardado, ya leído.
+	Fijadas []PiezaFijada `json:"fijadas"`
 }
 
 // Ficha arma la ficha de un trabajo.
@@ -407,7 +409,8 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 	return &Ficha{
 		Corte: c, Tarifa: tarifa, Cargo: CargoPorCorte(tarifa, float64(c.Pasadas)), MetrosCanto: metros,
 		CargoCanto: CargoPorTapacanto(tarifa, metros), Plano: plano, Superficies: sup,
-		Cuenta: Presupuestar(plano, tarifa, c.PrecioPlaca, pres, FraccionDePlaca(c.Medida.Mitad, pct)),
+		Cuenta:  Presupuestar(plano, tarifa, c.PrecioPlaca, pres, FraccionDePlaca(c.Medida.Mitad, pct)),
+		Fijadas: LeerAcomodoManual(texto(c.AcomodoManual)),
 	}, nil
 }
 

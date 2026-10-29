@@ -12,7 +12,7 @@ import { turnoQueContiene } from "@/lib/mostrador/turno";
 import { costoPorUnidadDeVenta, costosParaCongelar } from "@/lib/compras/congelar";
 import { factoresDeStock } from "@/lib/ventas/factores";
 import { leerAnchoDeSierra } from "@/lib/cortes/sierra";
-import { ANCHO_DE_SIERRA_MM } from "@/lib/calculations";
+import { ANCHO_DE_SIERRA_MM } from "@/lib/cortes/tipos";
 import { ErrorDeCobro, registrarChequeRecibido } from "@/lib/cobros/recibo";
 import { unidadesDeStock } from "@/lib/ventas/forma-de-venta";
 import {

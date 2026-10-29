@@ -16,7 +16,7 @@ import {
   serializar,
   type Hoja,
 } from "@/lib/pdf/hoja";
-import { superficieDeSierra, type PlanoDeCorte } from "@/lib/cortes/plano";
+import type { PlanoDeCorte } from "@/lib/cortes/tipos";
 import { rgb } from "pdf-lib";
 import { formatearSierra } from "@/lib/cortes/sierra";
 
@@ -54,6 +54,8 @@ export interface CorteParaPdf {
   createdAt: Date;
   /** Metros de tapacanto del trabajo, ya calculados. */
   metrosCanto: number;
+  /** Lo que se lleva la sierra en todo el trabajo, en mm² (lo calcula Go). */
+  superficieSierra: number;
 }
 
 export async function cortePdf(
@@ -125,10 +127,7 @@ export async function cortePdf(
   y -= 6;
 
   // Los números del trabajo.
-  const sierra = plano.placas.reduce(
-    (total, placa) => total + superficieDeSierra(placa, plano.anchoSierra),
-    0,
-  );
+  const sierra = corte.superficieSierra;
 
   const cifras: [string, string][] = [
     [String(plano.placas.length), plano.placas.length === 1 ? "placa" : "placas"],

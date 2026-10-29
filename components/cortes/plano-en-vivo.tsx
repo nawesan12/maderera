@@ -1,6 +1,6 @@
 "use client";
 
-import type { PiezaFijada, PlanoDeCorte } from "@/lib/cortes/plano";
+import type { PiezaFijada, PlanoDeCorte } from "@/lib/cortes/tipos";
 import { PlanoEditable } from "@/components/cortes/plano-editable";
 
 /**

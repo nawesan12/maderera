@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/dal/session";
-import { obtenerCorte } from "@/lib/dal/admin/cortes";
-import { calcularPlanoDeCorteSinTrabar, leerAcomodoManual } from "@/lib/cortes/plano";
+import { hojaDelCorte } from "@/lib/dal/admin/cortes";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
-import { armarHojaDeCorte } from "@/lib/cortes/secuencia";
 import { hojaDeCortePdf } from "@/lib/pdf/hoja-de-corte";
 
 /**
  * La hoja de corte para la seccionadora, en PDF.
  *
- * Personal con sesión, como el reporte: el despiece de un cliente no se publica
- * en una dirección adivinable. El plano se rehace con el disco y el motor del
- * trabajo, igual que en la ficha.
+ * Personal con sesión, como el reporte. La hoja la arma Go
+ * (backend/internal/cortes) del plano del trabajo, con su disco y su motor;
+ * acá solo se dibuja el PDF, hasta la tanda 12.
  */
 export async function GET(
   _request: Request,
@@ -20,17 +18,9 @@ export async function GET(
   await requireStaff();
 
   const { id } = await params;
-  const corte = await obtenerCorte(id);
-  if (!corte) return new NextResponse("No encontrado", { status: 404 });
-
-  const plano = await calcularPlanoDeCorteSinTrabar({
-    piezas: corte.piezas,
-    placaLargo: corte.medida.largo,
-    placaAncho: corte.medida.ancho,
-    anchoSierra: corte.anchoSierraMm,
-    fijadas: leerAcomodoManual(corte.acomodoManual),
-    busqueda: corte.motorPlano >= 2,
-  });
+  const datos = await hojaDelCorte(id);
+  if (!datos) return new NextResponse("No encontrado", { status: 404 });
+  const { corte, hoja } = datos;
 
   const pdf = await hojaDeCortePdf(
     {
@@ -40,7 +30,7 @@ export async function GET(
       deQueSale: nombreDeLaMitad(corte.medida.mitad),
       createdAt: corte.createdAt,
     },
-    armarHojaDeCorte(plano),
+    hoja,
   );
 
   return new NextResponse(pdf as BodyInit, {

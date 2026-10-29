@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { asc } from "drizzle-orm";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { db } from "@/lib/db";
-import { cuttingRates } from "@/lib/db/schema";
+import { todasLasTarifas } from "@/lib/dal/cortes-tarifas";
 import { requireStaffRole } from "@/lib/dal/session";
 import { listarListasDePrecios } from "@/lib/dal/admin/precios";
 import { EditorDeTarifa } from "./editor";
@@ -24,10 +22,7 @@ export default async function TarifasDeCortePage() {
   await requireStaffRole("admin");
 
   const [tarifas, listas] = await Promise.all([
-    db
-      .select()
-      .from(cuttingRates)
-      .orderBy(asc(cuttingRates.material), asc(cuttingRates.priceListId)),
+    todasLasTarifas(),
     listarListasDePrecios(),
   ]);
 

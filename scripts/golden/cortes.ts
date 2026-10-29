@@ -2,9 +2,10 @@
  * Golden de cortes: el plano (motor guillotina, búsqueda, fijadas), la hoja
  * de corte en el orden de la máquina, el PTX y la lista para el optimizador
  * byte a byte, la tarifa, el presupuesto, la placa, la sierra y las
- * calculadoras. Corre el TS de verdad (lib/cortes/** y lib/calculations.ts,
- * git 9a17128) sobre miles de casos al azar con semilla, más el banco de
- * scripts/benchmark-plano.ts. El Go (internal/cortes) compara exacto.
+ * calculadoras. Corre el TS de verdad (lib/cortes/** y lib/calculations.ts de
+ * 9a17128, copiados tal cual en bench/tanda11/ts al mudarlos) sobre miles de
+ * casos al azar con semilla, más el banco del benchmark del plano. El Go
+ * (internal/cortes) compara exacto.
  *
  *   TZ=America/Argentina/Buenos_Aires npx tsx --tsconfig tsconfig.json scripts/golden/cortes.ts
  *
@@ -20,9 +21,9 @@ import {
   superficieDeSierra,
   type PiezaAcortar,
   type PiezaFijada,
-} from "../../lib/cortes/plano";
-import { armarHojaDeCorte } from "../../lib/cortes/secuencia";
-import { armarPtx, espesorDelMaterial, nombreDeArchivoPtx, textoPtx } from "../../lib/cortes/ptx";
+} from "../../bench/tanda11/ts/plano";
+import { armarHojaDeCorte } from "../../bench/tanda11/ts/secuencia";
+import { armarPtx, espesorDelMaterial, nombreDeArchivoPtx, textoPtx } from "../../bench/tanda11/ts/ptx";
 import {
   armarArchivoDeCorte,
   convertirMedida,
@@ -30,25 +31,25 @@ import {
   PERFIL_GENERICO,
   type ClaveColumna,
   type PerfilDeExportacion,
-} from "../../lib/cortes/formatos";
+} from "../../bench/tanda11/ts/formatos";
 import {
   cargoPorCorte,
   cargoPorTapacanto,
   metrosDeTapacanto,
   tarifaDeCorte,
   type TarifaDeCorte,
-} from "../../lib/cortes/tarifa";
-import { presupuestarCorte } from "../../lib/cortes/presupuesto";
-import { fraccionDePlaca, medidaDePlaca, nombreDeLaMitad, type Mitad } from "../../lib/cortes/placa";
-import { leerAnchoDeSierra } from "../../lib/cortes/sierra";
+} from "../../bench/tanda11/ts/tarifa";
+import { presupuestarCorte } from "../../bench/tanda11/ts/presupuesto";
+import { fraccionDePlaca, medidaDePlaca, nombreDeLaMitad, type Mitad } from "../../bench/tanda11/ts/placa";
+import { leerAnchoDeSierra } from "../../bench/tanda11/ts/sierra";
 import {
   calculateBoards,
   calculateDeck,
   calculateFloor,
   calculateRoof,
   type ParametrosDeCalculo,
-} from "../../lib/calculations";
-import { despiecesDePrueba } from "../benchmark-plano";
+} from "../../bench/tanda11/ts/calculations";
+import { despiecesDePrueba } from "../../bench/tanda11/ts/benchmark-plano";
 
 if (process.env.TZ !== "America/Argentina/Buenos_Aires") {
   throw new Error("Correlo con TZ=America/Argentina/Buenos_Aires (la fecha del PTX).");

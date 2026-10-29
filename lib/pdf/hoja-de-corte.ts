@@ -16,7 +16,7 @@ import {
   serializar,
   type Hoja,
 } from "@/lib/pdf/hoja";
-import type { HojaDeCorte, OperacionDeCorte, PatronDeCorte } from "@/lib/cortes/secuencia";
+import type { HojaDeCorte, OperacionDeCorte, PatronDeCorte } from "@/lib/cortes/tipos";
 import { formatearSierra } from "@/lib/cortes/sierra";
 
 /**

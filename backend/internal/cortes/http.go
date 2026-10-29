@@ -674,3 +674,32 @@ func (a *API) ptx(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	_, _ = w.Write([]byte(archivo))
 }
+
+func (o respuesta) VisitVistaPreviaDePerfilResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+// VistaPreviaDePerfil es cómo saldría el archivo con un formato que todavía
+// se está armando en pantalla.
+func (a *API) VistaPreviaDePerfil(ctx context.Context, r cortesapi.VistaPreviaDePerfilRequestObject) (cortesapi.VistaPreviaDePerfilResponseObject, error) {
+	if _, err := auth.ExigirStaff(ctx); err != nil {
+		return nil, err
+	}
+	b := r.Body
+	p := PerfilDeExportacion{
+		Nombre: b.Perfil.Nombre, Separador: b.Perfil.Separador, ConEncabezado: b.Perfil.ConEncabezado,
+		Unidad: string(b.Perfil.Unidad), Decimal: string(b.Perfil.Decimal), SiNo: [2]string{b.Perfil.SiNo[0], b.Perfil.SiNo[1]},
+		FinDeLinea: b.Perfil.FinDeLinea,
+	}
+	if p.Separador == "" {
+		p.Separador = ";"
+	}
+	for _, c := range b.Perfil.Columnas {
+		p.Columnas = append(p.Columnas, ColumnaConfigurada{c.Clave, c.Encabezado})
+	}
+	c := CorteParaExportar{Numero: b.Corte.Numero, Cliente: b.Corte.Cliente, Material: b.Corte.Material}
+	for _, x := range b.Corte.Piezas {
+		c.Piezas = append(c.Piezas, PiezaParaExportar{x.LargoMm, x.AnchoMm, x.Cantidad, x.RespetaVeta, x.CantoLargo, x.CantoAncho, x.Etiqueta})
+	}
+	return ok(map[string]string{"archivo": ArmarArchivoDeCorte(c, p), "nombre": NombreDeArchivo(c.Numero, p.Separador)}), nil
+}

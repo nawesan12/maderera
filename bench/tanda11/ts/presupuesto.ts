@@ -20,13 +20,13 @@
  * argumento porque dependen de la lista del cliente, y eso lo resuelve el DAL.
  */
 
-import type { PlanoDeCorte } from "@/lib/cortes/plano";
+import type { PlanoDeCorte } from "./plano";
 import {
   cargoPorCorte,
   cargoPorTapacanto,
   metrosDeTapacanto,
   type TarifaDeCorte,
-} from "@/lib/cortes/tarifa";
+} from "./tarifa";
 
 /**
  * Una pieza como la conoce el presupuesto.

@@ -9,21 +9,9 @@ import { ArrowLeft, Download, Flame, ListChecks, Map, Tags } from "lucide-react"
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_CORTE, Pasos } from "@/components/admin/pasos";
 import { fechaHora, plural } from "@/components/admin/formato";
-import { obtenerCorte } from "@/lib/dal/admin/cortes";
-import { tarifasDeCorte } from "@/lib/dal/cortes-tarifas";
-import {
-  cargoPorCorte,
-  cargoPorTapacanto,
-  metrosDeTapacanto,
-  tarifaDeCorte,
-} from "@/lib/cortes/tarifa";
-import {
-  calcularPlanoDeCorteSinTrabar,
-  leerAcomodoManual,
-} from "@/lib/cortes/plano";
+import { fichaDeCorte } from "@/lib/dal/admin/cortes";
 import { AcomodoDelCorte } from "../acomodo";
-import { presupuestarCorte } from "@/lib/cortes/presupuesto";
-import { fraccionDePlaca, nombreDeLaMitad } from "@/lib/cortes/placa";
+import { nombreDeLaMitad } from "@/lib/cortes/placa";
 import { formatearMonto } from "@/lib/formato";
 import { AccionesCorte } from "../acciones";
 import { CargarPasadas } from "../pasadas";
@@ -37,54 +25,17 @@ export default async function FichaCortePage({
 }) {
   const { id } = await params;
   if (!esUuid(id)) notFound();
-  const corte = await obtenerCorte(id);
+  // La ficha llega armada de Go (backend/internal/cortes): la tarifa según
+  // la categoría y la lista del cliente, el plano con el disco, lo fijado a
+  // mano y el motor con que nació el trabajo, y el presupuesto placa por
+  // placa (de la que sale más de la mitad se vende entera y el corte va sin
+  // cargo).
+  const ficha = await fichaDeCorte(id);
 
-  if (!corte) notFound();
+  if (!ficha) notFound();
+  const { corte, tarifa, cargo, metrosCanto, cargoCanto, plano, cuenta } = ficha;
 
   const totalPiezas = corte.piezas.reduce((s, p) => s + p.cantidad, 0);
-
-  // La tarifa depende del material y de la lista de quien encarga: un mayorista
-  // paga $996 la pasada donde el público paga $1.200.
-  // Por categoría primero —que es como se cargan las tarifas— y por la
-  // descripción después, que es lo único que hay si el material lo trajo el
-  // cliente y no salió del catálogo.
-  const tarifa = tarifaDeCorte(
-    await tarifasDeCorte(),
-    [corte.categoria ?? "", corte.material],
-    corte.priceListId ?? null,
-  );
-  const cargo = cargoPorCorte(tarifa, corte.pasadas);
-  // Los metros de tapacanto salen del despiece, con la cuenta de la planilla
-  // del taller; el pegado se cobra aparte del corte.
-  const metrosCanto = metrosDeTapacanto(corte.piezas);
-  const cargoCanto = cargoPorTapacanto(tarifa, metrosCanto);
-  /*
-   * El plano, que es de donde sale el precio.
-   *
-   * No se puede cobrar un corte sin ver cómo entra en la placa: de una placa de
-   * la que sale más de la mitad se vende la placa entera y el corte va sin
-   * cargo. Ver `lib/cortes/presupuesto.ts`.
-   */
-  const plano = await calcularPlanoDeCorteSinTrabar({
-    piezas: corte.piezas,
-    placaLargo: corte.medida.largo,
-    placaAncho: corte.medida.ancho,
-    // El disco de **este** trabajo, guardado al crearlo: cambiar el general en
-    // /admin/calculadoras ya no redibuja los planos viejos ni su precio.
-    anchoSierra: corte.anchoSierraMm,
-    // Lo que alguien corrigió a mano cuando cargó el trabajo.
-    fijadas: leerAcomodoManual(corte.acomodoManual),
-    // Con el motor con que nació el trabajo (ver `cutting_orders.motorPlano`).
-    busqueda: corte.motorPlano >= 2,
-  });
-  const cuenta = presupuestarCorte({
-    plano,
-    tarifa,
-    precioPorPlaca: corte.precioPlaca,
-    piezas: corte.piezas,
-    // De media placa se cobra media placa.
-    fraccion: fraccionDePlaca(corte.medida.mitad, corte.precioMediaPct ?? 50),
-  });
 
   // Terminado: el cliente tiene que enterarse para venir a buscarlo.
   // Solo para quien atiende el WhatsApp de la maderera (no el aserradero ni depósito).
@@ -363,7 +314,7 @@ export default async function FichaCortePage({
               placaAncho={plano.placaAncho}
               anchoSierra={plano.anchoSierra}
               busqueda={corte.motorPlano >= 2}
-              inicial={leerAcomodoManual(corte.acomodoManual)}
+              inicial={ficha.fijadas}
             />
           </div>
         </section>

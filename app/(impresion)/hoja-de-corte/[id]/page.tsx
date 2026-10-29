@@ -2,13 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Hoja, MUESTRA_DEL_BUILD } from "../../preparando";
 import { requireStaff } from "@/lib/dal/session";
-import { obtenerCorte } from "@/lib/dal/admin/cortes";
-import {
-  calcularPlanoDeCorteSinTrabar,
-  leerAcomodoManual,
-} from "@/lib/cortes/plano";
+import { hojaDelCorte } from "@/lib/dal/admin/cortes";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
-import { armarHojaDeCorte } from "@/lib/cortes/secuencia";
 import { HojaDeCorteImpresa } from "@/components/cortes/hoja-de-corte";
 
 export const metadata: Metadata = {
@@ -23,7 +18,7 @@ export const metadata: Metadata = {
  * Es lo que le daba Cutty al operario del semiautomático de WinCut, y Cutty no
  * anda. Sale del mismo plano que la ficha, el PDF y el plano del taller —con el
  * disco y el motor con que nació el trabajo—, así que lo que se corta es lo que
- * se cobró. Ver `lib/cortes/secuencia.ts`.
+ * se cobró. Ver `backend/internal/cortes/secuencia.go`.
  *
  * La abre todo el personal, aserradero incluido: es su hoja de trabajo.
  */
@@ -47,23 +42,15 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
   await requireStaff();
 
   const { id } = await params;
-  const corte = await obtenerCorte(id);
-  if (!corte) notFound();
-
-  const plano = await calcularPlanoDeCorteSinTrabar({
-    piezas: corte.piezas,
-    placaLargo: corte.medida.largo,
-    placaAncho: corte.medida.ancho,
-    // El disco de este trabajo: con otro, las medidas de la hoja no serían
-    // las del patrón que se cobró.
-    anchoSierra: corte.anchoSierraMm,
-    fijadas: leerAcomodoManual(corte.acomodoManual),
-    busqueda: corte.motorPlano >= 2,
-  });
+  // La hoja la arma Go (backend/internal/cortes/secuencia.go) del plano del
+  // trabajo, con su disco y su motor.
+  const datos = await hojaDelCorte(id);
+  if (!datos) notFound();
+  const { corte, hoja } = datos;
 
   return (
     <HojaDeCorteImpresa
-      hoja={armarHojaDeCorte(plano)}
+      hoja={hoja}
       corte={{
         id: corte.id,
         numero: corte.numero,

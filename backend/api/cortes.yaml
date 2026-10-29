@@ -48,7 +48,7 @@ paths:
           description: El trabajo, su plano, el presupuesto y lo que se cobra
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Ficha" }
+              schema: { $ref: "#/components/schemas/FichaCorte" }
         "404": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/cortes/{id}/hoja:
     get:
@@ -154,6 +154,65 @@ paths:
       responses:
         "204": { description: Guardado }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/perfiles/vista-previa:
+    post:
+      operationId: VistaPreviaDePerfil
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [perfil, corte]
+              additionalProperties: false
+              properties:
+                perfil:
+                  type: object
+                  required: [nombre, separador, conEncabezado, unidad, decimal, siNo, finDeLinea, columnas]
+                  properties:
+                    nombre: { type: string }
+                    separador: { type: string, maxLength: 4 }
+                    conEncabezado: { type: boolean }
+                    unidad: { type: string, enum: [mm, cm, m] }
+                    decimal: { type: string, enum: [",", "."] }
+                    siNo: { type: array, minItems: 2, maxItems: 2, items: { type: string, maxLength: 20 } }
+                    finDeLinea: { type: string, maxLength: 2 }
+                    columnas:
+                      type: array
+                      maxItems: 40
+                      items:
+                        type: object
+                        required: [clave, encabezado]
+                        properties:
+                          clave: { type: string }
+                          encabezado: { type: string, maxLength: 80 }
+                corte:
+                  type: object
+                  required: [numero, cliente, material, piezas]
+                  properties:
+                    numero: { type: string, maxLength: 80 }
+                    cliente: { type: string, maxLength: 200 }
+                    material: { type: string, maxLength: 200 }
+                    piezas:
+                      type: array
+                      maxItems: 50
+                      items:
+                        type: object
+                        required: [largoMm, anchoMm, cantidad, respetaVeta, cantoLargo, cantoAncho, etiqueta]
+                        properties:
+                          largoMm: { type: number, format: double }
+                          anchoMm: { type: number, format: double }
+                          cantidad: { type: number, format: double }
+                          respetaVeta: { type: number, format: double }
+                          cantoLargo: { type: number, format: double }
+                          cantoAncho: { type: number, format: double }
+                          etiqueta: { type: string, nullable: true }
+      responses:
+        "200":
+          description: El archivo como saldría con ese formato, y su nombre
+          content:
+            application/json:
+              schema: { type: object, required: [archivo, nombre], properties: { archivo: { type: string }, nombre: { type: string } } }
   /api/v1/admin/cortes/perfiles/{perfil}:
     delete:
       operationId: BorrarPerfil
@@ -425,7 +484,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object }
+            schema: { type: object, additionalProperties: true }
       responses:
         "200":
           description: Lo que se guarda en el carrito
@@ -524,7 +583,7 @@ components:
         notas: { type: string }
         acomodoManual: { type: string }
         anchoSierraMm: { type: string }
-        piezas: { type: array, maxItems: 500, items: { type: object } }
+        piezas: { type: array, maxItems: 500, items: { type: object, additionalProperties: true } }
     PiezaDelCorte:
       type: object
       required: [id, cuttingOrderId, largoMm, anchoMm, cantidad, respetaVeta, cantoLargo, cantoAncho, aclaracion, etiqueta, orden]
@@ -608,9 +667,9 @@ components:
         activo: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-    Ficha:
+    FichaCorte:
       type: object
-      required: [corte, tarifa, cargo, metrosCanto, cargoCanto, plano, superficies, cuenta]
+      required: [corte, tarifa, cargo, metrosCanto, cargoCanto, plano, superficies, cuenta, fijadas]
       properties:
         corte: { $ref: "#/components/schemas/Corte" }
         tarifa: { allOf: [{ $ref: "#/components/schemas/TarifaDeCorte" }], nullable: true }
@@ -620,6 +679,7 @@ components:
         plano: { $ref: "#/components/schemas/Plano" }
         superficies: { type: array, items: { type: number, format: double } }
         cuenta: { $ref: "#/components/schemas/Presupuesto" }
+        fijadas: { type: array, items: { $ref: "#/components/schemas/PiezaFijada" } }
     PiezaAcortar:
       type: object
       required: [largoMm, anchoMm, cantidad, respetaVeta]

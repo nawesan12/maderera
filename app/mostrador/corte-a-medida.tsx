@@ -9,10 +9,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PlanoEditable } from "@/components/cortes/plano-editable";
-import {
-  calcularPlanoDeCorte,
-  type PiezaFijada,
-} from "@/lib/cortes/plano";
+import type { PiezaFijada } from "@/lib/cortes/tipos";
+import { usePlano } from "@/lib/cortes/en-vivo";
 import {
   fraccionDePlaca,
   medidaDePlaca,
@@ -137,17 +135,14 @@ export function CorteAMedida({
     [piezas],
   );
 
-  const plano = useMemo(
-    () =>
-      calcularPlanoDeCorte({
-        piezas: validas,
-        placaLargo,
-        placaAncho,
-        anchoSierra,
-        fijadas,
-      }),
-    [validas, placaLargo, placaAncho, anchoSierra, fijadas],
-  );
+  // El plano lo calcula Go mientras se tipea (ver `lib/cortes/en-vivo.ts`).
+  const { plano, calculando } = usePlano({
+    piezas: validas,
+    placaLargo,
+    placaAncho,
+    anchoSierra,
+    fijadas,
+  });
 
   // La misma cuenta que la ficha del corte y la planilla del taller, que ya
   // está probada: no hay dos formas de medir un metro de tapacanto.
@@ -164,7 +159,7 @@ export function CorteAMedida({
   const subtotalCanto = Math.round(metrosCanto * precioPorMetroCanto * 100) / 100;
   const total = subtotalPlacas + subtotalCorte + subtotalCanto;
 
-  const sePuede = validas.length > 0 && plano.noEntran.length === 0;
+  const sePuede = validas.length > 0 && plano.noEntran.length === 0 && !calculando;
 
   /**
    * Suma una pieza y deja el cursor en su largo.

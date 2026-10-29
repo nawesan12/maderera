@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { AlertCircle, Check, Loader2, Save } from "lucide-react";
-import type { ParametrosDeCalculo } from "@/lib/calculations";
+import type { ParametrosDeCalculo } from "@/lib/cortes/tipos";
 import { guardarParametros, type EstadoCalculadoras } from "./actions";
 
 const inicial: EstadoCalculadoras = {};

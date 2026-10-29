@@ -11,10 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { crearCorte } from "../actions";
 import { buscarClientes, buscarEnMostrador } from "@/app/mostrador/actions";
 import { medidaDePlaca, nombreDeLaMitad, type Mitad } from "@/lib/cortes/placa";
-import {
-  calcularPlanoDeCorte,
-  type PiezaFijada,
-} from "@/lib/cortes/plano";
+import type { PiezaFijada } from "@/lib/cortes/tipos";
+import { usePlano } from "@/lib/cortes/en-vivo";
 import { PlanoEnVivo } from "@/components/cortes/plano-en-vivo";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";
@@ -170,20 +168,17 @@ export function FormularioCorte({
   const anchoSierra = leerAnchoDeSierra(sierraTexto) ?? anchoSierraGeneral;
 
   /*
-   * El plano se calcula acá y no adentro del dibujo porque el formulario lo
-   * necesita para dos cosas: mostrarlo y proponer cuántas placas.
+   * El plano se pide acá y no adentro del dibujo porque el formulario lo
+   * necesita para dos cosas: mostrarlo y proponer cuántas placas. Lo calcula
+   * Go mientras se tipea (ver `lib/cortes/en-vivo.ts`).
    */
-  const plano = useMemo(
-    () =>
-      calcularPlanoDeCorte({
-        piezas: paraElPlano,
-        placaLargo: medidaPlaca.largo,
-        placaAncho: medidaPlaca.ancho,
-        anchoSierra,
-        fijadas,
-      }),
-    [paraElPlano, medidaPlaca.largo, medidaPlaca.ancho, anchoSierra, fijadas],
-  );
+  const { plano } = usePlano({
+    piezas: paraElPlano,
+    placaLargo: medidaPlaca.largo,
+    placaAncho: medidaPlaca.ancho,
+    anchoSierra,
+    fijadas,
+  });
 
   const placasDelPlano = Math.max(1, plano.placas.length);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useId, useState } from "react";
 import { useActionState } from "react";
 import { ChevronDown, ChevronUp, Loader2, Plus, Trash2, X } from "lucide-react";
 import {
@@ -9,19 +9,18 @@ import {
   type EstadoPerfil,
 } from "../perfiles-actions";
 import {
-  armarArchivoDeCorte,
   COLUMNAS,
-  PERFIL_GENERICO,
+  COLUMNAS_GENERICAS,
   type ClaveColumna,
   type ColumnaConfigurada,
-  type CorteParaExportar,
-} from "@/lib/cortes/formatos";
-import type { CuttingExportProfile } from "@/lib/db/schema";
+} from "@/lib/cortes/tipos";
+import { useDeGo } from "@/lib/cortes/en-vivo";
+import type { PerfilGuardado as CuttingExportProfile } from "@/lib/dal/admin/cortes-exportacion";
 
 const inicial: EstadoPerfil = {};
 
 /** Un corte de mentira para la vista previa. Medidas reales de una placa. */
-const EJEMPLO: CorteParaExportar = {
+const EJEMPLO = {
   numero: "C-1042",
   cliente: "Carpintería Pérez",
   material: "Melamina blanca 18mm",
@@ -126,12 +125,12 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
   const [estado, guardar, guardando] = useActionState(guardarPerfil, inicial);
 
   const [columnas, setColumnas] = useState<ColumnaConfigurada[]>(() => {
-    if (!perfil) return PERFIL_GENERICO.columnas;
+    if (!perfil) return COLUMNAS_GENERICAS;
     try {
       const crudo = JSON.parse(perfil.columnas) as ColumnaConfigurada[];
-      return Array.isArray(crudo) && crudo.length > 0 ? crudo : PERFIL_GENERICO.columnas;
+      return Array.isArray(crudo) && crudo.length > 0 ? crudo : COLUMNAS_GENERICAS;
     } catch {
-      return PERFIL_GENERICO.columnas;
+      return COLUMNAS_GENERICAS;
     }
   });
 
@@ -142,23 +141,24 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
   const [valorSi, setValorSi] = useState(perfil?.valorSi ?? "Sí");
   const [valorNo, setValorNo] = useState(perfil?.valorNo ?? "No");
 
-  // La vista previa se arma con el mismo motor que el archivo de verdad: si se
-  // ve bien acá, sale así. Una previsualización aproximada no serviría para
-  // esto, que es justamente acertarle a un formato ajeno.
-  const previa = useMemo(
-    () =>
-      armarArchivoDeCorte(EJEMPLO, {
-        nombre: "previa",
-        separador: separador === "tab" ? "\t" : separador,
-        conEncabezado,
-        unidad: unidad as "mm" | "cm" | "m",
-        decimal: decimal as "," | ".",
-        siNo: [valorSi, valorNo],
-        finDeLinea: "\n",
-        columnas,
-      }),
-    [columnas, separador, unidad, decimal, conEncabezado, valorSi, valorNo],
-  );
+  // La vista previa la arma Go con el mismo motor que el archivo de verdad
+  // (backend/internal/cortes/formatos.go): si se ve bien acá, sale así. Una
+  // previsualización aproximada no serviría para esto, que es justamente
+  // acertarle a un formato ajeno.
+  const { datos: vista } = useDeGo<{ archivo: string }>("/api/v1/admin/cortes/perfiles/vista-previa", {
+    perfil: {
+      nombre: "previa",
+      separador: separador === "tab" ? "\t" : separador,
+      conEncabezado,
+      unidad,
+      decimal,
+      siNo: [valorSi, valorNo],
+      finDeLinea: "\n",
+      columnas,
+    },
+    corte: EJEMPLO,
+  });
+  const previa = vista?.archivo ?? "";
 
   const sinUsar = (Object.keys(COLUMNAS) as ClaveColumna[]).filter(
     (c) => !columnas.some((x) => x.clave === c),

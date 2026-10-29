@@ -7,7 +7,7 @@ import type {
   PiezaFijada,
   PlacaDelPlano,
   PlanoDeCorte,
-} from "@/lib/cortes/plano";
+} from "@/lib/cortes/tipos";
 
 /**
  * El plano, con el mouse.

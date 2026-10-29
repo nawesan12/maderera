@@ -18,7 +18,7 @@
  * contra el mismo material.
  */
 
-import { calcularPlanoDeCorte, type PiezaAcortar } from "../lib/cortes/plano";
+import { calcularPlanoDeCorte, type PiezaAcortar } from "./plano";
 
 function mulberry32(semilla: number) {
   let a = semilla >>> 0;

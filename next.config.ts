@@ -133,6 +133,11 @@ const nextConfig: NextConfig = {
         { source: "/api/v1/:ruta*", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/v1/:ruta*` },
         // El tiempo real del panel también es de Go (backend/internal/vivo).
         { source: "/api/vivo", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/vivo` },
+        // Las rutas de siempre del agente del taller y la lista/PTX del panel,
+        // ahora de Go (backend/internal/cortes); el PDF y la hoja siguen en Next.
+        { source: "/api/cortes/pendientes", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/cortes/pendientes` },
+        { source: "/api/cortes/:id/lista", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/cortes/:id/lista` },
+        { source: "/api/cortes/:id/ptx", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/cortes/:id/ptx` },
       ],
       afterFiles: [],
       fallback: [

@@ -608,3 +608,144 @@ mismo en todos.
   producción (UTC) y los listados por período no coinciden. `TZ=UTC`.
 - **Un `pkill` de otro agente puede tirar tu servidor**: el binario del
   benchmark lleva nombre propio (`mjbj-t8`).
+
+## Tanda 5: mostrador, caja, ventas y entregas (29/10, rama go-mostrador)
+
+Sobre `go-cuentas`. Hecha en cuatro partes (el mostrador, y tres ramas
+integradas: `go-mostrador-pedidos`, `go-mostrador-entregas`,
+`go-mostrador-caja`). Falta correr las e2e (`e2e/mostrador.spec.ts`,
+`ventas.spec.ts`, `entregas.spec.ts`, `caja.spec.ts`) y aplicar la 00085.
+
+- [x] La base compartida: `internal/ventas` (importes del mostrador, forma de
+      venta, descuento por medio de pago, fecha acotada, orden de clientes),
+      `internal/reservas` (reservar, liberar, salida por remito, devolver,
+      factores y costos congelados: **lo usa también el checkout de la tanda
+      6**), `internal/caja` (turno que contiene un momento —compras lo usa en
+      vez de su copia—, turno abierto, cierre Z, latido) e `internal/zodjs`
+      (el lector de zod de compras, exportado y completo).
+- [x] **Mostrador** (`internal/mostrador`, `api/mostrador.yaml`): la venta (la
+      única que la registra, repetible por su clave), anular, abrir, mover y
+      cerrar la caja con el arqueo, el buscador, el alta rápida, el
+      presupuesto, el cobro de la cuenta con `cobros.EmitirRecibo`, la
+      pantalla y la descarga de la cola. **Las rutas de la copia local no
+      cambian**: `/api/mostrador/latido`, `catalogo`, `clientes`,
+      `caja/movimientos` y `caja/vincular` las atiende Go en la misma
+      dirección, con el mismo 401/403 de la guardia (Caddy `@mostradorGo`,
+      rewrite en `next.config.ts`). Quedan en Next `/api/mostrador/config`
+      (lee lo fiscal y las fichas de `lib/sucursales.ts`) y
+      `/api/mostrador/ventas`, que le pide la descarga a Go y emite el
+      comprobante (facturación, tanda 7). Tests de contrato sacados del TS
+      para cada ruta.
+- [x] **Pedidos y presupuestos** (`internal/pedidos`, `api/ventas.yaml`):
+      tablero y ficha (el margen, solo para el admin), avanzar, cancelar,
+      cobrado, presupuestos (plazo, decidir, convertir, alta) y su PDF.
+- [x] **Entregas** (`internal/entregas`, `api/entregas.yaml`): saldo de
+      acopio, remitos (preparar, anular, el de constancia del mostrador), la
+      firma pública por token (`/firmar/<token>` no cambia), el remito en PDF,
+      los retiros del portal y las zonas de envío. Serie de remitos con la
+      misma clave del TS (918273645, `numeracion.Remito`).
+- [x] **Caja del panel, cierre y reportes** (`internal/caja/panel.go`,
+      `internal/reportes`, `api/caja.yaml`, `api/reportes.yaml`): cajas
+      físicas, ventas sueltas, turnos cerrados con el cierre Z, lo emitido,
+      el reporte de ventas y la reposición (PDF y CSV desde Go), el cierre del
+      mes con su CSV y el inicio del panel (métricas y pendientes por rol).
+- [x] Golden: `scripts/golden/mostrador.ts` (4000 ventas, 2000 escalas, 3000
+      formas de venta, fechas, clientes y 10.500 formularios de las cinco
+      puertas del mostrador), `pedidos.ts` (15.000), `entregas.ts` (14.515),
+      `reportes.ts` (~13.000). Go da lo mismo exacto.
+- [x] Migración 00085: índice sobre la expresión de la numeración (ver abajo).
+- [x] Benchmark (`bench/tanda5`).
+
+### Qué TS se borró y qué quedó
+
+- Borrado: `lib/mostrador/{venta,anular,buscar,turno,caja}.ts`,
+  `lib/dal/admin/{mostrador-offline,latido-caja}.ts`, la lógica de los DAL de
+  ventas, entregas, cajas físicas, cierre, reportes, reposición, resumen y
+  pendientes (quedan envoltorios con los mismos nombres),
+  `lib/reposicion.ts`, `lib/contable/asientos.ts`, `lib/compras/costo.ts` y
+  los PDF de presupuesto, remito, reposición y reporte de ventas (copias en
+  `scripts/golden/originales` y `scripts/golden/pdf/ts` para los golden).
+- Queda en TS: lo que corre en el navegador (`lib/mostrador/importes.ts`,
+  `ticket.ts`, `arqueo.ts`, `ranking-clientes.ts`, `offline/*`; Go tiene su
+  gemelo con golden), el comprobante (`lib/mostrador/comprobante.ts`, tanda
+  7), y lo que usa el checkout de la tanda 6: `lib/dal/numeracion-ventas.ts`,
+  `lib/inventario/reservas.ts`, `lib/compras/congelar.ts`, `lib/ventas/*`
+  (con su gemelo en `internal/reservas` y `internal/ventas`). También
+  `lib/cobros/recibo.ts` y `lib/dal/credito.ts` (facturación y acreditar).
+
+### Bugs del TS arreglados (cada uno con su prueba, vista fallar sin el arreglo)
+
+- **La venta no tomaba el candado del stock**: una corrección de la ficha
+  (que lee y escribe el físico con el candado) le pisaba el descuento.
+  `TestVentaContraFichaNoPierdeStock`. Las ventas toman los candados de
+  todas sus variantes juntos y en orden (sin abrazo mortal entre dos ventas).
+- **Una venta de la cola de un usuario que ya no existe** quedaba en
+  «reintentar» para siempre (la clave foránea de la caja); ahora entra a
+  nombre de quien la sube. `TestDescargaDeLaCola`.
+- **El comprobante de una venta de la cola** se emitía con las líneas sin el
+  descuento repartido (la acción en línea sí lo hacía bien). Go devuelve las
+  líneas rebajadas.
+- Pedidos: la misma conversión de un presupuesto dos veces daba varios
+  pedidos; avanzar y cancelar a la vez dejaba un pedido vivo con las
+  reservas liberadas; el historial repetía estados (FOR UPDATE de la fila).
+  La anulación del mostrador también bloquea la fila.
+- Entregas: veinte retiros a la vez del mismo acopio sacaban de más (el
+  saldo se leía fuera de la transacción); la anulación y la firma dobles;
+  anular un remito de constancia devolvía al stock lo que nunca sacó.
+- Caja: asignar una venta suelta a un turno duplicaba el efectivo con diez
+  clics.
+- Fechas en hora argentina: «hoy» de las ventas del mostrador, el año del
+  presupuesto (el 31/12 desde las 21 salía P-2027), la firma y la fecha del
+  remito, los períodos y meses de los reportes, lo emitido por caja y la
+  etiqueta del turno. **El cierre del mes sigue en UTC a propósito**: los
+  días de gastos, facturas de compra y recepciones se guardan a las 0 UTC.
+- Permisos: las acciones de la caja del panel piden el acceso de
+  `/admin/caja`; el remito de constancia, el de `/mostrador`.
+
+### Pendiente
+
+- [ ] Correr las cuatro e2e; aplicar la 00085 antes de desplegar.
+- [ ] Facturación (tanda 7): `/api/mostrador/ventas` y `/api/mostrador/config`
+      se mudan enteros a Go cuando el comprobante esté en Go.
+- [ ] Tanda 6 (checkout y Mercado Pago): confirmar la compra tiene que usar
+      `reservas.ReservarPedido`, `reservas.FactoresDeStock`,
+      `reservas.CostosParaCongelar`, `numeracion.Pedido` y
+      `pedidos.DatosParaTransferir`; acreditar, `cobros.EmitirRecibo`. Al
+      mudarlo se borran los TS de la lista de arriba.
+- Diferencias sabidas: un NaN que la acción recibía de la pantalla llega a
+  Go como null («expected number, received null» en vez de «received NaN»);
+  `limiteCredito` del buscador de clientes sale como número (el TS lo daba
+  como texto; la pantalla no lo usa).
+- Mientras el carrito numere en TS, la noche del 31/12 los presupuestos de
+  Go y del carrito usan años distintos (prefijos distintos: no chocan).
+
+### Benchmark (29/10/2026, misma Mac, 20 a la vez; detalle en `bench/tanda5`)
+
+| Prueba | TypeScript | Go | Go / TS |
+|---|---:|---:|---:|
+| Venta del mostrador (mismo candado): ventas/s | 27,0 | 30,5 | 1,1× (manda el candado) |
+| Búsqueda del mostrador: pedidos/s | 29,6 | 26,3 | empate (manda Postgres) |
+| Listado de pedidos (~9000): pedidos/s | 4,9 | 26,5 | **5,4×** |
+| Descarga de la cola, lotes de 25, 5 a la vez: lotes/s | 1,5 | 1,6 | empate |
+| Memoria máx. | 170–423 MB | 39–195 MB | ~3× menos |
+
+### Lo aprendido
+
+- **La numeración por máximo barre la tabla entera con el candado tomado**:
+  sin índice era el techo de ventas por segundo de todo el negocio, y bajaba
+  con cada pedido (con 6000, 23 por segundo y lotes de la cola de 27 s). La
+  00085 indexa la misma expresión: el máximo sale del índice.
+- **pgx y el plan genérico**: con la sentencia preparada en caché, después de
+  cinco ejecuciones Postgres puede usar un plan genérico, que para un ILIKE
+  con el patrón como parámetro no sabe nada. La búsqueda va con
+  `QueryExecModeExec`.
+- **Un hueco de una lista en JS viaja como null**: el golden de los esquemas
+  se arma sobre `JSON.parse(JSON.stringify(entrada))`, que es lo que llega
+  por la red. Y `Number([])` es 0: el coerce de zod convierte listas.
+- **El candado de una serie se toma antes de leer lo que valida** (entregas):
+  si no, numera bien y entrega de más. Con candado, `now()` es la hora del
+  BEGIN: va `clock_timestamp()` donde importa el orden.
+- **Tres agentes en paralelo en ramas propias** desde la misma base, con los
+  nombres de paquete, contrato, migración y claves repartidos de antemano: los
+  únicos choques fueron las líneas agregadas de `api.go`, `generar.go` y
+  `lib/api/tipos/index.ts` (las uniones del final: cuidado con el `;`).

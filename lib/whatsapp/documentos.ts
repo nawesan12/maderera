@@ -1,11 +1,8 @@
 import "server-only";
 
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { cuttingOrders, deliveries, invoices, orders, quotes, receipts } from "@/lib/db/schema";
 import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 import { numeroFormateado } from "@/lib/fiscal/comprobantes";
-import { fechaCorta, moneda } from "@/lib/formato";
+import { fechaCorta } from "@/lib/formato";
 
 /**
  * Los papeles de la plataforma que se pueden mandar por WhatsApp.
@@ -16,7 +13,9 @@ import { fechaCorta, moneda } from "@/lib/formato";
  * por id: no se publican en una URL, porque el remito de un cliente no tiene
  * por qué estar en internet para que Meta lo vaya a buscar.
  *
- * Solo para el personal: quien llama ya validó que puede usar la bandeja.
+ * Solo para el personal: quien llama ya validó que puede usar la bandeja. La
+ * lista de los papeles de un cliente la arma la API de Go; los PDF siguen acá
+ * hasta la tanda 12 y viajan a Go en el pedido que los manda.
  */
 
 export const TIPOS_DE_DOCUMENTO = ["presupuesto", "comprobante", "remito", "recibo", "cuenta", "corte"] as const;
@@ -176,106 +175,4 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
       };
     }
   }
-}
-
-export interface DocumentoListado {
-  tipo: TipoDeDocumento;
-  id: string;
-  titulo: string;
-  detalle: string;
-  /** Cómo se lo nombra en el mensaje: «el remito R-0001-00000452». */
-  descripcion: string;
-  fecha: Date | null;
-}
-
-/**
- * Los papeles recientes de un cliente, para elegir cuál mandar desde la
- * conversación. Cinco de cada uno: lo que se manda por WhatsApp es casi
- * siempre lo último.
- */
-export async function documentosDelCliente(customerId: string): Promise<DocumentoListado[]> {
-  const [presupuestos, comprobantes, remitos, recibos, cortes] = await Promise.all([
-    db
-      .select({ id: quotes.id, numero: quotes.numero, total: quotes.total, fecha: quotes.createdAt })
-      .from(quotes)
-      .where(eq(quotes.customerId, customerId))
-      .orderBy(desc(quotes.createdAt))
-      .limit(5),
-    db
-      .select({
-        id: invoices.id,
-        tipo: invoices.tipo,
-        puntoVenta: invoices.puntoVenta,
-        numero: invoices.numero,
-        total: invoices.total,
-        fecha: invoices.createdAt,
-      })
-      .from(invoices)
-      .where(and(eq(invoices.customerId, customerId), ne(invoices.estado, "borrador")))
-      .orderBy(desc(invoices.createdAt))
-      .limit(5),
-    db
-      .select({ id: deliveries.id, numero: deliveries.numero, pedido: orders.numero, fecha: deliveries.createdAt })
-      .from(deliveries)
-      .innerJoin(orders, eq(orders.id, deliveries.orderId))
-      .where(eq(orders.customerId, customerId))
-      .orderBy(desc(deliveries.createdAt))
-      .limit(5),
-    db
-      .select({ id: receipts.id, numero: receipts.numero, total: receipts.total, fecha: receipts.createdAt })
-      .from(receipts)
-      .where(and(eq(receipts.customerId, customerId), inArray(receipts.estado, ["emitido"])))
-      .orderBy(desc(receipts.createdAt))
-      .limit(5),
-    db
-      .select({ id: cuttingOrders.id, numero: cuttingOrders.numero, fecha: cuttingOrders.createdAt })
-      .from(cuttingOrders)
-      .where(eq(cuttingOrders.customerId, customerId))
-      .orderBy(desc(cuttingOrders.createdAt))
-      .limit(5),
-  ]);
-
-  return [
-    { tipo: "cuenta" as const, id: customerId, titulo: "Resumen de cuenta", detalle: "Movimientos y saldo al día de hoy", descripcion: "el resumen de tu cuenta corriente", fecha: null },
-    ...presupuestos.map((p) => ({
-      tipo: "presupuesto" as const,
-      id: p.id,
-      titulo: `Presupuesto ${p.numero}`,
-      descripcion: `el presupuesto ${p.numero}`,
-      detalle: moneda.format(Number(p.total)),
-      fecha: p.fecha,
-    })),
-    ...comprobantes.map((c) => ({
-      tipo: "comprobante" as const,
-      id: c.id,
-      titulo: `Factura ${c.tipo.replace("factura_", "").toUpperCase()} ${numeroFormateado(c.puntoVenta, c.numero)}`,
-      descripcion: `la factura ${numeroFormateado(c.puntoVenta, c.numero)}`,
-      detalle: moneda.format(Number(c.total)),
-      fecha: c.fecha,
-    })),
-    ...remitos.map((r) => ({
-      tipo: "remito" as const,
-      id: r.id,
-      titulo: `Remito ${r.numero}`,
-      descripcion: `el remito ${r.numero}`,
-      detalle: `Pedido ${r.pedido}`,
-      fecha: r.fecha,
-    })),
-    ...recibos.map((r) => ({
-      tipo: "recibo" as const,
-      id: r.id,
-      titulo: `Recibo ${r.numero}`,
-      descripcion: `el recibo ${r.numero}`,
-      detalle: moneda.format(Number(r.total)),
-      fecha: r.fecha,
-    })),
-    ...cortes.map((c) => ({
-      tipo: "corte" as const,
-      id: c.id,
-      titulo: `Corte ${c.numero}`,
-      descripcion: `el plano de corte ${c.numero}`,
-      detalle: "Plano de corte",
-      fecha: c.fecha,
-    })),
-  ];
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CheckCircle2, FlaskConical, Settings2 } from "lucide-react";
 import { haceCuanto } from "@/lib/formato";
-import type { EstadoConexion } from "@/lib/whatsapp/tipos";
+import type { EstadoConexion } from "@/lib/dal/admin/whatsapp";
 
 /**
  * Estado de la conexión con WhatsApp.

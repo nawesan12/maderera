@@ -133,6 +133,8 @@ const nextConfig: NextConfig = {
         { source: "/api/v1/:ruta*", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/v1/:ruta*` },
         // El tiempo real del panel también es de Go (backend/internal/vivo).
         { source: "/api/vivo", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/vivo` },
+        // WhatsApp también: el webhook de Meta, los adjuntos y el envío de archivos.
+        { source: "/api/whatsapp/:ruta*", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/whatsapp/:ruta*` },
       ],
       afterFiles: [],
       fallback: [

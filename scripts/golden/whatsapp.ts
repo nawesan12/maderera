@@ -12,15 +12,35 @@
  * `cuerpoDelMensaje` (proveedor-cloud.ts), `limpiar` y `resumen` (ingesta.ts)
  * y `EVENTOS_WHATSAPP` (avisos.ts) viven en módulos con `server-only` y base:
  * van copiados textualmente de git 9a17128.
+ *
+ * `firma.ts`, `errores.ts` y `payload.ts` ya no están en lib/whatsapp (se
+ * mudaron a Go): se corren tal como eran en 9a17128, sacados de la historia
+ * con `git show` a una carpeta temporal.
  */
+import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import * as N from "../../lib/whatsapp/numeros";
 import * as V from "../../lib/whatsapp/ventana";
-import { firmaValida, firmar } from "../../lib/whatsapp/firma";
 import * as C from "../../lib/whatsapp/costos";
-import { explicarError, esFueraDeVentana } from "../../lib/whatsapp/errores";
 import * as P from "../../lib/whatsapp/plantillas";
-import { leerPayload } from "../../lib/whatsapp/payload";
+
+const historia = path.join(tmpdir(), "golden-whatsapp-9a17128");
+mkdirSync(historia, { recursive: true });
+for (const m of ["firma", "errores", "payload"]) {
+  writeFileSync(path.join(historia, `${m}.ts`), execFileSync("git", ["show", `9a17128:lib/whatsapp/${m}.ts`]));
+}
+const { firmaValida, firmar } = createRequire(import.meta.url)(path.join(historia, "firma.ts")) as {
+  firmaValida: (cuerpo: string, cabecera: string, secreto: string) => boolean;
+  firmar: (cuerpo: string, secreto: string) => string;
+};
+const { explicarError, esFueraDeVentana } = createRequire(import.meta.url)(path.join(historia, "errores.ts")) as {
+  explicarError: (codigo: number | null, detalle: string | null) => unknown;
+  esFueraDeVentana: (codigo: number | null) => boolean;
+};
+const { leerPayload } = createRequire(import.meta.url)(path.join(historia, "payload.ts")) as { leerPayload: (crudo: unknown) => unknown[] };
 import * as A from "../../lib/whatsapp/aviso-manual";
 import { PLANTILLAS_BASE } from "../../lib/whatsapp/plantillas-base";
 import * as F from "../../tests/fixtures/whatsapp/payloads";

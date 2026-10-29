@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, FileText, Loader2, Send, X } from "lucide-react";
 import { ConfirmarTope } from "./confirmar-tope";
 import { enviarDocumento, type EstadoWhatsapp } from "./actions";
-import type { DocumentoListado } from "@/lib/whatsapp/documentos";
+import type { DocumentoListado } from "@/lib/dal/admin/whatsapp";
 
 const estadoInicial: EstadoWhatsapp = {};
 

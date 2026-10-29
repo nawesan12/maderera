@@ -154,6 +154,17 @@ autoconfig.{$CORREO_DOMINIO} {
 		}
 	}
 
+	# WhatsApp es de Go (backend/internal/whatsapp): el webhook de Meta (la
+	# URL dada de alta en Meta no cambia), los adjuntos privados y el envío
+	# de archivos desde la bandeja (hasta 25 MB).
+	@whatsapp path /api/whatsapp/*
+	handle @whatsapp {
+		request_body {
+			max_size 25MB
+		}
+		reverse_proxy api:8080
+	}
+
 	# Todo lo demás va a la aplicación.
 	handle {
 		# Lo que Next ya marca como inmutable —los JS y CSS con hash en el

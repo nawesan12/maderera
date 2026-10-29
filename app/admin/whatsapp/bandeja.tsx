@@ -9,7 +9,7 @@ import { Hilo } from "./hilo";
 import { PanelCliente } from "./panel-cliente";
 import { NuevaConversacion } from "./nueva-conversacion";
 import type { ConversacionListada, DetalleConversacion, FiltroBandeja } from "@/lib/dal/admin/whatsapp";
-import type { PlantillaDisponible } from "@/lib/whatsapp/catalogo";
+import type { PlantillaDisponible } from "@/lib/dal/admin/whatsapp";
 import { useEnVivo } from "@/lib/vivo/use-en-vivo";
 import { dolares } from "@/lib/whatsapp/costos";
 

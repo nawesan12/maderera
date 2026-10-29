@@ -2,24 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AlertCircle, ArrowLeft, BellOff, Check, CircleAlert, ExternalLink, RefreshCw, Stethoscope } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import {
-  avisosCortadosPorTope,
-  bajasRegistradas,
-  estadoWhatsapp,
-  gastoDelMes,
-  listarAvisos,
-  ultimoDiagnostico,
-} from "@/lib/dal/admin/whatsapp";
+import { configuracionWhatsapp } from "@/lib/dal/admin/whatsapp";
 import { requireStaffRole } from "@/lib/dal/session";
-import { EVENTOS_WHATSAPP, sembrarAvisos } from "@/lib/whatsapp/avisos";
-import { plantillasGuardadas } from "@/lib/whatsapp/catalogo";
 import { PLANTILLAS_BASE } from "@/lib/whatsapp/plantillas-base";
 import { leerPlantilla, marcadores, nombreLegible } from "@/lib/whatsapp/plantillas";
 import { numeroLegible } from "@/lib/whatsapp/numeros";
 import { urlBase } from "@/lib/pagos/config";
 import { fechaCorta, fechaHora } from "@/lib/formato";
 import { CATEGORIAS_COBRO, dolares, NOMBRE_CATEGORIA, tarifaLegible } from "@/lib/whatsapp/costos";
-import type { Diagnostico } from "@/lib/whatsapp/tipos";
 import { FilaAviso } from "./aviso";
 import { BotonAccion, FormularioTope, MensajeDePrueba } from "./controles";
 
@@ -35,21 +25,22 @@ export const metadata: Metadata = { title: "WhatsApp · Configuración" };
  */
 export default async function ConfiguracionWhatsappPage() {
   await requireStaffRole("admin");
-  // La primera vez deja los interruptores creados y apagados.
-  await sembrarAvisos();
-
-  const [estado, avisos, guardadas, diagnosticoGuardado, gasto, bajas, cortados] = await Promise.all([
-    estadoWhatsapp(),
-    listarAvisos(),
-    plantillasGuardadas(),
-    ultimoDiagnostico(),
-    gastoDelMes(),
-    bajasRegistradas(),
-    avisosCortadosPorTope(),
-  ]);
+  // Todo de la API de Go, que la primera vez deja los interruptores creados y apagados.
+  const {
+    estado,
+    avisos,
+    eventos: EVENTOS_WHATSAPP,
+    guardadas,
+    diagnostico: diagnosticoGuardado,
+    gasto,
+    bajas,
+    cortados,
+    webhookSecreto,
+    firmaSecreto,
+  } = await configuracionWhatsapp();
 
   const enDemo = estado.proveedor === "demo";
-  const diagnostico = (diagnosticoGuardado?.diagnostico ?? null) as Diagnostico | null;
+  const diagnostico = diagnosticoGuardado?.diagnostico ?? null;
   const aprobada = (nombre: string) =>
     enDemo || guardadas.some((g) => g.nombre === nombre && g.estado === "APPROVED");
   const urlWebhook = `${urlBase()}/api/whatsapp/webhook`;
@@ -136,9 +127,9 @@ export default async function ConfiguracionWhatsappPage() {
           <dt className="text-muted-foreground">Dirección del webhook</dt>
           <dd className="tabular break-all">{urlWebhook}</dd>
           <dt className="text-muted-foreground">Verify token</dt>
-          <dd>{process.env.WHATSAPP_WEBHOOK_SECRET ? "cargado (WHATSAPP_WEBHOOK_SECRET)" : "falta WHATSAPP_WEBHOOK_SECRET"}</dd>
+          <dd>{webhookSecreto ? "cargado (WHATSAPP_WEBHOOK_SECRET)" : "falta WHATSAPP_WEBHOOK_SECRET"}</dd>
           <dt className="text-muted-foreground">Firma de Meta</dt>
-          <dd>{process.env.WHATSAPP_APP_SECRET ? "se valida (WHATSAPP_APP_SECRET)" : "falta WHATSAPP_APP_SECRET: se rechaza todo lo que llega"}</dd>
+          <dd>{firmaSecreto ? "se valida (WHATSAPP_APP_SECRET)" : "falta WHATSAPP_APP_SECRET: se rechaza todo lo que llega"}</dd>
           <dt className="text-muted-foreground">Último aviso de Meta</dt>
           <dd>
             {estado.ultimoWebhookAt

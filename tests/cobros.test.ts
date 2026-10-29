@@ -133,6 +133,12 @@ describe("el importe en letras del recibo", () => {
       "trescientos cuarenta y cinco mil seiscientos setenta y ocho con 90/100",
     );
   });
+
+  it("escribe los miles de millones (antes mil millones salía «millones»)", () => {
+    expect(importeEnLetras(1_000_000_000)).toBe("mil millones con 00/100");
+    expect(importeEnLetras(1_001_000_000)).toBe("mil un millones con 00/100");
+    expect(importeEnLetras(1_521_000_300)).toBe("mil quinientos veintiún millones trescientos con 00/100");
+  });
 });
 
 

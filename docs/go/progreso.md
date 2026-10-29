@@ -608,3 +608,106 @@ mismo en todos.
   producción (UTC) y los listados por período no coinciden. `TZ=UTC`.
 - **Un `pkill` de otro agente puede tirar tu servidor**: el binario del
   benchmark lleva nombre propio (`mjbj-t8`).
+
+## Tanda 13: la migración de ISIS (29/10, rama `go-migracion`)
+
+Rama `go-migracion`, desde 56ef2a1 (`go-cuentas`). En
+`backend/internal/migracion`, contrato `backend/api/migracion.yaml`.
+
+- [x] La lectura (`leer.go`, `analizar.go`, `informe.go`): las siete
+      entidades, el mapeo automático, la normalización de cada fila
+      (importes argentinos, fechas día primero, CUIT, correos, opciones), la
+      vista previa, el análisis del archivo (con `internal/planilla`) y los
+      controles del informe. **Golden** (`scripts/golden/migracion.ts` →
+      `testdata/golden/migracion`): 4038 fechas, 3000 mapeos, 2000 archivos
+      al azar (24.078 filas), 800 informes y 16 exportaciones de muestra de
+      ISIS en `archivos/` (sintéticas: no hay reales en el repo; CSV en
+      Windows-1252 y UTF-8 con BOM, con `;`, coma y tabulador, saltos de
+      línea entre comillas, .xlsx con textos compartidos y fechas). Go da lo
+      mismo exacto.
+- [x] La escritura (`escribir.go`): por lotes de 200, cada uno en su
+      transacción, fila por fila y con las mismas claves naturales del TS.
+      La corrida (`migration_runs`) suma los contadores en la base y guarda
+      los rechazos; al cerrar, el informe y la bitácora (`importar`,
+      `migracion`). Escribe directo en tablas de otras tandas con la misma
+      forma que el TS: `account_movements` (saldos, tanda 4/5),
+      `inventory` y su libro (stock), precios con `price_history`,
+      `historical_sales`/`historical_invoices` (no tocan la numeración ni
+      ARCA, tanda 7).
+- [x] **Repetible**: `TestMigracionCompletaYRepetible` corre las diez
+      muestras de punta a punta por HTTP (con el contrato) y otra vez: la
+      segunda no crea nada y la base queda idéntica.
+- [x] Next: el DAL y las cinco acciones del asistente son envoltorios; la
+      pantalla recibe las entidades y el lote de la API
+      (`GET /api/v1/admin/migracion/entidades`). Se borraron
+      `lib/migracion/{entidades,ejecutar}.ts`; `lib/csv.ts`, `lib/xlsx.ts`,
+      `lib/planilla.ts` y `lib/precios-csv.ts` ya no los usaba nadie de la
+      aplicación y pasaron a `scripts/golden/originales` (golden, vitest y
+      el benchmark de la tanda 3). Tipos en `lib/migracion/tipos.ts`.
+- [x] E2E escrita (`e2e/migracion.spec.ts`), **sin correr**: llega hasta la
+      vista previa y no escribe nada.
+- [x] Benchmark (`bench/tanda13`).
+
+Bugs arreglados (cada uno con su prueba que falla sin el arreglo):
+
+- **Un nombre con tildes se duplicaba en cada corrida.** Cliente, producto
+  o proveedor sin código ni CUIT: el TS buscaba `lower(nombre)` contra el
+  texto ya sin tildes, y «José Pérez» no se encontraba nunca. Ahora los dos
+  lados pasan por `comparable`, con un índice de nombres leído una vez por
+  lote (sin índice, compararlo en SQL recorría la tabla por fila).
+  `TestNombresConTildesNoSeDuplican`.
+- **La existencia no tomaba el candado del stock** (el de
+  `lib/inventario/reservas.ts`): dos a la vez, o una venta en el medio,
+  dejaban el libro de movimientos sin cerrar con el stock.
+  `TestStockSimultaneoCierraConElLibro`.
+- **Las fechas de un .xlsx salían un día antes** (`fechaDeSerie` restaba un
+  día de más): todo el histórico de ventas y comprobantes migrado desde
+  Excel, y las fechas de la importación de precios. La prueba de vitest
+  usaba 46269 (el 4/9) y así lo tapaba.
+- **«0,125» y «0.125» se leían como 125.** Con un cero o nada adelante, son
+  decimales.
+- Los dos últimos estaban reproducidos a propósito desde la tanda 3: ahora
+  que el TS no lee archivos en ningún lado, se arreglaron en Go y en la
+  copia de `scripts/golden/originales` (los golden de planilla y migración
+  se regeneraron: Go y TS siguen dando lo mismo).
+
+Reproducido a propósito, y pendiente:
+
+- [ ] Una alícuota que no entra en `numeric(4,2)` (un «105» en el archivo)
+      deshace el lote entero con «numeric field overflow», y la corrida
+      queda interrumpida: habría que validarla en la fila.
+- [ ] Los otros bugs del lector de .xlsx de la tanda 3 siguen: la hoja se
+      elige por nombre de archivo y no por las relaciones del libro, se
+      pierden los espacios de `xml:space="preserve"`, los `&#NN;` quedan
+      escritos y con prefijo de espacio de nombres la planilla sale vacía.
+- [ ] Dos lotes de saldos a la vez podrían cargar dos veces el saldo de un
+      cliente (mirar y escribir, sin candado). La pantalla manda los lotes
+      de a uno, como el TS.
+- [ ] El histórico de ventas y de comprobantes no tiene pantalla donde
+      verse: solo lo escribe la migración.
+- [ ] Correr la e2e.
+
+Benchmark (29/10/2026, con la máquina muy cargada por otros agentes: load
+average ~100; detalle en `bench/tanda13/README.md`). 72.000 filas en siete
+archivos, mismas bases:
+
+| Prueba | TypeScript | Go | Go / TS |
+|---|---:|---:|---:|
+| Importar todo, 1.ª vez | 665 s | 477 s | 1,4× |
+| Repetirlo (actualiza u omite) | 606 s | 550 s | 1,1× (ruido) |
+| Clientes, 10.000 filas (las dos pasadas) | 147–150 s | 61–69 s | **2,2–2,4×** |
+| Memoria máx. / CPU media | 245 MB / 13 % | 95 MB / 9 % | **2,6× menos** |
+
+Manda Postgres: los dos escriben fila por fila y esperan a la base el 90 %
+del tiempo.
+
+Lo aprendido:
+
+- **La plantilla de las pruebas (`mjbj_plantilla`) es compartida entre
+  agentes**: una migración nueva que se le aplique (aunque sea `00095`)
+  hace fallar con «missing migrations» a las ramas que tengan una más vieja
+  sin aplicar. Para el índice por nombre se evitó la migración (se resolvió
+  en Go, por lote).
+- **Un benchmark de escritura fila por fila mide la base, no el lenguaje**:
+  la diferencia está donde el algoritmo cambia (la búsqueda por nombre), no
+  en el resto.

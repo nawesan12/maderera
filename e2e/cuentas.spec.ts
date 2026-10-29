@@ -42,6 +42,12 @@ test("la ficha de un cliente: historial, y bloquear y volver a habilitar la cuen
   await page.getByRole("button", { name: "Volver a habilitarla" }).click();
   await expect(page.getByText("Cuenta corriente habilitada de nuevo.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Bloquear la cuenta" })).toBeVisible();
+
+  // El resumen de cuenta en PDF lo arma Go.
+  const pdf = await page.request.get(`/api/cuenta/${href!.split("/").pop()}/pdf`);
+  expect(pdf.status()).toBe(200);
+  expect(pdf.headers()["content-type"]).toBe("application/pdf");
+  expect((await pdf.body()).subarray(0, 4).toString()).toBe("%PDF");
 });
 
 test("el alta rechaza un CUIT mal escrito", async ({ page }) => {

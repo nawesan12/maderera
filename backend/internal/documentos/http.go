@@ -67,10 +67,13 @@ func (a archivo) VisitExportarPreciosResponse(w http.ResponseWriter) error     {
 // escribe nada desde un GET: sin fila, el membrete sale con los mismos
 // valores por omisión (la razón social de siempre y nada más), que es lo
 // que dibujaría esa fila recién creada.
-func (a *API) emisor(ctx context.Context) (*pdf.Emisor, error) {
+func (a *API) emisor(ctx context.Context) (*pdf.Emisor, error) { return EmisorDe(ctx, a.pool) }
+
+// EmisorDe es el membrete, para los PDF que arman otros dominios.
+func EmisorDe(ctx context.Context, pool *pgxpool.Pool) (*pdf.Emisor, error) {
 	var razon string
 	var fantasia, domicilio, cuit *string
-	err := a.pool.QueryRow(ctx, `SELECT razon_social, nombre_fantasia, domicilio, cuit FROM configuracion_fiscal LIMIT 1`).
+	err := pool.QueryRow(ctx, `SELECT razon_social, nombre_fantasia, domicilio, cuit FROM configuracion_fiscal LIMIT 1`).
 		Scan(&razon, &fantasia, &domicilio, &cuit)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

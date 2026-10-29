@@ -175,6 +175,21 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 		t.Errorf("resumen con el secreto: %v %v", r.StatusCode, err)
 	}
 
+	// Los PDF: el personal los baja; un cliente ajeno ve 404.
+	if c, b := pedir(t, ven, "GET", e.srv.URL+"/api/v1/recibos/"+cobro.ReceiptID+"/pdf", nil); c != 200 || !strings.HasPrefix(b, "%PDF") {
+		t.Errorf("recibo en PDF: %d %.40s", c, b)
+	}
+	if c, b := pedir(t, ven, "GET", e.srv.URL+"/api/v1/cuentas/"+id+"/pdf", nil); c != 200 || !strings.HasPrefix(b, "%PDF") {
+		t.Errorf("resumen en PDF: %d %.40s", c, b)
+	}
+	otro, _ := e.web(t, "ajeno@prueba.test")
+	if c, _ := pedir(t, otro, "GET", e.srv.URL+"/api/v1/recibos/"+cobro.ReceiptID+"/pdf", nil); c != 404 {
+		t.Errorf("recibo ajeno en PDF: %d", c)
+	}
+	if c, _ := pedir(t, otro, "GET", e.srv.URL+"/api/v1/cuentas/"+id+"/pdf", nil); c != 404 {
+		t.Errorf("resumen ajeno en PDF: %d", c)
+	}
+
 	// El historial muestra el pago con sus medios.
 	_, b = pedir(t, ven, "GET", u+"clientes/"+id+"/historial?filtro=pagos", nil)
 	if !strings.Contains(b, `Cheque Nación N° 00123456 $ 200.000 · Transferencia $ 100.000`) && !strings.Contains(b, "Cheque Nación N° 00123456 $ 200.000 · Transferencia $ 100.000") {
@@ -243,6 +258,10 @@ func TestPortalYVinculo(t *testing.T) {
 	}
 	if _, b := pedir(t, web, "GET", u+"cuenta/movimientos", nil); !strings.Contains(b, "Compra a cuenta") {
 		t.Errorf("movimientos: %s", b)
+	}
+	// Su propio resumen en PDF sí.
+	if c, b := pedir(t, web, "GET", u+"cuentas/"+mostrador+"/pdf", nil); c != 200 || !strings.HasPrefix(b, "%PDF") {
+		t.Errorf("su resumen en PDF: %d %.40s", c, b)
 	}
 	// El portal no entra al panel.
 	if c, _ := pedir(t, web, "GET", u+"admin/clientes", nil); c != 403 {

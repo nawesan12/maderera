@@ -214,6 +214,34 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Recibo" }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/recibos/{id}/pdf:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: ReciboPdf
+      description: El recibo en PDF. El personal, o el cliente dueño (a otro se le contesta 404).
+      responses:
+        "200":
+          description: El PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/cuentas/{id}/pdf:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: ResumenDeCuentaPdf
+      description: El resumen de cuenta corriente en PDF. El personal, o el cliente de esa cuenta.
+      responses:
+        "200":
+          description: El PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/cheques:
     get:
       operationId: ListarCheques

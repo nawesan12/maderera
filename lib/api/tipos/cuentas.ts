@@ -219,6 +219,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recibos/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description El recibo en PDF. El personal, o el cliente dueño (a otro se le contesta 404). */
+        get: operations["ReciboPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cuentas/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description El resumen de cuenta corriente en PDF. El personal, o el cliente de esa cuenta. */
+        get: operations["ResumenDeCuentaPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/cheques": {
         parameters: {
             query?: never;
@@ -983,6 +1021,54 @@ export interface operations {
                     "application/json": components["schemas"]["Recibo"];
                 };
             };
+            404: components["responses"]["Problema"];
+        };
+    };
+    ReciboPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            401: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+        };
+    };
+    ResumenDeCuentaPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            401: components["responses"]["Problema"];
             404: components["responses"]["Problema"];
         };
     };

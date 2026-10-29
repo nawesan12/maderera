@@ -1,10 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { redirect } from "next/navigation";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 import { z } from "zod";
-import { db } from "@/lib/db";
-import { addresses, customers, profiles, quotes } from "@/lib/db/schema";
 import { verifySession } from "@/lib/dal/session";
 import { clienteDeLaSesion, miPedido } from "@/lib/dal/cuenta";
 import { plural } from "@/lib/formato";
@@ -20,64 +19,20 @@ export interface EstadoAccion {
 /* Presupuestos                                                                */
 /* -------------------------------------------------------------------------- */
 
-const respuestaSchema = z.object({
-  numero: z.string().trim().min(1),
-  respuesta: z.enum(["aceptado", "rechazado"]),
-});
-
-/**
- * El cliente contesta un presupuesto.
- *
- * El `update` lleva tres condiciones juntas y ninguna es decorativa: el número,
- * el dueño —para que nadie conteste el presupuesto de otro— y que siga en
- * "enviado". Esa última evita que un botón viejo, en una pestaña abierta desde
- * ayer, reabra algo que en el mostrador ya se cerró.
- *
- * Aceptar no genera el pedido solo: el vendedor lo convierte desde el panel,
- * porque antes hay que confirmar stock y fecha de entrega.
- */
 export async function responderPresupuesto(
   _previo: EstadoAccion,
   formData: FormData,
 ): Promise<EstadoAccion> {
-  const parsed = respuestaSchema.safeParse({
-    numero: formData.get("numero"),
-    respuesta: formData.get("respuesta"),
+  const numero = String(formData.get("numero") ?? "").trim().slice(0, 40);
+  if (!numero) return { error: "No pudimos guardar tu respuesta. Probá de nuevo." };
+  const r = await (await api()).POST("/api/v1/cuenta/presupuestos/{numero}/respuesta", {
+    params: { path: { numero } },
+    body: { respuesta: String(formData.get("respuesta") ?? "") },
   });
-
-  if (!parsed.success) return { error: "No pudimos guardar tu respuesta. Probá de nuevo." };
-
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return { error: "No encontramos tu ficha de cliente." };
-
-  const actualizados = await db
-    .update(quotes)
-    .set({ estado: parsed.data.respuesta, updatedAt: new Date() })
-    .where(
-      and(
-        eq(quotes.numero, parsed.data.numero),
-        eq(quotes.customerId, cliente.id),
-        eq(quotes.estado, "enviado"),
-      ),
-    )
-    .returning({ id: quotes.id });
-
-  if (actualizados.length === 0) {
-    return {
-      error:
-        "Ese presupuesto ya no está esperando respuesta. Escribinos y lo vemos.",
-    };
-  }
-
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No pudimos guardar tu respuesta. Probá de nuevo.") };
   revalidatePath("/mi-cuenta", "layout");
   revalidatePath("/admin/presupuestos");
-
-  return {
-    ok:
-      parsed.data.respuesta === "aceptado"
-        ? "Listo, avisamos al vendedor. Te contactamos para coordinar la entrega."
-        : "Anotado. Si querés cambiar algo, escribinos y armamos otro.",
-  };
+  return { ok: r.data.ok };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -125,92 +80,24 @@ export async function repetirPedido(
 /* Mis datos                                                                   */
 /* -------------------------------------------------------------------------- */
 
-const datosSchema = z.object({
-  nombre: z.string().trim().min(2, "Escribí tu nombre.").max(120),
-  telefono: z.string().trim().max(40).optional(),
-  razonSocial: z.string().trim().max(160).optional(),
-  cuit: z
-    .string()
-    .trim()
-    .max(20)
-    .optional()
-    .refine(
-      (v) => !v || /^\d{2}-?\d{8}-?\d$/.test(v),
-      "El CUIT tiene que tener 11 dígitos, con o sin guiones.",
-    ),
-  condicionIva: z.enum([
-    "responsable_inscripto",
-    "monotributista",
-    "exento",
-    "consumidor_final",
-    "no_categorizado",
-  ]),
-});
-
-/**
- * El cliente edita sus propios datos.
- *
- * El CUIT y la condición frente al IVA no son un trámite administrativo: ARCA
- * exige `CondicionIVAReceptorId` en toda factura desde abril de 2026, así que
- * son los datos que después deciden si se puede emitir el comprobante.
- *
- * Lo que NO se toca desde acá: el correo (es la identidad de la cuenta), el
- * límite de crédito, el tipo de cliente y la lista de precios. Todo eso lo
- * define el negocio, no quien compra.
- */
 export async function guardarMisDatos(
   _previo: EstadoAccion,
   formData: FormData,
 ): Promise<EstadoAccion> {
-  const sesion = await verifySession();
-
-  const parsed = datosSchema.safeParse({
-    nombre: formData.get("nombre"),
-    telefono: (formData.get("telefono") as string) || undefined,
-    razonSocial: (formData.get("razonSocial") as string) || undefined,
-    cuit: (formData.get("cuit") as string) || undefined,
-    condicionIva: formData.get("condicionIva"),
+  const campo = (n: string) => (formData.get(n) as string | null) || undefined;
+  const r = await (await api()).PUT("/api/v1/cuenta/datos", {
+    body: {
+      nombre: (formData.get("nombre") as string | null) ?? "",
+      telefono: campo("telefono"),
+      razonSocial: campo("razonSocial"),
+      cuit: campo("cuit"),
+      condicionIva: (formData.get("condicionIva") as string | null) ?? "",
+    },
   });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
-  }
-
-  const datos = parsed.data;
-  const cuit = datos.cuit?.replace(/\D/g, "") || null;
-
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return { error: "No encontramos tu ficha de cliente." };
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(customers)
-      .set({
-        nombre: datos.nombre,
-        telefono: datos.telefono ?? null,
-        razonSocial: datos.razonSocial ?? null,
-        cuit,
-        condicionIva: datos.condicionIva,
-        updatedAt: new Date(),
-      })
-      .where(eq(customers.id, cliente.id));
-
-    // El perfil guarda los mismos datos fiscales para la facturación, así que
-    // se actualizan juntos o quedan diciendo cosas distintas.
-    await tx
-      .update(profiles)
-      .set({
-        telefono: datos.telefono ?? null,
-        razonSocial: datos.razonSocial ?? null,
-        cuit,
-        condicionIva: datos.condicionIva,
-        updatedAt: new Date(),
-      })
-      .where(eq(profiles.userId, sesion.userId));
-  });
-
+  if (r.response.status === 401) redirect("/ingresar?volver=/mi-cuenta/datos");
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
   revalidatePath("/mi-cuenta", "layout");
-  return { ok: "Guardamos tus datos." };
+  return { ok: r.data.ok };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -218,137 +105,39 @@ export async function guardarMisDatos(
 /* -------------------------------------------------------------------------- */
 
 /** Se aborta la transacción cuando el id editado no es de esta persona. */
-class DireccionAjena extends Error {}
-
-const direccionSchema = z.object({
-  id: z.string().uuid().optional(),
-  etiqueta: z
-    .string()
-    .trim()
-    .min(2, "Poné un nombre para reconocerla: Casa, Obra Alem…")
-    .max(60),
-  calle: z.string().trim().min(4, "Escribí la calle y la altura.").max(200),
-  localidad: z.string().trim().min(2, "Falta la localidad.").max(80),
-  codigoPostal: z.string().trim().max(12).optional(),
-  notas: z.string().trim().max(300).optional(),
-  predeterminada: z.coerce.boolean().optional(),
-});
-
 export async function guardarDireccion(
   _previo: EstadoAccion,
   formData: FormData,
 ): Promise<EstadoAccion> {
-  const parsed = direccionSchema.safeParse({
-    id: (formData.get("id") as string) || undefined,
-    etiqueta: formData.get("etiqueta"),
-    calle: formData.get("calle"),
-    localidad: formData.get("localidad"),
-    codigoPostal: (formData.get("codigoPostal") as string) || undefined,
-    notas: (formData.get("notas") as string) || undefined,
-    predeterminada: formData.get("predeterminada") === "on",
+  const campo = (n: string) => (formData.get(n) as string | null) || undefined;
+  const r = await (await api()).POST("/api/v1/cuenta/direcciones", {
+    body: {
+      id: campo("id"),
+      etiqueta: (formData.get("etiqueta") as string | null) ?? "",
+      calle: (formData.get("calle") as string | null) ?? "",
+      localidad: (formData.get("localidad") as string | null) ?? "",
+      codigoPostal: campo("codigoPostal"),
+      notas: campo("notas"),
+      predeterminada: formData.get("predeterminada") === "on",
+    },
   });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisá la dirección." };
-  }
-
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return { error: "No encontramos tu ficha de cliente." };
-
-  const datos = parsed.data;
-
-  const [{ cuantas }] = await db
-    .select({ cuantas: sql<number>`count(*)` })
-    .from(addresses)
-    .where(eq(addresses.customerId, cliente.id));
-
-  // La primera dirección queda como predeterminada sin que nadie lo marque:
-  // tener una sola y que igual haya que elegirla en el carrito es trabajo de
-  // más para nada.
-  const predeterminada = datos.predeterminada || Number(cuantas) === 0;
-
-  try {
-    await db.transaction(async (tx) => {
-      let id = datos.id;
-
-      if (id) {
-        // El `where` incluye el dueño: editar por id solo permitiría cambiar la
-        // dirección de cualquiera con solo cambiar el uuid del formulario.
-        const editadas = await tx
-          .update(addresses)
-          .set({
-            etiqueta: datos.etiqueta,
-            calle: datos.calle,
-            localidad: datos.localidad,
-            codigoPostal: datos.codigoPostal ?? null,
-            notas: datos.notas ?? null,
-            predeterminada,
-          })
-          .where(and(eq(addresses.id, id), eq(addresses.customerId, cliente.id)))
-          .returning({ id: addresses.id });
-
-        if (editadas.length === 0) throw new DireccionAjena();
-      } else {
-        const [creada] = await tx
-          .insert(addresses)
-          .values({
-            customerId: cliente.id,
-            etiqueta: datos.etiqueta,
-            calle: datos.calle,
-            localidad: datos.localidad,
-            codigoPostal: datos.codigoPostal ?? null,
-            notas: datos.notas ?? null,
-            predeterminada,
-          })
-          .returning({ id: addresses.id });
-        id = creada.id;
-      }
-
-      // Predeterminada hay una sola: al marcar una, las demás se apagan dentro
-      // de la misma transacción para que nunca haya dos ni ninguna.
-      if (predeterminada) {
-        await tx
-          .update(addresses)
-          .set({ predeterminada: false })
-          .where(and(eq(addresses.customerId, cliente.id), ne(addresses.id, id)));
-      }
-    });
-  } catch (error) {
-    if (error instanceof DireccionAjena) {
-      return { error: "No encontramos esa dirección." };
-    }
-    throw error;
-  }
-
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá la dirección.") };
   revalidatePath("/mi-cuenta/direcciones");
-  return { ok: "Dirección guardada." };
+  return { ok: r.data.ok };
 }
 
 export async function borrarDireccion(
   _previo: EstadoAccion,
   formData: FormData,
 ): Promise<EstadoAccion> {
-  const id = z.string().uuid().safeParse(formData.get("id"));
-  if (!id.success) return { error: "No encontramos esa dirección." };
-
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return { error: "No encontramos tu ficha de cliente." };
-
-  await db
-    .delete(addresses)
-    .where(and(eq(addresses.id, id.data), eq(addresses.customerId, cliente.id)));
-
+  const r = await (await api()).DELETE("/api/v1/cuenta/direcciones/{id}", {
+    params: { path: { id: String(formData.get("id") ?? "") || "-" } },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No encontramos esa dirección.") };
   revalidatePath("/mi-cuenta/direcciones");
-  return { ok: "Dirección eliminada." };
+  return { ok: r.data.ok };
 }
 
-/**
- * Recibir o no las novedades por correo.
- *
- * Se aplica a la dirección con que ingresa y a la de su ficha de cliente, si
- * son distintas: las campañas salen a la de la ficha, y quien se da de baja
- * desde su cuenta no tiene por qué saber cuál de las dos tenemos cargada.
- */
 export async function cambiarNovedades(recibir: boolean): Promise<{ ok?: string; error?: string }> {
   const sesion = await verifySession();
   const cliente = await clienteDeLaSesion();

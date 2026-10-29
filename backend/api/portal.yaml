@@ -1,0 +1,254 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Mi cuenta
+  version: "1"
+  description: |
+    El portal del cliente: su ficha, sus pedidos y presupuestos, sus datos y
+    sus direcciones. Todo sale de la ficha del usuario de la sesión, nunca de
+    un id del navegador. Sin sesión (o sin ficha) las lecturas vienen vacías,
+    como en el TS; las acciones piden sesión.
+paths:
+  /api/v1/cuenta/ficha:
+    get:
+      operationId: MiFicha
+      responses:
+        "200":
+          description: La ficha del usuario de la sesión, o null
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cliente]
+                properties:
+                  cliente: { $ref: "#/components/schemas/ClienteDelPortal" }
+  /api/v1/cuenta/resumen:
+    get:
+      operationId: MiResumen
+      responses:
+        "200":
+          description: Lo de arriba de Mi cuenta (en cero sin ficha)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pedidosEnCurso, presupuestosAResponder, saldo, limiteCredito]
+                properties:
+                  pedidosEnCurso: { type: integer }
+                  presupuestosAResponder: { type: integer }
+                  saldo: { type: number, format: double }
+                  limiteCredito: { type: number, format: double }
+  /api/v1/cuenta/pedidos:
+    get:
+      operationId: MisPedidos
+      responses:
+        "200":
+          description: Los más nuevos primero
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, numero, estado, estadoPago, tipoEntrega, total, items, sucursal, createdAt]
+                  properties:
+                    id: { type: string }
+                    numero: { type: string }
+                    estado: { type: string }
+                    estadoPago: { type: string }
+                    tipoEntrega: { type: string, enum: [retiro, envio] }
+                    total: { type: number, format: double }
+                    items: { type: integer }
+                    sucursal: { type: string, nullable: true }
+                    createdAt: { type: string, format: date-time }
+  /api/v1/cuenta/presupuestos:
+    get:
+      operationId: MisPresupuestos
+      responses:
+        "200":
+          description: Los más nuevos primero
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, numero, estado, total, items, validoHasta, createdAt]
+                  properties:
+                    id: { type: string }
+                    numero: { type: string }
+                    estado: { type: string }
+                    total: { type: number, format: double }
+                    items: { type: integer }
+                    validoHasta: { type: string, format: date-time, nullable: true }
+                    createdAt: { type: string, format: date-time }
+  /api/v1/cuenta/presupuestos/{numero}:
+    parameters:
+      - { name: numero, in: path, required: true, schema: { type: string, maxLength: 40 } }
+    get:
+      operationId: MiPresupuesto
+      responses:
+        "200":
+          description: El presupuesto con sus renglones
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PresupuestoDelPortal" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/cuenta/presupuestos/{numero}/respuesta:
+    parameters:
+      - { name: numero, in: path, required: true, schema: { type: string, maxLength: 40 } }
+    post:
+      operationId: ResponderPresupuesto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [respuesta]
+              additionalProperties: false
+              properties:
+                respuesta: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/cuenta/datos:
+    put:
+      operationId: GuardarMisDatos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                nombre: { type: string }
+                telefono: { type: string }
+                razonSocial: { type: string }
+                cuit: { type: string }
+                condicionIva: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/cuenta/direcciones:
+    get:
+      operationId: MisDirecciones
+      responses:
+        "200":
+          description: La predeterminada primero
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/DireccionDelPortal" } }
+    post:
+      operationId: GuardarDireccion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                id: { type: string }
+                etiqueta: { type: string }
+                calle: { type: string }
+                localidad: { type: string }
+                codigoPostal: { type: string }
+                notas: { type: string }
+                predeterminada: { type: boolean }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/cuenta/direcciones/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: BorrarDireccion
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+    Hecho:
+      description: Hecho, con el mensaje para la pantalla
+      content:
+        application/json:
+          schema: { type: object, required: [ok], properties: { ok: { type: string } } }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    ClienteDelPortal:
+      type: object
+      nullable: true
+      required: [id, nombre, razonSocial, cuit, condicionIva, email, telefono, direccion, tipo, estado, limiteCredito]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        razonSocial: { type: string, nullable: true }
+        cuit: { type: string, nullable: true }
+        condicionIva: { type: string }
+        email: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        direccion: { type: string, nullable: true }
+        tipo: { type: string, enum: [particular, profesional] }
+        estado: { type: string, enum: [activo, moroso, inactivo] }
+        limiteCredito: { type: number, format: double }
+    PresupuestoDelPortal:
+      type: object
+      required: [id, numero, estado, subtotal, total, notas, asesor, validoHasta, sucursal, createdAt, items]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        estado: { type: string }
+        subtotal: { type: string }
+        total: { type: string }
+        notas: { type: string, nullable: true }
+        asesor: { type: string, nullable: true }
+        validoHasta: { type: string, format: date-time, nullable: true }
+        sucursal: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, quoteId, variantId, descripcion, unidad, cantidad, precioUnitario, subtotal, notas, orden, presentacion]
+            properties:
+              id: { type: string }
+              quoteId: { type: string }
+              variantId: { type: string, nullable: true }
+              descripcion: { type: string }
+              unidad: { type: string }
+              cantidad: { type: string }
+              precioUnitario: { type: string }
+              subtotal: { type: string }
+              notas: { type: string, nullable: true }
+              orden: { type: integer }
+              presentacion: { type: string, nullable: true }
+    DireccionDelPortal:
+      type: object
+      required: [id, customerId, etiqueta, calle, localidad, codigoPostal, notas, predeterminada, createdAt]
+      properties:
+        id: { type: string }
+        customerId: { type: string }
+        etiqueta: { type: string }
+        calle: { type: string }
+        localidad: { type: string }
+        codigoPostal: { type: string, nullable: true }
+        notas: { type: string, nullable: true }
+        predeterminada: { type: boolean }
+        createdAt: { type: string, format: date-time }

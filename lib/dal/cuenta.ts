@@ -4,19 +4,13 @@ import { cache } from "react";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
-  accountMovements,
-  addresses,
   branches,
-  customers,
   deliveries,
   invoices,
   orderItems,
   orderStatusHistory,
   orders,
-  quoteItems,
-  quotes,
 } from "@/lib/db/schema";
-import { getSession } from "@/lib/dal/session";
 import { api, datos } from "@/lib/api/servidor";
 import { saldoDeAcopio } from "@/lib/entregas";
 
@@ -50,37 +44,9 @@ export interface ClienteDeSesion {
  * Devuelve null si esa persona todavía no tiene ficha: pasa con el personal, y
  * con cuentas creadas antes de que existiera el portal.
  */
-export const clienteDeLaSesion = cache(
-  async (): Promise<ClienteDeSesion | null> => {
-    // `getSession()` y no `verifySession()`: el carrito también pregunta por la
-    // ficha y ahí no hay que redirigir a nadie, porque se puede comprar sin
-    // cuenta. Las pantallas del portal ya exigen la sesión en su layout.
-    const sesion = await getSession();
-    if (!sesion) return null;
-
-    const [cliente] = await db
-      .select({
-        id: customers.id,
-        nombre: customers.nombre,
-        razonSocial: customers.razonSocial,
-        cuit: customers.cuit,
-        condicionIva: customers.condicionIva,
-        email: customers.email,
-        telefono: customers.telefono,
-        direccion: customers.direccion,
-        tipo: customers.tipo,
-        estado: customers.estado,
-        limiteCredito: customers.limiteCredito,
-      })
-      .from(customers)
-      .where(and(eq(customers.userId, sesion.userId), eq(customers.active, true)))
-      .limit(1);
-
-    if (!cliente) return null;
-
-    return { ...cliente, limiteCredito: Number(cliente.limiteCredito) };
-  },
-);
+export const clienteDeLaSesion = cache(async (): Promise<ClienteDeSesion | null> => {
+  return datos(await (await api()).GET("/api/v1/cuenta/ficha")).cliente;
+});
 
 export interface ResumenCuenta {
   /** Pedidos que todavía están en movimiento. */
@@ -99,43 +65,7 @@ export interface ResumenCuenta {
  * navegación.
  */
 export const resumenCuenta = cache(async (): Promise<ResumenCuenta> => {
-  const cliente = await clienteDeLaSesion();
-
-  if (!cliente) {
-    return {
-      pedidosEnCurso: 0,
-      presupuestosAResponder: 0,
-      saldo: 0,
-      limiteCredito: 0,
-    };
-  }
-
-  const [pedidos, presupuestos, saldo] = await Promise.all([
-    db
-      .select({ total: sql<number>`count(*)` })
-      .from(orders)
-      .where(
-        and(
-          eq(orders.customerId, cliente.id),
-          sql`${orders.estado} not in ('entregado', 'cancelado')`,
-        ),
-      ),
-    db
-      .select({ total: sql<number>`count(*)` })
-      .from(quotes)
-      .where(and(eq(quotes.customerId, cliente.id), eq(quotes.estado, "enviado"))),
-    db
-      .select({ saldo: sql<string>`coalesce(sum(${accountMovements.monto}), 0)` })
-      .from(accountMovements)
-      .where(eq(accountMovements.customerId, cliente.id)),
-  ]);
-
-  return {
-    pedidosEnCurso: Number(pedidos[0]?.total ?? 0),
-    presupuestosAResponder: Number(presupuestos[0]?.total ?? 0),
-    saldo: Number(saldo[0]?.saldo ?? 0),
-    limiteCredito: cliente.limiteCredito,
-  };
+  return datos(await (await api()).GET("/api/v1/cuenta/resumen"));
 });
 
 /* -------------------------------------------------------------------------- */
@@ -155,41 +85,8 @@ export interface PedidoPropio {
 }
 
 export async function misPedidos(): Promise<PedidoPropio[]> {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return [];
-
-  const cantidadItems = db
-    .select({
-      orderId: orderItems.orderId,
-      items: sql<number>`count(*)`.as("items"),
-    })
-    .from(orderItems)
-    .groupBy(orderItems.orderId)
-    .as("cantidad_items");
-
-  const filas = await db
-    .select({
-      id: orders.id,
-      numero: orders.numero,
-      estado: orders.estado,
-      estadoPago: orders.estadoPago,
-      tipoEntrega: orders.tipoEntrega,
-      total: orders.total,
-      items: cantidadItems.items,
-      sucursal: branches.name,
-      createdAt: orders.createdAt,
-    })
-    .from(orders)
-    .leftJoin(cantidadItems, eq(cantidadItems.orderId, orders.id))
-    .leftJoin(branches, eq(branches.id, orders.branchId))
-    .where(eq(orders.customerId, cliente.id))
-    .orderBy(desc(orders.createdAt));
-
-  return filas.map((f) => ({
-    ...f,
-    total: Number(f.total),
-    items: Number(f.items ?? 0),
-  }));
+  const filas = datos(await (await api()).GET("/api/v1/cuenta/pedidos"));
+  return filas.map((f) => ({ ...f, createdAt: new Date(f.createdAt) }));
 }
 
 /** Detalle de un pedido propio. Devuelve null si el número no es suyo. */
@@ -280,71 +177,21 @@ export interface PresupuestoPropio {
 }
 
 export async function misPresupuestos(): Promise<PresupuestoPropio[]> {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return [];
-
-  const cantidadItems = db
-    .select({
-      quoteId: quoteItems.quoteId,
-      items: sql<number>`count(*)`.as("items"),
-    })
-    .from(quoteItems)
-    .groupBy(quoteItems.quoteId)
-    .as("cantidad_items_presu");
-
-  const filas = await db
-    .select({
-      id: quotes.id,
-      numero: quotes.numero,
-      estado: quotes.estado,
-      total: quotes.total,
-      items: cantidadItems.items,
-      validoHasta: quotes.validoHasta,
-      createdAt: quotes.createdAt,
-    })
-    .from(quotes)
-    .leftJoin(cantidadItems, eq(cantidadItems.quoteId, quotes.id))
-    .where(eq(quotes.customerId, cliente.id))
-    .orderBy(desc(quotes.createdAt));
-
+  const filas = datos(await (await api()).GET("/api/v1/cuenta/presupuestos"));
   return filas.map((f) => ({
     ...f,
-    total: Number(f.total),
-    items: Number(f.items ?? 0),
+    validoHasta: f.validoHasta ? new Date(f.validoHasta) : null,
+    createdAt: new Date(f.createdAt),
   }));
 }
 
 export async function miPresupuesto(numero: string) {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return null;
-
-  const [presupuesto] = await db
-    .select({
-      id: quotes.id,
-      numero: quotes.numero,
-      estado: quotes.estado,
-      subtotal: quotes.subtotal,
-      total: quotes.total,
-      notas: quotes.notas,
-      asesor: quotes.asesor,
-      validoHasta: quotes.validoHasta,
-      sucursal: branches.name,
-      createdAt: quotes.createdAt,
-    })
-    .from(quotes)
-    .leftJoin(branches, eq(branches.id, quotes.branchId))
-    .where(and(eq(quotes.numero, numero), eq(quotes.customerId, cliente.id)))
-    .limit(1);
-
-  if (!presupuesto) return null;
-
-  const items = await db
-    .select()
-    .from(quoteItems)
-    .where(eq(quoteItems.quoteId, presupuesto.id))
-    .orderBy(asc(quoteItems.orden));
-
-  return { ...presupuesto, items };
+  const r = await (await api()).GET("/api/v1/cuenta/presupuestos/{numero}", {
+    params: { path: { numero: numero.slice(0, 40) } },
+  });
+  if (r.response.status === 404) return null;
+  const p = datos(r);
+  return { ...p, validoHasta: p.validoHasta ? new Date(p.validoHasta) : null, createdAt: new Date(p.createdAt) };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -479,12 +326,6 @@ export async function misComprobantes(): Promise<ComprobantePropio[]> {
 /* -------------------------------------------------------------------------- */
 
 export async function misDirecciones() {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return [];
-
-  return db
-    .select()
-    .from(addresses)
-    .where(eq(addresses.customerId, cliente.id))
-    .orderBy(desc(addresses.predeterminada), asc(addresses.etiqueta));
+  const filas = datos(await (await api()).GET("/api/v1/cuenta/direcciones"));
+  return filas.map((f) => ({ ...f, createdAt: new Date(f.createdAt) }));
 }

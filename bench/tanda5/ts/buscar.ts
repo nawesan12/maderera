@@ -1,0 +1,351 @@
+import "server-only";
+
+import { and, asc, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import { db } from "@/lib/db";
+import {
+  categories,
+  customers,
+  inventory,
+  orders,
+  priceListItems,
+  priceLists,
+  productVariants,
+  products,
+} from "@/lib/db/schema";
+import { coincideBusqueda } from "@/lib/busqueda";
+import { factorDeLista } from "@/lib/precios/derivada";
+import { ordenarClientes } from "@/lib/mostrador/ranking-clientes";
+
+/**
+ * La búsqueda del mostrador.
+ *
+ * Es distinta de la del catálogo y por eso vive aparte. Ahí se navega: se mira,
+ * se compara, se filtra. Acá hay alguien esperando del otro lado del mostrador
+ * y lo que se busca es **una medida concreta para ponerla en la venta**. Así
+ * que devuelve variantes y no productos —lo que se cobra es "Fenólico 18mm
+ * 1.22x2.44", no "Fenólico"—, con su precio y lo que hay en esta sucursal.
+ *
+ * El tope es corto a propósito: una lista larga en el mostrador no se lee, se
+ * vuelve a tipear.
+ */
+
+const TOPE = 12;
+
+export interface ResultadoDeMostrador {
+  variantId: string;
+  sku: string;
+  producto: string;
+  medida: string;
+  unidad: string;
+  precio: number;
+  /** Lo que hay en la sucursal donde se está vendiendo. */
+  stock: number;
+  /**
+   * La medida de la placa, cuando la variante la tiene cargada.
+   *
+   * La usa el plano de corte para acomodar las piezas mientras alguien carga el
+   * despiece en el mostrador. Viene en nulo para lo que no es una placa —un
+   * tarugo no tiene largo ni ancho— y también para las placas a las que todavía
+   * no se les cargó la medida. Opcionales porque la copia local del mostrador
+   * —la que sirve sin internet— no las guarda: ahí no hace falta el plano.
+   */
+  largoMm?: number | null;
+  anchoMm?: number | null;
+  /**
+   * El color de la placa, si la variante lo declara.
+   *
+   * Lo mira quien vende media placa: en una placa de color el dibujo corre en
+   * un sentido, y partirla al ancho puede dejar las dos mitades con la veta
+   * cruzada. La pantalla lo avisa y la decisión la toma quien atiende.
+   */
+  color?: string | null;
+  /** La familia del producto. Por acá se busca la tarifa de corte. */
+  categoria?: string | null;
+  /**
+   * Cómo se vende la placa y cuánto vale la media. Opcionales porque una
+   * copia local bajada antes del 1/10/2026 no los trae: sin ellos la placa se
+   * vende entera, que es lo que pasaba hasta entonces.
+   */
+  formaDeVenta?: "entera" | "entera_o_media" | "metro_cuadrado";
+  precioMediaPct?: number;
+}
+
+/**
+ * La lista de precios que corresponde aplicarle a un cliente.
+ *
+ * Sin cliente —consumidor final— es la general. Con cliente, la suya si tiene
+ * una asignada. Es la misma regla que el sitio, pero resuelta desde el cliente
+ * elegido en pantalla y no desde la sesión: en el mostrador quien tiene la
+ * sesión es quien atiende, no quien compra.
+ */
+export async function listaDelCliente(customerId: string | null): Promise<{
+  id: string | null;
+  generalId: string | null;
+  /** Multiplicador de una lista derivada (la constructora). Uno si no lo es. */
+  factorDerivado: number;
+}> {
+  const [general] = await db
+    .select({ id: priceLists.id })
+    .from(priceLists)
+    .where(and(eq(priceLists.isDefault, true), eq(priceLists.active, true)))
+    .limit(1);
+
+  const generalId = general?.id ?? null;
+
+  if (!customerId) return { id: generalId, generalId, factorDerivado: 1 };
+
+  const [cliente] = await db
+    .select({
+      priceListId: customers.priceListId,
+      porcentaje: priceLists.porcentajeSobreGeneral,
+    })
+    .from(customers)
+    .leftJoin(priceLists, eq(priceLists.id, customers.priceListId))
+    .where(eq(customers.id, customerId))
+    .limit(1);
+
+  return {
+    id: cliente?.priceListId ?? generalId,
+    generalId,
+    factorDerivado: cliente?.priceListId
+      ? factorDeLista(cliente.porcentaje)
+      : 1,
+  };
+}
+
+export async function buscarParaMostrador(
+  texto: string,
+  branchId: string,
+  customerId: string | null = null,
+): Promise<ResultadoDeMostrador[]> {
+  const consulta = texto.trim();
+  if (consulta.length < 2) return [];
+
+  const lista = await listaDelCliente(customerId);
+
+  const propia = alias(priceListItems, "precio_propio");
+  const general = alias(priceListItems, "precio_general");
+
+  // El SKU se compara aparte y por igualdad o prefijo: quien tipea un código
+  // completo quiere esa fila y ninguna otra, y la búsqueda difusa la mandaría
+  // al fondo entre veinte parecidas.
+  const porTexto = coincideBusqueda(consulta, [
+    products.name,
+    productVariants.label,
+    products.brand,
+    categories.name,
+  ]);
+
+  const condiciones = [
+    eq(productVariants.active, true),
+    eq(products.active, true),
+  ];
+
+  const porSku = or(
+    eq(productVariants.sku, consulta),
+    sql`${productVariants.sku} ilike ${consulta + "%"}`,
+  );
+
+  const coincidencia = porTexto ? or(porSku, porTexto) : porSku;
+  if (coincidencia) condiciones.push(coincidencia);
+
+  const filas = await db
+    .select({
+      variantId: productVariants.id,
+      sku: productVariants.sku,
+      producto: products.name,
+      medida: productVariants.label,
+      largoMm: productVariants.largoMm,
+      anchoMm: productVariants.anchoMm,
+      color: productVariants.color,
+      // Por acá se busca la tarifa de corte: se cargan por familia.
+      categoria: categories.name,
+      unidad: products.unit,
+      formaDeVenta: products.formaDeVenta,
+      precioMediaPct: products.precioMediaPct,
+      precio: sql<string | null>`coalesce(${propia.price}, round((${general.price} * ${lista.factorDerivado})::numeric, 2))`,
+      stock: sql<number>`coalesce(${inventory.qty}, 0)`.mapWith(Number),
+      // Lo que coincide por código va primero: es lo más específico que alguien
+      // puede tipear.
+      exacto: sql<number>`case when ${productVariants.sku} ilike ${consulta + "%"} then 0 else 1 end`,
+    })
+    .from(productVariants)
+    .innerJoin(products, eq(products.id, productVariants.productId))
+    .innerJoin(categories, eq(categories.id, products.categoryId))
+    .leftJoin(
+      propia,
+      lista.id
+        ? and(
+            eq(propia.variantId, productVariants.id),
+            eq(propia.priceListId, lista.id),
+          )
+        : sql`false`,
+    )
+    .leftJoin(
+      general,
+      lista.generalId
+        ? and(
+            eq(general.variantId, productVariants.id),
+            eq(general.priceListId, lista.generalId),
+          )
+        : sql`false`,
+    )
+    .leftJoin(
+      inventory,
+      and(
+        eq(inventory.variantId, productVariants.id),
+        eq(inventory.branchId, branchId),
+      ),
+    )
+    .where(and(...condiciones))
+    .orderBy(
+      asc(sql`case when ${productVariants.sku} ilike ${consulta + "%"} then 0 else 1 end`),
+      asc(products.name),
+      asc(productVariants.sortOrder),
+    )
+    .limit(TOPE);
+
+  return filas.map((f) => ({
+    variantId: f.variantId,
+    sku: f.sku,
+    producto: f.producto,
+    medida: f.medida,
+    unidad: f.unidad,
+    precio: Number(f.precio ?? 0),
+    stock: Number(f.stock),
+    largoMm: f.largoMm,
+    anchoMm: f.anchoMm,
+    color: f.color,
+    categoria: f.categoria,
+    formaDeVenta: f.formaDeVenta,
+    precioMediaPct: f.precioMediaPct,
+  }));
+}
+
+/** Búsqueda de clientes para el mostrador: nombre, razón social o CUIT. */
+export async function buscarClienteEnMostrador(texto: string) {
+  const consulta = texto.trim();
+  if (consulta.length < 2) return [];
+
+  const coincidencia = coincideBusqueda(consulta, [
+    customers.nombre,
+    customers.razonSocial,
+    customers.cuit,
+  ]);
+
+  return db
+    .select({
+      id: customers.id,
+      nombre: customers.nombre,
+      razonSocial: customers.razonSocial,
+      cuit: customers.cuit,
+      condicionIva: customers.condicionIva,
+      // El domicilio lo usa la factura manual: es un campo del comprobante y
+      // volver a tipearlo teniendo la ficha cargada es pedir un error.
+      direccion: customers.direccion,
+      estado: customers.estado,
+      limiteCredito: customers.limiteCredito,
+      // La lista que le toca: con ella, la pantalla puede resolver el precio
+      // desde la copia local sin volver a preguntar.
+      priceListId: customers.priceListId,
+    })
+    .from(customers)
+    .where(
+      coincidencia
+        ? and(eq(customers.active, true), coincidencia)
+        : eq(customers.active, true),
+    )
+    .orderBy(asc(customers.nombre))
+    // Se traen más de los que se muestran y se ordenan acá: el orden
+    // alfabético dejaba afuera al «García» que se buscaba si había cuarenta.
+    .limit(30)
+    .then((filas) => ordenarClientes(filas, consulta).slice(0, 8));
+}
+
+/**
+ * Los últimos clientes atendidos en una sucursal, para ofrecerlos con la caja
+ * del cliente vacía: el de todos los días se elige con una flecha y Enter.
+ */
+export async function clientesRecientesDeLaSucursal(branchId: string) {
+  const ultimos = await db
+    .select({ id: orders.customerId, cuando: sql<Date>`max(${orders.createdAt})` })
+    .from(orders)
+    .where(and(eq(orders.branchId, branchId), isNotNull(orders.customerId)))
+    .groupBy(orders.customerId)
+    .orderBy(desc(sql`max(${orders.createdAt})`))
+    .limit(6);
+
+  const ids = ultimos.map((u) => u.id).filter((id): id is string => Boolean(id));
+  if (ids.length === 0) return [];
+
+  const filas = await db
+    .select({
+      id: customers.id,
+      nombre: customers.nombre,
+      razonSocial: customers.razonSocial,
+      cuit: customers.cuit,
+      condicionIva: customers.condicionIva,
+      direccion: customers.direccion,
+      estado: customers.estado,
+      limiteCredito: customers.limiteCredito,
+      priceListId: customers.priceListId,
+    })
+    .from(customers)
+    .where(and(eq(customers.active, true), inArray(customers.id, ids)));
+
+  const lugar = new Map(ids.map((id, i) => [id, i]));
+  return filas.sort((a, b) => (lugar.get(a.id) ?? 0) - (lugar.get(b.id) ?? 0));
+}
+
+/**
+ * Los precios de un puñado de variantes para un cliente dado.
+ *
+ * Existe por un caso muy del mostrador: se cargan los ítems y **después** se
+ * identifica al cliente, que resulta ser profesional y tiene otra lista. Sin
+ * esto la venta se cobraba a precio de mostrador y la diferencia la descubría
+ * el cliente, que es la peor manera de descubrirla.
+ *
+ * Devuelve un mapa de variante a precio. Lo que se hace con eso lo decide la
+ * pantalla: los precios que quien atiende tocó a mano no se pisan solos.
+ */
+export async function preciosPara(
+  variantIds: string[],
+  customerId: string | null,
+): Promise<Record<string, number>> {
+  if (variantIds.length === 0) return {};
+
+  const lista = await listaDelCliente(customerId);
+  const propia = alias(priceListItems, "precio_propio_relista");
+  const general = alias(priceListItems, "precio_general_relista");
+
+  const filas = await db
+    .select({
+      variantId: productVariants.id,
+      precio: sql<string | null>`coalesce(${propia.price}, round((${general.price} * ${lista.factorDerivado})::numeric, 2))`,
+    })
+    .from(productVariants)
+    .leftJoin(
+      propia,
+      lista.id
+        ? and(
+            eq(propia.variantId, productVariants.id),
+            eq(propia.priceListId, lista.id),
+          )
+        : sql`false`,
+    )
+    .leftJoin(
+      general,
+      lista.generalId
+        ? and(
+            eq(general.variantId, productVariants.id),
+            eq(general.priceListId, lista.generalId),
+          )
+        : sql`false`,
+    )
+    .where(inArray(productVariants.id, variantIds));
+
+  return Object.fromEntries(
+    filas.map((f) => [f.variantId, Number(f.precio ?? 0)]),
+  );
+}

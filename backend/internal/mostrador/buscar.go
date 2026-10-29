@@ -90,6 +90,10 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 	if zodjs.LargoJS(consulta) < 2 {
 		return out, nil
 	}
+	if !plataforma.UUIDValido(sucursal) {
+		// El TS daba un 500 (Postgres rechaza el uuid); sin sucursal no hay stock.
+		return out, nil
+	}
 	lista, err := ListaDelCliente(ctx, s.pool, cliente)
 	if err != nil {
 		return nil, err
@@ -111,11 +115,14 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id
 		` + joins + `
-		LEFT JOIN inventory i ON i.variant_id = v.id AND i.branch_id::text = ` + suc + `
+		LEFT JOIN inventory i ON i.variant_id = v.id AND i.branch_id = ` + suc + `::uuid
 		WHERE v.active = true AND p.active = true AND ` + cond + `
 		ORDER BY CASE WHEN v.sku ILIKE ` + prefijo + ` THEN 0 ELSE 1 END, p.name, v.sort_order
 		LIMIT ` + fmt.Sprint(tope)
-	filas, err := s.pool.Query(ctx, sql, a...)
+	// Plan a medida en cada búsqueda (QueryExecModeExec): con el plan genérico
+	// que Postgres arma después de cinco ejecuciones de la misma sentencia,
+	// los ILIKE con el patrón como parámetro barren todo (ver progreso.md).
+	filas, err := s.pool.Query(ctx, sql, append([]any{pgx.QueryExecModeExec}, a...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +234,8 @@ func (s *Servicio) BuscarClientes(ctx context.Context, texto string) ([]ClienteD
 	if t := a.coincide(consulta, "nombre", "razon_social", "cuit"); t != "" {
 		cond += " AND " + t
 	}
-	filas, err := s.pool.Query(ctx, `SELECT `+columnasCliente+` FROM customers WHERE `+cond+` ORDER BY nombre LIMIT 30`, a...)
+	filas, err := s.pool.Query(ctx, `SELECT `+columnasCliente+` FROM customers WHERE `+cond+` ORDER BY nombre LIMIT 30`,
+		append([]any{pgx.QueryExecModeExec}, a...)...)
 	if err != nil {
 		return nil, err
 	}

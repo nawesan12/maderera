@@ -1,0 +1,1 @@
+{"ahora":"2026-03-05T15:04:05.000Z","datos":{"numero":"0001-00000042","fecha":"2026-03-05T14:00:00.000Z","impuesto":"iva","codigoRegimen":"078","nombreRegimen":"Enajenación de bienes muebles y bienes de cambio","base":1234567.89,"alicuota":10.5,"importe":24691.36,"emisor":null,"proveedor":{"nombre":"Juan Pérez"},"pago":{"fecha":"2026-03-04T23:30:00.000Z","medio":"cheque"}}}

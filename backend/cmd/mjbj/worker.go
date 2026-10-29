@@ -123,24 +123,43 @@ func correrWorker() error {
 		},
 	})
 
+	// Un trabajo nuevo despierta al worker en el acto (el trigger de
+	// `trabajos`); la vuelta de 2 s queda para los reintentos que vencen y
+	// por si la escucha se cae.
+	urlBase, err := cfg.Base.URLConexion()
+	if err != nil {
+		return err
+	}
+	despertar := cola.Despertador(ctx, urlBase, log)
+
 	log.Info("worker andando")
 	reloj := time.NewTicker(2 * time.Second)
 	defer reloj.Stop()
 	ultimaRevision := time.Time{}
+	seguir := false
 	for {
-		select {
-		case <-ctx.Done():
+		if !seguir {
+			select {
+			case <-ctx.Done():
+				log.Info("apagando")
+				return nil
+			case <-reloj.C:
+			case <-despertar:
+			}
+		} else if ctx.Err() != nil {
 			log.Info("apagando")
 			return nil
-		case <-reloj.C:
 		}
+		seguir = false
 		// Lo que está a mitad de hacerse termina aunque llegue el SIGTERM:
 		// el contexto de la pasada no es el de la señal.
 		pasada, cancelar := context.WithTimeout(context.Background(), 5*time.Minute)
 		if r, err := c.Procesar(pasada, 100); err != nil {
 			log.Error("cola", "error", err)
-		} else if r.Hechos+r.Reintentos+r.Fallidos > 0 {
+		} else if n := r.Hechos + r.Reintentos + r.Fallidos; n > 0 {
 			log.Info("cola", "hechos", r.Hechos, "reintentos", r.Reintentos, "fallidos", r.Fallidos)
+			// Llenó el tope: puede haber más esperando; otra pasada ya.
+			seguir = n >= 100
 		}
 		if time.Since(ultimaRevision) >= time.Minute {
 			ultimaRevision = time.Now()

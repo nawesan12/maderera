@@ -314,6 +314,17 @@ func TestPresupuestoAPedidoYDeVuelta(t *testing.T) {
 
 func jsTexto(n int) string { b, _ := json.Marshal(n); return string(b) }
 
+// Sin nada cargado, los listados son [] y no null (el panel hace .map).
+func TestListasVacias(t *testing.T) {
+	e := armar(t)
+	adm, _ := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)
+	for _, ruta := range []string{"pedidos", "presupuestos", "presupuestos?estado=abiertos", "pedidos?estado=inexistente"} {
+		if c, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/admin/"+ruta, nil); c != 200 || strings.TrimSpace(b) != "[]" {
+			t.Errorf("%s: %d %s", ruta, c, b)
+		}
+	}
+}
+
 func TestGuardarYPasarAPedido(t *testing.T) {
 	e := armar(t)
 	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)

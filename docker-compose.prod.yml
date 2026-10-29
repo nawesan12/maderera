@@ -61,6 +61,11 @@ services:
       args:
         DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}
         DATABASE_SSL: "off"
+        # La API de Go, por el mismo camino que la base: con Cache Components
+        # el build arma de antemano lo público en caché (los rubros del layout,
+        # el equipaje del asistente) y esos datos ya salen de Go.
+        # `desplegar.sh` levanta la API nueva antes de construir.
+        API_URL: http://127.0.0.1:8080
         APP_URL: ${APP_URL:?Falta APP_URL en .env.produccion}
         APP_ENV: ${APP_ENV:-production}
         SEO_INDEXAR: ${SEO_INDEXAR:-}
@@ -171,6 +176,11 @@ services:
       - privado:/datos/privado
     expose:
       - "8080"
+    # **Solo en loopback**, como la base: para que el build de la aplicación
+    # (que corre con la red del host) le pida lo público. Desde afuera no se
+    # llega; Caddy y Next le hablan por la red interna.
+    ports:
+      - "127.0.0.1:8080:8080"
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "/mjbj", "salud", "http://127.0.0.1:8080/salud"]

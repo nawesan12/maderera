@@ -77,6 +77,13 @@ ENV SEO_INDEXAR=$SEO_INDEXAR
 ENV BETTER_AUTH_URL=$APP_URL
 ENV BETTER_AUTH_SECRET=solo-para-el-build-no-firma-nada-real-000000
 
+# La API de Go: lo público en caché (rubros, sucursales, el equipaje del
+# asistente) se arma en el build y sus datos salen de ahí. La pasa el compose
+# (loopback del servidor, como la base); en la imagen final la pisa el
+# `environment` del compose con la red interna.
+ARG API_URL
+ENV API_URL=$API_URL
+
 # El commit, para el identificador del build (ver `next.config.ts`). Adentro
 # del build no hay `.git`: lo pasa `scripts/desplegar.sh`.
 ARG GIT_SHA

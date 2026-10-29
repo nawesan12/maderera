@@ -1,0 +1,1035 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Cortes
+  version: "1"
+  description: |
+    El corte a medida: la cola del taller y la ficha de cada trabajo, el
+    plano (motor guillotina y regla de la media placa), la hoja de corte,
+    los formatos para la máquina, las tarifas, las calculadoras y el
+    armador público. Leer la cola: cualquier persona del panel; cambiarla:
+    quien entra a /admin/cortes; tarifas y calculadoras: el admin.
+
+    Las rutas que usa el agente del taller (/api/cortes/pendientes,
+    /api/cortes/{id}/lista y /api/cortes/{id}/ptx) no están acá: son las de
+    siempre, con token o cookie, y devuelven archivos.
+paths:
+  /api/v1/admin/cortes:
+    get:
+      operationId: ListarCortes
+      parameters:
+        - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: estado, in: query, schema: { type: string, maxLength: 40 } }
+      responses:
+        "200":
+          description: La cola, primero lo urgente y después por antigüedad
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CorteListado" } }
+    post:
+      operationId: CrearCorte
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormCorte" }
+      responses:
+        "200":
+          description: El número del corte nuevo
+          content:
+            application/json:
+              schema: { type: object, required: [numero], properties: { numero: { type: string } } }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/{id}:
+    get:
+      operationId: FichaDeCorte
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: El trabajo, su plano, el presupuesto y lo que se cobra
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ficha" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/{id}/hoja:
+    get:
+      operationId: HojaDelCorte
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: El trabajo con su plano y la hoja en el orden de la máquina
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [corte, plano, hoja, metrosCanto, superficies]
+                properties:
+                  corte: { $ref: "#/components/schemas/Corte" }
+                  plano: { $ref: "#/components/schemas/Plano" }
+                  hoja: { $ref: "#/components/schemas/HojaDeCorte" }
+                  metrosCanto: { type: number, format: double }
+                  superficies: { type: array, items: { type: number, format: double } }
+        "404": { $ref: "#/components/responses/Problema" }
+        "409": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/{id}/avanzar:
+    post:
+      operationId: AvanzarCorte
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/{id}/urgente:
+    post:
+      operationId: AlternarUrgente
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/{id}/pasadas:
+    post:
+      operationId: CargarPasadas
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pasadas]
+              additionalProperties: false
+              properties: { pasadas: { type: number, format: double, nullable: true } }
+      responses:
+        "204": { description: Cargadas }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/{id}/acomodo:
+    put:
+      operationId: GuardarAcomodo
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fijadas]
+              additionalProperties: false
+              properties:
+                fijadas: { type: array, maxItems: 5000, items: { $ref: "#/components/schemas/PiezaFijada" } }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/{id}/sierra:
+    put:
+      operationId: CambiarSierra
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [valor]
+              additionalProperties: false
+              properties: { valor: { type: string, maxLength: 40 } }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/perfiles:
+    get:
+      operationId: ListarPerfiles
+      responses:
+        "200":
+          description: Los formatos guardados, el de por defecto primero
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Perfil" } }
+    post:
+      operationId: GuardarPerfil
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormPerfil" }
+      responses:
+        "204": { description: Guardado }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/perfiles/{perfil}:
+    delete:
+      operationId: BorrarPerfil
+      parameters:
+        - { name: perfil, in: path, required: true, schema: { type: string, maxLength: 80 } }
+      responses:
+        "204": { description: Borrado }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/tarifas:
+    get:
+      operationId: ListarTarifas
+      responses:
+        "200":
+          description: Todas las tarifas, activas o no
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/FilaTarifa" } }
+    post:
+      operationId: GuardarTarifa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [material, precioPorPasada, activo]
+              additionalProperties: false
+              properties:
+                id: { type: string }
+                material: { type: string }
+                priceListId: { type: string }
+                precioPorPasada: { type: string }
+                precioPorMetroCanto: { type: string }
+                activo: { type: boolean }
+      responses:
+        "204": { description: Guardada }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/tarifas/activas:
+    get:
+      operationId: TarifasActivas
+      responses:
+        "200":
+          description: Las que se cobran (para el mostrador)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/TarifaDeCorte" } }
+  /api/v1/admin/pedidos/{id}/cortes:
+    get:
+      operationId: CortesDelPedido
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: Los cortes que salieron del pedido, el más nuevo primero
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, numero, material, estado, urgente, createdAt]
+                  properties:
+                    id: { type: string }
+                    numero: { type: string }
+                    material: { type: string }
+                    estado: { type: string }
+                    urgente: { type: integer }
+                    createdAt: { type: string, format: date-time }
+  /api/v1/admin/calculadoras:
+    put:
+      operationId: GuardarParametros
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: { type: string } }
+      responses:
+        "204": { description: Guardados }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/calculadora/parametros:
+    get:
+      operationId: ParametrosDeCalculo
+      responses:
+        "200":
+          description: Los parámetros de las calculadoras (los del código si no hay fila)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ParametrosDeCalculo" }
+  /api/v1/calculadora/techo:
+    post:
+      operationId: CalcularTecho
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [largo, ancho, tipo]
+              additionalProperties: false
+              properties:
+                largo: { $ref: "#/components/schemas/Metros" }
+                ancho: { $ref: "#/components/schemas/Metros" }
+                tipo: { type: string, enum: [pino, saligna] }
+      responses:
+        "200":
+          description: Tirantes, machimbre, aislación, membrana y clavos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResultadoTecho" }
+  /api/v1/calculadora/placas:
+    post:
+      operationId: CalcularPlacas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [piezas, placaAncho, placaLargo]
+              additionalProperties: false
+              properties:
+                piezas:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: object
+                    required: [ancho, largo, cantidad]
+                    additionalProperties: false
+                    properties:
+                      ancho: { type: number, format: double, minimum: 0, maximum: 100000 }
+                      largo: { type: number, format: double, minimum: 0, maximum: 100000 }
+                      cantidad: { type: number, format: double, minimum: 0, maximum: 100000 }
+                placaAncho: { type: number, format: double, minimum: 1, maximum: 10000 }
+                placaLargo: { type: number, format: double, minimum: 1, maximum: 10000 }
+      responses:
+        "200":
+          description: Cuántas placas, con la sierra y el margen de seguridad
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResultadoPlacas" }
+  /api/v1/calculadora/piso:
+    post:
+      operationId: CalcularPiso
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [largo, ancho]
+              additionalProperties: false
+              properties:
+                largo: { $ref: "#/components/schemas/Metros" }
+                ancho: { $ref: "#/components/schemas/Metros" }
+      responses:
+        "200":
+          description: Cajas, zócalos y bajo piso
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResultadoPiso" }
+  /api/v1/calculadora/deck:
+    post:
+      operationId: CalcularDeck
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [largo, ancho, material]
+              additionalProperties: false
+              properties:
+                largo: { $ref: "#/components/schemas/Metros" }
+                ancho: { $ref: "#/components/schemas/Metros" }
+                material: { type: string, enum: [grandis, pvc] }
+      responses:
+        "200":
+          description: Tablas enteras, estructura, tornillos y protector
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResultadoDeck" }
+  /api/v1/calculadora/sugerencias:
+    post:
+      operationId: SugerirDelCatalogo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [terminos]
+              additionalProperties: false
+              properties:
+                terminos: { type: array, maxItems: 50, items: { type: string, maxLength: 200 } }
+      responses:
+        "200":
+          description: Una variante por término, la más barata con stock, con el precio de quien mira
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [busqueda, variantId, descripcion, unidad, precio, hayStock]
+                  properties:
+                    busqueda: { type: string }
+                    variantId: { type: string }
+                    descripcion: { type: string }
+                    unidad: { type: string }
+                    precio: { type: string, nullable: true }
+                    hayStock: { type: boolean }
+  /api/v1/cortes/placas:
+    get:
+      operationId: PlacasCortables
+      parameters:
+        - { name: publico, in: query, schema: { type: boolean } }
+        - { name: lista, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Las placas con medida, precio y tarifa de corte (la lista de quien mira, o la general con publico=true)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PlacaCortable" } }
+        "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/cortes/plano:
+    post:
+      operationId: CalcularPlano
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [piezas, placaLargo, placaAncho]
+              additionalProperties: false
+              properties:
+                piezas: { type: array, maxItems: 500, items: { $ref: "#/components/schemas/PiezaAcortar" } }
+                placaLargo: { type: number, format: double, minimum: 0, maximum: 10000 }
+                placaAncho: { type: number, format: double, minimum: 0, maximum: 10000 }
+                anchoSierra: { type: number, format: double, minimum: 0, maximum: 50 }
+                fijadas: { type: array, maxItems: 5000, items: { $ref: "#/components/schemas/PiezaFijada" } }
+                busqueda: { type: boolean }
+                presupuesto:
+                  type: object
+                  required: [precioPorPlaca, fraccion]
+                  additionalProperties: false
+                  properties:
+                    tarifa: { $ref: "#/components/schemas/TarifaDeCorte" }
+                    precioPorPlaca: { type: number, format: double, nullable: true }
+                    fraccion: { type: number, format: double }
+      responses:
+        "200":
+          description: El plano, y el presupuesto si se pidió
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plano]
+                properties:
+                  plano: { $ref: "#/components/schemas/Plano" }
+                  cuenta: { $ref: "#/components/schemas/Presupuesto" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/cortes/cotizar:
+    post:
+      operationId: CotizarCorte
+      description: |
+        El corte armado en el sitio, recalculado con la lista de quien compra
+        para guardarlo en el carrito. Con el freno «corte» por IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: Lo que se guarda en el carrito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CorteCotizado" }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/cortes/carrito:
+    post:
+      operationId: ResolverCarrito
+      description: Los cortes de un carrito listos para el pedido. Solo el servidor de Next (secreto interno).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cartId]
+              additionalProperties: false
+              properties: { cartId: { type: string } }
+      responses:
+        "200":
+          description: Los cortes resueltos, o el error que hay que mostrar
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resueltos]
+                properties:
+                  resueltos: { type: array, items: { $ref: "#/components/schemas/CorteResuelto" } }
+                  error: { type: string }
+        "403": { $ref: "#/components/responses/Problema" }
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+    Ok:
+      description: Lo que hay que decirle a quien lo hizo
+      content:
+        application/json:
+          schema: { type: object, required: [ok], properties: { ok: { type: string } } }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    Metros: { type: number, format: double, minimum: 0, maximum: 100000 }
+    CorteListado:
+      type: object
+      required: [id, numero, cliente, material, placas, pasadas, estado, urgente, sucursal, notas, piezas, metrosCuadrados, createdAt]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        cliente: { type: string }
+        material: { type: string }
+        placas: { type: integer }
+        pasadas: { type: integer }
+        estado: { type: string }
+        urgente: { type: boolean }
+        sucursal: { type: string, nullable: true }
+        notas: { type: string, nullable: true }
+        piezas: { type: integer }
+        metrosCuadrados: { type: number, format: double }
+        createdAt: { type: string, format: date-time }
+    FormCorte:
+      type: object
+      required: [contactoNombre, materialDescripcion, piezas]
+      additionalProperties: false
+      properties:
+        customerId: { type: string }
+        orderId: { type: string }
+        contactoNombre: { type: string }
+        branchId: { type: string }
+        variantId: { type: string }
+        materialDescripcion: { type: string }
+        placaLargoMm: { type: string }
+        placaAnchoMm: { type: string }
+        mitad: { type: string }
+        placas: { type: string }
+        cantoDescripcion: { type: string }
+        urgente: { type: boolean }
+        notas: { type: string }
+        acomodoManual: { type: string }
+        anchoSierraMm: { type: string }
+        piezas: { type: array, maxItems: 500, items: { type: object } }
+    PiezaDelCorte:
+      type: object
+      required: [id, cuttingOrderId, largoMm, anchoMm, cantidad, respetaVeta, cantoLargo, cantoAncho, aclaracion, etiqueta, orden]
+      properties:
+        id: { type: string }
+        cuttingOrderId: { type: string }
+        largoMm: { type: number, format: double }
+        anchoMm: { type: number, format: double }
+        cantidad: { type: number, format: double }
+        respetaVeta: { type: number, format: double }
+        cantoLargo: { type: number, format: double }
+        cantoAncho: { type: number, format: double }
+        aclaracion: { type: string, nullable: true }
+        etiqueta: { type: string, nullable: true }
+        orden: { type: integer }
+    Medida:
+      type: object
+      required: [largo, ancho, supuesta, mitad]
+      properties:
+        largo: { type: number, format: double }
+        ancho: { type: number, format: double }
+        supuesta: { type: boolean }
+        mitad: { type: string, nullable: true }
+    Corte:
+      type: object
+      required: [id, numero, cliente, customerId, orderId, pedidoNumero, empresa, priceListId, material, variantId,
+        varianteLargoMm, varianteAnchoMm, propiaLargoMm, propiaAnchoMm, mitad, color, categoria, precioMediaPct, placas,
+        pasadas, cantoDescripcion, acomodoManual, anchoSierraMm, motorPlano, estado, urgente, notas, sucursal, createdAt,
+        piezas, precioPlaca, medida]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        cliente: { type: string }
+        customerId: { type: string, nullable: true }
+        orderId: { type: string, nullable: true }
+        pedidoNumero: { type: string, nullable: true }
+        empresa: { type: string, nullable: true }
+        priceListId: { type: string, nullable: true }
+        material: { type: string }
+        variantId: { type: string, nullable: true }
+        varianteLargoMm: { type: number, format: double, nullable: true }
+        varianteAnchoMm: { type: number, format: double, nullable: true }
+        propiaLargoMm: { type: number, format: double, nullable: true }
+        propiaAnchoMm: { type: number, format: double, nullable: true }
+        mitad: { type: string, nullable: true }
+        color: { type: string, nullable: true }
+        categoria: { type: string, nullable: true }
+        precioMediaPct: { type: number, format: double, nullable: true }
+        placas: { type: integer }
+        pasadas: { type: integer }
+        cantoDescripcion: { type: string, nullable: true }
+        acomodoManual: { type: string, nullable: true }
+        anchoSierraMm: { type: number, format: double }
+        motorPlano: { type: integer }
+        estado: { type: string }
+        urgente: { type: boolean }
+        notas: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        piezas: { type: array, items: { $ref: "#/components/schemas/PiezaDelCorte" } }
+        precioPlaca: { type: number, format: double, nullable: true }
+        medida: { $ref: "#/components/schemas/Medida" }
+    TarifaDeCorte:
+      type: object
+      required: [material, priceListId, precioPorPasada, precioPorMetroCanto]
+      additionalProperties: false
+      properties:
+        material: { type: string }
+        priceListId: { type: string, nullable: true }
+        precioPorPasada: { type: number, format: double }
+        precioPorMetroCanto: { type: number, format: double }
+    FilaTarifa:
+      type: object
+      required: [id, material, priceListId, precioPorPasada, precioPorMetroCanto, activo, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        material: { type: string }
+        priceListId: { type: string, nullable: true }
+        precioPorPasada: { type: string }
+        precioPorMetroCanto: { type: string }
+        activo: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Ficha:
+      type: object
+      required: [corte, tarifa, cargo, metrosCanto, cargoCanto, plano, superficies, cuenta]
+      properties:
+        corte: { $ref: "#/components/schemas/Corte" }
+        tarifa: { allOf: [{ $ref: "#/components/schemas/TarifaDeCorte" }], nullable: true }
+        cargo: { type: number, format: double }
+        metrosCanto: { type: number, format: double }
+        cargoCanto: { type: number, format: double }
+        plano: { $ref: "#/components/schemas/Plano" }
+        superficies: { type: array, items: { type: number, format: double } }
+        cuenta: { $ref: "#/components/schemas/Presupuesto" }
+    PiezaAcortar:
+      type: object
+      required: [largoMm, anchoMm, cantidad, respetaVeta]
+      additionalProperties: false
+      properties:
+        largoMm: { type: number, format: double, minimum: 0, maximum: 100000 }
+        anchoMm: { type: number, format: double, minimum: 0, maximum: 100000 }
+        cantidad: { type: number, format: double, minimum: 0, maximum: 10000 }
+        respetaVeta: { type: number, format: double }
+        etiqueta: { type: string, nullable: true }
+        cantoLargo: { type: number, format: double }
+        cantoAncho: { type: number, format: double }
+    PiezaFijada:
+      type: object
+      required: [indice, unidad, placa]
+      additionalProperties: false
+      properties:
+        indice: { type: integer, minimum: 0, maximum: 100000 }
+        unidad: { type: integer, minimum: 0, maximum: 100000 }
+        placa: { type: integer, minimum: 1, maximum: 5000 }
+        girada: { type: boolean }
+    PiezaColocada:
+      type: object
+      required: [x, y, ancho, alto, indice, unidad, etiqueta, girada, largoOriginal, anchoOriginal]
+      properties:
+        x: { type: number, format: double }
+        y: { type: number, format: double }
+        ancho: { type: number, format: double }
+        alto: { type: number, format: double }
+        indice: { type: integer }
+        unidad: { type: integer }
+        etiqueta: { type: string, nullable: true }
+        girada: { type: boolean }
+        largoOriginal: { type: number, format: double }
+        anchoOriginal: { type: number, format: double }
+    Rect:
+      type: object
+      required: [x, y, ancho, alto]
+      properties:
+        x: { type: number, format: double }
+        y: { type: number, format: double }
+        ancho: { type: number, format: double }
+        alto: { type: number, format: double }
+    LineaDeCorte:
+      type: object
+      required: [direccion, x1, y1, x2, y2]
+      properties:
+        direccion: { type: string, enum: [horizontal, vertical] }
+        x1: { type: number, format: double }
+        y1: { type: number, format: double }
+        x2: { type: number, format: double }
+        y2: { type: number, format: double }
+    PlacaDelPlano:
+      type: object
+      required: [numero, piezas, cortes, recortes, aprovechado, seVendeEntera]
+      properties:
+        numero: { type: integer }
+        piezas: { type: array, items: { $ref: "#/components/schemas/PiezaColocada" } }
+        cortes: { type: array, items: { $ref: "#/components/schemas/LineaDeCorte" } }
+        recortes: { type: array, items: { $ref: "#/components/schemas/Rect" } }
+        aprovechado: { type: number, format: double }
+        seVendeEntera: { type: boolean }
+    NoEntra:
+      type: object
+      required: [indice, largoMm, anchoMm]
+      properties:
+        indice: { type: integer }
+        largoMm: { type: number, format: double }
+        anchoMm: { type: number, format: double }
+    Plano:
+      type: object
+      required: [placaLargo, placaAncho, anchoSierra, placas, noEntran, totalPiezas, aprovechadoTotal, pasadas,
+        recorteMayor, placasEnteras, pasadasCobrables, fijadasDescartadas]
+      properties:
+        placaLargo: { type: number, format: double }
+        placaAncho: { type: number, format: double }
+        anchoSierra: { type: number, format: double }
+        placas: { type: array, items: { $ref: "#/components/schemas/PlacaDelPlano" } }
+        noEntran: { type: array, items: { $ref: "#/components/schemas/NoEntra" } }
+        totalPiezas: { type: integer }
+        aprovechadoTotal: { type: number, format: double }
+        pasadas: { type: integer }
+        recorteMayor: { allOf: [{ $ref: "#/components/schemas/Rect" }], nullable: true }
+        placasEnteras: { type: integer }
+        pasadasCobrables: { type: integer }
+        fijadasDescartadas: { type: array, items: { $ref: "#/components/schemas/PiezaFijada" } }
+    Presupuesto:
+      type: object
+      required: [placasEnteras, fraccion, precioPorPlaca, subtotalPlacas, pasadasCobrables, precioPorPasada,
+        subtotalCorte, metrosCanto, subtotalCanto, total, faltan]
+      properties:
+        placasEnteras: { type: integer }
+        fraccion: { type: number, format: double }
+        precioPorPlaca: { type: number, format: double }
+        subtotalPlacas: { type: number, format: double }
+        pasadasCobrables: { type: integer }
+        precioPorPasada: { type: number, format: double }
+        subtotalCorte: { type: number, format: double }
+        metrosCanto: { type: number, format: double }
+        subtotalCanto: { type: number, format: double }
+        total: { type: number, format: double }
+        faltan: { type: array, items: { type: string } }
+    Trozo:
+      type: object
+      required: [tipo, rect]
+      properties:
+        tipo: { type: string, enum: [pieza, sobrante, partido] }
+        rect: { $ref: "#/components/schemas/Rect" }
+        pieza: { $ref: "#/components/schemas/PiezaColocada" }
+        eje: { type: string, enum: [x, y] }
+        nivel: { type: integer }
+        hijos: { type: array, items: { $ref: "#/components/schemas/Trozo" } }
+        ultimaSinCorte: { type: boolean }
+        sobra: { allOf: [{ $ref: "#/components/schemas/Rect" }], nullable: true }
+    Salida:
+      type: object
+      required: [cantidad, tipo, largo, ancho]
+      properties:
+        cantidad: { type: integer }
+        tipo: { type: string, enum: [pieza, trozo] }
+        largo: { type: number, format: double }
+        ancho: { type: number, format: double }
+        renglon: { type: integer }
+        etiqueta: { type: string, nullable: true }
+        girada: { type: boolean }
+        sigueEn: { type: integer }
+        letra: { type: string }
+    PasoDeCorte:
+      type: object
+      required: [numero, medida, veces, ultimaSinCorte, sale]
+      properties:
+        numero: { type: integer }
+        medida: { type: number, format: double }
+        veces: { type: integer }
+        ultimaSinCorte: { type: boolean }
+        sale: { type: array, items: { $ref: "#/components/schemas/Salida" } }
+    OperacionDeCorte:
+      type: object
+      required: [numero, nivel, direccion, largo, ancho, repeticiones, delPaso, pasos, tandas, sobra]
+      properties:
+        numero: { type: integer }
+        nivel: { type: integer }
+        direccion: { type: string, enum: [longitudinal, transversal] }
+        largo: { type: number, format: double }
+        ancho: { type: number, format: double }
+        repeticiones: { type: integer }
+        delPaso: { type: integer, nullable: true }
+        letra: { type: string }
+        pasos: { type: array, items: { $ref: "#/components/schemas/PasoDeCorte" } }
+        tandas: { type: array, items: { type: array, items: { $ref: "#/components/schemas/PasoDeCorte" } } }
+        sobra:
+          type: object
+          nullable: true
+          required: [largo, ancho, tipo]
+          properties:
+            largo: { type: number, format: double }
+            ancho: { type: number, format: double }
+            tipo: { type: string, enum: [retal, desperdicio] }
+    PatronDeCorte:
+      type: object
+      required: [placas, arbol, operaciones, dibujo, piezasPorPlaca, pasadasPorPlaca, seVendeEntera]
+      properties:
+        placas: { type: array, items: { type: integer } }
+        arbol: { $ref: "#/components/schemas/Trozo" }
+        operaciones: { type: array, items: { $ref: "#/components/schemas/OperacionDeCorte" } }
+        dibujo:
+          type: object
+          required: [piezas, sobrantes, cortes]
+          properties:
+            piezas:
+              type: array
+              items:
+                type: object
+                required: [rect, pieza]
+                properties:
+                  rect: { $ref: "#/components/schemas/Rect" }
+                  pieza: { $ref: "#/components/schemas/PiezaColocada" }
+            sobrantes:
+              type: array
+              items:
+                type: object
+                required: [rect, tipo]
+                properties:
+                  rect: { $ref: "#/components/schemas/Rect" }
+                  tipo: { type: string, enum: [retal, desperdicio] }
+            cortes:
+              type: array
+              items:
+                type: object
+                required: [x1, y1, x2, y2, paso]
+                properties:
+                  x1: { type: number, format: double }
+                  y1: { type: number, format: double }
+                  x2: { type: number, format: double }
+                  y2: { type: number, format: double }
+                  paso: { type: integer }
+        piezasPorPlaca: { type: integer }
+        pasadasPorPlaca: { type: integer }
+        seVendeEntera: { type: boolean }
+    HojaDeCorte:
+      type: object
+      required: [placaLargo, placaAncho, anchoSierra, patrones, placas, totalPiezas, noEntran]
+      properties:
+        placaLargo: { type: number, format: double }
+        placaAncho: { type: number, format: double }
+        anchoSierra: { type: number, format: double }
+        patrones: { type: array, items: { $ref: "#/components/schemas/PatronDeCorte" } }
+        placas: { type: integer }
+        totalPiezas: { type: integer }
+        noEntran: { type: array, items: { $ref: "#/components/schemas/NoEntra" } }
+    Perfil:
+      type: object
+      required: [id, nombre, programa, separador, conEncabezado, unidad, decimal, valorSi, valorNo, finDeLinea, columnas,
+        porDefecto, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        programa: { type: string, nullable: true }
+        separador: { type: string }
+        conEncabezado: { type: boolean }
+        unidad: { type: string }
+        decimal: { type: string }
+        valorSi: { type: string }
+        valorNo: { type: string }
+        finDeLinea: { type: string }
+        columnas: { type: string }
+        porDefecto: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    FormPerfil:
+      type: object
+      required: [nombre, separador, conEncabezado, unidad, decimal, finDeLinea, columnas, porDefecto]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        programa: { type: string }
+        separador: { type: string }
+        conEncabezado: { type: boolean }
+        unidad: { type: string }
+        decimal: { type: string }
+        valorSi: { type: string }
+        valorNo: { type: string }
+        finDeLinea: { type: string }
+        columnas:
+          type: array
+          maxItems: 40
+          items:
+            type: object
+            required: [clave, encabezado]
+            properties:
+              clave: { type: string }
+              encabezado: { type: string }
+        porDefecto: { type: boolean }
+    MedidaDeTabla:
+      type: object
+      required: [largoM, anchoM]
+      properties:
+        largoM: { type: number, format: double }
+        anchoM: { type: number, format: double }
+    ParametrosDeCalculo:
+      type: object
+      required: [mermaMachimbre, factorPendiente, margenSeguridad, anchoSierraMm, rindeRolloMembrana, rindeRolloAislacion,
+        separacionTechoM, separacionPisoM, deck]
+      properties:
+        mermaMachimbre: { type: number, format: double }
+        factorPendiente: { type: number, format: double }
+        margenSeguridad: { type: number, format: double }
+        anchoSierraMm: { type: number, format: double }
+        rindeRolloMembrana: { type: number, format: double }
+        rindeRolloAislacion: { type: number, format: double }
+        separacionTechoM: { type: number, format: double }
+        separacionPisoM: { type: number, format: double }
+        deck:
+          type: object
+          required: [grandis, pvc]
+          properties:
+            grandis: { $ref: "#/components/schemas/MedidaDeTabla" }
+            pvc: { $ref: "#/components/schemas/MedidaDeTabla" }
+    Item:
+      type: object
+      required: [descripcion, busqueda]
+      properties:
+        descripcion: { type: string }
+        busqueda: { type: string }
+    ResultadoTecho:
+      type: object
+      required: [tirantes, machimbre, aislacion, membrana, clavos]
+      properties:
+        tirantes:
+          allOf:
+            - { $ref: "#/components/schemas/Item" }
+            - { type: object, required: [cantidad, medida], properties: { cantidad: { type: number, format: double }, medida: { type: string } } }
+        machimbre:
+          allOf:
+            - { $ref: "#/components/schemas/Item" }
+            - { type: object, required: [m2], properties: { m2: { type: number, format: double } } }
+        aislacion:
+          allOf:
+            - { $ref: "#/components/schemas/Item" }
+            - { type: object, required: [rollos], properties: { rollos: { type: number, format: double } } }
+        membrana:
+          allOf:
+            - { $ref: "#/components/schemas/Item" }
+            - { type: object, required: [rollos], properties: { rollos: { type: number, format: double } } }
+        clavos:
+          allOf:
+            - { $ref: "#/components/schemas/Item" }
+            - { type: object, required: [kg, estimado], properties: { kg: { type: number, format: double }, estimado: { type: boolean, enum: [true] } } }
+    ResultadoPlacas:
+      type: object
+      required: [placasNecesarias, placaDimension, piezas, aprovechamiento, desperdicio, perdidaPorSierraMm2]
+      properties:
+        placasNecesarias: { type: number, format: double }
+        placaDimension: { type: string }
+        piezas:
+          type: array
+          items:
+            type: object
+            required: [ancho, largo, cantidad]
+            properties:
+              ancho: { type: number, format: double }
+              largo: { type: number, format: double }
+              cantidad: { type: number, format: double }
+        aprovechamiento: { type: number, format: double }
+        desperdicio: { type: number, format: double }
+        perdidaPorSierraMm2: { type: number, format: double }
+    ResultadoPiso:
+      type: object
+      required: [pisoM2, cajasNecesarias, m2PorCaja, zocalos, zocaloML, underlayM2, tirantesDeEntrepiso]
+      properties:
+        pisoM2: { type: number, format: double }
+        cajasNecesarias: { type: number, format: double }
+        m2PorCaja: { type: number, format: double }
+        zocalos: { type: number, format: double }
+        zocaloML: { type: number, format: double }
+        underlayM2: { type: number, format: double }
+        tirantesDeEntrepiso: { type: number, format: double }
+    ResultadoDeck:
+      type: object
+      required: [tablasDeck, estructura, tornillos, protector]
+      properties:
+        tablasDeck:
+          allOf:
+            - { $ref: "#/components/schemas/Item" }
+            - { type: object, required: [tablas, m2, medida], properties: { tablas: { type: number, format: double }, m2: { type: number, format: double }, medida: { type: string } } }
+        estructura:
+          allOf:
+            - { $ref: "#/components/schemas/Item" }
+            - { type: object, required: [tirantes, medida], properties: { tirantes: { type: number, format: double }, medida: { type: string } } }
+        tornillos:
+          allOf:
+            - { $ref: "#/components/schemas/Item" }
+            - { type: object, required: [cantidad], properties: { cantidad: { type: number, format: double } } }
+        protector:
+          allOf:
+            - { $ref: "#/components/schemas/Item" }
+            - { type: object, required: [litros], properties: { litros: { type: number, format: double } } }
+    PlacaCortable:
+      type: object
+      required: [variantId, descripcion, largoMm, anchoMm, color, precio, admiteMedia, precioMediaPct, precioPorPasada, precioPorMetroCanto]
+      properties:
+        variantId: { type: string }
+        descripcion: { type: string }
+        largoMm: { type: number, format: double }
+        anchoMm: { type: number, format: double }
+        color: { type: string, nullable: true }
+        precio: { type: number, format: double }
+        admiteMedia: { type: boolean }
+        precioMediaPct: { type: number, format: double }
+        precioPorPasada: { type: number, format: double }
+        precioPorMetroCanto: { type: number, format: double }
+    CorteCotizado:
+      type: object
+      required: [variantId, materialDescripcion, placaLargoMm, placaAnchoMm, mitad, cantoDescripcion, piezas, placas, pasadas, total]
+      properties:
+        variantId: { type: string }
+        materialDescripcion: { type: string }
+        placaLargoMm: { type: number, format: double }
+        placaAnchoMm: { type: number, format: double }
+        mitad: { type: string, nullable: true }
+        cantoDescripcion: { type: string, nullable: true }
+        piezas: { type: array, items: { $ref: "#/components/schemas/PiezaAcortar" } }
+        placas: { type: integer }
+        pasadas: { type: integer }
+        total: { type: string }
+    CorteResuelto:
+      type: object
+      required: [id, placa, piezas, mitad, cantoDescripcion, placaLargoMm, placaAnchoMm, placas, pasadas, anchoSierraMm, cuenta, lineas]
+      properties:
+        id: { type: string }
+        placa: { $ref: "#/components/schemas/PlacaCortable" }
+        piezas: { type: array, items: { $ref: "#/components/schemas/PiezaAcortar" } }
+        mitad: { type: string, nullable: true }
+        cantoDescripcion: { type: string, nullable: true }
+        placaLargoMm: { type: number, format: double }
+        placaAnchoMm: { type: number, format: double }
+        placas: { type: integer }
+        pasadas: { type: integer }
+        anchoSierraMm: { type: number, format: double }
+        cuenta: { $ref: "#/components/schemas/Presupuesto" }
+        lineas:
+          type: array
+          items:
+            type: object
+            required: [esMaterial, variantId, descripcion, unidad, cantidad, precioUnitario]
+            properties:
+              esMaterial: { type: boolean }
+              variantId: { type: string, nullable: true }
+              descripcion: { type: string }
+              unidad: { type: string }
+              cantidad: { type: number, format: double }
+              precioUnitario: { type: number, format: double }

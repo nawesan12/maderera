@@ -361,3 +361,14 @@ func TestGoldenAvisoManual(t *testing.T) {
 	leerGolden(t, "eventos.json", &eventos)
 	igual(t, "eventos", eventos, EventosWhatsapp)
 }
+
+func TestGoldenSucursales(t *testing.T) {
+	var casos []struct {
+		N, S *string
+		D    map[string]string
+	}
+	leerGolden(t, "sucursales.json", &casos)
+	for _, c := range casos {
+		igual(t, fmt.Sprintf("datosDeSucursal(%v, %v)", c.N, c.S), c.D, DatosDeSucursal(c.N, c.S))
+	}
+}

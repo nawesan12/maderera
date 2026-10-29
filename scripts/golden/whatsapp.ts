@@ -24,6 +24,11 @@ import { leerPayload } from "../../lib/whatsapp/payload";
 import * as A from "../../lib/whatsapp/aviso-manual";
 import { PLANTILLAS_BASE } from "../../lib/whatsapp/plantillas-base";
 import * as F from "../../tests/fixtures/whatsapp/payloads";
+import { SUCURSALES, sucursalPublicada } from "../../lib/sucursales";
+
+// La hora fija: los payloads de ejemplo llevan Date.now() en los ids y en los
+// timestamps, y así el golden sale igual cada vez que se corre.
+Date.now = () => Date.UTC(2026, 9, 29, 12, 0, 0);
 
 const destino = new URL("../../backend/testdata/golden/whatsapp/", import.meta.url);
 mkdirSync(destino, { recursive: true });
@@ -423,6 +428,18 @@ const EVENTOS_WHATSAPP = [
   { evento: "cheque_rechazado", titulo: "Cuando se rechaza un cheque", cuando: "No se tomó o lo rechazó el banco: el importe vuelve a la cuenta.", plantilla: "cheque_rechazado", textoLibre: "Hola {{nombre}}, el cheque {{cheque}} por {{importe}} no se pudo acreditar ({{motivo}}). El importe volvió a tu cuenta corriente." },
 ];
 escribir("eventos.json", EVENTOS_WHATSAPP);
+
+// Copia textual de datosDeSucursal (lib/whatsapp/avisos.ts, mismo commit).
+function datosDeSucursal(nombre: string | null, slug: string | null) {
+  const publicada = (slug && sucursalPublicada(slug)) || SUCURSALES.find((s) => s.nombre === nombre) || SUCURSALES[0];
+  return {
+    sucursal: publicada ? `${publicada.nombre}, ${publicada.direccion.replace(/, Mar del Plata$/, "")}` : nombre ?? "la sucursal",
+    horario: publicada?.horario ?? "",
+  };
+}
+const nombresSuc = [null, "", "Casa Central", "Aserradero", "Otra"];
+const slugs = [null, "", "casa-central", "aserradero", "otra"];
+escribir("sucursales.json", nombresSuc.flatMap((n) => slugs.map((s) => ({ n, s, d: datosDeSucursal(n, s) }))));
 
 writeFileSync(
   new URL("../../backend/internal/whatsapp/plantillas_base.json", import.meta.url),

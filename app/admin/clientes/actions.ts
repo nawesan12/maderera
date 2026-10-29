@@ -1,440 +1,92 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
-import { db } from "@/lib/db";
-import {
-  accountMovements,
-  addresses,
-  customers,
-  orders,
-  quotes,
-} from "@/lib/db/schema";
-import { requireStaff, requireStaffRole } from "@/lib/dal/session";
-import { leerDocumento } from "@/lib/clientes/documento";
-import { clientePorDocumento } from "@/lib/clientes/alta";
-import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
-import { parsearImporte } from "@/lib/formato";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+
+/*
+ * La ficha del cliente y su cuenta corriente. Lo hace la API de Go
+ * (backend/internal/clientes): el alta (frena un CUIT que ya es de otra
+ * ficha), el movimiento a mano (solo el admin), vincular la cuenta web,
+ * bloquear la cuenta corriente y el plazo de pago.
+ */
 
 export interface EstadoCliente {
   error?: string;
   ok?: string;
 }
 
-const clienteSchema = z.object({
-  id: z.string().uuid().optional(),
-  nombre: z.string().trim().min(2, "El nombre es obligatorio.").max(160),
-  razonSocial: z.string().trim().max(160).optional(),
-  cuit: z
-    .string()
-    .trim()
-    .max(20)
-    .optional()
-    .refine(
-      (v) => !v || /^\d{2}-?\d{8}-?\d$/.test(v),
-      "El CUIT tiene que tener 11 dígitos, con o sin guiones.",
-    ),
-  condicionIva: z.enum([
-    "responsable_inscripto",
-    "monotributista",
-    "exento",
-    "consumidor_final",
-    "no_categorizado",
-  ]),
-  tipo: z.enum(["particular", "profesional"]),
-  email: z.string().trim().email("Revisá el correo.").optional().or(z.literal("")),
-  telefono: z.string().trim().max(40).optional(),
-  direccion: z.string().trim().max(200).optional(),
-  rubro: z.string().trim().max(80).optional(),
-  asesor: z.string().trim().max(60).optional(),
-  sellerId: z.string().uuid().optional(),
-  limiteCredito: z.string().default("0"),
-  priceListId: z.string().uuid().optional(),
-  notas: z.string().trim().max(1000).optional(),
-});
+const campo = (formData: FormData, nombre: string) => (formData.get(nombre) as string | null) ?? undefined;
 
-export async function guardarCliente(
-  _previo: EstadoCliente,
-  formData: FormData,
-): Promise<EstadoCliente> {
-  const usuario = await requireStaff();
-
-  const parsed = clienteSchema.safeParse({
-    id: (formData.get("id") as string) || undefined,
-    nombre: formData.get("nombre"),
-    razonSocial: (formData.get("razonSocial") as string) || undefined,
-    cuit: (formData.get("cuit") as string) || undefined,
-    condicionIva: formData.get("condicionIva") ?? "consumidor_final",
-    tipo: formData.get("tipo") ?? "particular",
-    email: (formData.get("email") as string) || "",
-    telefono: (formData.get("telefono") as string) || undefined,
-    direccion: (formData.get("direccion") as string) || undefined,
-    rubro: (formData.get("rubro") as string) || undefined,
-    asesor: (formData.get("asesor") as string) || undefined,
-    sellerId: (formData.get("sellerId") as string) || undefined,
-    limiteCredito: (formData.get("limiteCredito") as string) || "0",
-    priceListId: (formData.get("priceListId") as string) || undefined,
-    notas: (formData.get("notas") as string) || undefined,
-  });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
-  }
-
-  const d = parsed.data;
-  const campos = {
-    nombre: d.nombre,
-    razonSocial: d.razonSocial || null,
-    // El CUIT se guarda sin guiones para poder buscarlo escrito de cualquier forma.
-    cuit: d.cuit ? d.cuit.replace(/-/g, "") : null,
-    condicionIva: d.condicionIva,
-    tipo: d.tipo,
-    email: d.email || null,
-    telefono: d.telefono || null,
-    direccion: d.direccion || null,
-    rubro: d.rubro || null,
-    asesor: d.asesor || null,
-    // El vendedor asignado. Null es "sin asignar".
-    sellerId: d.sellerId ?? null,
-    limiteCredito: (Number(d.limiteCredito.replace(/[^\d.-]/g, "")) || 0).toFixed(2),
-    // Null es la lista general: la ficha no la guarda para que un cambio de
-    // nombre o de default no deje al cliente atado a una lista que ya no es.
-    priceListId: d.priceListId ?? null,
-    notas: d.notas || null,
-    updatedAt: new Date(),
-  };
-
-  /*
-   * El mismo CUIT en otra ficha.
-   *
-   * Dos fichas de la misma empresa parten su cuenta corriente en dos, y eso
-   * se descubre recién cuando se le reclama una deuda que ya pagó en la otra.
-   * Se busca con y sin guiones, que es como puede haber quedado guardado.
-   */
-  if (campos.cuit) {
-    const documento = leerDocumento(campos.cuit);
-    if (!("error" in documento)) {
-      const otro = await clientePorDocumento(db, documento);
-      if (otro && otro.id !== d.id) {
-        return { error: `Ese CUIT ya es de ${otro.nombre}. Abrí esa ficha en vez de crear otra.` };
-      }
-    }
-  }
-
-  let id = d.id;
-
-  if (id) {
-    await db.update(customers).set(campos).where(eq(customers.id, id));
-  } else {
-    const [creado] = await db
-      .insert(customers)
-      .values(campos)
-      .returning({ id: customers.id });
-    id = creado?.id;
-  }
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: d.id ? "editar" : "crear",
-    entidad: "cliente",
-    entidadId: id ?? null,
-    descripcion: `${d.id ? "Editó" : "Dio de alta"} a ${d.nombre}`,
-    // El límite de crédito es el dato que después se discute: quedó registrado
-    // quién lo puso y en cuánto.
-    detalle: { limiteCredito: campos.limiteCredito, tipo: d.tipo },
-  });
-
-  revalidatePath("/admin/clientes");
-  return { ok: d.id ? "Cliente actualizado." : "Cliente creado." };
+function resultado(r: { data?: { ok: string }; error?: unknown }, porDefecto?: string): EstadoCliente {
+  return r.data ? { ok: r.data.ok } : { error: mensajeDe(r.error as Problema | undefined, porDefecto) };
 }
 
-const movimientoSchema = z.object({
-  customerId: z.string().uuid(),
-  // Sin «pago»: un pago se registra con su recibo, desde «Registrar cobro».
-  tipo: z.enum(["compra", "nota_credito", "nota_debito", "ajuste"]),
-  monto: z.string(),
-  detalle: z.string().trim().max(200).optional(),
-});
-
-/**
- * Registra un movimiento de cuenta corriente.
- *
- * El signo lo pone el tipo de movimiento y no quien carga: una compra suma
- * deuda, un pago la resta. Dejar que se escriba el signo a mano es la forma más
- * fácil de que una cuenta termine al revés.
- */
-export async function registrarMovimiento(
-  _previo: EstadoCliente,
-  formData: FormData,
-): Promise<EstadoCliente> {
-  // Corregir una cuenta a mano es del admin: cobrar no pasa por acá.
-  const usuario = await requireStaffRole("admin");
-
-  const parsed = movimientoSchema.safeParse({
-    customerId: formData.get("customerId"),
-    tipo: formData.get("tipo"),
-    monto: formData.get("monto"),
-    detalle: (formData.get("detalle") as string) || undefined,
+export async function guardarCliente(_previo: EstadoCliente, formData: FormData): Promise<EstadoCliente> {
+  const r = await (await api()).POST("/api/v1/admin/clientes", {
+    body: {
+      id: campo(formData, "id") || undefined,
+      nombre: campo(formData, "nombre") ?? "",
+      razonSocial: campo(formData, "razonSocial"),
+      cuit: campo(formData, "cuit"),
+      condicionIva: campo(formData, "condicionIva"),
+      tipo: campo(formData, "tipo"),
+      email: campo(formData, "email"),
+      telefono: campo(formData, "telefono"),
+      direccion: campo(formData, "direccion"),
+      rubro: campo(formData, "rubro"),
+      asesor: campo(formData, "asesor"),
+      sellerId: campo(formData, "sellerId"),
+      limiteCredito: campo(formData, "limiteCredito"),
+      priceListId: campo(formData, "priceListId"),
+      notas: campo(formData, "notas"),
+    },
   });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
-  }
-
-  const magnitud = Math.abs(parsearImporte(parsed.data.monto));
-
-  if (!Number.isFinite(magnitud) || magnitud <= 0) {
-    return { error: "Poné un importe mayor a cero." };
-  }
-
-  const suma = parsed.data.tipo === "compra" || parsed.data.tipo === "nota_debito";
-  const monto = (suma ? magnitud : -magnitud).toFixed(2);
-
-  await db.insert(accountMovements).values({
-    customerId: parsed.data.customerId,
-    tipo: parsed.data.tipo,
-    monto,
-    detalle: parsed.data.detalle,
-    createdByUserId: usuario.userId,
-  });
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "crear",
-    entidad: "cliente",
-    entidadId: parsed.data.customerId,
-    descripcion: `Cargó un movimiento de cuenta corriente: ${parsed.data.tipo} por ${monto}`,
-    detalle: { tipo: parsed.data.tipo, monto, detalleCarga: parsed.data.detalle },
-  });
-
-  revalidatePath("/admin/clientes");
-  return { ok: "Movimiento registrado." };
+  if (r.data) revalidatePath("/admin/clientes");
+  return resultado(r, "Revisá los datos.");
 }
 
-const vinculacionSchema = z.object({
-  customerId: z.string().uuid(),
-  cuentaWebId: z.string().uuid(),
-});
-
-/**
- * Une la ficha del mostrador con la cuenta que la persona se creó en el sitio.
- *
- * Existen dos fichas porque el registro público no vincula solo: como el alta no
- * verifica el correo, hacerlo automáticamente permitiría registrarse con el mail
- * de un tercero y quedarse con su cuenta corriente. La decisión la toma alguien
- * del mostrador, que sabe con quién está hablando.
- *
- * Todo pasa en una transacción y en este orden: primero se libera el `userId` de
- * la ficha web —hay un índice único sobre esa columna, así que no pueden
- * convivir las dos con el mismo—, después se lo queda la ficha real y recién ahí
- * se mudan pedidos, presupuestos, movimientos y direcciones. La ficha web se
- * desactiva en vez de borrarse: si la unión resultó equivocada, los datos siguen
- * estando.
- */
-export async function vincularCuentaWeb(
-  _previo: EstadoCliente,
-  formData: FormData,
-): Promise<EstadoCliente> {
-  const usuario = await requireStaffRole("admin", "vendedor");
-
-  const parsed = vinculacionSchema.safeParse({
-    customerId: formData.get("customerId"),
-    cuentaWebId: formData.get("cuentaWebId"),
+export async function registrarMovimiento(_previo: EstadoCliente, formData: FormData): Promise<EstadoCliente> {
+  const r = await (await api()).POST("/api/v1/admin/clientes/{id}/movimientos", {
+    params: { path: { id: campo(formData, "customerId") ?? "" } },
+    body: { tipo: campo(formData, "tipo") ?? "", monto: campo(formData, "monto") ?? "", detalle: campo(formData, "detalle") },
   });
-
-  if (!parsed.success) return { error: "No pudimos encontrar esos dos clientes. Recargá la pantalla y probá de nuevo." };
-
-  const { customerId, cuentaWebId } = parsed.data;
-
-  if (customerId === cuentaWebId) {
-    return { error: "Son la misma ficha." };
-  }
-
-  const [destino, web] = await Promise.all([
-    db
-      .select({ id: customers.id, userId: customers.userId })
-      .from(customers)
-      .where(eq(customers.id, customerId))
-      .limit(1),
-    db
-      .select({ id: customers.id, userId: customers.userId })
-      .from(customers)
-      .where(eq(customers.id, cuentaWebId))
-      .limit(1),
-  ]);
-
-  const userId = web[0]?.userId;
-
-  if (!destino[0] || !web[0] || !userId) {
-    return { error: "Esa cuenta web ya no está disponible." };
-  }
-
-  if (destino[0].userId) {
-    return { error: "Este cliente ya tiene una cuenta web vinculada." };
-  }
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(customers)
-      .set({ userId: null, active: false, updatedAt: new Date() })
-      .where(eq(customers.id, cuentaWebId));
-
-    await tx
-      .update(customers)
-      .set({ userId, updatedAt: new Date() })
-      .where(eq(customers.id, customerId));
-
-    await tx
-      .update(orders)
-      .set({ customerId })
-      .where(eq(orders.customerId, cuentaWebId));
-
-    await tx
-      .update(quotes)
-      .set({ customerId })
-      .where(eq(quotes.customerId, cuentaWebId));
-
-    await tx
-      .update(accountMovements)
-      .set({ customerId })
-      .where(eq(accountMovements.customerId, cuentaWebId));
-
-    await tx
-      .update(addresses)
-      .set({ customerId })
-      .where(eq(addresses.customerId, cuentaWebId));
-  });
-
-  // Esta es la acción más delicada del panel: mueve pedidos, presupuestos y
-  // saldo de una ficha a otra. Si se hace sobre la persona equivocada, la
-  // bitácora es la única forma de saber qué se movió y quién lo movió.
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "editar",
-    entidad: "cliente",
-    entidadId: customerId,
-    descripcion: "Vinculó una cuenta web con la ficha del mostrador",
-    detalle: { customerId, cuentaWebId, userId },
-  });
-
-  revalidatePath("/admin/clientes");
-  revalidatePath("/mi-cuenta", "layout");
-
-  return {
-    ok: "Listo: ahora ve sus pedidos y su cuenta corriente desde el sitio.",
-  };
+  if (r.data) revalidatePath("/admin/clientes");
+  return resultado(r, "Revisá los datos.");
 }
 
-/**
- * Corta o vuelve a habilitar la cuenta corriente de un cliente.
- *
- * Es lo que la clienta ya hace en papel —«ellos hacen un bloqueo de la cuenta
- * corriente»— y hasta ahora el sistema no tenía: lo más cercano era marcar la
- * ficha como morosa, que es otra cosa (un estado del cliente, no una decisión
- * sobre su crédito) y que el mostrador podía saltear autorizando la venta.
- *
- * **El bloqueo a mano no es autorizable**: alguien decidió cortarle la cuenta y
- * el mostrador no lo puede saltear con un botón. Se levanta desde acá, que es
- * donde se tomó la decisión, y queda en la bitácora con el motivo.
- */
-export async function bloquearCuentaCorriente(
-  customerId: string,
-  bloquear: boolean,
-  motivo: string,
-): Promise<EstadoCliente> {
-  const usuario = await requireStaffRole("admin");
-
-  const parsed = z
-    .object({
-      customerId: z.string().uuid(),
-      bloquear: z.boolean(),
-      motivo: z.string().trim().max(200),
-    })
-    .safeParse({ customerId, bloquear, motivo });
-
-  if (!parsed.success) return { error: "No se pudo actualizar la cuenta." };
-
-  // Bloquear sin explicar por qué deja a quien atiende sin nada que decirle al
-  // cliente cuando reclama, que es dentro de cinco minutos.
-  if (parsed.data.bloquear && parsed.data.motivo.length < 3) {
-    return { error: "Escribí por qué se bloquea: se lo van a preguntar." };
-  }
-
-  const [cliente] = await db
-    .update(customers)
-    .set({
-      cuentaBloqueada: parsed.data.bloquear,
-      motivoBloqueo: parsed.data.bloquear ? parsed.data.motivo : null,
-      updatedAt: new Date(),
-    })
-    .where(eq(customers.id, parsed.data.customerId))
-    .returning({ nombre: customers.nombre });
-
-  if (!cliente) return { error: "Esa ficha ya no está." };
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "cambiar_estado",
-    entidad: "cliente",
-    entidadId: parsed.data.customerId,
-    descripcion: parsed.data.bloquear
-      ? `Bloqueó la cuenta corriente de ${cliente.nombre}: ${parsed.data.motivo}`
-      : `Volvió a habilitar la cuenta corriente de ${cliente.nombre}`,
+export async function vincularCuentaWeb(_previo: EstadoCliente, formData: FormData): Promise<EstadoCliente> {
+  const r = await (await api()).POST("/api/v1/admin/clientes/{id}/cuenta-web", {
+    params: { path: { id: campo(formData, "customerId") ?? "" } },
+    body: { cuentaWebId: campo(formData, "cuentaWebId") ?? "" },
   });
-
-  revalidatePath("/admin/clientes");
-  revalidatePath(`/admin/clientes/${parsed.data.customerId}`);
-
-  return {
-    ok: parsed.data.bloquear
-      ? "Cuenta corriente bloqueada. El mostrador no va a poder venderle a cuenta."
-      : "Cuenta corriente habilitada de nuevo.",
-  };
+  if (r.data) {
+    revalidatePath("/admin/clientes");
+    revalidatePath("/mi-cuenta", "layout");
+  }
+  return resultado(r, "No pudimos encontrar esos dos clientes. Recargá la pantalla y probá de nuevo.");
 }
 
-/**
- * Cambia el plazo de pago de un cliente.
- *
- * Era una constante global de 30 días para toda la cartera. La constructora a
- * la que se le dan 60 y el que paga a 15 no pueden tener el mismo corte: con un
- * solo número, uno de los dos siempre aparece mal marcado en la cobranza.
- */
-export async function cambiarPlazoDePago(
-  customerId: string,
-  dias: number,
-): Promise<EstadoCliente> {
-  const usuario = await requireStaffRole("admin");
-
-  const parsed = z
-    .object({
-      customerId: z.string().uuid(),
-      dias: z.coerce.number().int().min(0).max(365),
-    })
-    .safeParse({ customerId, dias });
-
-  if (!parsed.success) {
-    return { error: "El plazo va en días, de 0 a 365." };
-  }
-
-  const [cliente] = await db
-    .update(customers)
-    .set({ diasCredito: parsed.data.dias, updatedAt: new Date() })
-    .where(eq(customers.id, parsed.data.customerId))
-    .returning({ nombre: customers.nombre });
-
-  if (!cliente) return { error: "Esa ficha ya no está." };
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "editar",
-    entidad: "cliente",
-    entidadId: parsed.data.customerId,
-    descripcion: `Dejó el plazo de pago de ${cliente.nombre} en ${parsed.data.dias} días`,
+export async function bloquearCuentaCorriente(customerId: string, bloquear: boolean, motivo: string): Promise<EstadoCliente> {
+  const r = await (await api()).PUT("/api/v1/admin/clientes/{id}/bloqueo", {
+    params: { path: { id: customerId } },
+    body: { bloquear, motivo },
   });
+  if (r.data) {
+    revalidatePath("/admin/clientes");
+    revalidatePath(`/admin/clientes/${customerId}`);
+  }
+  return resultado(r, "No se pudo actualizar la cuenta.");
+}
 
-  revalidatePath("/admin/clientes");
-  revalidatePath(`/admin/clientes/${parsed.data.customerId}`);
-
-  return { ok: `Listo: paga a ${parsed.data.dias} días.` };
+export async function cambiarPlazoDePago(customerId: string, dias: number): Promise<EstadoCliente> {
+  if (!Number.isFinite(dias)) return { error: "El plazo va en días, de 0 a 365." };
+  const r = await (await api()).PUT("/api/v1/admin/clientes/{id}/plazo", {
+    params: { path: { id: customerId } },
+    body: { dias },
+  });
+  if (r.data) {
+    revalidatePath("/admin/clientes");
+    revalidatePath(`/admin/clientes/${customerId}`);
+  }
+  return resultado(r, "El plazo va en días, de 0 a 365.");
 }

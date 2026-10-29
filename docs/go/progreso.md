@@ -33,7 +33,7 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 | 1 | Base común | `go-base` | hecha (falta desplegarla; E2E de Playwright pendiente) |
 | 2 | Catálogo público y contenido | `go-catalogo` | hecha (falta desplegarla; el secreto `API_SECRETO_INTERNO` va en el entorno de la VPS) |
 | 3 | Productos, precios, stock, acopio | `go-productos` | hecha (el informe de reposición lee ventas: va con la tanda 5) |
-| 4 | Clientes, cuenta corriente, cheques, cobros | | |
+| 4 | Clientes, cuenta corriente, cheques, cobros | hecha (29/10, rama go-cuentas) | cartera 4×, historial 1,6×, cheques 2×, cobro 1,5×; ver bench/tanda4 |
 | 5 | Mostrador, caja, ventas, entregas | | |
 | 6 | Carrito, checkout, Mercado Pago | | |
 | 7 | Facturación ARCA | | |
@@ -241,3 +241,21 @@ pánico de concurrencia en Go y la caché por lista que se había perdido: ver
   par. `jsmath.ToFixed`.
 - **Las e2e entran una sola vez** (`e2e/autenticar.setup.ts`, storageState):
   con una entrada por prueba, la suite pasaba el freno de 10 cada 5 minutos.
+
+## Tanda 4: clientes, cuenta corriente, cheques y cobros (29/10, rama go-cuentas)
+
+- En Go: `internal/cobros` (EmitirRecibo, anular, cheques, crédito, historial,
+  resumen, recibo completo), `internal/clientes` (ficha, cartera, vendedores,
+  seguimiento) y `internal/cuentas` (api/cuentas.yaml, 27 rutas).
+- Next: el DAL de clientes, cheques, cobranza, vendedores, seguimiento,
+  historial, recibos, resumen y la cuenta corriente del portal, y las cinco
+  acciones, son envoltorios. Recibo y resumen se leen con `apiInterna`: las
+  rutas de PDF ya revisan de quién es (el worker de la cola necesita
+  `API_URL` y `API_SECRETO_INTERNO`).
+- Quedan en TS hasta su tanda: `emitirRecibo` (mostrador, facturación,
+  acreditar, retenciones sufridas) y `estadoDeCredito` (mostrador,
+  facturación). Los avisos `recibo.aviso` y `cheque.rechazado` los encola Go
+  y los atiende el TS.
+- Bug arreglado: el límite de crédito con formato argentino («1.500.000»
+  daba 0). `internal/formato` imita Intl de es-AR (golden de 3017 números).
+- E2E `e2e/cuentas.spec.ts`; toda la batería: 26 en verde.

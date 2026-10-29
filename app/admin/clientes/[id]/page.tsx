@@ -19,7 +19,7 @@ import { DialogoMovimiento } from "./dialogo-movimiento";
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 import { LineaDeTiempo } from "@/components/cuenta/linea-de-tiempo";
 import { FiltrosDeMovimientos, esFiltro } from "@/components/cuenta/filtros-de-movimientos";
-import { desdeDelPeriodo, historialDelCliente } from "@/lib/dal/historial-cliente";
+import { historialDelCliente } from "@/lib/dal/historial-cliente";
 import { requireStaff } from "@/lib/dal/session";
 
 const CONDICIONES: Record<string, string> = {
@@ -44,7 +44,7 @@ export default async function FichaClientePage({
 
   const [cliente, historial, usuario] = await Promise.all([
     obtenerCliente(id),
-    historialDelCliente(id, { desde: desdeDelPeriodo(periodo), filtro }),
+    historialDelCliente(id, { periodo, filtro }),
     requireStaff(),
   ]);
 

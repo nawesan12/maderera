@@ -2,11 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
-import {
-  desdeDelPeriodo,
-  historialDelCliente,
-  saldoDelCliente,
-} from "@/lib/dal/historial-cliente";
+import { misMovimientos } from "@/lib/dal/historial-cliente";
 import { LineaDeTiempo } from "@/components/cuenta/linea-de-tiempo";
 import { FiltrosDeMovimientos, esFiltro } from "@/components/cuenta/filtros-de-movimientos";
 import { formatearMonto } from "@/lib/formato";
@@ -33,10 +29,8 @@ export default async function MovimientosPage({
   const { periodo = "12m", ver } = await searchParams;
   const filtro = esFiltro(ver) ? ver : "todo";
 
-  const [historial, saldo] = await Promise.all([
-    historialDelCliente(cliente.id, { desde: desdeDelPeriodo(periodo), filtro }),
-    saldoDelCliente(cliente.id),
-  ]);
+  const historial = await misMovimientos({ periodo, filtro });
+  const saldo = historial.saldo;
 
   const pendientes = historial.movimientos.filter(
     (m) => m.clase === "pago_en_revision" || m.clase === "cheque_por_recibir",

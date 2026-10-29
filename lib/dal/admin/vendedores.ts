@@ -1,16 +1,10 @@
 import "server-only";
 
-import { asc, eq, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { customers, sellers } from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
+import { api, datos } from "@/lib/api/servidor";
 
 /**
- * Los vendedores de la casa.
- *
- * Existen para que "el vendedor asignado" sea una persona concreta y no un
- * texto tipeado distinto en cada ficha. El reporte de ventas por vendedor y el
- * presupuesto impreso leen de acá.
+ * Los vendedores (de salón y de calle) y su cartera. Los sirve la API de Go
+ * (backend/internal/clientes/lecturas.go).
  */
 
 export interface VendedorConCartera {
@@ -18,27 +12,11 @@ export interface VendedorConCartera {
   nombre: string;
   tipo: "salon" | "calle";
   activo: boolean;
-  /** Cuántos clientes lo tienen asignado. Es lo que frena una baja a ciegas. */
   clientes: number;
 }
 
 export async function listarVendedores(): Promise<VendedorConCartera[]> {
-  await requireStaff();
-
-  const filas = await db
-    .select({
-      id: sellers.id,
-      nombre: sellers.nombre,
-      tipo: sellers.tipo,
-      activo: sellers.activo,
-      clientes: sql<number>`count(${customers.id})::int`,
-    })
-    .from(sellers)
-    .leftJoin(customers, eq(customers.sellerId, sellers.id))
-    .groupBy(sellers.id)
-    .orderBy(asc(sellers.nombre));
-
-  return filas;
+  return datos(await (await api()).GET("/api/v1/admin/vendedores"));
 }
 
 export interface VendedorParaElegir {
@@ -47,13 +25,8 @@ export interface VendedorParaElegir {
   tipo: "salon" | "calle";
 }
 
-/** Los activos, para los selects de cliente, presupuesto y pedido. */
+/** Los activos, para elegir el de un cliente. */
 export async function vendedoresActivos(): Promise<VendedorParaElegir[]> {
-  await requireStaff();
-
-  return db
-    .select({ id: sellers.id, nombre: sellers.nombre, tipo: sellers.tipo })
-    .from(sellers)
-    .where(eq(sellers.activo, true))
-    .orderBy(asc(sellers.nombre));
+  const filas = datos(await (await api()).GET("/api/v1/admin/vendedores", { params: { query: { activos: true } } }));
+  return filas.map(({ id, nombre, tipo }) => ({ id, nombre, tipo }));
 }

@@ -191,13 +191,3 @@ export async function estadoDeCredito(
 
   return { ...base, puede: true, motivo: null };
 }
-
-/** El saldo solo, sin traer los movimientos. */
-export async function saldoDeCliente(customerId: string): Promise<number> {
-  const [fila] = await db
-    .select({ saldo: sql<string>`coalesce(sum(${accountMovements.monto}), 0)` })
-    .from(accountMovements)
-    .where(eq(accountMovements.customerId, customerId));
-
-  return Number(fila?.saldo ?? 0);
-}

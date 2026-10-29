@@ -17,6 +17,7 @@ import {
   quotes,
 } from "@/lib/db/schema";
 import { getSession } from "@/lib/dal/session";
+import { api, datos } from "@/lib/api/servidor";
 import { saldoDeAcopio } from "@/lib/entregas";
 
 /**
@@ -379,60 +380,20 @@ export interface CuentaCorriente {
  * nuevo y mostrado al revés.
  */
 export async function miCuentaCorriente(): Promise<CuentaCorriente> {
-  const cliente = await clienteDeLaSesion();
-
-  if (!cliente) {
-    return { saldo: 0, limiteCredito: 0, disponible: 0, movimientos: [] };
-  }
-
-  const filas = await db
-    .select()
-    .from(accountMovements)
-    .where(eq(accountMovements.customerId, cliente.id))
-    .orderBy(asc(accountMovements.createdAt));
-
-  let corrido = 0;
-  const movimientos = filas.map((m) => {
-    corrido += Number(m.monto);
-    return {
+  const c = datos(await (await api()).GET("/api/v1/cuenta/corriente"));
+  return {
+    ...c,
+    movimientos: c.movimientos.map((m) => ({
       id: m.id,
-      tipo: m.tipo as string,
-      monto: Number(m.monto),
+      tipo: m.tipo,
+      monto: m.monto,
       detalle: m.detalle,
       referencia: m.referencia,
       receiptId: m.receiptId,
-      saldoDespues: corrido,
-      createdAt: m.createdAt,
-    };
-  });
-
-  movimientos.reverse();
-
-  return {
-    saldo: corrido,
-    limiteCredito: cliente.limiteCredito,
-    disponible: Math.max(cliente.limiteCredito - corrido, 0),
-    movimientos,
+      saldoDespues: m.saldo,
+      createdAt: new Date(m.fecha),
+    })),
   };
-}
-
-/**
- * Saldo actual del cliente, sumado en la base.
- *
- * Lo usa el carrito para decidir si la compra entra en el límite de crédito.
- * Va por separado de `miCuentaCorriente()` para no traerse todos los
- * movimientos cuando solo hace falta el número.
- */
-export async function miSaldo(): Promise<number> {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return 0;
-
-  const [fila] = await db
-    .select({ saldo: sql<string>`coalesce(sum(${accountMovements.monto}), 0)` })
-    .from(accountMovements)
-    .where(eq(accountMovements.customerId, cliente.id));
-
-  return Number(fila?.saldo ?? 0);
 }
 
 export interface CreditoDisponible {
@@ -462,63 +423,7 @@ export interface CreditoDisponible {
 export async function creditoDisponible(
   monto = 0,
 ): Promise<CreditoDisponible> {
-  const cliente = await clienteDeLaSesion();
-
-  const vacio = {
-    habilitado: false,
-    saldo: 0,
-    limiteCredito: 0,
-    disponible: 0,
-  };
-
-  if (!cliente) {
-    return { ...vacio, motivo: "Necesitás iniciar sesión con tu cuenta." };
-  }
-
-  const saldo = await miSaldo();
-
-  if (cliente.limiteCredito <= 0) {
-    // Sin crédito, el saldo a favor se puede usar para comprar hasta ese
-    // importe. Ver `estadoDeCredito` en `lib/dal/credito.ts`, la misma regla
-    // para el personal.
-    const aFavor = Math.max(-saldo, 0);
-    if (aFavor > 0 && cliente.estado !== "moroso") {
-      const alcanza = monto <= aFavor + 0.005;
-      return {
-        habilitado: alcanza,
-        saldo,
-        limiteCredito: 0,
-        disponible: aFavor,
-        soloSaldoAFavor: true,
-        motivo: alcanza ? null : "Tu saldo a favor no alcanza para esta compra.",
-      };
-    }
-    return { ...vacio, motivo: "Tu cuenta no tiene cuenta corriente habilitada." };
-  }
-  const disponible = Math.max(cliente.limiteCredito - saldo, 0);
-  const base = {
-    saldo,
-    limiteCredito: cliente.limiteCredito,
-    disponible,
-  };
-
-  if (cliente.estado === "moroso") {
-    return {
-      ...base,
-      habilitado: false,
-      motivo: "Tu cuenta está con pagos pendientes. Escribinos y lo vemos.",
-    };
-  }
-
-  if (monto > 0 && saldo + monto > cliente.limiteCredito) {
-    return {
-      ...base,
-      habilitado: false,
-      motivo: `Esta compra supera tu límite de crédito. Tenés ${disponible.toLocaleString("es-AR")} disponibles.`,
-    };
-  }
-
-  return { ...base, habilitado: true, motivo: null };
+  return datos(await (await api()).GET("/api/v1/cuenta/credito", { params: { query: { monto } } }));
 }
 
 /* -------------------------------------------------------------------------- */

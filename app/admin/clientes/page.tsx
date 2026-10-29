@@ -65,13 +65,7 @@ export default async function ClientesPage({
   const alDia = clientes.filter((c) => c.saldo <= 0);
   const deudaTotal = conDeuda.reduce((s, c) => s + c.saldo, 0);
 
-  const deudas = await deudaPorCliente(
-    conDeuda.map((c) => ({
-      id: c.id,
-      diasCredito: c.diasCredito,
-      cuentaBloqueada: c.cuentaBloqueada,
-    })),
-  );
+  const deudas = deudaPorCliente(conDeuda);
 
   const aCobrar = [...conDeuda].sort(
     (a, b) =>

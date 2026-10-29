@@ -1,5 +1,5 @@
 import { crc32, deflateSync } from "node:zlib";
-import { remitoPdf } from "@/lib/pdf/remito";
+import { remitoPdf } from "./ts/remito";
 import type { RemitoCompleto } from "@/lib/dal/admin/entregas";
 import type { CasoPdf } from "../pdf";
 import { EMISOR, EMISOR_LARGO, azarCon } from "./_azar";

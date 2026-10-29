@@ -1,11 +1,8 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { customers, deliveries, orders } from "@/lib/db/schema";
-import { remitoCompleto } from "@/lib/dal/admin/entregas";
+import { remitoCompleto, remitoParaAvisar } from "@/lib/dal/admin/entregas";
 import { urlBase } from "@/lib/pagos/config";
-import { fechaHora } from "@/lib/formato";
+import { fechaHoraDeFirma } from "@/lib/entregas/fecha";
 import * as plantillas from "@/lib/email/plantillas";
 import { despacharEmail } from "./avisos";
 
@@ -13,8 +10,9 @@ import { despacharEmail } from "./avisos";
  * Avisos de entrega.
  *
  * Van en su propio módulo porque necesitan el remito armado y no solo un id de
- * pedido. Como todos los avisos: no lanzan nunca, y el remito se prepara igual
- * aunque el correo no salga.
+ * pedido. Los datos los da la API de Go (backend/internal/entregas); el correo
+ * sigue saliendo de acá. Como todos los avisos: no lanzan nunca, y el remito
+ * se prepara igual aunque el correo no salga.
  */
 
 /** Le manda al cliente el link para firmar desde el celular. */
@@ -22,18 +20,7 @@ export async function notificarRemitoParaFirmar(
   deliveryId: string,
 ): Promise<void> {
   try {
-    const [datos] = await db
-      .select({
-        firmaToken: deliveries.firmaToken,
-        numero: deliveries.numero,
-        pedidoNumero: orders.numero,
-        nombre: orders.contactoNombre,
-        email: orders.contactoEmail,
-      })
-      .from(deliveries)
-      .innerJoin(orders, eq(orders.id, deliveries.orderId))
-      .where(eq(deliveries.id, deliveryId))
-      .limit(1);
+    const datos = await remitoParaAvisar(deliveryId);
 
     if (!datos?.firmaToken || !datos.email) return;
 
@@ -59,30 +46,10 @@ export async function notificarRemitoFirmado(
   deliveryId: string,
 ): Promise<void> {
   try {
-    const remito = await remitoCompleto(deliveryId);
-    if (!remito) return;
+    const [remito, pedido] = await Promise.all([remitoCompleto(deliveryId), remitoParaAvisar(deliveryId)]);
+    if (!remito || !pedido) return;
 
-    const [pedido] = await db
-      .select({
-        email: orders.contactoEmail,
-        nombre: orders.contactoNombre,
-        estado: orders.estado,
-      })
-      .from(orders)
-      .where(eq(orders.id, remito.pedidoId))
-      .limit(1);
-
-    const email =
-      pedido?.email ??
-      (remito.customerId
-        ? (
-            await db
-              .select({ email: customers.email })
-              .from(customers)
-              .where(eq(customers.id, remito.customerId))
-              .limit(1)
-          )[0]?.email
-        : null);
+    const email = pedido.email ?? pedido.emailCliente;
 
     if (!email) return;
 
@@ -92,11 +59,12 @@ export async function notificarRemitoFirmado(
       entidadTipo: "delivery",
       entidadId: deliveryId,
       correo: plantillas.remitoFirmado({
-        nombre: (pedido?.nombre ?? remito.clienteNombre).split(" ")[0],
+        nombre: (pedido.nombre ?? remito.clienteNombre).split(" ")[0],
         remito: remito.numero,
         numero: remito.pedidoNumero,
-        fecha: fechaHora.format(remito.firmadoAt ?? new Date()),
-        pendiente: pedido?.estado !== "entregado",
+        // En hora de Argentina: el servidor corre en UTC.
+        fecha: fechaHoraDeFirma.format(remito.firmadoAt ?? new Date()),
+        pendiente: pedido.estadoPedido !== "entregado",
         lineas: remito.lineas.map((l) => ({
           descripcion: l.descripcion,
           cantidad: l.cantidad,

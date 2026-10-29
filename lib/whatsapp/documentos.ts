@@ -88,13 +88,15 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
     }
 
     case "remito": {
+      // El PDF lo arma Go (backend/internal/entregas), el mismo de la descarga.
       const { remitoCompleto } = await import("@/lib/dal/admin/entregas");
-      const { remitoPdf } = await import("@/lib/pdf/remito");
+      const { apiInterna } = await import("@/lib/api/servidor");
       const r = await remitoCompleto(doc.id);
       if (!r) return null;
-      const pdf = await remitoPdf(r, emisor);
+      const pdf = await apiInterna.GET("/api/v1/remitos/{id}/pdf", { params: { path: { id: doc.id } }, parseAs: "arrayBuffer" });
+      if (!pdf.data) return null;
       return {
-        contenido: new Uint8Array(pdf),
+        contenido: new Uint8Array(pdf.data),
         nombre: `${r.numero}.pdf`,
         descripcion: `el remito ${r.numero}`,
         customerId: r.customerId,

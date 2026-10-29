@@ -26,7 +26,7 @@ describe("claves de lock de la numeración", () => {
   /** `claveDeLock()` de `lib/fiscal/numeracion.ts`: (hash % 1e6) * 1e4 + pv. */
   const TOPE_FISCAL = 9_999_999_999;
 
-  /** El literal de `lib/entregas/index.ts` para la serie de remitos. */
+  /** La serie de remitos (`numeracion.SerieRemitos` en Go, era el literal de lib/entregas). */
   const CLAVE_REMITOS = 918_273_645;
 
   const claves = Object.entries(CLAVES_DE_LOCK);

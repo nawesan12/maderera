@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import { Truck } from "lucide-react";
-import { asc } from "drizzle-orm";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { db } from "@/lib/db";
-import { shippingZones } from "@/lib/db/schema";
+import { api, datos } from "@/lib/api/servidor";
 import { requireStaffRole } from "@/lib/dal/session";
 import { formatearMonto } from "@/lib/formato";
 import { EditorDeZona } from "./editor";
@@ -25,10 +23,8 @@ export const metadata: Metadata = { title: "Envíos" };
 export default async function AdminEnviosPage() {
   await requireStaffRole("admin");
 
-  const zonas = await db
-    .select()
-    .from(shippingZones)
-    .orderBy(asc(shippingZones.orden), asc(shippingZones.nombre));
+  // Todas, por orden y nombre (backend/internal/entregas/zonas.go).
+  const zonas = datos(await (await api()).GET("/api/v1/admin/envios"));
 
   const aCotizar = zonas.filter((z) => z.activa && z.aCotizar).length;
 

@@ -11,8 +11,10 @@ import (
 
 // Recibir o no las novedades desde Mi cuenta (app/(public)/mi-cuenta).
 
-func (o respuesta) VisitMisNovedadesResponse(w http.ResponseWriter) error        { return o.escribir(w) }
-func (o respuesta) VisitCambiarMisNovedadesResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitMisNovedadesResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCambiarMisNovedadesResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 
 // CorreoDeLaFicha es la dirección de la ficha activa de la cuenta ("" si no
 // tiene ficha o no tiene correo).

@@ -1,0 +1,5 @@
+Código;Proveedor;CUIT;Situación IVA;Correo;Teléfono;Domicilio;Saldo;Observaciones
+P001;Aserradero del Sur SA;30-60000000-6;Responsable Inscripto;ventas@sur.com;;Ruta 2 km 40;1.234.567,89;
+P002;Herrajes Ñuble;20-30000000-1;Monotributo;;;;;
+P003;Pinturas Ya;;Exento;mal correo;;;(500,00);nota de crédito
+P004;;;;;;;;sin nombre

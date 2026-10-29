@@ -1,0 +1,10 @@
+Cód. Artículo;Descripción;Rubro;Medida;Unidad Medida;Marca;Precio Lista;Precio Profesional;% IVA;Largo;Ancho;Espesor
+MIG-PIN-001;Tirante pino;Maderas;2" x 4" x 3.60m;UN;;12.345,67;11.000,00;21;3600;101;50
+MIG-PIN-002;Tirante pino;Maderas;2" x 4" x 4.20m;Unidad;;14.400,00;;21;4200;101;50
+MIG-MDF-018;Placa MDF;Placas;18mm 1.83 x 2.60;Placa;Faplac;45.000;40.500;10,5;2600;1830;18
+MIG-DECK-01;Deck de pino;Deck;;M2;;$ 9.800,00;;21;;;
+MIG-ZOC-01;Zócalo;Molduras;7cm;Metro lineal;;1.200,5;0;21;;70;
+MIG-SIN-01;;Maderas;;UN;;100;;21;;;
+MIG-RAR-01;Pegamento;Ferretería;500g;Kilos;Fortex;abc;;21;;;
+;Sin código;Maderas;;UN;;100;;;;;
+MIG-IVA-01;Raro;Varios;;Juego;;100;;105;;;

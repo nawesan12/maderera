@@ -1,0 +1,9 @@
+Nro. Comprobante;Fecha;Cód. Cliente;Cliente;Total;Detalle;Sucursal;Vendedor
+FA-0001-00001234;03/09/2026;00012;Pérez Juan Carlos;12.345,67;"Tirante 2x4 x 10
+Clavos";Casa Central;Pablo
+FA-0001-00001235;3/9/26;;Mostrador;1.000;;Casa Central;
+FA-0001-00001236;2026-09-04;00013;Ñandú;(500,00);devolución;;
+FA-0001-00001237;31/02/2026;00012;Pérez;100;;;
+FA-0001-00001238;ayer;00012;Pérez;100;;;
+;04/09/2026;00012;Pérez;100;;;
+FA-0001-00001239;05/09/2026 10:30;99999;Cliente dado de baja;abc;;;

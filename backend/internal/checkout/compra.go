@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
 	"mjbj/internal/cortes"
 	"mjbj/internal/cuentas"
@@ -294,6 +295,17 @@ func (s *Servicio) Confirmar(ctx context.Context, q Quien, ip string, m map[stri
 			}
 			if err != nil {
 				return err
+			}
+		}
+		// El límite otra vez, con el candado del cliente: dos compras a la
+		// vez pasaban las dos la revisión de afuera y se pasaban entre las dos.
+		if d.MedioPago == "cuenta_corriente" && cliente != nil && !s.SinCandado {
+			motivo, err := cobros.LimiteEnLaTransaccion(ctx, tx, *cliente, cu.Total)
+			if err != nil {
+				return err
+			}
+			if motivo != "" {
+				return fallo(motivo)
 			}
 		}
 		numero, err := numeracion.Pedido(ctx, tx)

@@ -608,3 +608,44 @@ func TestPresupuestoYCobroDeCuenta(t *testing.T) {
 		t.Fatalf("saldo: %v", m)
 	}
 }
+
+// Diez ventas a cuenta a la vez de un cliente con límite $1.000, de $300
+// cada una: entran tres ($900) y las demás frenan. Sin la revisión adentro
+// de la transacción, las diez pasaban la revisión de afuera (saldo 0).
+func TestVentasACuentaSimultaneasRespetanElLimite(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	if _, err := e.pool.Exec(context.Background(), `update customers set limite_credito = 1000, dias_credito = 30, estado = 'activo', cuenta_bloqueada = false where id = $1`, e.cliente); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	hechas, frenadas := 0, 0
+	for i := 0; i < 10; i++ {
+		v := e.venta("cuenta_corriente", map[string]any{"variantId": nil, "descripcion": "Flete", "unidad": "unidad", "cantidad": 1, "precioUnitario": 300})
+		v["customerId"] = e.cliente
+		v["contactoNombre"] = "Ana Gómez"
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v)
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case m["ok"] == true:
+				hechas++
+			case strings.HasPrefix(fmt.Sprint(m["error"]), "Supera el límite de crédito"):
+				frenadas++
+			default:
+				t.Errorf("respuesta inesperada: %s", b)
+			}
+		}()
+	}
+	wg.Wait()
+	if hechas != 3 || frenadas != 7 {
+		t.Errorf("hechas %d, frenadas %d", hechas, frenadas)
+	}
+	if d := e.num(t, `select sum(monto)::float8 from account_movements where customer_id = $1`, e.cliente); d != 900 {
+		t.Errorf("deuda: %v", d)
+	}
+}

@@ -181,6 +181,10 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario st
 	parteCuenta := ventas.ImportePorMedio(pagos, ventas.CuentaCorriente)
 
 	// Cuenta corriente: límite y mora, con la válvula de quien atiende.
+	// revisarLimite: si pasó sin autorización, el límite se vuelve a mirar
+	// adentro de la transacción (con el candado del cliente); si quien
+	// atiende la autorizó, no.
+	revisarLimite := false
 	if parteCuenta > 0 && v.CustomerID != nil {
 		cr, err := cobros.Credito(ctx, q, *v.CustomerID, parteCuenta, ahora)
 		if err != nil {
@@ -193,6 +197,7 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario st
 			}
 			return ResultadoVenta{Error: m, RequiereAutorizacion: cr.Autorizable}, nil
 		}
+		revisarLimite = cr.Puede
 	}
 
 	// El vendedor asignado a la ficha.
@@ -210,6 +215,7 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario st
 		r, err = s.ventaEnTransaccion(ctx, tx, v, usuario, ventaCalculada{
 			subtotal: subtotal, descuento: descuento, motivoAutomatico: motivoAutomatico, lineas: lineas, total: total,
 			pagos: pagos, medioPago: medioPago, parteEfectivo: parteEfectivo, parteCuenta: parteCuenta, vendedor: vendedor, ahora: ahora,
+			revisarLimite: revisarLimite,
 		})
 		if err == nil && !r.Ok {
 			return errSinEscribir
@@ -242,6 +248,9 @@ type ventaCalculada struct {
 	medioPago                                              string
 	vendedor                                               *string
 	ahora                                                  time.Time
+	// revisarLimite: el límite se vuelve a mirar acá adentro, con el candado
+	// del cliente (si quien atiende no autorizó pasarse).
+	revisarLimite bool
 }
 
 func texto(s string) *string { return &s }
@@ -262,6 +271,18 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return ResultadoVenta{}, err
+	}
+
+	// Después del «ya hecha»: una venta reenviada no se vuelve a frenar por
+	// un saldo que ya la incluye.
+	if c.revisarLimite {
+		motivo, err := cobros.LimiteEnLaTransaccion(ctx, tx, *v.CustomerID, c.parteCuenta)
+		if err != nil {
+			return ResultadoVenta{}, err
+		}
+		if motivo != "" {
+			return ResultadoVenta{Error: motivo, RequiereAutorizacion: true}, nil
+		}
 	}
 
 	// La fecha de la venta es la del mostrador, acotada.

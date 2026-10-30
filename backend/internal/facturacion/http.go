@@ -15,6 +15,7 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 )
 
@@ -307,8 +308,16 @@ type libroConPeriodo struct {
 	Clave string    `json:"clave"`
 }
 
+// libroIva es el permiso de los dos libros IVA: el de quien entra a
+// /admin/arca (el admin), igual que el libro de compras. Antes el de ventas
+// lo leía cualquier persona del panel, y es la facturación entera del mes
+// con los CUIT de los clientes.
+func libroIva(ctx context.Context) (*auth.Sesion, error) {
+	return auth.Exigir(ctx, roles.QuienEntra("/admin/arca")...)
+}
+
 func (a *API) LibroIvaVentas(ctx context.Context, r facturacionapi.LibroIvaVentasRequestObject) (facturacionapi.LibroIvaVentasResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := libroIva(ctx); err != nil {
 		return nil, err
 	}
 	p := LeerPeriodo(texto2(r.Params.Periodo), a.s.ahora())
@@ -317,7 +326,7 @@ func (a *API) LibroIvaVentas(ctx context.Context, r facturacionapi.LibroIvaVenta
 }
 
 func (a *API) LibroIvaVentasCsv(ctx context.Context, r facturacionapi.LibroIvaVentasCsvRequestObject) (facturacionapi.LibroIvaVentasCsvResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := libroIva(ctx)
 	if err != nil {
 		return nil, err
 	}

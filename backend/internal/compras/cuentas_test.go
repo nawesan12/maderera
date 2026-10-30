@@ -369,7 +369,7 @@ func TestFiscalComoTS(t *testing.T) {
 			filas[i] = RetencionDelPeriodo{Numero: f.Numero, Fecha: f.Fecha, Impuesto: f.Impuesto, CodigoRegimen: f.CodigoRegimen, Proveedor: f.Proveedor,
 				Cuit: f.Cuit, Base: jsmath.Numero(f.Base), Alicuota: jsmath.Numero(f.Alicuota), Importe: jsmath.Numero(f.Importe)}
 		}
-		if csv := CsvRetenciones(filas); csv != c.Csv {
+		if csv := csvRetenciones(filas, false); csv != c.Csv {
 			t.Errorf("retenciones %d: CSV\nGo %q\nTS %q", n, csv, c.Csv)
 		}
 	}

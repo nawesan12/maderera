@@ -408,7 +408,7 @@ func TestPagoConRetencionesYCheques(t *testing.T) {
 	if _, b := pedir(t, adm, "GET", e.u+"compras/certificados/"+numero, nil); !strings.Contains(b, `"importe":"15.00"`) || !strings.Contains(b, `"pagoReferencia":"TR-9"`) {
 		t.Errorf("certificado: %s", b)
 	}
-	if c, b := pedir(t, adm, "GET", e.u+"compras/pagos/retenciones-csv", nil); c != 200 || !strings.Contains(b, `"`+numero+`";"iibb";"IIBB-MI"`) || !strings.Contains(b, "1000,00;1,500;15,00") {
+	if c, b := pedir(t, adm, "GET", e.u+"compras/pagos/retenciones-csv", nil); c != 200 || !strings.Contains(b, `"`+numero+`";"iibb";"IIBB-MI"`) || !strings.Contains(b, "1000,00;1000,00;1000,00;1,500;0,00;15,00") {
 		t.Errorf("csv: %d %s", c, b)
 	}
 	// E-Cheq por el circuito B: no.

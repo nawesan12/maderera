@@ -485,6 +485,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/compras/pagos/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Solo el admin. Devuelve la deuda con el proveedor, borra las
+         *     imputaciones, anula los certificados de retención y deshace los
+         *     cheques (los endosados vuelven a cartera, los propios se anulan). Si
+         *     un cheque ya se cobró o se rechazó, no se anula.
+         */
+        post: operations["AnularPagoAProveedor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/compras/pagos/retenciones-csv": {
         parameters: {
             query?: never;
@@ -511,6 +535,24 @@ export interface paths {
             cookie?: never;
         };
         get: operations["CertificadoDeRetencion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/compras/certificados/{numero}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                numero: string;
+            };
+            cookie?: never;
+        };
+        get: operations["CertificadoDeRetencionPdf"];
         put?: never;
         post?: never;
         delete?: never;
@@ -884,6 +926,9 @@ export interface components {
             supplierId: string;
             /** Format: double */
             retenido: number;
+            /** Format: date-time */
+            anuladoAt: string | null;
+            motivoAnulacion: string | null;
             certificados: number;
             numerosCertificado: string[];
             facturas: {
@@ -911,6 +956,14 @@ export interface components {
             pagoFecha: string;
             pagoMedio: string;
             pagoReferencia: string | null;
+            /** @description las bases del mes con la de este pago (null en los de antes de la 00089) */
+            acumulado: string | null;
+            /** @description el monto sujeto a retención (acumulado − mínimo no imponible) */
+            imponible: string | null;
+            /** @description lo retenido en el mes antes de este certificado */
+            retenidoAntes: string | null;
+            /** Format: date-time */
+            anuladaAt: string | null;
         };
         Regimen: {
             id: string;
@@ -1241,6 +1294,11 @@ export interface operations {
                         imputado: number;
                         /** Format: double */
                         saldo: number;
+                        /**
+                         * Format: double
+                         * @description neto gravado más no gravado/exento, sin IVA ni percepciones (lo que entra en la base de Ganancias e IIBB)
+                         */
+                        netoSinIva: number;
                     }[];
                 };
             };
@@ -1768,6 +1826,21 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
+    AnularPagoAProveedor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Motivo"];
+        responses: {
+            200: components["responses"]["Hecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
     RetencionesPracticadasCsv: {
         parameters: {
             query?: {
@@ -1809,6 +1882,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Certificado"];
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    CertificadoDeRetencionPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                numero: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El certificado en PDF, con el cálculo de la retención */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
                 };
             };
             404: components["responses"]["Problema"];

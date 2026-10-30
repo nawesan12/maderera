@@ -36,6 +36,8 @@ interface FacturaConSaldo {
   fechaEmision: Date | string | null;
   total: number;
   saldo: number;
+  /** Neto gravado + no gravado/exento, sin IVA ni percepciones. */
+  netoSinIva: number;
 }
 
 interface ChequeDeCartera {
@@ -183,6 +185,27 @@ export function FormularioPago({
     0,
   );
   const hayRetenciones = Object.values(bases).some((b) => Number(b) > 0);
+  /*
+   * La base que se propone para retener: el neto de IVA de lo que se paga.
+   *
+   * Para Ganancias e IIBB la base es el importe sin IVA (ni percepciones), y
+   * el botón que había ponía el total del pago, con IVA: retenía de más. Sale
+   * de las facturas imputadas, en proporción a lo que se paga de cada una
+   * (pagar la mitad de una factura es pagar la mitad de su neto). Sin
+   * facturas imputadas no hay de dónde sacarlo: se escribe a mano.
+   */
+  const basePropuesta =
+    Math.round(
+      facturas.reduce((s, f) => {
+        const pagado = Number(imputado[f.id]) || 0;
+        return f.total > 0 && pagado > 0
+          ? s + (pagado * f.netoSinIva) / f.total
+          : s;
+      }, 0) * 100,
+    ) / 100;
+  const basePasada = Object.values(bases).some(
+    (b) => Number(b) - importe > 0.009,
+  );
 
   /** Reparte el total entre las facturas más viejas, como se paga de verdad. */
   function repartirEntreFacturas() {
@@ -598,9 +621,13 @@ export function FormularioPago({
             Retenciones a practicar
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Poné la base de cada régimen. El sistema mira el acumulado del mes:
-            puede no retener aunque cargues una base, si todavía no llega al
-            mínimo.
+            Poné la base de cada régimen: para Ganancias e Ingresos Brutos es
+            el neto de IVA de lo que se paga.{" "}
+            {basePropuesta > 0
+              ? `Con las facturas elegidas da ${formatearMonto(basePropuesta)}.`
+              : "Sin facturas elegidas no se puede calcular: escribila a mano."}{" "}
+            El sistema mira el acumulado del mes: puede no retener aunque
+            cargues una base, si todavía no llega al mínimo.
           </p>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -633,18 +660,27 @@ export function FormularioPago({
                     placeholder="Base"
                     className="tabular h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-right text-base"
                   />
-                  {importe > 0 && (
+                  {basePropuesta > 0 && (
                     <button
                       type="button"
                       onClick={() =>
-                        setBases((prev) => ({ ...prev, [r.id]: String(importe) }))
+                        setBases((prev) => ({
+                          ...prev,
+                          [r.id]: basePropuesta.toFixed(2),
+                        }))
                       }
+                      title="El neto de IVA de las facturas imputadas"
                       className="h-11 shrink-0 rounded-lg border border-linea px-3 text-sm"
                     >
-                      Todo
+                      Neto sin IVA
                     </button>
                   )}
                 </div>
+                {Number(bases[r.id]) - importe > 0.009 && (
+                  <span className="mt-1 block text-sm text-saldo-debe">
+                    La base no puede ser mayor al pago.
+                  </span>
+                )}
               </label>
             ))}
           </div>
@@ -735,7 +771,12 @@ export function FormularioPago({
               }
             })
           }
-          disabled={enCurso || importe <= 0 || sumaImputada - importe > 0.01}
+          disabled={
+            enCurso ||
+            importe <= 0 ||
+            sumaImputada - importe > 0.01 ||
+            basePasada
+          }
           className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}

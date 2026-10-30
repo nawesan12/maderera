@@ -49,3 +49,47 @@ test("las pantallas de compras cargan", async ({ page }) => {
     await expect(page.getByText("Esta pantalla no cargó"), ruta).toHaveCount(0);
   }
 });
+
+/*
+ * Un pago a proveedor se registra y se anula desde la lista. La anulación
+ * devuelve la deuda (lo prueba Go, backend/internal/compras); acá, que el
+ * desplegable pida el motivo y el pago quede tachado con él.
+ */
+test("un pago a proveedor se registra y se anula", async ({ page }) => {
+  test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
+  await page.goto("/admin/compras/pagos");
+  const referencia = `E2E-${Date.now()}`;
+  await page.getByLabel("Se le imputa").fill("1");
+  await page.getByPlaceholder("N.º de operación").first().fill(referencia);
+  await page.getByRole("button", { name: "Registrar el pago" }).click();
+  const fila = page.locator("tbody tr", { hasText: referencia });
+  await expect(fila).toBeVisible();
+
+  await fila.getByText("Anular", { exact: true }).click();
+  await fila.getByPlaceholder("Motivo").fill("Prueba de punta a punta");
+  await fila.getByRole("button", { name: "Anular el pago" }).click();
+  await expect(fila.getByText("Anulado")).toBeVisible();
+  await expect(fila.getByText("Prueba de punta a punta")).toBeVisible();
+});
+
+// Los mínimos de un régimen se editan desde la pantalla (antes solo por SQL).
+test("los mínimos de un régimen de retención se editan", async ({ page }) => {
+  test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
+  await page.goto("/admin/arca/retenciones");
+  // La fila del primer régimen: el «Guardar» aparece solo cuando algo cambió.
+  const fila = page.locator("li", { has: page.locator('input[name="minimoRetencion"]') }).first();
+  const minimo = fila.locator('input[name="minimoRetencion"]');
+  const antes = await minimo.inputValue();
+  const otro = String(Number(antes) + 1);
+
+  await minimo.fill(otro);
+  await fila.getByRole("button", { name: "Guardar", exact: true }).click();
+  await expect(fila.getByText(/^Listo/)).toBeVisible();
+  await page.reload();
+  await expect(fila.locator('input[name="minimoRetencion"]')).toHaveValue(otro);
+
+  // Vuelve a como estaba.
+  await fila.locator('input[name="minimoRetencion"]').fill(antes);
+  await fila.getByRole("button", { name: "Guardar", exact: true }).click();
+  await expect(fila.getByText(/^Listo/)).toBeVisible();
+});

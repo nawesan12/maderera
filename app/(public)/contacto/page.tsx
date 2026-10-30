@@ -49,10 +49,12 @@ const ATAJOS = [
     detalle: "Armá la lista y te pasamos el precio con validez.",
   },
   {
-    href: "/carrito",
+    // A la herramienta de corte, no al carrito: ahí se carga el despiece, se
+    // ve el plano y se compra el corte hecho.
+    href: "/corte",
     icono: Scissors,
     titulo: "Pedir un corte a medida",
-    detalle: "Mandanos el despiece y lo cortamos en el aserradero.",
+    detalle: "Cargá el despiece, mirá el plano y lo cortamos en el aserradero.",
   },
   {
     href: "/stock",
@@ -89,7 +91,7 @@ export default async function ContactoPage() {
           <div className="space-y-3">
             {ATAJOS.map((atajo) => (
               <Link
-                key={atajo.href}
+                key={atajo.titulo}
                 href={atajo.href}
                 className="flex items-start gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-brand-orange/50 hover:bg-muted/40"
               >

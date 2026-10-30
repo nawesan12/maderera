@@ -148,6 +148,8 @@ const nextConfig: NextConfig = {
         { source: "/api/mostrador/catalogo", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/mostrador/catalogo` },
         { source: "/api/mostrador/clientes", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/mostrador/clientes` },
         { source: "/api/mostrador/caja/:ruta*", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/mostrador/caja/:ruta*` },
+        // El webhook de Mercado Pago (backend/internal/pagos, tanda 6), en su dirección de siempre.
+        { source: "/api/pagos/webhook", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/pagos/webhook` },
       ],
       afterFiles: [],
       fallback: [

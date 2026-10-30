@@ -1,27 +1,29 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
-import { z } from "zod";
-import { db } from "@/lib/db";
-import { cartCortes } from "@/lib/db/schema";
-import { obtenerOCrearCarrito } from "@/lib/dal/carrito";
-import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+import { api, copiarCookies, mensajeDe, type Problema } from "@/lib/api/servidor";
+import { COOKIE_CARRITO } from "@/lib/dal/carrito";
+import { encenderSenal } from "@/lib/senal-cliente";
 
 export interface EstadoCorte {
   error?: string;
   ok?: string;
 }
 
+async function despues(r: { data?: EstadoCorte; error?: unknown; response: Response }, porDefecto: string): Promise<EstadoCorte> {
+  await copiarCookies(r.response);
+  if (r.response.headers.getSetCookie().some((c) => c.startsWith(`${COOKIE_CARRITO}=`))) await encenderSenal();
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, porDefecto) };
+  revalidatePath("/carrito");
+  revalidatePath("/carrito/confirmar");
+  return r.data;
+}
+
 /**
- * Guarda en el carrito un corte armado en el sitio.
- *
- * **Todo se vuelve a calcular en Go** (/api/v1/cortes/cotizar): la placa con
- * la lista de quien compra, el plano con el disco configurado y el
- * presupuesto, con las mismas validaciones y el freno por IP de siempre. Una
- * acción de servidor es una dirección pública: el precio nunca viaja en el
- * formulario. La escritura en el carrito sigue acá hasta que se mude el
- * carrito (tanda 6).
+ * Guarda en el carrito un corte armado en el sitio. **Todo se vuelve a
+ * calcular en Go** (backend/internal/checkout, con el motor de cortes): la
+ * placa con la lista de quien compra, el plano y el presupuesto, con el freno
+ * por IP de siempre. El precio nunca viaja en el formulario.
  */
 export async function agregarCorteAlCarrito(datos: {
   variantId: string;
@@ -29,47 +31,12 @@ export async function agregarCorteAlCarrito(datos: {
   cantoDescripcion?: string | null;
   piezas: unknown[];
 }): Promise<EstadoCorte> {
-  const r = await (await api()).POST("/api/v1/cortes/cotizar", { body: datos as Record<string, unknown> });
-  if (!r.data) {
-    return {
-      error: mensajeDe(r.error as Problema | undefined, "Revisá las medidas: tienen que ser números en milímetros."),
-    };
-  }
-  const c = r.data;
-  const cartId = await obtenerOCrearCarrito();
-
-  await db.insert(cartCortes).values({
-    cartId,
-    variantId: c.variantId,
-    materialDescripcion: c.materialDescripcion,
-    placaLargoMm: c.placaLargoMm,
-    placaAnchoMm: c.placaAnchoMm,
-    mitad: c.mitad,
-    cantoDescripcion: c.cantoDescripcion,
-    piezas: JSON.stringify(c.piezas),
-    placas: c.placas,
-    pasadas: c.pasadas,
-    total: c.total,
-  });
-
-  revalidatePath("/carrito");
-  revalidatePath("/carrito/confirmar");
-  return { ok: "El corte quedó en tu carrito." };
+  const r = await (await api()).POST("/api/v1/carrito/cortes", { body: datos as Record<string, unknown> });
+  return despues(r, "Revisá las medidas: tienen que ser números en milímetros.");
 }
 
-/** Saca un corte del carrito. */
+/** Saca un corte del carrito de quien pide. */
 export async function quitarCorteDelCarrito(id: string): Promise<EstadoCorte> {
-  const parsed = z.string().uuid().safeParse(id);
-  if (!parsed.success) return { error: "No se pudo quitar." };
-
-  // Del carrito de quien está pidiendo y de ningún otro.
-  const cartId = await obtenerOCrearCarrito();
-
-  await db
-    .delete(cartCortes)
-    .where(and(eq(cartCortes.id, parsed.data), eq(cartCortes.cartId, cartId)));
-
-  revalidatePath("/carrito");
-  revalidatePath("/carrito/confirmar");
-  return { ok: "Corte quitado." };
+  const r = await (await api()).DELETE("/api/v1/carrito/cortes/{id}", { params: { path: { id: String(id).slice(0, 64) } } });
+  return despues(r, "No se pudo quitar.");
 }

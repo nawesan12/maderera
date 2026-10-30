@@ -11,7 +11,7 @@ import {
   receiptParts,
   receipts,
 } from "@/lib/db/schema";
-import { siguienteNumeroDeRecibo } from "@/lib/dal/numeracion-ventas";
+import { siguienteNumeroDeRecibo } from "./numeracion-ventas";
 import { nombreDelCheque, normalizarNumeroDeCheque } from "@/lib/cheques/numero";
 import {
   aCentavos,
@@ -19,7 +19,7 @@ import {
   revisarPartes,
   totalDePartes,
   type ParteDeCobro,
-} from "./partes";
+} from "@/lib/cobros/partes";
 
 type Transaccion = Parameters<Parameters<typeof db.transaction>[0]>[0];
 

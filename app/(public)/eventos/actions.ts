@@ -3,9 +3,8 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { ETIQUETAS } from "@/lib/cache-publico";
 import { redirect } from "next/navigation";
-import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+import { api, apiInterna, mensajeDe, type Problema } from "@/lib/api/servidor";
 import { getSession } from "@/lib/dal/session";
-import { ErrorDeCobro, iniciarPagoDeInscripcion } from "@/lib/pagos/crear";
 
 export interface EstadoInscripcion {
   error?: string;
@@ -19,7 +18,7 @@ export interface EstadoInscripcion {
  * como antes, frena por IP y por correo, y reserva el lugar con el candado
  * por evento (dos personas al último lugar no entran las dos). Gratuito:
  * queda confirmada de una y Go manda el correo. Con precio: queda reservada
- * —ocupando lugar— y acá se arma el cobro de Mercado Pago (tanda 6). La
+ * —ocupando lugar— y Go abre el cobro de Mercado Pago (tanda 6). La
  * confirmación llega por el mismo `acreditarPago` que cobra un pedido.
  */
 export async function anotarse(_previo: EstadoInscripcion, formData: FormData): Promise<EstadoInscripcion> {
@@ -47,14 +46,15 @@ export async function anotarse(_previo: EstadoInscripcion, formData: FormData): 
     return { ok: "Listo, quedaste anotado. Te mandamos los detalles por correo." };
   }
 
-  let destino: string;
-  try {
-    const sesion = await getSession();
-    destino = (await iniciarPagoDeInscripcion(r.data.id, sesion?.userId)).urlPago;
-  } catch (error) {
-    if (error instanceof ErrorDeCobro) return { error: error.message };
-    console.error(error);
-    return { error: "No pudimos anotarte. Probá de nuevo en un momento." };
+  // El cobro lo abre Go (backend/internal/pagos) con el secreto interno: la
+  // inscripción ya quedó reservada a nombre de quien pidió.
+  const sesion = await getSession();
+  const cobro = await apiInterna.POST("/api/v1/interno/pagos/inscripcion/{id}", {
+    params: { path: { id: r.data.id } },
+    body: { usuarioId: sesion?.userId ?? null },
+  });
+  if (!cobro.data) {
+    return { error: mensajeDe(cobro.error as Problema | undefined, "No pudimos anotarte. Probá de nuevo en un momento.") };
   }
-  redirect(destino);
+  redirect(cobro.data.urlPago);
 }

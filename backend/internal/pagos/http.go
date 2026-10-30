@@ -92,6 +92,23 @@ func (a *API) EstadoDeCobros(context.Context, pagosapi.EstadoDeCobrosRequestObje
 	return ok(map[string]bool{"enVivo": a.s.EnVivo()}), nil
 }
 
+func (o respuesta) VisitDatosParaTransferirResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+// DatosParaTransferir son los datos bancarios para quien va a transferir:
+// null mientras no haya CBU ni alias (la pantalla no inventa un CBU).
+func (a *API) DatosParaTransferir(ctx context.Context, _ pagosapi.DatosParaTransferirRequestObject) (pagosapi.DatosParaTransferirResponseObject, error) {
+	d, _, err := a.s.datosBancarios(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if d != nil && d.Cbu == "" && d.Alias == "" {
+		d = nil
+	}
+	return ok(map[string]any{"datos": d}), nil
+}
+
 func (a *API) PagarPedido(ctx context.Context, r pagosapi.PagarPedidoRequestObject) (pagosapi.PagarPedidoResponseObject, error) {
 	c, err := a.s.PagarPedido(ctx, r.Body.Numero, valor(r.Body.Token), auth.DeContexto(ctx))
 	if err != nil {

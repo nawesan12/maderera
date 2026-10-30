@@ -3,12 +3,12 @@
  * corrido sobre casos fijos y miles al azar con semilla, para que
  * internal/checkout e internal/pagos den lo mismo, exacto.
  *
- * - `volumen.json`: descuentoPorVolumen y precioConDescuento (lib/precios/volumen.ts, el real).
+ * - `volumen.json`: descuentoPorVolumen y precioConDescuento (copia de lib/precios/volumen.ts en originales/tanda6).
  * - `carrito.json`: el armado de obtenerCarrito sin las consultas (copia en originales/tanda6/carrito.ts).
  * - `agregar.json`, `presupuesto.json`, `compra.json`, `bancarios.json`: los esquemas de zod
  *   (primer error y campo, o los datos leídos).
  * - `cuentas.json`: subtotal, envío, medio permitido, descuento y total de confirmarCompra.
- * - `firma.json`: la firma del webhook (lib/pagos/firma.ts, el real) y el `data.id` que se firma.
+ * - `firma.json`: la firma del webhook (copia de lib/pagos/firma.ts en originales/tanda6) y el `data.id` que se firma.
  * - `preferencia.json`: el cuerpo de POST /checkout/preferences.
  * - `remoto.json`: la respuesta de GET /v1/payments/{id} traducida; los avisos de MP y de la demo.
  * - `decision.json`: lo que decide acreditarPago con el estado y el aviso.
@@ -21,8 +21,8 @@
 import { createHmac } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import type { ZodSafeParseResult } from "zod";
-import { descuentoPorVolumen, precioConDescuento, type EscalaDeVolumen } from "../../lib/precios/volumen";
-import { firmaValida, leerCabeceraFirma, manifiestoFirma } from "../../lib/pagos/firma";
+import { descuentoPorVolumen, precioConDescuento, type EscalaDeVolumen } from "./originales/tanda6/volumen";
+import { firmaValida, leerCabeceraFirma, manifiestoFirma } from "./originales/tanda6/firma";
 import {
   agregarSchema,
   armarCarrito,

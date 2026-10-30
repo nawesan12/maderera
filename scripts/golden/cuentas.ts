@@ -10,7 +10,7 @@
  */
 import { writeFileSync } from "node:fs";
 import { aCentavos, importeEnLetras, revisarPartes, totalDePartes, type ParteDeCobro } from "../../lib/cobros/partes";
-import { leerPartes } from "../../lib/cobros/leer";
+import { leerPartes } from "./originales/tanda6/leer";
 import { efectoEnLaCuenta, puedePasar, TRANSICIONES, type EstadoDeCheque } from "../../lib/cheques/estados";
 import { nombreDelCheque, normalizarNumeroDeCheque, revisarNumeroDeCheque } from "../../lib/cheques/numero";
 import { calcularAging } from "../../lib/cuenta-corriente/aging";

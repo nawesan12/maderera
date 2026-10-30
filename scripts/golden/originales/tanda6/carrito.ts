@@ -5,7 +5,7 @@
  * esquemas de zod de las acciones y las cuentas de confirmarCompra.
  */
 import { z } from "zod";
-import { descuentoPorVolumen, precioConDescuento, type EscalaDeVolumen } from "../../../../lib/precios/volumen";
+import { descuentoPorVolumen, precioConDescuento, type EscalaDeVolumen } from "./volumen";
 import { esPresentacion, precioDeLinea } from "../../../../lib/ventas/forma-de-venta";
 import { calcularEnvio, type ZonaEnvio } from "../../../../lib/envios";
 import {

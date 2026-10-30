@@ -1,278 +1,85 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, isNull } from "drizzle-orm";
-import { z } from "zod";
-import { db } from "@/lib/db";
-import {
-  cartItems,
-  priceListItems,
-  priceLists,
-  productVariants,
-  products,
-} from "@/lib/db/schema";
-import { admiteMedia, precioDeLinea, unidadDeLinea } from "@/lib/ventas/forma-de-venta";
-import { admiteDecimales, formatearCantidad } from "@/lib/unidades";
-import { obtenerOCrearCarrito } from "@/lib/dal/carrito";
+import { api, copiarCookies, mensajeDe, type Problema } from "@/lib/api/servidor";
+import { COOKIE_CARRITO } from "@/lib/dal/carrito";
+import { encenderSenal } from "@/lib/senal-cliente";
 
+/**
+ * Las acciones del carrito: las hace Go (backend/internal/checkout, tanda 6)
+ * con las mismas validaciones y mensajes. Acá queda lo que es de Next: la
+ * cookie del carrito (Go la pone cuando lo crea y se copia al navegador), la
+ * señal del encabezado y qué se vuelve a dibujar.
+ */
 export interface EstadoCarrito {
   error?: string;
   ok?: string;
 }
 
 /**
- * Qué hay que volver a dibujar después de tocar el carrito.
- *
- * **Antes decía `revalidatePath("/", "layout")`, y eso era carísimo.** Esa
- * llamada tira el caché de *todas* las páginas del sitio: cada vez que un
- * visitante agregaba un producto, la portada, el catálogo y las ocho fichas de
- * rubro quedaban sin cachear y la siguiente visita de cualquier otra persona
- * pagaba el render completo. Cuanto más se usaba el carrito, más caro salía el
- * sitio para todos.
- *
- * Y no hacía falta: el contador del carrito lo dibuja el navegador
- * (`CarritoProvider`), y las dos pantallas que muestran el carrito del servidor
- * son dinámicas por definición —leen la cookie—, así que nunca estuvieron
- * cacheadas. Alcanza con nombrarlas.
+ * Qué hay que volver a dibujar después de tocar el carrito: solo las dos
+ * pantallas que lo muestran (antes era `revalidatePath("/", "layout")`, que
+ * tiraba el caché de todo el sitio en cada agregar).
  */
 function refrescar() {
   revalidatePath("/carrito");
   revalidatePath("/carrito/confirmar");
 }
 
-const agregarSchema = z.object({
-  variantId: z.string().uuid().optional(),
-  descripcion: z.string().trim().min(1).max(240),
-  unidad: z.string().trim().max(40).default("unidad"),
-  cantidad: z.coerce.number().positive().max(100000),
-  presentacion: z.enum(["media_largo", "media_ancho"]).nullable().optional(),
-  origen: z.string().trim().max(40).default("catalogo"),
-  notas: z.string().trim().max(300).optional(),
-});
-
-/**
- * Agrega algo al presupuesto en curso.
- *
- * Si la misma medida ya estaba, suma la cantidad en vez de repetir la línea: ver
- * dos veces el mismo producto obliga a sumar de cabeza para saber cuánto se está
- * pidiendo.
- */
-export async function agregarAlCarrito(
-  datos: z.input<typeof agregarSchema>,
-): Promise<EstadoCarrito> {
-  const parsed = agregarSchema.safeParse(datos);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "No se pudo agregar." };
-  }
-
-  const item = parsed.data;
-  const cartId = await obtenerOCrearCarrito();
-
-  // Precio de lista del momento, para poder avisar después si cambió.
-  let precio: string | null = null;
-
-  if (item.variantId) {
-    const [producto] = await db
-      .select({
-        unit: products.unit,
-        formaDeVenta: products.formaDeVenta,
-        precioMediaPct: products.precioMediaPct,
-      })
-      .from(productVariants)
-      .innerJoin(products, eq(products.id, productVariants.productId))
-      .where(eq(productVariants.id, item.variantId))
-      .limit(1);
-
-    if (!producto) return { error: "Ese producto ya no está disponible." };
-
-    // La media solo existe donde el producto la admite: si no, se descarta y
-    // va la placa entera, igual que en el mostrador.
-    if (!admiteMedia(producto)) item.presentacion = null;
-
-    // Lo que se cuenta va entero; lo que se mide admite decimales.
-    const unidad = unidadDeLinea(producto);
-    const fraccionable = admiteDecimales(unidad) && unidad !== "placa";
-    if (!fraccionable && !Number.isInteger(item.cantidad)) {
-      return { error: "Este producto se vende por unidad entera." };
-    }
-
-    const [fila] = await db
-      .select({ price: priceListItems.price })
-      .from(priceListItems)
-      .innerJoin(priceLists, eq(priceLists.id, priceListItems.priceListId))
-      .where(
-        and(
-          eq(priceListItems.variantId, item.variantId),
-          eq(priceLists.isDefault, true),
-        ),
-      )
-      .limit(1);
-
-    // El precio que se guarda es el de lo que se agregó: el de la media si es
-    // media. Si no, el aviso de «cambió el precio» saltaría siempre.
-    precio =
-      fila?.price != null
-        ? precioDeLinea(Number(fila.price), producto, item.presentacion ?? null).toFixed(2)
-        : null;
-  }
-
-  if (item.variantId) {
-    const [existente] = await db
-      .select({ id: cartItems.id, cantidad: cartItems.cantidad })
-      .from(cartItems)
-      .where(
-        and(
-          eq(cartItems.cartId, cartId),
-          eq(cartItems.variantId, item.variantId),
-          // Una placa entera y una media de la misma medida son dos renglones:
-          // sumarlas daría «3 medias» donde se pidieron dos enteras y una media.
-          item.presentacion
-            ? eq(cartItems.presentacion, item.presentacion)
-            : isNull(cartItems.presentacion),
-        ),
-      )
-      .limit(1);
-
-    if (existente) {
-      await db
-        .update(cartItems)
-        .set({
-          cantidad: (Number(existente.cantidad) + item.cantidad).toFixed(2),
-        })
-        .where(eq(cartItems.id, existente.id));
-
-      refrescar();
-      return { ok: `Sumaste ${formatearCantidad(item.cantidad)} a ${item.descripcion}.` };
-    }
-  }
-
-  await db.insert(cartItems).values({
-    cartId,
-    variantId: item.variantId,
-    descripcion: item.descripcion,
-    unidad: item.unidad,
-    cantidad: item.cantidad.toFixed(2),
-    presentacion: item.presentacion ?? null,
-    precioUnitario: precio,
-    origen: item.origen,
-    notas: item.notas,
-  });
-
-  refrescar();
-  return { ok: `${item.descripcion} va al presupuesto.` };
+export interface ItemParaAgregar {
+  variantId?: string;
+  descripcion: string;
+  unidad?: string;
+  cantidad: number | string;
+  presentacion?: "media_largo" | "media_ancho" | null;
+  origen?: string;
+  notas?: string;
 }
 
 /**
- * Cuántas líneas se pueden mandar juntas.
- *
- * La calculadora más larga —la de techos— manda una decena de materiales. Este
- * tope es lo que separa eso de un arreglo de diez mil elementos, que serían diez
- * mil `INSERT` en una sola llamada sin sesión: la acción **no tenía ningún
- * límite de largo**.
+ * Lo que contestó Go, con la cookie del carrito si se creó: desde ahí hay
+ * algo que mostrar en el encabezado, y el HTML del sitio viene del CDN sin
+ * saberlo (la señal hace que el navegador lo pregunte).
  */
-const MAXIMO_POR_TANDA = 40;
+async function despues(r: { data?: EstadoCarrito; error?: unknown; response: Response }, porDefecto: string): Promise<EstadoCarrito> {
+  await copiarCookies(r.response);
+  if (r.response.headers.getSetCookie().some((c) => c.startsWith(`${COOKIE_CARRITO}=`))) await encenderSenal();
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, porDefecto) };
+  refrescar();
+  return r.data;
+}
+
+/** Agrega algo al presupuesto en curso; la misma medida suma cantidad. */
+export async function agregarAlCarrito(datos: ItemParaAgregar): Promise<EstadoCarrito> {
+  const r = await (await api()).POST("/api/v1/carrito/items", { body: { ...datos } });
+  return despues(r, "No se pudo agregar.");
+}
 
 /** Agrega varias líneas de una sola vez: la calculadora manda todo junto. */
-export async function agregarVarios(
-  items: z.input<typeof agregarSchema>[],
-): Promise<EstadoCarrito> {
-  if (items.length === 0) return { error: "No hay nada para agregar." };
-
-  if (items.length > MAXIMO_POR_TANDA) {
-    return {
-      error: `Son demasiadas líneas juntas (${items.length}). Agregalas en tandas de ${MAXIMO_POR_TANDA}.`,
-    };
-  }
-
-  for (const item of items) {
-    const resultado = await agregarAlCarrito(item);
-    if (resultado.error) return resultado;
-  }
-
-  return { ok: `Se agregaron ${items.length} productos al presupuesto.` };
+export async function agregarVarios(items: ItemParaAgregar[]): Promise<EstadoCarrito> {
+  const r = await (await api()).POST("/api/v1/carrito/items/varios", { body: { items } });
+  return despues(r, "No se pudo agregar.");
 }
 
-/**
- * Las dos acciones de abajo filtran por `cartId` además de por el id de la
- * línea. El id es un uuid y adivinarlo es poco probable, pero "poco probable"
- * no es una autorización: sin esa condición, quien consiguiera un id podría
- * editar el presupuesto de otra persona.
- */
-export async function cambiarCantidad(
-  itemId: string,
-  cantidad: number,
-): Promise<EstadoCarrito> {
-  if (!Number.isFinite(cantidad) || cantidad <= 0) {
-    return quitarDelCarrito(itemId);
-  }
-
-  const cartId = await obtenerOCrearCarrito();
-
-  await db
-    .update(cartItems)
-    .set({ cantidad: cantidad.toFixed(2) })
-    .where(and(eq(cartItems.id, itemId), eq(cartItems.cartId, cartId)));
-
-  refrescar();
-  return {};
+/** Cambia la cantidad de un renglón propio; cero o menos lo quita. */
+export async function cambiarCantidad(itemId: string, cantidad: number): Promise<EstadoCarrito> {
+  const r = await (await api()).PATCH("/api/v1/carrito/items/{id}", {
+    params: { path: { id: itemId } },
+    body: { cantidad: Number.isFinite(cantidad) ? cantidad : null },
+  });
+  return despues(r, "No se pudo cambiar.");
 }
 
 export async function quitarDelCarrito(itemId: string): Promise<EstadoCarrito> {
-  const cartId = await obtenerOCrearCarrito();
-
-  await db
-    .delete(cartItems)
-    .where(and(eq(cartItems.id, itemId), eq(cartItems.cartId, cartId)));
-
-  refrescar();
-  return { ok: "Lo sacamos del presupuesto." };
+  const r = await (await api()).DELETE("/api/v1/carrito/items/{id}", { params: { path: { id: itemId } } });
+  return despues(r, "No se pudo quitar.");
 }
 
 export async function vaciarCarrito(): Promise<EstadoCarrito> {
-  const cartId = await obtenerOCrearCarrito();
-  await db.delete(cartItems).where(eq(cartItems.cartId, cartId));
-  refrescar();
-  return { ok: "Presupuesto vaciado." };
+  return despues(await (await api()).DELETE("/api/v1/carrito"), "No se pudo vaciar.");
 }
 
 /** Pone las líneas al precio de lista de hoy. */
 export async function actualizarPrecios(): Promise<EstadoCarrito> {
-  const cartId = await obtenerOCrearCarrito();
-
-  const [listaGeneral] = await db
-    .select({ id: priceLists.id })
-    .from(priceLists)
-    .where(eq(priceLists.isDefault, true))
-    .limit(1);
-
-  if (!listaGeneral) return { error: "No hay lista de precios configurada." };
-
-  const items = await db
-    .select({
-      id: cartItems.id,
-      precio: priceListItems.price,
-    })
-    .from(cartItems)
-    .leftJoin(
-      priceListItems,
-      and(
-        eq(priceListItems.variantId, cartItems.variantId),
-        eq(priceListItems.priceListId, listaGeneral.id),
-      ),
-    )
-    .where(eq(cartItems.cartId, cartId));
-
-  let actualizados = 0;
-
-  for (const item of items) {
-    if (!item.precio) continue;
-    await db
-      .update(cartItems)
-      .set({ precioUnitario: item.precio })
-      .where(eq(cartItems.id, item.id));
-    actualizados++;
-  }
-
-  refrescar();
-  return { ok: `Se actualizaron ${actualizados} precios.` };
+  return despues(await (await api()).POST("/api/v1/carrito/precios"), "No se pudieron actualizar los precios.");
 }

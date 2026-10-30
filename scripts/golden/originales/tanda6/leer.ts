@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parsearImporte } from "@/lib/formato";
-import type { ParteDeCobro } from "./partes";
+import type { ParteDeCobro } from "@/lib/cobros/partes";
 
 /**
  * Lee las partes de un cobro como las manda `CobroMultimedio`.

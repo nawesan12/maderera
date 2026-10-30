@@ -29,6 +29,19 @@ paths:
                 required: [enVivo]
                 properties:
                   enVivo: { type: boolean }
+  /api/v1/pagos/datos-para-transferir:
+    get:
+      operationId: DatosParaTransferir
+      responses:
+        "200":
+          description: Los datos bancarios para transferir (null si todavía no se cargaron)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [datos]
+                properties:
+                  datos: { $ref: "#/components/schemas/DatosBancariosDelPanel" }
   /api/v1/pagos/pedido:
     post:
       operationId: PagarPedido

@@ -14,7 +14,7 @@ async function main() {
   const historial = await import("./ts/historial-cliente");
   const cheques = await import("./ts/admin-cheques");
   const { db } = await import("@/lib/db");
-  const { emitirRecibo } = await import("@/lib/cobros/recibo");
+  const { emitirRecibo } = await import("@/scripts/golden/originales/tanda6/recibo");
   createServer(async (req, res) => {
     const u = new URL(req.url ?? "/", "http://x");
     try {

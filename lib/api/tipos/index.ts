@@ -27,6 +27,8 @@ import type { paths as Entregas, components as ComponentesEntregas } from "./ent
 import type { paths as Caja, components as ComponentesCaja } from "./caja";
 import type { paths as Reportes, components as ComponentesReportes } from "./reportes";
 import type { paths as Migracion, components as ComponentesMigracion } from "./migracion";
+import type { paths as Checkout, components as ComponentesCheckout } from "./checkout";
+import type { paths as Pagos, components as ComponentesPagos } from "./pagos";
 
 export type paths = Sesion &
   Catalogo &
@@ -51,7 +53,9 @@ export type paths = Sesion &
   Entregas &
   Caja &
   Reportes &
-  Migracion;
+  Migracion &
+  Checkout &
+  Pagos;
 export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesCatalogo["schemas"] &
   ComponentesContenido["schemas"] &
@@ -75,4 +79,6 @@ export type Esquemas = ComponentesSesion["schemas"] &
   ComponentesEntregas["schemas"] &
   ComponentesCaja["schemas"] &
   ComponentesReportes["schemas"] &
-  ComponentesMigracion["schemas"];
+  ComponentesMigracion["schemas"] &
+  ComponentesCheckout["schemas"] &
+  ComponentesPagos["schemas"];

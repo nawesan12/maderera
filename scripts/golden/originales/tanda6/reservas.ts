@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { claveDeLock } from "@/lib/inventario/locks";
+import { claveDeLock } from "./locks";
 import { unidadesDeStock } from "@/lib/ventas/forma-de-venta";
 import { cantidadDeStock } from "@/lib/unidades";
 import {

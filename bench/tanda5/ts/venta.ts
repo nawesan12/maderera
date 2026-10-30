@@ -9,11 +9,11 @@ import {
 } from "@/lib/dal/numeracion-ventas";
 import { fechaAcotada } from "@/lib/mostrador/offline/numero-provisorio";
 import { turnoQueContiene } from "./turno";
-import { costoPorUnidadDeVenta, costosParaCongelar } from "@/lib/compras/congelar";
-import { factoresDeStock } from "@/lib/ventas/factores";
+import { costoPorUnidadDeVenta, costosParaCongelar } from "@/scripts/golden/originales/tanda6/congelar";
+import { factoresDeStock } from "@/scripts/golden/originales/tanda6/factores";
 import { leerAnchoDeSierra } from "@/lib/cortes/sierra";
 import { ANCHO_DE_SIERRA_MM } from "@/lib/cortes/tipos";
-import { ErrorDeCobro, registrarChequeRecibido } from "@/lib/cobros/recibo";
+import { ErrorDeCobro, registrarChequeRecibido } from "@/scripts/golden/originales/tanda6/recibo";
 import { unidadesDeStock } from "@/lib/ventas/forma-de-venta";
 import {
   accountMovements,
@@ -28,7 +28,7 @@ import {
   orders,
   payments,
 } from "@/lib/db/schema";
-import { reservarPedido } from "@/lib/inventario/reservas";
+import { reservarPedido } from "@/scripts/golden/originales/tanda6/reservas";
 import {
   aCentavos,
   aplicarDescuento,
@@ -43,7 +43,7 @@ import {
   type PagoDeVenta,
 } from "@/lib/mostrador/importes";
 import { escalasDePago } from "@/lib/dal/descuentos-pago";
-import { estadoDeCredito } from "@/lib/dal/credito";
+import { estadoDeCredito } from "@/scripts/golden/originales/tanda6/credito";
 import {
   descuentoPorMedioDePago,
   medioPermitido,

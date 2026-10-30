@@ -15,13 +15,7 @@ import {
   EtiquetaEstado,
 } from "@/components/admin/etiqueta-estado";
 import { fechaHora, moneda, plural } from "@/lib/formato";
-import {
-  listarPagos,
-  obtenerDatosBancarios,
-  resumenPagos,
-  ultimosAvisos,
-  type PagoListado,
-} from "@/lib/dal/admin/pagos";
+import { panelDePagos, type PagoListado } from "@/lib/dal/admin/pagos";
 import { AccionesCobro } from "./acciones";
 import { FormularioBanco } from "./banco";
 
@@ -54,12 +48,7 @@ export default async function PagosPage({
 }) {
   const periodo = resolverPeriodo(leerPeriodo((await searchParams).periodo));
 
-  const [pagos, resumen, avisos, banco] = await Promise.all([
-    listarPagos(periodo.desde ? { desde: periodo.desde } : {}),
-    resumenPagos(periodo),
-    ultimosAvisos(8),
-    obtenerDatosBancarios(),
-  ]);
+  const { pagos, resumen, avisos, datosBancarios: banco } = await panelDePagos(periodo.clave);
 
   const aVerificar = pagos.filter((p) => p.estado === "en_revision");
   const rechazados = pagos.filter((p) => p.estado === "rechazado");

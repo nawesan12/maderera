@@ -1294,6 +1294,11 @@ function Buscador({
     Awaited<ReturnType<typeof buscarEnMostrador>>
   >([]);
   const [buscando, setBuscando] = useState(false);
+  // El texto de la última búsqueda al servidor que terminó: «no hay nada» se
+  // dice recién cuando se buscó ESE texto. Antes salía durante los 180 ms de
+  // espera (con la lista vacía de antes) y un Enter en ese momento caía en
+  // la búsqueda en curso y no hacía nada.
+  const [buscado, setBuscado] = useState("");
   /** Cuál de los resultados está marcado. Se mueve con las flechas. */
   const [marcado, setMarcado] = useState(0);
   const campo = useRef<HTMLInputElement>(null);
@@ -1332,9 +1337,17 @@ function Buscador({
 
     const t = setTimeout(async () => {
       setBuscando(true);
-      const r = await buscarEnMostrador(consulta, branchId, customerId);
-      setResultados(r);
-      setBuscando(false);
+      // En un finally: si la búsqueda falla (se cortó la red, la sesión
+      // venció), «buscando» quedaba prendido y el Enter dejaba de abrir la
+      // carga a mano hasta recargar la página.
+      try {
+        setResultados(await buscarEnMostrador(consulta, branchId, customerId));
+      } catch {
+        setResultados([]);
+      } finally {
+        setBuscando(false);
+        setBuscado(consulta);
+      }
     }, 180);
 
     return () => clearTimeout(t);
@@ -1346,6 +1359,9 @@ function Buscador({
    * estado que después hay que acordarse de limpiar.
    */
   const visibles = consulta.length < 2 ? [] : (locales ?? resultados);
+  // Ya se sabe qué hay para este texto: con la copia local, al instante; sin
+  // ella, cuando volvió la búsqueda de este mismo texto.
+  const resuelto = consulta.length >= 2 && (hayCopia || (!buscando && buscado === consulta));
 
   // El marcado se acota al leerlo y no se corrige con un efecto: la lista
   // cambia con cada tecla y un `setState` adentro de un efecto por cada
@@ -1422,7 +1438,7 @@ function Buscador({
                   r,
                   e.shiftKey ? "media_largo" : e.altKey ? "media_ancho" : null,
                 );
-              } else if (consulta.length >= 2 && !buscando) {
+              } else if (resuelto) {
                 /*
                  * Enter sobre algo que no está en el catálogo abre la carga a
                  * mano con ese texto. En el mostrador se tipea "corte a
@@ -1449,7 +1465,7 @@ function Buscador({
         {buscando && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
 
-      {consulta.length >= 2 && visibles.length === 0 && !buscando && (
+      {resuelto && visibles.length === 0 && (
         <div className="absolute inset-x-0 top-full z-20 mt-1.5 rounded-xl border border-linea bg-popover p-4 shadow-lg">
           <p className="text-base text-muted-foreground">
             No hay nada en el catálogo con «{consulta}».

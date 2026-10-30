@@ -140,6 +140,13 @@ if ! "${COMPOSE[@]}" up -d --no-deps --wait --wait-timeout 120 api; then
 fi
 "${COMPOSE[@]}" up -d --no-deps worker
 
+# Los comprobantes de transferencia y los documentos técnicos van a la
+# carpeta privada (se sirven con sesión, no por /subidas/). Mueve lo que haya
+# quedado en la pública de antes; repetible: si no hay nada, no hace nada.
+if ! "${COMPOSE[@]}" run --rm --no-deps api privados; then
+  echo "Aviso: no se pudieron mover los archivos privados. Ver: dc run --rm api privados" >&2
+fi
+
 echo "→ Construyendo la aplicación"
 # Con bake, no con `compose build`: la app se construye con `network: host`
 # para llegar a la base, y desde Compose v5 eso es un permiso que hay que dar

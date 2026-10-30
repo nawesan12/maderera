@@ -331,3 +331,58 @@ func TestAlicuotaFueraDeLaLista(t *testing.T) {
 		t.Fatal("se mandó a ARCA")
 	}
 }
+
+// **Un rechazado trababa la numeración.** ARCA no consume un número
+// rechazado: el siguiente que espera sigue siendo ese. El comprobante que
+// venía después pasaba primero por el rechazado, que volvía a fallar con los
+// mismos datos, para siempre. Corregido el receptor del rechazado, el
+// reintento manda los datos nuevos y destraba al siguiente.
+func TestRechazadoSeCorrigeYDestraba(t *testing.T) {
+	e := armar(t, true)
+	ctx := context.Background()
+	admin := e.staff(t, "admin@mjbj.test", sqlc.StaffRoleAdmin)
+	emitir := func() string {
+		_, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(consumidor(), [4]string{"Fenólico", "1", "12100", "21"}))
+		return leerJSON[map[string]string](t, b)["invoiceId"]
+	}
+	autorizar := func(id string) map[string]string {
+		_, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/autorizar", nil)
+		return leerJSON[map[string]string](t, b)
+	}
+	// Un CUIT con el verificador mal que llegó a la fila (de antes de
+	// validarlo, o de la migración): ARCA lo rechaza.
+	primero := emitir()
+	e.exec(t, `UPDATE invoices SET receptor_cuit = '20123456789' WHERE id = $1`, primero)
+	if r := autorizar(primero); !strings.Contains(r["error"], "10015") {
+		t.Fatalf("el primero: %v", r)
+	}
+	segundo := emitir()
+	if r := autorizar(segundo); !strings.Contains(r["error"], "Antes hay que autorizar") {
+		t.Fatalf("el segundo, trabado: %v", r)
+	}
+
+	corregir := func(id string, campos map[string]string) (int, []byte) {
+		return pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/corregir-receptor", campos)
+	}
+	// La letra no cambia sobre el mismo número.
+	if st, b := corregir(primero, map[string]string{"receptorNombre": "Gómez SRL", "receptorCuit": "30-71234567-1",
+		"receptorCondicionIva": "responsable_inscripto"}); st != 422 || !strings.Contains(string(b), "la letra no se puede cambiar") {
+		t.Fatalf("cambiar la letra: %d %s", st, b)
+	}
+	// Solo un rechazado.
+	if st, b := corregir(segundo, map[string]string{"receptorNombre": "Juan Pérez", "receptorCondicionIva": "consumidor_final"}); st != 422 ||
+		!strings.Contains(string(b), "ARCA rechazó") {
+		t.Fatalf("corregir uno no rechazado: %d %s", st, b)
+	}
+	st, b := corregir(primero, map[string]string{"receptorNombre": "Juan Pérez", "receptorCuit": "20-12345678-6", "receptorCondicionIva": "consumidor_final"})
+	if st != 200 || !strings.HasPrefix(leerJSON[map[string]string](t, b)["ok"], "Autorizado por ARCA") {
+		t.Fatalf("corregido y reintentado: %d %s", st, b)
+	}
+	c, _ := e.s.Obtener(ctx, primero)
+	if c.Numero != 1 || c.Estado != "autorizada" || c.ReceptorCuit == nil || *c.ReceptorCuit != "20123456786" {
+		t.Fatalf("el primero corregido: %d %s %v", c.Numero, c.Estado, c.ReceptorCuit)
+	}
+	if r := autorizar(segundo); !strings.HasPrefix(r["ok"], "Autorizado por ARCA") {
+		t.Fatalf("el segundo, destrabado: %v", r)
+	}
+}

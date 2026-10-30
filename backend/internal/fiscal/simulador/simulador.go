@@ -35,6 +35,8 @@ import (
 	"time"
 
 	"github.com/smallstep/pkcs7"
+
+	"mjbj/internal/cuit"
 )
 
 // Simulador guarda lo autorizado por punto de venta y tipo.
@@ -550,6 +552,9 @@ func (s *Simulador) solicitar(b []byte) string {
 				agregar("10153", "[sim] El comprobante asociado no existe o no está autorizado.")
 			}
 		}
+	}
+	if d.DocTipo == 80 && !cuit.Valido(d.DocNro) {
+		agregar("10015", "[sim] El número de documento (DocNro) no es un CUIT válido.")
 	}
 	if strings.TrimSpace(d.CondicionIVA) == "" {
 		agregar("10242", "El campo Condicion Frente al IVA del receptor es obligatorio conforme a la RG 5616.")

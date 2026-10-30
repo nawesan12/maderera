@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"mjbj/internal/clientes"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
@@ -171,6 +172,67 @@ func (a *arca) largo(ctx context.Context, c *comprobanteArca) (string, error) {
 		}
 	}
 	return a.solicitar(ctx, c)
+}
+
+// CorregirReceptor arregla los datos del receptor de un comprobante que ARCA
+// rechazó, para volver a pedir su CAE con el mismo número.
+//
+// Para ARCA un número rechazado no se consumió: el próximo que espera sigue
+// siendo ese. Pero el siguiente comprobante del mismo tipo, al autorizarse,
+// pasa primero por el rechazado (ARCA no deja saltear números), y si el
+// rechazo era por un dato del receptor (un CUIT mal, la condición frente al
+// IVA) fallaba igual, para siempre. Corregido acá, el reintento manda los
+// datos nuevos (paraArca lee la fila en cada pedido).
+//
+// La letra no cambia: con otra letra el comprobante sería de otra serie y
+// este número quedaría vacío en la suya. Ese caso (y el de un rechazo que no
+// es del receptor) todavía no tiene salida desde el panel: hace falta poder
+// dar de baja el rechazado y que otro comprobante tome su número.
+func (s *Servicio) CorregirReceptor(ctx context.Context, id string, c map[string]string) error {
+	cab, err := validarCabecera(c)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(cab.cuit) != "" {
+		if _, msj := clientes.LeerDocumento(cab.cuit); msj != "" {
+			return errEmision(msj)
+		}
+	}
+	var cuit *string
+	if d := fiscal.SoloDigitos(cab.cuit); d != "" {
+		cuit = &d
+	}
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var tipo, estado string
+		var cae *string
+		err := tx.QueryRow(ctx, `SELECT tipo::text, estado::text, cae FROM invoices WHERE id = $1 FOR UPDATE`, id).Scan(&tipo, &estado, &cae)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errEmision("No encontramos el comprobante.")
+		}
+		if err != nil {
+			return err
+		}
+		if estado != "rechazada" || cae != nil {
+			return errEmision("Solo se corrigen los datos de un comprobante que ARCA rechazó.")
+		}
+		config, err := emisorEn(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if l := fiscal.LetraQueCorresponde(config.CondicionIva, cab.condicion); l != fiscal.LetraDe(tipo) {
+			return errEmision("Con esa condición frente al IVA corresponde una " + fiscal.NombreComprobante(fiscal.TipoFactura(l)) +
+				", y este comprobante es " + fiscal.NombreComprobante(tipo) + ": la letra no se puede cambiar sobre el mismo número.")
+		}
+		if fiscal.LetraDe(tipo) == "A" {
+			if m := faltaCuitParaLaA(fiscal.ResponsableInscripto, cuit); m != "" {
+				return errEmision(m)
+			}
+		}
+		_, err = tx.Exec(ctx, `UPDATE invoices SET receptor_nombre = $2, receptor_cuit = $3, receptor_condicion_iva = $4::condicion_iva,
+			receptor_domicilio = $5, estado = 'emitida', observaciones_arca = NULL, updated_at = now() WHERE id = $1`,
+			id, cab.nombre, cuit, cab.condicion, cab.domicilio)
+		return err
+	})
 }
 
 // arca es una conversación con ARCA dentro del candado.

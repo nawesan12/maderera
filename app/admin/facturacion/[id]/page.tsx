@@ -24,6 +24,7 @@ import {
 import {
   AnularComprobante,
   BotonAutorizar,
+  CorregirReceptor,
   FormularioCobro,
 } from "./acciones";
 import { NotasSobreElComprobante } from "./notas";
@@ -160,6 +161,17 @@ export default async function FichaComprobantePage({
               <BotonAutorizar
                 id={comprobante.id}
                 rechazado={comprobante.estado === "rechazada"}
+              />
+            </div>
+          )}
+          {!anulada && comprobante.estado === "rechazada" && (
+            <div className="mt-3">
+              <CorregirReceptor
+                id={comprobante.id}
+                nombre={comprobante.receptorNombre}
+                cuit={comprobante.receptorCuit}
+                condicion={comprobante.receptorCondicionIva}
+                domicilio={comprobante.receptorDomicilio}
               />
             </div>
           )}

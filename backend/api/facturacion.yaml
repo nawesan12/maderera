@@ -141,6 +141,23 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ResultadoDeAutorizacion" }
+  /api/v1/admin/facturacion/comprobantes/{id}/corregir-receptor:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: CorregirReceptorYReintentar
+      description: >-
+        Corrige los datos del receptor (receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio) de un comprobante
+        que ARCA rechazó y vuelve a pedir el CAE con el mismo número (para ARCA un número rechazado no se consumió). La letra
+        no puede cambiar. Solo el admin. Si ARCA vuelve a rechazar, `error` trae el motivo.
+      requestBody: { $ref: "#/components/requestBodies/CamposDeFormulario" }
+      responses:
+        "200":
+          description: El resultado del nuevo pedido de CAE
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResultadoDeAutorizacion" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/facturacion/comprobantes/{id}/anular:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }

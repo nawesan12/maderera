@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   anular,
   autorizar,
+  corregirReceptor,
   registrarCobro,
   type EstadoFactura,
 } from "../actions";
@@ -60,6 +61,139 @@ export function BotonAutorizar({
         </p>
       )}
     </div>
+  );
+}
+
+const CONDICIONES_RECEPTOR = [
+  { valor: "consumidor_final", texto: "Consumidor final" },
+  { valor: "responsable_inscripto", texto: "Responsable inscripto" },
+  { valor: "monotributista", texto: "Monotributista" },
+  { valor: "exento", texto: "Exento" },
+  { valor: "no_categorizado", texto: "No categorizado" },
+];
+
+/**
+ * Corregir el receptor de un comprobante que ARCA rechazó y reenviarlo.
+ *
+ * Plegado: es la excepción. Un rechazado traba a los que vienen después del
+ * mismo tipo (ARCA no deja saltear números), así que si el rechazo fue por
+ * un dato del receptor, se corrige acá y sale con el mismo número. La letra
+ * no puede cambiar. La ficha del cliente no se toca.
+ */
+export function CorregirReceptor({
+  id,
+  nombre,
+  cuit,
+  condicion,
+  domicilio,
+}: {
+  id: string;
+  nombre: string;
+  cuit: string | null;
+  condicion: string;
+  domicilio: string | null;
+}) {
+  const [estado, accion, pendiente] = useActionState(corregirReceptor, inicial);
+  const [abierto, setAbierto] = useState(false);
+
+  if (!abierto) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAbierto(true)}
+        className="inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+      >
+        Corregir los datos del cliente y reenviar
+      </button>
+    );
+  }
+
+  return (
+    <form action={accion} className="space-y-2.5 rounded-xl border bg-background p-4">
+      <input type="hidden" name="id" value={id} />
+      <p className="text-sm text-muted-foreground">
+        Sale con el mismo número: para ARCA un comprobante rechazado no lo usó.
+        La ficha del cliente no cambia.
+      </p>
+      <label className="block text-sm font-medium">
+        Nombre o razón social
+        <input
+          name="receptorNombre"
+          required
+          defaultValue={nombre}
+          maxLength={160}
+          className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
+        />
+      </label>
+      <label className="block text-sm font-medium">
+        CUIT o DNI
+        <input
+          name="receptorCuit"
+          defaultValue={cuit ?? ""}
+          maxLength={20}
+          inputMode="numeric"
+          className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
+        />
+      </label>
+      <label className="block text-sm font-medium">
+        Condición frente al IVA
+        <select
+          name="receptorCondicionIva"
+          defaultValue={condicion}
+          className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
+        >
+          {CONDICIONES_RECEPTOR.map((c) => (
+            <option key={c.valor} value={c.valor}>
+              {c.texto}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block text-sm font-medium">
+        Domicilio
+        <input
+          name="receptorDomicilio"
+          defaultValue={domicilio ?? ""}
+          maxLength={200}
+          className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
+        />
+      </label>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={pendiente}
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+        >
+          {pendiente ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+          Corregir y reenviar a ARCA
+        </button>
+        <button
+          type="button"
+          onClick={() => setAbierto(false)}
+          className="inline-flex h-10 items-center rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+        >
+          Cancelar
+        </button>
+      </div>
+      {estado.error && (
+        <p
+          role="alert"
+          className="estado-problema flex items-start gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base text-[var(--estado-tinta)]"
+        >
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          {estado.error}
+        </p>
+      )}
+      {estado.ok && (
+        <p
+          role="status"
+          className="estado-ok flex items-start gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base text-[var(--estado-tinta)]"
+        >
+          <Check className="mt-0.5 h-5 w-5 shrink-0" />
+          {estado.ok}
+        </p>
+      )}
+    </form>
   );
 }
 

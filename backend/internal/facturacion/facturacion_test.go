@@ -659,9 +659,15 @@ func TestPortalYRutasInternas(t *testing.T) {
 	if st != 200 || leerJSON[map[string]string](t, b)["invoiceId"] == "" {
 		t.Fatalf("interno: %d %s", st, b)
 	}
-	st, b = pedir(t, http.DefaultClient, "GET", e.srv.URL+"/api/v1/interno/facturacion/letra?cuit=20-12345678-9", nil, "Authorization", "Bearer "+secretoInterno)
+	// Un CUIT de empresa sin ficha da A; uno de persona (20), B: puede ser
+	// monotributista o consumidor final.
+	st, b = pedir(t, http.DefaultClient, "GET", e.srv.URL+"/api/v1/interno/facturacion/letra?cuit=30-71234567-1", nil, "Authorization", "Bearer "+secretoInterno)
 	if l := leerJSON[map[string]string](t, b); st != 200 || l["letra"] != "A" {
 		t.Fatalf("letra: %d %s", st, b)
+	}
+	st, b = pedir(t, http.DefaultClient, "GET", e.srv.URL+"/api/v1/interno/facturacion/letra?cuit=20-12345678-6", nil, "Authorization", "Bearer "+secretoInterno)
+	if l := leerJSON[map[string]string](t, b); st != 200 || l["letra"] != "B" {
+		t.Fatalf("letra con CUIT 20: %d %s", st, b)
 	}
 	// Sin CUIT del emisor no se factura.
 	e.exec(t, `UPDATE configuracion_fiscal SET cuit = NULL`)

@@ -243,3 +243,58 @@ func TestLaAlicuotaSaleDelRenglonDelPedido(t *testing.T) {
 		t.Fatalf("alícuotas del pedido: %s", a)
 	}
 }
+
+// **Una A sin CUIT, o con uno mal tipeado.** En el mostrador cualquier CUIT
+// sin ficha daba A (un monotributista con CUIT 20 también), y un CUIT con el
+// verificador mal iba igual a ARCA. La factura manual a un «responsable
+// inscripto» sin CUIT salía como A con DocTipo 99, que ARCA rechaza.
+func TestFacturaASoloConCuitValido(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	admin := e.staff(t, "admin@mjbj.test", sqlc.StaffRoleAdmin)
+	emitir := func(campos map[string]string) (int, string) {
+		st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(campos, [4]string{"Fenólico", "1", "12100", "21"}))
+		return st, string(b)
+	}
+	if st, b := emitir(map[string]string{"receptorNombre": "Gómez SRL", "receptorCondicionIva": "responsable_inscripto"}); st != 422 ||
+		!strings.Contains(b, "hace falta su CUIT") {
+		t.Fatalf("A sin CUIT: %d %s", st, b)
+	}
+	if st, b := emitir(map[string]string{"receptorNombre": "Gómez SRL", "receptorCuit": "30-71234567-2", "receptorCondicionIva": "responsable_inscripto"}); st != 422 ||
+		!strings.Contains(b, "El CUIT no es válido") {
+		t.Fatalf("CUIT con el verificador mal: %d %s", st, b)
+	}
+	var n int
+	e.uno(t, `SELECT count(*) FROM invoices`, &n)
+	if n != 0 {
+		t.Fatalf("se emitieron %d", n)
+	}
+
+	// Mostrador: un CUIT de persona sin ficha es B, con el CUIT informado.
+	venta := func(cuit string) ResultadoComprobante {
+		r, err := e.s.EmitirParaLaVenta(ctx, PedidoDeComprobante{ReceptorNombre: "Mostrador", Cuit: &cuit, UsuarioID: "u",
+			Lineas: []LineaDeVenta{{Descripcion: "Clavos", Unidad: "kg", Cantidad: 2, PrecioUnitario: 1500}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	r := venta("20-12345678-6")
+	if r.InvoiceID == nil {
+		t.Fatalf("mostrador: %+v", r)
+	}
+	c, _ := e.s.Obtener(ctx, *r.InvoiceID)
+	if c.Tipo != "factura_b" || c.ReceptorCuit == nil || *c.ReceptorCuit != "20123456786" || c.ReceptorCondicionIva != "consumidor_final" {
+		t.Fatalf("CUIT 20 en el mostrador: %s %v %s", c.Tipo, c.ReceptorCuit, c.ReceptorCondicionIva)
+	}
+	// Uno de empresa, A.
+	r = venta("30-71234567-1")
+	c, _ = e.s.Obtener(ctx, *r.InvoiceID)
+	if c.Tipo != "factura_a" {
+		t.Fatalf("CUIT 30 en el mostrador: %s", c.Tipo)
+	}
+	// Mal tipeado: la venta queda, el comprobante no se emite.
+	if r = venta("30-71234567-2"); r.InvoiceID != nil || !strings.Contains(r.Aviso, "El CUIT no es válido") {
+		t.Fatalf("CUIT inválido en el mostrador: %+v", r)
+	}
+}

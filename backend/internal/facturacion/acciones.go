@@ -144,6 +144,17 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 	nombre, cuit, condicion, cliente := cab.nombre, cab.cuit, cab.condicion, cab.cliente
 	domicilio, obs := cab.domicilio, cab.obs
 	guardar := c["guardarComoCliente"] == "on"
+	// El documento, con su dígito verificador: un CUIT mal tipeado no va a
+	// ARCA. Y una A sin CUIT salía con DocTipo 99 (consumidor final), que
+	// ARCA rechaza.
+	if strings.TrimSpace(cuit) != "" {
+		if _, msj := clientes.LeerDocumento(cuit); msj != "" {
+			return "", errEmision(msj)
+		}
+	}
+	if m := faltaCuitParaLaA(condicion, &cuit); m != "" {
+		return "", errEmision(m)
+	}
 
 	var lineas []Linea
 	for i, d := range ls.Descripcion {
@@ -288,7 +299,10 @@ type ResultadoComprobante struct {
 
 // LetraQueSaldria es letraQueSaldria: la letra según quién emite y quién
 // recibe, para decirla en pantalla antes de cobrar. Alguien sin ficha que da
-// un CUIT seguramente quiere una A.
+// un CUIT es inscripto solo si el CUIT es de empresa (30, 33, 34), como en el
+// alta de clientes: el TS suponía inscripto a cualquier CUIT, y un
+// monotributista o un particular con CUIT 20 se llevaba una A que no le
+// corresponde.
 func (s *Servicio) LetraQueSaldria(ctx context.Context, customerID, cuitTipeado *string) (letra, receptor string, err error) {
 	config, err := s.ObtenerEmisor(ctx)
 	if err != nil {
@@ -303,8 +317,10 @@ func (s *Servicio) LetraQueSaldria(ctx context.Context, customerID, cuitTipeado 
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return "", "", err
 		}
-	} else if cuitTipeado != nil && len(fiscal.SoloDigitos(*cuitTipeado)) == 11 {
-		receptor = fiscal.ResponsableInscripto
+	} else if cuitTipeado != nil {
+		if doc, msj := clientes.LeerDocumento(*cuitTipeado); msj == "" {
+			receptor = clientes.SugerirCondicionIva(doc)
+		}
 	}
 	return fiscal.LetraQueCorresponde(config.CondicionIva, receptor), receptor, nil
 }
@@ -318,7 +334,18 @@ func (s *Servicio) EmitirParaLaVenta(ctx context.Context, p PedidoDeComprobante)
 		return ResultadoComprobante{}, err
 	}
 	var cuit, domicilio *string
-	if p.Cuit != nil {
+	if p.Cuit != nil && (p.CustomerID == nil || *p.CustomerID == "") {
+		// Un documento mal tipeado no va a ARCA (lo rechaza, o sale a nombre
+		// de otro): la venta queda y el comprobante se emite desde el pedido
+		// con el documento corregido.
+		doc, msj := clientes.LeerDocumento(*p.Cuit)
+		if msj != "" {
+			return ResultadoComprobante{Aviso: "La venta quedó registrada, pero el comprobante no se pudo crear: " + msj}, nil
+		}
+		if doc.Digitos != "" {
+			cuit = &doc.Digitos
+		}
+	} else if p.Cuit != nil {
 		if d := fiscal.SoloDigitos(*p.Cuit); d != "" {
 			cuit = &d
 		}
@@ -423,4 +450,24 @@ func (s *Servicio) alicuotasDeLaVenta(ctx context.Context, orderID string, linea
 		}
 	}
 	return out, nil
+}
+
+// faltaCuitParaLaA es el motivo por el que no se puede facturar a un
+// responsable inscripto, o "": la factura A informa el CUIT del receptor
+// (DocTipo 80), y sin uno válido ARCA la rechaza.
+func faltaCuitParaLaA(condicion string, cuit *string) string {
+	if condicion != fiscal.ResponsableInscripto {
+		return ""
+	}
+	if cuit == nil || strings.TrimSpace(*cuit) == "" {
+		return "Para facturarle a un responsable inscripto (factura A) hace falta su CUIT."
+	}
+	doc, msj := clientes.LeerDocumento(*cuit)
+	if msj != "" {
+		return msj
+	}
+	if doc.Tipo != "cuit" {
+		return "Para facturarle a un responsable inscripto (factura A) hace falta su CUIT, no el DNI."
+	}
+	return ""
 }

@@ -385,7 +385,7 @@ func TestConfirmarDosVecesElMismoCarrito(t *testing.T) {
 	}
 	// Las conexiones, abiertas antes de largar.
 	var conns []*pgxpool.Conn
-	for i := 0; i < 10; i++ {
+	for i := int32(0); i < e.pool.Stat().MaxConns(); i++ {
 		c, _ := e.pool.Acquire(ctx)
 		conns = append(conns, c)
 	}

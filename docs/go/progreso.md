@@ -43,7 +43,7 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 | 11 | Cortes | `go-cortes` | hecha (29/10), integrada en `go-cuentas`; HTTP 6× con 20 a la vez |
 | 12 | PDF y exportaciones | `go-pdf` | hecha (29/10), integrada en `go-cuentas`: 11 documentos idénticos a pdf-lib, con sus datos desde Go |
 | 13 | Migración de ISIS | `go-migracion` | hecha (29/10), integrada en `go-cuentas`: repetible sin duplicar; cuatro bugs del TS arreglados |
-| — | Corte final | | |
+| — | Corte final | `main` | **desplegado el 30/10/2026** en la VPS (KVM 2): goose en la 85, Next sin acceso a la base, sin cron; faltan Mercado Pago y ARCA reales, y el dominio |
 
 ## Tanda 0: el correo
 

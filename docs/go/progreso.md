@@ -1210,3 +1210,178 @@ Lo aprendido:
 - **Un benchmark de escritura fila por fila mide la base, no el lenguaje**:
   la diferencia está donde el algoritmo cambia (la búsqueda por nombre), no
   en el resto.
+
+## Tanda 6: carrito, checkout y Mercado Pago (29/10, rama `go-checkout`)
+
+Desde `go-cuentas` (b6eb298). Paquetes nuevos `internal/checkout` (contrato
+`api/checkout.yaml`) e `internal/pagos` (`api/pagos.yaml`). Sin migraciones.
+Falta correr la e2e (`e2e/checkout.spec.ts`).
+
+- [x] **Carrito** (`internal/checkout`): leerlo (la lista de quien mira, el
+      precio de la media, los descuentos por volumen, los cortes), agregar
+      (suma la misma medida), varios (tope 40), cambiar, quitar, vaciar,
+      actualizar precios, los cortes a medida (se recalculan con
+      `cortes.CotizarParaElCarrito`, freno «corte»), quitar lo que se cotiza
+      y adoptar el carrito anónimo al entrar (ruta interna con el secreto: el
+      `api()` del pedido ya tiene la cookie de antes). **La cookie
+      `mjbj_carrito` la pone Go** cuando crea el carrito; las acciones la
+      copian (`copiarCookies`) y prenden la señal del encabezado.
+- [x] **Pedir presupuesto**: `numeracion.Presupuesto`, express para el
+      profesional aprobado, el mismo freno. El correo sigue en Next.
+- [x] **Confirmar la compra**: `numeracion.Pedido`, `reservas.CostosParaCongelar`,
+      `FactoresDeStock`, `CostoPorUnidadDeVenta`, los cortes con
+      `cortes.ResolverCarrito` y `numeracion.Corte`, la deuda a cuenta
+      corriente con `cuentas.CreditoDeLaSesion` (el `MiCredito` del portal,
+      sacado a una función), `reservas.ReservarPedido` (con los candados del
+      stock tomados antes, en orden) y el carrito desactivado, en una
+      transacción. Next sigue haciendo `updateTag(catálogo)`,
+      `avisarPedidoNuevo`, el correo y la redirección al seguimiento.
+- [x] **Cobros** (`internal/pagos`): Mercado Pago por HTTP (preferencia con
+      `X-Idempotency-Key`, `GET /v1/payments/{id}`; `MP_API_URL` solo para el
+      simulador) y el de demostración; abrir el pago de un pedido y de una
+      inscripción (ruta interna; Go ya reservaba el lugar); **acreditar** con
+      el candado del TS (`hashtext(pagoId)`) y `cobros.EmitirRecibo` /
+      `AnularRecibo`; el **webhook en `/api/pagos/webhook`** (firma
+      `x-signature`, a la cola, 200 rápido; Caddy `@pagosGo` y el rewrite de
+      desarrollo) con `pago.aviso` atendido por el **worker de Go**; los
+      comprobantes de transferencia (pedido y deuda, con
+      `subidas.GuardarAdjunto`), los cheques informados, la pantalla de
+      demostración y la conciliación del panel en un pedido.
+- [x] **El aviso de un pago acreditado** (`notificarResultadoDePago`) sigue
+      en TS: Go encola `pago.resultado` en la misma transacción que acredita
+      (una sola vez) y lo atiende el TS. Desde la demostración y la
+      conciliación, Next lo procesa en el acto (`after(procesarCola)`);
+      desde el webhook, en la vuelta de cada minuto (antes era en el acto).
+- [x] Golden (`TZ=America/Argentina/Buenos_Aires npx tsx scripts/golden/checkout.ts`
+      → `testdata/golden/checkout`): 4000 descuentos por volumen, 2500
+      carritos armados, 3000/3000/4000/1500 formularios de agregar,
+      presupuesto, compra y datos bancarios (primer error y campo, o los
+      datos), 4000 cuentas de la compra (envío, medio permitido, descuento,
+      total), 3000 firmas del webhook con su `data.id`, 2000 preferencias,
+      2000 pagos de Mercado Pago, 2000 avisos de MP y de la demostración,
+      3000 decisiones de acreditar y 3000 plazos de respuesta. Go da lo mismo.
+- [x] Pruebas contra la base, con el contrato en cada respuesta, y contra un
+      simulador de la API de Mercado Pago (`httptest`): la preferencia, el
+      webhook firmado cinco veces (un evento, un aviso), la firma mala (nada
+      en la base), el importe que no coincide (en revisión), el aviso que
+      falla y se retoma, la demostración y la conciliación. `-race` en verde.
+- [x] Benchmark (`bench/tanda6`).
+
+### Concurrencia (vistas fallar sin el arreglo: `MJBJ_PRUEBA_SIN_CANDADO=1`)
+
+- `TestConfirmarDosVecesElMismoCarrito`: diez «Confirmar» del mismo carrito
+  a la vez. **El TS hacía diez pedidos** (leía el carrito fuera de la
+  transacción) con la mercadería reservada diez veces; Go bloquea la fila
+  del carrito y verifica que siga activo: uno.
+- `TestAcreditarVeinteVecesUnRecibo`: veinte acreditaciones del mismo pago
+  de una deuda. Con el candado, un recibo; sin él, doce.
+- `TestComprasSimultaneas`: veinte compras de carritos distintos con las
+  mismas variantes en distinto orden: números distintos y la reserva justa.
+
+### Bugs del TS arreglados
+
+- **Dos clics en «Confirmar» = dos pedidos** (arriba).
+- **«Actualizar precios» le ponía a la media placa el precio de la entera**,
+  y el aviso de «cambió el precio» no se iba nunca (`TestCarritoAnonimo`).
+- **Volver del pago de demostración rompía el token del seguimiento**:
+  `volverA` ya trae `?t=` y se le pegaba otro `?pago=`; quien compró sin
+  cuenta volvía a un «no encontrado».
+- **Permisos de la conciliación**: acreditar una transferencia pedía solo ser
+  personal; ahora es de quien entra a `/admin/pagos` (`TestConciliacion`).
+- Dos primeros «agregar» a la vez dejaban dos carritos activos del mismo
+  usuario, o el mismo renglón repetido: candado por usuario
+  (`pg_advisory_xact_lock(hashtext('carrito:' || user_id))`, **clave nueva**)
+  y la fila del carrito bloqueada al agregar.
+- Fechas en hora argentina: «para cuándo» del presupuesto (12 h de Buenos
+  Aires; el TS, 12 UTC), el plazo de respuesta (8 a 16 de Buenos Aires; el
+  TS contaba el horario en UTC), el vencimiento, el año de la numeración del
+  presupuesto y el período de la conciliación.
+- Una referencia que no es un uuid en el aviso de MP daba un error de
+  Postgres; ahora se ignora y se busca por el id del proveedor.
+
+### Qué TS se borró y qué quedó
+
+- Borrado: `app/api/pagos/webhook/route.ts`, `lib/pagos/*` (menos
+  `config.ts`, que queda con `urlBase` para los correos),
+  `lib/inventario/{reservas,locks}.ts`, `lib/compras/congelar.ts`,
+  `lib/ventas/factores.ts`, `lib/cortes/desde-carrito.ts`,
+  `lib/dal/numeracion-ventas.ts`, `lib/cobros/{recibo,leer}.ts`,
+  `lib/dal/credito.ts`, `lib/precios/volumen.ts`, `pedidoAutorizado` y
+  `tests/numeracion-ventas.test.ts`. Las copias que usan el golden, vitest y
+  los benchmarks viejos (tandas 4 y 5, con los imports cambiados) están en
+  `scripts/golden/originales/tanda6`.
+- Envoltorios: `lib/dal/carrito.ts`, `lib/dal/pagos.ts`,
+  `lib/dal/admin/pagos.ts` y todas las acciones (carrito, corte, presupuesto,
+  compra, pago, demostración, conciliación, inscripción con precio).
+- Queda en TS: `lib/limites` (lo usan `/api/diagnostico` y la limpieza de
+  `lib/tareas`; ni el carrito ni los cobros lo usan), lo que corre en el
+  navegador (`lib/ventas/forma-de-venta.ts`, `lib/precios/medio-pago.ts`,
+  `lib/envios.ts`, `lib/cobros/partes.ts`) y los avisos por correo
+  (`notificarPedidoRecibido`, `notificarResultadoDePago`,
+  `notificarPresupuestoRecibido`).
+- `POST /api/v1/cortes/carrito` (la tanda 11) ya no lo llama Next: la compra
+  usa `cortes.ResolverCarrito` adentro de Go. Se puede borrar.
+
+### Despliegue
+
+- `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `PAGOS_PROVIDER` y `APP_URL` en el
+  entorno de **`api` y `worker`** (los lee `pagos.Config`); `app` ya no los
+  necesita para cobrar (los avisos siguen usando `APP_URL`).
+- Caddy: `@pagosGo` antes de la aplicación. Sin migraciones.
+
+### Para probar con Mercado Pago de verdad
+
+1. Con la cuenta de la clienta: una aplicación de Checkout Pro y las
+   credenciales de prueba en `MP_ACCESS_TOKEN` (con las que empiezan con
+   `TEST-` Go manda al `sandbox_init_point`; con las de un usuario de prueba
+   que empiezan con `APP_USR-`, al `init_point`).
+2. En el panel de Mercado Pago, Webhooks: la URL
+   `https://<dominio>/api/pagos/webhook`, el evento «Pagos», y la clave que
+   genera ahí en `MP_WEBHOOK_SECRET`. Con «Simular notificación» tiene que
+   aparecer en `/admin/pagos` → avisos con firma `true` (una firma mala no
+   deja nada: mirar el registro de `api`).
+3. Comprar con un usuario de prueba y las tarjetas de prueba (APRO, OTHE,
+   CONT): aprobado → pedido pagado y un solo `pago.resultado`; rechazado →
+   «rechazado»; pendiente → sigue pendiente. Reintentar el aviso desde el
+   panel de MP no tiene que cambiar nada.
+4. «Reconsultar» desde `/admin/pagos` un cobro con el aviso perdido.
+5. Producción: las credenciales de la cuenta real y la clave del webhook de
+   producción.
+
+### Pendiente
+
+- [ ] Correr `e2e/checkout.spec.ts` (sin correr: servidores compartidos).
+- [ ] El crédito de una compra a cuenta corriente se mira fuera de la
+      transacción (como en el TS): dos compras a la vez pueden pasar el
+      límite. Bloquear la ficha y volver a mirar adentro.
+- [ ] El aviso de un pago que llega por el webhook sale en la vuelta de cada
+      minuto del TS (antes, en el acto): se arregla cuando los avisos de
+      pedidos y pagos se muden.
+- [ ] El precio que se guarda al agregar es el de la lista general: para un
+      profesional el aviso de «cambió el precio» aparece siempre (igual que
+      en el TS).
+- [ ] Borrar `POST /api/v1/cortes/carrito`.
+
+### Benchmark (29/10/2026, misma Mac; detalle en `bench/tanda6`)
+
+| Prueba | TypeScript | Go | Go / TS |
+|---|---:|---:|---:|
+| Confirmar la compra, 20 a la vez: compras/s | 25,8 | 38,5 | **1,5×** |
+| ídem, p50 / p99 | 739 ms / 1,15 s | 495 ms / 966 ms | 1,5× / 1,2× menos |
+| Webhook firmado, 50 a la vez: aceptados/s | 846 | 849 | empate (manda el INSERT) |
+| Conciliación (3000 cobros), 20 a la vez: pedidos/s | 182 | 368 | **2×** |
+| Memoria máx. | 209–213 MB | 63–104 MB | 2–3× menos |
+
+### Lo aprendido
+
+- **Una prueba de concurrencia que toma conexiones de más se cuelga**:
+  «abrir las conexiones antes» con un bucle de 20 sobre un pool de menos se
+  queda esperando para siempre. Se abren `pool.Stat().MaxConns()`.
+- **El hook de Mercado Pago también bloquea un encabezado Authorization con
+  un token de prueba escrito entero** en una prueba: el del simulador se arma
+  con partes.
+- **Los ids de better-auth no son uuid**: validar el `userId` como uuid hacía
+  que adoptar el carrito no hiciera nada.
+- Con el candado de la serie de pedidos tomado al principio, dos compras ya
+  no se pueden trabar por los candados del stock; tomarlos en orden igual
+  cubre una venta del mostrador o una entrega que se crucen.

@@ -306,9 +306,18 @@ func AnularRecibo(ctx context.Context, tx pgx.Tx, recibo, motivo string, usuario
 	}
 	var anulacion *string
 	if r.CustomerID != nil {
+		// Lo que ya volvió a la cuenta por reintegros parciales de Mercado
+		// Pago de este recibo no se devuelve otra vez: la deuda vuelve por el
+		// total menos esos tramos.
+		var devuelto float64
+		if err := tx.QueryRow(ctx, `SELECT coalesce(sum(f.importe), 0)::float8 FROM payment_refunds f
+			WHERE f.account_movement_id IS NOT NULL
+			  AND f.payment_id IN (SELECT payment_id FROM receipt_parts WHERE receipt_id = $1 AND payment_id IS NOT NULL)`, recibo).Scan(&devuelto); err != nil {
+			return "", nil, err
+		}
 		detalle := "Anulación del recibo " + r.Numero + ": " + motivo
 		mov, err := q.AsentarMovimiento(ctx, sqlc.AsentarMovimientoParams{
-			CustomerID: *r.CustomerID, Tipo: sqlc.TipoMovimientoCuentaAjuste, Monto: jsmath.Fijo2(float64(r.Total)),
+			CustomerID: *r.CustomerID, Tipo: sqlc.TipoMovimientoCuentaAjuste, Monto: jsmath.Fijo2(jsmath.Redondear2(float64(r.Total) - devuelto)),
 			Detalle: &detalle, Referencia: &r.Numero, ReceiptID: &recibo, CreatedByUserID: usuario,
 		})
 		if err != nil {

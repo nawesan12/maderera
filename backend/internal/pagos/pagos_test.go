@@ -571,3 +571,33 @@ func TestReintegroParcialDeUnaDeuda(t *testing.T) {
 		t.Errorf("el pedido no toca la cuenta: %v", s)
 	}
 }
+
+// Anular a mano el recibo de un pago que ya tuvo un reintegro parcial: la
+// deuda vuelve por lo que quedaba cobrado, no por el total (el tramo ya
+// había vuelto a la cuenta). Antes quedaba debiendo de más.
+func TestAnularElReciboDespuesDeUnReintegroParcial(t *testing.T) {
+	e := armar(t, true)
+	ctx := context.Background()
+	cliente := e.id(t, `insert into customers (nombre, tipo) values ('Carpintería Norte', 'particular') returning id`)
+	pago := e.id(t, `insert into payments (customer_id, tipo, proveedor, monto, estado) values ($1, 'deuda', 'mercado_pago', 50000, 'iniciado') returning id`, cliente)
+	monto := 50000.0
+	if _, err := e.s.Acreditar(ctx, pago, &PagoRemoto{ID: "777", Estado: Aprobado, Monto: &monto, Crudo: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.s.Acreditar(ctx, pago, &PagoRemoto{ID: "777", Estado: Aprobado, Monto: &monto, Reintegrado: 15000, Crudo: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	var recibo string
+	if err := e.pool.QueryRow(ctx, `select receipt_id from receipt_parts where payment_id = $1`, pago).Scan(&recibo); err != nil {
+		t.Fatal(err)
+	}
+	if err := pgx.BeginFunc(ctx, e.pool, func(tx pgx.Tx) error {
+		_, _, err := cobros.AnularRecibo(ctx, tx, recibo, "lo cargué mal", nil)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if s := e.numero(t, `select coalesce(sum(monto), 0)::float8 from account_movements where customer_id = $1`, cliente); s != 0 {
+		t.Errorf("anular después del reintegro parcial deja la cuenta en %v, no en 0", s)
+	}
+}

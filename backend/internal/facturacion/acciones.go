@@ -20,8 +20,8 @@ import (
 
 // TrabajoAvisoDeFactura es el aviso al cliente con el comprobante en PDF
 // (lib/notificaciones/fiscal.ts). Lo encola Go en la misma transacción que
-// emite (sale solo si se confirmó) y lo atiende el TS mientras los correos
-// sigan allá: el PDF se lo pide a Go.
+// emite (sale solo si se confirmó) y lo atiende el worker
+// (internal/notificaciones).
 const TrabajoAvisoDeFactura = "factura.aviso"
 
 func (s *Servicio) encolarAviso(ctx context.Context, tx pgx.Tx, id string) error {

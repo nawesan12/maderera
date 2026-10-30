@@ -31,8 +31,8 @@ import (
 )
 
 // TipoResultado es el trabajo de la cola que avisa un pago acreditado: lo
-// atiende el TS (notificarResultadoDePago: el correo, el aviso al panel, el
-// de una inscripción), que sigue mandando los avisos de pedidos y pagos.
+// atiende el worker (internal/notificaciones: el correo, el aviso al panel,
+// el recibo, el de una inscripción).
 const TipoResultado = "pago.resultado"
 
 // TipoAviso es el aviso de Mercado Pago encolado por el webhook: lo atiende

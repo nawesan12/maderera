@@ -283,6 +283,11 @@ func TestPresupuestoAPedidoYDeVuelta(t *testing.T) {
 			t.Fatalf("avanzar: %d %s", c, b)
 		}
 	}
+	// Cada avance deja su aviso al cliente en la cola, con el estado.
+	if n := e.numero(t, `select count(*) from trabajos where tipo = 'pedido.estado' and carga->>'orderId' = $1
+		and carga->>'estado' in ('preparando', 'listo')`, pedido.ID); n != 2 {
+		t.Errorf("avisos encolados al avanzar: %v", n)
+	}
 	// Cobrarlo, dos veces.
 	if c, b := pedir(t, ven, "POST", u+"pedidos/"+pedido.ID+"/cobrado", nil); c != 200 || !strings.Contains(b, "PED-1000 quedó cobrado.") {
 		t.Fatalf("cobrar: %d %s", c, b)

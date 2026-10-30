@@ -7,9 +7,8 @@
 // Las tres reglas del TS no cambian: un aviso nunca frena la operación, todo
 // queda en notifications_log, y `simulada` no es `enviada`.
 //
-// despacharEmail del TS sigue vivo para los avisos de pedidos, pagos,
-// facturas y presupuestos (tandas 5, 6 y 7): lee la misma configuración y
-// encola el mismo `email.reintento`, que ahora atiende este paquete.
+// Todos los avisos por correo salen de acá (internal/notificaciones y
+// profesionales los arman); el despacharEmail del TS ya no existe.
 package avisos
 
 import (

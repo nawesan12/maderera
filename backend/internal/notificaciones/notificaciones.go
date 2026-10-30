@@ -1,8 +1,10 @@
-// Package notificaciones son los avisos al cliente que se encolan cuando
-// pasa algo con su plata: el recibo emitido, el cheque rechazado y el
-// comprobante emitido (lib/notificaciones/{cobros,fiscal}.ts). Cada uno va
-// por WhatsApp y por correo, con el PDF cuando lo hay. Los atiende el worker:
-// el cobro o la factura ya se confirmaron y un aviso que falla no los toca.
+// Package notificaciones son los avisos al cliente (y al panel) que se
+// encolan cuando pasa algo: el recibo emitido, el cheque rechazado, el
+// comprobante emitido, el pedido recibido o que avanzó, el pago acreditado,
+// el presupuesto pedido y el remito para firmar o firmado (lo que era
+// lib/notificaciones/*.ts). Cada uno va por WhatsApp y por correo, con el PDF
+// cuando lo hay. Los atiende el worker: lo que los originó ya se confirmó y
+// un aviso que falla no lo toca.
 package notificaciones
 
 import (
@@ -19,14 +21,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mjbj/internal/avisos"
+	"mjbj/internal/checkout"
 	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
 	"mjbj/internal/cuentas"
 	"mjbj/internal/documentos"
 	"mjbj/internal/email"
+	"mjbj/internal/entregas"
 	"mjbj/internal/facturacion"
 	"mjbj/internal/formato"
+	"mjbj/internal/pagos"
 	"mjbj/internal/pdf"
+	"mjbj/internal/pedidos"
+	"mjbj/internal/profesionales"
+	"mjbj/internal/push"
 	"mjbj/internal/whatsapp"
 )
 
@@ -37,16 +45,59 @@ type Servicio struct {
 	correo      *avisos.Servicio
 	wa          *whatsapp.Servicio
 	facturacion *facturacion.Servicio
-	log         *slog.Logger
+	entregas    *entregas.Servicio
+	// panel son los avisos al teléfono del personal (la venta nueva y el
+	// pago acreditado); eventos, el correo de una inscripción pagada. Los
+	// pone ConPanel; sin ellos, esos avisos no salen (pruebas).
+	panel   *push.Avisador
+	eventos *profesionales.Servicio
+	log     *slog.Logger
 }
 
 // Nuevo arma el servicio. sitio es la URL pública (APP_URL).
 func Nuevo(pool *pgxpool.Pool, sitio string, correo *avisos.Servicio, wa *whatsapp.Servicio, f *facturacion.Servicio, log *slog.Logger) *Servicio {
-	return &Servicio{pool: pool, sitio: sitio, correo: correo, wa: wa, facturacion: f, log: log}
+	return &Servicio{pool: pool, sitio: sitio, correo: correo, wa: wa, facturacion: f, entregas: entregas.Nuevo(pool, log), log: log}
 }
 
-// Registrar suma los tres manejadores a la cola.
+// ConPanel suma el aviso al panel y el de las inscripciones pagadas.
+func (s *Servicio) ConPanel(panel *push.Avisador, eventos *profesionales.Servicio) *Servicio {
+	s.panel, s.eventos = panel, eventos
+	return s
+}
+
+// Registrar suma los manejadores a la cola.
 func (s *Servicio) Registrar(c *cola.Cola) {
+	porID := func(campo string, f func(context.Context, string) error) cola.Manejador {
+		return s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
+			var carga map[string]any
+			if err := json.Unmarshal(crudo, &carga); err != nil {
+				return err
+			}
+			id, _ := carga[campo].(string)
+			return f(ctx, id)
+		})
+	}
+	c.Registrar(checkout.TrabajoPedidoRecibido, porID("orderId", s.PedidoRecibido))
+	c.Registrar(checkout.TrabajoPresupuestoRecibido, porID("quoteId", s.PresupuestoRecibido))
+	c.Registrar(entregas.TrabajoRemitoParaFirmar, porID("deliveryId", s.RemitoParaFirmar))
+	c.Registrar(entregas.TrabajoRemitoFirmado, porID("deliveryId", s.RemitoFirmado))
+	c.Registrar(pedidos.TrabajoCambioDeEstado, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
+		var carga struct {
+			OrderID string `json:"orderId"`
+			Estado  string `json:"estado"`
+		}
+		if err := json.Unmarshal(crudo, &carga); err != nil {
+			return err
+		}
+		return s.CambioDeEstado(ctx, carga.OrderID, carga.Estado)
+	}))
+	c.Registrar(pagos.TipoResultado, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
+		var carga CargaResultadoDePago
+		if err := json.Unmarshal(crudo, &carga); err != nil {
+			return err
+		}
+		return s.ResultadoDePago(ctx, carga)
+	}))
 	c.Registrar(cobros.TrabajoAvisoDeRecibo, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
 		var carga struct {
 			ReceiptID string `json:"receiptId"`

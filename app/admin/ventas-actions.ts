@@ -1,17 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { avisarPedidoNuevo } from "@/lib/dal/existencia";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
-import { avisarCambioDePedido } from "@/lib/whatsapp/avisos";
-import { notificarCambioDeEstado } from "@/lib/notificaciones/avisos";
 
 /**
  * Pedidos y presupuestos del panel. Lo hace la API de Go
  * (backend/internal/pedidos): los permisos, los candados, la numeración, la
- * reserva de la mercadería y la bitácora. Acá quedan la firma de siempre, lo
- * que Next tiene que revalidar y los avisos al cliente.
+ * reserva de la mercadería, la bitácora y los avisos al cliente (los encola
+ * en la misma transacción y los manda su worker). Acá quedan la firma de
+ * siempre y lo que Next tiene que revalidar.
  */
 
 export interface EstadoVenta {
@@ -47,16 +45,10 @@ function fallo(r: Respuesta): EstadoVenta {
 export async function avanzarPedido(id: string): Promise<EstadoVenta> {
   const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/avanzar", { params: { path: { id } } });
   if (!r.data) return fallo(r);
-  const siguiente = r.data.estado!;
 
+  // El WhatsApp y el correo al cliente los encoló Go con el avance: salen
+  // aunque esta respuesta se corte, y no la demoran.
   refrescar();
-
-  // Los avisos al cliente salen después de que el cambio quedó guardado, y
-  // por fuera de la respuesta: si WhatsApp o el correo no responden, el
-  // pedido igual avanzó. Los dos canales en paralelo, con allSettled.
-  after(async () => {
-    await Promise.allSettled([avisarCambioDePedido(id, siguiente), notificarCambioDeEstado(id, siguiente)]);
-  });
 
   return { ok: r.data.ok };
 }

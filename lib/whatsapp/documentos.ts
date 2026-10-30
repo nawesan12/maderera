@@ -80,7 +80,6 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
     case "comprobante": {
       // El PDF lo arma Go (backend/internal/facturacion), como el que baja el panel.
       const { comprobanteInterno } = await import("@/lib/dal/admin/facturacion");
-      const { pdfDelComprobante } = await import("@/lib/notificaciones/fiscal");
       const c = await comprobanteInterno(doc.id);
       if (!c) return null;
       const pdf = await pdfDelComprobante(doc.id);
@@ -179,4 +178,22 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
       };
     }
   }
+}
+
+/**
+ * El comprobante en PDF tal como lo arma Go (backend/internal/facturacion),
+ * pedido con el secreto interno: quien llama ya decidió que se puede mandar.
+ * Null si no existe. (Vivía en lib/notificaciones/fiscal.ts, con el correo
+ * del comprobante, que ya manda Go.)
+ */
+async function pdfDelComprobante(invoiceId: string): Promise<{ nombre: string; contenido: Uint8Array } | null> {
+  const { apiInterna } = await import("@/lib/api/servidor");
+  const r = await apiInterna.GET("/api/v1/comprobantes/{id}/pdf", {
+    params: { path: { id: invoiceId } },
+    parseAs: "arrayBuffer",
+  });
+  if (!r.response.ok || !r.data) return null;
+  const disposicion = r.response.headers.get("Content-Disposition") ?? "";
+  const nombre = /filename="([^"]+)"/.exec(disposicion)?.[1] ?? "comprobante.pdf";
+  return { nombre, contenido: new Uint8Array(r.data as ArrayBuffer) };
 }

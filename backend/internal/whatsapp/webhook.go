@@ -22,7 +22,8 @@ import (
 // adjuntos, avisar al panel— lo hace el worker con la cola.
 
 // Los trabajos de la cola que son de WhatsApp. Las cargas tienen la forma
-// del TS (lib/cola/manejadores.ts): la cola la comparten los dos lados.
+// del TS (lib/cola/manejadores.ts, ya borrado): un trabajo encolado antes de
+// la mudanza se entiende igual.
 const (
 	TrabajoPayload = "whatsapp.payload"
 	TrabajoEstado  = "whatsapp.estado"

@@ -164,7 +164,19 @@ if ! "${COMPOSE[@]}" up -d --no-deps --wait --wait-timeout 180 app; then
 fi
 
 echo "→ Levantando el resto"
-"${COMPOSE[@]}" up -d --no-deps web respaldo cron
+"${COMPOSE[@]}" up -d --no-deps web respaldo
+
+# El contenedor `cron` ya no existe (la cola y las tareas de Next se borraron:
+# todo lo periódico lo corre el worker de Go). Si quedó andando de un
+# despliegue anterior, le pegaría cada minuto a una ruta que ya no está.
+PROYECTO="$("${COMPOSE[@]}" config 2>/dev/null | sed -n 's/^name: //p' | head -n 1)"
+if [ -n "$PROYECTO" ]; then
+  VIEJO="$(docker ps -aq --filter "label=com.docker.compose.project=$PROYECTO" --filter label=com.docker.compose.service=cron)"
+  if [ -n "$VIEJO" ]; then
+    echo "→ Sacando el contenedor cron de antes"
+    docker rm -f $VIEJO >/dev/null
+  fi
+fi
 
 # El correo propio solo si está encendido (`COMPOSE_PROFILES=correo` en
 # $ENTORNO). Nombrarlo en `up` lo encendería aunque el perfil esté apagado: por

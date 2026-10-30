@@ -87,8 +87,8 @@ cliente:
 
 ## 6. Después
 
-- El contenedor `cron` deja de hacer falta cuando la cola de TS quede vacía
-  (después de la tanda 6, `pago.aviso` es lo último que atiende).
+- ~~El contenedor `cron`~~: se sacó con la mudanza de los avisos (rama
+  `go-avisos`). `desplegar.sh` borra el que haya quedado andando.
 - Borrar `lib/db`, drizzle y `pg` de la app cuando la lista de
   `eslint.config.mjs` quede vacía; sacarle `DATABASE_URL` a `app` en el
   compose.

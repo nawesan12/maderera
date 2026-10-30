@@ -17,7 +17,7 @@ propio todo eso corre en una sola máquina, en cinco contenedores:
 | `app` | La aplicación (Next, empaquetado `standalone`) | Vercel |
 | `web` | Caddy: HTTPS con certificado automático, comprime, sirve las fotos | El CDN de Vercel |
 | `respaldo` | Un volcado diario de la base, con copia fuera de la máquina opcional | Los respaldos de Neon |
-| `cron` | Llama a las tareas programadas a horario (`servidor/cron/crontab`) | Nada: en Vercel no había |
+| `worker` | La cola de trabajos y las tareas programadas (el worker de Go, `backend/`) | Nada: en Vercel no había |
 | `correo` | **Opcional.** Las casillas propias: recibe, guarda y manda correo (docker-mailserver) | Resend para los avisos; Gmail para las casillas |
 | `correo-web` | **Opcional.** Leer el correo desde el navegador (el webmail propio, en Go) | — |
 
@@ -46,7 +46,6 @@ alguien tiene que mirar de vez en cuando que sigan andando (ver
 | `scripts/mudar-base.sh` | Una vez: trae la base de Neon |
 | `scripts/mudar-subidas.ts` | Una vez: trae los archivos de Vercel Blob |
 | `servidor/fail2ban/` | El filtro y las cárceles de fail2ban |
-| `servidor/cron/` | El crontab y el script que dispara cada tarea |
 | `servidor/correo/` | La configuración del correo propio (sin nada secreto) |
 | `backend/` | El backend en Go; por ahora, el webmail (`mjbj correo`). Ver `docs/go/` |
 | `scripts/correo.sh` | Casillas, alias, DKIM, relay y los registros DNS del correo |
@@ -276,7 +275,7 @@ Lo que cambia respecto del ejemplo (el resto, con los valores de Vercel):
 | `DOMINIO` | `mjbj.com.ar` (o el subdominio de prueba) |
 | `POSTGRES_USER` / `POSTGRES_DB` | `mjbj` / `mjbj` |
 | `POSTGRES_PASSWORD` | `openssl rand -hex 32` (solo letras y números: va adentro de una URL) |
-| `TAREAS_SECRETO` | `openssl rand -base64 32` — **obligatoria**: sin ella el compose no levanta |
+| `TAREAS_SECRETO` | ya no se usa (era del contenedor `cron`, que no existe más) |
 | `BLOB_READ_WRITE_TOKEN` | **vacía**: con token, las fotos nuevas seguirían yendo a Vercel |
 | `DATABASE_URL` | se ignora: la arma el compose |
 | `RCLONE_REMOTE` | ver [Respaldos](#respaldos) |
@@ -829,7 +828,7 @@ hay que volcarlo antes con `pg_dump` y cargarlo allá.
 | Caddy, certificados | `dc logs -f web` |
 | Cada pedido | `/var/log/caddy/acceso.log` (JSON; `client_ip` es la IP real) |
 | El respaldo | `dc logs respaldo` y `ls -lh ~/maderera/respaldos` |
-| Las tareas programadas | `dc logs cron` (una línea por corrida; la de cada minuto, solo si hizo algo) |
+| Las tareas programadas y la cola | `dc logs worker`; la última corrida de cada tarea, `select distinct on (tarea) tarea, periodo, estado, error from tareas_corridas order by tarea, iniciada_at desc` |
 | La cola de trabajos | `select tipo, estado, intentos, ultimo_error from trabajos where estado <> 'hecho'` |
 | Los baneados | `sudo fail2ban-client status caddy-sondas` |
 | El correo | `dc logs -f correo`; la cola, `scripts/correo.sh cola`; baneados, `scripts/correo.sh baneados` |
@@ -922,16 +921,16 @@ Las actualizaciones del sistema y el certificado son automáticos.
 En Vercel se pagaba por cada uso, y varias cosas se recortaron por eso. Acá el
 costo es fijo y el criterio cambia: no saturar una sola máquina.
 
-- **Tareas programadas** (`lib/tareas`, contenedor `cron`). Cada minuto se
-  procesa la cola; cada hora deja de verse lo que venció en la portada (un
+- **Tareas programadas** (el worker de Go, `backend/cmd/mjbj/worker.go`;
+  antes `lib/tareas` y un contenedor `cron`). Cada hora deja de verse lo que venció en la portada (un
   banner «hasta el 30/9» ya no sigue el 1/10); a las 7 salen los
   recordatorios de eventos, el parte del día al panel y la limpieza de tablas
   que crecían solas; los lunes, las reseñas de Google y los candidatos a baja.
   Cada una corre **una vez por período**: el candado está en
-  `tareas_corridas`, así que reiniciar el cron o dispararla a mano no repite
-  nada. Para probarla a mano:
-  `dc exec cron sh /tarea.sh diaria`.
-- **Una cola con reintentos** (`lib/cola`). Los webhooks de Mercado Pago y de
+  `tareas_corridas`, así que reiniciar el worker no repite nada. Para que
+  una vuelva a correr hoy, borrar su fila de `tareas_corridas` del período.
+- **Una cola con reintentos** (`backend/internal/cola`, la atiende el
+  worker; un trabajo nuevo lo despierta en el acto). Los webhooks de Mercado Pago y de
   WhatsApp guardan el trabajo y contestan; si el proceso se reinicia en ese
   segundo —un despliegue— el pago o el mensaje no se pierden. Lo que falla se
   reintenta con espera creciente, y lo que agota los intentos avisa al panel.

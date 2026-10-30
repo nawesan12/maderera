@@ -1,10 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { headers } from "next/headers";
 import { apiInterna, mensajeDe, type Problema } from "@/lib/api/servidor";
-import { notificarRemitoFirmado } from "@/lib/notificaciones/entregas";
 
 export interface EstadoFirma {
   error?: string;
@@ -22,7 +20,8 @@ export interface EstadoFirma {
  *
  * Lo que hace que esto reemplace al remito en papel es el contexto: la fecha,
  * la hora y desde qué IP se firmó. La IP la ve Next y se la pasa a Go con el
- * secreto interno (si no, Go usaría la de Next).
+ * secreto interno (si no, Go usaría la de Next). La constancia por correo la
+ * encola Go con la firma.
  */
 export async function firmarRemito(
   _previo: EstadoFirma,
@@ -47,10 +46,6 @@ export async function firmarRemito(
 
   const resultado = r.data;
   revalidatePath("/admin/pedidos");
-
-  after(async () => {
-    await notificarRemitoFirmado(resultado.deliveryId);
-  });
 
   return { numero: resultado.numero };
 }

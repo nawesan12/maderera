@@ -646,3 +646,23 @@ func TestAnularElReciboDespuesDeUnReintegroParcial(t *testing.T) {
 		t.Errorf("anular después del reintegro parcial deja la cuenta en %v, no en 0", s)
 	}
 }
+
+// Quien no tiene el token no le gasta al dueño los intentos de subir el
+// comprobante: el límite se cuenta después de verificarlo.
+func TestComprobanteConTokenMaloNoGastaElLimite(t *testing.T) {
+	e := armar(t, false)
+	_, token := e.pedido(t, "PED-1006")
+	x := Extras{Lim: limites.Nuevo(sqlc.New(e.pool), silencio), Disco: subidas.Nuevo(subidas.Config{Carpeta: t.TempDir()})}
+	archivo := &Archivo{Datos: []byte("%PDF-1.4 comprobante"), Tipo: "application/pdf"}
+	ctx := context.Background()
+	for i := 0; i < 15; i++ {
+		if _, err := e.s.SubirComprobante(ctx, x, "PED-1006", "token-que-no-es", nil, archivo); err == nil {
+			t.Fatal("subió con un token equivocado")
+		}
+	}
+	if r, err := e.s.SubirComprobante(ctx, x, "PED-1006", token, nil, archivo); err != nil {
+		t.Fatalf("el dueño no pudo subir su comprobante: %v", err)
+	} else if r.Ok == "" {
+		t.Fatalf("%+v", r)
+	}
+}

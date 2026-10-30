@@ -190,6 +190,45 @@ func insertarRemito(ctx context.Context, tx pgx.Tx, numero, pedido string, sucur
 	return id, nil
 }
 
+// sucursalDelRemito es de dónde sale la mercadería: la del pedido, o donde
+// quedó reservada (un envío sin sucursal reserva en la primera activa).
+func sucursalDelRemito(ctx context.Context, tx pgx.Tx, pedido string, sucursal *string) (*string, error) {
+	if sucursal != nil {
+		return sucursal, nil
+	}
+	suc, ok, err := reservas.SucursalDeSalida(ctx, tx, pedido, nil)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return &suc, nil
+}
+
+// sacarDelDeposito baja el stock de lo que sale con el remito. La última
+// línea de cada renglón que lo deja entregado entero va marcada: esa consume
+// todo lo que quede de la reserva.
+func sacarDelDeposito(ctx context.Context, tx pgx.Tx, pedido string, sucursal *string, numero string, usuario *string,
+	lineas []LineaAEntregar, pendientes []Renglon) error {
+	if sucursal == nil {
+		return nil
+	}
+	pendiente := map[string]float64{}
+	for _, p := range pendientes {
+		pendiente[p.OrderItemID] = p.Pendiente
+	}
+	total := map[string]float64{}
+	ultima := map[string]int{}
+	for i, l := range lineas {
+		total[l.OrderItemID] += l.Cantidad
+		ultima[l.OrderItemID] = i
+	}
+	s := reservas.Salida{OrderID: pedido, BranchID: *sucursal, NumeroRemito: numero, UsuarioID: usuario}
+	for i, l := range lineas {
+		completa := ultima[l.OrderItemID] == i && pendiente[l.OrderItemID]-total[l.OrderItemID] <= 0.01
+		s.Lineas = append(s.Lineas, reservas.SalidaDeMercaderia{OrderItemID: l.OrderItemID, Cantidad: l.Cantidad, Completa: completa})
+	}
+	return reservas.SalidaPorEntrega(ctx, tx, s)
+}
+
 // CrearEntrega prepara un remito y saca la mercadería del depósito, todo en
 // una transacción: el remito, sus líneas, el descuento de stock y el consumo
 // de la reserva. Si con esto no queda nada pendiente, el pedido pasa a
@@ -223,8 +262,12 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 		if err != nil {
 			return err
 		}
+		salida, err := sucursalDelRemito(ctx, tx, f.OrderID, pedido.sucursal)
+		if err != nil {
+			return err
+		}
 		token := tokenDeFirma()
-		id, err := insertarRemito(ctx, tx, numero, f.OrderID, pedido.sucursal, f.Tipo, "preparada",
+		id, err := insertarRemito(ctx, tx, numero, f.OrderID, salida, f.Tipo, "preparada",
 			f.ReceptorNombre, f.ReceptorDocumento, f.Notas, token, usuario, control.Lineas)
 		if err != nil {
 			return err
@@ -235,14 +278,8 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 				return err
 			}
 		}
-		if pedido.sucursal != nil {
-			salida := reservas.Salida{OrderID: f.OrderID, BranchID: *pedido.sucursal, NumeroRemito: numero, UsuarioID: usuario}
-			for _, l := range control.Lineas {
-				salida.Lineas = append(salida.Lineas, reservas.SalidaDeMercaderia{OrderItemID: l.OrderItemID, Cantidad: l.Cantidad})
-			}
-			if err := reservas.SalidaPorEntrega(ctx, tx, salida); err != nil {
-				return err
-			}
+		if err := sacarDelDeposito(ctx, tx, f.OrderID, salida, numero, usuario, control.Lineas, pendientes); err != nil {
+			return err
 		}
 		if control.Completo && pedido.estado != "entregado" {
 			if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'entregado', updated_at = now() WHERE id = $1`, f.OrderID); err != nil {
@@ -259,6 +296,50 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 		return err
 	})
 	return out, err
+}
+
+// RemitoPorLoQueQueda es el remito que nace cuando un pedido pasa a
+// «entregado» desde el tablero («Avanzar») con mercadería todavía en
+// depósito: sale todo lo pendiente, con su movimiento y el consumo de la
+// reserva, igual que un remito preparado a mano, y queda «preparada» con su
+// enlace para que el que retira firme. Sin saldo no hace nada (nil).
+//
+// Quien llama ya tiene el candado de la serie (numeracion.BloquearRemitos,
+// **antes** de bloquear el pedido, el orden de CrearEntrega) y la fila del
+// pedido. No cambia el estado del pedido: eso lo hace quien avanza.
+func RemitoPorLoQueQueda(ctx context.Context, tx pgx.Tx, pedidoID string, sucursal *string, tipo string, usuario *string) (*EntregaCreada, error) {
+	pendientes, err := SaldoDeAcopio(ctx, tx, pedidoID)
+	if err != nil {
+		return nil, err
+	}
+	lineas := LineasDeConstancia(pendientes)
+	if len(lineas) == 0 {
+		return nil, nil
+	}
+	numero, err := numeracion.Remito(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	salida, err := sucursalDelRemito(ctx, tx, pedidoID, sucursal)
+	if err != nil {
+		return nil, err
+	}
+	if tipo != "envio" {
+		tipo = "retiro"
+	}
+	nota := "Entregado desde el tablero de pedidos"
+	token := tokenDeFirma()
+	id, err := insertarRemito(ctx, tx, numero, pedidoID, salida, tipo, "preparada", nil, nil, &nota, token, usuario, lineas)
+	if err != nil {
+		return nil, err
+	}
+	if err := sacarDelDeposito(ctx, tx, pedidoID, salida, numero, usuario, lineas, pendientes); err != nil {
+		return nil, err
+	}
+	if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Time{}); err != nil {
+		return nil, err
+	}
+	return &EntregaCreada{ID: id, Numero: numero, FirmaToken: token, PedidoCompleto: true}, nil
 }
 
 // RemitoDeConstancia es el remito de una venta que ya salió por el
@@ -364,60 +445,123 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 //     mercadería que ese remito nunca sacó (se descontó al cobrar). Ahora se
 //     devuelve solo si el remito tiene su salida del depósito
 //     («Remito REM-…»).
+//
+// **Arreglado** (auditoría del 30/10): lo que vuelve sale de los movimientos
+// del remito —lo que de verdad salió, de la sucursal de donde salió— y, si el
+// pedido sigue vivo, **vuelve a reservarse**: la mercadería es del cliente y
+// sigue en acopio. Antes volvía al físico sin reserva (quedaba disponible
+// para venderle a otro) y el pedido seguía «entregado» con saldo; anular
+// después la venta del mostrador la devolvía otra vez. Si el pedido estaba
+// entregado y ahora le queda saldo, vuelve a «listo».
 func (s *Servicio) AnularEntrega(ctx context.Context, ses *auth.Sesion, id string) error {
 	if !plataforma.UUIDValido(id) {
 		return nil
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		var numero, estado string
-		var sucursal *string
-		err := tx.QueryRow(ctx, `SELECT numero, estado::text, branch_id FROM deliveries WHERE id = $1 FOR UPDATE`, id).Scan(&numero, &estado, &sucursal)
+		// El mismo orden que CrearEntrega: la serie, el remito, el pedido.
+		// Con la serie, nadie lee el saldo del pedido a mitad de la anulación.
+		if err := numeracion.BloquearRemitos(ctx, tx); err != nil {
+			return err
+		}
+		var numero, estado, pedidoID string
+		err := tx.QueryRow(ctx, `SELECT numero, estado::text, order_id FROM deliveries WHERE id = $1 FOR UPDATE`, id).Scan(&numero, &estado, &pedidoID)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && estado == "anulada") {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
+		pedido, err := pedidoBloqueado(ctx, tx, pedidoID)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `UPDATE deliveries SET estado = 'anulada', updated_at = now() WHERE id = $1`, id); err != nil {
 			return err
 		}
-		if sucursal == nil {
-			return nil
-		}
-		var salio bool
-		if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM inventory_movements WHERE type = 'venta' AND note = $1)`,
-			"Remito "+numero).Scan(&salio); err != nil {
-			return err
-		}
-		if !salio {
-			return nil
-		}
+		// Lo que salió con este remito, por variante y sucursal. Se filtra
+		// por las variantes del remito para usar el índice.
 		filas, err := tx.Query(ctx, `
-			SELECT oi.variant_id, di.cantidad::text, oi.stock_por_unidad::text
-			FROM delivery_items di JOIN order_items oi ON oi.id = di.order_item_id
-			WHERE di.delivery_id = $1 ORDER BY di.orden`, id)
+			SELECT variant_id, branch_id, (-sum(qty))::text FROM inventory_movements
+			WHERE type = 'venta' AND note = $2
+			  AND variant_id IN (SELECT oi.variant_id FROM delivery_items di JOIN order_items oi ON oi.id = di.order_item_id
+			                     WHERE di.delivery_id = $1 AND oi.variant_id IS NOT NULL)
+			GROUP BY variant_id, branch_id ORDER BY variant_id, branch_id`, id, "Remito "+numero)
 		if err != nil {
 			return err
 		}
 		var lineas []reservas.LineaDevuelta
+		dondeSalio := map[string]string{}
 		for filas.Next() {
-			var variante *string
-			var cantidad, factor string
-			if err := filas.Scan(&variante, &cantidad, &factor); err != nil {
+			var l reservas.LineaDevuelta
+			var cantidad string
+			if err := filas.Scan(&l.VariantID, &l.BranchID, &cantidad); err != nil {
 				filas.Close()
 				return err
 			}
-			if variante == nil {
+			l.Cantidad = numeroJS(cantidad)
+			if l.Cantidad > 0 {
+				lineas = append(lineas, l)
+				dondeSalio[l.VariantID] = l.BranchID
+			}
+		}
+		filas.Close()
+		if err := filas.Err(); err != nil {
+			return err
+		}
+		if len(lineas) == 0 {
+			// Un remito de constancia: la mercadería salió con la venta.
+			return nil
+		}
+		if err := reservas.DevolverAlStock(ctx, tx, numero, &ses.UserID, lineas); err != nil {
+			return err
+		}
+		if pedido == nil || pedido.estado == "cancelado" {
+			return nil
+		}
+		filas, err = tx.Query(ctx, `
+			SELECT di.order_item_id, oi.variant_id, di.cantidad::text, oi.stock_por_unidad::text
+			FROM delivery_items di JOIN order_items oi ON oi.id = di.order_item_id
+			WHERE di.delivery_id = $1 AND oi.variant_id IS NOT NULL ORDER BY di.orden`, id)
+		if err != nil {
+			return err
+		}
+		var otraVez []reservas.ReservaDeVuelta
+		for filas.Next() {
+			var item, variante, cantidad, factor string
+			if err := filas.Scan(&item, &variante, &cantidad, &factor); err != nil {
+				filas.Close()
+				return err
+			}
+			suc, ok := dondeSalio[variante]
+			if !ok {
 				continue
 			}
-			lineas = append(lineas, reservas.LineaDevuelta{VariantID: *variante,
+			otraVez = append(otraVez, reservas.ReservaDeVuelta{OrderID: pedidoID, OrderItemID: item, VariantID: variante, BranchID: suc,
 				Cantidad: ventas.UnidadesDeStock(numeroJS(cantidad), numeroJS(factor))})
 		}
 		filas.Close()
 		if err := filas.Err(); err != nil {
 			return err
 		}
-		return reservas.DevolverAlStock(ctx, tx, *sucursal, numero, &ses.UserID, lineas)
+		if err := reservas.VolverAReservar(ctx, tx, otraVez); err != nil {
+			return err
+		}
+		if pedido.estado != "entregado" {
+			return nil
+		}
+		saldo, err := SaldoDeAcopio(ctx, tx, pedidoID)
+		if err != nil {
+			return err
+		}
+		if len(SoloPendientes(saldo)) == 0 {
+			return nil
+		}
+		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'listo', updated_at = now() WHERE id = $1`, pedidoID); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'listo', $2, $3)`,
+			pedidoID, "Remito "+numero+" anulado: vuelve a quedar mercadería en acopio", ses.UserID)
+		return err
 	})
 }
 

@@ -3,7 +3,6 @@ package mostrador
 import (
 	"context"
 	"errors"
-	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -81,36 +80,13 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 	}
 	total := p.total.F()
 
-	type item struct {
-		variante *string
-		cantidad jsmath.Num
-		factor   jsmath.Num
-	}
-	var items []item
-	filas, err := tx.Query(ctx, `SELECT variant_id, cantidad, stock_por_unidad FROM order_items WHERE order_id = $1`, id)
-	if err != nil {
-		return ResultadoAnulacion{}, err
-	}
-	for filas.Next() {
-		var it item
-		if err := filas.Scan(&it.variante, &it.cantidad, &it.factor); err != nil {
-			filas.Close()
-			return ResultadoAnulacion{}, err
-		}
-		items = append(items, it)
-	}
-	filas.Close()
-	if err := filas.Err(); err != nil {
-		return ResultadoAnulacion{}, err
-	}
-
 	// Cómo se pagó de verdad: order_payments, o el medio único de las viejas.
 	type renglon struct {
 		medio   string
 		importe jsmath.Num
 	}
 	var detalle []renglon
-	filas, err = tx.Query(ctx, `SELECT medio::text, importe FROM order_payments WHERE order_id = $1`, id)
+	filas, err := tx.Query(ctx, `SELECT medio::text, importe FROM order_payments WHERE order_id = $1`, id)
 	if err != nil {
 		return ResultadoAnulacion{}, err
 	}
@@ -171,10 +147,7 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		}
 	}
 
-	var enAcopio, conRetiro bool
-	if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM stock_reservations WHERE order_id = $1 AND estado = 'activa')`, id).Scan(&enAcopio); err != nil {
-		return ResultadoAnulacion{}, err
-	}
+	var conRetiro bool
 	if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM deliveries WHERE order_id = $1 AND estado <> 'anulada')`, id).Scan(&conRetiro); err != nil {
 		return ResultadoAnulacion{}, err
 	}
@@ -195,50 +168,11 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		sesion = &turno
 	}
 
-	// 1. El stock vuelve (o se libera la reserva del acopio).
-	if enAcopio {
-		if err := reservas.LiberarReservas(ctx, tx, id); err != nil {
-			return ResultadoAnulacion{}, err
-		}
-	} else if p.sucursal != nil {
-		type vuelta struct {
-			variante string
-			unidades float64
-		}
-		var vueltas []vuelta
-		var orden []string
-		vistos := map[string]bool{}
-		for _, it := range items {
-			if it.variante == nil {
-				continue
-			}
-			u := ventas.UnidadesDeStock(it.cantidad.F(), it.factor.F())
-			if u <= 0 {
-				continue
-			}
-			vueltas = append(vueltas, vuelta{*it.variante, u})
-			if !vistos[*it.variante] {
-				vistos[*it.variante] = true
-				orden = append(orden, *it.variante)
-			}
-		}
-		sort.Strings(orden)
-		for _, v := range orden {
-			if err := reservas.Bloquear(ctx, tx, v, *p.sucursal); err != nil {
-				return ResultadoAnulacion{}, err
-			}
-		}
-		for _, x := range vueltas {
-			if _, err := tx.Exec(ctx, `UPDATE inventory SET qty = qty + $3::numeric, updated_at = now() WHERE variant_id = $1 AND branch_id = $2`,
-				x.variante, *p.sucursal, jsmath.Texto(x.unidades)); err != nil {
-				return ResultadoAnulacion{}, err
-			}
-			if _, err := tx.Exec(ctx, `
-				INSERT INTO inventory_movements (variant_id, branch_id, type, qty, note, created_by_user_id)
-				VALUES ($1, $2, 'devolucion', $3::numeric, $4, $5)`, x.variante, *p.sucursal, jsmath.Texto(x.unidades), "Anulación "+p.numero, usuario); err != nil {
-				return ResultadoAnulacion{}, err
-			}
-		}
+	// 1. El stock: vuelve lo que de verdad salió del físico y se libera lo
+	// que sigue reservado. Las dos cosas pueden pasar en la misma venta (un
+	// acopio con un remito anulado) o ninguna.
+	if err := devolverLoQueSalio(ctx, tx, id, p.numero, usuario); err != nil {
+		return ResultadoAnulacion{}, err
 	}
 
 	// Los cheques en cartera vuelven al cliente.
@@ -309,4 +243,81 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		return ResultadoAnulacion{}, err
 	}
 	return r, nil
+}
+
+// devolverLoQueSalio devuelve al físico lo que la venta sacó y todavía no
+// volvió, y libera sus reservas activas.
+//
+// **Arreglado**: se decidía por la ausencia de reservas («sin reservas, todo
+// salió con la venta»). Un acopio con el remito anulado se quedaba sin
+// reservas con la mercadería en el galpón, y anular la venta la devolvía
+// otra vez: el físico subía de la nada. Ahora se suman los movimientos de la
+// venta («Mostrador V-…») y de sus remitos («Remito REM-…» y su anulación),
+// por variante y sucursal: vuelve lo que dé negativo, adonde salió.
+func devolverLoQueSalio(ctx context.Context, tx pgx.Tx, pedido, numero, usuario string) error {
+	filas, err := tx.Query(ctx, `
+		SELECT variant_id, branch_id, (-sum(qty))::text FROM inventory_movements
+		WHERE variant_id IN (SELECT variant_id FROM order_items WHERE order_id = $1 AND variant_id IS NOT NULL)
+		  AND type IN ('venta', 'devolucion')
+		  AND (note = $2
+		       OR note IN (SELECT 'Remito ' || numero FROM deliveries WHERE order_id = $1)
+		       OR note IN (SELECT 'Anulación del remito ' || numero FROM deliveries WHERE order_id = $1))
+		GROUP BY variant_id, branch_id ORDER BY variant_id, branch_id`, pedido, "Mostrador "+numero)
+	if err != nil {
+		return err
+	}
+	var vueltas []reservas.LineaDevuelta
+	var stocks []reservas.Stock
+	for filas.Next() {
+		var l reservas.LineaDevuelta
+		var cantidad string
+		if err := filas.Scan(&l.VariantID, &l.BranchID, &cantidad); err != nil {
+			filas.Close()
+			return err
+		}
+		if l.Cantidad = ventas.CantidadDeStock(jsmath.Numero(cantidad)); l.Cantidad > 0 {
+			vueltas = append(vueltas, l)
+			stocks = append(stocks, reservas.Stock{Variante: l.VariantID, Sucursal: l.BranchID})
+		}
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return err
+	}
+	filas, err = tx.Query(ctx, `SELECT variant_id, branch_id FROM stock_reservations WHERE order_id = $1 AND estado = 'activa'`, pedido)
+	if err != nil {
+		return err
+	}
+	for filas.Next() {
+		var s reservas.Stock
+		if err := filas.Scan(&s.Variante, &s.Sucursal); err != nil {
+			filas.Close()
+			return err
+		}
+		stocks = append(stocks, s)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return err
+	}
+	// Todos los candados juntos y en orden: liberar y devolver por separado
+	// los tomarían en dos tandas.
+	if err := reservas.BloquearEnOrden(ctx, tx, stocks); err != nil {
+		return err
+	}
+	if err := reservas.LiberarReservas(ctx, tx, pedido); err != nil {
+		return err
+	}
+	for _, x := range vueltas {
+		if _, err := tx.Exec(ctx, `UPDATE inventory SET qty = qty + $3::numeric, updated_at = now() WHERE variant_id = $1 AND branch_id = $2`,
+			x.VariantID, x.BranchID, jsmath.Texto(x.Cantidad)); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO inventory_movements (variant_id, branch_id, type, qty, note, created_by_user_id)
+			VALUES ($1, $2, 'devolucion', $3::numeric, $4, $5)`, x.VariantID, x.BranchID, jsmath.Texto(x.Cantidad), "Anulación "+numero, usuario); err != nil {
+			return err
+		}
+	}
+	return nil
 }

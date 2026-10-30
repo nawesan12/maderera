@@ -10,6 +10,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
+	"mjbj/internal/entregas"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/reservas"
@@ -92,10 +93,25 @@ func bloquearPedido(ctx context.Context, tx pgx.Tx, id string) (*filaDePedido, e
 // Avanzar lleva el pedido al estado siguiente. Uno de retiro pasa de
 // «listo» a «entregado»; uno con envío, a «en camino». No se vuelve atrás:
 // para deshacer se cancela, que deja rastro.
+//
+// **Arreglado** (auditoría del 30/10): pasar a «entregado» no sacaba nada del
+// depósito; el físico no bajaba y la reserva quedaba activa para siempre.
+// Ahora, si queda saldo, sale con un remito por todo lo pendiente
+// (entregas.RemitoPorLoQueQueda): con su número, su movimiento, el consumo de
+// la reserva y el enlace para firmar. Se eligió eso y no rechazar porque
+// «Avanzar» es el camino normal del tablero para los pedidos de la tienda, y
+// porque la regla del depósito es que **cada salida tiene su remito**: así
+// la tiene, y se puede anular como cualquier otro.
 func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id string) (*Resultado, error) {
 	var p *filaDePedido
 	var siguiente string
+	var remito *entregas.EntregaCreada
 	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
+		// La serie de remitos antes que la fila del pedido: el mismo orden
+		// que preparar un remito, por si este avance tiene que emitir uno.
+		if err := numeracion.BloquearRemitos(ctx, tx); err != nil {
+			return err
+		}
 		var err error
 		if p, err = bloquearPedido(ctx, tx, id); err != nil {
 			return err
@@ -121,6 +137,16 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id string) (*R
 		if siguiente == "" {
 			return fallo("No hay un estado siguiente.")
 		}
+		if siguiente == "entregado" {
+			var sucursal *string
+			if err := tx.QueryRow(ctx, `SELECT branch_id FROM orders WHERE id = $1`, id).Scan(&sucursal); err != nil {
+				return err
+			}
+			usuario := ses.UserID
+			if remito, err = entregas.RemitoPorLoQueQueda(ctx, tx, id, sucursal, p.tipoEntrega, &usuario); err != nil {
+				return err
+			}
+		}
 		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = $2, updated_at = now() WHERE id = $1`, id, siguiente); err != nil {
 			return err
 		}
@@ -139,7 +165,11 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id string) (*R
 	if texto == "" {
 		texto = siguiente
 	}
-	return &Resultado{Ok: p.numero + " quedó " + texto + ".", Numero: p.numero, Estado: siguiente}, nil
+	ok := p.numero + " quedó " + texto + "."
+	if remito != nil {
+		ok = p.numero + " quedó " + texto + ": la mercadería salió con el remito " + remito.Numero + ", que queda para firmar."
+	}
+	return &Resultado{Ok: ok, Numero: p.numero, Estado: siguiente}, nil
 }
 
 // Cancelar cancela el pedido y libera lo reservado (el físico no se toca:

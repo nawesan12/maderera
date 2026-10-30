@@ -626,8 +626,12 @@ DATABASE_URL=…/ensayo … mjbj api       # y recorrer el panel
 **Carga** (`bench/corte/carga.k6.js`): 200 a la vez durante 60 s contra esa
 API —140 en el catálogo (listado y búsqueda), 40 en el panel, 20 con el
 tiempo real abierto—: 9229 pedidos, **0 fallos, p50 5 ms, p95 9,5 ms, p99
-134 ms**, 101 MB de memoria. Falta sumarle el mostrador cuando la tanda 5
-esté, y correrla en la VPS (la de desarrollo es una Mac de 6 núcleos).
+134 ms**, 101 MB de memoria. **En la VPS (30/10/2026, KVM 2: 2 núcleos, 8 GB), ya desplegada:** los
+mismos 200 durante 60 s desde afuera (con ~55 ms de ida y vuelta de red):
+8039 pedidos, **0 fallos, p50 107 ms, p95 251 ms, p99 285 ms**. La API de Go
+llegó al 67 % de CPU y 90 MiB; Postgres al 160 % y 173 MiB: con más carga, el
+primero en quedarse corto es la base, no Go. Se corre con
+`-e IP=179.197.224.61` si el DNS de la red no resuelve sslip.io.
 
 ## Lo que no era de ninguna tanda (29/10/2026, rama `go-cuentas`)
 

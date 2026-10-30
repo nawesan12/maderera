@@ -6,6 +6,9 @@
 //
 //   k6 run -e URL=http://127.0.0.1:8080 -e COOKIE='better-auth.session_token=…' bench/corte/carga.k6.js
 //
+// Contra la VPS, si el DNS de la red no resuelve el nombre (sslip.io):
+//   -e URL=https://179-197-224-61.sslip.io -e IP=179.197.224.61
+//
 // Corta (falla) si más del 1 % de los pedidos falla o si el p95 pasa de 1 s.
 import http from "k6/http";
 import { check, sleep } from "k6";
@@ -15,7 +18,11 @@ const COOKIE = __ENV.COOKIE || "";
 const DURACION = __ENV.DURACION || "60s";
 const con = () => ({ headers: COOKIE ? { Cookie: COOKIE } : {} });
 
+const host = URL.replace(/^https?:\/\//, "").split(/[/:]/)[0];
+
 export const options = {
+  // Como el --resolve de curl: el nombre va a esta IP sin preguntarle al DNS.
+  hosts: __ENV.IP ? { [host]: __ENV.IP } : {},
   scenarios: {
     catalogo: { executor: "constant-vus", vus: 140, duration: DURACION, exec: "catalogo" },
     panel: { executor: "constant-vus", vus: 40, duration: DURACION, exec: "panel" },

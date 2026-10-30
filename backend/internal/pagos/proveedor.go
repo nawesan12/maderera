@@ -58,19 +58,31 @@ type Proveedor interface {
 	InterpretarAviso(cuerpo any, query url.Values) *AvisoEntrante
 }
 
-// Elegir es proveedorPagos(): sin token, el de demostración.
+// ModoDemo: el proveedor de demostración, que aprueba un cobro con un botón,
+// **solo con PAGOS_PROVIDER=demo puesto a propósito** (desarrollo, los E2E).
+// Antes bastaba con que faltara el token, y un servidor sin credenciales le
+// dejaba a cualquiera aprobar su propio pago desde /pago-demo.
+func (c Config) ModoDemo() bool { return c.Proveedor == "demo" }
+
+// Elegir es proveedorPagos(): el demo si se pidió, Mercado Pago si hay token,
+// y nil si no hay con qué cobrar (el pago online está apagado).
 func (c Config) Elegir() Proveedor {
-	if c.Proveedor == "demo" || c.AccessToken == "" {
+	if c.ModoDemo() {
 		return demo{c}
 	}
-	return &mercadoPago{c, &http.Client{Timeout: 20 * time.Second}}
+	if c.AccessToken != "" {
+		return &mercadoPago{c, &http.Client{Timeout: 20 * time.Second}}
+	}
+	return nil
 }
 
-// PorNombre es proveedorPorNombre: nil si Mercado Pago no está configurado.
+// PorNombre es proveedorPorNombre: nil si ese proveedor no está encendido.
 func (c Config) PorNombre(nombre string) Proveedor {
 	switch nombre {
 	case "demo":
-		return demo{c}
+		if c.ModoDemo() {
+			return demo{c}
+		}
 	case "mercado_pago":
 		if c.AccessToken != "" {
 			return &mercadoPago{c, &http.Client{Timeout: 20 * time.Second}}

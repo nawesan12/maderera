@@ -190,7 +190,12 @@ func (a *API) InformarChequesDeDeuda(ctx context.Context, r pagosapi.InformarChe
 	return ok(v), nil
 }
 
+// Las dos rutas de /pago-demo no existen fuera del modo demo: 404, como
+// cualquier dirección que no está.
 func (a *API) CobroSimulado(ctx context.Context, r pagosapi.CobroSimuladoRequestObject) (pagosapi.CobroSimuladoResponseObject, error) {
+	if !a.s.ModoDemo() {
+		return nil, noEsta("Esa ruta no existe.")
+	}
 	c, err := a.s.Simulado(ctx, r.Id)
 	if err != nil {
 		return nil, err
@@ -202,6 +207,9 @@ func (a *API) CobroSimulado(ctx context.Context, r pagosapi.CobroSimuladoRequest
 }
 
 func (a *API) SimularPago(ctx context.Context, r pagosapi.SimularPagoRequestObject) (pagosapi.SimularPagoResponseObject, error) {
+	if !a.s.ModoDemo() {
+		return nil, noEsta("Esa ruta no existe.")
+	}
 	v, err := a.s.Simular(ctx, r.Id, valor(r.Body.Decision))
 	if err != nil {
 		return nil, err

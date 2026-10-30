@@ -119,15 +119,25 @@ type entorno struct {
 	ahora time.Time
 }
 
+// armar levanta la API con Mercado Pago (el simulador) o, sin él, con el
+// demo encendido a propósito (PAGOS_PROVIDER=demo).
 func armar(t *testing.T, conMP bool) *entorno {
+	return armarCon(t, func(cfg *Config) {
+		if conMP {
+			cfg.AccessToken = tokenMP
+		} else {
+			cfg.Proveedor = "demo"
+		}
+	})
+}
+
+func armarCon(t *testing.T, ajustar func(*Config)) *entorno {
 	t.Helper()
 	pool := pruebas.Base(t)
 	ses := auth.Nuevo(auth.Config{Secreto: "secreto-de-prueba-de-pagos-de-32-caracteres", URL: "http://localhost"}, pool)
 	mp := nuevoSimulador(t)
 	cfg := Config{API: mp.srv.URL, Sitio: "https://mjbj.com.ar/", WebhookSecret: claveMP}
-	if conMP {
-		cfg.AccessToken = tokenMP
-	}
+	ajustar(&cfg)
 	s := Nuevo(pool, cfg, silencio)
 	ahora := time.Now()
 	q := sqlc.New(pool)
@@ -384,6 +394,41 @@ func TestPagoDeDemostracion(t *testing.T) {
 	}
 	if c, _ := pedir(t, anon, "POST", e.srv.URL+"/api/v1/pagos/demo/"+abierto.PagoID, map[string]any{"decision": "aprobar"}); c != 404 {
 		t.Fatalf("real: %d", c)
+	}
+}
+
+// Sin token y sin PAGOS_PROVIDER=demo, el pago online está apagado: pagar
+// con Mercado Pago da un error claro (y no abre ningún cobro), y las rutas
+// de /pago-demo no existen. Antes la falta de token encendía el demo, y
+// cualquiera aprobaba su propio pago con un POST.
+func TestSinTokenNiDemoNoHayPagoOnline(t *testing.T) {
+	e := armarCon(t, func(*Config) {})
+	pedidoID, token := e.pedido(t, "PED-1005")
+	anon := &http.Client{}
+
+	c, b := pedir(t, anon, "POST", e.srv.URL+"/api/v1/pagos/pedido", map[string]any{"numero": "PED-1005", "token": token})
+	if c != http.StatusServiceUnavailable || !strings.Contains(b, "El pago online no está disponible") {
+		t.Fatalf("pagar sin proveedor: %d %s", c, b)
+	}
+	if n := e.numero(t, `select count(*) from payments`); n != 0 {
+		t.Fatalf("abrió %v cobros sin proveedor", n)
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/pagos/estado", nil); !strings.Contains(b, `"enVivo":false`) {
+		t.Fatal(b)
+	}
+
+	// Un cobro demo que quedó de antes (la VPS corría con el demo): no se
+	// puede ver ni aprobar.
+	pagoID := e.id(t, `insert into payments (tipo, proveedor, estado, order_id, monto)
+		values ('pedido', 'demo', 'pendiente', $1, 204732) returning id`, pedidoID)
+	if c, _ := pedir(t, anon, "GET", e.srv.URL+"/api/v1/pagos/demo/"+pagoID, nil); c != http.StatusNotFound {
+		t.Fatalf("ver el demo: %d", c)
+	}
+	if c, _ := pedir(t, anon, "POST", e.srv.URL+"/api/v1/pagos/demo/"+pagoID, map[string]any{"decision": "aprobar"}); c != http.StatusNotFound {
+		t.Fatalf("aprobar el demo: %d", c)
+	}
+	if est := e.texto(t, `select estado_pago::text from orders where id = $1`, pedidoID); est == "pagado" {
+		t.Fatal("el pedido quedó pagado")
 	}
 }
 

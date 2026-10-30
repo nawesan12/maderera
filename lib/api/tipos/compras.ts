@@ -793,6 +793,8 @@ export interface components {
             lineas: number;
             /** Format: double */
             neto: number;
+            /** @description Si ya hay una factura de compra vinculada */
+            facturada: boolean;
         };
         Recepcion: {
             id: string;

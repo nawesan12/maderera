@@ -4,6 +4,7 @@ import { FileText } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import { listarFacturasDeCompra } from "@/lib/dal/admin/compras-fiscal";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
+import { listarRecepciones } from "@/lib/dal/admin/recepciones";
 import { formatearMonto } from "@/lib/formato";
 import {
   nombreComprobanteCompra,
@@ -33,10 +34,15 @@ export default async function FacturasDeCompraPage({
 
   const { pago = "todas" } = await searchParams;
 
-  const [todas, proveedores] = await Promise.all([
+  const [todas, proveedores, recepciones] = await Promise.all([
     listarFacturasDeCompra(),
     proveedoresParaElegir(),
+    listarRecepciones(200),
   ]);
+  // Las que todavía esperan su factura: a esas se puede vincular la nueva.
+  const sinFactura = recepciones.filter(
+    (r) => r.estado === "confirmada" && !r.facturada,
+  );
 
   /*
    * El filtro se aplica acá y no en la consulta a propósito: "pagada" no es una
@@ -79,7 +85,7 @@ export default async function FacturasDeCompraPage({
 
       <FiltroDePago actual={pago} />
 
-      <CargarFactura proveedores={proveedores} />
+      <CargarFactura proveedores={proveedores} recepciones={sinFactura} />
 
       <section className="tarjeta overflow-hidden">
         {facturas.length === 0 ? (

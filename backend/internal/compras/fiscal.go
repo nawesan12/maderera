@@ -75,6 +75,17 @@ func (s *Servicio) LibroIvaCompras(ctx context.Context, desde, hasta time.Time) 
 
 // CargarFactura es cargarFacturaDeCompra: la factura y la deuda, en el mismo
 // acto. El total no se pide: se suma.
+//
+// La factura puede venir vinculada a la recepción que cubre (receiptId). En
+// ese caso carga en la cuenta solo la diferencia entre su total y lo que esa
+// recepción ya cargó: antes la recepción cargaba la deuda y la factura la
+// volvía a cargar, y una orden de $1.210 recibida y facturada dejaba $2.420.
+// Lo «ya cargado» se lee de los movimientos atados a la recepción, así que
+// esto anda igual si el contador dice que la deuda nace con la factura (ver
+// LaDeudaNaceConElRemito): la recepción no carga nada y la factura, todo.
+// El vínculo también resuelve el aviso «Recepciones sin factura» del cierre.
+// Una recepción la cubre una sola factura; si un proveedor factura tres
+// remitos juntos, se cargan sin vincular (y cargan el total, como antes).
 func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[string]any) (string, string, error) {
 	d, err := leerFactura(m)
 	if err != nil {
@@ -91,35 +102,87 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 	esCredito := strings.HasPrefix(d.Tipo, "nota_credito")
 	var id string
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var yaCargado float64
+		if d.ReceiptID != nil {
+			if esCredito || strings.HasPrefix(d.Tipo, "nota_debito") {
+				return fallo("Una nota de crédito o de débito no cubre una recepción: vinculá la factura.")
+			}
+			var proveedor, estado string
+			err := tx.QueryRow(ctx, `SELECT supplier_id, estado::text FROM goods_receipts WHERE id = $1 FOR UPDATE`, *d.ReceiptID).Scan(&proveedor, &estado)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fallo("Esa recepción no existe.")
+			}
+			if err != nil {
+				return err
+			}
+			if proveedor != d.SupplierID {
+				return fallo("Esa recepción es de otro proveedor.")
+			}
+			if estado != "confirmada" {
+				return fallo("Solo se vincula una recepción confirmada: esa está " + estado + ".")
+			}
+			ya, err := facturaDeRecepcion(ctx, tx, *d.ReceiptID)
+			if err != nil {
+				return err
+			}
+			if ya != "" {
+				return fallo("Esa recepción ya tiene una factura cargada.")
+			}
+			cargado, err := cargadoPorRecepcion(ctx, tx, *d.ReceiptID)
+			if err != nil {
+				return err
+			}
+			if cargado != nil {
+				yaCargado = *cargado
+			}
+		}
 		dias := int32(0)
 		if err := tx.QueryRow(ctx, `SELECT dias_pago FROM suppliers WHERE id = $1`, d.SupplierID).Scan(&dias); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, fecha_vencimiento, cae, neto, iva21, iva105, iva27,
-			  exento, percepciones, total, observaciones, created_by_user_id)
+			  exento, percepciones, total, observaciones, created_by_user_id, receipt_id)
 			VALUES ($1, $2::tipo_comprobante_compra, $3, $4, $5, $6, $7, $8::numeric, $9::numeric, $10::numeric, $11::numeric, $12::numeric,
-			  $13::numeric, $14::numeric, $15, $16) RETURNING id`,
+			  $13::numeric, $14::numeric, $15, $16, $17) RETURNING id`,
 			d.SupplierID, d.Tipo, int64(d.PuntoVenta), int64(d.Numero), emision, Vencimiento(emision, int(dias)), d.Cae, jsmath.Fijo2(d.Neto),
 			jsmath.Fijo2(d.Iva21), jsmath.Fijo2(d.Iva105), jsmath.Fijo2(d.Iva27), jsmath.Fijo2(d.Exento), jsmath.Fijo2(d.Percepciones),
-			jsmath.Fijo2(total), d.Observaciones, ses.UserID).Scan(&id); err != nil {
+			jsmath.Fijo2(total), d.Observaciones, ses.UserID, d.ReceiptID).Scan(&id); err != nil {
 			return err
 		}
-		tipo, monto := "factura", total
+		tipo, monto, detalle := "factura", total, "Factura de compra"
 		if esCredito {
 			tipo, monto = "nota_credito", -total
 		} else if strings.HasPrefix(d.Tipo, "nota_debito") {
 			tipo = "nota_debito"
 		}
+		if d.ReceiptID != nil {
+			// Solo la diferencia con lo que ya cargó la recepción; si la
+			// factura vino por menos, la diferencia baja la deuda.
+			monto = float64(total - yaCargado)
+			detalle = "Factura de compra (diferencia con la recepción)"
+			if yaCargado == 0 {
+				detalle = "Factura de compra"
+			}
+			if monto < 0 {
+				tipo = "ajuste"
+			}
+			if jsmath.Fijo2(monto) == "0.00" || jsmath.Fijo2(monto) == "-0.00" {
+				return nil
+			}
+		}
 		_, err := tx.Exec(ctx, `
 			INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id)
-			VALUES ($1, $2::tipo_movimiento_proveedor, $3::numeric, $4, 'Factura de compra', $5)`,
-			d.SupplierID, tipo, jsmath.Fijo2(monto), NumeroDeCompra(int64(d.PuntoVenta), int64(d.Numero)), ses.UserID)
+			VALUES ($1, $2::tipo_movimiento_proveedor, $3::numeric, $4, $5, $6)`,
+			d.SupplierID, tipo, jsmath.Fijo2(monto), NumeroDeCompra(int64(d.PuntoVenta), int64(d.Numero)), detalle, ses.UserID)
 		return err
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "purchase_invoices_numeracion_idx") {
 			return "", "", fallo("Ese comprobante ya está cargado para este proveedor. Computarlo dos veces rompería el IVA del mes.")
+		}
+		if strings.Contains(err.Error(), "purchase_invoices_receipt_idx") {
+			return "", "", fallo("Esa recepción ya tiene una factura cargada.")
 		}
 		if strings.Contains(err.Error(), "foreign key") {
 			return "", "", fallo("Ese proveedor no existe.")

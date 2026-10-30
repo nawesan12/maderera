@@ -617,3 +617,70 @@ func TestAcumuladoSumaLosPagosQueNoRetuvieron(t *testing.T) {
 		t.Errorf("régimen apagado: %d %s", c, b)
 	}
 }
+
+// Bug: la recepción cargaba la deuda y la factura de esa misma mercadería la
+// volvía a cargar. Una orden de $1.210 recibida y facturada dejaba $2.420.
+// Ahora la factura se vincula a la recepción y carga solo la diferencia.
+func TestFacturaDeUnaRecepcionNoDuplicaLaDeuda(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	recibir := func(remito string) string {
+		c, b := pedir(t, adm, "POST", e.u+"recepciones", map[string]any{"supplierId": e.proveedor, "branchId": e.central, "numeroRemito": remito,
+			"lineas": []any{map[string]any{"variantId": e.tornillo, "cantidad": 100, "costoUnitario": 10, "alicuotaIva": 21}}})
+		if c != 200 {
+			t.Fatalf("crear: %d %s", c, b)
+		}
+		id := idDe(t, b)
+		if c, b := pedir(t, adm, "POST", e.u+"recepciones/"+id+"/confirmar", nil); c != 200 {
+			t.Fatalf("confirmar: %d %s", c, b)
+		}
+		return id
+	}
+	factura := func(numero int, neto, iva float64, recepcion string) (int, string) {
+		f := map[string]any{"supplierId": e.proveedor, "tipo": "factura_a", "puntoVenta": 3, "numero": numero, "fechaEmision": "2026-10-20",
+			"neto": neto, "iva21": iva, "iva105": 0, "iva27": 0, "exento": 0, "percepciones": 0}
+		if recepcion != "" {
+			f["receiptId"] = recepcion
+		}
+		return pedir(t, adm, "POST", e.u+"compras/facturas", f)
+	}
+	r1 := recibir("R-1")
+	if s := e.saldo(t); s != 1210 {
+		t.Fatalf("deuda de la recepción: %v", s)
+	}
+	if c, b := factura(1, 1000, 210, r1); c != 200 {
+		t.Fatalf("factura: %d %s", c, b)
+	}
+	if s := e.saldo(t); s != 1210 {
+		t.Errorf("la factura de la misma mercadería no suma deuda: quedó %v", s)
+	}
+	if n := e.numero(t, `select count(*)::float8 from purchase_invoices where receipt_id = $1`, r1); n != 1 {
+		t.Errorf("la factura queda vinculada a la recepción: %v", n)
+	}
+	// Una recepción la cubre una sola factura.
+	if c, b := factura(2, 1000, 210, r1); c != 422 || !strings.Contains(b, "ya tiene una factura") {
+		t.Errorf("dos facturas para una recepción: %d %s", c, b)
+	}
+	// Si la factura viene por más (un flete que no estaba en el remito), sube
+	// solo la diferencia.
+	r2 := recibir("R-2")
+	if c, b := factura(3, 1100, 231, r2); c != 200 {
+		t.Fatalf("factura con diferencia: %d %s", c, b)
+	}
+	if s := e.saldo(t); s != 1210+1331 {
+		t.Errorf("con diferencia: %v", s)
+	}
+	// Anular una recepción ya facturada saca el stock pero no toca la deuda:
+	// la deuda ya es de la factura, y la devuelve la nota de crédito del proveedor.
+	pedir(t, adm, "POST", e.u+"recepciones/"+r2+"/anular", map[string]string{"motivo": "Devolución"})
+	if s := e.saldo(t); s != 1210+1331 {
+		t.Errorf("anular una recepción facturada: %v", s)
+	}
+	// Sin recepción, la factura carga el total, como siempre.
+	if c, b := factura(4, 100, 21, ""); c != 200 {
+		t.Fatalf("factura suelta: %d %s", c, b)
+	}
+	if s := e.saldo(t); s != 1210+1331+121 {
+		t.Errorf("factura suelta: %v", s)
+	}
+}

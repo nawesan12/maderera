@@ -196,6 +196,21 @@ export const fechaSolaCorta = new Intl.DateTimeFormat("es-AR", {
 });
 
 /**
+ * El día de hoy en Argentina, como `aaaa-mm-dd` (el valor de un `<input
+ * type="date">`). `new Date().toISOString().slice(0, 10)` da el día UTC:
+ * desde las 21 dice mañana, y un gasto cargado a la noche quedaba fechado
+ * al día siguiente.
+ */
+export function hoyEnArgentina(ahora: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "America/Argentina/Buenos_Aires",
+  }).format(ahora);
+}
+
+/**
  * Convierte a número un importe tipeado por una persona.
  *
  * Hay que aceptar las formas en que se escribe un precio, porque todas llegan:

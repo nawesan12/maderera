@@ -809,7 +809,7 @@ components:
               orden: { type: integer }
     RecepcionListada:
       type: object
-      required: [id, numeroRemito, fecha, estado, gastos, proveedor, supplierId, sucursal, lineas, neto]
+      required: [id, numeroRemito, fecha, estado, gastos, proveedor, supplierId, sucursal, lineas, neto, facturada]
       properties:
         id: { type: string }
         numeroRemito: { type: string, nullable: true }
@@ -821,6 +821,7 @@ components:
         sucursal: { type: string, nullable: true }
         lineas: { type: integer }
         neto: { type: number, format: double }
+        facturada: { type: boolean, description: Si ya hay una factura de compra vinculada }
     Recepcion:
       type: object
       required: [id, numeroRemito, fecha, estado, gastos, notas, confirmadaAt, supplierId, proveedor, branchId, sucursal, items]

@@ -29,12 +29,15 @@ type RecepcionListada struct {
 	Sucursal     *string   `json:"sucursal"`
 	Lineas       int       `json:"lineas"`
 	Neto         float64   `json:"neto"`
+	// Facturada dice si ya hay una factura de compra vinculada.
+	Facturada bool `json:"facturada"`
 }
 
 // ListarRecepciones es listarRecepciones: el neto de las líneas más el flete.
 func (s *Servicio) ListarRecepciones(ctx context.Context, limite int) ([]RecepcionListada, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT r.id, r.numero_remito, r.fecha, r.estado::text, r.gastos::text, s.nombre, r.supplier_id, b.name, coalesce(t.lineas, 0), t.neto, r.gastos
+		SELECT r.id, r.numero_remito, r.fecha, r.estado::text, r.gastos::text, s.nombre, r.supplier_id, b.name, coalesce(t.lineas, 0), t.neto, r.gastos,
+		  EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = r.id)
 		FROM goods_receipts r
 		JOIN suppliers s ON s.id = r.supplier_id
 		LEFT JOIN branches b ON b.id = r.branch_id
@@ -48,7 +51,7 @@ func (s *Servicio) ListarRecepciones(ctx context.Context, limite int) ([]Recepci
 		var x RecepcionListada
 		var neto *jsmath.Num
 		var gastos jsmath.Num
-		err := r.Scan(&x.ID, &x.NumeroRemito, &x.Fecha, &x.Estado, &x.Gastos, &x.Proveedor, &x.SupplierID, &x.Sucursal, &x.Lineas, &neto, &gastos)
+		err := r.Scan(&x.ID, &x.NumeroRemito, &x.Fecha, &x.Estado, &x.Gastos, &x.Proveedor, &x.SupplierID, &x.Sucursal, &x.Lineas, &neto, &gastos, &x.Facturada)
 		x.Neto = numOCero(neto) + float64(gastos)
 		return x, err
 	})
@@ -403,10 +406,15 @@ func (s *Servicio) ConfirmarRecepcion(ctx context.Context, ses *auth.Sesion, id 
 			return err
 		}
 		lineas = len(items)
-		// La deuda sube por el total con IVA: es lo que hay que pagarle.
+		if !LaDeudaNaceConElRemito {
+			return nil
+		}
+		// La deuda sube por el total con IVA: es lo que hay que pagarle. El
+		// movimiento queda atado a la recepción para que la factura que la
+		// cubra sepa cuánto ya está cargado (ver CargarFactura).
 		_, err = tx.Exec(ctx, `
-			INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id)
-			VALUES ($1, 'factura', $2::numeric, $3, 'Recepción de mercadería', $4)`, c.supplier, jsmath.Fijo2(deuda), c.remito, ses.UserID)
+			INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id, goods_receipt_id)
+			VALUES ($1, 'factura', $2::numeric, $3, 'Recepción de mercadería', $4, $5)`, c.supplier, jsmath.Fijo2(deuda), c.remito, ses.UserID, id)
 		return err
 	})
 	if err != nil {
@@ -415,6 +423,45 @@ func (s *Servicio) ConfirmarRecepcion(ctx context.Context, ses *auth.Sesion, id 
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "recepcion", id,
 		fmt.Sprintf("Confirmó la recepción: %d renglones por $%s netos", lineas, jsmath.Fijo2(neto)), nil)
 	return lineas, neto, nil
+}
+
+// LaDeudaNaceConElRemito dice cuándo nace la deuda con el proveedor. Es una
+// pregunta para el contador: «¿la deuda nace con el remito o con la factura?».
+//
+// Con true (lo de siempre), confirmar la recepción carga la deuda por el
+// total con IVA, y la factura que la cubre carga solo la diferencia entre lo
+// facturado y lo que ya cargó la recepción (un flete que no estaba en el
+// remito, un precio que cambió). Con false, la recepción no carga nada y la
+// factura carga su total: la diferencia sale igual de la misma cuenta,
+// porque lo «ya cargado» se lee de los movimientos atados a la recepción y
+// no se recalcula. Cambiar la respuesta es cambiar esta constante; las
+// recepciones confirmadas antes siguen bien porque su movimiento quedó atado.
+const LaDeudaNaceConElRemito = true
+
+// cargadoPorRecepcion es lo que la recepción cargó en la cuenta del
+// proveedor, neto de su anulación: la suma de los movimientos atados a ella.
+// nil si no cargó nada (la deuda nace con la factura, o es de antes de que
+// los movimientos se ataran y la migración 00087 no la encontró).
+func cargadoPorRecepcion(ctx context.Context, tx pgx.Tx, id string) (*float64, error) {
+	var n *jsmath.Num
+	if err := tx.QueryRow(ctx, `SELECT sum(monto) FROM supplier_movements WHERE goods_receipt_id = $1`, id).Scan(&n); err != nil {
+		return nil, err
+	}
+	if n == nil {
+		return nil, nil
+	}
+	v := float64(*n)
+	return &v, nil
+}
+
+// facturaDeRecepcion es el id de la factura que cubre la recepción, o "".
+func facturaDeRecepcion(ctx context.Context, tx pgx.Tx, id string) (string, error) {
+	var f string
+	err := tx.QueryRow(ctx, `SELECT id FROM purchase_invoices WHERE receipt_id = $1 LIMIT 1`, id).Scan(&f)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return f, err
 }
 
 // actualizarOrden es actualizarOrden: suma (o resta, al anular) lo recibido
@@ -512,10 +559,32 @@ func (s *Servicio) AnularRecepcion(ctx context.Context, ses *auth.Sesion, id, mo
 			}); err != nil {
 				return err
 			}
+			// Si ya llegó la factura de esta recepción, la deuda es de la
+			// factura y no se toca: la devuelve la nota de crédito que mande el
+			// proveedor por la mercadería devuelta. Devolverla acá también la
+			// bajaría dos veces. Si no, vuelve exactamente lo que la recepción
+			// cargó; la cuenta de las líneas queda para las recepciones de
+			// antes de que el movimiento se atara.
+			facturada, err := facturaDeRecepcion(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			cargado, err := cargadoPorRecepcion(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			switch {
+			case facturada != "":
+				deuda = 0
+			case cargado != nil:
+				deuda = *cargado
+			case !LaDeudaNaceConElRemito:
+				deuda = 0
+			}
 			if deuda > 0 {
 				if _, err := tx.Exec(ctx, `
-					INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id)
-					VALUES ($1, 'nota_credito', $2::numeric, $3, $4, $5)`, c.supplier, jsmath.Fijo2(-deuda), c.remito, nota, ses.UserID); err != nil {
+					INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id, goods_receipt_id)
+					VALUES ($1, 'nota_credito', $2::numeric, $3, $4, $5, $6)`, c.supplier, jsmath.Fijo2(-deuda), c.remito, nota, ses.UserID, id); err != nil {
 					return err
 				}
 			}

@@ -214,6 +214,9 @@ type FormFactura struct {
 	Exento        float64 `json:"exento"`
 	Percepciones  float64 `json:"percepciones"`
 	Observaciones *string `json:"observaciones"`
+	// ReceiptID es la recepción que cubre la factura, si la hay (ver
+	// CargarFactura). Es opcional: hay facturas sin remito.
+	ReceiptID *string `json:"receiptId,omitempty"`
 }
 
 func leerFactura(m map[string]any) (FormFactura, error) {
@@ -232,6 +235,10 @@ func leerFactura(m map[string]any) (FormFactura, error) {
 	x.Exento = l.numero("exento", nil, minimo(0))
 	x.Percepciones = l.numero("percepciones", nil, minimo(0))
 	x.Observaciones = l.opcionalONulo("observaciones", 500)
+	if v, esta := m["receiptId"]; esta && v != nil && v != "" {
+		r := l.uuid("receiptId", "Esa recepción no existe.")
+		x.ReceiptID = &r
+	}
 	return x, l.Problema()
 }
 

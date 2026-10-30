@@ -28,6 +28,8 @@ export interface DatosFacturaCompra {
   exento: number;
   percepciones: number;
   observaciones?: string;
+  /** La recepción que cubre: si está, la factura carga solo la diferencia. */
+  receiptId?: string;
 }
 
 export async function cargarFacturaDeCompra(datos: DatosFacturaCompra): Promise<EstadoFacturaCompra> {

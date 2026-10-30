@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
-import { formatearMonto } from "@/lib/formato";
+import { fechaCorta, formatearMonto, hoyEnArgentina } from "@/lib/formato";
 import { COMPROBANTES_DE_COMPRA, daCreditoFiscal } from "@/lib/fiscal/comprobantes-compra";
 import { cargarFacturaDeCompra, type EstadoFacturaCompra } from "./actions";
 
@@ -17,11 +17,23 @@ import { cargarFacturaDeCompra, type EstadoFacturaCompra } from "./actions";
  * El neto no se calcula desde el total, tampoco: el proveedor factura neto y
  * después IVA, al revés que el catálogo de venta, y desagregar un total sería
  * inventar el reparto entre alícuotas.
+ *
+ * **La recepción que cubre.** La recepción ya cargó la deuda con el
+ * proveedor; si la factura se vincula a ella, carga solo la diferencia. Sin
+ * vincular, la misma mercadería quedaba debida dos veces.
  */
 export function CargarFactura({
   proveedores,
+  recepciones,
 }: {
   proveedores: { id: string; nombre: string; condicionIva: string }[];
+  recepciones: {
+    id: string;
+    supplierId: string;
+    numeroRemito: string | null;
+    fecha: Date;
+    neto: number;
+  }[];
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
@@ -32,7 +44,9 @@ export function CargarFactura({
   const [tipo, setTipo] = useState<keyof typeof COMPROBANTES_DE_COMPRA>("factura_a");
   const [puntoVenta, setPuntoVenta] = useState("");
   const [numero, setNumero] = useState("");
-  const [fechaEmision, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaEmision, setFecha] = useState(hoyEnArgentina);
+  const [receiptId, setReceiptId] = useState("");
+  const delProveedor = recepciones.filter((r) => r.supplierId === supplierId);
   const [cae, setCae] = useState("");
   const [neto, setNeto] = useState("");
   const [iva21, setIva21] = useState("");
@@ -67,6 +81,7 @@ export function CargarFactura({
         iva27: n(iva27),
         exento: n(exento),
         percepciones: n(percepciones),
+        receiptId: receiptId || undefined,
       });
       setEstado(resultado);
       if (resultado.ok) {
@@ -79,6 +94,7 @@ export function CargarFactura({
         setIva27("");
         setExento("");
         setPercepciones("");
+        setReceiptId("");
         router.refresh();
       }
     });
@@ -104,7 +120,10 @@ export function CargarFactura({
           <span className="text-sm font-medium">Proveedor</span>
           <select
             value={supplierId}
-            onChange={(e) => setSupplierId(e.target.value)}
+            onChange={(e) => {
+              setSupplierId(e.target.value);
+              setReceiptId("");
+            }}
             className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
           >
             {proveedores.map((p) => (
@@ -151,6 +170,30 @@ export function CargarFactura({
         </label>
 
         <Campo etiqueta="CAE" valor={cae} onCambio={setCae} />
+
+        {delProveedor.length > 0 && (
+          <label className="block sm:col-span-2">
+            <span className="text-sm font-medium">Recepción que cubre</span>
+            <select
+              value={receiptId}
+              onChange={(e) => setReceiptId(e.target.value)}
+              className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            >
+              <option value="">Ninguna (carga el total)</option>
+              {delProveedor.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.numeroRemito ? `Remito ${r.numeroRemito}` : "Sin remito"} ·{" "}
+                  {fechaCorta.format(r.fecha)} · {formatearMonto(r.neto)} neto
+                </option>
+              ))}
+            </select>
+            {receiptId && (
+              <span className="text-sm text-muted-foreground">
+                La recepción ya cargó la deuda: la factura suma solo la diferencia.
+              </span>
+            )}
+          </label>
+        )}
       </div>
 
       <div className="grid gap-4 border-t border-linea pt-4 sm:grid-cols-3 lg:grid-cols-6">

@@ -12,8 +12,11 @@ import (
 
 	"mjbj/internal/api/comprasapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/documentos"
+	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
+	"mjbj/internal/sqlc"
 )
 
 // API son las rutas de api/compras.yaml.
@@ -92,6 +95,24 @@ func (o respuesta) VisitListarPagosAProveedoresResponse(w http.ResponseWriter) e
 	return o.escribir(w)
 }
 func (o respuesta) VisitPagarAProveedorResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitAnularPagoAProveedorResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+// archivoPdf es un PDF para mostrar en el navegador.
+type archivoPdf struct {
+	nombre string
+	datos  []byte
+}
+
+func (a archivoPdf) VisitCertificadoDeRetencionPdfResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", `inline; filename="`+a.nombre+`"`)
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.WriteHeader(http.StatusOK)
+	_, err := w.Write(a.datos)
+	return err
+}
 func (o respuesta) VisitRetencionesPracticadasCsvResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -600,6 +621,23 @@ func (a *API) PagarAProveedor(ctx context.Context, r comprasapi.PagarAProveedorR
 	return ok(map[string]any{"ok": m, "certificados": certificados}), nil
 }
 
+// AnularPagoAProveedor es solo del admin (con nombre, no por pantalla):
+// deshace plata ya pagada y certificados ya entregados.
+func (a *API) AnularPagoAProveedor(ctx context.Context, r comprasapi.AnularPagoAProveedorRequestObject) (comprasapi.AnularPagoAProveedorResponseObject, error) {
+	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	if !plataforma.UUIDValido(r.Id) {
+		return nil, fallo("Ese pago no existe.")
+	}
+	m, err := a.s.AnularPago(ctx, ses, r.Id, r.Body.Motivo)
+	if err != nil {
+		return nil, err
+	}
+	return hecho(m), nil
+}
+
 func (a *API) RetencionesPracticadasCsv(ctx context.Context, r comprasapi.RetencionesPracticadasCsvRequestObject) (comprasapi.RetencionesPracticadasCsvResponseObject, error) {
 	if _, err := compras(ctx); err != nil {
 		return nil, err
@@ -624,6 +662,29 @@ func (a *API) CertificadoDeRetencion(ctx context.Context, r comprasapi.Certifica
 		return nil, noEncontrado("No existe ese certificado.")
 	}
 	return ok(c), nil
+}
+
+// CertificadoDeRetencionPdf es el certificado impreso, con el cálculo.
+func (a *API) CertificadoDeRetencionPdf(ctx context.Context, r comprasapi.CertificadoDeRetencionPdfRequestObject) (comprasapi.CertificadoDeRetencionPdfResponseObject, error) {
+	if _, err := compras(ctx); err != nil {
+		return nil, err
+	}
+	c, err := a.s.CertificadoParaImprimir(ctx, r.Numero)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, noEncontrado("No existe ese certificado.")
+	}
+	emisor, err := documentos.EmisorDe(ctx, a.s.pool)
+	if err != nil {
+		return nil, err
+	}
+	b, err := pdf.CertificadoDeRetencion(DatosDelCertificadoPdf(c, emisor), time.Now())
+	if err != nil {
+		return nil, err
+	}
+	return archivoPdf{"retencion-" + c.Numero + ".pdf", b}, nil
 }
 
 func (a *API) RegimenesDeRetencion(ctx context.Context, r comprasapi.RegimenesDeRetencionRequestObject) (comprasapi.RegimenesDeRetencionResponseObject, error) {

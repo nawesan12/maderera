@@ -101,22 +101,63 @@ type RetencionDelPeriodo struct {
 	Importe       float64   `json:"importe"`
 	Proveedor     string    `json:"proveedor"`
 	Cuit          *string   `json:"cuit"`
+	// El cálculo; nil en los certificados de antes de la 00089.
+	Acumulado     *float64 `json:"acumulado"`
+	Imponible     *float64 `json:"imponible"`
+	RetenidoAntes *float64 `json:"retenidoAntes"`
 }
 
-// CsvRetenciones es el archivo de app/admin/compras/pagos/exportar.
-func CsvRetenciones(filas []RetencionDelPeriodo) string {
+// CsvRetenciones es el archivo de app/admin/compras/pagos/exportar, con el
+// cálculo de cada retención para que el contador lo pueda seguir: base del
+// pago, acumulado del mes, monto sujeto, alícuota, lo ya retenido en el mes
+// y lo retenido. Los certificados de antes de la 00089 dejan esas columnas
+// vacías.
+func CsvRetenciones(filas []RetencionDelPeriodo) string { return csvRetenciones(filas, true) }
+
+// csvRetenciones con conCalculo en false es el archivo que armaba el TS
+// (el golden lo compara así).
+func csvRetenciones(filas []RetencionDelPeriodo, conCalculo bool) string {
 	salida := make([][]string, len(filas))
 	total := 0.0
+	opcional := func(p *float64) string {
+		if p == nil {
+			return ""
+		}
+		return numeroCsv(*p, 2)
+	}
 	for i, f := range filas {
 		total += f.Importe
+		if conCalculo {
+			salida[i] = []string{fechaCsv(f.Fecha), texto(f.Numero), texto(f.Impuesto), texto(f.CodigoRegimen), texto(f.Proveedor),
+				textoCsv(f.Cuit), numeroCsv(f.Base, 2), opcional(f.Acumulado), opcional(f.Imponible), numeroCsv(f.Alicuota, 3),
+				opcional(f.RetenidoAntes), numeroCsv(f.Importe, 2)}
+			continue
+		}
 		salida[i] = []string{fechaCsv(f.Fecha), texto(f.Numero), texto(f.Impuesto), texto(f.CodigoRegimen), texto(f.Proveedor),
 			textoCsv(f.Cuit), numeroCsv(f.Base, 2), numeroCsv(f.Alicuota, 3), numeroCsv(f.Importe, 2)}
+	}
+	if conCalculo {
+		return armarCsv(
+			[]string{"Fecha", "Certificado", "Impuesto", "Régimen", "Proveedor", "CUIT", "Base del pago", "Acumulado del mes",
+				"Monto sujeto a retención", "Alícuota", "Ya retenido en el mes", "Retenido"},
+			salida,
+			[]string{texto("Total"), "", "", "", "", "", "", "", "", "", "", numeroCsv(total, 2)},
+		)
 	}
 	return armarCsv(
 		[]string{"Fecha", "Certificado", "Impuesto", "Régimen", "Proveedor", "CUIT", "Base", "Alícuota", "Retenido"},
 		salida,
 		[]string{texto("Total"), "", "", "", "", "", "", "", numeroCsv(total, 2)},
 	)
+}
+
+// aFloat pasa un numeric que puede ser null.
+func aFloat(n *jsmath.Num) *float64 {
+	if n == nil {
+		return nil
+	}
+	f := float64(*n)
+	return &f
 }
 
 // SaldosCorrientes es el libro de la ficha: los movimientos vienen del más

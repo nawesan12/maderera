@@ -137,7 +137,7 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, numero, tipo, fechaEmision, total, imputado, saldo]
+                  required: [id, numero, tipo, fechaEmision, total, imputado, saldo, netoSinIva]
                   properties:
                     id: { type: string }
                     numero: { type: string }
@@ -146,6 +146,10 @@ paths:
                     total: { type: number, format: double }
                     imputado: { type: number, format: double }
                     saldo: { type: number, format: double }
+                    netoSinIva:
+                      type: number
+                      format: double
+                      description: neto gravado más no gravado/exento, sin IVA ni percepciones (lo que entra en la base de Ganancias e IIBB)
   /api/v1/admin/proveedores/{id}/acumulado-del-mes:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     get:
@@ -464,6 +468,19 @@ paths:
                         impuesto: { type: string }
                         importe: { type: number, format: double }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/pagos/{id}/anular:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: AnularPagoAProveedor
+      description: |
+        Solo el admin. Devuelve la deuda con el proveedor, borra las
+        imputaciones, anula los certificados de retención y deshace los
+        cheques (los endosados vuelven a cartera, los propios se anulan). Si
+        un cheque ya se cobró o se rechazó, no se anula.
+      requestBody: { $ref: "#/components/requestBodies/Motivo" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/compras/pagos/retenciones-csv:
     get:
       operationId: RetencionesPracticadasCsv
@@ -485,6 +502,17 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Certificado" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/certificados/{numero}/pdf:
+    parameters: [{ name: numero, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: CertificadoDeRetencionPdf
+      responses:
+        "200":
+          description: El certificado en PDF, con el cálculo de la retención
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/compras/regimenes:
     get:
@@ -889,7 +917,8 @@ components:
         total: { type: number, format: double }
     PagoListado:
       type: object
-      required: [id, fecha, total, neto, medio, circuito, referencia, proveedor, supplierId, retenido, certificados, numerosCertificado, facturas]
+      required: [id, fecha, total, neto, medio, circuito, referencia, proveedor, supplierId, retenido, certificados, numerosCertificado, facturas,
+        anuladoAt, motivoAnulacion]
       properties:
         id: { type: string }
         fecha: { type: string, format: date-time }
@@ -901,6 +930,8 @@ components:
         proveedor: { type: string }
         supplierId: { type: string }
         retenido: { type: number, format: double }
+        anuladoAt: { type: string, format: date-time, nullable: true }
+        motivoAnulacion: { type: string, nullable: true }
         certificados: { type: integer }
         numerosCertificado: { type: array, items: { type: string } }
         facturas:
@@ -915,7 +946,7 @@ components:
     Certificado:
       type: object
       required: [numero, fecha, impuesto, codigoRegimen, nombreRegimen, base, alicuota, importe, proveedorNombre, proveedorRazonSocial,
-        proveedorCuit, proveedorDomicilio, pagoFecha, pagoMedio, pagoReferencia]
+        proveedorCuit, proveedorDomicilio, pagoFecha, pagoMedio, pagoReferencia, acumulado, imponible, retenidoAntes, anuladaAt]
       properties:
         numero: { type: string }
         fecha: { type: string, format: date-time }
@@ -932,6 +963,10 @@ components:
         pagoFecha: { type: string, format: date-time }
         pagoMedio: { type: string }
         pagoReferencia: { type: string, nullable: true }
+        acumulado: { type: string, nullable: true, description: las bases del mes con la de este pago (null en los de antes de la 00089) }
+        imponible: { type: string, nullable: true, description: el monto sujeto a retención (acumulado − mínimo no imponible) }
+        retenidoAntes: { type: string, nullable: true, description: lo retenido en el mes antes de este certificado }
+        anuladaAt: { type: string, format: date-time, nullable: true }
     Regimen:
       type: object
       required: [id, codigo, nombre, impuesto, alicuota, alicuotaNoInscripto, minimoNoImponible, minimoRetencion, activo, createdAt, updatedAt, jurisdiccion]

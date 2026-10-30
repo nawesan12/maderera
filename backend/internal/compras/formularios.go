@@ -406,6 +406,10 @@ type FormRegimen struct {
 	Alicuota            float64
 	AlicuotaNoInscripto float64
 	Activo              bool
+	// Los mínimos del régimen, en pesos. nil es «no vino en el formulario»:
+	// se deja el que está (el formulario viejo solo mandaba alícuotas).
+	MinimoNoImponible *float64
+	MinimoRetencion   *float64
 }
 
 func leerRegimen(form map[string]*string) (FormRegimen, bool) {
@@ -426,7 +430,28 @@ func leerRegimen(form map[string]*string) (FormRegimen, bool) {
 	r.Alicuota = l.numero("alicuota", nil, minimo(0), maximo(100))
 	r.AlicuotaNoInscripto = l.numero("alicuotaNoInscripto", nil, minimo(0), maximo(100))
 	r.Activo = form["activo"] != nil && *form["activo"] == "on"
-	return r, l.ok()
+	if !l.ok() {
+		return r, false
+	}
+	// Los mínimos: vacíos o ausentes, quedan como están; si vienen, un número
+	// de cero para arriba (con tope, para que un dedo de más no lo vuelva
+	// absurdo: el mínimo no imponible de Ganancias anda en cientos de miles).
+	for _, c := range []struct {
+		campo   string
+		destino **float64
+	}{{"minimoNoImponible", &r.MinimoNoImponible}, {"minimoRetencion", &r.MinimoRetencion}} {
+		v := form[c.campo]
+		if v == nil || trimJS(*v) == "" {
+			continue
+		}
+		m := leer(map[string]any{c.campo: trimJS(*v)})
+		n := m.numero(c.campo, nil, minimo(0), maximo(1e11))
+		if !m.ok() {
+			return r, false
+		}
+		*c.destino = &n
+	}
+	return r, true
 }
 
 // FilaAplicar es una fila de la vista previa que se aplica.

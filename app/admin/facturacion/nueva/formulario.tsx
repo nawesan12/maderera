@@ -312,7 +312,11 @@ export function FormularioFacturaManual({
           <dl className="mt-5 space-y-1.5 border-t pt-4 text-base">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Neto gravado</dt>
-              <dd className="tabular">{moneda.format(totales.neto)}</dd>
+              {/* calcularTotales del TS suma lo exento al neto; la factura
+                  (Go) deja en el neto solo lo gravado. */}
+              <dd className="tabular">
+                {moneda.format(Math.round((totales.neto - totales.exento) * 100) / 100)}
+              </dd>
             </div>
             {[...totales.ivaPorAlicuota.entries()].map(([alicuota, valores]) => (
               <div key={alicuota} className="flex justify-between">

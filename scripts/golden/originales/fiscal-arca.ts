@@ -15,8 +15,27 @@ import {
   CONDICION_IVA_RECEPTOR,
   type TipoComprobante,
 } from "../../../lib/fiscal/comprobantes";
-import { calcularTotales, CODIGO_ALICUOTA_ARCA, redondear } from "../../../lib/fiscal/impuestos";
+import {
+  calcularTotales as calcularTotalesConExentoEnElNeto,
+  CODIGO_ALICUOTA_ARCA,
+  redondear,
+  type TotalesComprobante,
+} from "../../../lib/fiscal/impuestos";
 import { lineasDeLaNota, prorratearTributos, revisarAcreditacion, type CantidadAAcreditar, type ItemOriginal } from "./fiscal-notas";
+
+/* ------------------- arreglos hechos a propósito en Go ------------------- */
+// Lo exento (alícuota 0) iba en el neto y además en el exento: a ARCA le
+// llegaba dos veces (ImpNeto + ImpOpEx) y ImpTotal no cerraba. Go deja en el
+// neto solo lo gravado; el golden se regeneró con estas cuentas. Ver
+// backend/internal/fiscal/impuestos.go.
+
+/** calcularTotales con el neto gravado solo, sumado en el mismo orden. */
+export function calcularTotales(lineas: Parameters<typeof calcularTotalesConExentoEnElNeto>[0]): TotalesComprobante {
+  const t = calcularTotalesConExentoEnElNeto(lineas);
+  let neto = 0;
+  for (const l of t.lineas) if (l.alicuota > 0) neto += l.neto;
+  return { ...t, neto: redondear(neto) };
+}
 
 /* ------------------------------ arca.ts ------------------------------ */
 
@@ -104,14 +123,17 @@ export function cuerpoAutorizar(comprobante: ComprobanteAAutorizar, config: { cu
     const doc = documentoReceptor(comprobante.receptorCuit);
     const esC = comprobante.tipo.endsWith("_c");
 
-    const neto = esC ? comprobante.total : comprobante.neto;
-    const totalIva = esC
-      ? 0
-      : comprobante.iva.reduce((suma, i) => suma + i.importe, 0);
     const totalTributos = comprobante.tributos.reduce(
       (suma, t) => suma + t.importe,
       0,
     );
+    // Arreglo de Go: en la C el neto es el total menos los tributos y no
+    // hay exento (el TS mandaba el total como neto y no cerraba).
+    const neto = esC ? redondear(comprobante.total - totalTributos) : comprobante.neto;
+    const exento = esC ? 0 : comprobante.exento;
+    const totalIva = esC
+      ? 0
+      : comprobante.iva.reduce((suma, i) => suma + i.importe, 0);
 
     const detalleIva =
       esC || comprobante.iva.length === 0
@@ -178,7 +200,7 @@ ${comprobante.tributos
             <ar:ImpTotal>${importe(comprobante.total)}</ar:ImpTotal>
             <ar:ImpTotConc>0.00</ar:ImpTotConc>
             <ar:ImpNeto>${importe(neto)}</ar:ImpNeto>
-            <ar:ImpOpEx>${importe(comprobante.exento)}</ar:ImpOpEx>
+            <ar:ImpOpEx>${importe(exento)}</ar:ImpOpEx>
             <ar:ImpTrib>${importe(totalTributos)}</ar:ImpTrib>
             <ar:ImpIVA>${importe(totalIva)}</ar:ImpIVA>
             <ar:MonId>PES</ar:MonId>
@@ -383,15 +405,25 @@ export function calculoDeNota(
         lineas.reduce((t, l) => t + l.cantidad * l.precioFinalUnitario, 0),
       );
 
-      const baseOriginal =
-        Number(original.neto) +
+      // Arreglo de Go: los tributos vuelven en la proporción del neto
+      // gravado (sobre eso se calculó la percepción), no de la mercadería.
+      const netoOriginal = Number(original.neto);
+      const baseSinNeto =
         Number(original.iva21) +
         Number(original.iva105) +
         Number(original.iva27) +
         Number(original.exento);
-
       const proporcion =
-        baseOriginal > 0 ? Math.min(1, netoDeLaNota / baseOriginal) : 1;
+        netoOriginal > 0
+          ? Math.min(
+              1,
+              calcularTotales(
+                lineas.map((l) => ({ descripcion: "", cantidad: l.cantidad, precioFinalUnitario: l.precioFinalUnitario, alicuota: l.alicuota })),
+              ).neto / netoOriginal,
+            )
+          : baseSinNeto > 0
+            ? Math.min(1, netoDeLaNota / baseSinNeto)
+            : 1;
 
       const tributosDados = prorratearTributos(tributosOriginales, proporcion);
 

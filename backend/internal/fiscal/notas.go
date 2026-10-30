@@ -182,9 +182,21 @@ func CalcularNota(o Original, items []ItemOriginal, parciales []CantidadAAcredit
 		suma = suma + float64(l.Cantidad*l.PrecioFinalUnitario)
 	}
 	neto := Redondear(suma)
-	base := o.Neto + o.Iva21 + o.Iva105 + o.Iva27 + o.Exento
+	// Los tributos (la percepción de IIBB) se calcularon sobre el neto
+	// gravado: se devuelven en la proporción de lo gravado que se acredita.
+	// El TS usaba la mercadería entera, con lo exento contado dos veces (iba
+	// en el neto y en el exento), y una nota solo de renglones exentos
+	// devolvía percepción que nunca se cobró sobre ellos. Sin neto gravado en
+	// el original, queda la proporción de la mercadería.
 	proporcion := 1.0
-	if base > 0 {
+	if o.Neto > 0 {
+		entradas := make([]LineaEntrada, len(lineas))
+		for k, l := range lineas {
+			alic := l.Alicuota
+			entradas[k] = LineaEntrada{Cantidad: l.Cantidad, PrecioFinalUnitario: l.PrecioFinalUnitario, Alicuota: &alic}
+		}
+		proporcion = jsMin(1, CalcularTotales(entradas).Neto/o.Neto)
+	} else if base := o.Iva21 + o.Iva105 + o.Iva27 + o.Exento; base > 0 {
 		proporcion = jsMin(1, neto/base)
 	}
 	dados := ProrratearTributos(tributos, proporcion)

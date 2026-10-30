@@ -22,12 +22,7 @@
  */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { z } from "zod";
-import {
-  agregarIva,
-  calcularTotales,
-  desagregar,
-  redondear,
-} from "../../lib/fiscal/impuestos";
+import { agregarIva, desagregar, redondear } from "../../lib/fiscal/impuestos";
 import {
   CODIGO_COMPROBANTE,
   desdeFechaArca,
@@ -46,6 +41,7 @@ import { lineasDeLaNota, prorratearTributos, revisarAcreditacion } from "./origi
 import {
   armarTra,
   auth,
+  calcularTotales,
   calculoDeNota,
   claveDeLock,
   cuerpoAutorizar,

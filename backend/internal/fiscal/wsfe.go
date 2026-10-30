@@ -17,7 +17,7 @@ import (
 // mano, como el TS, con los mismos bytes: el golden compara el sobre entero.
 //
 // Reglas de ARCA que están acá: los importes con dos decimales y que cierren
-// (ImpTotal = ImpNeto + ImpIVA + ImpTrib + ImpOpEx), sin IVA en la C, el
+// (ImpTotal = ImpNeto + ImpIVA + ImpTrib + ImpOpEx, con lo exento solo en ImpOpEx), sin IVA en la C, el
 // comprobante asociado en toda nota y CondicionIVAReceptorId.
 
 const nsFev1 = "http://ar.gov.afip.dif.FEV1/"
@@ -84,18 +84,22 @@ func CuerpoAutorizar(c AAutorizar, cuitEmisor, auth string) string {
 	codigo := definido(CodigoComprobante, c.Tipo)
 	docTipo, docNro := DocumentoReceptor(c.ReceptorCuit)
 	esC := strings.HasSuffix(c.Tipo, "_c")
-	neto := c.Neto
+	totalTributos := 0.0
+	for _, t := range c.Tributos {
+		totalTributos += t.Importe
+	}
+	// ImpNeto es solo lo gravado; lo exento va en ImpOpEx. En la C no hay
+	// IVA ni exento que informar: todo es neto, menos los tributos (que van
+	// aparte en ImpTrib). El TS mandaba el total entero como neto y, con
+	// tributos, ImpTotal no cerraba.
+	neto, exento := c.Neto, c.Exento
 	totalIva := 0.0
 	if esC {
-		neto = c.Total
+		neto, exento = Redondear(c.Total-totalTributos), 0
 	} else {
 		for _, i := range c.Iva {
 			totalIva += i.Importe
 		}
-	}
-	totalTributos := 0.0
-	for _, t := range c.Tributos {
-		totalTributos += t.Importe
 	}
 
 	detalleIva := ""
@@ -165,7 +169,7 @@ func CuerpoAutorizar(c AAutorizar, cuitEmisor, auth string) string {
             <ar:ImpTotal>` + importe(c.Total) + `</ar:ImpTotal>
             <ar:ImpTotConc>0.00</ar:ImpTotConc>
             <ar:ImpNeto>` + importe(neto) + `</ar:ImpNeto>
-            <ar:ImpOpEx>` + importe(c.Exento) + `</ar:ImpOpEx>
+            <ar:ImpOpEx>` + importe(exento) + `</ar:ImpOpEx>
             <ar:ImpTrib>` + importe(totalTributos) + `</ar:ImpTrib>
             <ar:ImpIVA>` + importe(totalIva) + `</ar:ImpIVA>
             <ar:MonId>PES</ar:MonId>

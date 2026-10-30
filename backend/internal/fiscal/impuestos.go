@@ -110,6 +110,11 @@ func (t Totales) IvaDe(a float64) float64 {
 
 // CalcularTotales es calcularTotales: se desagrega sobre el total de cada
 // renglón y el IVA se agrupa por alícuota.
+//
+// Neto es el neto **gravado**: lo exento (alícuota 0) va solo en Exento. El
+// TS lo sumaba a los dos, y a ARCA le llegaba dos veces (ImpNeto + ImpOpEx):
+// ImpTotal no cerraba y la factura se rechazaba (10048); la percepción de
+// IIBB, que se calcula sobre el neto gravado, también salía inflada.
 func CalcularTotales(lineas []LineaEntrada) Totales {
 	out := Totales{Lineas: make([]LineaCalculada, 0, len(lineas)), IvaPorAlicuota: []IvaDeAlicuota{}}
 	var neto, iva, exento, total float64
@@ -132,10 +137,10 @@ func CalcularTotales(lineas []LineaEntrada) Totales {
 			Descripcion: l.Descripcion, Unidad: unidad, Cantidad: l.Cantidad, PrecioFinalUnitario: l.PrecioFinalUnitario,
 			Alicuota: alicuota, PrecioUnitarioNeto: unitario, Neto: partes.Neto, Iva: partes.Iva, Subtotal: partes.Total,
 		})
-		neto += partes.Neto
 		iva += partes.Iva
 		total += partes.Total
 		if alicuota > 0 {
+			neto += partes.Neto
 			i := -1
 			for j, x := range out.IvaPorAlicuota {
 				if x.Alicuota == alicuota {

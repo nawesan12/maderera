@@ -56,15 +56,12 @@ services:
       context: .
       target: runner
       # Con la red del host, para que el build llegue al puerto de loopback
-      # donde está la base.
+      # de la API de Go: con Cache Components el build arma de antemano lo
+      # público en caché (los rubros del layout, el equipaje del asistente).
+      # `desplegar.sh` levanta la API nueva antes de construir. La app ya no
+      # le habla a la base: ni el build ni la imagen llevan su URL.
       network: host
       args:
-        DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}
-        DATABASE_SSL: "off"
-        # La API de Go, por el mismo camino que la base: con Cache Components
-        # el build arma de antemano lo público en caché (los rubros del layout,
-        # el equipaje del asistente) y esos datos ya salen de Go.
-        # `desplegar.sh` levanta la API nueva antes de construir.
         API_URL: http://127.0.0.1:8080
         APP_URL: ${APP_URL:?Falta APP_URL en .env.produccion}
         APP_ENV: ${APP_ENV:-production}
@@ -73,20 +70,14 @@ services:
     image: mjbj-app:latest
     restart: unless-stopped
     depends_on:
-      db:
-        condition: service_healthy
       api:
         condition: service_healthy
     env_file:
       - .env.produccion
     environment:
-      # Estas pisan lo que diga `.env.produccion`: la URL de la base la arma el
-      # compose con el nombre interno del contenedor.
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      # La base está en la misma máquina y en una red privada de Docker:
-      # cifrar ese tramo no protege de nada y el Postgres del compose ni
-      # siquiera lo admite.
-      DATABASE_SSL: "off"
+      # Sin DATABASE_URL a propósito: todo dato pasa por la API de Go. (Si
+      # `.env.produccion` la trae, no se usa: nada de la app importa lib/db,
+      # y ESLint lo frena.)
       # Las fotos van a un volumen y no adentro de la imagen: si vivieran en
       # `public/`, cada despliegue borraría lo que se subió desde el panel.
       CARPETA_SUBIDAS: /datos/subidas

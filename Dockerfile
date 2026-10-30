@@ -41,23 +41,6 @@ CMD ["node_modules/.bin/drizzle-kit", "migrate"]
 FROM deps AS build
 COPY . .
 
-# El build **necesita la base**, y conviene saberlo antes de que falle: Next
-# prerenderiza las páginas públicas —«Quiénes somos», sucursales, contacto— y
-# esas leen los ajustes del sitio, las sucursales y los avisos. Sin base, el
-# build no termina.
-#
-# En el servidor propio no es problema: la base corre en la misma máquina, así
-# que el build se hace contra ella por la red del host. El compose se encarga
-# de pasar la URL.
-#
-# La contraseña queda en el historial de esta imagen. Es aceptable porque la
-# imagen no sale de la máquina donde se construye; si alguna vez se publicara
-# en un registro, hay que pasar a `--secret`.
-ARG DATABASE_URL
-ARG DATABASE_SSL=off
-ENV DATABASE_URL=$DATABASE_URL
-ENV DATABASE_SSL=$DATABASE_SSL
-
 # Lo que se hornea en las páginas estáticas: `robots.txt` decide si se indexa
 # con `APP_ENV` y `SEO_INDEXAR`, y las canónicas y el `metadataBase` salen de
 # `APP_URL`. Si llegaran recién al arrancar, la página ya estaría armada con

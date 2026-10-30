@@ -1,10 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { apiPublica } from "@/lib/api/servidor";
-import { procesarCola } from "@/lib/cola";
 
 /**
  * Simulación del resultado de un pago.
@@ -12,8 +10,7 @@ import { procesarCola } from "@/lib/cola";
  * Go (backend/internal/pagos) arma el mismo aviso que mandaría Mercado Pago y
  * lo pasa por el mismo procesamiento: si la acreditación tiene un error, este
  * botón lo reproduce. Solo sobre cobros del proveedor `demo`. Si se acreditó,
- * el aviso al cliente queda encolado y se manda acá mismo, sin esperar a la
- * vuelta de la cola.
+ * el aviso al cliente queda encolado y lo manda el worker de Go.
  */
 export async function simularResultado(formData: FormData): Promise<void> {
   const pagoId = String(formData.get("pagoId") ?? "").slice(0, 64);
@@ -25,8 +22,7 @@ export async function simularResultado(formData: FormData): Promise<void> {
   });
   if (!r.data) redirect("/");
 
-  const { volverA, estado, trabajo } = r.data;
-  if (trabajo) after(() => procesarCola({ soloId: trabajo }));
+  const { volverA, estado } = r.data;
 
   revalidatePath(volverA);
   revalidatePath("/admin/pagos");

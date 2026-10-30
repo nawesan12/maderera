@@ -1,9 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
-import { notificarRemitoParaFirmar } from "@/lib/notificaciones/entregas";
 
 export interface EstadoEntrega {
   error?: string;
@@ -20,7 +18,7 @@ export interface EstadoEntrega {
  * esquema de siempre —en un retiro el documento es obligatorio: la firma sola
  * no identifica a nadie—, controla las cantidades contra lo que queda en
  * acopio y saca la mercadería del depósito, todo con el candado de la serie
- * de remitos.
+ * de remitos. El correo con el enlace para firmar lo encola ahí mismo.
  */
 export async function prepararRemito(
   _previo: EstadoEntrega,
@@ -60,10 +58,6 @@ export async function prepararRemito(
   revalidatePath(`/admin/pedidos/${orderId}`);
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin/stock");
-
-  after(async () => {
-    await notificarRemitoParaFirmar(entrega.id);
-  });
 
   return { ok: entrega.ok, numero: entrega.numero, linkFirma: `/firmar/${entrega.firmaToken}` };
 }

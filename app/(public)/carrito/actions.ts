@@ -1,9 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
-import { notificarPresupuestoRecibido } from "@/lib/notificaciones/presupuestos";
 
 export interface EstadoPresupuesto {
   error?: string;
@@ -18,8 +16,8 @@ export interface EstadoPresupuesto {
  * precios del momento. **El carrito no se vacía**: pedir un presupuesto no es
  * comprar. Lo hace Go (backend/internal/checkout, tanda 6): el esquema, el
  * freno por IP y correo, la numeración y el plazo de respuesta (express de 24
- * horas para un profesional aprobado). El correo de «recibimos tu pedido»
- * sigue saliendo de acá.
+ * horas para un profesional aprobado) y el correo de «recibimos tu pedido»,
+ * que encola en la misma transacción.
  */
 export async function pedirPresupuesto(
   _previo: EstadoPresupuesto,
@@ -38,10 +36,7 @@ export async function pedirPresupuesto(
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
 
-  const { quoteId, ok, numero, express } = r.data;
-  after(async () => {
-    await notificarPresupuestoRecibido(quoteId);
-  });
+  const { ok, numero, express } = r.data;
   revalidatePath("/admin/presupuestos");
   revalidatePath("/admin");
   return { ok, numero, express };

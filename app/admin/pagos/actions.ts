@@ -1,9 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
-import { procesarCola } from "@/lib/cola";
 
 export interface EstadoAccionPago {
   error?: string;
@@ -13,13 +11,9 @@ export interface EstadoAccionPago {
 /*
  * La conciliación la hace Go (backend/internal/pagos, tanda 6), con el
  * permiso de la pantalla (/admin/pagos), la bitácora y el mismo `acreditar`
- * que el webhook. Si algo se acreditó, Go deja encolado el aviso al cliente y
- * acá se manda en el acto (sin esperar la vuelta de la cola).
+ * que el webhook. Si algo se acreditó, Go deja encolado el aviso al cliente
+ * (pago.resultado) y su worker lo manda en el acto.
  */
-
-function avisar(trabajo: string | undefined) {
-  if (trabajo) after(() => procesarCola({ soloId: trabajo }));
-}
 
 /** Conciliación de una transferencia: la decide una persona y queda firmada. */
 export async function conciliarTransferencia(
@@ -35,7 +29,6 @@ export async function conciliarTransferencia(
     },
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No pudimos registrar la decisión.") };
-  avisar(r.data.trabajo);
   revalidatePath("/admin/pagos");
   revalidatePath("/admin/pedidos");
   return { ok: r.data.ok };
@@ -51,7 +44,6 @@ export async function reconsultarCobro(
     params: { path: { id: pagoId || "-" } },
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo consultar.") };
-  avisar(r.data.trabajo);
   revalidatePath("/admin/pagos");
   revalidatePath("/admin/pedidos");
   return { ok: r.data.ok };

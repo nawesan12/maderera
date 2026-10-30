@@ -1458,3 +1458,25 @@ en paralelo).
   - [ ] `notificarPresupuestoEnviado` no lo llamaba nadie (se borró con
         `presupuestos.ts`): el presupuesto armado no se avisa por correo ni
         por WhatsApp al pasar a «enviado». Era así antes de la mudanza.
+
+## Errores de plata de la auditoría (30/10, sobre `go-cuentas`)
+
+Cada uno con una prueba que falla sin el arreglo. **Migración 00087**: va a
+mano y antes del despliegue, como todas.
+
+- **Recepción + factura duplicaban la deuda con el proveedor.** La factura de
+  compra puede vincularse a la recepción que cubre (`receiptId`) y carga solo
+  la diferencia con lo que la recepción ya cargó; lo ya cargado se lee de los
+  movimientos atados a la recepción (`supplier_movements.goods_receipt_id`,
+  00087). El vínculo resuelve el aviso «Recepciones sin factura» del cierre.
+  **Pregunta para el contador**: ¿la deuda nace con el remito o con la
+  factura? Se responde con la constante `compras.LaDeudaNaceConElRemito`.
+- **Gasto en efectivo de hoy fuera de la caja**: el turno se buscaba con la
+  medianoche UTC. Los formularios proponen el día argentino (`hoyEnArgentina`).
+- **Venta suelta mixta**: se lista y se asigna solo la parte en efectivo.
+- **Anular suelto un cheque de un recibo**: se rechaza; se anula el recibo.
+- **Cancelar un pedido a cuenta corriente** devuelve la deuda, una vez; una
+  venta del mostrador se anula desde el mostrador.
+- **Aging con restos de coma flotante**: tolerancia de medio centavo.
+- **Cierre Z de un turno cerrado**: la venta anulada después sigue en su Z, y
+  la devolución aparece en el turno en que se anuló.

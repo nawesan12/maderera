@@ -586,6 +586,10 @@ func TestPresupuestoYCobroDeCuenta(t *testing.T) {
 	if s := e.txt(t, `select total::text || ' ' || origen || ' ' || estado from quotes where id = $1`, m["quoteId"]); s != "135001.50 mostrador enviado" {
 		t.Fatalf("presupuesto: %q", s)
 	}
+	// Nace enviado: deja el aviso del presupuesto armado en la cola.
+	if n := e.num(t, `select count(*)::float8 from trabajos where tipo = 'presupuesto.enviado' and carga->>'quoteId' = $1`, m["quoteId"]); n != 1 {
+		t.Fatalf("aviso del presupuesto: %v", n)
+	}
 	// Cobro en efectivo sin caja: no.
 	partes := `[{"medio":"efectivo","importe":"5000"}]`
 	st, m, _ = pedir(t, ven, "POST", e.u+"/api/v1/mostrador/clientes/"+e.cliente+"/cobro", map[string]any{"branchId": e.central, "partes": partes})

@@ -17,6 +17,7 @@ import (
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
+	"mjbj/internal/pedidos"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
@@ -68,7 +69,10 @@ func (s *Servicio) Presupuesto(ctx context.Context, ses *auth.Sesion, p Presupue
 				return err
 			}
 		}
-		return nil
+		// Nace «enviado»: el cliente recibe el aviso del presupuesto armado
+		// (el WhatsApp con el PDF, y el correo si lo tiene), igual que uno
+		// del panel que pasa a enviado. Apagado en /admin/avisos, no sale.
+		return pedidos.EncolarPresupuestoEnviado(ctx, tx, id)
 	})
 	if err != nil {
 		return "", "", err

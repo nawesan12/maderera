@@ -142,7 +142,7 @@ func (s *Servicio) ObtenerOCrear(ctx context.Context, q Quien) (id, tokenNuevo s
 // cuenta de quien acaba de entrar; si ya tenía uno, se juntan (lo repetido
 // suma cantidad).
 func (s *Servicio) Adoptar(ctx context.Context, userID, token string) error {
-	if token == "" || !plataforma.UUIDValido(userID) {
+	if token == "" || userID == "" {
 		return nil
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {

@@ -362,9 +362,10 @@ func (s *Servicio) Confirmar(ctx context.Context, q Quien, ip string, m map[stri
 				return err
 			}
 		}
-		// Los candados del stock de todas las variantes juntos y en orden:
-		// reservarPedido los toma renglón por renglón, y dos compras con las
-		// mismas placas en otro orden se trababan entre sí.
+		// Los candados del stock de todas las variantes juntos y en orden
+		// (reservarPedido los toma renglón por renglón). Hoy el candado de la
+		// serie de pedidos ya ordena dos compras; esto cubre una venta del
+		// mostrador o una entrega que toque las mismas placas en otro orden.
 		if err := bloquearEnOrden(ctx, tx, d.SucursalID, variantes); err != nil {
 			return err
 		}

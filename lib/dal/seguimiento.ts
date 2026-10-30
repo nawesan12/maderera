@@ -1,9 +1,6 @@
 import { cache } from "react";
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { orders } from "@/lib/db/schema";
 import { api, datos } from "@/lib/api/servidor";
 
 /**
@@ -41,24 +38,3 @@ export const pedidoParaSeguimiento = cache(async (numero: string, token?: string
   return { ...p, createdAt: new Date(p.createdAt) };
 });
 
-/** El token de un pedido, para armar el enlace desde donde solo se tiene el id. */
-export async function tokenDelPedido(orderId: string): Promise<string | null> {
-  const [fila] = await db
-    .select({ token: orders.publicToken })
-    .from(orders)
-    .where(eq(orders.id, orderId))
-    .limit(1);
-
-  return fila?.token ?? null;
-}
-
-/** Igual, pero por número: lo necesitan los avisos, que trabajan con el número. */
-export async function tokenPorNumero(numero: string): Promise<string | null> {
-  const [fila] = await db
-    .select({ token: orders.publicToken })
-    .from(orders)
-    .where(and(eq(orders.numero, numero)))
-    .limit(1);
-
-  return fila?.token ?? null;
-}

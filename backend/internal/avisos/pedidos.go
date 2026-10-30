@@ -26,7 +26,7 @@ func LineaDeCorreo(descripcion string, cantidad float64, unidad, importe *string
 
 // Las plantillas de los avisos de pedidos, pagos, presupuestos y entregas
 // (lib/email/plantillas.ts: pedidoRecibido, pedidoCambioDeEstado,
-// pagoAcreditado, pedidoParaFirmar, remitoFirmado, y el acuse del
+// pagoAcreditado, presupuestoListo, pedidoParaFirmar, remitoFirmado, y el acuse del
 // presupuesto de lib/notificaciones/presupuestos.ts), comparadas con el TS en
 // el golden de avisos (testdata/golden/avisos/pedidos.json).
 
@@ -150,6 +150,26 @@ func PresupuestoRecibido(sitio, nombre, numero string, express bool, respondeHas
 		Parrafos: []string{parrafo},
 		Datos:    datos,
 		Cierre:   "Si necesitás agregar o cambiar algo, contestá este correo y lo ajustamos antes de cotizarlo.",
+	})
+}
+
+// PresupuestoListo es el presupuesto armado que se le manda al cliente al
+// pasarlo a «enviado», con el detalle para aceptarlo desde su cuenta. El
+// vencimiento va en hora argentina (fechaHora del TS); nil no se muestra.
+func PresupuestoListo(sitio, nombre, numero string, total float64, validoHasta *time.Time, lineas []email.LineaCorreo) Correo {
+	datos := []email.Bloque{{Etiqueta: "Presupuesto", Valor: numero}}
+	if validoHasta != nil {
+		datos = append(datos, email.Bloque{Etiqueta: "Válido hasta", Valor: pdf.FechaHora(*validoHasta)})
+	}
+	return armar(sitio, "Presupuesto "+numero, email.Opciones{
+		Titulo:   "Tu presupuesto " + numero,
+		Adelanto: "Preparamos el presupuesto " + numero + ".",
+		Saludo:   nombre,
+		Parrafos: []string{"Lo podés aceptar desde tu cuenta y lo convertimos en pedido con estos mismos precios."},
+		Datos:    datos,
+		Lineas:   lineas,
+		Total:    &total,
+		CTA:      &email.Enlace{Texto: "Ver el presupuesto", URL: base(sitio) + "/mi-cuenta/presupuestos"},
 	})
 }
 

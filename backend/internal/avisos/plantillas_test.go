@@ -63,6 +63,14 @@ func TestPlantillasDePedidosComoElTS(t *testing.T) {
 			}
 			correo
 		}
+		Listos []struct {
+			Entrada struct {
+				Nombre, Numero, Total string
+				ValidoHasta           *time.Time
+				Lineas                []lineaGolden
+			}
+			correo
+		}
 		ParaFirmar []struct {
 			Entrada struct{ Nombre, Numero, Remito, URL string }
 			correo
@@ -79,7 +87,7 @@ func TestPlantillasDePedidosComoElTS(t *testing.T) {
 	if err := json.Unmarshal(crudo, &g); err != nil {
 		t.Fatal(err)
 	}
-	if len(g.Pedidos) == 0 || len(g.Estados) == 0 || len(g.Pagos) == 0 || len(g.Presupuestos) == 0 || len(g.ParaFirmar) == 0 || len(g.Firmados) == 0 {
+	if len(g.Pedidos) == 0 || len(g.Estados) == 0 || len(g.Pagos) == 0 || len(g.Presupuestos) == 0 || len(g.Listos) == 0 || len(g.ParaFirmar) == 0 || len(g.Firmados) == 0 {
 		t.Fatal("golden incompleto")
 	}
 	texto := func(p *string) string {
@@ -110,6 +118,10 @@ func TestPlantillasDePedidosComoElTS(t *testing.T) {
 	for i, c := range g.Presupuestos {
 		e := c.Entrada
 		comparar("presupuesto", i, PresupuestoRecibido(g.Sitio, e.Nombre, e.Numero, e.Express, e.RespondeHasta), c.correo)
+	}
+	for i, c := range g.Listos {
+		e := c.Entrada
+		comparar("listo", i, PresupuestoListo(g.Sitio, e.Nombre, e.Numero, jsmath.Numero(e.Total), e.ValidoHasta, lineasDe(e.Lineas)), c.correo)
 	}
 	for i, c := range g.ParaFirmar {
 		e := c.Entrada

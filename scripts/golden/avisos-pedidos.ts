@@ -1,14 +1,14 @@
 /**
  * Golden de los correos de pedidos, pagos, presupuestos y entregas
  * (lib/email/plantillas.ts: pedidoRecibido, pedidoCambioDeEstado,
- * pagoAcreditado, pedidoParaFirmar, remitoFirmado; y el acuse del
+ * pagoAcreditado, presupuestoListo, pedidoParaFirmar, remitoFirmado; y el acuse del
  * presupuesto, que vivía sin exportar en lib/notificaciones/presupuestos.ts
  * —copia textual de 7c087bb, abajo—). El Go
  * (backend/internal/avisos/pedidos.go) tiene que dar el mismo asunto, HTML y
  * texto.
  *
  * Con la zona de Buenos Aires: el acuse formatea la hora de respuesta con la
- * zona del proceso. El contenedor de Next corría en UTC y la daba tres horas
+ * zona del proceso (y el presupuesto listo, el vencimiento). El contenedor de Next corría en UTC y la daba tres horas
  * corrida; Go la da en hora argentina, y el golden falla si Go usa UTC.
  *
  *   TZ=America/Argentina/Buenos_Aires npx tsx --conditions=react-server scripts/golden/avisos-pedidos.ts
@@ -126,6 +126,27 @@ async function main() {
           presupuestos.push({ entrada, ...acuse({ ...entrada, respondeHasta: respondeHasta ? new Date(respondeHasta) : null }) });
         }
 
+  // El presupuesto armado (notificarPresupuestoEnviado, 98a7443^): el
+  // vencimiento va con fechaHora y el total, como viene de la columna.
+  const listos = [];
+  for (const nombre of nombres)
+    for (const numero of ["P-2026-0042", "P <7>"])
+      for (const total of totales)
+        for (const lineas of lineasPedido)
+          for (const validoHasta of [null, "2026-10-29T03:05:00Z", "2026-12-31T23:30:00Z"]) {
+            const entrada = { nombre, numero, total, validoHasta, lineas };
+            listos.push({
+              entrada,
+              ...p.presupuestoListo({
+                nombre,
+                numero,
+                total,
+                vence: validoHasta ? fechaHora.format(new Date(validoHasta)) : null,
+                lineas,
+              }),
+            });
+          }
+
   const paraFirmar = [];
   for (const nombre of nombres)
     for (const numero of numeros)
@@ -146,9 +167,9 @@ async function main() {
   const destino = new URL("../../backend/testdata/golden/avisos/pedidos.json", import.meta.url);
   writeFileSync(
     destino,
-    JSON.stringify({ sitio: process.env.APP_URL, pedidos, estados, pagos, presupuestos, paraFirmar, firmados }) + "\n",
+    JSON.stringify({ sitio: process.env.APP_URL, pedidos, estados, pagos, presupuestos, listos, paraFirmar, firmados }) + "\n",
   );
-  const n = pedidos.length + estados.length + pagos.length + presupuestos.length + paraFirmar.length + firmados.length;
+  const n = pedidos.length + estados.length + pagos.length + presupuestos.length + listos.length + paraFirmar.length + firmados.length;
   console.log(`${n} correos en ${destino.pathname}`);
 }
 main();

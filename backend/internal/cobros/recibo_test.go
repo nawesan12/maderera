@@ -190,6 +190,45 @@ func TestAnularChequeDeUnReciboSeBloquea(t *testing.T) {
 	}
 }
 
+// Bug: el cheque con que se pagó una venta del mostrador (sin recibo, atado
+// al renglón del pago) se podía anular suelto: la venta seguía cobrada y la
+// mercadería entregada con un cheque que ya no contaba. Ahora manda a anular
+// la venta desde el mostrador; con la venta ya anulada, no frena.
+func TestAnularChequeDeUnaVentaDelMostradorSeBloquea(t *testing.T) {
+	b := armarBase(t)
+	ctx := context.Background()
+	_, _ = b.pool.Exec(ctx, `insert into "user" (id, name, email, email_verified, created_at, updated_at) values ('admin', 'Admin', 'admin@prueba.test', true, now(), now())`)
+	var pedido, renglon, cheque string
+	if err := b.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, branch_id, origen, estado, total, customer_id)
+		values ('M-0042', 'Mostrador', $1, 'mostrador', 'entregado', 800, $2) returning id`, b.sucursal, b.cliente).Scan(&pedido); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.pool.QueryRow(ctx, `insert into order_payments (order_id, medio, importe) values ($1, 'cheque', 800) returning id`, pedido).Scan(&renglon); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.pool.QueryRow(ctx, `insert into cheques (sentido, tipo, numero, banco, fecha_pago, importe, estado, customer_id, order_payment_id)
+		values ('recibido', 'fisico', '12340000', 'Macro', now(), 800, 'cartera', $1, $2) returning id`, b.cliente, renglon).Scan(&cheque); err != nil {
+		t.Fatal(err)
+	}
+	s := Nuevo(b.pool, silencio)
+	ses := &auth.Sesion{UserID: "admin"}
+	_, err := s.CambiarEstado(ctx, ses, cheque, "anulado", "")
+	var p *plataforma.Problema
+	if !errors.As(err, &p) || !strings.Contains(p.Errores["cobro"], "anulá la venta M-0042 desde el mostrador") {
+		t.Errorf("anular suelto un cheque de una venta: %v", err)
+	}
+	var estado string
+	_ = b.pool.QueryRow(ctx, `select estado::text from cheques where id = $1`, cheque).Scan(&estado)
+	if estado != "cartera" {
+		t.Errorf("el cheque sigue en cartera: %s", estado)
+	}
+	// Con la venta anulada en el mostrador, el cheque ya no frena nada.
+	_, _ = b.pool.Exec(ctx, `update orders set estado = 'cancelado' where id = $1`, pedido)
+	if _, err := s.CambiarEstado(ctx, ses, cheque, "anulado", ""); err != nil {
+		t.Errorf("con la venta anulada, el cheque se anula: %v", err)
+	}
+}
+
 // Bug: el saldo se sumaba en coma flotante y un saldo real cero daba
 // -5,5e-17: con límite cero, el cliente «tenía $ 0 a favor y no alcanzaba».
 func TestCreditoConSaldoCeroNoTieneNadaAFavor(t *testing.T) {

@@ -289,6 +289,22 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 					", que devuelve la deuda del cliente y anula el cheque.")
 			}
 		}
+		// Lo mismo con el cheque que pagó una venta del mostrador: no tiene
+		// recibo, pero la venta quedó cobrada con él. Anularlo suelto dejaba la
+		// venta pagada y la mercadería entregada con un cheque que ya no
+		// cuenta. Anular la venta desde el mostrador revierte todo junto.
+		if hacia == "anulado" && cheque.ReceiptID == nil && cheque.OrderPaymentID != nil {
+			var numero, estado string
+			err := tx.QueryRow(ctx, `SELECT o.numero, o.estado::text FROM order_payments p JOIN orders o ON o.id = p.order_id
+				WHERE p.id = $1`, *cheque.OrderPaymentID).Scan(&numero, &estado)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if err == nil && estado != "cancelado" {
+				return errCobro("Este cheque pagó la venta " + numero + " del mostrador: anulá la venta " + numero +
+					" desde el mostrador, que devuelve la plata o la deuda y anula el cheque.")
+			}
+		}
 		efecto := "nada"
 		if cheque.Sentido == sqlc.SentidoChequeRecibido {
 			efecto = Efecto(desde, hacia)

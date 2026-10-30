@@ -61,8 +61,8 @@ func (s *Servicio) anotar(ctx context.Context, ses *auth.Sesion, accion bitacora
 }
 
 type filaDePedido struct {
-	numero, estado, tipoEntrega, estadoPago, total string
-	medioPago, customerID                          *string
+	numero, estado, tipoEntrega, estadoPago, total, origen string
+	medioPago, customerID                                  *string
 }
 
 // bloquearPedido lee el pedido y bloquea su fila hasta el final de la
@@ -70,8 +70,8 @@ type filaDePedido struct {
 func bloquearPedido(ctx context.Context, tx pgx.Tx, id string) (*filaDePedido, error) {
 	var p filaDePedido
 	err := tx.QueryRow(ctx, `
-		SELECT numero, estado::text, tipo_entrega::text, estado_pago::text, total::text, medio_pago::text, customer_id
-		FROM orders WHERE id = $1 FOR UPDATE`, id).Scan(&p.numero, &p.estado, &p.tipoEntrega, &p.estadoPago, &p.total, &p.medioPago, &p.customerID)
+		SELECT numero, estado::text, tipo_entrega::text, estado_pago::text, total::text, origen::text, medio_pago::text, customer_id
+		FROM orders WHERE id = $1 FOR UPDATE`, id).Scan(&p.numero, &p.estado, &p.tipoEntrega, &p.estadoPago, &p.total, &p.origen, &p.medioPago, &p.customerID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, noEsta("No se encontró el pedido.")
 	}
@@ -133,7 +133,14 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id string) (*R
 
 // Cancelar cancela el pedido y libera lo reservado (el físico no se toca:
 // nunca salió del galpón). Un pedido ya cancelado no se cancela de nuevo.
+//
+// Si el pedido cargó deuda en la cuenta corriente (la compra a cuenta de la
+// tienda), la cancelación la devuelve con una nota de crédito, una sola vez:
+// antes el pedido quedaba cancelado y la deuda seguía en la cuenta. Una
+// venta del mostrador no se cancela acá: se anula desde el mostrador, que
+// además devuelve el stock que salió y el efectivo de la caja.
 func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, motivo *string) (*Resultado, error) {
+	devuelto := 0.0
 	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
 		p, err := bloquearPedido(ctx, tx, id)
 		if err != nil {
@@ -141,6 +148,14 @@ func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, mo
 		}
 		if p.estado == "cancelado" {
 			return fallo("El pedido ya está cancelado.")
+		}
+		if p.origen == "mostrador" {
+			return fallo("Es una venta del mostrador: anulala desde el mostrador, que devuelve el stock, el efectivo de la caja y la deuda.")
+		}
+		if p.customerID != nil {
+			if devuelto, err = devolverDeuda(ctx, tx, *p.customerID, p.numero, motivo, ses.UserID); err != nil {
+				return err
+			}
 		}
 		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'cancelado', updated_at = now() WHERE id = $1`, id); err != nil {
 			return err
@@ -159,7 +174,38 @@ func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, mo
 		desc += ": " + *motivo
 	}
 	s.anotar(ctx, ses, sqlc.AccionAuditoriaAnular, "pedido", id, desc, nil)
-	return &Resultado{Ok: "Pedido cancelado. La mercadería reservada quedó disponible.", Estado: "cancelado"}, nil
+	ok := "Pedido cancelado. La mercadería reservada quedó disponible."
+	if devuelto > 0 {
+		ok = "Pedido cancelado. La mercadería reservada quedó disponible y la deuda del pedido salió de la cuenta corriente."
+	}
+	return &Resultado{Ok: ok, Estado: "cancelado"}, nil
+}
+
+// devolverDeuda revierte lo que el pedido cargó en la cuenta corriente del
+// cliente (los movimientos «compra» con el número del pedido como
+// referencia, que es como los asienta el checkout) menos lo que ya se
+// devolvió por una cancelación anterior: así se devuelve una sola vez aunque
+// el pedido se cancele dos veces. Devuelve cuánto devolvió.
+func devolverDeuda(ctx context.Context, tx pgx.Tx, cliente, numero string, motivo *string, usuario string) (float64, error) {
+	var pendiente jsmath.Num
+	if err := tx.QueryRow(ctx, `
+		SELECT coalesce(sum(monto), 0) FROM account_movements
+		WHERE customer_id = $1 AND referencia = $2
+		  AND (tipo = 'compra' OR (tipo = 'nota_credito' AND detalle LIKE 'Cancelación del pedido %'))`, cliente, numero).Scan(&pendiente); err != nil {
+		return 0, err
+	}
+	monto := pendiente.F()
+	if jsmath.Fijo2(monto) == "0.00" || monto < 0 {
+		return 0, nil
+	}
+	detalle := "Cancelación del pedido " + numero
+	if motivo != nil && *motivo != "" {
+		detalle += ": " + *motivo
+	}
+	_, err := tx.Exec(ctx, `
+		INSERT INTO account_movements (customer_id, tipo, monto, detalle, referencia, created_by_user_id)
+		VALUES ($1, 'nota_credito', $2::numeric, $3, $4, $5)`, cliente, jsmath.Fijo2(-monto), detalle, numero, usuario)
+	return monto, err
 }
 
 // MarcarPagado anota como cobrado lo que ya se cobró por otro lado. Un

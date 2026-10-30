@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 
@@ -203,5 +204,38 @@ func TestAvanzarALaVezNoRepiteEstados(t *testing.T) {
 	filas.Close()
 	if fmt.Sprint(estados) != "[pendiente preparando listo entregado]" {
 		t.Errorf("historial: %v", estados)
+	}
+}
+
+// Bug: cancelar un pedido a cuenta corriente dejaba la deuda en la cuenta.
+// Ahora la devuelve, una sola vez aunque se cancele diez veces a la vez. Y
+// una venta del mostrador no se cancela desde Pedidos: se anula desde el
+// mostrador, que devuelve stock, efectivo y deuda.
+func TestCancelarDevuelveLaDeudaUnaVez(t *testing.T) {
+	e := armar(t)
+	_, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	cliente := e.id(t, `insert into customers (nombre) values ('Juan') returning id`)
+	pedido := e.id(t, `insert into orders (numero, customer_id, contacto_nombre, branch_id, origen, medio_pago, total, estado)
+		values ('P-2026-0001', $1, 'Juan', $2, 'tienda', 'cuenta_corriente', 1210, 'pendiente') returning id`, cliente, e.sucursal)
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, detalle, referencia) values ($1, 'compra', 1210, 'Pedido P-2026-0001', 'P-2026-0001')`, cliente)
+	aLaVez(10, func(int) {
+		_, err := e.s.Cancelar(context.Background(), ses, pedido, nil)
+		if err != nil && !esProblema(err, 422) {
+			t.Errorf("error inesperado: %v", err)
+		}
+	})
+	if s := e.numero(t, `select coalesce(sum(monto), 0) from account_movements where customer_id = $1`, cliente); s != 0 {
+		t.Errorf("la deuda del pedido cancelado tiene que volver a cero: %v", s)
+	}
+	if n := e.numero(t, `select count(*) from account_movements where customer_id = $1 and tipo = 'nota_credito'`, cliente); n != 1 {
+		t.Errorf("notas de crédito: %v", n)
+	}
+
+	venta := e.id(t, `insert into orders (numero, customer_id, contacto_nombre, branch_id, origen, medio_pago, total, estado, clave_mostrador)
+		values ('M-1', $1, 'Juan', $2, 'mostrador', 'cuenta_corriente', 500, 'entregado', 'clave-m-1') returning id`, cliente, e.sucursal)
+	_, err := e.s.Cancelar(context.Background(), ses, venta, nil)
+	var p *plataforma.Problema
+	if !errors.As(err, &p) || !strings.Contains(p.Error(), "anulala desde el mostrador") {
+		t.Errorf("cancelar una venta del mostrador: %v", err)
 	}
 }

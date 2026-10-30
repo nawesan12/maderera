@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"mjbj/internal/plataforma"
@@ -50,5 +51,41 @@ func TestExigirSinRolesNoDejaEntrarANadie(t *testing.T) {
 	_, err := ExigirSesion(cliente)
 	if got := estadoDe(t, err); got != http.StatusOK {
 		t.Errorf("ExigirSesion con un cliente: %d, quería que entre", got)
+	}
+}
+
+// Un anónimo que manda un pedido mal formado a una ruta del panel recibe un
+// 401, no el 400 del contrato que le describe el esquema.
+func TestPanelCierraAntesDelContrato(t *testing.T) {
+	interna := plataforma.ConfigInterna{Secreto: "secreto-interno"}
+	contrato := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusBadRequest, "parameter \"q\" in query has an error: value is required"))
+	})
+	h := Panel(interna)(contrato)
+	admin := sqlc.StaffRoleAdmin
+	casos := []struct {
+		nombre, ruta, cabecera string
+		ses                    *Sesion
+		quiero                 int
+	}{
+		{"anónimo en el panel", "/api/v1/admin/buscar", "", nil, http.StatusUnauthorized},
+		{"cliente en el panel", "/api/v1/admin/buscar", "", &Sesion{UserID: "c", Rol: sqlc.UserRoleCliente}, http.StatusForbidden},
+		{"personal en el panel", "/api/v1/admin/buscar", "", &Sesion{UserID: "a", Rol: sqlc.UserRoleStaff, RolStaff: &admin}, http.StatusBadRequest},
+		{"Next con el secreto", "/api/v1/admin/buscar", "Bearer secreto-interno", nil, http.StatusBadRequest},
+		{"anónimo en la tienda", "/api/v1/catalogo/rubros", "", nil, http.StatusBadRequest},
+	}
+	for _, c := range casos {
+		r := httptest.NewRequest("GET", c.ruta, nil)
+		if c.cabecera != "" {
+			r.Header.Set("Authorization", c.cabecera)
+		}
+		if c.ses != nil {
+			r = r.WithContext(ConSesion(r.Context(), c.ses))
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != c.quiero {
+			t.Errorf("%s: %d, quería %d", c.nombre, w.Code, c.quiero)
+		}
 	}
 }

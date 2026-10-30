@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -75,4 +76,31 @@ func ExigirSesion(ctx context.Context) (*Sesion, error) {
 // ExigirStaff pide que sea personal, con cualquier rol.
 func ExigirStaff(ctx context.Context) (*Sesion, error) {
 	return Exigir(ctx, sqlc.AllStaffRoleValues()...)
+}
+
+// Panel cierra /api/v1/admin/ antes de que el pedido llegue a la validación
+// del contrato: sin sesión, 401; con una sesión que no es del personal, 403.
+// Sin esto, un anónimo que mandaba un pedido mal formado recibía un 400 que
+// le describía el esquema de la ruta (qué parámetros, qué tipos).
+//
+// Cada handler sigue exigiendo su pantalla con Exigir: esto solo adelanta lo
+// que todas las rutas del panel tienen en común. Las que Next llama con el
+// secreto interno, sin sesión, pasan.
+func Panel(interna plataforma.ConfigInterna) func(http.Handler) http.Handler {
+	return func(sig http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/api/v1/admin/") && !interna.EsInterno(r) {
+				ses := DeContexto(r.Context())
+				if ses == nil {
+					plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusUnauthorized, "Tenés que entrar para hacer esto."))
+					return
+				}
+				if !ses.EsStaff() {
+					plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusForbidden, "Tu usuario no tiene permiso para esto."))
+					return
+				}
+			}
+			sig.ServeHTTP(w, r)
+		})
+	}
 }

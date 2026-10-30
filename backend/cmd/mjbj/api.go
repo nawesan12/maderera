@@ -570,5 +570,7 @@ func correrAPI() error {
 
 	// La sesión se lee en todos los pedidos de la API; /salud no la necesita
 	// pero tampoco molesta (sin cookie no toca la base).
+	// El panel, cerrado antes de validar el contrato (ver auth.Panel).
+	h = auth.Panel(cfg.Interna)(h)
 	return plataforma.Servir(cfg.Escuchar, plataforma.Cadena(sesiones.Middleware(h), log), log)
 }

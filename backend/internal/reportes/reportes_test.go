@@ -3,6 +3,7 @@ package reportes
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -524,5 +525,34 @@ func TestCierreSinRetencionesPracticadasAnuladas(t *testing.T) {
 	r, err = e.s.ResumenDelMes(ctx, p.Desde, p.Hasta)
 	if err != nil || r.RetencionesPracticadas.Cantidad != 1 || r.RetencionesPracticadas.Total != 30 {
 		t.Errorf("la anulada no cuenta: %+v %v", r.RetencionesPracticadas, err)
+	}
+}
+
+// Un pago a proveedor de octubre anulado en noviembre: octubre no cambia (el
+// pago sigue ahí) y noviembre lleva el contraasiento.
+func TestElPagoAnuladoVaConSuContraasiento(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	prov := e.id(t, `insert into suppliers (nombre) values ('Aserradero Norte') returning id`)
+	e.exec(t, `insert into supplier_payments (supplier_id, total, neto, medio, referencia, fecha, anulado_at, motivo_anulacion)
+		values ($1, 1000, 1000, 'transferencia', 'TR 9', '2026-10-15T15:00:00Z', '2026-11-03T15:00:00Z', 'mal cargado')`, prov)
+	conceptos := func(periodo string) []string {
+		_, b, _ := pedir(t, adm, e.u+"cierre/asientos?periodo="+periodo)
+		var as []Asiento
+		_ = json.Unmarshal([]byte(b), &as)
+		var c []string
+		for _, a := range as {
+			c = append(c, a.Concepto)
+			if !a.Balancea {
+				t.Errorf("%s no balancea", a.Concepto)
+			}
+		}
+		return c
+	}
+	if c := conceptos("2026-10"); fmt.Sprint(c) != "[Pago a Aserradero Norte · TR 9]" {
+		t.Errorf("octubre: %v", c)
+	}
+	if c := conceptos("2026-11"); fmt.Sprint(c) != "[Anulación · Pago a Aserradero Norte · TR 9]" {
+		t.Errorf("noviembre: %v", c)
 	}
 }

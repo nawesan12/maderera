@@ -44,11 +44,3 @@ export async function acumuladoDelMes(supplierId: string) {
     await (await api()).GET("/api/v1/admin/proveedores/{id}/acumulado-del-mes", { params: { path: { id: supplierId } } }),
   );
 }
-
-/** Un certificado con todo lo que hace falta para imprimirlo, por número. */
-export async function certificadoParaImprimir(numero: string) {
-  const r = await (await api()).GET("/api/v1/admin/compras/certificados/{numero}", { params: { path: { numero } } });
-  if (r.response.status === 404) return null;
-  const c = datos(r);
-  return { ...c, fecha: new Date(c.fecha), pagoFecha: new Date(c.pagoFecha) };
-}

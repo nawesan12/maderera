@@ -111,23 +111,34 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 	}
 
 	rs, err = s.pool.Query(ctx, `
-		SELECT p.fecha, s.nombre, p.referencia, p.total, p.neto, p.medio
+		SELECT p.fecha, s.nombre, p.referencia, p.total, p.neto, p.medio, p.anulado_at
 		FROM supplier_payments p JOIN suppliers s ON s.id = p.supplier_id
-		WHERE p.fecha >= $1 AND p.fecha <= $2 ORDER BY p.fecha`, idesde, ihasta)
+		WHERE (p.fecha >= $1 AND p.fecha <= $2) OR (p.anulado_at >= $1 AND p.anulado_at <= $2)
+		ORDER BY p.fecha`, idesde, ihasta)
 	if err != nil {
 		return nil, err
 	}
 	for rs.Next() {
 		var fecha time.Time
+		var anulado *time.Time
 		var proveedor, medio string
 		var referencia *string
 		var total, neto jsmath.Num
-		if err := rs.Scan(&fecha, &proveedor, &referencia, &total, &neto, &medio); err != nil {
+		if err := rs.Scan(&fecha, &proveedor, &referencia, &total, &neto, &medio, &anulado); err != nil {
 			rs.Close()
 			return nil, err
 		}
-		asientos = append(asientos, AsientoDePagoAProveedor(PagoAAsentar{Fecha: fecha, Proveedor: proveedor, Referencia: referencia,
-			Total: total.F(), Retenido: total.F() - neto.F(), Medio: medio}))
+		pago := AsientoDePagoAProveedor(PagoAAsentar{Fecha: fecha, Proveedor: proveedor, Referencia: referencia,
+			Total: total.F(), Retenido: total.F() - neto.F(), Medio: medio})
+		// Como el recibo anulado: el pago queda en su mes y la anulación va
+		// con su contraasiento en la fecha en que se anuló, así un mes ya
+		// cerrado no cambia.
+		if entre(fecha, idesde, ihasta) {
+			asientos = append(asientos, pago)
+		}
+		if anulado != nil && entre(*anulado, idesde, ihasta) {
+			asientos = append(asientos, asiento(*anulado, "Anulación · "+pago.Concepto, invertir(pago.Renglones)))
+		}
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {
@@ -224,19 +235,6 @@ type ResumenDelMes struct {
 	PosicionIva float64 `json:"posicionIva"`
 }
 
-// retencionesPracticadasAnulables dice si retenciones_practicadas ya tiene
-// anulada_at (la migración 00089, de compras, la agrega para anular una
-// retención con su pago). Mientras no esté, no hay retención anulada que
-// sacar; cuando esté, el resumen deja de contar las anuladas sin otro
-// despliegue. Se pregunta al catálogo y no con una constante para que el
-// orden en que entren las dos ramas no importe.
-func (s *Servicio) retencionesPracticadasAnulables(ctx context.Context) (bool, error) {
-	var hay bool
-	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.columns
-		WHERE table_schema = current_schema() AND table_name = 'retenciones_practicadas' AND column_name = 'anulada_at')`).Scan(&hay)
-	return hay, err
-}
-
 // ResumenDelMes es resumenDelMes: las notas de crédito restan, y en las
 // compras solo da crédito el IVA de la A, la M y sus notas.
 func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (ResumenDelMes, error) {
@@ -266,12 +264,8 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	if err != nil {
 		return r, err
 	}
-	practicadas := ""
-	if anulables, err := s.retencionesPracticadasAnulables(ctx); err != nil {
-		return r, err
-	} else if anulables {
-		practicadas = " AND anulada_at IS NULL"
-	}
+	// Las retenciones de un pago anulado no cuentan.
+	practicadas := " AND anulada_at IS NULL"
 	err = s.pool.QueryRow(ctx, `
 		SELECT
 		  (SELECT coalesce(sum(importe), 0) FROM expenses WHERE fecha >= $1 AND fecha <= $2),

@@ -52,14 +52,6 @@ ENV APP_URL=$APP_URL
 ENV APP_ENV=$APP_ENV
 ENV SEO_INDEXAR=$SEO_INDEXAR
 
-# Better Auth se carga mientras se prerenderiza y, sin estas dos, llena el
-# registro del build de errores que no son: «falta el secreto», «falta la URL».
-# El secreto de acá es de mentira y **solo vive en esta etapa**: la imagen final
-# sale de `runner`, que no lo hereda, y el verdadero llega al arrancar por el
-# `env_file`. Nada de lo que se prerenderiza firma ni lee una sesión.
-ENV BETTER_AUTH_URL=$APP_URL
-ENV BETTER_AUTH_SECRET=solo-para-el-build-no-firma-nada-real-000000
-
 # La API de Go: lo público en caché (rubros, sucursales, el equipaje del
 # asistente) se arma en el build y sus datos salen de ahí. La pasa el compose
 # (loopback del servidor, como la base); en la imagen final la pisa el

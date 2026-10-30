@@ -1,4 +1,6 @@
-import type { SegmentoCampana } from "@/lib/db/schema/campanas";
+import type { Esquemas } from "@/lib/api/tipos";
+
+type SegmentoCampana = Esquemas["SegmentoCampana"];
 
 /*
  * Lo que queda en TS del segmento de una campaña: lo que usa el editor en el

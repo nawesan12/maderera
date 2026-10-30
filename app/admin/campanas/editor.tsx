@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarClock, Eye, Loader2, Save, Send, TestTube2, Users } from "lucide-react";
 import { Confirmar } from "@/components/admin/confirmar";
-import type { SegmentoCampana } from "@/lib/db/schema/campanas";
+import type { Esquemas } from "@/lib/api/tipos";
 import { duracionDelEnvio } from "@/lib/campanas/segmento";
 import {
   alcanceDelSegmento,
@@ -16,6 +16,8 @@ import {
   vistaPrevia,
   type EstadoCampana,
 } from "./actions";
+
+type SegmentoCampana = Esquemas["SegmentoCampana"];
 
 export interface CamposDeCampana {
   id?: string;

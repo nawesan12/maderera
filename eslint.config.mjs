@@ -36,39 +36,11 @@ const eslintConfig = defineConfig([
   },  {
     /**
      * **Next no le habla a la base.** Todo dato pasa por la API de Go
-     * (docs/go/progreso.md). Los archivos de abajo son los que todavía no se
-     * mudaron: la lista solo puede achicarse, y cuando quede vacía se borran
-     * lib/db y drizzle.
+     * (docs/go/progreso.md); los tipos salen del contrato (lib/api/tipos).
+     * Quedan afuera solo las herramientas: las semillas de la base de
+     * desarrollo (lib/db), los scripts y los golden que leen el TS viejo.
      */
-    ignores: [
-      "lib/db/**",
-      "scripts/**",
-      "bench/**",
-      "tests/**",
-      "backend/**",
-      "app/(public)/carrito-actions.ts",
-      "app/(public)/corte/actions.ts",
-      "app/(public)/pago-actions.ts",
-      "app/admin/pagos/banco.tsx",
-      "lib/cobros/recibo.ts",
-      "lib/compras/congelar.ts",
-      "lib/dal/admin/pagos.ts",
-      "lib/dal/carrito.ts",
-      "lib/dal/credito.ts",
-      "lib/dal/numeracion-ventas.ts",
-      "lib/dal/pagos.ts",
-      "lib/inventario/locks.ts",
-      "lib/inventario/reservas.ts",
-      "lib/limites/index.ts",
-      "lib/mostrador/offline/cola.ts",
-      "lib/mostrador/offline/sincronizar.ts",
-      "lib/mostrador/offline/use-caja.ts",
-      "lib/mostrador/offline/use-copia-local.ts",
-      "lib/pagos/acreditar.ts",
-      "lib/pagos/crear.ts",
-      "lib/pagos/webhook.ts",
-      "lib/ventas/factores.ts",
-    ],
+    ignores: ["lib/db/**", "scripts/**", "bench/**", "tests/**", "backend/**"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -80,7 +52,6 @@ const eslintConfig = defineConfig([
           patterns: [
             {
               group: ["@/lib/db/*", "drizzle-orm/*"],
-              allowTypeImports: true,
               message: "Next no le habla a la base: pedíselo a la API de Go (lib/api/servidor).",
             },
           ],

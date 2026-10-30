@@ -89,7 +89,9 @@ cliente:
 
 - ~~El contenedor `cron`~~: se sacó con la mudanza de los avisos (rama
   `go-avisos`). `desplegar.sh` borra el que haya quedado andando.
-- Borrar `lib/db`, drizzle y `pg` de la app cuando la lista de
-  `eslint.config.mjs` quede vacía; sacarle `DATABASE_URL` a `app` en el
-  compose.
+- ~~La lista de `eslint.config.mjs`~~: vacía desde el 30/10, sin imports de
+  tipo tampoco (los tipos salen de `lib/api/tipos`). `app` ya no tiene
+  `DATABASE_URL`. Lo que queda de `lib/db`, drizzle y `pg` son las semillas
+  de la base de desarrollo y los scripts golden: herramientas, no la app (el
+  `standalone` no los empaqueta).
 - Repetir la prueba de carga en la VPS, con el mostrador.

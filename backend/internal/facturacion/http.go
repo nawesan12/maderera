@@ -286,7 +286,7 @@ func (a *API) ComprobanteEnPdf(ctx context.Context, r facturacionapi.Comprobante
 }
 
 func (a *API) MisComprobantes(ctx context.Context, _ facturacionapi.MisComprobantesRequestObject) (facturacionapi.MisComprobantesResponseObject, error) {
-	ses, err := auth.Exigir(ctx)
+	ses, err := auth.ExigirSesion(ctx)
 	if err != nil {
 		return nil, err
 	}

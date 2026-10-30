@@ -451,7 +451,7 @@ func (a *API) clienteDeLaSesion(ctx context.Context, ses *auth.Sesion) (*cliente
 }
 
 func (a *API) portal(ctx context.Context) (*clientePortal, error) {
-	ses, err := auth.Exigir(ctx)
+	ses, err := auth.ExigirSesion(ctx)
 	if err != nil {
 		return nil, err
 	}

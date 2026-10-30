@@ -40,19 +40,34 @@ func DeContexto(ctx context.Context) *Sesion {
 	return s
 }
 
-// Exigir pide sesión y, si se pasan roles, que sea personal con alguno de
-// ellos. Devuelve el problema listo para devolver desde el handler.
+// Exigir pide que sea personal con alguno de los roles. Devuelve el problema
+// listo para devolver desde el handler.
 //
 // Es la línea de defensa (no hay RLS en la base): toda ruta que devuelve o
-// cambia datos de alguien empieza con esto, y filtra por ses.UserID, nunca
-// por un id que mande el cliente.
+// cambia datos de alguien empieza con esto (o con ExigirSesion), y filtra por
+// ses.UserID, nunca por un id que mande el cliente.
+//
+// **Sin roles no entra nadie.** Lo normal es pasarle
+// roles.QuienEntra("/pantalla")..., y una clave mal escrita devuelve nil: si
+// eso dejara pasar a cualquier sesión, un error de tipeo abriría la ruta a
+// los clientes. Para «cualquiera que haya entrado» está ExigirSesion.
 func Exigir(ctx context.Context, roles ...sqlc.StaffRole) (*Sesion, error) {
+	ses, err := ExigirSesion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(roles) == 0 || !ses.Tiene(roles...) {
+		return nil, plataforma.NuevoProblema(http.StatusForbidden, "Tu usuario no tiene permiso para esto.")
+	}
+	return ses, nil
+}
+
+// ExigirSesion pide solo que haya entrado alguien (cliente o personal): las
+// rutas de «mi cuenta», que después filtran por ses.UserID.
+func ExigirSesion(ctx context.Context) (*Sesion, error) {
 	ses := DeContexto(ctx)
 	if ses == nil {
 		return nil, plataforma.NuevoProblema(http.StatusUnauthorized, "Tenés que entrar para hacer esto.")
-	}
-	if len(roles) > 0 && !ses.Tiene(roles...) {
-		return nil, plataforma.NuevoProblema(http.StatusForbidden, "Tu usuario no tiene permiso para esto.")
 	}
 	return ses, nil
 }

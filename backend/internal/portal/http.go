@@ -60,7 +60,7 @@ func (a *API) cliente(ctx context.Context) (*Cliente, error) {
 
 // paraCambiar pide sesión, y la ficha.
 func (a *API) paraCambiar(ctx context.Context) (*auth.Sesion, *Cliente, error) {
-	ses, err := auth.Exigir(ctx)
+	ses, err := auth.ExigirSesion(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

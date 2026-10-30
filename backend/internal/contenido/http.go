@@ -152,7 +152,7 @@ func (a *API) ResumenDeResenas(ctx context.Context, r contenidoapi.ResumenDeRese
 // --- las reseñas del cliente ---
 
 func (a *API) MisResenables(ctx context.Context, _ contenidoapi.MisResenablesRequestObject) (contenidoapi.MisResenablesResponseObject, error) {
-	ses, err := auth.Exigir(ctx)
+	ses, err := auth.ExigirSesion(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (a *API) MisResenables(ctx context.Context, _ contenidoapi.MisResenablesReq
 }
 
 func (a *API) DejarResena(ctx context.Context, r contenidoapi.DejarResenaRequestObject) (contenidoapi.DejarResenaResponseObject, error) {
-	ses, err := auth.Exigir(ctx)
+	ses, err := auth.ExigirSesion(ctx)
 	if err != nil {
 		return nil, err
 	}

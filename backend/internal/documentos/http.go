@@ -96,7 +96,7 @@ const leyendaConIva = "Precios finales con IVA incluido"
 // de quien pide, con los precios de su lista (Vigente), nunca de un
 // parámetro.
 func (a *API) MiListaDePreciosPdf(ctx context.Context, _ documentosapi.MiListaDePreciosPdfRequestObject) (documentosapi.MiListaDePreciosPdfResponseObject, error) {
-	ses, err := auth.Exigir(ctx)
+	ses, err := auth.ExigirSesion(ctx)
 	if err != nil {
 		return nil, err
 	}

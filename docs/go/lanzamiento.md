@@ -95,3 +95,13 @@ cliente:
   de la base de desarrollo y los scripts golden: herramientas, no la app (el
   `standalone` no los empaqueta).
 - Repetir la prueba de carga en la VPS, con el mostrador.
+- **Restauración ensayada (30/10/2026):** el volcado diario de las 6:48
+  restaurado en `prueba_restauracion` dentro de la VPS dio las mismas filas
+  que la base en uso (productos, clientes, pedidos, facturas, movimientos,
+  usuarios); solo cambiaba la versión de goose (85 contra 90: las
+  migraciones del día son posteriores al volcado). **Falta la copia fuera de
+  la máquina**: `secretos/rclone` está vacío y `RCLONE_REMOTE` sin poner, así
+  que hoy los respaldos viven en el mismo disco que la base. Hace falta una
+  cuenta de destino (Backblaze B2, Google Drive, S3) y seguir «Respaldos» en
+  `docs/SERVIDOR-PROPIO.md`. El `.tar.gz` de fotos y adjuntos no se genera
+  porque todavía no hay ninguno subido: el script lo saltea a propósito.

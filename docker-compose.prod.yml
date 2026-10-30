@@ -94,7 +94,7 @@ services:
       # aparte y **Caddy no monta este volumen**: solo se sirven por
       # `/api/whatsapp/medios/<id>`, con sesión de la bandeja.
       CARPETA_PRIVADA: /datos/privado
-      # Hay un proceso que vive y un cron: enciende el tiempo real del panel
+      # Hay un proceso que vive: enciende el tiempo real del panel
       # (`lib/vivo`). En Vercel no está y las pantallas consultan cada tanto.
       PLATAFORMA: vps
       # El envío de los avisos y las campañas por el servidor de correo propio
@@ -337,31 +337,9 @@ services:
       - ./secretos/rclone:/config/rclone
     entrypoint: ["sh", "/respaldo.sh"]
 
-  # Las tareas programadas (ver `servidor/cron/crontab` y `lib/tareas`). Un
-  # crond de busybox y nada más: no guarda estado ni sabe qué hace cada tarea,
-  # solo llama a la aplicación a horario. El candado de «una vez por período»
-  # está en la base, así que reiniciar este contenedor no repite nada.
-  cron:
-    image: alpine:3.20
-    restart: unless-stopped
-    depends_on:
-      - app
-    environment:
-      # En formato POSIX y no «America/Argentina/Buenos_Aires»: alpine no trae
-      # la base de zonas, y Argentina no tiene horario de verano, así que «tres
-      # horas al oeste de UTC» es exacto todo el año.
-      TZ: ART3
-      TAREAS_SECRETO: ${TAREAS_SECRETO:?Falta TAREAS_SECRETO en .env.produccion}
-    volumes:
-      - ./servidor/cron/crontab:/etc/crontabs/root:ro
-      - ./servidor/cron/tarea.sh:/tarea.sh:ro
-    # crond no hereda el entorno: el secreto se deja en un archivo que solo
-    # vive dentro del contenedor, y `tarea.sh` lo lee de ahí.
-    entrypoint:
-      - sh
-      - -c
-      - 'umask 077; printf %s "$$TAREAS_SECRETO" > /run/secreto; exec crond -f -l 8'
-
+  # No hay contenedor `cron`: las tareas programadas y la cola las corre el
+  # worker de Go (servicio `worker`), con el candado de «una vez por período»
+  # en la base. El de antes le pegaba a /api/tareas de Next, que ya no existe.
 
   # **Las casillas de correo propias** (docker-mailserver: Postfix, Dovecot y
   # Rspamd). Es la pieza que más mantenimiento pide de todo el servidor —ver

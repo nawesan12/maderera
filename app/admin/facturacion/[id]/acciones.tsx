@@ -190,7 +190,15 @@ export function FormularioCobro({
  * emitida no se borra, se anula con una nota de crédito que queda en el libro.
  * Es una operación fiscal, no un "deshacer".
  */
-export function AnularComprobante({ id }: { id: string }) {
+export function AnularComprobante({
+  id,
+  revierteConDebito = false,
+}: {
+  id: string;
+  /** Una nota de crédito se anula con una nota de débito (ARCA). */
+  revierteConDebito?: boolean;
+}) {
+  const nota = revierteConDebito ? "nota de débito" : "nota de crédito";
   const [estado, accion, pendiente] = useActionState(anular, inicial);
   const [abierto, setAbierto] = useState(false);
 
@@ -202,7 +210,7 @@ export function AnularComprobante({ id }: { id: string }) {
         className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-base font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
       >
         <Undo2 className="h-5 w-5" />
-        Anular con nota de crédito
+        Anular con {nota}
       </button>
     );
   }
@@ -212,7 +220,7 @@ export function AnularComprobante({ id }: { id: string }) {
       <input type="hidden" name="id" value={id} />
 
       <p className="text-base">
-        Se emite una <strong>nota de crédito por el total</strong> que anula este
+        Se emite una <strong>{nota} por el total</strong> que anula este
         comprobante. Las dos quedan en el libro IVA: una factura emitida no se
         borra.
       </p>
@@ -232,7 +240,7 @@ export function AnularComprobante({ id }: { id: string }) {
           className="inline-flex h-10 items-center gap-2 rounded-lg bg-red-700 px-4 text-base font-medium text-white transition-colors hover:bg-red-800 disabled:opacity-60"
         >
           {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
-          Emitir nota de crédito
+          Emitir {nota}
         </button>
         <button
           type="button"

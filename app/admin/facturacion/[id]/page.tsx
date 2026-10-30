@@ -420,11 +420,15 @@ export default async function FichaComprobantePage({
                   }))}
                   total={Number(comprobante.total)}
                   acreditado={Number(comprobante.acreditado)}
+                  revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
                 />
               </section>
 
               <section className="tarjeta p-5">
-                <AnularComprobante id={comprobante.id} />
+                <AnularComprobante
+                  id={comprobante.id}
+                  revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
+                />
               </section>
             </>
           )}

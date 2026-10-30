@@ -37,8 +37,18 @@ func diasEntre(desde, hasta time.Time) int {
 	return int(math.Max(0, math.Floor(float64(hasta.UnixMilli()-desde.UnixMilli())/86_400_000)))
 }
 
+// medioCentavo es la tolerancia de la cuenta: lo que queda por debajo es
+// resto de la coma flotante, no plata.
+const medioCentavo = 0.005
+
 // CalcularAging es calcularAging: los pagos cancelan la deuda más vieja
 // primero (FIFO); lo que sobra queda a favor y se come la deuda siguiente.
+//
+// Bug del TS arreglado: la cuenta en coma flotante dejaba restos. Con
+// 0,29999999999999998 a favor, una compra de 0,30 quedaba con 5,5e-17
+// pendientes, y una cuenta con saldo real cero decía «Tiene deuda de hace
+// 198 días» (y frenaba la venta a cuenta). Ahora lo que no llega a medio
+// centavo no queda pendiente ni a favor.
 func CalcularAging(movs []Movimiento, hoy time.Time) Aging {
 	ordenados := append([]Movimiento(nil), movs...)
 	sort.SliceStable(ordenados, func(i, j int) bool { return ordenados[i].Fecha.UnixMilli() < ordenados[j].Fecha.UnixMilli() })
@@ -56,7 +66,10 @@ func CalcularAging(movs []Movimiento, hoy time.Time) Aging {
 				aFavor -= usa
 				deuda -= usa
 			}
-			if deuda > 0 {
+			if aFavor <= medioCentavo {
+				aFavor = 0
+			}
+			if deuda > medioCentavo {
 				pendientes = append(pendientes, &pendiente{deuda, m.Fecha})
 			}
 			continue
@@ -67,11 +80,11 @@ func CalcularAging(movs []Movimiento, hoy time.Time) Aging {
 			cancela := math.Min(pago, vieja.monto)
 			vieja.monto -= cancela
 			pago -= cancela
-			if vieja.monto <= 0.005 {
+			if vieja.monto <= medioCentavo {
 				pendientes = pendientes[1:]
 			}
 		}
-		if pago > 0 {
+		if pago > medioCentavo {
 			aFavor += pago
 		}
 	}

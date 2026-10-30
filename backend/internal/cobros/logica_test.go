@@ -233,3 +233,27 @@ func TestAgingYPrioridadComoTS(t *testing.T) {
 		}
 	}
 }
+
+// Bug: la cuenta en coma flotante dejaba restos. Dos pagos de 0,70 y -0,40
+// (una nota de débito) dejan 0,29999999999999998 a favor; una compra de 0,30
+// quedaba con 5,5e-17 pendientes y la cuenta, con saldo real cero, decía
+// «Tiene deuda de hace 198 días».
+func TestAgingSinRestosDeComaFlotante(t *testing.T) {
+	hace := func(d int) time.Time { return time.Date(2026, 4, 15, 12, 0, 0, 0, time.UTC).AddDate(0, 0, -d) }
+	hoy := hace(0)
+	movs := []Movimiento{
+		{-0.7, hace(200)},
+		{0.4, hace(199)},
+		{0.3, hace(198)},
+	}
+	a := CalcularAging(movs, hoy)
+	if a.DiasDeLaMasVieja != nil || a.Total != 0 || a.AFavor != 0 {
+		t.Errorf("saldo cero sin deuda: %+v (días %v)", a, a.DiasDeLaMasVieja)
+	}
+	// Y al revés: un resto a favor de 1e-17 no es saldo a favor.
+	movs = []Movimiento{{0.3, hace(10)}, {-0.1, hace(9)}, {-0.2, hace(8)}}
+	a = CalcularAging(movs, hoy)
+	if a.DiasDeLaMasVieja != nil || a.Total != 0 || a.AFavor != 0 {
+		t.Errorf("pagado justo: %+v", a)
+	}
+}

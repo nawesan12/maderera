@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/formato"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/sqlc"
 )
 
@@ -52,6 +53,9 @@ func Credito(ctx context.Context, q *sqlc.Queries, cliente string, monto float64
 		movs[i] = Movimiento{f.Monto, f.CreatedAt}
 		saldo += f.Monto
 	}
+	// En centavos: sumar en coma flotante deja restos, y un saldo real cero
+	// daba -5,5e-17 («tiene $ 0 a favor y no alcanza»).
+	saldo = jsmath.Round(saldo*100) / 100
 	if c.LimiteCredito <= 0 {
 		aFavor := math.Max(-saldo, 0)
 		if aFavor > 0 && !c.CuentaBloqueada {

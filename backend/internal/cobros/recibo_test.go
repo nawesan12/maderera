@@ -18,6 +18,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/pruebas"
+	"mjbj/internal/sqlc"
 )
 
 var silencio = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -186,6 +187,22 @@ func TestAnularChequeDeUnReciboSeBloquea(t *testing.T) {
 		values ('recibido', 'fisico', '99990000', 'Nación', now(), 100, 'cartera', $1) returning id`, b.cliente).Scan(&suelto)
 	if _, err := s.CambiarEstado(ctx, ses, suelto, "anulado", ""); err != nil {
 		t.Errorf("anular un cheque sin recibo: %v", err)
+	}
+}
+
+// Bug: el saldo se sumaba en coma flotante y un saldo real cero daba
+// -5,5e-17: con límite cero, el cliente «tenía $ 0 a favor y no alcanzaba».
+func TestCreditoConSaldoCeroNoTieneNadaAFavor(t *testing.T) {
+	b := armarBase(t)
+	ctx := context.Background()
+	_, _ = b.pool.Exec(ctx, `insert into account_movements (customer_id, tipo, monto, created_at) values
+		($1, 'pago', -0.1, now() - interval '3 days'), ($1, 'pago', -0.2, now() - interval '2 days'), ($1, 'compra', 0.3, now() - interval '1 day')`, b.cliente)
+	e, err := Credito(ctx, sqlc.New(b.pool), b.cliente, 100, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Saldo != 0 || e.SoloSaldoAFavor || e.Motivo == nil || *e.Motivo != "Este cliente no tiene cuenta corriente habilitada." {
+		t.Errorf("saldo cero: %+v %v", e, *e.Motivo)
 	}
 }
 

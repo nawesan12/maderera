@@ -3,6 +3,7 @@ package planilla
 import (
 	"strings"
 
+	"mjbj/internal/csvexcel"
 	"mjbj/internal/jsmath"
 )
 
@@ -50,6 +51,9 @@ func GenerarCsv(filas []FilaPlanilla) string {
 			strings.Replace(f.PrecioProfesional, ".", ",", 1),
 		}
 		for i, c := range campos {
+			if i < 4 { // SKU, producto, medida y categoría: los textos
+				c = csvexcel.SinFormula(c)
+			}
 			campos[i] = escapar(c)
 		}
 		sb.WriteString("\r\n")
@@ -138,6 +142,11 @@ func LeerFilas(grilla [][]string) []FilaImportada {
 		sku := ""
 		if iSku < len(campos) {
 			sku = trimJS(campos[iSku])
+		}
+		// La planilla que bajó de acá trae el apóstrofo de SinFormula
+		// delante de un código que empieza con = + - @: vuelve sin él.
+		if len(sku) > 1 && sku[0] == '\'' && csvexcel.SinFormula(sku[1:]) == sku {
+			sku = sku[1:]
 		}
 		if sku == "" {
 			salida = append(salida, FilaImportada{Linea: linea, Error: "Esta fila no tiene código de producto."})

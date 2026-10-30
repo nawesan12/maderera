@@ -50,12 +50,30 @@ func EnteroCsv(valor float64) string {
 }
 
 // TextoCsv es textoCsv: entre comillas, con las de adentro duplicadas. nil
-// es como null.
+// es como null. El texto pasa por SinFormula.
 func TextoCsv(valor *string) string {
 	if valor == nil {
 		return `""`
 	}
-	return `"` + strings.ReplaceAll(*valor, `"`, `""`) + `"`
+	return `"` + strings.ReplaceAll(SinFormula(*valor), `"`, `""`) + `"`
+}
+
+// SinFormula le antepone un apóstrofo al texto que Excel tomaría como
+// fórmula (empieza con = + - @, tabulador o retorno de carro). Los textos
+// de las exportaciones los escribe gente de afuera —el nombre de un cliente
+// que se registró solo, el de un producto, una observación— y un
+// «=HYPERLINK(...)» en la planilla del contador se ejecuta al abrirla.
+//
+// Solo para celdas de texto: un importe negativo también empieza con «-».
+func SinFormula(t string) string {
+	if t == "" {
+		return t
+	}
+	switch t[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		return "'" + t
+	}
+	return t
 }
 
 // Texto es TextoCsv de un texto que siempre está.

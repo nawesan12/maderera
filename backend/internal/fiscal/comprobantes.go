@@ -19,6 +19,16 @@ const (
 	NoCategorizado       = "no_categorizado"
 )
 
+// NombreCondicion es cómo se escribe la condición en papel (el comprobante y
+// el libro IVA).
+var NombreCondicion = map[string]string{
+	ResponsableInscripto: "Responsable inscripto",
+	Monotributista:       "Responsable monotributo",
+	Exento:               "IVA exento",
+	ConsumidorFinal:      "Consumidor final",
+	NoCategorizado:       "No categorizado",
+}
+
 // Condiciones, en el orden del enum de zod.
 var Condiciones = []string{ResponsableInscripto, Monotributista, Exento, ConsumidorFinal, NoCategorizado}
 

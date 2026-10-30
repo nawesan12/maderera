@@ -366,6 +366,15 @@ guardar("wsaa", { tickets, tras });
 
 // --- el libro IVA ventas ---
 
+// La condición frente al IVA del receptor en el CSV: la pide el contador
+// para separar las ventas a inscriptos de las a consumidores finales.
+const NOMBRE_CONDICION: Record<CondicionIva, string> = {
+  responsable_inscripto: "Responsable inscripto",
+  monotributista: "Responsable monotributo",
+  exento: "IVA exento",
+  consumidor_final: "Consumidor final",
+  no_categorizado: "No categorizado",
+};
 const libros: unknown[] = [];
 for (let i = 0; i < 80; i++) {
   const filas = Array.from({ length: entero(40) }, (_x, k) => {
@@ -379,6 +388,8 @@ for (let i = 0; i < 80; i++) {
       numero: 1 + entero(99999),
       receptorNombre: texto(),
       receptorCuit: elegir([null, "20123456789", 'raro "cuit"']),
+      // Agregado con Go (sin tirar el azar, para no mover el resto).
+      receptorCondicionIva: CONDICIONES[k % CONDICIONES.length],
       neto: neto.toFixed(2),
       iva21: (neto * 0.21).toFixed(2),
       iva105: (azar() < 0.2 ? neto * 0.105 : 0).toFixed(2),
@@ -419,13 +430,14 @@ for (let i = 0; i < 80; i++) {
   // con lib/csv-excel (CRLF, encabezados entre comillas, fecha dd/mm/aaaa en
   // hora argentina) como el libro IVA compras.
   const csv = armarCsv(
-    ["Fecha", "Tipo", "Numero", "Cliente", "CUIT", "Neto", "IVA 21%", "IVA 10,5%", "IVA 27%", "Exento", "Percepciones", "Total", "CAE"],
+    ["Fecha", "Tipo", "Numero", "Cliente", "CUIT", "Condicion IVA", "Neto", "IVA 21%", "IVA 10,5%", "IVA 27%", "Exento", "Percepciones", "Total", "CAE"],
     conSigno.map((f) => [
       fechaCsv(new Date(f.fechaEmision)),
       textoCsv(nombreComprobante(f.tipo)),
       textoCsv(numeroFormateado(f.puntoVenta, f.numero)),
       textoCsv(f.receptorNombre),
       textoCsv(f.receptorCuit),
+      textoCsv(NOMBRE_CONDICION[f.receptorCondicionIva]),
       numeroCsv(f.neto),
       numeroCsv(f.iva21),
       numeroCsv(f.iva105),
@@ -435,7 +447,7 @@ for (let i = 0; i < 80; i++) {
       numeroCsv(f.total),
       textoCsv(f.cae),
     ]),
-    ["", "", "", textoCsv("TOTALES"), "", numeroCsv(tot.neto), numeroCsv(tot.iva21), numeroCsv(tot.iva105), numeroCsv(tot.iva27),
+    ["", "", "", textoCsv("TOTALES"), "", "", numeroCsv(tot.neto), numeroCsv(tot.iva21), numeroCsv(tot.iva105), numeroCsv(tot.iva27),
       numeroCsv(tot.exento), numeroCsv(tot.tributos), numeroCsv(tot.total), ""],
   );
   libros.push({ filas, conSigno, totales: tot, csv });

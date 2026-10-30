@@ -377,11 +377,15 @@ func Sumar(filas []RenglonLibro) TotalesLibro {
 	return t
 }
 
-// LibroIva es libroIvaVentas entre desde y hasta (inclusive), sin borradores.
+// LibroIva es libroIvaVentas entre desde y hasta (inclusive): solo lo que
+// tiene CAE. Un comprobante sin CAE (emitido y sin autorizar, rechazado o
+// del proveedor interno) no existe para ARCA y no se declara; el TS solo
+// sacaba los borradores. Una anulada con CAE sí va: su nota de crédito la
+// resta en su propio renglón.
 func (s *Servicio) LibroIva(ctx context.Context, desde, hasta time.Time) (Libro, error) {
 	filas, err := s.pool.Query(ctx, `SELECT id, fecha_emision, tipo::text, punto_venta, numero, receptor_nombre, receptor_cuit,
 		receptor_condicion_iva::text, neto::float8, iva21::float8, iva105::float8, iva27::float8, exento::float8, tributos::float8,
-		total::float8, cae, estado::text FROM invoices WHERE fecha_emision >= $1 AND fecha_emision <= $2 AND estado <> 'borrador'
+		total::float8, cae, estado::text FROM invoices WHERE fecha_emision >= $1 AND fecha_emision <= $2 AND cae IS NOT NULL
 		ORDER BY fecha_emision, numero`, desde, hasta)
 	if err != nil {
 		return Libro{}, err

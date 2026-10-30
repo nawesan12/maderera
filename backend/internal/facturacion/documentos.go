@@ -13,7 +13,9 @@ import (
 // CsvLibroIva es el libro IVA ventas para el contador. Las mismas columnas
 // que app/admin/arca/libro-iva/exportar, ahora con internal/csvexcel como el
 // de compras: CRLF, encabezados entre comillas y la fecha en dd/mm/aaaa en
-// hora argentina (el TS escribía la fecha UTC en ISO).
+// hora argentina (el TS escribía la fecha UTC en ISO). Lleva además la
+// condición frente al IVA del receptor, que el contador necesita para
+// separar las ventas a inscriptos de las a consumidores finales.
 func CsvLibroIva(l Libro) string {
 	n := func(v float64) string { return csvexcel.NumeroCsv(v, 2) }
 	filas := make([][]string, len(l.Filas))
@@ -21,14 +23,21 @@ func CsvLibroIva(l Libro) string {
 		fecha := f.FechaEmision
 		filas[i] = []string{csvexcel.FechaCsv(&fecha), csvexcel.Texto(fiscal.NombreComprobante(f.Tipo)),
 			csvexcel.Texto(fiscal.NumeroFormateado(f.PuntoVenta, f.Numero)), csvexcel.Texto(f.ReceptorNombre), csvexcel.TextoCsv(f.ReceptorCuit),
-			n(f.Neto), n(f.Iva21), n(f.Iva105), n(f.Iva27), n(f.Exento), n(f.Tributos), n(f.Total), csvexcel.TextoCsv(f.Cae)}
+			csvexcel.Texto(condicionEnPapel(f.ReceptorCondicionIva)), n(f.Neto), n(f.Iva21), n(f.Iva105), n(f.Iva27), n(f.Exento), n(f.Tributos), n(f.Total), csvexcel.TextoCsv(f.Cae)}
 	}
 	t := l.Totales
 	return csvexcel.ArmarCsv(
-		[]string{"Fecha", "Tipo", "Numero", "Cliente", "CUIT", "Neto", "IVA 21%", "IVA 10,5%", "IVA 27%", "Exento", "Percepciones", "Total", "CAE"},
+		[]string{"Fecha", "Tipo", "Numero", "Cliente", "CUIT", "Condicion IVA", "Neto", "IVA 21%", "IVA 10,5%", "IVA 27%", "Exento", "Percepciones", "Total", "CAE"},
 		filas,
-		[]string{"", "", "", csvexcel.Texto("TOTALES"), "", n(t.Neto), n(t.Iva21), n(t.Iva105), n(t.Iva27), n(t.Exento), n(t.Tributos), n(t.Total), ""},
+		[]string{"", "", "", csvexcel.Texto("TOTALES"), "", "", n(t.Neto), n(t.Iva21), n(t.Iva105), n(t.Iva27), n(t.Exento), n(t.Tributos), n(t.Total), ""},
 	)
+}
+
+func condicionEnPapel(c string) string {
+	if n, ok := fiscal.NombreCondicion[c]; ok {
+		return n
+	}
+	return c
 }
 
 func dia(t *time.Time) *time.Time {

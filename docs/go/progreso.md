@@ -1406,6 +1406,7 @@ en paralelo).
       | `pedido.estado` | `pedidos.Avanzar` | `notificarCambioDeEstado` + `avisarCambioDePedido` | el estado (correo y WhatsApp) |
       | `pago.resultado` | `pagos` al acreditar (ya lo encolaba) | `notificarResultadoDePago` | `pago_acreditado`, «Pago acreditado» al panel, el recibo (`recibo_emitido`) o la inscripción |
       | `presupuesto.recibido` | `checkout.PedirPresupuesto` | `notificarPresupuestoRecibido` | `presupuesto_recibido` |
+      | `presupuesto.enviado` | `pedidos.CambiarEstadoPresupuesto` y el alta del mostrador (30/10) | `notificarPresupuestoEnviado` (no lo llamaba nadie) | `presupuesto_listo` (correo y WhatsApp con el PDF) |
       | `remito.para-firmar` | `entregas.CrearEntrega` | `notificarRemitoParaFirmar` | `remito_para_firmar` |
       | `remito.firmado` | `entregas.RegistrarFirma` (ahora en una transacción) | `notificarRemitoFirmado` | `remito_firmado` |
 
@@ -1455,9 +1456,29 @@ en paralelo).
         `nodemailer`, `resend` y `web-push` del `package.json`.
   - [ ] Sacar `TAREAS_SECRETO` de `.env.example` y del `.env.produccion` de
         la VPS (el compose ya no la pide).
-  - [ ] `notificarPresupuestoEnviado` no lo llamaba nadie (se borró con
-        `presupuestos.ts`): el presupuesto armado no se avisa por correo ni
-        por WhatsApp al pasar a «enviado». Era así antes de la mudanza.
+  - [x] `notificarPresupuestoEnviado` no lo llamaba nadie (se borró con
+        `presupuestos.ts`): el presupuesto armado no se avisaba por correo
+        ni por WhatsApp al pasar a «enviado». Era así antes de la mudanza.
+        **Hecho (30/10, sobre `go-cuentas`)**, sin migraciones:
+        - `pedidos.CambiarEstadoPresupuesto` es ahora una transacción que
+          lee el estado anterior con `FOR UPDATE` y encola
+          `presupuesto.enviado` solo si llega a «enviado» desde otro estado.
+          Diez clics a la vez → un aviso (`TestPasarAEnviadoAvisaUnaVez`,
+          vista fallar con diez sin el `FOR UPDATE`).
+        - El presupuesto del mostrador nace «enviado»: encola el mismo aviso
+          en la transacción del alta.
+        - No había botón que pasara a «enviado» (solo Aceptar y Rechazar):
+          se sumó «Enviar al cliente» en `app/admin/presupuestos/acciones.tsx`
+          para lo pendiente o en revisión.
+        - `notificaciones.PresupuestoEnviado` manda el WhatsApp de
+          `presupuesto_listo` (plantilla `presupuesto_enviado`) con el PDF de
+          `pedidos.PresupuestoPdf` —armado solo si el WhatsApp va a salir— y
+          el correo `avisos.PresupuestoListo` (golden: 360 casos más en
+          `avisos-pedidos.ts`). Cada canal respeta su interruptor.
+          `TestPresupuestoEnviado`, `TestPresupuestoEnviadoPorLaCola`.
+        - Distinto del TS, a propósito: si cuando lo atiende el worker ya no
+          está «enviado», no sale; sin teléfono o correo en el presupuesto
+          (el del mostrador no guarda correo) se usan los de la ficha.
 
 ## Errores de plata de la auditoría (30/10, sobre `go-cuentas`)
 

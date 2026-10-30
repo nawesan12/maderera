@@ -258,6 +258,13 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 		if pedido.estado == "cancelado" {
 			return ErrorDeEntrega("El pedido está cancelado.")
 		}
+		// Un pedido entregado con saldo es una venta directa del mostrador:
+		// la mercadería salió al cobrar y el stock ya bajó. Un remito común
+		// la descontaría otra vez; el de constancia no toca el inventario.
+		// (Los demás pedidos dejan de estar entregados al anular un remito.)
+		if pedido.estado == "entregado" {
+			return ErrorDeEntrega("Este pedido ya salió del depósito: emití el remito de constancia, que no vuelve a descontar el stock.")
+		}
 		numero, err := numeracion.Remito(ctx, tx)
 		if err != nil {
 			return err

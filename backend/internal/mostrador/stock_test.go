@@ -357,3 +357,34 @@ func TestElAjusteRapidoRespetaLoReservado(t *testing.T) {
 		t.Errorf("sumar siempre se puede: %v", err)
 	}
 }
+
+// Un remito común sobre una venta directa del mostrador (ya entregada: la
+// mercadería salió al cobrar) descontaba el stock otra vez. Se rechaza y
+// manda al remito de constancia, que no toca el inventario.
+func TestElRemitoDeUnaVentaYaEntregadaNoDescuentaDosVeces(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	ses := e.sesionDe(t, "doble@prueba.test")
+	p := e.placa
+	r, err := e.svc.RegistrarVenta(ctx, VentaPedida{Clave: claveDeStock(), BranchID: e.central, ContactoNombre: "CF",
+		MedioPago: ventas.Transferencia,
+		Lineas:    []ventas.LineaDeVenta{{VariantID: &p, Descripcion: "Fenólico", Unidad: "placa", Cantidad: 4, PrecioUnitario: 100}}}, ses.UserID)
+	if err != nil || !r.Ok {
+		t.Fatalf("venta: %v %+v", err, r)
+	}
+	ent := entregas.Nuevo(e.pool, silencio)
+	_, err = ent.CrearEntrega(ctx, ses, entregas.FormRemito{OrderID: r.OrderID, Tipo: "retiro",
+		Lineas: []entregas.LineaAEntregar{{OrderItemID: e.primerRenglon(t, r.OrderID), Cantidad: 4}}})
+	if err == nil || !strings.Contains(err.Error(), "constancia") {
+		t.Errorf("el remito común sobre una venta entregada: %v", err)
+	}
+	if q, _ := e.fisicoYReservado(t); q != 96 {
+		t.Errorf("el físico bajó dos veces: %v", q)
+	}
+	if _, err := ent.RemitoDeConstancia(ctx, ses, r.OrderID, nil); err != nil {
+		t.Errorf("la constancia: %v", err)
+	}
+	if q, _ := e.fisicoYReservado(t); q != 96 {
+		t.Errorf("la constancia tocó el stock: %v", q)
+	}
+}

@@ -504,3 +504,70 @@ func TestReintegroDeUnReciboYaAnulado(t *testing.T) {
 		t.Errorf("la deuda volvió una sola vez: el saldo da %v", s)
 	}
 }
+
+// Antes un reintegro parcial no se reconocía: Mercado Pago deja el pago
+// aprobado (solo «refunded» y «charged_back» se leían), así que la deuda que
+// el cliente pagó y le devolvieron en parte seguía cancelada entera. Ahora la
+// parte devuelta vuelve a la cuenta una sola vez, aunque el aviso se repita,
+// y un reintegro total posterior devuelve solo lo que faltaba.
+func TestReintegroParcialDeUnaDeuda(t *testing.T) {
+	e := armar(t, true)
+	ctx := context.Background()
+	cliente := e.id(t, `insert into customers (nombre, tipo) values ('Carpintería Sur', 'particular') returning id`)
+	pago := e.id(t, `insert into payments (customer_id, tipo, proveedor, monto, estado) values ($1, 'deuda', 'mercado_pago', 50000, 'iniciado') returning id`, cliente)
+	monto := 50000.0
+	saldo := func() float64 {
+		return e.numero(t, `select coalesce(sum(monto), 0)::float8 from account_movements where customer_id = $1`, cliente)
+	}
+	if _, err := e.s.Acreditar(ctx, pago, &PagoRemoto{ID: "555", Estado: Aprobado, Monto: &monto, Crudo: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if s := saldo(); s != -50000 {
+		t.Fatalf("acreditado: %v", s)
+	}
+	parcial := &PagoRemoto{ID: "555", Estado: Aprobado, Monto: &monto, Reintegrado: 10000, Crudo: []byte(`{}`)}
+	for i := 0; i < 3; i++ {
+		if _, err := e.s.Acreditar(ctx, pago, parcial); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if s := saldo(); s != -40000 {
+		t.Errorf("el reintegro parcial vuelve una vez: %v", s)
+	}
+	if _, err := e.s.Acreditar(ctx, pago, &PagoRemoto{ID: "555", Estado: Aprobado, Monto: &monto, Reintegrado: 15000, Crudo: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if s := saldo(); s != -35000 {
+		t.Errorf("un segundo reintegro parcial suma solo lo nuevo: %v", s)
+	}
+	if n := e.numero(t, `select count(*) from account_movements where customer_id = $1 and referencia = '555' and tipo = 'ajuste'`, cliente); n != 2 {
+		t.Errorf("los ajustes llevan la referencia del pago: %v", n)
+	}
+	if _, err := e.s.Acreditar(ctx, pago, &PagoRemoto{ID: "555", Estado: Reintegrado, Monto: &monto, Reintegrado: 50000, Crudo: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if s := saldo(); s != 0 {
+		t.Errorf("el reintegro total devuelve solo lo que faltaba: %v", s)
+	}
+	var estado, recibo string
+	_ = e.pool.QueryRow(ctx, `select p.estado::text, r.estado::text from payments p, receipts r where p.id = $1`, pago).Scan(&estado, &recibo)
+	if estado != "reintegrado" || recibo != "emitido" {
+		t.Errorf("pago %s, recibo %s", estado, recibo)
+	}
+	if n := e.numero(t, `select coalesce(sum(importe), 0)::float8 from payment_refunds where payment_id = $1`, pago); n != 50000 {
+		t.Errorf("tramos: %v", n)
+	}
+
+	// El de un pedido: no hay deuda que devolver, el tramo queda anotado.
+	pedido := e.id(t, `insert into payments (customer_id, tipo, proveedor, monto, estado) values ($1, 'pedido', 'mercado_pago', 8000, 'aprobado') returning id`, cliente)
+	m2 := 8000.0
+	if _, err := e.s.Acreditar(ctx, pedido, &PagoRemoto{ID: "556", Estado: Aprobado, Monto: &m2, Reintegrado: 3000, Crudo: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if n := e.numero(t, `select coalesce(sum(importe), 0)::float8 from payment_refunds where payment_id = $1`, pedido); n != 3000 {
+		t.Errorf("tramo del pedido: %v", n)
+	}
+	if s := saldo(); s != 0 {
+		t.Errorf("el pedido no toca la cuenta: %v", s)
+	}
+}

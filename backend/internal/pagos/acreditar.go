@@ -123,6 +123,26 @@ func (s *Servicio) Acreditar(ctx context.Context, pagoID string, r *PagoRemoto) 
 		nuestro := float64(p.monto)
 		res = ResultadoAcreditacion{Estado: p.estado, OrderID: p.orderID, CustomerID: p.customerID, Tipo: p.tipo, Monto: nuestro}
 
+		// Lo que ya se devolvió en reintegros parciales.
+		var yaDevuelto float64
+		if err := tx.QueryRow(ctx, `SELECT coalesce(sum(importe), 0)::float8 FROM payment_refunds WHERE payment_id = $1`, p.id).
+			Scan(&yaDevuelto); err != nil {
+			return err
+		}
+		// Un reintegro parcial deja el pago aprobado (Decidir lo vería
+		// «igual»): se devuelve la parte nueva, una sola vez.
+		if falta := ReintegroParcial(p.estado, nuestro, r, yaDevuelto); falta > 0 {
+			acumulado := float64(yaDevuelto + falta)
+			if err := reintegrarTramo(ctx, tx, p, r.ID, falta, acumulado, "Reintegro parcial del pago online"); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE payments SET detalle = $2, updated_at = now() WHERE id = $1`, pagoID, crudo(r)); err != nil {
+				return err
+			}
+			res.Cambio = true
+			return nil
+		}
+
 		decision, motivo := Decidir(p.estado, nuestro, r.Estado, r.Monto)
 		switch decision {
 		case Igual, Ignorar:
@@ -189,6 +209,15 @@ func (s *Servicio) Acreditar(ctx context.Context, pagoID string, r *PagoRemoto) 
 				WHERE p.payment_id = $1 LIMIT 1`, p.id).Scan(&recibo, &estadoRecibo)
 			switch {
 			case err == nil && estadoRecibo == string(sqlc.EstadoReciboAnulado):
+			case (err == nil || errors.Is(err, pgx.ErrNoRows)) && yaDevuelto > 0:
+				// Ya hubo reintegros parciales: el recibo no se anula (volvería
+				// la deuda entera y lo parcial quedaría devuelto dos veces); se
+				// devuelve lo que faltaba, como un tramo más.
+				if falta := float64(nuestro - yaDevuelto); falta >= 0.01 {
+					if err := reintegrarTramo(ctx, tx, p, r.ID, falta, nuestro, "Reintegro del pago online"); err != nil {
+						return err
+					}
+				}
 			case err == nil:
 				if _, _, err := cobros.AnularRecibo(ctx, tx, recibo, "Reintegro del pago online", nil); err != nil {
 					return err
@@ -232,6 +261,13 @@ func (s *Servicio) Acreditar(ctx context.Context, pagoID string, r *PagoRemoto) 
 				return err
 			}
 		}
+		// Un pago que llega aprobado y ya con una parte devuelta (el aviso de
+		// la aprobación se perdió): se acredita y se devuelve esa parte.
+		if falta := ReintegroParcial(Aprobado, nuestro, r, yaDevuelto); acredita && falta > 0 {
+			if err := reintegrarTramo(ctx, tx, p, r.ID, falta, float64(yaDevuelto+falta), "Reintegro parcial del pago online"); err != nil {
+				return err
+			}
+		}
 		res.Cambio, res.Estado = true, r.Estado
 		if acredita {
 			// El aviso al cliente y al panel, en la misma transacción: si el
@@ -247,6 +283,52 @@ func (s *Servicio) Acreditar(ctx context.Context, pagoID string, r *PagoRemoto) 
 		return nil
 	})
 	return res, err
+}
+
+// reintegrarTramo anota un tramo devuelto de un pago (payment_refunds) y, si
+// el pago canceló deuda, la devuelve a la cuenta del cliente con un ajuste
+// con la referencia del pago de Mercado Pago. Si el recibo ya se había
+// anulado a mano, la deuda entera ya volvió: el tramo se anota sin tocar la
+// cuenta. El índice único sobre (pago, acumulado) frena un segundo tramo
+// igual aunque faltara el candado.
+//
+// El pago de un pedido no tiene deuda que devolver: Mercado Pago le devuelve
+// la plata a la tarjeta del cliente, y el tramo queda anotado para el
+// cierre.
+func reintegrarTramo(ctx context.Context, tx pgx.Tx, p filaDePago, remotoID string, importe, acumulado float64, detalle string) error {
+	var tramo string
+	err := tx.QueryRow(ctx, `
+		INSERT INTO payment_refunds (payment_id, importe, acumulado, referencia) VALUES ($1, $2::numeric, $3::numeric, $4)
+		ON CONFLICT (payment_id, acumulado) DO NOTHING RETURNING id`,
+		p.id, jsmath.Fijo2(importe), jsmath.Fijo2(acumulado), remotoID).Scan(&tramo)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if p.tipo != "deuda" || p.customerID == nil {
+		return nil
+	}
+	var recibo *string
+	var anulado bool
+	err = tx.QueryRow(ctx, `SELECT r.id, r.estado = 'anulado' FROM receipt_parts x JOIN receipts r ON r.id = x.receipt_id
+		WHERE x.payment_id = $1 LIMIT 1`, p.id).Scan(&recibo, &anulado)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if anulado {
+		return nil
+	}
+	var mov string
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO account_movements (customer_id, tipo, monto, detalle, referencia, receipt_id)
+		VALUES ($1, 'ajuste', $2::numeric, $3, $4, $5) RETURNING id`,
+		*p.customerID, jsmath.Fijo2(importe), detalle, remotoID, recibo).Scan(&mov); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `UPDATE payment_refunds SET account_movement_id = $2 WHERE id = $1`, tramo, mov)
+	return err
 }
 
 func crudo(r *PagoRemoto) []byte {

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { accountMovements, customers } from "@/lib/db/schema";
 import { calcularAging } from "@/lib/cuenta-corriente/aging";

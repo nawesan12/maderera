@@ -179,9 +179,16 @@ func (s *Servicio) Acreditar(ctx context.Context, pagoID string, r *PagoRemoto) 
 		if revierte && p.tipo == "deuda" && p.customerID != nil {
 			// La deuda vuelve: se anula el recibo (o, de antes de los recibos,
 			// un ajuste suelto). Un asiento no se borra.
-			var recibo string
-			err := tx.QueryRow(ctx, `SELECT receipt_id FROM receipt_parts WHERE payment_id = $1 LIMIT 1`, p.id).Scan(&recibo)
+			//
+			// Si alguien ya anuló el recibo a mano, la deuda ya volvió: el
+			// reintegro está hecho. Antes AnularRecibo fallaba con «ya estaba
+			// anulado» y el aviso se reintentaba para siempre, con el pago
+			// aprobado en la base y reintegrado en Mercado Pago.
+			var recibo, estadoRecibo string
+			err := tx.QueryRow(ctx, `SELECT p.receipt_id, r.estado::text FROM receipt_parts p JOIN receipts r ON r.id = p.receipt_id
+				WHERE p.payment_id = $1 LIMIT 1`, p.id).Scan(&recibo, &estadoRecibo)
 			switch {
+			case err == nil && estadoRecibo == string(sqlc.EstadoReciboAnulado):
 			case err == nil:
 				if _, _, err := cobros.AnularRecibo(ctx, tx, recibo, "Reintegro del pago online", nil); err != nil {
 					return err

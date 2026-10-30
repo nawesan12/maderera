@@ -20,10 +20,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mjbj/internal/api/pagosapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
@@ -466,5 +468,39 @@ func TestConciliacion(t *testing.T) {
 	}
 	if c, b := pedir(t, adm, "PUT", u+"/datos-bancarios", map[string]any{"banco": "Nación", "titular": "MJBJ", "cuit": "30", "cbu": "0110 0123 4567 8901 2345 67", "alias": "x"}); c != 200 {
 		t.Fatalf("cbu: %d %s", c, b)
+	}
+}
+
+// Bug: si el recibo de un pago online ya se había anulado a mano y después
+// llegaba el reintegro de Mercado Pago, AnularRecibo fallaba con «ya estaba
+// anulado» y el aviso se reintentaba para siempre. Ahora es un reintegro ya
+// hecho: el pago pasa a reintegrado y la deuda no vuelve dos veces.
+func TestReintegroDeUnReciboYaAnulado(t *testing.T) {
+	e := armar(t, true)
+	ctx := context.Background()
+	cliente := e.id(t, `insert into customers (nombre, tipo) values ('Carpintería Sur', 'particular') returning id`)
+	pago := e.id(t, `insert into payments (customer_id, tipo, proveedor, monto, estado) values ($1, 'deuda', 'mercado_pago', 50000, 'iniciado') returning id`, cliente)
+	monto := 50000.0
+	r, err := e.s.Acreditar(ctx, pago, &PagoRemoto{ID: "777", Estado: Aprobado, Monto: &monto, Crudo: []byte(`{}`)})
+	if err != nil || r.ReceiptID == nil {
+		t.Fatalf("acreditar: %+v %v", r, err)
+	}
+	if err := pgx.BeginFunc(ctx, e.pool, func(tx pgx.Tx) error {
+		_, _, err := cobros.AnularRecibo(ctx, tx, *r.ReceiptID, "Se cargó dos veces", nil)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r, err = e.s.Acreditar(ctx, pago, &PagoRemoto{ID: "777", Estado: Reintegrado, Monto: &monto, Crudo: []byte(`{}`)})
+	if err != nil || !r.Cambio || r.Estado != Reintegrado {
+		t.Fatalf("el reintegro de un recibo ya anulado: %+v %v", r, err)
+	}
+	var estado string
+	_ = e.pool.QueryRow(ctx, `select estado::text from payments where id = $1`, pago).Scan(&estado)
+	if estado != "reintegrado" {
+		t.Errorf("el pago queda %s", estado)
+	}
+	if s := e.numero(t, `select coalesce(sum(monto), 0)::float8 from account_movements where customer_id = $1`, cliente); s != 0 {
+		t.Errorf("la deuda volvió una sola vez: el saldo da %v", s)
 	}
 }

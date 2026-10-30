@@ -178,8 +178,13 @@ export interface components {
         CajaRenglonDelCierre: {
             medioPago: string;
             cantidad: number;
-            /** Format: double */
+            /**
+             * Format: double
+             * @description En negativo si es una devolución
+             */
             total: number;
+            /** @description Ventas anuladas durante el turno (la venta queda en el Z de su turno) */
+            devolucion: boolean;
         };
         TurnoCerrado: {
             id: string;

@@ -240,7 +240,7 @@ func TestTurnosVentasSueltasYFondo(t *testing.T) {
 	if tc.Esperado != 15000 || *tc.Contado != 14000 || tc.Tardios != 1 || tc.AbiertaPor != "Persona admin" || tc.Sucursal != "Casa Central" {
 		t.Errorf("turno: %+v", tc)
 	}
-	if fmt.Sprint(tc.Cierre) != "[{efectivo 2 6000} {debito 1 2000}]" {
+	if fmt.Sprint(tc.Cierre) != "[{efectivo 2 6000 false} {debito 1 2000 false}]" {
 		t.Errorf("cierre Z: %+v", tc.Cierre)
 	}
 	if c, _ := pedir(t, ven, "GET", e.u+"turnos-cerrados", nil); c != 403 {
@@ -314,6 +314,42 @@ func TestEmitidoPorMesArgentino(t *testing.T) {
 // Diez clics a la vez en «asignar» la misma venta suelta: un solo
 // movimiento. Sin el candado de la fila del pedido, entraba más de una vez
 // (el TS leía «sin movimiento» y anotaba, sin bloquear nada).
+// Bug: el cierre Z de un turno sumaba sus ventas sin las anuladas. Anular
+// hoy una venta de un turno ya cerrado le cambiaba el Z a ese turno (que ya
+// se había arqueado contra otro número) y la devolución no aparecía en
+// ningún lado. Ahora el Z muestra lo que pasó en el turno: la venta en el
+// suyo y la devolución en el turno en que se hizo.
+func TestAnularNoCambiaElCierreDeOtroTurno(t *testing.T) {
+	e := armar(t)
+	adm, idAdm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	ayer := time.Now().Add(-26 * time.Hour)
+	cierra := ayer.Add(9 * time.Hour)
+	contado := 1000.0
+	viejo := e.turno(t, e.central, idAdm, ayer, &cierra, &contado)
+	venta := e.venta(t, "Z-1", e.central, "efectivo", 1000, ayer.Add(time.Hour), nil, true)
+	e.pool.Exec(ctx, `insert into cash_movements (session_id, tipo, monto, order_id, created_at) values ($1, 'venta', 1000, $2, $3)`, viejo, venta, ayer.Add(time.Hour))
+	hoy := e.turno(t, e.central, idAdm, time.Now().Add(-time.Hour), nil, nil)
+	// La anulación de hoy, como la deja el mostrador.
+	e.pool.Exec(ctx, `update orders set estado = 'cancelado', estado_pago = 'reintegrado', updated_at = now() where id = $1`, venta)
+	e.pool.Exec(ctx, `insert into order_status_history (order_id, estado, nota) values ($1, 'cancelado', 'Anulada en el mostrador')`, venta)
+	e.pool.Exec(ctx, `insert into cash_movements (session_id, tipo, monto, order_id) values ($1, 'devolucion', -1000, $2)`, hoy, venta)
+
+	_, b := pedir(t, adm, "GET", e.u+"turnos-cerrados", nil)
+	var cerrados []TurnoCerrado
+	_ = json.Unmarshal([]byte(b), &cerrados)
+	if len(cerrados) != 1 || fmt.Sprint(cerrados[0].Cierre) != "[{efectivo 1 1000 false}]" {
+		t.Errorf("el Z del turno cerrado no cambia con la anulación de hoy: %s", b)
+	}
+	z, err := CierreDelTurno(ctx, e.pool, hoy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(z) != "[{efectivo 1 -1000 true}]" {
+		t.Errorf("la devolución se ve en el turno en que se hizo: %+v", z)
+	}
+}
+
 // Bug: una venta suelta mixta (tarjeta + efectivo) no aparecía si el medio
 // principal no era efectivo, y si era efectivo, al asignarla entraba al
 // cajón el total y no la parte en efectivo: el arqueo daba sobrante.

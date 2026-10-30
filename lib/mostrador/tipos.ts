@@ -57,5 +57,11 @@ export interface ResultadoDeMostrador {
 export interface RenglonDelCierre {
   medioPago: string;
   cantidad: number;
+  /** En negativo si es una devolución. */
   total: number;
+  /**
+   * Ventas anuladas durante este turno. La venta anulada sigue en el Z del
+   * turno en que se vendió: el cierre de un turno no cambia después.
+   */
+  devolucion: boolean;
 }

@@ -210,32 +210,59 @@ func VentasDeHoy(ctx context.Context, c Consultador, sucursal string, ahora time
 	return out, filas.Err()
 }
 
-// RenglonDelCierre es una fila del cierre Z: cuánto entró por cada medio.
+// RenglonDelCierre es una fila del cierre Z: cuánto entró por cada medio, o
+// cuánto se devolvió (Devolucion, con el total en negativo).
 type RenglonDelCierre struct {
-	MedioPago string  `json:"medioPago"`
-	Cantidad  int     `json:"cantidad"`
-	Total     float64 `json:"total"`
+	MedioPago  string  `json:"medioPago"`
+	Cantidad   int     `json:"cantidad"`
+	Total      float64 `json:"total"`
+	Devolucion bool    `json:"devolucion"`
 }
 
 // CierresDeTurnos es el cierre Z de cada turno: las ventas de la sucursal en
-// la ventana del turno, sin las anuladas, por medio (order_payments, o el
-// medio único de las ventas viejas).
+// la ventana del turno, por medio (order_payments, o el medio único de las
+// ventas viejas), y aparte las devoluciones de las ventas anuladas durante
+// el turno.
+//
+// Bug arreglado: las ventas se sumaban sin las anuladas. Anular hoy una venta
+// de un turno ya cerrado le cambiaba el Z a ese turno —que ya se había
+// arqueado contra otro número— y la devolución no se veía en ningún turno.
+// Ahora la venta queda en el Z de su turno aunque después se anule, y la
+// devolución aparece en el turno en que se anuló. El momento de la anulación
+// es la fila «cancelado» del historial del pedido (la escribe el mostrador
+// al anular); para las anuladas antes de eso, la última actualización.
 func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map[string][]RenglonDelCierre, error) {
 	por := map[string][]RenglonDelCierre{}
 	if len(sesiones) == 0 {
 		return por, nil
 	}
 	filas, err := c.Query(ctx, `
-		SELECT s.id, coalesce(p.medio::text, o.medio_pago::text),
+		SELECT s.id, false, coalesce(p.medio::text, o.medio_pago::text),
 		       count(DISTINCT o.id)::int,
 		       coalesce(sum(coalesce(p.importe, o.total)), 0)
 		FROM cash_sessions s
 		JOIN orders o ON o.branch_id = s.branch_id AND o.origen = 'mostrador' AND o.clave_mostrador IS NOT NULL
-		     AND o.estado <> 'cancelado' AND o.created_at >= s.abierta_at
+		     AND o.created_at >= s.abierta_at
 		     AND (s.cerrada_at IS NULL OR o.created_at <= s.cerrada_at)
 		LEFT JOIN order_payments p ON p.order_id = o.id
 		WHERE s.id = ANY($1::uuid[])
-		GROUP BY s.id, coalesce(p.medio::text, o.medio_pago::text)`, sesiones)
+		GROUP BY s.id, coalesce(p.medio::text, o.medio_pago::text)
+		UNION ALL
+		SELECT s.id, true, coalesce(p.medio::text, a.medio_pago::text),
+		       count(DISTINCT a.id)::int,
+		       -coalesce(sum(coalesce(p.importe, a.total)), 0)
+		FROM cash_sessions s
+		JOIN LATERAL (
+		  SELECT o.id, o.medio_pago, o.total,
+		         coalesce((SELECT max(h.created_at) FROM order_status_history h WHERE h.order_id = o.id AND h.estado = 'cancelado'),
+		                  o.updated_at) AS anulada_at
+		  FROM orders o
+		  WHERE o.branch_id = s.branch_id AND o.origen = 'mostrador' AND o.clave_mostrador IS NOT NULL AND o.estado = 'cancelado'
+		    AND o.created_at <= coalesce(s.cerrada_at, now())
+		) a ON a.anulada_at >= s.abierta_at AND (s.cerrada_at IS NULL OR a.anulada_at <= s.cerrada_at)
+		LEFT JOIN order_payments p ON p.order_id = a.id
+		WHERE s.id = ANY($1::uuid[])
+		GROUP BY s.id, coalesce(p.medio::text, a.medio_pago::text)`, sesiones)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +272,7 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		var medio *string
 		var r RenglonDelCierre
 		var total jsmath.Num
-		if err := filas.Scan(&id, &medio, &r.Cantidad, &total); err != nil {
+		if err := filas.Scan(&id, &r.Devolucion, &medio, &r.Cantidad, &total); err != nil {
 			return nil, err
 		}
 		r.MedioPago = "sin especificar"
@@ -258,8 +285,18 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 	if err := filas.Err(); err != nil {
 		return nil, err
 	}
+	// Primero las ventas, de la más grande a la más chica; después las
+	// devoluciones, igual.
 	for _, rs := range por {
-		sort.SliceStable(rs, func(i, j int) bool { return rs[i].Total > rs[j].Total })
+		sort.SliceStable(rs, func(i, j int) bool {
+			if rs[i].Devolucion != rs[j].Devolucion {
+				return !rs[i].Devolucion
+			}
+			if rs[i].Devolucion {
+				return rs[i].Total < rs[j].Total
+			}
+			return rs[i].Total > rs[j].Total
+		})
 	}
 	return por, nil
 }

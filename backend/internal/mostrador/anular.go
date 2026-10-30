@@ -284,6 +284,13 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		id, strings.Join(notas, "\n")); err != nil {
 		return ResultadoAnulacion{}, err
 	}
+	// El momento de la anulación queda en el historial: el cierre Z muestra
+	// la devolución en el turno en que se hizo (caja.CierresDeTurnos), y la
+	// venta sigue en el Z de su turno.
+	if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'cancelado', $2, $3)`,
+		id, "Anulada en el mostrador: "+motivo, usuario); err != nil {
+		return ResultadoAnulacion{}, err
+	}
 
 	// El trabajo de corte que todavía no se cortó se cae con la venta.
 	if _, err := tx.Exec(ctx, `UPDATE cutting_orders SET estado = 'cancelado', updated_at = now() WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso')`, id); err != nil {

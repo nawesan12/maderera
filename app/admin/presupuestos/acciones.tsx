@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Loader2, ShoppingCart, X } from "lucide-react";
+import { Check, Loader2, Send, ShoppingCart, X } from "lucide-react";
 import {
   cambiarEstadoPresupuesto,
   convertirEnPedido,
@@ -31,9 +31,23 @@ export function AccionesPresupuesto({
   }
 
   const decidible = ["pendiente", "revision", "enviado"].includes(estado);
+  // Armado y revisado, se le manda: pasa a «enviado» y Go le avisa al
+  // cliente por correo y por WhatsApp con el PDF (lo que esté prendido en
+  // /admin/avisos).
+  const enviable = ["pendiente", "revision"].includes(estado);
 
   return (
     <div className="flex items-center gap-2">
+      {enviable && (
+        <button
+          onClick={() => accion(() => cambiarEstadoPresupuesto(id, "enviado"))}
+          disabled={pendiente}
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50"
+        >
+          <Send className="h-5 w-5" />
+          Enviar al cliente
+        </button>
+      )}
       {decidible && (
         <>
           <button

@@ -48,6 +48,7 @@ import (
 	"mjbj/internal/contenido"
 	"mjbj/internal/cortes"
 	"mjbj/internal/cuentas"
+	"mjbj/internal/diagnostico"
 	"mjbj/internal/documentos"
 	"mjbj/internal/email"
 	"mjbj/internal/existencia"
@@ -99,6 +100,9 @@ func correrAPI() error {
 	lim := limites.Nuevo(q, log)
 
 	m := http.NewServeMux()
+	// Los errores de hidratación que reporta el navegador (la dirección de
+	// siempre; Caddy la manda acá).
+	m.Handle("POST /api/diagnostico", diagnostico.Handler(lim, log))
 	m.HandleFunc("GET /salud", func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {
 			plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusServiceUnavailable, "sin base"))

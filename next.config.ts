@@ -138,6 +138,8 @@ const nextConfig: NextConfig = {
         { source: "/api/cortes/pendientes", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/cortes/pendientes` },
         { source: "/api/cortes/:id/lista", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/cortes/:id/lista` },
         { source: "/api/cortes/:id/ptx", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/cortes/:id/ptx` },
+        // Los errores de hidratación del navegador los anota Go.
+        { source: "/api/diagnostico", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/diagnostico` },
         // WhatsApp también: el webhook de Meta, los adjuntos y el envío de archivos.
         { source: "/api/whatsapp/:ruta*", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/whatsapp/:ruta*` },
         // La baja con un clic de las campañas (RFC 8058), de Go (backend/internal/campanas).

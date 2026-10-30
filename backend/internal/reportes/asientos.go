@@ -130,10 +130,14 @@ func cuentaDeMedio(medio string) string {
 }
 
 // cuentaDeCobro: el cheque cobrado no es plata en el banco hasta que se
-// deposita y se acredita.
+// deposita y se acredita; la retención que el cliente practicó no es plata
+// sino un crédito contra el impuesto.
 func cuentaDeCobro(medio string) string {
-	if medio == "cheque" || medio == "echeq" {
+	switch medio {
+	case "cheque", "echeq":
 		return Cuentas.ValoresADepositar
+	case "retencion":
+		return Cuentas.RetencionesSufridas
 	}
 	return cuentaDeMedio(medio)
 }
@@ -144,6 +148,48 @@ func cuentaDeCobro(medio string) string {
 func AsientoDeCobro(c CobroAAsentar) Asiento {
 	return asiento(c.Fecha, "Cobro "+c.Comprobante+" · "+c.Cliente, []RenglonDeAsiento{
 		renglon(cuentaDeCobro(c.Medio), c.Importe, 0), renglon(Cuentas.Deudores, 0, c.Importe)})
+}
+
+// AsientoDeReintegro es el cobro al revés: la plata vuelve al cliente (o
+// el cheque se anula con la venta) y la deuda vuelve a Deudores.
+func AsientoDeReintegro(c CobroAAsentar) Asiento {
+	return asiento(c.Fecha, "Reintegro "+c.Comprobante+" · "+c.Cliente, []RenglonDeAsiento{
+		renglon(Cuentas.Deudores, c.Importe, 0), renglon(cuentaDeCobro(c.Medio), 0, c.Importe)})
+}
+
+// ParteDeRecibo es con qué se pagó una parte del recibo.
+type ParteDeRecibo struct {
+	Medio   string
+	Importe float64
+}
+
+// ReciboAAsentar es un recibo emitido o su anulación.
+type ReciboAAsentar struct {
+	Fecha           time.Time
+	Numero, Cliente string
+	Partes          []ParteDeRecibo
+	Anulacion       bool
+}
+
+// AsientoDeRecibo es el cobro de un recibo: un renglón por parte, cada medio
+// a su cuenta (efectivo a Caja, cheques a Valores a depositar, la retención a
+// Retenciones sufridas, lo demás a Banco), contra Deudores por el total. La
+// anulación es el mismo asiento al revés, en su fecha: el del recibo no se
+// toca, porque el mes en que se emitió puede estar cerrado.
+func AsientoDeRecibo(r ReciboAAsentar) Asiento {
+	renglones := []RenglonDeAsiento{}
+	total := 0.0
+	for _, p := range r.Partes {
+		renglones = append(renglones, renglon(cuentaDeCobro(p.Medio), p.Importe, 0))
+		total = float64(total + p.Importe)
+	}
+	renglones = append(renglones, renglon(Cuentas.Deudores, 0, total))
+	concepto := "Recibo " + r.Numero + " · " + r.Cliente
+	if r.Anulacion {
+		renglones = invertir(renglones)
+		concepto = "Anulación del recibo " + r.Numero + " · " + r.Cliente
+	}
+	return asiento(r.Fecha, concepto, renglones)
 }
 
 // CompraAAsentar es CompraAAsentar.

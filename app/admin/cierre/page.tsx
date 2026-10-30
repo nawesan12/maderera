@@ -212,8 +212,10 @@ export default async function CierrePage({
       </section>
 
       <p className="text-base text-muted-foreground">
-        La exportación trae los asientos de ventas, compras, pagos a proveedores
-        y gastos, con código y nombre de cuenta para que el estudio los remapee
+        La exportación trae los asientos de ventas, cobros (los recibos, sus
+        anulaciones y las ventas facturadas que se cobraron en el mostrador o en
+        línea), compras, pagos a proveedores y gastos, con código y nombre de
+        cuenta para que el estudio los remapee
         al plan que usa. El libro diario, el mayor y el balance los lleva el
         estudio: acá se construye lo que necesita para importar.
       </p>

@@ -356,3 +356,173 @@ func TestInicioDelPanel(t *testing.T) {
 		t.Errorf("sin secreto ni sesión: %d", c)
 	}
 }
+
+// deudores es lo que los asientos le restan a Deudores por ventas (haber −
+// debe), y cuántos asientos lo tocan.
+func deudores(asientos []Asiento) (float64, int) {
+	neto, n := 0.0, 0
+	for _, a := range asientos {
+		toca := false
+		for _, r := range a.Renglones {
+			if r.Cuenta == Cuentas.Deudores {
+				neto += r.Haber - r.Debe
+				toca = true
+			}
+		}
+		if toca {
+			n++
+		}
+	}
+	return redondear(neto), n
+}
+
+func buscarAsiento(asientos []Asiento, concepto string) *Asiento {
+	for i := range asientos {
+		if strings.HasPrefix(asientos[i].Concepto, concepto) {
+			return &asientos[i]
+		}
+	}
+	return nil
+}
+
+// Bug: los asientos de cobro salían solo de los cobros de una factura. El
+// cobro de cuenta corriente desde la ficha o el mostrador, el de Mercado
+// Pago, la transferencia o la retención (todos con recibo, sin factura) no
+// se asentaban, y Deudores del CSV no daba lo que las cuentas corrientes.
+// Ahora salen de los recibos; el cobro de una factura con recibo no se
+// asienta dos veces, y la venta del mostrador facturada asienta su cobro.
+func TestCierreAsientaLosCobrosDesdeLosRecibos(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	cliente := e.id(t, `insert into customers (nombre, razon_social) values ('Juan Pérez', 'Pérez SRL') returning id`)
+	recibo := func(numero, origen string, total float64, emitido string, anulado *string, partes ...[2]any) string {
+		estado := "emitido"
+		if anulado != nil {
+			estado = "anulado"
+		}
+		id := e.id(t, `insert into receipts (numero, customer_id, recibido_de, total, estado, origen, created_at, anulado_at)
+			values ($1, $2, 'Pérez SRL', $3, $4, $5, $6, $7) returning id`, numero, cliente, total, estado, origen, emitido, anulado)
+		for i, p := range partes {
+			e.exec(t, `insert into receipt_parts (receipt_id, medio, importe, orden) values ($1, $2, $3, $4)`, id, p[0], p[1], i)
+		}
+		return id
+	}
+	// Cobro de cuenta corriente desde la ficha, partido en cuatro medios.
+	recibo("REC-0001", "panel", 1000, "2026-10-10T15:00:00Z", nil,
+		[2]any{"efectivo", 300}, [2]any{"cheque", 500}, [2]any{"retencion", 50}, [2]any{"transferencia", 150})
+	// Emitido en septiembre y anulado en octubre: solo el contraasiento.
+	anulado := "2026-10-12T15:00:00Z"
+	recibo("REC-0002", "mercado_pago", 200, "2026-09-20T15:00:00Z", &anulado, [2]any{"mercado_pago", 200})
+	// El 31 de octubre a las 23:30 de Buenos Aires es noviembre en UTC: es de octubre.
+	recibo("REC-0003", "mostrador", 70, "2026-11-01T02:30:00Z", nil, [2]any{"efectivo", 70})
+	// El 1.º de octubre a las 0:30 UTC es 30 de septiembre en Buenos Aires: no es de octubre.
+	recibo("REC-0004", "panel", 40, "2026-10-01T00:30:00Z", nil, [2]any{"efectivo", 40})
+	// El cobro de una factura con recibo: un asiento, no dos.
+	fac := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae)
+		values ('factura_a', 3, 200, 'Pérez SRL', 1000, 210, 0, 0, 0, 1210, 'autorizada', '2026-10-05T15:00:00Z', '76123456789012') returning id`)
+	rf := recibo("REC-0005", "factura", 1210, "2026-10-06T15:00:00Z", nil, [2]any{"efectivo", 1210})
+	e.exec(t, `insert into invoice_payments (invoice_id, medio, monto, receipt_id, fecha) values ($1, 'efectivo', 1210, $2, '2026-10-06T15:00:00Z')`, fac, rf)
+
+	// Una venta del mostrador cobrada al contado, sin recibo, facturada dos
+	// días después: el cobro se asienta en la fecha de la factura.
+	m1 := e.pedido(t, "M-0001", e.central, "entregado", "mostrador", time.Date(2026, 10, 18, 12, 0, 0, 0, Argentina), &cliente)
+	e.exec(t, `insert into payments (order_id, customer_id, tipo, proveedor, medio, monto, estado, conciliado_at, created_at)
+		values ($1, $2, 'pedido', 'mostrador', 'efectivo', 800, 'aprobado', '2026-10-18T15:00:00Z', '2026-10-18T15:00:00Z')`, m1, cliente)
+	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
+		values ('factura_b', 3, 201, 'Pérez SRL', 661.16, 138.84, 0, 0, 0, 800, 'autorizada', '2026-10-20T15:00:00Z', '76123456789013', $1)`, m1)
+	// Sin factura no hay asiento de venta, así que tampoco de cobro.
+	m2 := e.pedido(t, "M-0002", e.central, "entregado", "mostrador", time.Date(2026, 10, 18, 13, 0, 0, 0, Argentina), nil)
+	e.exec(t, `insert into payments (order_id, tipo, proveedor, medio, monto, estado, created_at)
+		values ($1, 'pedido', 'mostrador', 'efectivo', 999, 'aprobado', '2026-10-18T16:00:00Z')`, m2)
+	// Una venta con cheque, facturada y anulada después: cobro y reintegro.
+	m3 := e.pedido(t, "M-0003", e.central, "cancelado", "mostrador", time.Date(2026, 10, 21, 12, 0, 0, 0, Argentina), &cliente)
+	e.exec(t, `insert into payments (order_id, customer_id, tipo, proveedor, medio, monto, estado, created_at, updated_at)
+		values ($1, $2, 'pedido', 'mostrador', 'cheque', 400, 'reintegrado', '2026-10-21T15:00:00Z', '2026-10-25T15:00:00Z')`, m3, cliente)
+	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
+		values ('factura_b', 3, 202, 'Pérez SRL', 330.58, 69.42, 0, 0, 0, 400, 'autorizada', '2026-10-21T15:00:00Z', '76123456789014', $1)`, m3)
+
+	// Un pago de Mercado Pago con recibo, devuelto en parte: el tramo que
+	// volvió a la cuenta es el cobro al revés.
+	mp := e.id(t, `insert into payments (customer_id, tipo, proveedor, medio, monto, estado) values ($1, 'deuda', 'mercado_pago', 'visa', 90, 'aprobado') returning id`, cliente)
+	r6 := recibo("REC-0006", "mercado_pago", 90, "2026-10-14T15:00:00Z", nil, [2]any{"mercado_pago", 90})
+	e.exec(t, `update receipt_parts set payment_id = $1 where receipt_id = $2`, mp, r6)
+	mov := e.id(t, `insert into account_movements (customer_id, tipo, monto, referencia) values ($1, 'ajuste', 25, '555') returning id`, cliente)
+	e.exec(t, `insert into payment_refunds (payment_id, importe, acumulado, referencia, account_movement_id, created_at)
+		values ($1, 25, 25, '555', $2, '2026-10-16T15:00:00Z')`, mp, mov)
+
+	p := PeriodoDelCierre("2026-10", ahoraDePrueba)
+	asientos, err := e.s.AsientosDelPeriodo(ctx, p.Desde, p.Hasta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range asientos {
+		if !a.Balancea {
+			t.Errorf("no cierra: %+v", a)
+		}
+	}
+	r1 := buscarAsiento(asientos, "Recibo REC-0001")
+	if r1 == nil || len(r1.Renglones) != 5 || r1.Renglones[0] != renglon(Cuentas.Caja, 300, 0) ||
+		r1.Renglones[1] != renglon(Cuentas.ValoresADepositar, 500, 0) || r1.Renglones[2] != renglon(Cuentas.RetencionesSufridas, 50, 0) ||
+		r1.Renglones[3] != renglon(Cuentas.Banco, 150, 0) || r1.Renglones[4] != renglon(Cuentas.Deudores, 0, 1000) {
+		t.Errorf("el recibo partido: %+v", r1)
+	}
+	if a := buscarAsiento(asientos, "Recibo REC-0002"); a != nil {
+		t.Errorf("el recibo de septiembre no es de octubre: %+v", a)
+	}
+	if a := buscarAsiento(asientos, "Anulación del recibo REC-0002"); a == nil || a.Renglones[1] != renglon(Cuentas.Deudores, 200, 0) {
+		t.Errorf("el contraasiento de la anulación: %+v", a)
+	}
+	if buscarAsiento(asientos, "Recibo REC-0003") == nil || buscarAsiento(asientos, "Recibo REC-0004") != nil {
+		t.Errorf("el corte es el mes argentino")
+	}
+	if a := buscarAsiento(asientos, "Cobro Factura A"); a != nil {
+		t.Errorf("el cobro de la factura con recibo se asentó dos veces: %+v", a)
+	}
+	m := buscarAsiento(asientos, "Cobro Factura B 0003-00000201 (pedido M-0001)")
+	if m == nil || !m.Fecha.Equal(time.Date(2026, 10, 20, 15, 0, 0, 0, time.UTC)) || m.Renglones[0] != renglon(Cuentas.Caja, 800, 0) {
+		t.Errorf("la venta del mostrador facturada: %+v", m)
+	}
+	if a := buscarAsiento(asientos, "Reintegro Factura B 0003-00000202"); a == nil || a.Renglones[1] != renglon(Cuentas.ValoresADepositar, 0, 400) {
+		t.Errorf("la venta anulada: %+v", a)
+	}
+	if a := buscarAsiento(asientos, "Reintegro parcial del recibo REC-0006"); a == nil || a.Renglones[0] != renglon(Cuentas.Deudores, 25, 0) {
+		t.Errorf("el reintegro parcial: %+v", a)
+	}
+	// Los cobros bajan 2945 (recibos: 1000 + 70 + 1210 + 90 − 200 − 25;
+	// ventas: 800 + 400 − 400) y las tres facturas suben 2410.
+	if neto, n := deudores(asientos); neto != 535 {
+		t.Errorf("Deudores baja %v (en %d asientos de cobro)", neto, n)
+	}
+	for _, a := range asientos {
+		if strings.Contains(a.Concepto, "M-0002") {
+			t.Errorf("la venta sin factura no tiene asiento: %+v", a)
+		}
+	}
+}
+
+// Cuando compras agregue retenciones_practicadas.anulada_at (00089), el
+// resumen del cierre deja de contar las anuladas; sin la columna no falla.
+func TestCierreSinRetencionesPracticadasAnuladas(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	prov := e.id(t, `insert into suppliers (nombre) values ('Maderas del Sur') returning id`)
+	pago := e.id(t, `insert into supplier_payments (supplier_id, total, neto, medio, fecha) values ($1, 1000, 970, 'transferencia', '2026-10-08T15:00:00Z') returning id`, prov)
+	reg := e.id(t, `insert into regimenes_retencion (codigo, nombre, impuesto, alicuota, alicuota_no_inscripto) values ('IIBB', 'IIBB Misiones', 'iibb', 3, 3) returning id`)
+	retencion := func(numero string) string {
+		return e.id(t, `insert into retenciones_practicadas (payment_id, supplier_id, regimen_id, numero, codigo_regimen, impuesto, base, alicuota, importe, fecha)
+			values ($1, $2, $3, $4, 'IIBB', 'iibb', 1000, 3, 30, '2026-10-08T15:00:00Z') returning id`, pago, prov, reg, numero)
+	}
+	retencion("R-1")
+	anulada := retencion("R-2")
+	p := PeriodoDelCierre("2026-10", ahoraDePrueba)
+	r, err := e.s.ResumenDelMes(ctx, p.Desde, p.Hasta)
+	if err != nil || r.RetencionesPracticadas.Cantidad != 2 {
+		t.Fatalf("sin la columna cuentan las dos: %+v %v", r.RetencionesPracticadas, err)
+	}
+	e.exec(t, `alter table retenciones_practicadas add column if not exists anulada_at timestamptz`)
+	e.exec(t, `update retenciones_practicadas set anulada_at = now() where id = $1`, anulada)
+	r, err = e.s.ResumenDelMes(ctx, p.Desde, p.Hasta)
+	if err != nil || r.RetencionesPracticadas.Cantidad != 1 || r.RetencionesPracticadas.Total != 30 {
+		t.Errorf("la anulada no cuenta: %+v %v", r.RetencionesPracticadas, err)
+	}
+}

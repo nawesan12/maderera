@@ -230,13 +230,16 @@ func ArmarPreferencia(s SolicitudPreferencia) CuerpoPreferencia {
 
 // PagoRemoto es lo que el proveedor dice de un pago.
 type PagoRemoto struct {
-	ID            string          `json:"id"`
-	Estado        EstadoRemoto    `json:"estado"`
-	Monto         *float64        `json:"monto"`
-	Medio         *string         `json:"medio"`
-	Referencia    *string         `json:"referencia"`
-	MotivoRechazo *string         `json:"motivoRechazo"`
-	Crudo         json.RawMessage `json:"crudo"`
+	ID            string       `json:"id"`
+	Estado        EstadoRemoto `json:"estado"`
+	Monto         *float64     `json:"monto"`
+	Medio         *string      `json:"medio"`
+	Referencia    *string      `json:"referencia"`
+	MotivoRechazo *string      `json:"motivoRechazo"`
+	// Reintegrado es lo devuelto hasta ahora (transaction_amount_refunded de
+	// Mercado Pago): con el pago aprobado, es un reintegro parcial.
+	Reintegrado float64         `json:"reintegrado,omitempty"`
+	Crudo       json.RawMessage `json:"crudo"`
 }
 
 func cadena(v any) (string, bool) {
@@ -289,7 +292,30 @@ func PagoDeMercadoPago(crudo json.RawMessage) *PagoRemoto {
 	if estado != "approved" && hayDetalle {
 		r.MotivoRechazo = &detalle
 	}
+	if v, esta := p["transaction_amount_refunded"]; esta && v != nil {
+		if n := zodjs.NumeroJS(v, true); n > 0 && !math.IsNaN(n) && !math.IsInf(n, 0) {
+			r.Reintegrado = n
+		}
+	}
 	return r
+}
+
+// ReintegroParcial es cuánto de un reintegro parcial falta devolver: Mercado
+// Pago deja el pago aprobado y acumula lo devuelto en
+// transaction_amount_refunded (status_detail «partially_refunded»). Se aplica
+// solo la diferencia con lo que ya se devolvió, así el mismo aviso repetido,
+// o el de un segundo reintegro, devuelve cada peso una sola vez. Cero si no
+// hay nada nuevo; lo devuelto nunca pasa del importe del pago.
+func ReintegroParcial(actual string, nuestro float64, r *PagoRemoto, yaDevuelto float64) float64 {
+	if r == nil || actual != Aprobado || r.Estado != Aprobado || r.Reintegrado <= 0 {
+		return 0
+	}
+	acumulado := math.Min(r.Reintegrado, nuestro)
+	falta := jsmath.Round(float64(float64(acumulado-yaDevuelto)*100)) / 100
+	if falta < 0.01 {
+		return 0
+	}
+	return falta
 }
 
 // AvisoEntrante es qué pago hay que ir a consultar.

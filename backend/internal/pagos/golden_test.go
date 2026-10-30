@@ -167,3 +167,32 @@ func TestGoldenDecision(t *testing.T) {
 		}
 	}
 }
+
+func TestReintegroParcial(t *testing.T) {
+	r := PagoDeMercadoPago([]byte(`{"id": 1, "status": "approved", "status_detail": "partially_refunded", "transaction_amount": 100,
+		"transaction_amount_refunded": 30.5, "refunds": [{"id": 9, "amount": 30.5}]}`))
+	if r == nil || r.Estado != Aprobado || r.Reintegrado != 30.5 {
+		t.Fatalf("se lee lo devuelto: %+v", r)
+	}
+	casos := []struct {
+		actual      string
+		reintegrado float64
+		ya, falta   float64
+	}{
+		{Aprobado, 30.5, 0, 30.5},
+		{Aprobado, 30.5, 30.5, 0},  // el mismo aviso otra vez
+		{Aprobado, 50, 30.5, 19.5}, // un segundo reintegro
+		{Aprobado, 500, 0, 100},    // nunca más que el pago
+		{Aprobado, 0, 0, 0},
+		{Pendiente, 30.5, 0, 0}, // sin acreditar no hay nada que devolver
+	}
+	for _, c := range casos {
+		r.Reintegrado = c.reintegrado
+		if f := ReintegroParcial(c.actual, 100, r, c.ya); f != c.falta {
+			t.Errorf("%+v: %v", c, f)
+		}
+	}
+	if f := ReintegroParcial(Aprobado, 100, &PagoRemoto{Estado: Reintegrado, Reintegrado: 100}, 0); f != 0 {
+		t.Errorf("el reintegro total va por el otro camino: %v", f)
+	}
+}

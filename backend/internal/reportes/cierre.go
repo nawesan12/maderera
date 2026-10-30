@@ -46,7 +46,7 @@ const conCae = `estado <> 'borrador' AND cae IS NOT NULL`
 func numero(n jsmath.Num) float64 { return n.F() }
 
 // AsientosDelPeriodo es asientosDelPeriodo: las ventas (sin borradores), los
-// cobros, las compras, los pagos a proveedores y los gastos, en orden de
+// cobros (asientosDeCobro), las compras, los pagos a proveedores y los gastos, en orden de
 // fecha.
 func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Time) ([]Asiento, error) {
 	asientos := []Asiento{}
@@ -78,29 +78,11 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 		return nil, err
 	}
 
-	rs, err = s.pool.Query(ctx, `
-		SELECT p.fecha, i.tipo::text, i.punto_venta, i.numero, i.receptor_nombre, p.monto, p.medio::text
-		FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id
-		WHERE p.fecha >= $1 AND p.fecha <= $2 AND p.medio <> 'cuenta_corriente' ORDER BY p.fecha`, idesde, ihasta)
+	cobros, err := s.asientosDeCobro(ctx, idesde, ihasta)
 	if err != nil {
 		return nil, err
 	}
-	for rs.Next() {
-		var fecha time.Time
-		var tipo, cliente, medio string
-		var pv, nro int64
-		var monto jsmath.Num
-		if err := rs.Scan(&fecha, &tipo, &pv, &nro, &cliente, &monto, &medio); err != nil {
-			rs.Close()
-			return nil, err
-		}
-		asientos = append(asientos, AsientoDeCobro(CobroAAsentar{Fecha: fecha,
-			Comprobante: NombreComprobante(tipo) + " " + NumeroFormateado(pv, nro), Cliente: cliente, Importe: monto.F(), Medio: medio}))
-	}
-	rs.Close()
-	if err := rs.Err(); err != nil {
-		return nil, err
-	}
+	asientos = append(asientos, cobros...)
 
 	rs, err = s.pool.Query(ctx, `
 		SELECT f.fecha_emision, f.tipo::text, f.punto_venta, f.numero, s.nombre, f.neto, f.iva21, f.iva105, f.iva27, f.percepciones, f.total, f.exento
@@ -242,6 +224,19 @@ type ResumenDelMes struct {
 	PosicionIva float64 `json:"posicionIva"`
 }
 
+// retencionesPracticadasAnulables dice si retenciones_practicadas ya tiene
+// anulada_at (la migración 00089, de compras, la agrega para anular una
+// retención con su pago). Mientras no esté, no hay retención anulada que
+// sacar; cuando esté, el resumen deja de contar las anuladas sin otro
+// despliegue. Se pregunta al catálogo y no con una constante para que el
+// orden en que entren las dos ramas no importe.
+func (s *Servicio) retencionesPracticadasAnulables(ctx context.Context) (bool, error) {
+	var hay bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = 'retenciones_practicadas' AND column_name = 'anulada_at')`).Scan(&hay)
+	return hay, err
+}
+
 // ResumenDelMes es resumenDelMes: las notas de crédito restan, y en las
 // compras solo da crédito el IVA de la A, la M y sus notas.
 func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (ResumenDelMes, error) {
@@ -271,12 +266,18 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	if err != nil {
 		return r, err
 	}
+	practicadas := ""
+	if anulables, err := s.retencionesPracticadasAnulables(ctx); err != nil {
+		return r, err
+	} else if anulables {
+		practicadas = " AND anulada_at IS NULL"
+	}
 	err = s.pool.QueryRow(ctx, `
 		SELECT
 		  (SELECT coalesce(sum(importe), 0) FROM expenses WHERE fecha >= $1 AND fecha <= $2),
 		  (SELECT count(*)::int FROM expenses WHERE fecha >= $1 AND fecha <= $2),
-		  (SELECT coalesce(sum(importe), 0) FROM retenciones_practicadas WHERE fecha >= $3 AND fecha <= $4),
-		  (SELECT count(*)::int FROM retenciones_practicadas WHERE fecha >= $3 AND fecha <= $4),
+		  (SELECT coalesce(sum(importe), 0) FROM retenciones_practicadas WHERE fecha >= $3 AND fecha <= $4`+practicadas+`),
+		  (SELECT count(*)::int FROM retenciones_practicadas WHERE fecha >= $3 AND fecha <= $4`+practicadas+`),
 		  (SELECT coalesce(sum(importe), 0) FROM retenciones_sufridas WHERE anulada_at IS NULL AND fecha >= $1 AND fecha <= $2),
 		  (SELECT count(*)::int FROM retenciones_sufridas WHERE anulada_at IS NULL AND fecha >= $1 AND fecha <= $2)`, desde, hasta, idesde, ihasta).
 		Scan(&g, &r.Gastos.Cantidad, &rp, &r.RetencionesPracticadas.Cantidad, &rs, &r.RetencionesSufridas.Cantidad)

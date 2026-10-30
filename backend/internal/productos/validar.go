@@ -58,6 +58,10 @@ type FormVariante struct {
 	StockAserradero   string `json:"stockAserradero"`
 	MinCentral        string `json:"minCentral"`
 	MinAserradero     string `json:"minAserradero"`
+	// Lo que había cuando se abrió la ficha: el stock se corrige por
+	// diferencia contra esto, no se pisa con un valor viejo.
+	StockCentralVisto    string `json:"stockCentralVisto"`
+	StockAserraderoVisto string `json:"stockAserraderoVisto"`
 }
 
 // Producto es la ficha ya validada (lo que daba productoSchema).
@@ -81,6 +85,23 @@ type Variante struct {
 	PrecioGeneral, PrecioProfesional      string
 	StockCentral, StockAserradero         *float64
 	MinCentral, MinAserradero             *float64
+	// nil: no vino (un alta, o quien no lo manda).
+	StockCentralVisto, StockAserraderoVisto *float64
+}
+
+// visto lee lo que la pantalla vio al abrir la ficha. No es un dato del
+// usuario: si no se entiende, es como si no hubiera venido.
+func visto(s string) *float64 {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	n := jsmath.Numero(reemplazarComa(s))
+	if math.IsNaN(n) || math.IsInf(n, 0) {
+		return nil
+	}
+	n = jsmath.Round(n*1000) / 1000
+	return &n
 }
 
 // UnidadesDeProducto en el orden del enum del TS.
@@ -316,6 +337,10 @@ func Validar(f FormProducto) (Producto, *ErrorDeCampo) {
 		x.StockAserradero = v.cantidad(c+"stockAserradero", fv.StockAserradero)
 		x.MinCentral = v.cantidad(c+"minCentral", fv.MinCentral)
 		x.MinAserradero = v.cantidad(c+"minAserradero", fv.MinAserradero)
+		if x.ID != "" {
+			x.StockCentralVisto = visto(fv.StockCentralVisto)
+			x.StockAserraderoVisto = visto(fv.StockAserraderoVisto)
+		}
 		p.Variantes = append(p.Variantes, x)
 	}
 	if v.primero != nil {

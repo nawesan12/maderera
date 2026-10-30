@@ -314,6 +314,31 @@ func mm(v *float64) *int32 {
 	return &n
 }
 
+// StockNuevo es el físico que deja la ficha, leído con el candado tomado.
+//
+// **Arreglado** (auditoría del 30/10): la ficha pisaba el físico con el
+// número que traía, aunque fuera el de hace diez minutos: una venta hecha
+// mientras tanto se perdía al guardar un cambio de precio, y un campo vacío
+// ponía el físico en 0. Ahora:
+//   - campo vacío: el físico no se toca;
+//   - con lo que la pantalla vio al abrir: si no cambió, no se toca; si
+//     cambió, se aplica la diferencia (10 → 12 son dos más, aunque entre
+//     tanto se hayan vendido tres);
+//   - sin lo visto (un alta, o quien no lo manda): el valor tal cual, como
+//     siempre.
+func StockNuevo(anterior float64, cantidad, visto *float64) float64 {
+	switch {
+	case cantidad == nil:
+		return anterior
+	case visto == nil:
+		return *cantidad
+	case *cantidad == *visto:
+		return anterior
+	default:
+		return jsmath.Round(float64(anterior+(*cantidad-*visto))*1000) / 1000
+	}
+}
+
 func valor(v *float64) float64 {
 	if v == nil {
 		return 0
@@ -451,9 +476,11 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 				}
 			}
 			for _, st := range []struct {
-				suc              *string
-				cantidad, minimo float64
-			}{{ls.central, valor(v.StockCentral), valor(v.MinCentral)}, {ls.aserradero, valor(v.StockAserradero), valor(v.MinAserradero)}} {
+				suc             *string
+				cantidad, visto *float64
+				minimo          float64
+			}{{ls.central, v.StockCentral, v.StockCentralVisto, valor(v.MinCentral)},
+				{ls.aserradero, v.StockAserradero, v.StockAserraderoVisto, valor(v.MinAserradero)}} {
 				if st.suc == nil {
 					continue
 				}
@@ -466,15 +493,16 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 				} else if !errors.Is(err, pgx.ErrNoRows) {
 					return err
 				}
+				nuevo := StockNuevo(anterior, st.cantidad, st.visto)
 				if err := q.FijarStock(ctx, sqlc.FijarStockParams{VariantID: vid, BranchID: *st.suc,
-					Qty: jsmath.Num(st.cantidad), MinQty: jsmath.Num(st.minimo)}); err != nil {
+					Qty: jsmath.Num(nuevo), MinQty: jsmath.Num(st.minimo)}); err != nil {
 					return err
 				}
-				if st.cantidad != anterior {
-					nota := "Ajuste manual desde la ficha del producto (" + formato.Cantidad(anterior) + " → " + formato.Cantidad(st.cantidad) + ")"
+				if nuevo != anterior {
+					nota := "Ajuste manual desde la ficha del producto (" + formato.Cantidad(anterior) + " → " + formato.Cantidad(nuevo) + ")"
 					if err := q.RegistrarMovimiento(ctx, sqlc.RegistrarMovimientoParams{
 						VariantID: vid, BranchID: *st.suc, Type: sqlc.MovementTypeAjuste,
-						Qty: jsmath.Num(jsmath.Round(float64(st.cantidad-anterior)*1000) / 1000), Note: &nota, CreatedByUserID: &ses.UserID,
+						Qty: jsmath.Num(jsmath.Round(float64(nuevo-anterior)*1000) / 1000), Note: &nota, CreatedByUserID: &ses.UserID,
 					}); err != nil {
 						return err
 					}

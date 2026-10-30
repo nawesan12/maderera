@@ -207,16 +207,28 @@ export function FormularioProducto({
         type="hidden"
         name="variantes"
         value={JSON.stringify(
-          variantes.map((v) => ({
-            ...v,
-            largoMm: v.largoMm === null ? "" : String(v.largoMm),
-            anchoMm: v.anchoMm === null ? "" : String(v.anchoMm),
-            espesorMm: v.espesorMm === null ? "" : String(v.espesorMm),
-            stockCentral: String(v.stockCentral ?? 0),
-            stockAserradero: String(v.stockAserradero ?? 0),
-            minCentral: String(v.minCentral ?? 0),
-            minAserradero: String(v.minAserradero ?? 0),
-          })),
+          variantes.map((v) => {
+            // Lo que se vio al abrir la ficha: Go corrige el stock por
+            // diferencia contra esto, así una venta hecha mientras tanto no
+            // se pisa. Un stock vacío viaja vacío y no toca el físico.
+            const visto = v.id ? inicial.variantes.find((x) => x.id === v.id) : undefined;
+            return {
+              ...v,
+              largoMm: v.largoMm === null ? "" : String(v.largoMm),
+              anchoMm: v.anchoMm === null ? "" : String(v.anchoMm),
+              espesorMm: v.espesorMm === null ? "" : String(v.espesorMm),
+              stockCentral: v.stockCentral === null ? "" : String(v.stockCentral),
+              stockAserradero: v.stockAserradero === null ? "" : String(v.stockAserradero),
+              minCentral: String(v.minCentral ?? 0),
+              minAserradero: String(v.minAserradero ?? 0),
+              ...(visto
+                ? {
+                    stockCentralVisto: String(visto.stockCentral),
+                    stockAserraderoVisto: String(visto.stockAserradero),
+                  }
+                : {}),
+            };
+          }),
         )}
       />
       <input type="hidden" name="unit" value={unidad} />

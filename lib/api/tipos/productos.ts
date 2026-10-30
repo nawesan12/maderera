@@ -343,6 +343,9 @@ export interface components {
                 stockAserradero?: string;
                 minCentral?: string;
                 minAserradero?: string;
+                /** @description El stock que mostraba la ficha al abrirse. Si viene, el cambio se aplica por diferencia; si no cambió, el físico no se toca. */
+                stockCentralVisto?: string;
+                stockAserraderoVisto?: string;
             }[];
         };
         Ficha: {

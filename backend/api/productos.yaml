@@ -432,6 +432,10 @@ components:
               stockAserradero: { type: string }
               minCentral: { type: string }
               minAserradero: { type: string }
+              stockCentralVisto:
+                type: string
+                description: El stock que mostraba la ficha al abrirse. Si viene, el cambio se aplica por diferencia; si no cambió, el físico no se toca.
+              stockAserraderoVisto: { type: string }
     Ficha:
       type: object
       required: [id, slug, name, categoryId, subcategory, description, brand, unit, featured, active, createdAt, updatedAt,

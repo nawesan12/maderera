@@ -62,6 +62,10 @@ type CobroAbierto struct {
 // id es la referencia que vuelve en el aviso) y guarda la preferencia.
 func (s *Servicio) abrir(ctx context.Context, insertar func(prov string) (string, error), sol func(id string) SolicitudPreferencia) (*CobroAbierto, error) {
 	prov := s.elegido()
+	if prov == nil {
+		// Antes de insertar la fila: un cobro sin proveedor no se abre.
+		return nil, sinPagoOnline()
+	}
 	if s.Proveedor != nil {
 		if p := s.Proveedor(prov.Nombre()); p != nil {
 			prov = p

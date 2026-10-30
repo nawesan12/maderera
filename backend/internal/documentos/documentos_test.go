@@ -229,9 +229,13 @@ func TestExportarPrecios(t *testing.T) {
 		t.Errorf("un cliente: %d", r.estado)
 	}
 
-	// Cualquier persona del panel, como requireStaff.
-	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
-	r := pedir(t, ven, u+"?buscar=fenol")
+	// La planilla de precios es de /admin/precios: solo el admin (antes
+	// cualquier persona del panel, como requireStaff).
+	if r := pedir(t, e.staff(t, "vendedor@prueba.test", "vendedor"), u); r.estado != 403 {
+		t.Errorf("un vendedor: %d", r.estado)
+	}
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	r := pedir(t, adm, u+"?buscar=fenol")
 	if r.estado != 200 || r.tipo != "text/csv; charset=utf-8" || r.disp != `attachment; filename="precios-mjbj-2026-03-06.csv"` {
 		t.Fatalf("csv: %d %q %q", r.estado, r.tipo, r.disp)
 	}
@@ -244,14 +248,14 @@ func TestExportarPrecios(t *testing.T) {
 		t.Errorf("el filtro no se aplicó: %q", csv)
 	}
 
-	r = pedir(t, ven, u+"?formato=pdf&lista=profesional")
+	r = pedir(t, adm, u+"?formato=pdf&lista=profesional")
 	if r.estado != 200 || r.tipo != "application/pdf" || r.disp != `inline; filename="precios-mjbj-2026-03-06.pdf"` {
 		t.Fatalf("pdf: %d %q %q", r.estado, r.tipo, r.disp)
 	}
 	if txt, ok := textoDelPDF(t, r.cuerpo); ok {
 		contiene(t, "pdf profesional", txt, "Lista profesional", "Vigente al 5/3/2026", "MEL18", "$ 40.000")
 	}
-	r = pedir(t, ven, u+"?formato=pdf&cat=placas")
+	r = pedir(t, adm, u+"?formato=pdf&cat=placas")
 	if txt, ok := textoDelPDF(t, r.cuerpo); ok {
 		contiene(t, "pdf general", txt, "Lista de precios", "$ 84.500", "$ 50.001")
 	}

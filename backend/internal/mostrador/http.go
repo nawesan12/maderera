@@ -11,13 +11,16 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/caja"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
 	"mjbj/internal/zodjs"
 )
 
 // API son los handlers de api/mostrador.yaml. Las acciones de app/mostrador
-// pedían requireStaff(): cualquier persona del panel.
+// pedían requireStaff(): cualquier persona del panel. Ahora piden lo mismo que
+// la pantalla /mostrador (ver puesto): el depósito y el aserradero no entran
+// al mostrador, y por la API cobraban, anulaban ventas y leían el padrón.
 type API struct {
 	s *Servicio
 }
@@ -86,8 +89,13 @@ func comoProblema(err error) error {
 	return err
 }
 
+// puesto es quien entra a /mostrador.
+func puesto(ctx context.Context) (*auth.Sesion, error) {
+	return auth.Exigir(ctx, roles.QuienEntra("/mostrador")...)
+}
+
 func (a *API) PantallaDelMostrador(ctx context.Context, r mostradorapi.PantallaDelMostradorRequestObject) (mostradorapi.PantallaDelMostradorResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := puesto(ctx); err != nil {
 		return nil, err
 	}
 	p, err := a.s.Pantalla(ctx, r.Params.Sucursal)
@@ -95,7 +103,7 @@ func (a *API) PantallaDelMostrador(ctx context.Context, r mostradorapi.PantallaD
 }
 
 func (a *API) CobrarVenta(ctx context.Context, r mostradorapi.CobrarVentaRequestObject) (mostradorapi.CobrarVentaResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := puesto(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +117,7 @@ func (a *API) CobrarVenta(ctx context.Context, r mostradorapi.CobrarVentaRequest
 }
 
 func (a *API) DescargarVentas(ctx context.Context, r mostradorapi.DescargarVentasRequestObject) (mostradorapi.DescargarVentasResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := puesto(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +129,7 @@ func (a *API) DescargarVentas(ctx context.Context, r mostradorapi.DescargarVenta
 }
 
 func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularVentaDeMostradorRequestObject) (mostradorapi.AnularVentaDeMostradorResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := puesto(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +149,7 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 }
 
 func (a *API) BuscarEnMostrador(ctx context.Context, r mostradorapi.BuscarEnMostradorRequestObject) (mostradorapi.BuscarEnMostradorResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := puesto(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.Buscar(ctx, r.Params.Q, r.Params.Sucursal, vacioANulo(r.Params.Cliente))
@@ -156,7 +164,7 @@ func vacioANulo(p *string) *string {
 }
 
 func (a *API) PreciosDelCliente(ctx context.Context, r mostradorapi.PreciosDelClienteRequestObject) (mostradorapi.PreciosDelClienteResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := puesto(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.PreciosPara(ctx, r.Body.VariantIds, vacioANulo(r.Body.CustomerId))
@@ -164,7 +172,7 @@ func (a *API) PreciosDelCliente(ctx context.Context, r mostradorapi.PreciosDelCl
 }
 
 func (a *API) BuscarClientesEnMostrador(ctx context.Context, r mostradorapi.BuscarClientesEnMostradorRequestObject) (mostradorapi.BuscarClientesEnMostradorResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := puesto(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.BuscarClientes(ctx, r.Params.Q)
@@ -172,7 +180,7 @@ func (a *API) BuscarClientesEnMostrador(ctx context.Context, r mostradorapi.Busc
 }
 
 func (a *API) AltaRapidaDeCliente(ctx context.Context, r mostradorapi.AltaRapidaDeClienteRequestObject) (mostradorapi.AltaRapidaDeClienteResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := puesto(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +193,7 @@ func (a *API) AltaRapidaDeCliente(ctx context.Context, r mostradorapi.AltaRapida
 }
 
 func (a *API) ClientesRecientes(ctx context.Context, r mostradorapi.ClientesRecientesRequestObject) (mostradorapi.ClientesRecientesResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := puesto(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.ClientesRecientes(ctx, r.Params.Sucursal)
@@ -193,7 +201,7 @@ func (a *API) ClientesRecientes(ctx context.Context, r mostradorapi.ClientesReci
 }
 
 func (a *API) ClienteDelMostrador(ctx context.Context, r mostradorapi.ClienteDelMostradorRequestObject) (mostradorapi.ClienteDelMostradorResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := puesto(ctx); err != nil {
 		return nil, err
 	}
 	c, err := a.s.ClientePorID(ctx, r.Id)
@@ -204,7 +212,7 @@ func (a *API) ClienteDelMostrador(ctx context.Context, r mostradorapi.ClienteDel
 }
 
 func (a *API) SaldoDeCuentaEnMostrador(ctx context.Context, r mostradorapi.SaldoDeCuentaEnMostradorRequestObject) (mostradorapi.SaldoDeCuentaEnMostradorResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := puesto(ctx); err != nil {
 		return nil, err
 	}
 	s, err := a.s.SaldoDeCuenta(ctx, r.Id)
@@ -212,7 +220,7 @@ func (a *API) SaldoDeCuentaEnMostrador(ctx context.Context, r mostradorapi.Saldo
 }
 
 func (a *API) CobrarCuentaEnMostrador(ctx context.Context, r mostradorapi.CobrarCuentaEnMostradorRequestObject) (mostradorapi.CobrarCuentaEnMostradorResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := puesto(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +232,7 @@ func (a *API) CobrarCuentaEnMostrador(ctx context.Context, r mostradorapi.Cobrar
 }
 
 func (a *API) PresupuestoDeMostrador(ctx context.Context, r mostradorapi.PresupuestoDeMostradorRequestObject) (mostradorapi.PresupuestoDeMostradorResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := puesto(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +255,7 @@ func numeroONaN(p *float64) float64 {
 }
 
 func (a *API) AbrirCaja(ctx context.Context, r mostradorapi.AbrirCajaRequestObject) (mostradorapi.AbrirCajaResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := puesto(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +267,7 @@ func (a *API) AbrirCaja(ctx context.Context, r mostradorapi.AbrirCajaRequestObje
 }
 
 func (a *API) MovimientoDeCaja(ctx context.Context, r mostradorapi.MovimientoDeCajaRequestObject) (mostradorapi.MovimientoDeCajaResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := puesto(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +279,7 @@ func (a *API) MovimientoDeCaja(ctx context.Context, r mostradorapi.MovimientoDeC
 }
 
 func (a *API) CerrarCaja(ctx context.Context, r mostradorapi.CerrarCajaRequestObject) (mostradorapi.CerrarCajaResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := puesto(ctx)
 	if err != nil {
 		return nil, err
 	}

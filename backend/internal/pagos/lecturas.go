@@ -218,8 +218,13 @@ func (s *Servicio) Listar(ctx context.Context, estado string, desde *time.Time) 
 	}
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (PagoListado, error) {
 		var p PagoListado
-		return p, r.Scan(&p.ID, &p.Tipo, &p.Proveedor, &p.Estado, &p.Monto, &p.Medio, &p.ComprobanteURL, &p.MotivoRechazo,
+		err := r.Scan(&p.ID, &p.Tipo, &p.Proveedor, &p.Estado, &p.Monto, &p.Medio, &p.ComprobanteURL, &p.MotivoRechazo,
 			&p.ProveedorPaymentID, &p.NumeroPedido, &p.OrderID, &p.Cliente, &p.CustomerID, &p.CreatedAt, &p.AcreditadoAt)
+		if p.ComprobanteURL != nil {
+			u := URLDelComprobante(p.ID)
+			p.ComprobanteURL = &u
+		}
+		return p, err
 	})
 }
 

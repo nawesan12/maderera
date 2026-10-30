@@ -66,8 +66,21 @@ func (s *Servicio) porNombre(n string) Proveedor {
 	return s.cfg.PorNombre(n)
 }
 
-// EnVivo: los cobros salen de verdad (no es el de demostración).
-func (s *Servicio) EnVivo() bool { return s.elegido().Real() }
+// EnVivo: los cobros salen de verdad (no es el de demostración ni está
+// apagado).
+func (s *Servicio) EnVivo() bool {
+	p := s.elegido()
+	return p != nil && p.Real()
+}
+
+// ModoDemo: las rutas de /pago-demo existen solo con el demo encendido.
+func (s *Servicio) ModoDemo() bool { return s.cfg.ModoDemo() }
+
+// sinPagoOnline es lo que ve quien quiere pagar con Mercado Pago cuando no
+// hay token ni demo: un error claro, nunca un cobro que se apruebe solo.
+func sinPagoOnline() error {
+	return plataforma.NuevoProblema(http.StatusServiceUnavailable, "El pago online no está disponible. Podés pagar por transferencia o en el local.")
+}
 
 func fallo(m string) error { return plataforma.NuevoProblema(http.StatusUnprocessableEntity, m) }
 

@@ -74,7 +74,7 @@ func pantallaDeCaja(ctx context.Context) (*auth.Sesion, error) {
 }
 
 func (a *PanelAPI) SucursalesConCaja(ctx context.Context, _ cajaapi.SucursalesConCajaRequestObject) (cajaapi.SucursalesConCajaResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := pantallaDeCaja(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.p.SucursalesConCaja(ctx)

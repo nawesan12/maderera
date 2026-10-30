@@ -440,8 +440,9 @@ func TestPermisosYErroresDelArchivo(t *testing.T) {
 		"mapeo": map[string]int{}, "filasTotales": 0}, nil); s != 403 {
 		t.Errorf("iniciar del vendedor: %d", s)
 	}
-	// Leer el estado y el historial, cualquiera del panel (como el DAL).
-	if s := pedir(t, ven, "GET", u+"estado", nil, nil); s != 200 {
+	// Leer el estado y el historial también es de /admin/migracion: el
+	// vendedor no (antes cualquiera del panel, como el DAL).
+	if s := pedir(t, ven, "GET", u+"estado", nil, nil); s != 403 {
 		t.Errorf("estado del vendedor: %d", s)
 	}
 	if s := pedir(t, &http.Client{}, "GET", u+"corridas", nil, nil); s != 401 {

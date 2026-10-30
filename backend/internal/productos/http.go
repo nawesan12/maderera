@@ -72,9 +72,6 @@ func (o respuesta) VisitGuardarMesesSinVenderResponse(w http.ResponseWriter) err
 }
 func (o respuesta) VisitImputacionesUsadasResponse(w http.ResponseWriter) error { return o.escribir(w) }
 
-// staff es cualquiera del panel (las lecturas que usan otras pantallas).
-func staff(ctx context.Context) (*auth.Sesion, error) { return auth.ExigirStaff(ctx) }
-
 // gestion es quien entra a /admin/productos (admin y vendedor).
 func gestion(ctx context.Context) (*auth.Sesion, error) {
 	return auth.Exigir(ctx, roles.QuienEntra("/admin/productos")...)
@@ -108,7 +105,7 @@ func formDe(cuerpo any) (FormProducto, error) {
 }
 
 func (a *API) ListarProductos(ctx context.Context, r productosapi.ListarProductosRequestObject) (productosapi.ListarProductosResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.Listar(ctx, texto(r.Params.Busqueda), texto(r.Params.Categoria))
@@ -133,7 +130,7 @@ func (a *API) CrearProducto(ctx context.Context, r productosapi.CrearProductoReq
 }
 
 func (a *API) FichaDeProducto(ctx context.Context, r productosapi.FichaDeProductoRequestObject) (productosapi.FichaDeProductoResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.Ficha(ctx, r.Id.String())
@@ -169,7 +166,7 @@ func (a *API) ActivarProducto(ctx context.Context, r productosapi.ActivarProduct
 }
 
 func (a *API) SugeridosDelProducto(ctx context.Context, r productosapi.SugeridosDelProductoRequestObject) (productosapi.SugeridosDelProductoResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.Sugeridos(ctx, r.Id.String())
@@ -197,7 +194,7 @@ func (a *API) QuitarSugerido(ctx context.Context, r productosapi.QuitarSugeridoR
 }
 
 func (a *API) CandidatosParaSugerir(ctx context.Context, r productosapi.CandidatosParaSugerirRequestObject) (productosapi.CandidatosParaSugerirResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.q.CandidatosParaSugerir(ctx, r.Id.String())
@@ -269,7 +266,7 @@ func (a *API) HacerPrincipal(ctx context.Context, r productosapi.HacerPrincipalR
 }
 
 func (a *API) CategoriasAdmin(ctx context.Context, _ productosapi.CategoriasAdminRequestObject) (productosapi.CategoriasAdminResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/stock")...); err != nil {
 		return nil, err
 	}
 	v, err := a.s.q.CategoriasAdmin(ctx)
@@ -277,7 +274,7 @@ func (a *API) CategoriasAdmin(ctx context.Context, _ productosapi.CategoriasAdmi
 }
 
 func (a *API) RubrosAdmin(ctx context.Context, _ productosapi.RubrosAdminRequestObject) (productosapi.RubrosAdminResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.q.RubrosAdmin(ctx)
@@ -293,7 +290,7 @@ func (a *API) CrearRubro(ctx context.Context, r productosapi.CrearRubroRequestOb
 }
 
 func (a *API) RubrosPorCategoria(ctx context.Context, _ productosapi.RubrosPorCategoriaRequestObject) (productosapi.RubrosPorCategoriaResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.RubrosPorCategoria(ctx)
@@ -320,7 +317,7 @@ func (a *API) EngancharRubro(ctx context.Context, r productosapi.EngancharRubroR
 }
 
 func (a *API) CandidatosDeBaja(ctx context.Context, _ productosapi.CandidatosDeBajaRequestObject) (productosapi.CandidatosDeBajaResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	meses, err := a.s.MesesSinVender(ctx)
@@ -347,7 +344,7 @@ func (a *API) GuardarMesesSinVender(ctx context.Context, r productosapi.GuardarM
 }
 
 func (a *API) ImputacionesUsadas(ctx context.Context, _ productosapi.ImputacionesUsadasRequestObject) (productosapi.ImputacionesUsadasResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.q.ImputacionesUsadas(ctx)

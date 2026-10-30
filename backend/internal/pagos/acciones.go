@@ -90,7 +90,9 @@ func revisarArchivo(a *Archivo) error {
 }
 
 func (s *Servicio) guardar(x Extras, a *Archivo) (string, error) {
-	url, err := x.Disco.GuardarAdjunto(a.Datos, a.Tipo, "comprobante")
+	// En la carpeta privada: el comprobante trae el nombre, el CBU y el
+	// banco de quien pagó. Se ve solo por la ruta de la conciliación.
+	url, err := x.Disco.GuardarPrivado(a.Datos, a.Tipo, "comprobante")
 	var e *subidas.ErrSubida
 	if errors.As(err, &e) {
 		return "", fallo(e.Mensaje)
@@ -104,15 +106,17 @@ func (s *Servicio) SubirComprobante(ctx context.Context, x Extras, numero, token
 	if err := revisarArchivo(a); err != nil {
 		return Resultado{}, err
 	}
-	if v := x.Lim.Permitido(ctx, limites.Comprobante, "pedido:"+numero); !v.Permitido {
-		return Resultado{}, fallo(limites.AvisoDeEspera(v))
-	}
 	p, err := s.Autorizado(ctx, numero, token, ses)
 	if err != nil {
 		return Resultado{}, err
 	}
 	if p == nil {
 		return Resultado{}, fallo("No encontramos ese pedido.")
+	}
+	// Se cuenta después del token: contado antes, cualquiera que supiera el
+	// número (son consecutivos) le gastaba los intentos al dueño del pedido.
+	if v := x.Lim.Permitido(ctx, limites.Comprobante, "pedido:"+numero); !v.Permitido {
+		return Resultado{}, fallo(limites.AvisoDeEspera(v))
 	}
 	if p.EstadoPago == "pagado" {
 		return Resultado{}, fallo("Este pedido ya está pagado.")

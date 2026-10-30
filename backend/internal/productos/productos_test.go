@@ -199,7 +199,11 @@ func TestLaFichaDeProducto(t *testing.T) {
 	}
 
 	// El listado (el stock total suma también la medida desactivada, como el TS).
-	_, b = pedir(t, dep, "GET", u+"productos?busqueda=fenol", nil)
+	// El listado es de /admin/productos: el depósito no (antes sí, por la API).
+	if c, _ := pedir(t, dep, "GET", u+"productos?busqueda=fenol", nil); c != 403 {
+		t.Errorf("el depósito leyó el listado: %d", c)
+	}
+	_, b = pedir(t, adm, "GET", u+"productos?busqueda=fenol", nil)
 	var lista []ProductoAdmin
 	_ = json.Unmarshal([]byte(b), &lista)
 	if len(lista) != 2 {

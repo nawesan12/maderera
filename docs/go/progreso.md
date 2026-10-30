@@ -1687,3 +1687,77 @@ Pendiente y preguntas (decisiones de negocio, no se tocaron):
       firmar.
 - [ ] Cancelar desde Pedidos un pedido ya entregado sigue permitido y no
       devuelve nada (solo libera reservas, que ya no hay).
+
+## Seguridad antes de abrir al público (30/10, sobre `go-cuentas`)
+
+La auditoría recorrió cada ruta con un usuario de cada rol (la matriz ruta ×
+rol). Lo que se arregló, cada cosa con su prueba:
+
+- **El pago de demostración se aprobaba solo.** Sin `MP_ACCESS_TOKEN` el
+  proveedor caía al demo y `POST /api/v1/pagos/demo/{id}` le dejaba a un
+  anónimo aprobar su propio pedido. Ahora el demo existe solo con
+  `PAGOS_PROVIDER=demo` puesto a propósito; sin token y sin demo, pagar con
+  Mercado Pago da 503 «El pago online no está disponible» antes de abrir un
+  cobro, y las rutas del demo dan 404. `api:dev` y `worker:dev` ponen el
+  demo si no hay token (así andan desarrollo y los E2E);
+  `docker-compose.prod.yml` no fija nada. `TestSinTokenNiDemoNoHayPagoOnline`.
+  **La VPS hoy cobra con el demo: con este cambio el pago online queda
+  apagado hasta que se cargue el token** (decisión a avisarle a Nahuel). Las
+  pantallas siguen diciendo «modo de prueba» cuando `enVivo` es falso
+  (`/admin/pagos`, el bloque de pago del pedido, la inscripción a eventos):
+  sin token ahora es «apagado», y el texto habría que ajustarlo.
+- **Rutas más abiertas que su pantalla** (~100, todas con `ExigirStaff`): el
+  mostrador entero, clientes, vendedores, seguimiento, cheques, facturación,
+  bitácora, migración, proveedores, precios y su planilla, stock,
+  sucursales, productos, WhatsApp (avisos manuales, sin leer), las tarifas
+  vigentes de corte y los pendientes del inicio. Cada handler pide ahora
+  `roles.QuienEntra` de la pantalla que lo usa (la más amplia si son
+  varias). `TestAccesoPorPantalla` (`cmd/mjbj`) llama a todas las
+  operaciones de los contratos con cada rol y las compara con
+  `pantallaDeCadaRuta`: **una ruta nueva se declara ahí** (con
+  `MJBJ_VER_ACCESO=1 go test ./cmd/mjbj -run TestVerAcceso -v` se ve la
+  matriz). A propósito para todo el personal: el push, el buscador del
+  encabezado, el emisor fiscal y la ficha del pedido (la abre el aserradero
+  en `/admin/cortes/nuevo`). La cartera de cheques va con
+  `/admin/compras/pagos`: es el pago a proveedores el que la usa, no el
+  mostrador. Recibos y comprobantes (JSON y PDF) ya no los abre el
+  aserradero.
+- **`auth.Exigir` sin roles dejaba pasar a cualquier sesión**: una clave mal
+  escrita en `roles.QuienEntra` abría la ruta. Ahora da 403; para «cualquiera
+  que haya entrado» está `auth.ExigirSesion`.
+  `TestExigirSinRolesNoDejaEntrarANadie`.
+- **CSV con fórmulas**: el texto que empieza con `= + - @`, tabulador o
+  retorno sale con un apóstrofo (`csvexcel.SinFormula`), en todas las
+  exportaciones; la planilla de precios lo saca al subirla de vuelta. Ningún
+  golden cambió. `TestTextoSinFormula` y compañía.
+- **Comprobantes de transferencia y documentos técnicos, privados**: van a
+  `CARPETA_PRIVADA` (`privado:<nombre>` en la base) y se entregan por
+  `/api/v1/admin/pagos/{id}/comprobante` (quien entra a `/admin/pagos`) y
+  `/api/v1/contenido/documentos/{id}/archivo` (el abierto, a cualquiera; el
+  reservado, a profesionales aprobados y al panel). `TestComprobanteEsPrivado`,
+  `TestPanelDeDocumentacion`. **Paso al desplegar**: correr una vez
+  `docker compose -f docker-compose.prod.yml run --rm api privados` (mismas
+  carpetas que la API; mueve lo que quedó en `/subidas/` y actualiza la base;
+  repetible). Hasta correrlo, lo viejo se sigue viendo por la ruta nueva
+  pero también por `/subidas/`.
+- Bajos: el límite de comprobantes se cuenta después del token; el motivo
+  del rechazo de un profesional va escapado en el correo (el golden de
+  `campanas/avisos.json` tenía ese caso y se actualizó a mano ese renglón);
+  un anónimo en `/api/v1/admin/*` recibe 401 antes de validar el contrato
+  (`auth.Panel`), y un cliente 403; los carritos anónimos nuevos tienen tope
+  de 60 por hora por IP (acción `carrito` del limitador).
+
+Decisiones pendientes (no se hicieron):
+
+- [ ] **Vincular por correo una compra anónima a la ficha de un cliente
+      existente** (`internal/checkout/compra.go`, `clientePorCorreo`): hoy
+      quien compra sin cuenta con el correo de otro cliente queda asociado a
+      su ficha (y a su historial). Decidir si se vincula solo con sesión, o
+      se crea ficha aparte y se avisa.
+- [ ] **`trusted_proxies` de Cloudflare en Caddy**: cuando se ponga
+      Cloudflare, `IPDelCliente` va a ver la IP de Cloudflare en todos los
+      pedidos (límites por IP compartidos por todo el mundo). Se configura
+      junto con el dominio.
+- [ ] Otras vistas de documentos siguen abiertas a todo el personal (el
+      remito, el presupuesto en PDF, el seguimiento): revisar si el
+      aserradero las necesita.

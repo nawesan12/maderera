@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"mjbj/internal/csvexcel"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/planilla"
@@ -456,12 +457,8 @@ func numeroCsv(v float64, decimales int) string {
 	return strings.Replace(jsmath.ToFixed(v, decimales), ".", ",", 1)
 }
 
-func textoCsv(v *string) string {
-	if v == nil {
-		return `""`
-	}
-	return `"` + strings.ReplaceAll(*v, `"`, `""`) + `"`
-}
+// textoCsv es csvexcel.TextoCsv: entre comillas y sin fórmulas.
+func textoCsv(v *string) string { return csvexcel.TextoCsv(v) }
 
 func texto(v string) string { return textoCsv(&v) }
 

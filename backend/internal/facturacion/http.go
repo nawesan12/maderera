@@ -176,7 +176,7 @@ func (a *API) GuardarEmisorFiscal(ctx context.Context, r facturacionapi.GuardarE
 }
 
 func (a *API) ListarPuntosDeVenta(ctx context.Context, _ facturacionapi.ListarPuntosDeVentaRequestObject) (facturacionapi.ListarPuntosDeVentaResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/facturacion")...); err != nil {
 		return nil, err
 	}
 	v, err := a.s.PuntosDeVenta(ctx)
@@ -196,7 +196,7 @@ func (a *API) GuardarPuntoDeVenta(ctx context.Context, r facturacionapi.GuardarP
 }
 
 func (a *API) EstadoDeArca(ctx context.Context, _ facturacionapi.EstadoDeArcaRequestObject) (facturacionapi.EstadoDeArcaResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/facturacion")...); err != nil {
 		return nil, err
 	}
 	return ok(a.s.Estado(ctx)), nil
@@ -205,7 +205,7 @@ func (a *API) EstadoDeArca(ctx context.Context, _ facturacionapi.EstadoDeArcaReq
 /* ---------------------------- las lecturas ----------------------------- */
 
 func (a *API) ListarComprobantes(ctx context.Context, r facturacionapi.ListarComprobantesRequestObject) (facturacionapi.ListarComprobantesResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/facturacion")...); err != nil {
 		return nil, err
 	}
 	p := r.Params
@@ -221,7 +221,7 @@ func (a *API) ListarComprobantes(ctx context.Context, r facturacionapi.ListarCom
 }
 
 func (a *API) ResumenDeFacturacion(ctx context.Context, r facturacionapi.ResumenDeFacturacionRequestObject) (facturacionapi.ResumenDeFacturacionResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/facturacion")...); err != nil {
 		return nil, err
 	}
 	v, err := a.s.ResumenDe(ctx, r.Params.Desde, r.Params.Hasta)
@@ -239,7 +239,13 @@ func (a *API) puedeVer(ctx context.Context, c *Completo) error {
 		return noEsta("No encontrado")
 	}
 	if ses.EsStaff() {
-		return nil
+		// El comprobante lo abre quien factura o cobra: la ficha del pedido
+		// (la pantalla más amplia que lo enlaza), la facturación, el
+		// mostrador. El aserradero no.
+		if ses.Tiene(roles.QuienEntra("/admin/pedidos")...) {
+			return nil
+		}
+		return noEsta("No encontrado")
 	}
 	propio, err := a.s.ClienteDeLaSesion(ctx, ses.UserID)
 	if err != nil {
@@ -286,7 +292,7 @@ func (a *API) ComprobanteEnPdf(ctx context.Context, r facturacionapi.Comprobante
 }
 
 func (a *API) MisComprobantes(ctx context.Context, _ facturacionapi.MisComprobantesRequestObject) (facturacionapi.MisComprobantesResponseObject, error) {
-	ses, err := auth.Exigir(ctx)
+	ses, err := auth.ExigirSesion(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +347,7 @@ func (a *API) LibroIvaVentasCsv(ctx context.Context, r facturacionapi.LibroIvaVe
 }
 
 func (a *API) PedidoParaFacturar(ctx context.Context, r facturacionapi.PedidoParaFacturarRequestObject) (facturacionapi.PedidoParaFacturarResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/pedidos")...); err != nil {
 		return nil, err
 	}
 	p, err := a.s.PedidoParaFacturar(ctx, r.Id.String())
@@ -354,7 +360,7 @@ func (a *API) PedidoParaFacturar(ctx context.Context, r facturacionapi.PedidoPar
 /* ----------------------------- las acciones ---------------------------- */
 
 func (a *API) FacturarPedido(ctx context.Context, r facturacionapi.FacturarPedidoRequestObject) (facturacionapi.FacturarPedidoResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/pedidos")...)
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +372,7 @@ func (a *API) FacturarPedido(ctx context.Context, r facturacionapi.FacturarPedid
 }
 
 func (a *API) EmitirComprobanteManual(ctx context.Context, r facturacionapi.EmitirComprobanteManualRequestObject) (facturacionapi.EmitirComprobanteManualResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/facturacion")...)
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +388,7 @@ func (a *API) EmitirComprobanteManual(ctx context.Context, r facturacionapi.Emit
 // con `error` (un rechazo no es un error del pedido). Queda en la bitácora
 // salga como salga, y con el CAE se le manda al cliente el definitivo.
 func (a *API) AutorizarComprobante(ctx context.Context, r facturacionapi.AutorizarComprobanteRequestObject) (facturacionapi.AutorizarComprobanteResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/facturacion")...)
 	if err != nil {
 		return nil, err
 	}
@@ -512,7 +518,7 @@ func (a *API) NotaDeDebito(ctx context.Context, r facturacionapi.NotaDeDebitoReq
 }
 
 func (a *API) CobrarComprobante(ctx context.Context, r facturacionapi.CobrarComprobanteRequestObject) (facturacionapi.CobrarComprobanteResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/facturacion")...)
 	if err != nil {
 		return nil, err
 	}

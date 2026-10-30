@@ -150,14 +150,18 @@ func TestGrillaYEdicion(t *testing.T) {
 	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
 	u := e.srv.URL + "/api/v1/admin/precios"
 
-	_, b := pedir(t, ven, "GET", u+"?busqueda=fen", nil)
+	// La grilla es de /admin/precios: el vendedor no la lee (antes sí, por
+	// la API) ni cambia precios.
+	if c, _ := pedir(t, ven, "GET", u+"?busqueda=fen", nil); c != 403 {
+		t.Errorf("el vendedor leyó la grilla: %d", c)
+	}
+	_, b := pedir(t, adm, "GET", u+"?busqueda=fen", nil)
 	var grilla []FilaPrecio
 	_ = json.Unmarshal([]byte(b), &grilla)
 	if len(grilla) != 2 || grilla[0].SKU != "FEN18" || grilla[0].PrecioGeneral != "84500.00" || grilla[0].PrecioProfesional != "70000.00" ||
 		grilla[0].Brecha == nil || *grilla[0].Brecha != 17.2 || grilla[1].PrecioProfesional != "0" || grilla[1].Brecha != nil || grilla[0].Desactualizado {
 		t.Fatalf("grilla: %s", b)
 	}
-	// El vendedor ve la grilla pero no cambia precios (la pantalla es del admin).
 	if c, _ := pedir(t, ven, "POST", u+"/editar", map[string]string{"variantId": e.fen18, "priceListId": e.general, "precio": "1"}); c != 403 {
 		t.Errorf("el vendedor editó un precio: %d", c)
 	}
@@ -172,7 +176,7 @@ func TestGrillaYEdicion(t *testing.T) {
 	}
 	// El mismo precio otra vez no deja historial.
 	pedir(t, adm, "POST", u+"/editar", map[string]string{"variantId": e.fen18, "priceListId": e.general, "precio": "86000.13"})
-	_, b = pedir(t, ven, "GET", u+"/historial", nil)
+	_, b = pedir(t, adm, "GET", u+"/historial", nil)
 	var hist []CambioDePrecio
 	_ = json.Unmarshal([]byte(b), &hist)
 	if len(hist) != 1 || hist[0].PrecioAnterior == nil || *hist[0].PrecioAnterior != "84500.00" || hist[0].PrecioNuevo != "86000.13" || hist[0].Origen != "manual" {

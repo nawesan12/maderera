@@ -179,6 +179,9 @@ func CsvReposicion(r ReporteDeReposicion) string {
 		celdas := []string{f.Producto, f.Medida, de(f.Sku), f.Categoria, de(f.Rubro),
 			jsmath.Texto(f.DisponibleCentral), jsmath.Texto(f.DisponibleAserradero), jsmath.Texto(f.Vendido), cob, jsmath.Texto(f.Sugerido)}
 		for i := range celdas {
+			if i < 5 { // las de texto: las otras son números, y pueden ser negativos
+				celdas[i] = csvexcel.SinFormula(celdas[i])
+			}
 			celdas[i] = celdaReposicion(celdas[i])
 		}
 		lineas = append(lineas, strings.Join(celdas, ";"))

@@ -10,15 +10,20 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 )
 
-// Config es dónde se guarda.
+// Config es dónde se guarda: lo público (que sirve Caddy) y lo privado
+// (comprobantes de transferencias, documentos técnicos), que solo se lee por
+// una ruta de la API que mira quién pide. La privada es la misma carpeta de
+// los adjuntos de WhatsApp.
 type Config struct {
-	Carpeta string `env:"CARPETA_SUBIDAS" envDefault:"/datos/subidas"`
+	Carpeta        string `env:"CARPETA_SUBIDAS" envDefault:"/datos/subidas"`
+	CarpetaPrivada string `env:"CARPETA_PRIVADA" envDefault:"/datos/privado"`
 }
 
 // ErrSubida es un archivo que no se acepta, con el mensaje para la pantalla.
@@ -73,11 +78,11 @@ func uuid() string {
 
 func mb(n int) string { return fmt.Sprintf("%.1f", float64(n)/1024/1024) }
 
-// Disco guarda en la carpeta configurada.
-type Disco struct{ carpeta string }
+// Disco guarda en las carpetas configuradas.
+type Disco struct{ carpeta, privada string }
 
 // Nuevo arma el almacenamiento.
-func Nuevo(c Config) *Disco { return &Disco{carpeta: c.Carpeta} }
+func Nuevo(c Config) *Disco { return &Disco{carpeta: c.Carpeta, privada: c.CarpetaPrivada} }
 
 func (d *Disco) escribir(nombre string, datos []byte) error {
 	if err := os.MkdirAll(d.carpeta, 0o755); err != nil {
@@ -112,8 +117,20 @@ func (d *Disco) GuardarImagen(datos []byte, tipoDeclarado, prefijo string) (stri
 }
 
 // GuardarAdjunto guarda un adjunto (de WhatsApp, por ejemplo) con la
-// extensión de su tipo.
+// extensión de su tipo, en la carpeta pública: **cualquiera que tenga la URL
+// lo baja**. Lo que es de alguien va con GuardarPrivado.
 func (d *Disco) GuardarAdjunto(datos []byte, mime, prefijo string) (string, error) {
+	nombre, err := nombreDeAdjunto(datos, mime, prefijo)
+	if err != nil {
+		return "", err
+	}
+	if err := d.escribir(nombre, datos); err != nil {
+		return "", err
+	}
+	return "/subidas/" + nombre, nil
+}
+
+func nombreDeAdjunto(datos []byte, mime, prefijo string) (string, error) {
 	if len(datos) == 0 {
 		return "", &ErrSubida{"El archivo llegó vacío."}
 	}
@@ -128,11 +145,113 @@ func (d *Disco) GuardarAdjunto(datos []byte, mime, prefijo string) (string, erro
 	if prefijo == "" {
 		prefijo = "whatsapp"
 	}
-	nombre := prefijo + "-" + uuid() + "." + ext
-	if err := d.escribir(nombre, datos); err != nil {
+	return prefijo + "-" + uuid() + "." + ext, nil
+}
+
+// PrefijoPrivado es cómo empieza la referencia de un archivo privado en la
+// base (`privado:<nombre>`, como los adjuntos de WhatsApp): nunca una URL,
+// para que nadie la pueda pegar en el navegador.
+const PrefijoPrivado = "privado:"
+
+// GuardarPrivado guarda un adjunto en la carpeta privada, que Caddy no
+// monta, y devuelve su referencia para la base. Los comprobantes de
+// transferencia (con el CBU y el nombre de quien pagó) y los documentos
+// técnicos van acá: antes iban a /subidas/, públicos para quien tuviera el
+// enlace.
+func (d *Disco) GuardarPrivado(datos []byte, mime, prefijo string) (string, error) {
+	nombre, err := nombreDeAdjunto(datos, mime, prefijo)
+	if err != nil {
 		return "", err
 	}
-	return "/subidas/" + nombre, nil
+	if d.privada == "" {
+		return "", errors.New("subidas: falta CARPETA_PRIVADA")
+	}
+	if err := os.MkdirAll(d.privada, 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(d.privada, nombre), datos, 0o640); err != nil {
+		return "", err
+	}
+	return PrefijoPrivado + nombre, nil
+}
+
+// LeerGuardado lee un archivo por su referencia: `privado:<nombre>` de la
+// carpeta privada, o `/subidas/<nombre>` de la pública (lo que se subió
+// antes de que existiera la privada). Devuelve el tipo según la extensión;
+// nil si no está o la referencia no es de acá.
+func (d *Disco) LeerGuardado(ref string) ([]byte, string) {
+	var ruta string
+	switch {
+	case strings.HasPrefix(ref, PrefijoPrivado) && d.privada != "":
+		n := strings.TrimPrefix(ref, PrefijoPrivado)
+		if !NombreValido(n) {
+			return nil, ""
+		}
+		ruta = filepath.Join(d.privada, n)
+	case strings.HasPrefix(ref, "/subidas/"):
+		n := strings.TrimPrefix(ref, "/subidas/")
+		if !NombreValido(n) {
+			return nil, ""
+		}
+		ruta = filepath.Join(d.carpeta, n)
+	default:
+		return nil, ""
+	}
+	b, err := os.ReadFile(ruta)
+	if err != nil {
+		return nil, ""
+	}
+	return b, TipoDeNombre(ruta)
+}
+
+// TipoDeNombre es el tipo de un archivo guardado acá, por su extensión.
+func TipoDeNombre(nombre string) string {
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(nombre), "."))
+	for tipo, e := range extensionesDeAdjunto {
+		if e == ext {
+			return tipo
+		}
+	}
+	if ext == "avif" {
+		return "image/avif"
+	}
+	return "application/octet-stream"
+}
+
+// MoverAPrivado pasa un archivo de la carpeta pública a la privada y
+// devuelve su nueva referencia. Si ya no está en la pública pero sí en la
+// privada (una corrida anterior que se cortó), también vale: es repetible.
+func (d *Disco) MoverAPrivado(url string) (string, error) {
+	n := strings.TrimPrefix(url, "/subidas/")
+	if !strings.HasPrefix(url, "/subidas/") || !NombreValido(n) {
+		return "", &ErrSubida{"Nombre de archivo inválido."}
+	}
+	if d.privada == "" {
+		return "", errors.New("subidas: falta CARPETA_PRIVADA")
+	}
+	if err := os.MkdirAll(d.privada, 0o755); err != nil {
+		return "", err
+	}
+	origen, destino := filepath.Join(d.carpeta, n), filepath.Join(d.privada, n)
+	datos, err := os.ReadFile(origen)
+	if errors.Is(err, os.ErrNotExist) {
+		if _, e := os.Stat(destino); e == nil {
+			return PrefijoPrivado + n, nil
+		}
+		return "", err
+	}
+	if err != nil {
+		return "", err
+	}
+	// Copiar y después borrar (no rename): las dos carpetas son volúmenes
+	// distintos en el compose.
+	if err := os.WriteFile(destino, datos, 0o640); err != nil {
+		return "", err
+	}
+	if err := os.Remove(origen); err != nil {
+		return "", err
+	}
+	return PrefijoPrivado + n, nil
 }
 
 var reNombre = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$`)
@@ -142,8 +261,20 @@ func NombreValido(nombre string) bool {
 	return filepath.Base(nombre) == nombre && reNombre.MatchString(nombre) && !strings.Contains(nombre, "..")
 }
 
-// Borrar borra una foto por su URL. Si ya no estaba, no es error.
+// Borrar borra una foto por su URL (o un archivo privado por su
+// referencia). Si ya no estaba, no es error.
 func (d *Disco) Borrar(url string) error {
+	if strings.HasPrefix(url, PrefijoPrivado) && d.privada != "" {
+		nombre := strings.TrimPrefix(url, PrefijoPrivado)
+		if !NombreValido(nombre) {
+			return &ErrSubida{"Nombre de archivo inválido."}
+		}
+		err := os.Remove(filepath.Join(d.privada, nombre))
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
 	if !strings.HasPrefix(url, "/subidas/") {
 		return nil
 	}
@@ -156,4 +287,16 @@ func (d *Disco) Borrar(url string) error {
 		return nil
 	}
 	return err
+}
+
+// Entregar escribe un archivo leído con LeerGuardado. `inline` para que el
+// PDF o la foto se abran en el navegador, nosniff y un sandbox por si alguna
+// vez entra algo que el navegador quiera interpretar.
+func Entregar(w http.ResponseWriter, datos []byte, tipo, cache string) {
+	w.Header().Set("Content-Type", tipo)
+	w.Header().Set("Content-Disposition", "inline")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "sandbox")
+	w.Header().Set("Cache-Control", cache)
+	_, _ = w.Write(datos)
 }

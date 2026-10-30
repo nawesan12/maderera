@@ -23,6 +23,7 @@ import (
 	"mjbj/internal/planilla"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
+	"mjbj/internal/roles"
 )
 
 // API son las rutas de los documentos.
@@ -96,7 +97,7 @@ const leyendaConIva = "Precios finales con IVA incluido"
 // de quien pide, con los precios de su lista (Vigente), nunca de un
 // parámetro.
 func (a *API) MiListaDePreciosPdf(ctx context.Context, _ documentosapi.MiListaDePreciosPdfRequestObject) (documentosapi.MiListaDePreciosPdfResponseObject, error) {
-	ses, err := auth.Exigir(ctx)
+	ses, err := auth.ExigirSesion(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +140,7 @@ func (a *API) MiListaDePreciosPdf(ctx context.Context, _ documentosapi.MiListaDe
 // ExportarPrecios es app/admin/precios/exportar/route.ts: la grilla con los
 // filtros de la pantalla, en CSV para trabajarla o en PDF para mandarla.
 func (a *API) ExportarPrecios(ctx context.Context, r documentosapi.ExportarPreciosRequestObject) (documentosapi.ExportarPreciosResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/precios")...); err != nil {
 		return nil, err
 	}
 	busqueda := texto(r.Params.Buscar)

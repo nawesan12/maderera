@@ -117,21 +117,33 @@ type entorno struct {
 	mp    *simuladorMP
 	cola  *cola.Cola
 	ahora time.Time
+	disco *subidas.Disco
 }
 
+// armar levanta la API con Mercado Pago (el simulador) o, sin él, con el
+// demo encendido a propósito (PAGOS_PROVIDER=demo).
 func armar(t *testing.T, conMP bool) *entorno {
+	return armarCon(t, func(cfg *Config) {
+		if conMP {
+			cfg.AccessToken = tokenMP
+		} else {
+			cfg.Proveedor = "demo"
+		}
+	})
+}
+
+func armarCon(t *testing.T, ajustar func(*Config)) *entorno {
 	t.Helper()
 	pool := pruebas.Base(t)
 	ses := auth.Nuevo(auth.Config{Secreto: "secreto-de-prueba-de-pagos-de-32-caracteres", URL: "http://localhost"}, pool)
 	mp := nuevoSimulador(t)
 	cfg := Config{API: mp.srv.URL, Sitio: "https://mjbj.com.ar/", WebhookSecret: claveMP}
-	if conMP {
-		cfg.AccessToken = tokenMP
-	}
+	ajustar(&cfg)
 	s := Nuevo(pool, cfg, silencio)
 	ahora := time.Now()
 	q := sqlc.New(pool)
-	api := NuevaAPI(s, Extras{Lim: limites.Nuevo(q, silencio), Disco: subidas.Nuevo(subidas.Config{Carpeta: t.TempDir()})},
+	disco := subidas.Nuevo(subidas.Config{Carpeta: t.TempDir(), CarpetaPrivada: t.TempDir()})
+	api := NuevaAPI(s, Extras{Lim: limites.Nuevo(q, silencio), Disco: disco},
 		plataforma.ConfigInterna{Secreto: secretoInterno})
 	api.ahora = func() time.Time { return ahora }
 	m := http.NewServeMux()
@@ -152,7 +164,7 @@ func armar(t *testing.T, conMP bool) *entorno {
 	t.Cleanup(srv.Close)
 	c := cola.Nueva(q, silencio)
 	c.Registrar(TipoAviso, s.Manejador())
-	return &entorno{srv: srv, pool: pool, ses: ses, s: s, mp: mp, cola: c, ahora: ahora}
+	return &entorno{srv: srv, pool: pool, ses: ses, s: s, mp: mp, cola: c, ahora: ahora, disco: disco}
 }
 
 func (e *entorno) id(t *testing.T, sql string, args ...any) string {
@@ -387,6 +399,41 @@ func TestPagoDeDemostracion(t *testing.T) {
 	}
 }
 
+// Sin token y sin PAGOS_PROVIDER=demo, el pago online está apagado: pagar
+// con Mercado Pago da un error claro (y no abre ningún cobro), y las rutas
+// de /pago-demo no existen. Antes la falta de token encendía el demo, y
+// cualquiera aprobaba su propio pago con un POST.
+func TestSinTokenNiDemoNoHayPagoOnline(t *testing.T) {
+	e := armarCon(t, func(*Config) {})
+	pedidoID, token := e.pedido(t, "PED-1005")
+	anon := &http.Client{}
+
+	c, b := pedir(t, anon, "POST", e.srv.URL+"/api/v1/pagos/pedido", map[string]any{"numero": "PED-1005", "token": token})
+	if c != http.StatusServiceUnavailable || !strings.Contains(b, "El pago online no está disponible") {
+		t.Fatalf("pagar sin proveedor: %d %s", c, b)
+	}
+	if n := e.numero(t, `select count(*) from payments`); n != 0 {
+		t.Fatalf("abrió %v cobros sin proveedor", n)
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/pagos/estado", nil); !strings.Contains(b, `"enVivo":false`) {
+		t.Fatal(b)
+	}
+
+	// Un cobro demo que quedó de antes (la VPS corría con el demo): no se
+	// puede ver ni aprobar.
+	pagoID := e.id(t, `insert into payments (tipo, proveedor, estado, order_id, monto)
+		values ('pedido', 'demo', 'pendiente', $1, 204732) returning id`, pedidoID)
+	if c, _ := pedir(t, anon, "GET", e.srv.URL+"/api/v1/pagos/demo/"+pagoID, nil); c != http.StatusNotFound {
+		t.Fatalf("ver el demo: %d", c)
+	}
+	if c, _ := pedir(t, anon, "POST", e.srv.URL+"/api/v1/pagos/demo/"+pagoID, map[string]any{"decision": "aprobar"}); c != http.StatusNotFound {
+		t.Fatalf("aprobar el demo: %d", c)
+	}
+	if est := e.texto(t, `select estado_pago::text from orders where id = $1`, pedidoID); est == "pagado" {
+		t.Fatal("el pedido quedó pagado")
+	}
+}
+
 // Veinte acreditaciones a la vez del mismo pago de una deuda (webhook,
 // vuelta del usuario, reintentos): un recibo. Sin el candado
 // (MJBJ_PRUEBA_SIN_CANDADO=1) salen varios y la deuda baja varias veces.
@@ -599,5 +646,73 @@ func TestAnularElReciboDespuesDeUnReintegroParcial(t *testing.T) {
 	}
 	if s := e.numero(t, `select coalesce(sum(monto), 0)::float8 from account_movements where customer_id = $1`, cliente); s != 0 {
 		t.Errorf("anular después del reintegro parcial deja la cuenta en %v, no en 0", s)
+	}
+}
+
+// Quien no tiene el token no le gasta al dueño los intentos de subir el
+// comprobante: el límite se cuenta después de verificarlo.
+func TestComprobanteConTokenMaloNoGastaElLimite(t *testing.T) {
+	e := armar(t, false)
+	_, token := e.pedido(t, "PED-1006")
+	x := Extras{Lim: limites.Nuevo(sqlc.New(e.pool), silencio), Disco: e.disco}
+	archivo := &Archivo{Datos: []byte("%PDF-1.4 comprobante"), Tipo: "application/pdf"}
+	ctx := context.Background()
+	for i := 0; i < 15; i++ {
+		if _, err := e.s.SubirComprobante(ctx, x, "PED-1006", "token-que-no-es", nil, archivo); err == nil {
+			t.Fatal("subió con un token equivocado")
+		}
+	}
+	if r, err := e.s.SubirComprobante(ctx, x, "PED-1006", token, nil, archivo); err != nil {
+		t.Fatalf("el dueño no pudo subir su comprobante: %v", err)
+	} else if r.Ok == "" {
+		t.Fatalf("%+v", r)
+	}
+}
+
+// El comprobante de una transferencia (nombre, CBU y banco de quien pagó)
+// queda en la carpeta privada y se ve solo desde la conciliación: antes iba
+// a /subidas/, que Caddy sirve a cualquiera que tenga el enlace.
+func TestComprobanteEsPrivado(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	_, token := e.pedido(t, "PED-1007")
+	x := Extras{Lim: limites.Nuevo(sqlc.New(e.pool), silencio), Disco: e.disco}
+	pdf := []byte("%PDF-1.4 transferencia de Juan, CBU 0000003100000000000001")
+	if _, err := e.s.SubirComprobante(ctx, x, "PED-1007", token, nil, &Archivo{Datos: pdf, Tipo: "application/pdf"}); err != nil {
+		t.Fatal(err)
+	}
+	ref := e.texto(t, `select comprobante_url from payments`)
+	if !strings.HasPrefix(ref, subidas.PrefijoPrivado) {
+		t.Fatalf("quedó en %q, no en la carpeta privada", ref)
+	}
+	pago := e.texto(t, `select id::text from payments`)
+
+	entrar := func(correo string, rol sqlc.StaffRole) *http.Client {
+		if _, err := e.ses.AltaDeStaff(ctx, correo, "una clave larga", "Persona", rol); err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		if _, err := e.ses.Entrar(ctx, w, correo, "una clave larga", "", "", true); err != nil {
+			t.Fatal(err)
+		}
+		jar, _ := cookiejar.New(nil)
+		u, _ := http.NewRequest("GET", e.srv.URL, nil)
+		jar.SetCookies(u.URL, w.Result().Cookies())
+		return &http.Client{Jar: jar}
+	}
+	u := e.srv.URL + URLDelComprobante(pago)
+	if c, _ := pedir(t, &http.Client{}, "GET", u, nil); c != http.StatusUnauthorized {
+		t.Fatalf("anónimo: %d", c)
+	}
+	if c, _ := pedir(t, entrar("vendedor@prueba.test", sqlc.StaffRoleVendedor), "GET", u, nil); c != http.StatusForbidden {
+		t.Fatalf("vendedor: %d", c)
+	}
+	adm := entrar("admin@prueba.test", sqlc.StaffRoleAdmin)
+	if c, b := pedir(t, adm, "GET", u, nil); c != 200 || b != string(pdf) {
+		t.Fatalf("admin: %d %q", c, b)
+	}
+	// La conciliación muestra el enlace a la ruta, no la referencia.
+	if _, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/admin/pagos", nil); !strings.Contains(b, `"comprobanteUrl":"`+URLDelComprobante(pago)+`"`) {
+		t.Fatalf("listado: %s", b)
 	}
 }

@@ -12,8 +12,8 @@ info:
     Los errores que se muestran tal cual en la pantalla vienen en `error`
     con 200, como los devolvían las acciones.
 
-    Permisos: leer el estado y el historial, cualquier persona del panel;
-    todo lo demás, el admin (quien entra a /admin/migracion).
+    Permisos: todo, también leer el estado y el historial, es de quien entra
+    a /admin/migracion (el admin).
 paths:
   /api/v1/admin/migracion/entidades:
     get:

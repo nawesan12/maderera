@@ -226,7 +226,7 @@ func enumTexto[T ~string](v *T) string {
 // MiLista son las filas del PDF de /mi-lista-de-precios. Exige sesión: sin
 // esto la lista profesional quedaría a un link de cualquiera.
 func (a *API) MiLista(ctx context.Context, _ catalogoapi.MiListaRequestObject) (catalogoapi.MiListaResponseObject, error) {
-	ses, err := auth.Exigir(ctx)
+	ses, err := auth.ExigirSesion(ctx)
 	if err != nil {
 		return nil, err
 	}

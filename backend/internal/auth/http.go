@@ -50,7 +50,7 @@ func espera(v limites.Veredicto) *plataforma.Problema {
 
 // VerSesion es quién pide.
 func (a *API) VerSesion(ctx context.Context, _ sesionapi.VerSesionRequestObject) (sesionapi.VerSesionResponseObject, error) {
-	ses, err := Exigir(ctx)
+	ses, err := ExigirSesion(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func (a *API) Registrarse(ctx context.Context, req sesionapi.RegistrarseRequestO
 
 // CambiarClave pide la actual y cierra las otras sesiones.
 func (a *API) CambiarClave(ctx context.Context, req sesionapi.CambiarClaveRequestObject) (sesionapi.CambiarClaveResponseObject, error) {
-	ses, err := Exigir(ctx)
+	ses, err := ExigirSesion(ctx)
 	if err != nil {
 		return nil, err
 	}

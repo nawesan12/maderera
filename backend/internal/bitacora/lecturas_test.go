@@ -47,7 +47,8 @@ func TestLeerLaBitacora(t *testing.T) {
 	srv := httptest.NewServer(pruebas.ConContrato(t, spec2, ses.Middleware(validar(m))))
 	defer srv.Close()
 
-	id, err := ses.AltaDeStaff(ctx, "ana@prueba.test", "una clave larga", "Ana", sqlc.StaffRoleVendedor)
+	// La bitácora es del admin (/admin/bitacora).
+	id, err := ses.AltaDeStaff(ctx, "ana@prueba.test", "una clave larga", "Ana", sqlc.StaffRoleAdmin)
 	if err != nil {
 		t.Fatal(err)
 	}

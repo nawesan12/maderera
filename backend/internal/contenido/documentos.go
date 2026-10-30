@@ -3,12 +3,16 @@ package contenido
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 )
 
@@ -60,7 +64,11 @@ func (s *Servicio) SubirDocumento(ctx context.Context, ses *auth.Sesion, f FormD
 	if !ok || (t.firma != nil && !bytes.HasPrefix(f.Archivo.Datos, t.firma)) {
 		return plataforma.Invalido(map[string]string{"archivo": "Subí un PDF, una planilla o una imagen."})
 	}
-	url, err := s.disco.GuardarAdjunto(f.Archivo.Datos, tipo, "tecnica")
+	// En la carpeta privada, aunque sea para todos: la visibilidad se cambia
+	// después sin mover el archivo, y lo entrega ArchivoDeDocumento mirando
+	// quién lo pide (antes iba a /subidas/ y un documento «reservado» lo
+	// bajaba cualquiera que tuviera el enlace).
+	url, err := s.disco.GuardarPrivado(f.Archivo.Datos, tipo, "tecnica")
 	if err != nil {
 		return subidaInvalida("archivo", err)
 	}
@@ -114,4 +122,41 @@ func (s *Servicio) ActivarDocumento(ctx context.Context, ses *auth.Sesion, id st
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, accion, "documento", id, desc, nil)
 	return nil
+}
+
+// URLDelDocumento es el enlace que ven las pantallas: la ruta que mira quién
+// pide, nunca la referencia guardada.
+func URLDelDocumento(id string) string { return "/api/v1/contenido/documentos/" + id + "/archivo" }
+
+// ArchivoDeDocumento es el archivo de un documento técnico para esta
+// sesión: el abierto, para cualquiera; el reservado, para los profesionales
+// aprobados; el dado de baja, solo para el panel. «No existe» y «no te
+// corresponde» son lo mismo (nil): un 403 confirmaría que el documento está.
+func (s *Servicio) ArchivoDeDocumento(ctx context.Context, ses *auth.Sesion, id string) (datos []byte, tipo string, publico bool, err error) {
+	if !plataforma.UUIDValido(id) {
+		return nil, "", false, nil
+	}
+	var ref string
+	var activo, reservado bool
+	err = s.pool.QueryRow(ctx, `SELECT url, activo, solo_profesionales FROM technical_documents WHERE id = $1`, id).Scan(&ref, &activo, &reservado)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, "", false, nil
+	}
+	if err != nil {
+		return nil, "", false, err
+	}
+	puede := activo && !reservado
+	if !puede && ses.Tiene(roles.QuienEntra("/admin/documentacion")...) {
+		puede = true
+	}
+	if !puede && activo && reservado {
+		if puede, err = s.esProfesional(ctx, ses); err != nil {
+			return nil, "", false, err
+		}
+	}
+	if !puede {
+		return nil, "", false, nil
+	}
+	datos, tipo = s.disco.LeerGuardado(ref)
+	return datos, tipo, activo && !reservado, nil
 }

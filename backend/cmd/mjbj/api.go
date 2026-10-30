@@ -154,8 +154,10 @@ func correrAPI() error {
 		catalogoapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	apiContenido := contenido.NuevaAPI(contenido.Nuevo(pool, subidas.Nuevo(cfg.Subidas), log), cfg.Google, cfg.Contacto, email.Elegir(cfg.Email, log), lim)
+	apiContenido.Rutas(m)
 	contenidoapi.HandlerWithOptions(
-		contenidoapi.NewStrictHandlerWithOptions(contenido.NuevaAPI(contenido.Nuevo(pool, subidas.Nuevo(cfg.Subidas), log), cfg.Google, cfg.Contacto, email.Elegir(cfg.Email, log), lim),
+		contenidoapi.NewStrictHandlerWithOptions(apiContenido,
 			[]contenidoapi.StrictMiddlewareFunc{plataforma.ConPedido[contenidoapi.StrictHandlerFunc]},
 			contenidoapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
@@ -570,5 +572,7 @@ func correrAPI() error {
 
 	// La sesión se lee en todos los pedidos de la API; /salud no la necesita
 	// pero tampoco molesta (sin cookie no toca la base).
+	// El panel, cerrado antes de validar el contrato (ver auth.Panel).
+	h = auth.Panel(cfg.Interna)(h)
 	return plataforma.Servir(cfg.Escuchar, plataforma.Cadena(sesiones.Middleware(h), log), log)
 }

@@ -71,8 +71,6 @@ func (o respuesta) VisitGuardarDescuentoDePagoResponse(w http.ResponseWriter) er
 	return o.escribir(w)
 }
 
-func staff(ctx context.Context) (*auth.Sesion, error) { return auth.ExigirStaff(ctx) }
-
 // gestion es quien entra a /admin/precios.
 func gestion(ctx context.Context) (*auth.Sesion, error) {
 	return auth.Exigir(ctx, roles.QuienEntra("/admin/precios")...)
@@ -86,7 +84,7 @@ func texto(p *string) string {
 }
 
 func (a *API) GrillaDePrecios(ctx context.Context, r preciosapi.GrillaDePreciosRequestObject) (preciosapi.GrillaDePreciosResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.Listar(ctx, texto(r.Params.Busqueda), texto(r.Params.Categoria), time.Now())
@@ -94,7 +92,7 @@ func (a *API) GrillaDePrecios(ctx context.Context, r preciosapi.GrillaDePreciosR
 }
 
 func (a *API) HistorialDePrecios(ctx context.Context, r preciosapi.HistorialDePreciosRequestObject) (preciosapi.HistorialDePreciosResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	limite := 40
@@ -106,7 +104,7 @@ func (a *API) HistorialDePrecios(ctx context.Context, r preciosapi.HistorialDePr
 }
 
 func (a *API) ListasDePrecios(ctx context.Context, _ preciosapi.ListasDePreciosRequestObject) (preciosapi.ListasDePreciosResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...); err != nil {
 		return nil, err
 	}
 	v, err := a.s.Listas(ctx)
@@ -126,7 +124,7 @@ func (a *API) FijarPorcentajeDeLista(ctx context.Context, r preciosapi.FijarPorc
 }
 
 func (a *API) RubrosParaAjuste(ctx context.Context, _ preciosapi.RubrosParaAjusteRequestObject) (preciosapi.RubrosParaAjusteResponseObject, error) {
-	if _, err := staff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.q.RubrosParaAjuste(ctx)

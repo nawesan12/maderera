@@ -64,7 +64,7 @@ func entero(p *int, def int) int {
 }
 
 func (a *API) GrillaDeStock(ctx context.Context, r stockapi.GrillaDeStockRequestObject) (stockapi.GrillaDeStockResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.Listar(ctx, texto(r.Params.Busqueda), texto(r.Params.Categoria))
@@ -72,7 +72,7 @@ func (a *API) GrillaDeStock(ctx context.Context, r stockapi.GrillaDeStockRequest
 }
 
 func (a *API) AlertasDeStock(ctx context.Context, r stockapi.AlertasDeStockRequestObject) (stockapi.AlertasDeStockResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.Alertas(ctx, entero(r.Params.Limite, 8))
@@ -80,7 +80,7 @@ func (a *API) AlertasDeStock(ctx context.Context, r stockapi.AlertasDeStockReque
 }
 
 func (a *API) UltimosMovimientos(ctx context.Context, r stockapi.UltimosMovimientosRequestObject) (stockapi.UltimosMovimientosResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.Movimientos(ctx, entero(r.Params.Limite, 10))
@@ -115,7 +115,7 @@ func (a *API) TransferirStock(ctx context.Context, r stockapi.TransferirStockReq
 }
 
 func (a *API) SucursalesDelPanel(ctx context.Context, _ stockapi.SucursalesDelPanelRequestObject) (stockapi.SucursalesDelPanelResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
 	filas, err := a.s.q.SucursalesTodas(ctx)
@@ -138,7 +138,7 @@ func (o respuesta) VisitSinSucursalAsignadaResponse(w http.ResponseWriter) error
 }
 
 func (a *API) MetricasDeSucursales(ctx context.Context, _ stockapi.MetricasDeSucursalesRequestObject) (stockapi.MetricasDeSucursalesResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/sucursales")...); err != nil {
 		return nil, err
 	}
 	v, err := a.s.MetricasPorSucursal(ctx, time.Now())
@@ -146,7 +146,7 @@ func (a *API) MetricasDeSucursales(ctx context.Context, _ stockapi.MetricasDeSuc
 }
 
 func (a *API) SinSucursalAsignada(ctx context.Context, _ stockapi.SinSucursalAsignadaRequestObject) (stockapi.SinSucursalAsignadaResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/sucursales")...); err != nil {
 		return nil, err
 	}
 	p, c, err := a.s.SinSucursal(ctx)

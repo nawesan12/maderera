@@ -281,7 +281,7 @@ func (a *API) FirmarRemito(ctx context.Context, r entregasapi.FirmarRemitoReques
 /* ------------------------------ el portal ---------------------------- */
 
 func (a *API) EntregasDeMiPedido(ctx context.Context, r entregasapi.EntregasDeMiPedidoRequestObject) (entregasapi.EntregasDeMiPedidoResponseObject, error) {
-	ses, err := auth.Exigir(ctx)
+	ses, err := auth.ExigirSesion(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -56,7 +56,7 @@ func (s *Servicio) Documentos(ctx context.Context, ses *auth.Sesion) ([]Document
 	}
 	out := make([]DocumentoTecnico, len(filas))
 	for i, f := range filas {
-		out[i] = DocumentoTecnico{f.ID, f.Titulo, f.Descripcion, f.Categoria, f.Url, f.Formato, f.TamanoBytes, f.SoloProfesionales}
+		out[i] = DocumentoTecnico{f.ID, f.Titulo, f.Descripcion, f.Categoria, URLDelDocumento(f.ID), f.Formato, f.TamanoBytes, f.SoloProfesionales}
 	}
 	return out, nil
 }

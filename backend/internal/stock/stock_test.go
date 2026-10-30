@@ -293,17 +293,22 @@ func errorsAs(err error, p **plataforma.Problema) bool { return errors.As(err, p
 func TestMetricasDeSucursales(t *testing.T) {
 	e := armar(t)
 	dep := e.staff(t, "deposito@prueba.test", "deposito")
+	adm := e.staff(t, "admin@prueba.test", "admin")
 	ctx := context.Background()
 	_, _ = e.pool.Exec(ctx, `insert into orders (numero, contacto_nombre, branch_id, total, subtotal, estado) values
 		('PED-1', 'Juan', $1, 1000, 1000, 'pendiente'), ('PED-2', 'Ana', $1, 500, 500, 'entregado'), ('PED-3', 'Sin sucursal', null, 10, 10, 'pendiente')`, e.central)
-	_, b := pedir(t, dep, "GET", e.srv.URL+"/api/v1/admin/sucursales/metricas", nil)
+	// Las métricas son de /admin/sucursales (el admin): el depósito no.
+	if c, _ := pedir(t, dep, "GET", e.srv.URL+"/api/v1/admin/sucursales/metricas", nil); c != 403 {
+		t.Errorf("el depósito leyó las métricas: %d", c)
+	}
+	_, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/admin/sucursales/metricas", nil)
 	var m []MetricasDeSucursal
 	_ = json.Unmarshal([]byte(b), &m)
 	if len(m) != 2 || m[0].Slug != "casa-central" || m[0].VentasHoy != 1500 || m[0].PedidosHoy != 2 || m[0].ClientesAtendidos != 2 ||
 		m[0].PedidosAbiertos != 1 || m[0].ProductosStockBajo != 0 {
 		t.Errorf("métricas: %s", b)
 	}
-	if _, b := pedir(t, dep, "GET", e.srv.URL+"/api/v1/admin/sucursales/sin-asignar", nil); b != "{\"cortes\":0,\"pedidos\":1}\n" {
+	if _, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/admin/sucursales/sin-asignar", nil); b != "{\"cortes\":0,\"pedidos\":1}\n" {
 		t.Errorf("sin asignar: %s", b)
 	}
 	// 22:30 del 10 en Argentina es el 11 en UTC: el día es el 10.

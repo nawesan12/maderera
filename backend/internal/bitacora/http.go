@@ -11,6 +11,7 @@ import (
 	"mjbj/internal/api/bitacoraapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/roles"
 )
 
 // API son las rutas de api/bitacora.yaml.
@@ -44,7 +45,7 @@ func de[T any](p *T) T {
 }
 
 func (a *API) ListarBitacora(ctx context.Context, r bitacoraapi.ListarBitacoraRequestObject) (bitacoraapi.ListarBitacoraResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/bitacora")...); err != nil {
 		return nil, err
 	}
 	p := r.Params
@@ -57,7 +58,7 @@ func (a *API) ListarBitacora(ctx context.Context, r bitacoraapi.ListarBitacoraRe
 }
 
 func (a *API) OpcionesDeBitacora(ctx context.Context, _ bitacoraapi.OpcionesDeBitacoraRequestObject) (bitacoraapi.OpcionesDeBitacoraResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/bitacora")...); err != nil {
 		return nil, err
 	}
 	entidades, personas, err := Opciones(ctx, a.pool)

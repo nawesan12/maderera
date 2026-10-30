@@ -540,15 +540,21 @@ func TestNotasYAnulacion(t *testing.T) {
 // corriente, con el control de crédito.
 func TestCobrarComprobante(t *testing.T) {
 	e := armar(t, false)
+	admin := e.staff(t, "a@mjbj.test", sqlc.StaffRoleAdmin)
 	vendedor := e.staff(t, "v@mjbj.test", sqlc.StaffRoleVendedor)
-	_, b := pedir(t, vendedor, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(consumidor(), [4]string{"Placa", "1", "12100", "21"}))
+	// Emitir y cobrar un comprobante suelto es de /admin/facturacion (el
+	// admin): el vendedor factura desde la ficha del pedido.
+	if st, _ := pedir(t, vendedor, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(consumidor(), [4]string{"Placa", "1", "12100", "21"})); st != 403 {
+		t.Fatalf("emitir un vendedor: %d", st)
+	}
+	_, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(consumidor(), [4]string{"Placa", "1", "12100", "21"}))
 	id := leerJSON[map[string]string](t, b)["invoiceId"]
-	st, b := pedir(t, vendedor, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/cobros",
+	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/cobros",
 		map[string]string{"modo": "cuenta_corriente", "monto": "12.100"})
 	if st != 422 || !strings.Contains(string(b), "no tiene cliente") {
 		t.Fatalf("a cuenta sin cliente: %d %s", st, b)
 	}
-	st, b = pedir(t, vendedor, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/cobros",
+	st, b = pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/cobros",
 		map[string]string{"partes": `[{"medio":"efectivo","importe":"10000"},{"medio":"tarjeta_debito","importe":"2100","referencia":"lote 7"}]`})
 	if st != 200 {
 		t.Fatalf("cobrar: %d %s", st, b)
@@ -566,11 +572,11 @@ func TestCobrarComprobante(t *testing.T) {
 	if avisos != 1 {
 		t.Fatalf("avisos del recibo: %d", avisos)
 	}
-	_, b = pedir(t, vendedor, "GET", e.srv.URL+"/api/v1/admin/facturacion/comprobantes?cobro=contado", nil)
+	_, b = pedir(t, admin, "GET", e.srv.URL+"/api/v1/admin/facturacion/comprobantes?cobro=contado", nil)
 	if l := leerJSON[[]Listado](t, b); len(l) != 1 || l[0].Cobrado != 12100 {
 		t.Fatalf("listado de contado: %s", b)
 	}
-	_, b = pedir(t, vendedor, "GET", e.srv.URL+"/api/v1/admin/facturacion/comprobantes?cobro=cuenta", nil)
+	_, b = pedir(t, admin, "GET", e.srv.URL+"/api/v1/admin/facturacion/comprobantes?cobro=cuenta", nil)
 	if l := leerJSON[[]Listado](t, b); len(l) != 0 {
 		t.Fatalf("listado a cuenta: %s", b)
 	}

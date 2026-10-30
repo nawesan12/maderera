@@ -308,7 +308,7 @@ func (a *API) PendientesDelRol(ctx context.Context, r reportesapi.PendientesDelR
 		v, err := a.s.PendientesDelRol(ctx, sqlc.StaffRole(*r.Params.Rol))
 		return ok(v), err
 	}
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := pantalla(ctx, "/admin")
 	if err != nil {
 		return nil, err
 	}

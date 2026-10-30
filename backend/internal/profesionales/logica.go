@@ -264,7 +264,10 @@ func Bienvenida(sitio, nombre string, lista *string, limite float64) Correo {
 func Rechazo(sitio, nombre string, motivo *string) Correo {
 	parrafos := []string{"Por ahora no pudimos habilitarte el acceso al portal de profesionales."}
 	if motivo != nil && *motivo != "" {
-		parrafos = append(parrafos, "<strong>Motivo:</strong> "+*motivo)
+		// El motivo lo escribe alguien del panel, pero va dentro del HTML
+		// del correo: escapado, como cualquier texto de afuera (el TS lo
+		// metía crudo).
+		parrafos = append(parrafos, "<strong>Motivo:</strong> "+email.Escapar(*motivo))
 	}
 	parrafos = append(parrafos, "Si creés que hay un error o querés que lo revisemos, contestá este correo o escribinos por WhatsApp: la mayoría de los casos se resuelven hablando.")
 	return armarCorreo(sitio, "Sobre tu solicitud de acceso profesional", email.Opciones{

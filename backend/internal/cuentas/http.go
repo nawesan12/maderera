@@ -19,6 +19,7 @@ import (
 	"mjbj/internal/clientes"
 	"mjbj/internal/cobros"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 )
 
@@ -101,6 +102,11 @@ func numero(p *float64) float64 {
 
 func admin(ctx context.Context) (*auth.Sesion, error) { return auth.Exigir(ctx, sqlc.StaffRoleAdmin) }
 
+// pantallaDelRecibo: un recibo lo abre quien cobra (mostrador, ficha del
+// cliente, pedido, conciliación); de esas, la de pedidos es la más amplia.
+// El aserradero no cobra y no ve recibos.
+const pantallaDelRecibo = "/admin/pedidos"
+
 func noEsta(m string) error { return plataforma.NuevoProblema(http.StatusNotFound, m) }
 
 // staffOInterno deja pasar al personal o al servidor de Next con el secreto.
@@ -108,14 +114,14 @@ func (a *API) staffOInterno(ctx context.Context) error {
 	if a.interna.EsInterno(plataforma.PedidoDe(ctx)) {
 		return nil
 	}
-	_, err := auth.ExigirStaff(ctx)
+	_, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...)
 	return err
 }
 
 /* ---------------------------- clientes ---------------------------- */
 
 func (a *API) ListarClientes(ctx context.Context, r cuentasapi.ListarClientesRequestObject) (cuentasapi.ListarClientesResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...); err != nil {
 		return nil, err
 	}
 	p := r.Params
@@ -125,7 +131,7 @@ func (a *API) ListarClientes(ctx context.Context, r cuentasapi.ListarClientesReq
 }
 
 func (a *API) GuardarCliente(ctx context.Context, r cuentasapi.GuardarClienteRequestObject) (cuentasapi.GuardarClienteResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +147,7 @@ func (a *API) GuardarCliente(ctx context.Context, r cuentasapi.GuardarClienteReq
 }
 
 func (a *API) FichaDeCliente(ctx context.Context, r cuentasapi.FichaDeClienteRequestObject) (cuentasapi.FichaDeClienteResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...); err != nil {
 		return nil, err
 	}
 	f, err := a.clientes.Obtener(ctx, r.Id.String())
@@ -172,7 +178,7 @@ func (a *API) historial(ctx context.Context, cliente string, periodo *string, fi
 }
 
 func (a *API) HistorialDeCliente(ctx context.Context, r cuentasapi.HistorialDeClienteRequestObject) (cuentasapi.HistorialDeClienteResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...); err != nil {
 		return nil, err
 	}
 	h, err := a.historial(ctx, r.Id.String(), (*string)(r.Params.Periodo), r.Params.Filtro)
@@ -191,7 +197,7 @@ func (a *API) ResumenDeCuenta(ctx context.Context, r cuentasapi.ResumenDeCuentaR
 }
 
 func (a *API) CreditoDeCliente(ctx context.Context, r cuentasapi.CreditoDeClienteRequestObject) (cuentasapi.CreditoDeClienteResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...); err != nil {
 		return nil, err
 	}
 	v, err := cobros.Credito(ctx, sqlc.New(a.pool), r.Id.String(), numero(r.Params.Monto), a.ahora())
@@ -247,7 +253,7 @@ func (a *API) CambiarPlazo(ctx context.Context, r cuentasapi.CambiarPlazoRequest
 /* ----------------------------- cobros ----------------------------- */
 
 func (a *API) CobrarACliente(ctx context.Context, r cuentasapi.CobrarAClienteRequestObject) (cuentasapi.CobrarAClienteResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/pedidos")...)
 	if err != nil {
 		return nil, err
 	}
@@ -273,6 +279,9 @@ func (a *API) ReciboCompleto(ctx context.Context, r cuentasapi.ReciboCompletoReq
 		ses := auth.DeContexto(ctx)
 		if ses == nil {
 			return nil, plataforma.NuevoProblema(http.StatusUnauthorized, "Tenés que entrar para hacer esto.")
+		}
+		if ses.EsStaff() && !ses.Tiene(roles.QuienEntra(pantallaDelRecibo)...) {
+			return nil, noEsta("Ese recibo no está.")
 		}
 		if !ses.EsStaff() {
 			// El cliente ve solo los suyos; uno ajeno es como si no existiera.
@@ -318,7 +327,7 @@ func (o respuesta) VisitCargarRetencionSufridaResponse(w http.ResponseWriter) er
 /* ----------------------------- cheques ---------------------------- */
 
 func (a *API) ListarCheques(ctx context.Context, r cuentasapi.ListarChequesRequestObject) (cuentasapi.ListarChequesResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/cheques")...); err != nil {
 		return nil, err
 	}
 	v, err := cobros.Cheques(ctx, a.pool, texto(r.Params.Estado), texto(r.Params.Sentido))
@@ -326,7 +335,7 @@ func (a *API) ListarCheques(ctx context.Context, r cuentasapi.ListarChequesReque
 }
 
 func (a *API) ChequesEnCartera(ctx context.Context, _ cuentasapi.ChequesEnCarteraRequestObject) (cuentasapi.ChequesEnCarteraResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/compras/pagos")...); err != nil {
 		return nil, err
 	}
 	v, err := cobros.EnCartera(ctx, a.pool)
@@ -359,7 +368,7 @@ func (a *API) CambiarEstadoDeCheque(ctx context.Context, r cuentasapi.CambiarEst
 /* ---------------------------- vendedores --------------------------- */
 
 func (a *API) ListarVendedores(ctx context.Context, r cuentasapi.ListarVendedoresRequestObject) (cuentasapi.ListarVendedoresResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...); err != nil {
 		return nil, err
 	}
 	v, err := a.clientes.Vendedores(ctx, r.Params.Activos != nil && *r.Params.Activos)
@@ -367,7 +376,7 @@ func (a *API) ListarVendedores(ctx context.Context, r cuentasapi.ListarVendedore
 }
 
 func (a *API) GuardarVendedor(ctx context.Context, r cuentasapi.GuardarVendedorRequestObject) (cuentasapi.GuardarVendedorResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...)
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +387,7 @@ func (a *API) GuardarVendedor(ctx context.Context, r cuentasapi.GuardarVendedorR
 }
 
 func (a *API) AlternarVendedor(ctx context.Context, r cuentasapi.AlternarVendedorRequestObject) (cuentasapi.AlternarVendedorResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +401,7 @@ func (a *API) AlternarVendedor(ctx context.Context, r cuentasapi.AlternarVendedo
 /* ---------------------------- seguimiento -------------------------- */
 
 func (a *API) ListarGestiones(ctx context.Context, r cuentasapi.ListarGestionesRequestObject) (cuentasapi.ListarGestionesResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...); err != nil {
 		return nil, err
 	}
 	v, err := a.clientes.Gestiones(ctx, r.Params.Cerradas != nil && *r.Params.Cerradas, texto(r.Params.Cliente), a.ahora())
@@ -400,7 +409,7 @@ func (a *API) ListarGestiones(ctx context.Context, r cuentasapi.ListarGestionesR
 }
 
 func (a *API) GestionesVencidas(ctx context.Context, _ cuentasapi.GestionesVencidasRequestObject) (cuentasapi.GestionesVencidasResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...); err != nil {
 		return nil, err
 	}
 	n, err := a.clientes.GestionesVencidas(ctx, a.ahora())
@@ -408,7 +417,7 @@ func (a *API) GestionesVencidas(ctx context.Context, _ cuentasapi.GestionesVenci
 }
 
 func (a *API) CrearGestion(ctx context.Context, r cuentasapi.CrearGestionRequestObject) (cuentasapi.CrearGestionResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...)
 	if err != nil {
 		return nil, err
 	}
@@ -420,7 +429,7 @@ func (a *API) CrearGestion(ctx context.Context, r cuentasapi.CrearGestionRequest
 }
 
 func (a *API) MoverGestion(ctx context.Context, r cuentasapi.MoverGestionRequestObject) (cuentasapi.MoverGestionResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +460,7 @@ func (a *API) clienteDeLaSesion(ctx context.Context, ses *auth.Sesion) (*cliente
 }
 
 func (a *API) portal(ctx context.Context) (*clientePortal, error) {
-	ses, err := auth.Exigir(ctx)
+	ses, err := auth.ExigirSesion(ctx)
 	if err != nil {
 		return nil, err
 	}

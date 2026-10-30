@@ -7,8 +7,9 @@ info:
     mostrador, repetible por su clave), anular, la caja del turno, el
     buscador, el alta rápida de clientes, el presupuesto y el cobro de la
     cuenta corriente en el mostrador, y la descarga de las ventas hechas sin
-    conexión. Lo pide el servidor de Next con la cookie de quien atiende
-    (cualquier persona del panel, como las acciones de app/mostrador). Las
+    conexión. Lo pide el servidor de Next con la cookie de quien atiende:
+    quien entra a /mostrador (admin y vendedor; hasta el 30/10/2026 era
+    cualquier persona del panel, como las acciones de app/mostrador). Las
     rutas de siempre de la copia local (/api/mostrador/latido, catalogo,
     clientes, caja/movimientos y caja/vincular) no están en este contrato: las
     atiende Go con su forma de siempre (internal/mostrador/offline.go).

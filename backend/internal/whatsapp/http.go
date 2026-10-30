@@ -202,7 +202,7 @@ func (a *API) AbrirBandeja(ctx context.Context, r whatsappapi.AbrirBandejaReques
 }
 
 func (a *API) ConversacionesSinLeer(ctx context.Context, _ whatsappapi.ConversacionesSinLeerRequestObject) (whatsappapi.ConversacionesSinLeerResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := bandeja(ctx); err != nil {
 		return nil, err
 	}
 	n, err := a.s.ConversacionesSinLeer(ctx)
@@ -475,7 +475,7 @@ func (a *API) GuardarTope(ctx context.Context, r whatsappapi.GuardarTopeRequestO
 }
 
 func (a *API) AvisosManuales(ctx context.Context, r whatsappapi.AvisosManualesRequestObject) (whatsappapi.AvisosManualesResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := bandeja(ctx); err != nil {
 		return nil, err
 	}
 	ids := []string{}
@@ -503,7 +503,7 @@ func (a *API) AvisosManuales(ctx context.Context, r whatsappapi.AvisosManualesRe
 }
 
 func (a *API) AvisoDelUltimoRecibo(ctx context.Context, r whatsappapi.AvisoDelUltimoReciboRequestObject) (whatsappapi.AvisoDelUltimoReciboResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := bandeja(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.AvisoDelUltimoRecibo(ctx, r.CustomerId)

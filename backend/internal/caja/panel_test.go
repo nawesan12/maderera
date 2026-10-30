@@ -246,9 +246,13 @@ func TestTurnosVentasSueltasYFondo(t *testing.T) {
 	if c, _ := pedir(t, ven, "GET", e.u+"turnos-cerrados", nil); c != 403 {
 		t.Errorf("el vendedor no ve la caja: %d", c)
 	}
-	// Las sucursales las lee cualquiera del panel.
-	if c, b := pedir(t, ven, "GET", e.u+"sucursales", nil); c != 200 || !strings.Contains(b, `"turnoId":null`) {
+	// Las sucursales con su caja son de las pantallas del admin (la caja,
+	// las órdenes de compra, las recepciones): el vendedor no las lee.
+	if c, b := pedir(t, adm, "GET", e.u+"sucursales", nil); c != 200 || !strings.Contains(b, `"turnoId":null`) {
 		t.Errorf("sucursales: %d %s", c, b)
+	}
+	if c, _ := pedir(t, ven, "GET", e.u+"sucursales", nil); c != 403 {
+		t.Errorf("sucursales, el vendedor: %d", c)
 	}
 
 	// Una venta suelta: efectivo, cobrada sin conexión, sin movimiento.

@@ -197,8 +197,13 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 	}
 
 	// Cheques: el de la cartera, y anular (solo el admin) lo anula.
-	if _, b := pedir(t, ven, "GET", u+"cheques/cartera", nil); !strings.Contains(b, "00123456") {
+	// La cartera la usa el pago a proveedores (/admin/compras/pagos), y el
+	// listado de cheques es de /admin/cheques: los dos, solo del admin.
+	if _, b := pedir(t, adm, "GET", u+"cheques/cartera", nil); !strings.Contains(b, "00123456") {
 		t.Errorf("cartera: %s", b)
+	}
+	if c, _ := pedir(t, ven, "GET", u+"cheques/cartera", nil); c != 403 {
+		t.Errorf("cartera, el vendedor: %d", c)
 	}
 	if c, _ := pedir(t, ven, "POST", u+"recibos/"+cobro.ReceiptID+"/anular", map[string]string{"motivo": "error"}); c != 403 {
 		t.Errorf("anular del vendedor: %d", c)
@@ -206,7 +211,7 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 	if c, b := pedir(t, adm, "POST", u+"recibos/"+cobro.ReceiptID+"/anular", map[string]string{"motivo": "lo cargué mal"}); c != 200 {
 		t.Errorf("anular: %d %s", c, b)
 	}
-	if _, b := pedir(t, ven, "GET", u+"cheques?estado=anulado", nil); !strings.Contains(b, "00123456") {
+	if _, b := pedir(t, adm, "GET", u+"cheques?estado=anulado", nil); !strings.Contains(b, "00123456") {
 		t.Errorf("cheque anulado: %s", b)
 	}
 

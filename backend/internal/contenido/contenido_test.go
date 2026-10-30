@@ -51,6 +51,7 @@ type entorno struct {
 	srv     *httptest.Server
 	pool    *pgxpool.Pool
 	carpeta string
+	privada string
 	ses     *auth.Servicio
 }
 
@@ -59,12 +60,14 @@ func armar(t *testing.T) *entorno { return armarCon(t, ConfigGoogle{}) }
 func armarCon(t *testing.T, google ConfigGoogle) *entorno {
 	t.Helper()
 	pool := pruebas.Base(t)
-	carpeta := t.TempDir()
-	e := &entorno{correo: &correoFalso{}}
+	carpeta, privada := t.TempDir(), t.TempDir()
+	e := &entorno{correo: &correoFalso{}, privada: privada}
 	ses := auth.Nuevo(auth.Config{Secreto: "secreto-de-prueba-de-contenido-32-caracteres", URL: "http://localhost"}, pool)
 	m := http.NewServeMux()
+	api := NuevaAPI(Nuevo(pool, subidas.Nuevo(subidas.Config{Carpeta: carpeta, CarpetaPrivada: privada}), silencio), google, ConfigContacto{Casilla: "info@prueba.test", Sitio: "https://mjbj.com.ar"}, e.correo, limites.Nuevo(sqlc.New(pool), silencio))
+	api.Rutas(m)
 	contenidoapi.HandlerWithOptions(
-		contenidoapi.NewStrictHandlerWithOptions(NuevaAPI(Nuevo(pool, subidas.Nuevo(subidas.Config{Carpeta: carpeta}), silencio), google, ConfigContacto{Casilla: "info@prueba.test", Sitio: "https://mjbj.com.ar"}, e.correo, limites.Nuevo(sqlc.New(pool), silencio)),
+		contenidoapi.NewStrictHandlerWithOptions(api,
 			[]contenidoapi.StrictMiddlewareFunc{plataforma.ConPedido[contenidoapi.StrictHandlerFunc]},
 			contenidoapi.StrictHTTPServerOptions{RequestErrorHandlerFunc: plataforma.ErrorDePedido, ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(silencio)}),
 		contenidoapi.StdHTTPServerOptions{BaseRouter: m},
@@ -562,26 +565,55 @@ func TestPanelDeDocumentacion(t *testing.T) {
 		SoloProfesionales, Activo   bool
 	}
 	_ = json.Unmarshal(b, &docs)
-	if len(docs) != 1 || docs[0].Formato != "pdf" || docs[0].Categoria != "general" || docs[0].TamanoBytes != len(pdf) || !docs[0].SoloProfesionales || !strings.HasPrefix(docs[0].URL, "/subidas/tecnica-") {
+	if len(docs) != 1 || docs[0].Formato != "pdf" || docs[0].Categoria != "general" || docs[0].TamanoBytes != len(pdf) || !docs[0].SoloProfesionales || docs[0].URL != URLDelDocumento(docs[0].ID) {
 		t.Fatalf("el documento: %s", b)
 	}
-	if _, err := os.Stat(filepath.Join(e.carpeta, strings.TrimPrefix(docs[0].URL, "/subidas/"))); err != nil {
-		t.Error("el archivo no quedó en disco")
+	// El archivo queda en la carpeta privada (Caddy no la sirve), no en
+	// /subidas/: un documento reservado no lo baja quien tenga el enlace.
+	var ref string
+	if err := e.pool.QueryRow(context.Background(), `select url from technical_documents`).Scan(&ref); err != nil {
+		t.Fatal(err)
 	}
-	// Abrirlo a todos y darlo de baja: el público lo ve y después no.
+	if !strings.HasPrefix(ref, subidas.PrefijoPrivado) {
+		t.Fatalf("quedó en %q", ref)
+	} else if _, err := os.Stat(filepath.Join(e.privada, strings.TrimPrefix(ref, subidas.PrefijoPrivado))); err != nil {
+		t.Error("el archivo no quedó en la carpeta privada")
+	}
+	archivo := e.srv.URL + docs[0].URL
 	anon := &http.Client{}
+	cli := e.cliente(t, "cliente@prueba.test", "cliente")
+	pro := e.cliente(t, "pro@prueba.test", "cliente")
+	if _, err := e.pool.Exec(context.Background(), `update customers set tipo = 'profesional' where user_id = (select id from "user" where email = 'pro@prueba.test')`); err != nil {
+		t.Fatal(err)
+	}
+	baja := func(quien string, c *http.Client, quiero int) {
+		t.Helper()
+		code, b := pedir(t, c, "GET", archivo, nil)
+		if code != quiero || (quiero == 200 && string(b) != string(pdf)) {
+			t.Errorf("%s: %d, quería %d", quien, code, quiero)
+		}
+	}
+	// Reservado: el profesional y el panel; nadie más.
+	baja("anónimo, reservado", anon, 404)
+	baja("cliente, reservado", cli, 404)
+	baja("profesional, reservado", pro, 200)
+	baja("admin, reservado", adm, 200)
+	// Abrirlo a todos y darlo de baja: el público lo ve y después no.
 	if c, _ := pedir(t, adm, "POST", u+"/"+docs[0].ID+"/visibilidad", map[string]bool{"soloProfesionales": false}); c != 204 {
 		t.Fatal("visibilidad")
 	}
 	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); !strings.Contains(string(b), "Tabla de cargas") {
 		t.Errorf("abierto a todos y no se ve: %s", b)
 	}
+	baja("anónimo, abierto", anon, 200)
 	if c, _ := pedir(t, adm, "POST", u+"/"+docs[0].ID+"/activo", map[string]bool{"activo": false}); c != 204 {
 		t.Fatal("baja")
 	}
 	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); string(b) != "[]\n" {
 		t.Errorf("dado de baja y se ve: %s", b)
 	}
+	baja("anónimo, de baja", anon, 404)
+	baja("admin, de baja", adm, 200)
 	if _, b := pedir(t, adm, "GET", u+"/categorias", nil); string(b) != "[]\n" {
 		t.Errorf("categorías con todo de baja: %s", b)
 	}

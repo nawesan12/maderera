@@ -16,6 +16,7 @@ import (
 	"mjbj/internal/cobros"
 	"mjbj/internal/documentos"
 	"mjbj/internal/pdf"
+	"mjbj/internal/roles"
 )
 
 // Los PDF del recibo y del resumen de cuenta (app/api/recibos/[id]/pdf y
@@ -47,14 +48,19 @@ func de(p *string) string {
 	return *p
 }
 
-// puedeVer: personal, o el cliente de la sesión es el dueño.
-func (a *API) puedeVer(ctx context.Context, dueno func() (*string, error)) error {
+// puedeVer: el personal que entra a la pantalla donde se ve el documento, o
+// el cliente de la sesión si es el dueño. Al resto, 404 (antes cualquier
+// persona del panel, también el aserradero, veía cualquier recibo).
+func (a *API) puedeVer(ctx context.Context, pantalla string, dueno func() (*string, error)) error {
 	ses := auth.DeContexto(ctx)
 	if ses == nil {
 		return noEsta("No encontrado")
 	}
 	if ses.EsStaff() {
-		return nil
+		if ses.Tiene(roles.QuienEntra(pantalla)...) {
+			return nil
+		}
+		return noEsta("No encontrado")
 	}
 	d, err := dueno()
 	if err != nil {
@@ -72,7 +78,7 @@ func (a *API) puedeVer(ctx context.Context, dueno func() (*string, error)) error
 
 func (a *API) ReciboPdf(ctx context.Context, r cuentasapi.ReciboPdfRequestObject) (cuentasapi.ReciboPdfResponseObject, error) {
 	id := r.Id.String()
-	if err := a.puedeVer(ctx, func() (*string, error) {
+	if err := a.puedeVer(ctx, pantallaDelRecibo, func() (*string, error) {
 		d, err := cobros.DuenoDelRecibo(ctx, a.pool, id)
 		if errors.Is(err, cobros.ErrNoEsta) {
 			return nil, nil
@@ -119,7 +125,7 @@ func ReciboParaPdf(r *cobros.ReciboCompleto) pdf.ReciboCompleto {
 
 func (a *API) ResumenDeCuentaPdf(ctx context.Context, r cuentasapi.ResumenDeCuentaPdfRequestObject) (cuentasapi.ResumenDeCuentaPdfResponseObject, error) {
 	id := r.Id.String()
-	if err := a.puedeVer(ctx, func() (*string, error) { return &id, nil }); err != nil {
+	if err := a.puedeVer(ctx, "/admin/clientes", func() (*string, error) { return &id, nil }); err != nil {
 		return nil, err
 	}
 	res, err := cobros.Resumen(ctx, a.pool, id, a.ahora())

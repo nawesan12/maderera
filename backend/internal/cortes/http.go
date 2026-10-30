@@ -306,7 +306,7 @@ func (a *API) ListarTarifas(ctx context.Context, _ cortesapi.ListarTarifasReques
 }
 
 func (a *API) TarifasActivas(ctx context.Context, _ cortesapi.TarifasActivasRequestObject) (cortesapi.TarifasActivasResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/mostrador")...); err != nil {
 		return nil, err
 	}
 	v, err := a.s.TarifasActivas(ctx)

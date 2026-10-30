@@ -6,8 +6,9 @@ info:
     El stock del panel: la grilla por sucursal, las alertas, los últimos
     movimientos, el ajuste rápido y la transferencia entre sucursales. Cada
     cambio toma el candado del stock (el de las reservas) y deja su
-    movimiento. Leer: cualquier persona del panel; cambiar: quien entra a
-    /admin/stock (admin, vendedor y depósito).
+    movimiento. Leer y cambiar: quien entra a /admin/stock (admin, vendedor
+    y depósito); las métricas de las sucursales, quien entra a
+    /admin/sucursales (el admin).
 paths:
   /api/v1/admin/stock:
     get:

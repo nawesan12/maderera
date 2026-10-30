@@ -6,9 +6,12 @@ info:
     Los comprobantes: emitirlos (desde un pedido o a mano), pedir el CAE a
     ARCA, las notas de crédito y débito, cobrarlos, el libro IVA ventas; los
     datos del emisor y los puntos de venta; los comprobantes del portal y el
-    PDF. Leer y emitir: cualquier persona del panel; anular, las notas,
-    corregir el receptor de un rechazado, el libro IVA ventas, el emisor y
-    los puntos de venta: solo el admin. El emisor, el comprobante y su PDF
+    PDF. Leer, emitir y cobrar: quien entra a /admin/facturacion (el admin);
+    facturar un pedido y ver si ya se facturó, quien entra a /admin/pedidos
+    (el botón está en la ficha del pedido); un comprobante, quien entra a
+    /admin/pedidos o su cliente; anular, las notas, corregir el receptor de
+    un rechazado, el libro IVA ventas, el emisor y los puntos de venta: solo
+    el admin. El emisor, el comprobante y su PDF
     los puede pedir también el servidor de Next con el secreto interno (las
     hojas impresas, los avisos, WhatsApp), y las rutas /interno son solo
     para él.

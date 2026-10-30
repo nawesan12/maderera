@@ -189,7 +189,7 @@ func noEncontrado(m string) error { return plataforma.NuevoProblema(http.StatusN
 // --- proveedores ---
 
 func (a *API) ListarProveedores(ctx context.Context, r comprasapi.ListarProveedoresRequestObject) (comprasapi.ListarProveedoresResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := proveedores(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.ListarProveedores(ctx, deTexto(r.Params.Busqueda), deTexto(r.Params.Estado))
@@ -197,7 +197,7 @@ func (a *API) ListarProveedores(ctx context.Context, r comprasapi.ListarProveedo
 }
 
 func (a *API) ProveedoresParaElegir(ctx context.Context, _ comprasapi.ProveedoresParaElegirRequestObject) (comprasapi.ProveedoresParaElegirResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := compras(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.ProveedoresParaElegir(ctx)
@@ -217,7 +217,7 @@ func (a *API) GuardarProveedor(ctx context.Context, r comprasapi.GuardarProveedo
 }
 
 func (a *API) FichaDeProveedor(ctx context.Context, r comprasapi.FichaDeProveedorRequestObject) (comprasapi.FichaDeProveedorResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := proveedores(ctx); err != nil {
 		return nil, err
 	}
 	p, err := a.s.ObtenerProveedor(ctx, r.Id)
@@ -256,7 +256,7 @@ func (a *API) RegistrarMovimientoDeProveedor(ctx context.Context, r comprasapi.R
 }
 
 func (a *API) CondicionesDelProveedor(ctx context.Context, r comprasapi.CondicionesDelProveedorRequestObject) (comprasapi.CondicionesDelProveedorResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := proveedores(ctx); err != nil {
 		return nil, err
 	}
 	v, err := a.s.CondicionesDelProveedor(ctx, r.Id)
@@ -299,7 +299,7 @@ func (a *API) GuardarConvenios(ctx context.Context, r comprasapi.GuardarConvenio
 }
 
 func (a *API) PerfilDeLista(ctx context.Context, r comprasapi.PerfilDeListaRequestObject) (comprasapi.PerfilDeListaResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := proveedores(ctx); err != nil {
 		return nil, err
 	}
 	p, err := a.s.PerfilDelProveedor(ctx, r.Id)
@@ -313,7 +313,7 @@ func (a *API) PerfilDeLista(ctx context.Context, r comprasapi.PerfilDeListaReque
 }
 
 func (a *API) FacturasConSaldo(ctx context.Context, r comprasapi.FacturasConSaldoRequestObject) (comprasapi.FacturasConSaldoResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := admin(ctx, "/admin/compras/pagos"); err != nil {
 		return nil, err
 	}
 	v, err := a.s.FacturasConSaldo(ctx, r.Id)
@@ -359,7 +359,7 @@ func leerFormulario(r *multipart.Reader) ([]byte, map[string]*string, error) {
 }
 
 func (a *API) VistaPreviaDeLista(ctx context.Context, r comprasapi.VistaPreviaDeListaRequestObject) (comprasapi.VistaPreviaDeListaResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := proveedores(ctx); err != nil {
 		return nil, err
 	}
 	archivo, form, err := leerFormulario(r.Body)

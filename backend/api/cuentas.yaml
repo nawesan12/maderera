@@ -6,9 +6,12 @@ info:
     La cartera de clientes, su cuenta corriente, los cobros con recibo, los
     cheques, los vendedores y el seguimiento de cobranza; y la cuenta
     corriente que ve el cliente en el portal. Cada cobro pasa por
-    EmitirRecibo (la única puerta para la plata de un cliente). Leer:
-    cualquier persona del panel; anular, cargar cheques, movimientos a mano,
-    bloqueo y plazo: solo el admin. El resumen y el recibo los puede pedir
+    EmitirRecibo (la única puerta para la plata de un cliente). Cada ruta
+    pide la pantalla que la usa: clientes, vendedores y seguimiento, quien
+    entra a /admin/clientes; los cheques, /admin/cheques, y su cartera,
+    /admin/compras/pagos; cobrar, /admin/pedidos (se cobra también desde la
+    ficha del pedido); un recibo, quien entra a /admin/pedidos. Anular,
+    cargar cheques, movimientos a mano, bloqueo y plazo: solo el admin. El resumen y el recibo los puede pedir
     también el servidor de Next con el secreto interno (los PDF y los avisos).
 paths:
   /api/v1/admin/clientes:

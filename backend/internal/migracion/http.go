@@ -75,14 +75,14 @@ func motivo(err error) string {
 }
 
 func (a *API) EntidadesDeMigracion(ctx context.Context, _ migracionapi.EntidadesDeMigracionRequestObject) (migracionapi.EntidadesDeMigracionResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := admin(ctx); err != nil {
 		return nil, err
 	}
 	return ok(map[string]any{"lote": Lote, "entidades": Entidades}), nil
 }
 
 func (a *API) EstadoDeMigracion(ctx context.Context, _ migracionapi.EstadoDeMigracionRequestObject) (migracionapi.EstadoDeMigracionResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := admin(ctx); err != nil {
 		return nil, err
 	}
 	e, err := a.s.EstadoDelSistema(ctx)
@@ -90,7 +90,7 @@ func (a *API) EstadoDeMigracion(ctx context.Context, _ migracionapi.EstadoDeMigr
 }
 
 func (a *API) HistorialDeMigraciones(ctx context.Context, r migracionapi.HistorialDeMigracionesRequestObject) (migracionapi.HistorialDeMigracionesResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	if _, err := admin(ctx); err != nil {
 		return nil, err
 	}
 	limite := 20

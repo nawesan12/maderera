@@ -7,9 +7,9 @@ info:
     cierre Z, las cajas físicas del mostrador, las ventas que quedaron sin
     turno, lo emitido en el mostrador y el cambio fijo de cada sucursal.
 
-    Todo es de quien entra a /admin/caja (el admin), menos las sucursales con
-    su turno, que las lee cualquier persona del panel (las usan también las
-    recepciones y las órdenes de compra).
+    Todo es de quien entra a /admin/caja (el admin), también las sucursales
+    con su turno (las usan además las recepciones y las órdenes de compra,
+    que son del admin).
 paths:
   /api/v1/admin/caja/sucursales:
     get:

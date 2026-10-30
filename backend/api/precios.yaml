@@ -7,9 +7,9 @@ info:
     historial, editar un precio, el ajuste masivo, la importación de
     planillas, las listas derivadas y los descuentos por medio de pago.
 
-    Permisos: leer, cualquier persona del panel (las tarifas de cortes y la
-    exportación usan las listas y la grilla); escribir, quien entra a
-    /admin/precios (el admin).
+    Permisos: la grilla, el historial y escribir, quien entra a
+    /admin/precios (el admin); las listas, quien entra a /admin/clientes (la
+    ficha del cliente elige la suya; el admin también las usa en tarifas).
 paths:
   /api/v1/admin/precios:
     get:

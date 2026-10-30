@@ -158,7 +158,12 @@ func TestProveedores(t *testing.T) {
 	if c, b := pedir(t, adm, "POST", e.u+"proveedores/"+id+"/movimientos", map[string]any{"tipo": "pago", "monto": -1}); c != 422 || !strings.Contains(b, "El monto tiene que ser mayor a cero.") {
 		t.Errorf("monto negativo: %d %s", c, b)
 	}
-	_, b = pedir(t, ven, "GET", e.u+"proveedores/"+id, nil)
+	// Los proveedores son de /admin/proveedores: el vendedor no ve la ficha
+	// (antes la leía cualquiera del panel por la API).
+	if c, _ := pedir(t, ven, "GET", e.u+"proveedores/"+id, nil); c != 403 {
+		t.Errorf("el vendedor vio la ficha del proveedor: %d", c)
+	}
+	_, b = pedir(t, adm, "GET", e.u+"proveedores/"+id, nil)
 	var p Proveedor
 	_ = json.Unmarshal([]byte(b), &p)
 	if p.Nombre != "Herrajes Sur" || p.Cuit != nil || p.Saldo != 600 || len(p.Movimientos) != 2 || p.Movimientos[0].Saldo != 600 || p.Movimientos[1].Saldo != 1000 {
@@ -168,14 +173,14 @@ func TestProveedores(t *testing.T) {
 	if c, b := pedir(t, adm, "POST", e.u+"proveedores/"+id+"/condiciones", map[string]string{"modalidad": "echeq", "plazoDias": "30", "bonificacionPct": "5,5"}); c != 200 {
 		t.Fatalf("condición: %d %s", c, b)
 	}
-	if _, b := pedir(t, ven, "GET", e.u+"proveedores/"+id+"/condiciones", nil); !strings.Contains(b, `"bonificacionPct":"5.50"`) {
+	if _, b := pedir(t, adm, "GET", e.u+"proveedores/"+id+"/condiciones", nil); !strings.Contains(b, `"bonificacionPct":"5.50"`) {
 		t.Errorf("condiciones: %s", b)
 	}
 	if c, _ := pedir(t, adm, "PUT", e.u+"proveedores/"+id+"/convenios", map[string]string{"convenios": "  5% pagando a 10 días  "}); c != 204 {
 		t.Errorf("convenios: %d", c)
 	}
 	// El listado, con búsqueda sin tildes, y la baja.
-	if _, b := pedir(t, ven, "GET", e.u+"proveedores?busqueda=herrajes", nil); !strings.Contains(b, `"saldo":600`) || strings.Contains(b, "Maderas del Sur") {
+	if _, b := pedir(t, adm, "GET", e.u+"proveedores?busqueda=herrajes", nil); !strings.Contains(b, `"saldo":600`) || strings.Contains(b, "Maderas del Sur") {
 		t.Errorf("listado: %s", b)
 	}
 	if c, b := pedir(t, adm, "POST", e.u+"proveedores/"+id+"/baja", nil); c != 200 || !strings.Contains(b, "Herrajes Sur quedó inactivo.") {

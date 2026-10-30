@@ -1609,3 +1609,81 @@ Pendiente:
       `scripts/golden/originales`.
 - [ ] `lib/db/schema/retenciones.ts` (drizzle, solo para las semillas) no
       tiene las columnas nuevas.
+
+## Errores de stock de la auditoría (30/10, sobre `go-cuentas`)
+
+Cada uno con una prueba que falla sin el arreglo (`internal/mostrador/stock_test.go`
+y `internal/productos/ficha_stock_test.go`). Sin migración.
+
+- **Anular el remito de un acopio** devolvía el físico sin volver a
+  reservar: los 10 del cliente quedaban disponibles para venderle a otro, y
+  el pedido seguía «entregado» con saldo. Ahora lo que vuelve sale de los
+  movimientos del remito (lo que de verdad salió, de la sucursal de donde
+  salió), se **vuelve a reservar** si el pedido no está cancelado
+  (`reservas.VolverAReservar`) y, si estaba entregado y le queda saldo,
+  vuelve a «listo». La anulación toma la serie de remitos primero, como
+  `CrearEntrega`. `TestAnularElRemitoDeUnAcopioVuelveAReservar`.
+- **Anular la venta del mostrador** decidía qué devolver por la ausencia de
+  reservas: con el remito anulado devolvía el físico otra vez (100 → 110).
+  Ahora suma los movimientos de la venta («Mostrador V-…») y de sus remitos
+  («Remito REM-…» y «Anulación del remito REM-…») por variante y sucursal, y
+  devuelve lo que dé negativo; además libera las reservas activas. Una venta
+  importada de ISIS (sin esos movimientos) ya no devuelve nada al anularse.
+  `TestAnularElRemitoDeUnAcopioVuelveAReservar`,
+  `TestAnularUnaVentaSinAcopioDevuelveLoQueSalio`.
+- **«Avanzar» a «entregado» sin remito** (el tablero, retiro de «listo» o
+  envío de «en camino») no sacaba nada: el físico no bajaba y la reserva
+  quedaba activa para siempre. **Decisión**: si hay saldo, sale con un
+  remito por todo lo pendiente (`entregas.RemitoPorLoQueQueda`), con su
+  número, el movimiento, el consumo de la reserva y el enlace para firmar
+  (queda «preparada», nota «Entregado desde el tablero de pedidos»). No se
+  rechaza porque Avanzar es el camino normal de los pedidos de la tienda, y
+  la regla del depósito es que cada salida tenga su remito: así la tiene, se
+  firma con el dedo como cualquiera y se puede anular. Avanzar toma la serie
+  de remitos antes que la fila del pedido (el orden de `CrearEntrega`).
+  `TestAvanzarAEntregadoSacaConRemito`.
+- **Envío sin sucursal**: reservaba en la primera sucursal activa y el remito
+  no sacaba nada (solo salía con `pedido.sucursal`). Ahora la salida es de
+  donde está la reserva (`reservas.SucursalDeSalida`: la de las reservas, la
+  del pedido, o la primera activa) y el remito queda con esa sucursal.
+  `TestRemitoDeUnEnvioSinSucursal`.
+- **La ficha del producto pisaba el físico** con el número que traía. La
+  pantalla manda lo que vio al abrir (`stockCentralVisto`,
+  `stockAserraderoVisto`, en `api/productos.yaml`): si no cambió, no se toca;
+  si cambió, se aplica la diferencia contra lo visto. Un campo vacío ya no
+  lo pone en 0 (la pantalla mandaba «0»; ahora manda vacío y Go no lo toca).
+  Sin lo visto (un alta, u otro cliente), el valor tal cual como antes.
+  `TestLaFichaNoPisaElStockConUnValorViejo`.
+- **Abrazos mortales**: `LiberarReservas`, `ReservarPedido`,
+  `SalidaPorEntrega`, `DevolverAlStock` y la anulación del mostrador toman
+  ahora todos sus candados juntos y ordenados (`reservas.BloquearEnOrden`,
+  por variante y sucursal: el orden de la venta y del checkout).
+  `TestCancelarContraVentasSinAbrazo`, `TestRemitosContraVentasSinAbrazo`
+  (30 contra 30, sin ningún 40P01).
+- **El ajuste rápido** dejaba lo disponible negativo: ahora una resta no
+  puede dejar el físico por debajo de lo reservado («En Casa Central hay 100
+  y 90 están reservados para clientes: se pueden sacar hasta 10.»). Sumar
+  siempre se puede. `TestElAjusteRapidoRespetaLoReservado`.
+- **Restos de reserva por redondeo** (m²): las salidas a tres decimales
+  podían no llegar a lo reservado y quedaba 0,001 activo en un pedido
+  entregado. El retiro que completa el renglón consume toda la reserva que
+  quede (el físico baja lo redondeado, como antes).
+  `TestElUltimoRetiroConsumeElRestoDeLaReserva`.
+
+Pendiente y preguntas (decisiones de negocio, no se tocaron):
+
+- [ ] **¿La tienda y la conversión de presupuestos frenan si no hay
+      disponible?** Hoy reservan aunque deje lo disponible en negativo.
+- [ ] **El costo promedio**: ¿se pondera sobre todo lo comprado en la
+      historia (`variant_costs.cantidad_base`) o sobre lo que hay en stock al
+      recibir? Y **anular una recepción no revierte el costo** promedio que
+      movió: ¿se recalcula o queda?
+- [ ] Un remito preparado a mano sobre una venta del mostrador **sin acopio**
+      (ya «entregado», con saldo porque no tiene remito) saca del físico otra
+      vez: lo correcto ahí es el remito de constancia. ¿Se rechaza
+      `CrearEntrega` si el pedido tiene movimientos «Mostrador V-…»?
+- [ ] El remito implícito de «Avanzar» nace sin documento de quien retira
+      (en el remito a mano es obligatorio en un retiro): se completa al
+      firmar.
+- [ ] Cancelar desde Pedidos un pedido ya entregado sigue permitido y no
+      devuelve nada (solo libera reservas, que ya no hay).

@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math"
 	"net/http"
 	"time"
 
@@ -19,7 +18,6 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/clientes"
 	"mjbj/internal/cobros"
-	"mjbj/internal/formato"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
 )
@@ -484,57 +482,12 @@ func (a *API) MisMovimientos(ctx context.Context, r cuentasapi.MisMovimientosReq
 	return ok(h), err
 }
 
-type miCredito struct {
-	Habilitado      bool    `json:"habilitado"`
-	Saldo           float64 `json:"saldo"`
-	LimiteCredito   float64 `json:"limiteCredito"`
-	Disponible      float64 `json:"disponible"`
-	SoloSaldoAFavor bool    `json:"soloSaldoAFavor,omitempty"`
-	Motivo          *string `json:"motivo"`
-}
-
-func motivo(s string) *string { return &s }
-
 // MiCredito es creditoDisponible del portal: el saldo a favor si no tiene
 // límite, la morosa, y pasarse del límite.
 func (a *API) MiCredito(ctx context.Context, r cuentasapi.MiCreditoRequestObject) (cuentasapi.MiCreditoResponseObject, error) {
-	ses := auth.DeContexto(ctx)
-	if ses == nil {
-		return ok(miCredito{Motivo: motivo("Necesitás iniciar sesión con tu cuenta.")}), nil
-	}
-	c, err := a.clienteDeLaSesion(ctx, ses)
+	v, err := CreditoDeLaSesion(ctx, a.pool, auth.DeContexto(ctx), numero(r.Params.Monto))
 	if err != nil {
 		return nil, err
-	}
-	if c == nil {
-		return ok(miCredito{Motivo: motivo("Necesitás iniciar sesión con tu cuenta.")}), nil
-	}
-	id := c.id
-	saldo, err := sqlc.New(a.pool).SaldoDeCliente(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	monto := numero(r.Params.Monto)
-	if c.limite <= 0 {
-		aFavor := math.Max(-saldo, 0)
-		if aFavor > 0 && c.estado != "moroso" {
-			alcanza := monto <= aFavor+0.005
-			v := miCredito{Habilitado: alcanza, Saldo: saldo, Disponible: aFavor, SoloSaldoAFavor: true}
-			if !alcanza {
-				v.Motivo = motivo("Tu saldo a favor no alcanza para esta compra.")
-			}
-			return ok(v), nil
-		}
-		return ok(miCredito{Motivo: motivo("Tu cuenta no tiene cuenta corriente habilitada.")}), nil
-	}
-	v := miCredito{Saldo: saldo, LimiteCredito: c.limite, Disponible: math.Max(c.limite-saldo, 0)}
-	switch {
-	case c.estado == "moroso":
-		v.Motivo = motivo("Tu cuenta está con pagos pendientes. Escribinos y lo vemos.")
-	case monto > 0 && saldo+monto > c.limite:
-		v.Motivo = motivo("Esta compra supera tu límite de crédito. Tenés " + formato.Numero(v.Disponible) + " disponibles.")
-	default:
-		v.Habilitado = true
 	}
 	return ok(v), nil
 }

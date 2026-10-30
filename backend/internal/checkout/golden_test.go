@@ -207,6 +207,18 @@ func TestGoldenCuentas(t *testing.T) {
 	}
 }
 
+func TestGoldenPlazos(t *testing.T) {
+	var casos []struct {
+		Desde, Express, DelDia time.Time
+	}
+	leerGolden(t, "plazos.json", &casos)
+	for i, c := range casos {
+		if e, d := VencimientoExpress(c.Desde), VencimientoDelDia(c.Desde); !e.Equal(c.Express) || !d.Equal(c.DelDia) {
+			t.Fatalf("%d %v: %v %v, el TS %v %v", i, c.Desde, e, d, c.Express, c.DelDia)
+		}
+	}
+}
+
 func TestFechaDelDiaEnHoraArgentina(t *testing.T) {
 	f, ok := FechaDelDia("2026-11-05")
 	if !ok || !f.Equal(time.Date(2026, 11, 5, 15, 0, 0, 0, time.UTC)) {

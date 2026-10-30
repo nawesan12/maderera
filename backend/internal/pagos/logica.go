@@ -239,7 +239,7 @@ type PagoRemoto struct {
 	Crudo         json.RawMessage `json:"crudo"`
 }
 
-func texto(v any) (string, bool) {
+func cadena(v any) (string, bool) {
 	s, ok := v.(string)
 	return s, ok
 }
@@ -271,19 +271,19 @@ func PagoDeMercadoPago(crudo json.RawMessage) *PagoRemoto {
 	if !esta {
 		return nil
 	}
-	estado, _ := texto(p["status"])
-	detalle, hayDetalle := texto(p["status_detail"])
+	estado, _ := cadena(p["status"])
+	detalle, hayDetalle := cadena(p["status_detail"])
 	monto := 0.0
 	if v, esta := p["transaction_amount"]; esta && v != nil {
 		monto = zodjs.NumeroJS(v, true)
 	}
 	r := &PagoRemoto{ID: zodjs.TextoJS(id), Estado: TraducirEstado(estado, detalle), Monto: &monto, Crudo: crudo}
-	if m, ok := texto(p["payment_method_id"]); ok {
+	if m, ok := cadena(p["payment_method_id"]); ok {
 		r.Medio = &m
-	} else if m, ok := texto(p["payment_type_id"]); ok {
+	} else if m, ok := cadena(p["payment_type_id"]); ok {
 		r.Medio = &m
 	}
-	if ref, ok := texto(p["external_reference"]); ok {
+	if ref, ok := cadena(p["external_reference"]); ok {
 		r.Referencia = &ref
 	}
 	if estado != "approved" && hayDetalle {

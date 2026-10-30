@@ -1,0 +1,7 @@
+package: checkoutapi
+output: ../internal/api/checkoutapi/checkout.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+  embedded-spec: true

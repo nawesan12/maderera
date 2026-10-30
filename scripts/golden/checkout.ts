@@ -412,3 +412,15 @@ for (let i = 0; i < 3000; i++) {
 guardar("decision.json", decision);
 
 console.log("golden de checkout listos en", SALIDA);
+
+/* -------------------------------- plazos ------------------------------- */
+// lib/plazos.ts, el real, con la zona argentina: Go cuenta el horario de
+// atención en Buenos Aires (el TS lo contaba en la del servidor, UTC).
+import { vencimientoDelDia, vencimientoExpress } from "../../lib/plazos";
+const plazos = [];
+for (let i = 0; i < 3000; i++) {
+  const desde = new Date(Date.UTC(2026, 0, 1) + Math.floor(azar() * 400 * 86_400_000));
+  if (azar() < 0.3) desde.setMinutes(0, 0, 0);
+  plazos.push({ desde: desde.toISOString(), express: vencimientoExpress(desde).toISOString(), delDia: vencimientoDelDia(desde).toISOString() });
+}
+guardar("plazos.json", plazos);

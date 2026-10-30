@@ -1480,3 +1480,57 @@ mano y antes del despliegue, como todas.
 - **Aging con restos de coma flotante**: tolerancia de medio centavo.
 - **Cierre Z de un turno cerrado**: la venta anulada después sigue en su Z, y
   la devolución aparece en el turno en que se anuló.
+
+## Cobros en el cierre y reintegros de Mercado Pago (30/10, sobre `go-cuentas`)
+
+Cada uno con una prueba que falla sin el arreglo. **Migración 00090**
+(`payment_refunds`): va a mano y antes del despliegue, después de la 00089
+de compras.
+
+- **Los asientos de cobro salen de los recibos** (`reportes/cobros.go`).
+  Antes solo de `invoice_payments`: el cobro de cuenta corriente, Mercado
+  Pago, la transferencia y la retención no se asentaban y Deudores no daba
+  lo de las cuentas corrientes. Un renglón por parte (efectivo → Caja,
+  cheque/echeq → Valores a depositar, retención → Retenciones sufridas, lo
+  demás → Banco) contra Deudores; el anulado, contraasiento en la fecha de
+  anulación. `facturacion.Cobrar` emite recibo y ata el `invoice_payments`
+  con `receipt_id`: esos ya no se asientan aparte (quedan los viejos, sin
+  recibo). La venta del mostrador y el pedido en línea **no emiten recibo**:
+  su cobro (`payments` sin parte de recibo) se asienta solo si el pedido
+  tiene factura con CAE y esa factura no tiene cobros propios, con la fecha
+  de la factura si salió después del cobro (un mes cerrado no cambia por
+  facturar tarde); el reintegrado, al revés. Sin factura no hay asiento de
+  venta ni de cobro. Entran también los pagos de deuda de antes de los
+  recibos. `TestCierreAsientaLosCobrosDesdeLosRecibos`.
+- **Retenciones practicadas anuladas**: el resumen las saca cuando exista
+  `retenciones_practicadas.anulada_at` (la 00089 de compras). Se pregunta a
+  `information_schema` en vez de una constante: no importa qué rama entra
+  antes. `TestCierreSinRetencionesPracticadasAnuladas`.
+- **Reintegro de un pago cuyo recibo ya se anuló a mano**: se da por hecho
+  y el pago pasa a reintegrado (antes el aviso se reintentaba para siempre).
+  `TestReintegroDeUnReciboYaAnulado`.
+- **Reintegro parcial de Mercado Pago**: el pago sigue `approved` y suma lo
+  devuelto en `transaction_amount_refunded` (está en la respuesta de
+  `GET /v1/payments` de la doc de MP; el detalle es `partially_refunded`).
+  `ReintegroParcial` aplica solo lo nuevo; cada tramo queda en
+  `payment_refunds` (índice único por pago y acumulado) y, si el pago
+  canceló deuda, vuelve a la cuenta con un ajuste con la referencia del pago
+  de MP. Un reintegro total después de uno parcial devuelve lo que faltaba
+  en vez de anular el recibo entero. El de un pedido solo anota el tramo:
+  la plata vuelve a la tarjeta, no a la cuenta. `TestReintegroParcialDeUnaDeuda`,
+  `TestReintegroParcial`.
+- **El cheque de una venta del mostrador** (`order_payment_id`, sin recibo)
+  no se anula suelto: manda a anular la venta desde el mostrador.
+  `TestAnularChequeDeUnaVentaDelMostradorSeBloquea`.
+
+Pendiente:
+- [ ] Anular a mano un recibo de Mercado Pago que ya tuvo un reintegro
+      parcial devuelve la deuda entera más el tramo: habría que restar los
+      tramos en `AnularRecibo` (o frenarlo).
+- [ ] Las comisiones de Mercado Pago siguen sin asiento (Banco recibe el
+      bruto).
+- [ ] El efectivo de un recibo emitido sin caja abierta va a Caja en el
+      asiento aunque no haya entrado al arqueo.
+- [ ] La plantilla de pruebas (`mjbj_plantilla`) es compartida: con la 00090
+      aplicada antes que la 00089, goose da «missing migrations». Se borra y
+      se rearma sola.

@@ -15,6 +15,7 @@ import (
 	"mjbj/internal/cola"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
 )
 
@@ -342,14 +343,22 @@ func (s *Servicio) EmitirParaLaVenta(ctx context.Context, p PedidoDeComprobante)
 			return ResultadoComprobante{}, err
 		}
 	}
-	lineas := make([]Linea, len(p.Lineas))
-	for i, l := range p.Lineas {
-		unidad := l.Unidad
-		lineas[i] = Linea{LineaEntrada: fiscal.LineaEntrada{Descripcion: l.Descripcion, Unidad: &unidad, Cantidad: l.Cantidad, PrecioFinalUnitario: l.PrecioUnitario}}
-	}
 	var pedido *string
 	if p.OrderID != "" {
 		pedido = &p.OrderID
+	}
+	// La alícuota de cada renglón sale del pedido (la guardada al vender o
+	// la del producto): la venta no la trae, y el TS facturaba todo al 21 %,
+	// también lo que es al 10,5 o exento.
+	alicuotas, err := s.alicuotasDeLaVenta(ctx, p.OrderID, p.Lineas)
+	if err != nil {
+		return ResultadoComprobante{}, err
+	}
+	lineas := make([]Linea, len(p.Lineas))
+	for i, l := range p.Lineas {
+		unidad := l.Unidad
+		lineas[i] = Linea{LineaEntrada: fiscal.LineaEntrada{Descripcion: l.Descripcion, Unidad: &unidad, Cantidad: l.Cantidad,
+			PrecioFinalUnitario: l.PrecioUnitario, Alicuota: alicuotas[i]}}
 	}
 	id, err := s.EmitirComprobante(ctx, DatosEmision{CustomerID: p.CustomerID, OrderID: pedido, ReceptorNombre: nombre, ReceptorCuit: cuit,
 		ReceptorCondicionIva: receptor, ReceptorDomicilio: domicilio, CreatedByUserID: &p.UsuarioID, Lineas: lineas})
@@ -369,4 +378,49 @@ func (s *Servicio) EmitirParaLaVenta(ctx context.Context, p PedidoDeComprobante)
 		return ResultadoComprobante{InvoiceID: &id, Aviso: "Comprobante creado, pero sin autorizar en ARCA: " + m}, nil
 	}
 	return ResultadoComprobante{InvoiceID: &id, Aviso: "Comprobante autorizado.", Autorizado: true}, nil
+}
+
+// alicuotasDeLaVenta busca, para cada renglón de la venta, el del pedido con
+// la misma descripción y cantidad (en orden, sin usar uno dos veces) y toma
+// su alícuota. nil, el 21 % de siempre, si no hay pedido o no aparece.
+func (s *Servicio) alicuotasDeLaVenta(ctx context.Context, orderID string, lineas []LineaDeVenta) ([]*float64, error) {
+	out := make([]*float64, len(lineas))
+	if !plataforma.UUIDValido(orderID) {
+		return out, nil
+	}
+	filas, err := s.pool.Query(ctx, `SELECT oi.descripcion, oi.cantidad::float8, coalesce(oi.alicuota_iva, pr.alicuota_iva)::float8
+		FROM order_items oi LEFT JOIN product_variants v ON v.id = oi.variant_id LEFT JOIN products pr ON pr.id = v.product_id
+		WHERE oi.order_id = $1 ORDER BY oi.orden`, orderID)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	type renglon struct {
+		descripcion string
+		cantidad    float64
+		alicuota    *float64
+		usado       bool
+	}
+	var delPedido []renglon
+	for filas.Next() {
+		var r renglon
+		if err := filas.Scan(&r.descripcion, &r.cantidad, &r.alicuota); err != nil {
+			return nil, err
+		}
+		delPedido = append(delPedido, r)
+	}
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	for i, l := range lineas {
+		for k := range delPedido {
+			r := &delPedido[k]
+			if !r.usado && r.descripcion == l.Descripcion && math.Abs(r.cantidad-l.Cantidad) < 1e-9 {
+				r.usado = true
+				out[i] = r.alicuota
+				break
+			}
+		}
+	}
+	return out, nil
 }

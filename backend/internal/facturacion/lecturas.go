@@ -464,7 +464,7 @@ type Pedido struct {
 	} `json:"yaFacturado"`
 }
 
-// ItemDePedido es un renglón del pedido, con la alícuota del producto.
+// ItemDePedido es un renglón del pedido, con su alícuota.
 type ItemDePedido struct {
 	Descripcion    string  `json:"descripcion"`
 	Unidad         string  `json:"unidad"`
@@ -473,7 +473,7 @@ type ItemDePedido struct {
 	Alicuota       *string `json:"alicuota"`
 }
 
-// PedidoParaFacturar: el pedido, sus renglones con la alícuota del producto y
+// PedidoParaFacturar: el pedido, sus renglones con su alícuota y
 // si ya tiene un comprobante vivo.
 func (s *Servicio) PedidoParaFacturar(ctx context.Context, id string) (*Pedido, error) {
 	var p Pedido
@@ -489,7 +489,12 @@ func (s *Servicio) PedidoParaFacturar(ctx context.Context, id string) (*Pedido, 
 	if err != nil {
 		return nil, err
 	}
-	filas, err := s.pool.Query(ctx, `SELECT oi.descripcion, oi.unidad, oi.cantidad::text, oi.precio_unitario::text, pr.alicuota_iva::text
+	// La alícuota es la que quedó guardada en el renglón al vender; la del
+	// producto solo para renglones viejos que no la tienen. El TS leía la
+	// del producto de hoy: si cambió después de la venta, la factura salía
+	// con otra alícuota que la que se cobró.
+	filas, err := s.pool.Query(ctx, `SELECT oi.descripcion, oi.unidad, oi.cantidad::text, oi.precio_unitario::text,
+		coalesce(oi.alicuota_iva, pr.alicuota_iva)::text
 		FROM order_items oi LEFT JOIN product_variants v ON v.id = oi.variant_id LEFT JOIN products pr ON pr.id = v.product_id
 		WHERE oi.order_id = $1 ORDER BY oi.orden`, id)
 	if err != nil {

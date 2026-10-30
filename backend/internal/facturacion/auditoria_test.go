@@ -186,3 +186,60 @@ func TestNotaParcialRespetaLoQueQueda(t *testing.T) {
 		t.Fatalf("anulación: %d renglones, %s", len(resto.Items), resto.Total)
 	}
 }
+
+// pedidoConAlicuotas arma un pedido con tres renglones: uno al 10,5 % guardado
+// en el renglón (el producto hoy está al 21 %), uno exento guardado y uno
+// viejo sin alícuota guardada (vale la del producto, 10,5 %).
+func pedidoConAlicuotas(t *testing.T, e *entorno) string {
+	t.Helper()
+	var cat, al21, al105, v21, v105, pedido string
+	e.uno(t, `INSERT INTO categories (slug, name, description) VALUES ('varios', 'Varios', '') RETURNING id`, &cat)
+	e.uno(t, `INSERT INTO products (slug, name, category_id, description, alicuota_iva) VALUES ('harina', 'Harina', $1, '', 21) RETURNING id`, &al21, cat)
+	e.uno(t, `INSERT INTO products (slug, name, category_id, description, alicuota_iva) VALUES ('leña', 'Leña', $1, '', 10.5) RETURNING id`, &al105, cat)
+	e.uno(t, `INSERT INTO product_variants (product_id, sku, label) VALUES ($1, 'HAR', '1 kg') RETURNING id`, &v21, al21)
+	e.uno(t, `INSERT INTO product_variants (product_id, sku, label) VALUES ($1, 'LEN', '10 kg') RETURNING id`, &v105, al105)
+	e.uno(t, `INSERT INTO orders (numero, contacto_nombre, costo_envio, total) VALUES ('PED-2000', 'Ana', 0, 4420) RETURNING id`, &pedido)
+	e.exec(t, `INSERT INTO order_items (order_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal, alicuota_iva, orden)
+		VALUES ($1, $2, 'Harina', 'unidad', 2, 1105, 2210, 10.5, 0), ($1, NULL, 'Libro', 'unidad', 1, 1000, 1000, 0, 1),
+		($1, $3, 'Leña', 'unidad', 1, 1210, 1210, NULL, 2)`, pedido, v21, v105)
+	return pedido
+}
+
+// alicuotasFacturadas son las alícuotas de los renglones del comprobante.
+func alicuotasFacturadas(t *testing.T, e *entorno, invoiceID string) string {
+	t.Helper()
+	var s string
+	e.uno(t, `SELECT string_agg(alicuota_iva::text, ' ' ORDER BY orden) FROM invoice_items WHERE invoice_id = $1`, &s, invoiceID)
+	return s
+}
+
+// **El mostrador facturaba todo al 21 %.** La venta no trae la alícuota y el
+// comprobante salía sin ella (21 por defecto), también lo exento o al 10,5.
+// Y facturar un pedido leía la alícuota del producto de hoy, no la que quedó
+// guardada en el renglón al vender.
+func TestLaAlicuotaSaleDelRenglonDelPedido(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	pedido := pedidoConAlicuotas(t, e)
+	r, err := e.s.EmitirParaLaVenta(ctx, PedidoDeComprobante{OrderID: pedido, ReceptorNombre: "Mostrador", UsuarioID: "u",
+		Lineas: []LineaDeVenta{{Descripcion: "Harina", Unidad: "unidad", Cantidad: 2, PrecioUnitario: 1105},
+			{Descripcion: "Libro", Unidad: "unidad", Cantidad: 1, PrecioUnitario: 1000},
+			{Descripcion: "Leña", Unidad: "unidad", Cantidad: 1, PrecioUnitario: 1210}}})
+	if err != nil || r.InvoiceID == nil {
+		t.Fatalf("mostrador: %v %+v", err, r)
+	}
+	if a := alicuotasFacturadas(t, e, *r.InvoiceID); a != "10.50 0.00 10.50" {
+		t.Fatalf("alícuotas del mostrador: %s", a)
+	}
+	// El mismo pedido facturado desde el panel (el del mostrador se anula
+	// antes: un pedido tiene un solo comprobante vivo).
+	e.exec(t, `UPDATE invoices SET estado = 'anulada' WHERE id = $1`, *r.InvoiceID)
+	admin := e.staff(t, "a@mjbj.test", sqlc.StaffRoleAdmin)
+	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/pedidos/"+pedido+"/facturar", nil)
+	if st != 200 {
+		t.Fatalf("facturar: %d %s", st, b)
+	}
+	if a := alicuotasFacturadas(t, e, leerJSON[map[string]string](t, b)["invoiceId"]); a != "10.50 0.00 10.50" {
+		t.Fatalf("alícuotas del pedido: %s", a)
+	}
+}

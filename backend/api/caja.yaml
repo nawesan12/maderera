@@ -193,7 +193,7 @@ components:
         pendientes: { type: integer }
     CajaVentaSuelta:
       type: object
-      required: [id, numero, numeroProvisorio, branchId, sucursal, cliente, total, cobradaAt, createdAt]
+      required: [id, numero, numeroProvisorio, branchId, sucursal, cliente, total, efectivo, cobradaAt, createdAt]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -202,6 +202,7 @@ components:
         sucursal: { type: string, nullable: true }
         cliente: { type: string }
         total: { type: number, format: double }
+        efectivo: { type: number, format: double, description: La parte cobrada en efectivo (lo que entra al cajón) }
         cobradaAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
     TurnoParaAsignar:

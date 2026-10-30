@@ -218,6 +218,11 @@ export interface components {
             cliente: string;
             /** Format: double */
             total: number;
+            /**
+             * Format: double
+             * @description La parte cobrada en efectivo (lo que entra al cajón)
+             */
+            efectivo: number;
             /** Format: date-time */
             cobradaAt: string | null;
             /** Format: date-time */

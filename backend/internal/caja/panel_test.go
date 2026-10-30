@@ -314,6 +314,46 @@ func TestEmitidoPorMesArgentino(t *testing.T) {
 // Diez clics a la vez en «asignar» la misma venta suelta: un solo
 // movimiento. Sin el candado de la fila del pedido, entraba más de una vez
 // (el TS leía «sin movimiento» y anotaba, sin bloquear nada).
+// Bug: una venta suelta mixta (tarjeta + efectivo) no aparecía si el medio
+// principal no era efectivo, y si era efectivo, al asignarla entraba al
+// cajón el total y no la parte en efectivo: el arqueo daba sobrante.
+func TestVentaSueltaMixtaEntraSoloConElEfectivo(t *testing.T) {
+	e := armar(t)
+	adm, idAdm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	abre := time.Now().Add(-time.Hour)
+	turno := e.turno(t, e.central, idAdm, abre, nil, nil)
+	cobrada := abre.Add(time.Minute)
+	// Principal débito, con $1.000 en efectivo.
+	debito := e.venta(t, "M-1", e.central, "debito", 3000, cobrada, &cobrada, true)
+	e.pool.Exec(ctx, `insert into order_payments (order_id, medio, importe) values ($1, 'debito', 2000), ($1, 'efectivo', 1000)`, debito)
+	// Principal efectivo, con $500 con tarjeta.
+	efectivo := e.venta(t, "M-2", e.central, "efectivo", 2000, cobrada, &cobrada, true)
+	e.pool.Exec(ctx, `insert into order_payments (order_id, medio, importe) values ($1, 'efectivo', 1500), ($1, 'credito', 500)`, efectivo)
+	// Toda con tarjeta: no tiene nada que ver con la caja.
+	tarjeta := e.venta(t, "M-3", e.central, "credito", 700, cobrada, &cobrada, true)
+	e.pool.Exec(ctx, `insert into order_payments (order_id, medio, importe) values ($1, 'credito', 700)`, tarjeta)
+
+	_, b := pedir(t, adm, "GET", e.u+"ventas-sueltas", nil)
+	if !strings.Contains(b, `"numero":"M-1"`) || !strings.Contains(b, `"numero":"M-2"`) || strings.Contains(b, `"numero":"M-3"`) {
+		t.Errorf("las sueltas con parte en efectivo: %s", b)
+	}
+	if !strings.Contains(b, `"efectivo":1000`) || !strings.Contains(b, `"efectivo":1500`) {
+		t.Errorf("la parte en efectivo de cada una: %s", b)
+	}
+	for _, v := range []string{debito, efectivo} {
+		if c, b := pedir(t, adm, "POST", e.u+"ventas-sueltas/"+v+"/asignar", map[string]string{"sessionId": turno}); c != 200 {
+			t.Fatalf("asignar: %d %s", c, b)
+		}
+	}
+	if m := e.numero(t, `select coalesce(sum(monto), 0)::float8 from cash_movements where session_id = $1 and tipo = 'venta'`, turno); m != 2500 {
+		t.Errorf("al cajón entra solo el efectivo (1000 + 1500): %v", m)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"ventas-sueltas/"+tarjeta+"/asignar", map[string]string{"sessionId": turno}); c != 422 {
+		t.Errorf("una venta sin efectivo no va a la caja: %d %s", c, b)
+	}
+}
+
 func TestAsignarLaMismaVentaALaVez(t *testing.T) {
 	e := armar(t)
 	adm, idAdm := e.staff(t, "admin@prueba.test", "admin")

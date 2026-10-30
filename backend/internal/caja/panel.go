@@ -283,28 +283,45 @@ func (p *Panel) DarDeBajaCaja(ctx context.Context, ses *auth.Sesion, id string) 
 
 // VentaSuelta es una venta en efectivo que no cayó en ningún turno.
 type VentaSuelta struct {
-	ID               string     `json:"id"`
-	Numero           string     `json:"numero"`
-	NumeroProvisorio *string    `json:"numeroProvisorio"`
-	BranchID         string     `json:"branchId"`
-	Sucursal         *string    `json:"sucursal"`
-	Cliente          string     `json:"cliente"`
-	Total            float64    `json:"total"`
-	CobradaAt        *time.Time `json:"cobradaAt"`
-	CreatedAt        time.Time  `json:"createdAt"`
+	ID               string  `json:"id"`
+	Numero           string  `json:"numero"`
+	NumeroProvisorio *string `json:"numeroProvisorio"`
+	BranchID         string  `json:"branchId"`
+	Sucursal         *string `json:"sucursal"`
+	Cliente          string  `json:"cliente"`
+	Total            float64 `json:"total"`
+	// Efectivo es la parte que se cobró en efectivo: lo que entra al cajón.
+	Efectivo  float64    `json:"efectivo"`
+	CobradaAt *time.Time `json:"cobradaAt"`
+	CreatedAt time.Time  `json:"createdAt"`
 }
 
+// parteEnEfectivo es la parte en efectivo de una venta (de `orders o`): la
+// suma de sus pagos en efectivo (order_payments), o el total si es una venta
+// vieja sin pagos partidos cuyo medio fue efectivo. Una venta mixta (tarjeta
+// más efectivo) mete al cajón solo el efectivo, como al cobrarla.
+const parteEnEfectivo = `coalesce(
+		  (SELECT sum(pp.importe) FROM order_payments pp WHERE pp.order_id = o.id AND pp.medio = 'efectivo'),
+		  CASE WHEN o.medio_pago = 'efectivo' AND NOT EXISTS (SELECT 1 FROM order_payments pp WHERE pp.order_id = o.id) THEN o.total END,
+		  0)`
+
 // VentasSinCaja es ventasSinCaja: las cobradas sin conexión mientras no
-// había caja abierta (las 50 últimas).
+// había caja abierta (las 50 últimas). Toda venta con parte en efectivo,
+// aunque el medio principal sea otro: el TS miraba solo medio_pago y una
+// venta de débito con un poco en efectivo nunca aparecía.
 func (p *Panel) VentasSinCaja(ctx context.Context) ([]VentaSuelta, error) {
 	filas, err := p.pool.Query(ctx, `
-		SELECT o.id, o.numero, o.numero_provisorio, o.branch_id, b.name, o.contacto_nombre, o.total, o.cobrada_at, o.created_at
-		FROM orders o
-		LEFT JOIN branches b ON b.id = o.branch_id
-		LEFT JOIN cash_movements m ON m.order_id = o.id
-		WHERE o.medio_pago = 'efectivo' AND o.origen = 'mostrador' AND o.estado <> 'cancelado'
-		  AND o.cobrada_at IS NOT NULL AND m.id IS NULL
-		ORDER BY o.cobrada_at DESC
+		SELECT id, numero, numero_provisorio, branch_id, sucursal, contacto_nombre, total, efectivo, cobrada_at, created_at FROM (
+		  SELECT o.id, o.numero, o.numero_provisorio, o.branch_id, b.name AS sucursal, o.contacto_nombre, o.total,
+		         `+parteEnEfectivo+` AS efectivo, o.cobrada_at, o.created_at
+		  FROM orders o
+		  LEFT JOIN branches b ON b.id = o.branch_id
+		  LEFT JOIN cash_movements m ON m.order_id = o.id
+		  WHERE o.origen = 'mostrador' AND o.estado <> 'cancelado'
+		    AND o.cobrada_at IS NOT NULL AND m.id IS NULL
+		) v
+		WHERE efectivo > 0
+		ORDER BY cobrada_at DESC
 		LIMIT 50`)
 	if err != nil {
 		return nil, err
@@ -314,15 +331,15 @@ func (p *Panel) VentasSinCaja(ctx context.Context) ([]VentaSuelta, error) {
 	for filas.Next() {
 		var v VentaSuelta
 		var branch *string
-		var total jsmath.Num
-		if err := filas.Scan(&v.ID, &v.Numero, &v.NumeroProvisorio, &branch, &v.Sucursal, &v.Cliente, &total, &v.CobradaAt, &v.CreatedAt); err != nil {
+		var total, efectivo jsmath.Num
+		if err := filas.Scan(&v.ID, &v.Numero, &v.NumeroProvisorio, &branch, &v.Sucursal, &v.Cliente, &total, &efectivo, &v.CobradaAt, &v.CreatedAt); err != nil {
 			return nil, err
 		}
 		// Una de mostrador siempre tiene sucursal; el filtro deja el tipo limpio.
 		if branch == nil {
 			continue
 		}
-		v.BranchID, v.Total = *branch, total.F()
+		v.BranchID, v.Total, v.Efectivo = *branch, total.F(), efectivo.F()
 		out = append(out, v)
 	}
 	return out, filas.Err()
@@ -456,18 +473,23 @@ func (p *Panel) AsignarVentaAlTurno(ctx context.Context, ses *auth.Sesion, order
 		}
 	}
 	var numero string
-	var total jsmath.Num
+	var efectivo jsmath.Num
 	var branch *string
 	var cobrada *time.Time
 	err = tx.QueryRow(ctx, `
-		SELECT o.numero, o.total, o.branch_id, o.cobrada_at FROM orders o
+		SELECT o.numero, `+parteEnEfectivo+`, o.branch_id, o.cobrada_at FROM orders o
 		LEFT JOIN cash_movements m ON m.order_id = o.id
-		WHERE o.id = $1 AND m.id IS NULL LIMIT 1`, orderID).Scan(&numero, &total, &branch, &cobrada)
+		WHERE o.id = $1 AND m.id IS NULL LIMIT 1`, orderID).Scan(&numero, &efectivo, &branch, &cobrada)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", problema("Esa venta ya está asignada a un turno.")
 	}
 	if err != nil {
 		return "", err
+	}
+	// Al cajón entra solo la parte en efectivo; una venta sin efectivo no
+	// tiene nada que hacer en la caja.
+	if !(efectivo.F() > 0) {
+		return "", problema("Esa venta no se cobró en efectivo: no va a la caja.")
 	}
 	var turnoBranch string
 	err = tx.QueryRow(ctx, `SELECT branch_id FROM cash_sessions WHERE id = $1`, sessionID).Scan(&turnoBranch)
@@ -487,7 +509,7 @@ func (p *Panel) AsignarVentaAlTurno(ctx context.Context, ses *auth.Sesion, order
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO cash_movements (session_id, tipo, monto, motivo, order_id, creado_por, created_at)
 		VALUES ($1, 'venta', $2::numeric, $3, $4, $5, $6)`,
-		sessionID, jsmath.Fijo2(total.F()), numero, orderID, ses.UserID, momento); err != nil {
+		sessionID, jsmath.Fijo2(efectivo.F()), numero, orderID, ses.UserID, momento); err != nil {
 		return "", err
 	}
 	if err := tx.Commit(ctx); err != nil {

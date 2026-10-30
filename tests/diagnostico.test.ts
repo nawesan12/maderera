@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { limitesRepetidos } from "@/lib/diagnostico/limites";
 import {
   esErrorDeHidratacion,
-  leerReporte,
-  lineaDelNavegador,
   lineaDelServidor,
 } from "@/lib/diagnostico/registro";
 import { esUuid } from "@/lib/uuid";
@@ -56,32 +54,6 @@ describe("el reporte del navegador", () => {
     // El #4190 no es el #419.
     expect(esErrorDeHidratacion("https://react.dev/errors/4190")).toBe(false);
     expect(esErrorDeHidratacion("TypeError: x is undefined")).toBe(false);
-  });
-
-  it("solo acepta un error de hidratación con una ruta del sitio", () => {
-    const mensaje = "Minified React error #419";
-    expect(leerReporte({ ruta: "/stock", mensaje })).toEqual({
-      ruta: "/stock",
-      mensaje,
-      pila: undefined,
-      build: undefined,
-    });
-    expect(leerReporte({ ruta: "https://otro.com/", mensaje })).toBeNull();
-    expect(leerReporte({ ruta: "/stock", mensaje: "hola" })).toBeNull();
-    expect(leerReporte("texto")).toBeNull();
-    expect(leerReporte(null)).toBeNull();
-  });
-
-  it("recorta lo largo y aplana los saltos de línea: un renglón por error", () => {
-    const reporte = leerReporte({
-      ruta: "/stock",
-      mensaje: "Minified React error #419 " + "x".repeat(5000),
-      pila: "a\nb\nc",
-    })!;
-    expect(reporte.mensaje.length).toBe(500);
-    expect(reporte.pila).toBe("a b c");
-    expect(lineaDelNavegador(reporte)).not.toContain("\n");
-    expect(JSON.parse(lineaDelNavegador(reporte)).scope).toBe("diagnostico.navegador");
   });
 });
 

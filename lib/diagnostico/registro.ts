@@ -26,48 +26,12 @@ export function esErrorDeHidratacion(mensaje: string): boolean {
   return DE_HIDRATACION.test(mensaje);
 }
 
-/** Lo que manda el navegador. Todo opcional y recortado: viene de afuera. */
-export interface ReporteDelNavegador {
-  ruta: string;
-  mensaje: string;
-  /** El primer tramo de la pila: dice qué componente, aunque esté minificado. */
-  pila?: string;
-  build?: string;
-}
-
 const LARGO_MAXIMO = 500;
 
 function texto(valor: unknown, largo = LARGO_MAXIMO): string | undefined {
   if (typeof valor !== "string") return undefined;
   const limpio = valor.replace(/[\r\n]+/g, " ").trim();
   return limpio ? limpio.slice(0, largo) : undefined;
-}
-
-/**
- * Valida lo que llegó a `/api/diagnostico`. Devuelve null si no es un reporte:
- * el endpoint es público y no tiene por qué anotar cualquier cosa que le
- * manden. Solo pasan errores de hidratación, con una ruta del sitio.
- */
-export function leerReporte(cuerpo: unknown): ReporteDelNavegador | null {
-  if (!cuerpo || typeof cuerpo !== "object") return null;
-  const datos = cuerpo as Record<string, unknown>;
-
-  const ruta = texto(datos.ruta, 300);
-  const mensaje = texto(datos.mensaje);
-  if (!ruta || !ruta.startsWith("/") || !mensaje) return null;
-  if (!esErrorDeHidratacion(mensaje)) return null;
-
-  return {
-    ruta,
-    mensaje,
-    pila: texto(datos.pila, 1000),
-    build: texto(datos.build, 40),
-  };
-}
-
-/** El renglón del registro, para un error que vio el navegador. */
-export function lineaDelNavegador(reporte: ReporteDelNavegador): string {
-  return JSON.stringify({ scope: "diagnostico.navegador", ...reporte });
 }
 
 /** El renglón del registro, para un error que atrapó el servidor. */

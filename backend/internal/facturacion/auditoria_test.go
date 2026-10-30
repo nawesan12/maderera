@@ -298,3 +298,36 @@ func TestFacturaASoloConCuitValido(t *testing.T) {
 		t.Fatalf("CUIT inválido en el mostrador: %+v", r)
 	}
 }
+
+// **Una alícuota fuera de la lista.** El formulario aceptaba cualquier número
+// y, sin Id de AlicIva, a ARCA le llegaba como 21 % (Id 5) con el IVA de otra
+// alícuota.
+func TestAlicuotaFueraDeLaLista(t *testing.T) {
+	e := armar(t, true)
+	admin := e.staff(t, "admin@mjbj.test", sqlc.StaffRoleAdmin)
+	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(consumidor(),
+		[4]string{"Fenólico", "1", "12100", "21"}, [4]string{"Raro", "1", "1050", "5"}))
+	if st != 422 || !strings.Contains(string(b), "Revisá la línea 2: La alícuota de IVA tiene que ser 0, 10,5, 21 o 27 %.") {
+		t.Fatalf("manual al 5 %%: %d %s", st, b)
+	}
+	_, b = pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(consumidor(), [4]string{"Fenólico", "1", "12100", "21"}))
+	id := leerJSON[map[string]string](t, b)["invoiceId"]
+	autorizarPorAPI(t, e, admin, id)
+	st, b = pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/nota-de-debito",
+		map[string]any{"motivo": "Flete olvidado", "concepto": "Flete", "importe": 5000, "alicuota": 5})
+	if st != 422 || !strings.Contains(string(b), "tiene que ser 0, 10,5, 21 o 27 %") {
+		t.Fatalf("débito al 5 %%: %d %s", st, b)
+	}
+	// Uno que ya quedó guardado con otra alícuota no se manda a ARCA.
+	_, b = pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(consumidor(), [4]string{"Viejo", "1", "1050", "21"}))
+	viejo := leerJSON[map[string]string](t, b)["invoiceId"]
+	e.exec(t, `UPDATE invoice_items SET alicuota_iva = 5 WHERE invoice_id = $1`, viejo)
+	antes := e.sim.Llamadas("FECAESolicitar")
+	st, b = pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+viejo+"/autorizar", nil)
+	if st == 200 && leerJSON[map[string]string](t, b)["ok"] != "" || !strings.Contains(string(b), "renglón al 5 %") {
+		t.Fatalf("autorizar al 5 %%: %d %s", st, b)
+	}
+	if e.sim.Llamadas("FECAESolicitar") != antes {
+		t.Fatal("se mandó a ARCA")
+	}
+}

@@ -13,6 +13,7 @@ import (
 
 	"mjbj/internal/fiscal"
 	"mjbj/internal/formato"
+	"mjbj/internal/jsmath"
 )
 
 // El pedido de CAE (autorizarComprobante). Va **fuera** de la transacción
@@ -294,6 +295,12 @@ func (a *arca) pedir(ctx context.Context, c *comprobanteArca) (fiscal.Resultado,
 	aut, err := a.s.paraArca(ctx, c)
 	if err != nil {
 		return fiscal.Resultado{}, err
+	}
+	// Una alícuota sin Id de AlicIva no sale: el cuerpo la mandaría como 21 %.
+	for _, i := range aut.Iva {
+		if !fiscal.AlicuotaValida(i.Alicuota) {
+			return fiscal.Resultado{}, errEmision(fiscal.MensajeAlicuota + " El comprobante tiene un renglón al " + jsmath.Texto(i.Alicuota) + " %.")
+		}
 	}
 	auth, err := a.auth(ctx)
 	if err != nil {

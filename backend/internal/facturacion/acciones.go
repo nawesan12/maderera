@@ -165,6 +165,9 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 		if !ok {
 			return "", errEmision("Revisá la línea " + jsmath.Texto(float64(i+1)) + ": cantidad y precio deben ser mayores a cero.")
 		}
+		if !fiscal.AlicuotaValida(alic) {
+			return "", errEmision("Revisá la línea " + jsmath.Texto(float64(i+1)) + ": " + fiscal.MensajeAlicuota)
+		}
 		lineas = append(lineas, Linea{LineaEntrada: fiscal.LineaEntrada{Descripcion: desc, Cantidad: cant, PrecioFinalUnitario: precio, Alicuota: ptr(alic)}})
 	}
 	if len(lineas) == 0 {

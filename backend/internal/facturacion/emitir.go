@@ -135,6 +135,10 @@ func (s *Servicio) EmitirEnTransaccion(ctx context.Context, tx pgx.Tx, d DatosEm
 	entradas := make([]fiscal.LineaEntrada, len(d.Lineas))
 	for i, l := range d.Lineas {
 		entradas[i] = l.LineaEntrada
+		// Sin alícuota vale 21; otra que no está en la lista no se factura.
+		if l.Alicuota != nil && !fiscal.AlicuotaValida(*l.Alicuota) {
+			return "", errEmision(`"` + l.Descripcion + `": ` + fiscal.MensajeAlicuota)
+		}
 	}
 	im := fiscal.Importes(entradas, d.TributosDados, config.PercibeIibb, jsmath.Numero(config.AlicuotaPercepcionIibb))
 

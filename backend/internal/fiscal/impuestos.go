@@ -18,6 +18,16 @@ import (
 // Alicuotas son las que puede tener un producto.
 var Alicuotas = []float64{0, 10.5, 21, 27}
 
+// AlicuotaValida: solo las de la lista. Otra no tiene Id de AlicIva, y el
+// TS la mandaba como 21 % (Id 5) con el importe de otra alícuota.
+func AlicuotaValida(a float64) bool {
+	_, ok := CodigoAlicuotaArca[a]
+	return ok
+}
+
+// MensajeAlicuota es el error de una alícuota fuera de la lista.
+const MensajeAlicuota = "La alícuota de IVA tiene que ser 0, 10,5, 21 o 27 %."
+
 // CodigoAlicuotaArca es el Id de AlicIva de WSFEv1.
 var CodigoAlicuotaArca = map[float64]int{0: 3, 10.5: 4, 21: 5, 27: 6}
 

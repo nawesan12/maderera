@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -13,8 +15,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"mjbj/internal/auth"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/pruebas"
 )
+
+var silencio = slog.New(slog.NewTextHandler(io.Discard, nil))
 
 type base struct {
 	pool              *pgxpool.Pool
@@ -140,6 +146,46 @@ func TestAnularConChequeDepositado(t *testing.T) {
 	r, err = emitir(t, b, Cobro{CustomerID: &b.cliente, Origen: "panel", Partes: []Parte{{Medio: "efectivo", Importe: 10}}, Caja: &Caja{Buscar: true}})
 	if err != nil || r.Aviso == nil || !strings.Contains(*r.Aviso, "No hay ninguna caja abierta") {
 		t.Errorf("sin caja: %+v %v", r, err)
+	}
+}
+
+// Bug: un cheque en cartera que entró con un recibo se podía anular suelto.
+// El cheque dejaba de contar pero la deuda que pagó seguía cancelada: plata
+// que no entró nunca. Ahora hay que anular el recibo, que devuelve la deuda.
+func TestAnularChequeDeUnReciboSeBloquea(t *testing.T) {
+	b := armarBase(t)
+	ctx := context.Background()
+	_, _ = b.pool.Exec(ctx, `insert into "user" (id, name, email, email_verified, created_at, updated_at) values ('admin', 'Admin', 'admin@prueba.test', true, now(), now())`)
+	_, _ = b.pool.Exec(ctx, `insert into account_movements (customer_id, tipo, monto) values ($1, 'compra', 500)`, b.cliente)
+	r, err := emitir(t, b, Cobro{CustomerID: &b.cliente, Origen: "panel", Partes: []Parte{
+		{Medio: "cheque", Importe: 500, Cheque: &ChequeNuevo{Numero: "55556666", Banco: "Galicia", FechaPago: time.Now()}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cheque string
+	_ = b.pool.QueryRow(ctx, `select id from cheques`).Scan(&cheque)
+	s := Nuevo(b.pool, silencio)
+	ses := &auth.Sesion{UserID: "admin"}
+	_, err = s.CambiarEstado(ctx, ses, cheque, "anulado", "")
+	var p *plataforma.Problema
+	if !errors.As(err, &p) || !strings.Contains(p.Errores["cobro"], "anulá el recibo "+r.Numero) {
+		t.Errorf("anular suelto un cheque de un recibo: %v", err)
+	}
+	if sd := saldo(t, b); sd != 0 {
+		t.Errorf("la deuda no se mueve: %v", sd)
+	}
+	var estado string
+	_ = b.pool.QueryRow(ctx, `select estado::text from cheques`).Scan(&estado)
+	if estado != "cartera" {
+		t.Errorf("el cheque sigue en cartera: %s", estado)
+	}
+	// Un cheque cargado a mano, sin recibo, se sigue pudiendo anular.
+	var suelto string
+	_ = b.pool.QueryRow(ctx, `insert into cheques (sentido, tipo, numero, banco, fecha_pago, importe, estado, customer_id)
+		values ('recibido', 'fisico', '99990000', 'Nación', now(), 100, 'cartera', $1) returning id`, b.cliente).Scan(&suelto)
+	if _, err := s.CambiarEstado(ctx, ses, suelto, "anulado", ""); err != nil {
+		t.Errorf("anular un cheque sin recibo: %v", err)
 	}
 }
 

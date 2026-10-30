@@ -275,6 +275,20 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 			}
 			return errCobro("Un cheque " + strings.ToLower(ParaElCliente[desde]) + " no puede pasar a " + strings.ToLower(nombre) + ".")
 		}
+		// Un cheque que entró con un recibo emitido no se anula suelto: el
+		// recibo ya bajó la deuda, y anular solo el cheque la dejaba pagada
+		// con plata que no entró nunca. Anular el recibo devuelve la deuda y
+		// anula el cheque en el mismo acto (AnularRecibo).
+		if hacia == "anulado" && cheque.ReceiptID != nil {
+			var numero, estado string
+			if err := tx.QueryRow(ctx, `SELECT numero, estado::text FROM receipts WHERE id = $1`, *cheque.ReceiptID).Scan(&numero, &estado); err != nil {
+				return err
+			}
+			if estado != "anulado" {
+				return errCobro("Este cheque entró con el recibo " + numero + ": anulá el recibo " + numero +
+					", que devuelve la deuda del cliente y anula el cheque.")
+			}
+		}
 		efecto := "nada"
 		if cheque.Sentido == sqlc.SentidoChequeRecibido {
 			efecto = Efecto(desde, hacia)

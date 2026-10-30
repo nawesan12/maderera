@@ -12,6 +12,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/fiscal"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -179,9 +180,11 @@ type Acumulado struct {
 	Retenido      string `json:"retenido"`
 }
 
+// inicioDeMes es el primer instante del mes argentino: un pago del 31 a las
+// 22 es de ese mes, no del siguiente.
 func inicioDeMes(t time.Time) time.Time {
-	t = t.UTC()
-	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+	t = t.In(fiscal.Argentina)
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, fiscal.Argentina)
 }
 
 // AcumuladoDelMes es acumuladoDelMes.
@@ -190,8 +193,11 @@ func (s *Servicio) AcumuladoDelMes(ctx context.Context, proveedor string, ahora 
 		return []Acumulado{}, nil
 	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT codigo_regimen, sum(base)::text, sum(importe)::text FROM retenciones_practicadas
-		WHERE supplier_id = $1 AND fecha >= $2 GROUP BY codigo_regimen`, proveedor, inicioDeMes(ahora))
+		SELECT b.codigo_regimen, sum(b.base)::text,
+		  (SELECT coalesce(sum(r.importe), 0) FROM retenciones_practicadas r
+		   WHERE r.supplier_id = $1 AND r.codigo_regimen = b.codigo_regimen AND r.fecha >= $2)::text
+		FROM bases_de_retencion b
+		WHERE b.supplier_id = $1 AND b.fecha >= $2 GROUP BY b.codigo_regimen`, proveedor, inicioDeMes(ahora))
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +277,7 @@ func siguienteCertificado(ctx context.Context, tx pgx.Tx, impuesto string, fecha
 	if len(tres) > 3 {
 		tres = tres[:3]
 	}
-	prefijo := fmt.Sprintf("%s-%d-", strings.ToUpper(tres), fecha.UTC().Year())
+	prefijo := fmt.Sprintf("%s-%d-", strings.ToUpper(tres), fecha.In(fiscal.Argentina).Year())
 	var maximo int64
 	if err := tx.QueryRow(ctx, `
 		SELECT coalesce(max(nullif(regexp_replace(numero, '^.*-', ''), '')::bigint), 0)::int FROM retenciones_practicadas WHERE numero LIKE $1`,
@@ -340,19 +346,28 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 			var a, ani, mni, mr jsmath.Num
 			err := tx.QueryRow(ctx, `
 				SELECT id, codigo, nombre, impuesto::text, alicuota, alicuota_no_inscripto, minimo_no_imponible, minimo_retencion
-				FROM regimenes_retencion WHERE id = $1`, pedida.RegimenID).Scan(&regID, &reg.Codigo, &reg.Nombre, &reg.Impuesto, &a, &ani, &mni, &mr)
+				FROM regimenes_retencion WHERE id = $1 AND activo`, pedida.RegimenID).Scan(&regID, &reg.Codigo, &reg.Nombre, &reg.Impuesto, &a, &ani, &mni, &mr)
 			if errors.Is(err, pgx.ErrNoRows) {
-				continue
+				return fallo("Ese régimen de retención no existe o está apagado.")
 			}
 			if err != nil {
 				return err
 			}
 			reg.Alicuota, reg.AlicuotaNoInscripto, reg.MinimoNoImponible, reg.MinimoRetencion = float64(a), float64(ani), float64(mni), float64(mr)
 			// El acumulado del mes, que es lo que mira ARCA.
+			// La base sale de todos los pagos del mes, hayan retenido o no
+			// (bases_de_retencion); lo retenido, de los certificados.
 			var base, ret jsmath.Num
 			if err := tx.QueryRow(ctx, `
-				SELECT coalesce(sum(base), 0), coalesce(sum(importe), 0) FROM retenciones_practicadas
-				WHERE supplier_id = $1 AND codigo_regimen = $2 AND fecha >= $3`, d.SupplierID, reg.Codigo, inicioDeMes(fecha)).Scan(&base, &ret); err != nil {
+				SELECT (SELECT coalesce(sum(base), 0) FROM bases_de_retencion
+				        WHERE supplier_id = $1 AND codigo_regimen = $2 AND fecha >= $3),
+				       (SELECT coalesce(sum(importe), 0) FROM retenciones_practicadas
+				        WHERE supplier_id = $1 AND codigo_regimen = $2 AND fecha >= $3)`,
+				d.SupplierID, reg.Codigo, inicioDeMes(fecha)).Scan(&base, &ret); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO bases_de_retencion (payment_id, supplier_id, codigo_regimen, base, fecha)
+				VALUES ($1, $2, $3, $4::numeric, $5)`, pagoID, d.SupplierID, reg.Codigo, jsmath.Fijo2(pedida.Base), fecha); err != nil {
 				return err
 			}
 			// Inscripto es quien tiene CUIT cargado (todavía no se consulta el padrón).

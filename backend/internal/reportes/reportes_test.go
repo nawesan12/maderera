@@ -257,12 +257,17 @@ func TestCierreDelMes(t *testing.T) {
 	adm := e.staff(t, "admin@prueba.test", "admin")
 	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
 	prov := e.id(t, `insert into suppliers (nombre) values ('Maderas del Sur') returning id`)
-	fac := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision)
-		values ('factura_a', 3, 127, 'Constructora', 1000, 210, 0, 0, 0, 1210, 'autorizada', '2026-10-05T15:00:00Z') returning id`)
-	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision)
-		values ('nota_credito_a', 3, 5, 'Constructora', 100, 21, 0, 0, 0, 121, 'autorizada', '2026-10-06T15:00:00Z'),
-		       ('factura_b', 3, 128, 'Borrador', 1, 0, 0, 0, 0, 1, 'borrador', '2026-10-06T15:00:00Z')`)
+	fac := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae)
+		values ('factura_a', 3, 127, 'Constructora', 1000, 210, 0, 0, 0, 1210, 'autorizada', '2026-10-05T15:00:00Z', '76123456789012') returning id`)
+	// La rechazada por ARCA (sin CAE) no cuenta para el fisco: ni en el
+	// resumen ni en los asientos.
+	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae)
+		values ('nota_credito_a', 3, 5, 'Constructora', 100, 21, 0, 0, 0, 121, 'autorizada', '2026-10-06T15:00:00Z', '76123456789013'),
+		       ('factura_b', 3, 128, 'Borrador', 1, 0, 0, 0, 0, 1, 'borrador', '2026-10-06T15:00:00Z', null),
+		       ('factura_b', 3, 129, 'Rechazada', 500, 105, 0, 0, 0, 605, 'rechazada', '2026-10-06T16:00:00Z', null)`)
 	e.exec(t, `insert into invoice_payments (invoice_id, medio, monto, fecha) values ($1, 'efectivo', 1210, '2026-10-07T15:00:00Z')`, fac)
+	// Pasarla a cuenta corriente no es un cobro: no se asienta.
+	e.exec(t, `insert into invoice_payments (invoice_id, medio, monto, fecha) values ($1, 'cuenta_corriente', 50, '2026-10-07T16:00:00Z')`, fac)
 	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, neto, iva21, iva105, iva27, percepciones, total, fecha_emision)
 		values ($1, 'factura_b', 1, 9, 500, 105, 0, 0, 0, 605, '2026-10-02T00:00:00Z')`, prov)
 	e.exec(t, `insert into supplier_payments (supplier_id, total, neto, medio, referencia, fecha) values ($1, 605, 600, 'transferencia', 'TR 1', '2026-10-08T15:00:00Z')`, prov)

@@ -19,7 +19,8 @@ import (
 var Cuentas = struct {
 	Caja, Banco, Deudores, IvaCredito, RetencionesSufridas, Mercaderias         string
 	Proveedores, IvaDebito, PercepcionesIibb, RetencionesAPagar, Ventas, Gastos string
-}{"1.1.01", "1.1.02", "1.1.03", "1.1.05", "1.1.06", "1.2.01", "2.1.01", "2.1.03", "2.1.04", "2.1.05", "4.1.01", "5.1.01"}
+	ValoresADepositar                                                           string
+}{"1.1.01", "1.1.02", "1.1.03", "1.1.05", "1.1.06", "1.2.01", "2.1.01", "2.1.03", "2.1.04", "2.1.05", "4.1.01", "5.1.01", "1.1.04"}
 
 // CuentaPorCategoria es CUENTA_POR_CATEGORIA.
 var CuentaPorCategoria = map[string]string{
@@ -28,7 +29,7 @@ var CuentaPorCategoria = map[string]string{
 }
 
 var nombresDeCuenta = map[string]string{
-	"1.1.01": "Caja", "1.1.02": "Banco", "1.1.03": "Deudores por ventas", "1.1.05": "IVA crédito fiscal",
+	"1.1.01": "Caja", "1.1.02": "Banco", "1.1.03": "Deudores por ventas", "1.1.04": "Valores a depositar", "1.1.05": "IVA crédito fiscal",
 	"1.1.06": "Retenciones sufridas", "1.2.01": "Mercaderías", "2.1.01": "Proveedores", "2.1.03": "IVA débito fiscal",
 	"2.1.04": "Percepciones IIBB a depositar", "2.1.05": "Retenciones a depositar", "4.1.01": "Ventas",
 	"5.1.01": "Gastos varios", "5.1.02": "Fletes", "5.1.03": "Combustible", "5.1.04": "Servicios", "5.1.05": "Alquileres",
@@ -95,11 +96,13 @@ type VentaAAsentar struct {
 	Comprobante, Cliente       string
 	Neto, Iva, Tributos, Total float64
 	EsNotaDeCredito            bool
+	// Exento: lo exento y no gravado va a Ventas sin IVA.
+	Exento float64
 }
 
 // AsientoDeVenta es asientoDeVenta.
 func AsientoDeVenta(v VentaAAsentar) Asiento {
-	r := []RenglonDeAsiento{renglon(Cuentas.Deudores, v.Total, 0), renglon(Cuentas.Ventas, 0, v.Neto)}
+	r := []RenglonDeAsiento{renglon(Cuentas.Deudores, v.Total, 0), renglon(Cuentas.Ventas, 0, v.Neto+v.Exento)}
 	if v.Iva != 0 {
 		r = append(r, renglon(Cuentas.IvaDebito, 0, v.Iva))
 	}
@@ -126,10 +129,21 @@ func cuentaDeMedio(medio string) string {
 	return Cuentas.Banco
 }
 
-// AsientoDeCobro es asientoDeCobro.
+// cuentaDeCobro: el cheque cobrado no es plata en el banco hasta que se
+// deposita y se acredita.
+func cuentaDeCobro(medio string) string {
+	if medio == "cheque" || medio == "echeq" {
+		return Cuentas.ValoresADepositar
+	}
+	return cuentaDeMedio(medio)
+}
+
+// AsientoDeCobro es asientoDeCobro. Pasar una factura a cuenta corriente no
+// es un cobro (no entra plata: la deuda sigue en Deudores), así que no se
+// asienta: AsientosDelPeriodo la saltea.
 func AsientoDeCobro(c CobroAAsentar) Asiento {
 	return asiento(c.Fecha, "Cobro "+c.Comprobante+" · "+c.Cliente, []RenglonDeAsiento{
-		renglon(cuentaDeMedio(c.Medio), c.Importe, 0), renglon(Cuentas.Deudores, 0, c.Importe)})
+		renglon(cuentaDeCobro(c.Medio), c.Importe, 0), renglon(Cuentas.Deudores, 0, c.Importe)})
 }
 
 // CompraAAsentar es CompraAAsentar.
@@ -138,18 +152,21 @@ type CompraAAsentar struct {
 	Comprobante, Proveedor           string
 	Neto, Iva, Percepciones, Total   float64
 	DaCreditoFiscal, EsNotaDeCredito bool
+	// Exento: lo exento y no gravado de la factura, al costo sin IVA. Antes
+	// no se asentaba y el asiento no cerraba (Proveedores lleva el total).
+	Exento float64
 }
 
 // AsientoDeCompra es asientoDeCompra.
 func AsientoDeCompra(c CompraAAsentar) Asiento {
 	r := []RenglonDeAsiento{}
 	if c.DaCreditoFiscal {
-		r = append(r, renglon(Cuentas.Mercaderias, c.Neto, 0))
+		r = append(r, renglon(Cuentas.Mercaderias, c.Neto+c.Exento, 0))
 		if c.Iva != 0 {
 			r = append(r, renglon(Cuentas.IvaCredito, c.Iva, 0))
 		}
 	} else {
-		r = append(r, renglon(Cuentas.Mercaderias, c.Neto+c.Iva, 0))
+		r = append(r, renglon(Cuentas.Mercaderias, float64(c.Neto+c.Iva)+c.Exento, 0))
 	}
 	if c.Percepciones != 0 {
 		r = append(r, renglon(Cuentas.RetencionesSufridas, c.Percepciones, 0))

@@ -580,3 +580,40 @@ func TestListasVacias(t *testing.T) {
 		}
 	}
 }
+
+// RG 830: el acumulado del mes suma todos los pagos, también los que no
+// retuvieron. Dos pagos de 200.000 con mínimo no sujeto de 224.000: el
+// primero no retiene y el segundo retiene (400.000 − 224.000) × 2 % = 3.520.
+// Antes el primero no quedaba en ningún lado y el segundo tampoco retenía.
+func TestAcumuladoSumaLosPagosQueNoRetuvieron(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	gan := e.regimen(t, "78", "ganancias", 2)
+	if _, err := e.pool.Exec(ctx, `update regimenes_retencion set minimo_no_imponible = 224000, minimo_retencion = 0 where id = $1`, gan); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `update suppliers set cuit = '30712345679' where id = $1`, e.proveedor); err != nil {
+		t.Fatal(err)
+	}
+	pago := func() map[string]any {
+		return map[string]any{"supplierId": e.proveedor, "total": 200000, "medio": "transferencia",
+			"retenciones": []any{map[string]any{"regimenId": gan, "base": 200000}},
+			"partes":      []any{map[string]any{"medio": "transferencia", "importe": 200000}}}
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/pagos", pago()); c != 200 || strings.Contains(b, "retuvieron") {
+		t.Fatalf("primer pago: %d %s", c, b)
+	}
+	p := pago()
+	p["partes"] = []any{map[string]any{"medio": "transferencia", "importe": 196480}}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/pagos", p); c != 200 || !strings.Contains(b, `"importe":3520`) {
+		t.Fatalf("segundo pago: %d %s", c, b)
+	}
+	// Un régimen apagado no retiene aunque la API lo reciba.
+	if _, err := e.pool.Exec(ctx, `update regimenes_retencion set activo = false where id = $1`, gan); err != nil {
+		t.Fatal(err)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/pagos", pago()); c != 422 || !strings.Contains(b, "está apagado") {
+		t.Errorf("régimen apagado: %d %s", c, b)
+	}
+}

@@ -96,11 +96,11 @@ type entradaAsiento struct {
 func asientoDe(e entradaAsiento) Asiento {
 	switch e.Tipo {
 	case "venta":
-		return AsientoDeVenta(VentaAAsentar{e.Fecha, e.Comprobante, e.Cliente, e.Neto, e.Iva, e.Tributos, e.Total, e.EsNotaDeCredito})
+		return AsientoDeVenta(VentaAAsentar{e.Fecha, e.Comprobante, e.Cliente, e.Neto, e.Iva, e.Tributos, e.Total, e.EsNotaDeCredito, 0})
 	case "cobro":
 		return AsientoDeCobro(CobroAAsentar{e.Fecha, e.Comprobante, e.Cliente, e.Medio, e.Importe})
 	case "compra":
-		return AsientoDeCompra(CompraAAsentar{e.Fecha, e.Comprobante, e.Proveedor, e.Neto, e.Iva, e.Percepciones, e.Total, e.DaCreditoFiscal, e.EsNotaDeCredito})
+		return AsientoDeCompra(CompraAAsentar{e.Fecha, e.Comprobante, e.Proveedor, e.Neto, e.Iva, e.Percepciones, e.Total, e.DaCreditoFiscal, e.EsNotaDeCredito, 0})
 	case "pago":
 		return AsientoDePagoAProveedor(PagoAAsentar{e.Fecha, e.Proveedor, e.Medio, e.Referencia, e.Total, e.Retenido})
 	}

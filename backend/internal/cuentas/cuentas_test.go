@@ -227,6 +227,21 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 	if medio != "retencion" {
 		t.Errorf("el recibo de la retención: %q", medio)
 	}
+	// Anular el recibo anula la retención: deja de ser crédito fiscal y el
+	// certificado corregido se puede volver a cargar.
+	var reciboRet string
+	_ = e.pool.QueryRow(context.Background(), `select receipt_id from retenciones_sufridas where numero = '0001-123'`).Scan(&reciboRet)
+	if c, b := pedir(t, adm, "POST", u+"recibos/"+reciboRet+"/anular", map[string]string{"motivo": "el certificado tenía mal la base"}); c != 200 {
+		t.Fatalf("anular el recibo de la retención: %d %s", c, b)
+	}
+	var vivas int
+	_ = e.pool.QueryRow(context.Background(), `select count(*) from retenciones_sufridas where numero = '0001-123' and anulada_at is null`).Scan(&vivas)
+	if vivas != 0 {
+		t.Errorf("la retención sigue viva después de anular su recibo")
+	}
+	if c, b := pedir(t, adm, "POST", u+"retenciones-sufridas", ret); c != 200 {
+		t.Errorf("volver a cargar el certificado corregido: %d %s", c, b)
+	}
 
 	// Bloqueo, plazo y crédito.
 	if c, b := pedir(t, adm, "PUT", u+"clientes/"+id+"/bloqueo", map[string]any{"bloquear": true, "motivo": "no"}); c != 422 || !strings.Contains(b, "Escribí por qué") {

@@ -154,6 +154,7 @@ func (s *Servicio) ListarRetencionesSufridas(ctx context.Context, limite int) ([
 		SELECT r.id, r.numero, r.fecha, r.impuesto::text, r.codigo_regimen, r.base::text, r.alicuota::text, r.importe::text, r.referencia,
 		  c.nombre, r.customer_id, c.cuit
 		FROM retenciones_sufridas r JOIN customers c ON c.id = r.customer_id
+		WHERE r.anulada_at IS NULL
 		ORDER BY r.fecha DESC LIMIT $1`, limite)
 	if err != nil {
 		return nil, err
@@ -173,7 +174,7 @@ type CreditoPorImpuesto struct {
 func (s *Servicio) CreditoPorRetenciones(ctx context.Context, desde, hasta time.Time) ([]CreditoPorImpuesto, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT impuesto::text, count(*)::int, sum(importe)::text FROM retenciones_sufridas
-		WHERE fecha >= $1 AND fecha <= $2 GROUP BY impuesto`, desde, hasta)
+		WHERE anulada_at IS NULL AND fecha >= $1 AND fecha <= $2 GROUP BY impuesto`, desde, hasta)
 	if err != nil {
 		return nil, err
 	}

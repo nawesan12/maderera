@@ -102,16 +102,22 @@ func (s *Servicio) CargarRetencionSufrida(ctx context.Context, ses *auth.Sesion,
 
 	var r ReciboEmitido
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO retenciones_sufridas
+		var retencion string
+		if err := tx.QueryRow(ctx, `INSERT INTO retenciones_sufridas
 			(customer_id, numero, impuesto, codigo_regimen, base, alicuota, importe, fecha, referencia, created_by_user_id)
-			VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9, $10)`,
-			f.CustomerID, numero, f.Impuesto, codigo, jsmath.Fijo2(base), alicuota, jsmath.Fijo2(importe), fecha, referencia, ses.UserID); err != nil {
+			VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9, $10) RETURNING id`,
+			f.CustomerID, numero, f.Impuesto, codigo, jsmath.Fijo2(base), alicuota, jsmath.Fijo2(importe), fecha, referencia, ses.UserID).Scan(&retencion); err != nil {
 			return err
 		}
 		concepto := "Retención de " + f.Impuesto + " · certificado " + numero
 		var err error
 		r, err = EmitirRecibo(ctx, tx, Cobro{CustomerID: &f.CustomerID, Origen: "panel", Concepto: &concepto, UsuarioID: &ses.UserID,
 			Partes: []Parte{{Medio: "retencion", Importe: importe, Referencia: &numero}}})
+		if err != nil {
+			return err
+		}
+		// Atada al recibo: si se anula el recibo, se anula la retención.
+		_, err = tx.Exec(ctx, `UPDATE retenciones_sufridas SET receipt_id = $2 WHERE id = $1`, retencion, r.ReceiptID)
 		return err
 	})
 	if err != nil {

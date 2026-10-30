@@ -320,5 +320,10 @@ func AnularRecibo(ctx context.Context, tx pgx.Tx, recibo, motivo string, usuario
 		AnuladoPorUserID: usuario, AnulacionMovementID: anulacion}); err != nil {
 		return "", nil, err
 	}
+	// La retención que cargó este recibo deja de ser crédito fiscal (y el
+	// certificado, corregido, se puede volver a cargar).
+	if _, err := tx.Exec(ctx, `UPDATE retenciones_sufridas SET anulada_at = now() WHERE receipt_id = $1 AND anulada_at IS NULL`, recibo); err != nil {
+		return "", nil, err
+	}
 	return r.Numero, r.CustomerID, nil
 }

@@ -40,6 +40,8 @@ func main() {
 		err = correrMigrar()
 	case "salud":
 		err = salud(os.Args[2:])
+	case "privados":
+		err = correrPrivados()
 	default:
 		uso()
 		os.Exit(2)
@@ -58,6 +60,9 @@ func uso() {
   correo          el webmail (correo.<dominio>)
   migrar          aplica las migraciones de la base (y adopta las de drizzle)
   usuario         alta a mano: «usuario staff …» o «usuario cliente …»
+  privados        pasa a la carpeta privada los comprobantes de transferencia
+                  y los documentos técnicos que quedaron en /subidas/
+                  (repetible; ver docs/go/progreso.md)
   salud <url>     pide la URL y sale con error si no responde 200 (para el
                   healthcheck de Docker: la imagen no tiene curl)`)
 }

@@ -117,6 +117,7 @@ type entorno struct {
 	mp    *simuladorMP
 	cola  *cola.Cola
 	ahora time.Time
+	disco *subidas.Disco
 }
 
 // armar levanta la API con Mercado Pago (el simulador) o, sin él, con el
@@ -141,7 +142,8 @@ func armarCon(t *testing.T, ajustar func(*Config)) *entorno {
 	s := Nuevo(pool, cfg, silencio)
 	ahora := time.Now()
 	q := sqlc.New(pool)
-	api := NuevaAPI(s, Extras{Lim: limites.Nuevo(q, silencio), Disco: subidas.Nuevo(subidas.Config{Carpeta: t.TempDir()})},
+	disco := subidas.Nuevo(subidas.Config{Carpeta: t.TempDir(), CarpetaPrivada: t.TempDir()})
+	api := NuevaAPI(s, Extras{Lim: limites.Nuevo(q, silencio), Disco: disco},
 		plataforma.ConfigInterna{Secreto: secretoInterno})
 	api.ahora = func() time.Time { return ahora }
 	m := http.NewServeMux()
@@ -162,7 +164,7 @@ func armarCon(t *testing.T, ajustar func(*Config)) *entorno {
 	t.Cleanup(srv.Close)
 	c := cola.Nueva(q, silencio)
 	c.Registrar(TipoAviso, s.Manejador())
-	return &entorno{srv: srv, pool: pool, ses: ses, s: s, mp: mp, cola: c, ahora: ahora}
+	return &entorno{srv: srv, pool: pool, ses: ses, s: s, mp: mp, cola: c, ahora: ahora, disco: disco}
 }
 
 func (e *entorno) id(t *testing.T, sql string, args ...any) string {
@@ -652,7 +654,7 @@ func TestAnularElReciboDespuesDeUnReintegroParcial(t *testing.T) {
 func TestComprobanteConTokenMaloNoGastaElLimite(t *testing.T) {
 	e := armar(t, false)
 	_, token := e.pedido(t, "PED-1006")
-	x := Extras{Lim: limites.Nuevo(sqlc.New(e.pool), silencio), Disco: subidas.Nuevo(subidas.Config{Carpeta: t.TempDir()})}
+	x := Extras{Lim: limites.Nuevo(sqlc.New(e.pool), silencio), Disco: e.disco}
 	archivo := &Archivo{Datos: []byte("%PDF-1.4 comprobante"), Tipo: "application/pdf"}
 	ctx := context.Background()
 	for i := 0; i < 15; i++ {
@@ -664,5 +666,53 @@ func TestComprobanteConTokenMaloNoGastaElLimite(t *testing.T) {
 		t.Fatalf("el dueño no pudo subir su comprobante: %v", err)
 	} else if r.Ok == "" {
 		t.Fatalf("%+v", r)
+	}
+}
+
+// El comprobante de una transferencia (nombre, CBU y banco de quien pagó)
+// queda en la carpeta privada y se ve solo desde la conciliación: antes iba
+// a /subidas/, que Caddy sirve a cualquiera que tenga el enlace.
+func TestComprobanteEsPrivado(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	_, token := e.pedido(t, "PED-1007")
+	x := Extras{Lim: limites.Nuevo(sqlc.New(e.pool), silencio), Disco: e.disco}
+	pdf := []byte("%PDF-1.4 transferencia de Juan, CBU 0000003100000000000001")
+	if _, err := e.s.SubirComprobante(ctx, x, "PED-1007", token, nil, &Archivo{Datos: pdf, Tipo: "application/pdf"}); err != nil {
+		t.Fatal(err)
+	}
+	ref := e.texto(t, `select comprobante_url from payments`)
+	if !strings.HasPrefix(ref, subidas.PrefijoPrivado) {
+		t.Fatalf("quedó en %q, no en la carpeta privada", ref)
+	}
+	pago := e.texto(t, `select id::text from payments`)
+
+	entrar := func(correo string, rol sqlc.StaffRole) *http.Client {
+		if _, err := e.ses.AltaDeStaff(ctx, correo, "una clave larga", "Persona", rol); err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		if _, err := e.ses.Entrar(ctx, w, correo, "una clave larga", "", "", true); err != nil {
+			t.Fatal(err)
+		}
+		jar, _ := cookiejar.New(nil)
+		u, _ := http.NewRequest("GET", e.srv.URL, nil)
+		jar.SetCookies(u.URL, w.Result().Cookies())
+		return &http.Client{Jar: jar}
+	}
+	u := e.srv.URL + URLDelComprobante(pago)
+	if c, _ := pedir(t, &http.Client{}, "GET", u, nil); c != http.StatusUnauthorized {
+		t.Fatalf("anónimo: %d", c)
+	}
+	if c, _ := pedir(t, entrar("vendedor@prueba.test", sqlc.StaffRoleVendedor), "GET", u, nil); c != http.StatusForbidden {
+		t.Fatalf("vendedor: %d", c)
+	}
+	adm := entrar("admin@prueba.test", sqlc.StaffRoleAdmin)
+	if c, b := pedir(t, adm, "GET", u, nil); c != 200 || b != string(pdf) {
+		t.Fatalf("admin: %d %q", c, b)
+	}
+	// La conciliación muestra el enlace a la ruta, no la referencia.
+	if _, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/admin/pagos", nil); !strings.Contains(b, `"comprobanteUrl":"`+URLDelComprobante(pago)+`"`) {
+		t.Fatalf("listado: %s", b)
 	}
 }

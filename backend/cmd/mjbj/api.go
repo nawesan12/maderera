@@ -154,8 +154,10 @@ func correrAPI() error {
 		catalogoapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	apiContenido := contenido.NuevaAPI(contenido.Nuevo(pool, subidas.Nuevo(cfg.Subidas), log), cfg.Google, cfg.Contacto, email.Elegir(cfg.Email, log), lim)
+	apiContenido.Rutas(m)
 	contenidoapi.HandlerWithOptions(
-		contenidoapi.NewStrictHandlerWithOptions(contenido.NuevaAPI(contenido.Nuevo(pool, subidas.Nuevo(cfg.Subidas), log), cfg.Google, cfg.Contacto, email.Elegir(cfg.Email, log), lim),
+		contenidoapi.NewStrictHandlerWithOptions(apiContenido,
 			[]contenidoapi.StrictMiddlewareFunc{plataforma.ConPedido[contenidoapi.StrictHandlerFunc]},
 			contenidoapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

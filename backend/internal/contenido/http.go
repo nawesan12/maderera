@@ -17,6 +17,7 @@ import (
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/subidas"
 )
 
 // API son las rutas del contenido (api/contenido.yaml).
@@ -558,7 +559,32 @@ func (a *API) AdminDocumentos(ctx context.Context, _ contenidoapi.AdminDocumento
 		return nil, err
 	}
 	v, err := a.s.q.DocumentosDelPanel(ctx)
+	for i := range v {
+		v[i].Url = URLDelDocumento(v[i].ID)
+	}
 	return ok(v), err
+}
+
+// Rutas son las que no van por el contrato: el archivo de un documento
+// técnico, que es un PDF o una planilla y no JSON.
+func (a *API) Rutas(m *http.ServeMux) {
+	m.HandleFunc("GET /api/v1/contenido/documentos/{id}/archivo", func(w http.ResponseWriter, r *http.Request) {
+		datos, tipo, publico, err := a.s.ArchivoDeDocumento(r.Context(), auth.DeContexto(r.Context()), r.PathValue("id"))
+		if err != nil {
+			a.s.log.Error("no se pudo leer el documento", "error", err)
+			plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusInternalServerError, "No pudimos abrir el documento."))
+			return
+		}
+		if datos == nil {
+			plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusNotFound, "No encontramos ese documento."))
+			return
+		}
+		cache := "private, no-store"
+		if publico {
+			cache = "public, max-age=3600"
+		}
+		subidas.Entregar(w, datos, tipo, cache)
+	})
 }
 
 func (a *API) CategoriasDeDocumentos(ctx context.Context, _ contenidoapi.CategoriasDeDocumentosRequestObject) (contenidoapi.CategoriasDeDocumentosResponseObject, error) {

@@ -17,6 +17,7 @@ import (
 	"mjbj/internal/reportes"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/subidas"
 )
 
 // API son las rutas de api/pagos.yaml y el webhook de siempre.
@@ -302,6 +303,39 @@ func (a *API) ReconsultarCobro(ctx context.Context, r pagosapi.ReconsultarCobroR
 // Rutas registra el webhook de Mercado Pago en su dirección de siempre.
 func (a *API) Rutas(m *http.ServeMux) {
 	m.HandleFunc("POST /api/pagos/webhook", a.webhook)
+	m.HandleFunc("GET /api/v1/admin/pagos/{id}/comprobante", a.comprobante)
+}
+
+// URLDelComprobante es el enlace que ve la conciliación: la ruta con sesión,
+// nunca la referencia guardada.
+func URLDelComprobante(pagoID string) string { return "/api/v1/admin/pagos/" + pagoID + "/comprobante" }
+
+// comprobante entrega el comprobante de una transferencia a quien entra a
+// /admin/pagos. Los de antes de la carpeta privada (`/subidas/...`) también
+// salen por acá.
+func (a *API) comprobante(w http.ResponseWriter, r *http.Request) {
+	if _, err := panel(r.Context()); err != nil {
+		var p *plataforma.Problema
+		if errors.As(err, &p) {
+			plataforma.EscribirProblema(w, p)
+		}
+		return
+	}
+	id := r.PathValue("id")
+	var ref *string
+	if plataforma.UUIDValido(id) {
+		_ = a.s.pool.QueryRow(r.Context(), `SELECT comprobante_url FROM payments WHERE id = $1`, id).Scan(&ref)
+	}
+	if ref == nil || a.x.Disco == nil {
+		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusNotFound, "Ese cobro no tiene comprobante."))
+		return
+	}
+	datos, tipo := a.x.Disco.LeerGuardado(*ref)
+	if datos == nil {
+		plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusNotFound, "No encontramos el archivo del comprobante."))
+		return
+	}
+	subidas.Entregar(w, datos, tipo, "private, no-store")
 }
 
 // webhook es app/api/pagos/webhook/route.ts: verifica la firma, guarda el

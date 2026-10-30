@@ -90,7 +90,9 @@ func revisarArchivo(a *Archivo) error {
 }
 
 func (s *Servicio) guardar(x Extras, a *Archivo) (string, error) {
-	url, err := x.Disco.GuardarAdjunto(a.Datos, a.Tipo, "comprobante")
+	// En la carpeta privada: el comprobante trae el nombre, el CBU y el
+	// banco de quien pagó. Se ve solo por la ruta de la conciliación.
+	url, err := x.Disco.GuardarPrivado(a.Datos, a.Tipo, "comprobante")
 	var e *subidas.ErrSubida
 	if errors.As(err, &e) {
 		return "", fallo(e.Mensaje)

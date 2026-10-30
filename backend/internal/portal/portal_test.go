@@ -199,6 +199,16 @@ func TestSeguimientoDelPedido(t *testing.T) {
 		{"el personal", staff, "PED-0042/seguimiento", 200},
 		{"uno que no existe", http.DefaultClient, "PED-9999/seguimiento?t=" + token, 404},
 	}
+	// Mi pedido: el dueño lo ve con su historial; otro, 404; sin el costo.
+	_, _ = e.pool.Exec(ctx, `insert into order_status_history (order_id, estado, nota) values ($1, 'pendiente', 'Recibido')`, pedido)
+	if c, b := pedir(t, juan, "GET", e.srv.URL+"/api/v1/cuenta/pedidos/PED-0042", nil); c != 200 || !strings.Contains(b, "Recibido") ||
+		!strings.Contains(b, "Fenólico 18 mm") || strings.Contains(b, "costoUnitario") {
+		t.Errorf("mi pedido: %d %s", c, b)
+	}
+	if c, _ := pedir(t, ana, "GET", e.srv.URL+"/api/v1/cuenta/pedidos/PED-0042", nil); c != 404 {
+		t.Errorf("pedido ajeno: %d", c)
+	}
+
 	var cuerpo404 string
 	for _, c := range casos {
 		codigo, b := pedir(t, c.c, "GET", u+c.ruta, nil)

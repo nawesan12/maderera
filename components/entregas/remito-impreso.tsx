@@ -1,7 +1,9 @@
 import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
 import { formatearUnidad } from "@/lib/formato";
 import { fechaDelRemito, fechaHoraDeFirma } from "@/lib/entregas/fecha";
-import type { ConfiguracionFiscal } from "@/lib/db/schema";
+import type { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
+
+type ConfiguracionFiscal = Awaited<ReturnType<typeof obtenerConfiguracionFiscal>>;
 import type { RemitoCompleto } from "@/lib/dal/admin/entregas";
 import { LogoEmisor } from "@/components/impresion/logo-emisor";
 import { lineasDeLaFactura } from "@/lib/entregas/factura-del-remito";

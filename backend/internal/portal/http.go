@@ -192,3 +192,20 @@ func (a *API) SeguirPedido(ctx context.Context, r portalapi.SeguirPedidoRequestO
 	}
 	return respuesta{p}, nil
 }
+
+func (o respuesta) VisitMiPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+func (a *API) MiPedido(ctx context.Context, r portalapi.MiPedidoRequestObject) (portalapi.MiPedidoResponseObject, error) {
+	c, err := a.cliente(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "Ese pedido no está.")
+	}
+	p, err := a.s.MiPedido(ctx, c, r.Numero)
+	if errors.Is(err, ErrNoEsta) {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "Ese pedido no está.")
+	}
+	return respuesta{p}, err
+}

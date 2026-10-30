@@ -95,3 +95,68 @@ func (s *Servicio) Seguir(ctx context.Context, ses *auth.Sesion, numero, token s
 	p.Items, err = pgx.CollectRows(filas, pgx.RowToStructByPos[RenglonDelPedido])
 	return &p, err
 }
+
+// PedidoPropio es miPedido: un pedido del cliente de la sesión, con sus
+// renglones (sin costo) y su historial de estados. Los retiros y el acopio
+// los da internal/entregas.
+type PedidoPropio struct {
+	ID               string             `json:"id"`
+	Numero           string             `json:"numero"`
+	Estado           string             `json:"estado"`
+	EstadoPago       string             `json:"estadoPago"`
+	MedioPago        *string            `json:"medioPago"`
+	TipoEntrega      string             `json:"tipoEntrega"`
+	DireccionEntrega *string            `json:"direccionEntrega"`
+	ZonaEnvio        *string            `json:"zonaEnvio"`
+	CostoEnvio       *string            `json:"costoEnvio"`
+	Subtotal         string             `json:"subtotal"`
+	Total            string             `json:"total"`
+	Notas            *string            `json:"notas"`
+	Sucursal         *string            `json:"sucursal"`
+	SucursalSlug     *string            `json:"sucursalSlug"`
+	CreatedAt        time.Time          `json:"createdAt"`
+	Items            []RenglonDelPedido `json:"items"`
+	Historial        []EstadoDelPedido  `json:"historial"`
+}
+
+// EstadoDelPedido es un paso del historial.
+type EstadoDelPedido struct {
+	ID        string    `json:"id"`
+	Estado    string    `json:"estado"`
+	Nota      *string   `json:"nota"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// MiPedido busca por número **y** dueño juntos: si el filtro por dueño
+// fuera después, ya se habría leído el pedido de otro.
+func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*PedidoPropio, error) {
+	var p PedidoPropio
+	err := s.pool.QueryRow(ctx, `
+		SELECT o.id, o.numero, o.estado::text, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.direccion_entrega,
+		  o.zona_envio, o.costo_envio::text, o.subtotal::text, o.total::text, o.notas, b.name, b.slug, o.created_at
+		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
+		WHERE o.numero = $1 AND o.customer_id = $2`, numero, c.ID).
+		Scan(&p.ID, &p.Numero, &p.Estado, &p.EstadoPago, &p.MedioPago, &p.TipoEntrega, &p.DireccionEntrega, &p.ZonaEnvio,
+			&p.CostoEnvio, &p.Subtotal, &p.Total, &p.Notas, &p.Sucursal, &p.SucursalSlug, &p.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNoEsta
+	}
+	if err != nil {
+		return nil, err
+	}
+	filas, err := s.pool.Query(ctx, `SELECT id, variant_id, descripcion, unidad, cantidad::text, precio_unitario::text, subtotal::text,
+		presentacion, orden FROM order_items WHERE order_id = $1 ORDER BY orden`, p.ID)
+	if err != nil {
+		return nil, err
+	}
+	if p.Items, err = pgx.CollectRows(filas, pgx.RowToStructByPos[RenglonDelPedido]); err != nil {
+		return nil, err
+	}
+	filas, err = s.pool.Query(ctx, `SELECT id, estado::text, nota, created_at FROM order_status_history
+		WHERE order_id = $1 ORDER BY created_at DESC`, p.ID)
+	if err != nil {
+		return nil, err
+	}
+	p.Historial, err = pgx.CollectRows(filas, pgx.RowToStructByPos[EstadoDelPedido])
+	return &p, err
+}

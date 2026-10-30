@@ -1,17 +1,6 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import {
-  branches,
-  deliveries,
-  customers,
-  invoices,
-  orderItems,
-  orderStatusHistory,
-  orders,
-} from "@/lib/db/schema";
 import { api, datos } from "@/lib/api/servidor";
 
 /**
@@ -91,59 +80,21 @@ export async function misPedidos(): Promise<PedidoPropio[]> {
 
 /** Detalle de un pedido propio. Devuelve null si el número no es suyo. */
 export async function miPedido(numero: string) {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return null;
+  // El pedido, sus renglones (sin costo) y su historial los da Go
+  // (backend/internal/portal), que busca por número y dueño juntos.
+  const r = await (await api()).GET("/api/v1/cuenta/pedidos/{numero}", { params: { path: { numero: numero.slice(0, 40) } } });
+  if (r.response.status === 404) return null;
+  const p = datos(r);
+  const pedido = { ...p, createdAt: new Date(p.createdAt) };
+  const historial = p.historial.map((h) => ({ ...h, createdAt: new Date(h.createdAt) }));
 
-  const [pedido] = await db
-    .select({
-      id: orders.id,
-      numero: orders.numero,
-      estado: orders.estado,
-      estadoPago: orders.estadoPago,
-      medioPago: orders.medioPago,
-      tipoEntrega: orders.tipoEntrega,
-      direccionEntrega: orders.direccionEntrega,
-      zonaEnvio: orders.zonaEnvio,
-      costoEnvio: orders.costoEnvio,
-      subtotal: orders.subtotal,
-      total: orders.total,
-      notas: orders.notas,
-      sucursal: branches.name,
-      sucursalSlug: branches.slug,
-      createdAt: orders.createdAt,
-    })
-    .from(orders)
-    .leftJoin(branches, eq(branches.id, orders.branchId))
-    // El filtro por dueño va acá, junto al número: si estuviera después del
-    // select ya habríamos leído el pedido de otra persona.
-    .where(and(eq(orders.numero, numero), eq(orders.customerId, cliente.id)))
-    .limit(1);
-
-  if (!pedido) return null;
-
-  const [items, historial, retiros] = await Promise.all([
-    db
-      .select()
-      .from(orderItems)
-      .where(eq(orderItems.orderId, pedido.id))
-      .orderBy(asc(orderItems.orden)),
-    db
-      .select({
-        id: orderStatusHistory.id,
-        estado: orderStatusHistory.estado,
-        nota: orderStatusHistory.nota,
-        createdAt: orderStatusHistory.createdAt,
-      })
-      .from(orderStatusHistory)
-      .where(eq(orderStatusHistory.orderId, pedido.id))
-      .orderBy(desc(orderStatusHistory.createdAt)),
-    // Los retiros ya hechos y lo que queda en acopio, renglón por renglón (la
-    // pregunta que un cliente de maderera se hace todo el tiempo: "¿cuánto me
-    // falta retirar?"). Los da Go (backend/internal/entregas), que vuelve a
-    // mirar que el pedido sea del cliente de la sesión.
-    (await api()).GET("/api/v1/mi-cuenta/pedidos/{id}/entregas", { params: { path: { id: pedido.id } } }).then(datos),
-  ]);
-
+  // Los retiros ya hechos y lo que queda en acopio, renglón por renglón (la
+  // pregunta que un cliente de maderera se hace todo el tiempo: "¿cuánto me
+  // falta retirar?"). Los da Go (backend/internal/entregas), que vuelve a
+  // mirar que el pedido sea del cliente de la sesión.
+  const retiros = datos(
+    await (await api()).GET("/api/v1/mi-cuenta/pedidos/{id}/entregas", { params: { path: { id: p.id } } }),
+  );
   const entregas = retiros.entregas.map((e) => ({
     ...e,
     firmadoAt: e.firmadoAt ? new Date(e.firmadoAt) : null,
@@ -152,7 +103,7 @@ export async function miPedido(numero: string) {
   const acopio = retiros.acopio;
   const enAcopio = acopio.filter((a) => a.pendiente > 0.01);
 
-  return { ...pedido, items, historial, entregas, acopio, enAcopio };
+  return { ...pedido, items: p.items, historial, entregas, acopio, enAcopio };
 }
 
 /* -------------------------------------------------------------------------- */

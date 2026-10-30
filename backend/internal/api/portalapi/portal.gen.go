@@ -62,6 +62,24 @@ func (e ClienteDelPortalTipo) Valid() bool {
 	}
 }
 
+// Defines values for PedidoPropioTipoEntrega.
+const (
+	PedidoPropioTipoEntregaEnvio  PedidoPropioTipoEntrega = "envio"
+	PedidoPropioTipoEntregaRetiro PedidoPropioTipoEntrega = "retiro"
+)
+
+// Valid indicates whether the value is a known member of the PedidoPropioTipoEntrega enum.
+func (e PedidoPropioTipoEntrega) Valid() bool {
+	switch e {
+	case PedidoPropioTipoEntregaEnvio:
+		return true
+	case PedidoPropioTipoEntregaRetiro:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PedidoSeguidoTipoEntrega.
 const (
 	PedidoSeguidoTipoEntregaEnvio  PedidoSeguidoTipoEntrega = "envio"
@@ -132,36 +150,55 @@ type DireccionDelPortal struct {
 	Predeterminada bool      `json:"predeterminada"`
 }
 
-// PedidoSeguido defines model for PedidoSeguido.
-type PedidoSeguido struct {
-	Cliente          string    `json:"cliente"`
+// PedidoPropio defines model for PedidoPropio.
+type PedidoPropio struct {
 	CostoEnvio       *string   `json:"costoEnvio"`
 	CreatedAt        time.Time `json:"createdAt"`
 	DireccionEntrega *string   `json:"direccionEntrega"`
 	Estado           string    `json:"estado"`
 	EstadoPago       string    `json:"estadoPago"`
-	Id               string    `json:"id"`
-	Items            []struct {
-		Cantidad       string  `json:"cantidad"`
-		Descripcion    string  `json:"descripcion"`
-		Id             string  `json:"id"`
-		Orden          int     `json:"orden"`
-		PrecioUnitario string  `json:"precioUnitario"`
-		Presentacion   *string `json:"presentacion"`
-		Subtotal       string  `json:"subtotal"`
-		Unidad         string  `json:"unidad"`
-		VariantId      *string `json:"variantId"`
-	} `json:"items"`
-	MedioPago    *string                  `json:"medioPago"`
-	Numero       string                   `json:"numero"`
-	PublicToken  string                   `json:"publicToken"`
-	Subtotal     string                   `json:"subtotal"`
-	Sucursal     *string                  `json:"sucursal"`
-	SucursalSlug *string                  `json:"sucursalSlug"`
-	Telefono     *string                  `json:"telefono"`
-	TipoEntrega  PedidoSeguidoTipoEntrega `json:"tipoEntrega"`
-	Total        string                   `json:"total"`
-	ZonaEnvio    *string                  `json:"zonaEnvio"`
+	Historial        []struct {
+		CreatedAt time.Time `json:"createdAt"`
+		Estado    string    `json:"estado"`
+		Id        string    `json:"id"`
+		Nota      *string   `json:"nota"`
+	} `json:"historial"`
+	Id           string                  `json:"id"`
+	Items        []RenglonDelPedido      `json:"items"`
+	MedioPago    *string                 `json:"medioPago"`
+	Notas        *string                 `json:"notas"`
+	Numero       string                  `json:"numero"`
+	Subtotal     string                  `json:"subtotal"`
+	Sucursal     *string                 `json:"sucursal"`
+	SucursalSlug *string                 `json:"sucursalSlug"`
+	TipoEntrega  PedidoPropioTipoEntrega `json:"tipoEntrega"`
+	Total        string                  `json:"total"`
+	ZonaEnvio    *string                 `json:"zonaEnvio"`
+}
+
+// PedidoPropioTipoEntrega defines model for PedidoPropio.TipoEntrega.
+type PedidoPropioTipoEntrega string
+
+// PedidoSeguido defines model for PedidoSeguido.
+type PedidoSeguido struct {
+	Cliente          string                   `json:"cliente"`
+	CostoEnvio       *string                  `json:"costoEnvio"`
+	CreatedAt        time.Time                `json:"createdAt"`
+	DireccionEntrega *string                  `json:"direccionEntrega"`
+	Estado           string                   `json:"estado"`
+	EstadoPago       string                   `json:"estadoPago"`
+	Id               string                   `json:"id"`
+	Items            []RenglonDelPedido       `json:"items"`
+	MedioPago        *string                  `json:"medioPago"`
+	Numero           string                   `json:"numero"`
+	PublicToken      string                   `json:"publicToken"`
+	Subtotal         string                   `json:"subtotal"`
+	Sucursal         *string                  `json:"sucursal"`
+	SucursalSlug     *string                  `json:"sucursalSlug"`
+	Telefono         *string                  `json:"telefono"`
+	TipoEntrega      PedidoSeguidoTipoEntrega `json:"tipoEntrega"`
+	Total            string                   `json:"total"`
+	ZonaEnvio        *string                  `json:"zonaEnvio"`
 }
 
 // PedidoSeguidoTipoEntrega defines model for PedidoSeguido.TipoEntrega.
@@ -200,6 +237,19 @@ type Problema struct {
 	Errores *map[string]string `json:"errores,omitempty"`
 	Status  int                `json:"status"`
 	Title   string             `json:"title"`
+}
+
+// RenglonDelPedido Un renglón de un pedido, sin el costo ni la alícuota.
+type RenglonDelPedido struct {
+	Cantidad       string  `json:"cantidad"`
+	Descripcion    string  `json:"descripcion"`
+	Id             string  `json:"id"`
+	Orden          int     `json:"orden"`
+	PrecioUnitario string  `json:"precioUnitario"`
+	Presentacion   *string `json:"presentacion"`
+	Subtotal       string  `json:"subtotal"`
+	Unidad         string  `json:"unidad"`
+	VariantId      *string `json:"variantId"`
 }
 
 // Hecho defines model for Hecho.
@@ -269,6 +319,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/cuenta/pedidos)
 	MisPedidos(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/cuenta/pedidos/{numero})
+	MiPedido(w http.ResponseWriter, r *http.Request, numero string)
 
 	// (GET /api/v1/cuenta/presupuestos)
 	MisPresupuestos(w http.ResponseWriter, r *http.Request)
@@ -382,6 +435,32 @@ func (siw *ServerInterfaceWrapper) MisPedidos(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.MisPedidos(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MiPedido operation middleware
+func (siw *ServerInterfaceWrapper) MiPedido(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "numero" -------------
+	var numero string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "numero", r.PathValue("numero"), &numero, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "numero", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MiPedido(w, r, numero)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -643,6 +722,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/cuenta/direcciones", wrapper.MisDirecciones)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/cuenta/direcciones", wrapper.GuardarDireccion)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/cuenta/direcciones/{id}", wrapper.BorrarDireccion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/cuenta/pedidos/{numero}", wrapper.MiPedido)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/pedidos/{numero}/seguimiento", wrapper.SeguirPedido)
 
 	return m
@@ -885,6 +965,44 @@ func (response MisPedidos200JSONResponse) VisitMisPedidosResponse(w http.Respons
 	return err
 }
 
+type MiPedidoRequestObject struct {
+	Numero string `json:"numero"`
+}
+
+type MiPedidoResponseObject interface {
+	VisitMiPedidoResponse(w http.ResponseWriter) error
+}
+
+type MiPedido200JSONResponse PedidoPropio
+
+func (response MiPedido200JSONResponse) VisitMiPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MiPedido404ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response MiPedido404ApplicationProblemPlusJSONResponse) VisitMiPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type MisPresupuestosRequestObject struct {
 }
 
@@ -1090,6 +1208,9 @@ type StrictServerInterface interface {
 
 	// (GET /api/v1/cuenta/pedidos)
 	MisPedidos(ctx context.Context, request MisPedidosRequestObject) (MisPedidosResponseObject, error)
+
+	// (GET /api/v1/cuenta/pedidos/{numero})
+	MiPedido(ctx context.Context, request MiPedidoRequestObject) (MiPedidoResponseObject, error)
 
 	// (GET /api/v1/cuenta/presupuestos)
 	MisPresupuestos(ctx context.Context, request MisPresupuestosRequestObject) (MisPresupuestosResponseObject, error)
@@ -1306,6 +1427,32 @@ func (sh *strictHandler) MisPedidos(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// MiPedido operation middleware
+func (sh *strictHandler) MiPedido(w http.ResponseWriter, r *http.Request, numero string) {
+	var request MiPedidoRequestObject
+
+	request.Numero = numero
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MiPedido(ctx, request.(MiPedidoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MiPedido")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MiPedidoResponseObject); ok {
+		if err := validResponse.VisitMiPedidoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // MisPresupuestos operation middleware
 func (sh *strictHandler) MisPresupuestos(w http.ResponseWriter, r *http.Request) {
 	var request MisPresupuestosRequestObject
@@ -1445,37 +1592,39 @@ func (sh *strictHandler) SeguirPedido(w http.ResponseWriter, r *http.Request, nu
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"XeKPpKUo8zvLSJvNLwMA",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

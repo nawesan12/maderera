@@ -154,6 +154,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cuenta/pedidos/{numero}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                numero: string;
+            };
+            cookie?: never;
+        };
+        get: operations["MiPedido"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pedidos/{numero}/seguimiento": {
         parameters: {
             query?: never;
@@ -264,17 +282,46 @@ export interface components {
             sucursalSlug: string | null;
             /** Format: date-time */
             createdAt: string;
-            items: {
+            items: components["schemas"]["RenglonDelPedido"][];
+        };
+        PedidoPropio: {
+            id: string;
+            numero: string;
+            estado: string;
+            estadoPago: string;
+            medioPago: string | null;
+            /** @enum {string} */
+            tipoEntrega: "retiro" | "envio";
+            direccionEntrega: string | null;
+            zonaEnvio: string | null;
+            costoEnvio: string | null;
+            subtotal: string;
+            total: string;
+            notas: string | null;
+            sucursal: string | null;
+            sucursalSlug: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            items: components["schemas"]["RenglonDelPedido"][];
+            historial: {
                 id: string;
-                variantId: string | null;
-                descripcion: string;
-                unidad: string;
-                cantidad: string;
-                precioUnitario: string;
-                subtotal: string;
-                presentacion: string | null;
-                orden: number;
+                estado: string;
+                nota: string | null;
+                /** Format: date-time */
+                createdAt: string;
             }[];
+        };
+        /** @description Un renglón de un pedido, sin el costo ni la alícuota. */
+        RenglonDelPedido: {
+            id: string;
+            variantId: string | null;
+            descripcion: string;
+            unidad: string;
+            cantidad: string;
+            precioUnitario: string;
+            subtotal: string;
+            presentacion: string | null;
+            orden: number;
         };
     };
     responses: {
@@ -548,6 +595,29 @@ export interface operations {
             200: components["responses"]["Hecho"];
             401: components["responses"]["Problema"];
             422: components["responses"]["Problema"];
+        };
+    };
+    MiPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                numero: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El pedido con sus renglones (sin costo) y su historial */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PedidoPropio"];
+                };
+            };
+            404: components["responses"]["Problema"];
         };
     };
     SeguirPedido: {

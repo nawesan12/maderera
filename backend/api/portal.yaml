@@ -171,6 +171,18 @@ paths:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/cuenta/pedidos/{numero}:
+    parameters:
+      - { name: numero, in: path, required: true, schema: { type: string, maxLength: 40 } }
+    get:
+      operationId: MiPedido
+      responses:
+        "200":
+          description: El pedido con sus renglones (sin costo) y su historial
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PedidoPropio" }
+        "404": { $ref: "#/components/responses/Problema" }
   /api/v1/pedidos/{numero}/seguimiento:
     parameters:
       - { name: numero, in: path, required: true, schema: { type: string, maxLength: 40 } }
@@ -292,18 +304,49 @@ components:
         sucursal: { type: string, nullable: true }
         sucursalSlug: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
-        items:
+        items: { type: array, items: { $ref: "#/components/schemas/RenglonDelPedido" } }
+    PedidoPropio:
+      type: object
+      required: [id, numero, estado, estadoPago, medioPago, tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, total, notas,
+        sucursal, sucursalSlug, createdAt, items, historial]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        estado: { type: string }
+        estadoPago: { type: string }
+        medioPago: { type: string, nullable: true }
+        tipoEntrega: { type: string, enum: [retiro, envio] }
+        direccionEntrega: { type: string, nullable: true }
+        zonaEnvio: { type: string, nullable: true }
+        costoEnvio: { type: string, nullable: true }
+        subtotal: { type: string }
+        total: { type: string }
+        notas: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+        sucursalSlug: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        items: { type: array, items: { $ref: "#/components/schemas/RenglonDelPedido" } }
+        historial:
           type: array
           items:
             type: object
-            required: [id, variantId, descripcion, unidad, cantidad, precioUnitario, subtotal, presentacion, orden]
+            required: [id, estado, nota, createdAt]
             properties:
               id: { type: string }
-              variantId: { type: string, nullable: true }
-              descripcion: { type: string }
-              unidad: { type: string }
-              cantidad: { type: string }
-              precioUnitario: { type: string }
-              subtotal: { type: string }
-              presentacion: { type: string, nullable: true }
-              orden: { type: integer }
+              estado: { type: string }
+              nota: { type: string, nullable: true }
+              createdAt: { type: string, format: date-time }
+    RenglonDelPedido:
+      type: object
+      description: Un renglón de un pedido, sin el costo ni la alícuota.
+      required: [id, variantId, descripcion, unidad, cantidad, precioUnitario, subtotal, presentacion, orden]
+      properties:
+        id: { type: string }
+        variantId: { type: string, nullable: true }
+        descripcion: { type: string }
+        unidad: { type: string }
+        cantidad: { type: string }
+        precioUnitario: { type: string }
+        subtotal: { type: string }
+        presentacion: { type: string, nullable: true }
+        orden: { type: integer }

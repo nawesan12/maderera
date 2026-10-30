@@ -113,6 +113,14 @@ func (s *Servicio) ObtenerOCrear(ctx context.Context, q Quien) (id, tokenNuevo s
 				return id, "", err
 			}
 		}
+		// Un carrito anónimo nuevo cuenta contra la IP: un navegador lo crea
+		// una vez y después manda la cookie; quien no la guarda, crea uno por
+		// pedido.
+		if r := plataforma.PedidoDe(ctx); r != nil {
+			if v := s.lim.Permitido(ctx, limites.Carrito, "ip:"+plataforma.IPDelCliente(r)); !v.Permitido {
+				return "", "", espera(v)
+			}
+		}
 		tokenNuevo = uuid()
 		err = s.pool.QueryRow(ctx, `INSERT INTO carts (token) VALUES ($1) RETURNING id`, tokenNuevo).Scan(&id)
 		return id, tokenNuevo, err

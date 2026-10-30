@@ -40,6 +40,10 @@ const (
 	ListaDePrecios Accion = "listaDePrecios"
 	Comprobante    Accion = "comprobante"
 	Diagnostico    Accion = "diagnostico"
+	// Carrito son los carritos anónimos nuevos por IP: solo de Go (el TS no
+	// lo tenía). Sin cookie, cada «agregar» crea uno, y un bot que no guarda
+	// cookies llenaba la tabla.
+	Carrito Accion = "carrito"
 )
 
 // Los valores de LIMITES en lib/limites/index.ts.
@@ -55,6 +59,7 @@ var limites = map[Accion]Limite{
 	ListaDePrecios: {10, time.Hour},
 	Comprobante:    {10, time.Hour},
 	Diagnostico:    {20, time.Hour},
+	Carrito:        {60, time.Hour},
 }
 
 // Veredicto es si pasa, cuántos le quedan y cuánto esperar si no.

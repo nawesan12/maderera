@@ -449,3 +449,31 @@ func muchos(n int) []any {
 	}
 	return out
 }
+
+// Sin cookie, cada «agregar» crea un carrito: por IP hay un tope por hora,
+// y el que ya tiene su carrito sigue agregando aunque el tope se cumpla.
+func TestCarritosAnonimosConFreno(t *testing.T) {
+	e := armar(t)
+	u := e.srv.URL + "/api/v1/carrito/items"
+	item := map[string]any{"variantId": e.placa, "descripcion": "Fenólico 18 mm", "cantidad": 1}
+	con := e.anonimo()
+	if code, b := pedir(t, con, "POST", u, item); code != 200 {
+		t.Fatalf("el primero: %d %s", code, b)
+	}
+	sin := &http.Client{} // un bot: no guarda la cookie
+	frenado := 0
+	for i := 0; i < 70; i++ {
+		if code, _ := pedir(t, sin, "POST", u, item); code == http.StatusTooManyRequests {
+			frenado++
+		}
+	}
+	if n := e.numero(t, `select count(*) from carts`); n > 60 {
+		t.Fatalf("%v carritos de una IP en una hora", n)
+	}
+	if frenado == 0 {
+		t.Fatal("no frenó a nadie")
+	}
+	if code, b := pedir(t, con, "POST", u, item); code != 200 {
+		t.Fatalf("el que ya tenía carrito: %d %s", code, b)
+	}
+}

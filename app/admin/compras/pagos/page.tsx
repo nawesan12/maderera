@@ -10,6 +10,7 @@ import { listarProveedores } from "@/lib/dal/admin/proveedores";
 import { formatearMonto } from "@/lib/formato";
 import { etiquetaDeCircuito } from "@/lib/circuito";
 import { FormularioPago } from "./formulario";
+import { AnularPago } from "./anular";
 
 export const metadata: Metadata = { title: "Pagos a proveedores" };
 
@@ -112,9 +113,27 @@ export default async function PagosPage({
               </thead>
               <tbody className="divide-y divide-linea">
                 {pagos.map((p) => (
-                  <tr key={p.id}>
+                  <tr
+                    key={p.id}
+                    className={p.anuladoAt ? "text-muted-foreground" : undefined}
+                  >
                     <td className="tabular px-5 py-3 text-muted-foreground">
                       {p.fecha.toLocaleDateString("es-AR")}
+                      {/* Un pago anulado queda a la vista, con su motivo: los
+                          certificados que se le entregaron al proveedor
+                          siguen existiendo y hay que poder explicarlos. */}
+                      {p.anuladoAt ? (
+                        <span className="mt-0.5 block text-sm font-medium text-saldo-debe">
+                          Anulado
+                          {p.motivoAnulacion && (
+                            <span className="block font-normal text-muted-foreground">
+                              {p.motivoAnulacion}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <AnularPago id={p.id} supplierId={p.supplierId} />
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       <Link
@@ -151,7 +170,9 @@ export default async function PagosPage({
                         {etiquetaDeCircuito(p.circuito)}
                       </span>
                     </td>
-                    <td className="tabular px-5 py-3 text-right font-semibold">
+                    <td
+                      className={`tabular px-5 py-3 text-right font-semibold ${p.anuladoAt ? "line-through" : ""}`}
+                    >
                       {formatearMonto(p.total)}
                       {/* Contra qué se imputó. Sin esto la tabla contestaba
                           "salieron $800.000" y no "de qué facturas". */}

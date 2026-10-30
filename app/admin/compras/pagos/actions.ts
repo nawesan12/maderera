@@ -64,3 +64,26 @@ export async function verFacturasConSaldo(supplierId: string) {
 export async function verChequesEnCartera() {
   return chequesEnCartera();
 }
+
+/**
+ * Anula un pago cargado por error. Solo el admin, con motivo, y queda en la
+ * bitácora. La API de Go (backend/internal/compras) devuelve la deuda con el
+ * proveedor, borra las imputaciones, anula los certificados de retención y
+ * deshace los cheques (los endosados vuelven a cartera, los propios se
+ * anulan). Un cheque ya cobrado o rechazado no se puede deshacer: se avisa.
+ */
+export async function anularPago(
+  id: string,
+  supplierId: string,
+  motivo: string,
+): Promise<{ error?: string; ok?: string }> {
+  const r = await (await api()).POST("/api/v1/admin/compras/pagos/{id}/anular", {
+    params: { path: { id } },
+    body: { motivo },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo anular el pago.") };
+  revalidatePath("/admin/compras/pagos");
+  revalidatePath(`/admin/proveedores/${supplierId}`);
+  revalidatePath("/admin/cheques");
+  return { ok: r.data.ok };
+}

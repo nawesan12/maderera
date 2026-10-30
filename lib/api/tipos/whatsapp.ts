@@ -197,6 +197,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/whatsapp/conversaciones/{id}/ficha": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Da de alta la ficha con el teléfono de la conversación y la vincula. */
+        post: operations["CrearFichaDesdeConversacion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/whatsapp/conversaciones/{id}/baja": {
         parameters: {
             query?: never;
@@ -1137,6 +1154,29 @@ export interface operations {
             content: {
                 "application/json": {
                     customerId: string | null;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Resultado"];
+        };
+    };
+    CrearFichaDesdeConversacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    nombre?: string;
+                    documento?: string;
+                    rubro?: string;
+                    email?: string;
                 };
             };
         };

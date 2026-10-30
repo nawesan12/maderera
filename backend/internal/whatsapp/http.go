@@ -758,3 +758,23 @@ func (s *Servicio) EnviarArchivo(w http.ResponseWriter, r *http.Request) {
 
 // reUUIDBandeja es el /^[0-9a-f-]{36}$/i del TS.
 var reUUIDBandeja = regexp.MustCompile(`^[0-9a-fA-F-]{36}$`)
+
+func (o respuesta) VisitCrearFichaDesdeConversacionResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+func (a *API) CrearFichaDesdeConversacion(ctx context.Context, r whatsappapi.CrearFichaDesdeConversacionRequestObject) (whatsappapi.CrearFichaDesdeConversacionResponseObject, error) {
+	ses, err := bandeja(ctx)
+	if err != nil {
+		return nil, err
+	}
+	b := r.Body
+	de := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return *p
+	}
+	v, err := a.s.CrearFicha(ctx, ses, r.Id, FormFicha{Nombre: de(b.Nombre), Documento: de(b.Documento), Rubro: de(b.Rubro), Email: de(b.Email)})
+	return ok(v), err
+}

@@ -1,17 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { api, comoFormulario, mensajeDe, type Problema } from "@/lib/api/servidor";
-import { db } from "@/lib/db";
-import { customers } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { obtenerConversacion, requireBandeja } from "@/lib/dal/admin/whatsapp";
-import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
+import { requireBandeja } from "@/lib/dal/admin/whatsapp";
 import { documentoPdf, esTipoDeDocumento } from "@/lib/whatsapp/documentos";
-import { numeroLegible, sinNumero } from "@/lib/whatsapp/numeros";
-import { crearClienteRapido } from "@/lib/clientes/alta";
-import { leerDocumento, sugerirCondicionIva } from "@/lib/clientes/documento";
 
 /**
  * Las acciones de la bandeja. Las hace la API de Go (backend/internal/whatsapp),
@@ -230,47 +222,20 @@ export async function vincularCliente(_previo: EstadoWhatsapp, formData: FormDat
  * a la conversación, de Go.
  */
 export async function crearFichaDesdeConversacion(_previo: EstadoWhatsapp, formData: FormData): Promise<EstadoWhatsapp> {
-  const usuario = await requireBandeja();
-  const id = texto(formData, "conversacionId");
-  const conversacion = z.string().uuid().safeParse(id).success ? await obtenerConversacion(id) : null;
-  if (!conversacion) return { error: "No encontramos esa conversación." };
-  if (conversacion.customerId) return { error: "Esta conversación ya tiene ficha." };
-
-  const nombre = z.string().trim().min(2, "Escribí el nombre.").max(160).safeParse(formData.get("nombre"));
-  if (!nombre.success) return { error: nombre.error.issues[0]?.message };
-
-  const documento = leerDocumento(String(formData.get("documento") ?? ""));
-  if ("error" in documento) return { error: documento.error };
-
-  const telefono = sinNumero(conversacion.waJid) ? null : numeroLegible(conversacion.waJid);
-  const cliente = await crearClienteRapido(db, {
-    nombre: nombre.data,
-    documento,
-    condicionIva: sugerirCondicionIva(documento),
-    telefono,
-    rubro: (formData.get("rubro") as string) || null,
-    notas: "Alta desde una conversación de WhatsApp.",
-  });
-
-  const email = z.string().trim().email().safeParse(formData.get("email"));
-  if (email.success) await db.update(customers).set({ email: email.data }).where(eq(customers.id, cliente.id));
-
-  const r = await (await api()).POST("/api/v1/admin/whatsapp/conversaciones/{id}/vincular", {
-    params: { path: { id } },
-    body: { customerId: cliente.id },
+  // La ficha, el correo, el vínculo y la bitácora los hace Go
+  // (backend/internal/whatsapp/ficha.go), en una transacción.
+  const r = await (await api()).POST("/api/v1/admin/whatsapp/conversaciones/{id}/ficha", {
+    params: { path: { id: texto(formData, "conversacionId") || "-" } },
+    body: {
+      nombre: String(formData.get("nombre") ?? ""),
+      documento: String(formData.get("documento") ?? ""),
+      rubro: (formData.get("rubro") as string | null) || undefined,
+      email: (formData.get("email") as string | null) || undefined,
+    },
   });
   if (!r.response.ok || r.data?.error) return estado(r);
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "crear",
-    entidad: "cliente",
-    entidadId: cliente.id,
-    descripcion: `Ficha de ${cliente.nombre} creada desde WhatsApp`,
-  });
-
   refrescar();
-  return { ok: `Ficha de ${cliente.nombre} creada.` };
+  return estado(r);
 }
 
 /**

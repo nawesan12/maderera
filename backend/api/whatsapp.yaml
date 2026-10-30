@@ -199,6 +199,26 @@ paths:
                 customerId: { type: string, nullable: true }
       responses:
         "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/conversaciones/{id}/ficha:
+    post:
+      operationId: CrearFichaDesdeConversacion
+      description: Da de alta la ficha con el teléfono de la conversación y la vincula.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                nombre: { type: string }
+                documento: { type: string }
+                rubro: { type: string }
+                email: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
   /api/v1/admin/whatsapp/conversaciones/{id}/baja:
     post:
       operationId: CambiarBaja

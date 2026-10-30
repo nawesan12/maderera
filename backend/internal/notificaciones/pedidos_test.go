@@ -11,9 +11,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"mjbj/internal/auth"
 	"mjbj/internal/avisos"
 	"mjbj/internal/cola"
 	"mjbj/internal/facturacion"
+	"mjbj/internal/pedidos"
 	"mjbj/internal/pruebas"
 	"mjbj/internal/push"
 	"mjbj/internal/sqlc"
@@ -32,7 +34,7 @@ func armar(t *testing.T) *entorno {
 	silencio := slog.New(slog.NewTextHandler(io.Discard, nil))
 	b := &buzon{}
 	s := Nuevo(pool, "https://mjbj.com.ar/", avisos.Nuevo(pool, b, "MJBJ <avisos@mjbj.com.ar>", silencio),
-		whatsapp.Nuevo(pool, whatsapp.Config{}, nil, silencio), facturacion.Nuevo(pool, silencio), silencio).
+		whatsapp.Nuevo(pool, whatsapp.Config{CarpetaPrivada: t.TempDir()}, nil, silencio), facturacion.Nuevo(pool, silencio), silencio).
 		ConPanel(push.Nuevo(push.Config{}, sqlc.New(pool), silencio), nil)
 	return &entorno{pool: pool, s: s, b: b}
 }
@@ -204,6 +206,118 @@ func TestPresupuestoRecibido(t *testing.T) {
 	}
 	if r := e.registro(t, "presupuesto_recibido"); r != "email:enviada" {
 		t.Errorf("registro: %s", r)
+	}
+}
+
+// presupuestoEnviado carga uno «enviado» con dos renglones y prende el
+// WhatsApp de presupuesto_listo (nace apagado).
+func (e *entorno) presupuestoEnviado(t *testing.T, numero, correo string) string {
+	t.Helper()
+	cliente := e.uno(t, `insert into customers (nombre, email, telefono) values ('Ana Gómez', 'ana.ficha@prueba.test', '2235550000') returning id`)
+	id := e.uno(t, `insert into quotes (numero, customer_id, contacto_nombre, contacto_email, contacto_telefono, estado, subtotal, total, valido_hasta)
+		values ($1, $2, 'Ana Gómez', nullif($3, ''), '2234440000', 'enviado', 84500.50, 84500.50, '2026-11-14T03:05:00Z') returning id`, numero, cliente, correo)
+	e.uno(t, `insert into quote_items (quote_id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden) values
+		($1, 'Tirante 2x4', 'm', 3.5, 1000, 3500, 1), ($1, 'Placa MDF 18 mm', 'u', 2, 40500.25, 81000.50, 0) returning 'ok'`, id)
+	e.uno(t, `insert into whatsapp_avisos (evento, plantilla, idioma, activo) values ('presupuesto_listo', 'presupuesto_enviado', 'es_AR', true)
+		on conflict (evento) do update set activo = true returning 'ok'`)
+	return id
+}
+
+func TestPresupuestoEnviado(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	id := e.presupuestoEnviado(t, "P-2026-0050", "ana@prueba.test")
+	if err := e.s.PresupuestoEnviado(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	// El correo, al del presupuesto, con el detalle y el vencimiento en hora
+	// argentina.
+	para, asunto, html, texto := e.ultimo(t)
+	if para != "ana@prueba.test" || asunto != "Presupuesto P-2026-0050" || !strings.Contains(html, "14/11, 00:05") ||
+		!strings.Contains(texto, "Hola Ana,") || !strings.Contains(texto, "- Placa MDF 18 mm (2 u) $ 81.001\n- Tirante 2x4 (3.5 m) $ 3.500\n") ||
+		!strings.Contains(texto, "https://mjbj.com.ar/mi-cuenta/presupuestos") {
+		t.Errorf("correo: %s %q %q", para, asunto, texto)
+	}
+	// El WhatsApp (simulado: proveedor de demostración), con la plantilla y
+	// el PDF del presupuesto pegado.
+	if r := e.registro(t, "presupuesto_listo"); r != "whatsapp:simulada,email:enviada" {
+		t.Errorf("registro: %s", r)
+	}
+	if m := e.uno(t, `select coalesce(plantilla, '') || ' ' || coalesce(media_nombre, '') || ' ' || coalesce(media_tipo::text, '') || ' ' || cuerpo
+		from whatsapp_mensajes where direccion = 'saliente'`); !strings.HasPrefix(m, "presupuesto_enviado P-2026-0050.pdf document ") ||
+		!strings.Contains(m, "P-2026-0050") || !strings.Contains(m, "84.501") || !strings.Contains(m, "14/11/26") {
+		t.Errorf("WhatsApp: %q", m)
+	}
+
+	// Si ya no está enviado cuando lo atiende el worker, no sale.
+	e.uno(t, `update quotes set estado = 'revision' where id = $1 returning 'ok'`, id)
+	antes := e.correos()
+	if err := e.s.PresupuestoEnviado(ctx, id); err != nil || e.correos() != antes {
+		t.Errorf("ya no enviado: %v, %d correos", err, e.correos()-antes)
+	}
+
+	// Sin correo en el presupuesto (el del mostrador), va al de la ficha.
+	otro := e.presupuestoEnviado(t, "P-2026-0051", "")
+	if err := e.s.PresupuestoEnviado(ctx, otro); err != nil {
+		t.Fatal(err)
+	}
+	if para, _, _, _ := e.ultimo(t); para != "ana.ficha@prueba.test" {
+		t.Errorf("correo de la ficha: %s", para)
+	}
+
+	// Apagado en /admin/avisos (los dos canales): el correo queda omitido y
+	// el WhatsApp no sale.
+	e.uno(t, `insert into email_avisos (evento, asunto, activo) values ('presupuesto_listo', 'x', false) returning 'ok'`)
+	apagado := e.presupuestoEnviado(t, "P-2026-0052", "ana@prueba.test")
+	e.uno(t, `update whatsapp_avisos set activo = false where evento = 'presupuesto_listo' returning 'ok'`)
+	antes = e.correos()
+	mensajes := e.uno(t, `select count(*)::text from whatsapp_mensajes`)
+	if err := e.s.PresupuestoEnviado(ctx, apagado); err != nil || e.correos() != antes {
+		t.Errorf("apagado: %v, %d correos", err, e.correos()-antes)
+	}
+	if n := e.uno(t, `select count(*)::text from whatsapp_mensajes`); n != mensajes {
+		t.Errorf("apagado, WhatsApp: %s → %s", mensajes, n)
+	}
+	if r := e.uno(t, `select string_agg(canal::text || ':' || estado::text, ',') from notifications_log where entidad_id = $1`, apagado); r != "email:omitida" {
+		t.Errorf("registro apagado: %s", r)
+	}
+}
+
+// Pasar a «enviado» desde el panel, dos veces seguidas, y después a otro
+// estado: por la cola sale un solo correo y un solo WhatsApp.
+func TestPresupuestoEnviadoPorLaCola(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	silencio := slog.New(slog.NewTextHandler(io.Discard, nil))
+	q := sqlc.New(e.pool)
+	c := cola.Nueva(q, silencio)
+	e.s.Registrar(c)
+	id := e.presupuestoEnviado(t, "P-2026-0060", "ana@prueba.test")
+	e.uno(t, `update quotes set estado = 'revision' where id = $1 returning 'ok'`, id)
+	p := pedidos.Nuevo(e.pool, silencio)
+	ses := &auth.Sesion{Nombre: "Vendedor"}
+	cambiar := func(estado string) {
+		t.Helper()
+		if _, err := p.CambiarEstadoPresupuesto(ctx, ses, id, estado); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cambiar("enviado")
+	cambiar("enviado")
+	r, err := c.Procesar(ctx, 10)
+	if err != nil || r.Hechos != 1 {
+		t.Fatalf("procesar: %+v %v", r, err)
+	}
+	if got := e.registro(t, "presupuesto_listo"); got != "whatsapp:simulada,email:enviada" {
+		t.Errorf("registro: %s", got)
+	}
+	if e.correos() != 1 {
+		t.Errorf("correos: %d", e.correos())
+	}
+	// Aceptarlo no avisa nada.
+	cambiar("aceptado")
+	if r, err := c.Procesar(ctx, 10); err != nil || r.Hechos != 0 || e.correos() != 1 {
+		t.Errorf("aceptado: %+v %v, %d correos", r, err, e.correos())
 	}
 }
 

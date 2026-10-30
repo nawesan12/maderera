@@ -1,7 +1,7 @@
 // Package notificaciones son los avisos al cliente (y al panel) que se
 // encolan cuando pasa algo: el recibo emitido, el cheque rechazado, el
 // comprobante emitido, el pedido recibido o que avanzó, el pago acreditado,
-// el presupuesto pedido y el remito para firmar o firmado (lo que era
+// el presupuesto pedido o enviado y el remito para firmar o firmado (lo que era
 // lib/notificaciones/*.ts). Cada uno va por WhatsApp y por correo, con el PDF
 // cuando lo hay. Los atiende el worker: lo que los originó ya se confirmó y
 // un aviso que falla no lo toca.
@@ -46,6 +46,7 @@ type Servicio struct {
 	wa          *whatsapp.Servicio
 	facturacion *facturacion.Servicio
 	entregas    *entregas.Servicio
+	pedidos     *pedidos.Servicio
 	// panel son los avisos al teléfono del personal (la venta nueva y el
 	// pago acreditado); eventos, el correo de una inscripción pagada. Los
 	// pone ConPanel; sin ellos, esos avisos no salen (pruebas).
@@ -56,7 +57,8 @@ type Servicio struct {
 
 // Nuevo arma el servicio. sitio es la URL pública (APP_URL).
 func Nuevo(pool *pgxpool.Pool, sitio string, correo *avisos.Servicio, wa *whatsapp.Servicio, f *facturacion.Servicio, log *slog.Logger) *Servicio {
-	return &Servicio{pool: pool, sitio: sitio, correo: correo, wa: wa, facturacion: f, entregas: entregas.Nuevo(pool, log), log: log}
+	return &Servicio{pool: pool, sitio: sitio, correo: correo, wa: wa, facturacion: f, entregas: entregas.Nuevo(pool, log),
+		pedidos: pedidos.Nuevo(pool, log), log: log}
 }
 
 // ConPanel suma el aviso al panel y el de las inscripciones pagadas.
@@ -79,6 +81,7 @@ func (s *Servicio) Registrar(c *cola.Cola) {
 	}
 	c.Registrar(checkout.TrabajoPedidoRecibido, porID("orderId", s.PedidoRecibido))
 	c.Registrar(checkout.TrabajoPresupuestoRecibido, porID("quoteId", s.PresupuestoRecibido))
+	c.Registrar(pedidos.TrabajoPresupuestoEnviado, porID("quoteId", s.PresupuestoEnviado))
 	c.Registrar(entregas.TrabajoRemitoParaFirmar, porID("deliveryId", s.RemitoParaFirmar))
 	c.Registrar(entregas.TrabajoRemitoFirmado, porID("deliveryId", s.RemitoFirmado))
 	c.Registrar(pedidos.TrabajoCambioDeEstado, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {

@@ -15,12 +15,13 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/pdf"
 	"mjbj/internal/push"
+	"mjbj/internal/whatsapp"
 )
 
 // Los avisos de pedidos, pagos, presupuestos y entregas
 // (lib/notificaciones/{avisos,presupuestos,entregas}.ts). Los encola Go en
 // la misma transacción que confirma (la compra, el avance del pedido, el
-// pago acreditado, el presupuesto pedido, el remito preparado o firmado) y
+// pago acreditado, el presupuesto pedido o enviado, el remito preparado o firmado) y
 // los atiende el worker: lo que antes hacía Next en el after() de la acción.
 
 // medios son los nombres de MEDIOS de lib/notificaciones/avisos.ts (el
@@ -256,6 +257,75 @@ func (s *Servicio) PresupuestoRecibido(ctx context.Context, id string) error {
 	s.correo.Despachar(ctx, avisos.Despacho{
 		Evento: "presupuesto_recibido", Para: *correo, EntidadTipo: "quote", EntidadID: id,
 		Correo: avisos.PresupuestoRecibido(s.sitio, primerNombre(nombre), numero, origen == "express", responde),
+	})
+	return nil
+}
+
+// PresupuestoEnviado es notificarPresupuestoEnviado (98a7443^), que nadie
+// llamaba: el presupuesto armado, por WhatsApp con el PDF (el mismo que se
+// descarga del panel) y por correo con el detalle. Uno no depende del otro:
+// hay quien solo tiene teléfono. Si cuando lo atiende el worker el
+// presupuesto ya no está «enviado» (lo volvieron atrás), no sale.
+//
+// El teléfono y el correo del presupuesto mandan; si no tiene, los de la
+// ficha del cliente (el TS solo miraba los del presupuesto, y el del
+// mostrador no guarda correo).
+func (s *Servicio) PresupuestoEnviado(ctx context.Context, id string) error {
+	p, err := s.pedidos.Presupuesto(ctx, id)
+	if err != nil || p == nil || p.Estado != "enviado" {
+		return err
+	}
+	var telCliente, correoCliente *string
+	if p.CustomerID != nil {
+		c, err := s.cliente(ctx, *p.CustomerID)
+		if err != nil {
+			return err
+		}
+		if c != nil {
+			telCliente, correoCliente = c.telefono, c.email
+		}
+	}
+	telefono := p.Telefono
+	if vacio(telefono) {
+		telefono = telCliente
+	}
+	total := jsmath.Numero(p.Total)
+	vence := "consultar"
+	if p.ValidoHasta != nil {
+		vence = whatsapp.FechaCorta(*p.ValidoHasta)
+	}
+	aviso := whatsapp.OpcionesAviso{
+		Evento: "presupuesto_listo", Telefono: telefono, Nombre: &p.Cliente,
+		Valores:      map[string]string{"presupuesto": p.Numero, "total": whatsapp.Moneda(total), "vence": vence},
+		Entidad:      &whatsapp.Entidad{Tipo: "quote", ID: id},
+		ConDocumento: true,
+	}
+	// El PDF se arma solo si el WhatsApp va a salir (apagado, sin teléfono
+	// o con la baja pedida, no hace falta): como el `documento: () => …`.
+	if r := s.wa.AvisarPorWhatsapp(ctx, aviso); r.Estado == "falta-documento" {
+		archivo, err := s.pedidos.PresupuestoPdf(ctx, p)
+		if err != nil {
+			return err
+		}
+		aviso.Documento = &whatsapp.Documento{Contenido: archivo, Nombre: p.Numero + ".pdf"}
+		s.wa.AvisarPorWhatsapp(ctx, aviso)
+	}
+
+	correo := p.Email
+	if vacio(correo) {
+		correo = correoCliente
+	}
+	if vacio(correo) {
+		return nil
+	}
+	var lineas []email.LineaCorreo
+	for _, it := range p.Items {
+		unidad, sub := it.Unidad, it.Subtotal
+		lineas = append(lineas, avisos.LineaDeCorreo(it.Descripcion, jsmath.Numero(it.Cantidad), &unidad, &sub))
+	}
+	s.correo.Despachar(ctx, avisos.Despacho{
+		Evento: "presupuesto_listo", Para: *correo, EntidadTipo: "quote", EntidadID: id,
+		Correo: avisos.PresupuestoListo(s.sitio, primerNombre(p.Cliente), p.Numero, total, p.ValidoHasta, lineas),
 	})
 	return nil
 }

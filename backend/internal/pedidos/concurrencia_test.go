@@ -239,3 +239,55 @@ func TestCancelarDevuelveLaDeudaUnaVez(t *testing.T) {
 		t.Errorf("cancelar una venta del mostrador: %v", err)
 	}
 }
+
+// Pasar un presupuesto a «enviado» deja un solo aviso en la cola, aunque
+// lleguen diez clics a la vez: el estado anterior se lee con la fila
+// bloqueada. Pasar a otro estado no avisa; volver a «enviado» desde otro, sí.
+func TestPasarAEnviadoAvisaUnaVez(t *testing.T) {
+	e := armar(t)
+	_, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	id := e.presupuesto(t, ses, 1)
+	avisos := func() float64 {
+		return e.numero(t, `select count(*) from trabajos where tipo = 'presupuesto.enviado' and carga->>'quoteId' = $1`, id)
+	}
+	ctx := context.Background()
+	// Diez a la vez a «revisión»: no avisa, y de paso deja abiertas las
+	// conexiones del pool (si no, el primer clic termina antes de que los
+	// otros consigan una y la carrera no se ve).
+	errs := make([]error, 10)
+	clics := func(estado string) {
+		t.Helper()
+		aLaVez(10, func(i int) {
+			_, errs[i] = e.s.CambiarEstadoPresupuesto(ctx, ses, id, estado)
+		})
+		for _, err := range errs {
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	clics("revision")
+	if n := avisos(); n != 0 {
+		t.Fatalf("a revisión avisó: %v", n)
+	}
+	clics("enviado")
+	if n := avisos(); n != 1 {
+		t.Fatalf("diez clics en «enviado»: %v avisos", n)
+	}
+	if _, err := e.s.CambiarEstadoPresupuesto(ctx, ses, id, "aceptado"); err != nil {
+		t.Fatal(err)
+	}
+	if n := avisos(); n != 1 {
+		t.Fatalf("aceptar avisó: %v", n)
+	}
+	if _, err := e.s.CambiarEstadoPresupuesto(ctx, ses, id, "enviado"); err != nil {
+		t.Fatal(err)
+	}
+	if n := avisos(); n != 2 {
+		t.Fatalf("de nuevo a «enviado»: %v avisos", n)
+	}
+	// Uno que no existe sigue dando 404, sin encolar nada.
+	if _, err := e.s.CambiarEstadoPresupuesto(ctx, ses, "00000000-0000-4000-8000-000000000000", "enviado"); !esProblema(err, 404) {
+		t.Fatalf("no existe: %v", err)
+	}
+}

@@ -25,6 +25,17 @@ import (
 // TrabajoCambioDeEstado es el aviso de un pedido que avanzó.
 const TrabajoCambioDeEstado = "pedido.estado"
 
+// TrabajoPresupuestoEnviado es el aviso de un presupuesto armado: el
+// correo con el detalle y el WhatsApp con el PDF (presupuesto_listo).
+const TrabajoPresupuestoEnviado = "presupuesto.enviado"
+
+// EncolarPresupuestoEnviado deja el aviso del presupuesto armado en la
+// cola, dentro de la transacción de quien lo pasa a «enviado».
+func EncolarPresupuestoEnviado(ctx context.Context, tx pgx.Tx, quoteID string) error {
+	_, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoPresupuestoEnviado, map[string]string{"quoteId": quoteID}, time.Time{})
+	return err
+}
+
 // Resultado es lo que contesta una acción: el mensaje y, según cuál, el
 // estado al que llegó el pedido y su número.
 type Resultado struct {
@@ -254,13 +265,30 @@ func (s *Servicio) CambiarEstadoPresupuesto(ctx context.Context, ses *auth.Sesio
 	if !valido {
 		return nil, fallo("Ese estado no existe.")
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE quotes SET estado = $2, updated_at = now() WHERE id = $1`, id, estado)
+	// El estado anterior, con la fila bloqueada: el aviso al cliente sale
+	// solo cuando el presupuesto llega a «enviado» desde otro estado, y dos
+	// clics seguidos en «enviado» dan un solo aviso (el segundo espera al
+	// primero y ya lo encuentra enviado).
+	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
+		var anterior string
+		err := tx.QueryRow(ctx, `SELECT estado::text FROM quotes WHERE id = $1 FOR UPDATE`, id).Scan(&anterior)
+		// El TS contestaba «actualizado» aunque el presupuesto no existiera.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return noEsta("No se encontró el presupuesto.")
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE quotes SET estado = $2, updated_at = now() WHERE id = $1`, id, estado); err != nil {
+			return err
+		}
+		if estado == "enviado" && anterior != "enviado" {
+			return EncolarPresupuestoEnviado(ctx, tx, id)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-	// El TS contestaba «actualizado» aunque el presupuesto no existiera.
-	if tag.RowsAffected() == 0 {
-		return nil, noEsta("No se encontró el presupuesto.")
 	}
 	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "presupuesto", id, "Pasó el presupuesto a "+estado, nil)
 	return &Resultado{Ok: "Presupuesto actualizado.", Estado: estado}, nil

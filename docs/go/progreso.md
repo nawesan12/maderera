@@ -1480,3 +1480,57 @@ mano y antes del despliegue, como todas.
 - **Aging con restos de coma flotante**: tolerancia de medio centavo.
 - **Cierre Z de un turno cerrado**: la venta anulada después sigue en su Z, y
   la devolución aparece en el turno en que se anuló.
+
+## Retenciones y pagos a proveedores de la auditoría (30/10, sobre `go-cuentas`)
+
+Cada uno con una prueba que falla sin el arreglo. **Migración 00089**: va a
+mano y antes del despliegue.
+
+- **La base de la retención era el total con IVA.** El botón «Todo» del
+  formulario de pagos ponía el importe del pago; para Ganancias e IIBB la
+  base es el neto de IVA. Ahora las facturas con saldo traen `netoSinIva`
+  (neto + exento/no gravado, sin IVA ni percepciones) y el botón «Neto sin
+  IVA» propone la proporción de lo que se paga de cada factura imputada; sin
+  facturas imputadas, se escribe a mano. Go rechaza una base mayor al total
+  del pago. `TestLaBaseDeLaRetencionNoPasaElPago`.
+- **El certificado no cerraba a la vista.** Mostraba la base del pago, pero
+  la retención sale de (acumulado del mes − mínimo no imponible) × alícuota −
+  lo ya retenido. `retenciones_practicadas` guarda `acumulado`, `imponible`
+  y `retenido_antes` del momento (null en los de antes), y el certificado y
+  el CSV muestran la cuenta entera. **El PDF del certificado ahora lo arma
+  Go** (`GET /api/v1/admin/compras/certificados/{numero}/pdf`, con
+  `internal/pdf`); la ruta de Next solo lo pasa. Sin el cálculo (certificados
+  viejos, golden del TS) sale el cuadro de siempre. El CSV suma las columnas
+  «Acumulado del mes», «Monto sujeto a retención» y «Ya retenido en el mes».
+  `TestElCertificadoMuestraElCalculo`.
+- **Mínimos editables**: `GuardarRegimen` también cambia el mínimo no
+  imponible y el de retención (si no vienen, quedan); la pantalla de
+  `/admin/arca/retenciones` tiene los dos campos.
+  `TestLosMinimosDelRegimenSeEditan`.
+- **Anular un pago a proveedor** (no existía): solo el admin, con motivo, en
+  la bitácora (`POST /api/v1/admin/compras/pagos/{id}/anular`). Marca el pago
+  (`anulado_at`, `motivo_anulacion`), devuelve la deuda con un movimiento
+  `ajuste` por el total, borra las imputaciones, anula los certificados
+  (`retenciones_practicadas.anulada_at`; el número no se reusa) y borra las
+  `bases_de_retencion` del pago, así el acumulado del mes y el CSV no los
+  cuentan. Cheques: los de terceros endosados vuelven a cartera, los propios
+  se anulan; si alguno ya está acreditado o rechazado, no se anula nada y se
+  dice por qué. La parte en efectivo no sale de ninguna caja (el pago no
+  toca la caja del turno): no hay nada que devolver.
+  `TestAnularUnPagoAProveedor`, `TestNoSeAnulaUnPagoConElChequeCobrado`.
+- **El libro IVA ventas lo leía cualquiera del panel** (y lo bajaba en CSV):
+  ahora pide lo mismo que el de compras, el admin de `/admin/arca`.
+  `TestElLibroIvaVentasEsDelAdmin`.
+
+Pendiente:
+
+- [ ] **El cierre (`internal/reportes/cierre.go`) tiene que filtrar los
+      anulados**: `supplier_payments.anulado_at IS NULL` en los asientos de
+      pagos y `retenciones_practicadas.anulada_at IS NULL` en el total de
+      retenciones practicadas. Hoy un pago anulado sigue contando ahí.
+- [ ] `certificadoParaImprimir` de `lib/dal/admin/pagos-proveedor.ts` ya no
+      lo usa nadie; `lib/pdf/certificado-retencion.ts` queda solo para el
+      golden (`scripts/golden/pdf/certificado-retencion.ts`): se puede mover a
+      `scripts/golden/originales`.
+- [ ] `lib/db/schema/retenciones.ts` (drizzle, solo para las semillas) no
+      tiene las columnas nuevas.

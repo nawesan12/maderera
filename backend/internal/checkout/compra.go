@@ -6,9 +6,11 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"mjbj/internal/cola"
 	"mjbj/internal/cortes"
 	"mjbj/internal/cuentas"
 	"mjbj/internal/jsmath"
@@ -17,7 +19,17 @@ import (
 	"mjbj/internal/plataforma"
 	"mjbj/internal/profesionales"
 	"mjbj/internal/reservas"
+	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
+)
+
+// Los avisos que deja la compra y el presupuesto en la cola, en la misma
+// transacción: el acuse al cliente (y la venta nueva al panel) los manda el
+// worker (internal/notificaciones). Antes los mandaba Next en el after() de
+// la acción.
+const (
+	TrabajoPedidoRecibido      = "pedido.recibido"
+	TrabajoPresupuestoRecibido = "presupuesto.recibido"
 )
 
 func espera(v limites.Veredicto) error {
@@ -48,8 +60,8 @@ type Presupuesto struct {
 const DiasDeValidez = 15
 
 // PedirPresupuesto convierte el carrito en un presupuesto con número y los
-// precios del momento. El carrito no se vacía. El correo lo manda Next
-// (notificarPresupuestoRecibido) con el id que se devuelve.
+// precios del momento. El carrito no se vacía. El acuse por correo queda
+// encolado (presupuesto.recibido) en la misma transacción.
 func (s *Servicio) PedirPresupuesto(ctx context.Context, q Quien, ip string, m map[string]any) (*Presupuesto, error) {
 	d, e := LeerPedidoDePresupuesto(m)
 	if e != nil {
@@ -112,7 +124,8 @@ func (s *Servicio) PedirPresupuesto(ctx context.Context, q Quien, ip string, m m
 				return err
 			}
 		}
-		return nil
+		_, err = cola.Encolar(ctx, sqlc.New(tx), TrabajoPresupuestoRecibido, map[string]string{"quoteId": p.QuoteID}, time.Time{})
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -378,7 +391,12 @@ func (s *Servicio) Confirmar(ctx context.Context, q Quien, ip string, m map[stri
 		if _, err := tx.Exec(ctx, `DELETE FROM cart_cortes WHERE cart_id = $1`, cartID); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `UPDATE carts SET activo = false, updated_at = now() WHERE id = $1`, cartID)
+		if _, err := tx.Exec(ctx, `UPDATE carts SET activo = false, updated_at = now() WHERE id = $1`, cartID); err != nil {
+			return err
+		}
+		// El acuse al cliente y la venta nueva al panel: si el pedido
+		// queda, el aviso también.
+		_, err = cola.Encolar(ctx, sqlc.New(tx), TrabajoPedidoRecibido, map[string]string{"orderId": compra.PedidoID}, time.Time{})
 		return err
 	})
 	if err != nil {

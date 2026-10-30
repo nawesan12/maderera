@@ -40,9 +40,9 @@ type configWorker struct {
 	Pagos     pagos.Config
 }
 
-// El worker: la cola (los tipos que ya son de Go) y las tareas periódicas
-// que ya se mudaron. Reemplaza de a poco al contenedor `cron`, que le pega a
-// /api/tareas de Next.
+// El worker: la cola (todos los tipos: la de Next ya no existe) y las tareas
+// periódicas. Reemplazó al contenedor `cron`, que le pegaba a /api/tareas de
+// Next.
 func correrWorker() error {
 	log := plataforma.Registro("worker")
 	cfg, err := plataforma.Cargar[configWorker]()
@@ -71,7 +71,7 @@ func correrWorker() error {
 	}
 	c.Registrar(revalidar.Tipo, revalidar.Manejador(cfg.Revalidar))
 	// Los avisos de Mercado Pago que deja el webhook (tanda 6): acreditar y
-	// encolar el aviso al cliente (pago.resultado, que atiende el TS).
+	// encolar el aviso al cliente (pago.resultado, internal/notificaciones).
 	c.Registrar(pagos.TipoAviso, pagos.Nuevo(pool, cfg.Pagos, log).Manejador())
 
 	// Las tareas que ya son de Go. Cada tanda suma las suyas.
@@ -205,13 +205,17 @@ func correrWorker() error {
 	camp := campanas.Nuevo(pool, cfg.Campanas, correoT10, avisos, log)
 	c.Registrar(campanas.TipoTanda, camp.ManejadorTanda())
 	c.Registrar(avisosT10.TipoReintento, avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log).ManejadorReintento())
-	// Los avisos al cliente de un recibo, un cheque rechazado y un
-	// comprobante (los encolan cobros y facturación al confirmar).
-	notificaciones.Nuevo(pool, cfg.Campanas.URLDelSitio(), avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log), wa,
-		facturacion.Nuevo(pool, log), log).Registrar(c)
 	// Los recordatorios de los eventos de mañana (salían de la «diaria» de
 	// lib/tareas, a las 7).
 	eventos := profesionales.Nuevo(pool, avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log), cfg.Campanas.URLDelSitio(), log)
+	// Los avisos al cliente de un recibo, un cheque rechazado y un
+	// comprobante (los encolan cobros y facturación al confirmar).
+	// Y los que eran del TS (lib/notificaciones): el pedido recibido y su
+	// venta nueva al panel, el pedido que avanzó, el pago acreditado
+	// (pago.resultado), el presupuesto pedido y el remito para firmar o
+	// firmado. Con esto la cola de Next quedó sin trabajos.
+	notificaciones.Nuevo(pool, cfg.Campanas.URLDelSitio(), avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log), wa,
+		facturacion.Nuevo(pool, log), log).ConPanel(avisos, eventos).Registrar(c)
 	lista = append(lista, tareas.Tarea{
 		Nombre: "recordatorios-eventos", Frecuencia: tareas.Dia, DesdeHora: 7,
 		Ejecutar: func(ctx context.Context) (map[string]any, error) {

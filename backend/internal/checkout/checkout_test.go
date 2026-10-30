@@ -305,6 +305,10 @@ func TestConfirmarCompra(t *testing.T) {
 	if n := e.numero(t, `select count(*) from carts where activo`); n != 0 {
 		t.Fatal("el carrito sigue activo")
 	}
+	// El acuse (y la venta nueva al panel), en la cola con el pedido.
+	if n := e.numero(t, `select count(*) from trabajos where tipo = 'pedido.recibido' and carga->>'orderId' = $1`, compra.PedidoID); n != 1 {
+		t.Fatalf("avisos del pedido encolados: %v", n)
+	}
 	// Otra vez el mismo carrito: ya no hay nada que comprar.
 	if code, _ := pedir(t, c, "POST", u+"/confirmar", e.compra(nil)); code != 422 {
 		t.Fatalf("dos veces: %d", code)
@@ -398,6 +402,9 @@ func TestConfirmarDosVecesElMismoCarrito(t *testing.T) {
 	if n := e.numero(t, `select count(*) from orders`); n != 1 {
 		t.Fatalf("%v pedidos del mismo carrito", n)
 	}
+	if n := e.numero(t, `select count(*) from trabajos where tipo = 'pedido.recibido'`); n != 1 {
+		t.Fatalf("%v acuses para un pedido", n)
+	}
 	if r := e.numero(t, `select reservado::float8 from inventory where variant_id = $1`, e.placa); r != 3 {
 		t.Fatalf("reservado %v", r)
 	}
@@ -429,6 +436,9 @@ func TestPedirPresupuesto(t *testing.T) {
 	}
 	if n := e.numero(t, `select count(*) from cart_items`); n != 1 {
 		t.Fatal("el carrito se vació")
+	}
+	if n := e.numero(t, `select count(*) from trabajos where tipo = 'presupuesto.recibido' and carga->>'quoteId' = $1`, p.QuoteID); n != 1 {
+		t.Fatalf("acuse del presupuesto encolado: %v", n)
 	}
 }
 

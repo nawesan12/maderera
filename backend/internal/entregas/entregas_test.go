@@ -512,6 +512,13 @@ func TestFirmasALaVez(t *testing.T) {
 	if pasaron != 1 {
 		t.Fatalf("pasaron %d firmas", pasaron)
 	}
+	// Un aviso para firmar al preparar, y una sola constancia.
+	if n := e.uno(t, `select count(*)::text from trabajos where tipo = 'remito.para-firmar' and carga->>'deliveryId' = $1`, r.ID); n != "1" {
+		t.Errorf("avisos para firmar: %s", n)
+	}
+	if n := e.uno(t, `select count(*)::text from trabajos where tipo = 'remito.firmado' and carga->>'deliveryId' = $1`, r.ID); n != "1" {
+		t.Errorf("constancias encoladas: %s", n)
+	}
 }
 
 func TestZonasDeEnvio(t *testing.T) {

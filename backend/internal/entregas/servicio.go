@@ -32,11 +32,19 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/cola"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
+)
+
+// Los avisos al cliente que dejan el remito preparado y el firmado, en la
+// misma transacción (los manda el worker, internal/notificaciones).
+const (
+	TrabajoRemitoParaFirmar = "remito.para-firmar"
+	TrabajoRemitoFirmado    = "remito.firmado"
 )
 
 // Servicio son las entregas.
@@ -246,7 +254,9 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 			}
 		}
 		out = &EntregaCreada{ID: id, Numero: numero, FirmaToken: token, PedidoCompleto: control.Completo}
-		return nil
+		// El enlace para firmar desde el celular.
+		_, err = cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Time{})
+		return err
 	})
 	return out, err
 }
@@ -318,16 +328,29 @@ type FirmaRegistrada struct {
 // la primera. Ahora es un solo UPDATE condicionado.
 func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) (*FirmaRegistrada, error) {
 	var r FirmaRegistrada
-	err := s.pool.QueryRow(ctx, `
-		UPDATE deliveries SET estado = 'entregada', firma_url = $2, firmado_at = now(), firmado_ip = $3,
-		  receptor_nombre = $4, receptor_documento = coalesce(nullif($5, ''), receptor_documento),
-		  entregado_at = now(), updated_at = now()
-		WHERE firma_token = $1 AND estado = 'preparada'
-		RETURNING id, numero`, f.Token, f.Firma, ip, f.ReceptorNombre, textoONulo(f.ReceptorDocumento)).Scan(&r.DeliveryID, &r.Numero)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
+	firmo := false
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `
+			UPDATE deliveries SET estado = 'entregada', firma_url = $2, firmado_at = now(), firmado_ip = $3,
+			  receptor_nombre = $4, receptor_documento = coalesce(nullif($5, ''), receptor_documento),
+			  entregado_at = now(), updated_at = now()
+			WHERE firma_token = $1 AND estado = 'preparada'
+			RETURNING id, numero`, f.Token, f.Firma, ip, f.ReceptorNombre, textoONulo(f.ReceptorDocumento)).Scan(&r.DeliveryID, &r.Numero)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		firmo = true
+		// La constancia de lo que se retiró, por correo.
+		_, err = cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoFirmado, map[string]string{"deliveryId": r.DeliveryID}, time.Time{})
+		return err
+	})
+	if err != nil || !firmo {
+		return nil, err
 	}
-	return &r, err
+	return &r, nil
 }
 
 // AnularEntrega anula un remito: no lo borra (alguien pudo haberlo visto),

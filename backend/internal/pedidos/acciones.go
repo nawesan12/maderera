@@ -3,11 +3,13 @@ package pedidos
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/cola"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/reservas"
@@ -16,8 +18,12 @@ import (
 )
 
 // Las acciones de app/admin/ventas-actions.ts. Los avisos al cliente
-// (WhatsApp y correo al avanzar) y las revalidaciones siguen en la acción de
-// Next, que los dispara con lo que devuelve esto.
+// (WhatsApp y correo al avanzar) quedan en la cola en la misma transacción
+// (pedido.estado, los manda el worker); las revalidaciones siguen en la
+// acción de Next.
+
+// TrabajoCambioDeEstado es el aviso de un pedido que avanzó.
+const TrabajoCambioDeEstado = "pedido.estado"
 
 // Resultado es lo que contesta una acción: el mensaje y, según cuál, el
 // estado al que llegó el pedido y su número.
@@ -107,8 +113,11 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id string) (*R
 		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = $2, updated_at = now() WHERE id = $1`, id, siguiente); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, created_by_user_id) VALUES ($1, $2, $3)`,
-			id, siguiente, ses.UserID)
+		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, created_by_user_id) VALUES ($1, $2, $3)`,
+			id, siguiente, ses.UserID); err != nil {
+			return err
+		}
+		_, err = cola.Encolar(ctx, sqlc.New(tx), TrabajoCambioDeEstado, map[string]string{"orderId": id, "estado": siguiente}, time.Time{})
 		return err
 	})
 	if err != nil {

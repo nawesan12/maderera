@@ -61,6 +61,9 @@ type Despacho struct {
 	Correo      Correo
 	EntidadTipo string
 	EntidadID   string
+	// Adjuntos: el PDF del recibo o del comprobante. Si el correo rebota
+	// temporalmente, viajan con el reintento.
+	Adjuntos []email.Adjunto
 }
 
 // Reintento es la carga de `email.reintento` (ReintentoDeEmail del TS).
@@ -115,11 +118,14 @@ func (s *Servicio) Despachar(ctx context.Context, d Despacho) {
 	if hayConfig && asuntoConfig != "" {
 		asunto = asuntoConfig
 	}
-	r := s.envio.Enviar(ctx, email.Mensaje{Para: d.Para, Asunto: asunto, HTML: d.Correo.HTML, Texto: d.Correo.Texto})
+	r := s.envio.Enviar(ctx, email.Mensaje{Para: d.Para, Asunto: asunto, HTML: d.Correo.HTML, Texto: d.Correo.Texto, Adjuntos: d.Adjuntos})
 	if !r.Enviado && r.Temporal {
 		s.registrar(ctx, d.Evento, d.Para, asunto, d.EntidadTipo, d.EntidadID, sqlc.EstadoNotificacionFallida, "", "Rechazo temporal, se reintenta: "+r.Error)
 		carga := Reintento{Evento: d.Evento, Para: d.Para, Asunto: asunto, HTML: d.Correo.HTML, Texto: d.Correo.Texto,
 			EntidadTipo: nulo(d.EntidadTipo), EntidadID: nulo(d.EntidadID)}
+		for _, a := range d.Adjuntos {
+			carga.Adjuntos = append(carga.Adjuntos, AdjuntoBase64{Nombre: a.Nombre, Tipo: a.Tipo, Base64: base64.StdEncoding.EncodeToString(a.Contenido)})
+		}
 		if _, err := cola.Encolar(ctx, s.q, TipoReintento, carga, s.ahora().Add(2*time.Minute)); err != nil {
 			s.log.Error("avisos: no se pudo encolar el reintento", "evento", d.Evento, "error", err)
 		}

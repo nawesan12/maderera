@@ -92,14 +92,15 @@ func (a *API) ReciboPdf(ctx context.Context, r cuentasapi.ReciboPdfRequestObject
 	if err != nil {
 		return nil, err
 	}
-	b, err := pdf.Recibo(pdf.DatosRecibo{Recibo: reciboParaPdf(rec), Emisor: emisor}, a.ahora())
+	b, err := pdf.Recibo(pdf.DatosRecibo{Recibo: ReciboParaPdf(rec), Emisor: emisor}, a.ahora())
 	if err != nil {
 		return nil, err
 	}
 	return archivo{`inline; filename="recibo-` + rec.Numero + `.pdf"`, b}, nil
 }
 
-func reciboParaPdf(r *cobros.ReciboCompleto) pdf.ReciboCompleto {
+// ReciboParaPdf pasa el recibo de cobros a lo que dibuja internal/pdf.
+func ReciboParaPdf(r *cobros.ReciboCompleto) pdf.ReciboCompleto {
 	out := pdf.ReciboCompleto{ID: r.ID, Numero: r.Numero, Fecha: r.Fecha, Estado: r.Estado, Origen: r.Origen, Concepto: de(r.Concepto),
 		Total: r.Total, RecibidoDe: r.RecibidoDe, MotivoAnulacion: de(r.MotivoAnulacion), AnuladoAt: r.AnuladoAt,
 		SaldoDespues: r.SaldoDespues, EmitidoPor: de(r.EmitidoPor), Partes: make([]pdf.ParteDelRecibo, len(r.Partes))}

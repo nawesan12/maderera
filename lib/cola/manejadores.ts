@@ -24,20 +24,6 @@ export interface CargasDeTrabajo {
   // whatsapp.payload, whatsapp.estado y whatsapp.medio son del worker de Go
   // (backend/internal/whatsapp): no están acá, así este lado no los toma.
   // campana.tanda es del worker de Go (backend/internal/campanas).
-  /**
-   * El aviso de un recibo al cliente (correo y WhatsApp, con el PDF). Lo
-   * encola la API de Go al emitir el recibo, en la misma transacción; lo
-   * atiende el TS mientras el PDF y WhatsApp sigan acá.
-   */
-  "recibo.aviso": { receiptId: string };
-  /** El aviso al cliente de un cheque suyo rechazado (lo encola Go). */
-  "cheque.rechazado": { chequeId: string; porElBanco: boolean };
-  /**
-   * El comprobante en PDF por correo al cliente. Lo encola la API de Go al
-   * emitir y al recibir el CAE (backend/internal/facturacion); el PDF se lo
-   * pide a Go.
-   */
-  "factura.aviso": { invoiceId: string };
 }
 
 /**
@@ -47,6 +33,12 @@ export interface CargasDeTrabajo {
  */
 export interface CargasParaGo {
   "email.reintento": ReintentoDeEmail;
+  // Los avisos de un recibo, un cheque rechazado y un comprobante, con su
+  // PDF: los encolan cobros y facturación al confirmar y los atiende el
+  // worker de Go (backend/internal/notificaciones).
+  "recibo.aviso": { receiptId: string };
+  "cheque.rechazado": { chequeId: string; porElBanco: boolean };
+  "factura.aviso": { invoiceId: string };
 }
 
 export type TipoDeTrabajo = keyof CargasDeTrabajo;
@@ -76,18 +68,5 @@ export const MANEJADORES: {
     if (resultado.resultado === "acreditado" || resultado.resultado === "actualizado") {
       await notificarResultadoDePago(resultado);
     }
-  },
-
-  "recibo.aviso": async (carga) => {
-    const { notificarRecibo } = await import("@/lib/notificaciones/cobros");
-    await notificarRecibo(carga.receiptId);
-  },
-  "cheque.rechazado": async (carga) => {
-    const { notificarChequeRechazado } = await import("@/lib/notificaciones/cobros");
-    await notificarChequeRechazado(carga.chequeId, carga.porElBanco);
-  },
-  "factura.aviso": async (carga) => {
-    const { enviarComprobantePorCorreo } = await import("@/lib/notificaciones/fiscal");
-    await enviarComprobantePorCorreo(carga.invoiceId);
   },
 };

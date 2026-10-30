@@ -13,6 +13,8 @@ import (
 	"mjbj/internal/cola"
 	"mjbj/internal/contenido"
 	"mjbj/internal/email"
+	"mjbj/internal/facturacion"
+	"mjbj/internal/notificaciones"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/productos"
 	"mjbj/internal/profesionales"
@@ -136,6 +138,10 @@ func correrWorker() error {
 	camp := campanas.Nuevo(pool, cfg.Campanas, correoT10, avisos, log)
 	c.Registrar(campanas.TipoTanda, camp.ManejadorTanda())
 	c.Registrar(avisosT10.TipoReintento, avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log).ManejadorReintento())
+	// Los avisos al cliente de un recibo, un cheque rechazado y un
+	// comprobante (los encolan cobros y facturación al confirmar).
+	notificaciones.Nuevo(pool, cfg.Campanas.URLDelSitio(), avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log), wa,
+		facturacion.Nuevo(pool, log), log).Registrar(c)
 	// Los recordatorios de los eventos de mañana (salían de la «diaria» de
 	// lib/tareas, a las 7).
 	eventos := profesionales.Nuevo(pool, avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log), cfg.Campanas.URLDelSitio(), log)

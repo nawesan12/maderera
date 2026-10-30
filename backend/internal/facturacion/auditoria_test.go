@@ -3,6 +3,7 @@ package facturacion
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"mjbj/internal/sqlc"
@@ -138,5 +139,50 @@ func TestNotasSobreNotas(t *testing.T) {
 	autorizarPorAPI(t, e, admin, ncFlete.ID)
 	if s := saldo(); s != 121000 {
 		t.Fatalf("saldo final: %v", s)
+	}
+}
+
+// **El mismo renglón acreditado dos veces.** El tope de una nota parcial era
+// la cantidad facturada, no lo que queda: dos notas de 6 sobre 10 placas
+// pasaban (el tope del total no lo frenaba si la factura tenía otros
+// renglones), y una sola nota con el renglón repetido también.
+func TestNotaParcialRespetaLoQueQueda(t *testing.T) {
+	e := armar(t, true)
+	admin := e.staff(t, "admin@mjbj.test", sqlc.StaffRoleAdmin)
+	ctx := context.Background()
+	_, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(consumidor(),
+		[4]string{"Fenólico", "10", "12100", "21"}, [4]string{"Machimbre", "100", "1210", "21"}))
+	id := leerJSON[map[string]string](t, b)["invoiceId"]
+	autorizarPorAPI(t, e, admin, id)
+	c, _ := e.s.Obtener(ctx, id)
+	placas := c.Items[0].ID
+	nota := func(parciales ...map[string]any) (int, string) {
+		st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/nota-de-credito",
+			map[string]any{"motivo": "Devolución", "parciales": parciales})
+		return st, string(b)
+	}
+	// Una sola nota con el renglón dos veces: 6 + 6 de 10.
+	if st, b := nota(map[string]any{"itemId": placas, "cantidad": 6}, map[string]any{"itemId": placas, "cantidad": 6}); st != 422 ||
+		!strings.Contains(b, `ya se acreditaron 6 de 10: quedan 4.`) {
+		t.Fatalf("renglón repetido: %d %s", st, b)
+	}
+	if st, b := nota(map[string]any{"itemId": placas, "cantidad": 6}); st != 200 {
+		t.Fatalf("la primera: %d %s", st, b)
+	}
+	// Otra de 6: quedan 4.
+	if st, b := nota(map[string]any{"itemId": placas, "cantidad": 6}); st != 422 || !strings.Contains(b, `quedan 4.`) {
+		t.Fatalf("la segunda: %d %s", st, b)
+	}
+	if st, b := nota(map[string]any{"itemId": placas, "cantidad": 4}); st != 200 {
+		t.Fatalf("lo que queda: %d %s", st, b)
+	}
+	// Anular acredita solo el machimbre.
+	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/anular", map[string]string{"motivo": "Error de carga"})
+	if st != 200 {
+		t.Fatalf("anular: %d %s", st, b)
+	}
+	resto, _ := e.s.Obtener(ctx, leerJSON[map[string]string](t, b)["invoiceId"])
+	if len(resto.Items) != 1 || resto.Total != "121000.00" {
+		t.Fatalf("anulación: %d renglones, %s", len(resto.Items), resto.Total)
 	}
 }

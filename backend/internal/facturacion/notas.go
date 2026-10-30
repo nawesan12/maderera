@@ -63,6 +63,16 @@ func (s *Servicio) NotaDeCredito(ctx context.Context, invoiceID, motivo string, 
 		if err != nil {
 			return err
 		}
+		// Lo que ya devolvieron otras notas: el tope de cada renglón es lo
+		// que queda (el original está bloqueado, así que dos notas a la vez
+		// se ven una a la otra).
+		acreditadas, err := yaAcreditado(ctx, tx, invoiceID)
+		if err != nil {
+			return err
+		}
+		for k := range items {
+			items[k].Acreditado = acreditadas[items[k].ID]
+		}
 		tributos, err := tributosDe(ctx, tx, invoiceID)
 		if err != nil {
 			return err

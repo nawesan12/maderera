@@ -18,6 +18,16 @@ import (
 // Alicuotas son las que puede tener un producto.
 var Alicuotas = []float64{0, 10.5, 21, 27}
 
+// AlicuotaValida: solo las de la lista. Otra no tiene Id de AlicIva, y el
+// TS la mandaba como 21 % (Id 5) con el importe de otra alícuota.
+func AlicuotaValida(a float64) bool {
+	_, ok := CodigoAlicuotaArca[a]
+	return ok
+}
+
+// MensajeAlicuota es el error de una alícuota fuera de la lista.
+const MensajeAlicuota = "La alícuota de IVA tiene que ser 0, 10,5, 21 o 27 %."
+
 // CodigoAlicuotaArca es el Id de AlicIva de WSFEv1.
 var CodigoAlicuotaArca = map[float64]int{0: 3, 10.5: 4, 21: 5, 27: 6}
 
@@ -110,6 +120,11 @@ func (t Totales) IvaDe(a float64) float64 {
 
 // CalcularTotales es calcularTotales: se desagrega sobre el total de cada
 // renglón y el IVA se agrupa por alícuota.
+//
+// Neto es el neto **gravado**: lo exento (alícuota 0) va solo en Exento. El
+// TS lo sumaba a los dos, y a ARCA le llegaba dos veces (ImpNeto + ImpOpEx):
+// ImpTotal no cerraba y la factura se rechazaba (10048); la percepción de
+// IIBB, que se calcula sobre el neto gravado, también salía inflada.
 func CalcularTotales(lineas []LineaEntrada) Totales {
 	out := Totales{Lineas: make([]LineaCalculada, 0, len(lineas)), IvaPorAlicuota: []IvaDeAlicuota{}}
 	var neto, iva, exento, total float64
@@ -132,10 +147,10 @@ func CalcularTotales(lineas []LineaEntrada) Totales {
 			Descripcion: l.Descripcion, Unidad: unidad, Cantidad: l.Cantidad, PrecioFinalUnitario: l.PrecioFinalUnitario,
 			Alicuota: alicuota, PrecioUnitarioNeto: unitario, Neto: partes.Neto, Iva: partes.Iva, Subtotal: partes.Total,
 		})
-		neto += partes.Neto
 		iva += partes.Iva
 		total += partes.Total
 		if alicuota > 0 {
+			neto += partes.Neto
 			i := -1
 			for j, x := range out.IvaPorAlicuota {
 				if x.Alicuota == alicuota {

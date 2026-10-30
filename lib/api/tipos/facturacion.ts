@@ -162,6 +162,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/facturacion/comprobantes/{id}/corregir-receptor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Corrige los datos del receptor (receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio) de un comprobante que ARCA rechazó y vuelve a pedir el CAE con el mismo número (para ARCA un número rechazado no se consumió). La letra no puede cambiar. Solo el admin. Si ARCA vuelve a rechazar, `error` trae el motivo. */
+        post: operations["CorregirReceptorYReintentar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/facturacion/comprobantes/{id}/anular": {
         parameters: {
             query?: never;
@@ -989,6 +1008,29 @@ export interface operations {
                     "application/json": components["schemas"]["ResultadoDeAutorizacion"];
                 };
             };
+        };
+    };
+    CorregirReceptorYReintentar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CamposDeFormulario"];
+        responses: {
+            /** @description El resultado del nuevo pedido de CAE */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultadoDeAutorizacion"];
+                };
+            };
+            422: components["responses"]["Problema"];
         };
     };
     AnularComprobante: {

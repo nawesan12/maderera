@@ -15,6 +15,7 @@ import (
 	"mjbj/internal/cola"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
 )
 
@@ -143,6 +144,17 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 	nombre, cuit, condicion, cliente := cab.nombre, cab.cuit, cab.condicion, cab.cliente
 	domicilio, obs := cab.domicilio, cab.obs
 	guardar := c["guardarComoCliente"] == "on"
+	// El documento, con su dígito verificador: un CUIT mal tipeado no va a
+	// ARCA. Y una A sin CUIT salía con DocTipo 99 (consumidor final), que
+	// ARCA rechaza.
+	if strings.TrimSpace(cuit) != "" {
+		if _, msj := clientes.LeerDocumento(cuit); msj != "" {
+			return "", errEmision(msj)
+		}
+	}
+	if m := faltaCuitParaLaA(condicion, &cuit); m != "" {
+		return "", errEmision(m)
+	}
 
 	var lineas []Linea
 	for i, d := range ls.Descripcion {
@@ -152,6 +164,9 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 		desc, cant, precio, alic, ok := validarLinea(texto(d), en(ls.Cantidad, i), en(ls.Precio, i), en(ls.Alicuota, i))
 		if !ok {
 			return "", errEmision("Revisá la línea " + jsmath.Texto(float64(i+1)) + ": cantidad y precio deben ser mayores a cero.")
+		}
+		if !fiscal.AlicuotaValida(alic) {
+			return "", errEmision("Revisá la línea " + jsmath.Texto(float64(i+1)) + ": " + fiscal.MensajeAlicuota)
 		}
 		lineas = append(lineas, Linea{LineaEntrada: fiscal.LineaEntrada{Descripcion: desc, Cantidad: cant, PrecioFinalUnitario: precio, Alicuota: ptr(alic)}})
 	}
@@ -287,7 +302,10 @@ type ResultadoComprobante struct {
 
 // LetraQueSaldria es letraQueSaldria: la letra según quién emite y quién
 // recibe, para decirla en pantalla antes de cobrar. Alguien sin ficha que da
-// un CUIT seguramente quiere una A.
+// un CUIT es inscripto solo si el CUIT es de empresa (30, 33, 34), como en el
+// alta de clientes: el TS suponía inscripto a cualquier CUIT, y un
+// monotributista o un particular con CUIT 20 se llevaba una A que no le
+// corresponde.
 func (s *Servicio) LetraQueSaldria(ctx context.Context, customerID, cuitTipeado *string) (letra, receptor string, err error) {
 	config, err := s.ObtenerEmisor(ctx)
 	if err != nil {
@@ -302,8 +320,10 @@ func (s *Servicio) LetraQueSaldria(ctx context.Context, customerID, cuitTipeado 
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return "", "", err
 		}
-	} else if cuitTipeado != nil && len(fiscal.SoloDigitos(*cuitTipeado)) == 11 {
-		receptor = fiscal.ResponsableInscripto
+	} else if cuitTipeado != nil {
+		if doc, msj := clientes.LeerDocumento(*cuitTipeado); msj == "" {
+			receptor = clientes.SugerirCondicionIva(doc)
+		}
 	}
 	return fiscal.LetraQueCorresponde(config.CondicionIva, receptor), receptor, nil
 }
@@ -317,7 +337,18 @@ func (s *Servicio) EmitirParaLaVenta(ctx context.Context, p PedidoDeComprobante)
 		return ResultadoComprobante{}, err
 	}
 	var cuit, domicilio *string
-	if p.Cuit != nil {
+	if p.Cuit != nil && (p.CustomerID == nil || *p.CustomerID == "") {
+		// Un documento mal tipeado no va a ARCA (lo rechaza, o sale a nombre
+		// de otro): la venta queda y el comprobante se emite desde el pedido
+		// con el documento corregido.
+		doc, msj := clientes.LeerDocumento(*p.Cuit)
+		if msj != "" {
+			return ResultadoComprobante{Aviso: "La venta quedó registrada, pero el comprobante no se pudo crear: " + msj}, nil
+		}
+		if doc.Digitos != "" {
+			cuit = &doc.Digitos
+		}
+	} else if p.Cuit != nil {
 		if d := fiscal.SoloDigitos(*p.Cuit); d != "" {
 			cuit = &d
 		}
@@ -342,14 +373,22 @@ func (s *Servicio) EmitirParaLaVenta(ctx context.Context, p PedidoDeComprobante)
 			return ResultadoComprobante{}, err
 		}
 	}
-	lineas := make([]Linea, len(p.Lineas))
-	for i, l := range p.Lineas {
-		unidad := l.Unidad
-		lineas[i] = Linea{LineaEntrada: fiscal.LineaEntrada{Descripcion: l.Descripcion, Unidad: &unidad, Cantidad: l.Cantidad, PrecioFinalUnitario: l.PrecioUnitario}}
-	}
 	var pedido *string
 	if p.OrderID != "" {
 		pedido = &p.OrderID
+	}
+	// La alícuota de cada renglón sale del pedido (la guardada al vender o
+	// la del producto): la venta no la trae, y el TS facturaba todo al 21 %,
+	// también lo que es al 10,5 o exento.
+	alicuotas, err := s.alicuotasDeLaVenta(ctx, p.OrderID, p.Lineas)
+	if err != nil {
+		return ResultadoComprobante{}, err
+	}
+	lineas := make([]Linea, len(p.Lineas))
+	for i, l := range p.Lineas {
+		unidad := l.Unidad
+		lineas[i] = Linea{LineaEntrada: fiscal.LineaEntrada{Descripcion: l.Descripcion, Unidad: &unidad, Cantidad: l.Cantidad,
+			PrecioFinalUnitario: l.PrecioUnitario, Alicuota: alicuotas[i]}}
 	}
 	id, err := s.EmitirComprobante(ctx, DatosEmision{CustomerID: p.CustomerID, OrderID: pedido, ReceptorNombre: nombre, ReceptorCuit: cuit,
 		ReceptorCondicionIva: receptor, ReceptorDomicilio: domicilio, CreatedByUserID: &p.UsuarioID, Lineas: lineas})
@@ -369,4 +408,69 @@ func (s *Servicio) EmitirParaLaVenta(ctx context.Context, p PedidoDeComprobante)
 		return ResultadoComprobante{InvoiceID: &id, Aviso: "Comprobante creado, pero sin autorizar en ARCA: " + m}, nil
 	}
 	return ResultadoComprobante{InvoiceID: &id, Aviso: "Comprobante autorizado.", Autorizado: true}, nil
+}
+
+// alicuotasDeLaVenta busca, para cada renglón de la venta, el del pedido con
+// la misma descripción y cantidad (en orden, sin usar uno dos veces) y toma
+// su alícuota. nil, el 21 % de siempre, si no hay pedido o no aparece.
+func (s *Servicio) alicuotasDeLaVenta(ctx context.Context, orderID string, lineas []LineaDeVenta) ([]*float64, error) {
+	out := make([]*float64, len(lineas))
+	if !plataforma.UUIDValido(orderID) {
+		return out, nil
+	}
+	filas, err := s.pool.Query(ctx, `SELECT oi.descripcion, oi.cantidad::float8, coalesce(oi.alicuota_iva, pr.alicuota_iva)::float8
+		FROM order_items oi LEFT JOIN product_variants v ON v.id = oi.variant_id LEFT JOIN products pr ON pr.id = v.product_id
+		WHERE oi.order_id = $1 ORDER BY oi.orden`, orderID)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	type renglon struct {
+		descripcion string
+		cantidad    float64
+		alicuota    *float64
+		usado       bool
+	}
+	var delPedido []renglon
+	for filas.Next() {
+		var r renglon
+		if err := filas.Scan(&r.descripcion, &r.cantidad, &r.alicuota); err != nil {
+			return nil, err
+		}
+		delPedido = append(delPedido, r)
+	}
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	for i, l := range lineas {
+		for k := range delPedido {
+			r := &delPedido[k]
+			if !r.usado && r.descripcion == l.Descripcion && math.Abs(r.cantidad-l.Cantidad) < 1e-9 {
+				r.usado = true
+				out[i] = r.alicuota
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
+// faltaCuitParaLaA es el motivo por el que no se puede facturar a un
+// responsable inscripto, o "": la factura A informa el CUIT del receptor
+// (DocTipo 80), y sin uno válido ARCA la rechaza.
+func faltaCuitParaLaA(condicion string, cuit *string) string {
+	if condicion != fiscal.ResponsableInscripto {
+		return ""
+	}
+	if cuit == nil || strings.TrimSpace(*cuit) == "" {
+		return "Para facturarle a un responsable inscripto (factura A) hace falta su CUIT."
+	}
+	doc, msj := clientes.LeerDocumento(*cuit)
+	if msj != "" {
+		return msj
+	}
+	if doc.Tipo != "cuit" {
+		return "Para facturarle a un responsable inscripto (factura A) hace falta su CUIT, no el DNI."
+	}
+	return ""
 }

@@ -19,6 +19,16 @@ const (
 	NoCategorizado       = "no_categorizado"
 )
 
+// NombreCondicion es cómo se escribe la condición en papel (el comprobante y
+// el libro IVA).
+var NombreCondicion = map[string]string{
+	ResponsableInscripto: "Responsable inscripto",
+	Monotributista:       "Responsable monotributo",
+	Exento:               "IVA exento",
+	ConsumidorFinal:      "Consumidor final",
+	NoCategorizado:       "No categorizado",
+}
+
 // Condiciones, en el orden del enum de zod.
 var Condiciones = []string{ResponsableInscripto, Monotributista, Exento, ConsumidorFinal, NoCategorizado}
 
@@ -37,17 +47,23 @@ func LetraQueCorresponde(emisor, receptor string) string {
 // TipoFactura es `factura_<letra>`.
 func TipoFactura(letra string) string { return "factura_" + strings.ToLower(letra) }
 
-// NotaDeCredito lleva la letra del comprobante que corrige.
-func NotaDeCredito(tipo string) string { return reemplazarFactura(tipo, "nota_credito") }
+// NotaDeCredito lleva la letra del comprobante que corrige, sea una factura
+// o una nota. El TS solo cambiaba el prefijo «factura»: sobre una nota de
+// débito devolvía el mismo tipo, y la nota de crédito salía como débito (y
+// al revés).
+func NotaDeCredito(tipo string) string { return "nota_credito_" + strings.ToLower(LetraDe(tipo)) }
 
 // NotaDeDebito, igual.
-func NotaDeDebito(tipo string) string { return reemplazarFactura(tipo, "nota_debito") }
+func NotaDeDebito(tipo string) string { return "nota_debito_" + strings.ToLower(LetraDe(tipo)) }
 
-func reemplazarFactura(tipo, por string) string {
-	if strings.HasPrefix(tipo, "factura") {
-		return por + strings.TrimPrefix(tipo, "factura")
+// Reverso es el comprobante que deshace a otro: una nota de crédito para una
+// factura o una nota de débito, y una nota de débito para una nota de
+// crédito. Siempre de la misma letra.
+func Reverso(tipo string) string {
+	if EsNotaDeCredito(tipo) {
+		return NotaDeDebito(tipo)
 	}
-	return tipo
+	return NotaDeCredito(tipo)
 }
 
 // LetraDe es la última letra, en mayúscula.

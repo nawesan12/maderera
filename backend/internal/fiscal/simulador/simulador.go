@@ -35,6 +35,8 @@ import (
 	"time"
 
 	"github.com/smallstep/pkcs7"
+
+	"mjbj/internal/cuit"
 )
 
 // Simulador guarda lo autorizado por punto de venta y tipo.
@@ -510,16 +512,21 @@ func (s *Simulador) solicitar(b []byte) string {
 		agregar("10070", "Si ImpNeto es mayor a 0 el objeto IVA es obligatorio.")
 	}
 	if d.Iva != nil {
-		suma := int64(0)
+		suma, bases := int64(0), int64(0)
 		for _, a := range d.Iva.Lista {
 			c, _ := centavos(a.Importe)
 			suma += c
+			b, _ := centavos(a.BaseImp)
+			bases += b
 			if a.ID < 3 || a.ID > 9 {
 				agregar("10019", "El Id de la alícuota de IVA no es válido.")
 			}
 		}
 		if suma != iva {
 			agregar("10023", "La suma de los importes de IVA (AlicIva.Importe) debe ser igual a ImpIVA.")
+		}
+		if bases != neto {
+			agregar("10061", "[sim] La suma de las bases imponibles de IVA (AlicIva.BaseImp) debe ser igual a ImpNeto.")
 		}
 	}
 	if d.Tributos != nil {
@@ -545,6 +552,9 @@ func (s *Simulador) solicitar(b []byte) string {
 				agregar("10153", "[sim] El comprobante asociado no existe o no está autorizado.")
 			}
 		}
+	}
+	if d.DocTipo == 80 && !cuit.Valido(d.DocNro) {
+		agregar("10015", "[sim] El número de documento (DocNro) no es un CUIT válido.")
 	}
 	if strings.TrimSpace(d.CondicionIVA) == "" {
 		agregar("10242", "El campo Condicion Frente al IVA del receptor es obligatorio conforme a la RG 5616.")

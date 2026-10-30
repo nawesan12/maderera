@@ -102,6 +102,27 @@ export async function autorizar(
   return r.data;
 }
 
+/**
+ * Corrige los datos del receptor de un comprobante que ARCA rechazó y lo
+ * reenvía con el mismo número (un número rechazado no se consume, y mientras
+ * no salga traba a los siguientes del mismo tipo).
+ */
+export async function corregirReceptor(
+  _previo: EstadoFactura,
+  formData: FormData,
+): Promise<EstadoFactura> {
+  const id = String(formData.get("id") ?? "");
+  if (!UUID.test(id)) return { error: "No encontramos el comprobante." };
+
+  const r = await (await api()).POST("/api/v1/admin/facturacion/comprobantes/{id}/corregir-receptor", {
+    params: { path: { id } },
+    body: campos(formData),
+  });
+  refrescar(id);
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  return r.data;
+}
+
 export async function anular(
   _previo: EstadoFactura,
   formData: FormData,

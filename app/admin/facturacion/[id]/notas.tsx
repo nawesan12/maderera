@@ -27,12 +27,16 @@ export function NotasSobreElComprobante({
   items,
   total,
   acreditado,
+  revierteConDebito = false,
 }: {
   invoiceId: string;
   items: Renglon[];
   total: number;
   acreditado: number;
+  /** Es una nota de crédito: se revierte con una nota de débito. */
+  revierteConDebito?: boolean;
 }) {
+  const reverso = revierteConDebito ? "Nota de débito parcial (revierte la nota de crédito)" : "Nota de crédito parcial";
   const [modo, setModo] = useState<"credito" | "debito" | null>(null);
   const [estado, setEstado] = useState<EstadoFactura>({});
   const [enCurso, empezar] = useTransition();
@@ -63,7 +67,7 @@ export function NotasSobreElComprobante({
               className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-linea px-3.5 text-base font-medium hover:bg-hundida"
             >
               <MinusCircle className="h-4 w-4" />
-              Nota de crédito parcial
+              {reverso}
             </button>
           )}
           <button
@@ -83,7 +87,7 @@ export function NotasSobreElComprobante({
     <div className="space-y-4">
       <h3 className="text-base font-semibold">
         {modo === "credito"
-          ? "Nota de crédito parcial"
+          ? reverso
           : "Nota de débito"}
       </h3>
 

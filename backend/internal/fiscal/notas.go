@@ -15,6 +15,8 @@ type ItemOriginal struct {
 	Cantidad    float64 `json:"cantidad"`
 	Subtotal    float64 `json:"subtotal"`
 	AlicuotaIva float64 `json:"alicuotaIva"`
+	// Acreditado es cuánto de la cantidad ya devolvieron otras notas.
+	Acreditado float64 `json:"acreditado"`
 }
 
 // CantidadAAcreditar es cuánto de un renglón.
@@ -49,13 +51,26 @@ func LineasDeLaNota(items []ItemOriginal, parciales []CantidadAAcreditar) ([]Lin
 		return 0
 	}
 	if parciales == nil {
-		out := make([]LineaDeNota, len(items))
-		for k, i := range items {
-			out[k] = LineaDeNota{i.Descripcion, i.Unidad, i.Cantidad, unitario(i), i.AlicuotaIva, i.ID}
+		// Por el total: lo que queda de cada renglón.
+		out := make([]LineaDeNota, 0, len(items))
+		for _, i := range items {
+			cantidad := i.Cantidad
+			if i.Acreditado > 0 {
+				if cantidad = i.Cantidad - i.Acreditado; cantidad <= toleranciaCantidad {
+					continue
+				}
+			}
+			out = append(out, LineaDeNota{i.Descripcion, i.Unidad, cantidad, unitario(i), i.AlicuotaIva, i.ID})
 		}
 		return out, nil
 	}
 	out := []LineaDeNota{}
+	// El tope es lo que queda de cada renglón: lo facturado menos lo que ya
+	// acreditaron otras notas y lo que esta misma nota ya tomó (el renglón
+	// puede venir repetido). El TS comparaba cada pedido contra la cantidad
+	// original: dos notas parciales de 6 sobre 10 placas pasaban, y una sola
+	// con el renglón dos veces también.
+	tomado := map[string]float64{}
 	for _, p := range parciales {
 		var item *ItemOriginal
 		for k := range items {
@@ -73,6 +88,12 @@ func LineasDeLaNota(items []ItemOriginal, parciales []CantidadAAcreditar) ([]Lin
 		if p.Cantidad > item.Cantidad {
 			return nil, &ErrorDeNota{`No se puede acreditar más de lo facturado en "` + item.Descripcion + `".`}
 		}
+		queda := item.Cantidad - item.Acreditado - tomado[item.ID]
+		if p.Cantidad > queda+toleranciaCantidad {
+			return nil, &ErrorDeNota{`De "` + item.Descripcion + `" ya se acreditaron ` + jsmath.Texto(Redondear(item.Cantidad-queda)) +
+				` de ` + jsmath.Texto(item.Cantidad) + `: quedan ` + jsmath.Texto(Redondear(math.Max(0, queda))) + `.`}
+		}
+		tomado[item.ID] += p.Cantidad
 		out = append(out, LineaDeNota{item.Descripcion, item.Unidad, p.Cantidad, unitario(*item), item.AlicuotaIva, item.ID})
 	}
 	return out, nil
@@ -103,6 +124,10 @@ func ProrratearTributos(tributos []Tributo, proporcion float64) []Tributo {
 }
 
 const tolerancia = 0.005
+
+// toleranciaCantidad absorbe el error de sumar cantidades con decimales
+// (0,1 + 0,2 no da 0,3 exacto).
+const toleranciaCantidad = 1e-9
 
 // RevisarAcreditacion devuelve por qué no se puede acreditar ese monto, o "".
 func RevisarAcreditacion(totalOriginal, acreditado, monto float64) string {
@@ -182,9 +207,21 @@ func CalcularNota(o Original, items []ItemOriginal, parciales []CantidadAAcredit
 		suma = suma + float64(l.Cantidad*l.PrecioFinalUnitario)
 	}
 	neto := Redondear(suma)
-	base := o.Neto + o.Iva21 + o.Iva105 + o.Iva27 + o.Exento
+	// Los tributos (la percepción de IIBB) se calcularon sobre el neto
+	// gravado: se devuelven en la proporción de lo gravado que se acredita.
+	// El TS usaba la mercadería entera, con lo exento contado dos veces (iba
+	// en el neto y en el exento), y una nota solo de renglones exentos
+	// devolvía percepción que nunca se cobró sobre ellos. Sin neto gravado en
+	// el original, queda la proporción de la mercadería.
 	proporcion := 1.0
-	if base > 0 {
+	if o.Neto > 0 {
+		entradas := make([]LineaEntrada, len(lineas))
+		for k, l := range lineas {
+			alic := l.Alicuota
+			entradas[k] = LineaEntrada{Cantidad: l.Cantidad, PrecioFinalUnitario: l.PrecioFinalUnitario, Alicuota: &alic}
+		}
+		proporcion = jsMin(1, CalcularTotales(entradas).Neto/o.Neto)
+	} else if base := o.Iva21 + o.Iva105 + o.Iva27 + o.Exento; base > 0 {
 		proporcion = jsMin(1, neto/base)
 	}
 	dados := ProrratearTributos(tributos, proporcion)

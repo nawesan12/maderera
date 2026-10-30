@@ -71,6 +71,9 @@ func (o respuesta) VisitAutorizarComprobanteResponse(w http.ResponseWriter) erro
 	return o.escribir(w)
 }
 func (o respuesta) VisitCobrarComprobanteResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCorregirReceptorYReintentarResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitNotaDeCreditoParcialResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -374,11 +377,20 @@ func (a *API) AutorizarComprobante(ctx context.Context, r facturacionapi.Autoriz
 	if err != nil {
 		return nil, err
 	}
-	id := r.Id.String()
+	res, err := a.autorizarYAnotar(ctx, ses, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// autorizarYAnotar pide el CAE, deja el intento en la bitácora y, si salió,
+// encola el aviso al cliente.
+func (a *API) autorizarYAnotar(ctx context.Context, ses *auth.Sesion, id string) (respuesta, error) {
 	m, err := a.s.Autorizar(ctx, id)
 	motivo := Mensaje(err)
 	if err != nil && motivo == "" {
-		return nil, err
+		return respuesta{}, err
 	}
 	desc := "Autorizó un comprobante en ARCA"
 	if motivo != "" {
@@ -392,6 +404,24 @@ func (a *API) AutorizarComprobante(ctx context.Context, r facturacionapi.Autoriz
 		a.s.log.Error("encolando el aviso de la factura", "invoiceId", id, "error", err)
 	}
 	return mensaje(m), nil
+}
+
+func (a *API) CorregirReceptorYReintentar(ctx context.Context, r facturacionapi.CorregirReceptorYReintentarRequestObject) (facturacionapi.CorregirReceptorYReintentarResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id := r.Id.String()
+	if err := a.s.CorregirReceptor(ctx, id, *r.Body); err != nil {
+		return nil, comoProblema(err)
+	}
+	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "factura", id,
+		"Corrigió los datos del receptor de un comprobante rechazado por ARCA", nil)
+	res, err := a.autorizarYAnotar(ctx, ses, id)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func (a *API) AnularComprobante(ctx context.Context, r facturacionapi.AnularComprobanteRequestObject) (facturacionapi.AnularComprobanteResponseObject, error) {

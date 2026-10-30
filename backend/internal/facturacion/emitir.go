@@ -125,9 +125,20 @@ func (s *Servicio) EmitirEnTransaccion(ctx context.Context, tx pgx.Tx, d DatosEm
 	if tipo == "" {
 		tipo = fiscal.TipoFactura(fiscal.LetraQueCorresponde(config.CondicionIva, d.ReceptorCondicionIva))
 	}
+	// Una A sin CUIT válido del receptor no llega a numerarse: venga de un
+	// pedido, del mostrador o de una ficha sin CUIT, ARCA la rechazaría.
+	if fiscal.LetraDe(tipo) == "A" {
+		if m := faltaCuitParaLaA(fiscal.ResponsableInscripto, d.ReceptorCuit); m != "" {
+			return "", errEmision(m)
+		}
+	}
 	entradas := make([]fiscal.LineaEntrada, len(d.Lineas))
 	for i, l := range d.Lineas {
 		entradas[i] = l.LineaEntrada
+		// Sin alícuota vale 21; otra que no está en la lista no se factura.
+		if l.Alicuota != nil && !fiscal.AlicuotaValida(*l.Alicuota) {
+			return "", errEmision(`"` + l.Descripcion + `": ` + fiscal.MensajeAlicuota)
+		}
 	}
 	im := fiscal.Importes(entradas, d.TributosDados, config.PercibeIibb, jsmath.Numero(config.AlicuotaPercepcionIibb))
 

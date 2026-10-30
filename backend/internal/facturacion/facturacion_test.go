@@ -659,9 +659,15 @@ func TestPortalYRutasInternas(t *testing.T) {
 	if st != 200 || leerJSON[map[string]string](t, b)["invoiceId"] == "" {
 		t.Fatalf("interno: %d %s", st, b)
 	}
-	st, b = pedir(t, http.DefaultClient, "GET", e.srv.URL+"/api/v1/interno/facturacion/letra?cuit=20-12345678-9", nil, "Authorization", "Bearer "+secretoInterno)
+	// Un CUIT de empresa sin ficha da A; uno de persona (20), B: puede ser
+	// monotributista o consumidor final.
+	st, b = pedir(t, http.DefaultClient, "GET", e.srv.URL+"/api/v1/interno/facturacion/letra?cuit=30-71234567-1", nil, "Authorization", "Bearer "+secretoInterno)
 	if l := leerJSON[map[string]string](t, b); st != 200 || l["letra"] != "A" {
 		t.Fatalf("letra: %d %s", st, b)
+	}
+	st, b = pedir(t, http.DefaultClient, "GET", e.srv.URL+"/api/v1/interno/facturacion/letra?cuit=20-12345678-6", nil, "Authorization", "Bearer "+secretoInterno)
+	if l := leerJSON[map[string]string](t, b); st != 200 || l["letra"] != "B" {
+		t.Fatalf("letra con CUIT 20: %d %s", st, b)
 	}
 	// Sin CUIT del emisor no se factura.
 	e.exec(t, `UPDATE configuracion_fiscal SET cuit = NULL`)
@@ -679,7 +685,11 @@ func TestLibroIvaEnHoraArgentina(t *testing.T) {
 	id, _ := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "CF", ReceptorCondicionIva: "consumidor_final",
 		Lineas: []Linea{{LineaEntrada: fiscal.LineaEntrada{Descripcion: "Placa", Cantidad: 1, PrecioFinalUnitario: 1210}}}})
 	// 31/10 a las 22 en Argentina = 1/11 01:00 UTC.
-	e.exec(t, `UPDATE invoices SET fecha_emision = '2026-11-01T01:00:00Z' WHERE id = $1`, id)
+	e.exec(t, `UPDATE invoices SET fecha_emision = '2026-11-01T01:00:00Z', cae = '70000000000001', estado = 'autorizada' WHERE id = $1`, id)
+	// Uno sin CAE en el mismo mes no va al libro: para ARCA no existe.
+	sinCae, _ := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "CF", ReceptorCondicionIva: "consumidor_final",
+		Lineas: []Linea{{LineaEntrada: fiscal.LineaEntrada{Descripcion: "Placa", Cantidad: 1, PrecioFinalUnitario: 999}}}})
+	e.exec(t, `UPDATE invoices SET fecha_emision = '2026-10-15T12:00:00Z' WHERE id = $1`, sinCae)
 	admin := e.staff(t, "a@mjbj.test", sqlc.StaffRoleAdmin)
 	_, b := pedir(t, admin, "GET", e.srv.URL+"/api/v1/admin/facturacion/libro-iva?periodo=2026-10", nil)
 	l := leerJSON[libroConPeriodo](t, b)
@@ -687,7 +697,8 @@ func TestLibroIvaEnHoraArgentina(t *testing.T) {
 		t.Fatalf("octubre: %s", b)
 	}
 	st, csv := pedir(t, admin, "GET", e.srv.URL+"/api/v1/admin/facturacion/libro-iva/csv?periodo=2026-10", nil)
-	if st != 200 || !strings.Contains(string(csv), "31/10/2026") || !strings.HasPrefix(string(csv), "\ufeff") {
+	if st != 200 || !strings.Contains(string(csv), "31/10/2026") || !strings.HasPrefix(string(csv), "\ufeff") ||
+		!strings.Contains(string(csv), `"Consumidor final"`) {
 		t.Fatalf("csv: %d %s", st, csv)
 	}
 	_, b = pedir(t, admin, "GET", e.srv.URL+"/api/v1/admin/facturacion/libro-iva?periodo=2026-11", nil)

@@ -9,7 +9,9 @@ import (
 
 // El comprobante fiscal en PDF (lib/pdf/comprobante.ts): la letra en
 // recuadro al centro, el IVA discriminado solo en la A, el QR únicamente
-// cuando hay CAE y la marca de agua cuando no la hay.
+// cuando hay CAE y la marca de agua cuando no la hay. Lo que cambió desde el
+// TS, a propósito: en la B y la C el precio unitario es el final, y la B a
+// consumidor final lleva la leyenda de la ley 27.743.
 //
 // Espera a la tanda 7 (facturación ARCA): hoy lo llaman
 // app/api/comprobantes/[id]/pdf/route.ts, lib/notificaciones/fiscal.ts y
@@ -114,6 +116,21 @@ func rellenarJS(n float64, largo int) string {
 // comprobanteNumero es numeroFormateado: «0003-00000127».
 func comprobanteNumero(puntoVenta, numero float64) string {
 	return rellenarJS(puntoVenta, 4) + "-" + rellenarJS(numero, 8)
+}
+
+// precioImpreso es el precio unitario del renglón. En la A, el neto (el IVA
+// va en su columna); en la B y la C, que no discriminan, el final con IVA,
+// el mismo que da el subtotal impreso. El TS imprimía el neto en todas: en
+// la B, precio por cantidad no daba el subtotal.
+func precioImpreso(item ItemComprobante, discrimina bool) string {
+	if discrimina {
+		return MonedaDe(item.PrecioUnitario)
+	}
+	cantidad := jsmath.Numero(item.Cantidad)
+	if !(cantidad > 0) {
+		return MonedaDe(item.PrecioUnitario)
+	}
+	return Moneda(jsmath.Numero(item.Subtotal) / cantidad)
 }
 
 // Comprobante arma el PDF del comprobante fiscal.
@@ -227,7 +244,7 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8.5}, Ancho: Mm(100)})
 		h.Escribir(numeroJS(num(item.Cantidad)), Opciones{X: colCantidad, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true})
 		h.Escribir(Unidad(item.Unidad), Opciones{X: colUnidad, Y: cursor, Tamano: 8, Derecha: true})
-		h.Escribir(MonedaDe(item.PrecioUnitario), Opciones{X: colPrecio, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true})
+		h.Escribir(precioImpreso(item, discrimina), Opciones{X: colPrecio, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true})
 		if discrimina {
 			h.Escribir(numeroJS(num(item.AlicuotaIva))+"%", Opciones{X: colIva, Y: cursor, Tamano: 8, Derecha: true})
 		}
@@ -273,6 +290,19 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 	h.Escribir(MonedaDe(c.Total), Opciones{X: derecha, Y: cursor, Tamano: 13, Fuente: Negrita, Derecha: true})
 
 	cursor -= Mm(10)
+
+	// Régimen de Transparencia Fiscal al Consumidor (ley 27.743, RG 5614):
+	// la factura B a un consumidor final dice el IVA que lleva adentro el
+	// precio y los otros impuestos nacionales indirectos (acá no hay).
+	if comprobanteLetra(c.Tipo) == "B" && c.ReceptorCondicionIva == "consumidor_final" {
+		ivaContenido := num(c.Iva21) + num(c.Iva105) + num(c.Iva27)
+		h.Escribir("Régimen de Transparencia Fiscal al Consumidor (Ley 27.743)", Opciones{X: Margen, Y: cursor, Tamano: 7.5, Fuente: Negrita})
+		cursor -= 11
+		h.Escribir("IVA contenido: "+Moneda(ivaContenido), Opciones{X: Margen, Y: cursor, Tamano: 8})
+		cursor -= 10
+		h.Escribir("Otros impuestos nacionales indirectos: "+Moneda(0), Opciones{X: Margen, Y: cursor, Tamano: 8})
+		cursor -= Mm(7)
+	}
 
 	if c.Observaciones != "" {
 		cursor -= h.EscribirParrafo(c.Observaciones, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8, Color: TintaSuave}, Ancho: Mm(120)})

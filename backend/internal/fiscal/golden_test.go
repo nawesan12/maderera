@@ -231,7 +231,8 @@ func TestGoldenNotas(t *testing.T) {
 	for i, c := range casos {
 		items := make([]ItemOriginal, len(c.Items))
 		for k, x := range c.Items {
-			items[k] = ItemOriginal{x.ID, x.Descripcion, x.Unidad, float64(x.Cantidad), float64(x.Subtotal), float64(x.AlicuotaIva)}
+			items[k] = ItemOriginal{ID: x.ID, Descripcion: x.Descripcion, Unidad: x.Unidad, Cantidad: float64(x.Cantidad),
+				Subtotal: float64(x.Subtotal), AlicuotaIva: float64(x.AlicuotaIva)}
 		}
 		var parciales []CantidadAAcreditar
 		if c.Parciales != nil {

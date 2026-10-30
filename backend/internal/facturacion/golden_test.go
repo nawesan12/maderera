@@ -98,7 +98,7 @@ func TestGoldenZod(t *testing.T) {
 func TestGoldenLibro(t *testing.T) {
 	var casos []struct {
 		Filas []struct {
-			ID, Tipo, ReceptorNombre                            string
+			ID, Tipo, ReceptorNombre, ReceptorCondicionIva      string
 			FechaEmision                                        time.Time
 			PuntoVenta, Numero                                  int64
 			ReceptorCuit, Cae                                   *string
@@ -114,7 +114,7 @@ func TestGoldenLibro(t *testing.T) {
 		var filas []RenglonLibro
 		for _, x := range c.Filas {
 			filas = append(filas, ConSigno(RenglonLibro{ID: x.ID, FechaEmision: x.FechaEmision, Tipo: x.Tipo, PuntoVenta: x.PuntoVenta, Numero: x.Numero,
-				ReceptorNombre: x.ReceptorNombre, ReceptorCuit: x.ReceptorCuit, Neto: f(x.Neto), Iva21: f(x.Iva21), Iva105: f(x.Iva105),
+				ReceptorNombre: x.ReceptorNombre, ReceptorCuit: x.ReceptorCuit, ReceptorCondicionIva: x.ReceptorCondicionIva, Neto: f(x.Neto), Iva21: f(x.Iva21), Iva105: f(x.Iva105),
 				Iva27: f(x.Iva27), Exento: f(x.Exento), Tributos: f(x.Tributos), Total: f(x.Total), Cae: x.Cae}))
 		}
 		for k, r := range filas {

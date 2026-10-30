@@ -39,6 +39,11 @@ func bloquearOriginal(ctx context.Context, tx pgx.Tx, id string) (*original, err
 
 // NotaDeCredito emite una nota de crédito, entera (parciales nil) o parcial.
 // Una parcial no anula el original ni llegando al 100 %: anular es explícito.
+//
+// Lo que se emite es el reverso del original (fiscal.Reverso): una nota de
+// crédito para una factura o una nota de débito, y una nota de débito para
+// revertir una nota de crédito. El signo en la cuenta corriente acompaña al
+// tipo que sale.
 func (s *Servicio) NotaDeCredito(ctx context.Context, invoiceID, motivo string, userID *string, parciales []fiscal.CantidadAAcreditar, anular bool) (string, error) {
 	var nueva string
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -57,6 +62,16 @@ func (s *Servicio) NotaDeCredito(ctx context.Context, invoiceID, motivo string, 
 		items, err := itemsOriginales(ctx, tx, invoiceID)
 		if err != nil {
 			return err
+		}
+		// Lo que ya devolvieron otras notas: el tope de cada renglón es lo
+		// que queda (el original está bloqueado, así que dos notas a la vez
+		// se ven una a la otra).
+		acreditadas, err := yaAcreditado(ctx, tx, invoiceID)
+		if err != nil {
+			return err
+		}
+		for k := range items {
+			items[k].Acreditado = acreditadas[items[k].ID]
 		}
 		tributos, err := tributosDe(ctx, tx, invoiceID)
 		if err != nil {
@@ -80,7 +95,7 @@ func (s *Servicio) NotaDeCredito(ctx context.Context, invoiceID, motivo string, 
 		nueva, err = s.EmitirEnTransaccion(ctx, tx, DatosEmision{CustomerID: o.customerID, OrderID: o.orderID, ReceptorNombre: o.receptorNombre,
 			ReceptorCuit: o.receptorCuit, ReceptorCondicionIva: o.condicion, ReceptorDomicilio: o.receptorDomicilio, PuntoVentaID: o.puntoVentaID,
 			ComprobanteOrigenID: &o.id, Observaciones: &motivo, CreatedByUserID: userID, TributosDados: dados, Lineas: lineas},
-			fiscal.NotaDeCredito(o.tipo))
+			fiscal.Reverso(o.tipo))
 		if err != nil {
 			return err
 		}
@@ -96,12 +111,17 @@ func (s *Servicio) NotaDeCredito(ctx context.Context, invoiceID, motivo string, 
 		// deuda (no tiene pedido detrás): un movimiento nuevo, no un borrado.
 		if o.customerID != nil && o.orderID == nil {
 			et := etiqueta(o.tipo, o.puntoVenta, o.numero)
+			// Revertir una nota de crédito vuelve a cargar la deuda.
+			tipoMov, monto, nombre := "nota_credito", -calc.Total, "Nota de crédito"
+			if !fiscal.EsNotaDeCredito(fiscal.Reverso(o.tipo)) {
+				tipoMov, monto, nombre = "nota_debito", calc.Total, "Nota de débito"
+			}
 			detalle := "Anulación de " + et + ": " + motivo
 			if parciales != nil {
-				detalle = "Nota de crédito parcial sobre " + et + ": " + motivo
+				detalle = nombre + " parcial sobre " + et + ": " + motivo
 			}
 			if _, err := tx.Exec(ctx, `INSERT INTO account_movements (customer_id, tipo, monto, detalle, referencia, created_by_user_id)
-				VALUES ($1, 'nota_credito', $2::numeric, $3, $4, $5)`, *o.customerID, jsmath.Fijo2(-calc.Total), detalle, et, userID); err != nil {
+				VALUES ($1, $2::tipo_movimiento_cuenta, $3::numeric, $4, $5, $6)`, *o.customerID, tipoMov, jsmath.Fijo2(monto), detalle, et, userID); err != nil {
 				return err
 			}
 		}
@@ -111,6 +131,30 @@ func (s *Servicio) NotaDeCredito(ctx context.Context, invoiceID, motivo string, 
 		return "", s.comoEmision(err, "fiscal.nota-credito", "No se pudo emitir la nota de crédito.")
 	}
 	return nueva, nil
+}
+
+// yaAcreditado es cuánto de cada renglón del original ya revirtieron sus
+// notas vivas (las que tienen el renglón de origen: la nota de crédito de una
+// factura o la de débito que revierte una nota de crédito).
+func yaAcreditado(ctx context.Context, c consultor, invoiceID string) (map[string]float64, error) {
+	filas, err := c.Query(ctx, `SELECT i.invoice_item_origen_id, sum(i.cantidad)::text FROM invoice_items i
+		JOIN invoices f ON f.id = i.invoice_id JOIN invoices o ON o.id = f.comprobante_origen_id
+		WHERE f.comprobante_origen_id = $1 AND f.estado <> 'anulada' AND i.invoice_item_origen_id IS NOT NULL
+		AND (f.tipo::text LIKE 'nota_credito%') <> (o.tipo::text LIKE 'nota_credito%')
+		GROUP BY i.invoice_item_origen_id`, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	acreditadas := map[string]float64{}
+	for filas.Next() {
+		var origen, suma string
+		if err := filas.Scan(&origen, &suma); err != nil {
+			return nil, err
+		}
+		acreditadas[origen] = jsmath.Numero(suma)
+	}
+	return acreditadas, filas.Err()
 }
 
 func itemsOriginales(ctx context.Context, c consultor, id string) ([]fiscal.ItemOriginal, error) {
@@ -155,23 +199,10 @@ func tributosDe(ctx context.Context, c consultor, id string) ([]fiscal.Tributo, 
 func (s *Servicio) Anular(ctx context.Context, invoiceID, motivo string, userID *string) (string, error) {
 	var restante []fiscal.CantidadAAcreditar
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		filas, err := tx.Query(ctx, `SELECT i.invoice_item_origen_id, sum(i.cantidad)::text FROM invoice_items i
-			JOIN invoices f ON f.id = i.invoice_id
-			WHERE f.comprobante_origen_id = $1 AND f.tipo::text LIKE 'nota_credito%' AND f.estado <> 'anulada'
-			AND i.invoice_item_origen_id IS NOT NULL GROUP BY i.invoice_item_origen_id`, invoiceID)
+		acreditadas, err := yaAcreditado(ctx, tx, invoiceID)
 		if err != nil {
 			return err
 		}
-		acreditadas := map[string]float64{}
-		for filas.Next() {
-			var origen, suma string
-			if err := filas.Scan(&origen, &suma); err != nil {
-				filas.Close()
-				return err
-			}
-			acreditadas[origen] = jsmath.Numero(suma)
-		}
-		filas.Close()
 		if len(acreditadas) == 0 {
 			return nil
 		}

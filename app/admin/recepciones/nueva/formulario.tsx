@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Search, Trash2 } from "lucide-react";
-import { formatearMonto, importeParaEditar } from "@/lib/formato";
+import { formatearMonto, hoyEnArgentina, importeParaEditar } from "@/lib/formato";
 import {
   buscarMercaderia,
   crearRecepcion,
@@ -54,7 +54,7 @@ export function FormularioRecepcion({
   const [supplierId, setSupplierId] = useState(proveedores[0]?.id ?? "");
   const [branchId, setBranchId] = useState(sucursales[0]?.id ?? "");
   const [numeroRemito, setNumeroRemito] = useState("");
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(hoyEnArgentina);
   const [gastos, setGastos] = useState("");
   const [notas, setNotas] = useState("");
   const [lineas, setLineas] = useState<Linea[]>([]);

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, hoyEnArgentina } from "@/lib/formato";
 import { cargarSufrida, type EstadoSufrida } from "./actions";
 
 const IMPUESTOS = {
@@ -36,7 +36,7 @@ export function CargarSufrida({
   const [codigoRegimen, setCodigo] = useState("");
   const [base, setBase] = useState("");
   const [importe, setImporte] = useState("");
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(hoyEnArgentina);
   const [referencia, setReferencia] = useState("");
 
   const n = (v: string) => Number(v || 0);

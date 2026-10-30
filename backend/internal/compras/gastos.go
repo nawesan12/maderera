@@ -2,6 +2,7 @@ package compras
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -59,7 +60,7 @@ func (s *Servicio) CargarGasto(ctx context.Context, ses *auth.Sesion, m map[stri
 		if d.Medio != "efectivo" || d.BranchID == nil {
 			return nil
 		}
-		turno, hay, err := caja.TurnoQueContiene(ctx, tx, *d.BranchID, fecha)
+		turno, momento, hay, err := turnoDelGasto(ctx, tx, *d.BranchID, d.Fecha, time.Now())
 		if err != nil {
 			return err
 		}
@@ -69,7 +70,7 @@ func (s *Servicio) CargarGasto(ctx context.Context, ses *auth.Sesion, m map[stri
 		}
 		_, err = tx.Exec(ctx, `
 			INSERT INTO cash_movements (session_id, tipo, monto, motivo, expense_id, creado_por, created_at)
-			VALUES ($1, 'gasto', $2::numeric, $3, $4, $5, $6)`, turno, jsmath.Fijo2(-d.Importe), descripcion, gasto, ses.UserID, fecha)
+			VALUES ($1, 'gasto', $2::numeric, $3, $4, $5, $6)`, turno, jsmath.Fijo2(-d.Importe), descripcion, gasto, ses.UserID, momento)
 		return err
 	})
 	if err != nil {
@@ -82,6 +83,52 @@ func (s *Servicio) CargarGasto(ctx context.Context, ses *auth.Sesion, m map[stri
 		aviso = "No había caja abierta en ese momento, así que no salió del turno. La plata igual se fue: el arqueo va a mostrar la diferencia."
 	}
 	return "Gasto anotado por " + Monto(d.Importe) + ".", aviso, nil
+}
+
+// turnoDelGasto es el turno de la sucursal del que sale un gasto en efectivo
+// del día `dia` (aaaa-mm-dd, un día argentino), y el momento en que se anota
+// el movimiento de caja.
+//
+// Bug arreglado: el turno se buscaba con la fecha del formulario, que es la
+// medianoche UTC (las 21 del día anterior en Argentina). Un gasto de hoy
+// nunca caía en el turno abierto a la mañana, no salía de la caja y el
+// arqueo mostraba un faltante. Ahora, si el día es hoy, sale del turno que
+// está abierto ahora; si es otro día, del último turno que estuvo abierto
+// en algún momento de ese día argentino.
+func turnoDelGasto(ctx context.Context, tx pgx.Tx, sucursal, dia string, ahora time.Time) (string, time.Time, bool, error) {
+	d, err := time.ParseInLocation("2006-01-02", dia, caja.Argentina)
+	if err != nil {
+		// Vino con hora (un instante): se busca el turno de ese instante.
+		f, ok := LeerFecha(dia)
+		if !ok {
+			return "", time.Time{}, false, nil
+		}
+		id, hay, err := caja.TurnoQueContiene(ctx, tx, sucursal, f)
+		return id, f, hay, err
+	}
+	if d.Equal(caja.InicioDelDia(ahora)) {
+		id, hay, err := caja.TurnoQueContiene(ctx, tx, sucursal, ahora)
+		return id, ahora, hay, err
+	}
+	fin := d.AddDate(0, 0, 1)
+	var id string
+	var abierta time.Time
+	err = tx.QueryRow(ctx, `
+		SELECT id, abierta_at FROM cash_sessions
+		WHERE branch_id = $1 AND abierta_at < $3 AND (cerrada_at IS NULL OR cerrada_at >= $2)
+		ORDER BY abierta_at DESC LIMIT 1`, sucursal, d, fin).Scan(&id, &abierta)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", time.Time{}, false, nil
+	}
+	if err != nil {
+		return "", time.Time{}, false, err
+	}
+	// El movimiento se fecha adentro del turno y del día.
+	momento := d
+	if abierta.After(momento) {
+		momento = abierta
+	}
+	return id, momento, true, nil
 }
 
 // Gasto es una fila del listado.

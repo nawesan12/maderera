@@ -20,6 +20,7 @@ import (
 
 	"mjbj/internal/api/comprasapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/caja"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/pruebas"
 	"mjbj/internal/sqlc"
@@ -504,6 +505,26 @@ func TestGastos(t *testing.T) {
 	}
 	if _, b := pedir(t, adm, "GET", e.u+"compras/gastos/sucursales", nil); !strings.Contains(b, `"turnoAbierto":"`) {
 		t.Errorf("sucursales: %s", b)
+	}
+}
+
+// Bug: el turno se buscaba con la fecha del formulario (medianoche UTC, las
+// 21 del día anterior en Argentina): un gasto en efectivo de hoy no caía en
+// el turno abierto a la mañana y no salía de la caja.
+func TestGastoDeHoySaleDelTurnoAbierto(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	var usuario string
+	_ = e.pool.QueryRow(ctx, `select id from "user" limit 1`).Scan(&usuario)
+	_, _ = e.pool.Exec(ctx, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, now() - interval '1 minute')`, e.central, usuario)
+	hoy := time.Now().In(caja.Argentina).Format("2006-01-02")
+	gasto := map[string]any{"fecha": hoy, "categoria": "flete", "descripcion": "Flete", "importe": 800, "medio": "efectivo", "branchId": e.central}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/gastos", gasto); c != 200 || strings.Contains(b, "No había caja abierta") {
+		t.Fatalf("gasto de hoy: %d %s", c, b)
+	}
+	if m := e.numero(t, `select coalesce(sum(monto), 0)::float8 from cash_movements where tipo = 'gasto'`); m != -800 {
+		t.Errorf("el gasto de hoy tiene que salir del turno abierto: %v", m)
 	}
 }
 

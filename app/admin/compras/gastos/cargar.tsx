@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { ETIQUETA_CIRCUITO } from "@/lib/circuito";
+import { hoyEnArgentina } from "@/lib/formato";
 import { cargarGasto, type EstadoGasto } from "./actions";
 
 const CATEGORIAS = {
@@ -37,7 +38,7 @@ export function CargarGasto({
   const [estado, setEstado] = useState<EstadoGasto>({});
   const [enCurso, empezar] = useTransition();
 
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(hoyEnArgentina);
   const [categoria, setCategoria] = useState<keyof typeof CATEGORIAS>("flete");
   const [descripcion, setDescripcion] = useState("");
   const [importe, setImporte] = useState("");

@@ -28,3 +28,5 @@ package api
 //go:generate go tool oapi-codegen -config caja.gen.yaml caja.yaml
 //go:generate go tool oapi-codegen -config reportes.gen.yaml reportes.yaml
 //go:generate go tool oapi-codegen -config migracion.gen.yaml migracion.yaml
+//go:generate go tool oapi-codegen -config checkout.gen.yaml checkout.yaml
+//go:generate go tool oapi-codegen -config pagos.gen.yaml pagos.yaml

@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { Check, Loader2, TriangleAlert } from "lucide-react";
 import { guardarDatosBancarios, type EstadoAccionPago } from "./actions";
-import type { DatosBancarios } from "@/lib/db/schema";
+import type { DatosBancariosDelPanel } from "@/lib/dal/admin/pagos";
 
 const inicial: EstadoAccionPago = {};
 
@@ -15,7 +15,7 @@ const inicial: EstadoAccionPago = {};
  * para eso. El CBU se valida por largo: uno mal tipeado manda la plata de un
  * cliente a otra cuenta, y eso no vuelve.
  */
-export function FormularioBanco({ datos }: { datos: DatosBancarios | null }) {
+export function FormularioBanco({ datos }: { datos: DatosBancariosDelPanel | null }) {
   const [estado, accion, guardando] = useActionState(
     guardarDatosBancarios,
     inicial,

@@ -3,18 +3,23 @@ package main
 import (
 	"context"
 	"mjbj/internal/api/cajaapi"
+	"mjbj/internal/api/checkoutapi"
 	"mjbj/internal/api/entregasapi"
 	"mjbj/internal/api/migracionapi"
 	"mjbj/internal/api/mostradorapi"
+	"mjbj/internal/api/pagosapi"
 	"mjbj/internal/api/reportesapi"
 	"mjbj/internal/api/ventasapi"
 	"mjbj/internal/caja"
+	"mjbj/internal/checkout"
 	"mjbj/internal/entregas"
 	"mjbj/internal/migracion"
 	"mjbj/internal/mostrador"
+	"mjbj/internal/pagos"
 	"mjbj/internal/pedidos"
 	"mjbj/internal/reportes"
 	"net/http"
+	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
 
@@ -79,6 +84,7 @@ type configAPI struct {
 	WhatsApp whatsapp.Config
 	Push     push.Config
 	Campanas campanas.Config
+	Pagos    pagos.Config
 }
 
 func correrAPI() error {
@@ -389,6 +395,30 @@ func correrAPI() error {
 		reportesapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	// El carrito, la compra y los cobros (tanda 6), con el webhook de
+	// Mercado Pago en su dirección de siempre (POST /api/pagos/webhook).
+	checkoutapi.HandlerWithOptions(
+		checkoutapi.NewStrictHandlerWithOptions(checkout.NuevaAPI(checkout.Nuevo(pool, log), cfg.Interna, strings.HasPrefix(cfg.Pagos.URLBase(), "https://")),
+			[]checkoutapi.StrictMiddlewareFunc{plataforma.ConPedido[checkoutapi.StrictHandlerFunc]},
+			checkoutapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		checkoutapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+	apiPagos := pagos.NuevaAPI(pagos.Nuevo(pool, cfg.Pagos, log),
+		pagos.Extras{Lim: lim, Disco: subidas.Nuevo(cfg.Subidas), Push: push.Nuevo(cfg.Push, q, log)}, cfg.Interna)
+	apiPagos.Rutas(m)
+	pagosapi.HandlerWithOptions(
+		pagosapi.NewStrictHandlerWithOptions(apiPagos,
+			[]pagosapi.StrictMiddlewareFunc{plataforma.ConPedido[pagosapi.StrictHandlerFunc]},
+			pagosapi.StrictHTTPServerOptions{
+				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
+				ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(log),
+			}),
+		pagosapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
+	)
+
 	// La migración de ISIS (tanda 13).
 	migracionapi.HandlerWithOptions(
 		migracionapi.NewStrictHandlerWithOptions(migracion.NuevaAPI(migracion.Nuevo(pool, log)),
@@ -522,6 +552,19 @@ func correrAPI() error {
 	} else if validar, err := plataforma.ValidarContra(s); err != nil {
 		return err
 	} else {
+		h = validar(h)
+	}
+
+	// Los contratos del carrito y de los cobros (tanda 6), en su propia línea.
+	for _, spec := range []func() (*openapi3.T, error){checkoutapi.GetSwagger, pagosapi.GetSwagger} {
+		s, err := spec()
+		if err != nil {
+			return err
+		}
+		validar, err := plataforma.ValidarContra(s)
+		if err != nil {
+			return err
+		}
 		h = validar(h)
 	}
 

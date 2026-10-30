@@ -1,0 +1,353 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Cobros
+  version: "1"
+  description: |
+    Los cobros (tanda 6): abrir el pago de un pedido o de una inscripción
+    (Mercado Pago o el de demostración), lo que el cliente informa
+    (comprobantes de transferencia y cheques), la pantalla de pago de
+    demostración y la conciliación del panel.
+
+    El webhook de Mercado Pago no está acá: sigue en su dirección de siempre
+    (POST /api/pagos/webhook), con la firma `x-signature` y fuera del
+    contrato.
+
+    Las acciones contestan { ok } o un problema con el mensaje para mostrar
+    tal cual. `trabajo` es el aviso al cliente encolado para el TS cuando
+    algo se acreditó (Next lo procesa en el acto).
+paths:
+  /api/v1/pagos/estado:
+    get:
+      operationId: EstadoDeCobros
+      responses:
+        "200":
+          description: Si los cobros salen de verdad o son de demostración
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enVivo]
+                properties:
+                  enVivo: { type: boolean }
+  /api/v1/pagos/datos-para-transferir:
+    get:
+      operationId: DatosParaTransferir
+      responses:
+        "200":
+          description: Los datos bancarios para transferir (null si todavía no se cargaron)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [datos]
+                properties:
+                  datos: { $ref: "#/components/schemas/DatosBancariosDelPanel" }
+  /api/v1/pagos/pedido:
+    post:
+      operationId: PagarPedido
+      description: Abre el checkout de un pedido. Autoriza el token (o el dueño con sesión, o el personal).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [numero]
+              properties:
+                numero: { type: string, maxLength: 40 }
+                token: { type: string, maxLength: 64 }
+      responses:
+        "200": { $ref: "#/components/responses/CobroAbierto" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/pagos/pedido/{numero}/cobro:
+    parameters:
+      - { name: numero, in: path, required: true, schema: { type: string, maxLength: 40 } }
+      - { name: t, in: query, schema: { type: string, maxLength: 64 } }
+    get:
+      operationId: CobroDelPedido
+      responses:
+        "200":
+          description: El último intento de cobro del pedido (null si no hay)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cobro, enVivo]
+                properties:
+                  cobro: { $ref: "#/components/schemas/CobroDelPedido" }
+                  enVivo: { type: boolean }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/pagos/comprobante:
+    post:
+      operationId: SubirComprobante
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                numero: { type: string }
+                token: { type: string }
+                comprobante: { type: string, format: binary }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/pagos/comprobante-deuda:
+    post:
+      operationId: SubirComprobanteDeDeuda
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                monto: { type: string }
+                medio: { type: string }
+                comprobante: { type: string, format: binary }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/pagos/cheques:
+    post:
+      operationId: InformarChequesDeDeuda
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                partes: { type: string, nullable: true }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/pagos/demo/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, maxLength: 64 } }]
+    get:
+      operationId: CobroSimulado
+      responses:
+        "200":
+          description: El cobro de demostración
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CobroSimulado" }
+        "404": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: SimularPago
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                decision: { type: string }
+      responses:
+        "200":
+          description: A dónde vuelve la persona
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Simulacion" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/interno/pagos/inscripcion/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, maxLength: 64 } }]
+    post:
+      operationId: PagarInscripcion
+      description: Abre el pago de una inscripción reservada. Solo el servidor de Next (secreto interno).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                usuarioId: { type: string, nullable: true }
+      responses:
+        "200": { $ref: "#/components/responses/CobroAbierto" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pagos:
+    get:
+      operationId: PanelDePagos
+      parameters:
+        - { name: periodo, in: query, schema: { type: string, maxLength: 20 } }
+        - { name: estado, in: query, schema: { type: string, maxLength: 20 } }
+      responses:
+        "200":
+          description: Los cobros del período, el resumen, los últimos avisos y los datos bancarios
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PanelDePagos" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pagos/datos-bancarios:
+    put:
+      operationId: GuardarDatosBancarios
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pagos/{id}/conciliar:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, maxLength: 64 } }]
+    post:
+      operationId: ConciliarTransferencia
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                decision: { type: string }
+                motivo: { type: string, nullable: true }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pagos/{id}/reconsultar:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, maxLength: 64 } }]
+    post:
+      operationId: ReconsultarCobro
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+components:
+  responses:
+    Hecho:
+      description: Hecho, con el mensaje para mostrar
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ResultadoDePago" }
+    CobroAbierto:
+      description: A dónde mandar a pagar
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/CobroAbierto" }
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    ResultadoDePago:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: string }
+        trabajo: { type: string }
+    CobroAbierto:
+      type: object
+      required: [pagoId, urlPago, real]
+      properties:
+        pagoId: { type: string }
+        urlPago: { type: string }
+        real: { type: boolean }
+    CobroDelPedido:
+      type: object
+      nullable: true
+      required: [id, estado, proveedor, monto, comprobanteUrl, motivoRechazo, createdAt]
+      properties:
+        id: { type: string }
+        estado: { type: string }
+        proveedor: { type: string }
+        monto: { type: number, format: double }
+        comprobanteUrl: { type: string, nullable: true }
+        motivoRechazo: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    CobroSimulado:
+      type: object
+      required: [id, monto, estado, tipo, concepto, volverA]
+      properties:
+        id: { type: string }
+        monto: { type: number, format: double }
+        estado: { type: string }
+        tipo: { type: string }
+        concepto: { type: string }
+        volverA: { type: string }
+    Simulacion:
+      type: object
+      required: [volverA, estado]
+      properties:
+        volverA: { type: string }
+        estado: { type: string }
+        trabajo: { type: string }
+    CobroListado:
+      type: object
+      required: [id, tipo, proveedor, estado, monto, medio, comprobanteUrl, motivoRechazo, proveedorPaymentId, numeroPedido,
+        orderId, cliente, customerId, createdAt, acreditadoAt]
+      properties:
+        id: { type: string }
+        tipo: { type: string }
+        proveedor: { type: string }
+        estado: { type: string }
+        monto: { type: number, format: double }
+        medio: { type: string, nullable: true }
+        comprobanteUrl: { type: string, nullable: true }
+        motivoRechazo: { type: string, nullable: true }
+        proveedorPaymentId: { type: string, nullable: true }
+        numeroPedido: { type: string, nullable: true }
+        orderId: { type: string, nullable: true }
+        cliente: { type: string, nullable: true }
+        customerId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        acreditadoAt: { type: string, format: date-time, nullable: true }
+    ResumenPagos:
+      type: object
+      required: [acreditadoMes, cantidadMes, enRevision, montoEnRevision, rechazadosMes, enVivo, avisosConError]
+      properties:
+        acreditadoMes: { type: number, format: double }
+        cantidadMes: { type: integer }
+        enRevision: { type: integer }
+        montoEnRevision: { type: number, format: double }
+        rechazadosMes: { type: integer }
+        enVivo: { type: boolean }
+        avisosConError: { type: integer }
+    AvisoDePago:
+      type: object
+      required: [id, proveedor, eventoId, tipo, firmaValida, error, procesadoAt, createdAt]
+      properties:
+        id: { type: string }
+        proveedor: { type: string }
+        eventoId: { type: string }
+        tipo: { type: string, nullable: true }
+        firmaValida: { type: string, nullable: true }
+        error: { type: string, nullable: true }
+        procesadoAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    DatosBancariosDelPanel:
+      type: object
+      nullable: true
+      required: [banco, titular, cuit, cbu, alias, instrucciones]
+      properties:
+        banco: { type: string }
+        titular: { type: string }
+        cuit: { type: string }
+        cbu: { type: string }
+        alias: { type: string }
+        instrucciones: { type: string, nullable: true }
+    PanelDePagos:
+      type: object
+      required: [pagos, resumen, avisos, datosBancarios]
+      properties:
+        pagos: { type: array, items: { $ref: "#/components/schemas/CobroListado" } }
+        resumen: { $ref: "#/components/schemas/ResumenPagos" }
+        avisos: { type: array, items: { $ref: "#/components/schemas/AvisoDePago" } }
+        datosBancarios: { $ref: "#/components/schemas/DatosBancariosDelPanel" }

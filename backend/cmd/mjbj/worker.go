@@ -17,6 +17,7 @@ import (
 	"mjbj/internal/facturacion"
 	"mjbj/internal/limites"
 	"mjbj/internal/notificaciones"
+	"mjbj/internal/pagos"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/productos"
 	"mjbj/internal/profesionales"
@@ -36,6 +37,7 @@ type configWorker struct {
 	WhatsApp  whatsapp.Config
 	Email     email.Config
 	Campanas  campanas.Config
+	Pagos     pagos.Config
 }
 
 // El worker: la cola (los tipos que ya son de Go) y las tareas periódicas
@@ -68,6 +70,9 @@ func correrWorker() error {
 		})
 	}
 	c.Registrar(revalidar.Tipo, revalidar.Manejador(cfg.Revalidar))
+	// Los avisos de Mercado Pago que deja el webhook (tanda 6): acreditar y
+	// encolar el aviso al cliente (pago.resultado, que atiende el TS).
+	c.Registrar(pagos.TipoAviso, pagos.Nuevo(pool, cfg.Pagos, log).Manejador())
 
 	// Las tareas que ya son de Go. Cada tanda suma las suyas.
 	lista := []tareas.Tarea{{

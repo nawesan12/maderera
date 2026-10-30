@@ -1,48 +1,37 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
-import { cobroSimulado } from "@/lib/dal/pagos";
-import { idSimulado } from "@/lib/pagos/proveedor-demo";
-import { procesarAviso } from "@/lib/pagos/webhook";
-import { notificarResultadoDePago } from "@/lib/notificaciones/avisos";
+import { apiPublica } from "@/lib/api/servidor";
+import { procesarCola } from "@/lib/cola";
 
 /**
  * Simulación del resultado de un pago.
  *
- * Arma el mismo aviso que mandaría Mercado Pago y lo mete por el mismo
- * `procesarAviso`. No hay un camino alternativo para la demo: si la
- * acreditación tiene un error, este botón lo reproduce.
- *
- * Solo funciona sobre cobros del proveedor `demo`; `cobroSimulado` ya filtra
- * por eso, así que este endpoint no puede aprobar un cobro real.
+ * Go (backend/internal/pagos) arma el mismo aviso que mandaría Mercado Pago y
+ * lo pasa por el mismo procesamiento: si la acreditación tiene un error, este
+ * botón lo reproduce. Solo sobre cobros del proveedor `demo`. Si se acreditó,
+ * el aviso al cliente queda encolado y se manda acá mismo, sin esperar a la
+ * vuelta de la cola.
  */
 export async function simularResultado(formData: FormData): Promise<void> {
-  const pagoId = String(formData.get("pagoId") ?? "");
+  const pagoId = String(formData.get("pagoId") ?? "").slice(0, 64);
   const decision = String(formData.get("decision") ?? "");
 
-  const pago = await cobroSimulado(pagoId);
-  if (!pago) redirect("/");
-
-  const estado = decision === "aprobar" ? "aprobado" : "rechazado";
-
-  const resultado = await procesarAviso({
-    proveedor: "demo",
-    cuerpo: {
-      id: `demo-evento-${pagoId}-${estado}`,
-      type: "payment",
-      data: { id: idSimulado(pagoId, estado) },
-    },
-    url: new URL("https://demo.local/api/pagos/webhook"),
-    firmaVerificada: null,
+  const r = await apiPublica.POST("/api/v1/pagos/demo/{id}", {
+    params: { path: { id: pagoId || "-" } },
+    body: { decision },
   });
+  if (!r.data) redirect("/");
 
-  if (resultado.resultado === "acreditado") {
-    await notificarResultadoDePago({ ...resultado, detalle: "aprobado" });
-  }
+  const { volverA, estado, trabajo } = r.data;
+  if (trabajo) after(() => procesarCola({ soloId: trabajo }));
 
-  revalidatePath(pago.volverA);
+  revalidatePath(volverA);
   revalidatePath("/admin/pagos");
-
-  redirect(`${pago.volverA}?pago=${estado}`);
+  // El de un pedido ya trae `?t=<token>`: el TS le pegaba otro `?` y el token
+  // quedaba roto («abc?pago=aprobado»), así que quien compró sin cuenta
+  // volvía de pagar a una página de «no encontrado».
+  redirect(`${volverA}${volverA.includes("?") ? "&" : "?"}pago=${estado}`);
 }

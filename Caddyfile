@@ -195,6 +195,13 @@ autoconfig.{$CORREO_DOMINIO} {
 		reverse_proxy api:8080
 	}
 
+	# El webhook de Mercado Pago es de Go (backend/internal/pagos, tanda 6):
+	# la URL dada de alta en Mercado Pago no cambia.
+	@pagosGo path /api/pagos/webhook
+	handle @pagosGo {
+		reverse_proxy api:8080
+	}
+
 	# Todo lo demás va a la aplicación.
 	handle {
 		# Lo que Next ya marca como inmutable —los JS y CSS con hash en el

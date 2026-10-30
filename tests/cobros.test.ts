@@ -11,7 +11,7 @@ import {
   revisarNumeroDeCheque,
 } from "@/lib/cheques/numero";
 import { importeEnLetras, revisarPartes, totalDePartes } from "@/lib/cobros/partes";
-import { leerPartes } from "@/lib/cobros/leer";
+import { leerPartes } from "../scripts/golden/originales/tanda6/leer";
 import { lineasDeLaFactura } from "@/lib/entregas/factura-del-remito";
 
 /**

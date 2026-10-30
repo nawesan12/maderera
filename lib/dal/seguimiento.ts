@@ -4,9 +4,7 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { orders } from "@/lib/db/schema";
-import { getSession } from "@/lib/dal/session";
 import { api, datos } from "@/lib/api/servidor";
-import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 
 /**
  * La página de seguimiento de un pedido.
@@ -42,47 +40,6 @@ export const pedidoParaSeguimiento = cache(async (numero: string, token?: string
   const p = datos(r);
   return { ...p, createdAt: new Date(p.createdAt) };
 });
-
-/**
- * Un pedido, solo si quien pregunta puede tocarlo.
- *
- * La usan las acciones que salen de la página de seguimiento: abrir el pago y
- * subir el comprobante de una transferencia. Las dos recibían el número y nada
- * más, heredando la suposición de que conocer el número era prueba suficiente
- * —la misma que hacía enumerable la página—. Con eso se le podía adjuntar un
- * comprobante inventado al pedido de cualquiera y dejarlo esperando que alguien
- * lo diera por bueno en la conciliación.
- *
- * Devuelve null tanto si el pedido no existe como si no corresponde: quien
- * prueba números no puede distinguir un caso del otro.
- */
-export async function pedidoAutorizado(numero: string, token?: string) {
-  const [pedido] = await db
-    .select({
-      id: orders.id,
-      numero: orders.numero,
-      publicToken: orders.publicToken,
-      customerId: orders.customerId,
-      total: orders.total,
-      estadoPago: orders.estadoPago,
-    })
-    .from(orders)
-    .where(eq(orders.numero, numero))
-    .limit(1);
-
-  if (!pedido) return null;
-
-  if (token && token === pedido.publicToken) return pedido;
-
-  const sesion = await getSession();
-  if (!sesion) return null;
-  if (sesion.role === "staff") return pedido;
-
-  const cliente = await clienteDeLaSesion();
-  if (!cliente || pedido.customerId !== cliente.id) return null;
-
-  return pedido;
-}
 
 /** El token de un pedido, para armar el enlace desde donde solo se tiene el id. */
 export async function tokenDelPedido(orderId: string): Promise<string | null> {

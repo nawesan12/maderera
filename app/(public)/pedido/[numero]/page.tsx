@@ -19,7 +19,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getSession } from "@/lib/dal/session";
 import { pedidoParaSeguimiento } from "@/lib/dal/seguimiento";
 import { cobroDelPedido, datosParaTransferir } from "@/lib/dal/pagos";
-import { cobrosEnVivo } from "@/lib/pagos";
 import { BloquePago } from "@/components/pagos/bloque-pago";
 import { formatearPrecio } from "@/lib/formato";
 
@@ -100,11 +99,12 @@ async function Seguimiento({
 
   const items = pedido.items;
 
-  const [sesion, cobro, banco] = await Promise.all([
+  const [sesion, estadoDelCobro, banco] = await Promise.all([
     getSession(),
-    cobroDelPedido(pedido.id),
+    cobroDelPedido(pedido.numero, t),
     datosParaTransferir(),
   ]);
+  const cobro = estadoDelCobro?.cobro ?? null;
 
   const mensaje = encodeURIComponent(
     `Hola! Acabo de hacer el pedido ${pedido.numero} desde la web.`,
@@ -222,7 +222,7 @@ async function Seguimiento({
                 : null
             }
             banco={banco}
-            enVivo={cobrosEnVivo()}
+            enVivo={estadoDelCobro?.enVivo ?? false}
           />
         </div>
 

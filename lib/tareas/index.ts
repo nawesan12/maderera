@@ -1,14 +1,8 @@
 import "server-only";
 
-import { revalidateTag } from "next/cache";
-import { and, inArray, lt, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { tareasCorridas, trabajos } from "@/lib/db/schema";
-import { ETIQUETAS } from "@/lib/cache-publico";
 import { procesarCola } from "@/lib/cola";
-import { limpiarVentanasViejas } from "@/lib/limites";
-import { avisarAlPanel } from "@/lib/notificaciones/push";
-import { pendientesDelRol } from "@/lib/dal/admin/pendientes";
 import { periodoDe, type Frecuencia } from "./periodo";
 
 /**
@@ -46,54 +40,9 @@ export const TAREAS = {
     ejecutar: async () => ({ ...(await procesarCola({ limite: 100 })) }),
   },
 
-  "cada-hora": {
-    frecuencia: "hora",
-    descripcion: "Vence en la portada lo que venció: banners, promociones y eventos.",
-    ejecutar: async () => {
-      /*
-       * `expire: 0` y no "max": con "max" el próximo visitante vería todavía el
-       * banner vencido mientras se rearma en segundo plano. Un banner de «hasta
-       * el 30/9» el 1/10 es exactamente lo que esta tarea existe para evitar.
-       */
-      revalidateTag(ETIQUETAS.contenido, { expire: 0 });
-      revalidateTag(ETIQUETAS.eventos, { expire: 0 });
-      return { invalidadas: 2 };
-    },
-  },
-
-  diaria: {
-    frecuencia: "dia",
-    descripcion:
-      "El parte del día al panel y la limpieza de tablas que crecen solas. (Los recordatorios de eventos los manda el worker de Go.)",
-    ejecutar: async () => {
-      const parte = await mandarParteDelDia();
-      // Las plantillas de WhatsApp las copia el worker de Go (tarea
-      // «plantillas-whatsapp»).
-
-      const limites = await limpiarVentanasViejas();
-      const hace90 = new Date(Date.now() - 90 * 86_400_000);
-      const hace30 = new Date(Date.now() - 30 * 86_400_000);
-      const corridas = await db
-        .delete(tareasCorridas)
-        .where(lt(tareasCorridas.iniciadaAt, hace90))
-        .returning({ id: tareasCorridas.id });
-      // Los fallidos no se borran: son los que alguien tiene que mirar.
-      const hechos = await db
-        .delete(trabajos)
-        .where(and(inArray(trabajos.estado, ["hecho"]), lt(trabajos.terminadoAt, hace30)))
-        .returning({ id: trabajos.id });
-
-      return {
-        parte,
-        limitesBorrados: limites,
-        corridasBorradas: corridas.length,
-        trabajosBorrados: hechos.length,
-      };
-    },
-  },
-
-  // La semanal (reseñas de Google y candidatos a baja) la corre el worker de
-  // Go: tareas «resenas-google» y «candidatos-baja».
+  // «cada-hora» (vencer lo de la portada) y «diaria» (el parte del día y
+  // la limpieza) las corre el worker de Go: vencer-portada y
+  // parte-y-limpieza (backend/cmd/mjbj/worker.go).
 } satisfies Record<string, Tarea>;
 
 export type NombreDeTarea = keyof typeof TAREAS;
@@ -168,26 +117,6 @@ export async function correrTarea(nombre: NombreDeTarea, ahora: Date = new Date(
  * del admin, que ve todo. Solo se manda si hay algo: un aviso diario que dice
  * «nada» enseña a ignorar los avisos.
  */
-async function mandarParteDelDia(): Promise<number> {
-  const filas = await pendientesDelRol("admin");
-  if (filas.length === 0) return 0;
-
-  const urgentes = filas.filter((f) => f.urgente);
-  const primeras = (urgentes.length > 0 ? urgentes : filas).slice(0, 3);
-
-  await avisarAlPanel({
-    titulo:
-      urgentes.length > 0
-        ? `Para hoy: ${urgentes.length} ${urgentes.length === 1 ? "cosa urgente" : "cosas urgentes"}`
-        : "Para hoy en la maderera",
-    cuerpo: primeras.map((f) => `${f.cantidad} ${f.texto}`).join(" · "),
-    url: "/admin",
-    etiqueta: "parte-del-dia",
-  });
-
-  return filas.length;
-}
-
 function mensajeDe(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 2000);
 }

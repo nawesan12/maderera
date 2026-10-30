@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -14,11 +15,13 @@ import (
 	"mjbj/internal/contenido"
 	"mjbj/internal/email"
 	"mjbj/internal/facturacion"
+	"mjbj/internal/limites"
 	"mjbj/internal/notificaciones"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/productos"
 	"mjbj/internal/profesionales"
 	"mjbj/internal/push"
+	"mjbj/internal/reportes"
 	"mjbj/internal/revalidar"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/tareas"
@@ -114,6 +117,65 @@ func correrWorker() error {
 	// plantillas de Meta (por si cambió alguna sin que llegara el webhook).
 	wa := whatsapp.Nuevo(pool, cfg.WhatsApp, avisos, log)
 	wa.Registrar(c)
+	// Lo que hacían las tareas «cada-hora» y «diaria» de lib/tareas.
+	lista = append(lista, tareas.Tarea{
+		// Vence en la portada lo que venció (banners, promociones, eventos):
+		// Next vuelve a armar esas etiquetas.
+		Nombre: "vencer-portada", Frecuencia: tareas.Hora,
+		Ejecutar: func(ctx context.Context) (map[string]any, error) {
+			err := revalidar.Encolar(ctx, q, revalidar.Aviso{Etiquetas: []string{"contenido", "eventos"}})
+			return map[string]any{"invalidadas": 2}, err
+		},
+	}, tareas.Tarea{
+		// El parte del día al panel (lo pendiente del admin, lo urgente
+		// primero) y la limpieza de las tablas que crecen solas.
+		Nombre: "parte-y-limpieza", Frecuencia: tareas.Dia, DesdeHora: 7,
+		Ejecutar: func(ctx context.Context) (map[string]any, error) {
+			filas, err := reportes.Nuevo(pool, log).PendientesDelRol(ctx, sqlc.StaffRoleAdmin)
+			if err != nil {
+				return nil, err
+			}
+			if len(filas) > 0 {
+				var urgentes []reportes.Pendiente
+				for _, f := range filas {
+					if f.Urgente {
+						urgentes = append(urgentes, f)
+					}
+				}
+				primeras := filas
+				titulo := "Para hoy en la maderera"
+				if len(urgentes) > 0 {
+					primeras = urgentes
+					titulo = "Para hoy: " + strconv.Itoa(len(urgentes)) + " cosas urgentes"
+					if len(urgentes) == 1 {
+						titulo = "Para hoy: 1 cosa urgente"
+					}
+				}
+				if len(primeras) > 3 {
+					primeras = primeras[:3]
+				}
+				var partes []string
+				for _, f := range primeras {
+					partes = append(partes, strconv.Itoa(f.Cantidad)+" "+f.Texto)
+				}
+				avisos.Avisar(ctx, push.Aviso{Titulo: titulo, Cuerpo: strings.Join(partes, " · "), URL: "/admin", Etiqueta: "parte-del-dia"})
+			}
+			limpias, err := limites.Nuevo(q, log).LimpiarViejas(ctx)
+			if err != nil {
+				return nil, err
+			}
+			corridas, err := pool.Exec(ctx, `DELETE FROM tareas_corridas WHERE iniciada_at < now() - interval '90 days'`)
+			if err != nil {
+				return nil, err
+			}
+			hechos, err := pool.Exec(ctx, `DELETE FROM trabajos WHERE estado = 'hecho' AND terminado_at < now() - interval '30 days'`)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"parte": len(filas), "limitesBorrados": limpias, "corridasBorradas": corridas.RowsAffected(),
+				"trabajosBorrados": hechos.RowsAffected()}, nil
+		},
+	})
 	lista = append(lista, tareas.Tarea{
 		Nombre: "plantillas-whatsapp", Frecuencia: tareas.Dia, DesdeHora: 6,
 		Ejecutar: func(ctx context.Context) (map[string]any, error) {

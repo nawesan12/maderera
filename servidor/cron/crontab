@@ -8,12 +8,7 @@
 # La cola: pagos y mensajes que quedaron sin hacer o fallaron.
 * * * * *   sh /tarea.sh cada-minuto
 
-# Lo que venció en la portada (banners, promociones, eventos) deja de verse.
-0 * * * *   sh /tarea.sh cada-hora
-
-# Recordatorios de eventos, el parte del día y la limpieza. A las 7, antes de
-# que abra el local.
-0 7 * * *   sh /tarea.sh diaria
-
-# Reseñas de Google y candidatos a baja, los lunes.
-0 8 * * 1   sh /tarea.sh semanal
+# Las demás —vencer lo de la portada cada hora, el parte del día y la
+# limpieza a las 7, las reseñas de Google y los candidatos a baja los lunes,
+# los recordatorios de eventos— las corre el worker de Go
+# (backend/cmd/mjbj/worker.go), con el mismo candado por período.

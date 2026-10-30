@@ -288,15 +288,29 @@ func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, variante, sucu
 		if err := q.BloquearStock(ctx, sqlc.BloquearStockParams{Variante: variante, Sucursal: suc.ID}); err != nil {
 			return err
 		}
-		previo := 0.0
-		if a, err := q.StockDe(ctx, sqlc.StockDeParams{VariantID: variante, BranchID: suc.ID}); err == nil {
-			previo = float64(a)
+		previo, reservado := 0.0, 0.0
+		if a, err := q.StockYReservado(ctx, sqlc.StockYReservadoParams{VariantID: variante, BranchID: suc.ID}); err == nil {
+			previo, reservado = float64(a.Qty), float64(a.Reservado)
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		nuevo := Cantidad(previo + cantidad)
 		if nuevo < 0 {
 			return plataforma.Invalido(map[string]string{"cantidad": "Solo hay " + formato.Cantidad(previo) + " en " + suc.Name + "."})
+		}
+		// Lo reservado es de clientes que ya pagaron: un ajuste que baja el
+		// físico no puede dejar lo disponible en negativo (el TS miraba solo
+		// el físico, como la transferencia). Sumar siempre se puede.
+		if cantidad < 0 && nuevo < reservado {
+			libre := catalogo.Disponible(previo, reservado)
+			m := "En " + suc.Name + " hay " + formato.Cantidad(previo) + " y " + formato.Cantidad(reservado) +
+				" está" + pluralN(reservado) + " reservado" + plural(reservado) + " para clientes"
+			if libre > 0 {
+				m += ": se pueden sacar hasta " + formato.Cantidad(libre) + "."
+			} else {
+				m += ": no se puede sacar nada sin antes liberar o entregar esas reservas."
+			}
+			return plataforma.Invalido(map[string]string{"cantidad": m})
 		}
 		if err := q.FijarCantidad(ctx, sqlc.FijarCantidadParams{VariantID: variante, BranchID: suc.ID, Qty: jsmath.Num(nuevo)}); err != nil {
 			return err
@@ -428,6 +442,14 @@ func plural(n float64) string {
 		return ""
 	}
 	return "s"
+}
+
+// pluralN es la n del verbo: «está» o «están».
+func pluralN(n float64) string {
+	if n == 1 {
+		return ""
+	}
+	return "n"
 }
 
 func uuid() string {

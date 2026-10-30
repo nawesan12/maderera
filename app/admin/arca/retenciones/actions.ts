@@ -52,7 +52,8 @@ export interface EstadoRegimen {
 }
 
 /**
- * Cambia la alícuota de un régimen de retención (y si está activo). Lo guarda
+ * Cambia la alícuota de un régimen de retención, sus dos mínimos (no imponible
+ * y de retención) y si está activo. Lo guarda
  * la API de Go (backend/internal/compras): un régimen en cero no retiene nada
  * y sigue cargado, con su código, para el día que vuelva a corresponder.
  */

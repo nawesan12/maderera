@@ -27,7 +27,7 @@ const IMPUESTOS: Record<string, string> = {
 };
 
 /**
- * Las alícuotas con las que se retiene, editables.
+ * Las alícuotas y los mínimos con los que se retiene, editables.
  *
  * **Por qué hacía falta.** La tabla se sembraba con un script y no se podía
  * tocar desde ninguna pantalla: cambiar una alícuota —que ARCA actualiza por
@@ -68,10 +68,18 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
     String(regimen.alicuotaNoInscripto),
   );
   const [activo, setActivo] = useState(regimen.activo);
+  const [minimoNoImponible, setMinimoNoImponible] = useState(
+    String(regimen.minimoNoImponible),
+  );
+  const [minimoRetencion, setMinimoRetencion] = useState(
+    String(regimen.minimoRetencion),
+  );
 
   const cambio =
     Number(alicuota) !== regimen.alicuota ||
     Number(noInscripto) !== regimen.alicuotaNoInscripto ||
+    Number(minimoNoImponible) !== regimen.minimoNoImponible ||
+    Number(minimoRetencion) !== regimen.minimoRetencion ||
     activo !== regimen.activo;
 
   return (
@@ -92,8 +100,6 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
             <span className="tabular">{regimen.codigo}</span> ·{" "}
             {IMPUESTOS[regimen.impuesto] ?? regimen.impuesto}
             {regimen.jurisdiccion && ` · ${regimen.jurisdiccion}`}
-            {regimen.minimoNoImponible > 0 &&
-              ` · mínimo no imponible $${regimen.minimoNoImponible.toLocaleString("es-AR")}`}
           </p>
         </div>
 
@@ -122,6 +128,40 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
             value={noInscripto}
             onChange={(e) => setNoInscripto(e.target.value)}
             className="tabular mt-1 h-10 w-28 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
+          />
+        </label>
+
+        {/* Los dos mínimos, en pesos. El no imponible se descuenta del
+            acumulado del mes antes de aplicar la alícuota (solo al
+            inscripto); por debajo del de retención no se retiene. Antes se
+            cambiaban solo entrando a la base. */}
+        <label className="block">
+          <span className="text-sm text-muted-foreground">
+            Mín. no imponible $
+          </span>
+          <input
+            name="minimoNoImponible"
+            type="number"
+            min="0"
+            step="0.01"
+            value={minimoNoImponible}
+            onChange={(e) => setMinimoNoImponible(e.target.value)}
+            className="tabular mt-1 h-10 w-36 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-sm text-muted-foreground">
+            Mín. de retención $
+          </span>
+          <input
+            name="minimoRetencion"
+            type="number"
+            min="0"
+            step="0.01"
+            value={minimoRetencion}
+            onChange={(e) => setMinimoRetencion(e.target.value)}
+            className="tabular mt-1 h-10 w-32 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
           />
         </label>
 

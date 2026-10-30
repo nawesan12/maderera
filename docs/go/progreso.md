@@ -1385,3 +1385,72 @@ Falta correr la e2e (`e2e/checkout.spec.ts`).
 - Con el candado de la serie de pedidos tomado al principio, dos compras ya
   no se pueden trabar por los candados del stock; tomarlos en orden igual
   cubre una venta del mostrador o una entrega que se crucen.
+
+## Los avisos al cliente y la cola de TS (29/10, rama `go-avisos`)
+
+Desde `go-cuentas` (7c087bb). Sin migraciones. Lo último que Next le pedía a
+la base salvo `lib/dal/admin/auditoria.ts` y `lib/dal/seguimiento.ts` (van
+en paralelo).
+
+- [x] **Cada aviso lo encola Go en la misma transacción que confirma** y lo
+      atiende el worker (`internal/notificaciones/pedidos.go`). Donde antes
+      Next llamaba al aviso en el `after()` de la acción, ya no llama nada:
+
+      | Trabajo | Lo encola | Era (TS) | Evento(s) |
+      |---|---|---|---|
+      | `pedido.recibido` | `checkout.Confirmar` | `notificarPedidoRecibido` | `pedido_recibido` (correo y WhatsApp) + «Venta nueva» al panel |
+      | `pedido.estado` | `pedidos.Avanzar` | `notificarCambioDeEstado` + `avisarCambioDePedido` | el estado (correo y WhatsApp) |
+      | `pago.resultado` | `pagos` al acreditar (ya lo encolaba) | `notificarResultadoDePago` | `pago_acreditado`, «Pago acreditado» al panel, el recibo (`recibo_emitido`) o la inscripción |
+      | `presupuesto.recibido` | `checkout.PedirPresupuesto` | `notificarPresupuestoRecibido` | `presupuesto_recibido` |
+      | `remito.para-firmar` | `entregas.CrearEntrega` | `notificarRemitoParaFirmar` | `remito_para_firmar` |
+      | `remito.firmado` | `entregas.RegistrarFirma` (ahora en una transacción) | `notificarRemitoFirmado` | `remito_firmado` |
+
+      Mismas condiciones: sin correo no sale, apagado en `/admin/avisos`
+      queda `omitida`, el asunto y el encabezado editados mandan, el aviso al
+      panel sale aunque el comprador no haya dejado correo. Como los de
+      recibos y cheques, no se reintentan (un reintento repetiría el
+      WhatsApp que sí salió); el correo que rebota temporalmente sigue con
+      `email.reintento`.
+- [x] Plantillas en `internal/avisos/pedidos.go`; golden
+      `TZ=America/Argentina/Buenos_Aires npx tsx --conditions=react-server scripts/golden/avisos-pedidos.ts`
+      → `testdata/golden/avisos/pedidos.json`: 1192 correos, asunto, HTML y
+      texto byte a byte. El acuse del presupuesto estaba sin exportar en
+      `presupuestos.ts`: va como copia textual en el script.
+- [x] Pruebas contra la base: cada productor deja su trabajo (una sola vez
+      con diez «Confirmar» o veinte firmas a la vez) y cada manejador manda lo
+      que mandaba el TS, también pasando por la cola entera.
+- [x] **Borrado**: `lib/notificaciones/{avisos,cobros,presupuestos,push,entregas,fiscal}.ts`,
+      `lib/whatsapp/avisos.ts`, `lib/cola`, `lib/tareas`, `app/api/tareas/[tarea]`,
+      `tests/tareas.test.ts` (Go tiene `internal/cola` e `internal/tareas`) y
+      el contenedor `cron` con `servidor/cron/`. `desplegar.sh` saca el
+      contenedor `cron` que haya quedado de antes. `TAREAS_SECRETO` ya no se
+      usa. El PDF del comprobante para WhatsApp pasó a
+      `lib/whatsapp/documentos.ts`. Queda `lib/notificaciones/titulos.ts`
+      (los nombres de los eventos, para el panel).
+- [x] El aviso de un pago que llega por el webhook sale en el acto (el
+      trigger despierta al worker), no en la vuelta de cada minuto del TS. La
+      conciliación y la demostración ya no corren `procesarCola` en Next.
+- Arreglado (con prueba):
+  - **La hora del acuse del presupuesto** («Te contestamos antes de») salía
+    en UTC: el contenedor de Next no tiene `TZ`. Go la da en hora argentina
+    (el golden falla con UTC).
+  - **El correo del pago tomaba cualquier cobro del pedido** (`limit 1` sin
+    orden): con un intento rechazado antes del aprobado podía decir otro
+    importe y otro medio. Va el aprobado más reciente (`TestResultadoDePago`,
+    vista fallar sin el orden). Lo mismo en el pago de una deuda sin recibo.
+  - Los renglones del acuse del pedido, en el orden del pedido (el TS no
+    ordenaba).
+- Reproducido a propósito: el débito no está en los nombres de los medios
+  del acuse (sale «A coordinar», como en el TS); el medio del correo del pago
+  es el que dice Mercado Pago (`account_money`, `visa`), sin traducir.
+- Pendiente:
+  - [ ] `lib/email` ya no lo usa la aplicación: queda para los golden
+        (`scripts/golden/{plantillas,avisos-cobros,avisos-pedidos}.ts` y
+        `originales/tanda10`), vitest (`tests/correo*.test.ts`) y el bench de
+        la tanda 10. Se puede mover a `scripts/golden/originales` y sacar
+        `nodemailer`, `resend` y `web-push` del `package.json`.
+  - [ ] Sacar `TAREAS_SECRETO` de `.env.example` y del `.env.produccion` de
+        la VPS (el compose ya no la pide).
+  - [ ] `notificarPresupuestoEnviado` no lo llamaba nadie (se borró con
+        `presupuestos.ts`): el presupuesto armado no se avisa por correo ni
+        por WhatsApp al pasar a «enviado». Era así antes de la mudanza.

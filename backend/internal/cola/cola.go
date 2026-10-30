@@ -1,12 +1,11 @@
 // Package cola es la cola de trabajos en Postgres (tabla `trabajos`): lo que
 // llega por un webhook o hay que reintentar se encola, y el worker lo hace
-// después, con reintentos y espera creciente. Es lib/cola del TS con la misma
-// tabla y la misma semántica.
+// después, con reintentos y espera creciente. Era lib/cola del TS, con la
+// misma tabla y la misma semántica; desde que los avisos se mudaron, la cola
+// es solo de Go.
 //
-// **Mientras Next y Go convivan, cada tipo de trabajo es de uno solo.** Este
-// proceso toma únicamente los tipos que tiene registrados, y lib/cola del TS
-// solo los suyos: si los dos supieran hacer `pago.aviso`, se lo disputarían.
-// Un tipo se muda de lado junto con su módulo.
+// Este proceso toma únicamente los tipos que tiene registrados: un trabajo
+// de un tipo que nadie atiende queda pendiente (no se pierde).
 package cola
 
 import (

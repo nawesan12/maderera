@@ -33,9 +33,9 @@ func Nuevo(pool *pgxpool.Pool, log *slog.Logger) *Servicio {
 	return &Servicio{pool: pool, q: sqlc.New(pool), log: log}
 }
 
-// Los avisos al cliente (correo y WhatsApp con el PDF) los atiende el TS
-// mientras el PDF y WhatsApp sigan allá: se encolan en la misma transacción
-// del cobro, así salen solo si el cobro se confirmó.
+// Los avisos al cliente (correo y WhatsApp con el PDF) los atiende el worker
+// (internal/notificaciones): se encolan en la misma transacción del cobro,
+// así salen solo si el cobro se confirmó.
 const (
 	TrabajoAvisoDeRecibo   = "recibo.aviso"
 	TrabajoChequeRechazado = "cheque.rechazado"

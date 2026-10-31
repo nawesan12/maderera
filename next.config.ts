@@ -18,6 +18,8 @@ const idDeBuild =
   `local-${Date.now()}`;
 
 const nextConfig: NextConfig = {
+  // Sin la cabecera `x-powered-by: Next.js`: no le dice a nadie qué corre.
+  poweredByHeader: false,
   cacheComponents: true,
   /**
    * El prefetch de siempre, por enlace.

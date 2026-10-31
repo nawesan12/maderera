@@ -171,8 +171,10 @@
   /* La banda lo pide en #8a7f72, que da 3.92:1 sobre blanco y 3.67:1 sobre el
      fondo alterno — por debajo del mínimo, y no es texto decorativo: son las
      bajadas del menú, el "desde", el precio tachado y el neto legal. Este es el
-     mismo tono un escalón más oscuro: 4.52:1 en el peor de los dos fondos. */
-  --texto-3: oklch(0.552 0.022 70);
+     mismo tono un escalón más oscuro: 4.52:1 en el peor de los dos fondos.
+     Y otro escalón (31/10): sobre el fondo hundido (#efedea) del taller y los
+     cortes caía a 4.13:1. #70665b da 4.7:1 o más en todos los fondos claros. */
+  --texto-3: #70665b;
 
   --naranja-claro: #fdeada;
   --naranja-tenue: #fdf5ec;

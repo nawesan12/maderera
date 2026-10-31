@@ -179,7 +179,7 @@ export default async function FichaCortePage({
               </p>
               <a
                 href={`/api/cortes/${corte.id}/ptx`}
-                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-current bg-card px-3.5 text-base font-medium transition-colors hover:bg-muted"
+                className="inline-flex min-h-11 max-w-full shrink-0 items-center gap-1.5 rounded-lg border border-current bg-card px-3.5 py-2 text-base font-medium transition-colors hover:bg-muted"
               >
                 <Download className="h-4 w-4" />
                 Programa para la máquina (.PTX) — prueba
@@ -362,7 +362,7 @@ export default async function FichaCortePage({
                 <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
                   Cantidad
                 </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
+                <th className="hidden px-4 py-3 text-right text-sm font-medium text-muted-foreground sm:table-cell">
                   Superficie
                 </th>
                 <th className="px-5 py-3 text-sm font-medium text-muted-foreground">
@@ -379,7 +379,7 @@ export default async function FichaCortePage({
                   <td className="tabular px-4 py-3.5 text-right text-base">
                     {pieza.cantidad}
                   </td>
-                  <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
+                  <td className="tabular hidden px-4 py-3.5 text-right text-base text-muted-foreground sm:table-cell">
                     {(
                       (pieza.largoMm * pieza.anchoMm * pieza.cantidad) /
                       1_000_000

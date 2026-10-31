@@ -77,7 +77,8 @@ export default async function FichaPresupuestoPage({
                 <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
                   Cantidad
                 </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
+                {/* En el teléfono no entra: el subtotal quedaba cortado. */}
+                <th className="hidden px-4 py-3 text-right text-sm font-medium text-muted-foreground sm:table-cell">
                   Unitario
                 </th>
                 <th className="px-5 py-3 text-right text-sm font-medium text-muted-foreground">
@@ -92,7 +93,7 @@ export default async function FichaPresupuestoPage({
                   <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
                     {Number(item.cantidad)} {item.unidad.replace("_", " ")}
                   </td>
-                  <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
+                  <td className="tabular hidden px-4 py-3.5 text-right text-base text-muted-foreground sm:table-cell">
                     {moneda.format(Number(item.precioUnitario))}
                   </td>
                   <td className="tabular px-5 py-3.5 text-right text-base">
@@ -103,9 +104,10 @@ export default async function FichaPresupuestoPage({
             </tbody>
             <tfoot>
               <tr className="border-t bg-muted/40">
-                <td colSpan={3} className="px-5 py-4 text-base font-medium">
+                <td colSpan={2} className="px-5 py-4 text-base font-medium">
                   Total
                 </td>
+                <td className="hidden sm:table-cell" />
                 <td className="tabular px-5 py-4 text-right text-xl font-semibold">
                   {moneda.format(Number(p.total))}
                 </td>

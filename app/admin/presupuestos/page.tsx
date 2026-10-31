@@ -228,7 +228,9 @@ function Tarjeta({
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
+        {/* Con flex-wrap: en el teléfono los botones bajan abajo del total
+            en vez de quedar cortados por el borde. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <p className="tabular text-xl font-semibold">
             {moneda.format(p.total)}
           </p>

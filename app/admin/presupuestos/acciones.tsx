@@ -37,7 +37,7 @@ export function AccionesPresupuesto({
   const enviable = ["pendiente", "revision"].includes(estado);
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 [&>button]:whitespace-nowrap">
       {enviable && (
         <button
           onClick={() => accion(() => cambiarEstadoPresupuesto(id, "enviado"))}

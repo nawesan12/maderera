@@ -1807,3 +1807,43 @@ Decisiones pendientes (no se hicieron):
       remito, el presupuesto en PDF, el seguimiento): revisar si el
       aserradero las necesita.
       Hecho: el presupuesto en PDF lo bajan presupuestos y mostrador; el remito, el seguimiento y la pantalla de pago, quien entra a pedidos. El aserradero, 404.
+
+## Todo desde la VPS, CSP y la caché de Next (31/10, sobre `go-cuentas`)
+
+Desplegado (último commit `eeeb753`). Verificado en producción con
+`scripts/recorrer.mjs` (todos los roles, escritorio y 390 px) y un navegador
+que cuenta imágenes rotas y pedidos a otros hosts: cero rotas, ninguna
+violación de CSP.
+
+- **CSP** en `next.config.ts` (solo producción): `connect-src 'self'`,
+  `object-src 'none'`, `base-uri`, `frame-ancestors`; el mapa de Google en
+  `frame-src`. Sin nonce (volvería dinámicas las páginas públicas) y sin
+  `form-action` (el pago es una server action que redirige a Mercado Pago).
+- **Ninguna foto viene de afuera.** Las 19 de muestra de Unsplash están en
+  `public/fotos/<id>.jpg`; la 00091 reescribió banners, categorías y
+  `product_images`; `remotePatterns` quedó vacío a propósito. En la base no
+  queda ninguna URL de Vercel Blob. Lo único externo que carga el navegador
+  es el iframe de Google Maps en `/sucursales/<slug>`.
+- **La caché de datos de Next se borra al arrancar** (CMD del `Dockerfile`).
+  Next anota en memoria las etiquetas revalidadas y guarda los datos en el
+  volumen `next_cache`: después de un reinicio servía lo ya invalidado
+  (precios, fotos). La de imágenes se conserva. La 00092 encola un
+  `next.revalidar` de todas las etiquetas.
+
+Para revisar algo de la caché: preguntarle a Go directo desde la app
+(`docker exec mjbj-app-1 wget -qO- http://api:8080/api/v1/...`).
+
+### Lo que espera a Nahuel
+
+- [ ] **Correo (Stalwart)**, pasos en `docs/SERVIDOR-PROPIO.md` §14
+      «Encenderlo»: registros A `mail`, `correo`, `autoconfig` → 179.197.224.61
+      en Cloudflare (solo DNS, nube gris); PTR en hPanel → `mail.mjbj.com.ar`;
+      ufw 25/465/587/993; en `.env.produccion` `COMPOSE_PROFILES="correo"`,
+      `CORREO_CLAVE`, `CORREO_ADMIN_CLAVE`; desplegar, `scripts/correo.sh
+      iniciar`, `alta avisos@mjbj.com.ar` y `EMAIL_PROVIDER=smtp` +
+      `SMTP_*` + `EMAIL_REMITENTE`; SPF con `ip4:179.197.224.61` y los dos
+      DKIM de `correo.sh dns` (MX de Zoho y DMARC no se tocan); crontab de
+      `correo.sh respaldar`. Los dos primeros necesitan su cuenta.
+- [ ] Claves VAPID para las notificaciones push (no hay).
+- [ ] Credenciales de Mercado Pago y certificado de ARCA reales; el dominio
+      con Cloudflare (y `trusted_proxies`, ver arriba).

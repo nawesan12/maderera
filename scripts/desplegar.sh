@@ -122,6 +122,9 @@ respaldo="respaldos/antes-de-migrar-$(date +%Y-%m-%d-%H%M).dump"
 # shellcheck disable=SC2016 # las variables las expande el shell del contenedor
 "${COMPOSE[@]}" exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -F c' < /dev/null > "$respaldo"
 echo "  $respaldo ($(du -h "$respaldo" | cut -f1))"
+# Quedan los diez últimos: uno por despliegue, sin tope, con la base real
+# llenaban el disco (los diarios los poda el contenedor de respaldo).
+ls -1t respaldos/antes-de-migrar-*.dump 2>/dev/null | tail -n +11 | xargs -r rm -f
 
 echo "→ Migrando (goose)"
 if ! "${COMPOSE[@]}" --profile herramientas run --rm migrar; then

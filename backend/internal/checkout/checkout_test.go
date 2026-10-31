@@ -477,3 +477,29 @@ func TestCarritosAnonimosConFreno(t *testing.T) {
 		t.Fatalf("el que ya tenía carrito: %d %s", code, b)
 	}
 }
+
+// Bug: el carrito guardaba el precio de la lista general y lo comparaba con
+// el de la lista de quien compra: a un profesional le avisaba «cambió el
+// precio» en todo lo que agregaba. Ahora guarda el de su lista (la propia o
+// la general con su porcentaje), y actualizar también lo pone en el suyo.
+func TestElProfesionalNoVePreciosDesactualizados(t *testing.T) {
+	e := armar(t)
+	c, ses := e.web(t, "pro@prueba.test")
+	propia := e.id(t, `insert into price_lists (slug, name, porcentaje_sobre_general) values ('gremio', 'Gremio', -10) returning id`)
+	e.exec(t, `insert into price_list_items (price_list_id, variant_id, price) values ($1, $2, 70000)`, propia, e.placa)
+	e.exec(t, `update customers set price_list_id = $2 where user_id = $1`, ses.UserID, propia)
+	u := e.srv.URL + "/api/v1/carrito"
+	pedir(t, c, "POST", u+"/items", map[string]any{"variantId": e.placa, "descripcion": "Fenólico", "cantidad": 1})
+	pedir(t, c, "POST", u+"/items", map[string]any{"variantId": e.tirante, "descripcion": "Tirante", "cantidad": 1})
+	_, b := pedir(t, c, "GET", u, nil)
+	car := leer[Carrito](t, b)
+	if car.ConPrecioDesactualizado != 0 || len(car.Items) != 2 || *car.Items[0].PrecioActual != 70000 || *car.Items[1].PrecioActual != 1080.45 {
+		t.Fatalf("carrito del profesional: %d desactualizados, %s", car.ConPrecioDesactualizado, b)
+	}
+	e.exec(t, `update cart_items set precio_unitario = 1`)
+	pedir(t, c, "POST", u+"/precios", nil)
+	_, b = pedir(t, c, "GET", u, nil)
+	if car = leer[Carrito](t, b); car.ConPrecioDesactualizado != 0 {
+		t.Fatalf("después de actualizar quedan %d desactualizados", car.ConPrecioDesactualizado)
+	}
+}

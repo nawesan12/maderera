@@ -1364,9 +1364,10 @@ Falta correr la e2e (`e2e/checkout.spec.ts`).
 - [ ] El aviso de un pago que llega por el webhook sale en la vuelta de cada
       minuto del TS (antes, en el acto): se arregla cuando los avisos de
       pedidos y pagos se muden.
-- [ ] El precio que se guarda al agregar es el de la lista general: para un
+- [x] El precio que se guarda al agregar es el de la lista general: para un
       profesional el aviso de «cambió el precio» aparece siempre (igual que
       en el TS).
+      Hecho: se guarda y se actualiza con la lista de quien compra (`TestElProfesionalNoVePreciosDesactualizados`).
 - [ ] Borrar `POST /api/v1/cortes/carrito`.
 
 ### Benchmark (29/10/2026, misma Mac; detalle en `bench/tanda6`)

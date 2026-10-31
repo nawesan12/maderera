@@ -347,10 +347,20 @@ func (s *Servicio) Agregar(ctx context.Context, q Quien, m map[string]any) (Resu
 			r.Error = "Este producto se vende por unidad entera."
 			return r, nil
 		}
+		// El precio de la lista de quien compra, como lo lee el carrito: con
+		// el de la general, a un profesional el aviso de «cambió el precio»
+		// le salía siempre.
+		vigente, err := s.cat.Vigente(ctx, q.Ses)
+		if err != nil {
+			return r, err
+		}
 		var lista *jsmath.Num
 		err = s.pool.QueryRow(ctx, `
-			SELECT pli.price FROM price_list_items pli JOIN price_lists pl ON pl.id = pli.price_list_id
-			WHERE pli.variant_id = $1 AND pl.is_default LIMIT 1`, *item.VariantID).Scan(&lista)
+			SELECT coalesce(propia.price, round((general.price * $4::numeric)::numeric, 2))
+			FROM product_variants v
+			LEFT JOIN price_list_items propia ON propia.variant_id = v.id AND propia.price_list_id = $2
+			LEFT JOIN price_list_items general ON general.variant_id = v.id AND general.price_list_id = $3
+			WHERE v.id = $1`, *item.VariantID, vigente.ID, vigente.GeneralID, jsmath.Texto(vigente.FactorDerivado)).Scan(&lista)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return r, err
 		}
@@ -460,8 +470,8 @@ func (s *Servicio) Vaciar(ctx context.Context, q Quien) (Resultado, error) {
 	return Resultado{Ok: "Presupuesto vaciado.", TokenNuevo: token}, err
 }
 
-// ActualizarPrecios pone los renglones al precio de la lista general de
-// hoy. **Con la media placa**: el TS guardaba el precio de la entera y el
+// ActualizarPrecios pone los renglones al precio de hoy de la lista de quien
+// compra. **Con la media placa**: el TS guardaba el precio de la entera y el
 // aviso de «cambió el precio» no se iba nunca de un renglón de media.
 func (s *Servicio) ActualizarPrecios(ctx context.Context, q Quien) (Resultado, error) {
 	cart, token, err := s.ObtenerOCrear(ctx, q)
@@ -469,21 +479,22 @@ func (s *Servicio) ActualizarPrecios(ctx context.Context, q Quien) (Resultado, e
 		return Resultado{}, err
 	}
 	r := Resultado{TokenNuevo: token}
-	var general string
-	err = s.pool.QueryRow(ctx, `SELECT id FROM price_lists WHERE is_default LIMIT 1`).Scan(&general)
-	if errors.Is(err, pgx.ErrNoRows) {
-		r.Error = "No hay lista de precios configurada."
-		return r, nil
-	}
+	lista, err := s.cat.Vigente(ctx, q.Ses)
 	if err != nil {
 		return r, err
 	}
+	if lista.GeneralID == nil {
+		r.Error = "No hay lista de precios configurada."
+		return r, nil
+	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT ci.id::text, pli.price::text, ci.presentacion, p.unit::text, p.forma_de_venta::text, p.precio_media_pct::float8
+		SELECT ci.id::text, coalesce(propia.price, round((general.price * $4::numeric)::numeric, 2))::text,
+		       ci.presentacion, p.unit::text, p.forma_de_venta::text, p.precio_media_pct::float8
 		FROM cart_items ci
-		JOIN price_list_items pli ON pli.variant_id = ci.variant_id AND pli.price_list_id = $2
 		JOIN product_variants v ON v.id = ci.variant_id JOIN products p ON p.id = v.product_id
-		WHERE ci.cart_id = $1`, cart, general)
+		LEFT JOIN price_list_items propia ON propia.variant_id = ci.variant_id AND propia.price_list_id = $2
+		LEFT JOIN price_list_items general ON general.variant_id = ci.variant_id AND general.price_list_id = $3
+		WHERE ci.cart_id = $1 AND coalesce(propia.price, general.price) IS NOT NULL`, cart, lista.ID, lista.GeneralID, jsmath.Texto(lista.FactorDerivado))
 	if err != nil {
 		return r, err
 	}

@@ -484,25 +484,6 @@ func (a *API) CotizarCorte(ctx context.Context, r cortesapi.CotizarCorteRequestO
 	return ok(v), nil
 }
 
-func (a *API) ResolverCarrito(ctx context.Context, r cortesapi.ResolverCarritoRequestObject) (cortesapi.ResolverCarritoResponseObject, error) {
-	if !a.interna.EsInterno(plataforma.PedidoDe(ctx)) {
-		return nil, plataforma.NuevoProblema(http.StatusForbidden, "Esto solo lo puede pedir el sitio.")
-	}
-	l, err := a.lista(ctx, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	resueltos, msg, err := a.s.ResolverCarrito(ctx, l, r.Body.CartId)
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]any{"resueltos": resueltos}
-	if msg != "" {
-		out["error"] = msg
-	}
-	return ok(out), nil
-}
-
 // --- las rutas del agente del taller (las de siempre, fuera del contrato) ---
 
 // TokenDelAgente es CORTES_AGENTE_TOKEN: sin él (o con menos de 16

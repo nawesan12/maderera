@@ -493,31 +493,6 @@ paths:
               schema: { $ref: "#/components/schemas/CorteCotizado" }
         "422": { $ref: "#/components/responses/Problema" }
         "429": { $ref: "#/components/responses/Problema" }
-  /api/v1/cortes/carrito:
-    post:
-      operationId: ResolverCarrito
-      description: Los cortes de un carrito listos para el pedido. Solo el servidor de Next (secreto interno).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [cartId]
-              additionalProperties: false
-              properties: { cartId: { type: string } }
-      responses:
-        "200":
-          description: Los cortes resueltos, o el error que hay que mostrar
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [resueltos]
-                properties:
-                  resueltos: { type: array, items: { $ref: "#/components/schemas/CorteResuelto" } }
-                  error: { type: string }
-        "403": { $ref: "#/components/responses/Problema" }
 components:
   parameters:
     Id:
@@ -1066,30 +1041,3 @@ components:
         placas: { type: integer }
         pasadas: { type: integer }
         total: { type: string }
-    CorteResuelto:
-      type: object
-      required: [id, placa, piezas, mitad, cantoDescripcion, placaLargoMm, placaAnchoMm, placas, pasadas, anchoSierraMm, cuenta, lineas]
-      properties:
-        id: { type: string }
-        placa: { $ref: "#/components/schemas/PlacaCortable" }
-        piezas: { type: array, items: { $ref: "#/components/schemas/PiezaAcortar" } }
-        mitad: { type: string, nullable: true }
-        cantoDescripcion: { type: string, nullable: true }
-        placaLargoMm: { type: number, format: double }
-        placaAnchoMm: { type: number, format: double }
-        placas: { type: integer }
-        pasadas: { type: integer }
-        anchoSierraMm: { type: number, format: double }
-        cuenta: { $ref: "#/components/schemas/Presupuesto" }
-        lineas:
-          type: array
-          items:
-            type: object
-            required: [esMaterial, variantId, descripcion, unidad, cantidad, precioUnitario]
-            properties:
-              esMaterial: { type: boolean }
-              variantId: { type: string, nullable: true }
-              descripcion: { type: string }
-              unidad: { type: string }
-              cantidad: { type: number, format: double }
-              precioUnitario: { type: number, format: double }

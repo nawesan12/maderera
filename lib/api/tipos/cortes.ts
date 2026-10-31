@@ -392,23 +392,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/cortes/carrito": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Los cortes de un carrito listos para el pedido. Solo el servidor de Next (secreto interno). */
-        post: operations["ResolverCarrito"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -958,32 +941,6 @@ export interface components {
             placas: number;
             pasadas: number;
             total: string;
-        };
-        CorteResuelto: {
-            id: string;
-            placa: components["schemas"]["PlacaCortable"];
-            piezas: components["schemas"]["PiezaAcortar"][];
-            mitad: string | null;
-            cantoDescripcion: string | null;
-            /** Format: double */
-            placaLargoMm: number;
-            /** Format: double */
-            placaAnchoMm: number;
-            placas: number;
-            pasadas: number;
-            /** Format: double */
-            anchoSierraMm: number;
-            cuenta: components["schemas"]["Presupuesto"];
-            lineas: {
-                esMaterial: boolean;
-                variantId: string | null;
-                descripcion: string;
-                unidad: string;
-                /** Format: double */
-                cantidad: number;
-                /** Format: double */
-                precioUnitario: number;
-            }[];
         };
     };
     responses: {
@@ -1745,36 +1702,6 @@ export interface operations {
             };
             422: components["responses"]["Problema"];
             429: components["responses"]["Problema"];
-        };
-    };
-    ResolverCarrito: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    cartId: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Los cortes resueltos, o el error que hay que mostrar */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        resueltos: components["schemas"]["CorteResuelto"][];
-                        error?: string;
-                    };
-                };
-            };
-            403: components["responses"]["Problema"];
         };
     };
 }

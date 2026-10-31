@@ -363,7 +363,6 @@ var pantallaDeCadaRuta = map[string]string{
 	"Sitemap":                        "publico",                       // GET /api/v1/contenido/sitemap/{seccion}
 	"Sucursales":                     "publico",                       // GET /api/v1/contenido/sucursales
 	"ZonasDeEnvio":                   "publico",                       // GET /api/v1/contenido/zonas-envio
-	"ResolverCarrito":                "interno",                       // POST /api/v1/cortes/carrito
 	"CotizarCorte":                   "publico",                       // POST /api/v1/cortes/cotizar
 	"PlacasCortables":                "publico",                       // GET /api/v1/cortes/placas
 	"CalcularPlano":                  "publico",                       // POST /api/v1/cortes/plano

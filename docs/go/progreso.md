@@ -1368,7 +1368,7 @@ Falta correr la e2e (`e2e/checkout.spec.ts`).
       profesional el aviso de «cambió el precio» aparece siempre (igual que
       en el TS).
       Hecho: se guarda y se actualiza con la lista de quien compra (`TestElProfesionalNoVePreciosDesactualizados`).
-- [ ] Borrar `POST /api/v1/cortes/carrito`.
+- [x] Borrar `POST /api/v1/cortes/carrito`. Hecho: la usa el checkout por dentro (`cortes.ResolverCarrito`).
 
 ### Benchmark (29/10/2026, misma Mac; detalle en `bench/tanda6`)
 

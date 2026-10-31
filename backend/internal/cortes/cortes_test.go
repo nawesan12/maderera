@@ -19,6 +19,7 @@ import (
 
 	"mjbj/internal/api/cortesapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/catalogo"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/pruebas"
@@ -472,7 +473,8 @@ func TestArmadorPublicoYCarrito(t *testing.T) {
 		t.Fatalf("cotizar: %d %s", code, b)
 	}
 
-	// El carrito: se guarda como lo haría Next y se resuelve con el secreto.
+	// El carrito: se guarda como lo haría Next y lo resuelve el checkout
+	// (cortes.ResolverCarrito, sin ruta propia).
 	piezas, _ := json.Marshal(c.Piezas)
 	var cart string
 	_ = e.pool.QueryRow(context.Background(), `insert into carts (token) values ('t') returning id::text`).Scan(&cart)
@@ -481,18 +483,13 @@ func TestArmadorPublicoYCarrito(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code, _ := pedir(t, http.DefaultClient, "POST", u+"carrito", map[string]any{"cartId": cart}); code != 403 {
-		t.Errorf("carrito sin secreto: %d", code)
+	resueltos, msg, err := Nuevo(e.pool, silencio).ResolverCarrito(context.Background(),
+		catalogo.Lista{ID: &e.general, GeneralID: &e.general, FactorDerivado: 1}, cart)
+	if err != nil || len(resueltos) != 1 || msg != "" || jsonTotal(resueltos[0]) != c.Total {
+		t.Fatalf("carrito: %v %q %+v", err, msg, resueltos)
 	}
-	_, b = pedir(t, http.DefaultClient, "POST", u+"carrito", map[string]any{"cartId": cart}, "Authorization", "Bearer "+secretoInterno)
-	var r struct {
-		Resueltos []CorteResuelto `json:"resueltos"`
-		Error     string          `json:"error"`
-	}
-	_ = json.Unmarshal([]byte(b), &r)
-	if len(r.Resueltos) != 1 || r.Error != "" || jsonTotal(r.Resueltos[0]) != c.Total {
-		t.Fatalf("carrito: %s", b)
-	}
+	crudo, _ := json.Marshal(resueltos)
+	b = string(crudo)
 	if !strings.Contains(b, "media placa, partida a lo largo") || !strings.Contains(b, "Tapacanto pegado — Blanco") {
 		t.Errorf("líneas: %s", b)
 	}

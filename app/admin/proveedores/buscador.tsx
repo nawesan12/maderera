@@ -49,7 +49,7 @@ export function BuscadorDeProveedores() {
         onValueChange={(v) => v && actualizar({ estado: v })}
         items={ESTADOS}
       >
-        <SelectTrigger className="h-11 w-44">
+        <SelectTrigger className="h-11 w-44" aria-label="Estado">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

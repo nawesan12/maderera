@@ -205,7 +205,7 @@ export function Hilo({
       )}
 
       {/* Mensajes */}
-      <div className="flex-1 space-y-1 overflow-y-auto bg-brand-cream/25 px-4 py-4" aria-live="polite">
+      <div tabIndex={0} role="log" aria-label="Mensajes de la conversación" className="flex-1 space-y-1 overflow-y-auto bg-brand-cream/25 px-4 py-4" aria-live="polite">
         {detalle.mensajes.length === 0 ? (
           <p className="py-10 text-center text-base text-muted-foreground">Todavía no hay mensajes en esta conversación.</p>
         ) : (

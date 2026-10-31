@@ -73,7 +73,7 @@ export function FilaAvisoEmail({ aviso }: { aviso: AvisoEmailConfigurable }) {
               aria-pressed={aviso.activo}
               className={`inline-flex h-10 min-w-[6.5rem] items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium transition-colors disabled:opacity-60 ${
                 aviso.activo
-                  ? "bg-brand-green text-white hover:bg-brand-green/90"
+                  ? "bg-verde-whatsapp text-white hover:bg-brand-green/90"
                   : "border hover:bg-muted"
               }`}
             >

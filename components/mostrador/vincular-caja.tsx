@@ -106,6 +106,7 @@ export function VincularCaja({
           </p>
         ) : (
           <select
+            aria-label="Caja de esta PC"
             defaultValue=""
             disabled={enCurso}
             onChange={(e) => {

@@ -224,7 +224,7 @@ export function Bandeja({
                         </span>
                         {c.noLeidos > 0 && (
                           <span
-                            className="tabular flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-brand-green px-1.5 text-sm font-semibold text-white"
+                            className="tabular flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-verde-whatsapp px-1.5 text-sm font-semibold text-white"
                             aria-label={`${c.noLeidos} sin leer`}
                           >
                             {c.noLeidos}

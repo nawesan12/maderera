@@ -56,7 +56,7 @@ export function BuscadorClientes({
         onValueChange={(v) => v && actualizar({ rubro: v })}
         items={RUBROS}
       >
-        <SelectTrigger className="h-11 w-56">
+        <SelectTrigger className="h-11 w-56" aria-label="Rubro">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

@@ -66,6 +66,7 @@ export default async function CierrePage({
             <input
               type="month"
               name="periodo"
+              aria-label="Mes del cierre"
               defaultValue={periodo.clave}
               className="tabular h-11 rounded-lg border border-linea bg-card px-3 text-base"
             />
@@ -284,10 +285,11 @@ function Renglon({
 }) {
   return (
     <div className="flex flex-wrap items-baseline gap-3 px-5 py-3">
-      <div className="min-w-0 flex-1">
-        <dt className="text-base">{titulo}</dt>
-        <dd className="text-sm text-muted-foreground">{detalle}</dd>
-      </div>
+      {/* Un solo nivel adentro del <dl>: el detalle va dentro del <dt>. */}
+      <dt className="min-w-0 flex-1">
+        <span className="block text-base">{titulo}</span>
+        <span className="block text-sm text-muted-foreground">{detalle}</span>
+      </dt>
       <dd className="tabular shrink-0 text-base font-semibold">
         {formatearMonto(valor)}
       </dd>

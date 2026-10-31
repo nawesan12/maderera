@@ -99,7 +99,7 @@ export function AvisarPorWhatsapp({
           className={`inline-flex ${alto} items-center gap-2 rounded-lg px-3.5 text-base font-medium transition-colors ${
             avisado
               ? "border text-foreground hover:bg-muted"
-              : "bg-brand-green text-white hover:bg-brand-green/90"
+              : "bg-verde-whatsapp text-white hover:bg-brand-green/90"
           }`}
         >
           <MessageCircle className="h-5 w-5" />

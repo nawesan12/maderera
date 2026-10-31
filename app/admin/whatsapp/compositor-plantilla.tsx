@@ -246,7 +246,7 @@ export function CompositorPlantilla({
           <button
             type="submit"
             disabled={enviando || faltan.length > 0 || faltaDocumento || !plantilla}
-            className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
           >
             {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             {faltan.length > 0 ? "Faltan datos" : faltaDocumento ? "Elegí el documento" : "Enviar mensaje preparado"}

@@ -102,7 +102,7 @@ export function Resenas({ resenas }: { resenas: ResenaParaModerar[] }) {
                     <input type="hidden" name="estado" value="publicada" />
                     <button
                       type="submit"
-                      className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand-green px-3 text-base font-medium text-white transition-opacity hover:opacity-90"
+                      className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-verde-whatsapp px-3 text-base font-medium text-white transition-opacity hover:opacity-90"
                     >
                       <Check className="h-4 w-4" />
                       Publicar

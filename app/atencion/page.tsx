@@ -55,7 +55,7 @@ export default async function AtencionPage({
         </Link>
 
         {sinLeer > 0 && (
-          <span className="tabular flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-green px-1.5 text-sm font-semibold text-white">
+          <span className="tabular flex h-6 min-w-6 items-center justify-center rounded-full bg-verde-whatsapp px-1.5 text-sm font-semibold text-white">
             {sinLeer}
           </span>
         )}

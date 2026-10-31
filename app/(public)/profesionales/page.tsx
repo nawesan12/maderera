@@ -231,7 +231,7 @@ export default async function ProfesionalesPage() {
               href={whatsapp}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
+              className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
             >
               <MessageCircle className="h-4 w-4" />
               Escribir por WhatsApp
@@ -361,7 +361,7 @@ async function SolicitudRechazada({ motivo }: { motivo: string | null }) {
         href={whatsapp}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
+        className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
       >
         <MessageCircle className="h-4 w-4" />
         Hablar con un asesor

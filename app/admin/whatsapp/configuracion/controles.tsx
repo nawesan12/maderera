@@ -73,7 +73,7 @@ export function MensajeDePrueba() {
       <button
         type="submit"
         disabled={pendiente}
-        className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-green px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-60"
+        className="inline-flex h-10 items-center gap-2 rounded-lg bg-verde-whatsapp px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-60"
       >
         {pendiente ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
         Mandar mensaje de prueba

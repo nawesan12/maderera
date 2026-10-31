@@ -416,6 +416,14 @@ input::placeholder, textarea::placeholder {
   color: var(--estado-tinta);
 }
 
+/* Y el texto secundario adentro también: el gris de `muted-foreground` está
+   calculado para el fondo neutro, y sobre el rosado o el ámbar de la familia
+   caía a 3,97:1 (axe, 31/10). La tinta da de 5 a 6:1 sobre su propio fondo. */
+:is(.estado-espera, .estado-info, .estado-marca, .estado-ok, .estado-problema, .estado-cerrado)
+  :is(.text-muted-foreground, .text-texto-2, .text-texto-3) {
+  color: var(--estado-tinta);
+}
+
 .dark .estado-espera {
   --estado-fondo: oklch(0.26 0.05 75);
   --estado-tinta: oklch(0.78 0.11 75);

@@ -52,7 +52,7 @@ export function BuscadorProductos({
           ...Object.fromEntries(categorias.map((c) => [c.slug, c.name])),
         }}
       >
-        <SelectTrigger className="h-11 w-56">
+        <SelectTrigger className="h-11 w-56" aria-label="Categoría">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

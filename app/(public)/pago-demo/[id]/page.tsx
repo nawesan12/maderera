@@ -99,7 +99,7 @@ async function PagoDemo({ id }: { id: string }) {
                   <input type="hidden" name="decision" value="aprobar" />
                   <Button
                     type="submit"
-                    className="h-12 w-full bg-brand-green text-base text-white hover:bg-brand-green/90"
+                    className="h-12 w-full bg-verde-whatsapp text-base text-white hover:bg-brand-green/90"
                   >
                     Simular pago aprobado
                   </Button>

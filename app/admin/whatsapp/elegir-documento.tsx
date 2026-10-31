@@ -132,7 +132,7 @@ export function ElegirDocumento({
           <button
             type="submit"
             disabled={enviando || !elegido}
-            className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
           >
             {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : documento ? <Send className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
             {documento ? `Mandar ${documento.titulo}` : "Elegí un documento"}

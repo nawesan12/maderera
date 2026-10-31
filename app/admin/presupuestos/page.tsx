@@ -148,7 +148,9 @@ function Tarjeta({
   return (
     <article
       className={`tarjeta tarjeta-activa relative overflow-hidden ${
-        apagado ? "opacity-75" : ""
+        // Fondo apagado y no opacidad: con opacity-75 el texto (y las
+        // insignias) caían por debajo de 4,5:1.
+        apagado ? "bg-sitio-alt shadow-none" : ""
       }`}
     >
       <AcentoEstado estado={p.estado} />

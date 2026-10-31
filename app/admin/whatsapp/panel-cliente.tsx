@@ -258,7 +258,7 @@ function SinFicha({ detalle }: { detalle: DetalleConversacion }) {
           <button
             type="submit"
             disabled={creando}
-            className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-brand-green text-base font-medium text-white hover:bg-brand-green/90 disabled:opacity-60"
+            className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-verde-whatsapp text-base font-medium text-white hover:bg-brand-green/90 disabled:opacity-60"
           >
             {creando && <Loader2 className="h-4 w-4 animate-spin" />}
             Guardar ficha

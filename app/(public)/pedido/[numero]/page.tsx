@@ -274,7 +274,7 @@ async function Seguimiento({
             target="_blank"
             rel="noopener noreferrer"
           >
-            <Button className="bg-brand-green text-white hover:bg-brand-green/90">
+            <Button className="bg-verde-whatsapp text-white hover:bg-brand-green/90">
               <MessageCircle className="h-4 w-4" />
               Escribirnos por WhatsApp
             </Button>

@@ -44,7 +44,7 @@ export function RespuestaPresupuesto({ numero }: { numero: string }) {
           name="respuesta"
           value="aceptado"
           disabled={pendiente}
-          className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-5 font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-60"
+          className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-5 font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-60"
         >
           {pendiente ? (
             <Loader2 className="h-4 w-4 animate-spin" />

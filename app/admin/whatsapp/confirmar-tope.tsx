@@ -31,7 +31,7 @@ export function ConfirmarTope({
           }}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-green px-3 text-base font-medium text-white hover:bg-brand-green/90"
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-verde-whatsapp px-3 text-base font-medium text-white hover:bg-brand-green/90"
         >
           <Smartphone className="h-4 w-4" />
           Contestar desde el teléfono (gratis)

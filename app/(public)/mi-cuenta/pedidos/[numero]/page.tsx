@@ -327,7 +327,7 @@ export default async function DetallePedidoPage({
           href={`${whatsapp}?text=${mensaje}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 font-medium text-white transition-colors hover:bg-brand-green/90"
+          className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-4 font-medium text-white transition-colors hover:bg-brand-green/90"
         >
           <MessageCircle className="h-4 w-4" />
           Consultar por este pedido

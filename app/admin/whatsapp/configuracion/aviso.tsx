@@ -79,7 +79,7 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
             aria-pressed={aviso.activo}
             className={`inline-flex h-10 items-center gap-2 rounded-lg px-4 text-base font-medium transition-colors disabled:opacity-60 ${
               aviso.activo
-                ? "bg-brand-green text-white hover:bg-brand-green/90"
+                ? "bg-verde-whatsapp text-white hover:bg-brand-green/90"
                 : "border hover:bg-muted"
             }`}
           >

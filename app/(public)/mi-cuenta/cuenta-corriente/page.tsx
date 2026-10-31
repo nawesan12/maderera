@@ -39,7 +39,7 @@ export default async function CuentaCorrientePage({
           href={whatsapp}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
+          className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
         >
           <MessageCircle className="h-4 w-4" />
           Consultar por cuenta corriente
@@ -168,7 +168,7 @@ export default async function CuentaCorrientePage({
           nada. */}
       {pago === "aprobado" && (
         <p className="flex items-start gap-2 rounded-xl border border-brand-green/30 bg-brand-green/5 p-4">
-          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-green text-white">
+          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-verde-whatsapp text-white">
             ✓
           </span>
           Recibimos tu pago. El saldo de arriba ya lo tiene descontado.

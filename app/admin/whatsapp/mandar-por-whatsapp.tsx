@@ -66,7 +66,7 @@ export function MandarPorWhatsapp({
       <button
         type="submit"
         disabled={pendiente}
-        className={`inline-flex ${alto} items-center gap-1.5 rounded-lg bg-brand-green px-3 text-base font-medium text-white hover:bg-brand-green/90 disabled:opacity-60`}
+        className={`inline-flex ${alto} items-center gap-1.5 rounded-lg bg-verde-whatsapp px-3 text-base font-medium text-white hover:bg-brand-green/90 disabled:opacity-60`}
       >
         {pendiente ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         Mandar

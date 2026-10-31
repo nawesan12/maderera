@@ -883,7 +883,7 @@ function Sucursales({
                         />
                       }
                       size="sm"
-                      className="rounded-full bg-brand-green text-white hover:bg-brand-green/90"
+                      className="rounded-full bg-verde-whatsapp text-white hover:bg-brand-green/90"
                     >
                       <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
                       WhatsApp

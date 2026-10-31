@@ -72,13 +72,13 @@ export function PedirPresupuesto({
             : "Te lo contestamos el mismo día, dentro del horario de atención."}
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Los campos con <span className="text-brand-orange">*</span> hay que
+          Los campos con <span className="text-acento-texto">*</span> hay que
           completarlos.
         </p>
       </div>
 
       {esProfesional && (
-        <p className="flex items-center gap-2 rounded-lg bg-brand-orange/10 px-3 py-2 text-sm text-brand-orange-dark">
+        <p className="flex items-center gap-2 rounded-lg bg-naranja-claro px-3 py-2 text-sm text-acento-sobre-claro">
           <Clock className="h-4 w-4 shrink-0" />
           Entra por la cola express
         </p>
@@ -193,7 +193,7 @@ export function PedirPresupuesto({
         <button
           type="submit"
           disabled={enviando}
-          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-brand-orange text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-accion text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
         >
           {enviando ? (
             <>
@@ -239,7 +239,7 @@ function Campo({
     <div>
       <label htmlFor={nombre} className="block text-sm font-medium">
         {etiqueta}
-        {requerido && <span className="text-brand-orange" aria-label="obligatorio">
+        {requerido && <span className="text-acento-texto" aria-label="obligatorio">
             {" *"}
           </span>}
       </label>

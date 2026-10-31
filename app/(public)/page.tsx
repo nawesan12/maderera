@@ -326,7 +326,7 @@ function BannerCorte() {
               <div className="mt-6 flex flex-wrap gap-2.5">
                 <Link
                   href="/corte"
-                  className="flex h-12 items-center rounded-[10px] bg-brand-orange px-[22px] text-[15.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
+                  className="flex h-12 items-center rounded-[10px] bg-accion px-[22px] text-[15.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
                 >
                   Pedir un corte
                 </Link>
@@ -924,7 +924,7 @@ async function CierreCta() {
           <Button
             render={<Link href="/catalogo" />}
             size="lg"
-            className="h-14 rounded-full bg-brand-orange px-8 text-base font-semibold text-white hover:bg-brand-orange-dark"
+            className="h-14 rounded-full bg-accion px-8 text-base font-semibold text-white hover:bg-brand-orange-dark"
           >
             Ver el catálogo
             <ArrowRight className="ml-2 h-5 w-5" />

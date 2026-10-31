@@ -97,7 +97,7 @@ export function Hero({
           <div className="mt-[30px] flex animate-in flex-wrap gap-3 duration-700 fade-in slide-in-from-bottom-8 fill-mode-backwards [animation-delay:300ms] motion-reduce:animate-none">
             <Link
               href="/catalogo"
-              className="flex h-[52px] items-center rounded-[10px] bg-brand-orange px-6 text-base font-semibold text-white transition-colors hover:bg-accion-hover"
+              className="flex h-[52px] items-center rounded-[10px] bg-accion px-6 text-base font-semibold text-white transition-colors hover:bg-accion-hover"
             >
               Ver el catálogo
             </Link>

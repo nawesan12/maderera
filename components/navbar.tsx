@@ -222,7 +222,7 @@ export function Navbar({
         <div className="contenedor flex h-[72px] items-center gap-6">
           {/* El logo, más grande y con el nombre siempre a la vista: la
               clienta pidió que tenga más presencia y que nunca se pierda. */}
-          <Link href="/" className="group flex items-center gap-3">
+          <Link href="/" className="group flex shrink-0 items-center gap-3">
             <Image
               src="/cropped-icon-180x180.png"
               alt="Maderera Juan B. Justo"
@@ -230,7 +230,7 @@ export function Navbar({
               height={54}
               className="rounded-[13px] transition-transform duration-300 group-hover:scale-105"
             />
-            <span className="leading-[1.1]">
+            <span className="whitespace-nowrap leading-[1.1]">
               <span className="block text-[17px] font-extrabold tracking-tight text-foreground">Maderera</span>
               <span className="block text-[12px] font-semibold uppercase tracking-[0.11em] text-texto-3">Juan B. Justo</span>
             </span>
@@ -534,7 +534,9 @@ export function Navbar({
 
             <Link
               href="/carrito"
-              className="hidden h-11 items-center whitespace-nowrap rounded-full bg-accion px-5 text-[15px] font-semibold text-white shadow-[0_4px_14px_-6px_rgb(194_87_15_/_0.6)] transition-colors hover:bg-accion-hover md:flex"
+              // De lg a xl no entra: lleva al mismo carrito que el ícono de al
+              // lado, que en ese rango queda solo.
+              className="hidden h-11 items-center whitespace-nowrap rounded-full bg-accion px-5 text-[15px] font-semibold text-white shadow-[0_4px_14px_-6px_rgb(194_87_15_/_0.6)] transition-colors hover:bg-accion-hover md:flex lg:hidden xl:flex"
             >
               Pedir Presupuesto
             </Link>
@@ -716,7 +718,9 @@ function SesionDeEscritorio({ sesion }: { sesion: SesionConocida }) {
         <Icono className="h-[18px] w-[18px]" />
         {/* El ancho de «Ingresar» queda reservado mientras no se sabe, para
             que el botón no cambie de tamaño cuando llega el nombre. */}
-        <span className={sinSaber ? "invisible" : undefined}>{texto}</span>
+        {/* Entre lg y 2xl la barra no da para todo: queda el ícono, y el
+            texto sigue ahí para los lectores de pantalla. */}
+        <span className={`lg:sr-only 2xl:not-sr-only ${sinSaber ? "invisible" : ""}`}>{texto}</span>
       </Link>
 
       {/* Crear cuenta, solo a quien no entró. La clienta pidió promover
@@ -759,7 +763,9 @@ function EnlaceAlCarrito({ cantidad }: { cantidad: number }) {
       className="relative flex h-10 items-center gap-2 rounded-[11px] px-2.5 text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto"
     >
       <ShoppingCart className="h-[19px] w-[19px] shrink-0" />
-      <span className="hidden text-[13px] font-bold uppercase tracking-[0.045em] sm:inline">
+      {/* Entre lg y 2xl no entra todo en la barra (desde xl se suma «Crear
+          cuenta»): el carrito queda en ícono, con su aria-label. */}
+      <span className="hidden text-[13px] font-bold uppercase tracking-[0.045em] sm:inline lg:hidden 2xl:inline">
         Carrito
       </span>
       {cantidad > 0 && (

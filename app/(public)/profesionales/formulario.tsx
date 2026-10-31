@@ -69,7 +69,7 @@ export function FormularioProfesional({
       className="space-y-4"
     >
       <p className="text-sm text-muted-foreground">
-        Los campos con <span className="text-brand-orange">*</span> hay que
+        Los campos con <span className="text-acento-texto">*</span> hay que
         completarlos.
       </p>
 
@@ -90,7 +90,7 @@ export function FormularioProfesional({
         />
         <div>
           <label htmlFor="documentoNumero" className="block text-sm font-medium">
-            DNI o CUIT <span className="text-brand-orange" aria-label="obligatorio">
+            DNI o CUIT <span className="text-acento-texto" aria-label="obligatorio">
               *
             </span>
           </label>
@@ -122,7 +122,7 @@ export function FormularioProfesional({
         </div>
         <div>
           <label htmlFor="rubro" className="block text-sm font-medium">
-            A qué te dedicás <span className="text-brand-orange" aria-label="obligatorio">
+            A qué te dedicás <span className="text-acento-texto" aria-label="obligatorio">
               *
             </span>
           </label>
@@ -196,7 +196,7 @@ export function FormularioProfesional({
       <button
         type="submit"
         disabled={enviando}
-        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand-orange text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accion text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
       >
         {enviando ? (
           <>
@@ -243,7 +243,7 @@ function Campo({
     <div>
       <label htmlFor={nombre} className="block text-sm font-medium">
         {etiqueta}
-        {requerido && <span className="text-brand-orange" aria-label="obligatorio">
+        {requerido && <span className="text-acento-texto" aria-label="obligatorio">
             {" *"}
           </span>}
       </label>

@@ -141,7 +141,7 @@ function Tarjeta({ producto }: { producto: ProductoAdmin }) {
         )}
 
         {producto.featured && (
-          <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-brand-orange px-2 py-0.5 text-sm font-medium text-white">
+          <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-accion px-2 py-0.5 text-sm font-medium text-white">
             <Star className="h-3.5 w-3.5" fill="currentColor" />
             Destacado
           </span>

@@ -209,7 +209,7 @@ function PagoOnline({
           <Button
             type="submit"
             disabled={pendiente}
-            className="h-12 w-full bg-brand-orange text-base text-white hover:bg-brand-orange-dark"
+            className="h-12 w-full bg-accion text-base text-white hover:bg-brand-orange-dark"
           >
             {pendiente ? (
               <>
@@ -339,7 +339,7 @@ function TransferenciaBancaria({
             <Button
               type="submit"
               disabled={pendiente}
-              className="w-full bg-brand-orange text-white hover:bg-brand-orange-dark"
+              className="w-full bg-accion text-white hover:bg-brand-orange-dark"
             >
               {pendiente ? (
                 <>

@@ -72,7 +72,7 @@ export default async function EventosPage() {
                     )}
 
                     <div className="flex flex-1 flex-col p-5">
-                      <p className="flex items-center gap-2 text-sm font-medium text-brand-orange-dark">
+                      <p className="flex items-center gap-2 text-sm font-medium text-acento-sobre-claro">
                         <CalendarDays className="h-4 w-4" />
                         {fechaLarga.format(evento.inicia)} ·{" "}
                         {hora.format(evento.inicia)}
@@ -108,7 +108,7 @@ export default async function EventosPage() {
                               agotado
                                 ? "text-muted-foreground"
                                 : lugares <= 5
-                                  ? "text-brand-orange-dark"
+                                  ? "text-acento-sobre-claro"
                                   : "text-muted-foreground"
                             }`}
                           >
@@ -120,7 +120,7 @@ export default async function EventosPage() {
                         )}
 
                         {evento.soloProfesionales && (
-                          <span className="rounded-full bg-brand-orange/10 px-2 py-0.5 text-brand-orange-dark">
+                          <span className="rounded-full bg-naranja-claro px-2 py-0.5 text-acento-sobre-claro">
                             Profesionales
                           </span>
                         )}

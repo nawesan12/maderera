@@ -146,7 +146,7 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
       {estado.error && (
         <p
           role="alert"
-          className="flex items-start gap-2 rounded-xl bg-brand-orange/10 p-3 text-sm text-brand-orange-dark"
+          className="flex items-start gap-2 rounded-xl bg-naranja-claro p-3 text-sm text-acento-sobre-claro"
         >
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
           {estado.error}
@@ -162,7 +162,7 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
         <Button
           type="submit"
           disabled={enviando}
-          className="h-12 rounded-full bg-brand-orange font-semibold text-white shadow-lg shadow-brand-orange/20 hover:bg-brand-orange-dark sm:flex-1"
+          className="h-12 rounded-full bg-accion font-semibold text-white shadow-lg shadow-brand-orange/20 hover:bg-brand-orange-dark sm:flex-1"
         >
           {enviando ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

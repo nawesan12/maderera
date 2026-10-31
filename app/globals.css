@@ -94,7 +94,9 @@
   --card-foreground: oklch(0.15 0.01 60);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.15 0.01 60);
-  --primary: oklch(0.68 0.19 48);
+  /* El botón por defecto lleva blanco encima: el naranja de marca daba
+     3,08:1. `--accion` es el que está calculado para eso (4,61:1). */
+  --primary: var(--accion);
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.95 0.01 75);
   --secondary-foreground: oklch(0.22 0.01 60);
@@ -174,7 +176,7 @@
 
   --naranja-claro: #fdeada;
   --naranja-tenue: #fdf5ec;
-  --verde-whatsapp: #2f7d4f;
+  --verde-whatsapp: #2a7247; /* era #2f7d4f: 4,16:1 sobre su propio fondo claro */
   --rojo-oferta: #a52a1a;
 
   /* El naranja de marca sobre blanco da 3.08:1, insuficiente para texto. Los
@@ -185,8 +187,11 @@
   --accion-hover: oklch(0.50 0.18 42);
   /* El mismo naranja cuando se usa como texto y no como fondo de botón. En
      claro coinciden; en oscuro no pueden: el tono que deja leer el blanco
-     encima del botón (4.61:1) se queda en 4.08:1 como texto sobre la tarjeta. */
-  --acento-texto: oklch(0.58 0.19 45);
+     encima del botón (4.61:1) se queda en 4.08:1 como texto sobre la tarjeta.
+     En claro iba igual que `--accion` (4.61:1 contra blanco), pero el sitio no
+     es blanco: sobre el crema (#f4f1eb, #faf7f2) caía a 4.1–4.4:1. Un punto
+     más oscuro da 4.9:1 sobre el crema y 4.86:1 sobre el naranja claro. */
+  --acento-texto: oklch(0.55 0.19 45);
   /* Y un tercero, para cuando el naranja es texto **sobre** el naranja claro.
      `--acento-texto` ahí da 3.95:1: está calculado contra blanco, y #fdeada no
      es blanco. Este es el que trae la propia banda en su paleta de estados. */
@@ -205,7 +210,9 @@
   --card-foreground: oklch(0.96 0.005 80);
   --popover: oklch(0.18 0.01 60);
   --popover-foreground: oklch(0.96 0.005 80);
-  --primary: oklch(0.68 0.19 48);
+  /* El botón por defecto lleva blanco encima: el naranja de marca daba
+     3,08:1. `--accion` es el que está calculado para eso (4,61:1). */
+  --primary: var(--accion);
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.24 0.01 60);
   --secondary-foreground: oklch(0.96 0.005 80);
@@ -272,7 +279,7 @@
   --accion: oklch(0.58 0.19 45);
   --accion-hover: oklch(0.50 0.18 42);
   /* Como texto sí hace falta aclararlo, o no llega sobre el fondo oscuro. */
-  --acento-texto: oklch(0.63 0.15 48);
+  --acento-texto: oklch(0.66 0.15 48); /* era 0.63: 4,3:1 sobre la tarjeta oscura */
   --acento-sobre-claro: oklch(0.705 0.12 50);
 
   --saldo-debe: oklch(0.68 0.18 28);

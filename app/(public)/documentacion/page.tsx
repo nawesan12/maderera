@@ -68,7 +68,7 @@ export default async function DocumentacionPage() {
             </p>
             <Link
               href="/profesionales"
-              className="inline-flex h-11 items-center rounded-lg bg-brand-orange px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
+              className="inline-flex h-11 items-center rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
             >
               Pedir acceso
             </Link>

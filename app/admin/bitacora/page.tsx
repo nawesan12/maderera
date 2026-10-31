@@ -173,7 +173,7 @@ export default async function BitacoraPage({
             href={conFiltro({ dias: String(p.dias), pagina: undefined })}
             className={`h-9 rounded-lg px-3 text-base font-medium leading-9 transition-colors ${
               dias === p.dias
-                ? "bg-brand-orange text-white"
+                ? "bg-accion text-white"
                 : "border hover:bg-muted"
             }`}
           >

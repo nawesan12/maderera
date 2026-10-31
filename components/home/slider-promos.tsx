@@ -174,6 +174,10 @@ export function SliderDePromos({
             // de la página, y esconderlo cuando el carrusel avanza dejaría la
             // portada sin encabezado.
             aria-hidden={varios && i !== actual && slide.clave !== "hero"}
+            // Y fuera del teclado: escondida pero con sus enlaces alcanzables
+            // con Tab, el foco caía en algo que no se ve. `actual` sigue al
+            // desplazamiento, así que la que entra en pantalla se habilita.
+            inert={varios && i !== actual && slide.clave !== "hero"}
             // `[&>*]:h-full` empareja las alturas: el hero es más alto que un
             // banner, y sin esto los banners dejan una franja de fondo abajo
             // que hace saltar la página cada vez que el carrusel avanza.

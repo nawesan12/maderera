@@ -214,7 +214,7 @@ export function Pizarra({
       <button
         type="submit"
         disabled={enviando || !hayTrazo}
-        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand-orange text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
+        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accion text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
       >
         {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
         Confirmar la entrega

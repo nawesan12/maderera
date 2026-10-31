@@ -322,7 +322,7 @@ export function PanelCategorias({
         </p>
         <Link
           href="/carrito"
-          className="mt-3 flex h-[42px] items-center justify-center rounded-[9px] bg-brand-orange text-[14.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
+          className="mt-3 flex h-[42px] items-center justify-center rounded-[9px] bg-accion text-[14.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
         >
           Pedir corte a medida
         </Link>

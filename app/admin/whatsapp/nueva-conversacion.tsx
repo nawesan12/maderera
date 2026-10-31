@@ -55,7 +55,7 @@ export function NuevaConversacion({ onCerrar }: { onCerrar: () => void }) {
         <button
           type="submit"
           disabled={pendiente}
-          className="inline-flex h-10 shrink-0 items-center rounded-lg bg-brand-orange px-3 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+          className="inline-flex h-10 shrink-0 items-center rounded-lg bg-accion px-3 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
         >
           {pendiente ? <Loader2 className="h-5 w-5 animate-spin" /> : "Abrir"}
         </button>

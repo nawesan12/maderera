@@ -203,7 +203,7 @@ export default async function CuentaCorrientePage({
           {/* Acá va solo lo que mueve el saldo. Las compras de contado, las
               transferencias en revisión y los cheques por recibir están en
               Movimientos. */}
-          <Link href="/mi-cuenta/movimientos" className="text-sm font-medium text-brand-orange hover:underline">
+          <Link href="/mi-cuenta/movimientos" className="text-sm font-medium text-acento-texto hover:underline">
             Ver todos tus movimientos
           </Link>
         </div>
@@ -252,7 +252,7 @@ export default async function CuentaCorrientePage({
                           href={`/api/recibos/${m.receiptId}/pdf`}
                           target="_blank"
                           rel="noopener"
-                          className="tabular mt-0.5 block text-sm text-brand-orange hover:underline"
+                          className="tabular mt-0.5 block text-sm text-acento-texto hover:underline"
                         >
                           Recibo {m.referencia}
                         </a>
@@ -283,7 +283,7 @@ export default async function CuentaCorrientePage({
           href={whatsapp}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-medium text-brand-orange hover:underline"
+          className="font-medium text-acento-texto hover:underline"
         >
           Escribinos
         </a>{" "}
@@ -312,7 +312,7 @@ function PedidoRelacionado({ referencia }: { referencia: string }) {
   return (
     <Link
       href={`/mi-cuenta/pedidos/${referencia}`}
-      className="tabular mt-0.5 block text-sm text-brand-orange hover:underline"
+      className="tabular mt-0.5 block text-sm text-acento-texto hover:underline"
     >
       {referencia}
     </Link>

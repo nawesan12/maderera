@@ -51,7 +51,7 @@ export function Vacio({
           {esEnlace ? (
             <Link
               href={(accion as { href: string }).href}
-              className="inline-flex h-11 items-center rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-opacity hover:opacity-90"
+              className="inline-flex h-11 items-center rounded-lg bg-accion px-4 text-base font-medium text-white transition-opacity hover:opacity-90"
             >
               {(accion as { texto: string }).texto}
             </Link>

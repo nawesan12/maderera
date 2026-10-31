@@ -129,7 +129,7 @@ export default async function ResumenCuentaPage() {
 
             <Link
               href="/mi-cuenta/cuenta-corriente"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-orange hover:underline"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-acento-texto hover:underline"
             >
               Ver movimientos
               <ArrowRight className="h-4 w-4" />
@@ -167,7 +167,7 @@ export default async function ResumenCuentaPage() {
               No tenés pedidos en curso. El último fue{" "}
               <Link
                 href={`/mi-cuenta/pedidos/${pedidos[0].numero}`}
-                className="tabular font-medium text-brand-orange hover:underline"
+                className="tabular font-medium text-acento-texto hover:underline"
               >
                 {pedidos[0].numero}
               </Link>
@@ -214,7 +214,7 @@ function EncabezadoSeccion({
       {verMas && (
         <Link
           href={verMas}
-          className="shrink-0 text-sm font-medium text-brand-orange hover:underline"
+          className="shrink-0 text-sm font-medium text-acento-texto hover:underline"
         >
           Ver todos
         </Link>
@@ -345,7 +345,7 @@ async function Bienvenida({ nombre }: { nombre: string }) {
         <div className="flex flex-wrap gap-3 border-t bg-sitio-alt px-6 py-5">
           <Link
             href="/catalogo"
-            className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-orange px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
           >
             Ver el catálogo
             <ArrowRight className="h-4 w-4" />

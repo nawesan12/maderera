@@ -63,7 +63,7 @@ export function AccionesCobro({
             <button
               type="submit"
               disabled={conciliando}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-orange px-3 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-accion px-3 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
             >
               {conciliando ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

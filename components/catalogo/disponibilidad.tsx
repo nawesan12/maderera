@@ -44,7 +44,7 @@ export function Disponibilidad({
         cantidad !== undefined && cantidad > 0
           ? `¡Quedan ${formatearCantidad(cantidad)}!`
           : "Quedan pocas",
-      color: "text-brand-orange",
+      color: "text-acento-texto",
     },
     "sin-stock": {
       punto: "bg-muted-foreground/40",

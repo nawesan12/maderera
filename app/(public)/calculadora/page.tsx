@@ -81,11 +81,11 @@ export default async function CalculadoraPage() {
           </p>
           <p className="mt-3 text-muted-foreground">
             Cuando tengas la lista armada, mandala como{" "}
-            <Link href="/carrito" className="font-medium text-brand-orange hover:underline">
+            <Link href="/carrito" className="font-medium text-acento-texto hover:underline">
               pedido de presupuesto
             </Link>{" "}
             y te confirmamos precios y disponibilidad, o revisá primero el{" "}
-            <Link href="/stock" className="font-medium text-brand-orange hover:underline">
+            <Link href="/stock" className="font-medium text-acento-texto hover:underline">
               stock por sucursal
             </Link>
             .

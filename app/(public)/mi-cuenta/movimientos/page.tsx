@@ -85,7 +85,7 @@ export default async function MovimientosPage({
       {saldo > 0 && (
         <p className="text-[15px] text-muted-foreground">
           Para pagar tu cuenta con transferencia, depósito o cheque, entrá a{" "}
-          <Link href="/mi-cuenta/cuenta-corriente" className="font-medium text-brand-orange hover:underline">
+          <Link href="/mi-cuenta/cuenta-corriente" className="font-medium text-acento-texto hover:underline">
             Cuenta corriente
           </Link>
           .

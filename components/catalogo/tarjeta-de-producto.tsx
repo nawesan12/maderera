@@ -70,8 +70,13 @@ export function TarjetaDeProducto({
 
   return (
     <article className="group relative flex h-full flex-col overflow-hidden rounded-[14px] border border-linea bg-card shadow-[0_1px_2px_rgb(60_50_40_/_0.05)] transition-[box-shadow,transform,border-color] duration-200 hover:-translate-y-[3px] hover:border-linea-hover hover:shadow-[0_14px_30px_-16px_rgb(60_50_40_/_0.34)] motion-reduce:transform-none motion-reduce:transition-none">
+      {/* La foto lleva a la misma ficha que el nombre de abajo: fuera del Tab
+          y de los lectores, que si no la anunciaban dos veces (y sin foto,
+          como un enlace sin nombre). */}
       <Link
         href={`/catalogo/${product.slug}`}
+        tabIndex={-1}
+        aria-hidden="true"
         className="relative block aspect-[4/3] overflow-hidden bg-brand-wood-light/25"
       >
         {product.image ? (

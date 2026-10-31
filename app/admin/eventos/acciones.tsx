@@ -52,7 +52,7 @@ export function AccionesEvento({
             disabled={cambiando}
             className={`inline-flex h-10 items-center gap-2 rounded-lg px-3.5 text-base font-medium transition-colors disabled:opacity-60 ${
               opcion.principal
-                ? "bg-brand-orange text-white hover:bg-brand-orange-dark"
+                ? "bg-accion text-white hover:bg-brand-orange-dark"
                 : "border hover:bg-muted"
             }`}
           >

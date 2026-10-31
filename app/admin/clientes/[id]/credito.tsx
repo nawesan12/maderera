@@ -59,7 +59,7 @@ export function CreditoDelCliente({
                 setAviso(r.error ?? r.ok ?? null);
               })
             }
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-orange px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accion px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
           >
             {trabajando && <Loader2 className="h-4 w-4 animate-spin" />}
             Guardar el plazo

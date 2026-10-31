@@ -35,7 +35,7 @@ export default async function NuevaFacturaPage() {
           </p>
           <Link
             href="/admin/arca"
-            className="mt-3 inline-flex h-10 items-center rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"
+            className="mt-3 inline-flex h-10 items-center rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"
           >
             Cargar datos fiscales
           </Link>

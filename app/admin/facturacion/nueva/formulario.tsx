@@ -368,7 +368,7 @@ export function FormularioFacturaManual({
       <button
         type="submit"
         disabled={pendiente || totales.total <= 0}
-        className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-orange px-5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
+        className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
       >
         {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
         Emitir {letra === "A" ? "factura A" : letra === "B" ? "factura B" : "factura C"}

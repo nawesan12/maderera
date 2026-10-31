@@ -168,7 +168,7 @@ export function SelectorVariante({
                   aria-pressed={activa}
                   className={`rounded-[10px] px-3.5 py-2.5 text-left transition-colors ${
                     activa
-                      ? "border-[1.5px] border-accion bg-naranja-claro font-semibold text-acento-texto"
+                      ? "border-[1.5px] border-accion bg-naranja-claro font-semibold text-acento-sobre-claro"
                       : agotada
                         ? "border border-linea bg-chip text-texto-3"
                         : "border border-linea bg-card hover:border-accion/40"
@@ -205,7 +205,7 @@ export function SelectorVariante({
                   aria-pressed={activa}
                   className={`rounded-[10px] px-3.5 py-2.5 text-left text-[14.5px] transition-colors ${
                     activa
-                      ? "border-[1.5px] border-accion bg-naranja-claro font-semibold text-acento-texto"
+                      ? "border-[1.5px] border-accion bg-naranja-claro font-semibold text-acento-sobre-claro"
                       : "border border-linea bg-card hover:border-accion/40"
                   }`}
                 >

@@ -260,7 +260,7 @@ async function Seguimiento({
               </span>
               <Button
                 render={<Link href="/registro" />}
-                className="bg-brand-orange text-white hover:bg-brand-orange-dark"
+                className="bg-accion text-white hover:bg-brand-orange-dark"
               >
                 Crear cuenta
               </Button>

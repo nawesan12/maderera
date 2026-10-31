@@ -225,7 +225,7 @@ function CargaPorMedida({
             type="button"
             onClick={() => cargar(1)}
             disabled={pendiente || cantidad <= 0}
-            className="h-10 rounded-md bg-brand-orange text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
+            className="h-10 rounded-md bg-accion text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
           >
             {pendiente ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Sumar"}
           </button>

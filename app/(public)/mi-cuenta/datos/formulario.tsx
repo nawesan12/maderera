@@ -136,7 +136,7 @@ export function FormularioDatos({
       <button
         type="submit"
         disabled={pendiente}
-        className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-orange px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+        className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
       >
         {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
         Guardar cambios

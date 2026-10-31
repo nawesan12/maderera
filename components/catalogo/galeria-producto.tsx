@@ -51,7 +51,7 @@ export function GaleriaProducto({
           sizes="(max-width: 1024px) 100vw, 50vw"
         />
         {destacado && (
-          <span className="absolute left-4 top-4 rounded-full bg-brand-orange px-3 py-1 text-xs font-bold uppercase tracking-wider text-white">
+          <span className="absolute left-4 top-4 rounded-full bg-accion px-3 py-1 text-xs font-bold uppercase tracking-wider text-white">
             Destacado
           </span>
         )}

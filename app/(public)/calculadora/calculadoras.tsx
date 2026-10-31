@@ -64,7 +64,7 @@ function ResultRow({ label, value, unit, onAdd, sugerencia, nota }: {
           <p className="text-sm font-medium">{label}</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-mono font-bold bg-brand-orange/10 text-brand-orange px-3 py-1 rounded-lg">
+          <span className="text-sm font-mono font-bold bg-brand-orange/10 text-acento-texto px-3 py-1 rounded-lg">
             {value} {unit}
           </span>
           {onAdd && (
@@ -258,7 +258,7 @@ export function Calculadoras({
                     </div>
                   </div>
                   <Button
-                    className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
+                    className="w-full bg-accion hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     disabled={!roofLargo || !roofAncho}
                     onClick={async () => {
                       const largo = metros(roofLargo);
@@ -323,7 +323,7 @@ export function Calculadoras({
                     />
                     <div className="pt-4 mt-2">
                       <Button
-                        className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
+                        className="w-full bg-accion hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
                         onClick={() => {
                           agregarDelCalculo(roofResult.tirantes, roofResult.tirantes.cantidad, "un");
                           agregarDelCalculo(roofResult.machimbre, roofResult.machimbre.m2, "m²");
@@ -420,7 +420,7 @@ export function Calculadoras({
                     </Button>
                   </div>
                   <Button
-                    className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
+                    className="w-full bg-accion hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     onClick={async () => {
                       const piezas = boardPieces.filter(p => p.ancho > 0 && p.largo > 0 && Number.isFinite(p.cantidad));
                       const r = await calcular<BoardResult>("placas", { piezas, placaAncho: boardPlacaAncho, placaLargo: boardPlacaLargo });
@@ -446,7 +446,7 @@ export function Calculadoras({
                     <ResultRow label="Desperdicio" value={`${boardResult.desperdicio}%`} unit="" nota={`Incluye los ${formatearSierra(parametros.anchoSierraMm)} que se lleva la sierra en cada pasada.`} />
                     <div className="pt-4 mt-2">
                       <Button
-                        className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
+                        className="w-full bg-accion hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
                         onClick={() => agregarDelCalculo({ descripcion: `Placa ${boardResult.placaDimension}`, busqueda: "placa melamina" }, boardResult.placasNecesarias, "placas")}
                       >
                         <ShoppingCart className="h-4 w-4 mr-2" />
@@ -492,7 +492,7 @@ export function Calculadoras({
                     </div>
                   </div>
                   <Button
-                    className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
+                    className="w-full bg-accion hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     disabled={!floorLargo || !floorAncho}
                     onClick={async () => {
                       const largo = metros(floorLargo);
@@ -530,7 +530,7 @@ export function Calculadoras({
                     <ResultRow label="Manta de espuma (underlay)" value={floorResult.underlayM2} unit="m²" sugerencia={sugerenciaDe("underlay")} />
                     <div className="pt-4 mt-2">
                       <Button
-                        className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
+                        className="w-full bg-accion hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
                         onClick={() => {
                           agregarDelCalculo({ descripcion: "Piso Melamínico Decno Flooring", busqueda: "piso melaminico" }, floorResult.cajasNecesarias, "cajas");
                           agregarDelCalculo({ descripcion: "Zócalo Moldava 7cm", busqueda: "zocalo" }, floorResult.zocalos, "unidades");
@@ -602,7 +602,7 @@ export function Calculadoras({
                     </div>
                   </div>
                   <Button
-                    className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
+                    className="w-full bg-accion hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20 text-base"
                     disabled={!deckLargo || !deckAncho}
                     onClick={async () => {
                       const largo = metros(deckLargo);
@@ -638,7 +638,7 @@ export function Calculadoras({
                     )}
                     <div className="pt-4 mt-2">
                       <Button
-                        className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
+                        className="w-full bg-accion hover:bg-brand-orange-dark text-white rounded-full h-12 font-semibold shadow-lg shadow-brand-orange/20"
                         onClick={() => {
                           // Se agrega en tablas y no en m²: la tabla es lo que
                           // se saca del galpón y lo que tiene precio propio.

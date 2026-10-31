@@ -179,7 +179,7 @@ export default async function SucursalesPage() {
                       {destacados.map((destacado) => (
                         <li
                           key={destacado}
-                          className="rounded-full bg-brand-orange/10 px-3 py-1 text-sm font-medium text-brand-orange-dark"
+                          className="rounded-full bg-naranja-claro px-3 py-1 text-sm font-medium text-acento-sobre-claro"
                         >
                           {destacado}
                         </li>
@@ -189,54 +189,54 @@ export default async function SucursalesPage() {
 
                   <dl className="space-y-3 text-sm">
                     <div className="flex items-start gap-3">
-                      <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
-                      <div>
-                        <dt className="sr-only">Dirección</dt>
-                        <dd>{sucursal.direccion}</dd>
-                      </div>
+                      <dt className="shrink-0">
+                        <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
+                        <span className="sr-only">Dirección</span>
+                      </dt>
+                      <dd>{sucursal.direccion}</dd>
                     </div>
 
                     {sucursal.telefono && (
                       <div className="flex items-center gap-3">
-                        <Phone className="h-5 w-5 shrink-0 text-brand-orange" />
-                        <div>
-                          <dt className="sr-only">Teléfono</dt>
-                          <dd>
-                            <a
-                              href={`tel:${telefonoParaMarcar(sucursal.telefono)}`}
-                              className="hover:text-brand-orange"
-                            >
-                              {sucursal.telefono}
-                            </a>
-                          </dd>
-                        </div>
+                        <dt className="shrink-0">
+                          <Phone className="h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
+                          <span className="sr-only">Teléfono</span>
+                        </dt>
+                        <dd>
+                          <a
+                            href={`tel:${telefonoParaMarcar(sucursal.telefono)}`}
+                            className="hover:text-brand-orange"
+                          >
+                            {sucursal.telefono}
+                          </a>
+                        </dd>
                       </div>
                     )}
 
                     {sucursal.email && (
                       <div className="flex items-center gap-3">
-                        <Mail className="h-5 w-5 shrink-0 text-brand-orange" />
-                        <div>
-                          <dt className="sr-only">Correo</dt>
-                          <dd>
-                            <a
-                              href={`mailto:${sucursal.email}`}
-                              className="hover:text-brand-orange"
-                            >
-                              {sucursal.email}
-                            </a>
-                          </dd>
-                        </div>
+                        <dt className="shrink-0">
+                          <Mail className="h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
+                          <span className="sr-only">Correo</span>
+                        </dt>
+                        <dd>
+                          <a
+                            href={`mailto:${sucursal.email}`}
+                            className="hover:text-brand-orange"
+                          >
+                            {sucursal.email}
+                          </a>
+                        </dd>
                       </div>
                     )}
 
                     {sucursal.horario && (
                       <div className="flex items-center gap-3">
-                        <Clock className="h-5 w-5 shrink-0 text-brand-orange" />
-                        <div>
-                          <dt className="sr-only">Horario</dt>
-                          <dd>{sucursal.horario}</dd>
-                        </div>
+                        <dt className="shrink-0">
+                          <Clock className="h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
+                          <span className="sr-only">Horario</span>
+                        </dt>
+                        <dd>{sucursal.horario}</dd>
                       </div>
                     )}
                   </dl>
@@ -307,7 +307,7 @@ export default async function SucursalesPage() {
 
         <p className="text-center text-base text-muted-foreground">
           ¿Buscás algo puntual?{" "}
-          <Link href="/stock" className="font-medium text-brand-orange hover:underline">
+          <Link href="/stock" className="font-medium text-acento-texto hover:underline">
             Consultá la disponibilidad por sucursal
           </Link>
           .

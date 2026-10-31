@@ -70,7 +70,7 @@ export default async function IngresarPage({
                   ? `/registro?volver=${encodeURIComponent(volver)}`
                   : "/registro"
               }
-              className="font-medium text-brand-orange hover:underline"
+              className="font-medium text-acento-texto hover:underline"
             >
               Creala en un minuto
             </Link>
@@ -81,7 +81,7 @@ export default async function IngresarPage({
           ¿Problemas para entrar? Escribinos al{" "}
           <a
             href={whatsapp}
-            className="font-medium text-brand-orange hover:underline"
+            className="font-medium text-acento-texto hover:underline"
           >
             WhatsApp de Casa Central
           </a>

@@ -128,7 +128,7 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
               <button
                 type="submit"
                 disabled={guardando}
-                className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
               >
                 {guardando && <Loader2 className="h-5 w-5 animate-spin" />}
                 Guardar

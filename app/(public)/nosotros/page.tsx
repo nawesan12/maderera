@@ -123,7 +123,7 @@ export default async function NosotrosPage() {
             {TRAYECTORIA.map((hito, i) => (
               <li key={hito.anio} className="flex gap-6 pb-10 last:pb-0">
                 <div className="flex flex-col items-center">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-orange">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accion">
                     <span className="text-xs font-bold text-white">{hito.anio}</span>
                   </div>
                   {i < TRAYECTORIA.length - 1 && (
@@ -144,7 +144,7 @@ export default async function NosotrosPage() {
         <div className="contenedor">
           <div className="grid items-center gap-12 lg:grid-cols-2">
             <div>
-              <p className="mb-4 inline-block rounded-full border border-brand-green/30 bg-brand-green/10 px-3 py-1 text-sm text-brand-green">
+              <p className="mb-4 inline-block rounded-full border border-brand-green/30 bg-brand-green/10 px-3 py-1 text-sm text-verde-whatsapp">
                 Marca propia
               </p>
               <h2 className="mb-4 text-3xl font-bold">Moldava</h2>
@@ -183,13 +183,13 @@ export default async function NosotrosPage() {
         </div>
       </section>
 
-      <section className="bg-brand-orange py-16 text-white">
+      <section className="bg-accion py-16 text-white">
         <div className="contenedor">
           <dl className="grid grid-cols-2 gap-8 text-center md:grid-cols-4">
             {cifras.map((cifra) => (
               <div key={cifra.etiqueta}>
                 <dd className="tabular text-4xl font-bold">{cifra.valor}</dd>
-                <dt className="mt-1 text-sm text-white/70">{cifra.etiqueta}</dt>
+                <dt className="mt-1 text-sm text-white">{cifra.etiqueta}</dt>
               </div>
             ))}
           </dl>

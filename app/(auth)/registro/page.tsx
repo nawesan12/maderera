@@ -78,7 +78,7 @@ export default async function RegistroPage({
         </Link>
 
         <div className="relative max-w-md">
-          <p className="text-sm font-medium uppercase tracking-[0.14em] text-brand-orange">
+          <p className="text-sm font-medium uppercase tracking-[0.14em] text-acento-texto">
             Desde 1981 en Mar del Plata
           </p>
           <h2 className="mt-3 text-3xl font-bold leading-tight">
@@ -149,7 +149,7 @@ export default async function RegistroPage({
                     ? `/ingresar?volver=${encodeURIComponent(volver)}`
                     : "/ingresar"
                 }
-                className="font-medium text-brand-orange hover:underline"
+                className="font-medium text-acento-texto hover:underline"
               >
                 Ingresá
               </Link>
@@ -160,7 +160,7 @@ export default async function RegistroPage({
             ¿Comprás a cuenta corriente?{" "}
             <a
               href={whatsapp}
-              className="font-medium text-brand-orange hover:underline"
+              className="font-medium text-acento-texto hover:underline"
             >
               Escribinos
             </a>{" "}

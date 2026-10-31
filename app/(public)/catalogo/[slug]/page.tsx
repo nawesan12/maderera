@@ -340,8 +340,14 @@ export default async function ProductoPage({
             {/* Cinco columnas no entran en un teléfono: la tabla scrollea sola
                 en su caja en vez de cortarse contra el borde de la pantalla. El
                 fondo sale del token y no de `bg-white`, que en tema oscuro
-                dejaba texto claro sobre blanco. */}
-            <div className="overflow-x-auto rounded-2xl border border-linea bg-card shadow-sm">
+                dejaba texto claro sobre blanco. Con tabIndex y nombre: sin eso,
+                con el teclado no se podía correr la tabla. */}
+            <div
+              tabIndex={0}
+              role="region"
+              aria-label="Medidas disponibles"
+              className="overflow-x-auto rounded-2xl border border-linea bg-card shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento-texto"
+            >
               <table className="w-full min-w-[560px]">
                 <thead>
                   <tr className="border-b bg-muted/40 text-left">
@@ -417,7 +423,7 @@ export default async function ProductoPage({
               </h2>
               <Link
                 href={`/catalogo?cat=${producto.categorySlug}`}
-                className="text-sm font-medium text-brand-orange hover:underline"
+                className="text-sm font-medium text-acento-texto hover:underline"
               >
                 Ver todos
               </Link>

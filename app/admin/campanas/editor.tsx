@@ -208,7 +208,7 @@ export function EditorDeCampana({
                 role="radio"
                 aria-checked={segmento.tipo === valor}
                 onClick={() => cambiarSegmento({ tipo: valor })}
-                className={`h-10 rounded-full border px-4 text-base transition-colors ${segmento.tipo === valor ? "border-brand-orange bg-brand-orange/10 font-medium text-brand-orange-dark" : "border-linea hover:bg-muted"}`}
+                className={`h-10 rounded-full border px-4 text-base transition-colors ${segmento.tipo === valor ? "border-brand-orange bg-naranja-claro font-medium text-acento-sobre-claro" : "border-linea hover:bg-muted"}`}
               >
                 {texto}
               </button>
@@ -230,7 +230,7 @@ export function EditorDeCampana({
                         rubros: marcado ? segmento.rubros.filter((x) => x !== r.valor) : [...segmento.rubros, r.valor],
                       })
                     }
-                    className={`h-9 rounded-full border px-3 text-sm transition-colors ${marcado ? "border-brand-orange bg-brand-orange/10 font-medium text-brand-orange-dark" : "border-linea hover:bg-muted"}`}
+                    className={`h-9 rounded-full border px-3 text-sm transition-colors ${marcado ? "border-brand-orange bg-naranja-claro font-medium text-acento-sobre-claro" : "border-linea hover:bg-muted"}`}
                   >
                     {r.etiqueta}
                   </button>
@@ -321,7 +321,7 @@ export function EditorDeCampana({
               type="button"
               disabled={!listoParaEnviar || Boolean(impedimento) || pendiente || !alcance?.cantidad}
               onClick={() => setConfirmando(true)}
-              className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand-orange px-4 text-base font-semibold text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
+              className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-accion px-4 text-base font-semibold text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
             >
               <Send className="h-5 w-5" />
               Enviar ahora

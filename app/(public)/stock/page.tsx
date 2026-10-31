@@ -15,9 +15,11 @@ interface Params {
 }
 
 const estilo: Record<StockLevel, { clase: string; texto: string }> = {
-  alto: { clase: "bg-brand-green/15 text-brand-green", texto: "En stock" },
-  medio: { clase: "bg-yellow-500/15 text-yellow-700", texto: "Stock limitado" },
-  bajo: { clase: "bg-brand-red/15 text-brand-red", texto: "Poco stock" },
+  // Tintas un punto más oscuras que el fondo de su color: con las de antes
+  // el texto no llegaba a 4,5:1 sobre su propia insignia.
+  alto: { clase: "bg-brand-green/15 text-verde-whatsapp", texto: "En stock" },
+  medio: { clase: "bg-yellow-500/15 text-yellow-800 dark:text-yellow-300", texto: "Stock limitado" },
+  bajo: { clase: "bg-brand-red/15 text-red-800 dark:text-red-300", texto: "Poco stock" },
   "sin-stock": { clase: "bg-muted text-muted-foreground", texto: "Sin stock" },
 };
 
@@ -153,7 +155,7 @@ async function Tabla({ params }: { params: Params }) {
   return (
     <Card>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div tabIndex={0} role="region" aria-label="Stock por sucursal" className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-muted/50">

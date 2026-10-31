@@ -52,7 +52,7 @@ export function ResolverSolicitud({
         <button
           type="button"
           onClick={() => setModo("aprobar")}
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"
         >
           <UserCheck className="h-5 w-5" />
           Habilitar
@@ -138,7 +138,7 @@ export function ResolverSolicitud({
           <button
             type="submit"
             disabled={aprobando}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
           >
             {aprobando && <Loader2 className="h-4 w-4 animate-spin" />}
             Confirmar

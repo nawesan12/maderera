@@ -230,7 +230,7 @@ export default async function ReposicionPage({
                     .slice(0, 40)
                     .map((f) => `${f.variantId}:${f.sugerido}`)
                     .join(",")}`}
-                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-opacity hover:opacity-90"
+                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-opacity hover:opacity-90"
                 >
                   <ShoppingCart className="h-5 w-5" aria-hidden="true" />
                   Generar orden de compra

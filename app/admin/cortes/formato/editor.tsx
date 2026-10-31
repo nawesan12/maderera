@@ -358,7 +358,7 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
         <button
           type="submit"
           disabled={guardando}
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
         >
           {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
           Guardar

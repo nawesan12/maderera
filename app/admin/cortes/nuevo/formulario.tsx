@@ -364,7 +364,7 @@ export function FormularioCorte({
                     aria-pressed={mitad === m}
                     className={`h-10 rounded-md px-3 text-base font-medium transition-colors ${
                       mitad === m
-                        ? "bg-brand-orange text-white"
+                        ? "bg-accion text-white"
                         : "border border-input text-muted-foreground hover:bg-muted"
                     }`}
                   >

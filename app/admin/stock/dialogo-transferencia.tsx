@@ -46,7 +46,7 @@ export function DialogoTransferencia({
 
   return (
     <Dialog open={abierto} onOpenChange={setAbierto}>
-      <DialogTrigger className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark">
+      <DialogTrigger className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark">
         <ArrowLeftRight className="h-4 w-4" />
         Transferir stock
       </DialogTrigger>

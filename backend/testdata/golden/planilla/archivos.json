@@ -721,7 +721,7 @@
     ],
     [
      "Tom & Jerry <b> \"x\" 'y'",
-     "Línea&#10;dos &#x41;   &#65536; &unknown;",
+     "Línea\ndos A   𐀀 &unknown;",
      "",
      "Pino",
      "Con <cdata> & todo",
@@ -905,7 +905,7 @@
     ],
     [
      "Tom & Jerry <b> \"x\" 'y'",
-     "Línea&#10;dos &#x41;   &#65536; &unknown;",
+     "Línea\ndos A   𐀀 &unknown;",
      "",
      "Pino",
      "Con <cdata> & todo",
@@ -1146,7 +1146,7 @@
   "leida": {
    "filas": [
     [
-     "soy sheet10"
+     "soy sheet2"
     ]
    ],
    "codificacion": "xlsx · hoja \"Primera\""
@@ -1263,10 +1263,22 @@
  {
   "archivo": "prefijo-x.xlsx",
   "leida": {
-   "filas": [],
+   "filas": [
+    [
+     "1"
+    ]
+   ],
    "codificacion": "xlsx · hoja \"Hoja1\""
   },
-  "filas": []
+  "filas": [
+   {
+    "linea": 1,
+    "sku": "",
+    "precioGeneral": null,
+    "precioProfesional": null,
+    "error": "La planilla no tiene la columna con el código del producto."
+   }
+  ]
  },
  {
   "archivo": "xml-raro.xlsx",
@@ -1528,7 +1540,7 @@
   "leida": {
    "filas": [
     [
-     "a&#1;b&#9;cde"
+     "a\u0001b\tcde"
     ]
    ],
    "codificacion": "xlsx · hoja \"Hoja1\""
@@ -1548,7 +1560,7 @@
   "leida": {
    "filas": [
     [
-     "ab&#9;cdefghi"
+     "ab\tcdefghi"
     ]
    ],
    "codificacion": "xlsx · hoja \"Hoja1\""
@@ -1966,7 +1978,7 @@
   "leida": {
    "filas": [
     [
-     "la cero"
+     "zip"
     ]
    ],
    "codificacion": "xlsx · hoja \"Hoja1\""

@@ -403,8 +403,8 @@ function archivosDePrueba(): Record<string, Buffer> {
     },
   });
 
-  // Sin sheet1: el TS toma la primera en orden alfabético (sheet10), pero el
-  // nombre sale de la primera hoja del libro.
+  // Sin sheet1 ni relaciones: la de número más bajo (sheet2; antes, la
+  // primera en orden alfabético, sheet10), y el nombre de la primera del libro.
   a["hojas-orden.xlsx"] = xlsx({
     hojas: ["Primera", "Segunda"],
     archivos: {
@@ -421,7 +421,8 @@ function archivosDePrueba(): Record<string, Buffer> {
   a["hoja-vacia.xlsx"] = xlsx({ archivos: { "xl/worksheets/sheet1.xml": hoja("") } });
   a["hoja-una-fila.xlsx"] = xlsx({ archivos: { "xl/worksheets/sheet1.xml": hoja('<row r="1"><c r="B1" t="inlineStr"><is><t>sola</t></is></c></row>') } });
 
-  // Con prefijos de espacio de nombres (x:): fast-xml-parser no los saca, y el TS no encuentra las filas.
+  // Con prefijos de espacio de nombres (x:): fast-xml-parser no los saca; el
+  // lector los saca después (antes no encontraba las filas).
   a["prefijo-x.xlsx"] = xlsx({
     archivos: {
       "xl/worksheets/sheet1.xml": `<?xml version="1.0"?><x:worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><x:sheetData><x:row r="1"><x:c r="A1"><x:v>1</x:v></x:c></x:row></x:sheetData></x:worksheet>`,

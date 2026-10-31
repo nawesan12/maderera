@@ -5,13 +5,15 @@ import (
 	"math"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"mjbj/internal/jsmath"
 )
 
-// El lector de .xlsx (lib/xlsx.ts): la primera hoja como grilla de textos,
+// El lector de .xlsx (lib/xlsx.ts, con los arreglos del 30/10 copiados en
+// scripts/golden/originales/xlsx.ts): la primera hoja como grilla de textos,
 // con las fechas convertidas, los huecos rellenados por la referencia de cada
 // celda y los textos compartidos resueltos. Las fórmulas se leen por su
 // último valor calculado.
@@ -76,7 +78,77 @@ func leerXML(archivos map[string][]byte, ruta string) (valor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return o, nil
+	return sinPrefijos(o), nil
+}
+
+// sinPrefijos saca los prefijos de espacio de nombres de las claves
+// (`x:row` → `row`, `@r:id` → `@id`) y las declaraciones `xmlns`. Algunos
+// exportadores escriben la hoja entera con prefijo, y sin esto la planilla
+// salía vacía. Si dos claves quedan iguales, gana la primera.
+func sinPrefijos(v valor) valor {
+	switch x := v.(type) {
+	case []valor:
+		out := make([]valor, len(x))
+		for i, e := range x {
+			out[i] = sinPrefijos(e)
+		}
+		return out
+	case *objeto:
+		out := nuevoObjeto()
+		for _, p := range x.pares {
+			arroba := ""
+			if strings.HasPrefix(p.k, "@") {
+				arroba = "@"
+			}
+			partes := strings.Split(p.k[len(arroba):], ":")
+			if partes[0] == "xmlns" {
+				continue
+			}
+			clave := p.k
+			if len(partes) == 2 {
+				clave = arroba + partes[1]
+			}
+			if _, ya := out.get(clave); !ya {
+				out.poner(clave, sinPrefijos(p.v))
+			}
+		}
+		return out
+	}
+	return v
+}
+
+var referenciaNumerica = regexp.MustCompile(`&#(?:x([0-9a-fA-F]{1,6})|([0-9]{1,7}));`)
+
+// conCaracteres resuelve las referencias numéricas (`&#10;`, `&#x41;`) que
+// el parser deja escritas. Las que no son un carácter válido quedan.
+func conCaracteres(texto string) string {
+	if !strings.Contains(texto, "&#") {
+		return texto
+	}
+	return referenciaNumerica.ReplaceAllStringFunc(texto, func(todo string) string {
+		m := referenciaNumerica.FindStringSubmatch(todo)
+		var cp int64
+		if m[1] != "" {
+			cp, _ = strconv.ParseInt(m[1], 16, 64)
+		} else {
+			cp, _ = strconv.ParseInt(m[2], 10, 64)
+		}
+		if cp == 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) {
+			return todo
+		}
+		return string(rune(cp))
+	})
+}
+
+var numeroDeHojaRe = regexp.MustCompile(`sheet([0-9]+)\.xml$`)
+
+// numeroDeHoja es el N de sheetN.xml, para ordenar sheet2 antes que sheet10.
+func numeroDeHoja(ruta string) float64 {
+	m := numeroDeHojaRe.FindStringSubmatch(ruta)
+	if m == nil {
+		return 0
+	}
+	return jsmath.Numero(m[1])
 }
 
 // Los formatos numéricos de fábrica de Excel que son fechas u horas.
@@ -296,24 +368,58 @@ func LeerXlsx(datos []byte) (filas [][]string, hoja string, err error) {
 		return nil, "", err
 	}
 	hoja = "Hoja 1"
+	var primera valor
 	if hojas := lista(prop(prop(prop(libro, "workbook"), "sheets"), "sheet")); len(hojas) > 0 {
-		if n := prop(hojas[0], "@name"); n != nil {
+		primera = hojas[0]
+		if n := prop(primera, "@name"); n != nil {
 			hoja = textoDe(n)
 		}
 	}
+	hoja = conCaracteres(hoja)
 
-	// La ruta de la hoja: la primera en orden alfabético ("sheet10" va antes
-	// que "sheet2"), no la que nombra el libro.
-	var rutas []string
-	for nombre := range archivos {
-		if rutaDeHoja.MatchString(nombre) {
-			rutas = append(rutas, nombre)
+	// La ruta de la primera hoja sale de las relaciones del libro (antes se
+	// tomaba la primera en orden alfabético: sheet10 antes que sheet2, y la
+	// que no era si se habían reordenado las hojas). Sin relaciones, la de
+	// número más bajo.
+	relaciones, err := leerXML(archivos, "xl/_rels/workbook.xml.rels")
+	if err != nil {
+		return nil, "", err
+	}
+	ruta := ""
+	if id, ok := prop(primera, "@id").(string); ok {
+		for _, rel := range lista(prop(prop(relaciones, "Relationships"), "Relationship")) {
+			if r, ok := prop(rel, "@Id").(string); !ok || r != id {
+				continue
+			}
+			destino := textoDe(prop(rel, "@Target"))
+			candidata := "xl/" + destino
+			if strings.HasPrefix(destino, "/") {
+				candidata = destino[1:]
+			}
+			if _, existe := archivos[candidata]; existe {
+				ruta = candidata
+			}
+			break
 		}
 	}
-	sort.Strings(rutas)
-	ruta := "xl/worksheets/sheet1.xml"
-	if len(rutas) > 0 {
-		ruta = rutas[0]
+	if ruta == "" {
+		var rutas []string
+		for nombre := range archivos {
+			if rutaDeHoja.MatchString(nombre) {
+				rutas = append(rutas, nombre)
+			}
+		}
+		sort.SliceStable(rutas, func(i, j int) bool {
+			a, b := numeroDeHoja(rutas[i]), numeroDeHoja(rutas[j])
+			if a != b {
+				return a < b
+			}
+			return rutas[i] < rutas[j]
+		})
+		ruta = "xl/worksheets/sheet1.xml"
+		if len(rutas) > 0 {
+			ruta = rutas[0]
+		}
 	}
 
 	datosHoja, err := leerXML(archivos, ruta)
@@ -357,6 +463,7 @@ func LeerXlsx(datos []byte) (filas [][]string, hoja string, err error) {
 			if err != nil {
 				return nil, "", err
 			}
+			texto = conCaracteres(texto)
 			// Con una referencia que no empieza con mayúscula el índice es -1:
 			// en JS eso es una propiedad del arreglo, no una celda, y se pierde.
 			if indice < 0 {

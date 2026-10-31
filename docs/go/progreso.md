@@ -1184,6 +1184,7 @@ Reproducido a propósito, y pendiente:
       elige por nombre de archivo y no por las relaciones del libro, se
       pierden los espacios de `xml:space="preserve"`, los `&#NN;` quedan
       escritos y con prefijo de espacio de nombres la planilla sale vacía.
+      Arreglados el 30/10 (en Go y en el original TS, con las golden regeneradas): la hoja sale de `xl/_rels/workbook.xml.rels`, los prefijos se sacan después de parsear y las `&#NN;` se resuelven en el texto de la celda. Queda el `xml:space="preserve"` (habría que tocar el parser).
 - [x] Dos lotes de saldos a la vez podrían cargar dos veces el saldo de un
       cliente (mirar y escribir, sin candado). La pantalla manda los lotes
       de a uno, como el TS.

@@ -132,7 +132,44 @@ function comoLista<T>(valor: T | T[] | undefined): T[] {
 function leerXml(archivos: Map<string, Uint8Array>, ruta: string): unknown {
   const bytes = archivos.get(ruta);
   if (!bytes) return null;
-  return parser.parse(new TextDecoder().decode(bytes));
+  return sinPrefijos(parser.parse(new TextDecoder().decode(bytes)));
+}
+
+/**
+ * Saca los prefijos de espacio de nombres de las claves (`x:row` → `row`,
+ * `@r:id` → `@id`) y las declaraciones `xmlns`. Algunos exportadores escriben
+ * la hoja entera con prefijo, y sin esto la planilla salía vacía. Agregado en
+ * Go el 30/10 y copiado acá: las golden siguen siendo la especificación.
+ */
+function sinPrefijos(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(sinPrefijos);
+  if (v === null || typeof v !== "object") return v;
+  const out: Record<string, unknown> = {};
+  for (const [k, x] of Object.entries(v)) {
+    const arroba = k.startsWith("@") ? "@" : "";
+    const partes = k.slice(arroba.length).split(":");
+    if (partes[0] === "xmlns") continue;
+    const clave = partes.length === 2 ? arroba + partes[1] : k;
+    if (!Object.hasOwn(out, clave)) out[clave] = sinPrefijos(x);
+  }
+  return out;
+}
+
+/**
+ * Las referencias numéricas (`&#10;`, `&#x41;`) que el parser deja escritas.
+ * Las que no son un carácter válido quedan como están.
+ */
+function conCaracteres(texto: string): string {
+  return texto.replace(/&#(?:x([0-9a-fA-F]{1,6})|([0-9]{1,7}));/g, (todo, hex, dec) => {
+    const cp = hex !== undefined ? parseInt(hex, 16) : parseInt(dec, 10);
+    if (cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) return todo;
+    return String.fromCodePoint(cp);
+  });
+}
+
+/** El número de `sheetN.xml`, para ordenar sheet2 antes que sheet10. */
+function numeroDeHoja(ruta: string): number {
+  return Number(/sheet(\d+)\.xml$/.exec(ruta)?.[1] ?? 0);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -251,15 +288,30 @@ export function leerXlsx(datos: ArrayBuffer | Uint8Array): PlanillaLeida {
   const primera = comoLista(libro?.workbook?.sheets?.sheet)[0] as
     | Record<string, string>
     | undefined;
-  const hoja = primera?.["@name"] ?? "Hoja 1";
+  const hoja = conCaracteres(String(primera?.["@name"] ?? "Hoja 1"));
 
-  // La ruta de la hoja sale de las relaciones del libro. Se busca la primera
-  // que exista, que cubre tanto el nombre habitual como los libros que numeran
-  // distinto.
-  const rutaHoja =
+  // La ruta de la primera hoja sale de las relaciones del libro (antes se
+  // tomaba la primera en orden alfabético: sheet10 antes que sheet2, y la que
+  // no era si se habían reordenado las hojas). Sin relaciones, la de número
+  // más bajo.
+  const relaciones = leerXml(archivos, "xl/_rels/workbook.xml.rels") as
+    | { Relationships?: { Relationship?: unknown } }
+    | null;
+  const idDeLaPrimera = primera?.["@id"];
+  let rutaHoja: string | undefined;
+  for (const r of comoLista(relaciones?.Relationships?.Relationship)) {
+    const rel = r as Record<string, unknown>;
+    if (idDeLaPrimera === undefined || rel["@Id"] !== idDeLaPrimera) continue;
+    const destino = String(rel["@Target"] ?? "");
+    const ruta = destino.startsWith("/") ? destino.slice(1) : "xl/" + destino;
+    if (archivos.has(ruta)) rutaHoja = ruta;
+    break;
+  }
+  rutaHoja ??=
     [...archivos.keys()]
       .filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n))
-      .sort()[0] ?? "xl/worksheets/sheet1.xml";
+      .sort((a, b) => numeroDeHoja(a) - numeroDeHoja(b) || (a < b ? -1 : a > b ? 1 : 0))[0] ??
+    "xl/worksheets/sheet1.xml";
 
   const datosHoja = leerXml(archivos, rutaHoja) as
     | { worksheet?: { sheetData?: { row?: unknown } } }
@@ -286,7 +338,7 @@ export function leerXlsx(datos: ArrayBuffer | Uint8Array): PlanillaLeida {
       // campos vacíos adelante y no corrida dos lugares.
       while (celdas.length < indice) celdas.push("");
 
-      celdas[indice] = valorDeCelda(celda, compartidos, fechas);
+      celdas[indice] = conCaracteres(valorDeCelda(celda, compartidos, fechas));
     }
 
     filas.push(celdas.map((c) => c ?? ""));

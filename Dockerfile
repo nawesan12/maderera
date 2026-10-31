@@ -93,5 +93,14 @@ EXPOSE 3000
 # `node` directo y no `npm start`: así es el proceso 1 del contenedor y recibe
 # el SIGTERM de `docker stop`. Next lo atiende solo —deja de aceptar pedidos,
 # termina los que están en curso y corre lo pendiente de `after()`— antes de
-# salir; el compose le da treinta segundos para eso.
-CMD ["node", "server.js"]
+# salir; el compose le da treinta segundos para eso. `exec` reemplaza al shell,
+# así que `node` sigue siendo el proceso 1.
+#
+# Antes de arrancar se borra la caché de datos (`fetch-cache`, lo de
+# `unstable_cache`), no la de imágenes. Next anota en memoria qué etiquetas se
+# revalidaron, pero los datos quedan en el volumen: al reiniciar, el proceso
+# nuevo no sabe nada de esas revalidaciones y vuelve a servir lo viejo —un
+# precio cambiado, una foto mudada— hasta que vence la red de seguridad. Lo
+# de la caché sale de Go, que responde en milisegundos: arrancar sin ella no
+# cuesta nada.
+CMD ["sh", "-c", "rm -rf .next/cache/fetch-cache && exec node server.js"]

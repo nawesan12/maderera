@@ -107,11 +107,10 @@ services:
     volumes:
       - subidas:/datos/subidas
       - privado:/datos/privado
-      # La caché de Next —las imágenes ya optimizadas y los datos de
-      # `unstable_cache`— sobrevive al despliegue. Sin esto, cada deploy
-      # arranca en frío y la primera visita a cada foto la vuelve a
-      # recomprimir. Es lo mismo que hacía Vercel con su Data Cache, que
-      # también persiste entre despliegues.
+      # Las imágenes ya optimizadas sobreviven al despliegue: sin esto, la
+      # primera visita a cada foto la vuelve a recomprimir. Los datos de
+      # `unstable_cache` no: el contenedor los borra al arrancar (ver el CMD
+      # del Dockerfile).
       - next_cache:/app/.next/cache
       # El certificado y la clave de ARCA, de `secretos/arca/` en el servidor
       # y en solo lectura. Nunca entran en la imagen: `.dockerignore` deja

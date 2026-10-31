@@ -72,7 +72,8 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
       fuera de la aplicación (queda de desarrollo, para los golden)
 - [x] Despliegue: api, worker, migrar (goose), Caddy, desplegar.sh
 - [x] E2E con Playwright (login primero; un flujo más por tanda)
-- [ ] Desplegar en la VPS y probar una cookie real de producción
+- [x] Desplegar en la VPS y probar una cookie real de producción
+      Hecho: en la VPS desde el 30/10; las sesiones las lleva Go.
 - Queda en TS hasta su tanda: `lib/limites` (lo usan otras acciones; cuenta
   en la misma tabla que Go) y las tareas de `lib/tareas` (el cron sigue
   pegándole a Next).
@@ -93,8 +94,9 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 - [x] Pruebas: Go contra la base y el contrato en cada respuesta
       (`pruebas.ConContrato`), y 30 E2E en escritorio y teléfono
 - [x] Benchmark (`bench/tanda2`)
-- [ ] Desplegar en la VPS: agregar `API_SECRETO_INTERNO` al entorno de `api`
+- [x] Desplegar en la VPS: agregar `API_SECRETO_INTERNO` al entorno de `api`
       y `app` antes del despliegue
+      Hecho: desplegado; Next le habla a Go con el secreto.
 - Queda en TS hasta su tanda: la inscripción a eventos y su panel (cobran
   por Mercado Pago, tanda 6, y avisan con lo de profesionales, tanda 10),
   `estadoProfesional` (tanda 10; el mismo criterio está en Go en
@@ -116,8 +118,9 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 - [x] Benchmark (`bench/tanda3`)
 - [x] El ajuste masivo en lote: dos consultas por lista en vez de tres por
       precio; 6400 precios en ~1 s (antes 21–33 s, y 32–45 s en TS)
-- [ ] El informe de reposición (lib/dal/admin/reposicion.ts): lee ventas,
+- [x] El informe de reposición (lib/dal/admin/reposicion.ts): lee ventas,
       va con la tanda 5
+      Hecho: `internal/reportes/reposicion.go`; `lib/dal/admin/reposicion.ts` es solo el cliente de la API.
 - Queda en TS hasta su tanda: el acopio y las reservas (tanda 5), las
   recepciones de compras (tanda 8), las tarifas de cortes (tanda 11), los PDF
   de listas (tanda 12) y lib/csv.ts, lib/xlsx.ts y lib/planilla.ts (los usan
@@ -330,11 +333,13 @@ Rama `go-cortes` (desde 9a17128 de `go-productos`).
       tardíos, avisos y archivos; el contrato en cada respuesta
 - [x] E2E escrita (`e2e/whatsapp.spec.ts`, en modo demostración); sin correr
 - [x] Benchmark (`bench/tanda9`)
-- [ ] La consulta del gasto del mes recorre los salientes en cada apertura de
+- [x] La consulta del gasto del mes recorre los salientes en cada apertura de
       la bandeja (~28 ms con 40.000 mensajes): un índice parcial o el gasto
       guardado. Es lo que hoy limita la bandeja, en TS y en Go
-- [ ] El worker toma 100 trabajos cada 2 s: un mensaje entrante tarda hasta
+      Hecho: índice parcial `whatsapp_mensajes_gasto_idx` (00082).
+- [x] El worker toma 100 trabajos cada 2 s: un mensaje entrante tarda hasta
       2 s en aparecer (el TS lo procesaba en el `after()` de la ruta)
+      Hecho: el trigger de `trabajos` avisa por `mjbj_cola` (00081) y `cola.Despertador` despierta al worker en el acto.
 - Queda en TS: lo que corre en el navegador (plantillas, ventana, costos,
   números, aviso-manual, plantillas-base; Go tiene su gemelo con golden), los
   PDF de `documentos.ts` (tanda 12: Next los arma y viajan a Go en el
@@ -569,13 +574,17 @@ mismo en todos.
 
 ### Pendiente
 
-- [ ] La carga de una retención sufrida (`cargarRetencionSufrida`): emite un
+- [x] La carga de una retención sufrida (`cargarRetencionSufrida`): emite un
       recibo; espera `internal/cobros` de la tanda 4.
-- [ ] El PDF del certificado de retención (tanda 12).
-- [ ] `turnoQueContiene` duplicado en `internal/compras/gastos.go`: se junta
+      Hecho: `cobros.CargarRetencionSufrida`.
+- [x] El PDF del certificado de retención (tanda 12).
+      Hecho: `CertificadoDeRetencionPdf` (internal/pdf).
+- [x] `turnoQueContiene` duplicado en `internal/compras/gastos.go`: se junta
       con la caja de la tanda 5.
-- [ ] La e2e `e2e/compras.spec.ts` (no se corrió: los servidores son
+      Hecho: ya no está duplicado.
+- [x] La e2e `e2e/compras.spec.ts` (no se corrió: los servidores son
       compartidos).
+      Hecho: corre y pasa (30/10).
 - Sin cambiar (a propósito, anotado): aplicar la lista del proveedor no deja
   historial de precios (el TS tampoco); `TotalDeGastos` sale como `clave` y
   el DAL lo renombra a `categoria`/`circuito`.
@@ -774,15 +783,18 @@ en todos.
 
 ### Pendiente
 
-- [ ] Correr `e2e/campanas.spec.ts` (no se corrió: los servidores son
+- [x] Correr `e2e/campanas.spec.ts` (no se corrió: los servidores son
       compartidos).
+      Hecho: corre en la suite completa (79 en verde el 30/10).
 - [ ] `internal/email.Escapar`/`Envolver` asignan mucho (98 KB por correo de
       campaña): si alguna vez se manda sin tope, un `strings.Replacer`.
-- [ ] La tanda 6 se lleva `iniciarPagoDeInscripcion` y el aviso por pago (hoy
+- [x] La tanda 6 se lleva `iniciarPagoDeInscripcion` y el aviso por pago (hoy
       Next → `/api/v1/eventos/aviso-por-pago`); la 5, `pendientes.ts`.
-- [ ] `despacharEmail` del TS y `avisos.Despachar` de Go conviven (misma
+      Hecho: ya no queda en el TS.
+- [x] `despacharEmail` del TS y `avisos.Despachar` de Go conviven (misma
       tabla, mismo `email.reintento`): se junta cuando se muden los avisos de
       pedidos y pagos.
+      Hecho: solo queda `avisos.Despachar`.
 
 ### Lo aprendido
 
@@ -952,9 +964,10 @@ emitido por AC de confianza»: el formato lo acepta). Para homologar:
 - [ ] El candado del CAE es uno solo para todos los puntos de venta: alcanza
       para una maderera; si hiciera falta, uno por punto y tipo, y pedir
       varios comprobantes en un solo `FECAESolicitar` (`CantReg`).
-- [ ] Leen `invoices` desde otros módulos y se mudan con ellos: la caja y las
+- [x] Leen `invoices` desde otros módulos y se mudan con ellos: la caja y las
       entregas (tanda 5), el cierre mensual, el buscador del panel, los
       asientos y los pendientes.
+      Hecho: todos en Go (caja, entregas, reportes, cierre).
 - [ ] El comprobante en PDF sigue sin cortar de página (tanda 12).
 
 ### Lo aprendido
@@ -1066,14 +1079,17 @@ integradas: `go-mostrador-pedidos`, `go-mostrador-entregas`,
 
 ### Pendiente
 
-- [ ] Correr las cuatro e2e; aplicar la 00085 antes de desplegar.
-- [ ] Facturación (tanda 7): `/api/mostrador/ventas` y `/api/mostrador/config`
+- [x] Correr las cuatro e2e; aplicar la 00085 antes de desplegar.
+      Hecho.
+- [x] Facturación (tanda 7): `/api/mostrador/ventas` y `/api/mostrador/config`
       se mudan enteros a Go cuando el comprobante esté en Go.
-- [ ] Tanda 6 (checkout y Mercado Pago): confirmar la compra tiene que usar
+      Hecho: las rutas de Next son envoltorios de `POST /api/v1/mostrador/descarga`.
+- [x] Tanda 6 (checkout y Mercado Pago): confirmar la compra tiene que usar
       `reservas.ReservarPedido`, `reservas.FactoresDeStock`,
       `reservas.CostosParaCongelar`, `numeracion.Pedido` y
       `pedidos.DatosParaTransferir`; acreditar, `cobros.EmitirRecibo`. Al
       mudarlo se borran los TS de la lista de arriba.
+      Hecho: `checkout/compra.go` usa `reservas.ReservarPedido` y `numeracion.Pedido`.
 - Diferencias sabidas: un NaN que la acción recibía de la pantalla llega a
   Go como null («expected number, received null» en vez de «received NaN»);
   `limiteCredito` del buscador de clientes sale como número (el TS lo daba
@@ -1191,7 +1207,8 @@ Reproducido a propósito, y pendiente:
       Hecho: candado por cuenta (`cuenta:` y `proveedor:`), `TestSaldosSimultaneosSeCarganUnaVez`.
 - [ ] El histórico de ventas y de comprobantes no tiene pantalla donde
       verse: solo lo escribe la migración.
-- [ ] Correr la e2e.
+- [x] Correr la e2e.
+      Hecho: `e2e/migracion.spec.ts` en verde (30/10).
 
 Benchmark (29/10/2026, con la máquina muy cargada por otros agentes: load
 average ~100; detalle en `bench/tanda13/README.md`). 72.000 filas en siete
@@ -1357,14 +1374,16 @@ Falta correr la e2e (`e2e/checkout.spec.ts`).
 
 ### Pendiente
 
-- [ ] Correr `e2e/checkout.spec.ts` (sin correr: servidores compartidos).
+- [x] Correr `e2e/checkout.spec.ts` (sin correr: servidores compartidos).
+      Hecho: en verde (30/10).
 - [x] El crédito de una compra a cuenta corriente se mira fuera de la
       transacción (como en el TS): dos compras a la vez pueden pasar el
       límite. Bloquear la ficha y volver a mirar adentro.
       Hecho: `cobros.LimiteEnLaTransaccion`, con candado por cuenta (`TestVentasACuentaSimultaneasRespetanElLimite`).
-- [ ] El aviso de un pago que llega por el webhook sale en la vuelta de cada
+- [x] El aviso de un pago que llega por el webhook sale en la vuelta de cada
       minuto del TS (antes, en el acto): se arregla cuando los avisos de
       pedidos y pagos se muden.
+      Hecho: los avisos están en Go y el worker se despierta con el trabajo nuevo (`cola.Despertador`).
 - [x] El precio que se guarda al agregar es el de la lista general: para un
       profesional el aviso de «cambió el precio» aparece siempre (igual que
       en el TS).

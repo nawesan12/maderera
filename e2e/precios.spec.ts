@@ -18,8 +18,10 @@ test("un precio editado en la grilla queda guardado y en el historial", async ({
   const editar = page.getByRole("button", { name: /^Editar precio, actualmente \$\s?[1-9]/ }).first();
   const antes = (await editar.getAttribute("aria-label"))!.replace("Editar precio, actualmente ", "");
   const numeroAntes = antes.replace(/[^\d]/g, "");
+  // Se cuentan los que ya valen 12.345: una corrida cortada a la mitad puede
+  // haber dejado uno, y la prueba no tiene que depender de eso.
   const nuevo = page.getByRole("button", { name: /^Editar precio, actualmente \$\s12\.345$/ });
-  await expect(nuevo).toHaveCount(0);
+  const yaHabia = await nuevo.count();
 
   await editar.click();
   await page.getByLabel("Nuevo precio").fill("12345");
@@ -27,15 +29,15 @@ test("un precio editado en la grilla queda guardado y en el historial", async ({
   await expect(page.getByText("Precio actualizado.").first()).toBeVisible();
 
   await page.reload();
-  await expect(nuevo).toHaveCount(1);
+  await expect(nuevo).toHaveCount(yaHabia + 1);
 
   // Volver al precio de antes.
-  await nuevo.click();
+  await nuevo.first().click();
   await page.getByLabel("Nuevo precio").fill(numeroAntes);
   await page.getByLabel("Nuevo precio").press("Enter");
   await expect(page.getByText("Precio actualizado.").first()).toBeVisible();
   await page.reload();
-  await expect(nuevo).toHaveCount(0);
+  await expect(nuevo).toHaveCount(yaHabia);
 });
 
 test("una planilla importada muestra qué cambia y aplica lo confirmado", async ({ page }) => {

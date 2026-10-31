@@ -40,7 +40,8 @@ type ArchivoAdjunto struct {
 	Datos  []byte
 }
 
-// TopeAdjuntos es lo que acepta docker-mailserver por mensaje (25 MB), con
+// TopeAdjuntos es para que el mensaje no pase de 25 MB (lo que aceptan Gmail
+// y la mayoría de los servidores, y el tope de la casilla), con
 // lugar para lo que agrega el base64.
 const TopeAdjuntos = 18 << 20
 

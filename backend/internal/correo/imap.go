@@ -232,7 +232,7 @@ func (cx *conexion) carpetas() ([]Carpeta, error) {
 }
 
 // carpetaDeRol busca la carpeta de un rol; si no existe, la crea con el
-// nombre en castellano (el archivo no lo trae docker-mailserver).
+// nombre en castellano (el servidor puede no traerla).
 func (cx *conexion) carpetaDeRol(rol Rol) (string, error) {
 	carpetas, err := cx.carpetas()
 	if err != nil {

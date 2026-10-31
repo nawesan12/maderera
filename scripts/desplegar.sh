@@ -217,15 +217,13 @@ if "${COMPOSE[@]}" config --services | grep -qx correo; then
   "${COMPOSE[@]}" build correo-web
   "${COMPOSE[@]}" up -d --no-deps --remove-orphans correo correo-web
 
-  # **La primera vez, el servidor de correo se apaga si en dos minutos no
-  # tiene ninguna casilla** (y vuelve a arrancar y a esperar, en bucle). Se
-  # avisa acá, que es donde alguien está mirando.
+  # La primera vez Stalwart arranca sin configurar: lo instala
+  # `scripts/correo.sh iniciar`. Se avisa acá, que es donde alguien está mirando.
   sleep 5
-  if ! "${COMPOSE[@]}" exec -T correo test -s /tmp/docker-mailserver/postfix-accounts.cf 2>/dev/null; then
+  if ! "${COMPOSE[@]}" exec -T correo test -f /etc/stalwart/config.json 2>/dev/null; then
     echo
-    echo "  El correo no tiene casillas todavía. En los próximos dos minutos:"
-    dominio="$(grep -E '^DOMINIO=' "$ENTORNO" | tail -n1 | cut -d= -f2- | tr -d '"')"
-    echo "    scripts/correo.sh alta postmaster@${dominio}"
+    echo "  El correo todavía no está instalado:"
+    echo "    scripts/correo.sh iniciar"
     echo "  Ver «Correo propio» en docs/SERVIDOR-PROPIO.md."
   fi
 fi

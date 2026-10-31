@@ -18,7 +18,7 @@ propio todo eso corre en una sola máquina, en cinco contenedores:
 | `web` | Caddy: HTTPS con certificado automático, comprime, sirve las fotos | El CDN de Vercel |
 | `respaldo` | Un volcado diario de la base, con copia fuera de la máquina opcional | Los respaldos de Neon |
 | `worker` | La cola de trabajos y las tareas programadas (el worker de Go, `backend/`) | Nada: en Vercel no había |
-| `correo` | **Opcional.** Las casillas propias: recibe, guarda y manda correo (docker-mailserver) | Resend para los avisos; Gmail para las casillas |
+| `correo` | **Opcional.** Las casillas propias: recibe, guarda y manda correo (Stalwart) | Resend para los avisos; Gmail para las casillas |
 | `correo-web` | **Opcional.** Leer el correo desde el navegador (el webmail propio, en Go) | — |
 
 `correo` y `correo-web` solo levantan con `COMPOSE_PROFILES=correo` en
@@ -46,9 +46,8 @@ alguien tiene que mirar de vez en cuando que sigan andando (ver
 | `scripts/mudar-base.sh` | Una vez: trae la base de Neon |
 | `scripts/mudar-subidas.ts` | Una vez: trae los archivos de Vercel Blob |
 | `servidor/fail2ban/` | El filtro y las cárceles de fail2ban |
-| `servidor/correo/` | La configuración del correo propio (sin nada secreto) |
 | `backend/` | El backend en Go; por ahora, el webmail (`mjbj correo`). Ver `docs/go/` |
-| `scripts/correo.sh` | Casillas, alias, DKIM, relay y los registros DNS del correo |
+| `scripts/correo.sh` | El correo propio: instalarlo, casillas, alias, registros DNS, respaldo |
 | `.github/workflows/desplegar.yml` | Desplegar desde GitHub, apagado por omisión |
 
 ## Antes de empezar
@@ -490,8 +489,9 @@ que despliegue en cada push.
 Casillas con el dominio de la maderera —`ventas@`, `administracion@`— que se
 leen desde el teléfono, la PC o el navegador, y por las que salen también los
 avisos y las campañas de la tienda. Corre en dos contenedores más: `correo`
-(docker-mailserver: Postfix para mandar y recibir, Dovecot para leer, Rspamd
-contra el spam y para firmar) y `correo-web` (el webmail, en `correo.<dominio>`).
+(Stalwart: mandar, recibir, leer por IMAP, firmar con DKIM, filtrar spam y
+bloquear a quien prueba claves, en un solo proceso) y `correo-web` (el
+webmail, en `correo.<dominio>`).
 
 ### Antes de decidir
 
@@ -578,33 +578,38 @@ propio, calentar la IP, relay— son solo para el servidor propio.
 
    ```bash
    COMPOSE_PROFILES="correo"
-   CORREO_CLAVE="$(openssl rand -base64 32)"   # la clave de las sesiones del webmail
+   CORREO_CLAVE="$(openssl rand -base64 32)"        # la clave de las sesiones del webmail
+   CORREO_ADMIN_CLAVE="$(openssl rand -base64 24)"  # la del administrador del servidor de correo
    ```
 
    y desplegar (`./scripts/desplegar.sh`). Caddy saca el certificado de
-   `mail.` y el servidor de correo arranca con él.
+   `mail.` (necesita el registro A de `mail` apuntando acá).
 
-5. **En los dos minutos siguientes, la primera casilla.** docker-mailserver se
-   apaga si arranca sin ninguna (y vuelve a intentar, en bucle):
+5. **Instalarlo** (una vez; se puede repetir sin romper nada):
 
    ```bash
-   scripts/correo.sh alta postmaster@mjbj.com.ar
-   scripts/correo.sh dkim        # genera la llave y muestra el registro DNS
+   scripts/correo.sh iniciar
    ```
 
-   Cargar el registro `mail._domainkey` que muestra `dkim`.
+   Hace lo que pide el asistente de Stalwart: el nombre `mail.<dominio>`, el
+   dominio, las dos llaves DKIM (Ed25519 y RSA), el puerto 587, el
+   administrador `admin@<dominio>` con `CORREO_ADMIN_CLAVE`, y el certificado
+   de Caddy. Si Caddy todavía no lo tenía, avisa: se vuelve a correr cuando
+   esté.
 
 6. Las casillas de verdad y los alias:
 
    ```bash
+   scripts/correo.sh alta postmaster@mjbj.com.ar
    scripts/correo.sh alta ventas@mjbj.com.ar
    scripts/correo.sh alta administracion@mjbj.com.ar
-   scripts/correo.sh alias info@mjbj.com.ar ventas@mjbj.com.ar,administracion@mjbj.com.ar
+   scripts/correo.sh alias info@mjbj.com.ar ventas@mjbj.com.ar
    ```
 
    `alta` sin clave genera una de 20 caracteres y la muestra **una sola vez**.
-   `postmaster@` conviene redirigirlo a una casilla que alguien lea: ahí llegan
-   los reportes de DMARC y los avisos de versiones nuevas.
+   `postmaster@` conviene que lo lea alguien: ahí llegan los reportes de DMARC.
+   Un alias llega a **una** casilla; para repartir a varias, una casilla
+   compartida o una regla en el webmail.
 
 7. **La tienda manda por acá**: una casilla para ella y, en `.env.produccion`,
 
@@ -616,9 +621,8 @@ propio, calentar la IP, relay— son solo para el servidor propio.
    ```
 
    **El remitente tiene que ser la misma casilla** (o un alias suyo): el
-   servidor no deja que una casilla firme como otra (`SPOOF_PROTECTION`). El
-   resto (`SMTP_HOST`, `SMTP_PUERTO`, `SMTP_NOMBRE_TLS`) lo pone el compose.
-   Desplegar de nuevo.
+   servidor no deja que una casilla mande como otra. El resto (`SMTP_HOST`,
+   `SMTP_PUERTO`, `SMTP_NOMBRE_TLS`) lo pone el compose. Desplegar de nuevo.
 
 8. Probar en [mail-tester.com](https://www.mail-tester.com): mandarle un correo
    desde el webmail y desde la tienda. Tiene que dar 9/10 o más; lo que falte
@@ -660,7 +664,8 @@ una «contraseña de aplicación» de Zoho, no la de siempre.
 
 ### Los registros DNS
 
-`scripts/correo.sh dns` los imprime con la IP del servidor. Para `mjbj.com.ar`:
+`scripts/correo.sh dns` imprime los que propone Stalwart, con sus llaves DKIM.
+Para `mjbj.com.ar`, los que importan:
 
 | Tipo | Nombre | Valor | Para qué |
 |---|---|---|---|
@@ -669,13 +674,21 @@ una «contraseña de aplicación» de Zoho, no la de siempre.
 | A | `autoconfig` | IP de la VPS | Que Thunderbird se configure solo |
 | MX | `@` | `mail.mjbj.com.ar` (prioridad 10) | Adónde se entrega el correo para `@mjbj.com.ar` |
 | TXT | `@` | `v=spf1 mx -all` | Solo el servidor del MX puede mandar como `@mjbj.com.ar` |
-| TXT | `mail._domainkey` | lo da `scripts/correo.sh dkim` | La firma DKIM de lo que sale |
+| TXT | `v1-ed25519-<fecha>._domainkey` y `v1-rsa-<fecha>._domainkey` | los dos que da `scripts/correo.sh dns` | La firma DKIM de lo que sale (se firma con las dos) |
 | TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:postmaster@mjbj.com.ar; adkim=s; aspf=s` | Qué hacer con lo que no pasa SPF/DKIM, y adónde mandar los reportes |
 | SRV | `_submissions._tcp` | `0 1 465 mail.mjbj.com.ar` | Programas que buscan solos dónde mandar |
 | SRV | `_imaps._tcp` | `0 1 993 mail.mjbj.com.ar` | Programas que buscan solos dónde leer |
 
-Y el **PTR** de la IP, que no es un registro del dominio sino de Hostinger
-(paso 3 de arriba).
+Los A van **sin el proxy de Cloudflare** (nube gris): el correo no pasa por
+Cloudflare. Y el **PTR** de la IP, que no es un registro del dominio sino de
+Hostinger (paso 3 de arriba).
+
+Stalwart propone además MTA-STS, TLS-RPT, CAA y DMARC en `p=reject`: el
+DMARC se carga en `p=none` primero (abajo), y el resto se puede sumar
+después. **Las llaves DKIM no rotan solas** (`iniciar` lo deja así): con
+rotación automática, Stalwart saca llaves nuevas cada 90 días que habría que
+cargar a mano. Para que roten solas, darle a Stalwart un token de la API de
+Cloudflare (panel de Stalwart → Dominio → DNS) y él publica los registros.
 
 **DMARC empieza en `p=none`** a propósito: no rechaza nada, solo manda
 reportes diarios a `postmaster@`. Así se ve si algo legítimo —la tienda, un
@@ -727,10 +740,10 @@ SES, Brevo, Mailgun): el servidor de correo sigue recibiendo y guardando
 todo, pero lo que sale lo entrega el relay, sin el límite y con su reputación.
 Con Resend, que la tienda ya conoce:
 
-```bash
-scripts/correo.sh relay smtp.resend.com 587 resend
-# pide la clave: la API key de Resend
-```
+se configura en el panel de Stalwart (ver [Mantenimiento del
+correo](#mantenimiento-del-correo) para entrar): *Settings → MTA → Routing*,
+una ruta «relay» a `smtp.resend.com:587` con usuario `resend` y la API key
+como clave, y la estrategia de salida usándola para todo.
 
 Y en el DNS, los registros que pide Resend para el dominio. Los avisos de la
 tienda siguen saliendo por `EMAIL_PROVIDER="smtp"`: pasan por el servidor
@@ -748,41 +761,42 @@ después.
 
 ### Mantenimiento del correo
 
+- **El panel de Stalwart** (cola, rechazos, IP bloqueadas, filtro de spam,
+  rutas de salida) no se publica: escucha solo en la máquina. Desde la PC,
+  `ssh -L 8081:127.0.0.1:8081 mjbj@<servidor>` y abrir
+  `http://127.0.0.1:8081`, con `admin@<dominio>` y `CORREO_ADMIN_CLAVE`.
 - **Actualizar la imagen**: la versión está fijada en el compose
-  (`mailserver/docker-mailserver:16.0.1`) y el servidor avisa a `postmaster@`
-  cuando sale una nueva. Leer las notas de la versión antes —las mayores
-  cambian configuración— y después cambiar el número en el compose,
-  `dc pull correo && dc up -d correo`.
-- **Disco**: los buzones crecen. `scripts/correo.sh listar` dice cuánto ocupa
-  cada casilla; `docker system df -v | grep correo`, el total.
-- **La cola**: `scripts/correo.sh cola` tendría que estar casi vacía. Muchos
-  correos esperando es la señal de que algo rebota (un relay sin clave, una
-  lista negra, el límite de Hostinger).
+  (`stalwartlabs/stalwart:v0.16.26`). Leer las notas de la versión antes —las
+  mayores cambian configuración—, hacer `scripts/correo.sh respaldar`, cambiar
+  el número en el compose y `dc pull correo && dc up -d correo`.
+- **El certificado**: lo renueva Caddy y el worker le pide a Stalwart que lo
+  vuelva a leer una vez por día (tarea `correo-certificado`). A mano:
+  `scripts/correo.sh recargar-certificado`.
+- **La cola**: en el panel, *Queue*. Muchos correos esperando es la señal de
+  que algo rebota (un relay sin clave, una lista negra, el límite de
+  Hostinger).
 - **Listas negras**: si de golpe todo va a spam, mirar la IP en
   [MXToolbox](https://mxtoolbox.com/blacklists.aspx).
 - **Claves**: `scripts/correo.sh clave <casilla>` genera una nueva. Cuando
   alguien deja la empresa, `baja` (borra los correos: respaldarlos antes si
   hacen falta) o `clave` para que nadie más entre.
-- **Baneados**: fail2ban banea una semana a quien falla 6 claves. Si quien
-  quedó afuera es alguien de la maderera con la clave vieja en el teléfono,
-  `scripts/correo.sh baneados` y `desbanear <ip>`.
+- **Bloqueados**: Stalwart bloquea solo la IP que falla muchas claves. Si
+  quedó afuera alguien de la maderera con la clave vieja en el teléfono, se
+  desbloquea en el panel (*Security → Blocked IPs*).
 
 ### Por qué así, en una línea
 
-- **docker-mailserver y no Mailcow**: un solo contenedor y configuración por
-  variables; Mailcow trae una docena y pide más memoria de la que tiene una
-  VPS que además corre la tienda.
-- **Rspamd y sin ClamAV**: Rspamd hace en un proceso lo que antes eran cinco;
-  ClamAV solo pide más de 1 GB de memoria.
-- **El certificado lo saca Caddy**: el mismo que ya renueva el del sitio. El
-  correo lo lee de su volumen y se recarga solo cuando cambia (probado).
+- **Stalwart y no docker-mailserver**: un solo proceso que hace SMTP, IMAP,
+  DKIM, el filtro de spam y el bloqueo de IP; la configuración se aplica por
+  API (`scripts/correo.sh`) y se respalda con el resto. docker-mailserver eran
+  Postfix, Dovecot, Rspamd y fail2ban, cada uno con su archivo.
+- **El certificado lo saca Caddy**: el mismo que ya renueva el del sitio.
+  Stalwart sabe sacar el suyo, pero pide cinco nombres (`autoconfig`,
+  `autodiscover`, `mta-sts`…) y el puerto 80 es de Caddy.
 - **El webmail es propio (Go + Svelte) y no tiene base**: la sesión es una
   cookie sellada con `CORREO_CLAVE`, así que el correo se lee aunque la base
-  de la tienda esté caída. Corre sin root en una imagen distroless.
-- **El fail2ban del correo no banea redes privadas**: el webmail entra a
-  Dovecot desde una IP interna, y banearla dejaría el webmail afuera para
-  todos. El webmail se defiende solo: cinco fallos en un cuarto de hora,
-  por IP real y por casilla.
+  de la tienda esté caída. Corre sin root en una imagen distroless. Habla con
+  Stalwart por IMAP y SMTP como cualquier programa de correo.
 - **Perfil `correo`**: el servidor anda igual sin él, y apagarlo es sacar una
   línea de `.env.produccion`.
 
@@ -831,7 +845,7 @@ hay que volcarlo antes con `pg_dump` y cargarlo allá.
 | Las tareas programadas y la cola | `dc logs worker`; la última corrida de cada tarea, `select distinct on (tarea) tarea, periodo, estado, error from tareas_corridas order by tarea, iniciada_at desc` |
 | La cola de trabajos | `select tipo, estado, intentos, ultimo_error from trabajos where estado <> 'hecho'` |
 | Los baneados | `sudo fail2ban-client status caddy-sondas` |
-| El correo | `dc logs -f correo`; la cola, `scripts/correo.sh cola`; baneados, `scripts/correo.sh baneados` |
+| El correo | `dc logs -f correo`; la cola y los bloqueados, en el panel de Stalwart (ver Mantenimiento del correo) |
 | El webmail | `dc logs -f correo-web` y `/var/log/caddy/webmail.log` |
 | El estado | `dc ps` (la app tiene que decir `healthy`) |
 | El disco | `df -h` y `docker system df` |
@@ -873,18 +887,22 @@ docker run --rm -v mjbj_subidas:/archivos/subidas -v mjbj_privado:/archivos/priv
   -v ~/maderera/respaldos:/r alpine tar -xzf /r/archivos-<fecha>.tar.gz -C /archivos
 ```
 
-**Con el correo propio encendido, el respaldo también empaqueta el correo**:
-`respaldos/correo-<fecha>.tar.gz`, con los buzones, las casillas con sus
-claves y la llave DKIM, y sube a rclone junto con la base. Sin la llave DKIM,
-un servidor reinstalado tendría que cambiar el registro DNS. Para restaurarlo,
-con el correo apagado (`dc stop correo`):
+**El correo propio se respalda aparte**, porque Stalwart guarda todo
+—buzones, casillas con sus claves, llaves DKIM— en una base que no se puede
+copiar mientras escribe: `scripts/correo.sh respaldar` lo para unos segundos,
+lo exporta a `respaldos/correo-<fecha>.tar.gz` y lo vuelve a levantar (lo que
+llegue en esos segundos lo reintenta quien lo manda). El contenedor de
+respaldo lo rota y lo sube a rclone junto con la base. Va en el cron del
+usuario `mjbj`, antes del respaldo de las 3:
 
 ```bash
-docker run --rm -v mjbj_correo_buzones:/correo/buzones -v mjbj_correo_estado:/correo/estado \
-  -v mjbj_correo_config:/correo/config -v ~/maderera/respaldos:/r alpine \
-  tar -xzf /r/correo-<fecha>.tar.gz -C /correo
-dc start correo
+crontab -e
+30 2 * * * cd ~/maderera && scripts/correo.sh respaldar >> respaldos/correo.log 2>&1
 ```
+
+Para volver a uno: `scripts/correo.sh restaurar respaldos/correo-<fecha>.tar.gz`
+(reemplaza todo el correo; pide confirmación). Probado: lo que llegó después
+del respaldo desaparece y lo anterior vuelve, con las claves de entonces.
 
 **Probar una restauración de vez en cuando.** Un respaldo que nunca se
 restauró no se sabe si sirve. Contra una base aparte, sin tocar la de verdad:

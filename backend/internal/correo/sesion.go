@@ -19,7 +19,7 @@ import (
 // buena: lo único que hace falta guardar entre pedidos es la casilla y su
 // clave, para volver a entrar por IMAP. Sellada con una clave que solo tiene
 // este servicio, la cookie no se puede leer ni fabricar; si alguien se la
-// roba, vale hasta que vence, igual que una sesión de Roundcube.
+// roba, vale hasta que vence, igual que la sesión de cualquier webmail.
 //
 // **Dos vencimientos.** Una sesión dura como máximo `duracionMaxima`, y se
 // corta antes si pasa `inactividadMaxima` sin uso: es la PC del mostrador, y

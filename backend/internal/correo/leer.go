@@ -59,7 +59,7 @@ type Mensaje struct {
 }
 
 // tope de lo que se procesa de un mensaje: más de esto no es un correo, es
-// un problema (docker-mailserver rechaza arriba de 25 MB igual).
+// un problema (los servidores rechazan arriba de 25 MB igual).
 const topeMensaje = 40 << 20
 
 func parsear(crudo []byte) (*Mensaje, [][]byte, error) {

@@ -55,7 +55,21 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 - [x] Dockerfile, compose (`correo-web`), Caddy (`correo.`), `desplegar.sh`
 - [x] Probado contra docker-mailserver 16.0.1 local (curl y navegador)
 - [x] Roundcube afuera
-- [ ] Encendido en la VPS (espera los registros DNS y el PTR)
+- [x] **El servidor pasa a Stalwart** (31/10, pedido de Nahuel): v0.16.26 en el
+      mismo servicio `correo` (nombre, puertos y alias iguales: la app, el
+      worker y el webmail no cambian). `scripts/correo.sh` reescrito sobre su
+      API (stalwart-cli 1.0.13 en un contenedor): `iniciar` hace la
+      instalación sin asistente, y alta/clave/baja/alias/dns/respaldar/
+      restaurar. Certificado de Caddy leído de archivos y recargado cada día
+      por el worker (`correo-certificado`); DKIM sin rotación automática
+      (con el DNS a mano rompería a los 90 días). Probado en local de punta a
+      punta: instalación desde cero, envío por 587 con el proveedor SMTP de
+      la app verificando el certificado, alias, DKIM, IMAP, respaldo y
+      restauración.
+- [ ] Encendido en la VPS: espera el registro A de `mail` (sin proxy), el
+      PTR en hPanel, abrir 25/465/587/993 y, para mandar como
+      `@mjbj.com.ar` sin caer en spam, sumar la IP al SPF y las dos llaves
+      DKIM (hoy el dominio recibe en Zoho y el SPF termina en `-all`).
 
 ## Tanda 1: la base común
 

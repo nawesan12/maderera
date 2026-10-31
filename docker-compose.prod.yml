@@ -306,17 +306,9 @@ services:
       RCLONE_REMOTE: ${RCLONE_REMOTE:-}
       RCLONE_DIAS: ${RCLONE_DIAS:-90}
       RCLONE_CONFIG: /config/rclone/rclone.conf
-      CORREO_RESPALDO: ${CORREO_RESPALDO:-si}
     volumes:
       - ./respaldos:/respaldos
       - ./scripts/respaldo.sh:/respaldo.sh:ro
-      # Los buzones y la configuración del correo (casillas, claves, llaves
-      # DKIM), en solo lectura: el respaldo los empaqueta junto con la base.
-      # Si el correo propio no está en uso, los volúmenes están vacíos y el
-      # respaldo lo saltea.
-      - correo_buzones:/correo/buzones:ro
-      - correo_estado:/correo/estado:ro
-      - correo_config:/correo/config:ro
       # Las fotos subidas desde el panel y los adjuntos de WhatsApp, también
       # en solo lectura. La base guarda dónde están, no los archivos: sin
       # estos dos, una base restaurada muestra fichas sin fotos y
@@ -332,60 +324,52 @@ services:
   # worker de Go (servicio `worker`), con el candado de «una vez por período»
   # en la base. El de antes le pegaba a /api/tareas de Next, que ya no existe.
 
-  # **Las casillas de correo propias** (docker-mailserver: Postfix, Dovecot y
-  # Rspamd). Es la pieza que más mantenimiento pide de todo el servidor —ver
-  # «Correo propio» en docs/SERVIDOR-PROPIO.md antes de encenderla—, por eso
-  # va en un perfil: solo levanta con `COMPOSE_PROFILES=correo` en
-  # `.env.produccion`. Sin eso, el resto del servidor anda igual y los avisos
-  # pueden seguir saliendo por Resend.
+  # **Las casillas de correo propias** (Stalwart: SMTP, IMAP, DKIM, filtro de
+  # spam y bloqueo de IP que prueban claves, en un solo proceso). Es la pieza
+  # que más cuidado pide de todo el servidor —ver «Correo propio» en
+  # docs/SERVIDOR-PROPIO.md antes de encenderla—, por eso va en un perfil:
+  # solo levanta con `COMPOSE_PROFILES=correo` en `.env.produccion`. Sin eso,
+  # el resto del servidor anda igual.
+  #
+  # La configuración (dominio, casillas, puertos, certificado) no está en un
+  # archivo: vive en la base de Stalwart y la escribe `scripts/correo.sh`.
   correo:
     profiles: ["correo"]
-    image: mailserver/docker-mailserver:16.0.1
+    image: stalwartlabs/stalwart:v0.16.26
     # El nombre con que se presenta a los otros servidores. Tiene que coincidir
     # con el registro A de `mail`, con el PTR de la IP (lo configura Hostinger)
     # y con el certificado: si no, Gmail lo trata como sospechoso.
     hostname: mail.${CORREO_DOMINIO:-${DOMINIO}}
+    init: true
     restart: unless-stopped
-    env_file:
-      - ./servidor/correo/correo.env
     environment:
-      POSTMASTER_ADDRESS: postmaster@${CORREO_DOMINIO:-${DOMINIO}}
-      # El certificado lo saca y lo renueva Caddy (bloque `mail.` del
-      # Caddyfile), y acá se lee de su volumen. Con `SSL_TYPE=manual` el
-      # servidor de correo vigila esos archivos y se recarga solo cuando Caddy
-      # los renueva. La ruta lleva el emisor: por eso el Caddyfile fija Let's
-      # Encrypt para ese nombre y no deja que caiga en otro.
-      SSL_CERT_PATH: ${CORREO_CERTIFICADO:-/srv/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${CORREO_DOMINIO:-${DOMINIO}}/mail.${CORREO_DOMINIO:-${DOMINIO}}.crt}
-      SSL_KEY_PATH: ${CORREO_CLAVE_CERTIFICADO:-/srv/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${CORREO_DOMINIO:-${DOMINIO}}/mail.${CORREO_DOMINIO:-${DOMINIO}}.key}
+      # Solo durante `scripts/correo.sh iniciar` (la primera vez): un
+      # administrador temporal para la instalación. Después queda vacío.
+      STALWART_RECOVERY_ADMIN: ${CORREO_RECUPERACION:-}
     # **Publicados a internet, a diferencia de la aplicación.** 25 para
     # recibir de otros servidores, 465 y 587 para que las personas manden, 993
-    # para leer. No 143 ni 110: son IMAP y POP sin cifrar, y no hay ningún
-    # programa de correo de hoy que los necesite.
+    # para leer. El panel de administración (8080) solo en la máquina: se
+    # entra con un túnel SSH.
     ports:
       - "25:25"
       - "465:465"
       - "587:587"
       - "993:993"
+      - "127.0.0.1:8081:8080"
     volumes:
-      - correo_buzones:/var/mail
-      - correo_estado:/var/mail-state
-      - correo_registro:/var/log/mail
-      # Casillas, alias y llaves DKIM: lo escribe `scripts/correo.sh`. En un
-      # volumen y no en el repositorio porque tiene las claves.
-      - correo_config:/tmp/docker-mailserver
-      - ./servidor/correo/fail2ban-jail.cf:/tmp/docker-mailserver/fail2ban-jail.cf:ro
+      - correo_etc:/etc/stalwart
+      - correo_datos:/var/lib/stalwart
+      # El certificado de `mail.<dominio>` lo saca y lo renueva Caddy (bloque
+      # `mail.` del Caddyfile) y Stalwart lo lee de su volumen. Lo recarga el
+      # worker una vez por día (tarea `correo.certificado`).
       - caddy_data:/srv/caddy:ro
-    # fail2ban banea con nftables dentro del contenedor, y para eso necesita
-    # tocar la red.
-    cap_add:
-      - NET_ADMIN
-    # Postfix termina de entregar lo que tiene en curso antes de cortar.
+    # Termina de entregar lo que tiene en curso antes de cortar.
     stop_grace_period: 1m
     healthcheck:
-      test: ["CMD-SHELL", "ss --listening --tcp | grep -P 'LISTEN.+:smtp' || exit 1"]
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/healthz/live"]
       interval: 1m
       timeout: 5s
-      start_period: 2m
+      start_period: 1m
       retries: 3
     networks:
       default:
@@ -433,7 +417,5 @@ volumes:
   next_cache:
   caddy_data:
   caddy_config:
-  correo_buzones:
-  correo_estado:
-  correo_registro:
-  correo_config:
+  correo_etc:
+  correo_datos:

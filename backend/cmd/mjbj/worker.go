@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -38,6 +39,7 @@ type configWorker struct {
 	Email     email.Config
 	Campanas  campanas.Config
 	Pagos     pagos.Config
+	Correo    configCorreo
 }
 
 // El worker: la cola (todos los tipos: la de Next ya no existe) y las tareas
@@ -216,6 +218,16 @@ func correrWorker() error {
 	// firmado. Con esto la cola de Next quedó sin trabajos.
 	notificaciones.Nuevo(pool, cfg.Campanas.URLDelSitio(), avisosT10.Nuevo(pool, correoT10, cfg.Email.Remitente, log), wa,
 		facturacion.Nuevo(pool, log), log).ConPanel(avisos, eventos).Registrar(c)
+	// El certificado del correo propio lo renueva Caddy; Stalwart lo vuelve a
+	// leer cuando se le pide. Sin correo propio (sin CORREO_ADMIN_CLAVE), nada.
+	if cfg.Correo.AdminClave != "" {
+		lista = append(lista, tareas.Tarea{
+			Nombre: "correo-certificado", Frecuencia: tareas.Dia, DesdeHora: 5,
+			Ejecutar: func(ctx context.Context) (map[string]any, error) {
+				return nil, recargarCertificadoDelCorreo(ctx, cfg.Correo, &http.Client{Timeout: 30 * time.Second})
+			},
+		})
+	}
 	lista = append(lista, tareas.Tarea{
 		Nombre: "recordatorios-eventos", Frecuencia: tareas.Dia, DesdeHora: 7,
 		Ejecutar: func(ctx context.Context) (map[string]any, error) {

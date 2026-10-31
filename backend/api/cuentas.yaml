@@ -602,7 +602,7 @@ components:
       type: object
       required: [id, userId, nombre, razonSocial, cuit, condicionIva, email, telefono, direccion, rubro, tipo, estado, priceListId,
         limiteCredito, asesor, notas, active, createdAt, updatedAt, codigoLegacy, sellerId, diasCredito, cuentaBloqueada,
-        motivoBloqueo, vendedor, cuentaWebSinVincular, saldo, pedidos, presupuestos]
+        motivoBloqueo, vendedor, cuentaWebSinVincular, saldo, pedidos, presupuestos, anterior]
       properties:
         id: { type: string }
         userId: { type: string, nullable: true }
@@ -640,6 +640,44 @@ components:
         saldo: { type: number, format: double }
         pedidos: { type: array, items: { $ref: "#/components/schemas/Comprobante" } }
         presupuestos: { type: array, items: { $ref: "#/components/schemas/Comprobante" } }
+        anterior: { $ref: "#/components/schemas/HistorialAnterior" }
+    HistorialAnterior:
+      description: >-
+        Lo que la migración trajo del sistema anterior (ISIS) para este cliente:
+        las últimas 20 ventas y los últimos 20 comprobantes, con los totales de
+        todo.
+      type: object
+      required: [ventas, comprobantes, cantidadVentas, totalVentas, cantidadComprobantes, totalComprobantes]
+      properties:
+        cantidadVentas: { type: integer }
+        totalVentas: { type: string }
+        cantidadComprobantes: { type: integer }
+        totalComprobantes: { type: string }
+        ventas:
+          type: array
+          items:
+            type: object
+            required: [id, comprobante, fecha, total, detalle, sucursal]
+            properties:
+              id: { type: string }
+              comprobante: { type: string }
+              fecha: { type: string, format: date-time }
+              total: { type: string }
+              detalle: { type: string }
+              sucursal: { type: string, nullable: true }
+        comprobantes:
+          type: array
+          items:
+            type: object
+            required: [id, tipo, puntoVenta, numero, fecha, total, cae]
+            properties:
+              id: { type: string }
+              tipo: { type: string }
+              puntoVenta: { type: integer }
+              numero: { type: integer }
+              fecha: { type: string, format: date-time }
+              total: { type: string }
+              cae: { type: string, nullable: true }
     MovimientoDelCliente:
       type: object
       required: [id, fecha, clase, titulo, detalle, importe, importeInformativo, pedido, recibo]

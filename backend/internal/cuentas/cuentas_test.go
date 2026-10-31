@@ -350,3 +350,39 @@ func TestVendedoresYSeguimiento(t *testing.T) {
 		t.Errorf("notas: %q", notas)
 	}
 }
+
+// La ficha trae lo que la migración cargó del sistema anterior (antes no se
+// veía en ningún lado): los totales de todo y lo último primero. Sin nada
+// migrado, las listas vienen vacías y los totales en cero.
+func TestLaFichaTraeElHistorialAnterior(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	ctx := context.Background()
+	var id, otro string
+	_ = e.pool.QueryRow(ctx, `insert into customers (nombre) values ('Juan') returning id`).Scan(&id)
+	_ = e.pool.QueryRow(ctx, `insert into customers (nombre) values ('Ana') returning id`).Scan(&otro)
+	for _, sql := range []string{
+		`insert into historical_sales (comprobante_legacy, customer_id, cliente_nombre, fecha, total, detalle) values
+		  ('V-1', $1, 'Juan', '2024-03-01', 1000, 'Tirantes'), ('V-2', $1, 'Juan', '2025-06-01', 250.50, '')`,
+		`insert into historical_invoices (punto_venta, tipo, numero, customer_id, cliente_nombre, fecha, total, cae) values
+		  (1, 'FA', 77, $1, 'Juan', '2025-06-01', 250.50, '71234567890123')`,
+	} {
+		if _, err := e.pool.Exec(ctx, sql, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, b := pedir(t, ven, "GET", e.srv.URL+"/api/v1/admin/clientes/"+id, nil)
+	var f struct{ Anterior clientes.Anterior }
+	if err := json.Unmarshal([]byte(b), &f); err != nil {
+		t.Fatal(err)
+	}
+	a := f.Anterior
+	if a.CantidadVentas != 2 || a.TotalVentas != "1250.50" || len(a.Ventas) != 2 || a.Ventas[0].Comprobante != "V-2" ||
+		a.CantidadComprobantes != 1 || len(a.Comprobantes) != 1 || a.Comprobantes[0].Numero != 77 {
+		t.Fatalf("historial anterior: %s", b)
+	}
+	_, b = pedir(t, ven, "GET", e.srv.URL+"/api/v1/admin/clientes/"+otro, nil)
+	if !strings.Contains(b, `"anterior":{"cantidadVentas":0,"totalVentas":"0","cantidadComprobantes":0,"totalComprobantes":"0","ventas":[],"comprobantes":[]}`) {
+		t.Errorf("sin historial: %s", b)
+	}
+}

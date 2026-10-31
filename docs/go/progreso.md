@@ -1205,8 +1205,9 @@ Reproducido a propósito, y pendiente:
       cliente (mirar y escribir, sin candado). La pantalla manda los lotes
       de a uno, como el TS.
       Hecho: candado por cuenta (`cuenta:` y `proveedor:`), `TestSaldosSimultaneosSeCarganUnaVez`.
-- [ ] El histórico de ventas y de comprobantes no tiene pantalla donde
+- [x] El histórico de ventas y de comprobantes no tiene pantalla donde
       verse: solo lo escribe la migración.
+      Hecho (31/10): sección «Del sistema anterior» en la ficha del cliente (`anterior` en `FichaDeCliente`), con los totales y lo último primero.
 - [x] Correr la e2e.
       Hecho: `e2e/migracion.spec.ts` en verde (30/10).
 

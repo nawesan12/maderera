@@ -6,13 +6,13 @@ import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoDelUltimoRecibo, avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
 import { ArrowLeft, Download, MessageCircle, Printer } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { enlaceDeWhatsapp } from "@/lib/formato";
+import { enlaceDeWhatsapp, fechaSolaCorta } from "@/lib/formato";
 import {
   fechaCorta,
   formatearCuit,
   moneda,
 } from "@/components/admin/formato";
-import { obtenerCliente } from "@/lib/dal/admin/clientes";
+import { obtenerCliente, type FichaDeCliente } from "@/lib/dal/admin/clientes";
 import { AvisoCuentaWeb } from "./aviso-cuenta-web";
 import { CreditoDelCliente } from "./credito";
 import { DialogoMovimiento } from "./dialogo-movimiento";
@@ -324,6 +324,8 @@ export default async function FichaClientePage({
               }))}
             />
           </div>
+
+          <DelSistemaAnterior anterior={cliente.anterior} />
         </div>
       </div>
     </div>
@@ -355,6 +357,88 @@ function Dato({
         )}
       </dd>
     </div>
+  );
+}
+
+/**
+ * Lo que la migración trajo de ISIS para este cliente: sus ventas y sus
+ * comprobantes de antes. Antes solo lo escribía la migración y no se veía en
+ * ningún lado, justo cuando el cliente pregunta «¿qué me llevé la otra vez?».
+ * Sin nada migrado, la sección no aparece. Las fechas son días guardados a
+ * medianoche UTC: se leen en UTC, si no salen un día antes.
+ */
+function DelSistemaAnterior({ anterior }: { anterior: FichaDeCliente["anterior"] }) {
+  if (anterior.cantidadVentas === 0 && anterior.cantidadComprobantes === 0) return null;
+  const mas = (cantidad: number, mostradas: number) =>
+    cantidad > mostradas ? ` · se muestran las últimas ${mostradas}` : "";
+  return (
+    <section className="tarjeta overflow-hidden">
+      <header className="px-4 py-3.5">
+        <h2 className="text-base font-medium">Del sistema anterior</h2>
+        <p className="text-sm text-muted-foreground">
+          Lo que se migró de ISIS. Es historia: no mueve la cuenta corriente.
+        </p>
+      </header>
+      <div className="grid gap-px border-t bg-linea sm:grid-cols-2">
+        {anterior.cantidadVentas > 0 && (
+          <div className="bg-card">
+            <p className="px-4 pt-3 text-sm text-muted-foreground">
+              {anterior.cantidadVentas} {anterior.cantidadVentas === 1 ? "venta" : "ventas"} por{" "}
+              <span className="tabular">{moneda.format(Number(anterior.totalVentas))}</span>
+              {mas(anterior.cantidadVentas, anterior.ventas.length)}
+            </p>
+            <ul className="divide-y">
+              {anterior.ventas.map((v) => (
+                <li key={v.id} className="flex items-start gap-3 px-4 py-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="tabular block text-base">{v.comprobante}</span>
+                    <span className="block text-sm text-muted-foreground">
+                      {fechaSolaCorta.format(new Date(v.fecha))}
+                      {v.sucursal && ` · ${v.sucursal}`}
+                    </span>
+                    {v.detalle && (
+                      <span className="block truncate text-sm text-muted-foreground">{v.detalle}</span>
+                    )}
+                  </span>
+                  <span className="tabular text-base">{moneda.format(Number(v.total))}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {anterior.cantidadComprobantes > 0 && (
+          <div className="bg-card">
+            <p className="px-4 pt-3 text-sm text-muted-foreground">
+              {anterior.cantidadComprobantes}{" "}
+              {anterior.cantidadComprobantes === 1 ? "comprobante" : "comprobantes"} por{" "}
+              <span className="tabular">{moneda.format(Number(anterior.totalComprobantes))}</span>
+              {mas(anterior.cantidadComprobantes, anterior.comprobantes.length)}
+            </p>
+            <ul className="divide-y">
+              {anterior.comprobantes.map((c) => (
+                <li key={c.id} className="flex items-start gap-3 px-4 py-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base">
+                      {c.tipo}{" "}
+                      <span className="tabular">
+                        {String(c.puntoVenta).padStart(4, "0")}-{String(c.numero).padStart(8, "0")}
+                      </span>
+                    </span>
+                    <span className="block text-sm text-muted-foreground">
+                      {fechaSolaCorta.format(new Date(c.fecha))}
+                    </span>
+                    {c.cae && (
+                      <span className="tabular block text-sm text-muted-foreground">CAE {c.cae}</span>
+                    )}
+                  </span>
+                  <span className="tabular text-base">{moneda.format(Number(c.total))}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

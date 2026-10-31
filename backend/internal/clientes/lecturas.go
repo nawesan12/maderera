@@ -177,6 +177,65 @@ type Ficha struct {
 	Saldo                float64       `json:"saldo"`
 	Pedidos              []Comprobante `json:"pedidos"`
 	Presupuestos         []Comprobante `json:"presupuestos"`
+	Anterior             Anterior      `json:"anterior"`
+}
+
+// Anterior es lo que la migración trajo del sistema anterior (ISIS): antes
+// solo lo escribía la migración y no había dónde verlo.
+type Anterior struct {
+	CantidadVentas       int                   `json:"cantidadVentas"`
+	TotalVentas          string                `json:"totalVentas"`
+	CantidadComprobantes int                   `json:"cantidadComprobantes"`
+	TotalComprobantes    string                `json:"totalComprobantes"`
+	Ventas               []VentaAnterior       `json:"ventas"`
+	Comprobantes         []ComprobanteAnterior `json:"comprobantes"`
+}
+
+type VentaAnterior struct {
+	ID          string    `json:"id"`
+	Comprobante string    `json:"comprobante"`
+	Fecha       time.Time `json:"fecha"`
+	Total       string    `json:"total"`
+	Detalle     string    `json:"detalle"`
+	Sucursal    *string   `json:"sucursal"`
+}
+
+type ComprobanteAnterior struct {
+	ID         string    `json:"id"`
+	Tipo       string    `json:"tipo"`
+	PuntoVenta int32     `json:"puntoVenta"`
+	Numero     int32     `json:"numero"`
+	Fecha      time.Time `json:"fecha"`
+	Total      string    `json:"total"`
+	Cae        *string   `json:"cae"`
+}
+
+func (s *Servicio) anterior(ctx context.Context, id string) (Anterior, error) {
+	var a Anterior
+	err := s.pool.QueryRow(ctx, `
+		SELECT (SELECT count(*)::int FROM historical_sales WHERE customer_id = $1),
+		  (SELECT coalesce(sum(total), 0)::text FROM historical_sales WHERE customer_id = $1),
+		  (SELECT count(*)::int FROM historical_invoices WHERE customer_id = $1),
+		  (SELECT coalesce(sum(total), 0)::text FROM historical_invoices WHERE customer_id = $1)`, id).
+		Scan(&a.CantidadVentas, &a.TotalVentas, &a.CantidadComprobantes, &a.TotalComprobantes)
+	if err != nil {
+		return a, err
+	}
+	filas, err := s.pool.Query(ctx, `SELECT id, comprobante_legacy, fecha, total::text, detalle, sucursal
+		FROM historical_sales WHERE customer_id = $1 ORDER BY fecha DESC, comprobante_legacy DESC LIMIT 20`, id)
+	if err != nil {
+		return a, err
+	}
+	if a.Ventas, err = pgx.CollectRows(filas, pgx.RowToStructByPos[VentaAnterior]); err != nil {
+		return a, err
+	}
+	filas, err = s.pool.Query(ctx, `SELECT id, tipo, punto_venta, numero, fecha, total::text, cae
+		FROM historical_invoices WHERE customer_id = $1 ORDER BY fecha DESC, numero DESC LIMIT 20`, id)
+	if err != nil {
+		return a, err
+	}
+	a.Comprobantes, err = pgx.CollectRows(filas, pgx.RowToStructByPos[ComprobanteAnterior])
+	return a, err
 }
 
 // CuentaWeb es una ficha creada desde el sitio con el mismo correo.
@@ -243,6 +302,9 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Ficha, error) {
 	}
 	if c.Presupuestos, err = comprobantes(ctx, s, `SELECT id, numero, estado::text, total::text, created_at FROM quotes
 		WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 10`, id); err != nil {
+		return nil, err
+	}
+	if c.Anterior, err = s.anterior(ctx, id); err != nil {
 		return nil, err
 	}
 	return &c, nil

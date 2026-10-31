@@ -574,6 +574,33 @@ export interface components {
             saldo: number;
             pedidos: components["schemas"]["Comprobante"][];
             presupuestos: components["schemas"]["Comprobante"][];
+            anterior: components["schemas"]["HistorialAnterior"];
+        };
+        /** @description Lo que la migración trajo del sistema anterior (ISIS) para este cliente: las últimas 20 ventas y los últimos 20 comprobantes, con los totales de todo. */
+        HistorialAnterior: {
+            cantidadVentas: number;
+            totalVentas: string;
+            cantidadComprobantes: number;
+            totalComprobantes: string;
+            ventas: {
+                id: string;
+                comprobante: string;
+                /** Format: date-time */
+                fecha: string;
+                total: string;
+                detalle: string;
+                sucursal: string | null;
+            }[];
+            comprobantes: {
+                id: string;
+                tipo: string;
+                puntoVenta: number;
+                numero: number;
+                /** Format: date-time */
+                fecha: string;
+                total: string;
+                cae: string | null;
+            }[];
         };
         MovimientoDelCliente: {
             id: string;

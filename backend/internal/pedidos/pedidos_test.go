@@ -224,7 +224,8 @@ func TestPresupuestoAPedidoYDeVuelta(t *testing.T) {
 		t.Fatalf("listado: %d %s", c, b)
 	}
 
-	// El PDF: el personal, el dueño y el servidor de Next; a los demás, 404.
+	// El PDF: el personal de presupuestos, el dueño y el servidor de Next; a
+	// los demás (también el depósito: precios y datos del cliente), 404.
 	pdf := e.srv.URL + "/api/v1/presupuestos/" + alta.ID + "/pdf"
 	for _, caso := range []struct {
 		nombre string
@@ -232,7 +233,7 @@ func TestPresupuestoAPedidoYDeVuelta(t *testing.T) {
 		cab    []string
 		codigo int
 	}{
-		{"personal", dep, nil, 200}, {"dueño", dueno, nil, 200}, {"otro cliente", otro, nil, 404},
+		{"vendedor", ven, nil, 200}, {"depósito", dep, nil, 404}, {"dueño", dueno, nil, 200}, {"otro cliente", otro, nil, 404},
 		{"sin sesión", http.DefaultClient, nil, 404}, {"interno", http.DefaultClient, []string{"Authorization", "Bearer " + secretoInterno}, 200},
 	} {
 		c, b := pedir(t, caso.c, "GET", pdf, nil, caso.cab...)

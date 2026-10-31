@@ -193,13 +193,18 @@ func (a *API) RemitoParaAvisar(ctx context.Context, r entregasapi.RemitoParaAvis
 	return ok(v), err
 }
 
-// RemitoPdf: el personal baja cualquiera (como el TS: cualquier rol), el
+// RemitoPdf: el personal de pedidos baja cualquiera, el
 // servidor de Next también (WhatsApp), y el cliente solo los suyos. A quien no
 // puede verlo, 404 y no 403: un 403 confirma que existe.
 func (a *API) RemitoPdf(ctx context.Context, r entregasapi.RemitoPdfRequestObject) (entregasapi.RemitoPdfResponseObject, error) {
 	if !a.esInterno(ctx) {
 		ses := auth.DeContexto(ctx)
 		if ses == nil {
+			return nil, noEsta("No encontrado")
+		}
+		// Del personal, quien entra a los pedidos (antes cualquier rol,
+		// también el aserradero).
+		if ses.EsStaff() && !ses.Tiene(roles.QuienEntra("/admin/pedidos")...) {
 			return nil, noEsta("No encontrado")
 		}
 		if !ses.EsStaff() {

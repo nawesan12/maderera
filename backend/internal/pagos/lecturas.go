@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/reportes"
+	"mjbj/internal/roles"
 )
 
 // --- lib/dal/pagos.ts ---
@@ -59,6 +60,9 @@ func (s *Servicio) Autorizado(ctx context.Context, numero, token string, ses *au
 		return nil, nil
 	}
 	if ses.EsStaff() {
+		if !ses.Tiene(roles.QuienEntra("/admin/pedidos")...) {
+			return nil, nil
+		}
 		return &p, nil
 	}
 	var cliente string

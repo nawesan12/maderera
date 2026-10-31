@@ -2,6 +2,7 @@ package migracion
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -361,6 +362,12 @@ func validarFila(e Entidad, d map[string]string) (errores, avisos []string) {
 		if numeroJS(d["limiteCredito"]) < 0 {
 			errores = append(errores, "El límite de cuenta corriente no puede ser negativo.")
 		}
+	case "productos":
+		// Una alícuota fuera de las de ARCA («105» por 10,5) no entra en la
+		// columna y deshacía el lote entero con «numeric field overflow».
+		if !alicuotaDeArca(numeroJS(d["alicuotaIva"])) {
+			errores = append(errores, fmt.Sprintf("La alícuota de IVA %s no es una de ARCA (0, 2,5, 5, 10,5, 21 o 27).", d["alicuotaIva"]))
+		}
 	case "stock":
 		if numeroJS(d["cantidad"]) < 0 {
 			errores = append(errores, "La existencia no puede ser negativa.")
@@ -491,4 +498,15 @@ func Previsualizar(e Entidad, m Mapeo, filas [][]string) VistaPrevia {
 	}
 	validas, avisos, errores := len(normalizadas)-len(conError), len(conAviso), len(conError)
 	return VistaPrevia{Validas: &validas, ConAviso: &avisos, ConError: &errores, Muestra: &muestra, Rechazos: &rechazos}
+}
+
+// alicuotaDeArca dice si el porcentaje es una de las alícuotas de IVA que
+// existen.
+func alicuotaDeArca(a float64) bool {
+	for _, v := range []float64{0, 2.5, 5, 10.5, 21, 27} {
+		if math.Abs(a-v) < 1e-9 {
+			return true
+		}
+	}
+	return false
 }

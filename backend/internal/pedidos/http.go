@@ -215,7 +215,7 @@ func (a *API) ConvertirPresupuestoEnPedido(ctx context.Context, r ventasapi.Conv
 	return ok(v), nil
 }
 
-// PresupuestoPdf: el personal, el cliente dueño o el servidor de Next. A
+// PresupuestoPdf: el personal de presupuestos o del mostrador, el cliente dueño o el servidor de Next. A
 // cualquier otro, 404.
 func (a *API) PresupuestoPdf(ctx context.Context, r ventasapi.PresupuestoPdfRequestObject) (ventasapi.PresupuestoPdfResponseObject, error) {
 	no := noEsta("No encontrado")
@@ -229,6 +229,11 @@ func (a *API) PresupuestoPdf(ctx context.Context, r ventasapi.PresupuestoPdfRequ
 		return nil, err
 	}
 	if p == nil {
+		return nil, no
+	}
+	// Del personal, quien arma o vende presupuestos (antes, también el
+	// aserradero y el depósito: precios y datos del cliente).
+	if !interno && ses.EsStaff() && !ses.Tiene(append(roles.QuienEntra("/admin/presupuestos"), roles.QuienEntra("/mostrador")...)...) {
 		return nil, no
 	}
 	if !interno && !ses.EsStaff() {

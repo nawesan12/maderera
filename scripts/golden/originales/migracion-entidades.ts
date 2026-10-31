@@ -926,6 +926,18 @@ function validarFila(
     }
   }
 
+  // Una alícuota fuera de las de ARCA («105» por 10,5) no entra en la
+  // columna y deshacía el lote entero. Agregado en Go (30/10) y copiado acá
+  // para que las golden sigan siendo la especificación.
+  if (entidad.clave === "productos") {
+    const alicuota = Number(datos.alicuotaIva ?? "");
+    if (![0, 2.5, 5, 10.5, 21, 27].some((v) => Math.abs(alicuota - v) < 1e-9)) {
+      errores.push(
+        `La alícuota de IVA ${datos.alicuotaIva} no es una de ARCA (0, 2,5, 5, 10,5, 21 o 27).`,
+      );
+    }
+  }
+
   if (entidad.clave === "stock" && Number(datos.cantidad ?? "0") < 0) {
     errores.push("La existencia no puede ser negativa.");
   }

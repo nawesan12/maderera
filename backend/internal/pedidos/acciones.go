@@ -3,6 +3,7 @@ package pedidos
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -173,7 +174,8 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id string) (*R
 }
 
 // Cancelar cancela el pedido y libera lo reservado (el físico no se toca:
-// nunca salió del galpón). Un pedido ya cancelado no se cancela de nuevo.
+// nunca salió del galpón). Un pedido ya cancelado no se cancela de nuevo, y
+// uno con remitos vigentes tampoco: lo que salió vuelve anulando el remito.
 //
 // Si el pedido cargó deuda en la cuenta corriente (la compra a cuenta de la
 // tienda), la cancelación la devuelve con una nota de crédito, una sola vez:
@@ -192,6 +194,19 @@ func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, mo
 		}
 		if p.origen == "mostrador" {
 			return fallo("Es una venta del mostrador: anulala desde el mostrador, que devuelve el stock, el efectivo de la caja y la deuda.")
+		}
+		// Si ya salió mercadería, cancelar devolvía la deuda y liberaba
+		// reservas que ya no estaban, pero el físico quedaba afuera. Primero
+		// se anulan los remitos, que la devuelven al depósito.
+		var remitos []string
+		if err := tx.QueryRow(ctx, `
+			SELECT coalesce(array_agg(numero ORDER BY numero), '{}') FROM deliveries
+			WHERE order_id = $1 AND estado <> 'anulada'`, id).Scan(&remitos); err != nil {
+			return err
+		}
+		if len(remitos) > 0 {
+			return fallo("Ya salió mercadería con el remito " + strings.Join(remitos, ", ") +
+				": anulalo en la ficha del pedido, así vuelve al depósito, y después cancelá.")
 		}
 		if p.customerID != nil {
 			if devuelto, err = devolverDeuda(ctx, tx, *p.customerID, p.numero, motivo, ses.UserID); err != nil {

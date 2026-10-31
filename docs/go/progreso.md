@@ -1176,16 +1176,18 @@ Bugs arreglados (cada uno con su prueba que falla sin el arreglo):
 
 Reproducido a propósito, y pendiente:
 
-- [ ] Una alícuota que no entra en `numeric(4,2)` (un «105» en el archivo)
+- [x] Una alícuota que no entra en `numeric(4,2)` (un «105» en el archivo)
       deshace el lote entero con «numeric field overflow», y la corrida
       queda interrumpida: habría que validarla en la fila.
+      Hecho: es un error de la fila (`TestAlicuotaInvalidaRechazaSoloSuFila`); la regla se copió al original TS de las golden.
 - [ ] Los otros bugs del lector de .xlsx de la tanda 3 siguen: la hoja se
       elige por nombre de archivo y no por las relaciones del libro, se
       pierden los espacios de `xml:space="preserve"`, los `&#NN;` quedan
       escritos y con prefijo de espacio de nombres la planilla sale vacía.
-- [ ] Dos lotes de saldos a la vez podrían cargar dos veces el saldo de un
+- [x] Dos lotes de saldos a la vez podrían cargar dos veces el saldo de un
       cliente (mirar y escribir, sin candado). La pantalla manda los lotes
       de a uno, como el TS.
+      Hecho: candado por cuenta (`cuenta:` y `proveedor:`), `TestSaldosSimultaneosSeCarganUnaVez`.
 - [ ] El histórico de ventas y de comprobantes no tiene pantalla donde
       verse: solo lo escribe la migración.
 - [ ] Correr la e2e.
@@ -1355,9 +1357,10 @@ Falta correr la e2e (`e2e/checkout.spec.ts`).
 ### Pendiente
 
 - [ ] Correr `e2e/checkout.spec.ts` (sin correr: servidores compartidos).
-- [ ] El crédito de una compra a cuenta corriente se mira fuera de la
+- [x] El crédito de una compra a cuenta corriente se mira fuera de la
       transacción (como en el TS): dos compras a la vez pueden pasar el
       límite. Bloquear la ficha y volver a mirar adentro.
+      Hecho: `cobros.LimiteEnLaTransaccion`, con candado por cuenta (`TestVentasACuentaSimultaneasRespetanElLimite`).
 - [ ] El aviso de un pago que llega por el webhook sale en la vuelta de cada
       minuto del TS (antes, en el acto): se arregla cuando los avisos de
       pedidos y pagos se muden.
@@ -1545,13 +1548,15 @@ de compras.
   `TestAnularChequeDeUnaVentaDelMostradorSeBloquea`.
 
 Pendiente:
-- [ ] Anular a mano un recibo de Mercado Pago que ya tuvo un reintegro
+- [x] Anular a mano un recibo de Mercado Pago que ya tuvo un reintegro
       parcial devuelve la deuda entera más el tramo: habría que restar los
       tramos en `AnularRecibo` (o frenarlo).
+      Hecho: `AnularRecibo` resta los reintegros parciales.
 - [ ] Las comisiones de Mercado Pago siguen sin asiento (Banco recibe el
       bruto).
-- [ ] El efectivo de un recibo emitido sin caja abierta va a Caja en el
+- [x] El efectivo de un recibo emitido sin caja abierta va a Caja en el
       asiento aunque no haya entrado al arqueo.
+      No se toca: el asiento a Caja es correcto (la plata entró); lo que falta es el arqueo, y el recibo avisa que se cargue a mano. El cierre no asienta los ingresos manuales de caja, así que no cuenta dos veces.
 - [ ] La plantilla de pruebas (`mjbj_plantilla`) es compartida: con la 00090
       aplicada antes que la 00089, goose da «missing migrations». Se borra y
       se rearma sola.
@@ -1599,14 +1604,16 @@ mano y antes del despliegue.
 
 Pendiente:
 
-- [ ] **El cierre (`internal/reportes/cierre.go`) tiene que filtrar los
+- [x] **El cierre (`internal/reportes/cierre.go`) tiene que filtrar los
       anulados**: `supplier_payments.anulado_at IS NULL` en los asientos de
       pagos y `retenciones_practicadas.anulada_at IS NULL` en el total de
       retenciones practicadas. Hoy un pago anulado sigue contando ahí.
-- [ ] `certificadoParaImprimir` de `lib/dal/admin/pagos-proveedor.ts` ya no
+      Hecho: el pago anulado lleva su contraasiento y las retenciones anuladas no suman.
+- [x] `certificadoParaImprimir` de `lib/dal/admin/pagos-proveedor.ts` ya no
       lo usa nadie; `lib/pdf/certificado-retencion.ts` queda solo para el
       golden (`scripts/golden/pdf/certificado-retencion.ts`): se puede mover a
       `scripts/golden/originales`.
+      Hecho: se borró.
 - [ ] `lib/db/schema/retenciones.ts` (drizzle, solo para las semillas) no
       tiene las columnas nuevas.
 
@@ -1678,15 +1685,17 @@ Pendiente y preguntas (decisiones de negocio, no se tocaron):
       historia (`variant_costs.cantidad_base`) o sobre lo que hay en stock al
       recibir? Y **anular una recepción no revierte el costo** promedio que
       movió: ¿se recalcula o queda?
-- [ ] Un remito preparado a mano sobre una venta del mostrador **sin acopio**
+- [x] Un remito preparado a mano sobre una venta del mostrador **sin acopio**
       (ya «entregado», con saldo porque no tiene remito) saca del físico otra
       vez: lo correcto ahí es el remito de constancia. ¿Se rechaza
       `CrearEntrega` si el pedido tiene movimientos «Mostrador V-…»?
+      Hecho: `CrearEntrega` rechaza el pedido ya entregado y manda al remito de constancia.
 - [ ] El remito implícito de «Avanzar» nace sin documento de quien retira
       (en el remito a mano es obligatorio en un retiro): se completa al
       firmar.
-- [ ] Cancelar desde Pedidos un pedido ya entregado sigue permitido y no
+- [x] Cancelar desde Pedidos un pedido ya entregado sigue permitido y no
       devuelve nada (solo libera reservas, que ya no hay).
+      Hecho: con un remito vigente pide anularlo primero (`TestNoSeCancelaUnPedidoConRemito`).
 
 ## Seguridad antes de abrir al público (30/10, sobre `go-cuentas`)
 
@@ -1758,6 +1767,7 @@ Decisiones pendientes (no se hicieron):
       Cloudflare, `IPDelCliente` va a ver la IP de Cloudflare en todos los
       pedidos (límites por IP compartidos por todo el mundo). Se configura
       junto con el dominio.
-- [ ] Otras vistas de documentos siguen abiertas a todo el personal (el
+- [x] Otras vistas de documentos siguen abiertas a todo el personal (el
       remito, el presupuesto en PDF, el seguimiento): revisar si el
       aserradero las necesita.
+      Hecho: el presupuesto en PDF lo bajan presupuestos y mostrador; el remito, el seguimiento y la pantalla de pago, quien entra a pedidos. El aserradero, 404.

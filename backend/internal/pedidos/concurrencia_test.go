@@ -291,3 +291,22 @@ func TestPasarAEnviadoAvisaUnaVez(t *testing.T) {
 		t.Fatalf("no existe: %v", err)
 	}
 }
+
+// Bug: un pedido con remito (entregado, o con un retiro parcial) se podía
+// cancelar desde Pedidos; devolvía la deuda y la mercadería quedaba afuera.
+// Ahora pide anular el remito primero; con el remito anulado, se cancela.
+func TestNoSeCancelaUnPedidoConRemito(t *testing.T) {
+	e := armar(t)
+	_, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	id := e.pedido(t, ses, 1)
+	remito := e.id(t, `insert into deliveries (numero, order_id) values ('R-0001-00000001', $1) returning id`, id)
+	_, err := e.s.Cancelar(context.Background(), ses, id, nil)
+	var p *plataforma.Problema
+	if !errors.As(err, &p) || !strings.Contains(p.Error(), "R-0001-00000001") {
+		t.Fatalf("cancelar con remito vigente: %v", err)
+	}
+	e.exec(t, `update deliveries set estado = 'anulada' where id = $1`, remito)
+	if _, err := e.s.Cancelar(context.Background(), ses, id, nil); err != nil {
+		t.Fatalf("cancelar con el remito anulado: %v", err)
+	}
+}

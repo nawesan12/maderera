@@ -489,7 +489,12 @@ func aplicarSaldos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resultado,
 		}
 
 		// Un saldo cargado dos veces duplica la deuda de una persona real:
-		// la corrida se puede repetir, el movimiento no.
+		// la corrida se puede repetir, el movimiento no. El candado de la
+		// cuenta (el mismo del límite de crédito) frena a otro lote que mire
+		// a la vez.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('cuenta:' || $1))`, cliente); err != nil {
+			return err
+		}
 		ya, err := unID(ctx, tx, `SELECT id FROM account_movements WHERE customer_id = $1 AND referencia = $2 LIMIT 1`,
 			cliente, ReferenciaSaldo)
 		if err != nil {
@@ -564,6 +569,9 @@ func aplicarProveedores(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resul
 		// se carga una sola vez.
 		if numeroJS(d["saldo"]) == 0 {
 			continue
+		}
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('proveedor:' || $1))`, proveedor); err != nil {
+			return err
 		}
 		ya, err := unID(ctx, tx, `SELECT id FROM supplier_movements WHERE supplier_id = $1 AND referencia = $2 LIMIT 1`,
 			proveedor, ReferenciaSaldoProveedor)

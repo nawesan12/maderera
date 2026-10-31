@@ -277,12 +277,13 @@ func TestRetiroParcialFirmaYAnulacion(t *testing.T) {
 		t.Errorf("segunda firma: %d %s", c, b)
 	}
 
-	// El PDF: el personal, el dueño; a otro, 404.
+	// El PDF: el personal de pedidos, el dueño; a otro y al aserradero, 404.
+	taller, _ := e.staff(t, "taller@prueba.test", sqlc.StaffRoleAserradero)
 	for _, caso := range []struct {
 		c     *http.Client
 		cod   int
 		quien string
-	}{{ven, 200, "vendedor"}, {web, 200, "dueño"}, {otro, 404, "otro cliente"}, {http.DefaultClient, 404, "sin sesión"}} {
+	}{{ven, 200, "vendedor"}, {web, 200, "dueño"}, {otro, 404, "otro cliente"}, {taller, 404, "aserradero"}, {http.DefaultClient, 404, "sin sesión"}} {
 		req, _ := http.NewRequest("GET", u+"remitos/"+remito+"/pdf", nil)
 		resp, err := caso.c.Do(req)
 		if err != nil {

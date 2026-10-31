@@ -15,6 +15,12 @@ const eslintConfig = defineConfig([
     // Las copias del repo de los agentes (worktrees) y lo de Go.
     ".claude/**",
     "backend/**",
+    // Copias congeladas del TS viejo para los benchmarks, y los guiones del
+    // navegador de los agentes (no van al repo).
+    "bench/*/ts/**",
+    ".playwright-mcp/**",
+    // Los paquetes de diseño que llegan de afuera.
+    "docs/diseno/**",
   ]),
   {
     rules: {

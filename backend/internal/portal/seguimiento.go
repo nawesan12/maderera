@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/roles"
 )
 
 // Seguimiento es la página pública de un pedido (lib/dal/seguimiento.ts):
@@ -75,6 +76,9 @@ func (s *Servicio) Seguir(ctx context.Context, ses *auth.Sesion, numero, token s
 	conToken := token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(p.PublicToken)) == 1
 	if !conToken {
 		if ses == nil {
+			return nil, ErrNoEsta
+		}
+		if ses.EsStaff() && !ses.Tiene(roles.QuienEntra("/admin/pedidos")...) {
 			return nil, ErrNoEsta
 		}
 		if !ses.EsStaff() {

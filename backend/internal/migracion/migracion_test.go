@@ -135,9 +135,10 @@ func muestra(t *testing.T, nombre string) []byte {
 	return b
 }
 
-// sinLaAlicuotaRota es la muestra de artículos sin el renglón con IVA 105 %,
-// que no entra en numeric(4,2) y deshace su lote entero (como en el TS; ver
-// TestLoteQueFallaSeDejaSinEfecto).
+// sinLaAlicuotaRota es la muestra de artículos sin el renglón con IVA 105 %.
+// Antes deshacía su lote entero; ahora se rechaza solo esa fila
+// (TestAlicuotaInvalidaRechazaSoloSuFila), pero los totales de las pruebas
+// de punta a punta se escribieron sin ella.
 func sinLaAlicuotaRota(t *testing.T) []byte {
 	b := muestra(t, "articulos-isis.csv")
 	return bytes.Replace(b, []byte("MIG-IVA-01;Raro;Varios;;Juego;;100;;105;;;\r\n"), nil, 1)
@@ -402,15 +403,15 @@ func TestLoteQueFallaSeDejaSinEfecto(t *testing.T) {
 	e := armar(t)
 	adm := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)
 	u := e.srv.URL + "/api/v1/admin/migracion/"
-	mapeo := map[string]int{"sku": 0, "nombre": 1, "categoria": 2, "alicuotaIva": 3}
+	mapeo := map[string]int{"sku": 0, "nombre": 1, "categoria": 2, "alicuotaIva": 3, "precioGeneral": 4}
 	var corrida struct{ RunID string }
 	pedir(t, adm, "POST", u+"corridas", map[string]any{"entidad": "productos", "archivo": "x.csv", "codificacion": "utf-8",
 		"mapeo": mapeo, "filasTotales": 2}, &corrida)
-	// La segunda fila tiene una alícuota que no entra en numeric(4,2): el
-	// lote entero se deshace, también la primera.
+	// La segunda fila tiene un precio que no entra en numeric(12,2): el lote
+	// entero se deshace, también la primera.
 	var l LoteAplicado
 	if s := pedir(t, adm, "POST", u+"corridas/"+corrida.RunID+"/lote", map[string]any{"entidad": "productos", "mapeo": mapeo,
-		"filas": [][]string{{"OK-1", "Bueno", "Varios", "21"}, {"MAL-1", "Malo", "Varios", "105"}}}, &l); s != 200 ||
+		"filas": [][]string{{"OK-1", "Bueno", "Varios", "21", "100"}, {"MAL-1", "Malo", "Varios", "21", "99999999999"}}}, &l); s != 200 ||
 		!strings.HasPrefix(l.Error, "El lote no se pudo aplicar y se dejó sin efecto: ") {
 		t.Fatalf("lote: %d %+v", s, l)
 	}
@@ -476,5 +477,46 @@ func TestPermisosYErroresDelArchivo(t *testing.T) {
 	if s := pedir(t, adm, "POST", u+"previa", map[string]any{"entidad": "productos", "mapeo": map[string]int{"sku": 0},
 		"filas": [][]string{{"X"}}}, &previa); s != 200 || previa.Error != "Falta indicar qué columna es Nombre del producto, Categoría." {
 		t.Errorf("previa sin mapeo: %d %+v", s, previa)
+	}
+}
+
+// Bug: una alícuota de IVA que no existe («105» por 10,5) no entraba en la
+// columna y deshacía el lote entero. Ahora es un error de la fila: se ve en
+// el análisis y las demás filas del lote se cargan.
+func TestAlicuotaInvalidaRechazaSoloSuFila(t *testing.T) {
+	def, _ := DefinicionDe("productos")
+	mapeo := Mapeo{"sku": 0, "nombre": 1, "categoria": 2, "alicuotaIva": 3}
+	filas := NormalizarFilas(def, mapeo, [][]string{{"A", "A", "V", "10,5"}, {"B", "B", "V", "105"}, {"C", "C", "V", ""}})
+	if len(filas[0].Errores) != 0 || len(filas[2].Errores) != 0 {
+		t.Errorf("10,5 y vacío (21) son válidas: %v %v", filas[0].Errores, filas[2].Errores)
+	}
+	if len(filas[1].Errores) != 1 || !strings.Contains(filas[1].Errores[0], "105.00 no es una de ARCA") {
+		t.Errorf("105: %v", filas[1].Errores)
+	}
+}
+
+// Dos lotes de saldos a la vez sobre el mismo cliente: un solo saldo inicial
+// (antes los dos miraban, no veían nada y cargaban).
+func TestSaldosSimultaneosSeCarganUnaVez(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	if _, err := e.pool.Exec(ctx, `INSERT INTO customers (nombre, codigo_legacy) VALUES ('Juan', 'C-1')`); err != nil {
+		t.Fatal(err)
+	}
+	def, _ := DefinicionDe("saldos")
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			filas := NormalizarFilas(def, Mapeo{"codigo": 0, "saldo": 1}, [][]string{{"C-1", "1500"}})
+			if _, err := AplicarLote(ctx, e.pool, "saldos", filas, Opciones{LoteID: "00000000-0000-0000-0000-000000000000"}); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	if n := contarFilas(t, e.pool, `SELECT count(*) FROM account_movements WHERE referencia = $1`, ReferenciaSaldo); n != 1 {
+		t.Errorf("saldos iniciales cargados: %d", n)
 	}
 }

@@ -17,6 +17,43 @@ const idDeBuild =
   (process.env.GIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA)?.slice(0, 12) ||
   `local-${Date.now()}`;
 
+/*
+ * Qué puede cargar el navegador, y de dónde.
+ *
+ * Lo que cierra: un script inyectado no puede mandar datos a otro servidor
+ * (`connect-src 'self'`), ni traer código de afuera, ni meter `<object>`,
+ * ni cambiar la base de los enlaces relativos, ni el sitio puede ir adentro
+ * del iframe de otro.
+ *
+ * Lo que no cierra, a propósito:
+ * - `'unsafe-inline'` en scripts: Next escribe sus propios scripts en línea.
+ *   Sacarlo pide un nonce por pedido, y un nonce vuelve dinámica cada página,
+ *   incluido lo público que hoy sale armado de antemano.
+ * - Imágenes de cualquier `https:`: las fotos vienen de Unsplash, de Vercel
+ *   Blob y de lo que se cargue mañana; una imagen no ejecuta nada.
+ * - Sin `form-action`: pagar es una server action que redirige a Mercado
+ *   Pago, y sin JavaScript eso es un formulario que termina en otro dominio.
+ *   Chrome aplica `form-action` también a esa redirección.
+ *
+ * Solo en producción: el modo desarrollo de Next necesita `eval`.
+ */
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  // El mapa de la ficha de cada sucursal.
+  "frame-src 'self' https://www.google.com https://maps.google.com",
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "media-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'self'",
+].join("; ");
+
 const nextConfig: NextConfig = {
   // Sin la cabecera `x-powered-by: Next.js`: no le dice a nadie qué corre.
   poweredByHeader: false,
@@ -231,6 +268,9 @@ const nextConfig: NextConfig = {
             value: "camera=(), microphone=(), geolocation=(), payment=()",
           },
           { key: "Strict-Transport-Security", value: "max-age=63072000" },
+          ...(process.env.NODE_ENV === "production"
+            ? [{ key: "Content-Security-Policy", value: CSP }]
+            : []),
         ],
       },
 

@@ -145,12 +145,15 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 	discrimina := comprobanteLetra(c.Tipo) == "A"
 	num := jsmath.Numero
 
-	if c.Cae == "" {
-		h.MarcaDeAgua("Sin valor fiscal")
+	marcas := func() {
+		if c.Cae == "" {
+			h.MarcaDeAgua("Sin valor fiscal")
+		}
+		if c.Estado == "anulada" {
+			h.MarcaDeAgua("Anulada")
+		}
 	}
-	if c.Estado == "anulada" {
-		h.MarcaDeAgua("Anulada")
-	}
+	marcas()
 
 	// Emisor
 	y := AltoA4 - Margen - 10
@@ -223,24 +226,49 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 	colIva := Margen + Mm(160)
 	colSubtotal := derecha
 
-	cabecera := Opciones{Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave}
-	con := func(o Opciones, x float64, der bool) Opciones { o.X, o.Derecha = x, der; return o }
-	h.Escribir("DESCRIPCIÓN", con(cabecera, Margen, false))
-	h.Escribir("CANT.", con(cabecera, colCantidad, true))
-	h.Escribir("UNIDAD", con(cabecera, colUnidad, true))
-	h.Escribir("P. UNIT.", con(cabecera, colPrecio, true))
-	if discrimina {
-		h.Escribir("IVA", con(cabecera, colIva, true))
+	encabezarDetalle := func() {
+		cabecera := Opciones{Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave}
+		con := func(o Opciones, x float64, der bool) Opciones { o.X, o.Derecha = x, der; return o }
+		h.Escribir("DESCRIPCIÓN", con(cabecera, Margen, false))
+		h.Escribir("CANT.", con(cabecera, colCantidad, true))
+		h.Escribir("UNIDAD", con(cabecera, colUnidad, true))
+		h.Escribir("P. UNIT.", con(cabecera, colPrecio, true))
+		if discrimina {
+			h.Escribir("IVA", con(cabecera, colIva, true))
+		}
+		h.Escribir("SUBTOTAL", con(cabecera, colSubtotal, true))
+
+		cursor -= 6
+		h.Raya(cursor, 1, Tinta)
+		cursor -= 14
 	}
-	h.Escribir("SUBTOTAL", con(cabecera, colSubtotal, true))
+	encabezarDetalle()
 
-	cursor -= 6
-	h.Raya(cursor, 1, Tinta)
-	cursor -= 14
+	// Lo que no entra pasa a otra hoja (antes, como en el TS, se salía por
+	// abajo): arriba van el comprobante y su número, para que la hoja suelta
+	// se sepa de qué es, y el pie fiscal queda en la última.
+	limite := Margen + Mm(30)
+	otraHoja := func() {
+		h.NuevaPagina()
+		marcas()
+		y := AltoA4 - Margen - 10
+		h.Escribir(comprobanteNombre(c.Tipo)+" "+comprobanteNumero(c.PuntoVenta, c.Numero)+" (continuación)",
+			Opciones{X: Margen, Y: y, Tamano: 9, Fuente: Negrita})
+		cursor = y - Mm(10)
+	}
+	espacio := func(necesario float64, detalle bool) {
+		if cursor-necesario >= limite {
+			return
+		}
+		otraHoja()
+		if detalle {
+			encabezarDetalle()
+		}
+	}
 
-	// Como en el TS, el detalle no corta de página: con muchos renglones se
-	// sale por abajo de la hoja (ver el informe de la tanda 12).
 	for _, item := range c.Items {
+		renglones := len(Renglones(item.Descripcion, Helvetica, 8.5, Mm(100)))
+		espacio(maximo(float64(renglones)*8.5*1.35, 12)+4, true)
 		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8.5}, Ancho: Mm(100)})
 		h.Escribir(numeroJS(num(item.Cantidad)), Opciones{X: colCantidad, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true})
 		h.Escribir(Unidad(item.Unidad), Opciones{X: colUnidad, Y: cursor, Tamano: 8, Derecha: true})
@@ -277,6 +305,13 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 	for _, t := range c.Tributos {
 		totales = append(totales, [2]string{t.Descripcion + " " + numeroJS(num(t.Alicuota)) + "%", MonedaDe(t.Importe)})
 	}
+	// Los totales van juntos (y con la leyenda de transparencia, si la hay):
+	// partirlos entre dos hojas confunde.
+	bloque := float64(len(totales))*12 + 24 + Mm(10) + Mm(28)
+	if c.Observaciones != "" {
+		bloque += Mm(12)
+	}
+	espacio(bloque, false)
 	for _, f := range totales {
 		h.Escribir(f[0], Opciones{X: xEtiqueta, Y: cursor, Tamano: 8.5, Color: TintaSuave})
 		h.Escribir(f[1], Opciones{X: derecha, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true})

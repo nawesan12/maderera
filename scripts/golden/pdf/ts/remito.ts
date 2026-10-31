@@ -14,6 +14,7 @@ import {
   escribir,
   escribirCentrado,
   escribirParrafo,
+  limpiar,
   linea,
   marcaDeAgua,
   mm,
@@ -201,35 +202,66 @@ export async function remitoPdf(
   // Detalle, sin precios
   const colCantidad = derecha - mm(30);
 
-  escribir(hoja, "DESCRIPCIÓN", {
-    x: MARGEN,
-    y: cursor,
-    tamano: 6,
-    fuente: hoja.negrita,
-    color: TINTA_SUAVE,
-  });
-  escribir(hoja, "CANTIDAD", {
-    x: colCantidad,
-    y: cursor,
-    tamano: 6,
-    fuente: hoja.negrita,
-    color: TINTA_SUAVE,
-    derecha: true,
-  });
-  escribir(hoja, "UNIDAD", {
-    x: derecha,
-    y: cursor,
-    tamano: 6,
-    fuente: hoja.negrita,
-    color: TINTA_SUAVE,
-    derecha: true,
-  });
+  const encabezarDetalle = () => {
+    escribir(hoja, "DESCRIPCIÓN", {
+      x: MARGEN,
+      y: cursor,
+      tamano: 6,
+      fuente: hoja.negrita,
+      color: TINTA_SUAVE,
+    });
+    escribir(hoja, "CANTIDAD", {
+      x: colCantidad,
+      y: cursor,
+      tamano: 6,
+      fuente: hoja.negrita,
+      color: TINTA_SUAVE,
+      derecha: true,
+    });
+    escribir(hoja, "UNIDAD", {
+      x: derecha,
+      y: cursor,
+      tamano: 6,
+      fuente: hoja.negrita,
+      color: TINTA_SUAVE,
+      derecha: true,
+    });
 
-  cursor -= 6;
-  linea(hoja, cursor, { grosor: 1, color: TINTA });
-  cursor -= 14;
+    cursor -= 6;
+    linea(hoja, cursor, { grosor: 1, color: TINTA });
+    cursor -= 14;
+  };
+  encabezarDetalle();
+
+  // Lo que no entra pasa a otra hoja (antes se salía por abajo). Agregado en
+  // Go el 30/10 y copiado acá: las golden siguen siendo la especificación.
+  const limite = MARGEN + mm(64);
+  const renglones = (texto: string, ancho: number, tamano: number) => {
+    let n = 0;
+    let actual = "";
+    for (const palabra of limpiar(texto).split(/\s+/).filter(Boolean)) {
+      const tentativa = actual ? `${actual} ${palabra}` : palabra;
+      if (hoja.normal.widthOfTextAtSize(tentativa, tamano) > ancho && actual) {
+        n++;
+        actual = palabra;
+      } else {
+        actual = tentativa;
+      }
+    }
+    return actual ? n + 1 : n;
+  };
+  const espacio = (necesario: number, detalle: boolean) => {
+    if (cursor - necesario >= limite) return;
+    hoja.pagina = hoja.doc.addPage([A4.ancho, A4.alto]);
+    if (remito.estado === "anulada") marcaDeAgua(hoja, "Anulado");
+    const yArriba = A4.alto - MARGEN - 10;
+    escribir(hoja, `Remito ${remito.numero} (continuación)`, { x: MARGEN, y: yArriba, tamano: 9, fuente: hoja.negrita });
+    cursor = yArriba - mm(10);
+    if (detalle) encabezarDetalle();
+  };
 
   for (const item of remito.lineas) {
+    espacio(Math.max(renglones(item.descripcion, mm(120), 9) * 9 * 1.35, 12) + 4, true);
     const alto = escribirParrafo(hoja, item.descripcion, {
       x: MARGEN,
       y: cursor,
@@ -263,6 +295,7 @@ export async function remitoPdf(
    * sin importes, como el resto del remito.
    */
   if (deAcopio) {
+    espacio(mm(7) + 12 + 11 + 20, false);
     cursor -= mm(7);
     escribir(hoja, "QUEDA EN ACOPIO", {
       x: MARGEN,
@@ -274,6 +307,7 @@ export async function remitoPdf(
     cursor -= 12;
 
     for (const p of remito.pendientes) {
+      espacio(11, false);
       escribir(hoja, `${p.pendiente} ${p.unidad} · ${p.descripcion}`, {
         x: MARGEN,
         y: cursor,
@@ -292,6 +326,7 @@ export async function remitoPdf(
   }
 
   if (remito.notas) {
+    espacio(mm(6) + renglones(remito.notas, mm(120), 8) * 8 * 1.35, false);
     cursor -= mm(6);
     cursor -= escribirParrafo(hoja, remito.notas, {
       x: MARGEN,

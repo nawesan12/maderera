@@ -15,6 +15,7 @@ import {
   escribir,
   escribirCentrado,
   escribirParrafo,
+  limpiar,
   linea,
   marcaDeAgua,
   mm,
@@ -102,8 +103,11 @@ export async function comprobantePdf(
   const derecha = A4.ancho - MARGEN;
   const discrimina = discriminaIva(comprobante.tipo);
 
-  if (!comprobante.cae) marcaDeAgua(hoja, "Sin valor fiscal");
-  if (comprobante.estado === "anulada") marcaDeAgua(hoja, "Anulada");
+  const marcas = () => {
+    if (!comprobante.cae) marcaDeAgua(hoja, "Sin valor fiscal");
+    if (comprobante.estado === "anulada") marcaDeAgua(hoja, "Anulada");
+  };
+  marcas();
 
   // Emisor
   let y = A4.alto - MARGEN - 10;
@@ -237,26 +241,65 @@ export async function comprobantePdf(
   const colIva = MARGEN + mm(160);
   const colSubtotal = derecha;
 
-  escribir(hoja, "DESCRIPCIÓN", {
-    x: MARGEN,
-    y: cursor,
-    tamano: 6,
-    fuente: hoja.negrita,
-    color: TINTA_SUAVE,
-  });
-  escribir(hoja, "CANT.", { x: colCantidad, y: cursor, tamano: 6, fuente: hoja.negrita, color: TINTA_SUAVE, derecha: true });
-  escribir(hoja, "UNIDAD", { x: colUnidad, y: cursor, tamano: 6, fuente: hoja.negrita, color: TINTA_SUAVE, derecha: true });
-  escribir(hoja, "P. UNIT.", { x: colPrecio, y: cursor, tamano: 6, fuente: hoja.negrita, color: TINTA_SUAVE, derecha: true });
-  if (discrimina) {
-    escribir(hoja, "IVA", { x: colIva, y: cursor, tamano: 6, fuente: hoja.negrita, color: TINTA_SUAVE, derecha: true });
-  }
-  escribir(hoja, "SUBTOTAL", { x: colSubtotal, y: cursor, tamano: 6, fuente: hoja.negrita, color: TINTA_SUAVE, derecha: true });
+  const encabezarDetalle = () => {
+    escribir(hoja, "DESCRIPCIÓN", {
+      x: MARGEN,
+      y: cursor,
+      tamano: 6,
+      fuente: hoja.negrita,
+      color: TINTA_SUAVE,
+    });
+    escribir(hoja, "CANT.", { x: colCantidad, y: cursor, tamano: 6, fuente: hoja.negrita, color: TINTA_SUAVE, derecha: true });
+    escribir(hoja, "UNIDAD", { x: colUnidad, y: cursor, tamano: 6, fuente: hoja.negrita, color: TINTA_SUAVE, derecha: true });
+    escribir(hoja, "P. UNIT.", { x: colPrecio, y: cursor, tamano: 6, fuente: hoja.negrita, color: TINTA_SUAVE, derecha: true });
+    if (discrimina) {
+      escribir(hoja, "IVA", { x: colIva, y: cursor, tamano: 6, fuente: hoja.negrita, color: TINTA_SUAVE, derecha: true });
+    }
+    escribir(hoja, "SUBTOTAL", { x: colSubtotal, y: cursor, tamano: 6, fuente: hoja.negrita, color: TINTA_SUAVE, derecha: true });
 
-  cursor -= 6;
-  linea(hoja, cursor, { grosor: 1, color: TINTA });
-  cursor -= 14;
+    cursor -= 6;
+    linea(hoja, cursor, { grosor: 1, color: TINTA });
+    cursor -= 14;
+  };
+  encabezarDetalle();
+
+  // Lo que no entra pasa a otra hoja (antes se salía por abajo). Agregado en
+  // Go el 30/10 y copiado acá: las golden siguen siendo la especificación.
+  const limite = MARGEN + mm(30);
+  const otraHoja = () => {
+    hoja.pagina = hoja.doc.addPage([A4.ancho, A4.alto]);
+    marcas();
+    const yArriba = A4.alto - MARGEN - 10;
+    escribir(
+      hoja,
+      `${nombreComprobante(comprobante.tipo)} ${numeroFormateado(comprobante.puntoVenta, comprobante.numero)} (continuación)`,
+      { x: MARGEN, y: yArriba, tamano: 9, fuente: hoja.negrita },
+    );
+    cursor = yArriba - mm(10);
+  };
+  const espacio = (necesario: number, detalle: boolean) => {
+    if (cursor - necesario >= limite) return;
+    otraHoja();
+    if (detalle) encabezarDetalle();
+  };
+  const contarRenglones = (texto: string, ancho: number, tamano: number) => {
+    let n = 0;
+    let actual = "";
+    for (const palabra of limpiar(texto).split(/\s+/).filter(Boolean)) {
+      const tentativa = actual ? `${actual} ${palabra}` : palabra;
+      if (hoja.normal.widthOfTextAtSize(tentativa, tamano) > ancho && actual) {
+        n++;
+        actual = palabra;
+      } else {
+        actual = tentativa;
+      }
+    }
+    return actual ? n + 1 : n;
+  };
 
   for (const item of comprobante.items) {
+    const renglones = contarRenglones(item.descripcion, mm(100), 8.5);
+    espacio(Math.max(renglones * 8.5 * 1.35, 12) + 4, true);
     const alto = escribirParrafo(hoja, item.descripcion, {
       x: MARGEN,
       y: cursor,
@@ -313,6 +356,10 @@ export async function comprobantePdf(
     ]);
   }
 
+  // Los totales van juntos (y con la leyenda de transparencia, si la hay).
+  let bloque = filasTotales.length * 12 + 24 + mm(10) + mm(28);
+  if (comprobante.observaciones) bloque += mm(12);
+  espacio(bloque, false);
   for (const [etiqueta, valor] of filasTotales) {
     escribir(hoja, etiqueta, { x: xEtiqueta, y: cursor, tamano: 8.5, color: TINTA_SUAVE });
     escribir(hoja, valor, { x: derecha, y: cursor, tamano: 8.5, fuente: hoja.mono, derecha: true });

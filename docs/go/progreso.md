@@ -968,7 +968,7 @@ emitido por AC de confianza»: el formato lo acepta). Para homologar:
       entregas (tanda 5), el cierre mensual, el buscador del panel, los
       asientos y los pendientes.
       Hecho: todos en Go (caja, entregas, reportes, cierre).
-- [ ] El comprobante en PDF sigue sin cortar de página (tanda 12).
+- [x] El comprobante en PDF sigue sin cortar de página (tanda 12). Hecho (30/10): el comprobante y el remito pasan a otra hoja con el número y la cabecera; el pie fiscal y las firmas, en la última. Copiado al original TS de las golden.
 
 ### Lo aprendido
 

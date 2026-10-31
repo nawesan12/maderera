@@ -195,15 +195,38 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 
 	// Detalle, sin precios.
 	colCantidad := derecha - Mm(30)
-	h.Escribir("DESCRIPCIÓN", Opciones{X: Margen, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
-	h.Escribir("CANTIDAD", Opciones{X: colCantidad, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave, Derecha: true})
-	h.Escribir("UNIDAD", Opciones{X: derecha, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave, Derecha: true})
+	encabezarDetalle := func() {
+		h.Escribir("DESCRIPCIÓN", Opciones{X: Margen, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
+		h.Escribir("CANTIDAD", Opciones{X: colCantidad, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave, Derecha: true})
+		h.Escribir("UNIDAD", Opciones{X: derecha, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave, Derecha: true})
 
-	cursor -= 6
-	h.Raya(cursor, 1, Tinta)
-	cursor -= 14
+		cursor -= 6
+		h.Raya(cursor, 1, Tinta)
+		cursor -= 14
+	}
+	encabezarDetalle()
+
+	// Lo que no entra pasa a otra hoja (antes se salía por abajo), con el
+	// número del remito arriba. Las firmas van al pie de la última.
+	limite := Margen + Mm(64)
+	espacio := func(necesario float64, detalle bool) {
+		if cursor-necesario >= limite {
+			return
+		}
+		h.NuevaPagina()
+		if r.Estado == "anulada" {
+			h.MarcaDeAgua("Anulado")
+		}
+		yArriba := AltoA4 - Margen - 10
+		h.Escribir("Remito "+r.Numero+" (continuación)", Opciones{X: Margen, Y: yArriba, Tamano: 9, Fuente: Negrita})
+		cursor = yArriba - Mm(10)
+		if detalle {
+			encabezarDetalle()
+		}
+	}
 
 	for _, item := range r.Lineas {
+		espacio(maximo(float64(len(Renglones(item.Descripcion, Helvetica, 9, Mm(120))))*9*1.35, 12)+4, true)
 		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 9}, Ancho: Mm(120)})
 		h.Escribir(numeroJS(item.Cantidad), Opciones{X: colCantidad, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true})
 		h.Escribir(Unidad(item.Unidad), Opciones{X: derecha, Y: cursor, Tamano: 8.5, Derecha: true})
@@ -213,10 +236,12 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 
 	// Lo que queda en acopio, renglón por renglón.
 	if deAcopio {
+		espacio(Mm(7)+12+11+20, false)
 		cursor -= Mm(7)
 		h.Escribir("QUEDA EN ACOPIO", Opciones{X: Margen, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
 		cursor -= 12
 		for _, p := range r.Pendientes {
+			espacio(11, false)
 			h.Escribir(numeroJS(p.Pendiente)+" "+p.Unidad+" · "+p.Descripcion, Opciones{X: Margen, Y: cursor, Tamano: 8})
 			cursor -= 11
 		}
@@ -227,6 +252,7 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	}
 
 	if r.Notas != "" {
+		espacio(Mm(6)+float64(len(Renglones(r.Notas, Helvetica, 8, Mm(120))))*8*1.35, false)
 		cursor -= Mm(6)
 		cursor -= h.EscribirParrafo(r.Notas, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8, Color: TintaSuave}, Ancho: Mm(120)})
 	}

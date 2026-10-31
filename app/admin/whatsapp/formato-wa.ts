@@ -8,22 +8,29 @@
  * mensaje, no cuántos días pasaron.
  */
 
+import { ZONA } from "@/lib/formato";
+
 const hora = new Intl.DateTimeFormat("es-AR", {
+  timeZone: ZONA,
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
 });
 
 const diaMes = new Intl.DateTimeFormat("es-AR", {
+  timeZone: ZONA,
   day: "2-digit",
   month: "2-digit",
 });
 
 const diaCompleto = new Intl.DateTimeFormat("es-AR", {
+  timeZone: ZONA,
   weekday: "long",
   day: "numeric",
   month: "long",
 });
+
+const diaArgentino = new Intl.DateTimeFormat("en-CA", { timeZone: ZONA });
 
 /** "hace 5 min" para la lista de conversaciones. */
 export function haceCuanto(fecha: Date | string | null): string {
@@ -55,16 +62,12 @@ export function etiquetaDia(fecha: Date | string): string {
   const momento = typeof fecha === "string" ? new Date(fecha) : fecha;
   const hoy = new Date();
 
-  const mismoDia = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
+  // El día en la Argentina, no el de la máquina: el servidor corre en UTC y
+  // de 21 a 24 decía «Ayer» donde el navegador dice «Hoy».
+  const dia = (d: Date) => diaArgentino.format(d);
 
-  if (mismoDia(momento, hoy)) return "Hoy";
-
-  const ayer = new Date(hoy);
-  ayer.setDate(hoy.getDate() - 1);
-  if (mismoDia(momento, ayer)) return "Ayer";
+  if (dia(momento) === dia(hoy)) return "Hoy";
+  if (dia(momento) === dia(new Date(hoy.getTime() - 86_400_000))) return "Ayer";
 
   return diaCompleto.format(momento);
 }

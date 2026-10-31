@@ -159,6 +159,7 @@ export function CuentaDelProveedor({
                 <tr key={m.id}>
                   <td className="tabular px-5 py-3 text-muted-foreground">
                     {new Date(m.createdAt).toLocaleDateString("es-AR", {
+                      timeZone: "America/Argentina/Buenos_Aires",
                       day: "2-digit",
                       month: "2-digit",
                       year: "2-digit",

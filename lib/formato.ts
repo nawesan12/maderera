@@ -76,6 +76,17 @@ export function importeParaEditar(valor: string | number | null): string {
 /* Fechas                                                                      */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * La zona de las horas que se muestran. El contenedor de Next corre en UTC, y
+ * sin zona explícita toda hora armada en el servidor salía 3 h adelantada (y
+ * distinta de la que arma el navegador al hidratar). Va en `fechaHora` y
+ * `hora`, que siempre son instantes. `fechaCorta` y `fechaLarga` no la llevan
+ * a propósito: muchas fechas son días guardados a medianoche UTC
+ * (vencimientos, vigencias, asientos), que en hora argentina saldrían un día
+ * antes; para esos, `fechaSolaCorta`.
+ */
+export const ZONA = "America/Argentina/Buenos_Aires";
+
 export const fechaCorta = new Intl.DateTimeFormat("es-AR", {
   day: "2-digit",
   month: "2-digit",
@@ -89,6 +100,7 @@ export const fechaLarga = new Intl.DateTimeFormat("es-AR", {
 });
 
 export const fechaHora = new Intl.DateTimeFormat("es-AR", {
+  timeZone: ZONA,
   day: "2-digit",
   month: "2-digit",
   hour: "2-digit",
@@ -97,6 +109,7 @@ export const fechaHora = new Intl.DateTimeFormat("es-AR", {
 });
 
 export const hora = new Intl.DateTimeFormat("es-AR", {
+  timeZone: ZONA,
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,

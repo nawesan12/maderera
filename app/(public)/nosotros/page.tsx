@@ -172,7 +172,7 @@ export default async function NosotrosPage() {
 
             <div className="relative h-80 overflow-hidden rounded-2xl bg-brand-gray lg:h-96">
               <Image
-                src="https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800&q=80"
+                src="/fotos/photo-1504148455328-c376907d081c.jpg"
                 alt="Molduras Moldava"
                 fill
                 sizes="(min-width: 1024px) 50vw, 100vw"

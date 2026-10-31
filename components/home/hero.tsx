@@ -40,7 +40,7 @@ export function Hero({
 
       <div className="absolute inset-y-0 right-0 hidden w-[46%] lg:block">
         <Image
-          src="https://plus.unsplash.com/premium_photo-1663133630972-d9b620dfea27?q=80&w=1600&auto=format&fit=crop"
+          src="/fotos/premium_photo-1663133630972-d9b620dfea27.jpg"
           alt="Corte de madera con sierra en el aserradero"
           fill
           className="object-cover object-center"

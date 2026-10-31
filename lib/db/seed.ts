@@ -70,9 +70,9 @@ interface CategorySeed {
 }
 
 const IMG = {
-  madera: "https://images.unsplash.com/photo-1520333789090-1afc82db536a?w=800&q=80",
-  taller: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800&q=80",
-  piso: "https://images.unsplash.com/photo-1615873968403-89e068629265?w=800&q=80",
+  madera: "/fotos/photo-1520333789090-1afc82db536a.jpg",
+  taller: "/fotos/photo-1504148455328-c376907d081c.jpg",
+  piso: "/fotos/photo-1615873968403-89e068629265.jpg",
 } as const;
 
 

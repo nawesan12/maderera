@@ -23,15 +23,15 @@
  */
 export const PORTADA: Record<string, string> = {
   // Machimbre y tirantes a la vista, que es lo que se vende para un techo.
-  techos: "https://images.unsplash.com/photo-1776624383828-e1bf5d141aa7?w=800&q=80",
+  techos: "/fotos/photo-1776624383828-e1bf5d141aa7.jpg",
   // Placas apiladas y de canto: las chapas del fenólico se ven una por una.
-  placas: "https://images.unsplash.com/photo-1700973408133-b45276ec8feb?w=800&q=80",
-  pisos: "https://images.unsplash.com/photo-1573869908170-64b53a60d8da?w=800&q=80",
-  molduras: "https://images.unsplash.com/photo-1764283824453-02cd00e49143?w=800&q=80",
-  ferreteria: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
+  placas: "/fotos/photo-1700973408133-b45276ec8feb.jpg",
+  pisos: "/fotos/photo-1573869908170-64b53a60d8da.jpg",
+  molduras: "/fotos/photo-1764283824453-02cd00e49143.jpg",
+  ferreteria: "/fotos/photo-1558618666-fcd25c85cd64.jpg",
   // Gris y de intemperie, para no confundirse con el piso interior de arriba.
-  "decks-y-escaleras": "https://images.unsplash.com/photo-1585597985125-9ad0229ae71d?w=800&q=80",
+  "decks-y-escaleras": "/fotos/photo-1585597985125-9ad0229ae71d.jpg",
   // Perfiles metálicos, placa y aislante: las tres cosas que dice el rubro.
-  "construccion-en-seco": "https://images.unsplash.com/photo-1768321903269-8a1f17a45c25?w=800&q=80",
-  cubiertas: "https://images.unsplash.com/photo-1632759145351-1d592919f522?w=800&q=80",
+  "construccion-en-seco": "/fotos/photo-1768321903269-8a1f17a45c25.jpg",
+  cubiertas: "/fotos/photo-1632759145351-1d592919f522.jpg",
 };

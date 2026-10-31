@@ -577,7 +577,7 @@ function BannerProfesionales({
    */
   const foto =
     sucursales.find((s) => s.imagenUrl)?.imagenUrl ??
-    "https://images.unsplash.com/photo-1634672652995-ee7525bce595?w=1200&q=75";
+    "/fotos/photo-1634672652995-ee7525bce595.jpg";
 
   return (
     <section className="bg-sitio-fondo pb-[48px]">
@@ -590,7 +590,7 @@ function BannerProfesionales({
                 ancho de banda a lo primero que se ve. */}
             <div className="relative h-[190px] shrink-0">
               <Image
-                src="https://images.unsplash.com/photo-1773430272778-28c224216811?w=900&q=75"
+                src="/fotos/photo-1773430272778-28c224216811.jpg"
                 alt=""
                 fill
                 className="object-cover"
@@ -798,7 +798,7 @@ function Historia({
           <div className="relative">
             <div className="relative h-[460px] overflow-hidden rounded-3xl">
               <Image
-                src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80"
+                src="/fotos/photo-1504307651254-35680f356dfd.jpg"
                 alt="Nuestro depósito"
                 fill
                 className="object-cover"

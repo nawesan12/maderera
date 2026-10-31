@@ -304,36 +304,21 @@ const nextConfig: NextConfig = {
      * tamaños que usan los avatares y las miniaturas.
      *
      * `minimumCacheTTL` sube de cuatro horas a treinta días: las URLs de las
-     * fotos son inmutables —Blob las guarda con nombre único y Unsplash tiene
-     * su propio identificador—, así que revalidar seguido no descubre nada
+     * fotos son inmutables —las subidas llevan nombre único y las de muestra
+     * no cambian—, así que revalidar seguido no descubre nada
      * nuevo y vuelve a pagar la transformación.
      */
     deviceSizes: [640, 828, 1200, 1920],
     imageSizes: [96, 256, 384],
     minimumCacheTTL: 2592000,
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "images.unsplash.com",
-      },
-      // Las fotos "plus" de Unsplash salen por otro host. Sin declararlo,
-      // `next/image` no las sirve y la portada rompe en tiempo de pedido.
-      {
-        protocol: "https",
-        hostname: "plus.unsplash.com",
-      },
-      /*
-       * Las fotos que se suben desde el panel, en Vercel Blob. Faltaba: la
-       * primera foto de producto cargada en producción iba a salir rota en
-       * `next/image`, que rechaza todo host que no esté acá (1/10/2026). En el
-       * servidor propio las muda `scripts/mudar-subidas.ts`; hasta que se
-       * corra, sus URLs siguen apuntando acá.
-       */
-      {
-        protocol: "https",
-        hostname: "*.public.blob.vercel-storage.com",
-      },
-    ],
+    /*
+     * Ninguna foto se sirve desde otro servidor (31/10/2026). Las de muestra,
+     * que eran de Unsplash, están en `public/fotos/`; lo que se sube desde el
+     * panel va a `/subidas/`, y lo que quedó en Vercel Blob ya se mudó. Que la
+     * lista esté vacía es lo que impide que vuelva a aparecer una dependencia
+     * de afuera: `next/image` rechaza cualquier host que no esté acá.
+     */
+    remotePatterns: [],
   },
 };
 

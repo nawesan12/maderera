@@ -158,7 +158,7 @@ async function main() {
       // Un slide sin foto sale como un rectángulo de color plano al lado del
       // hero, que sí tiene una: la diapositiva siguiente parecía un error.
       imagenUrl:
-        "https://images.unsplash.com/photo-1687422810663-c316494f725a?w=1600&q=75",
+        "/fotos/photo-1687422810663-c316494f725a.jpg",
       enlace: "/profesionales",
       textoEnlace: "Solicitar cuenta profesional",
       orden: 1,

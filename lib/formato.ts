@@ -79,25 +79,46 @@ export function importeParaEditar(valor: string | number | null): string {
 /**
  * La zona de las horas que se muestran. El contenedor de Next corre en UTC, y
  * sin zona explícita toda hora armada en el servidor salía 3 h adelantada (y
- * distinta de la que arma el navegador al hidratar). Va en `fechaHora` y
- * `hora`, que siempre son instantes. `fechaCorta` y `fechaLarga` no la llevan
- * a propósito: muchas fechas son días guardados a medianoche UTC
- * (vencimientos, vigencias, asientos), que en hora argentina saldrían un día
- * antes; para esos, `fechaSolaCorta`.
+ * distinta de la que arma el navegador al hidratar). `fechaHora` y `hora`
+ * siempre son instantes; `fechaCorta` y `fechaLarga` distinguen los días
+ * guardados a medianoche UTC (ver `fechaSegunTipo`).
  */
 export const ZONA = "America/Argentina/Buenos_Aires";
 
-export const fechaCorta = new Intl.DateTimeFormat("es-AR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "2-digit",
-});
+/**
+ * Un día guardado como día: medianoche UTC exacta (así guardan las fechas que
+ * se cargan en un formulario, «2026-10-15»). Un instante real no cae nunca
+ * justo ahí.
+ */
+function esDia(fecha: Date): boolean {
+  return (
+    fecha.getUTCHours() === 0 &&
+    fecha.getUTCMinutes() === 0 &&
+    fecha.getUTCSeconds() === 0 &&
+    fecha.getUTCMilliseconds() === 0
+  );
+}
 
-export const fechaLarga = new Intl.DateTimeFormat("es-AR", {
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-});
+/**
+ * Una fecha que sale bien sea un día o un instante: el día se lee en UTC (si
+ * no, en la Argentina sale el anterior) y el instante en hora argentina (si
+ * no, el servidor, que corre en UTC, ponía mañana a todo lo de después de las
+ * 21).
+ */
+function fechaSegunTipo(opciones: Intl.DateTimeFormatOptions) {
+  const comoDia = new Intl.DateTimeFormat("es-AR", { ...opciones, timeZone: "UTC" });
+  const comoInstante = new Intl.DateTimeFormat("es-AR", { ...opciones, timeZone: ZONA });
+  return {
+    format: (fecha: Date | number) => {
+      const d = typeof fecha === "number" ? new Date(fecha) : fecha;
+      return (esDia(d) ? comoDia : comoInstante).format(d);
+    },
+  };
+}
+
+export const fechaCorta = fechaSegunTipo({ day: "2-digit", month: "2-digit", year: "2-digit" });
+
+export const fechaLarga = fechaSegunTipo({ day: "numeric", month: "long", year: "numeric" });
 
 export const fechaHora = new Intl.DateTimeFormat("es-AR", {
   timeZone: ZONA,

@@ -170,9 +170,14 @@ async function PanelConSesion({
                 el navbar público, así que quien entraba al panel en modo oscuro
                 no tenía desde dónde volver. */}
             <ThemeToggle />
-            <Suspense fallback={<ActivityBellSkeleton />}>
-              <ActivityBell />
-            </Suspense>
+            {/* La actividad sale de la bitácora, que es del admin: para los
+                otros roles la API da 403, y como el encabezado está en todas
+                las pantallas, ese 403 tiraba abajo el panel entero. */}
+            {puedeEntrar("/admin/bitacora", usuario.staffRole) && (
+              <Suspense fallback={<ActivityBellSkeleton />}>
+                <ActivityBell />
+              </Suspense>
+            )}
             <div className="border-l border-linea pl-3.5">
               <MenuUsuario
                 nombre={usuario.name}

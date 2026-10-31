@@ -176,6 +176,21 @@ fi
 echo "→ Levantando el resto"
 "${COMPOSE[@]}" up -d --no-deps web respaldo
 
+# El Caddyfile está montado como archivo: cuando `git pull` lo reemplaza, el
+# contenedor sigue leyendo el viejo, y un cambio de rutas no se aplicaba
+# nunca. Si cambió, se valida primero (un error tiraría el sitio entero) y
+# recién ahí se recrea Caddy.
+caddy_en_disco="$(cat Caddyfile servidor/caddy/sitio-viejo.caddy | md5sum)"
+caddy_andando="$("${COMPOSE[@]}" exec -T web cat /etc/caddy/Caddyfile /etc/caddy/sitio-viejo.caddy 2>/dev/null | md5sum)"
+if [ "$caddy_en_disco" != "$caddy_andando" ]; then
+  echo "→ El Caddyfile cambió: validando"
+  if "${COMPOSE[@]}" run --rm --no-deps -T web caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null; then
+    "${COMPOSE[@]}" up -d --no-deps --force-recreate web
+  else
+    echo "Aviso: el Caddyfile nuevo no valida; Caddy sigue con el anterior." >&2
+  fi
+fi
+
 # El contenedor `cron` ya no existe (la cola y las tareas de Next se borraron:
 # todo lo periódico lo corre el worker de Go). Si quedó andando de un
 # despliegue anterior, le pegaría cada minuto a una ruta que ya no está.

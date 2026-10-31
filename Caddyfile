@@ -151,6 +151,8 @@ autoconfig.{$CORREO_DOMINIO} {
 		}
 		reverse_proxy api:8080 {
 			flush_interval -1
+			lb_try_duration 30s
+			lb_try_interval 250ms
 		}
 	}
 
@@ -159,7 +161,10 @@ autoconfig.{$CORREO_DOMINIO} {
 	# corte (/api/cortes/<id>/pdf y /hoja) siguen en Next hasta la tanda 12.
 	@cortesGo path_regexp ^/api/cortes/(pendientes|[^/]+/(lista|ptx))$
 	handle @cortesGo {
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
 	}
 
 	# La copia local del mostrador es de Go (backend/internal/mostrador): las
@@ -167,7 +172,10 @@ autoconfig.{$CORREO_DOMINIO} {
 	# /api/mostrador/config y /api/mostrador/ventas siguen en Next (lo fiscal).
 	@mostradorGo path /api/mostrador/latido /api/mostrador/catalogo /api/mostrador/clientes /api/mostrador/caja/*
 	handle @mostradorGo {
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
 	}
 
 	# WhatsApp es de Go (backend/internal/whatsapp): el webhook de Meta (la
@@ -176,7 +184,10 @@ autoconfig.{$CORREO_DOMINIO} {
 	# Los errores de hidratación que reporta el navegador: los anota Go.
 	@diagnosticoGo path /api/diagnostico
 	handle @diagnosticoGo {
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
 	}
 
 	@whatsapp path /api/whatsapp/*
@@ -184,7 +195,10 @@ autoconfig.{$CORREO_DOMINIO} {
 		request_body {
 			max_size 25MB
 		}
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
 	}
 
 	# La baja con un clic de las campañas (RFC 8058, el botón de Gmail): la
@@ -192,14 +206,20 @@ autoconfig.{$CORREO_DOMINIO} {
 	# (backend/internal/campanas). La página /baja sigue en Next.
 	@baja path /api/baja
 	handle @baja {
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
 	}
 
 	# El webhook de Mercado Pago es de Go (backend/internal/pagos, tanda 6):
 	# la URL dada de alta en Mercado Pago no cambia.
 	@pagosGo path /api/pagos/webhook
 	handle @pagosGo {
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
 	}
 
 	# Todo lo demás va a la aplicación.
@@ -233,6 +253,13 @@ autoconfig.{$CORREO_DOMINIO} {
 			# asistente— lleguen a medida que se arman y no todas juntas al
 			# final.
 			flush_interval -1
+
+			# Mientras se cambia la app en un despliegue no hay a quién
+			# conectarse: en vez de un 502 al instante, Caddy espera y
+			# reintenta. Solo reintenta lo que no llegó a conectar, así que
+			# un POST no se manda dos veces.
+			lb_try_duration 30s
+			lb_try_interval 250ms
 		}
 	}
 

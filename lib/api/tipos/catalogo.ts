@@ -223,10 +223,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asistente/entender": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lo que entiende el motor sin IA de un texto (internal/asistente, el mismo del bot de WhatsApp) */
+        post: operations["EntenderAsistente"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Entendido: {
+            /** @enum {string} */
+            intencion: "saludo" | "buscar" | "precio" | "stock" | "envios" | "horarios" | "pagos" | "cortes" | "cuenta" | "calcular" | "armar_corte" | "moldava" | "documentacion" | "devoluciones" | "acopio" | "factura" | "eventos" | "persona" | "gracias" | "sin_idea";
+            puntaje: number;
+            /** @description El texto completado con lo anterior, si correspondía */
+            texto: string;
+            consulta: string;
+            medida: {
+                espesorMm: number | null;
+                largoMm: number | null;
+                anchoMm: number | null;
+            };
+            cantidad: {
+                /** Format: double */
+                valor: number;
+                /** @enum {string} */
+                unidad: "m2" | "m";
+            } | null;
+            rubro: string | null;
+            despiece: {
+                material: string;
+                piezas: {
+                    largoMm: number;
+                    anchoMm: number;
+                    cantidad: number;
+                    cantoLargo: number;
+                    cantoAncho: number;
+                }[];
+            } | null;
+            /** @description El cortador con el despiece cargado */
+            enlace: string | null;
+        };
         Problema: {
             title: string;
             status: number;
@@ -754,6 +803,34 @@ export interface operations {
             };
             401: components["responses"]["Problema"];
             429: components["responses"]["Problema"];
+        };
+    };
+    EntenderAsistente: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    texto: string;
+                    /** @description Lo último que se buscó, para «¿y en 18?» */
+                    anterior?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Lo entendido */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Entendido"];
+                };
+            };
         };
     };
 }

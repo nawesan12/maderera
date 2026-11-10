@@ -23,6 +23,96 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for EntendidoCantidadUnidad.
+const (
+	M  EntendidoCantidadUnidad = "m"
+	M2 EntendidoCantidadUnidad = "m2"
+)
+
+// Valid indicates whether the value is a known member of the EntendidoCantidadUnidad enum.
+func (e EntendidoCantidadUnidad) Valid() bool {
+	switch e {
+	case M:
+		return true
+	case M2:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EntendidoIntencion.
+const (
+	Acopio        EntendidoIntencion = "acopio"
+	ArmarCorte    EntendidoIntencion = "armar_corte"
+	Buscar        EntendidoIntencion = "buscar"
+	Calcular      EntendidoIntencion = "calcular"
+	Cortes        EntendidoIntencion = "cortes"
+	Cuenta        EntendidoIntencion = "cuenta"
+	Devoluciones  EntendidoIntencion = "devoluciones"
+	Documentacion EntendidoIntencion = "documentacion"
+	Envios        EntendidoIntencion = "envios"
+	Eventos       EntendidoIntencion = "eventos"
+	Factura       EntendidoIntencion = "factura"
+	Gracias       EntendidoIntencion = "gracias"
+	Horarios      EntendidoIntencion = "horarios"
+	Moldava       EntendidoIntencion = "moldava"
+	Pagos         EntendidoIntencion = "pagos"
+	Persona       EntendidoIntencion = "persona"
+	Precio        EntendidoIntencion = "precio"
+	Saludo        EntendidoIntencion = "saludo"
+	SinIdea       EntendidoIntencion = "sin_idea"
+	Stock         EntendidoIntencion = "stock"
+)
+
+// Valid indicates whether the value is a known member of the EntendidoIntencion enum.
+func (e EntendidoIntencion) Valid() bool {
+	switch e {
+	case Acopio:
+		return true
+	case ArmarCorte:
+		return true
+	case Buscar:
+		return true
+	case Calcular:
+		return true
+	case Cortes:
+		return true
+	case Cuenta:
+		return true
+	case Devoluciones:
+		return true
+	case Documentacion:
+		return true
+	case Envios:
+		return true
+	case Eventos:
+		return true
+	case Factura:
+		return true
+	case Gracias:
+		return true
+	case Horarios:
+		return true
+	case Moldava:
+		return true
+	case Pagos:
+		return true
+	case Persona:
+		return true
+	case Precio:
+		return true
+	case Saludo:
+		return true
+	case SinIdea:
+		return true
+	case Stock:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListaYVistaVista.
 const (
 	Final ListaYVistaVista = "final"
@@ -272,6 +362,45 @@ type DocumentoDeFicha struct {
 	Url         string  `json:"url"`
 }
 
+// Entendido defines model for Entendido.
+type Entendido struct {
+	Cantidad *struct {
+		Unidad EntendidoCantidadUnidad `json:"unidad"`
+		Valor  float64                 `json:"valor"`
+	} `json:"cantidad"`
+	Consulta string `json:"consulta"`
+	Despiece *struct {
+		Material string `json:"material"`
+		Piezas   []struct {
+			AnchoMm    int `json:"anchoMm"`
+			Cantidad   int `json:"cantidad"`
+			CantoAncho int `json:"cantoAncho"`
+			CantoLargo int `json:"cantoLargo"`
+			LargoMm    int `json:"largoMm"`
+		} `json:"piezas"`
+	} `json:"despiece"`
+
+	// Enlace El cortador con el despiece cargado
+	Enlace    *string            `json:"enlace"`
+	Intencion EntendidoIntencion `json:"intencion"`
+	Medida    struct {
+		AnchoMm   *int `json:"anchoMm"`
+		EspesorMm *int `json:"espesorMm"`
+		LargoMm   *int `json:"largoMm"`
+	} `json:"medida"`
+	Puntaje int     `json:"puntaje"`
+	Rubro   *string `json:"rubro"`
+
+	// Texto El texto completado con lo anterior, si correspondía
+	Texto string `json:"texto"`
+}
+
+// EntendidoCantidadUnidad defines model for Entendido.Cantidad.Unidad.
+type EntendidoCantidadUnidad string
+
+// EntendidoIntencion defines model for Entendido.Intencion.
+type EntendidoIntencion string
+
 // ListaYVista defines model for ListaYVista.
 type ListaYVista struct {
 	Lista struct {
@@ -452,6 +581,13 @@ type FiltroStock string
 // FiltroSubcategoria defines model for filtro_subcategoria.
 type FiltroSubcategoria = string
 
+// EntenderAsistenteJSONBody defines parameters for EntenderAsistente.
+type EntenderAsistenteJSONBody struct {
+	// Anterior Lo último que se buscó, para «¿y en 18?»
+	Anterior *string `json:"anterior,omitempty"`
+	Texto    string  `json:"texto"`
+}
+
 // ComplementosJSONBody defines parameters for Complementos.
 type ComplementosJSONBody struct {
 	Limite    *int     `json:"limite,omitempty"`
@@ -551,11 +687,17 @@ type RubrosParams struct {
 	Categoria string `form:"categoria" json:"categoria"`
 }
 
+// EntenderAsistenteJSONRequestBody defines body for EntenderAsistente for application/json ContentType.
+type EntenderAsistenteJSONRequestBody EntenderAsistenteJSONBody
+
 // ComplementosJSONRequestBody defines body for Complementos for application/json ContentType.
 type ComplementosJSONRequestBody ComplementosJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// EntenderAsistente Lo que entiende el motor sin IA de un texto (internal/asistente, el mismo del bot de WhatsApp)
+	// (POST /api/v1/asistente/entender)
+	EntenderAsistente(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/catalogo/categorias)
 	Categorias(w http.ResponseWriter, r *http.Request)
@@ -605,6 +747,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// EntenderAsistente operation middleware
+func (siw *ServerInterfaceWrapper) EntenderAsistente(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EntenderAsistente(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // Categorias operation middleware
 func (siw *ServerInterfaceWrapper) Categorias(w http.ResponseWriter, r *http.Request) {
@@ -1358,11 +1514,34 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/catalogo/numeros", wrapper.Numeros)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/catalogo/portada", wrapper.Portada)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/catalogo/mi-lista", wrapper.MiLista)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/asistente/entender", wrapper.EntenderAsistente)
 
 	return m
 }
 
 type ProblemaApplicationProblemPlusJSONResponse Problema
+
+type EntenderAsistenteRequestObject struct {
+	Body *EntenderAsistenteJSONRequestBody
+}
+
+type EntenderAsistenteResponseObject interface {
+	VisitEntenderAsistenteResponse(w http.ResponseWriter) error
+}
+
+type EntenderAsistente200JSONResponse Entendido
+
+func (response EntenderAsistente200JSONResponse) VisitEntenderAsistenteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type CategoriasRequestObject struct {
 }
@@ -1704,6 +1883,9 @@ func (response Rubros200JSONResponse) VisitRubrosResponse(w http.ResponseWriter)
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// EntenderAsistente Lo que entiende el motor sin IA de un texto (internal/asistente, el mismo del bot de WhatsApp)
+	// (POST /api/v1/asistente/entender)
+	EntenderAsistente(ctx context.Context, request EntenderAsistenteRequestObject) (EntenderAsistenteResponseObject, error)
 
 	// (GET /api/v1/catalogo/categorias)
 	Categorias(ctx context.Context, request CategoriasRequestObject) (CategoriasResponseObject, error)
@@ -1782,6 +1964,37 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// EntenderAsistente operation middleware
+func (sh *strictHandler) EntenderAsistente(w http.ResponseWriter, r *http.Request) {
+	var request EntenderAsistenteRequestObject
+
+	var body EntenderAsistenteJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EntenderAsistente(ctx, request.(EntenderAsistenteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EntenderAsistente")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EntenderAsistenteResponseObject); ok {
+		if err := validResponse.VisitEntenderAsistenteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // Categorias operation middleware
@@ -2124,55 +2337,63 @@ func (sh *strictHandler) Rubros(w http.ResponseWriter, r *http.Request, params R
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

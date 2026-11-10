@@ -1,22 +1,17 @@
-import {
-  entender,
-  enlaceDelDespiece,
-  type Entendido,
-  type Intencion,
-} from "@/lib/asistente/lenguaje";
+import type { components } from "@/lib/api/tipos/catalogo";
+
+/** Lo que entendió el motor de Go (internal/asistente), el mismo del bot de WhatsApp. */
+export type Entendido = components["schemas"]["Entendido"];
+type Intencion = Entendido["intencion"];
 
 /**
- * Las respuestas que **no** necesitan el servidor.
+ * Las respuestas que **no** necesitan el catálogo.
  *
  * Todo lo que el asistente contesta y es igual para cualquiera —horarios,
  * zonas de envío, formas de pago, si cortan a medida, cómo se pide la cuenta
- * corriente— se resuelve acá, en el navegador, con los datos que bajaron una
- * sola vez al abrir el panel. Preguntar el horario no tiene por qué costar una
- * ida al servidor: la respuesta ya está.
- *
- * Lo que sí va al servidor es buscar productos, y por una razón concreta: el
- * precio depende de la lista de quien mira, así que el catálogo no puede vivir
- * en el navegador. Ver `lib/dal/precios-sesion.ts`.
+ * corriente— sale de acá, con los datos del equipaje. Lo que se entendió lo
+ * dice el motor de Go (10/11/2026): antes había una copia en TypeScript, y el
+ * sitio y el bot de WhatsApp podían entender distinto.
  */
 
 export interface DatoSuelto {
@@ -59,7 +54,7 @@ const SIN_SERVIDOR: Intencion[] = [
   "persona",
 ];
 
-export function seContestaSolo(leido: Entendido): boolean {
+function seContestaSolo(leido: Entendido): boolean {
   return SIN_SERVIDOR.includes(leido.intencion);
 }
 
@@ -70,10 +65,9 @@ export function seContestaSolo(leido: Entendido): boolean {
  * servidor.
  */
 export function responderLocal(
-  textoLibre: string,
+  leido: Entendido,
   equipaje: Equipaje,
 ): RespuestaLocal | null {
-  const leido = entender(textoLibre);
   if (!seContestaSolo(leido)) return null;
 
   switch (leido.intencion) {
@@ -127,7 +121,7 @@ export function responderLocal(
       const unidades = d.piezas.reduce((s, p) => s + p.cantidad, 0);
       return {
         texto: `Te armé el corte: ${unidades} ${unidades === 1 ? "pieza" : "piezas"}${d.material ? ` en ${d.material}` : ""}. Abrilo para ver cómo entra en la placa y pedirlo.`,
-        enlace: { texto: "Abrir el corte", href: enlaceDelDespiece(d) },
+        enlace: { texto: "Abrir el corte", href: leido.enlace ?? "/corte" },
       };
     }
 

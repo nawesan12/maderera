@@ -174,8 +174,11 @@ var (
 	reMedidaPorPor = regexp.MustCompile(`(\d{2,4})\s*[x×]\s*(\d{2,4})`)
 	reEspesorMm    = regexp.MustCompile(`(\d{1,3})\s*mm\b`)
 	reEspesorDe    = regexp.MustCompile(`\bde\s+(\d{1,2})\b`)
-	reM2           = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*(?:m2|m²|metros? cuadrados?)`)
-	reMetros       = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*(?:m|metros?|ml)\b`)
+	// «¿y en 18?»: con «en», solo si el número cierra la frase; «lo
+	// necesito en 15 días» no es un espesor.
+	reEspesorEn = regexp.MustCompile(`\ben\s+(\d{1,2})\s*(?:mm)?\s*[?!.]*$`)
+	reM2        = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*(?:m2|m²|metros? cuadrados?)`)
+	reMetros    = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*(?:m|metros?|ml)\b`)
 )
 
 func leerMedida(texto string) Medida {
@@ -190,7 +193,11 @@ func leerMedida(texto string) Medida {
 		m.EspesorMm, _ = strconv.Atoi(g[1])
 		return m
 	}
-	if g := reEspesorDe.FindStringSubmatch(texto); g != nil {
+	g := reEspesorDe.FindStringSubmatch(texto)
+	if g == nil {
+		g = reEspesorEn.FindStringSubmatch(texto)
+	}
+	if g != nil {
 		if v, _ := strconv.Atoi(g[1]); v >= 3 && v <= 50 {
 			m.EspesorMm = v
 		}

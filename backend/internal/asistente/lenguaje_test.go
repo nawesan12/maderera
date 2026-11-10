@@ -85,10 +85,13 @@ func TestEntenderDatos(t *testing.T) {
 	if r := Entender("tenés melamina de 18?"); r.Intencion != Buscar || r.Rubro != "placas" {
 		t.Errorf("melamina de 18: %+v", r)
 	}
-	for frase, esp := range map[string]int{"fenólico 18mm": 18, "melamina de 15": 15, "placa de 5 mm": 5} {
+	for frase, esp := range map[string]int{"fenólico 18mm": 18, "melamina de 15": 15, "placa de 5 mm": 5, "mdf y en 18?": 18} {
 		if got := Entender(frase).Medida.EspesorMm; got != esp {
 			t.Errorf("espesor de %q = %d", frase, got)
 		}
+	}
+	if m := Entender("necesito melamina en 15 dias").Medida; m.EspesorMm != 0 {
+		t.Errorf("«en 15 días» no es un espesor: %+v", m)
 	}
 	if m := Entender("placa 1830 x 2600").Medida; m.LargoMm != 1830 || m.AnchoMm != 2600 || m.EspesorMm != 0 {
 		t.Errorf("medida grande: %+v", m)

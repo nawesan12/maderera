@@ -341,6 +341,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"Sugeridos":                      "publico",                       // GET /api/v1/catalogo/productos/{id}/sugeridos
 	"Producto":                       "publico",                       // GET /api/v1/catalogo/productos/{slug}
 	"Productos":                      "publico",                       // GET /api/v1/catalogo/productos
+	"EntenderAsistente":              "publico",                       // POST /api/v1/asistente/entender
 	"Rubros":                         "publico",                       // GET /api/v1/catalogo/rubros
 	"ComprobanteEnPdf":               "publico",                       // GET /api/v1/comprobantes/{id}/pdf
 	"ComprobanteCompleto":            "publico",                       // GET /api/v1/comprobantes/{id}

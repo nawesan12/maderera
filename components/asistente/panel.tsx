@@ -26,8 +26,6 @@ import {
   type EquipajeDelAsistente,
   type ProductoDelAsistente,
 } from "@/app/(public)/asistente-actions";
-import { responderLocal } from "@/lib/asistente/respuestas";
-import { conContexto } from "@/lib/asistente/lenguaje";
 import { formatearPrecio } from "@/lib/formato";
 import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
@@ -204,36 +202,30 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
   async function preguntar(consultaCruda?: string) {
     const escrito = (consultaCruda ?? texto).trim();
     if (escrito.length < 1 || trabajando) return;
-    // «¿y en 18?» después de hablar de MDF: se completa con lo anterior.
-    const consulta = conContexto(escrito, ultimaConsulta);
 
     decir([{ tipo: "persona", texto: escrito }]);
     setTexto("");
     setTrabajando(true);
 
     /*
-     * Lo que se puede contestar acá, se contesta acá.
-     *
-     * El motor de intención es lógica pura, así que corre igual en el
-     * navegador, y los datos del negocio ya bajaron al abrir. Preguntar el
-     * horario no tiene por qué costar una ida al servidor. Lo único que sí va
-     * es buscar productos: el precio depende de la lista de quien mira.
+     * Lo que se entendió lo dice el motor de Go, el mismo del bot de WhatsApp
+     * (10/11/2026). Va la consulta anterior para «¿y en 18?» después de hablar
+     * de MDF. La espera mínima es a propósito: aparecer instantáneo se siente
+     * a formulario y no a conversación.
      */
-    const local = equipaje ? responderLocal(consulta, equipaje) : null;
-
     const [respuesta] = await Promise.all([
-      local ?? preguntarAlAsistente(consulta),
-      new Promise((listo) => setTimeout(listo, local ? 320 : 550)),
+      preguntarAlAsistente(escrito, ultimaConsulta),
+      new Promise((listo) => setTimeout(listo, 400)),
     ]);
 
     setTrabajando(false);
 
     const nuevos: Renglon[] = [{ tipo: "asistente", texto: respuesta.texto }];
 
-    const productos = "productos" in respuesta ? respuesta.productos : undefined;
+    const productos = respuesta.productos;
     if (productos?.length) {
       nuevos.push({ tipo: "productos", items: productos });
-      setUltimaConsulta(consulta);
+      if (respuesta.consulta) setUltimaConsulta(respuesta.consulta);
     }
     if (respuesta.datos?.length) {
       nuevos.push({ tipo: "datos", items: respuesta.datos });
@@ -243,7 +235,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     setExtra({
       sugerencias: respuesta.sugerencias ?? [],
       aPersona: respuesta.aPersona ?? false,
-      enlace: "enlace" in respuesta ? (respuesta.enlace ?? null) : null,
+      enlace: respuesta.enlace ?? null,
     });
   }
 

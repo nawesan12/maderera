@@ -206,6 +206,27 @@ paths:
                         precio: { type: string, nullable: true }
         "401": { $ref: "#/components/responses/Problema" }
         "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/asistente/entender:
+    post:
+      operationId: EntenderAsistente
+      summary: Lo que entiende el motor sin IA de un texto (internal/asistente, el mismo del bot de WhatsApp)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [texto]
+              additionalProperties: false
+              properties:
+                texto: { type: string, minLength: 1, maxLength: 300 }
+                anterior: { type: string, maxLength: 120, description: "Lo último que se buscó, para «¿y en 18?»" }
+      responses:
+        "200":
+          description: Lo entendido
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Entendido" }
 components:
   parameters:
     filtro_categoria: { name: categoria, in: query, schema: { type: string } }
@@ -240,6 +261,50 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problema" }
   schemas:
+    Entendido:
+      type: object
+      required: [intencion, puntaje, texto, consulta, medida, cantidad, rubro, despiece, enlace]
+      properties:
+        intencion:
+          type: string
+          enum: [saludo, buscar, precio, stock, envios, horarios, pagos, cortes, cuenta, calcular, armar_corte, moldava,
+            documentacion, devoluciones, acopio, factura, eventos, persona, gracias, sin_idea]
+        puntaje: { type: integer }
+        texto: { type: string, description: "El texto completado con lo anterior, si correspondía" }
+        consulta: { type: string }
+        medida:
+          type: object
+          required: [espesorMm, largoMm, anchoMm]
+          properties:
+            espesorMm: { type: integer, nullable: true }
+            largoMm: { type: integer, nullable: true }
+            anchoMm: { type: integer, nullable: true }
+        cantidad:
+          type: object
+          nullable: true
+          required: [valor, unidad]
+          properties:
+            valor: { type: number, format: double }
+            unidad: { type: string, enum: [m2, m] }
+        rubro: { type: string, nullable: true }
+        despiece:
+          type: object
+          nullable: true
+          required: [piezas, material]
+          properties:
+            material: { type: string }
+            piezas:
+              type: array
+              items:
+                type: object
+                required: [largoMm, anchoMm, cantidad, cantoLargo, cantoAncho]
+                properties:
+                  largoMm: { type: integer }
+                  anchoMm: { type: integer }
+                  cantidad: { type: integer }
+                  cantoLargo: { type: integer }
+                  cantoAncho: { type: integer }
+        enlace: { type: string, nullable: true, description: "El cortador con el despiece cargado" }
     Problema:
       type: object
       required: [title, status]

@@ -78,6 +78,9 @@ type Despiece struct {
 	Piezas []Pieza
 	// Material es lo que dijeron del material, para elegir la placa.
 	Material string
+	// EspesorMm, si lo dijeron («en melamina blanca de 18mm»): ConsultaLimpia
+	// lo saca del material, y sin él se elegiría cualquier espesor.
+	EspesorMm int
 }
 
 // Entendido es lo que se sacó del texto.
@@ -173,7 +176,9 @@ func init() {
 var (
 	reMedidaPorPor = regexp.MustCompile(`(\d{2,4})\s*[x×]\s*(\d{2,4})`)
 	reEspesorMm    = regexp.MustCompile(`(\d{1,3})\s*mm\b`)
-	reEspesorDe    = regexp.MustCompile(`\bde\s+(\d{1,2})\b`)
+	// La segunda parte atrapa la unidad de largo que sigue: «machimbre de 3
+	// metros» es el largo de la pieza, no un espesor de 3 mm.
+	reEspesorDe = regexp.MustCompile(`\bde\s+(\d{1,2})\b(\s*(?:m|mts?|metros?|cm|centimetros?)\b)?`)
 	// «¿y en 18?»: con «en», solo si el número cierra la frase; «lo
 	// necesito en 15 días» no es un espesor.
 	reEspesorEn = regexp.MustCompile(`\ben\s+(\d{1,2})\s*(?:mm)?\s*[?!.]*$`)
@@ -194,6 +199,9 @@ func leerMedida(texto string) Medida {
 		return m
 	}
 	g := reEspesorDe.FindStringSubmatch(texto)
+	if g != nil && g[2] != "" {
+		g = nil
+	}
 	if g == nil {
 		g = reEspesorEn.FindStringSubmatch(texto)
 	}
@@ -214,8 +222,10 @@ func leerCantidad(texto string) *Cantidad {
 	if g := reM2.FindStringSubmatch(texto); g != nil {
 		return &Cantidad{Valor: numero(g[1]), Unidad: "m2"}
 	}
-	if g := reMetros.FindStringSubmatch(texto); g != nil {
-		return &Cantidad{Valor: numero(g[1]), Unidad: "m"}
+	// «12 metros de zócalo» es una cantidad; «machimbre de 3 metros», el
+	// largo de cada pieza.
+	if i := reMetros.FindStringSubmatchIndex(texto); i != nil && !strings.HasSuffix(strings.TrimRight(texto[:i[0]], " "), " de") {
+		return &Cantidad{Valor: numero(texto[i[2]:i[3]]), Unidad: "m"}
 	}
 	return nil
 }
@@ -437,6 +447,7 @@ func LeerDespiece(texto string) *Despiece {
 		}
 	}
 	d.Material = strings.TrimSpace(strings.Join(mat, " "))
+	d.EspesorMm = leerMedida(t).EspesorMm
 	return d
 }
 

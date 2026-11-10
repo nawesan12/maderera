@@ -90,6 +90,12 @@ func TestEntenderDatos(t *testing.T) {
 			t.Errorf("espesor de %q = %d", frase, got)
 		}
 	}
+	if e := Entender("cuanto sale el machimbre de 3 metros"); e.Medida.EspesorMm != 0 || e.Cantidad != nil {
+		t.Errorf("«de 3 metros» es el largo de la pieza: %+v", e)
+	}
+	if d := LeerDespiece("4 de 600x400 en melamina blanca de 18mm"); d == nil || d.EspesorMm != 18 || d.Material != "melamina blanca" {
+		t.Errorf("espesor del despiece: %+v", d)
+	}
 	if m := Entender("necesito melamina en 15 dias").Medida; m.EspesorMm != 0 {
 		t.Errorf("«en 15 días» no es un espesor: %+v", m)
 	}

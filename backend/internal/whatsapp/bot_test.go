@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
+
+	"mjbj/internal/sqlc"
 
 	"mjbj/internal/asistente"
 )
@@ -241,5 +244,147 @@ func TestBotGuardaElCorte(t *testing.T) {
 		if !strings.Contains(r, c.quiere) {
 			t.Errorf("%q: %q", c.texto, r)
 		}
+	}
+}
+
+// Lo que encontró la revisión del 10/11: cada caso es un error que tenía.
+func TestBotRevision(t *testing.T) {
+	d := datosDePrueba
+	// Acuses y la charla de un pago: silencio, no «No lo encontré».
+	for _, txt := range []string{"ok", "dale", "listo gracias", "👍", "ya transferí", "te mando el comprobante", "gracias por tu mensaje, te responderemos a la brevedad"} {
+		if r := Responder(txt, EstadoBot{}, d, true); r.Texto != "" || r.Derivar || r.Estado.Fallos != 0 {
+			t.Errorf("%q tendría que quedar sin respuesta: %+v", txt, r)
+		}
+	}
+	// Pero «si tienen mdf?» es una consulta.
+	if r := Responder("si tienen mdf?", EstadoBot{}, d, false); r.Buscar != "mdf" {
+		t.Errorf("«si tienen mdf?»: %+v", r)
+	}
+	// Con un presupuesto esperando la medida, otro pedido no lo completa.
+	pend := &Presupuestar{Slug: "fenolico", Cantidad: 1}
+	if r := Responder("mejor pasame precio de mdf de 18", EstadoBot{Pendiente: pend}, d, false); r.Presupuestar != nil {
+		t.Errorf("otro producto no completa el pendiente: %+v", r.Presupuestar)
+	}
+	if r := Responder("la de 18", EstadoBot{Pendiente: pend}, d, false); r.Presupuestar == nil || r.Presupuestar.Medida.EspesorMm != 18 {
+		t.Errorf("«la de 18» sí: %+v", r)
+	}
+	// «pasame info» no es pedir precio.
+	if preguntaPrecio("pasame info de melamina blanca") || !preguntaPrecio("pasame el precio de la melamina") {
+		t.Error("pasame")
+	}
+	// Sin el espesor pedido, se muestra igual lo que hay.
+	d.Productos = []ProductoBot{{Nombre: "Machimbre", Slug: "machimbre", Medidas: []string{"1/2 x 4 x 3m"}}}
+	if r := Responder("tenés machimbre de 18?", EstadoBot{}, d, true); !strings.Contains(r.Texto, "Machimbre") {
+		t.Errorf("sin esa medida: %+v", r)
+	}
+	// El link a la persona no lleva un texto enorme.
+	if l := enlaceHumano("5492235903118", strings.Repeat("ñandú ", 500)); len(l) > 3000 {
+		t.Errorf("enlace de %d", len(l))
+	}
+}
+
+func TestProximaApertura(t *testing.T) {
+	casos := map[string]string{
+		"2026-11-10T10:00:00-03:00": "",               // martes, abierto
+		"2026-11-10T20:00:00-03:00": "mañana a las 8", // martes a la noche
+		"2026-11-11T06:30:00-03:00": "hoy a las 8",    // miércoles temprano
+		"2026-11-14T13:00:00-03:00": "el lunes a las 8",
+		"2026-11-15T10:00:00-03:00": "mañana a las 8", // domingo
+	}
+	for cuando, quiere := range casos {
+		ti, _ := time.Parse(time.RFC3339, cuando)
+		if got := proximaApertura(ti); got != quiere {
+			t.Errorf("%s: %q, quería %q", cuando, got, quiere)
+		}
+	}
+	r := Responder("quiero hablar con una persona", EstadoBot{}, DatosBot{Ahora: mustTime("2026-11-10T20:00:00-03:00"), NumeroHumano: "549223"}, false)
+	if !strings.Contains(r.Texto, "cerrados: te contestan mañana a las 8") {
+		t.Errorf("fuera de horario: %s", r.Texto)
+	}
+}
+
+func mustTime(s string) time.Time { t, _ := time.Parse(time.RFC3339, s); return t }
+
+// Las protecciones de atenderConBot, contra la base.
+func TestBotSabeCuandoCallarse(t *testing.T) {
+	e := armar(t, false)
+	ctx := e.ctx
+	if _, err := e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('whatsapp_bot', 'si')`); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	entra := func(jid, texto string) string {
+		t.Helper()
+		n++
+		id, err := e.wa.AtenderEntrante(ctx, MensajeMeta{WaMessageID: fmt.Sprintf("wamid.calla%d", n), Tipo: "text", Texto: texto}, jid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	delBot := func(jid string) int {
+		var c int
+		_ = e.pool.QueryRow(ctx, `select count(*) from whatsapp_mensajes m join whatsapp_conversaciones c on c.id = m.conversacion_id
+			where c.wa_jid = $1 and m.origen = 'bot'`, jid).Scan(&c)
+		return c
+	}
+	conv := func(jid string) string {
+		var id string
+		_ = e.pool.QueryRow(ctx, `select id from whatsapp_conversaciones where wa_jid = $1`, jid).Scan(&id)
+		return id
+	}
+
+	// El mismo mensaje no se contesta dos veces (el reintento de la cola).
+	id := entra("5492235550021", "a qué hora abren?")
+	if err := e.wa.atenderConBot(ctx, id, conv("5492235550021"), "5492235550021", "a qué hora abren?"); err != nil {
+		t.Fatal(err)
+	}
+	if c := delBot("5492235550021"); c != 1 {
+		t.Errorf("contestó %d veces el mismo mensaje", c)
+	}
+
+	// Un mensaje viejo (Meta reintentando tarde) no se contesta.
+	viejo := entra("5492235550022", "hola")
+	_, _ = e.pool.Exec(ctx, `delete from whatsapp_mensajes where conversacion_id = $1 and origen = 'bot'`, conv("5492235550022"))
+	_, _ = e.pool.Exec(ctx, `update whatsapp_mensajes set ocurrido_at = now() - interval '3 hours', datos = null where id = $1`, viejo)
+	if err := e.wa.atenderConBot(ctx, viejo, conv("5492235550022"), "5492235550022", "hola"); err != nil {
+		t.Fatal(err)
+	}
+	if c := delBot("5492235550022"); c != 0 {
+		t.Errorf("contestó un mensaje de hace 3 horas")
+	}
+
+	// Con un aviso automático reciente, es la charla de un pedido: no se mete.
+	entra("5492235550023", "hola")
+	c23 := conv("5492235550023")
+	_, _ = e.pool.Exec(ctx, `insert into whatsapp_mensajes (conversacion_id, direccion, tipo, cuerpo, estado, origen, ocurrido_at)
+		values ($1, 'saliente', 'text', 'Tu pedido está listo', 'enviado', 'aviso', now())`, c23)
+	antes := delBot("5492235550023")
+	entra("5492235550023", "a qué hora abren?")
+	if delBot("5492235550023") != antes {
+		t.Error("contestó en la charla de un aviso de pedido")
+	}
+
+	// Asignada a alguien: tampoco.
+	entra("5492235550024", "hola")
+	e.staff(t, "vera@prueba.test", sqlc.StaffRoleVendedor)
+	if _, err := e.pool.Exec(ctx, `update whatsapp_conversaciones set asignado_a_user_id = (select id from "user" where email = 'vera@prueba.test') where id = $1`, conv("5492235550024")); err != nil {
+		t.Fatal(err)
+	}
+	antes = delBot("5492235550024")
+	entra("5492235550024", "a qué hora abren?")
+	if delBot("5492235550024") != antes {
+		t.Error("contestó una conversación asignada")
+	}
+
+	// El tope por hora: pasado, se frena y pasa a una persona.
+	jid := "5492235550025"
+	for i := 0; i < TopeBotPorHora+3; i++ {
+		entra(jid, "a qué hora abren?")
+	}
+	var estado string
+	_ = e.pool.QueryRow(ctx, `select bot_estado from whatsapp_conversaciones where wa_jid = $1`, jid).Scan(&estado)
+	if c := delBot(jid); c != TopeBotPorHora || estado != "derivada" {
+		t.Errorf("tope: contestó %d (tope %d), estado %s", c, TopeBotPorHora, estado)
 	}
 }

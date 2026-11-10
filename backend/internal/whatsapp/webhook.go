@@ -69,7 +69,8 @@ func (s *Servicio) Registrar(c *cola.Cola) {
 		if err := json.Unmarshal(crudo, &c); err != nil {
 			return err
 		}
-		return s.atenderAudio(ctx, c)
+		s.lanzarAudio(c)
+		return nil
 	})
 	c.Registrar(TrabajoMedio, func(ctx context.Context, crudo json.RawMessage) error {
 		var c cargaMedio
@@ -193,6 +194,13 @@ func (s *Servicio) ProcesarPayload(ctx context.Context, payload any) error {
 	return nil
 }
 
+// botLee son los tipos de mensaje que el bot contesta: lo escrito, el
+// epígrafe de una foto, un video o un archivo, y el botón de una plantilla.
+// Una ubicación, un contacto, un formulario o un mensaje que WhatsApp no deja
+// ver llegan con un texto armado por nosotros («Ubicación: …», «Aviso de
+// WhatsApp…») que no es una consulta: los ve una persona.
+var botLee = map[string]bool{"text": true, "image": true, "video": true, "document": true, "button": true}
+
 // AtenderEntrante es lo que pasa cuando escribe un cliente: se guarda, se
 // baja el adjunto, se atiende el «BAJA» y se avisa al personal. Lo usan el
 // webhook y el simulador de la demostración.
@@ -201,8 +209,9 @@ func (s *Servicio) AtenderEntrante(ctx context.Context, m MensajeMeta, waJid str
 	if err != nil || g == nil {
 		return "", err
 	}
+	estadoMedio := ""
 	if g.MediaID != nil {
-		if _, err := s.DescargarMedio(ctx, g.MensajeID, 0); err != nil {
+		if estadoMedio, err = s.DescargarMedio(ctx, g.MensajeID, 0); err != nil {
 			return "", err
 		}
 	}
@@ -211,12 +220,25 @@ func (s *Servicio) AtenderEntrante(ctx context.Context, m MensajeMeta, waJid str
 	}
 	// El bot contesta después de guardar; si falla, el mensaje igual quedó en
 	// la bandeja y la persona lo ve.
-	if m.Tipo == "audio" {
-		if err := s.encolarAudio(ctx, g, waJid); err != nil {
-			s.log.Error("el audio de WhatsApp no se pudo encolar", "error", err, "conversacion", g.ConversacionID)
+	switch {
+	case m.Tipo == "audio":
+		// Si la descarga quedó para reintentar, el audio se encola cuando
+		// termine (DescargarMedio); contestar ahora «no puedo escucharlo»
+		// sería falso.
+		var err error
+		switch estadoMedio {
+		case "listo":
+			err = s.encolarAudio(ctx, g, waJid)
+		case "fallido":
+			err = s.contestarSinTexto(ctx, g.MensajeID, g.ConversacionID, waJid)
 		}
-	} else if err := s.atenderConBot(ctx, g.ConversacionID, waJid, g.Cuerpo); err != nil {
-		s.log.Error("el bot de WhatsApp falló", "error", err, "conversacion", g.ConversacionID)
+		if err != nil {
+			s.log.Error("el audio de WhatsApp no se pudo atender", "error", err, "conversacion", g.ConversacionID)
+		}
+	case botLee[m.Tipo]:
+		if err := s.atenderConBot(ctx, g.MensajeID, g.ConversacionID, waJid, g.Cuerpo); err != nil {
+			s.log.Error("el bot de WhatsApp falló", "error", err, "conversacion", g.ConversacionID)
+		}
 	}
 	cuerpo := cortarJS(trimJS(g.Cuerpo), 140)
 	if cuerpo == "" {
@@ -321,6 +343,12 @@ func (s *Servicio) DescargarMedio(ctx context.Context, mensajeID string, intento
 	if _, err := s.pool.Exec(ctx, `update whatsapp_mensajes set media_url = $2, media_mime = $3, media_bytes = $4, media_estado = 'listo',
 		error_detalle = null where id = $1`, mensajeID, ref, LimpiarMime(m), bytes); err != nil {
 		return "", err
+	}
+	// Un audio que bajó recién en un reintento: la primera vez no se encoló.
+	if intento > 0 {
+		if err := s.encolarAudioReintentado(ctx, mensajeID); err != nil {
+			return "", err
+		}
 	}
 	return "listo", nil
 }

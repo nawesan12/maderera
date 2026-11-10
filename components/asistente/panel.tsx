@@ -24,6 +24,7 @@ import {
   productosDelRubro,
   type DatoDelAsistente,
   type EquipajeDelAsistente,
+  type RespuestaDelAsistente,
   type ProductoDelAsistente,
 } from "@/app/(public)/asistente-actions";
 import { formatearPrecio } from "@/lib/formato";
@@ -213,8 +214,15 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
      * de MDF. La espera mínima es a propósito: aparecer instantáneo se siente
      * a formulario y no a conversación.
      */
+    // Si el servidor no contesta, el panel no puede quedar trabado en los
+    // tres puntitos: se ofrece una persona, como cuando no se entiende.
     const [respuesta] = await Promise.all([
-      preguntarAlAsistente(escrito, ultimaConsulta),
+      preguntarAlAsistente(escrito, ultimaConsulta).catch(
+        (): RespuestaDelAsistente => ({
+          texto: "Ahora no te puedo contestar. Te paso con alguien del mostrador.",
+          aPersona: true,
+        }),
+      ),
       new Promise((listo) => setTimeout(listo, 400)),
     ]);
 

@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -101,7 +103,7 @@ func corteadorDelBot(pool *pgxpool.Pool, log *slog.Logger) whatsapp.Corteador {
 		if err != nil {
 			return "", "", "", err
 		}
-		p := elegirPlaca(placas, d.Material)
+		p := elegirPlaca(placas, d.Material, d.EspesorMm)
 		if p == nil {
 			return "", "", "", nil
 		}
@@ -125,7 +127,19 @@ func corteadorDelBot(pool *pgxpool.Pool, log *slog.Logger) whatsapp.Corteador {
 	}
 }
 
-func elegirPlaca(placas []cortes.PlacaCortable, material string) *cortes.PlacaCortable {
+func elegirPlaca(todas []cortes.PlacaCortable, material string, espesorMm int) *cortes.PlacaCortable {
+	// Con el espesor dicho, solo las placas de ese espesor: en el sitio la
+	// persona ve el cortador antes de mandar; acá la consulta se guarda sola.
+	placas := todas
+	if espesorMm > 0 {
+		re := regexp.MustCompile(fmt.Sprintf(`(^|\D)%d\s*mm`, espesorMm))
+		placas = nil
+		for _, p := range todas {
+			if re.MatchString(p.Descripcion) {
+				placas = append(placas, p)
+			}
+		}
+	}
 	var palabras []string
 	for _, w := range strings.Fields(asistente.Normalizar(material)) {
 		if len(w) > 2 {

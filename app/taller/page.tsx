@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { CircleHelp, LayoutDashboard, Settings2 } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
@@ -8,6 +7,7 @@ import { plural } from "@/components/admin/formato";
 import { BuscadorCortes } from "@/app/admin/cortes/buscador";
 import { TableroDeCortes } from "@/app/admin/cortes/vista";
 import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
+import { Marca } from "@/components/marca";
 
 export const metadata: Metadata = {
   title: "Taller · Cola de corte",
@@ -52,16 +52,7 @@ export default async function TallerPage({
           `bg-sidebar`, el color del menú lateral: acá no hay menú, así que la
           barra entera quedaba negra y el título, negro encima. */}
       <header className="textura flex h-[60px] shrink-0 items-center gap-3.5 border-b border-linea bg-background px-[18px]">
-        <span className="flex items-center gap-2.5">
-          <Image
-            src="/cropped-icon-180x180.png"
-            alt=""
-            width={30}
-            height={30}
-            className="rounded-lg"
-          />
-          <span className="text-[17px] font-semibold">Taller</span>
-        </span>
+        <Marca tamano="panel" etiqueta="Taller" />
 
         {pendientes.length > 0 && (
           <span

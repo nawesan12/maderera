@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { Minimize2 } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import { conversacionesSinLeer } from "@/lib/dal/admin/whatsapp";
 import { VistaWhatsapp } from "@/app/admin/whatsapp/vista";
+import { Marca } from "@/components/marca";
 
 export const metadata: Metadata = {
   title: "Atención por WhatsApp",
@@ -43,15 +43,8 @@ export default async function AtencionPage({
   return (
     <div className="panel textura flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
-        <Link href="/admin" className="flex items-center gap-2.5">
-          <Image
-            src="/cropped-icon-180x180.png"
-            alt=""
-            width={28}
-            height={28}
-            className="rounded-lg"
-          />
-          <span className="text-base font-semibold">Atención</span>
+        <Link href="/admin">
+          <Marca tamano="panel" etiqueta="Atención" />
         </Link>
 
         {sinLeer > 0 && (

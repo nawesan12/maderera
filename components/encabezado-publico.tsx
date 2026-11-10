@@ -1,4 +1,6 @@
+import Image from "next/image";
 import Link from "next/link";
+import { ANIO_FUNDACION } from "@/lib/empresa";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd } from "@/lib/seo";
 
@@ -44,6 +46,16 @@ export function EncabezadoPublico({
         className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.07)_0_12px,transparent_12px_24px)]"
         aria-hidden="true"
       />
+      {/* La «M» del logo, grande y a un costado: la firma de la maderera en
+          cada sección (notas del 9/11/2026). */}
+      <Image
+        src="/cropped-icon-180x180.png"
+        alt=""
+        width={180}
+        height={180}
+        className="pointer-events-none absolute -right-6 top-1/2 hidden -translate-y-1/2 rotate-[-8deg] rounded-[40px] opacity-[0.13] md:block"
+        aria-hidden="true"
+      />
       <div className="contenedor relative">
         <nav
           aria-label="Dónde estás"
@@ -64,7 +76,10 @@ export function EncabezadoPublico({
           <span className="text-white">{titulo}</span>
         </nav>
 
-        <h1 className="mt-3.5 text-[40px] font-extrabold leading-[1.08] tracking-[-0.035em]">
+        <p className="mt-4 text-[12px] font-semibold uppercase tracking-[0.32em] text-brand-orange-light">
+          Juan B. Justo · Desde {ANIO_FUNDACION}
+        </p>
+        <h1 className="mt-1.5 text-[40px] font-extrabold leading-[1.08] tracking-[-0.035em]">
           {titulo}
         </h1>
         {bajada && (

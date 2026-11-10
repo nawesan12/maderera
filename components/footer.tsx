@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { telefonoParaMarcar } from "@/lib/formato";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
-import Image from "next/image";
 import { anioEnCurso } from "@/lib/reloj";
 import { Phone, Mail, MapPin, Clock } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { Separator } from "@/components/ui/separator";
 import { REDES } from "@/lib/empresa";
 import { tienda } from "@/lib/dal/contenido";
+import { Marca } from "@/components/marca";
 
 /**
  * El pie repite los datos de contacto, y por eso los lee de la base.
@@ -32,19 +32,7 @@ export async function Footer() {
         <div className="grid grid-cols-1 gap-[38px] md:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1.2fr]">
           {/* Brand */}
           <div>
-            <div className="flex items-center gap-2.5">
-              <Image
-                src="/cropped-icon-180x180.png"
-                alt="Maderera Juan B. Justo"
-                width={40}
-                height={40}
-                className="rounded-[10px]"
-              />
-              <div className="leading-[1.15]">
-                <p className="text-[15px] font-bold text-white">Maderera</p>
-                <p className="text-[13px] text-white/60">Juan B. Justo</p>
-              </div>
-            </div>
+            <Marca tamano="pie" tono="oscuro" />
             <p className="mt-4 text-sm leading-relaxed">
               Desde 1981 abasteciendo a Mar del Plata con los mejores productos
               de la industria maderera.

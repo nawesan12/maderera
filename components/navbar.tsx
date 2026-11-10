@@ -32,6 +32,7 @@ import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
 import { useEstado } from "@/lib/estado-context";
 import { primerNombre, telefonoParaMarcar } from "@/lib/formato";
+import { Marca } from "@/components/marca";
 
 const productLinks: {
   name: string;
@@ -241,18 +242,8 @@ export function Navbar({
         <div className="contenedor flex h-[72px] items-center gap-6">
           {/* El logo, más grande y con el nombre siempre a la vista: la
               clienta pidió que tenga más presencia y que nunca se pierda. */}
-          <Link href="/" className="group flex shrink-0 items-center gap-3">
-            <Image
-              src="/cropped-icon-180x180.png"
-              alt="Maderera Juan B. Justo"
-              width={54}
-              height={54}
-              className="rounded-[13px] transition-transform duration-300 group-hover:scale-105"
-            />
-            <span className="whitespace-nowrap leading-[1.1]">
-              <span className="block text-[17px] font-extrabold tracking-tight text-foreground">Maderera</span>
-              <span className="block text-[12px] font-semibold uppercase tracking-[0.11em] text-texto-3">Juan B. Justo</span>
-            </span>
+          <Link href="/" className="shrink-0">
+            <Marca />
           </Link>
 
           <div className="hidden items-center gap-0.5 lg:flex">

@@ -23,6 +23,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sesion/enlace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Entrar con un link mágico (un solo uso) */
+        post: operations["EntrarConEnlace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sesion/enlace/pedir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Manda un link de ingreso al correo, si tiene cuenta (contesta igual si no) */
+        post: operations["PedirEnlace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sesion/clave": {
         parameters: {
             query?: never;
@@ -180,6 +214,64 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    EntrarConEnlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Entró; la cookie va en Set-Cookie */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        sesion: components["schemas"]["Sesion"];
+                        /** @enum {string} */
+                        proposito: "activacion" | "ingreso";
+                    };
+                };
+            };
+            410: components["responses"]["Problema"];
+            429: components["responses"]["Problema"];
+        };
+    };
+    PedirEnlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    correo: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Pedido (haya o no cuenta) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Problema"];
+            429: components["responses"]["Problema"];
         };
     };
     CambiarClave: {

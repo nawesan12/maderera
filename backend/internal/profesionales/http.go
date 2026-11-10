@@ -126,6 +126,18 @@ func (a *API) AprobarSolicitud(ctx context.Context, r profesionalesapi.AprobarSo
 	return listo(m), nil
 }
 
+func (a *API) EnlaceDeAcceso(ctx context.Context, r profesionalesapi.EnlaceDeAccesoRequestObject) (profesionalesapi.EnlaceDeAccesoResponseObject, error) {
+	ses, err := panelProfesionales(ctx)
+	if err != nil {
+		return nil, err
+	}
+	url, nombre, telefono, err := a.s.EnlaceDeAcceso(ctx, ses, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	return profesionalesapi.EnlaceDeAcceso200JSONResponse{Url: url, Nombre: nombre, Telefono: telefono}, nil
+}
+
 func (a *API) RechazarSolicitud(ctx context.Context, r profesionalesapi.RechazarSolicitudRequestObject) (profesionalesapi.RechazarSolicitudResponseObject, error) {
 	ses, err := panelProfesionales(ctx)
 	if err != nil {

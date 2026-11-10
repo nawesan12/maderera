@@ -66,6 +66,24 @@ func (e SesionRolStaff) Valid() bool {
 	}
 }
 
+// Defines values for EntrarConEnlace200JSONResponseBodyProposito.
+const (
+	Activacion EntrarConEnlace200JSONResponseBodyProposito = "activacion"
+	Ingreso    EntrarConEnlace200JSONResponseBodyProposito = "ingreso"
+)
+
+// Valid indicates whether the value is a known member of the EntrarConEnlace200JSONResponseBodyProposito enum.
+func (e EntrarConEnlace200JSONResponseBodyProposito) Valid() bool {
+	switch e {
+	case Activacion:
+		return true
+	case Ingreso:
+		return true
+	default:
+		return false
+	}
+}
+
 // CambioDeClave defines model for CambioDeClave.
 type CambioDeClave struct {
 	Actual string `json:"actual"`
@@ -116,6 +134,19 @@ type SesionRol string
 // SesionRolStaff defines model for Sesion.RolStaff.
 type SesionRolStaff string
 
+// EntrarConEnlaceJSONBody defines parameters for EntrarConEnlace.
+type EntrarConEnlaceJSONBody struct {
+	Token string `json:"token"`
+}
+
+// EntrarConEnlace200JSONResponseBodyProposito defines parameters for EntrarConEnlace.
+type EntrarConEnlace200JSONResponseBodyProposito string
+
+// PedirEnlaceJSONBody defines parameters for PedirEnlace.
+type PedirEnlaceJSONBody struct {
+	Correo string `json:"correo"`
+}
+
 // RegistrarseJSONRequestBody defines body for Registrarse for application/json ContentType.
 type RegistrarseJSONRequestBody = Registro
 
@@ -124,6 +155,12 @@ type EntrarJSONRequestBody = Entrada
 
 // CambiarClaveJSONRequestBody defines body for CambiarClave for application/json ContentType.
 type CambiarClaveJSONRequestBody = CambioDeClave
+
+// EntrarConEnlaceJSONRequestBody defines body for EntrarConEnlace for application/json ContentType.
+type EntrarConEnlaceJSONRequestBody EntrarConEnlaceJSONBody
+
+// PedirEnlaceJSONRequestBody defines body for PedirEnlace for application/json ContentType.
+type PedirEnlaceJSONRequestBody PedirEnlaceJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -142,6 +179,12 @@ type ServerInterface interface {
 	// CambiarClave Cambiar la clave (cierra las otras sesiones)
 	// (PUT /api/v1/sesion/clave)
 	CambiarClave(w http.ResponseWriter, r *http.Request)
+	// EntrarConEnlace Entrar con un link mágico (un solo uso)
+	// (POST /api/v1/sesion/enlace)
+	EntrarConEnlace(w http.ResponseWriter, r *http.Request)
+	// PedirEnlace Manda un link de ingreso al correo, si tiene cuenta (contesta igual si no)
+	// (POST /api/v1/sesion/enlace/pedir)
+	PedirEnlace(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -214,6 +257,34 @@ func (siw *ServerInterfaceWrapper) CambiarClave(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CambiarClave(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EntrarConEnlace operation middleware
+func (siw *ServerInterfaceWrapper) EntrarConEnlace(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EntrarConEnlace(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PedirEnlace operation middleware
+func (siw *ServerInterfaceWrapper) PedirEnlace(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PedirEnlace(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -346,6 +417,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/sesion", wrapper.Salir)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/sesion", wrapper.VerSesion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sesion", wrapper.Entrar)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sesion/enlace", wrapper.EntrarConEnlace)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sesion/enlace/pedir", wrapper.PedirEnlace)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/sesion/clave", wrapper.CambiarClave)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/registro", wrapper.Registrarse)
 
@@ -556,6 +629,107 @@ func (response CambiarClave422ApplicationProblemPlusJSONResponse) VisitCambiarCl
 	return err
 }
 
+type EntrarConEnlaceRequestObject struct {
+	Body *EntrarConEnlaceJSONRequestBody
+}
+
+type EntrarConEnlaceResponseObject interface {
+	VisitEntrarConEnlaceResponse(w http.ResponseWriter) error
+}
+
+type EntrarConEnlace200JSONResponse struct {
+	Proposito EntrarConEnlace200JSONResponseBodyProposito `json:"proposito"`
+	Sesion    Sesion                                      `json:"sesion"`
+}
+
+func (response EntrarConEnlace200JSONResponse) VisitEntrarConEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EntrarConEnlace410ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response EntrarConEnlace410ApplicationProblemPlusJSONResponse) VisitEntrarConEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(410)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EntrarConEnlace429ApplicationProblemPlusJSONResponse Problema
+
+func (response EntrarConEnlace429ApplicationProblemPlusJSONResponse) VisitEntrarConEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PedirEnlaceRequestObject struct {
+	Body *PedirEnlaceJSONRequestBody
+}
+
+type PedirEnlaceResponseObject interface {
+	VisitPedirEnlaceResponse(w http.ResponseWriter) error
+}
+
+type PedirEnlace204Response struct {
+}
+
+func (response PedirEnlace204Response) VisitPedirEnlaceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type PedirEnlace422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response PedirEnlace422ApplicationProblemPlusJSONResponse) VisitPedirEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PedirEnlace429ApplicationProblemPlusJSONResponse Problema
+
+func (response PedirEnlace429ApplicationProblemPlusJSONResponse) VisitPedirEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Registrarse Crear una cuenta de cliente y entrar
@@ -573,6 +747,12 @@ type StrictServerInterface interface {
 	// CambiarClave Cambiar la clave (cierra las otras sesiones)
 	// (PUT /api/v1/sesion/clave)
 	CambiarClave(ctx context.Context, request CambiarClaveRequestObject) (CambiarClaveResponseObject, error)
+	// EntrarConEnlace Entrar con un link mágico (un solo uso)
+	// (POST /api/v1/sesion/enlace)
+	EntrarConEnlace(ctx context.Context, request EntrarConEnlaceRequestObject) (EntrarConEnlaceResponseObject, error)
+	// PedirEnlace Manda un link de ingreso al correo, si tiene cuenta (contesta igual si no)
+	// (POST /api/v1/sesion/enlace/pedir)
+	PedirEnlace(ctx context.Context, request PedirEnlaceRequestObject) (PedirEnlaceResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -755,28 +935,93 @@ func (sh *strictHandler) CambiarClave(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// EntrarConEnlace operation middleware
+func (sh *strictHandler) EntrarConEnlace(w http.ResponseWriter, r *http.Request) {
+	var request EntrarConEnlaceRequestObject
+
+	var body EntrarConEnlaceJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EntrarConEnlace(ctx, request.(EntrarConEnlaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EntrarConEnlace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EntrarConEnlaceResponseObject); ok {
+		if err := validResponse.VisitEntrarConEnlaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PedirEnlace operation middleware
+func (sh *strictHandler) PedirEnlace(w http.ResponseWriter, r *http.Request) {
+	var request PedirEnlaceRequestObject
+
+	var body PedirEnlaceJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PedirEnlace(ctx, request.(PedirEnlaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PedirEnlace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PedirEnlaceResponseObject); ok {
+		if err := validResponse.VisitPedirEnlaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"zFbNbhs3EH6VAduDjW4s23FRRL3FSYEGLeraQC91gMwuRzIdLskMuQIEYx+oZx96r1+sILmSV95VLBeN",
-	"kdtKHM7f930zvBGVrZ01ZIIX0xvB5J01ntKPM7alphrjd2VNIBPiJzqnVYVBWTNx2eS7a29NPPPVVXfh",
-	"W6aZmIpvJvcBJvnUT9aO27YthCRfsXLRn5iKt8yWYe/8p1N4dfL9D/sFVNaAth5qMh6vyYOzDBXWzgIZ",
-	"+EDxAvkPIvrqIsQETrEulX1DpxoXlPKWUsUgqM/YOuKgYpkz1J4K4Xp/3QisQoM6foWlIzEVPrAyc9EW",
-	"wjS0wJGTthBMnxrFJMX0z5WHlf37YmVvy2uqQvT01gRGiU9MrVqVM8isssxkR4+YKssSOR5KmmGjg5gG",
-	"bmidVmmtJjSDOjqnRRd3rI4+TTZzlRRQjbexQ2178SN3BpF9wND0bZUJNCdOxipo+oybxwDM99cxxgo/",
-	"p7nyge1zIGhsXfKWekjTzBqbO97XkkNGqKxlqQwyaPRAJjDN0Yvikfq7gMUuDLggr7L+H1S6vR6tfMA3",
-	"dMZUKeuHqSsJkkAjJMP47bIpSNLg2M5SzE5iWmOp6QGld2oe28RPMk2d6K4VmRDL3gzhA85mvdo3HFyk",
-	"w54XlLUyohALMpKkZRGHnLNehdhH9MSMktiK9zsk33jin+XjhO3sihHkYpG9TAfdH2IanSszG+FUmlpc",
-	"AGfyI3sqwKNWDEvwWBLDp0bd/WXAKUkH8AuCJ6/ubg2Qh8YkQn5UdGmuQnC/Gb2EvbgiMKhSUx72Ce+S",
-	"QiB+gU242p+CUWYeL0sC8gE9cBPQXxpJi4b0goA0BPuRzMFl7HynfvHru9fv4J+/4SKnkDDhTFZxFLtr",
-	"HRl0SkzFy4PDg5cReAxXiZATdGqyOJpwT+bO+rQDI8vTBozIiPP7XogMCvnw2srlZzbn0zbmetS0m7BH",
-	"zrTF5to+Pjz63+J2yh7Z06dMKPFH0CtAYYFxH19QeHGa/ojtPTk+3hZinXPvORAvvHrKhbgEmrpGXnYp",
-	"caZYQyZPjU7QsEyTDzldWSHr13NLkqZAQ2QvIrHFoMEnQ11Ey7tb2FuCJygt893tfW/2H2Sa3baFmNMI",
-	"nf4g7vo+CHz4DMj2FLtQ8zQOIzCHR9tcPgrM7/cDIboaF1EeLF9IP6u31k7yeY4mx4Tubr8q+WQA0gTO",
-	"mwOWkHf+UDOT9SPGNSNYprc3cn56fxlEN5/3O+E6otqcqMT/wPAno7M5q3KHEv6xAtirFDFjeqTZwOgh",
-	"d5p8HB5t++8A",
+	"zFfNbhs3EH6VAduDjG4syUlRRL1FSYEGCerGQC91gIyWI4k2l9wMuUIFQw/TY88+9F69WEFyJa2slSUb",
+	"idsbJXJ+v29+9kbktiitIeOdGNwIJlda4yj+OGc70lRgOOfWeDI+HLEstcrRK2u6ZXry3ZWzJty5fFoL",
+	"fMs0FgPxTXdjoJtuXXeteLFYZEKSy1mVQZ8YiDfMlqHz4achvHzx/Q8nGeTWgLYOCjIOr8hBaRlyLEoL",
+	"ZOATBQFyn0TQVVsIDgyxGCn7moYaZxT9llIFI6jP2ZbEXoUwx6gdZaJs/HUjMPcV6nDy85LEQDjPykzE",
+	"IhOmohm23CwywfS5UkxSDH5faVi9/5it3tvRFeU+aHpjPKPEB7qWr8LZ8Sy3zGRbr5hyyxI5XEoaY6W9",
+	"GHiuaO3WyFpNaHbiqJVmtd22OJo02fZVkkfVnsYatf3Bt8jsWHYefdV8q4ynCXF8rLyme9QcAjDJr220",
+	"Bf6BJsp5tk+BoLHFiPfEQ5rG1tiU8WYtlcgIubUslUEGjQ7IeKYJOpEdiL82mB3DgAtyKtX/nUj3x6OV",
+	"8/iazplyZd2u60qCJNAI8WE4l+kpSNJQsh1Hm3WJaY0jTXcofVTy2EZ+kqmKSHetyPgQ9rYJ53E8bsS+",
+	"peAiXja0oCyUEZmYkZEkLYvQ5ErrlA95REfMKImt+HiE85Uj/lkeJmz9LmtBLgTZ8HQn+7uYBuXKjFs4",
+	"FbsWZ8CJ/MiOMnCoFcMcHI6I4XOlln8ZKJWkU3iH4Mip5a0BclCZSMhrRZdm6n35i9Fz6IQRgV6NNKVm",
+	"H/EekffEz7Dy05MBGGUmQVgSkPPogCuP7tJImlWkZwSkwdtrMqeXIfN19Yv3b1+9hX/+hovkQsSEE1lF",
+	"P2TXlmSwVGIgnp/2Tp8H4NFPIyG7WKrurN/lRpmX1sUZGFgeJ2BARnzY5EIkUMj5V1bO75mcD5uY61az",
+	"2IY9cGaRbY/ts17/i9mtK7tlTg+ZUOKPoFeAwgzDPL4g/2wY/wjpfXF2ts/E2ufGOhAEXj5EIAyBqiiQ",
+	"57VLnChWkUldoy5omMfOhxxFVsi6dd+SpMnTLrIXgdhiJ8EvdusivFzeQmcOjmBkmZe3m9yc3PE0qV1k",
+	"YkItdPqNuM77juHeEyDbqNiZmsR2GIDp9fepPAjMr5uGEFS1F1FqLF+pfla71lHl8xRJDg4tb/9X5ZMA",
+	"iB04TQ6YQ5r5uzXTXS8xZdWCZdy9kdPq/XUQ3V7vj8K1pWqToxIfwfAHo7Pdq1KGIv4hAujkipgxLmnW",
+	"MzpImSZ30pZ/Mhpz2j+SEphDa96kh48H4QGbbRzA4VDgH+/ITPxUDPq93qFVM4m1LyFftla33Q2/0lLW",
+	"3N1yr2aYp+6rzITJ2dbFbzM8juoA2yG7VX/f+NAe/6O6Rr/3n3SNyoBW5hqK5Z8TlVvoVAac1RYqZ+8h",
+	"cbckqXg/lc/D9VPSePPZ0uDx2WEe13KPI3JLcwqBSwudKc4RLBhb7zUnTz4a3qORuMZXEtSFAajrWZGB",
+	"U+AVGVotX50ITfh4U5MKdbg3kQaLxb8DAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

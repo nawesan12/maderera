@@ -134,8 +134,24 @@ func correrAPI() error {
 
 	// Cada dominio registra sus rutas en el mismo mux. Todos con las mismas
 	// piezas: el pedido en el contexto y los errores como problem+json.
+	// El link de ingreso sale por el correo de los avisos: queda en el
+	// registro de envíos y se puede apagar desde /admin/avisos.
+	avisosDeSesion := avisos.Nuevo(pool, email.Elegir(cfg.Email, log), cfg.Email.Remitente, log)
+	apiDeSesion := auth.NuevaAPI(sesiones, lim).ConEnlaces(cfg.Campanas.URLDelSitio(),
+		func(ctx context.Context, correo, nombre, url string) {
+			html, texto := email.Envolver(cfg.Campanas.URLDelSitio(), email.Opciones{
+				Titulo:   "Tu link para entrar",
+				Adelanto: "Entrá a tu cuenta sin contraseña.",
+				Saludo:   nombre,
+				Parrafos: []string{"Tocá el botón para entrar. El link sirve una sola vez y vence en 15 minutos."},
+				CTA:      &email.Enlace{Texto: "Entrar a mi cuenta", URL: url},
+				Cierre:   "Si no lo pediste vos, ignorá este correo: nadie puede entrar sin abrirlo.",
+			})
+			avisosDeSesion.Despachar(ctx, avisos.Despacho{Evento: "enlace_ingreso", Para: correo,
+				Correo: avisos.Correo{Asunto: "Tu link para entrar", HTML: html, Texto: texto}})
+		})
 	sesionapi.HandlerWithOptions(
-		sesionapi.NewStrictHandlerWithOptions(auth.NuevaAPI(sesiones, lim),
+		sesionapi.NewStrictHandlerWithOptions(apiDeSesion,
 			[]sesionapi.StrictMiddlewareFunc{plataforma.ConPedido[sesionapi.StrictHandlerFunc]},
 			sesionapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

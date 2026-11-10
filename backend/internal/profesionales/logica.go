@@ -239,7 +239,9 @@ func AcuseDeRecibo(sitio, nombre string) Correo {
 }
 
 // Bienvenida es el correo de la aprobación.
-func Bienvenida(sitio, nombre string, lista *string, limite float64) Correo {
+// Con `enlace`, la cuenta la creó la aprobación y no tiene clave: el botón es
+// el link de activación, que entra sin contraseña.
+func Bienvenida(sitio, nombre string, lista *string, limite float64, enlace string) Correo {
 	parrafos := []string{"Los precios que ves en el catálogo ahora son los tuyos: entrás con tu cuenta y el sitio te muestra la lista profesional, con los descuentos por volumen ya aplicados."}
 	var datos []email.Bloque
 	if lista != nil && *lista != "" {
@@ -249,13 +251,18 @@ func Bienvenida(sitio, nombre string, lista *string, limite float64) Correo {
 		parrafos = append(parrafos, "También te habilitamos cuenta corriente, así podés comprar y abonar después.")
 		datos = append(datos, email.Bloque{Etiqueta: "Límite de cuenta corriente", Valor: "$ " + formato.Numero(limite)})
 	}
+	cta := &email.Enlace{Texto: "Entrar al catálogo", URL: strings.TrimSuffix(sitio, "/") + "/catalogo"}
+	if enlace != "" {
+		cta = &email.Enlace{Texto: "Activar mi cuenta", URL: enlace}
+		parrafos = append(parrafos, "Te creamos la cuenta con este correo. El botón te hace entrar sin contraseña; el link sirve una vez y vence en 7 días.")
+	}
 	return armarCorreo(sitio, "Tu acceso profesional está activo", email.Opciones{
 		Titulo:   "Tu acceso profesional está activo",
 		Adelanto: "Ya tenés precios diferenciados en el catálogo.",
 		Saludo:   nombre,
 		Parrafos: parrafos,
 		Datos:    datos,
-		CTA:      &email.Enlace{Texto: "Entrar al catálogo", URL: strings.TrimSuffix(sitio, "/") + "/catalogo"},
+		CTA:      cta,
 		Cierre:   "Desde tu cuenta también podés pedir presupuestos express, con respuesta en 24 horas, y descargar la documentación técnica.",
 	})
 }

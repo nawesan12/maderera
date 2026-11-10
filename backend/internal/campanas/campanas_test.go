@@ -509,7 +509,7 @@ func TestAvisos(t *testing.T) {
 	var lista []avisos.AvisoEmail
 	_ = json.NewDecoder(resp.Body).Decode(&lista)
 	resp.Body.Close()
-	if len(lista) != 18 || lista[0].Evento != "presupuesto_recibido" || lista[len(lista)-1].Evento != "recibo_emitido" && lista[len(lista)-1].Evento != "cheque_rechazado" {
+	if len(lista) != 19 || lista[0].Evento != "presupuesto_recibido" || lista[len(lista)-1].Evento != "recibo_emitido" && lista[len(lista)-1].Evento != "cheque_rechazado" {
 		t.Fatalf("lista sembrada: %d %+v", len(lista), lista)
 	}
 	var solicitud string

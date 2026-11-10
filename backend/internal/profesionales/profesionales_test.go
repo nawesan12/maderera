@@ -234,14 +234,15 @@ func TestSolicitudYAprobacion(t *testing.T) {
 		t.Fatalf("límite: %d %v", st, p)
 	}
 	st, p := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/profesionales/aprobacion", map[string]any{"id": sol, "priceListId": lista, "limiteCredito": "1.500.000"})
-	if st != 200 || p["ok"] != "Ana Pérez quedó habilitado. Los precios le cambian apenas recargue." {
+	// Pidió el acceso sin cuenta: la aprobación le crea una sin clave.
+	if st != 200 || p["ok"] != "Ana Pérez quedó habilitado. Como no tenía cuenta, le creamos una: mandale el link de acceso desde la lista de aprobados." {
 		t.Fatalf("aprobar: %d %v", st, p)
 	}
 	// Ganó la ficha del mostrador: profesional, con la lista, el límite y los datos de contacto nuevos.
 	if f := e.uno(t, `select tipo::text || '/' || rubro || '/' || price_list_id || '/' || limite_credito || '/' || email from customers where id = $1`, ficha); f != "profesional/carpintero/"+lista+"/1500000.00/ana@prueba.test" {
 		t.Fatalf("la ficha: %s", f)
 	}
-	if n := e.uno(t, `select count(*)::text from customers`); n != "1" { // el personal no tiene ficha: no se creó otra
+	if n := e.uno(t, `select count(*)::text from customers`); n != "1" { // ni el personal ni la cuenta nueva suman ficha
 		t.Fatalf("fichas: %s", n)
 	}
 	if !strings.Contains(e.buzon.asuntos(), "ana@prueba.test: Tu acceso profesional está activo") || !strings.Contains(e.buzon.mensajes[1].HTML, "1.500.000") {

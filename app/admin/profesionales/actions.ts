@@ -44,3 +44,12 @@ export async function rechazarSolicitud(_previo: EstadoProfesionales, formData: 
     }),
   );
 }
+
+/** Un link de acceso nuevo para un profesional aprobado sin clave. */
+export async function linkDeAcceso(
+  id: string,
+): Promise<{ url?: string; nombre?: string; telefono?: string; error?: string }> {
+  const r = await (await api()).POST("/api/v1/admin/profesionales/{id}/enlace", { params: { path: { id } } });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo generar el link.") };
+  return r.data;
+}

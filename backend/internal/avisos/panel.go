@@ -18,7 +18,7 @@ import (
 var OrdenEventos = []string{
 	"presupuesto_recibido", "presupuesto_listo", "pedido_recibido", "pago_acreditado", "preparando", "listo",
 	"remito_para_firmar", "en-camino", "entregado", "remito_firmado", "factura_emitida", "solicitud_profesional",
-	"profesional_aprobado", "profesional_rechazado", "inscripcion_evento", "recordatorio_evento",
+	"profesional_aprobado", "profesional_rechazado", "inscripcion_evento", "recordatorio_evento", "enlace_ingreso",
 }
 
 func posicion(evento string) int {
@@ -53,6 +53,7 @@ var porDefecto = []struct {
 	{"recordatorio_evento", "Mañana te esperamos", nil},
 	{"recibo_emitido", "Tu recibo de pago", nil},
 	{"cheque_rechazado", "Un cheque tuyo fue rechazado", nil},
+	{"enlace_ingreso", "Tu link para entrar", nil},
 }
 
 func ptr(s string) *string { return &s }

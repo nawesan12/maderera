@@ -47,6 +47,25 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Listo" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/profesionales/{id}/enlace:
+    post:
+      operationId: EnlaceDeAcceso
+      description: Un link de activación nuevo para un profesional aprobado sin clave, para mandarlo por WhatsApp.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: El link y a quién mandarlo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, nombre, telefono]
+                properties:
+                  url: { type: string }
+                  nombre: { type: string }
+                  telefono: { type: string }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/profesionales/rechazo:
     post:
       operationId: RechazarSolicitud

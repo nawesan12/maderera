@@ -1,35 +1,35 @@
 "use client";
 
-import { useActionState } from "react";
-import { AlertCircle, Check, Loader2, Send } from "lucide-react";
+import { useActionState, useRef, useState } from "react";
+import { AlertCircle, ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
 import { solicitarAcceso, type EstadoSolicitud } from "./actions";
 
 const inicial: EstadoSolicitud = {};
 
 const RUBROS = [
-  { valor: "arquitecto", texto: "Arquitecto o arquitecta" },
-  { valor: "constructora", texto: "Constructora o desarrollo" },
+  { valor: "arquitecto", texto: "Arquitectura" },
+  { valor: "constructora", texto: "Constructora" },
   { valor: "carpintero", texto: "Carpintería" },
   { valor: "disenador", texto: "Diseño de interiores" },
   { valor: "woodframer", texto: "Wood frame" },
-  { valor: "instalador", texto: "Instalación o colocación" },
+  { valor: "instalador", texto: "Instalación" },
   { valor: "otro", texto: "Otro" },
 ];
 
+const PASOS = ["Vos", "Tu trabajo", "Contacto"] as const;
+
 /**
- * Solicitud de acceso profesional.
+ * La solicitud de acceso profesional, en tres pasos (notas del 9/11/2026:
+ * «el registro es super poco intuitivo, plano»).
  *
- * El formulario que había antes no mandaba nada: eran campos sueltos sin acción.
- * Este crea una solicitud real que cae en el panel.
+ * Es un solo formulario: los tres pasos están siempre en el DOM y se muestra
+ * uno, así la acción recibe todo junto y React no tiene que guardar nada
+ * aparte. Cada paso valida lo suyo con la validación del navegador antes de
+ * dejar avanzar.
  *
- * Se piden pocos datos y todos con un porqué: el documento para poder
- * identificar a quien pide, el rubro porque decide qué lista de precios
- * corresponde, y el volumen estimado porque es lo que el vendedor mira para
- * poner el límite de cuenta corriente. Cada campo de más es gente que abandona
- * a mitad, y por eso salieron la matrícula y la localidad.
- *
- * El documento acepta DNI o CUIT. Sin CUIT no se puede facturar A, así que el
- * formulario lo dice en vez de dejar que se entere después.
+ * Si la acción rechaza, el servidor devuelve lo tipeado y el formulario se
+ * rearma con eso (la `key` es el número de intento); vuelve al primer paso,
+ * que es donde están los datos que se validan.
  */
 export function FormularioProfesional({
   emailSugerido,
@@ -39,181 +39,192 @@ export function FormularioProfesional({
   nombreSugerido?: string | null;
 }) {
   const [estado, accion, enviando] = useActionState(solicitarAcceso, inicial);
-
-  /*
-   * Lo que quedó escrito, si la acción rechazó.
-   *
-   * React vacía el formulario al ejecutar la acción, así que el servidor
-   * devuelve lo tipeado y acá se repinta. La `key` del formulario es el número
-   * de intento —y no el mensaje de error— para que los campos no controlados se
-   * rehagan también cuando alguien se equivoca dos veces en lo mismo.
-   */
   const previo = estado.valores;
 
   if (estado.ok) {
     return (
-      <div className="rounded-xl border border-brand-green/30 bg-brand-green/5 p-6 text-center">
-        <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-green">
-          <Check className="h-6 w-6 text-white" strokeWidth={3} />
+      <div className="py-6 text-center">
+        <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-green">
+          <Check className="h-7 w-7 text-white" strokeWidth={3} />
         </span>
-        <p className="text-lg font-semibold">Listo</p>
-        <p className="mt-1 text-muted-foreground">{estado.ok}</p>
+        <p className="text-xl font-bold">Recibimos tu pedido</p>
+        <p className="mt-1.5 text-texto-2">{estado.ok}</p>
       </div>
     );
   }
 
   return (
-    <form
-      key={estado.intento ?? 0}
-      action={accion}
-      className="space-y-4"
-    >
-      <p className="text-sm text-muted-foreground">
-        Los campos con <span className="text-acento-texto">*</span> hay que
-        completarlos.
-      </p>
+    <Pasos key={estado.intento ?? 0} accion={accion} enviando={enviando} error={estado.error}>
+      {(paso) => (
+        <>
+          <fieldset hidden={paso !== 0} className="space-y-4">
+            <Campo nombre="nombre" etiqueta="Nombre y apellido" requerido defecto={previo?.nombre || nombreSugerido} autoComplete="name" />
+            <div>
+              <label htmlFor="documentoNumero" className="block text-sm font-medium">
+                DNI o CUIT
+              </label>
+              <div className="mt-1 flex gap-2">
+                <select
+                  id="documentoTipo"
+                  name="documentoTipo"
+                  defaultValue={previo?.documentoTipo || "cuit"}
+                  aria-label="Tipo de documento"
+                  className="h-12 rounded-[10px] border border-linea bg-background px-3 text-base"
+                >
+                  <option value="cuit">CUIT</option>
+                  <option value="dni">DNI</option>
+                </select>
+                <input
+                  id="documentoNumero"
+                  name="documentoNumero"
+                  required
+                  defaultValue={previo?.documentoNumero}
+                  placeholder="30-71234567-1"
+                  inputMode="numeric"
+                  className="h-12 w-full rounded-[10px] border border-linea bg-background px-3 text-base"
+                />
+              </div>
+              <p className="mt-1 text-sm text-texto-3">Con DNI la factura sale B.</p>
+            </div>
+            <Campo nombre="razonSocial" etiqueta="Empresa (opcional)" defecto={previo?.razonSocial} autoComplete="organization" />
+          </fieldset>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Campo
-          nombre="nombre"
-          etiqueta="Nombre y apellido"
-          requerido
-          defecto={previo?.nombre || nombreSugerido}
-          autoComplete="name"
-        />
-        <Campo
-          nombre="razonSocial"
-          etiqueta="Empresa"
-          defecto={previo?.razonSocial}
-          ayuda="Si facturás a nombre de una empresa"
-          autoComplete="organization"
-        />
-        <div>
-          <label htmlFor="documentoNumero" className="block text-sm font-medium">
-            DNI o CUIT <span className="text-acento-texto" aria-label="obligatorio">
-              *
-            </span>
-          </label>
-          <div className="mt-1 flex gap-2">
-            <select
-              id="documentoTipo"
-              name="documentoTipo"
-              defaultValue={previo?.documentoTipo || "cuit"}
-              aria-label="Tipo de documento"
-              className="h-11 rounded-lg border bg-background px-3 text-base"
-            >
-              <option value="cuit">CUIT</option>
-              <option value="dni">DNI</option>
-            </select>
-            <input
-              id="documentoNumero"
-              name="documentoNumero"
-              required
-              defaultValue={previo?.documentoNumero}
-              placeholder="30-71234567-1"
-              inputMode="numeric"
-              className="h-11 w-full rounded-lg border bg-background px-3 text-base"
+          <fieldset hidden={paso !== 1} className="space-y-4">
+            <legend className="mb-2 block text-sm font-medium">A qué te dedicás</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {RUBROS.map((r) => (
+                <label
+                  key={r.valor}
+                  className="flex h-12 cursor-pointer items-center rounded-[10px] border border-linea px-3.5 text-[15px] transition-colors hover:bg-sitio-alt has-[:checked]:border-accion has-[:checked]:bg-naranja-claro has-[:checked]:font-semibold has-[:checked]:text-acento-sobre-claro"
+                >
+                  <input
+                    type="radio"
+                    name="rubro"
+                    value={r.valor}
+                    required
+                    defaultChecked={(previo?.rubro || "arquitecto") === r.valor}
+                    className="sr-only"
+                  />
+                  {r.texto}
+                </label>
+              ))}
+            </div>
+            <Campo nombre="redSocial" etiqueta="Instagram o web (opcional)" defecto={previo?.redSocial} placeholder="@tutaller" />
+            <Campo
+              nombre="volumenEstimado"
+              etiqueta="Qué comprás habitualmente (opcional)"
+              defecto={previo?.volumenEstimado}
+              placeholder="Placas y molduras, unas 40 por mes"
             />
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Con CUIT podemos facturarte A. Con DNI entrás igual, pero la factura
-            sale B.
-          </p>
-        </div>
-        <div>
-          <label htmlFor="rubro" className="block text-sm font-medium">
-            A qué te dedicás <span className="text-acento-texto" aria-label="obligatorio">
-              *
-            </span>
-          </label>
-          <select
-            id="rubro"
-            name="rubro"
-            required
-            defaultValue={previo?.rubro || "arquitecto"}
-            className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
-          >
-            {RUBROS.map((r) => (
-              <option key={r.valor} value={r.valor}>
-                {r.texto}
-              </option>
-            ))}
-          </select>
-        </div>
-        <Campo
-          nombre="email"
-          etiqueta="Correo"
-          tipo="email"
-          requerido
-          defecto={previo?.email || emailSugerido}
-          autoComplete="email"
-        />
-        <Campo
-          nombre="telefono"
-          etiqueta="Teléfono"
-          requerido
-          defecto={previo?.telefono}
-          autoComplete="tel"
-          inputMode="tel"
-        />
-        <Campo
-          nombre="redSocial"
-          etiqueta="Red social o web"
-          defecto={previo?.redSocial}
-          placeholder="@tutaller"
-          ayuda="Donde podamos ver tus trabajos"
-        />
-        <div className="sm:col-span-2">
-          <Campo
-            nombre="volumenEstimado"
-            etiqueta="Qué comprás habitualmente"
-            defecto={previo?.volumenEstimado}
-            placeholder="Placas y molduras, unas 40 por mes"
-            ayuda="Nos sirve para armarte la lista y el límite de cuenta corriente"
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label htmlFor="mensaje" className="block text-sm font-medium">
-            Algo más que quieras contarnos
-          </label>
-          <textarea
-            id="mensaje"
-            name="mensaje"
-            defaultValue={previo?.mensaje}
-            rows={3}
-            className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-base"
-          />
-        </div>
-      </div>
+          </fieldset>
 
-      {estado.error && (
-        <p className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+          <fieldset hidden={paso !== 2} className="space-y-4">
+            <Campo nombre="email" etiqueta="Correo" tipo="email" requerido defecto={previo?.email || emailSugerido} autoComplete="email" />
+            <Campo nombre="telefono" etiqueta="WhatsApp" requerido defecto={previo?.telefono} autoComplete="tel" inputMode="tel" />
+            <div>
+              <label htmlFor="mensaje" className="block text-sm font-medium">
+                Algo más (opcional)
+              </label>
+              <textarea
+                id="mensaje"
+                name="mensaje"
+                defaultValue={previo?.mensaje}
+                rows={3}
+                className="mt-1 w-full rounded-[10px] border border-linea bg-background px-3 py-2 text-base"
+              />
+            </div>
+          </fieldset>
+        </>
+      )}
+    </Pasos>
+  );
+}
+
+function Pasos({
+  accion,
+  enviando,
+  error,
+  children,
+}: {
+  accion: (datos: FormData) => void;
+  enviando: boolean;
+  error?: string;
+  children: (paso: number) => React.ReactNode;
+}) {
+  const [paso, setPaso] = useState(0);
+  const formulario = useRef<HTMLFormElement>(null);
+  const ultimo = paso === PASOS.length - 1;
+
+  // Valida solo lo que se ve: los campos de los otros pasos están ocultos y
+  // el navegador no los puede señalar.
+  function pasoValido() {
+    const visible = formulario.current?.querySelectorAll("fieldset")[paso];
+    const campos = visible ? Array.from(visible.querySelectorAll<HTMLInputElement>("input, select, textarea")) : [];
+    for (const c of campos) {
+      if (!c.checkValidity()) {
+        c.reportValidity();
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return (
+    <form
+      ref={formulario}
+      action={accion}
+      onSubmit={(e) => {
+        if (!pasoValido()) {
+          e.preventDefault();
+        } else if (!ultimo) {
+          e.preventDefault();
+          setPaso(paso + 1);
+        }
+      }}
+      noValidate
+      className="space-y-6"
+    >
+      <ol className="grid grid-cols-3 gap-2" aria-label="Pasos">
+        {PASOS.map((nombre, i) => (
+          <li key={nombre} aria-current={i === paso ? "step" : undefined}>
+            <span className={`block h-1.5 rounded-full ${i <= paso ? "bg-accion" : "bg-linea"}`} />
+            <span className={`mt-1.5 block text-[13px] ${i === paso ? "font-semibold text-foreground" : "text-texto-3"}`}>
+              {nombre}
+            </span>
+          </li>
+        ))}
+      </ol>
+
+      {children(paso)}
+
+      {error && (
+        <p className="flex items-start gap-2 rounded-[10px] bg-destructive/10 p-3 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          {estado.error}
+          {error}
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={enviando}
-        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accion text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
-      >
-        {enviando ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Enviando…
-          </>
-        ) : (
-          <>
-            <Send className="h-4 w-4" />
-            Solicitar acceso
-          </>
+      <div className="flex gap-2">
+        {paso > 0 && (
+          <button
+            type="button"
+            onClick={() => setPaso(paso - 1)}
+            aria-label="Paso anterior"
+            className="flex h-12 w-12 items-center justify-center rounded-[10px] border border-linea transition-colors hover:bg-sitio-alt"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
         )}
-      </button>
-
-      <p className="text-center text-sm text-muted-foreground">
-        Te contestamos dentro de las 24 horas hábiles.
-      </p>
+        <button
+          type="submit"
+          disabled={enviando}
+          className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-[10px] bg-accion text-base font-semibold text-white transition-colors hover:bg-accion-hover disabled:opacity-60"
+        >
+          {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {ultimo ? "Pedir mi cuenta" : "Seguir"}
+          {!ultimo && <ArrowRight className="h-4 w-4" />}
+        </button>
+      </div>
     </form>
   );
 }
@@ -224,7 +235,6 @@ function Campo({
   tipo = "text",
   requerido = false,
   placeholder,
-  ayuda,
   defecto,
   autoComplete,
   inputMode,
@@ -234,7 +244,6 @@ function Campo({
   tipo?: string;
   requerido?: boolean;
   placeholder?: string;
-  ayuda?: string;
   defecto?: string | null;
   autoComplete?: string;
   inputMode?: "numeric" | "tel" | "text";
@@ -243,9 +252,6 @@ function Campo({
     <div>
       <label htmlFor={nombre} className="block text-sm font-medium">
         {etiqueta}
-        {requerido && <span className="text-acento-texto" aria-label="obligatorio">
-            {" *"}
-          </span>}
       </label>
       <input
         id={nombre}
@@ -256,9 +262,8 @@ function Campo({
         defaultValue={defecto ?? undefined}
         autoComplete={autoComplete}
         inputMode={inputMode}
-        className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
+        className="mt-1 h-12 w-full rounded-[10px] border border-linea bg-background px-3 text-base"
       />
-      {ayuda && <p className="mt-1 text-sm text-muted-foreground">{ayuda}</p>}
     </div>
   );
 }

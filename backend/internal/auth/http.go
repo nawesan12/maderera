@@ -16,10 +16,63 @@ import (
 type API struct {
 	s   *Servicio
 	lim *limites.Limitador
+	// enviarEnlace manda el link de ingreso por correo. Lo pone quien arma la
+	// API (avisos importa auth, así que auth no puede llamarlo directo); sin
+	// él, pedir un link no manda nada.
+	enviarEnlace func(ctx context.Context, correo, nombre, url string)
+	sitio        string
 }
 
 // NuevaAPI arma los handlers.
 func NuevaAPI(s *Servicio, lim *limites.Limitador) *API { return &API{s: s, lim: lim} }
+
+// ConEnlaces le da a la API cómo mandar el link de ingreso y el sitio con
+// que se arma la dirección.
+func (a *API) ConEnlaces(sitio string, enviar func(ctx context.Context, correo, nombre, url string)) *API {
+	a.sitio, a.enviarEnlace = strings.TrimSuffix(sitio, "/"), enviar
+	return a
+}
+
+// EntrarConEnlace consume un link mágico. Con el freno del ingreso por IP:
+// probar tokens al azar es otra forma de adivinar una clave.
+func (a *API) EntrarConEnlace(ctx context.Context, req sesionapi.EntrarConEnlaceRequestObject) (sesionapi.EntrarConEnlaceResponseObject, error) {
+	ip, agente := ipYAgente(ctx)
+	if v := a.lim.Permitido(ctx, limites.Ingresar, "ip:"+ip); !v.Permitido {
+		return nil, espera(v)
+	}
+	ses, proposito, err := a.s.UsarEnlace(ctx, plataforma.EscritorDe(ctx), req.Body.Token, ip, agente)
+	switch {
+	case errors.Is(err, ErrEnlaceVencido):
+		return nil, plataforma.NuevoProblema(http.StatusGone, "El link venció. Pedí uno nuevo.")
+	case errors.Is(err, ErrEnlaceInvalido):
+		return nil, plataforma.NuevoProblema(http.StatusGone, "Este link ya se usó o no es válido.")
+	case err != nil:
+		return nil, err
+	}
+	return sesionapi.EntrarConEnlace200JSONResponse{Sesion: dto(ses), Proposito: sesionapi.EntrarConEnlace200JSONResponseBodyProposito(proposito)}, nil
+}
+
+// PedirEnlace manda un link de ingreso al correo, si es de una cuenta.
+// Contesta lo mismo en los dos casos: la respuesta no dice si el correo
+// existe.
+func (a *API) PedirEnlace(ctx context.Context, req sesionapi.PedirEnlaceRequestObject) (sesionapi.PedirEnlaceResponseObject, error) {
+	if !correoValido(req.Body.Correo) {
+		return nil, plataforma.Invalido(map[string]string{"correo": "Revisá el correo, no parece válido."})
+	}
+	ip, _ := ipYAgente(ctx)
+	correo := normalizarCorreo(req.Body.Correo)
+	if v := a.lim.PorAmbos(ctx, limites.Ingresar, ip, "correo", correo); !v.Permitido {
+		return nil, espera(v)
+	}
+	nombre, token, err := a.s.EnlaceDeIngreso(ctx, correo)
+	if err != nil {
+		return nil, err
+	}
+	if token != "" && a.enviarEnlace != nil {
+		a.enviarEnlace(ctx, correo, nombre, a.sitio+"/entrar/"+token)
+	}
+	return sesionapi.PedirEnlace204Response{}, nil
+}
 
 var _ sesionapi.StrictServerInterface = (*API)(nil)
 

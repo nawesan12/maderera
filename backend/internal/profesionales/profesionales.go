@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -235,7 +236,37 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 
 	var nombreLista *string
 	advertencia := ""
+	enlace := ""
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		// Quien pidió el acceso sin haber entrado quedaba aprobado sin
+		// cuenta para entrar (notas del 9/11/2026). Ahora la cuenta se ata al
+		// aprobar: la que ya tenga ese correo, o una nueva sin clave que se
+		// activa con un link de un solo uso (va en la bienvenida y el panel
+		// lo puede reenviar por WhatsApp).
+		if sol.userID == nil {
+			var existente string
+			err := tx.QueryRow(ctx, `select id from "user" where email = lower(btrim($1))`, sol.email).Scan(&existente)
+			switch {
+			case err == nil:
+				sol.userID = &existente
+			case errors.Is(err, pgx.ErrNoRows):
+				nueva, err := auth.CrearCuentaSinClave(ctx, s.q.WithTx(tx), sol.nombre, sol.email, s.ahora())
+				if err != nil {
+					return err
+				}
+				sol.userID = &nueva
+				token, err := auth.NuevoEnlace(ctx, tx, nueva, auth.EnlaceActivacion, auth.VenceActivacion, s.ahora())
+				if err != nil {
+					return err
+				}
+				enlace = strings.TrimSuffix(s.sitio, "/") + "/entrar/" + token
+			default:
+				return err
+			}
+			if _, err := tx.Exec(ctx, `update professional_applications set user_id = $2 where id = $1`, sol.id, *sol.userID); err != nil {
+				return err
+			}
+		}
 		var porCuit, porUsuario *Candidata
 		if sol.cuit != nil && *sol.cuit != "" {
 			var c Candidata
@@ -355,10 +386,13 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 
 	s.enSegundoPlano(func(ctx context.Context) {
 		s.avisos.Despachar(ctx, avisos.Despacho{Evento: "profesional_aprobado", Para: sol.email, EntidadTipo: "professional_application",
-			EntidadID: sol.id, Correo: avisos.Correo(Bienvenida(s.sitio, PrimeraPalabra(sol.nombre), nombreLista, limite))})
+			EntidadID: sol.id, Correo: avisos.Correo(Bienvenida(s.sitio, PrimeraPalabra(sol.nombre), nombreLista, limite, enlace))})
 	})
 
 	m := sol.nombre + " quedó habilitado. Los precios le cambian apenas recargue."
+	if enlace != "" {
+		m = sol.nombre + " quedó habilitado. Como no tenía cuenta, le creamos una: mandale el link de acceso desde la lista de aprobados."
+	}
 	if advertencia != "" {
 		m += " " + advertencia
 	}
@@ -380,7 +414,7 @@ func (s *Servicio) Rechazar(ctx context.Context, ses *auth.Sesion, id, motivo st
 		evento := "profesional_rechazado"
 		if sol.estado == "aprobada" {
 			evento = "profesional_aprobado"
-			correo = Bienvenida(s.sitio, PrimeraPalabra(sol.nombre), nil, 0)
+			correo = Bienvenida(s.sitio, PrimeraPalabra(sol.nombre), nil, 0, "")
 		}
 		s.avisos.Despachar(ctx, avisos.Despacho{Evento: evento, Para: sol.email, EntidadTipo: "professional_application",
 			EntidadID: sol.id, Correo: avisos.Correo(correo)})
@@ -486,4 +520,34 @@ func (s *Servicio) Estado(ctx context.Context, ses *auth.Sesion) (EstadoProfesio
 	e.PriceListID, e.NombreLista = cliente.lista, cliente.nombreLista
 	e.LimiteCredito = cliente.limite.F()
 	return e, nil
+}
+
+// EnlaceDeAcceso arma un link de activación nuevo para un profesional
+// aprobado, para mandárselo por WhatsApp desde el panel. **Solo para cuentas
+// sin clave** (las que creó la aprobación): con una cuenta que ya tiene
+// contraseña, un link que viaja al teléfono de la solicitud sería una forma
+// de entrar a una cuenta ajena. Esa persona entra con su clave o pide su link
+// por correo.
+func (s *Servicio) EnlaceDeAcceso(ctx context.Context, ses *auth.Sesion, id string) (url, nombre, telefono string, err error) {
+	sol, err := s.leerSolicitud(ctx, s.pool, id)
+	if err != nil {
+		return "", "", "", err
+	}
+	if sol == nil || sol.estado != "aprobada" || sol.userID == nil {
+		return "", "", "", invalido("Esa solicitud no está aprobada.")
+	}
+	var conClave bool
+	if err := s.pool.QueryRow(ctx, `select exists(select 1 from account where user_id = $1 and password is not null)`, *sol.userID).
+		Scan(&conClave); err != nil {
+		return "", "", "", err
+	}
+	if conClave {
+		return "", "", "", invalido("Esta cuenta ya tiene contraseña: que entre con su correo, o que pida un link desde «Ingresar».")
+	}
+	token, err := auth.NuevoEnlace(ctx, s.pool, *sol.userID, auth.EnlaceActivacion, auth.VenceActivacion, s.ahora())
+	if err != nil {
+		return "", "", "", err
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "profesional", sol.id, "Generó un link de acceso para "+sol.nombre, nil)
+	return strings.TrimSuffix(s.sitio, "/") + "/entrar/" + token, sol.nombre, sol.telefono, nil
 }

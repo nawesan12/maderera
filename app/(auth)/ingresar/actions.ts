@@ -62,3 +62,35 @@ export async function ingresar(
   // pantalla, el cliente a su cuenta.
   redirect(sesion.rol === "staff" ? inicioDelRol(sesion.rolStaff) : "/mi-cuenta");
 }
+
+/**
+ * Entra con un link mágico (ver `backend/internal/auth/enlace.go`). Se usa
+ * con un botón y no al abrir la página: WhatsApp y los filtros de correo abren
+ * los enlaces para armar la vista previa, y si con eso se gastara, el link
+ * de un solo uso no le llegaría nunca a la persona.
+ */
+export async function entrarConEnlace(_previo: EstadoIngreso, formData: FormData): Promise<EstadoIngreso> {
+  const token = String(formData.get("token") ?? "").slice(0, 100);
+  const r = await (await api()).POST("/api/v1/sesion/enlace", { body: { token } });
+  if (!r.data) {
+    return { error: mensajeDe(r.error as Problema | undefined, "No pudimos usar este link. Pedí uno nuevo.") };
+  }
+  await copiarCookies(r.response);
+  await renovarSenal();
+  await adoptarCarritoAnonimo(r.data.sesion.userId);
+  const rol = r.data.sesion.rolStaff;
+  redirect(r.data.proposito === "activacion" ? "/profesionales" : rol ? inicioDelRol(rol) : "/mi-cuenta");
+}
+
+export interface EstadoPedidoEnlace {
+  error?: string;
+  enviado?: boolean;
+}
+
+/** Pide el link de ingreso por correo. La respuesta no dice si la cuenta existe. */
+export async function pedirEnlace(_previo: EstadoPedidoEnlace, formData: FormData): Promise<EstadoPedidoEnlace> {
+  const correo = String(formData.get("email") ?? "");
+  const r = await (await api()).POST("/api/v1/sesion/enlace/pedir", { body: { correo } });
+  if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "No pudimos mandarlo. Probá en un rato.") };
+  return { enviado: true };
+}

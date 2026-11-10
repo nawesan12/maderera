@@ -230,6 +230,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"ListarProductos":                "/admin/productos",              // GET /api/v1/admin/productos
 	"CrearProducto":                  "/admin/productos",              // POST /api/v1/admin/productos
 	"AprobarSolicitud":               "/admin/profesionales",          // POST /api/v1/admin/profesionales/aprobacion
+	"EnlaceDeAcceso":                 "/admin/profesionales",          // POST /api/v1/admin/profesionales/{id}/enlace
 	"ListasAsignables":               "/admin/profesionales",          // GET /api/v1/admin/profesionales/listas
 	"RechazarSolicitud":              "/admin/profesionales",          // POST /api/v1/admin/profesionales/rechazo
 	"ResumenProfesionales":           "/admin/profesionales",          // GET /api/v1/admin/profesionales/resumen
@@ -440,4 +441,6 @@ var pantallaDeCadaRuta = map[string]string{
 	"Salir":                          "publico",                       // DELETE /api/v1/sesion
 	"VerSesion":                      "sesion",                        // GET /api/v1/sesion
 	"Entrar":                         "publico",                       // POST /api/v1/sesion
+	"EntrarConEnlace":                "publico",                       // POST /api/v1/sesion/enlace
+	"PedirEnlace":                    "publico",                       // POST /api/v1/sesion/enlace/pedir
 }

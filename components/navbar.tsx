@@ -739,12 +739,13 @@ function SesionDeEscritorio({ sesion }: { sesion: SesionConocida }) {
       {/* Crear cuenta, solo a quien no entró. La clienta pidió promover
           más el registro: en el escritorio no había ni un enlace, solo
           "Ingresar", que a quien todavía no tiene cuenta no le dice que
-          pueda hacerse una. Desde `xl` y no `lg`: con Profesionales en la
-          barra, en 1024 px ya no entran las dos cosas. */}
+          pueda hacerse una. Desde `2xl`: con Cortes en la barra y la marca
+          más grande (9/11/2026), en 1280 px ya no entra. Abajo de eso sigue
+          en el cajón del teléfono y detrás de «Ingresar». */}
       {sesion === null && (
         <Link
           href="/registro"
-          className="hidden h-11 items-center whitespace-nowrap rounded-[11px] px-[13px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-sitio-alt xl:flex"
+          className="hidden h-11 items-center whitespace-nowrap rounded-[11px] px-[13px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-sitio-alt 2xl:flex"
         >
           Crear cuenta
         </Link>

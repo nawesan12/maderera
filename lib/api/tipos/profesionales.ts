@@ -68,6 +68,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/profesionales/{id}/enlace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Un link de activación nuevo para un profesional aprobado sin clave, para mandarlo por WhatsApp. */
+        post: operations["EnlaceDeAcceso"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/profesionales/rechazo": {
         parameters: {
             query?: never;
@@ -447,6 +464,33 @@ export interface operations {
         };
         responses: {
             200: components["responses"]["Listo"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    EnlaceDeAcceso: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El link y a quién mandarlo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        url: string;
+                        nombre: string;
+                        telefono: string;
+                    };
+                };
+            };
             422: components["responses"]["Problema"];
         };
     };

@@ -131,7 +131,7 @@ func TestGoldenAvisos(t *testing.T) {
 		case "acuse":
 			got = AcuseDeRecibo(sitioGolden, c.Nombre)
 		case "bienvenida":
-			got = Bienvenida(sitioGolden, c.Nombre, c.Lista, c.LimiteCredito)
+			got = Bienvenida(sitioGolden, c.Nombre, c.Lista, c.LimiteCredito, "")
 		case "rechazo":
 			got = Rechazo(sitioGolden, c.Nombre, c.Motivo)
 		case "confirmacion", "recordatorio":

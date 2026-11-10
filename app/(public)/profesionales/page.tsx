@@ -13,7 +13,10 @@ import {
   Lock,
   MessageCircle,
   Download,
+  Package,
   Percent,
+  Scissors,
+  ScrollText,
   Wallet,
 } from "lucide-react";
 import { getSession } from "@/lib/dal/session";
@@ -38,30 +41,29 @@ export const metadata: Metadata = {
 };
 
 const BENEFICIOS = [
+  { icono: Percent, titulo: "Lista propia", detalle: "Precios de gremio en todo el catálogo." },
+  { icono: Wallet, titulo: "Cuenta corriente", detalle: "Comprás ahora y pagás después." },
+  { icono: Clock, titulo: "Presupuesto en 24 h", detalle: "Mandás la lista de la obra y te contestamos." },
+  { icono: FileText, titulo: "Documentación técnica", detalle: "Fichas y tablas de carga para el pliego." },
+];
+
+const PASOS = [
+  { titulo: "Pedís la cuenta", detalle: "Tres pasos, dos minutos." },
+  { titulo: "La revisamos", detalle: "Te contestamos en 24 horas hábiles." },
+  { titulo: "Entrás", detalle: "Te llega un link para activar la cuenta." },
+];
+
+const PREGUNTAS = [
   {
-    icono: Percent,
-    titulo: "Precios diferenciados",
-    detalle:
-      "Una lista propia, no un descuento parejo: cada producto con el margen que corresponde, y escalas por cantidad que se aplican solas en el carrito.",
+    pregunta: "¿Quién puede pedirla?",
+    respuesta: "Arquitectos, constructoras, carpinteros, diseñadores, instaladores y quien compre seguido para obra o taller.",
   },
+  { pregunta: "¿Necesito CUIT?", respuesta: "No. Con DNI entrás igual; con CUIT además te facturamos A." },
   {
-    icono: Wallet,
-    titulo: "Cuenta corriente",
-    detalle:
-      "Comprás y abonás después, dentro de un límite acordado. El saldo y cada movimiento los ves en tu cuenta, sin llamar a preguntar.",
+    pregunta: "¿Cómo pago con cuenta corriente?",
+    respuesta: "El límite se acuerda al aprobar la cuenta. Ves el saldo y cada movimiento desde tu cuenta.",
   },
-  {
-    icono: Clock,
-    titulo: "Presupuestos express",
-    detalle:
-      "Mandás la lista de la obra y contestamos en menos de 24 horas hábiles. Con el compromiso a la vista, no como promesa.",
-  },
-  {
-    icono: FileText,
-    titulo: "Documentación técnica",
-    detalle:
-      "Fichas de producto, tablas de carga e instructivos de colocación, todos en un lugar y listos para adjuntar al pliego.",
-  },
+  { pregunta: "¿Tiene costo?", respuesta: "No. La cuenta profesional es sin cargo." },
 ];
 
 /**
@@ -98,11 +100,11 @@ export default async function ProfesionalesPage() {
     <div className="min-h-screen">
       <EncabezadoPublico
         ruta="/profesionales"
-        titulo="Portal Profesionales"
+        titulo="Cuenta profesional"
         bajada={
           estado.aprobado
-            ? `Hola ${(estado.nombre ?? "").split(" ")[0]}, tu acceso está activo. Los precios del catálogo ya son los tuyos.`
-            : "Lista de precios propia, cuenta corriente y documentación reservada."
+            ? `Hola ${(estado.nombre ?? "").split(" ")[0]}, tu cuenta está activa.`
+            : "Precios de gremio, cuenta corriente y documentación técnica."
         }
       />
 
@@ -115,45 +117,68 @@ export default async function ProfesionalesPage() {
             tiendaActiva={laTienda.activa}
           />
         ) : (
-          <div className="grid gap-10 lg:grid-cols-[1fr_26rem]">
-            <div>
-              <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid items-start gap-12 lg:grid-cols-[1fr_27rem]">
+            <div className="space-y-14">
+              <div className="grid gap-4 sm:grid-cols-2">
                 {BENEFICIOS.map((b) => (
-                  <article
-                    key={b.titulo}
-                    className="rounded-xl border bg-card p-5"
-                  >
-                    <b.icono className="h-6 w-6 text-brand-orange" />
-                    <h2 className="mt-3 font-semibold">{b.titulo}</h2>
-                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                      {b.detalle}
-                    </p>
+                  <article key={b.titulo} className="rounded-2xl border border-linea bg-card p-6">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto">
+                      <b.icono className="h-6 w-6" />
+                    </span>
+                    <h2 className="mt-4 text-[22px] font-bold tracking-[-0.02em]">{b.titulo}</h2>
+                    <p className="mt-1 text-base text-texto-2">{b.detalle}</p>
                   </article>
                 ))}
               </div>
 
+              <section>
+                <h2 className="text-[28px] font-bold tracking-[-0.03em]">Cómo funciona</h2>
+                <ol className="mt-6 grid gap-6 sm:grid-cols-3">
+                  {PASOS.map((p, i) => (
+                    <li key={p.titulo}>
+                      <span className="tabular flex h-10 w-10 items-center justify-center rounded-full bg-oscuro-marca text-base font-bold text-white">
+                        {i + 1}
+                      </span>
+                      <h3 className="mt-3 text-lg font-bold">{p.titulo}</h3>
+                      <p className="mt-0.5 text-base text-texto-2">{p.detalle}</p>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+
               {reservados > 0 && (
-                <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+                <p className="flex items-center gap-2 text-base text-texto-2">
                   <Lock className="h-4 w-4 shrink-0" />
-                  Hay {reservados} documento{reservados === 1 ? "" : "s"} técnico
-                  {reservados === 1 ? "" : "s"} reservado
-                  {reservados === 1 ? "" : "s"} para profesionales aprobados.
+                  {reservados === 1
+                    ? "1 documento técnico reservado para profesionales"
+                    : `${reservados} documentos técnicos reservados para profesionales`}
                 </p>
               )}
+
+              <section>
+                <h2 className="text-[28px] font-bold tracking-[-0.03em]">Preguntas frecuentes</h2>
+                <div className="mt-5 divide-y divide-linea rounded-2xl border border-linea bg-card">
+                  {PREGUNTAS.map((p) => (
+                    <details key={p.pregunta} className="group px-5 py-4">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-lg font-semibold">
+                        {p.pregunta}
+                        <ArrowRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
+                      </summary>
+                      <p className="mt-2 text-base text-texto-2">{p.respuesta}</p>
+                    </details>
+                  ))}
+                </div>
+              </section>
             </div>
 
-            <aside>
+            <aside id="pedir" className="lg:sticky lg:top-[96px]">
               {estado.solicitud?.estado === "pendiente" ? (
                 <EstadoDeSolicitud fecha={estado.solicitud.createdAt} />
               ) : estado.solicitud?.estado === "rechazada" ? (
                 <SolicitudRechazada motivo={estado.solicitud.motivoRechazo} />
               ) : (
-                <div className="rounded-xl border bg-card p-6">
-                  <h2 className="text-xl font-semibold">Pedí tu acceso</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Lo revisa un asesor y te contestamos en menos de 24 horas
-                    hábiles.
-                  </p>
+                <div className="rounded-2xl border border-linea bg-card p-7 shadow-[0_18px_40px_-28px_rgb(60_50_40_/_0.45)]">
+                  <h2 className="text-2xl font-bold tracking-[-0.025em]">Pedí tu cuenta</h2>
                   <div className="mt-5">
                     <FormularioProfesional
                       emailSugerido={cliente?.email ?? sesion?.email}
@@ -296,6 +321,10 @@ function PanelDelProfesional({
       titulo: "Documentación técnica",
       detalle: `${documentos} documento${documentos === 1 ? "" : "s"} disponible${documentos === 1 ? "" : "s"}.`,
     },
+    { href: "/corte", icono: Scissors, titulo: "Corte a medida", detalle: "Armá el despiece y mandalo al aserradero." },
+    { href: "/mi-cuenta/pedidos", icono: Package, titulo: "Tus pedidos", detalle: "En qué está cada uno." },
+    { href: "/mi-cuenta/presupuestos", icono: ScrollText, titulo: "Tus presupuestos", detalle: "Los que pediste y los que te pasamos." },
+    { href: "/eventos", icono: CalendarDays, titulo: "Capacitaciones", detalle: "Las próximas fechas." },
     {
       // Sale del servidor con la lista de quien pide: nunca hay forma de
       // bajarse una lista que no es la propia.
@@ -310,23 +339,21 @@ function PanelDelProfesional({
   const accesos = tiendaActiva ? todos : todos.filter((a) => !conPrecios.has(a.href));
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {accesos.map((a) => (
         <Link
           key={a.href}
           href={a.href}
-          className="flex items-start gap-4 rounded-xl border bg-card p-5 transition-shadow hover:shadow-md"
+          className="group flex flex-col rounded-2xl border border-linea bg-card p-6 transition-colors hover:border-accion/50"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-orange/10">
-            <a.icono className="h-5 w-5 text-brand-orange" />
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto">
+            <a.icono className="h-6 w-6" />
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="block font-semibold">{a.titulo}</span>
-            <span className="block text-sm text-muted-foreground">
-              {a.detalle}
-            </span>
+          <span className="mt-4 flex items-center gap-2 text-[20px] font-bold tracking-[-0.02em]">
+            {a.titulo}
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </span>
-          <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="mt-1 text-base text-texto-2">{a.detalle}</span>
         </Link>
       ))}
     </div>

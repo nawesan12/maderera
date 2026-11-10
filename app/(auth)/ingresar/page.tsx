@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getSession } from "@/lib/dal/session";
 import { FormularioIngreso } from "./formulario";
+import { PedirLink } from "./pedir-link";
 
 export const metadata: Metadata = {
   title: "Ingresar",
@@ -18,10 +19,10 @@ export const metadata: Metadata = {
 export default async function IngresarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ volver?: string }>;
+  searchParams: Promise<{ volver?: string; link?: string }>;
 }) {
   const whatsapp = await enlaceWhatsapp();
-  const { volver } = await searchParams;
+  const { volver, link } = await searchParams;
 
   // Con la sesión abierta, esta pantalla no tiene sentido: va a donde
   // corresponda según quién sea.
@@ -61,6 +62,7 @@ export default async function IngresarPage({
           </div>
 
           <FormularioIngreso volver={volver} />
+          <PedirLink abierto={link === "1"} />
 
           <p className="mt-6 border-t pt-5 text-center text-sm text-muted-foreground">
             ¿Todavía no tenés cuenta?{" "}

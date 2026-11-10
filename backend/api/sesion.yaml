@@ -39,6 +39,51 @@ paths:
       summary: Salir
       responses:
         "204": { description: Salió (y se borró la cookie) }
+  /api/v1/sesion/enlace:
+    post:
+      operationId: EntrarConEnlace
+      summary: Entrar con un link mágico (un solo uso)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              additionalProperties: false
+              properties:
+                token: { type: string, maxLength: 100 }
+      responses:
+        "200":
+          description: Entró; la cookie va en Set-Cookie
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sesion, proposito]
+                properties:
+                  sesion: { $ref: "#/components/schemas/Sesion" }
+                  proposito: { type: string, enum: [activacion, ingreso] }
+        "410": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/sesion/enlace/pedir:
+    post:
+      operationId: PedirEnlace
+      summary: Manda un link de ingreso al correo, si tiene cuenta (contesta igual si no)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [correo]
+              additionalProperties: false
+              properties:
+                correo: { type: string, maxLength: 200 }
+      responses:
+        "204": { description: Pedido (haya o no cuenta) }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
   /api/v1/sesion/clave:
     put:
       operationId: CambiarClave

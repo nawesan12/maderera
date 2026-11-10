@@ -14,6 +14,7 @@ import {
   resumenProfesionales,
   type SolicitudListada,
 } from "@/lib/dal/admin/profesionales";
+import { LinkDeAcceso } from "./link-acceso";
 import { ResolverSolicitud } from "./resolver";
 
 export const metadata: Metadata = { title: "Profesionales" };
@@ -243,6 +244,7 @@ function Fila({
               Ver ficha
             </Link>
           )}
+          {solicitud.estado === "aprobada" && <LinkDeAcceso id={solicitud.id} />}
         </div>
       </div>
 

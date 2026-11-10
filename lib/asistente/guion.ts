@@ -60,7 +60,7 @@ const PASOS: PasoDelGuion[] = [
       "¡Hola! Te ayudo a encontrar lo que buscás. ¿Con qué te doy una mano?",
     opciones: [
       { texto: "Busco un producto", va: "que-busca" },
-      { texto: "No sé cuánto material necesito", va: "calcular" },
+      { texto: "Quiero cortar placas", va: "calcular" },
       { texto: "Tengo una duda", va: "dudas" },
       { texto: "Quiero hablar con alguien", va: "persona" },
     ],

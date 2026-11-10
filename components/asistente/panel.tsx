@@ -27,6 +27,7 @@ import {
   type ProductoDelAsistente,
 } from "@/app/(public)/asistente-actions";
 import { responderLocal } from "@/lib/asistente/respuestas";
+import { conContexto } from "@/lib/asistente/lenguaje";
 import { formatearPrecio } from "@/lib/formato";
 import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
@@ -78,7 +79,10 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
   const [extra, setExtra] = useState<{
     sugerencias: { texto: string; va: string }[];
     aPersona: boolean;
+    enlace?: { texto: string; href: string } | null;
   }>({ sugerencias: [], aPersona: false });
+  /** Lo último que se buscó en el catálogo, para la pregunta que sigue. */
+  const [ultimaConsulta, setUltimaConsulta] = useState<string | null>(null);
 
   const finRef = useRef<HTMLDivElement>(null);
 
@@ -198,10 +202,12 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
    * siente a formulario y no a conversación.
    */
   async function preguntar(consultaCruda?: string) {
-    const consulta = (consultaCruda ?? texto).trim();
-    if (consulta.length < 1 || trabajando) return;
+    const escrito = (consultaCruda ?? texto).trim();
+    if (escrito.length < 1 || trabajando) return;
+    // «¿y en 18?» después de hablar de MDF: se completa con lo anterior.
+    const consulta = conContexto(escrito, ultimaConsulta);
 
-    decir([{ tipo: "persona", texto: consulta }]);
+    decir([{ tipo: "persona", texto: escrito }]);
     setTexto("");
     setTrabajando(true);
 
@@ -227,6 +233,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     const productos = "productos" in respuesta ? respuesta.productos : undefined;
     if (productos?.length) {
       nuevos.push({ tipo: "productos", items: productos });
+      setUltimaConsulta(consulta);
     }
     if (respuesta.datos?.length) {
       nuevos.push({ tipo: "datos", items: respuesta.datos });
@@ -236,6 +243,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     setExtra({
       sugerencias: respuesta.sugerencias ?? [],
       aPersona: respuesta.aPersona ?? false,
+      enlace: "enlace" in respuesta ? (respuesta.enlace ?? null) : null,
     });
   }
 
@@ -350,6 +358,16 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
               </button>
             ))}
           </div>
+        )}
+
+        {extra.enlace && (
+          <Button
+            render={<Link href={extra.enlace.href} />}
+            className="w-full bg-accion text-white hover:bg-accion-hover"
+          >
+            {extra.enlace.texto}
+            <ArrowRight className="h-4 w-4" />
+          </Button>
         )}
 
         {aWhatsapp && (

@@ -27,6 +27,13 @@ export type Intencion =
   | "cortes"
   | "cuenta"
   | "calcular"
+  | "armar_corte"
+  | "moldava"
+  | "documentacion"
+  | "devoluciones"
+  | "acopio"
+  | "factura"
+  | "eventos"
   | "persona"
   | "gracias"
   | "sin_idea";
@@ -50,6 +57,23 @@ export interface Entendido {
   cantidad?: { valor: number; unidad: "m2" | "m" | "unidades" };
   /** Rubro nombrado, si se reconoce alguno. */
   rubro?: string;
+  /** Las piezas de un corte, si escribieron un despiece. */
+  despiece?: Despiece;
+}
+
+export interface PiezaDelTexto {
+  largoMm: number;
+  anchoMm: number;
+  cantidad: number;
+  cantoLargo: number;
+  cantoAncho: number;
+}
+
+/** Un despiece escrito con palabras: «4 de 600x400 en melamina blanca con canto». */
+export interface Despiece {
+  piezas: PiezaDelTexto[];
+  /** Lo que dijeron del material, para elegir la placa: «melamina blanca». */
+  material: string;
 }
 
 /**
@@ -127,6 +151,31 @@ const SENALES: { intencion: Intencion; palabras: string[]; peso?: number }[] = [
       "cuanto necesito", "cuanto me sale", "calcular", "calculo", "cuantas placas",
       "cuanto material", "cuantos metros", "me alcanza", "rinde",
     ],
+  },
+  {
+    intencion: "moldava",
+    palabras: ["moldava", "linea propia", "finger joint", "fingerjoint"],
+    peso: 2,
+  },
+  {
+    intencion: "documentacion",
+    palabras: ["ficha tecnica", "fichas tecnicas", "tabla de carga", "documentacion", "instructivo", "pliego"],
+  },
+  {
+    intencion: "devoluciones",
+    palabras: ["devolucion", "devolver", "cambio", "cambiar", "garantia", "vino fallado", "vino mal"],
+  },
+  {
+    intencion: "acopio",
+    palabras: ["acopio", "acopiar", "dejar guardado", "retirar despues", "retiro en partes", "de a poco"],
+  },
+  {
+    intencion: "factura",
+    palabras: ["factura a", "factura b", "factura", "facturan", "cuit", "responsable inscripto", "monotributo"],
+  },
+  {
+    intencion: "eventos",
+    palabras: ["capacitacion", "capacitaciones", "curso", "cursos", "charla", "charlas", "evento", "eventos", "taller"],
   },
   {
     intencion: "persona",
@@ -281,6 +330,19 @@ export function consultaLimpia(texto: string): string {
 export function entender(textoOriginal: string): Entendido {
   const texto = normalizar(textoOriginal);
 
+  // Un despiece le gana a todo: si escribieron piezas, quieren el corte.
+  const despiece = leerDespiece(texto);
+  if (despiece) {
+    return {
+      intencion: "armar_corte",
+      puntaje: 5,
+      consulta: consultaLimpia(textoOriginal),
+      medida: {},
+      rubro: "placas",
+      despiece,
+    };
+  }
+
   const medida = leerMedida(texto);
   const cantidad = leerCantidad(texto);
   const rubro = leerRubro(texto);
@@ -323,6 +385,7 @@ export function entender(textoOriginal: string): Entendido {
    */
   const SERVICIOS: Intencion[] = [
     "envios", "horarios", "pagos", "cortes", "cuenta", "persona", "calcular",
+    "documentacion", "devoluciones", "acopio", "factura", "eventos",
   ];
 
   if (!rubro && (mejor.intencion === "precio" || mejor.intencion === "stock")) {
@@ -359,10 +422,92 @@ export function entender(textoOriginal: string): Entendido {
     };
   }
 
+  // Moldava es una marca y también un rubro: preguntar por ella no es buscar
+  // un producto suelto sino conocer la línea.
+  if (reconocidas.has("moldava") && !leerMedida(texto).espesorMm) {
+    return { intencion: "moldava", puntaje: reconocidas.get("moldava")!, consulta, medida, cantidad, rubro };
+  }
+
   // Un saludo con algo más atrás no es un saludo: es la pregunta que sigue.
   if (mejor.intencion === "saludo" && consulta.length >= 3) {
     return { intencion: "buscar", puntaje: 1, consulta, medida, cantidad, rubro };
   }
 
   return { ...mejor, consulta, medida, cantidad, rubro };
+}
+
+/**
+ * Las piezas de un corte escritas con palabras (notas del 9/11/2026: el
+ * asistente arma el corte desde el texto).
+ *
+ * Reconoce «4 de 600x400», «4 piezas de 600 x 400» y «600x400 x 4», varias
+ * en la misma frase. Para no confundir un despiece con
+ * la medida de una placa entera («fenólico 2440x1220»), hace falta una
+ * cantidad, la palabra corte/cortar/despiece/piezas, o más de una medida.
+ * «Con canto» pone canto en los dos largos; «canto en todo» o «en los 4
+ * lados», en los cuatro.
+ */
+export function leerDespiece(texto: string): Despiece | null {
+  const t = normalizar(texto);
+  const patron = /(?:\b(\d{1,3})\s+(?:(?:piezas?|unidades|u)\s+)?(?:de\s+)?)?\b(\d{2,4})\s*x\s*(\d{2,4})\b(?:\s*(?:mm)?\s*x\s*(\d{1,3})\b(?!\s*x))?/g;
+  const encontradas: { largo: number; ancho: number; cantidad: number | null }[] = [];
+  for (const m of t.matchAll(patron)) {
+    const largo = Number(m[2]);
+    const ancho = Number(m[3]);
+    if (largo < 20 || ancho < 20 || largo > 3000 || ancho > 3000) continue;
+    const cantidad = Number(m[1] ?? m[4] ?? NaN);
+    encontradas.push({ largo, ancho, cantidad: Number.isFinite(cantidad) && cantidad > 0 ? cantidad : null });
+  }
+  if (encontradas.length === 0) return null;
+
+  const pideCorte = /\b(corte|cortes|cortar|cortame|cortan|despiece|piezas?)\b/.test(t);
+  const conCantidad = encontradas.some((e) => e.cantidad !== null);
+  if (!pideCorte && !conCantidad && encontradas.length < 2) return null;
+
+  const todoElCanto = /canto (en )?(todo|todos|los 4|los cuatro|4 lados|cuatro lados)/.test(t);
+  const conCanto = todoElCanto || /\b(con canto|con tapacanto|tapacanto|canteado)\b/.test(t);
+  const sinCanto = /\bsin (tapa)?canto\b/.test(t);
+
+  const piezas = encontradas.map((e) => ({
+    largoMm: Math.max(e.largo, e.ancho),
+    anchoMm: Math.min(e.largo, e.ancho),
+    cantidad: e.cantidad ?? 1,
+    cantoLargo: conCanto && !sinCanto ? 2 : 0,
+    cantoAncho: todoElCanto && !sinCanto ? 2 : 0,
+  }));
+
+  // El material: lo que queda sin números, cantidades ni las palabras del corte.
+  const material = consultaLimpia(t)
+    .split(" ")
+    .filter((p) => !/^(piezas?|corte|cortes|cortar|cortame|cortan|despiece|canto|tapacanto|todo|todos|lados|cuatro|unidades|sin|placa|placas|en)$/.test(p))
+    .join(" ")
+    .trim();
+
+  return { piezas, material };
+}
+
+/**
+ * La pregunta que sigue a otra: «¿y en 18?» después de hablar de MDF.
+ *
+ * Si el texto nuevo no nombra ningún producto pero trae una medida o un
+ * espesor, se completa con la consulta anterior. Si nombra algo, va solo.
+ */
+export function conContexto(texto: string, anterior: string | null): string {
+  if (!anterior) return texto;
+  const t = normalizar(texto);
+  const nombraAlgo = consultaLimpia(texto).replace(/\b(y|en|de|con)\b/g, "").trim().length >= 3;
+  const traeMedida = /\d/.test(t);
+  const sigue = /^(y|y en|y de|y con|en|de|con|otra|otro|la de|el de)\b/.test(t);
+  if (!nombraAlgo && (traeMedida || sigue)) return `${anterior} ${texto}`.trim();
+  return texto;
+}
+
+/** El enlace al cortador con el despiece cargado (`app/(public)/corte`). */
+export function enlaceDelDespiece(d: Despiece): string {
+  const piezas = d.piezas
+    .map((p) => `${p.largoMm}x${p.anchoMm}x${p.cantidad}${p.cantoLargo || p.cantoAncho ? `c${p.cantoLargo}${p.cantoAncho}` : ""}`)
+    .join("_");
+  const parametros = new URLSearchParams({ piezas });
+  if (d.material) parametros.set("material", d.material);
+  return `/corte#${parametros.toString()}`;
 }

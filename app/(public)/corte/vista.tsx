@@ -8,6 +8,7 @@ import type { PreciosDePlaca } from "@/lib/dal/visitante";
 import { usePlano } from "@/lib/cortes/en-vivo";
 import { fraccionDePlaca, medidaDePlaca, nombreDeLaMitad, type Mitad } from "@/lib/cortes/placa";
 import { tirasDePlaca } from "@/lib/cortes/tiras";
+import { leerEnlaceDeCorte } from "@/lib/cortes/enlace";
 import { PlanoSimple } from "@/components/cortes/plano-simple";
 import { contarCanto, SelectorDeCanto, SIN_CANTO, type LadosConCanto } from "@/components/cortes/selector-canto";
 import { formatearMonto } from "@/lib/formato";
@@ -66,9 +67,12 @@ export function VistaDeCorteDeQuienMira({
   sucursales: SucursalDelCorte[];
   precios: Promise<PreciosDePlaca>;
 }) {
+  // El enlace manda la placa o el despiece: con otro hash, el armador se
+  // rearma desde cero con lo que trae (la `key`).
+  const hash = useHash();
   return (
-    <Suspense fallback={<VistaDeCorte {...props} propios={{}} />}>
-      <VistaConPrecios promesa={precios} {...props} />
+    <Suspense fallback={<VistaDeCorte key={hash} {...props} hash={hash} propios={{}} />}>
+      <VistaConPrecios key={hash} promesa={precios} {...props} hash={hash} />
     </Suspense>
   );
 }
@@ -80,6 +84,7 @@ function VistaConPrecios({
   placas: PlacaCortable[];
   anchoSierra: number;
   sucursales: SucursalDelCorte[];
+  hash: string;
   promesa: Promise<PreciosDePlaca>;
 }) {
   return <VistaDeCorte {...props} propios={use(promesa)} />;
@@ -89,11 +94,14 @@ function VistaDeCorte({
   placas: deLaPagina,
   anchoSierra,
   sucursales,
+  hash,
   propios,
 }: {
   placas: PlacaCortable[];
   anchoSierra: number;
   sucursales: SucursalDelCorte[];
+  /** El hash del enlace: `#placa=` o `#piezas=…&material=…` (ver `lib/cortes/enlace.ts`). */
+  hash: string;
   /** El precio propio de cada placa y de su corte. Vacío para el público. */
   propios: PreciosDePlaca;
 }) {
@@ -110,16 +118,25 @@ function VistaDeCorte({
       }),
     [deLaPagina, propios],
   );
-  // La placa con que arranca: la del enlace (`/corte#placa=<variante>`, el
-  // «Pedila cortada» de la ficha) o la primera.
-  const delEnlace = usePlacaDelEnlace();
+  // La placa y las piezas con que arranca: las del enlace («Pedila cortada»
+  // de la ficha, o el despiece que armó el asistente) o la primera placa.
+  const [delEnlace] = useState(() => leerEnlaceDeCorte(hash, placas));
   const [elegida, setVariantId] = useState<string | null>(null);
-  const variantId =
-    elegida ?? (placas.some((p) => p.variantId === delEnlace) ? delEnlace : (placas[0]?.variantId ?? ""));
+  const variantId = elegida ?? delEnlace.placa ?? placas[0]?.variantId ?? "";
   const [mitadElegida, setMitad] = useState<Mitad>(null);
   const [canto, setCanto] = useState("");
   const [modo, setModo] = useState<"piezas" | "tiras">("piezas");
-  const [filas, setFilas] = useState<Fila[]>([vacia()]);
+  const [filas, setFilas] = useState<Fila[]>(() =>
+    delEnlace.piezas.length > 0
+      ? delEnlace.piezas.map((p) => ({
+          largo: String(p.largo),
+          ancho: String(p.ancho),
+          cantidad: String(p.cantidad),
+          veta: false,
+          lados: { arriba: p.cantoLargo >= 1, abajo: p.cantoLargo >= 2, izquierda: p.cantoAncho >= 1, derecha: p.cantoAncho >= 2 },
+        }))
+      : [vacia()],
+  );
   const [tiras, setTiras] = useState({ ancho: "", metros: "", lados: SIN_CANTO });
   // El aserradero es donde está la seccionadora: es la que arranca elegida.
   const [sucursal, setSucursal] = useState(
@@ -471,18 +488,17 @@ function VistaDeCorte({
 }
 
 /**
- * La placa que pide el enlace, por el hash y no por `?placa=`: con la URL de
- * búsqueda la página dejaría de armarse de antemano. En el servidor no hay
- * hash, así que la primera pintura es la de siempre y React la corrige al
- * hidratar, sin aviso de diferencia.
+ * El hash de la dirección. En el servidor no hay hash, así que la primera
+ * pintura es la de siempre y React la corrige al hidratar, sin aviso de
+ * diferencia.
  */
-function usePlacaDelEnlace(): string {
+function useHash(): string {
   return useSyncExternalStore(
     (avisar) => {
       window.addEventListener("hashchange", avisar);
       return () => window.removeEventListener("hashchange", avisar);
     },
-    () => new URLSearchParams(window.location.hash.slice(1)).get("placa") ?? "",
+    () => window.location.hash,
     () => "",
   );
 }

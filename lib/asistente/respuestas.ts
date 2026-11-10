@@ -1,5 +1,6 @@
 import {
   entender,
+  enlaceDelDespiece,
   type Entendido,
   type Intencion,
 } from "@/lib/asistente/lenguaje";
@@ -34,6 +35,8 @@ export interface RespuestaLocal {
   datos?: DatoSuelto[];
   sugerencias?: { texto: string; va: string }[];
   aPersona?: boolean;
+  /** Un botón que lleva a una pantalla: el cortador con el despiece cargado. */
+  enlace?: { texto: string; href: string };
 }
 
 /** Qué intenciones se pueden contestar sin el servidor. */
@@ -46,6 +49,13 @@ const SIN_SERVIDOR: Intencion[] = [
   "cortes",
   "cuenta",
   "calcular",
+  "armar_corte",
+  "moldava",
+  "documentacion",
+  "devoluciones",
+  "acopio",
+  "factura",
+  "eventos",
   "persona",
 ];
 
@@ -70,10 +80,10 @@ export function responderLocal(
     case "saludo":
       return {
         texto:
-          "¡Hola! Decime qué estás buscando —una placa, un machimbre, lo que sea— y te digo si lo tenemos y a cuánto.",
+          "¡Hola! Decime qué estás buscando —una placa, un machimbre— o pasame un despiece y te armo el corte.",
         sugerencias: [
           { texto: "Ver los rubros", va: "rubros" },
-          { texto: "Calcular material", va: "calcular" },
+          { texto: "Armar un corte", va: "calc-placas" },
         ],
       };
 
@@ -101,11 +111,8 @@ export function responderLocal(
     case "cortes":
       return {
         texto:
-          "Sí, cortamos placas a medida en el aserradero. Pasanos el despiece con las medidas en milímetros y te lo preparamos junto con el material. Si son muchas piezas conviene mandarlo por WhatsApp.",
-        sugerencias: [
-          { texto: "Calcular cuántas placas necesito", va: "calc-placas" },
-          { texto: "Mandar el despiece", va: "persona" },
-        ],
+          "Sí, cortamos placas a medida en el aserradero. Escribime el despiece acá —«4 de 600x400 en melamina blanca con canto»— o armalo en el cortador.",
+        enlace: { texto: "Abrir el cortador", href: "/corte" },
       };
 
     case "cuenta":
@@ -113,6 +120,50 @@ export function responderLocal(
         texto:
           "Si trabajás del rubro —carpintería, construcción, arquitectura— podés pedir la cuenta profesional: lista de precios propia, cuenta corriente y descuentos por cantidad. Se pide desde el portal y lo aprobamos nosotros.",
         sugerencias: [{ texto: "Ir al portal", va: "profesionales" }],
+      };
+
+    case "armar_corte": {
+      const d = leido.despiece!;
+      const unidades = d.piezas.reduce((s, p) => s + p.cantidad, 0);
+      return {
+        texto: `Te armé el corte: ${unidades} ${unidades === 1 ? "pieza" : "piezas"}${d.material ? ` en ${d.material}` : ""}. Abrilo para ver cómo entra en la placa y pedirlo.`,
+        enlace: { texto: "Abrir el corte", href: enlaceDelDespiece(d) },
+      };
+    }
+
+    case "moldava":
+      return {
+        texto: "Moldava es nuestra línea propia: molduras y listonería en pino finger joint, sin nudos, en piezas de 3,05 m.",
+        enlace: { texto: "Ver Moldava", href: "/moldava" },
+      };
+
+    case "documentacion":
+      return {
+        texto: "Las fichas técnicas y tablas de carga están en la biblioteca. Cada producto tiene las suyas en su ficha.",
+        enlace: { texto: "Ver la documentación", href: "/documentacion" },
+      };
+
+    case "devoluciones":
+      return {
+        texto: "Los cambios y devoluciones se hacen en la sucursal donde compraste, con el comprobante.",
+        enlace: { texto: "Ver las condiciones", href: "/cambios-y-devoluciones" },
+      };
+
+    case "acopio":
+      return {
+        texto: "Sí: comprás ahora y lo retirás en partes. El material queda reservado a tu nombre.",
+        aPersona: true,
+      };
+
+    case "factura":
+      return {
+        texto: "Facturamos A o B según tu condición frente al IVA. Para la A, pasanos el CUIT al comprar.",
+      };
+
+    case "eventos":
+      return {
+        texto: "Las capacitaciones y charlas están en la agenda.",
+        enlace: { texto: "Ver capacitaciones", href: "/eventos" },
       };
 
     case "calcular": {

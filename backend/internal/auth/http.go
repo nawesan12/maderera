@@ -198,6 +198,18 @@ func (a *API) Registrarse(ctx context.Context, req sesionapi.RegistrarseRequestO
 }
 
 // CambiarClave pide la actual y cierra las otras sesiones.
+func (a *API) EstadoDeClave(ctx context.Context, _ sesionapi.EstadoDeClaveRequestObject) (sesionapi.EstadoDeClaveResponseObject, error) {
+	ses, err := ExigirSesion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tiene, sin, err := a.s.EstadoDeClave(ctx, ses)
+	if err != nil {
+		return nil, err
+	}
+	return sesionapi.EstadoDeClave200JSONResponse{TieneClave: tiene, SinLaActual: sin}, nil
+}
+
 func (a *API) CambiarClave(ctx context.Context, req sesionapi.CambiarClaveRequestObject) (sesionapi.CambiarClaveResponseObject, error) {
 	ses, err := ExigirSesion(ctx)
 	if err != nil {
@@ -206,7 +218,11 @@ func (a *API) CambiarClave(ctx context.Context, req sesionapi.CambiarClaveReques
 	if utf8.RuneCountInString(req.Body.Nueva) < 8 {
 		return nil, plataforma.Invalido(map[string]string{"nueva": "La contraseña necesita 8 caracteres o más."})
 	}
-	if err := a.s.CambiarClave(ctx, ses, req.Body.Actual, req.Body.Nueva); errors.Is(err, ErrCredenciales) {
+	actual := ""
+	if req.Body.Actual != nil {
+		actual = *req.Body.Actual
+	}
+	if err := a.s.CambiarClave(ctx, ses, actual, req.Body.Nueva); errors.Is(err, ErrCredenciales) {
 		return nil, plataforma.Invalido(map[string]string{"actual": "La contraseña actual no es esa."})
 	} else if err != nil {
 		return nil, err

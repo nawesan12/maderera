@@ -243,12 +243,19 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 		// aprobar: la que ya tenga ese correo, o una nueva sin clave que se
 		// activa con un link de un solo uso (va en la bienvenida y el panel
 		// lo puede reenviar por WhatsApp).
+		//
+		// **Una solicitud anónima nunca se ata a una cuenta que ya existe**
+		// (revisión del 10/11/2026): cualquiera puede escribir el correo de
+		// otra persona en el formulario, y atarla le daba a quien la mandó la
+		// cuenta y la lista del dueño del correo. Si el correo ya tiene
+		// cuenta, se aprueba la ficha sin cuenta web y el panel avisa: que esa
+		// persona entre con su cuenta y pida el acceso desde ahí.
 		if sol.userID == nil {
 			var existente string
 			err := tx.QueryRow(ctx, `select id from "user" where email = lower(btrim($1))`, sol.email).Scan(&existente)
 			switch {
 			case err == nil:
-				sol.userID = &existente
+				advertencia = "Ya hay una cuenta web con ese correo y la solicitud se hizo sin entrar: no se ataron. Si es de esa persona, que entre con su cuenta y vuelva a pedir el acceso desde el portal."
 			case errors.Is(err, pgx.ErrNoRows):
 				nueva, err := auth.CrearCuentaSinClave(ctx, s.q.WithTx(tx), sol.nombre, sol.email, s.ahora())
 				if err != nil {
@@ -260,10 +267,10 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 					return err
 				}
 				enlace = strings.TrimSuffix(s.sitio, "/") + "/entrar/" + token
+				if _, err := tx.Exec(ctx, `update professional_applications set user_id = $2, cuenta_creada = true where id = $1`, sol.id, nueva); err != nil {
+					return err
+				}
 			default:
-				return err
-			}
-			if _, err := tx.Exec(ctx, `update professional_applications set user_id = $2 where id = $1`, sol.id, *sol.userID); err != nil {
 				return err
 			}
 		}
@@ -533,8 +540,21 @@ func (s *Servicio) EnlaceDeAcceso(ctx context.Context, ses *auth.Sesion, id stri
 	if err != nil {
 		return "", "", "", err
 	}
-	if sol == nil || sol.estado != "aprobada" || sol.userID == nil {
+	if sol == nil || sol.estado != "aprobada" {
 		return "", "", "", invalido("Esa solicitud no está aprobada.")
+	}
+	if sol.userID == nil {
+		return "", "", "", invalido("Esta solicitud no tiene cuenta web: el correo ya tenía una. Que entre con su correo, o que pida un link desde «Ingresar».")
+	}
+	// Solo para la cuenta que creó esta misma aprobación: el link viaja al
+	// teléfono de la solicitud, y una solicitud con el correo de otra persona
+	// no puede llevarse un acceso a su cuenta.
+	var creada bool
+	if err := s.pool.QueryRow(ctx, `select cuenta_creada from professional_applications where id = $1`, sol.id).Scan(&creada); err != nil {
+		return "", "", "", err
+	}
+	if !creada {
+		return "", "", "", invalido("Esta cuenta no la creó la aprobación: que entre con su correo, o que pida un link desde «Ingresar».")
 	}
 	var conClave bool
 	if err := s.pool.QueryRow(ctx, `select exists(select 1 from account where user_id = $1 and password is not null)`, *sol.userID).

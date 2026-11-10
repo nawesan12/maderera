@@ -85,6 +85,16 @@ paths:
         "422": { $ref: "#/components/responses/Problema" }
         "429": { $ref: "#/components/responses/Problema" }
   /api/v1/sesion/clave:
+    get:
+      operationId: EstadoDeClave
+      summary: Si la cuenta tiene clave y si se puede poner sin la actual
+      responses:
+        "200":
+          description: El estado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EstadoDeClave" }
+        "401": { $ref: "#/components/responses/Problema" }
     put:
       operationId: CambiarClave
       summary: Cambiar la clave (cierra las otras sesiones)
@@ -165,8 +175,14 @@ components:
         clave: { type: string }
     CambioDeClave:
       type: object
-      required: [actual, nueva]
+      required: [nueva]
       additionalProperties: false
       properties:
-        actual: { type: string }
+        actual: { type: string, description: "Vacía si la cuenta no tiene clave o si se entró con un link hace menos de media hora" }
         nueva: { type: string }
+    EstadoDeClave:
+      type: object
+      required: [tieneClave, sinLaActual]
+      properties:
+        tieneClave: { type: boolean }
+        sinLaActual: { type: boolean, description: "Puede poner clave sin dar la actual" }

@@ -64,7 +64,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Si la cuenta tiene clave y si se puede poner sin la actual */
+        get: operations["EstadoDeClave"];
         /** Cambiar la clave (cierra las otras sesiones) */
         put: operations["CambiarClave"];
         post?: never;
@@ -129,8 +130,14 @@ export interface components {
             clave: string;
         };
         CambioDeClave: {
-            actual: string;
+            /** @description Vacía si la cuenta no tiene clave o si se entró con un link hace menos de media hora */
+            actual?: string;
             nueva: string;
+        };
+        EstadoDeClave: {
+            tieneClave: boolean;
+            /** @description Puede poner clave sin dar la actual */
+            sinLaActual: boolean;
         };
     };
     responses: {
@@ -272,6 +279,27 @@ export interface operations {
             };
             422: components["responses"]["Problema"];
             429: components["responses"]["Problema"];
+        };
+    };
+    EstadoDeClave: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El estado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstadoDeClave"];
+                };
+            };
+            401: components["responses"]["Problema"];
         };
     };
     CambiarClave: {

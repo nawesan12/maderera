@@ -86,8 +86,9 @@ func (e EntrarConEnlace200JSONResponseBodyProposito) Valid() bool {
 
 // CambioDeClave defines model for CambioDeClave.
 type CambioDeClave struct {
-	Actual string `json:"actual"`
-	Nueva  string `json:"nueva"`
+	// Actual Vacía si la cuenta no tiene clave o si se entró con un link hace menos de media hora
+	Actual *string `json:"actual,omitempty"`
+	Nueva  string  `json:"nueva"`
 }
 
 // Entrada defines model for Entrada.
@@ -95,6 +96,13 @@ type Entrada struct {
 	Clave    string `json:"clave"`
 	Correo   string `json:"correo"`
 	Recordar *bool  `json:"recordar,omitempty"`
+}
+
+// EstadoDeClave defines model for EstadoDeClave.
+type EstadoDeClave struct {
+	// SinLaActual Puede poner clave sin dar la actual
+	SinLaActual bool `json:"sinLaActual"`
+	TieneClave  bool `json:"tieneClave"`
 }
 
 // Problema defines model for Problema.
@@ -176,6 +184,9 @@ type ServerInterface interface {
 	// Entrar Entrar con correo y clave
 	// (POST /api/v1/sesion)
 	Entrar(w http.ResponseWriter, r *http.Request)
+	// EstadoDeClave Si la cuenta tiene clave y si se puede poner sin la actual
+	// (GET /api/v1/sesion/clave)
+	EstadoDeClave(w http.ResponseWriter, r *http.Request)
 	// CambiarClave Cambiar la clave (cierra las otras sesiones)
 	// (PUT /api/v1/sesion/clave)
 	CambiarClave(w http.ResponseWriter, r *http.Request)
@@ -243,6 +254,20 @@ func (siw *ServerInterfaceWrapper) Entrar(w http.ResponseWriter, r *http.Request
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Entrar(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EstadoDeClave operation middleware
+func (siw *ServerInterfaceWrapper) EstadoDeClave(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EstadoDeClave(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -419,6 +444,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sesion", wrapper.Entrar)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sesion/enlace", wrapper.EntrarConEnlace)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sesion/enlace/pedir", wrapper.PedirEnlace)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/sesion/clave", wrapper.EstadoDeClave)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/sesion/clave", wrapper.CambiarClave)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/registro", wrapper.Registrarse)
 
@@ -579,6 +605,43 @@ func (response Entrar429ApplicationProblemPlusJSONResponse) VisitEntrarResponse(
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EstadoDeClaveRequestObject struct {
+}
+
+type EstadoDeClaveResponseObject interface {
+	VisitEstadoDeClaveResponse(w http.ResponseWriter) error
+}
+
+type EstadoDeClave200JSONResponse EstadoDeClave
+
+func (response EstadoDeClave200JSONResponse) VisitEstadoDeClaveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EstadoDeClave401ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response EstadoDeClave401ApplicationProblemPlusJSONResponse) VisitEstadoDeClaveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -744,6 +807,9 @@ type StrictServerInterface interface {
 	// Entrar Entrar con correo y clave
 	// (POST /api/v1/sesion)
 	Entrar(ctx context.Context, request EntrarRequestObject) (EntrarResponseObject, error)
+	// EstadoDeClave Si la cuenta tiene clave y si se puede poner sin la actual
+	// (GET /api/v1/sesion/clave)
+	EstadoDeClave(ctx context.Context, request EstadoDeClaveRequestObject) (EstadoDeClaveResponseObject, error)
 	// CambiarClave Cambiar la clave (cierra las otras sesiones)
 	// (PUT /api/v1/sesion/clave)
 	CambiarClave(ctx context.Context, request CambiarClaveRequestObject) (CambiarClaveResponseObject, error)
@@ -904,6 +970,30 @@ func (sh *strictHandler) Entrar(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// EstadoDeClave operation middleware
+func (sh *strictHandler) EstadoDeClave(w http.ResponseWriter, r *http.Request) {
+	var request EstadoDeClaveRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EstadoDeClave(ctx, request.(EstadoDeClaveRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EstadoDeClave")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EstadoDeClaveResponseObject); ok {
+		if err := validResponse.VisitEstadoDeClaveResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CambiarClave operation middleware
 func (sh *strictHandler) CambiarClave(w http.ResponseWriter, r *http.Request) {
 	var request CambiarClaveRequestObject
@@ -1002,26 +1092,28 @@ func (sh *strictHandler) PedirEnlace(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"zFfNbhs3EH6VAduDjG4syUlRRL1FSYEGCerGQC91gIyWI4k2l9wMuUIFQw/TY88+9F69WEFyJa2slSUb",
-	"idsbJXJ+v29+9kbktiitIeOdGNwIJlda4yj+OGc70lRgOOfWeDI+HLEstcrRK2u6ZXry3ZWzJty5fFoL",
-	"fMs0FgPxTXdjoJtuXXeteLFYZEKSy1mVQZ8YiDfMlqHz4achvHzx/Q8nGeTWgLYOCjIOr8hBaRlyLEoL",
-	"ZOATBQFyn0TQVVsIDgyxGCn7moYaZxT9llIFI6jP2ZbEXoUwx6gdZaJs/HUjMPcV6nDy85LEQDjPykzE",
-	"IhOmohm23CwywfS5UkxSDH5faVi9/5it3tvRFeU+aHpjPKPEB7qWr8LZ8Sy3zGRbr5hyyxI5XEoaY6W9",
-	"GHiuaO3WyFpNaHbiqJVmtd22OJo02fZVkkfVnsYatf3Bt8jsWHYefdV8q4ynCXF8rLyme9QcAjDJr220",
-	"Bf6BJsp5tk+BoLHFiPfEQ5rG1tiU8WYtlcgIubUslUEGjQ7IeKYJOpEdiL82mB3DgAtyKtX/nUj3x6OV",
-	"8/iazplyZd2u60qCJNAI8WE4l+kpSNJQsh1Hm3WJaY0jTXcofVTy2EZ+kqmKSHetyPgQ9rYJ53E8bsS+",
-	"peAiXja0oCyUEZmYkZEkLYvQ5ErrlA95REfMKImt+HiE85Uj/lkeJmz9LmtBLgTZ8HQn+7uYBuXKjFs4",
-	"FbsWZ8CJ/MiOMnCoFcMcHI6I4XOlln8ZKJWkU3iH4Mip5a0BclCZSMhrRZdm6n35i9Fz6IQRgV6NNKVm",
-	"H/EekffEz7Dy05MBGGUmQVgSkPPogCuP7tJImlWkZwSkwdtrMqeXIfN19Yv3b1+9hX/+hovkQsSEE1lF",
-	"P2TXlmSwVGIgnp/2Tp8H4NFPIyG7WKrurN/lRpmX1sUZGFgeJ2BARnzY5EIkUMj5V1bO75mcD5uY61az",
-	"2IY9cGaRbY/ts17/i9mtK7tlTg+ZUOKPoFeAwgzDPL4g/2wY/wjpfXF2ts/E2ufGOhAEXj5EIAyBqiiQ",
-	"57VLnChWkUldoy5omMfOhxxFVsi6dd+SpMnTLrIXgdhiJ8EvdusivFzeQmcOjmBkmZe3m9yc3PE0qV1k",
-	"YkItdPqNuM77juHeEyDbqNiZmsR2GIDp9fepPAjMr5uGEFS1F1FqLF+pfla71lHl8xRJDg4tb/9X5ZMA",
-	"iB04TQ6YQ5r5uzXTXS8xZdWCZdy9kdPq/XUQ3V7vj8K1pWqToxIfwfAHo7Pdq1KGIv4hAujkipgxLmnW",
-	"MzpImSZ30pZ/Mhpz2j+SEphDa96kh48H4QGbbRzA4VDgH+/ITPxUDPq93qFVM4m1LyFftla33Q2/0lLW",
-	"3N1yr2aYp+6rzITJ2dbFbzM8juoA2yG7VX/f+NAe/6O6Rr/3n3SNyoBW5hqK5Z8TlVvoVAac1RYqZ+8h",
-	"cbckqXg/lc/D9VPSePPZ0uDx2WEe13KPI3JLcwqBSwudKc4RLBhb7zUnTz4a3qORuMZXEtSFAajrWZGB",
-	"U+AVGVotX50ITfh4U5MKdbg3kQaLxb8DAA==",
+	"zFjLbhvHEv2VQt+7kHDHIiX7IjCzimkFiGEjigV4ExtwcbpItt3sGlf3ECEMfkyWWWTlRfbRjwXdPSJn",
+	"xKH1iK1kN2I/6nFOVZ3WR1XyomJHLng1+qiEfMXOU/rjTHhiaYHxu2QXyIX4iVVlTYnBsBtUecv/3nl2",
+	"cc2X8+bAf4WmaqT+M9gaGORVP9hcvF6vC6XJl2KqeJ8aqVMRFjh4+f0YHj/6/zeHBZTswLKHBTmP78hD",
+	"xQIlLioGcvCW4gHyb1W8q7EQHRjjYmL4KY0tLin5rbWJRtCeCVckwcQwp2g9Fapq/fRRYRlqtPGr69wr",
+	"LC9+R/AGLEJZkwsIjiEYcgRlNAQcVz0BuSAXn5LztQNr3HuYY0kxCvag44c2CHMWVIUKq4rUSPkgxs3U",
+	"ulCupmXK45WVdaGEPtRGSKvRz822N5sLePKOyhAvOHVBUOMtAy8vk7XjUMkixL1LQiWLRsn5mmJtgxoF",
+	"qWnj1oTZErod95tLi8Zubxw+oG7D2HXYG/ccv9sD11lNmiCyTxp0vHGgUSJ8Dca7PhYq4Tm+kop9MbQ2",
+	"Fx13+qJpl1Q3EE0Bje3Nb8Pw/VD2nNmx7AOGur3XuEAzkhxvsPSZa65jYT6/sdEX+EuaGR+E74OPjhcT",
+	"2RMPWZqy412uVCgIJbNo4xJBfCphmqFXxTXxNwaLm/D5nLzJvfJKpPvjscYHfEpnQqVhv+u60bGfWIS0",
+	"MX5XeStoslAJT5PNRHZXW4sTS1cK9EbJE078JFcvUvFaQy7EsLsmfMDptBV754LztNi6BfXCOFWoJTlN",
+	"mkXFgVCxNyHmET2JoCZh9eYGztee5Ad9PWGbfUUPcjHIlqc72d/FNF5u3LSHU6kHSwGSyY/iqQCP1gis",
+	"wOOEBD7U5uI3B5XRdATPETx5c/HJAXmoXSLke0Ov3TyE6kdnV3AQxykGM7GUB2PCe0IhkDzAOswPR+CM",
+	"m8XDmoB8QA9SB/SvnaZlTXZJQBYCvyd39Dpmvql+9eLZk2fw5x9wnl1ImEgmqzqO2eWKHFZGjdTDo+HR",
+	"wwg8hnki5AArM1geD6RV5hX7pBciy5NaiMiol9tcqAwK+fCE9eozKuN26mLTatZd2CNn1kVX4pwMj7+Y",
+	"3aayezTNWAg1fgv2ElBYYtQu5xQejNMPMb2PTk72mdj43JJO8cDj2xyIQ6BeLFBWjUuSKZZljCZoChpW",
+	"qfOhpCOXyPpN39JkKdAusueR2GonwY926yLuvPgEB6solCYsUShtcnN4xdN87bpQM+qh0yuSJu87hof3",
+	"gGyrYpdmltphBGZ4vO/Ka4H5adsQ4lX9RZQby1eqn0vleKPyuY8knyYp/a8qnwxA6sB5csAqK8yemhls",
+	"REwvg7sC9ysmuGuoL882zQvNf5fD5+33UftxtGoeR1VLmEdJvpXjkfJ1T5bSaw5lm6Qvz/vug/FG7O/p",
+	"bdlRjXfI4a053O3oOUMp8ynZB6UhEUxSloOgh8xH8od9LCVnsaT9gztTfszuNG+8Owi30P9JpsSPBf7y",
+	"nNwszNXoeDi8TpDnY/1S7ct2tK678a8sXdsKtwxmiWWeUcbNhDz3yuPtiL1Rn+yG7C+n4NaH/vjv1FuP",
+	"h/9Ib738z8ni4teZKRkOageeLUPt+TMkHlSkjeyn8llcvk8abx93LR6fXM/j5tzdiNzTnGLgmuFgjisE",
+	"BsdNkz689wH6Ap3GDb6aoCkMQNtM1CLOimZ45ElykKCJT1wzq9HGdZdosF7/NQA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -61,13 +61,23 @@ func TestLinkDeAcceso(t *testing.T) {
 		t.Errorf("vencido: %v", err)
 	}
 
-	// Con clave, el panel no manda links.
+	// Una solicitud anónima con el correo de una cuenta que ya existe no se
+	// ata a esa cuenta (revisión del 10/11: cualquiera podía escribir el
+	// correo de otro y llevarse su cuenta), y el panel no manda links.
 	_, _, _ = e.web(t, "beto@prueba.test")
 	form["documentoNumero"], form["email"], form["nombre"] = "30111333", "beto@prueba.test", "Beto"
 	pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form)
 	sol2 := e.uno(t, `select id from professional_applications where documento_numero = '30111333'`)
 	pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/profesionales/aprobacion", map[string]any{"id": sol2})
-	if st, p := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/profesionales/"+sol2+"/enlace", nil); st != 422 || !strings.Contains(primerError(p)+p["detail"].(string), "ya tiene contraseña") {
-		t.Errorf("cuenta con clave: %d %v", st, p)
+	if atada := e.uno(t, `select coalesce(user_id, '') from professional_applications where documento_numero = '30111333'`); atada != "" {
+		t.Errorf("la solicitud anónima se ató a la cuenta existente: %s", atada)
+	}
+	if st, p := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/profesionales/"+sol2+"/enlace", nil); st != 422 || !strings.Contains(primerError(p)+p["detail"].(string), "no tiene cuenta web") {
+		t.Errorf("sin cuenta web: %d %v", st, p)
+	}
+
+	// El personal no recibe links de ingreso.
+	if _, token, err := e.ses.EnlaceDeIngreso(ctx, "vendedor@prueba.test"); err != nil || token != "" {
+		t.Errorf("link de ingreso para el personal: %q %v", token, err)
 	}
 }

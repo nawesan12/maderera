@@ -34,7 +34,23 @@ const (
 
 	VenceActivacion = 7 * 24 * time.Hour
 	VenceIngreso    = 15 * time.Minute
+	VencePonerClave = 30 * time.Minute
 )
+
+// habilitaClave es la fila que permite, a la sesión que entró con un link,
+// poner clave sin la actual.
+func habilitaClave(sesionToken string) string {
+	h := sha256.Sum256([]byte(sesionToken))
+	return "clave:" + hex.EncodeToString(h[:])
+}
+
+// LimpiarEnlaces borra los enlaces vencidos: cada «mandame un link» suma una
+// fila que solo se borraba si alguien la usaba. La llama la tarea diaria.
+func LimpiarEnlaces(ctx context.Context, db ejecutor) (int64, error) {
+	t, err := db.Exec(ctx, `DELETE FROM verification WHERE expires_at < (now() at time zone 'utc')
+		AND (identifier LIKE 'enlace:%' OR identifier LIKE 'clave:%')`)
+	return t.RowsAffected(), err
+}
 
 // Errores del enlace. Vencido y usado se distinguen porque la pantalla dice
 // cosas distintas: uno se pide de nuevo, el otro ya entró.
@@ -61,6 +77,11 @@ func NuevoEnlace(ctx context.Context, db ejecutor, userID, proposito string, ven
 		return "", err
 	}
 	token := base64.RawURLEncoding.EncodeToString(b[:])
+	// Un link nuevo anula los anteriores del mismo tipo: el que se filtró
+	// antes deja de servir.
+	if _, err := db.Exec(ctx, `DELETE FROM verification WHERE value = $1`, proposito+":"+userID); err != nil {
+		return "", err
+	}
 	// La columna es timestamp sin zona, como la dejó better-auth: va en UTC.
 	_, err := db.Exec(ctx, `INSERT INTO verification (id, identifier, value, expires_at, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, now(), now())`,
@@ -106,6 +127,14 @@ func (s *Servicio) UsarEnlace(ctx context.Context, w http.ResponseWriter, token,
 		}
 		return nil, "", err
 	}
+	// Quien entró con un link puede ponerse una clave sin dar la actual
+	// durante media hora: es el «olvidé mi clave» y la primera clave de la
+	// cuenta que creó la aprobación.
+	if _, err := s.pool.Exec(ctx, `INSERT INTO verification (id, identifier, value, expires_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, now(), now())`, nuevoID(), habilitaClave(sesion), "clave:"+userID,
+		s.ahora().Add(VencePonerClave).UTC().Format("2006-01-02 15:04:05.999999")); err != nil {
+		return nil, "", err
+	}
 	s.escribirCookie(w, sesion, true)
 	ses, err := s.sesionDe(ctx, sesion)
 	return ses, proposito, err
@@ -116,12 +145,20 @@ func (s *Servicio) UsarEnlace(ctx context.Context, w http.ResponseWriter, token,
 // entera de si el correo existe.
 func (s *Servicio) EnlaceDeIngreso(ctx context.Context, correo string) (nombre, token string, err error) {
 	var userID string
-	err = s.pool.QueryRow(ctx, `SELECT id, name FROM "user" WHERE email = $1`, normalizarCorreo(correo)).Scan(&userID, &nombre)
+	var personal bool
+	err = s.pool.QueryRow(ctx, `SELECT u.id, u.name, coalesce(p.role::text = 'staff', false) FROM "user" u
+		LEFT JOIN profiles p ON p.user_id = u.id WHERE u.email = $1`, normalizarCorreo(correo)).Scan(&userID, &nombre, &personal)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", nil
 	}
 	if err != nil {
 		return "", "", err
+	}
+	// El personal entra solo con clave: con un link, quien lea el correo del
+	// local entraría al panel sin ella. Responde igual que un correo sin
+	// cuenta.
+	if personal {
+		return "", "", nil
 	}
 	token, err = NuevoEnlace(ctx, s.pool, userID, EnlaceIngreso, VenceIngreso, s.ahora())
 	return nombre, token, err

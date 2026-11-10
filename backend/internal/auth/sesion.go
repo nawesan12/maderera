@@ -324,20 +324,54 @@ func (s *Servicio) Salir(ctx context.Context, w http.ResponseWriter, r *http.Req
 	return nil
 }
 
-// CambiarClave verifica la actual, guarda la nueva y cierra las otras
-// sesiones de esa persona (quien cambia la clave porque se la vieron no
-// quiere que la sesión del otro siga abierta).
+// EstadoDeClave dice si la cuenta tiene clave y si esta sesión puede
+// ponerla sin dar la actual (entró con un link hace menos de media hora, o la
+// cuenta no tiene clave).
+func (s *Servicio) EstadoDeClave(ctx context.Context, ses *Sesion) (tieneClave, sinLaActual bool, err error) {
+	fila, err := s.q.CuentaConClave(ctx, ses.Correo)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return false, false, err
+	}
+	tieneClave = err == nil && fila.Password != nil
+	if !tieneClave {
+		return false, true, nil
+	}
+	err = s.pool.QueryRow(ctx, `SELECT exists(SELECT 1 FROM verification WHERE identifier = $1 AND value = $2
+		AND expires_at > (now() at time zone 'utc'))`, habilitaClave(ses.token), "clave:"+ses.UserID).Scan(&sinLaActual)
+	return true, sinLaActual, err
+}
+
+// CambiarClave guarda la clave nueva y cierra las otras sesiones de esa
+// persona (quien cambia la clave porque se la vieron no quiere que la sesión
+// del otro siga abierta). Pide la actual, salvo que la cuenta no tenga clave o
+// que la sesión haya entrado con un link hace menos de media hora (el «olvidé
+// mi clave»). Anula también los links pendientes: uno filtrado deja de servir.
 func (s *Servicio) CambiarClave(ctx context.Context, ses *Sesion, actual, nueva string) error {
 	fila, err := s.q.CuentaConClave(ctx, ses.Correo)
-	if err != nil || fila.Password == nil {
-		return ErrCredenciales
-	}
-	ok, err := verificarClave(*fila.Password, actual)
-	if err != nil {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
-	if !ok {
-		return ErrCredenciales
+	tieneClave := err == nil && fila.Password != nil
+	if tieneClave {
+		permitido := false
+		if actual != "" {
+			ok, err := verificarClave(*fila.Password, actual)
+			if err != nil {
+				return err
+			}
+			permitido = ok
+		} else {
+			// Se consume: una sola clave por link.
+			t, err := s.pool.Exec(ctx, `DELETE FROM verification WHERE identifier = $1 AND value = $2
+				AND expires_at > (now() at time zone 'utc')`, habilitaClave(ses.token), "clave:"+ses.UserID)
+			if err != nil {
+				return err
+			}
+			permitido = t.RowsAffected() > 0
+		}
+		if !permitido {
+			return ErrCredenciales
+		}
 	}
 	hash, err := hashearClave(nueva)
 	if err != nil {
@@ -345,7 +379,20 @@ func (s *Servicio) CambiarClave(ctx context.Context, ses *Sesion, actual, nueva 
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		if err := q.CambiarClave(ctx, sqlc.CambiarClaveParams{UserID: ses.UserID, Password: &hash, UpdatedAt: s.ahora()}); err != nil {
+		if tieneClave {
+			if err := q.CambiarClave(ctx, sqlc.CambiarClaveParams{UserID: ses.UserID, Password: &hash, UpdatedAt: s.ahora()}); err != nil {
+				return err
+			}
+		} else {
+			// La cuenta que creó la aprobación no tenía fila de clave.
+			if _, err := tx.Exec(ctx, `DELETE FROM account WHERE user_id = $1 AND provider_id = 'credential'`, ses.UserID); err != nil {
+				return err
+			}
+			if err := q.CrearCuentaConClave(ctx, sqlc.CrearCuentaConClaveParams{ID: nuevoID(), AccountID: ses.UserID, Password: &hash, CreatedAt: s.ahora()}); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM verification WHERE value LIKE '%:' || $1`, ses.UserID); err != nil {
 			return err
 		}
 		return q.BorrarOtrasSesiones(ctx, sqlc.BorrarOtrasSesionesParams{UserID: ses.UserID, Token: ses.token})

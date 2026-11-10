@@ -274,3 +274,14 @@ func TestSinDatosFiscales(t *testing.T) {
 		contiene(t, "sin datos fiscales", txt, "Maderera Juan B. Justo", "Lista de precios")
 	}
 }
+
+// Con la tienda apagada, el PDF de la lista no sale: con solo registrarse,
+// cualquiera se bajaba el catálogo con precios (revisión del 10/11/2026).
+func TestListaEnPDFConLaTiendaApagada(t *testing.T) {
+	e := armar(t)
+	pruebas.TiendaApagada(t, e.pool)
+	ana := e.cliente(t, "ana@prueba.test")
+	if r := pedir(t, ana, e.srv.URL+"/api/v1/documentos/mi-lista-de-precios"); r.estado != 403 {
+		t.Errorf("la lista en PDF salió con la tienda apagada: %d", r.estado)
+	}
+}

@@ -116,7 +116,7 @@ export default async function PedidosPage({
               <h2 className="mb-2.5 text-base font-semibold text-muted-foreground">
                 Entregados hace poco
               </h2>
-              <ul className="overflow-hidden rounded-xl border bg-card">
+              <ul className="overflow-hidden tarjeta">
                 {entregados.slice(0, 6).map((p) => (
                   <li
                     key={p.id}

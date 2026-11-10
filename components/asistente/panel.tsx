@@ -271,7 +271,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     <div
       role="dialog"
       aria-label="Asistente"
-      className="fixed inset-x-3 bottom-3 z-50 flex max-h-[min(80vh,620px)] flex-col overflow-hidden rounded-2xl border border-linea bg-card shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.45)] sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[420px]"
+      className="fixed inset-x-3 bottom-3 z-50 flex max-h-[min(80vh,620px)] flex-col overflow-hidden rounded-2xl superficie shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.45)] sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[420px]"
     >
       <header className="flex shrink-0 items-center gap-3 border-b border-linea px-4 py-3">
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-naranja-claro">

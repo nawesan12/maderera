@@ -461,7 +461,7 @@ function MediosDePago({
               return (
               <article
                 key={p.id}
-                className="flex flex-col rounded-2xl border border-linea bg-card px-5 py-[18px]"
+                className="flex flex-col rounded-2xl superficie px-5 py-[18px]"
               >
                 {/* El logo del banco, si lo cargaron. Se reconoce antes que
                     el nombre escrito, que es para lo que la clienta lo pidió.
@@ -713,7 +713,7 @@ function Herramientas({ tienda }: { tienda: Tienda }) {
           {herramientas.map((h) => (
             <article
               key={h.titulo}
-              className="overflow-hidden rounded-[14px] border border-linea bg-card shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]"
+              className="overflow-hidden rounded-[14px] superficie shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]"
             >
               <span className="block h-1 bg-brand-orange" aria-hidden="true" />
               <div className="px-[22px] pb-6 pt-[22px]">

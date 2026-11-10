@@ -60,7 +60,7 @@ export function ResenasDelNegocio({
           {resenas.slice(0, 6).map((resena) => (
             <li
               key={resena.id}
-              className="flex flex-col rounded-2xl border border-linea bg-card px-5 py-[18px]"
+              className="flex flex-col rounded-2xl superficie px-5 py-[18px]"
             >
               <span
                 className="flex items-center gap-0.5 text-brand-orange"

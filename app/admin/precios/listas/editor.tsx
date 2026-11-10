@@ -27,7 +27,7 @@ export function EditorDeLista({
   return (
     <form
       action={guardar}
-      className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-5"
+      className="flex flex-wrap items-end gap-3 tarjeta p-5"
     >
       <input type="hidden" name="id" value={lista.id} />
 

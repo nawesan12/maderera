@@ -32,7 +32,7 @@ export function CargandoSitio() {
         {Array.from({ length: 8 }).map((_, i) => (
           <div
             key={i}
-            className="overflow-hidden rounded-[14px] border border-linea bg-card"
+            className="overflow-hidden rounded-[14px] superficie"
           >
             <div className="aspect-[4/3] animate-pulse bg-hundida" />
             <div className="space-y-2.5 p-4">

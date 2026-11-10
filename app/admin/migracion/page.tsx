@@ -71,7 +71,7 @@ export default async function MigracionPage() {
       </div>
 
       <div className="mt-6 grid gap-6 2xl:grid-cols-[1fr_360px]">
-        <div className="rounded-xl border bg-card p-5">
+        <div className="tarjeta p-5">
           <AsistenteMigracion definiciones={definiciones} />
         </div>
 
@@ -90,7 +90,7 @@ export default async function MigracionPage() {
           ) : (
             <div className="space-y-2">
               {historial.map((corrida) => (
-                <div key={corrida.id} className="rounded-xl border bg-card p-4">
+                <div key={corrida.id} className="tarjeta p-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <p className="text-base font-medium">
                       {ETIQUETA_ENTIDAD[corrida.entidad]}
@@ -144,7 +144,7 @@ function Dato({
   detalle: string;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="tarjeta p-4">
       <p className="text-base text-muted-foreground">{titulo}</p>
       <p className="tabular text-3xl font-semibold">
         {valor.toLocaleString("es-AR")}

@@ -32,7 +32,7 @@ export function EditorDeZona({ zona }: { zona: ZonaEditable | null }) {
   const id = useId();
 
   return (
-    <form action={guardar} className="space-y-4 rounded-xl border bg-card p-5">
+    <form action={guardar} className="space-y-4 tarjeta p-5">
       {zona && <input type="hidden" name="id" value={zona.id} />}
 
       <div className="grid gap-4 sm:grid-cols-2">

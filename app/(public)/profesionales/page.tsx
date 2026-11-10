@@ -121,7 +121,7 @@ export default async function ProfesionalesPage() {
             <div className="space-y-14">
               <div className="grid gap-4 sm:grid-cols-2">
                 {BENEFICIOS.map((b) => (
-                  <article key={b.titulo} className="rounded-2xl border border-linea bg-card p-6">
+                  <article key={b.titulo} className="rounded-2xl superficie p-6">
                     <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto">
                       <b.icono className="h-6 w-6" />
                     </span>
@@ -157,7 +157,7 @@ export default async function ProfesionalesPage() {
 
               <section>
                 <h2 className="text-[28px] font-bold tracking-[-0.03em]">Preguntas frecuentes</h2>
-                <div className="mt-5 divide-y divide-linea rounded-2xl border border-linea bg-card">
+                <div className="mt-5 divide-y divide-linea rounded-2xl superficie">
                   {PREGUNTAS.map((p) => (
                     <details key={p.pregunta} className="group px-5 py-4">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-lg font-semibold">
@@ -177,7 +177,7 @@ export default async function ProfesionalesPage() {
               ) : estado.solicitud?.estado === "rechazada" ? (
                 <SolicitudRechazada motivo={estado.solicitud.motivoRechazo} />
               ) : (
-                <div className="rounded-2xl border border-linea bg-card p-7 shadow-[0_18px_40px_-28px_rgb(60_50_40_/_0.45)]">
+                <div className="rounded-2xl superficie p-7 shadow-[0_18px_40px_-28px_rgb(60_50_40_/_0.45)]">
                   <h2 className="text-2xl font-bold tracking-[-0.025em]">Pedí tu cuenta</h2>
                   <div className="mt-5">
                     <FormularioProfesional
@@ -344,7 +344,7 @@ function PanelDelProfesional({
         <Link
           key={a.href}
           href={a.href}
-          className="group flex flex-col rounded-2xl border border-linea bg-card p-6 transition-colors hover:border-accion/50"
+          className="group flex flex-col rounded-2xl superficie p-6 transition-colors hover:border-accion/50"
         >
           <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto">
             <a.icono className="h-6 w-6" />

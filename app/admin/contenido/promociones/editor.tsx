@@ -32,7 +32,7 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
   const id = useId();
 
   return (
-    <form {...sinReiniciar(guardar)} className="space-y-4 rounded-xl border bg-card p-5">
+    <form {...sinReiniciar(guardar)} className="space-y-4 tarjeta p-5">
       {promo && <input type="hidden" name="id" value={promo.id} />}
 
       <div className="grid gap-4 sm:grid-cols-2">

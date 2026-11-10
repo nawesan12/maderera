@@ -104,7 +104,7 @@ export default async function MoldavaPage() {
             Moldava buscando precio mayorista es justo el visitante que la
             clienta quiere captar, y le hacía falta bajar la página entera para
             encontrar cómo. */}
-        <section className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] border border-linea bg-card p-6">
+        <section className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] superficie p-6">
           <div>
             <h2 className="text-lg font-bold">¿Comprás al por mayor?</h2>
             <p className="mt-1 text-[15px] text-texto-2">
@@ -133,7 +133,7 @@ export default async function MoldavaPage() {
           {PROCESO.map((paso) => (
             <article
               key={paso.titulo}
-              className="rounded-[14px] border border-linea bg-card p-6"
+              className="rounded-[14px] superficie p-6"
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-[11px] bg-naranja-claro text-acento-texto">
                 <paso.icono className="h-5 w-5" />

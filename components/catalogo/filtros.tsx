@@ -124,7 +124,7 @@ export function BarraCatalogo({
           aria-label="Ordenar"
           value={ordenActual}
           onChange={(e) => actualizar({ orden: e.target.value })}
-          className="h-12 rounded-[10px] border border-linea bg-card px-3.5 text-[15px] outline-none focus:border-accion"
+          className="h-12 rounded-[10px] superficie px-3.5 text-[15px] outline-none focus:border-accion"
         >
           {ORDEN.map((o) => (
             <option key={o.valor} value={o.valor}>
@@ -327,7 +327,7 @@ export function PanelCategorias({
       {hayFiltros && (
         <button
           onClick={limpiar}
-          className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-linea bg-card py-2.5 text-xs text-texto-2 transition-colors hover:text-foreground"
+          className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-[10px] superficie py-2.5 text-xs text-texto-2 transition-colors hover:text-foreground"
         >
           <X className="h-3 w-3" />
           Limpiar filtros

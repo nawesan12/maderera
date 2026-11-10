@@ -38,7 +38,7 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
   // mismos campos y no hay nada que esconder según dónde vaya.
 
   return (
-    <form {...sinReiniciar(guardar)} className="space-y-4 rounded-xl border bg-card p-5">
+    <form {...sinReiniciar(guardar)} className="space-y-4 tarjeta p-5">
       {banner && <input type="hidden" name="id" value={banner.id} />}
 
       <fieldset className="space-y-3">

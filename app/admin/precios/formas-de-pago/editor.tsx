@@ -29,7 +29,7 @@ export function EditorDeDescuento({
   const id = useId();
 
   return (
-    <form action={guardar} className="rounded-xl border bg-card p-5">
+    <form action={guardar} className="tarjeta p-5">
       {descuento && <input type="hidden" name="id" value={descuento.id} />}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

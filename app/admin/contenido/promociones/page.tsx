@@ -51,7 +51,7 @@ export default async function PromocionesPage() {
         titulo="Promociones bancarias"
       />
 
-      <div className="rounded-xl border bg-card p-5">
+      <div className="tarjeta p-5">
         <p className="flex items-start gap-2.5 text-base text-muted-foreground">
           <Landmark className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
           <span>

@@ -10,7 +10,7 @@ export function EditorDeSierra({ anchoSierraMm }: { anchoSierraMm: number }) {
   const [estado, guardar, guardando] = useActionState(guardarSierra, inicial);
 
   return (
-    <form action={guardar} className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-5">
+    <form action={guardar} className="flex flex-wrap items-end gap-3 tarjeta p-5">
       <div>
         <label htmlFor="ancho-sierra" className="block text-base font-medium">
           Ancho de sierra (mm)

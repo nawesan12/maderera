@@ -84,7 +84,7 @@ export default async function CortePage() {
         </div>
 
         {placas.length === 0 ? (
-          <p className="mt-8 rounded-xl border border-linea bg-card px-5 py-6 text-base">
+          <p className="mt-8 rounded-xl superficie px-5 py-6 text-base">
             Por ahora el corte a medida se cotiza por WhatsApp o en el
             mostrador.{" "}
             <Link href="/contacto" className="font-medium underline underline-offset-2">

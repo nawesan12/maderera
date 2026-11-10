@@ -112,7 +112,7 @@ export function VincularCaja({
             onChange={(e) => {
               if (e.target.value) void vincular(e.target.value);
             }}
-            className="h-11 shrink-0 rounded-lg border border-linea bg-card px-3 text-base"
+            className="h-11 shrink-0 rounded-lg superficie px-3 text-base"
           >
             <option value="">Elegí la caja…</option>
             {cajas.map((c) => (

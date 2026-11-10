@@ -43,7 +43,7 @@ export function ResenasDelProducto({
       </div>
 
       {resenas.length === 0 ? (
-        <div className="rounded-[14px] border border-linea bg-card p-8 text-center">
+        <div className="rounded-[14px] superficie p-8 text-center">
           <p className="text-[15px] text-texto-2">
             Todavía nadie opinó sobre este producto.
           </p>
@@ -63,7 +63,7 @@ export function ResenasDelProducto({
           {resenas.map((r) => (
             <li
               key={r.id}
-              className="rounded-[14px] border border-linea bg-card p-5"
+              className="rounded-[14px] superficie p-5"
             >
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[15px] font-semibold">{r.nombre}</span>

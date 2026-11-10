@@ -84,7 +84,7 @@ export default async function NosotrosPage() {
         <h2 className="text-[32px] font-bold tracking-[-0.03em]">Dónde estamos</h2>
         <div className="mt-7 grid gap-5 lg:grid-cols-2">
           {sucursales.map((s) => (
-            <article key={s.slug} className="flex flex-col gap-5 rounded-2xl border border-linea bg-card p-5 sm:flex-row">
+            <article key={s.slug} className="flex flex-col gap-5 rounded-2xl superficie p-5 sm:flex-row">
               {s.foto && (
                 <Image
                   src={s.foto.ruta}
@@ -145,7 +145,7 @@ export default async function NosotrosPage() {
               <Link
                 key={s.titulo}
                 href={s.href}
-                className="group rounded-2xl border border-linea bg-card p-6 transition-colors hover:border-accion/50"
+                className="group rounded-2xl superficie p-6 transition-colors hover:border-accion/50"
               >
                 <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto">
                   <s.icono className="h-6 w-6" />

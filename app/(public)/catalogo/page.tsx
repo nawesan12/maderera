@@ -374,7 +374,7 @@ async function SobreLaCategoria({
   return (
     <section
       aria-labelledby="sobre-la-categoria"
-      className="mt-12 grid gap-8 rounded-[14px] border border-linea bg-card p-7 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
+      className="mt-12 grid gap-8 rounded-[14px] superficie p-7 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
     >
       <div>
         <h2 id="sobre-la-categoria" className="text-2xl font-bold tracking-[-0.025em]">
@@ -561,7 +561,7 @@ async function Resultados({ params }: { params: Params }) {
 
   if (productos.length === 0) {
     return (
-      <div className="rounded-[14px] border border-linea bg-card p-16 text-center shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+      <div className="rounded-[14px] superficie p-16 text-center shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
         <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-[14px] bg-chip">
           <Search className="h-7 w-7 text-texto-3" />
         </div>

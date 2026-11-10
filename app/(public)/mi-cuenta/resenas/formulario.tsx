@@ -25,7 +25,7 @@ export function FormularioResena({ item }: { item: ProductoResenable }) {
 
   if (estado.ok) {
     return (
-      <div className="rounded-[14px] border border-linea bg-card p-5">
+      <div className="rounded-[14px] superficie p-5">
         <p className="flex items-center gap-2 text-[15px] font-semibold">
           <Check className="h-4 w-4 text-brand-green" />
           {item.nombre}
@@ -36,7 +36,7 @@ export function FormularioResena({ item }: { item: ProductoResenable }) {
   }
 
   return (
-    <form action={enviar} className="rounded-[14px] border border-linea bg-card p-5">
+    <form action={enviar} className="rounded-[14px] superficie p-5">
       <input type="hidden" name="productId" value={item.productId} />
       <input type="hidden" name="orderId" value={item.orderId} />
       <input type="hidden" name="estrellas" value={estrellas} />

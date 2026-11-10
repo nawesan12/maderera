@@ -188,7 +188,7 @@ export default async function CuentaCorrientePage({
           debe. Donde sirve es al comprar, y conviene decirlo, porque si no el
           cliente lo pide por WhatsApp. */}
       {cuenta.saldo < 0 && (
-        <p className="rounded-xl border border-linea bg-card p-4 text-[15px]">
+        <p className="rounded-xl superficie p-4 text-[15px]">
           Tenés <strong className="tabular">{formatearMonto(-cuenta.saldo)}</strong> a favor. Se
           descuenta solo de tu próxima compra: en el carrito elegí «Con mi saldo a favor», o
           avisá en el mostrador.

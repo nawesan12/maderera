@@ -260,7 +260,7 @@ function VistaDeCorte({
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[1fr_360px]">
       <div className="space-y-5">
-        <section className="rounded-xl border border-linea bg-card p-5">
+        <section className="rounded-xl superficie p-5">
           <label className="block">
             <span className="text-base font-semibold">Placa</span>
             <select
@@ -291,7 +291,7 @@ function VistaDeCorte({
           </p>
         </section>
 
-        <section className="rounded-xl border border-linea bg-card p-5">
+        <section className="rounded-xl superficie p-5">
           <div className="flex flex-wrap gap-2" role="group" aria-label="Qué querés cortar">
             <Chip activo={modo === "piezas"} onClick={() => setModo("piezas")}>
               Piezas
@@ -410,14 +410,14 @@ function VistaDeCorte({
         )}
 
         {plano.placas.length > 0 && (
-          <section className="rounded-xl border border-linea bg-card p-5">
+          <section className="rounded-xl superficie p-5">
             <PlanoSimple plano={plano} />
           </section>
         )}
       </div>
 
       <aside className="space-y-3 lg:sticky lg:top-[92px]">
-        <section className="rounded-xl border border-linea bg-card p-5">
+        <section className="rounded-xl superficie p-5">
           <dl className="grid grid-cols-3 gap-2 text-center">
             <Cifra valor={plano.placas.length} nombre={plano.placas.length === 1 ? "placa" : "placas"} />
             <Cifra valor={plano.pasadas} nombre={plano.pasadas === 1 ? "pasada" : "pasadas"} />

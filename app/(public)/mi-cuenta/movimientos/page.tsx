@@ -45,7 +45,7 @@ export default async function MovimientosPage({
         {saldo !== 0 && (
           <Link
             href="/mi-cuenta/cuenta-corriente"
-            className="rounded-xl border border-linea bg-card px-4 py-2.5 text-right transition-colors hover:bg-chip"
+            className="rounded-xl superficie px-4 py-2.5 text-right transition-colors hover:bg-chip"
           >
             <span className="block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               {saldo > 0 ? "Tu saldo" : "A tu favor"}

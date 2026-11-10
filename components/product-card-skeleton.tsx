@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export function ProductCardSkeleton() {
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-[14px] border border-linea bg-card shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+    <div className="flex h-full flex-col overflow-hidden rounded-[14px] superficie shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
       <Skeleton className="aspect-[4/3] rounded-none" />
       <div className="flex flex-1 flex-col gap-[13px] px-4 pb-4 pt-[15px]">
         <div className="flex flex-col gap-[3px]">

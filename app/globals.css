@@ -652,14 +652,16 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
 
 /* ---- Niveles de superficie ------------------------------------------------ */
 
-/* Nivel 1 — contenido principal. Se levanta del fondo. */
+/* Nivel 1 — contenido principal. Se levanta del fondo.
+   Sin borde (9/11/2026, Nahuel: «sacaría el borde típico, le daría más
+   textura a todo»): la separa la sombra, como una hoja apoyada, no una línea. */
 .tarjeta {
   background-color: var(--card);
   background-image: var(--textura-superficie);
   background-size: 180px 180px;
-  border-radius: 0.5rem;
-  border: 1px solid var(--linea);
-  box-shadow: 0 1px 2px rgb(60 50 40 / 0.05);
+  border-radius: 0.875rem;
+  border: 0;
+  box-shadow: var(--sombra-hoja);
   transition:
     box-shadow 220ms ease,
     transform 220ms ease,
@@ -1440,4 +1442,93 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   .entra-en-orden > * {
     animation: none;
   }
+}
+
+
+/* ---- Relieve (9/11/2026) -------------------------------------------------
+   Nahuel: «sacaría el borde típico, le daría más textura a todo, tal vez
+   pondría hasta botones inflados». Las superficies se separan por sombra y
+   grano, y los botones tienen volumen: brillo arriba, sombra abajo, y se
+   hunden al apretarlos. Un chip elegido (aria-pressed) queda hundido.
+   Sin @layer a propósito: Turbopack en desarrollo descarta las reglas de
+   @layer components aunque la compilación de producción las emita. */
+:root {
+  --sombra-hoja: 0 0 0 1px rgb(60 50 40 / 0.045), 0 1px 2px rgb(60 50 40 / 0.07),
+    0 12px 28px -18px rgb(60 50 40 / 0.28);
+  --relieve-brillo: inset 0 1px 0 rgb(255 255 255 / 0.3);
+  --relieve-sombra: 0 1px 1px rgb(60 30 10 / 0.2), 0 5px 12px -5px rgb(60 30 10 / 0.42);
+  --relieve-hundido: inset 0 2px 5px rgb(0 0 0 / 0.24), inset 0 -1px 0 rgb(255 255 255 / 0.12);
+  --relieve-suave: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 1px rgb(60 50 40 / 0.1),
+    0 3px 8px -4px rgb(60 50 40 / 0.22);
+}
+
+.dark {
+  --sombra-hoja: 0 0 0 1px rgb(255 255 255 / 0.05), 0 12px 28px -16px rgb(0 0 0 / 0.65);
+  --relieve-brillo: inset 0 1px 0 rgb(255 255 255 / 0.18);
+  --relieve-sombra: 0 1px 1px rgb(0 0 0 / 0.4), 0 5px 12px -5px rgb(0 0 0 / 0.7);
+  --relieve-suave: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 1px rgb(0 0 0 / 0.35),
+    0 3px 8px -4px rgb(0 0 0 / 0.55);
+}
+
+/* Las tarjetas de shadcn del panel, igual que .tarjeta. */
+.panel [data-slot="card"] {
+  border-color: transparent;
+  border-radius: 0.875rem;
+  background-image: var(--textura-superficie);
+  background-size: 180px 180px;
+  box-shadow: var(--sombra-hoja);
+}
+
+/* Botones de acción, inflados. */
+:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca) {
+  background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.17), rgb(0 0 0 / 0.07));
+  box-shadow: var(--relieve-brillo), var(--relieve-sombra);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.16);
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms ease,
+    background-color 160ms ease;
+}
+
+:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca):hover {
+  transform: translateY(-1px);
+}
+
+:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca):is(:active, [aria-pressed="true"], [aria-selected="true"]) {
+  background-image: linear-gradient(to bottom, rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.05));
+  box-shadow: var(--relieve-hundido);
+  transform: translateY(1px);
+}
+
+:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary):disabled {
+  box-shadow: none;
+  transform: none;
+}
+
+/* Los secundarios (claros, con borde): un relieve más leve y sin la línea. */
+:is(button, a).border:is([class*="h-8 "], [class*="h-9 "], [class*="h-10 "], [class*="h-11 "], [class*="h-12 "], [class*="h-[5"], [class*=" h-8"], [class*=" h-9"], [class*=" h-10"], [class*=" h-11"], [class*=" h-12"]):not([aria-pressed="true"]) {
+  border-color: transparent;
+  background-image: linear-gradient(to bottom, var(--card), var(--hundida));
+  box-shadow: var(--relieve-suave);
+}
+
+:is(button, a).border:is([class*="h-8 "], [class*="h-9 "], [class*="h-10 "], [class*="h-11 "], [class*="h-12 "], [class*="h-[5"], [class*=" h-8"], [class*=" h-9"], [class*=" h-10"], [class*=" h-11"], [class*=" h-12"]):active {
+  box-shadow: inset 0 2px 4px rgb(60 50 40 / 0.16);
+  background-image: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca),
+  :is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca):hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* Las tarjetas del sitio: la misma hoja que el panel, con grano y sin borde. */
+.superficie {
+  background-color: var(--card);
+  background-image: var(--textura-superficie);
+  background-size: 180px 180px;
+  box-shadow: var(--sombra-hoja);
 }

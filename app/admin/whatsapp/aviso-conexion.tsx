@@ -97,7 +97,7 @@ export function AvisoConexion({
   }
 
   return (
-    <section className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border bg-card px-5 py-3.5">
+    <section className="flex flex-wrap items-center gap-x-3 gap-y-1 tarjeta px-5 py-3.5">
       <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
       <p className="text-base">
         Conectado

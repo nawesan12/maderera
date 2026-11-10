@@ -28,7 +28,7 @@ export default async function NoEncontrado() {
         <div className="mx-auto grid max-w-3xl gap-3 sm:grid-cols-3">
           <Link
             href="/catalogo"
-            className="rounded-[14px] border border-linea bg-card p-5 transition-colors hover:border-linea-hover"
+            className="rounded-[14px] superficie p-5 transition-colors hover:border-linea-hover"
           >
             <span className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-naranja-claro text-acento-sobre-claro">
               <Search className="h-5 w-5" />
@@ -41,7 +41,7 @@ export default async function NoEncontrado() {
 
           <Link
             href="/"
-            className="rounded-[14px] border border-linea bg-card p-5 transition-colors hover:border-linea-hover"
+            className="rounded-[14px] superficie p-5 transition-colors hover:border-linea-hover"
           >
             <span className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-naranja-claro text-acento-sobre-claro">
               <Compass className="h-5 w-5" />
@@ -56,7 +56,7 @@ export default async function NoEncontrado() {
             href={whatsapp}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-[14px] border border-linea bg-card p-5 transition-colors hover:border-linea-hover"
+            className="rounded-[14px] superficie p-5 transition-colors hover:border-linea-hover"
           >
             <span className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-verde-whatsapp/15 text-verde-whatsapp">
               <MessageCircle className="h-5 w-5" />

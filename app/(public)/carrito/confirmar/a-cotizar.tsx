@@ -36,7 +36,7 @@ export function ACotizar({
   hayOtros: boolean;
 }) {
   return (
-    <section className="rounded-2xl border border-linea bg-card p-6 shadow-sm">
+    <section className="rounded-2xl superficie p-6 shadow-sm">
       <h2 className="flex items-center gap-2 text-lg font-bold tracking-[-0.02em]">
         <Ruler className="h-5 w-5 text-acento-texto" />
         {items.length === 1

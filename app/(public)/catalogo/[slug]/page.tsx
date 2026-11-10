@@ -311,7 +311,7 @@ export default async function ProductoPage({
 
             {/* Cómo lo recibe */}
             <ul className="mt-3.5 grid gap-3 sm:grid-cols-2">
-              <li className="rounded-xl border border-linea bg-card px-4 py-3.5">
+              <li className="rounded-xl superficie px-4 py-3.5">
                 <span className="flex items-center gap-2 text-[14.5px] font-semibold">
                   <Store className="h-[18px] w-[18px] shrink-0 text-acento-texto" />
                   Retiro sin cargo
@@ -322,7 +322,7 @@ export default async function ProductoPage({
                     : "En Casa Central o en el Aserradero."}
                 </p>
               </li>
-              <li className="rounded-xl border border-linea bg-card px-4 py-3.5">
+              <li className="rounded-xl superficie px-4 py-3.5">
                 <span className="flex items-center gap-2 text-[14.5px] font-semibold">
                   <Truck className="h-[18px] w-[18px] shrink-0 text-acento-texto" />
                   Envío a domicilio
@@ -443,7 +443,7 @@ function FichaTecnica({
             tabIndex={0}
             role="region"
             aria-label="Ficha técnica"
-            className="overflow-x-auto rounded-2xl border border-linea bg-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento-texto"
+            className="overflow-x-auto rounded-2xl superficie focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento-texto"
           >
             <table className="w-full min-w-[420px] text-sm">
               <thead>
@@ -492,7 +492,7 @@ function FichaTecnica({
           {(producto.documentos.length > 0 || producto.documentosReservados > 0) && (
             <div>
               <h2 className="mb-2 text-xl font-bold tracking-[-0.02em]">Documentación</h2>
-              <ul className="divide-y divide-linea-tenue rounded-xl border border-linea bg-card">
+              <ul className="divide-y divide-linea-tenue rounded-xl superficie">
                 {producto.documentos.map((d) => (
                   <li key={d.id}>
                     <a

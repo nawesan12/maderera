@@ -84,7 +84,7 @@ async function CuentaConSesion({
               operaACuenta={operaACuenta}
               saldo={
                 operaACuenta && (
-                  <div className="mt-4 hidden rounded-xl border border-linea bg-card p-4 lg:block">
+                  <div className="mt-4 hidden rounded-xl superficie p-4 lg:block">
                     <p className="text-xs font-semibold uppercase tracking-[0.1em] text-texto-3">
                       Tu saldo
                     </p>

@@ -59,7 +59,7 @@ export function PasoMapeo({
         return (
           <div
             key={campo.clave}
-            className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-[1fr_minmax(0,20rem)] sm:items-start"
+            className="grid gap-3 tarjeta p-4 sm:grid-cols-[1fr_minmax(0,20rem)] sm:items-start"
           >
             <div>
               <Label

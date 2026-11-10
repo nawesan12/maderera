@@ -69,13 +69,13 @@ async function Consulta({ params }: { params: Promise<{ token: string }> }) {
             ))}
         </div>
 
-        <dl className="grid grid-cols-3 gap-3 rounded-xl border border-linea bg-card p-5 text-center sm:max-w-md">
+        <dl className="grid grid-cols-3 gap-3 rounded-xl superficie p-5 text-center sm:max-w-md">
           <Cifra valor={consulta.plano.placas.length} nombre={consulta.plano.placas.length === 1 ? "placa" : "placas"} />
           <Cifra valor={unidades} nombre={unidades === 1 ? "pieza" : "piezas"} />
           <Cifra valor={Math.round(consulta.metrosCanto * 100) / 100} nombre="m de canto" />
         </dl>
 
-        <section className="rounded-xl border border-linea bg-card p-5">
+        <section className="rounded-xl superficie p-5">
           <table className="w-full text-left text-base">
             <thead className="text-sm text-texto-2">
               <tr>
@@ -103,7 +103,7 @@ async function Consulta({ params }: { params: Promise<{ token: string }> }) {
           )}
         </section>
 
-        <section className="rounded-xl border border-linea bg-card p-5">
+        <section className="rounded-xl superficie p-5">
           <PlanoSimple plano={consulta.plano} />
         </section>
       </div>

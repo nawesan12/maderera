@@ -247,7 +247,7 @@ export function AsistenteMigracion({
               setEntidad(item.clave);
               setPaso("archivo");
             }}
-            className="rounded-xl border bg-card p-5 text-left transition-colors hover:border-brand-orange/50 hover:bg-muted/40"
+            className="tarjeta p-5 text-left transition-colors hover:border-brand-orange/50 hover:bg-muted/40"
           >
             <p className="text-lg font-semibold">{item.titulo}</p>
             <p className="mt-1 text-base text-muted-foreground">{item.resumen}</p>
@@ -410,7 +410,7 @@ export function AsistenteMigracion({
             {previa.muestra?.map((fila) => (
               <div
                 key={fila.linea}
-                className={`rounded-xl border bg-card p-3 ${
+                className={`tarjeta p-3 ${
                   fila.errores.length > 0 ? "border-brand-orange/60" : ""
                 }`}
               >
@@ -478,7 +478,7 @@ export function AsistenteMigracion({
     const porcentaje = filas.length ? Math.round((avance / filas.length) * 100) : 0;
 
     return (
-      <div className="rounded-xl border bg-card p-6">
+      <div className="tarjeta p-6">
         <p className="flex items-center gap-2 text-lg font-semibold">
           <Loader2 className="h-5 w-5 animate-spin text-brand-orange" />
           Migrando {definicion.titulo.toLowerCase()}…
@@ -546,7 +546,7 @@ export function AsistenteMigracion({
         <div className="mt-5 space-y-2">
           <p className="text-base font-semibold">Control de integridad</p>
           {controles.map((control) => (
-            <div key={control.titulo} className="rounded-xl border bg-card p-4">
+            <div key={control.titulo} className="tarjeta p-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className="text-base font-medium">
                   {control.ok ? (
@@ -629,7 +629,7 @@ function Indicador({
   }[tono];
 
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="tarjeta p-4">
       <p className="text-base text-muted-foreground">{titulo}</p>
       <p className={`tabular text-3xl font-semibold ${color}`}>
         {valor.toLocaleString("es-AR")}

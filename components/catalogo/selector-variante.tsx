@@ -189,7 +189,7 @@ export function SelectorVariante({
                       ? "border-[1.5px] border-accion bg-naranja-claro font-semibold text-acento-sobre-claro"
                       : agotada
                         ? "border border-linea bg-chip text-texto-3"
-                        : "border border-linea bg-card hover:border-accion/40"
+                        : "superficie hover:border-accion/40"
                   }`}
                 >
                   <span className="tabular flex items-center gap-1.5 text-[14.5px]">
@@ -224,7 +224,7 @@ export function SelectorVariante({
                   className={`rounded-[10px] px-3.5 py-2.5 text-left text-[14.5px] transition-colors ${
                     activa
                       ? "border-[1.5px] border-accion bg-naranja-claro font-semibold text-acento-sobre-claro"
-                      : "border border-linea bg-card hover:border-accion/40"
+                      : "superficie hover:border-accion/40"
                   }`}
                 >
                   <span className="flex items-center gap-1.5">
@@ -258,7 +258,7 @@ export function SelectorVariante({
       ) : (
         <>
           {/* Precio de la medida elegida */}
-          <div className="rounded-[14px] border border-linea bg-card px-[22px] py-5 shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+          <div className="rounded-[14px] superficie px-[22px] py-5 shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
             <p className="flex items-baseline gap-2">
               <span className="tabular text-4xl font-bold leading-none tracking-[-0.03em]">
                 {formatearPrecio(String(mostrado.principal))}
@@ -456,7 +456,7 @@ function ConsultaDeLaMedida({
 
   return (
     <>
-      <div className="rounded-[14px] border border-linea bg-card px-[22px] py-5 shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+      <div className="rounded-[14px] superficie px-[22px] py-5 shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
         <p className="tabular text-2xl font-bold leading-tight tracking-[-0.02em]">{medida.label}</p>
         <p className="mt-1.5 text-[14.5px] text-texto-2">
           {como ?? `Se vende por ${formatearUnidadLarga(unidad)}`}

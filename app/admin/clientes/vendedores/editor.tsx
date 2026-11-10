@@ -144,7 +144,7 @@ export function EditorDeVendedor({
   return (
     <form
       action={guardar}
-      className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4"
+      className="flex flex-wrap items-end gap-3 tarjeta p-4"
     >
       {vendedor && <input type="hidden" name="id" value={vendedor.id} />}
 

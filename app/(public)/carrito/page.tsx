@@ -71,9 +71,6 @@ export default async function CarritoPage() {
         <section className="contenedor pb-16">
           <div className="mb-5">
             <h2 className="text-xl font-bold">También vas a necesitar</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Lo que suele ir junto con lo que ya tenés en el carrito.
-            </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {complementos.map((p) => (

@@ -317,11 +317,6 @@ async function Bienvenida({ nombre }: { nombre: string }) {
           <h2 className="text-2xl font-bold">
             {nombre ? `Bienvenido, ${nombre.split(" ")[0]}` : "Bienvenido"}
           </h2>
-          <p className="mt-2 max-w-lg text-white/70">
-            Acá vas a ver tus pedidos, tus presupuestos y —si comprás a cuenta
-            corriente— tu saldo con cada movimiento. Por ahora está vacío
-            porque todavía no hiciste tu primera compra.
-          </p>
         </div>
 
         <div className="grid gap-4 p-6 sm:grid-cols-3">

@@ -131,10 +131,6 @@ export function PedirPresupuesto({
         <legend className="block text-sm font-medium">
           ¿Alguno de estos aplica?
         </legend>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Nos dice si lo puede resolver el mostrador o tiene que verlo
-          administración.
-        </p>
         <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
           {MOTIVOS_DE_COTIZACION.map((motivo) => (
             <label
@@ -163,10 +159,6 @@ export function PedirPresupuesto({
           type="date"
           className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
         />
-        <p className="mt-1 text-sm text-muted-foreground">
-          No es obligatorio, pero nos ordena la cola: si hay una fecha de obra,
-          la tenemos en cuenta.
-        </p>
       </div>
 
       <div>
@@ -212,10 +204,6 @@ export function PedirPresupuesto({
           Cancelar
         </button>
       </div>
-
-      <p className="text-sm text-muted-foreground">
-        Tu presupuesto queda igual: pedirlo por escrito no vacía el carrito.
-      </p>
     </form>
   );
 }

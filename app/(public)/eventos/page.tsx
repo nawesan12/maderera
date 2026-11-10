@@ -41,10 +41,6 @@ export default async function EventosPage() {
             <h2 className="mt-4 text-xl font-semibold">
               No hay eventos programados
             </h2>
-            <p className="mx-auto mt-1.5 max-w-md text-muted-foreground">
-              Publicamos las capacitaciones acá apenas se confirman. Si te
-              interesa alguna en particular, escribinos.
-            </p>
           </div>
         ) : (
           <ul className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">

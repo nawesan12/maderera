@@ -57,9 +57,6 @@ export default async function StockPage({
             <Warehouse className="h-8 w-8 text-brand-orange" />
             <h1 className="text-3xl font-bold">Stock entre Sucursales</h1>
           </div>
-          <p className="text-white/70">
-            Consultá la disponibilidad de productos en Casa Central y Aserradero.
-          </p>
         </div>
       </div>
 

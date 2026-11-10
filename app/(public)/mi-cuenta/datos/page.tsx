@@ -20,10 +20,6 @@ export default async function MisDatosPage() {
     <div className="space-y-5">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Mis datos</h1>
-        <p className="mt-1 text-muted-foreground">
-          Son los datos con los que te contactamos y con los que emitimos tus
-          comprobantes.
-        </p>
       </header>
 
       {/* El correo es la identidad de la cuenta y no se edita desde acá: es lo

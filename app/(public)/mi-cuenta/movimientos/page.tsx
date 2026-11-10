@@ -41,9 +41,6 @@ export default async function MovimientosPage({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Movimientos</h1>
-          <p className="mt-1 text-[15px] text-muted-foreground">
-            Tus compras, tus pagos con su recibo y los cheques que nos mandaste.
-          </p>
         </div>
         {saldo !== 0 && (
           <Link

@@ -122,11 +122,6 @@ export default async function MisComprobantesPage() {
           );
         })}
       </div>
-
-      <p className="text-sm text-muted-foreground">
-        Las facturas se abren en una pestaña nueva, listas para imprimir o
-        guardar como PDF desde el navegador.
-      </p>
     </div>
   );
 }

@@ -56,9 +56,6 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
     <form action={accion} className="space-y-5 rounded-2xl border bg-card p-6 sm:p-8">
       <div>
         <h2 className="text-2xl font-bold">Escribinos</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Contestamos en el día durante el horario de atención.
-        </p>
       </div>
 
       <div className="space-y-2">

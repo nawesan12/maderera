@@ -37,6 +37,8 @@ function cuerpo(formData: FormData) {
     alicuotaIva: texto(formData, "alicuotaIva") || "21",
     recargoElaboracionPct: texto(formData, "recargoElaboracionPct"),
     imputacion: texto(formData, "imputacion"),
+    usos: texto(formData, "usos"),
+    cuidados: texto(formData, "cuidados"),
     featured: formData.get("featured") === "on",
     aPedido: formData.get("aPedido") === "on",
     active: formData.get("active") === "on",

@@ -340,6 +340,18 @@ export interface components {
             categoryName: string;
             imagenes: string[];
             variantes: components["schemas"]["VarianteDetalle"][];
+            usos: string | null;
+            cuidados: string | null;
+            documentos: components["schemas"]["DocumentoDeFicha"][];
+            documentosReservados: number;
+        };
+        DocumentoDeFicha: {
+            id: string;
+            titulo: string;
+            descripcion: string | null;
+            url: string;
+            formato: string;
+            tamanoBytes: number | null;
         };
         Sugeridos: {
             complementarios: components["schemas"]["ProductoListado"][];

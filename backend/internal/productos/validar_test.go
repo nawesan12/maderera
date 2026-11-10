@@ -119,3 +119,20 @@ func TestCantidadYSlugComoTS(t *testing.T) {
 		}
 	}
 }
+
+// Las fotos del propio sitio son rutas (/fotos/, /subidas/): con la URL
+// absoluta obligatoria, un producto con foto no se podía volver a guardar.
+func TestFotoConRutaDelSitio(t *testing.T) {
+	for s, quiero := range map[string]bool{
+		"/fotos/photo-123.jpg":          true,
+		"/subidas/productos/a.webp":     true,
+		"https://cdn.example.com/a.jpg": true,
+		"//otro.com/a.jpg":              false,
+		"fotos/a.jpg":                   false,
+		"/fotos/con espacio.jpg":        false,
+	} {
+		if urlValida(s) != quiero {
+			t.Errorf("urlValida(%q) = %v", s, !quiero)
+		}
+	}
+}

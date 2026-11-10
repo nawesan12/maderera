@@ -122,6 +122,22 @@ export interface ProductoDetalle {
   categoryName: string;
   imagenes: string[];
   variantes: VarianteDetalle[];
+  /** Para qué sirve y cómo se cuida, con el formato de `lib/markdown.ts`. */
+  usos: string | null;
+  cuidados: string | null;
+  /** Los documentos públicos del producto y de su categoría. */
+  documentos: DocumentoDeFicha[];
+  /** Cuántos hay reservados a profesionales: de esos va solo el número. */
+  documentosReservados: number;
+}
+
+export interface DocumentoDeFicha {
+  id: string;
+  titulo: string;
+  descripcion: string | null;
+  url: string;
+  formato: string;
+  tamanoBytes: number | null;
 }
 
 export interface PaginaDeCatalogo {
@@ -276,19 +292,25 @@ export function paginaDeProductosPublica(filtros: FiltrosCatalogo = {}, pagina =
  * dada de baja. Memoizada por pedido: la página y su `generateMetadata` piden
  * la misma.
  */
-export const obtenerProductoPublico = cache(
-  cachearPublico(
-    async (slug: string): Promise<ProductoDetalle | null> => {
-      const r = await apiPublica.GET("/api/v1/catalogo/productos/{slug}", {
-        params: { path: { slug }, query: { publico: true } },
-      });
-      if (r.response.status === 404) return null;
-      return datos(r) as ProductoDetalle;
-    },
-    ["catalogo", "producto"],
-    ETIQUETAS.catalogo,
-  ),
+const fichaCacheada = cachearPublico(
+  async (slug: string): Promise<ProductoDetalle | null> => {
+    const r = await apiPublica.GET("/api/v1/catalogo/productos/{slug}", {
+      params: { path: { slug }, query: { publico: true } },
+    });
+    if (r.response.status === 404) return null;
+    return datos(r) as ProductoDetalle;
+  },
+  // «v2»: la ficha sumó usos, cuidados y documentos (9/11/2026). Con la
+  // clave de antes, una entrada guardada por la versión anterior volvía sin
+  // esos campos y tiraba la página.
+  ["catalogo", "producto", "v2"],
+  ETIQUETAS.catalogo,
 );
+
+export const obtenerProductoPublico = cache(async (slug: string): Promise<ProductoDetalle | null> => {
+  const p = await fichaCacheada(slug);
+  return p && { ...p, usos: p.usos ?? null, cuidados: p.cuidados ?? null, documentos: p.documentos ?? [], documentosReservados: p.documentosReservados ?? 0 };
+});
 
 /**
  * Qué precio tiene cada variante para la lista de quien pide. Vacío para la

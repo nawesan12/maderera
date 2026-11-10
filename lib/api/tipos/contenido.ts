@@ -554,6 +554,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/documentos/{id}/destinos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description A qué productos y categorías se ata el documento; reemplaza los anteriores. */
+        put: operations["DestinosDeDocumento"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/documentos/{id}/activo": {
         parameters: {
             query?: never;
@@ -784,6 +801,8 @@ export interface components {
             imagenes: string[];
         };
         DocumentoDelPanel: {
+            productos: components["schemas"]["Destino"][];
+            categorias: components["schemas"]["Destino"][];
             id: string;
             titulo: string;
             descripcion: string | null;
@@ -795,6 +814,10 @@ export interface components {
             activo: boolean;
             /** Format: date-time */
             createdAt: string;
+        };
+        Destino: {
+            id: string;
+            nombre: string;
         };
         FormBanner: {
             ubicacion: string;
@@ -1821,6 +1844,34 @@ export interface operations {
             content: {
                 "application/json": {
                     soloProfesionales: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Hecho */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    DestinosDeDocumento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    productos: string[];
+                    categorias: string[];
                 };
             };
         };

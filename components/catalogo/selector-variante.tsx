@@ -1,9 +1,10 @@
 "use client";
 
 import { Suspense, use, useState, type ComponentProps } from "react";
-import { Check, Loader2, MessageCircle, Plus } from "lucide-react";
+import { Check, Loader2, MessageCircle, Plus, Scissors } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Disponibilidad } from "@/components/catalogo/disponibilidad";
+import { DisponibilidadPorSucursal } from "@/components/catalogo/disponibilidad";
 import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
@@ -43,6 +44,7 @@ export function SelectorVariante({
   variantes,
   whatsapp,
   numeroWhatsapp,
+  cortables = [],
   alicuota = 21,
   vista = "final",
   aPedido = false,
@@ -59,6 +61,8 @@ export function SelectorVariante({
    * con la medida elegida escrita, y para eso hay que armar el enlace acá.
    */
   numeroWhatsapp?: string;
+  /** Las medidas que son placas cortables: llevan «Pedila cortada». */
+  cortables?: string[];
   /** La del producto. Sin esto el neto informado se calcula siempre al 21 %. */
   alicuota?: number;
   /**
@@ -294,11 +298,7 @@ export function SelectorVariante({
 
             {tienda.stockVisible && (
               <div className="mt-3.5 border-t border-linea-tenue pt-3.5">
-                <Disponibilidad
-                  central={elegida.stockCentral}
-                  aserradero={elegida.stockAserradero}
-                  cantidad={elegida.disponibles}
-                />
+                <DisponibilidadPorSucursal central={elegida.stockCentral} aserradero={elegida.stockAserradero} />
               </div>
             )}
           </div>
@@ -405,6 +405,16 @@ export function SelectorVariante({
         </>
       )}
 
+      {cortables.includes(elegida.id) && (
+        <Link
+          href={`/corte#placa=${elegida.id}`}
+          className="flex h-[50px] w-full items-center justify-center gap-2.5 rounded-[10px] border border-linea bg-card text-base font-semibold transition-colors hover:bg-sitio-alt"
+        >
+          <Scissors className="h-[18px] w-[18px] text-acento-texto" />
+          Pedila cortada
+        </Link>
+      )}
+
       <p className="tabular text-center text-xs text-texto-3">
         Código {elegida.sku}
       </p>
@@ -464,11 +474,7 @@ function ConsultaDeLaMedida({
         )}
         {stockVisible && (
           <div className="mt-3.5 border-t border-linea-tenue pt-3.5">
-            <Disponibilidad
-              central={medida.stockCentral}
-              aserradero={medida.stockAserradero}
-              cantidad={medida.disponibles}
-            />
+            <DisponibilidadPorSucursal central={medida.stockCentral} aserradero={medida.stockAserradero} />
           </div>
         )}
       </div>

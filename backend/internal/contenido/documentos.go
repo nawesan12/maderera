@@ -160,3 +160,69 @@ func (s *Servicio) ArchivoDeDocumento(ctx context.Context, ses *auth.Sesion, id 
 	datos, tipo = s.disco.LeerGuardado(ref)
 	return datos, tipo, activo && !reservado, nil
 }
+
+// Destino es un producto o una categoría a la que está atado un documento.
+type Destino struct {
+	ID     string `json:"id"`
+	Nombre string `json:"nombre"`
+}
+
+// DestinosDeDocumentos son los productos y las categorías de cada documento.
+func (s *Servicio) DestinosDeDocumentos(ctx context.Context) (productos, categorias map[string][]Destino, err error) {
+	productos, categorias = map[string][]Destino{}, map[string][]Destino{}
+	filas, err := s.pool.Query(ctx, `
+		SELECT t.document_id::text, coalesce(p.id, c.id)::text, coalesce(p.name, c.name), p.id IS NOT NULL
+		FROM technical_document_targets t
+		LEFT JOIN products p ON p.id = t.product_id
+		LEFT JOIN categories c ON c.id = t.category_id
+		ORDER BY 3`)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer filas.Close()
+	for filas.Next() {
+		var doc string
+		var d Destino
+		var esProducto bool
+		if err := filas.Scan(&doc, &d.ID, &d.Nombre, &esProducto); err != nil {
+			return nil, nil, err
+		}
+		if esProducto {
+			productos[doc] = append(productos[doc], d)
+		} else {
+			categorias[doc] = append(categorias[doc], d)
+		}
+	}
+	return productos, categorias, filas.Err()
+}
+
+// GuardarDestinos reemplaza a qué productos y categorías está atado el
+// documento: la ficha de cada uno lo muestra (migración 00095).
+func (s *Servicio) GuardarDestinos(ctx context.Context, ses *auth.Sesion, id string, productos, categorias []string) error {
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var titulo string
+		if err := tx.QueryRow(ctx, `SELECT titulo FROM technical_documents WHERE id = $1 FOR UPDATE`, id).Scan(&titulo); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM technical_document_targets WHERE document_id = $1`, id); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO technical_document_targets (document_id, product_id)
+			SELECT $1, p.id FROM products p WHERE p.id = ANY($2::uuid[])`, id, productos); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `
+			INSERT INTO technical_document_targets (document_id, category_id)
+			SELECT $1, c.id FROM categories c WHERE c.id = ANY($2::uuid[])`, id, categorias)
+		return err
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return plataforma.NuevoProblema(404, "Ese documento no existe.")
+	}
+	if err != nil {
+		return err
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "documento", id, "Cambió dónde se muestra un documento técnico", nil)
+	return nil
+}

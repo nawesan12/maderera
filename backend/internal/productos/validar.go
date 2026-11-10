@@ -33,6 +33,8 @@ type FormProducto struct {
 	AlicuotaIva           string         `json:"alicuotaIva"`
 	RecargoElaboracionPct string         `json:"recargoElaboracionPct"`
 	Imputacion            string         `json:"imputacion"`
+	Usos                  string         `json:"usos"`
+	Cuidados              string         `json:"cuidados"`
 	Featured              bool           `json:"featured"`
 	APedido               bool           `json:"aPedido"`
 	Active                bool           `json:"active"`
@@ -68,12 +70,14 @@ type FormVariante struct {
 type Producto struct {
 	ID, Name, Slug, CategoryID                    string
 	Subcategory, SubcategoryID, Brand, Imputacion *string
-	Description, Unit, FormaDeVenta, AlicuotaIva  string
-	PrecioMediaPct                                float64
-	RecargoElaboracionPct                         *float64
-	Featured, APedido, Active                     bool
-	Imagen                                        string
-	Variantes                                     []Variante
+	// Usos y Cuidados son la ficha pública (migración 00095).
+	Usos, Cuidados                               *string
+	Description, Unit, FormaDeVenta, AlicuotaIva string
+	PrecioMediaPct                               float64
+	RecargoElaboracionPct                        *float64
+	Featured, APedido, Active                    bool
+	Imagen                                       string
+	Variantes                                    []Variante
 }
 
 // Variante ya validada. Las medidas en mm pueden faltar; las cantidades,
@@ -222,8 +226,17 @@ func (v *validador) uuid(campo, s, mensaje string) {
 // urlValida: lo que aceptaba z.string().url(), pero solo http y https (zod
 // también deja pasar «javascript:…»; el mensaje ya pide https).
 func urlValida(s string) bool {
+	if strings.ContainsAny(s, " \t\n") {
+		return false
+	}
+	// Las fotos del propio sitio son rutas: desde la migración 00091 las de
+	// muestra viven en /fotos/ y las subidas en /subidas/. Sin esto, ningún
+	// producto con foto se podía volver a guardar desde el panel.
+	if strings.HasPrefix(s, "/") && !strings.HasPrefix(s, "//") {
+		return true
+	}
 	u, err := url.Parse(s)
-	return err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Host != "" && !strings.ContainsAny(s, " \t\n")
+	return err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Host != ""
 }
 
 // Validar es productoSchema.safeParse sobre lo que armaba parsearFormulario.
@@ -304,6 +317,8 @@ func Validar(f FormProducto) (Producto, *ErrorDeCampo) {
 		}
 	}
 	p.Imputacion = v.opcional("imputacion", f.Imputacion, 80)
+	p.Usos = v.opcional("usos", strings.TrimSpace(f.Usos), 3000)
+	p.Cuidados = v.opcional("cuidados", strings.TrimSpace(f.Cuidados), 3000)
 	// .trim().url().or(z.literal("")): el literal se compara sin recortar.
 	if f.Imagen != "" {
 		p.Imagen = strings.TrimSpace(f.Imagen)

@@ -406,6 +406,8 @@ components:
         alicuotaIva: { type: string }
         recargoElaboracionPct: { type: string }
         imputacion: { type: string }
+        usos: { type: string }
+        cuidados: { type: string }
         featured: { type: boolean }
         aPedido: { type: boolean }
         active: { type: boolean }
@@ -439,7 +441,8 @@ components:
     Ficha:
       type: object
       required: [id, slug, name, categoryId, subcategory, description, brand, unit, featured, active, createdAt, updatedAt,
-        alicuotaIva, aPedido, subcategoryId, recargoElaboracionPct, imputacion, formaDeVenta, precioMediaPct, imagen, galeria, variantes]
+        alicuotaIva, aPedido, subcategoryId, recargoElaboracionPct, imputacion, formaDeVenta, precioMediaPct, imagen, galeria, variantes,
+        usos, cuidados]
       properties:
         id: { type: string }
         slug: { type: string }
@@ -458,6 +461,8 @@ components:
         subcategoryId: { type: string, nullable: true }
         recargoElaboracionPct: { type: string, nullable: true }
         imputacion: { type: string, nullable: true }
+        usos: { type: string, nullable: true }
+        cuidados: { type: string, nullable: true }
         formaDeVenta: { type: string, enum: [entera, entera_o_media, metro_cuadrado] }
         precioMediaPct: { type: number, format: double }
         imagen: { type: string }

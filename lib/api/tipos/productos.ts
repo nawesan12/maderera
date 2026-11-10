@@ -322,6 +322,8 @@ export interface components {
             alicuotaIva?: string;
             recargoElaboracionPct?: string;
             imputacion?: string;
+            usos?: string;
+            cuidados?: string;
             featured?: boolean;
             aPedido?: boolean;
             active?: boolean;
@@ -368,6 +370,8 @@ export interface components {
             subcategoryId: string | null;
             recargoElaboracionPct: string | null;
             imputacion: string | null;
+            usos: string | null;
+            cuidados: string | null;
             /** @enum {string} */
             formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
             /** Format: double */

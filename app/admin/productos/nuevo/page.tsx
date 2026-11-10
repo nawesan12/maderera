@@ -44,6 +44,8 @@ export default async function NuevoProductoPage() {
           alicuotaIva: "21",
           recargoElaboracionPct: "",
           imputacion: "",
+          usos: "",
+          cuidados: "",
           featured: false,
           aPedido: false,
           active: true,

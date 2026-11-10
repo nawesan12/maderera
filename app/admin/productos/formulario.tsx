@@ -63,6 +63,9 @@ export interface ProductoForm {
   recargoElaboracionPct: string;
   /** A qué cuenta contable imputa. Texto libre. */
   imputacion: string;
+  /** Para qué sirve y cómo se cuida: van a la ficha pública. */
+  usos: string;
+  cuidados: string;
   featured: boolean;
   aPedido: boolean;
   active: boolean;
@@ -448,6 +451,17 @@ export function FormularioProducto({
               defaultValue={inicial.description}
               rows={3}
             />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="usos">Usos</Label>
+              <Textarea id="usos" name="usos" defaultValue={inicial.usos} rows={4} placeholder="Muebles de cocina, placares, revestimientos…" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cuidados">Cuidados</Label>
+              <Textarea id="cuidados" name="cuidados" defaultValue={inicial.cuidados} rows={4} placeholder="Limpiar con paño húmedo, sin solventes…" />
+            </div>
           </div>
 
           <input type="hidden" name="imagen" value={inicial.imagen} />

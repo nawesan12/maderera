@@ -4,8 +4,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ChevronRight,
+  FileText,
+  Lock,
   MessageCircle,
-  Ruler,
   Store,
   Truck,
 } from "lucide-react";
@@ -34,6 +35,9 @@ import {
 import { rutasDelCatalogo } from "@/lib/dal/sitemap";
 import { degradar } from "@/lib/degradar";
 import { hoyEnCurso } from "@/lib/reloj";
+import { markdownAHtml } from "@/lib/markdown";
+import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
+import type { ProductoDetalle, VarianteDetalle } from "@/lib/dal/catalog";
 
 /**
  * Unas pocas fichas se arman en el build; el resto, en la primera visita.
@@ -142,7 +146,7 @@ export default async function ProductoPage({
     producto.slug,
   );
 
-  const [whatsapp, numeroDelNegocio, resenas, resumenResenas, hoy, laTienda] =
+  const [whatsapp, numeroDelNegocio, resenas, resumenResenas, hoy, laTienda, placas] =
     await Promise.all([
       // Con el enlace a la ficha: quien atiende ve de qué producto se habla
       // sin preguntar, y WhatsApp lo muestra como tarjeta con la foto.
@@ -154,7 +158,12 @@ export default async function ProductoPage({
       resumenDeResenas(producto.id),
       hoyEnCurso(),
       tienda(),
+      degradar("las placas cortables", placasCortablesPublicas, []),
     ]);
+  // Las medidas de este producto que el aserradero corta: «Pedila cortada».
+  const cortables = placas
+    .filter((p) => producto.variantes.some((v) => v.id === p.variantId))
+    .map((p) => p.variantId);
 
   // Las medidas se arman de las variantes: si ninguna las tiene cargadas, la
   // ficha técnica no se muestra en lugar de quedar con guiones.
@@ -288,6 +297,7 @@ export default async function ProductoPage({
                 variantes={producto.variantes}
                 whatsapp={whatsapp}
                 numeroWhatsapp={numeroDelNegocio}
+                cortables={cortables}
                 alicuota={Number(producto.alicuotaIva) || 21}
                 aPedido={producto.aPedido}
                 formaDeVenta={producto.formaDeVenta}
@@ -341,65 +351,7 @@ export default async function ProductoPage({
           </div>
         </div>
 
-        {/* Ficha técnica */}
-        {conMedidas.length > 0 && (
-          <section className="mt-11">
-            <h2 className="mb-3.5 flex items-center gap-2 text-2xl font-bold tracking-[-0.025em]">
-              <Ruler className="h-5 w-5 text-acento-texto" />
-              Medidas disponibles
-            </h2>
-            {/* Cinco columnas no entran en un teléfono: la tabla scrollea sola
-                en su caja en vez de cortarse contra el borde de la pantalla. El
-                fondo sale del token y no de `bg-white`, que en tema oscuro
-                dejaba texto claro sobre blanco. Con tabIndex y nombre: sin eso,
-                con el teclado no se podía correr la tabla. */}
-            <div
-              tabIndex={0}
-              role="region"
-              aria-label="Medidas disponibles"
-              className="overflow-x-auto rounded-2xl border border-linea bg-card shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento-texto"
-            >
-              <table className="w-full min-w-[560px]">
-                <thead>
-                  <tr className="border-b bg-muted/40 text-left">
-                    <th className="px-5 py-3 text-sm font-semibold">Medida</th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold">
-                      Largo
-                    </th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold">
-                      Ancho
-                    </th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold">
-                      Espesor
-                    </th>
-                    <th className="px-5 py-3 text-sm font-semibold">Material</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {conMedidas.map((v) => (
-                    <tr key={v.id} className="border-b last:border-0">
-                      <td className="px-5 py-3 text-sm font-medium">
-                        {v.label}
-                      </td>
-                      <td className="tabular px-4 py-3 text-right text-sm text-muted-foreground">
-                        {v.largoMm ? `${v.largoMm} mm` : "—"}
-                      </td>
-                      <td className="tabular px-4 py-3 text-right text-sm text-muted-foreground">
-                        {v.anchoMm ? `${v.anchoMm} mm` : "—"}
-                      </td>
-                      <td className="tabular px-4 py-3 text-right text-sm text-muted-foreground">
-                        {v.espesorMm ? `${v.espesorMm} mm` : "—"}
-                      </td>
-                      <td className="px-5 py-3 text-sm text-muted-foreground">
-                        {v.material ?? v.color ?? "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
+        <FichaTecnica producto={producto} medidas={conMedidas} />
 
         <ResenasDelProducto resenas={resenas} resumen={resumenResenas} />
 
@@ -448,5 +400,133 @@ export default async function ProductoPage({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * La ficha técnica: la tabla de medidas con solo las columnas que tienen algo,
+ * y al lado para qué sirve, cómo se cuida y los documentos.
+ */
+function FichaTecnica({
+  producto,
+  medidas,
+}: {
+  producto: ProductoDetalle;
+  medidas: VarianteDetalle[];
+}) {
+  const columnas = (
+    [
+      ["Largo", (v) => (v.largoMm ? `${v.largoMm} mm` : null), true],
+      ["Ancho", (v) => (v.anchoMm ? `${v.anchoMm} mm` : null), true],
+      ["Espesor", (v) => (v.espesorMm ? `${v.espesorMm} mm` : null), true],
+      ["Material", (v) => v.material, false],
+      ["Color", (v) => v.color, false],
+      ["Terminación", (v) => v.terminacion, false],
+      ["Calidad", (v) => v.calidad, false],
+    ] as [string, (v: VarianteDetalle) => string | number | null, boolean][]
+  ).filter(([, valor]) => medidas.some((v) => valor(v)));
+
+  const textos = [
+    ["Usos", producto.usos],
+    ["Cuidados", producto.cuidados],
+  ].filter((t): t is [string, string] => Boolean(t[1]));
+  const hayLado = textos.length > 0 || producto.documentos.length > 0 || producto.documentosReservados > 0;
+
+  if (medidas.length === 0 && !hayLado) return null;
+
+  return (
+    <section className={`mt-11 grid gap-8 ${hayLado && medidas.length > 0 ? "lg:grid-cols-[1.4fr_1fr]" : ""}`}>
+      {medidas.length > 0 && (
+        <div>
+          <h2 className="mb-3.5 text-2xl font-bold tracking-[-0.025em]">Ficha técnica</h2>
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Ficha técnica"
+            className="overflow-x-auto rounded-2xl border border-linea bg-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento-texto"
+          >
+            <table className="w-full min-w-[420px] text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40 text-left">
+                  <th className="px-5 py-3 font-semibold">Medida</th>
+                  {columnas.map(([nombre, , numero]) => (
+                    <th key={nombre} className={`px-4 py-3 font-semibold ${numero ? "text-right" : ""}`}>
+                      {nombre}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {medidas.map((v) => (
+                  <tr key={v.id} className="border-b last:border-0">
+                    <td className="px-5 py-3 font-medium">{v.label}</td>
+                    {columnas.map(([nombre, valor, numero]) => (
+                      <td
+                        key={nombre}
+                        className={`px-4 py-3 text-muted-foreground ${numero ? "tabular text-right" : ""}`}
+                      >
+                        {valor(v) ?? "—"}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {hayLado && (
+        <div className="space-y-7">
+          {textos.map(([titulo, texto]) => (
+            <div key={titulo}>
+              <h2 className="mb-2 text-xl font-bold tracking-[-0.02em]">{titulo}</h2>
+              <div
+                className="nota-cuerpo text-base leading-relaxed text-texto-2"
+                // markdownAHtml escapa todo antes de dar formato.
+                dangerouslySetInnerHTML={{ __html: markdownAHtml(texto) }}
+              />
+            </div>
+          ))}
+
+          {(producto.documentos.length > 0 || producto.documentosReservados > 0) && (
+            <div>
+              <h2 className="mb-2 text-xl font-bold tracking-[-0.02em]">Documentación</h2>
+              <ul className="divide-y divide-linea-tenue rounded-xl border border-linea bg-card">
+                {producto.documentos.map((d) => (
+                  <li key={d.id}>
+                    <a
+                      href={d.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-sitio-alt"
+                    >
+                      <FileText className="h-5 w-5 shrink-0 text-acento-texto" />
+                      <span className="min-w-0 flex-1 font-medium">{d.titulo}</span>
+                      <span className="text-sm uppercase text-texto-3">{d.formato}</span>
+                    </a>
+                  </li>
+                ))}
+                {producto.documentosReservados > 0 && (
+                  <li>
+                    <Link
+                      href="/profesionales"
+                      className="flex items-center gap-3 px-4 py-3 text-texto-2 transition-colors hover:bg-sitio-alt"
+                    >
+                      <Lock className="h-5 w-5 shrink-0" />
+                      <span className="flex-1">
+                        {producto.documentosReservados === 1
+                          ? "1 documento para profesionales"
+                          : `${producto.documentosReservados} documentos para profesionales`}
+                      </span>
+                    </Link>
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

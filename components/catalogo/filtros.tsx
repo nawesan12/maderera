@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { Fragment, useEffect, useState, useTransition } from "react";
 import { Search, SlidersHorizontal, Tag, X } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
@@ -215,7 +215,8 @@ export function PanelCategorias({
           </button>
         </li>
         {categorias.map((cat) => (
-          <li key={cat.slug}>
+          <Fragment key={cat.slug}>
+          <li>
             <button
               // Cambiar de categoría limpia el rubro: los rubros son de adentro
               // de una categoría, y arrastrar "Tornillos" a Placas dejaría la
@@ -239,6 +240,18 @@ export function PanelCategorias({
               </span>
             </button>
           </li>
+          {/* La línea propia, al lado de Molduras (notas del 9/11/2026). */}
+          {cat.slug === "molduras" && (
+            <li>
+              <Link
+                href="/moldava"
+                className="flex w-full items-center rounded-lg px-3 py-2.5 text-sm text-texto-2 transition-colors hover:bg-card"
+              >
+                Moldava
+              </Link>
+            </li>
+          )}
+          </Fragment>
         ))}
       </ul>
 

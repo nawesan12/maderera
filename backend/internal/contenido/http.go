@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -67,17 +68,20 @@ func (o respuesta) VisitMisResenablesResponse(w http.ResponseWriter) error      
 func (o respuesta) VisitDejarResenaResponse(w http.ResponseWriter) error        { return o.escribir(w) }
 func (o respuesta) VisitAdminAjustesResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o respuesta) VisitGuardarAjusteResponse(w http.ResponseWriter) error      { return o.escribir(w) }
-func (o respuesta) VisitAdminResenasResponse(w http.ResponseWriter) error       { return o.escribir(w) }
-func (o respuesta) VisitModerarResenaResponse(w http.ResponseWriter) error      { return o.escribir(w) }
-func (o respuesta) VisitAdminBannersResponse(w http.ResponseWriter) error       { return o.escribir(w) }
-func (o respuesta) VisitCrearBannerResponse(w http.ResponseWriter) error        { return o.escribir(w) }
-func (o respuesta) VisitEditarBannerResponse(w http.ResponseWriter) error       { return o.escribir(w) }
-func (o respuesta) VisitBorrarBannerResponse(w http.ResponseWriter) error       { return o.escribir(w) }
-func (o respuesta) VisitAdminPromosResponse(w http.ResponseWriter) error        { return o.escribir(w) }
-func (o respuesta) VisitCrearPromoResponse(w http.ResponseWriter) error         { return o.escribir(w) }
-func (o respuesta) VisitEditarPromoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
-func (o respuesta) VisitBorrarPromoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
-func (o respuesta) VisitAdminDocumentosResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitDestinosDeDocumentoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitAdminResenasResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitModerarResenaResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+func (o respuesta) VisitAdminBannersResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitCrearBannerResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitEditarBannerResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitBorrarBannerResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitAdminPromosResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitCrearPromoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
+func (o respuesta) VisitEditarPromoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitBorrarPromoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitAdminDocumentosResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCategoriasDeDocumentosResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -568,10 +572,46 @@ func (a *API) AdminDocumentos(ctx context.Context, _ contenidoapi.AdminDocumento
 		return nil, err
 	}
 	v, err := a.s.q.DocumentosDelPanel(ctx)
+	if err != nil {
+		return nil, err
+	}
+	productos, categorias, err := a.s.DestinosDeDocumentos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	type conDestinos struct {
+		sqlc.DocumentosDelPanelRow
+		Productos  []Destino `json:"productos"`
+		Categorias []Destino `json:"categorias"`
+	}
+	out := make([]conDestinos, len(v))
 	for i := range v {
 		v[i].Url = URLDelDocumento(v[i].ID)
+		out[i] = conDestinos{v[i], nonil(productos[v[i].ID]), nonil(categorias[v[i].ID])}
 	}
-	return ok(v), err
+	return ok(out), nil
+}
+
+func nonil(d []Destino) []Destino {
+	if d == nil {
+		return []Destino{}
+	}
+	return d
+}
+
+func (a *API) DestinosDeDocumento(ctx context.Context, r contenidoapi.DestinosDeDocumentoRequestObject) (contenidoapi.DestinosDeDocumentoResponseObject, error) {
+	ses, err := panelDocumentos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids := func(u []openapi_types.UUID) []string {
+		out := make([]string, len(u))
+		for i := range u {
+			out[i] = u[i].String()
+		}
+		return out
+	}
+	return listo(), a.s.GuardarDestinos(ctx, ses, r.Id.String(), ids(r.Body.Productos), ids(r.Body.Categorias))
 }
 
 // Rutas son las que no van por el contrato: el archivo de un documento

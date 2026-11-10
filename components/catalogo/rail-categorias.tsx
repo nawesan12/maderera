@@ -31,9 +31,13 @@ export function RailDeCategorias({
   /** Slug de la categoría actual, o "todos". */
   activa: string;
 }) {
-  const todas = [
+  // Moldava, la línea propia, va al lado de Molduras como un rubro más
+  // (notas del 9/11/2026), aunque es una marca y lleva a su página.
+  const todas: (CategoriaDelRail & { href?: string })[] = [
     { slug: "todos", name: "Todo el catálogo", productCount: 0 },
-    ...categorias,
+    ...categorias.flatMap((c) =>
+      c.slug === "molduras" ? [c, { slug: "moldava", name: "Moldava", productCount: 0, href: "/moldava" }] : [c],
+    ),
   ];
 
   return (
@@ -49,9 +53,8 @@ export function RailDeCategorias({
             <li key={categoria.slug} className="snap-start">
               <Link
                 href={
-                  categoria.slug === "todos"
-                    ? "/catalogo"
-                    : `/catalogo?cat=${categoria.slug}`
+                  categoria.href ??
+                  (categoria.slug === "todos" ? "/catalogo" : `/catalogo?cat=${categoria.slug}`)
                 }
                 aria-current={esActiva ? "page" : undefined}
                 className={`inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 text-[14.5px] font-medium transition-colors ${

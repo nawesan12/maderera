@@ -191,6 +191,8 @@ export default async function EditarProductoPage({
             ? String(Number(producto.recargoElaboracionPct))
             : "",
           imputacion: producto.imputacion ?? "",
+          usos: producto.usos ?? "",
+          cuidados: producto.cuidados ?? "",
           featured: producto.featured,
           aPedido: producto.aPedido,
           active: producto.active,

@@ -544,6 +544,26 @@ paths:
       responses:
         "204": { description: Hecho }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/documentos/{id}/destinos:
+    put:
+      operationId: DestinosDeDocumento
+      description: A qué productos y categorías se ata el documento; reemplaza los anteriores.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productos, categorias]
+              additionalProperties: false
+              properties:
+                productos: { type: array, maxItems: 200, items: { type: string, format: uuid } }
+                categorias: { type: array, maxItems: 50, items: { type: string, format: uuid } }
+      responses:
+        "204": { description: Hecho }
+        "404": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/documentos/{id}/activo:
     post:
       operationId: ActivarDocumento
@@ -794,8 +814,10 @@ components:
         imagenes: { type: array, items: { type: string } }
     DocumentoDelPanel:
       type: object
-      required: [id, titulo, descripcion, categoria, url, formato, tamanoBytes, soloProfesionales, activo, createdAt]
+      required: [id, titulo, descripcion, categoria, url, formato, tamanoBytes, soloProfesionales, activo, createdAt, productos, categorias]
       properties:
+        productos: { type: array, items: { $ref: "#/components/schemas/Destino" } }
+        categorias: { type: array, items: { $ref: "#/components/schemas/Destino" } }
         id: { type: string }
         titulo: { type: string }
         descripcion: { type: string, nullable: true }
@@ -806,6 +828,12 @@ components:
         soloProfesionales: { type: boolean }
         activo: { type: boolean }
         createdAt: { type: string, format: date-time }
+    Destino:
+      type: object
+      required: [id, nombre]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
     FormBanner:
       type: object
       required: [ubicacion, titulo]

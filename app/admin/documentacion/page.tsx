@@ -8,6 +8,8 @@ import {
 } from "@/lib/dal/admin/documentacion";
 import { SubirDocumento } from "./subir";
 import { AccionesDocumento, RestaurarDocumento } from "./acciones";
+import { DestinosDocumento } from "./destinos";
+import { listarCategorias } from "@/lib/dal/catalog";
 
 export const metadata: Metadata = { title: "Documentación técnica" };
 
@@ -25,10 +27,12 @@ function peso(bytes: number | null): string {
  * como parte del acceso profesional.
  */
 export default async function DocumentacionAdminPage() {
-  const [documentos, categorias] = await Promise.all([
+  const [documentos, categorias, delCatalogo] = await Promise.all([
     listarDocumentos(),
     categoriasDeDocumentos(),
+    listarCategorias(),
   ]);
+  const todasLasCategorias = delCatalogo.map((c) => ({ id: c.id, nombre: c.name }));
 
   const activos = documentos.filter((d) => d.activo);
   const reservados = activos.filter((d) => d.soloProfesionales);
@@ -64,6 +68,7 @@ export default async function DocumentacionAdminPage() {
               icono={Lock}
               documentos={reservados}
               peso={peso}
+              todasLasCategorias={todasLasCategorias}
             />
           )}
           {publicos.length > 0 && (
@@ -73,6 +78,7 @@ export default async function DocumentacionAdminPage() {
               icono={Unlock}
               documentos={publicos}
               peso={peso}
+              todasLasCategorias={todasLasCategorias}
             />
           )}
         </>
@@ -120,12 +126,14 @@ function Grupo({
   icono: Icono,
   documentos,
   peso,
+  todasLasCategorias,
 }: {
   titulo: string;
   detalle: string;
   icono: React.ComponentType<{ className?: string }>;
   documentos: Awaited<ReturnType<typeof listarDocumentos>>;
   peso: (bytes: number | null) => string;
+  todasLasCategorias: { id: string; nombre: string }[];
 }) {
   return (
     <section className="tarjeta">
@@ -164,6 +172,13 @@ function Grupo({
               </p>
             </div>
 
+            <DestinosDocumento
+              id={doc.id}
+              titulo={doc.titulo}
+              productos={doc.productos}
+              categorias={doc.categorias}
+              todasLasCategorias={todasLasCategorias}
+            />
             <AccionesDocumento
               id={doc.id}
               titulo={doc.titulo}

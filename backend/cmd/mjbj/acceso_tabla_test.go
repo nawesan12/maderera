@@ -145,6 +145,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"CategoriasDeDocumentos":         "/admin/documentacion",          // GET /api/v1/admin/documentos/categorias
 	"ActivarDocumento":               "/admin/documentacion",          // POST /api/v1/admin/documentos/{id}/activo
 	"VisibilidadDocumento":           "/admin/documentacion",          // POST /api/v1/admin/documentos/{id}/visibilidad
+	"DestinosDeDocumento":            "/admin/documentacion",          // PUT /api/v1/admin/documentos/{id}/destinos
 	"AdminDocumentos":                "/admin/documentacion",          // GET /api/v1/admin/documentos
 	"SubirDocumento":                 "/admin/documentacion",          // POST /api/v1/admin/documentos
 	"ZonasDeEnvioDelPanel":           "/admin/envios",                 // GET /api/v1/admin/envios

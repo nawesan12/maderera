@@ -538,6 +538,24 @@ type ProductoDetalle struct {
 	CategoryName    string            `json:"categoryName"`
 	Imagenes        []string          `json:"imagenes"`
 	Variantes       []VarianteDetalle `json:"variantes"`
+	Usos            *string           `json:"usos"`
+	Cuidados        *string           `json:"cuidados"`
+	// Documentos son los técnicos atados al producto o a su categoría
+	// (migración 00095). **Solo los públicos**: la ficha se guarda en la
+	// caché compartida de Next, y un documento reservado ahí quedaría a la
+	// vista de cualquiera. De los reservados va la cantidad.
+	Documentos           []DocumentoDeFicha `json:"documentos"`
+	DocumentosReservados int                `json:"documentosReservados"`
+}
+
+// DocumentoDeFicha es un documento técnico en la ficha del producto.
+type DocumentoDeFicha struct {
+	ID          string  `json:"id"`
+	Titulo      string  `json:"titulo"`
+	Descripcion *string `json:"descripcion"`
+	URL         string  `json:"url"`
+	Formato     string  `json:"formato"`
+	TamanoBytes *int32  `json:"tamanoBytes"`
 }
 
 // ErrNoExiste es un producto que no está o está dado de baja.
@@ -548,17 +566,19 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 	l := lista.paraConsulta()
 	var p ProductoDetalle
 	var media jsmath.Num
+	var categoriaID string
 	err := s.pool.QueryRow(ctx, `
 		SELECT p.id, p.slug, p.name, p.description, p.subcategory, p.brand, p.unit::text,
 		       p.alicuota_iva::text, p.a_pedido, p.forma_de_venta::text, p.precio_media_pct,
-		       p.featured, c.slug, c.name, s.slug, s.name
+		       p.featured, c.slug, c.name, s.slug, s.name,
+		       nullif(btrim(p.usos), ''), nullif(btrim(p.cuidados), ''), p.category_id::text
 		FROM products p
 		JOIN categories c ON c.id = p.category_id
 		LEFT JOIN subcategories s ON s.id = p.subcategory_id
 		WHERE p.slug = $1 AND p.active
 		LIMIT 1`, slug).Scan(&p.ID, &p.Slug, &p.Name, &p.Description, &p.Subcategory, &p.Brand, &p.Unit,
 		&p.AlicuotaIva, &p.APedido, &p.FormaDeVenta, &media, &p.Featured,
-		&p.CategorySlug, &p.CategoryName, &p.SubcategorySlug, &p.SubcategoryName)
+		&p.CategorySlug, &p.CategoryName, &p.SubcategorySlug, &p.SubcategoryName, &p.Usos, &p.Cuidados, &categoriaID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoExiste
 	}
@@ -566,6 +586,9 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 		return nil, err
 	}
 	p.PrecioMediaPct = float64(media)
+	if err := s.documentosDeFicha(ctx, &p, categoriaID); err != nil {
+		return nil, err
+	}
 	p.Imagenes = []string{}
 	img, err := s.pool.Query(ctx, `SELECT url FROM product_images WHERE product_id = $1 ORDER BY sort_order`, p.ID)
 	if err != nil {
@@ -672,4 +695,39 @@ func quitarTildes(s string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+// documentosDeFicha trae los documentos públicos del producto y de su
+// categoría, sin repetir y en el orden de la biblioteca, y cuenta los
+// reservados a profesionales.
+func (s *Servicio) documentosDeFicha(ctx context.Context, p *ProductoDetalle, categoriaID string) error {
+	p.Documentos = []DocumentoDeFicha{}
+	filas, err := s.pool.Query(ctx, `
+		SELECT d.id::text, d.titulo, d.descripcion, d.url, d.formato, d.tamano_bytes, d.solo_profesionales
+		FROM technical_documents d
+		WHERE d.activo AND EXISTS (
+			SELECT 1 FROM technical_document_targets t
+			WHERE t.document_id = d.id AND (t.product_id = $1 OR t.category_id = $2::uuid))
+		ORDER BY d.orden, d.titulo`, p.ID, categoriaID)
+	if err != nil {
+		return err
+	}
+	defer filas.Close()
+	for filas.Next() {
+		var d DocumentoDeFicha
+		var reservado bool
+		var guardado string
+		if err := filas.Scan(&d.ID, &d.Titulo, &d.Descripcion, &guardado, &d.Formato, &d.TamanoBytes, &reservado); err != nil {
+			return err
+		}
+		// La de siempre de la biblioteca (contenido.URLDelDocumento): el
+		// archivo se sirve por la API, que decide quién lo puede bajar.
+		d.URL = "/api/v1/contenido/documentos/" + d.ID + "/archivo"
+		if reservado {
+			p.DocumentosReservados++
+			continue
+		}
+		p.Documentos = append(p.Documentos, d)
+	}
+	return filas.Err()
 }

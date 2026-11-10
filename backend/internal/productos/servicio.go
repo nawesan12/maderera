@@ -139,6 +139,8 @@ type Ficha struct {
 	SubcategoryID         *string           `json:"subcategoryId"`
 	RecargoElaboracionPct *string           `json:"recargoElaboracionPct"`
 	Imputacion            *string           `json:"imputacion"`
+	Usos                  *string           `json:"usos"`
+	Cuidados              *string           `json:"cuidados"`
 	FormaDeVenta          string            `json:"formaDeVenta"`
 	PrecioMediaPct        float64           `json:"precioMediaPct"`
 	Imagen                string            `json:"imagen"`
@@ -235,6 +237,9 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 	if p.RecargoElaboracionPct != nil {
 		t := strconv.FormatFloat(float64(*p.RecargoElaboracionPct), 'f', 2, 64)
 		f.RecargoElaboracionPct = &t
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT usos, cuidados FROM products WHERE id = $1`, id).Scan(&f.Usos, &f.Cuidados); err != nil {
+		return nil, err
 	}
 	imgs, err := s.q.ImagenesDelProducto(ctx, id)
 	if err != nil {
@@ -424,6 +429,11 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 			}
 		}
 		if err != nil {
+			return err
+		}
+		// Fuera de sqlc a propósito: son dos columnas de texto que solo
+		// escribe esta pantalla (migración 00095).
+		if _, err := tx.Exec(ctx, `UPDATE products SET usos = $2, cuidados = $3 WHERE id = $1`, id, p.Usos, p.Cuidados); err != nil {
 			return err
 		}
 		existentes, err := q.IDsDeVariantes(ctx, id)

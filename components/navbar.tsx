@@ -33,17 +33,31 @@ import { useTienda } from "@/lib/tienda-context";
 import { useEstado } from "@/lib/estado-context";
 import { primerNombre, telefonoParaMarcar } from "@/lib/formato";
 
-const productLinks = [
+const productLinks: {
+  name: string;
+  slug: string;
+  icon: typeof Home;
+  desc: string;
+  /** Para lo que no es una categoría del catálogo: Moldava. */
+  href?: string;
+  /** De qué rubro toma la foto. */
+  imagenDe?: string;
+  propia?: boolean;
+}[] = [
   { name: "Techos", slug: "techos", icon: Home, desc: "Tirantes, machimbres, aislantes" },
   { name: "Placas", slug: "placas", icon: Layers, desc: "Melaminas, MDF, fenólicos" },
   { name: "Pisos", slug: "pisos", icon: Grid3X3, desc: "Melamínicos Decno Flooring" },
+  { name: "Molduras", slug: "molduras", icon: Minus, desc: "Finger Joint y otras marcas" },
   {
-    name: "Molduras",
-    slug: "molduras",
+    // La línea propia, como un rubro más (notas del 9/11/2026). No es una
+    // categoría de la base sino una marca: lleva a su página, con la foto de
+    // las molduras.
+    name: "Moldava",
+    slug: "moldava",
+    href: "/moldava",
+    imagenDe: "molduras",
     icon: Minus,
-    desc: "Finger Joint, fabricadas acá",
-    // La única línea que sale del aserradero propio. La clienta pidió que
-    // Moldava se note; acá se nota sin ocupar un renglón más.
+    desc: "Molduras de fabricación propia",
     propia: true,
   },
   { name: "Ferretería", slug: "ferreteria", icon: Wrench, desc: "Herrajes y accesorios" },
@@ -302,16 +316,23 @@ export function Navbar({
                 <div className="absolute left-0 top-full z-[60] mt-2 flex w-[760px] max-w-[calc(100vw-2rem)] animate-in overflow-hidden rounded-2xl border border-linea-suave bg-popover shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.4)] duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none">
                   {/* Lo que se vende */}
                   <div className="min-w-0 flex-1 p-3">
-                    <p className="px-3 pb-2 pt-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-texto-3">
-                      Rubros
-                    </p>
+                    <div className="flex items-center justify-between px-3 pb-2 pt-1">
+                      <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-texto-3">Rubros</p>
+                      <Link
+                        href="/catalogo"
+                        className="group/todo inline-flex items-center gap-1 text-[12.5px] font-semibold text-acento-texto hover:underline"
+                      >
+                        Ver todo el catálogo
+                        <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover/todo:translate-x-0.5" />
+                      </Link>
+                    </div>
                     <div className="entra-en-orden grid grid-cols-3 gap-2">
                       {productLinks.map((link, i) => {
-                        const rubro = rubros[link.slug];
+                        const rubro = rubros[link.imagenDe ?? link.slug];
                         return (
                           <Link
                             key={link.slug}
-                            href={`/catalogo?cat=${link.slug}`}
+                            href={link.href ?? `/catalogo?cat=${link.slug}`}
                             style={{ "--i": i } as React.CSSProperties}
                             className="group/item relative flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-xl bg-oscuro-marca text-white"
                           >
@@ -339,9 +360,9 @@ export function Navbar({
                                 </span>
                                 {/* La línea propia, dicha una sola vez y donde
                                     corresponde. */}
-                                {"propia" in link && link.propia && (
+                                {link.propia && (
                                   <span className="rounded-full bg-naranja-claro px-1.5 py-px text-[9.5px] font-bold uppercase tracking-[0.06em] text-acento-sobre-claro">
-                                    Moldava
+                                    Propia
                                   </span>
                                 )}
                               </span>
@@ -373,19 +394,6 @@ export function Navbar({
                         );
                       })}
 
-                      {/* La novena celda cierra la grilla. Ocho rubros en tres
-                          columnas dejaban un hueco, y este enlace estaba al pie
-                          ocupando una fila entera para él solo. */}
-                      <Link
-                        href="/catalogo"
-                        style={{ "--i": productLinks.length } as React.CSSProperties}
-                        className="group/todo flex aspect-[4/3] flex-col justify-end gap-0.5 rounded-xl border border-transparent bg-naranja-claro p-2.5 text-acento-sobre-claro transition-colors hover:border-accion"
-                      >
-                        <span className="text-balance text-[11.5px] font-extrabold uppercase leading-tight tracking-[0.04em]">
-                          Ver todo el catálogo
-                        </span>
-                        <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover/todo:translate-x-1" />
-                      </Link>
                     </div>
                   </div>
 
@@ -580,11 +588,11 @@ export function Navbar({
                       tarjeta: una grilla de tarjetas en 320 px deja los nombres
                       ilegibles, y acá lo que se busca es leer rápido. */}
                   {productLinks.map((link) => {
-                    const rubro = rubros[link.slug];
+                    const rubro = rubros[link.imagenDe ?? link.slug];
                     return (
                       <Link
                         key={link.slug}
-                        href={`/catalogo?cat=${link.slug}`}
+                        href={link.href ?? `/catalogo?cat=${link.slug}`}
                         onClick={() => setMobileMenuOpen(false)}
                         className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-sitio-alt"
                       >

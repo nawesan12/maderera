@@ -343,7 +343,7 @@ components:
         disponibles: { type: number, format: double }
     ProductoDetalle:
       type: object
-      required: [id, slug, name, description, subcategory, subcategorySlug, subcategoryName, brand, unit, alicuotaIva, aPedido, formaDeVenta, precioMediaPct, featured, categorySlug, categoryName, imagenes, variantes]
+      required: [id, slug, name, description, subcategory, subcategorySlug, subcategoryName, brand, unit, alicuotaIva, aPedido, formaDeVenta, precioMediaPct, featured, categorySlug, categoryName, imagenes, variantes, usos, cuidados, documentos, documentosReservados]
       properties:
         id: { type: string }
         slug: { type: string }
@@ -363,6 +363,20 @@ components:
         categoryName: { type: string }
         imagenes: { type: array, items: { type: string } }
         variantes: { type: array, items: { $ref: "#/components/schemas/VarianteDetalle" } }
+        usos: { type: string, nullable: true }
+        cuidados: { type: string, nullable: true }
+        documentos: { type: array, items: { $ref: "#/components/schemas/DocumentoDeFicha" } }
+        documentosReservados: { type: integer }
+    DocumentoDeFicha:
+      type: object
+      required: [id, titulo, descripcion, url, formato, tamanoBytes]
+      properties:
+        id: { type: string }
+        titulo: { type: string }
+        descripcion: { type: string, nullable: true }
+        url: { type: string }
+        formato: { type: string }
+        tamanoBytes: { type: integer, nullable: true }
     Sugeridos:
       type: object
       required: [complementarios, similares, similaresPorCategoria]

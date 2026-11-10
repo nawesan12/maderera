@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { ETIQUETAS } from "@/lib/cache-publico";
 import { api, comoFormulario, mensajeDe, soloCampos, type Problema } from "@/lib/api/servidor";
 
 /*
@@ -61,4 +62,31 @@ export async function borrarDocumento(_previo: EstadoDocumento, formData: FormDa
 
 export async function restaurarDocumento(_previo: EstadoDocumento, formData: FormData): Promise<EstadoDocumento> {
   return activar(formData, true, "El documento vuelve a estar en línea.");
+}
+
+/**
+ * A qué productos y categorías se ata un documento: la ficha de cada uno lo
+ * muestra. La ficha sale de la caché del catálogo, así que se invalida.
+ */
+export async function guardarDestinos(
+  id: string,
+  productos: string[],
+  categorias: string[],
+): Promise<EstadoDocumento> {
+  const r = await (await api()).PUT("/api/v1/admin/documentos/{id}/destinos", {
+    params: { path: { id } },
+    body: { productos, categorias },
+  });
+  if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo guardar.") };
+  refrescar();
+  updateTag(ETIQUETAS.catalogo);
+  return { ok: "Guardado." };
+}
+
+/** Productos por nombre, para atarles un documento. */
+export async function buscarProductosParaDocumento(consulta: string): Promise<{ id: string; nombre: string }[]> {
+  const q = consulta.trim().slice(0, 80);
+  if (q.length < 2) return [];
+  const r = await (await api()).GET("/api/v1/admin/productos", { params: { query: { busqueda: q } } });
+  return (r.data ?? []).slice(0, 12).map((p) => ({ id: p.id, nombre: p.name }));
 }

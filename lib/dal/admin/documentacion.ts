@@ -19,6 +19,9 @@ export interface DocumentoAdmin {
   soloProfesionales: boolean;
   activo: boolean;
   createdAt: Date;
+  /** Dónde se muestra: la ficha de estos productos y de estas categorías. */
+  productos: { id: string; nombre: string }[];
+  categorias: { id: string; nombre: string }[];
 }
 
 /** Todos, primero los activos, por categoría y título. */

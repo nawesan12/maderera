@@ -220,9 +220,32 @@ function Categorias({
           </Link>
         </div>
 
-        {/* Grilla pareja: con ocho categorías, hacer dos más grandes dejaba un
-            hueco al final de la última fila. */}
+        {/* Moldava, la línea propia, abre la grilla en grande (notas del
+            9/11/2026): ocupa cuatro celdas y con las ocho categorías completa
+            tres filas justas. */}
         <div className="mt-7 grid auto-rows-[184px] grid-cols-2 gap-4 lg:grid-cols-4">
+          <Link
+            href="/moldava"
+            className="group relative col-span-2 row-span-2 overflow-hidden rounded-[14px] bg-oscuro-marca"
+          >
+            {categorias.find((c) => c.slug === "molduras")?.image && (
+              <Image
+                src={categorias.find((c) => c.slug === "molduras")!.image!}
+                alt=""
+                fill
+                className="object-cover opacity-80 transition-transform duration-500 group-hover:scale-105"
+                sizes="(max-width: 1024px) 100vw, 50vw"
+              />
+            )}
+            <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(28_25_22_/_0.92)_0%,rgb(28_25_22_/_0.35)_60%,transparent_100%)]" />
+            <div className="absolute inset-x-6 bottom-6">
+              <span className="rounded-full bg-accion px-3 py-1 text-[12px] font-bold uppercase tracking-[0.08em] text-white">
+                Línea propia
+              </span>
+              <h3 className="mt-3 text-[40px] font-bold leading-none tracking-[-0.03em] text-white">Moldava</h3>
+              <p className="mt-2 text-[15px] text-white/75">Molduras y listonería en pino finger joint</p>
+            </div>
+          </Link>
           {categorias.map((cat) => (
             <Link
               key={cat.slug}

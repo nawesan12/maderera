@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowLeft,
   BellOff,
+  Bot,
   Check,
   CheckCheck,
   CheckCircle2,
@@ -36,6 +37,7 @@ import {
   type EstadoWhatsapp,
 } from "./actions";
 import { etiquetaDia, horaMensaje, jidCorto } from "./formato-wa";
+import { devolverAlBot } from "./configuracion/acciones";
 import { CompositorPlantilla } from "./compositor-plantilla";
 import { ElegirDocumento } from "./elegir-documento";
 import type { Persona } from "./bandeja";
@@ -195,6 +197,8 @@ export function Hilo({
         />
         <FormularioEstado conversacionId={detalle.id} estado={detalle.estado} />
       </header>
+
+      {detalle.botEstado === "derivada" && <AvisoDerivada conversacionId={detalle.id} />}
 
       {detalle.bajaAt && (
         <p className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2 text-sm text-muted-foreground">
@@ -539,6 +543,12 @@ function Procedencia({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
       </span>,
     );
   else if (mensaje.origen === "sistema") partes.push("Respuesta automática");
+  else if (mensaje.origen === "bot")
+    partes.push(
+      <span key="bot" className="inline-flex items-center gap-1">
+        <Bot className="h-3.5 w-3.5" /> Bot
+      </span>,
+    );
   else if (mensaje.enviadoPor) partes.push(mensaje.enviadoPor);
   if (mensaje.plantilla) partes.push("mensaje preparado");
   // Lo del teléfono no se cobra; lo de la API sí: que se vea en la burbuja.
@@ -863,5 +873,31 @@ function SimuladorEntrante({ conversacionId }: { conversacionId: string }) {
         Simular
       </button>
     </form>
+  );
+}
+
+/** El bot la pasó a una persona y no contesta más acá hasta que se la devuelvan. */
+function AvisoDerivada({ conversacionId }: { conversacionId: string }) {
+  const router = useRouter();
+  const [pendiente, empezar] = useTransition();
+  return (
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-naranja-claro/60 px-4 py-2 text-sm font-medium text-acento-sobre-claro">
+      <UserRound className="h-4 w-4 shrink-0" />
+      El bot la pasó a una persona
+      <button
+        type="button"
+        disabled={pendiente}
+        onClick={() =>
+          empezar(async () => {
+            await devolverAlBot(conversacionId);
+            router.refresh();
+          })
+        }
+        className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-full border bg-card px-3 text-sm font-semibold text-foreground"
+      >
+        <Bot className="h-4 w-4" />
+        Devolver al bot
+      </button>
+    </p>
   );
 }

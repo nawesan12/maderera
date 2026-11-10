@@ -165,6 +165,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/whatsapp/conversaciones/{id}/bot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Le devuelve al bot una conversación que había derivado a una persona. */
+        post: operations["DevolverAlBot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/whatsapp/conversaciones/{id}/estado": {
         parameters: {
             query?: never;
@@ -661,6 +678,11 @@ export interface components {
             bajaDetalle: string | null;
             /** Format: date-time */
             resueltaAt: string | null;
+            /**
+             * @description «derivada»: el bot la pasó a una persona y no contesta
+             * @enum {string}
+             */
+            botEstado: "activo" | "derivada";
             clienteNombre: string | null;
             clienteTipo: string | null;
             clienteTelefono: string | null;
@@ -1117,6 +1139,20 @@ export interface operations {
                 };
             };
         };
+        responses: {
+            200: components["responses"]["Resultado"];
+        };
+    };
+    DevolverAlBot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: components["responses"]["Resultado"];
         };

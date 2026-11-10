@@ -11,6 +11,8 @@ import { urlBase } from "@/lib/pagos/config";
 import { fechaCorta, fechaHora } from "@/lib/formato";
 import { CATEGORIAS_COBRO, dolares, NOMBRE_CATEGORIA, tarifaLegible } from "@/lib/whatsapp/costos";
 import { FilaAviso } from "./aviso";
+import { ConfiguracionDelBot } from "./bot";
+import { ajuste } from "@/lib/dal/contenido";
 import { BotonAccion, FormularioTope, MensajeDePrueba } from "./controles";
 
 export const metadata: Metadata = { title: "WhatsApp · Configuración" };
@@ -38,6 +40,7 @@ export default async function ConfiguracionWhatsappPage() {
     webhookSecreto,
     firmaSecreto,
   } = await configuracionWhatsapp();
+  const [botEncendido, numeroHumano] = await Promise.all([ajuste("whatsapp_bot", "no"), ajuste("whatsapp_numero_humano")]);
 
   const enDemo = estado.proveedor === "demo";
   const diagnostico = diagnosticoGuardado?.diagnostico ?? null;
@@ -64,6 +67,8 @@ export default async function ConfiguracionWhatsappPage() {
       <EncabezadoPanel
         titulo="WhatsApp: configuración"
       />
+
+      <ConfiguracionDelBot encendido={botEncendido === "si"} numero={numeroHumano} />
 
       {/* 1. Conexión */}
       <section className="space-y-4">

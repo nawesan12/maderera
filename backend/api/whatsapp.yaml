@@ -165,6 +165,14 @@ paths:
                 usuarioId: { type: string, description: "«yo», el id de alguien, o vacío para liberarla" }
       responses:
         "200": { $ref: "#/components/responses/Resultado" }
+  /api/v1/admin/whatsapp/conversaciones/{id}/bot:
+    post:
+      operationId: DevolverAlBot
+      description: Le devuelve al bot una conversación que había derivado a una persona.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/Resultado" }
   /api/v1/admin/whatsapp/conversaciones/{id}/estado:
     post:
       operationId: CambiarEstadoConversacion
@@ -628,7 +636,7 @@ components:
     DetalleConversacion:
       type: object
       required: [id, waJid, displayName, customerId, orderId, estado, notas, ultimoEntranteAt, noLeidos, asignadoAUserId, bajaAt, bajaDetalle,
-        resueltaAt, clienteNombre, clienteTipo, clienteTelefono, clienteEmail, clienteLimite, clienteEstado, conocidos, nombre, sinNumero,
+        resueltaAt, botEstado, clienteNombre, clienteTipo, clienteTelefono, clienteEmail, clienteLimite, clienteEstado, conocidos, nombre, sinNumero,
         ventanaAbierta, mensajes, saldo, limiteCredito, pedidos, documentos]
       properties:
         id: { type: string }
@@ -644,6 +652,7 @@ components:
         bajaAt: { type: string, format: date-time, nullable: true }
         bajaDetalle: { type: string, nullable: true }
         resueltaAt: { type: string, format: date-time, nullable: true }
+        botEstado: { type: string, enum: [activo, derivada], description: "«derivada»: el bot la pasó a una persona y no contesta" }
         clienteNombre: { type: string, nullable: true }
         clienteTipo: { type: string, nullable: true }
         clienteTelefono: { type: string, nullable: true }

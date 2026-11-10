@@ -70,6 +70,7 @@ func (o respuesta) VisitObtenerConversacionResponse(w http.ResponseWriter) error
 func (o respuesta) VisitAsignarConversacionResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
+func (o respuesta) VisitDevolverAlBotResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitCambiarBajaResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitEnviarDocumentoResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCambiarEstadoConversacionResponse(w http.ResponseWriter) error {
@@ -351,6 +352,19 @@ func (a *API) AsignarConversacion(ctx context.Context, r whatsappapi.AsignarConv
 	}
 	v, err := a.s.Asignar(ctx, ses, r.Id, r.Body.UsuarioId)
 	return ok(v), err
+}
+
+func (a *API) DevolverAlBot(ctx context.Context, r whatsappapi.DevolverAlBotRequestObject) (whatsappapi.DevolverAlBotResponseObject, error) {
+	if _, err := bandeja(ctx); err != nil {
+		return nil, err
+	}
+	if !plataforma.UUIDValido(r.Id) {
+		return ok(conError(noEncontrada)), nil
+	}
+	if err := a.s.ReactivarBot(ctx, r.Id); err != nil {
+		return nil, err
+	}
+	return ok(Resultado{Ok: "El bot vuelve a contestar en esta conversación."}), nil
 }
 
 func (a *API) CambiarEstadoConversacion(ctx context.Context, r whatsappapi.CambiarEstadoConversacionRequestObject) (whatsappapi.CambiarEstadoConversacionResponseObject, error) {

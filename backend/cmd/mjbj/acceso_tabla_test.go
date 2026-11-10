@@ -294,6 +294,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"BuscarClientesParaVincular":     "/admin/whatsapp",               // GET /api/v1/admin/whatsapp/clientes
 	"ConfiguracionWhatsapp":          "/admin/whatsapp/configuracion", // GET /api/v1/admin/whatsapp/configuracion
 	"AsignarConversacion":            "/admin/whatsapp",               // POST /api/v1/admin/whatsapp/conversaciones/{id}/asignar
+	"DevolverAlBot":                  "/admin/whatsapp",               // POST /api/v1/admin/whatsapp/conversaciones/{id}/bot
 	"CambiarBaja":                    "/admin/whatsapp",               // POST /api/v1/admin/whatsapp/conversaciones/{id}/baja
 	"EnviarDocumento":                "/admin/whatsapp",               // POST /api/v1/admin/whatsapp/conversaciones/{id}/documento
 	"CambiarEstadoConversacion":      "/admin/whatsapp",               // POST /api/v1/admin/whatsapp/conversaciones/{id}/estado

@@ -91,6 +91,8 @@ type Servicio struct {
 	// espera es cuánto se espera entre los reintentos de un estado que llegó
 	// antes que el id del mensaje (700 ms en el TS). Las pruebas la acortan.
 	espera time.Duration
+	// buscar es el catálogo para el bot (bot.go); nil, el bot no busca.
+	buscar Buscador
 }
 
 // Nuevo arma el servicio. `avisos` puede ser nil (sin avisos al teléfono).

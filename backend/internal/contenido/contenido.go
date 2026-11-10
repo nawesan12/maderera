@@ -247,6 +247,7 @@ func (s *Servicio) DejarResena(ctx context.Context, ses *auth.Sesion, r NuevaRes
 var interruptores = map[string]string{
 	"tienda_activa": "la tienda online",
 	"stock_visible": "la disponibilidad en el sitio",
+	"whatsapp_bot":  "las respuestas automáticas de WhatsApp",
 }
 
 // GuardarAjuste cambia un texto del sitio.

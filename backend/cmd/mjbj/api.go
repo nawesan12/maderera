@@ -261,6 +261,7 @@ func correrAPI() error {
 	// WhatsApp: la bandeja por el contrato, y el webhook de Meta, los adjuntos
 	// y el envío de archivos con sus direcciones de siempre.
 	wa := whatsapp.Nuevo(pool, cfg.WhatsApp, push.Nuevo(cfg.Push, q, log), log)
+	wa.ConBuscador(buscadorDelBot(pool))
 	wa.Rutas(m)
 	whatsappapi.HandlerWithOptions(
 		whatsappapi.NewStrictHandlerWithOptions(whatsapp.NuevaAPI(wa, cfg.Interna),

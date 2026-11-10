@@ -93,7 +93,7 @@ func Base(t testing.TB) *pgxpool.Pool {
 	// La base vacía no trae los interruptores de la tienda (migración 00093),
 	// y sin ellos la tienda está encendida: casi todos los tests prueban el
 	// sitio vendiendo. Los de la tienda apagada la apagan con TiendaApagada.
-	if _, err := pool.Exec(ctx, `delete from site_settings where clave in ('tienda_activa', 'stock_visible')`); err != nil {
+	if _, err := pool.Exec(ctx, `delete from site_settings where clave in ('tienda_activa', 'stock_visible', 'whatsapp_bot', 'whatsapp_numero_humano')`); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {

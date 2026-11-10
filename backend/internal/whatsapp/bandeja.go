@@ -172,6 +172,7 @@ type DetalleConversacion struct {
 	BajaAt           *time.Time           `json:"bajaAt"`
 	BajaDetalle      *string              `json:"bajaDetalle"`
 	ResueltaAt       *time.Time           `json:"resueltaAt"`
+	BotEstado        string               `json:"botEstado"`
 	ClienteNombre    *string              `json:"clienteNombre"`
 	ClienteTipo      *string              `json:"clienteTipo"`
 	ClienteTelefono  *string              `json:"clienteTelefono"`
@@ -197,11 +198,11 @@ func (s *Servicio) ObtenerConversacion(ctx context.Context, id string) (*Detalle
 	var d DetalleConversacion
 	err := s.pool.QueryRow(ctx, `
 		select c.id, c.wa_jid, c.display_name, c.customer_id, c.order_id, c.estado::text, c.notas, c.ultimo_entrante_at, c.no_leidos,
-		       c.asignado_a_user_id, c.baja_at, c.baja_detalle, c.resuelta_at,
+		       c.asignado_a_user_id, c.baja_at, c.baja_detalle, c.resuelta_at, c.bot_estado,
 		       cu.nombre, cu.tipo::text, cu.telefono, cu.email, cu.limite_credito::text, cu.estado::text
 		  from whatsapp_conversaciones c left join customers cu on cu.id = c.customer_id
 		 where c.id = $1`, id).Scan(&d.ID, &d.WaJid, &d.DisplayName, &d.CustomerID, &d.OrderID, &d.Estado, &d.Notas, &d.UltimoEntranteAt,
-		&d.NoLeidos, &d.AsignadoAUserID, &d.BajaAt, &d.BajaDetalle, &d.ResueltaAt,
+		&d.NoLeidos, &d.AsignadoAUserID, &d.BajaAt, &d.BajaDetalle, &d.ResueltaAt, &d.BotEstado,
 		&d.ClienteNombre, &d.ClienteTipo, &d.ClienteTelefono, &d.ClienteEmail, &d.ClienteLimite, &d.ClienteEstado)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

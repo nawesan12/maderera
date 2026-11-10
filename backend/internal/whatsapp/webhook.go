@@ -202,6 +202,11 @@ func (s *Servicio) AtenderEntrante(ctx context.Context, m MensajeMeta, waJid str
 	if err := s.atenderBajaOAlta(ctx, g.ConversacionID, waJid, g.Cuerpo); err != nil {
 		return "", err
 	}
+	// El bot contesta después de guardar; si falla, el mensaje igual quedó en
+	// la bandeja y la persona lo ve.
+	if err := s.atenderConBot(ctx, g.ConversacionID, waJid, g.Cuerpo); err != nil {
+		s.log.Error("el bot de WhatsApp falló", "error", err, "conversacion", g.ConversacionID)
+	}
 	cuerpo := cortarJS(trimJS(g.Cuerpo), 140)
 	if cuerpo == "" {
 		cuerpo = "Mandó un archivo."

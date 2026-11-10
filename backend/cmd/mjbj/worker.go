@@ -123,6 +123,7 @@ func correrWorker() error {
 	// el mensaje y los reintentos de los adjuntos; y la copia diaria de las
 	// plantillas de Meta (por si cambió alguna sin que llegara el webhook).
 	wa := whatsapp.Nuevo(pool, cfg.WhatsApp, avisos, log)
+	wa.ConBuscador(buscadorDelBot(pool))
 	wa.Registrar(c)
 	// Lo que hacían las tareas «cada-hora» y «diaria» de lib/tareas.
 	lista = append(lista, tareas.Tarea{

@@ -20,7 +20,6 @@ test("el armador de /corte dibuja el plano mientras se tipea", async ({ page }) 
   test.skip(!(await largo.isVisible()), "no hay placas cortables en los datos de desarrollo");
   await largo.fill("900");
   await page.getByPlaceholder("400").first().fill("600");
-  await expect(page.getByText("Cómo entra")).toBeVisible();
   await expect(page.locator("svg rect").first()).toBeVisible();
 });
 

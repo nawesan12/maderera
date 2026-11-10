@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { tiendaEncendida } from "./molde";
 import { SESION_ADMIN } from "./sesion-guardada";
 
 /*
@@ -20,6 +21,8 @@ test("un producto cargado en el panel sale en el catálogo, y su stock se edita"
   await page.locator("#name").fill(nombre);
   await page.locator("#categoria").click();
   await page.getByRole("listbox").getByRole("option").filter({ visible: true }).first().click();
+  // Las medidas y los precios van en su pestaña (tanda 7).
+  await page.getByRole("tab", { name: "Medidas y precios" }).click();
   await page.locator("#sku-0").fill(`E2E-${Date.now()}`);
   await page.locator("#label-0").fill("18 mm");
 
@@ -40,6 +43,7 @@ test("un producto cargado en el panel sale en el catálogo, y su stock se edita"
   await fila.click();
   await expect(page.locator("#name")).toHaveValue(nombre);
   const id = page.url().split("/admin/productos/")[1]?.split(/[?#]/)[0] ?? "";
+  await page.getByRole("tab", { name: "Medidas y precios" }).click();
   await expect(page.locator("#stockCentral-0")).toHaveValue("7");
 
   // Editar el stock.
@@ -48,12 +52,13 @@ test("un producto cargado en el panel sale en el catálogo, y su stock se edita"
   await expect(page).toHaveURL(/\/admin\/productos\?guardado=1/);
   await page.goBack();
   await page.reload();
+  await page.getByRole("tab", { name: "Medidas y precios" }).click();
   await expect(page.locator("#stockCentral-0")).toHaveValue("4");
 
   // En el catálogo, con su precio.
   await page.goto(`/catalogo?q=${encodeURIComponent(nombre)}`);
   await expect(page.getByText(nombre).first()).toBeVisible();
-  await expect(page.getByText(/12\.345/).first()).toBeVisible();
+  if (await tiendaEncendida(page.request)) await expect(page.getByText(/12\.345/).first()).toBeVisible();
 
   // Que no quede en el catálogo de desarrollo.
   const baja = await page.request.post(`/api/v1/admin/productos/${id}/activo`, { data: { activo: false } });

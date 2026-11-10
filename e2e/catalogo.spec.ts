@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { tiendaEncendida } from "./molde";
 
 /*
  * El catálogo público, de punta a punta: lo arma la API de Go
@@ -25,11 +26,13 @@ test("una búsqueda sin resultados lo dice", async ({ page }) => {
   await expect(page.locator("a[href^='/catalogo/'][href*='-']")).toHaveCount(0);
 });
 
-test("la ficha abre con su precio, y un slug que no existe da 404", async ({ page }) => {
+test("la ficha abre con su precio, y un slug que no existe da 404", async ({ page, request }) => {
   const r = await page.goto("/catalogo/fenolico");
   expect(r?.status()).toBe(200);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Fenólico");
-  await expect(page.getByText(/\$\s?\d/).first()).toBeVisible();
+  // Con la tienda apagada no hay ningún precio a la vista.
+  if (await tiendaEncendida(request)) await expect(page.getByText(/\$\s?\d/).first()).toBeVisible();
+  else await expect(page.getByText(/\$\s?\d/)).toHaveCount(0);
   const nada = await page.goto("/catalogo/no-existe-este-producto");
   expect(nada?.status()).toBe(404);
 });

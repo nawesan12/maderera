@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { tiendaEncendida } from "./molde";
 import { SESION_ADMIN } from "./sesion-guardada";
 
 /*
@@ -54,6 +55,12 @@ test("la lista de precios en PDF exige sesión y sale con la sesión", async ({ 
   const contexto = await browser.newContext({ storageState: SESION_ADMIN });
   const page = await contexto.newPage();
   const r = await page.request.get("/mi-lista-de-precios");
+  // Con la tienda apagada la lista no sale: ningún precio llega al sitio.
+  if (!(await tiendaEncendida(request))) {
+    expect(r.status()).toBe(403);
+    await contexto.close();
+    return;
+  }
   expect(r.status()).toBe(200);
   expect(r.headers()["content-type"]).toBe("application/pdf");
   expect((await r.body()).subarray(0, 5).toString()).toBe("%PDF-");

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { ficha, interruptor } from "./molde";
 import { SESION_ADMIN } from "./sesion-guardada";
 
 /*
@@ -23,16 +24,18 @@ test("un banner cargado en el panel sale en la portada, y al borrarlo se va", as
   await page.goto("/admin/contenido/banners");
 
   const nuevo = page.locator("form").filter({ has: page.getByRole("button", { name: "Crear banner" }) }).first();
-  await nuevo.locator("select[name=ubicacion]").selectOption("portada");
+  await ficha(nuevo, "Portada, debajo del inicio");
   await nuevo.locator("input[name=titulo]").fill(titulo);
   await nuevo.locator("input[name=imagen]").setInputFiles({ name: "banner.png", mimeType: "image/png", buffer: png });
-  const activo = nuevo.locator("input[name=activo]");
-  if (!(await activo.isChecked())) await activo.check();
+  await interruptor(nuevo, "Encendido", true);
   await nuevo.getByRole("button", { name: "Crear banner" }).click();
   await expect(nuevo.getByText("Banner guardado.")).toBeVisible();
 
+  // La primera visita después de guardar todavía puede recibir la portada en
+  // caché (y dispara la regeneración); puede quedar en una diapositiva que no
+  // es la primera. Se espera a que esté en el HTML.
+  await expect.poll(async () => (await page.request.get("/").then((r) => r.text())).includes(titulo), { timeout: 20_000 }).toBe(true);
   await page.goto("/");
-  await expect(page.getByText(titulo)).toBeVisible();
   const imagen = page.locator("img[src*='/subidas/banner-'], img[srcset*='banner-']").first();
   await expect(imagen).toBeAttached();
 
@@ -41,8 +44,7 @@ test("un banner cargado en el panel sale en la portada, y al borrarlo se va", as
   await suyo.getByRole("button", { name: "Borrar" }).click();
   await expect(suyo.getByText("Banner borrado.")).toBeVisible();
 
-  await page.goto("/");
-  await expect(page.getByText(titulo)).toHaveCount(0);
+  await expect.poll(async () => (await page.request.get("/").then((r) => r.text())).includes(titulo), { timeout: 20_000 }).toBe(false);
 });
 
 test("una reseña del negocio cargada a mano sale en la portada, y al borrarla se va", async ({ page }) => {
@@ -52,18 +54,17 @@ test("una reseña del negocio cargada a mano sale en la portada, y al borrarla s
 
   await page.locator("input[name=autor]").fill(autor);
   await page.locator("textarea[name=texto]").fill("Muy buena atención y la madera llegó a tiempo.");
-  await page.locator("input[name=publicada]").check();
+  await interruptor(page, "Mostrarla en el sitio", true);
   await page.getByRole("button", { name: "Guardar", exact: true }).click();
   await expect(page.getByText("Publicada.").first()).toBeVisible();
 
-  await page.goto("/");
-  await expect(page.getByText(autor)).toBeVisible();
+  // Ver la nota del banner: la portada puede tardar una visita en rehacerse.
+  await expect.poll(async () => (await page.request.get("/").then((r) => r.text())).includes(autor), { timeout: 20_000 }).toBe(true);
 
   await page.goto("/admin/contenido/resenas-negocio");
   await page.getByRole("button", { name: `Borrar la reseña de ${autor}` }).click();
   await expect(page.getByRole("button", { name: `Borrar la reseña de ${autor}` })).toHaveCount(0);
-  await page.goto("/");
-  await expect(page.getByText(autor)).toHaveCount(0);
+  await expect.poll(async () => (await page.request.get("/").then((r) => r.text())).includes(autor), { timeout: 20_000 }).toBe(false);
 });
 
 test("un documento publicado sale en /documentacion, y dado de baja se va", async ({ page }) => {
@@ -77,8 +78,7 @@ test("un documento publicado sale en /documentacion, y dado de baja se va", asyn
     mimeType: "application/pdf",
     buffer: Buffer.from("%PDF-1.4\n%%EOF\n"),
   });
-  const reservado = subir.locator("input[name=soloProfesionales]");
-  if (await reservado.isChecked()) await reservado.uncheck();
+  await interruptor(subir, "Solo lo ven los profesionales aprobados", false);
   await subir.getByRole("button", { name: "Publicar", exact: true }).click();
   await expect(page.getByText("Documento publicado.")).toBeVisible();
 

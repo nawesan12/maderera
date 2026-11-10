@@ -29,7 +29,10 @@ export default defineConfig({
     { name: "escritorio", use: { ...devices["Desktop Chrome"] }, dependencies: ["sesion"] },
     { name: "telefono", use: { ...devices["Pixel 7"] }, dependencies: ["sesion"] },
   ],
-  webServer: [
+  // Con E2E_URL se prueba contra un servidor que ya está levantado (el de
+  // desarrollo en el 3000, o un entorno): no se levanta otro, que Next no deja
+  // correr dos en la misma carpeta.
+  webServer: process.env.E2E_URL ? undefined : [
     {
       command: "npm run api:dev",
       url: "http://127.0.0.1:8080/salud",

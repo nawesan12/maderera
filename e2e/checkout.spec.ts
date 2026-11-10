@@ -1,4 +1,5 @@
 import { expect, request as nuevoRequest, test, type APIRequestContext } from "@playwright/test";
+import { tiendaEncendida } from "./molde";
 import { SESION_ADMIN } from "./sesion-guardada";
 
 /*
@@ -43,7 +44,8 @@ async function algoParaComprar(req: APIRequestContext) {
   throw new Error("no hay ningún producto con precio en el catálogo de desarrollo");
 }
 
-test("carrito → confirmar → pago de demostración, acreditado una sola vez", async ({ page, baseURL }) => {
+test("carrito → confirmar → pago de demostración, acreditado una sola vez", async ({ page, baseURL, request }) => {
+  test.skip(!(await tiendaEncendida(request)), "con la tienda apagada no se vende (la prueba de Go cubre el 403)");
   // Las vueltas del pago van a APP_URL, que en desarrollo es el 3000 y no el
   // puerto de esta prueba: se las manda acá.
   const base = new URL(baseURL ?? "http://localhost:3100");

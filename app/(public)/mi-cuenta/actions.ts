@@ -146,3 +146,27 @@ export async function cambiarNovedades(recibir: boolean): Promise<{ ok?: string;
   revalidatePath("/mi-cuenta/datos");
   return { ok: r.data.ok };
 }
+
+/* -------------------------------------------------------------------------- */
+/* La clave                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Pone o cambia la clave (backend/internal/auth). La actual va vacía cuando
+ * Go lo permite: la cuenta no tiene clave, o se entró con un link hace menos
+ * de media hora (el «olvidé mi clave»). Cierra las otras sesiones.
+ */
+export async function cambiarClave(_previo: EstadoAccion, formData: FormData): Promise<EstadoAccion> {
+  const actual = String(formData.get("actual") ?? "");
+  const nueva = String(formData.get("nueva") ?? "");
+  if (nueva.length < 8) return { error: "La clave necesita 8 caracteres o más." };
+  if (nueva !== String(formData.get("repetida") ?? "")) return { error: "Las dos claves no coinciden." };
+  try {
+    const r = await (await api()).PUT("/api/v1/sesion/clave", { body: { nueva, ...(actual ? { actual } : {}) } });
+    if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "No pudimos guardar la clave.") };
+  } catch {
+    return { error: "No pudimos guardar la clave. Probá en un rato." };
+  }
+  revalidatePath("/mi-cuenta/datos");
+  return { ok: "Listo, ya podés entrar con tu correo y esta clave." };
+}

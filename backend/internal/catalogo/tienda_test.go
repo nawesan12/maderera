@@ -66,3 +66,19 @@ func TestTiendaApagadaNoDevuelvePrecios(t *testing.T) {
 		t.Errorf("encendida: %s", b)
 	}
 }
+
+// El orden no delata lo que no se muestra (revisión del 10/11/2026): con la
+// tienda apagada, «precio-asc» y «precio-desc» devolvían el orden de los
+// precios ocultos.
+func TestTiendaApagadaNoOrdenaPorPrecio(t *testing.T) {
+	ps := func() []ProductoListado {
+		uno, dos := "100", "50"
+		return []ProductoListado{{Name: "B caro", PrecioDesde: &uno}, {Name: "A barato", PrecioDesde: &dos}}
+	}
+	asc, desc := ps(), ps()
+	ordenar(asc, Filtros{Orden: "precio-asc", sinPrecios: true})
+	ordenar(desc, Filtros{Orden: "precio-desc", sinPrecios: true})
+	if asc[0].Name != desc[0].Name || asc[0].Name != "A barato" {
+		t.Errorf("con la tienda apagada ordena por nombre: asc %s, desc %s", asc[0].Name, desc[0].Name)
+	}
+}

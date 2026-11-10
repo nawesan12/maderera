@@ -91,6 +91,9 @@ func nulo(s string) *string {
 	return &s
 }
 
+// conLinkDeAcceso son los eventos cuyo correo lleva un link de entrar.
+var conLinkDeAcceso = map[string]bool{"enlace_ingreso": true, "profesional_aprobado": true}
+
 // Despachar manda un correo y lo registra. No falla nunca: un aviso que no
 // sale queda anotado y la operación que lo originó sigue.
 //
@@ -118,6 +121,13 @@ func (s *Servicio) Despachar(ctx context.Context, d Despacho) {
 		asunto = asuntoConfig
 	}
 	r := s.envio.Enviar(ctx, email.Mensaje{Para: d.Para, Asunto: asunto, HTML: d.Correo.HTML, Texto: d.Correo.Texto, Adjuntos: d.Adjuntos})
+	// Los correos con un link de acceso no se guardan para reintentar: la
+	// cola los guardaría en claro en la base, que guarda solo el hash del
+	// token. Quien no lo recibió lo pide de nuevo.
+	if !r.Enviado && r.Temporal && conLinkDeAcceso[d.Evento] {
+		s.registrar(ctx, d.Evento, d.Para, asunto, d.EntidadTipo, d.EntidadID, sqlc.EstadoNotificacionFallida, "", "Rechazo temporal; lleva un link de acceso y no se reintenta: "+r.Error)
+		return
+	}
 	if !r.Enviado && r.Temporal {
 		s.registrar(ctx, d.Evento, d.Para, asunto, d.EntidadTipo, d.EntidadID, sqlc.EstadoNotificacionFallida, "", "Rechazo temporal, se reintenta: "+r.Error)
 		carga := Reintento{Evento: d.Evento, Para: d.Para, Asunto: asunto, HTML: d.Correo.HTML, Texto: d.Correo.Texto,

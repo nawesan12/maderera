@@ -81,6 +81,21 @@ func (a *API) apagada(ctx context.Context) (bool, error) {
 	return !t.Activa, err
 }
 
+// ocultarDelPublico ajusta los filtros a lo que la tienda deja ver: con el
+// stock oculto, el filtro por stock no se aplica (si no, «solo con stock»
+// decía qué hay aunque no se muestre).
+func (a *API) ocultarDelPublico(ctx context.Context, f *Filtros) error {
+	t, err := a.s.Tienda(ctx)
+	if err != nil {
+		return err
+	}
+	f.sinPrecios, f.sinStock = !t.Activa, !t.StockVisible
+	if f.sinStock {
+		f.Stock = ""
+	}
+	return nil
+}
+
 // listado limpia una lista de tarjetas si la tienda está apagada. Las ofertas
 // son un precio rebajado: sin precios no hay ninguna.
 func (a *API) listado(ctx context.Context, ps []ProductoListado, soloOfertas bool) ([]ProductoListado, error) {
@@ -160,6 +175,9 @@ func (a *API) Productos(ctx context.Context, r catalogoapi.ProductosRequestObjec
 	}
 	f := filtros(parametrosDeFiltro{p.Categoria, p.Subcategoria, p.Busqueda, p.Marca, p.Ids,
 		enumTexto(p.Stock), enumTexto(p.Orden), p.SoloOfertas})
+	if err := a.ocultarDelPublico(ctx, &f); err != nil {
+		return nil, err
+	}
 	ps, err := a.s.Productos(ctx, f, l)
 	if err != nil {
 		return nil, err
@@ -176,6 +194,9 @@ func (a *API) PaginaDeProductos(ctx context.Context, r catalogoapi.PaginaDeProdu
 	}
 	f := filtros(parametrosDeFiltro{p.Categoria, p.Subcategoria, p.Busqueda, p.Marca, p.Ids,
 		enumTexto(p.Stock), enumTexto(p.Orden), p.SoloOfertas})
+	if err := a.ocultarDelPublico(ctx, &f); err != nil {
+		return nil, err
+	}
 	ps, err := a.s.Productos(ctx, f, l)
 	if err != nil {
 		return nil, err

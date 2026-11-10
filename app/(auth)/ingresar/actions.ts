@@ -71,7 +71,12 @@ export async function ingresar(
  */
 export async function entrarConEnlace(_previo: EstadoIngreso, formData: FormData): Promise<EstadoIngreso> {
   const token = String(formData.get("token") ?? "").slice(0, 100);
-  const r = await (await api()).POST("/api/v1/sesion/enlace", { body: { token } });
+  let r;
+  try {
+    r = await (await api()).POST("/api/v1/sesion/enlace", { body: { token } });
+  } catch {
+    return { error: "No pudimos usar este link ahora. Probá en un rato." };
+  }
   if (!r.data) {
     return { error: mensajeDe(r.error as Problema | undefined, "No pudimos usar este link. Pedí uno nuevo.") };
   }
@@ -79,7 +84,9 @@ export async function entrarConEnlace(_previo: EstadoIngreso, formData: FormData
   await renovarSenal();
   await adoptarCarritoAnonimo(r.data.sesion.userId);
   const rol = r.data.sesion.rolStaff;
-  redirect(r.data.proposito === "activacion" ? "/profesionales" : rol ? inicioDelRol(rol) : "/mi-cuenta");
+  // La activación lleva a ponerse una clave: la cuenta la creó la aprobación
+  // y no tiene ninguna.
+  redirect(r.data.proposito === "activacion" ? "/mi-cuenta/datos#clave" : rol ? inicioDelRol(rol) : "/mi-cuenta");
 }
 
 export interface EstadoPedidoEnlace {
@@ -90,7 +97,12 @@ export interface EstadoPedidoEnlace {
 /** Pide el link de ingreso por correo. La respuesta no dice si la cuenta existe. */
 export async function pedirEnlace(_previo: EstadoPedidoEnlace, formData: FormData): Promise<EstadoPedidoEnlace> {
   const correo = String(formData.get("email") ?? "");
-  const r = await (await api()).POST("/api/v1/sesion/enlace/pedir", { body: { correo } });
+  let r;
+  try {
+    r = await (await api()).POST("/api/v1/sesion/enlace/pedir", { body: { correo } });
+  } catch {
+    return { error: "No pudimos mandarlo. Probá en un rato." };
+  }
   if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "No pudimos mandarlo. Probá en un rato.") };
   return { enviado: true };
 }

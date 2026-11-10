@@ -99,6 +99,11 @@ type Filtros struct {
 	Marca        string
 	// IDs: nil es «sin filtro»; un slice vacío es «ninguno».
 	IDs []string
+	// Con la tienda apagada o el stock oculto, el orden no puede delatar lo
+	// que no se muestra (revisión del 10/11/2026): ordenar por precio
+	// devolvía el orden de los precios ocultos, y la relevancia subía las
+	// ofertas y lo que tiene stock. Los pone ocultarDelPublico.
+	sinPrecios, sinStock bool
 }
 
 // NormalizarBusqueda es normalizarBusqueda (lib/busqueda.ts): sin tildes, en
@@ -379,7 +384,7 @@ func (s *Servicio) consultarProductos(ctx context.Context, f Filtros, l listaPar
 		}
 		resultado = append(resultado, p)
 	}
-	ordenar(resultado, f.Orden)
+	ordenar(resultado, f)
 	return resultado, nil
 }
 
@@ -407,9 +412,13 @@ var coladores = sync.Pool{New: func() any { return collate.New(language.Spanish)
 
 // ordenar es la del TS, con un orden estable como el sort de JS: lo que
 // empata conserva el orden de la base.
-func ordenar(ps []ProductoListado, orden string) {
+func ordenar(ps []ProductoListado, f Filtros) {
 	colador := coladores.Get().(*collate.Collator)
 	defer coladores.Put(colador)
+	orden := f.Orden
+	if f.sinPrecios && (orden == "precio-asc" || orden == "precio-desc") {
+		orden = "nombre"
+	}
 	switch orden {
 	case "precio-asc", "precio-desc":
 		signo := 1.0
@@ -429,10 +438,10 @@ func ordenar(ps []ProductoListado, orden string) {
 	default:
 		sort.SliceStable(ps, func(i, j int) bool {
 			a, b := ps[i], ps[j]
-			if a.HayStock != b.HayStock {
+			if !f.sinStock && a.HayStock != b.HayStock {
 				return a.HayStock
 			}
-			if (a.Descuento != nil) != (b.Descuento != nil) {
+			if !f.sinPrecios && (a.Descuento != nil) != (b.Descuento != nil) {
 				return a.Descuento != nil
 			}
 			if a.Featured != b.Featured {

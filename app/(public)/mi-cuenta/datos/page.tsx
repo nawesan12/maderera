@@ -5,6 +5,7 @@ import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import { formatearCuit } from "@/lib/formato";
 import { FormularioDatos } from "./formulario";
 import { NovedadesPorCorreo } from "./novedades";
+import { Clave } from "./clave";
 import { api, datos } from "@/lib/api/servidor";
 
 export const metadata: Metadata = { title: "Mis datos" };
@@ -14,13 +15,19 @@ export default async function MisDatosPage() {
     verifySession(),
     clienteDeLaSesion(),
   ]);
-  const { recibe } = datos(await (await api()).GET("/api/v1/mi-cuenta/novedades"));
+  const [{ recibe }, clave] = await Promise.all([
+    (await api()).GET("/api/v1/mi-cuenta/novedades").then(datos),
+    (await api()).GET("/api/v1/sesion/clave").then(datos),
+  ]);
 
   return (
     <div className="space-y-5">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Mis datos</h1>
       </header>
+
+      {/* Sin clave (la cuenta la creó la aprobación), ponerla va primero. */}
+      {!clave.tieneClave && <Clave tieneClave={false} sinLaActual />}
 
       {/* El correo es la identidad de la cuenta y no se edita desde acá: es lo
           que valida el ingreso, y cambiarlo sin verificarlo dejaría a la
@@ -44,6 +51,8 @@ export default async function MisDatosPage() {
       />
 
       <NovedadesPorCorreo recibe={recibe} />
+
+      {clave.tieneClave && <Clave tieneClave sinLaActual={clave.sinLaActual} />}
     </div>
   );
 }

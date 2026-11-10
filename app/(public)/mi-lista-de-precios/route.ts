@@ -24,7 +24,8 @@ export async function GET() {
     const estado = r.response.status;
     const texto =
       estado === 401 ? "Necesitás iniciar sesión." : mensajeDe(r.error as Problema | undefined);
-    return new Response(texto, { status: estado === 401 || estado === 429 ? estado : 500 });
+    // 403: la tienda está apagada y la lista no sale (ver catalogo.ExigirTienda).
+    return new Response(texto, { status: [401, 403, 429].includes(estado) ? estado : 500 });
   }
 
   return new Response(r.data, {

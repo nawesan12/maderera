@@ -55,8 +55,13 @@ correo.{$CORREO_DOMINIO} {
 			roll_size 10MiB
 			roll_keep 5
 		}
-		format json {
-			time_format iso8601
+		# El token del link mágico (/entrar/<token>) no queda escrito: un link
+		# de activación sin usar vale 7 días para quien lea este archivo.
+		format filter {
+			request>uri regexp ^/entrar/[^/?]+ /entrar/oculto
+			wrap json {
+				time_format iso8601
+			}
 		}
 	}
 	# Adjuntos de hasta 25 MB más lo que agrega la codificación.
@@ -109,8 +114,13 @@ autoconfig.{$CORREO_DOMINIO} {
 			roll_size 20MiB
 			roll_keep 10
 		}
-		format json {
-			time_format iso8601
+		# El token del link mágico (/entrar/<token>) no queda escrito: un link
+		# de activación sin usar vale 7 días para quien lea este archivo.
+		format filter {
+			request>uri regexp ^/entrar/[^/?]+ /entrar/oculto
+			wrap json {
+				time_format iso8601
+			}
 		}
 	}
 

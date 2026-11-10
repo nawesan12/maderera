@@ -107,12 +107,14 @@ type Presupuesto struct {
 	CreatedAt   time.Time  `json:"createdAt"`
 }
 
-// Presupuestos es misPresupuestos.
+// Presupuestos es misPresupuestos. Los que armó el bot de WhatsApp y todavía
+// no revisó nadie no aparecen: llevan precios que no miró una persona.
 func (s *Servicio) Presupuestos(ctx context.Context, c *Cliente) ([]Presupuesto, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT q.id, q.numero, q.estado::text, q.total::float8, (SELECT count(*)::int FROM quote_items i WHERE i.quote_id = q.id),
 		  q.valido_hasta, q.created_at
-		FROM quotes q WHERE q.customer_id = $1 ORDER BY q.created_at DESC`, c.ID)
+		FROM quotes q WHERE q.customer_id = $1 AND NOT (q.origen = 'whatsapp' AND q.estado = 'revision')
+		ORDER BY q.created_at DESC`, c.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +160,7 @@ func (s *Servicio) PresupuestoDe(ctx context.Context, c *Cliente, numero string)
 	var p DetalleDePresupuesto
 	err := s.pool.QueryRow(ctx, `SELECT q.id, q.numero, q.estado::text, q.subtotal::text, q.total::text, q.notas, q.asesor, q.valido_hasta,
 		b.name, q.created_at FROM quotes q LEFT JOIN branches b ON b.id = q.branch_id
-		WHERE q.numero = $1 AND q.customer_id = $2`, numero, c.ID).
+		WHERE q.numero = $1 AND q.customer_id = $2 AND NOT (q.origen = 'whatsapp' AND q.estado = 'revision')`, numero, c.ID).
 		Scan(&p.ID, &p.Numero, &p.Estado, &p.Subtotal, &p.Total, &p.Notas, &p.Asesor, &p.ValidoHasta, &p.Sucursal, &p.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta

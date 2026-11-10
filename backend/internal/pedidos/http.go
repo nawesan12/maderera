@@ -244,6 +244,11 @@ func (a *API) PresupuestoPdf(ctx context.Context, r ventasapi.PresupuestoPdfRequ
 		if propio == nil || p.CustomerID == nil || *propio != *p.CustomerID {
 			return nil, no
 		}
+		// El que armó el bot de WhatsApp lo ve el cliente recién cuando una
+		// persona lo revisó y lo mandó.
+		if p.Origen == "whatsapp" && p.Estado == "revision" {
+			return nil, no
+		}
 	}
 	b, err := a.s.PresupuestoPdf(ctx, p)
 	if err != nil {

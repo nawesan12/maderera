@@ -20,6 +20,7 @@ import (
 	"mjbj/internal/reportes"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 
@@ -147,8 +148,15 @@ func correrAPI() error {
 				CTA:      &email.Enlace{Texto: "Entrar a mi cuenta", URL: url},
 				Cierre:   "Si no lo pediste vos, ignorá este correo: nadie puede entrar sin abrirlo.",
 			})
-			avisosDeSesion.Despachar(ctx, avisos.Despacho{Evento: "enlace_ingreso", Para: correo,
-				Correo: avisos.Correo{Asunto: "Tu link para entrar", HTML: html, Texto: texto}})
+			// En segundo plano: si el correo existe, mandarlo tarda cientos de
+			// milisegundos, y responder recién después delataba qué correos
+			// tienen cuenta (la respuesta es la misma, el tiempo no).
+			go func() {
+				ctx, cancelar := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+				defer cancelar()
+				avisosDeSesion.Despachar(ctx, avisos.Despacho{Evento: "enlace_ingreso", Para: correo,
+					Correo: avisos.Correo{Asunto: "Tu link para entrar", HTML: html, Texto: texto}})
+			}()
 		})
 	sesionapi.HandlerWithOptions(
 		sesionapi.NewStrictHandlerWithOptions(apiDeSesion,

@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"mjbj/internal/auth"
 	avisosT10 "mjbj/internal/avisos"
 	"mjbj/internal/campanas"
 	"mjbj/internal/cola"
@@ -140,6 +141,12 @@ func correrWorker() error {
 		// primero) y la limpieza de las tablas que crecen solas.
 		Nombre: "parte-y-limpieza", Frecuencia: tareas.Dia, DesdeHora: 7,
 		Ejecutar: func(ctx context.Context) (map[string]any, error) {
+			// Los links de entrar vencidos: cada «mandame un link» suma uno.
+			if n, err := auth.LimpiarEnlaces(ctx, pool); err != nil {
+				log.Warn("no se pudieron limpiar los links vencidos", "error", err)
+			} else if n > 0 {
+				log.Info("links vencidos borrados", "cantidad", n)
+			}
 			filas, err := reportes.Nuevo(pool, log).PendientesDelRol(ctx, sqlc.StaffRoleAdmin)
 			if err != nil {
 				return nil, err

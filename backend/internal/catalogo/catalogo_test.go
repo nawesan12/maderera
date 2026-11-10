@@ -248,8 +248,8 @@ func TestOrdenarEnParalelo(t *testing.T) {
 			defer func() { hecho <- struct{}{} }()
 			for range 50 {
 				ps := append([]ProductoListado(nil), base...)
-				ordenar(ps, "nombre")
-				ordenar(ps, "relevancia")
+				ordenar(ps, Filtros{Orden: "nombre"})
+				ordenar(ps, Filtros{Orden: "relevancia"})
 			}
 		}()
 	}

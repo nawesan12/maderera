@@ -97,9 +97,6 @@ export function EditorDeTarifa({
             placeholder="0 si no se cobra"
             className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
           />
-          <p className="mt-1 text-sm text-muted-foreground">
-            El pegado, por metro lineal. Los metros salen del despiece.
-          </p>
         </div>
       </div>
 

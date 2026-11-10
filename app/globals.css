@@ -1532,3 +1532,16 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   background-size: 180px 180px;
   box-shadow: var(--sombra-hoja);
 }
+
+/* Los campos, hundidos: sin la línea, un plano más bajo y la sombra interior
+   desde arriba. Al enfocarlos vuelven el borde y el anillo de cada uno. Los
+   que van sobre fondo oscuro (blanco translúcido) quedan como están. */
+:is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"]), select, textarea, [data-slot="select-trigger"]).border:not(:focus, :focus-visible, [aria-invalid="true"], [class*="bg-white/"], [class*="border-white"]) {
+  border-color: transparent;
+  background-color: var(--hundida);
+  box-shadow: inset 0 1.5px 3px rgb(60 50 40 / 0.11), inset 0 0 0 1px rgb(60 50 40 / 0.05);
+}
+
+.dark :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"]), select, textarea, [data-slot="select-trigger"]).border:not(:focus, :focus-visible, [aria-invalid="true"], [class*="bg-white/"], [class*="border-white"]) {
+  box-shadow: inset 0 1.5px 3px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(255 255 255 / 0.05);
+}

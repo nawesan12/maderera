@@ -97,6 +97,7 @@ type Servicio struct {
 	// buscar es el catálogo para el bot (bot.go); nil, el bot no busca.
 	buscar Buscador
 	ficha  Ficheador
+	cortar Corteador
 }
 
 // Nuevo arma el servicio. `avisos` puede ser nil (sin avisos al teléfono).

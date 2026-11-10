@@ -2,10 +2,16 @@ package main
 
 import (
 	"context"
+	"errors"
+	"log/slog"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"mjbj/internal/asistente"
 	"mjbj/internal/catalogo"
+	"mjbj/internal/cortes"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/whatsapp"
 )
 
@@ -77,4 +83,77 @@ func fichaDelBot(pool *pgxpool.Pool) whatsapp.Ficheador {
 		}
 		return f, nil
 	}
+}
+
+// corteadorDelBot guarda el despiece del chat como consulta de corte, sobre la
+// placa que nombraron: la misma elección que hace el cortador del sitio con
+// el enlace del asistente (lib/cortes/enlace.ts), la placa que tenga todas
+// las palabras del material o, si no hay, la que tenga la primera.
+func corteadorDelBot(pool *pgxpool.Pool, log *slog.Logger) whatsapp.Corteador {
+	cat := catalogo.Nuevo(pool)
+	cor := cortes.Nuevo(pool, log)
+	return func(ctx context.Context, d asistente.Despiece) (string, string, string, error) {
+		general, err := cat.General(ctx)
+		if err != nil {
+			return "", "", "", err
+		}
+		placas, err := cor.Placas(ctx, general)
+		if err != nil {
+			return "", "", "", err
+		}
+		p := elegirPlaca(placas, d.Material)
+		if p == nil {
+			return "", "", "", nil
+		}
+		piezas := make([]any, 0, len(d.Piezas))
+		for _, x := range d.Piezas {
+			piezas = append(piezas, map[string]any{
+				"largoMm": float64(x.LargoMm), "anchoMm": float64(x.AnchoMm), "cantidad": float64(x.Cantidad),
+				"cantoLargo": float64(x.CantoLargo), "cantoAncho": float64(x.CantoAncho), "respetaVeta": float64(0),
+			})
+		}
+		token, err := cor.GuardarConsulta(ctx, map[string]any{"variantId": p.VariantID, "piezas": piezas}, "whatsapp")
+		var problema *plataforma.Problema
+		if errors.As(err, &problema) && problema.Estado < 500 {
+			motivo := problema.Detalle
+			for _, m := range problema.Errores {
+				motivo = m
+			}
+			return "", p.Descripcion, motivo, nil
+		}
+		return token, p.Descripcion, "", err
+	}
+}
+
+func elegirPlaca(placas []cortes.PlacaCortable, material string) *cortes.PlacaCortable {
+	var palabras []string
+	for _, w := range strings.Fields(asistente.Normalizar(material)) {
+		if len(w) > 2 {
+			palabras = append(palabras, w)
+		}
+	}
+	if len(palabras) == 0 {
+		return nil
+	}
+	tiene := func(p cortes.PlacaCortable, w string) bool {
+		return strings.Contains(asistente.Normalizar(p.Descripcion), w)
+	}
+	for i := range placas {
+		todas := true
+		for _, w := range palabras {
+			if !tiene(placas[i], w) {
+				todas = false
+				break
+			}
+		}
+		if todas {
+			return &placas[i]
+		}
+	}
+	for i := range placas {
+		if tiene(placas[i], palabras[0]) {
+			return &placas[i]
+		}
+	}
+	return nil
 }

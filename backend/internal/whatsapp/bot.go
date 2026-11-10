@@ -72,6 +72,15 @@ func (s *Servicio) ConBuscador(b Buscador, f Ficheador) *Servicio {
 	return s
 }
 
+// Corteador guarda un despiece como consulta de corte (la misma que manda el
+// cortador del sitio) y devuelve el token, la placa elegida por el material y,
+// si no se pudo, por qué —«hay una pieza que no entra»— o vacío si no se
+// reconoció la placa.
+type Corteador func(ctx context.Context, d asistente.Despiece) (token, placa, motivo string, err error)
+
+// ConCortes conecta las consultas de corte.
+func (s *Servicio) ConCortes(c Corteador) *Servicio { s.cortar = c; return s }
+
 // Presupuestar es el pedido de presupuesto que sacó el bot de la charla.
 type Presupuestar struct {
 	Slug     string           `json:"slug"`
@@ -110,6 +119,9 @@ type RespuestaBot struct {
 	// Presupuestar: hay un producto elegido y pidieron precio. Lo arma
 	// atenderConBot con la ficha, en revisión.
 	Presupuestar *Presupuestar
+	// Cortar: escribieron un despiece; atenderConBot intenta guardarlo como
+	// consulta de corte. Texto ya trae el link al cortador por si no se puede.
+	Cortar *asistente.Despiece
 }
 
 const pieDerivar = "Escribile acá y seguís con una persona del mostrador:"
@@ -167,6 +179,7 @@ func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) Respue
 		}
 		r.Texto = fmt.Sprintf("Te armé el corte: %d %s%s. Abrilo para ver cómo entra en la placa, elegí la sucursal y mandalo:\n%s%s",
 			n, plural(n, "pieza", "piezas"), material, sitio, asistente.EnlaceDelDespiece(*dp))
+		r.Cortar = dp
 	case asistente.Cuenta:
 		r.Texto = "Si trabajás del rubro —carpintería, construcción, arquitectura— pedí la cuenta profesional: lista propia, cuenta corriente y descuentos por cantidad.\n" + sitio + "/profesionales"
 	case asistente.Moldava:
@@ -453,6 +466,14 @@ func (s *Servicio) atenderConBot(ctx context.Context, convID, waJid, texto strin
 	}
 
 	var avisoPresupuesto *push.Aviso
+	if r.Cortar != nil && s.cortar != nil {
+		texto, aviso, err := s.consultaDeCorte(ctx, convID, *r.Cortar, d.Sitio, r.Texto)
+		if err != nil {
+			s.log.Warn("el bot no pudo guardar el corte", "error", err)
+		} else {
+			r.Texto, avisoPresupuesto = texto, aviso
+		}
+	}
 	if r.Presupuestar != nil {
 		texto, consulta, aviso, err := s.presupuestar(ctx, convID, waJid, *r.Presupuestar)
 		if err != nil {
@@ -612,3 +633,32 @@ var argentina = func() *time.Location {
 	}
 	return l
 }()
+
+// consultaDeCorte guarda el despiece como consulta de corte. Si no reconoce la
+// placa, deja el texto con el link al cortador; si una pieza no entra, lo dice.
+func (s *Servicio) consultaDeCorte(ctx context.Context, convID string, d asistente.Despiece, sitio, textoSinConsulta string) (string, *push.Aviso, error) {
+	token, placa, motivo, err := s.cortar(ctx, d)
+	if err != nil {
+		return "", nil, err
+	}
+	sitio = strings.TrimRight(sitio, "/")
+	if motivo != "" {
+		return motivo + "\n\nPodés corregirlo en el cortador:\n" + sitio + asistente.EnlaceDelDespiece(d), nil, nil
+	}
+	if token == "" {
+		return textoSinConsulta, nil, nil
+	}
+	n := 0
+	for _, p := range d.Piezas {
+		n += p.Cantidad
+	}
+	enlace := sitio + "/corte/c/" + token
+	texto := fmt.Sprintf("Te armé el corte: %d %s en *%s*. Ya lo tiene el aserradero: te confirmamos precio y entrega por acá.\n\nEl plano:\n%s",
+		n, plural(n, "pieza", "piezas"), placa, enlace)
+	var nombre string
+	_ = s.pool.QueryRow(ctx, `select coalesce(cu.nombre, c.display_name, 'Cliente de WhatsApp') from whatsapp_conversaciones c
+		left join customers cu on cu.id = c.customer_id where c.id = $1`, convID).Scan(&nombre)
+	aviso := &push.Aviso{Titulo: "Corte por WhatsApp", Cuerpo: fmt.Sprintf("%s: %d %s en %s. Confirmale precio y entrega.", nombre, n, plural(n, "pieza", "piezas"), placa),
+		URL: "/corte/c/" + token, Etiqueta: "corte-" + token, Pantalla: "/admin/cortes"}
+	return texto, aviso, nil
+}

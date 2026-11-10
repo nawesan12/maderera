@@ -262,6 +262,7 @@ func correrAPI() error {
 	// y el envío de archivos con sus direcciones de siempre.
 	wa := whatsapp.Nuevo(pool, cfg.WhatsApp, push.Nuevo(cfg.Push, q, log), log)
 	wa.ConBuscador(buscadorDelBot(pool), fichaDelBot(pool))
+	wa.ConCortes(corteadorDelBot(pool, log))
 	wa.Rutas(m)
 	whatsappapi.HandlerWithOptions(
 		whatsappapi.NewStrictHandlerWithOptions(whatsapp.NuevaAPI(wa, cfg.Interna),

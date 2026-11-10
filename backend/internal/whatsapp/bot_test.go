@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -204,5 +205,41 @@ func TestBotArmaElPresupuesto(t *testing.T) {
 		where c.wa_jid = $1 and m.origen = 'bot'`, jid).Scan(&salientes)
 	if strings.Contains(salientes, "52000") || strings.Contains(salientes, "$") || !strings.Contains(salientes, "¿En qué medida") || !strings.Contains(salientes, "te armo el presupuesto") {
 		t.Errorf("lo que se le dijo al cliente: %s", salientes)
+	}
+}
+
+// El despiece del chat queda como consulta de corte: el cliente recibe el
+// plano y el aserradero, el aviso. Si una pieza no entra, se dice; si no se
+// reconoce la placa, queda el link al cortador.
+func TestBotGuardaElCorte(t *testing.T) {
+	e := armar(t, false)
+	ctx := e.ctx
+	if _, err := e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('whatsapp_bot', 'si')`); err != nil {
+		t.Fatal(err)
+	}
+	e.wa.ConCortes(func(_ context.Context, d asistente.Despiece) (string, string, string, error) {
+		switch d.Material {
+		case "melamina blanca":
+			return "TOKEN123", "Melamina blanca 18mm", "", nil
+		case "mdf":
+			return "", "MDF 18mm", "Hay una pieza que no entra en la placa. Revisá esa medida.", nil
+		}
+		return "", "", "", nil
+	})
+	casos := []struct{ jid, texto, quiere string }{
+		{"5492235550011", "4 de 600x400 en melamina blanca con canto", "/corte/c/TOKEN123"},
+		{"5492235550012", "2 de 2900x400 en mdf", "no entra"},
+		{"5492235550013", "4 de 600x400 en quebracho", "/corte#piezas="},
+	}
+	for i, c := range casos {
+		if _, err := e.wa.AtenderEntrante(ctx, MensajeMeta{WaMessageID: fmt.Sprintf("wamid.c%d", i), Tipo: "text", Texto: c.texto}, c.jid); err != nil {
+			t.Fatal(err)
+		}
+		var r string
+		_ = e.pool.QueryRow(ctx, `select m.cuerpo from whatsapp_mensajes m join whatsapp_conversaciones c on c.id = m.conversacion_id
+			where c.wa_jid = $1 and m.origen = 'bot'`, c.jid).Scan(&r)
+		if !strings.Contains(r, c.quiere) {
+			t.Errorf("%q: %q", c.texto, r)
+		}
 	}
 }

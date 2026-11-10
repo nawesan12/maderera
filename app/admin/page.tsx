@@ -10,7 +10,6 @@ import {
   Users,
   Warehouse,
 } from "lucide-react";
-import { seccionesPara } from "@/components/admin/secciones";
 import { NumerosDelNegocio } from "@/components/admin/numeros-del-negocio";
 import { FiltroPeriodo } from "@/components/admin/filtro-periodo";
 import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
@@ -27,10 +26,11 @@ import { puedeEntrar } from "@/lib/roles";
  * hasta que la última terminaba. Para hacer cualquier cosa había que ir igual
  * al menú lateral a buscarla, que es lo que un resumen existe para evitar.
  *
- * Ahora son tres franjas, de lo que urge a lo que se consulta: lo que está
- * esperando, lo que se puede empezar, y el panel entero en botones. **Los
- * botones no consultan nada**: lo único que pregunta a la base es el trabajo
- * pendiente, y los números llegan después, adentro de un `<Suspense>`.
+ * Son dos franjas y los números: lo que está esperando y lo que se puede
+ * empezar. El panel entero en botones («Ir a») se sacó el 10/11: repetía el
+ * menú lateral y el buscador, y eran treinta cajas sueltas. **Los botones no
+ * consultan nada**: lo único que pregunta a la base es el trabajo pendiente,
+ * y los números llegan después, adentro de un `<Suspense>`.
  *
  * **Todo se acota por rol**, con la misma lista que usan el menú y las páginas.
  * Un botón que ofrece algo que después rebota es peor que no tenerlo.
@@ -76,13 +76,6 @@ export default async function ResumenPage({
   ]);
 
   const periodo = resolverPeriodo(leerPeriodo((await searchParams).periodo));
-  /*
-   * Todo el panel menos esta pantalla: un botón que lleva a donde uno ya está
-   * es un renglón que se lee y no sirve.
-   */
-  const grupos = seccionesPara(staffRole)
-    .map((s) => ({ ...s, items: s.items.filter((i) => i.href !== "/admin") }))
-    .filter((s) => s.items.length > 0);
   const acciones = ACCIONES.filter((a) =>
     puedeEntrar(a.href.split("?")[0], staffRole),
   );
@@ -100,34 +93,26 @@ export default async function ResumenPage({
 
       {pendientes.length > 0 && (
         <section>
-          <Encabezado
-            titulo="Para hoy"
-          />
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <Encabezado titulo="Para hoy" />
+          {/* Una hoja con los números en columnas, no una caja por número: lo
+              urgente se distingue por el color de la cifra. */}
+          <div className="tarjeta grid divide-y divide-linea-suave sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 [&>*]:sm:border-l [&>*]:sm:border-linea-suave [&>*:first-child]:sm:border-l-0">
             {pendientes.map((p) => (
               <Link
                 key={p.clave}
                 href={p.href}
-                className={`group relative overflow-hidden rounded-xl border p-4 pt-[17px] transition-colors ${
-                  p.urgente
-                    ? "estado-problema border-[color-mix(in_oklab,var(--estado-acento)_35%,transparent)] bg-[var(--estado-fondo)]"
-                    : "textura border-linea bg-card hover:border-accion"
+                className={`group flex flex-col gap-2 px-6 py-5 transition-colors hover:bg-hundida/60 ${
+                  p.urgente ? "estado-problema" : ""
                 }`}
               >
                 <span
-                  className={`absolute inset-x-0 top-0 h-[3px] ${
-                    p.urgente ? "bg-[var(--estado-acento)]" : "bg-linea"
-                  }`}
-                  aria-hidden="true"
-                />
-                <span
-                  className={`tabular block text-[30px] font-extrabold leading-none tracking-tight ${
+                  className={`tabular text-[44px] font-extrabold leading-none tracking-[-0.04em] ${
                     p.urgente ? "text-[var(--estado-tinta)]" : ""
                   }`}
                 >
                   {p.cantidad}
                 </span>
-                <span className="mt-1.5 block text-[14.5px] font-semibold leading-tight">
+                <span className="text-base font-semibold leading-tight group-hover:underline">
                   {p.texto}
                 </span>
               </Link>
@@ -138,62 +123,23 @@ export default async function ResumenPage({
 
       {acciones.length > 0 && (
         <section>
-          <Encabezado
-            titulo="Empezar algo"
-          />
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {acciones.map((a) => (
+          <Encabezado titulo="Empezar algo" />
+          <div className="flex flex-wrap gap-2.5">
+            {acciones.map((a, n) => (
               <Link
                 key={a.href}
                 href={a.href}
-                className="textura group relative flex items-center gap-3 overflow-hidden rounded-xl border border-linea bg-card py-4 pl-[17px] pr-4 text-[14.5px] font-bold transition-colors hover:border-accion"
+                className={`inline-flex h-11 items-center gap-2 rounded-full px-4 text-[15px] font-semibold ${
+                  n === 0 ? "bg-accion text-white" : "border bg-card"
+                }`}
               >
-                <span
-                  className="absolute inset-y-0 left-0 w-1 bg-accion"
-                  aria-hidden="true"
-                />
-                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[11px] bg-naranja-claro text-acento-sobre-claro">
-                  <a.icon className="h-[22px] w-[22px]" />
-                </span>
+                <a.icon className={`h-[18px] w-[18px] ${n === 0 ? "" : "text-acento-texto"}`} />
                 {a.label}
               </Link>
             ))}
           </div>
         </section>
       )}
-
-      <section>
-        <Encabezado
-          titulo="Ir a"
-        />
-        <div className="space-y-4">
-          {grupos.map((g) => (
-            <div key={g.titulo}>
-              <h3 className="mb-2 flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-[0.14em] text-texto-3">
-                <span
-                  className="h-[3px] w-[22px] rounded-full bg-accion"
-                  aria-hidden="true"
-                />
-                {g.titulo}
-              </h3>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-                {g.items.map((i) => (
-                  <Link
-                    key={i.href}
-                    href={i.href}
-                    className="flex items-center gap-2.5 rounded-[11px] border border-linea bg-card px-3 py-2.5 text-sm font-semibold transition-colors hover:border-accion"
-                  >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-hundida text-acento-texto">
-                      <i.icon className="h-4 w-4" />
-                    </span>
-                    {i.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {veLosNumeros && (
         <section className="border-t border-dashed border-linea pt-6">

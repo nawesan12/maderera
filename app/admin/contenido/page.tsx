@@ -5,6 +5,8 @@ import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { listarAjustes, listarResenas } from "@/lib/dal/admin/contenido";
 import { Ajustes } from "./secciones";
 import { Resenas } from "./resenas";
+import { InterruptoresDeTienda } from "./tienda";
+import { leerTienda } from "@/lib/tienda";
 
 export const metadata: Metadata = { title: "Contenido" };
 
@@ -25,6 +27,10 @@ export default async function ContenidoPage() {
     listarResenas(),
     listarAjustes(),
   ]);
+  // Los interruptores tienen su propia tarjeta: en la lista de textos
+  // aparecían como un campo donde escribir «si» o «no».
+  const tienda = leerTienda(Object.fromEntries(ajustes.map((a) => [a.clave, a.valor])));
+  const textos = ajustes.filter((a) => a.clave !== "tienda_activa" && a.clave !== "stock_visible");
 
   return (
     <div className="space-y-6">
@@ -58,6 +64,8 @@ export default async function ContenidoPage() {
         </Link>
       </EncabezadoPanel>
 
+      <InterruptoresDeTienda tienda={tienda} />
+
       <Resenas resenas={resenas} />
 
       <section className="tarjeta p-5">
@@ -70,7 +78,7 @@ export default async function ContenidoPage() {
         </p>
 
         <div className="mt-4">
-          <Ajustes ajustes={ajustes} />
+          <Ajustes ajustes={textos} />
         </div>
       </section>
     </div>

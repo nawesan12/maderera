@@ -7,6 +7,7 @@ import { Phone, Mail, MapPin, Clock } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { Separator } from "@/components/ui/separator";
 import { REDES } from "@/lib/empresa";
+import { tienda } from "@/lib/dal/contenido";
 
 /**
  * El pie repite los datos de contacto, y por eso los lee de la base.
@@ -18,10 +19,11 @@ import { REDES } from "@/lib/empresa";
  * exige buscarlo en cuatro archivos.
  */
 export async function Footer() {
-  const [whatsapp, sucursales, anio] = await Promise.all([
+  const [whatsapp, sucursales, anio, laTienda] = await Promise.all([
     enlaceWhatsapp(),
     listarSucursalesPublicas(),
     anioEnCurso(),
+    tienda(),
   ]);
   const principal = sucursales[0];
   return (
@@ -90,7 +92,7 @@ export async function Footer() {
               {[
                 ["Catálogo", "/catalogo"],
                 ["Calculadora de materiales", "/calculadora"],
-                ["Pedir Presupuesto", "/carrito"],
+                ...(laTienda.activa ? [["Pedir Presupuesto", "/carrito"]] : []),
                 ["Crear una cuenta", "/registro"],
                 ["Portal Profesionales", "/profesionales"],
                 ["Sucursales", "/sucursales"],

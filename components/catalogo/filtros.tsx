@@ -6,6 +6,7 @@ import { Search, SlidersHorizontal, Tag, X } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { useTienda } from "@/lib/tienda-context";
 
 export interface CategoriaFiltro {
   slug: string;
@@ -168,6 +169,7 @@ export function PanelCategorias({
   hayBusqueda: boolean;
 }) {
   const { actualizar, limpiar } = useFiltros();
+  const { stockVisible } = useTienda();
 
   const hayFiltros =
     categoriaActual !== "todos" ||
@@ -283,25 +285,31 @@ export function PanelCategorias({
         </>
       )}
 
-      <h2 className="mb-2.5 mt-[22px] text-[11.5px] font-bold uppercase tracking-[0.11em] text-texto-3">
-        Disponibilidad
-      </h2>
-      <ul className="space-y-0.5">
-        {DISPONIBILIDAD.map((d) => (
-          <li key={d.valor}>
-            <button
-              onClick={() => actualizar({ stock: d.valor })}
-              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
-                stockActual === d.valor
-                  ? "bg-accion font-semibold text-white"
-                  : "text-texto-2 hover:bg-card"
-              }`}
-            >
-              {d.texto}
-            </button>
-          </li>
-        ))}
-      </ul>
+      {/* Con el stock todavía sin cargar, «Solo con stock» vaciaría el
+          catálogo entero. */}
+      {stockVisible && (
+        <>
+          <h2 className="mb-2.5 mt-[22px] text-[11.5px] font-bold uppercase tracking-[0.11em] text-texto-3">
+            Disponibilidad
+          </h2>
+          <ul className="space-y-0.5">
+            {DISPONIBILIDAD.map((d) => (
+              <li key={d.valor}>
+                <button
+                  onClick={() => actualizar({ stock: d.valor })}
+                  className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                    stockActual === d.valor
+                      ? "bg-accion font-semibold text-white"
+                      : "text-texto-2 hover:bg-card"
+                  }`}
+                >
+                  {d.texto}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       {hayFiltros && (
         <button
@@ -321,7 +329,7 @@ export function PanelCategorias({
           Lo cortamos en el aserradero. Mandanos el despiece y te cotizamos.
         </p>
         <Link
-          href="/carrito"
+          href="/corte"
           className="mt-3 flex h-[42px] items-center justify-center rounded-[9px] bg-accion text-[14.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
         >
           Pedir corte a medida

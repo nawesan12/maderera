@@ -8,6 +8,8 @@ import { listarCategorias, listarProductosPublicos } from "@/lib/dal/catalog";
 import type { StockLevel } from "@/lib/stock-level";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd } from "@/lib/seo";
+import { redirect } from "next/navigation";
+import { tienda } from "@/lib/dal/contenido";
 
 interface Params {
   cat?: string;
@@ -38,6 +40,8 @@ export default async function StockPage({
   searchParams: Promise<Params>;
 }) {
   const params = await searchParams;
+  // El stock todavía no está cargado: la página diría «sin stock» de todo.
+  if (!(await tienda()).stockVisible) redirect("/catalogo");
 
   return (
     <div className="min-h-screen">

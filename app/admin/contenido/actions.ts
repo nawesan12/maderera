@@ -33,6 +33,29 @@ export async function guardarAjuste(_previo: EstadoContenido, formData: FormData
   return { ok: "Guardado." };
 }
 
+/**
+ * Prende o apaga la tienda online o la disponibilidad (migración 00093). La API
+ * de Go valida el valor y lo anota en la bitácora.
+ *
+ * **Además de los ajustes se rearma el catálogo y todo el sitio**: con la
+ * tienda apagada Go deja de mandar los precios, pero lo que Next ya tenía
+ * guardado los seguiría mostrando hasta vencer.
+ */
+export async function cambiarInterruptor(
+  clave: "tienda_activa" | "stock_visible",
+  encender: boolean,
+): Promise<EstadoContenido> {
+  const r = await (await api()).PUT("/api/v1/admin/contenido/ajustes/{clave}", {
+    params: { path: { clave } },
+    body: { valor: encender ? "si" : "no" },
+  });
+  if (r.error) return { error: mensajeDe(r.error as Problema, "No se pudo cambiar.") };
+  refrescar();
+  updateTag(ETIQUETAS.catalogo);
+  revalidatePath("/", "layout");
+  return { ok: encender ? "Listo, quedó encendido." : "Listo, quedó apagado." };
+}
+
 export async function moderarResena(_previo: EstadoContenido, formData: FormData): Promise<EstadoContenido> {
   const estado = String(formData.get("estado") ?? "") as "publicada" | "rechazada" | "pendiente";
   const motivo = String(formData.get("motivo") ?? "").trim();

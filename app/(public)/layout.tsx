@@ -17,6 +17,8 @@ import { organizacionJsonLd, sitioWebJsonLd } from "@/lib/seo";
 import { degradar } from "@/lib/degradar";
 import { estadoDelVisitante } from "@/lib/dal/visitante";
 import { REDES } from "@/lib/empresa";
+import { leerTienda } from "@/lib/tienda";
+import { TiendaProvider } from "@/lib/tienda-context";
 
 export default async function PublicLayout({
   children,
@@ -61,6 +63,11 @@ export default async function PublicLayout({
   // cómo el sitio seguía mostrando un teléfono ya corregido en el panel.
   const principal = sucursales[0] ?? null;
 
+  // Si los ajustes no se pudieron leer, `degradar` devuelve {} y la tienda
+  // queda encendida: los precios igual los controla la API, que no los manda
+  // con la tienda apagada. Lo peor que pasa es un botón que no anda.
+  const laTienda = leerTienda(ajustes);
+
   // La organización va en todas las páginas y no solo en la portada: las
   // ofertas de cada producto y las fichas de cada sucursal apuntan a este nodo
   // por `@id`, y una referencia a un nodo que no está en la página es una
@@ -81,6 +88,7 @@ export default async function PublicLayout({
 
   return (
     <EstadoProvider estado={estadoDelVisitante()}>
+    <TiendaProvider tienda={laTienda}>
     <CarritoProvider>
       <SaltarAlContenido />
       <DatosEstructurados datos={marcado} />
@@ -123,6 +131,7 @@ export default async function PublicLayout({
         enlaceWhatsapp={`${whatsapp}?text=${encodeURIComponent("Hola! Vengo del asistente de la web y quería consultar por...")}`}
       />
     </CarritoProvider>
+    </TiendaProvider>
     </EstadoProvider>
   );
 }

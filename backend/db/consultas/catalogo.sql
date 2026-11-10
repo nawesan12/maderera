@@ -70,3 +70,7 @@ JOIN products p ON p.id = v.product_id AND p.active
 LEFT JOIN price_list_items pr ON pr.variant_id = v.id AND pr.price_list_id = sqlc.narg(lista)::uuid
 LEFT JOIN price_list_items g ON g.variant_id = v.id AND g.price_list_id = sqlc.narg(general)::uuid
 WHERE v.active AND coalesce(pr.price, g.price) IS NOT NULL;
+
+-- name: AjustesDeLaTienda :many
+-- Los dos interruptores de la tienda (migración 00093).
+SELECT clave, valor FROM site_settings WHERE clave IN ('tienda_activa', 'stock_visible');

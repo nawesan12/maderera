@@ -9,6 +9,8 @@ import { getSession } from "@/lib/dal/session";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { estadoProfesional } from "@/lib/dal/profesionales";
+import { redirect } from "next/navigation";
+import { tienda } from "@/lib/dal/contenido";
 import { VistaDelCarrito } from "./vista";
 
 export const metadata: Metadata = {
@@ -26,6 +28,10 @@ export const metadata: Metadata = {
  * corresponde la cola express.
  */
 export default async function CarritoPage() {
+  // Sin tienda no hay carrito: los precios no salen de la API y nada se
+  // puede agregar. Quien llega por un enlace viejo va al catálogo.
+  if (!(await tienda()).activa) redirect("/catalogo");
+
   const [sucursales, sesion, cliente, profesional, carrito, whatsapp, vista] =
     await Promise.all([
       listarSucursalesPublicas(),

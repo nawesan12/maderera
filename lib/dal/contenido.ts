@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 import { apiPublica, datos } from "@/lib/api/servidor";
+import { leerTienda, type Tienda } from "@/lib/tienda";
 
 /**
  * Los textos editables del sitio.
@@ -42,6 +43,11 @@ export const ajustesDelSitio = cache(
 export async function ajuste(clave: string, porDefecto = ""): Promise<string> {
   const ajustes = await ajustesDelSitio();
   return ajustes[clave] || porDefecto;
+}
+
+/** Los interruptores de la tienda (ver `lib/tienda.ts`). */
+export async function tienda(): Promise<Tienda> {
+  return leerTienda(await ajustesDelSitio());
 }
 
 export interface PromoVigente {

@@ -12,6 +12,7 @@ import {
 import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
 import { SelectorVarianteDeQuienMira } from "@/components/catalogo/selector-variante";
+import { tienda } from "@/lib/dal/contenido";
 import { preciosDeFicha } from "@/lib/dal/visitante";
 import {
   obtenerProductoPublico,
@@ -141,7 +142,7 @@ export default async function ProductoPage({
     producto.slug,
   );
 
-  const [whatsapp, numeroDelNegocio, resenas, resumenResenas, hoy] =
+  const [whatsapp, numeroDelNegocio, resenas, resumenResenas, hoy, laTienda] =
     await Promise.all([
       // Con el enlace a la ficha: quien atiende ve de qué producto se habla
       // sin preguntar, y WhatsApp lo muestra como tarjeta con la foto.
@@ -152,6 +153,7 @@ export default async function ProductoPage({
       resenasDelProducto(producto.id),
       resumenDeResenas(producto.id),
       hoyEnCurso(),
+      tienda(),
     ]);
 
   // Las medidas se arman de las variantes: si ninguna las tiene cargadas, la
@@ -285,6 +287,7 @@ export default async function ProductoPage({
                 unit={producto.unit}
                 variantes={producto.variantes}
                 whatsapp={whatsapp}
+                numeroWhatsapp={numeroDelNegocio}
                 alicuota={Number(producto.alicuotaIva) || 21}
                 aPedido={producto.aPedido}
                 formaDeVenta={producto.formaDeVenta}
@@ -304,7 +307,9 @@ export default async function ProductoPage({
                   Retiro sin cargo
                 </span>
                 <p className="mt-1.5 text-[13.5px] leading-snug text-texto-2">
-                  En Casa Central o en el Aserradero, con el número de pedido.
+                  {laTienda.activa
+                    ? "En Casa Central o en el Aserradero, con el número de pedido."
+                    : "En Casa Central o en el Aserradero."}
                 </p>
               </li>
               <li className="rounded-xl border border-linea bg-card px-4 py-3.5">
@@ -313,20 +318,26 @@ export default async function ProductoPage({
                   Envío a domicilio
                 </span>
                 <p className="mt-1.5 text-[13.5px] leading-snug text-texto-2">
-                  En Mar del Plata y zona. El costo se calcula al finalizar.
+                  {laTienda.activa
+                    ? "En Mar del Plata y zona. El costo se calcula al finalizar."
+                    : "En Mar del Plata y zona. Te lo cotizamos junto con el pedido."}
                 </p>
               </li>
             </ul>
 
-            <a
-              href={whatsapp}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 flex h-[50px] items-center justify-center gap-2.5 rounded-[10px] border border-verde-whatsapp/35 bg-verde-whatsapp/10 text-[15.5px] font-semibold text-verde-whatsapp transition-colors hover:bg-verde-whatsapp/20"
-            >
-              <MessageCircle className="h-[18px] w-[18px]" />
-              Consultar por WhatsApp
-            </a>
+            {/* Con la tienda apagada el WhatsApp ya es el botón principal del
+                selector, con la medida escrita: otro igual acá abajo sobra. */}
+            {laTienda.activa && (
+              <a
+                href={whatsapp}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 flex h-[50px] items-center justify-center gap-2.5 rounded-[10px] border border-verde-whatsapp/35 bg-verde-whatsapp/10 text-[15.5px] font-semibold text-verde-whatsapp transition-colors hover:bg-verde-whatsapp/20"
+              >
+                <MessageCircle className="h-[18px] w-[18px]" />
+                Consultar por WhatsApp
+              </a>
+            )}
           </div>
         </div>
 

@@ -48,6 +48,7 @@ const LISTADOS: Record<string, string> = {
   retencion_sufrida: "/admin/arca/retenciones",
   stock: "/admin/stock",
   tarifa_corte: "/admin/cortes/tarifas",
+  tienda: "/admin/contenido",
   vendedor: "/admin/clientes/vendedores",
   zona_envio: "/admin/envios",
 };
@@ -109,6 +110,7 @@ const ETIQUETAS: Record<string, string> = {
   retencion_sufrida: "Retención que nos hicieron",
   stock: "Stock",
   tarifa_corte: "Tarifa de corte",
+  tienda: "Tienda online",
   vendedor: "Vendedor",
   zona_envio: "Zona de envío",
 };

@@ -22,7 +22,8 @@ import { ProductCard } from "@/components/product-card";
 import { datosDePortada, numerosDeLaEmpresa } from "@/lib/dal/catalog";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { bannersDe } from "@/lib/dal/banners";
-import { promosVigentes, type PromoVigente } from "@/lib/dal/contenido";
+import { promosVigentes, tienda, type PromoVigente } from "@/lib/dal/contenido";
+import type { Tienda } from "@/lib/tienda";
 import { escalasDePagoPublicas } from "@/lib/dal/descuentos-pago";
 import { ALCANCE_MOLDAVA } from "@/lib/empresa";
 import { SliderDePromos } from "@/components/home/slider-promos";
@@ -72,6 +73,7 @@ export default async function HomePage() {
     escalasPago,
     resenas,
     resumenResenas,
+    laTienda,
   ] = await Promise.all([
     datosDePortada(),
     listarSucursalesPublicas(),
@@ -83,6 +85,7 @@ export default async function HomePage() {
     // confianza y trayectoria, y eso lo sostenía el año de fundación solo.
     resenasDelNegocio(),
     resumenDelNegocio(),
+    tienda(),
   ]);
 
   return (
@@ -119,7 +122,7 @@ export default async function HomePage() {
 
       <Destacados productos={portada.destacados} />
 
-      <Herramientas />
+      <Herramientas tienda={laTienda} />
 
       <ResenasDelNegocio resenas={resenas} resumen={resumenResenas} />
 
@@ -653,8 +656,8 @@ function BannerProfesionales({
   );
 }
 
-function Herramientas() {
-  const herramientas = [
+function Herramientas({ tienda }: { tienda: Tienda }) {
+  const todas = [
     {
       icono: Scissors,
       titulo: "Corte a medida",
@@ -696,13 +699,18 @@ function Herramientas() {
       cta: "Calcular materiales",
     },
   ];
+  // Sin tienda no hay carrito donde armar el presupuesto, y el stock no se
+  // muestra hasta que esté cargado.
+  const herramientas = todas.filter(
+    (h) => (h.href !== "/carrito" || tienda.activa) && (h.href !== "/stock" || tienda.stockVisible),
+  );
 
   return (
     <section className="bg-sitio-alt py-[48px]">
       <div className="contenedor">
         <TituloSeccion>Herramientas</TituloSeccion>
 
-        <div className="mt-7 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-7 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
           {herramientas.map((h) => (
             <article
               key={h.titulo}

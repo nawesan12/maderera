@@ -190,11 +190,20 @@ func (a *API) AdminAjustes(ctx context.Context, _ contenidoapi.AdminAjustesReque
 }
 
 func (a *API) GuardarAjuste(ctx context.Context, r contenidoapi.GuardarAjusteRequestObject) (contenidoapi.GuardarAjusteResponseObject, error) {
-	if _, err := admin(ctx); err != nil {
+	ses, err := admin(ctx)
+	if err != nil {
 		return nil, err
 	}
 	if err := a.s.GuardarAjuste(ctx, r.Clave, r.Body.Valor); err != nil {
 		return nil, err
+	}
+	// Prender o apagar la tienda cambia qué ve todo el mundo: queda anotado.
+	if desc, ok := interruptores[r.Clave]; ok {
+		estado := "Apagó"
+		if r.Body.Valor == "si" {
+			estado = "Encendió"
+		}
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "tienda", r.Clave, estado+" "+desc, nil)
 	}
 	return listo(), nil
 }

@@ -100,7 +100,15 @@ func (a *API) conCookie(r Resultado, err error) (respuesta, error) {
 	return o, nil
 }
 
+// apagada corta todo lo que llena o cobra el carrito si la tienda está
+// apagada (ver catalogo/tienda.go). Vaciar y quitar siguen andando: un
+// carrito armado antes de apagarla se tiene que poder limpiar.
+func (a *API) apagada(ctx context.Context) error { return a.s.cat.ExigirTienda(ctx) }
+
 func (a *API) MiCarrito(ctx context.Context, _ checkoutapi.MiCarritoRequestObject) (checkoutapi.MiCarritoResponseObject, error) {
+	if a.apagada(ctx) != nil {
+		return respuesta{codigo: http.StatusOK, v: CarritoVacio()}, nil
+	}
 	c, err := a.s.Obtener(ctx, quien(ctx))
 	if err != nil {
 		return nil, err
@@ -109,14 +117,23 @@ func (a *API) MiCarrito(ctx context.Context, _ checkoutapi.MiCarritoRequestObjec
 }
 
 func (a *API) AgregarAlCarrito(ctx context.Context, r checkoutapi.AgregarAlCarritoRequestObject) (checkoutapi.AgregarAlCarritoResponseObject, error) {
+	if err := a.apagada(ctx); err != nil {
+		return nil, err
+	}
 	return a.conCookie(a.s.Agregar(ctx, quien(ctx), map[string]any(*r.Body)))
 }
 
 func (a *API) AgregarVariosAlCarrito(ctx context.Context, r checkoutapi.AgregarVariosAlCarritoRequestObject) (checkoutapi.AgregarVariosAlCarritoResponseObject, error) {
+	if err := a.apagada(ctx); err != nil {
+		return nil, err
+	}
 	return a.conCookie(a.s.AgregarVarios(ctx, quien(ctx), r.Body.Items))
 }
 
 func (a *API) CambiarCantidadDelCarrito(ctx context.Context, r checkoutapi.CambiarCantidadDelCarritoRequestObject) (checkoutapi.CambiarCantidadDelCarritoResponseObject, error) {
+	if err := a.apagada(ctx); err != nil {
+		return nil, err
+	}
 	cantidad := 0.0
 	if r.Body != nil && r.Body.Cantidad != nil {
 		cantidad = *r.Body.Cantidad
@@ -133,6 +150,9 @@ func (a *API) VaciarCarrito(ctx context.Context, _ checkoutapi.VaciarCarritoRequ
 }
 
 func (a *API) ActualizarPreciosDelCarrito(ctx context.Context, _ checkoutapi.ActualizarPreciosDelCarritoRequestObject) (checkoutapi.ActualizarPreciosDelCarritoResponseObject, error) {
+	if err := a.apagada(ctx); err != nil {
+		return nil, err
+	}
 	return a.conCookie(a.s.ActualizarPrecios(ctx, quien(ctx)))
 }
 
@@ -144,6 +164,9 @@ func (a *API) QuitarLosQueSeCotizan(ctx context.Context, _ checkoutapi.QuitarLos
 }
 
 func (a *API) AgregarCorteAlCarrito(ctx context.Context, r checkoutapi.AgregarCorteAlCarritoRequestObject) (checkoutapi.AgregarCorteAlCarritoResponseObject, error) {
+	if err := a.apagada(ctx); err != nil {
+		return nil, err
+	}
 	// El freno de la cotización del corte: el trabajo más caro desde afuera.
 	if v := a.s.lim.Permitido(ctx, limites.Corte, "ip:"+ip(ctx)); !v.Permitido {
 		return nil, espera(v)
@@ -156,6 +179,9 @@ func (a *API) QuitarCorteDelCarrito(ctx context.Context, r checkoutapi.QuitarCor
 }
 
 func (a *API) PedirPresupuesto(ctx context.Context, r checkoutapi.PedirPresupuestoRequestObject) (checkoutapi.PedirPresupuestoResponseObject, error) {
+	if err := a.apagada(ctx); err != nil {
+		return nil, err
+	}
 	p, err := a.s.PedirPresupuesto(ctx, quien(ctx), ip(ctx), map[string]any(*r.Body))
 	if err != nil {
 		return nil, err
@@ -164,6 +190,9 @@ func (a *API) PedirPresupuesto(ctx context.Context, r checkoutapi.PedirPresupues
 }
 
 func (a *API) ConfirmarCompra(ctx context.Context, r checkoutapi.ConfirmarCompraRequestObject) (checkoutapi.ConfirmarCompraResponseObject, error) {
+	if err := a.apagada(ctx); err != nil {
+		return nil, err
+	}
 	c, err := a.s.Confirmar(ctx, quien(ctx), ip(ctx), map[string]any(*r.Body))
 	if err != nil {
 		return nil, err

@@ -11,6 +11,36 @@ import (
 	"mjbj/internal/jsmath"
 )
 
+const ajustesDeLaTienda = `-- name: AjustesDeLaTienda :many
+SELECT clave, valor FROM site_settings WHERE clave IN ('tienda_activa', 'stock_visible')
+`
+
+type AjustesDeLaTiendaRow struct {
+	Clave string `json:"clave"`
+	Valor string `json:"valor"`
+}
+
+// Los dos interruptores de la tienda (migración 00093).
+func (q *Queries) AjustesDeLaTienda(ctx context.Context) ([]AjustesDeLaTiendaRow, error) {
+	rows, err := q.db.Query(ctx, ajustesDeLaTienda)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AjustesDeLaTiendaRow{}
+	for rows.Next() {
+		var i AjustesDeLaTiendaRow
+		if err := rows.Scan(&i.Clave, &i.Valor); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const categorias = `-- name: Categorias :many
 SELECT c.id, c.slug, c.name, c.description, c.icon, c.image, count(p.id)::int AS product_count
 FROM categories c

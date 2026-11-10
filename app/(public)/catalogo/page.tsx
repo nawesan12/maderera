@@ -33,6 +33,7 @@ import {
   recortar,
 } from "@/lib/seo";
 import { TEXTOS_DE_CATEGORIA, TEXTOS_DE_RUBRO } from "@/lib/textos-categorias";
+import { tienda } from "@/lib/dal/contenido";
 
 interface Params {
   cat?: string;
@@ -70,7 +71,9 @@ export async function generateMetadata({
   searchParams: Promise<Params>;
 }): Promise<Metadata> {
   const params = await searchParams;
-  const resuelto = await resolverFiltro(params);
+  const [resuelto, laTienda] = await Promise.all([resolverFiltro(params), tienda()]);
+  // Sin tienda no hay precios en el sitio: la descripción no los puede prometer.
+  const alDia = laTienda.activa ? "con precio final y stock al día" : "con medidas, fichas y asesoramiento";
 
   /*
    * Lo que no se indexa.
@@ -103,7 +106,7 @@ export async function generateMetadata({
           ? `${resuelto.categoria.name} en Mar del Plata`
           : "Catálogo de productos",
       descripcion:
-        "Maderas, placas, molduras, pisos y ferretería con precio y stock al día en Maderera Juan B. Justo, Mar del Plata.",
+        `Maderas, placas, molduras, pisos y ferretería ${alDia} en Maderera Juan B. Justo, Mar del Plata.`,
       ruta: canonica,
       indexar: false,
     });
@@ -127,7 +130,7 @@ export async function generateMetadata({
     const descripcion = [
       `${nombre} en Mar del Plata.`,
       productos.length > 0
-        ? `${cantidad}${desde ? ` desde ${precioEnTexto(desde)}` : ""}, con precio final y stock al día en Casa Central y el Aserradero.`
+        ? `${cantidad}${desde ? ` desde ${precioEnTexto(desde)}` : ""}, ${alDia} en Casa Central y el Aserradero.`
         : null,
       rubro ? null : (categoria.description ?? null),
     ]
@@ -151,7 +154,7 @@ export async function generateMetadata({
     ...metadatosDePagina({
       titulo: "Catálogo de maderas, placas y materiales",
       descripcion:
-        "Techos, placas, pisos, molduras, ferretería, decks, construcción en seco y cubiertas, con precio final y stock al día en Mar del Plata.",
+        `Techos, placas, pisos, molduras, ferretería, decks, construcción en seco y cubiertas, ${alDia} en Mar del Plata.`,
       ruta: "/catalogo",
     }),
     keywords: [
@@ -223,6 +226,7 @@ async function Catalogo({
   searchParams: Promise<Params>;
 }) {
   const params = await searchParams;
+  const laTienda = await tienda();
   const { categoria: categoriaActual, rubro: rubroActual } =
     await resolverFiltro(params);
 
@@ -248,7 +252,9 @@ async function Catalogo({
   const bajada = rubroActual
     ? (TEXTOS_DE_RUBRO[rubroActual.slug] ?? categoriaActual?.description ?? null)
     : (categoriaActual?.description ??
-      "Maderas, placas, molduras y todo lo que necesita tu obra, con precios y disponibilidad al día.");
+      (laTienda.activa
+        ? "Maderas, placas, molduras y todo lo que necesita tu obra, con precios y disponibilidad al día."
+        : "Maderas, placas, molduras y todo lo que necesita tu obra. Elegí la medida y te pasamos el precio por WhatsApp."));
 
   return (
     <div className="min-h-screen bg-sitio-alt">

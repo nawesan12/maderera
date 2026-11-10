@@ -242,10 +242,20 @@ func (s *Servicio) DejarResena(ctx context.Context, ses *auth.Sesion, r NuevaRes
 
 // --- el panel ---
 
+// interruptores son los ajustes de la tienda (migración 00093): valen «si» o
+// «no», y la descripción es la de la bitácora.
+var interruptores = map[string]string{
+	"tienda_activa": "la tienda online",
+	"stock_visible": "la disponibilidad en el sitio",
+}
+
 // GuardarAjuste cambia un texto del sitio.
 func (s *Servicio) GuardarAjuste(ctx context.Context, clave, valor string) error {
 	if clave == "" || utf8.RuneCountInString(clave) > 60 || utf8.RuneCountInString(valor) > 500 {
 		return plataforma.Invalido(map[string]string{"valor": "No se pudo guardar: el texto no puede pasar de 500 letras."})
+	}
+	if _, ok := interruptores[clave]; ok && valor != "si" && valor != "no" {
+		return plataforma.Invalido(map[string]string{"valor": "Este ajuste solo puede estar encendido o apagado."})
 	}
 	n, err := s.q.GuardarAjuste(ctx, sqlc.GuardarAjusteParams{Clave: clave, Valor: valor})
 	if err != nil {

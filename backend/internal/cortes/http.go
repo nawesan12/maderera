@@ -411,7 +411,17 @@ func (a *API) SugerirDelCatalogo(ctx context.Context, r cortesapi.SugerirDelCata
 		terminos = terminos[:8]
 	}
 	v, err := a.s.Sugerir(ctx, l, terminos)
-	return ok(v), err
+	if err != nil {
+		return nil, err
+	}
+	if t, err := a.s.cat.Tienda(ctx); err != nil {
+		return nil, err
+	} else if !t.Activa {
+		for i := range v {
+			v[i].Precio = nil
+		}
+	}
+	return ok(v), nil
 }
 
 // --- el armador de cortes ---
@@ -422,7 +432,20 @@ func (a *API) PlacasCortables(ctx context.Context, r cortesapi.PlacasCortablesRe
 		return nil, err
 	}
 	v, err := a.s.Placas(ctx, l)
-	return ok(v), err
+	if err != nil {
+		return nil, err
+	}
+	// Con la tienda apagada el armador dibuja el plano y cuenta placas,
+	// pasadas y metros de canto, pero no cobra: los precios salen en cero y
+	// la pantalla no muestra el total (ver catalogo/tienda.go).
+	if t, err := a.s.cat.Tienda(ctx); err != nil {
+		return nil, err
+	} else if !t.Activa {
+		for i := range v {
+			v[i].Precio, v[i].PrecioPorPasada, v[i].PrecioPorMetroCanto = 0, 0, 0
+		}
+	}
+	return ok(v), nil
 }
 
 // TopeDeUnidades es cuántas piezas acomoda el plano de un pedido: más allá
@@ -472,6 +495,9 @@ func (a *API) CotizarCorte(ctx context.Context, r cortesapi.CotizarCorteRequestO
 	ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
 	if v := a.lim.Permitido(ctx, limites.Corte, "ip:"+ip); !v.Permitido {
 		return nil, plataforma.NuevoProblema(http.StatusTooManyRequests, limites.AvisoDeEspera(v))
+	}
+	if err := a.s.cat.ExigirTienda(ctx); err != nil {
+		return nil, err
 	}
 	l, err := a.lista(ctx, nil, nil)
 	if err != nil {

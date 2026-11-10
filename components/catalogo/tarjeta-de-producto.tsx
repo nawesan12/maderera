@@ -6,6 +6,7 @@ import { ImageOff, Loader2, MessageCircle, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useCarrito } from "@/lib/carrito-context";
+import { useTienda } from "@/lib/tienda-context";
 import { formatearUnidad } from "@/lib/formato";
 import type { ProductoListado } from "@/lib/dal/catalog";
 
@@ -53,6 +54,7 @@ export function TarjetaDeProducto({
   precio: ReactNode;
 }) {
   const { agregar, guardando } = useCarrito();
+  const { activa } = useTienda();
 
   /*
    * Si se puede agregar directo o hay que ir a la ficha se decide con el
@@ -132,7 +134,9 @@ export function TarjetaDeProducto({
                   "h-[42px] min-w-0 flex-1 rounded-[9px] border-linea text-[14.5px] font-semibold",
               })}
             >
-              {sinPrecio ? "Pedir cotización" : "Elegir medida"}
+              {/* Con la tienda apagada ningún producto trae precio: la tarjeta
+                  lleva a la ficha, que es donde está todo lo demás. */}
+              {!activa ? "Ver medidas y detalles" : sinPrecio ? "Pedir cotización" : "Elegir medida"}
             </Link>
           ) : (
             <Button

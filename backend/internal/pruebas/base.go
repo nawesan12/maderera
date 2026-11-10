@@ -90,6 +90,12 @@ func Base(t testing.TB) *pgxpool.Pool {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// La base vacía no trae los interruptores de la tienda (migración 00093),
+	// y sin ellos la tienda está encendida: casi todos los tests prueban el
+	// sitio vendiendo. Los de la tienda apagada la apagan con TiendaApagada.
+	if _, err := pool.Exec(ctx, `delete from site_settings where clave in ('tienda_activa', 'stock_visible')`); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
 		pool.Close()
 		c, err := pgx.Connect(context.Background(), conBase(servidor, "postgres"))
@@ -99,4 +105,15 @@ func Base(t testing.TB) *pgxpool.Pool {
 		}
 	})
 	return pool
+}
+
+// TiendaApagada deja el sitio como la primera entrega: sin precios, carrito ni
+// disponibilidad (migración 00093).
+func TiendaApagada(t testing.TB, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(), `insert into site_settings (clave, valor) values
+		('tienda_activa', 'no'), ('stock_visible', 'no')
+		on conflict (clave) do update set valor = excluded.valor`); err != nil {
+		t.Fatal(err)
+	}
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { metadatosDePagina } from "@/lib/seo";
+import { tienda } from "@/lib/dal/contenido";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
@@ -82,7 +83,7 @@ export default async function ProfesionalesPage() {
   /* El teléfono estaba escrito a mano —"(0223) 474-3328"— y no era el de
      ninguna de las dos sucursales. Sale de `branches` como el resto del sitio. */
   const [casaCentral] = await listarSucursalesPublicas();
-  const [estado, sesion, cliente, eventos, documentos, reservados] =
+  const [estado, sesion, cliente, eventos, documentos, reservados, laTienda] =
     await Promise.all([
       estadoProfesional(),
       getSession(),
@@ -90,6 +91,7 @@ export default async function ProfesionalesPage() {
       eventosProximos(),
       documentosVisibles(),
       documentosReservados(),
+      tienda(),
     ]);
 
   return (
@@ -110,6 +112,7 @@ export default async function ProfesionalesPage() {
             nombreLista={estado.nombreLista}
             limiteCredito={estado.limiteCredito}
             documentos={documentos.length}
+            tiendaActiva={laTienda.activa}
           />
         ) : (
           <div className="grid gap-10 lg:grid-cols-[1fr_26rem]">
@@ -255,12 +258,15 @@ function PanelDelProfesional({
   nombreLista,
   limiteCredito,
   documentos,
+  tiendaActiva,
 }: {
   nombreLista: string | null;
   limiteCredito: number;
   documentos: number;
+  /** Apagada, la lista propia, el presupuesto y el PDF de precios esperan. */
+  tiendaActiva: boolean;
 }) {
-  const accesos = [
+  const todos = [
     {
       href: "/catalogo",
       icono: Percent,
@@ -299,6 +305,9 @@ function PanelDelProfesional({
       detalle: "Con tus precios y la fecha de vigencia, para cotizar la obra.",
     },
   ];
+
+  const conPrecios = new Set(["/catalogo", "/carrito", "/mi-lista-de-precios"]);
+  const accesos = tiendaActiva ? todos : todos.filter((a) => !conPrecios.has(a.href));
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">

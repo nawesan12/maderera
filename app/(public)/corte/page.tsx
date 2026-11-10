@@ -8,6 +8,7 @@ import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
 import { HORARIO_CORTES } from "@/lib/sucursales";
 import { VistaDeCorteDeQuienMira } from "./vista";
 import { preciosDePlacas } from "@/lib/dal/visitante";
+import { numeroWhatsapp } from "@/lib/whatsapp/enlace";
 
 export const metadata: Metadata = {
   ...metadatosDePagina({
@@ -51,9 +52,10 @@ export default async function CortePage() {
    * de precios corresponde, era pagar dos veces. El precio del profesional
    * llega aparte, en la misma respuesta: ver `VistaDeCorteDeQuienMira`.
    */
-  const [placas, parametros] = await Promise.all([
+  const [placas, parametros, whatsapp] = await Promise.all([
     placasCortablesPublicas(),
     parametrosDeCalculo(),
+    numeroWhatsapp(),
   ]);
 
   return (
@@ -100,6 +102,7 @@ export default async function CortePage() {
               precios={preciosDePlacas()}
               placas={placas}
               anchoSierra={parametros.anchoSierraMm}
+              whatsapp={whatsapp}
             />
           </div>
         )}

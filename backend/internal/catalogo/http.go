@@ -74,6 +74,27 @@ func (a *API) lista(ctx context.Context, publico *bool, pedida *openapi_types.UU
 	return a.s.Vigente(ctx, auth.DeContexto(ctx))
 }
 
+// apagada dice si la tienda está apagada: entonces las rutas públicas salen
+// sin precios (ver tienda.go).
+func (a *API) apagada(ctx context.Context) (bool, error) {
+	t, err := a.s.Tienda(ctx)
+	return !t.Activa, err
+}
+
+// listado limpia una lista de tarjetas si la tienda está apagada. Las ofertas
+// son un precio rebajado: sin precios no hay ninguna.
+func (a *API) listado(ctx context.Context, ps []ProductoListado, soloOfertas bool) ([]ProductoListado, error) {
+	apagada, err := a.apagada(ctx)
+	if err != nil || !apagada {
+		return ps, err
+	}
+	if soloOfertas {
+		return []ProductoListado{}, nil
+	}
+	SinPrecios(ps)
+	return ps, nil
+}
+
 func texto(p *string) string {
 	if p == nil {
 		return ""
@@ -140,6 +161,10 @@ func (a *API) Productos(ctx context.Context, r catalogoapi.ProductosRequestObjec
 	f := filtros(parametrosDeFiltro{p.Categoria, p.Subcategoria, p.Busqueda, p.Marca, p.Ids,
 		enumTexto(p.Stock), enumTexto(p.Orden), p.SoloOfertas})
 	ps, err := a.s.Productos(ctx, f, l)
+	if err != nil {
+		return nil, err
+	}
+	ps, err = a.listado(ctx, ps, f.SoloOfertas)
 	return ok{ps}, err
 }
 
@@ -153,6 +178,9 @@ func (a *API) PaginaDeProductos(ctx context.Context, r catalogoapi.PaginaDeProdu
 		enumTexto(p.Stock), enumTexto(p.Orden), p.SoloOfertas})
 	ps, err := a.s.Productos(ctx, f, l)
 	if err != nil {
+		return nil, err
+	}
+	if ps, err = a.listado(ctx, ps, f.SoloOfertas); err != nil {
 		return nil, err
 	}
 	pagina := 1
@@ -171,6 +199,13 @@ func (a *API) Producto(ctx context.Context, r catalogoapi.ProductoRequestObject)
 	if errors.Is(err, ErrNoExiste) {
 		return nil, plataforma.NuevoProblema(http.StatusNotFound, "Ese producto no está en el catálogo.")
 	}
+	if err != nil {
+		return nil, err
+	}
+	apagada, err := a.apagada(ctx)
+	if apagada {
+		FichaSinPrecios(p)
+	}
 	return ok{p}, err
 }
 
@@ -180,6 +215,14 @@ func (a *API) Sugeridos(ctx context.Context, r catalogoapi.SugeridosRequestObjec
 		limite = *r.Params.Limite
 	}
 	s, err := a.s.Sugeridos(ctx, r.Id.String(), r.Params.Categoria, r.Params.Excluir, limite)
+	if err != nil {
+		return nil, err
+	}
+	apagada, err := a.apagada(ctx)
+	if apagada {
+		SinPrecios(s.Complementarios)
+		SinPrecios(s.Similares)
+	}
 	return ok{s}, err
 }
 
@@ -187,6 +230,9 @@ func (a *API) PreciosPorVariante(ctx context.Context, r catalogoapi.PreciosPorVa
 	l, err := a.lista(ctx, nil, r.Params.Lista)
 	if err != nil {
 		return nil, err
+	}
+	if apagada, err := a.apagada(ctx); err != nil || apagada {
+		return ok{map[string]string{}}, err
 	}
 	m, err := a.s.PreciosPorVariante(ctx, l)
 	return ok{m}, err
@@ -202,6 +248,10 @@ func (a *API) Complementos(ctx context.Context, r catalogoapi.ComplementosReques
 		limite = *r.Body.Limite
 	}
 	c, err := a.s.Complementos(ctx, r.Body.Variantes, limite, l)
+	if err != nil {
+		return nil, err
+	}
+	c, err = a.listado(ctx, c, false)
 	return ok{c}, err
 }
 
@@ -212,6 +262,14 @@ func (a *API) Numeros(ctx context.Context, _ catalogoapi.NumerosRequestObject) (
 
 func (a *API) Portada(ctx context.Context, _ catalogoapi.PortadaRequestObject) (catalogoapi.PortadaResponseObject, error) {
 	p, err := a.s.Portada(ctx)
+	if err != nil {
+		return nil, err
+	}
+	apagada, err := a.apagada(ctx)
+	if apagada {
+		p.Ofertas = []ProductoListado{}
+		SinPrecios(p.Destacados)
+	}
 	return ok{p}, err
 }
 
@@ -228,6 +286,9 @@ func enumTexto[T ~string](v *T) string {
 func (a *API) MiLista(ctx context.Context, _ catalogoapi.MiListaRequestObject) (catalogoapi.MiListaResponseObject, error) {
 	ses, err := auth.ExigirSesion(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := a.s.ExigirTienda(ctx); err != nil {
 		return nil, err
 	}
 	if v := a.lim.Permitido(ctx, limites.ListaDePrecios, "usuario:"+ses.UserID); !v.Permitido {

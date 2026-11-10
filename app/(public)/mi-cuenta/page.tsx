@@ -274,10 +274,10 @@ function AccesosRapidos() {
       href: "/catalogo",
       icono: PackageOpen,
       titulo: "Seguir comprando",
-      texto: "Todo el catálogo con precio y disponibilidad",
+      texto: "Todo el catálogo, por rubro y por medida",
     },
     {
-      href: "/carrito",
+      href: "/corte",
       icono: Scissors,
       titulo: "Pedir un corte a medida",
       texto: "Mandanos el despiece y lo cortamos en el aserradero",
@@ -351,7 +351,7 @@ async function Bienvenida({ nombre }: { nombre: string }) {
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
-            href="/carrito"
+            href="/corte"
             className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea bg-card px-5 font-medium transition-colors hover:bg-sitio-alt"
           >
             <Scissors className="h-4 w-4" />

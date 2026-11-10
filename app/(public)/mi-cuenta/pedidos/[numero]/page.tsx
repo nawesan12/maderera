@@ -23,6 +23,7 @@ import {
   plural,
 } from "@/lib/formato";
 import { VolverAPedir } from "./volver-a-pedir";
+import { tienda } from "@/lib/dal/contenido";
 
 const COMO_SIGUE: Record<string, string> = {
   mercado_pago: "Te mandamos el enlace para pagar por WhatsApp.",
@@ -48,7 +49,7 @@ export default async function DetallePedidoPage({
 }) {
   const { numero } = await params;
   const whatsapp = await enlaceWhatsapp(`Hola! Consulto por mi pedido ${numero.slice(0, 20)}.`);
-  const pedido = await miPedido(numero);
+  const [pedido, laTienda] = await Promise.all([miPedido(numero), tienda()]);
   const ficha = pedido?.sucursalSlug
     ? sucursalPublicada(pedido.sucursalSlug)
     : undefined;
@@ -322,7 +323,8 @@ export default async function DetallePedidoPage({
       )}
 
       <div className="flex flex-wrap gap-3">
-        <VolverAPedir numero={pedido.numero} />
+        {/* Volver a pedir carga el carrito: sin tienda no hay dónde. */}
+        {laTienda.activa && <VolverAPedir numero={pedido.numero} />}
         <a
           href={`${whatsapp}?text=${mensaje}`}
           target="_blank"

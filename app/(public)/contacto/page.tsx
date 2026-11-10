@@ -12,7 +12,7 @@ import {
   Scissors,
 } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
-import { ajuste } from "@/lib/dal/contenido";
+import { ajuste, tienda } from "@/lib/dal/contenido";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd, metadatosDePagina } from "@/lib/seo";
 import { FormularioContacto } from "./formulario";
@@ -65,10 +65,15 @@ const ATAJOS = [
 ];
 
 export default async function ContactoPage() {
-  const [sucursales, whatsapp] = await Promise.all([
+  const [sucursales, whatsapp, laTienda] = await Promise.all([
     listarSucursalesPublicas(),
     ajuste("whatsapp_principal", "5492235903118"),
+    tienda(),
   ]);
+  // Sin tienda no hay carrito, y el stock no se muestra hasta que se cargue.
+  const atajos = ATAJOS.filter(
+    (a) => (a.href !== "/carrito" || laTienda.activa) && (a.href !== "/stock" || laTienda.stockVisible),
+  );
 
   return (
     <div className="min-h-screen bg-sitio-alt">
@@ -89,7 +94,7 @@ export default async function ContactoPage() {
 
         <aside className="space-y-6">
           <div className="space-y-3">
-            {ATAJOS.map((atajo) => (
+            {atajos.map((atajo) => (
               <Link
                 key={atajo.titulo}
                 href={atajo.href}

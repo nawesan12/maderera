@@ -30,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useCarrito } from "@/lib/carrito-context";
+import { useTienda } from "@/lib/tienda-context";
 import { useEstado } from "@/lib/estado-context";
 import { primerNombre, telefonoParaMarcar } from "@/lib/formato";
 
@@ -165,6 +166,17 @@ export function Navbar({
   const [productsOpen, setProductsOpen] = useState(false);
   const [masOpen, setMasOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Con la tienda apagada no hay carrito: «Pedir presupuesto» abre WhatsApp
+  // con el pedido ya empezado, y el stock no se ofrece hasta que se cargue.
+  const tienda = useTienda();
+  const presupuesto = tienda.activa
+    ? "/carrito"
+    : whatsapp
+      ? `${whatsapp}?text=${encodeURIComponent("Hola! Quería pedir un presupuesto de...")}`
+      : "/contacto";
+  const externo = presupuesto.startsWith("http");
+  const lasHerramientas = herramientas.filter((h) => h.href !== "/stock" || tienda.stockVisible);
 
   return (
     <>
@@ -395,7 +407,7 @@ export function Navbar({
                       Y además
                     </p>
                     <div className="entra-en-orden space-y-0.5">
-                      {herramientas.map((h, i) => (
+                      {lasHerramientas.map((h, i) => (
                         <Link
                           key={h.href}
                           href={h.href}
@@ -528,14 +540,19 @@ export function Navbar({
                 cualquier otra tienda —/carrito y /carrito/confirmar—, y pedir
                 un presupuesto por escrito pasó a ser una de las salidas del
                 carrito, que es lo que siempre fue. */}
-            <Suspense fallback={<EnlaceAlCarrito cantidad={0} />}>
-              <EnlaceAlCarritoVigente />
-            </Suspense>
+            {tienda.activa && (
+              <Suspense fallback={<EnlaceAlCarrito cantidad={0} />}>
+                <EnlaceAlCarritoVigente />
+              </Suspense>
+            )}
 
             <Link
-              href="/carrito"
+              href={presupuesto}
+              {...(externo ? { target: "_blank", rel: "noopener noreferrer" } : {})}
               // De lg a xl no entra: lleva al mismo carrito que el ícono de al
-              // lado, que en ese rango queda solo.
+              // lado, que en ese rango queda solo. Con la tienda apagada no
+              // hay ícono, y en ese rango queda el WhatsApp de la barra de
+              // arriba.
               className="hidden h-11 items-center whitespace-nowrap rounded-full bg-accion px-5 text-[15px] font-semibold text-white shadow-[0_4px_14px_-6px_rgb(194_87_15_/_0.6)] transition-colors hover:bg-accion-hover md:flex lg:hidden xl:flex"
             >
               Pedir Presupuesto
@@ -618,7 +635,7 @@ export function Navbar({
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Y además
                   </p>
-                  {herramientas.map((h) => (
+                  {lasHerramientas.map((h) => (
                     <Link
                       key={h.href}
                       href={h.href}
@@ -652,7 +669,11 @@ export function Navbar({
                   ))}
 
                   <div className="my-3 border-t border-linea-tenue" />
-                  <Link href="/carrito" onClick={() => setMobileMenuOpen(false)}>
+                  <Link
+                    href={presupuesto}
+                    {...(externo ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
                     <Button className="w-full rounded-full bg-accion font-semibold text-white hover:bg-accion-hover">
                       Pedir Presupuesto
                     </Button>

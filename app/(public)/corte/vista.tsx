@@ -2,7 +2,7 @@
 
 import { Suspense, use, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, ShoppingCart, Trash2 } from "lucide-react";
+import { Loader2, MessageCircle, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import type { PlacaCortable } from "@/lib/dal/cortes-publico";
 import type { PreciosDePlaca } from "@/lib/dal/visitante";
 import { usePlano } from "@/lib/cortes/en-vivo";
@@ -16,6 +16,7 @@ import { PlanoSimple } from "@/components/cortes/plano-simple";
 import { formatearMonto } from "@/lib/formato";
 import { agregarCorteAlCarrito } from "./actions";
 import { formatearSierra } from "@/lib/cortes/sierra";
+import { useTienda } from "@/lib/tienda-context";
 
 interface Fila {
   largo: string;
@@ -66,6 +67,8 @@ export function VistaDeCorteDeQuienMira({
 }: {
   placas: PlacaCortable[];
   anchoSierra: number;
+  /** El número del negocio, en dígitos: sin tienda, el corte se pide por ahí. */
+  whatsapp: string;
   precios: Promise<PreciosDePlaca>;
 }) {
   return (
@@ -81,6 +84,7 @@ function VistaConPrecios({
 }: {
   placas: PlacaCortable[];
   anchoSierra: number;
+  whatsapp: string;
   promesa: Promise<PreciosDePlaca>;
 }) {
   return <VistaDeCorte {...props} propios={use(promesa)} />;
@@ -89,14 +93,19 @@ function VistaConPrecios({
 function VistaDeCorte({
   placas: deLaPagina,
   anchoSierra,
+  whatsapp,
   propios,
 }: {
   placas: PlacaCortable[];
   anchoSierra: number;
+  whatsapp: string;
   /** El precio propio de cada placa y de su corte. Vacío para el público. */
   propios: PreciosDePlaca;
 }) {
   const router = useRouter();
+  // Con la tienda apagada la API manda los precios en cero: el armador dibuja
+  // y cuenta, pero no cobra, y el corte se pide por WhatsApp.
+  const { activa } = useTienda();
 
   const placas = useMemo(
     () =>
@@ -228,7 +237,7 @@ function VistaDeCorte({
             >
               {placas.map((p) => (
                 <option key={p.variantId} value={p.variantId}>
-                  {p.descripcion} — {formatearMonto(p.precio)}
+                  {activa ? `${p.descripcion} — ${formatearMonto(p.precio)}` : p.descripcion}
                 </option>
               ))}
             </select>
@@ -444,62 +453,83 @@ function VistaDeCorte({
             </p>
           ) : (
             <>
-              <dl className="mt-3 space-y-1.5 text-[14.5px]">
+              {!activa ? (
+                <dl className="mt-3 space-y-1.5 text-[14.5px]">
+                  <Renglon
+                    que={`${plano.placas.length} ${plano.placas.length === 1 ? "placa" : "placas"}`}
+                    cuanto={null}
+                  />
+                  <Renglon
+                    que={`${plano.pasadas} ${plano.pasadas === 1 ? "pasada" : "pasadas"} de sierra`}
+                    cuanto={null}
+                  />
+                  {cuenta.metrosCanto > 0 && (
+                    <Renglon
+                      que={`${cuenta.metrosCanto.toFixed(2).replace(".", ",")} m de tapacanto`}
+                      cuanto={null}
+                    />
+                  )}
+                </dl>
+              ) : (
+                <>
+                <dl className="mt-3 space-y-1.5 text-[14.5px]">
+                  {cuenta.placasEnteras > 0 && (
+                    <Renglon
+                      que={`${cuenta.placasEnteras} ${
+                        mitad
+                          ? cuenta.placasEnteras === 1
+                            ? "media placa"
+                            : "medias placas"
+                          : cuenta.placasEnteras === 1
+                            ? "placa"
+                            : "placas"
+                      }`}
+                      cuanto={cuenta.subtotalPlacas}
+                    />
+                  )}
+                  {cuenta.subtotalCorte > 0 && (
+                    <Renglon
+                      que={`${cuenta.pasadasCobrables} ${
+                        cuenta.pasadasCobrables === 1 ? "pasada" : "pasadas"
+                      } de sierra`}
+                      cuanto={cuenta.subtotalCorte}
+                    />
+                  )}
+                  {cuenta.subtotalCanto > 0 && (
+                    <Renglon
+                      que={`${cuenta.metrosCanto
+                        .toFixed(2)
+                        .replace(".", ",")} m de tapacanto`}
+                      cuanto={cuenta.subtotalCanto}
+                    />
+                  )}
+                </dl>
+
+                <div className="mt-3 flex items-baseline justify-between border-t border-linea pt-3">
+                  <span className="text-base font-semibold">Total</span>
+                  <span className="tabular text-2xl font-bold">
+                    {formatearMonto(cuenta.total)}
+                  </span>
+                </div>
+
                 {cuenta.placasEnteras > 0 && (
-                  <Renglon
-                    que={`${cuenta.placasEnteras} ${
-                      mitad
-                        ? cuenta.placasEnteras === 1
-                          ? "media placa"
-                          : "medias placas"
-                        : cuenta.placasEnteras === 1
-                          ? "placa"
-                          : "placas"
-                    }`}
-                    cuanto={cuenta.subtotalPlacas}
-                  />
+                  <p className="mt-2 text-sm text-texto-2">
+                    De {cuenta.placasEnteras === 1 ? "esta placa" : "estas placas"}{" "}
+                    sale más de la mitad, así que se{" "}
+                    {cuenta.placasEnteras === 1 ? "vende" : "venden"} entera
+                    {cuenta.placasEnteras === 1 ? "" : "s"} y el corte va sin
+                    cargo. El recorte te lo llevás vos.
+                  </p>
                 )}
-                {cuenta.subtotalCorte > 0 && (
-                  <Renglon
-                    que={`${cuenta.pasadasCobrables} ${
-                      cuenta.pasadasCobrables === 1 ? "pasada" : "pasadas"
-                    } de sierra`}
-                    cuanto={cuenta.subtotalCorte}
-                  />
+
+                {cuenta.faltan.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-sm text-texto-2">
+                    {cuenta.faltan.map((f) => (
+                      <li key={f}>{f}</li>
+                    ))}
+                  </ul>
                 )}
-                {cuenta.subtotalCanto > 0 && (
-                  <Renglon
-                    que={`${cuenta.metrosCanto
-                      .toFixed(2)
-                      .replace(".", ",")} m de tapacanto`}
-                    cuanto={cuenta.subtotalCanto}
-                  />
-                )}
-              </dl>
-
-              <div className="mt-3 flex items-baseline justify-between border-t border-linea pt-3">
-                <span className="text-base font-semibold">Total</span>
-                <span className="tabular text-2xl font-bold">
-                  {formatearMonto(cuenta.total)}
-                </span>
-              </div>
-
-              {cuenta.placasEnteras > 0 && (
-                <p className="mt-2 text-sm text-texto-2">
-                  De {cuenta.placasEnteras === 1 ? "esta placa" : "estas placas"}{" "}
-                  sale más de la mitad, así que se{" "}
-                  {cuenta.placasEnteras === 1 ? "vende" : "venden"} entera
-                  {cuenta.placasEnteras === 1 ? "" : "s"} y el corte va sin
-                  cargo. El recorte te lo llevás vos.
-                </p>
-              )}
-
-              {cuenta.faltan.length > 0 && (
-                <ul className="mt-2 space-y-1 text-sm text-texto-2">
-                  {cuenta.faltan.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
+                </>
               )}
             </>
           )}
@@ -516,35 +546,83 @@ function VistaDeCorte({
             </p>
           )}
 
-          <button
-            type="button"
-            onClick={comprar}
-            disabled={!sePuede || guardando}
-            className="mt-4 inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-[10px] bg-accion text-base font-semibold text-white transition-colors hover:bg-accion-hover disabled:opacity-50"
-          >
-            {guardando ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ShoppingCart className="h-4 w-4" />
-            )}
-            Agregarlo al carrito
-          </button>
+          {!activa ? (
+            <>
+              <a
+                href={sePuede && placa ? enlaceDelPedido(whatsapp, placa.descripcion, mitad, canto, piezas) : undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-disabled={!sePuede}
+                className={`mt-4 inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-[10px] bg-verde-whatsapp text-base font-semibold text-white transition-colors hover:bg-brand-green/90 ${
+                  sePuede ? "" : "pointer-events-none opacity-50"
+                }`}
+              >
+                <MessageCircle className="h-4 w-4" />
+                Pedir este corte por WhatsApp
+              </a>
+              <p className="mt-2 text-sm text-texto-3">
+                Te contestamos con el precio y cuándo está listo para retirar.
+              </p>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={comprar}
+                disabled={!sePuede || guardando}
+                className="mt-4 inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-[10px] bg-accion text-base font-semibold text-white transition-colors hover:bg-accion-hover disabled:opacity-50"
+              >
+                {guardando ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShoppingCart className="h-4 w-4" />
+                )}
+                Agregarlo al carrito
+              </button>
 
-          <p className="mt-2 text-sm text-texto-3">
-            El precio se confirma al comprar. Si el despiece cambia el acomodo,
-            el mostrador te avisa antes de cortar.
-          </p>
+              <p className="mt-2 text-sm text-texto-3">
+                El precio se confirma al comprar. Si el despiece cambia el acomodo,
+                el mostrador te avisa antes de cortar.
+              </p>
+            </>
+          )}
         </section>
       </aside>
     </div>
   );
 }
 
-function Renglon({ que, cuanto }: { que: string; cuanto: number }) {
+/**
+ * El pedido del corte, escrito para WhatsApp: placa, medidas y canto, como lo
+ * anota quien atiende. Sin tienda es la única salida del armador.
+ */
+function enlaceDelPedido(
+  whatsapp: string,
+  placa: string,
+  mitad: Mitad,
+  canto: string,
+  piezas: { largoMm: number; anchoMm: number; cantidad: number; respetaVeta: number; cantoLargo: number }[],
+): string {
+  const renglones = piezas.map(
+    (p) =>
+      `• ${p.cantidad} de ${p.largoMm} × ${p.anchoMm} mm${p.respetaVeta ? ", respetando la veta" : ""}${
+        p.cantoLargo ? ", con canto en los largos" : ""
+      }`,
+  );
+  const texto = [
+    "Hola! Quería pedir este corte:",
+    `Placa: ${placa}${mitad ? ` (media, al ${mitad})` : ""}`,
+    ...renglones,
+    ...(canto.trim() ? [`Tapacanto: ${canto.trim()}`] : []),
+  ].join("\n");
+  return `https://wa.me/${whatsapp}?text=${encodeURIComponent(texto)}`;
+}
+
+function Renglon({ que, cuanto }: { que: string; cuanto: number | null }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="text-texto-2">{que}</dt>
-      <dd className="tabular font-medium">{formatearMonto(cuanto)}</dd>
+      {cuanto !== null && <dd className="tabular font-medium">{formatearMonto(cuanto)}</dd>}
     </div>
   );
 }

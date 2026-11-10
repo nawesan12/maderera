@@ -30,6 +30,7 @@ import {
 import { responderLocal } from "@/lib/asistente/respuestas";
 import { formatearPrecio } from "@/lib/formato";
 import { useCarrito } from "@/lib/carrito-context";
+import { useTienda } from "@/lib/tienda-context";
 
 /** Dónde queda el equipaje mientras dure la pestaña. */
 const CLAVE_EQUIPAJE = "mjbj-asistente-equipaje";
@@ -414,6 +415,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
 }
 
 function Renglon({ renglon }: { renglon: Renglon }) {
+  const tienda = useTienda();
   if (renglon.tipo === "persona") {
     return (
       <div className="flex justify-end">
@@ -487,21 +489,27 @@ function Renglon({ renglon }: { renglon: Renglon }) {
               </span>
             </span>
 
-            <span className="shrink-0 text-right">
-              <span className="block text-[15px] font-semibold">
-                {formatearPrecio(p.precioDesde)}
+            {/* Sin tienda no hay precio que mostrar, y sin stock cargado
+                todo diría «a pedido». */}
+            {(tienda.activa || tienda.stockVisible) && (
+              <span className="shrink-0 text-right">
+                {tienda.activa && (
+                  <span className="block text-[15px] font-semibold">
+                    {formatearPrecio(p.precioDesde)}
+                  </span>
+                )}
+                {tienda.stockVisible && !p.hayStock && (
+                  <span className="block text-xs text-texto-3">a pedido</span>
+                )}
               </span>
-              {!p.hayStock && (
-                <span className="block text-xs text-texto-3">a pedido</span>
-              )}
-            </span>
+            )}
           </Link>
 
           {/* Se puede sumar al presupuesto sin salir de la conversación. Es la
               diferencia entre un asistente que informa y uno que sirve para
               algo: la persona ya dijo qué necesita, hacerla navegar hasta la
               ficha para tocar otro botón es perderla en el camino. */}
-          <AgregarAlPresupuesto producto={p} />
+          {tienda.activa && <AgregarAlPresupuesto producto={p} />}
         </li>
       ))}
     </ul>

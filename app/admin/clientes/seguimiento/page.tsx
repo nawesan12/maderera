@@ -48,7 +48,7 @@ export default async function SeguimientoPage() {
 
       <EncabezadoPanel
         titulo="Seguimiento"
-        detalle={
+        resumen={
           vencidas > 0
             ? `${abiertas.length} gestiones abiertas · ${vencidas} para hoy o vencidas`
             : `${abiertas.length} gestiones abiertas`

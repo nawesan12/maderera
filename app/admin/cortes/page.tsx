@@ -41,7 +41,7 @@ export default async function CortesPage({
     <div>
       <EncabezadoPanel
         titulo="Cortes"
-        detalle={
+        resumen={
           pendientes.length > 0
             ? `${plural(pendientes.length, "trabajo")} por hacer · ${Math.round(superficiePendiente)} m² de placa`
             : `${plural(cortes.length, "trabajo")} en total`

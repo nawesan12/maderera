@@ -43,7 +43,6 @@ export default async function DocumentacionAdminPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Documentación técnica"
-        detalle="Fichas, tablas de carga e instructivos. Lo que más piden los profesionales."
       />
 
       <SubirDocumento categorias={categorias} />

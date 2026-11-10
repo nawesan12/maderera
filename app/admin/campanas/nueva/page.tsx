@@ -18,7 +18,7 @@ export default async function NuevaCampanaPage() {
       <Link href="/admin/campanas" className="mb-3 inline-flex items-center gap-1.5 text-base text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Campañas
       </Link>
-      <EncabezadoPanel titulo="Nueva campaña" detalle="Se guarda como borrador hasta que la envíes o la programes." />
+      <EncabezadoPanel titulo="Nueva campaña" />
       <EditorDeCampana
         inicial={{ asunto: "", adelanto: "", cuerpo: "", imagenUrl: "", botonTexto: "", botonUrl: "", segmento: SEGMENTO_TODOS }}
         rubros={RUBROS_CLIENTE.map((r) => ({ valor: r.valor, etiqueta: r.etiqueta }))}

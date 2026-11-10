@@ -84,10 +84,10 @@ export default async function FacturacionPage({
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Facturación"
-        detalle={
+        resumen={
           rango
             ? `Comprobantes del ${fechaCorta.format(rango.desde)} al ${fechaCorta.format(rango.hasta)}${cobro === "contado" ? ", cobrados de contado" : cobro === "cuenta" ? ", en cuenta corriente" : ""} · ${moneda.format(totalFiltrado)} en ${plural(comprobantes.length, "comprobante")}`
-            : `Comprobantes emitidos, su estado en ARCA y lo cobrado · ${periodo.etiqueta.toLowerCase()}`
+            : periodo.etiqueta
         }
       >
         {!rango && <FiltroPeriodo actual={periodo.clave} />}

@@ -36,7 +36,6 @@ export default async function AyudaPage({
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Ayuda"
-        detalle="Cómo se hace cada cosa en el panel, explicado paso a paso."
       />
 
       <form method="get" className="flex gap-2">

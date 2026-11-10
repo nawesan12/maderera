@@ -59,7 +59,7 @@ export default async function PedidosPage({
     <div>
       <EncabezadoPanel
         titulo="Pedidos"
-        detalle={
+        resumen={
           activos.length > 0
             ? `${plural(activos.length, "pedido")} en curso · ${moneda.format(porCobrar)} por cobrar`
             : `${plural(pedidos.length, "pedido")} en total`

@@ -41,10 +41,10 @@ export default async function ResenasDelNegocioPage() {
 
       <EncabezadoPanel
         titulo="Reseñas del negocio"
-        detalle={
+        resumen={
           resenas.length > 0
             ? `${resenas.filter((r) => r.publicada).length} publicadas de ${resenas.length} cargadas`
-            : "Todavía no hay ninguna cargada"
+            : "Ninguna cargada"
         }
       />
 

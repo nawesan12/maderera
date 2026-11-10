@@ -44,7 +44,6 @@ export default async function AvisosPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Avisos automáticos"
-        detalle="Qué se le escribe al cliente solo, y por dónde."
       >
         <Link
           href="/admin/whatsapp/configuracion"

@@ -17,7 +17,6 @@ export default async function WhatsappPage({
     <div className="space-y-5">
       <EncabezadoPanel
         titulo="WhatsApp"
-        detalle="Las consultas de los clientes, con su pedido y su cuenta al lado."
       >
         <Link
           href="/atencion"

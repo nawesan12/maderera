@@ -45,7 +45,6 @@ export default async function MigracionPage() {
     <div>
       <EncabezadoPanel
         titulo="Migración de datos"
-        detalle="Traer clientes, catálogo, stock y saldos desde el sistema anterior"
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

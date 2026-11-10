@@ -45,7 +45,6 @@ export default async function ListasDePreciosPage() {
 
       <EncabezadoPanel
         titulo="Listas de precios"
-        detalle="El porcentaje global de cada lista sobre la general, ajustable."
       />
 
       <div className="rounded-xl border bg-card p-5">

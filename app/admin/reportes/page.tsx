@@ -85,7 +85,7 @@ export default async function ReportesPage({
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Reportes"
-        detalle={
+        resumen={
           filas.length > 0
             ? `${etiquetaCorte.toLowerCase()} · ${formatearMonto(total)} en ${plural(operaciones, "operación", "operaciones")}`
             : "Sin ventas en el período elegido"

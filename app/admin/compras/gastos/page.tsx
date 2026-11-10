@@ -73,10 +73,10 @@ export default async function GastosPage({
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Gastos"
-        detalle={
+        resumen={
           total > 0
-            ? `${formatearMonto(total)} en ${etiqueta}.`
-            : `Sin gastos anotados en ${etiqueta}.`
+            ? `${formatearMonto(total)} en ${etiqueta}`
+            : `Sin gastos en ${etiqueta}`
         }
       >
         <SelectorDeMes actual={periodo.clave} />

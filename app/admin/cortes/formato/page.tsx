@@ -30,7 +30,6 @@ export default async function FormatoDeCortePage() {
 
       <EncabezadoPanel
         titulo="Formato para la máquina"
-        detalle="Cómo sale el archivo con la lista de piezas que después se importa en el optimizador."
       />
 
       <div className="flex items-start gap-3 rounded-lg border bg-muted/40 px-4 py-3">

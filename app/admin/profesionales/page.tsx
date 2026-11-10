@@ -51,7 +51,6 @@ export default async function ProfesionalesAdminPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Profesionales"
-        detalle="Quién pide acceso, quién ya lo tiene y con qué precios compra."
       >
         <Link
           href="/admin/precios"

@@ -63,7 +63,6 @@ export default async function ConfiguracionWhatsappPage() {
 
       <EncabezadoPanel
         titulo="WhatsApp: configuración"
-        detalle="Si está bien conectado, qué se avisa solo, qué textos aprueba Meta y cuánto se gasta."
       />
 
       {/* 1. Conexión */}

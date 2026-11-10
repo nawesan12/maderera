@@ -60,7 +60,7 @@ export default async function LibroIvaPage({
 
       <EncabezadoPanel
         titulo="Libro IVA ventas"
-        detalle={`${MESES[mes - 1]} de ${anio} · las notas de crédito ya restan.`}
+        resumen={`${MESES[mes - 1]} de ${anio}`}
       >
         <a
           href={`/admin/arca/libro-iva/exportar?periodo=${actual}`}

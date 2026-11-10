@@ -34,10 +34,10 @@ export default async function CampanaPage({ params }: { params: Promise<{ id: st
         {volver}
         <EncabezadoPanel
           titulo={campana.asunto}
-          detalle={
+          resumen={
             campana.estado === "programada" && campana.programadaPara
-              ? `Programada para el ${hora(campana.programadaPara)}. Si la editás, sigue programada.`
-              : "Borrador: todavía no salió a nadie."
+              ? `Programada para el ${hora(campana.programadaPara)}`
+              : "Borrador"
           }
         >
           <EtiquetaEstado estado={campana.estado} />
@@ -70,7 +70,7 @@ export default async function CampanaPage({ params }: { params: Promise<{ id: st
     <div>
       {volver}
       {campana.estado === "enviando" && <RefrescarMientrasEnvia />}
-      <EncabezadoPanel titulo={campana.asunto} detalle={campana.descripcion}>
+      <EncabezadoPanel titulo={campana.asunto} resumen={campana.descripcion}>
         <EtiquetaEstado estado={campana.estado === "enviada" ? "campana_enviada" : campana.estado} />
         <AccionesDeCampana id={campana.id} estado={campana.estado} />
       </EncabezadoPanel>

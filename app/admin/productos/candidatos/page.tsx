@@ -36,7 +36,6 @@ export default async function CandidatosPage() {
 
       <EncabezadoPanel
         titulo="Candidatos a dar de baja"
-        detalle="Sin ventas en el período de abajo, sin stock, o sin precio cargado. Nada se da de baja solo."
       >
         <UmbralDeBaja meses={meses} />
       </EncabezadoPanel>

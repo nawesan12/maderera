@@ -96,7 +96,6 @@ export default async function ArcaPage() {
     <div className="space-y-8">
       <EncabezadoPanel
         titulo="ARCA"
-        detalle="Datos fiscales, puntos de venta, impuestos y los libros de IVA."
       />
 
       {/* Estado de la conexión */}

@@ -32,7 +32,7 @@ export default async function AdminProductosPage({
     <div>
       <EncabezadoPanel
         titulo="Productos"
-        detalle={
+        resumen={
           sinFoto.length > 0
             ? `${plural(productos.length, "producto")} · ${sinFoto.length} sin foto`
             : plural(productos.length, "producto")

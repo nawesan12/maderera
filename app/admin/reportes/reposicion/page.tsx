@@ -107,7 +107,7 @@ export default async function ReposicionPage({
 
       <EncabezadoPanel
         titulo="Reposición"
-        detalle={`Ventas de los últimos ${dias} días contra el stock de hoy, con la compra sugerida para ${objetivo} días de cobertura.`}
+        resumen={`Últimos ${dias} días · cobertura de ${objetivo} días`}
       >
         <a
           href={urlExportar}

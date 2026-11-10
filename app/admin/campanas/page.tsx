@@ -24,7 +24,7 @@ export default async function CampanasPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Campañas"
-        detalle={`Novedades y promociones por correo a los clientes.${bajas > 0 ? ` ${bajas} ${bajas === 1 ? "dirección se dio" : "direcciones se dieron"} de baja y no reciben.` : ""}`}
+        resumen={bajas > 0 ? `${bajas} ${bajas === 1 ? "dirección dada" : "direcciones dadas"} de baja` : undefined}
       >
         <Link
           href="/admin/campanas/nueva"

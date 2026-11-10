@@ -69,7 +69,7 @@ export default async function ChequesPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Cheques"
-        detalle={
+        resumen={
           [
             porRecibir.length > 0 ? `${plural(porRecibir.length, "por recibir", "por recibir")}` : null,
             vivos.length > 0

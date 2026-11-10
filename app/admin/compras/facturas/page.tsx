@@ -69,10 +69,10 @@ export default async function FacturasDeCompraPage({
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Facturas de compra"
-        detalle={
+        resumen={
           adeudado > 0
-            ? `Lo que nos facturaron. Quedan ${formatearMonto(adeudado)} sin pagar.`
-            : "Lo que nos facturaron. No queda nada sin pagar."
+            ? `${formatearMonto(adeudado)} sin pagar`
+            : "Todo pagado"
         }
       >
         <Link

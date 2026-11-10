@@ -29,7 +29,6 @@ export default async function RubrosPage() {
 
       <EncabezadoPanel
         titulo="Rubros"
-        detalle="Los rubros de adentro de cada categoría. En el catálogo aparecen solo los que tienen productos cargados."
       />
 
       <ListaDeRubros categorias={categorias} />

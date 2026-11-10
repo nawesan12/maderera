@@ -82,7 +82,7 @@ export default async function ClientesPage({
     <div>
       <EncabezadoPanel
         titulo="Clientes"
-        detalle={
+        resumen={
           conDeuda.length > 0
             ? `${plural(clientes.length, "cliente")} · ${moneda.format(deudaTotal)} por cobrar`
             : plural(clientes.length, "cliente")

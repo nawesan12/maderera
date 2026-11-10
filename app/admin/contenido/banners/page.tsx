@@ -49,7 +49,6 @@ export default async function BannersPage() {
 
       <EncabezadoPanel
         titulo="Avisos y promociones"
-        detalle="Los banners del sitio, con la fecha en que empiezan y terminan."
       />
 
       <div className="rounded-xl border bg-card p-5">

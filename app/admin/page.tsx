@@ -102,7 +102,6 @@ export default async function ResumenPage({
         <section>
           <Encabezado
             titulo="Para hoy"
-            detalle="Lo que espera que alguien lo toque. Cada botón abre la pantalla que lo resuelve, ya filtrada."
           />
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {pendientes.map((p) => (
@@ -146,7 +145,6 @@ export default async function ResumenPage({
         <section>
           <Encabezado
             titulo="Empezar algo"
-            detalle="Lo que se arranca desde cero, sin pasar por el menú."
           />
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {acciones.map((a) => (
@@ -172,7 +170,6 @@ export default async function ResumenPage({
       <section>
         <Encabezado
           titulo="Ir a"
-          detalle="Todo el panel, en botones. Es lo que evita el viaje al menú lateral."
         />
         <div className="space-y-4">
           {grupos.map((g) => (
@@ -208,7 +205,6 @@ export default async function ResumenPage({
           <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
             <Encabezado
               titulo="Los números"
-              detalle={`Cómo viene el negocio · ${periodo.etiqueta.toLowerCase()}`}
               sinMargen
             />
             <FiltroPeriodo actual={periodo.clave} />
@@ -226,11 +222,9 @@ export default async function ResumenPage({
 
 function Encabezado({
   titulo,
-  detalle,
   sinMargen = false,
 }: {
   titulo: string;
-  detalle: string;
   sinMargen?: boolean;
 }) {
   return (
@@ -242,7 +236,6 @@ function Encabezado({
         <span className="wood-divider w-8 shrink-0" aria-hidden="true" />
         {titulo}
       </h2>
-      <p className="mt-1 text-sm text-texto-2">{detalle}</p>
     </div>
   );
 }

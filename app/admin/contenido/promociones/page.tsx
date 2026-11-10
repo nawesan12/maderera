@@ -49,7 +49,6 @@ export default async function PromocionesPage() {
 
       <EncabezadoPanel
         titulo="Promociones bancarias"
-        detalle="Las promociones por medio de pago que anuncia el inicio del sitio, con su vigencia."
       />
 
       <div className="rounded-xl border bg-card p-5">

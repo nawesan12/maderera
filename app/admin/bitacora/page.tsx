@@ -104,7 +104,6 @@ export default async function BitacoraPage({
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Bitácora"
-        detalle="Quién hizo qué en el panel, y cuándo."
       />
 
       <form method="get" className="flex flex-wrap items-end gap-3">

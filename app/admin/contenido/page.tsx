@@ -36,7 +36,6 @@ export default async function ContenidoPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Contenido"
-        detalle="Los avisos, las reseñas de los clientes y los textos que se pueden cambiar sin tocar el código."
       >
         <Link
           href="/admin/contenido/banners"

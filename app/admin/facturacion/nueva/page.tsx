@@ -23,7 +23,6 @@ export default async function NuevaFacturaPage() {
 
       <EncabezadoPanel
         titulo="Nueva factura"
-        detalle="Para la venta de mostrador que no pasó por un pedido."
       />
 
       {!emisor.cuit ? (

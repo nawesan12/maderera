@@ -82,7 +82,7 @@ export default async function AdminStockPage({
     <div>
       <EncabezadoPanel
         titulo="Stock"
-        detalle={
+        resumen={
           reponer.length + agotados.length > 0
             ? `${plural(reponer.length + agotados.length, "medida")} para atender de ${filas.length}`
             : `${plural(filas.length, "medida")} en inventario`

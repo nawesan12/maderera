@@ -34,7 +34,6 @@ export default async function EventosAdminPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Eventos y capacitaciones"
-        detalle="Quién se anotó, cuánto queda de cupo y cuánto se cobró."
       >
         <Recordatorios />
       </EncabezadoPanel>

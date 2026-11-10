@@ -36,7 +36,6 @@ export default async function FormasDePagoPage() {
 
       <EncabezadoPanel
         titulo="Descuentos por forma de pago"
-        detalle="Lo que se descuenta según cómo paga el cliente, en la tienda y en el mostrador."
       />
 
       <div className="rounded-xl border bg-muted/40 p-5 text-base">

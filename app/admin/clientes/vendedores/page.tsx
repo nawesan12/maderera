@@ -33,7 +33,6 @@ export default async function VendedoresPage() {
 
       <EncabezadoPanel
         titulo="Vendedores"
-        detalle="Quiénes venden, de salón y de calle. Cada cliente puede tener el suyo asignado."
       />
 
       <div className="rounded-xl border bg-card p-5">

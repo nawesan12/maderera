@@ -52,7 +52,6 @@ export default async function AdminSucursalesPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Sucursales"
-        detalle="Cómo viene el día en cada local, y la ficha que se publica en el sitio."
       >
         <Link
           href="/sucursales"

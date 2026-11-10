@@ -68,7 +68,7 @@ export default async function PresupuestosPage({
     <div>
       <EncabezadoPanel
         titulo="Presupuestos"
-        detalle={
+        resumen={
           abiertos.length > 0
             ? `${plural(abiertos.length, "presupuesto")} esperando respuesta por ${moneda.format(montoAbierto)}`
             : `${plural(presupuestos.length, "presupuesto")} en total`

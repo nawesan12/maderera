@@ -60,7 +60,7 @@ export default async function PagosPage({
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Cobros"
-        detalle={`La plata que entró, la que está por entrar y la que no pudo · ${periodo.etiqueta.toLowerCase()}`}
+        resumen={periodo.etiqueta}
       >
         <FiltroPeriodo actual={periodo.clave} />
         <Link

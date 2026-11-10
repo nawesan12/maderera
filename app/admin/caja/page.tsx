@@ -88,7 +88,6 @@ export default async function CajaPage({
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Caja"
-        detalle="Los turnos del mostrador, lo que debería haber y lo que se contó."
       >
         <SelectorDeMes actual={periodo.clave} />
       </EncabezadoPanel>

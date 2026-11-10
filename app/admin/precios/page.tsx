@@ -64,7 +64,7 @@ export default async function PreciosPage({
     <div>
       <EncabezadoPanel
         titulo="Precios"
-        detalle={
+        resumen={
           sinPrecio.length > 0
             ? `${plural(filas.length, "medida")} · ${sinPrecio.length} sin precio`
             : plural(filas.length, "medida con precio", "medidas con precio")

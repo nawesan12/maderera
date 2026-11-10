@@ -1,90 +1,65 @@
 import type { Metadata } from "next";
+import { readdirSync } from "node:fs";
+import path from "node:path";
 import Image from "next/image";
 import Link from "next/link";
+import { ArrowRight, MapPin, MessageCircle, Scissors, Truck, Users } from "lucide-react";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
-import { Award, Shield, Truck, Users } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
 import { ANIO_FUNDACION, numerosDeLaEmpresa } from "@/lib/dal/catalog";
+import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd, metadatosDePagina } from "@/lib/seo";
 import { ALCANCE_MOLDAVA, masDeAnios } from "@/lib/empresa";
 
 /**
- * Quiénes somos.
+ * Quiénes somos (notas del 9/11/2026: «hacer más enriquecida la página»).
  *
- * Era una página de cliente entera para animar la entrada de cada bloque. Las
- * animaciones ahora son CSS (`tw-animate-css`), que hace lo mismo sin mandar
- * una librería de animación al navegador en una página que no tiene
- * ni un botón.
- *
- * Los números grandes salen de la base y del calendario. Estaban escritos a
- * mano y ya eran falsos: decía "43 años" cuando iban 45, y "200+ productos"
- * sin relación con el catálogo. Es de lo poco que un visitante puede
- * verificar solo, y un número inventado ahí desmiente todo lo demás.
+ * **Solo lo verificable.** El brief volvió con la trayectoria en blanco, así
+ * que no se cuenta una historia que no nos dieron: los números salen de la
+ * base, las sucursales de `lib/sucursales.ts` y la galería de las fotos que
+ * haya en `public/nosotros/`. Sin fotos, la galería no aparece.
  */
 
 export const metadata: Metadata = {
   ...metadatosDePagina({
     titulo: "Quiénes somos — maderera familiar desde 1981",
-    descripcion:
-      `Empresa familiar fundada en ${ANIO_FUNDACION} en Mar del Plata. ${masDeAnios()} proveyendo madera de calidad. Marca propia Moldava, con entrega en ${ALCANCE_MOLDAVA}.`,
+    descripcion: `Empresa familiar fundada en ${ANIO_FUNDACION} en Mar del Plata. ${masDeAnios()} proveyendo madera. Casa Central y Aserradero, corte a medida y marca propia Moldava.`,
     ruta: "/nosotros",
   }),
-  keywords: [
-    "maderera juan b justo historia",
-    "moldava molduras",
-    "empresa madera mar del plata",
-    "maderera desde 1981",
-  ],
+  keywords: ["maderera juan b justo historia", "moldava molduras", "empresa madera mar del plata", "maderera desde 1981"],
 };
 
-/**
- * La trayectoria: solo lo que el cliente confirmó.
- *
- * El brief del 5/9/2026 pedía los hitos y **volvió con el cuadro en blanco**:
- * la única fila tenía el año 1981 y la columna "qué pasó" vacía. Así que de
- * los siete hitos que traía el prototipo quedan los dos verificables —el año
- * de apertura, que el cliente sí confirmó, y la puesta en marcha de esta
- * plataforma, que es de este año y nos consta—.
- *
- * Los cinco intermedios (1990, 2000, 2005, 2015, 2020) se sacaron por la misma
- * regla que ya se aplicó al hito falso de 2010 —"apertura en Av. Constitución",
- * que no es ninguna de las dos sucursales que opera—: inventar la historia de
- * otro es peor que no contarla. Vuelven en cuanto el cliente los mande; está
- * anotado en `docs/CAMBIOS.md`.
- */
-const TRAYECTORIA = [
-  { anio: String(ANIO_FUNDACION), titulo: "Fundación", detalle: "Abre Maderera Juan B. Justo en Mar del Plata, como empresa familiar." },
-  { anio: "2026", titulo: "Tienda y gestión online", detalle: "Catálogo con stock por sucursal, corte a medida, presupuestos y cuenta corriente desde el sitio." },
-];
+/** Las fotos reales de la maderera: se dejan en public/nosotros y aparecen. */
+function fotosDeLaGaleria(): string[] {
+  try {
+    return readdirSync(path.join(process.cwd(), "public", "nosotros"))
+      .filter((f) => /\.(jpe?g|png|webp|avif)$/i.test(f))
+      .sort()
+      .map((f) => `/nosotros/${f}`);
+  } catch {
+    return [];
+  }
+}
 
-const VALORES = [
-  { icono: Award, titulo: "Calidad", detalle: "Seleccionamos los mejores materiales para garantizar resultados duraderos." },
-  { icono: Users, titulo: "Servicio", detalle: "Asesoramiento personalizado con un equipo que conoce cada producto." },
-  { icono: Truck, titulo: "Logística", detalle: "Entrega en obra con flota propia en Mar del Plata y alrededores." },
-  { icono: Shield, titulo: "Confianza", detalle: `${masDeAnios()} respaldando a profesionales y particulares con seriedad.` },
-];
-
-const MOLDAVA = [
-  "Pino finger joint, sin nudos",
-  "El dentado y pegado elimina las imperfecciones de la madera",
-  "Piezas uniformes de 3,05 m de largo estándar",
-  "Línea completa: zócalos, marcos, cornisas y listonería",
-  `Venta mayorista en ${ALCANCE_MOLDAVA}, con entrega en puerta`,
+const SERVICIOS = [
+  { icono: Scissors, titulo: "Corte a medida", detalle: "Seccionadora en el aserradero.", href: "/corte" },
+  { icono: Truck, titulo: "Entregas", detalle: "En Mar del Plata y zona.", href: "/sucursales" },
+  { icono: Users, titulo: "Cuenta profesional", detalle: "Precios de gremio y cuenta corriente.", href: "/profesionales" },
 ];
 
 export default async function NosotrosPage() {
-  const numeros = await numerosDeLaEmpresa();
+  const [numeros, sucursales] = await Promise.all([numerosDeLaEmpresa(), listarSucursalesPublicas()]);
+  const fotos = fotosDeLaGaleria();
 
   const cifras = [
-    { valor: `${numeros.anios}`, etiqueta: "Años de experiencia" },
-    { valor: `${numeros.sucursales}`, etiqueta: "Sucursales en Mar del Plata" },
-    { valor: `${numeros.medidas}`, etiqueta: "Medidas en catálogo" },
-    { valor: `${numeros.rubros}`, etiqueta: "Rubros" },
+    { valor: numeros.anios, etiqueta: "años" },
+    { valor: numeros.sucursales, etiqueta: "sucursales" },
+    { valor: numeros.medidas, etiqueta: "medidas" },
+    { valor: numeros.rubros, etiqueta: "rubros" },
   ];
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-sitio-fondo">
       <DatosEstructurados
         datos={migasJsonLd([
           { nombre: "Inicio", ruta: "/" },
@@ -92,109 +67,145 @@ export default async function NosotrosPage() {
         ])}
       />
 
-      <EncabezadoPublico
-        titulo="Nosotros"
-        bajada={`Desde ${ANIO_FUNDACION} en Mar del Plata: ${numeros.anios} años de empresa familiar que creció con la ciudad.`}
-      />
+      <EncabezadoPublico titulo="Nosotros" bajada={`Empresa familiar de Mar del Plata desde ${ANIO_FUNDACION}.`} />
 
-      <section className="py-16">
-        <div className="contenedor">
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {VALORES.map((valor) => (
-              <div
-                key={valor.titulo}
-                className="h-full rounded-xl border bg-card p-6 text-center transition-shadow hover:shadow-lg"
-              >
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-orange/10">
-                  <valor.icono className="h-7 w-7 text-brand-orange" />
-                </div>
-                <h2 className="mb-2 font-semibold">{valor.titulo}</h2>
-                <p className="text-sm text-muted-foreground">{valor.detalle}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+      <section className="border-b border-linea bg-card">
+        <dl className="contenedor grid grid-cols-2 divide-linea py-10 md:grid-cols-4 md:divide-x">
+          {cifras.map((c) => (
+            <div key={c.etiqueta} className="flex flex-col-reverse items-center py-3 text-center">
+              <dt className="mt-1 text-base uppercase tracking-[0.18em] text-texto-3">{c.etiqueta}</dt>
+              <dd className="tabular text-[56px] font-extrabold leading-none tracking-[-0.04em] text-foreground">{c.valor}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
-      <section className="bg-muted/50 py-16">
-        <div className="contenedor">
-          <h2 className="mb-12 text-center text-3xl font-bold">Nuestra trayectoria</h2>
-          <ol className="mx-auto max-w-3xl">
-            {TRAYECTORIA.map((hito, i) => (
-              <li key={hito.anio} className="flex gap-6 pb-10 last:pb-0">
-                <div className="flex flex-col items-center">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accion">
-                    <span className="text-xs font-bold text-white">{hito.anio}</span>
-                  </div>
-                  {i < TRAYECTORIA.length - 1 && (
-                    <div aria-hidden className="mt-2 w-0.5 flex-1 bg-brand-orange/20" />
+      <section className="contenedor py-16">
+        <h2 className="text-[32px] font-bold tracking-[-0.03em]">Dónde estamos</h2>
+        <div className="mt-7 grid gap-5 lg:grid-cols-2">
+          {sucursales.map((s) => (
+            <article key={s.slug} className="flex flex-col gap-5 rounded-2xl border border-linea bg-card p-5 sm:flex-row">
+              {s.foto && (
+                <Image
+                  src={s.foto.ruta}
+                  alt={s.nombre}
+                  width={s.foto.ancho}
+                  height={s.foto.alto}
+                  className="h-40 w-full shrink-0 rounded-xl object-cover sm:h-auto sm:w-44"
+                />
+              )}
+              <div className="flex min-w-0 flex-1 flex-col">
+                <h3 className="text-[24px] font-bold tracking-[-0.02em]">{s.nombre}</h3>
+                <p className="mt-1 text-base text-texto-2">{s.direccion}</p>
+                {s.horario && <p className="text-base text-texto-2">{s.horario}</p>}
+                {s.destacados && (
+                  <ul className="mt-3 flex flex-wrap gap-1.5">
+                    {s.destacados.split("\n").map((d) => (
+                      <li key={d} className="rounded-full bg-naranja-claro px-3 py-1 text-sm font-medium text-acento-sobre-claro">
+                        {d}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-auto flex flex-wrap gap-2 pt-4">
+                  {s.mapUrl && (
+                    <a
+                      href={s.mapUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-linea px-4 font-semibold transition-colors hover:bg-sitio-alt"
+                    >
+                      <MapPin className="h-4 w-4" />
+                      Cómo llegar
+                    </a>
+                  )}
+                  {s.whatsapp && (
+                    <a
+                      href={`https://wa.me/${s.whatsapp}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-verde-whatsapp px-4 font-semibold text-white"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      WhatsApp
+                    </a>
                   )}
                 </div>
-                <div className="pb-2">
-                  <h3 className="text-lg font-semibold">{hito.titulo}</h3>
-                  <p className="text-sm text-muted-foreground">{hito.detalle}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 
-      <section className="py-16">
+      <section className="bg-sitio-alt py-16">
         <div className="contenedor">
-          <div className="grid items-center gap-12 lg:grid-cols-2">
-            <div>
-              <p className="mb-4 inline-block rounded-full border border-brand-green/30 bg-brand-green/10 px-3 py-1 text-sm text-verde-whatsapp">
-                Marca propia
-              </p>
-              <h2 className="mb-4 text-3xl font-bold">Moldava</h2>
-              <p className="mb-6 text-muted-foreground">
-                Moldava es nuestra línea propia de molduras y listonería en
-                pino finger joint, nacida en el proceso productivo de la
-                maderera. El sistema Finger Joint elimina las imperfecciones de
-                la madera y la vuelve a ensamblar por dentado y pegado, así que
-                cada pieza sale uniforme y de 3,05 m de largo estándar. La
-                vendemos a consumidor final y a mayoristas de {ALCANCE_MOLDAVA},
-                con entrega en puerta y coordinación de envíos.
-              </p>
-              <ul className="mb-6 space-y-3">
-                {MOLDAVA.map((item) => (
-                  <li key={item} className="flex items-center gap-2 text-sm">
-                    <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-brand-green" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <Link href="/catalogo?cat=molduras" className={buttonVariants()}>
-                Ver catálogo de molduras
+          <h2 className="text-[32px] font-bold tracking-[-0.03em]">Lo que hacemos</h2>
+          <div className="mt-7 grid gap-4 md:grid-cols-3">
+            {SERVICIOS.map((s) => (
+              <Link
+                key={s.titulo}
+                href={s.href}
+                className="group rounded-2xl border border-linea bg-card p-6 transition-colors hover:border-accion/50"
+              >
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto">
+                  <s.icono className="h-6 w-6" />
+                </span>
+                <span className="mt-4 flex items-center gap-2 text-[22px] font-bold tracking-[-0.02em]">
+                  {s.titulo}
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </span>
+                <span className="mt-1 block text-base text-texto-2">{s.detalle}</span>
               </Link>
-            </div>
-
-            <div className="relative h-80 overflow-hidden rounded-2xl bg-brand-gray lg:h-96">
-              <Image
-                src="/fotos/photo-1504148455328-c376907d081c.jpg"
-                alt="Molduras Moldava"
-                fill
-                sizes="(min-width: 1024px) 50vw, 100vw"
-                className="object-cover"
-              />
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="bg-accion py-16 text-white">
-        <div className="contenedor">
-          <dl className="grid grid-cols-2 gap-8 text-center md:grid-cols-4">
-            {cifras.map((cifra) => (
-              <div key={cifra.etiqueta}>
-                <dd className="tabular text-4xl font-bold">{cifra.valor}</dd>
-                <dt className="mt-1 text-sm text-white">{cifra.etiqueta}</dt>
-              </div>
-            ))}
-          </dl>
+      <section className="bg-oscuro-marca py-16 text-white">
+        <div className="contenedor grid items-center gap-10 lg:grid-cols-[1.2fr_1fr]">
+          <div>
+            <span className="rounded-full bg-accion px-3 py-1 text-[12px] font-bold uppercase tracking-[0.08em]">
+              Línea propia
+            </span>
+            <h2 className="mt-4 text-[48px] font-extrabold leading-none tracking-[-0.035em]">Moldava</h2>
+            <p className="mt-4 max-w-[520px] text-lg text-white/75">
+              Molduras y listonería en pino finger joint, fabricadas en nuestra planta. Piezas de 3,05 m, sin nudos.
+              Venta minorista y mayorista en {ALCANCE_MOLDAVA}.
+            </p>
+            <Link
+              href="/moldava"
+              className="mt-6 inline-flex h-12 items-center gap-2 rounded-[10px] bg-accion px-5 font-semibold transition-colors hover:bg-accion-hover"
+            >
+              Conocer Moldava
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="relative h-72 overflow-hidden rounded-2xl lg:h-80">
+            <Image
+              src="/fotos/photo-1764283824453-02cd00e49143.jpg"
+              alt="Molduras Moldava"
+              fill
+              sizes="(min-width: 1024px) 40vw, 100vw"
+              className="object-cover"
+            />
+          </div>
         </div>
       </section>
+
+      {fotos.length > 0 && (
+        <section className="contenedor py-16">
+          <div className="grid auto-rows-[200px] grid-cols-2 gap-3 md:grid-cols-4">
+            {fotos.map((f, i) => (
+              <div
+                key={f}
+                className={`relative overflow-hidden rounded-xl ${i % 5 === 0 ? "col-span-2 row-span-2" : ""}`}
+              >
+                <Image src={f} alt="" fill sizes="(min-width: 768px) 50vw, 100vw" className="object-cover" />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

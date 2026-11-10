@@ -38,6 +38,16 @@ El código: `lib/whatsapp/` (adaptador, webhook, plantillas, ventana, números),
 `app/admin/whatsapp/` (pantallas), `app/api/whatsapp/` (webhook, adjuntos,
 subida de archivos).
 
+## El bot (respuestas automáticas)
+
+Desde el 10/11/2026 la plataforma puede contestar sola, sin IA, con el mismo motor que el asistente del sitio (`backend/internal/asistente`). Se prende en **WhatsApp → Configuración → Respuestas automáticas**, y ahí mismo se carga el número de la persona a la que se derivan las consultas.
+
+- **Contesta solo:** horarios y sucursales, envíos, formas de pago, qué hay en el catálogo y en qué medidas, Moldava, documentación, factura A o B, capacitaciones, y el corte armado desde un despiece («4 de 600x400 en melamina con canto» devuelve el link al cortador).
+- **Presupuestos:** si preguntan el precio de un producto, arma el presupuesto con la lista general, en estado *En revisión* y con origen *Por WhatsApp*. Al cliente no le pasa ningún precio. Al panel le llega el aviso y el presupuesto se manda con el botón de siempre. Si el producto tiene varias medidas, pregunta cuál.
+- **Audios:** los transcribe whisper.cpp en el mismo servidor (servicio `whisper`). La transcripción se lee en la bandeja debajo del audio y el bot la contesta.
+- **Deriva a una persona:** si se lo piden, en temas de acopio, si no entiende dos veces o si el producto no tiene precio cargado. Le manda al cliente un `wa.me` al número de la persona con la consulta ya escrita. A partir de ahí no contesta más en esa conversación, hasta que alguien toque **Devolver al bot** en la bandeja. Si en las últimas 12 horas contestó una persona, tampoco se mete.
+- **Costo:** cada respuesta es un mensaje que Meta cobra y entra en el tope de gasto del mes.
+
 ## Antes de empezar: ¿el mismo número o uno nuevo?
 
 Es la decisión que más importa, y la tiene que tomar la clienta.

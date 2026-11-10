@@ -2,12 +2,32 @@
 
 import { useActionState, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  Boxes,
+  Columns2,
+  Cylinder,
+  Droplet,
+  Eye,
+  Globe,
+  Grid2x2,
+  Hammer,
+  ImageIcon,
+  Layers,
+  Loader2,
+  Package,
+  Plus,
+  Receipt,
+  RectangleHorizontal,
+  Ruler,
+  Star,
+  Trash2,
+  Weight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -29,6 +49,8 @@ import {
   Pestanas,
   Seccion,
   sinReiniciar,
+  Interruptor,
+  Opciones,
 } from "@/components/admin/formulario";
 
 export interface VarianteForm {
@@ -90,20 +112,31 @@ export interface ProductoForm {
  * desde el panel.
  */
 const UNIDADES = [
-  { valor: "unidad", texto: "Por unidad", nombre: "unidades" },
-  { valor: "metro_lineal", texto: "Por metro lineal", nombre: "metros" },
+  { valor: "unidad", texto: "Por unidad", nombre: "unidades", icono: Package },
+  {
+    valor: "metro_lineal",
+    texto: "Por metro lineal",
+    nombre: "metros",
+    icono: Ruler,
+  },
   {
     valor: "metro_cuadrado",
     texto: "Por metro cuadrado",
     nombre: "metros cuadrados",
+    icono: Grid2x2,
   },
-  { valor: "tabla", texto: "Por tabla", nombre: "tablas" },
-  { valor: "placa", texto: "Por placa", nombre: "placas" },
-  { valor: "rollo", texto: "Por rollo", nombre: "rollos" },
-  { valor: "par", texto: "Por par", nombre: "pares" },
-  { valor: "juego", texto: "Por juego", nombre: "juegos" },
-  { valor: "kg", texto: "Por kilo", nombre: "kilos" },
-  { valor: "litro", texto: "Por litro", nombre: "litros" },
+  {
+    valor: "tabla",
+    texto: "Por tabla",
+    nombre: "tablas",
+    icono: RectangleHorizontal,
+  },
+  { valor: "placa", texto: "Por placa", nombre: "placas", icono: Layers },
+  { valor: "rollo", texto: "Por rollo", nombre: "rollos", icono: Cylinder },
+  { valor: "par", texto: "Por par", nombre: "pares", icono: Columns2 },
+  { valor: "juego", texto: "Por juego", nombre: "juegos", icono: Boxes },
+  { valor: "kg", texto: "Por kilo", nombre: "kilos", icono: Weight },
+  { valor: "litro", texto: "Por litro", nombre: "litros", icono: Droplet },
 ];
 
 /** Cómo se nombra la unidad al lado de una cantidad. */
@@ -163,6 +196,7 @@ export function FormularioProducto({
   const [pctMedia, setPctMedia] = useState(inicial.precioMediaPct);
   const [categoria, setCategoria] = useState(inicial.categoryId);
   const [rubro, setRubro] = useState(inicial.subcategoryId);
+  const [descripcion, setDescripcion] = useState(inicial.description);
 
   const rubrosDeLaCategoria = rubros.filter((r) => r.categoryId === categoria);
 
@@ -269,186 +303,187 @@ export function FormularioProducto({
       <Pestanas pestanas={PESTANAS} activa={pestana} alCambiar={setPestana} />
 
       {/* Datos generales */}
-      <Hoja hidden={pestana !== "datos"}>
-        <Seccion titulo="Producto">
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="name">Nombre</Label>
-            <Input
-              id="name"
-              name="name"
-              value={nombre}
-              onChange={(e) => cambiarNombre(e.target.value)}
-              required
-            />
-          </div>
-          {/* La "dirección web" salió del formulario a pedido de la
+      <div
+        hidden={pestana !== "datos"}
+        className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]"
+      >
+        <Hoja>
+          <Seccion titulo="Producto" icono={Package}>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="name">Nombre</Label>
+              <Input
+                id="name"
+                name="name"
+                value={nombre}
+                onChange={(e) => cambiarNombre(e.target.value)}
+                required
+              />
+            </div>
+            {/* La "dirección web" salió del formulario a pedido de la
                 clienta: el slug se genera solo desde el nombre en el alta y
                 no se regenera al editar —la URL publicada ya está indexada—.
                 Viaja oculto; si choca con otro producto, el alta lo
                 desambigua sola. */}
-          <input type="hidden" name="slug" value={slug} />
-          <div className="space-y-2">
-            <Label htmlFor="categoria">Categoría</Label>
-            <Select
-              value={categoria}
-              onValueChange={(v) => v && setCategoria(v)}
-              items={Object.fromEntries(categorias.map((c) => [c.id, c.name]))}
-            >
-              <SelectTrigger id="categoria" className="w-full">
-                <SelectValue placeholder="Elegí una categoría" />
-              </SelectTrigger>
-              <SelectContent>
-                {categorias.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rubro">Rubro</Label>
-            {/* El valor viaja en un campo oculto: `Select` no es un
-                  `<select>` nativo y no se envía solo con el formulario. */}
-            <input type="hidden" name="subcategoryId" value={rubroValido} />
-            <Select
-              value={rubroValido}
-              onValueChange={(v) => setRubro(v ?? "")}
-              items={Object.fromEntries([
-                ["", "Sin rubro"],
-                ...rubrosDeLaCategoria.map((r) => [r.id, r.name]),
-              ])}
-            >
-              <SelectTrigger id="rubro" className="w-full">
-                <SelectValue placeholder="Sin rubro" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Sin rubro</SelectItem>
-                {rubrosDeLaCategoria.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    {r.name}
-                    {r.active ? "" : " (dado de baja)"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {rubrosDeLaCategoria.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                Esta categoría todavía no tiene rubros cargados.
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="brand">Marca</Label>
-            <Input
-              id="brand"
-              name="brand"
-              defaultValue={inicial.brand}
-              placeholder="Moldava, Curvin…"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="unidad-de-venta">Unidad de venta</Label>
-            <Select
-              value={unidad}
-              onValueChange={(v) => v && setUnidad(v)}
-              items={Object.fromEntries(
-                UNIDADES.map((u) => [u.valor, u.texto]),
-              )}
-            >
-              <SelectTrigger id="unidad-de-venta" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {UNIDADES.map((u) => (
-                  <SelectItem key={u.valor} value={u.valor}>
-                    {u.texto}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {unidad === "placa" && (
-            <div className="md:col-span-2">
-              <FormaDeVentaDePlaca
-                forma={forma}
-                onForma={setForma}
-                pct={pctMedia}
-                onPct={setPctMedia}
-                precioEjemplo={Number(
-                  (variantes[0]?.precioGeneral ?? "0").replace(",", "."),
+            <input type="hidden" name="slug" value={slug} />
+            <div className="space-y-2">
+              <Label htmlFor="categoria">Categoría</Label>
+              <Select
+                value={categoria}
+                onValueChange={(v) => v && setCategoria(v)}
+                items={Object.fromEntries(
+                  categorias.map((c) => [c.id, c.name]),
                 )}
-                sinMedidas={
-                  variantes.filter((v) => !v.largoMm || !v.anchoMm).length
-                }
+              >
+                <SelectTrigger id="categoria" className="w-full">
+                  <SelectValue placeholder="Elegí una categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categorias.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rubro">Rubro</Label>
+              {/* El valor viaja en un campo oculto: `Select` no es un
+                  `<select>` nativo y no se envía solo con el formulario. */}
+              <input type="hidden" name="subcategoryId" value={rubroValido} />
+              <Select
+                value={rubroValido}
+                onValueChange={(v) => setRubro(v ?? "")}
+                items={Object.fromEntries([
+                  ["", "Sin rubro"],
+                  ...rubrosDeLaCategoria.map((r) => [r.id, r.name]),
+                ])}
+              >
+                <SelectTrigger id="rubro" className="w-full">
+                  <SelectValue placeholder="Sin rubro" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin rubro</SelectItem>
+                  {rubrosDeLaCategoria.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                      {r.active ? "" : " (dado de baja)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {rubrosDeLaCategoria.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Esta categoría todavía no tiene rubros cargados.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="brand">Marca</Label>
+              <Input
+                id="brand"
+                name="brand"
+                defaultValue={inicial.brand}
+                placeholder="Moldava, Curvin…"
               />
             </div>
-          )}
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="description">Descripción</Label>
-            <Textarea
-              id="description"
-              name="description"
-              defaultValue={inicial.description}
-              rows={3}
-            />
-          </div>
-        </Seccion>
-        <Seccion titulo="En el sitio">
-          <div className="space-y-2">
-            <Label htmlFor="usos">Usos</Label>
-            <Textarea
-              id="usos"
-              name="usos"
-              defaultValue={inicial.usos}
-              rows={4}
-              placeholder="Muebles de cocina, placares, revestimientos…"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="cuidados">Cuidados</Label>
-            <Textarea
-              id="cuidados"
-              name="cuidados"
-              defaultValue={inicial.cuidados}
-              rows={4}
-              placeholder="Limpiar con paño húmedo, sin solventes…"
-            />
-          </div>
-          <div className="flex flex-wrap gap-8 md:col-span-2">
-            <label className="flex items-center gap-2 text-base text-foreground">
-              <Switch name="featured" defaultChecked={inicial.featured} />
-              Destacado
-            </label>
-            <label className="flex items-center gap-2 text-base text-foreground">
-              <Switch name="active" defaultChecked={inicial.active} />
-              Visible en el sitio
-            </label>
-            <label className="flex items-center gap-2 text-base text-foreground">
-              <Switch name="aPedido" defaultChecked={inicial.aPedido} />
-              Se fabrica a pedido
-            </label>
-          </div>
-          <input type="hidden" name="imagen" value={inicial.imagen} />
-        </Seccion>
-        <Seccion titulo="Impuestos" columnas={3}>
-          {/* La clienta pidió "tipos de IVA" en productos. El campo existía
+            <div className="space-y-2 md:col-span-2">
+              <Label>Unidad de venta</Label>
+              <Opciones
+                nombre="unidad-de-venta"
+                opciones={UNIDADES}
+                valor={unidad}
+                alCambiar={setUnidad}
+              />
+            </div>
+            {unidad === "placa" && (
+              <div className="md:col-span-2">
+                <FormaDeVentaDePlaca
+                  forma={forma}
+                  onForma={setForma}
+                  pct={pctMedia}
+                  onPct={setPctMedia}
+                  precioEjemplo={Number(
+                    (variantes[0]?.precioGeneral ?? "0").replace(",", "."),
+                  )}
+                  sinMedidas={
+                    variantes.filter((v) => !v.largoMm || !v.anchoMm).length
+                  }
+                />
+              </div>
+            )}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="description">Descripción</Label>
+              <Textarea
+                id="description"
+                name="description"
+                defaultValue={inicial.description}
+                onChange={(e) => setDescripcion(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </Seccion>
+          <Seccion titulo="En el sitio" icono={Globe}>
+            <div className="space-y-2">
+              <Label htmlFor="usos">Usos</Label>
+              <Textarea
+                id="usos"
+                name="usos"
+                defaultValue={inicial.usos}
+                rows={4}
+                placeholder="Muebles de cocina, placares, revestimientos…"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cuidados">Cuidados</Label>
+              <Textarea
+                id="cuidados"
+                name="cuidados"
+                defaultValue={inicial.cuidados}
+                rows={4}
+                placeholder="Limpiar con paño húmedo, sin solventes…"
+              />
+            </div>
+            <div className="grid gap-2.5 md:col-span-2 lg:grid-cols-3">
+              <Interruptor
+                nombre="featured"
+                etiqueta="Destacado"
+                icono={Star}
+                defecto={inicial.featured}
+              />
+              <Interruptor
+                nombre="active"
+                etiqueta="Visible en el sitio"
+                icono={Eye}
+                defecto={inicial.active}
+              />
+              <Interruptor
+                nombre="aPedido"
+                etiqueta="Se fabrica a pedido"
+                icono={Hammer}
+                defecto={inicial.aPedido}
+              />
+            </div>
+            <input type="hidden" name="imagen" value={inicial.imagen} />
+          </Seccion>
+          <Seccion titulo="Impuestos" icono={Receipt}>
+            {/* La clienta pidió "tipos de IVA" en productos. El campo existía
                 en la base desde el primer schema y el formulario nunca lo
                 ofreció, así que todo el catálogo quedaba al 21. */}
-          <div className="space-y-2">
-            <Label htmlFor="alicuotaIva">IVA</Label>
-            <select
-              id="alicuotaIva"
-              name="alicuotaIva"
-              defaultValue={inicial.alicuotaIva || "21"}
-              className="h-10 w-full rounded-lg border border-input bg-transparent px-3 text-base"
-            >
-              <option value="21">21 % — general</option>
-              <option value="10.5">10,5 % — reducida</option>
-              <option value="0">Exento</option>
-            </select>
-          </div>
-          {/*
+            <div className="space-y-2">
+              <Label>IVA</Label>
+              <Opciones
+                nombre="alicuotaIva"
+                defecto={inicial.alicuotaIva || "21"}
+                columnas={3}
+                opciones={[
+                  { valor: "21", texto: "21 %" },
+                  { valor: "10.5", texto: "10,5 %" },
+                  { valor: "0", texto: "Exento" },
+                ]}
+              />
+            </div>
+            {/*
               La imputación contable, que pidió la clienta junto con subrubros,
               IVA y SKU. Las otras tres existían; esta no.
 
@@ -457,35 +492,43 @@ export function FormularioProducto({
               `datalist` es lo que evita que la misma cuenta se escriba de tres
               maneras: propone lo ya usado sin impedir cargar una nueva.
             */}
-          <div className="space-y-2">
-            <Label htmlFor="imputacion">Imputación contable</Label>
-            <Input
-              id="imputacion"
-              name="imputacion"
-              list="imputaciones-cargadas"
-              defaultValue={inicial.imputacion}
-              placeholder="Mercaderías"
-            />
-            <datalist id="imputaciones-cargadas">
-              {imputaciones.map((i) => (
-                <option key={i} value={i} />
-              ))}
-            </datalist>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="recargoElaboracionPct">
-              Recargo por elaboración (%)
-            </Label>
-            <Input
-              id="recargoElaboracionPct"
-              name="recargoElaboracionPct"
-              defaultValue={inicial.recargoElaboracionPct}
-              inputMode="decimal"
-              placeholder="0"
-            />
-          </div>
-        </Seccion>
-      </Hoja>
+            <div className="space-y-2">
+              <Label htmlFor="imputacion">Imputación contable</Label>
+              <Input
+                id="imputacion"
+                name="imputacion"
+                list="imputaciones-cargadas"
+                defaultValue={inicial.imputacion}
+                placeholder="Mercaderías"
+              />
+              <datalist id="imputaciones-cargadas">
+                {imputaciones.map((i) => (
+                  <option key={i} value={i} />
+                ))}
+              </datalist>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recargoElaboracionPct">
+                Recargo por elaboración (%)
+              </Label>
+              <Input
+                id="recargoElaboracionPct"
+                name="recargoElaboracionPct"
+                defaultValue={inicial.recargoElaboracionPct}
+                inputMode="decimal"
+                placeholder="0"
+              />
+            </div>
+          </Seccion>
+        </Hoja>
+        <VistaPrevia
+          nombre={nombre}
+          categoria={categorias.find((c) => c.id === categoria)?.name ?? ""}
+          descripcion={descripcion}
+          unidad={UNIDADES.find((u) => u.valor === unidad)?.texto ?? ""}
+          foto={galeria[0]?.url ?? inicial.imagen}
+        />
+      </div>
 
       {/* Fotos */}
       {inicial.id ? (
@@ -888,4 +931,54 @@ const PESOS = new Intl.NumberFormat("es-AR", {
 
 function formatearPesos(n: number): string {
   return PESOS.format(n);
+}
+
+/**
+ * Cómo va a quedar la tarjeta en el catálogo, mientras se carga: el nombre, la
+ * categoría y la descripción se ven ahí y no en una lista de campos.
+ */
+function VistaPrevia({
+  nombre,
+  categoria,
+  descripcion,
+  unidad,
+  foto,
+}: {
+  nombre: string;
+  categoria: string;
+  descripcion: string;
+  unidad: string;
+  foto: string;
+}) {
+  return (
+    <aside className="sticky top-24 hidden xl:block">
+      <p className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-texto-3">
+        En el catálogo
+      </p>
+      <div className="tarjeta overflow-hidden">
+        <div className="flex aspect-[4/3] items-center justify-center bg-hundida">
+          {foto ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={foto} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <ImageIcon className="h-10 w-10 text-texto-3" />
+          )}
+        </div>
+        <div className="space-y-1.5 p-4">
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-acento-texto">
+            {categoria || "Categoría"}
+          </p>
+          <p className="text-lg font-bold leading-tight tracking-tight">
+            {nombre || (
+              <span className="text-texto-3">Nombre del producto</span>
+            )}
+          </p>
+          {descripcion && (
+            <p className="line-clamp-3 text-sm text-texto-2">{descripcion}</p>
+          )}
+          <p className="pt-1 text-sm font-medium text-texto-3">{unidad}</p>
+        </div>
+      </div>
+    </aside>
+  );
 }

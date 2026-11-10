@@ -746,7 +746,7 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
 /* Los controles del panel crecen a 40px, el mínimo que se acierta con el dedo
    o con un pulso poco firme. */
 .panel :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]),
-.panel button:not([data-slot="dropdown-menu-item"]) {
+.panel button:not([data-slot="dropdown-menu-item"], [data-slot="switch"]) {
   min-height: 2.5rem;
 }
 
@@ -767,7 +767,7 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
    menos conviene achicar el blanco al que hay que apuntar—. */
 [data-slot="dialog-content"]
   :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]),
-[data-slot="dialog-content"] button:not([data-slot="dropdown-menu-item"]) {
+[data-slot="dialog-content"] button:not([data-slot="dropdown-menu-item"], [data-slot="switch"]) {
   min-height: 2.5rem;
 }
 
@@ -1548,4 +1548,50 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
 
 .dark :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"]), select, textarea, [data-slot="select-trigger"]).border:not(:focus, :focus-visible, [aria-invalid="true"], [class*="bg-white/"], [class*="border-white"]) {
   box-shadow: inset 0 1.5px 3px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(255 255 255 / 0.05);
+}
+
+/* ---- Piezas visuales de los formularios (10/11/2026) ----------------------
+   Nahuel: «haría todo lo más visual posible». Ícono de sección, fichas de
+   opción y tarjetas de interruptor, con el mismo relieve que los botones. */
+.ficha-icono {
+  background-image: linear-gradient(to bottom, var(--naranja-claro), color-mix(in oklab, var(--naranja-claro) 70%, var(--accion) 30%));
+  color: var(--acento-sobre-claro);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), 0 2px 6px -2px rgb(200 90 20 / 0.35);
+}
+
+.ficha-opcion,
+.ficha-interruptor {
+  background-image: linear-gradient(to bottom, var(--card), var(--hundida));
+  box-shadow: var(--relieve-suave);
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms ease,
+    background 160ms ease;
+}
+
+.ficha-opcion:hover,
+.ficha-interruptor:hover {
+  transform: translateY(-1px);
+}
+
+.ficha-opcion:has(:checked),
+.ficha-interruptor:has([data-checked]) {
+  background-image: linear-gradient(to bottom, color-mix(in oklab, var(--naranja-claro) 80%, transparent), var(--naranja-claro));
+  color: var(--acento-sobre-claro);
+  box-shadow: inset 0 2px 5px rgb(200 90 20 / 0.22), inset 0 0 0 1.5px color-mix(in oklab, var(--accion) 55%, transparent);
+  transform: none;
+}
+
+.ficha-opcion:has(:focus-visible) {
+  outline: 2px solid var(--accion);
+  outline-offset: 2px;
+}
+
+.ficha-interruptor:has([data-checked]) .ficha-icono {
+  background-image: linear-gradient(to bottom, color-mix(in oklab, var(--accion) 85%, white), var(--accion));
+  color: #fff;
+}
+
+.ficha-interruptor [data-slot="switch"][data-checked] {
+  background-color: var(--accion);
 }

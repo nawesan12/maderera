@@ -1,6 +1,14 @@
 "use client";
 
-import { startTransition, type FormEvent, type ReactNode } from "react";
+import {
+  startTransition,
+  type ComponentType,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { Switch } from "@/components/ui/switch";
+
+type Icono = ComponentType<{ className?: string }>;
 
 /**
  * La base de los formularios del panel (notas del 9/11/2026: «los formularios
@@ -22,7 +30,10 @@ export function sinReiniciar(accion: (datos: FormData) => void) {
   return {
     onSubmit: (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      const datos = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+      const datos = new FormData(
+        e.currentTarget,
+        (e.nativeEvent as SubmitEvent).submitter,
+      );
       startTransition(() => accion(datos));
     },
   };
@@ -33,9 +44,18 @@ export function sinReiniciar(accion: (datos: FormData) => void) {
  * una línea suave, en vez de una caja por grupo (10/11/2026, Nahuel: «los
  * formularios todos también están horribles»).
  */
-export function Hoja({ children, hidden }: { children: ReactNode; hidden?: boolean }) {
+export function Hoja({
+  children,
+  hidden,
+}: {
+  children: ReactNode;
+  hidden?: boolean;
+}) {
   return (
-    <div hidden={hidden} className="tarjeta divide-y divide-linea-suave px-5 sm:px-8">
+    <div
+      hidden={hidden}
+      className="tarjeta divide-y divide-linea-suave px-5 sm:px-8"
+    >
       {children}
     </div>
   );
@@ -49,21 +69,113 @@ export function Hoja({ children, hidden }: { children: ReactNode; hidden?: boole
  */
 export function Seccion({
   titulo,
+  icono: IconoSeccion,
   children,
   columnas = 2,
   hidden,
 }: {
   titulo: string;
+  icono?: Icono;
   children: ReactNode;
   columnas?: 1 | 2 | 3;
   hidden?: boolean;
 }) {
   const grilla = { 1: "", 2: "md:grid-cols-2", 3: "md:grid-cols-3" }[columnas];
   return (
-    <section hidden={hidden} className="grid gap-x-10 gap-y-4 py-7 lg:grid-cols-[11rem_minmax(0,1fr)]">
-      <h2 className="text-[17px] font-semibold tracking-tight lg:pt-1.5">{titulo}</h2>
+    <section
+      hidden={hidden}
+      className="grid gap-x-10 gap-y-5 py-8 2xl:grid-cols-[11rem_minmax(0,1fr)]"
+    >
+      <h2 className="flex items-center gap-3 text-[19px] font-bold tracking-tight 2xl:flex-col 2xl:items-start">
+        {IconoSeccion && (
+          <span className="ficha-icono flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+            <IconoSeccion className="h-6 w-6" />
+          </span>
+        )}
+        {titulo}
+      </h2>
       <div className={`grid gap-x-5 gap-y-5 ${grilla}`}>{children}</div>
     </section>
+  );
+}
+
+/**
+ * Una elección entre pocas opciones, como fichas para tocar en vez de un
+ * desplegable: se ven todas de una vez y la elegida queda hundida y naranja.
+ * Son radios de verdad, así que viajan con el formulario.
+ */
+export function Opciones({
+  nombre,
+  opciones,
+  valor,
+  defecto,
+  alCambiar,
+  columnas = 4,
+}: {
+  nombre: string;
+  opciones: readonly { valor: string; texto: string; icono?: Icono }[];
+  valor?: string;
+  defecto?: string;
+  alCambiar?: (valor: string) => void;
+  columnas?: 2 | 3 | 4;
+}) {
+  const grilla = {
+    2: "grid-cols-2",
+    3: "grid-cols-2 sm:grid-cols-3",
+    4: "grid-cols-2 sm:grid-cols-4",
+  }[columnas];
+  return (
+    <div role="radiogroup" className={`grid gap-2.5 ${grilla}`}>
+      {opciones.map((o) => (
+        <label
+          key={o.valor}
+          className="ficha-opcion flex cursor-pointer flex-col items-start gap-2 rounded-xl p-3.5 text-[15px] font-semibold leading-tight"
+        >
+          <input
+            type="radio"
+            name={nombre}
+            value={o.valor}
+            className="sr-only"
+            {...(valor !== undefined
+              ? {
+                  checked: valor === o.valor,
+                  onChange: () => alCambiar?.(o.valor),
+                }
+              : {
+                  defaultChecked: defecto === o.valor,
+                  onChange: () => alCambiar?.(o.valor),
+                })}
+          />
+          {o.icono && <o.icono className="h-6 w-6 opacity-80" />}
+          {o.texto}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+/** Un interruptor grande, con ícono: la tarjeta se enciende con él. */
+export function Interruptor({
+  nombre,
+  etiqueta,
+  icono: IconoInterruptor,
+  defecto,
+}: {
+  nombre: string;
+  etiqueta: string;
+  icono: Icono;
+  defecto?: boolean;
+}) {
+  return (
+    <label className="ficha-interruptor flex cursor-pointer items-center gap-3 rounded-xl p-3.5">
+      <span className="ficha-icono flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+        <IconoInterruptor className="h-5 w-5" />
+      </span>
+      <span className="flex-1 text-[15px] font-semibold leading-tight">
+        {etiqueta}
+      </span>
+      <Switch name={nombre} defaultChecked={defecto} />
+    </label>
   );
 }
 
@@ -71,7 +183,13 @@ export function Seccion({
  * La barra de guardar, fija abajo: en un formulario largo el botón quedaba al
  * final de todo, y para guardar un cambio de arriba había que bajar hasta ahí.
  */
-export function BarraGuardar({ children, error }: { children: ReactNode; error?: string | null }) {
+export function BarraGuardar({
+  children,
+  error,
+}: {
+  children: ReactNode;
+  error?: string | null;
+}) {
   return (
     <div className="sticky bottom-0 z-20 -mx-4 border-t border-linea bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -99,7 +217,10 @@ export function Pestanas<T extends string>({
   conError?: T[];
 }) {
   return (
-    <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-linea">
+    <div
+      role="tablist"
+      className="flex gap-1 overflow-x-auto border-b border-linea"
+    >
       {pestanas.map((p) => (
         <button
           key={p.id}
@@ -114,7 +235,12 @@ export function Pestanas<T extends string>({
           }`}
         >
           {p.nombre}
-          {conError.includes(p.id) && <span className="ml-1.5 inline-block h-2 w-2 rounded-full bg-destructive" aria-label="con errores" />}
+          {conError.includes(p.id) && (
+            <span
+              className="ml-1.5 inline-block h-2 w-2 rounded-full bg-destructive"
+              aria-label="con errores"
+            />
+          )}
         </button>
       ))}
     </div>

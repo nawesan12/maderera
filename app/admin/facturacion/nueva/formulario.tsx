@@ -18,6 +18,7 @@ import {
   type CondicionIva,
 } from "@/lib/fiscal/comprobantes";
 import { moneda } from "@/lib/formato";
+import { sinReiniciar } from "@/components/admin/formulario";
 
 const inicial: EstadoFactura = {};
 
@@ -102,7 +103,7 @@ export function FormularioFacturaManual({
   }
 
   return (
-    <form action={accion} className="space-y-4">
+    <form {...sinReiniciar(accion)} className="space-y-4">
       {/* Receptor */}
       <section className="tarjeta p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">

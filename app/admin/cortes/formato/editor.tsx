@@ -16,6 +16,7 @@ import {
 } from "@/lib/cortes/tipos";
 import { useDeGo } from "@/lib/cortes/en-vivo";
 import type { PerfilGuardado as CuttingExportProfile } from "@/lib/dal/admin/cortes-exportacion";
+import { sinReiniciar } from "@/components/admin/formulario";
 
 const inicial: EstadoPerfil = {};
 
@@ -173,7 +174,7 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
   }
 
   return (
-    <form action={guardar} className="tarjeta space-y-5 p-5">
+    <form {...sinReiniciar(guardar)} className="tarjeta space-y-5 p-5">
       {perfil && <input type="hidden" name="id" value={perfil.id} />}
       <input type="hidden" name="columnas" value={JSON.stringify(columnas)} />
 

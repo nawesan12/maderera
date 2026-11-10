@@ -4,6 +4,7 @@ import { useActionState, useId, useState, useTransition } from "react";
 import Image from "next/image";
 import { Loader2, Trash2 } from "lucide-react";
 import { borrarPromo, guardarPromo, type EstadoPromo } from "./actions";
+import { sinReiniciar } from "@/components/admin/formulario";
 
 const inicial: EstadoPromo = {};
 
@@ -31,7 +32,7 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
   const id = useId();
 
   return (
-    <form action={guardar} className="space-y-4 rounded-xl border bg-card p-5">
+    <form {...sinReiniciar(guardar)} className="space-y-4 rounded-xl border bg-card p-5">
       {promo && <input type="hidden" name="id" value={promo.id} />}
 
       <div className="grid gap-4 sm:grid-cols-2">

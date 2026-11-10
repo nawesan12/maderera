@@ -93,87 +93,100 @@ export function FormularioProveedor({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Campo
-          etiqueta="Nombre"
-          valor={datos.nombre}
-          onCambio={(v) => campo("nombre", v)}
-          requerido
-        />
-        <Campo
-          etiqueta="Razón social"
-          valor={datos.razonSocial ?? ""}
-          onCambio={(v) => campo("razonSocial", v || null)}
-        />
-        <Campo
-          etiqueta="CUIT"
-          valor={datos.cuit ?? ""}
-          onCambio={(v) => campo("cuit", v || null)}
-        />
-        <label className="block">
-          <span className="text-sm font-medium">Condición frente al IVA</span>
-          <select
-            value={datos.condicionIva}
-            onChange={(e) => campo("condicionIva", e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            {Object.entries(CONDICIONES).map(([valor, texto]) => (
-              <option key={valor} value={valor}>
-                {texto}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Campo
-          etiqueta="Con quién se habla"
-          valor={datos.contacto ?? ""}
-          onCambio={(v) => campo("contacto", v || null)}
-        />
-        <Campo
-          etiqueta="Teléfono"
-          valor={datos.telefono ?? ""}
-          onCambio={(v) => campo("telefono", v || null)}
-        />
-        <Campo
-          etiqueta="Correo"
-          valor={datos.email ?? ""}
-          onCambio={(v) => campo("email", v || null)}
-        />
-        <Campo
-          etiqueta="Rubro"
-          valor={datos.rubro ?? ""}
-          onCambio={(v) => campo("rubro", v || null)}
-        />
-        <Campo
-          etiqueta="Dirección"
-          valor={datos.direccion ?? ""}
-          onCambio={(v) => campo("direccion", v || null)}
-        />
-        <label className="block">
-          <span className="text-sm font-medium">Días de pago</span>
-          <input
-            type="number"
-            min="0"
-            max="365"
-            value={datos.diasPago}
-            onChange={(e) => campo("diasPago", Number(e.target.value))}
-            className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+      <fieldset className="space-y-3">
+        <legend className="text-base font-semibold">Quién es</legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Campo
+            etiqueta="Nombre"
+            valor={datos.nombre}
+            onCambio={(v) => campo("nombre", v)}
+            requerido
           />
-          <span className="text-sm text-muted-foreground">
-            Cero es contra entrega.
-          </span>
-        </label>
-        <Campo
-          etiqueta="CBU"
-          valor={datos.cbu ?? ""}
-          onCambio={(v) => campo("cbu", v || null)}
-        />
-        <Campo
-          etiqueta="Alias"
-          valor={datos.aliasCbu ?? ""}
-          onCambio={(v) => campo("aliasCbu", v || null)}
-        />
-      </div>
+          <Campo
+            etiqueta="Razón social"
+            valor={datos.razonSocial ?? ""}
+            onCambio={(v) => campo("razonSocial", v || null)}
+          />
+          <Campo
+            etiqueta="CUIT"
+            valor={datos.cuit ?? ""}
+            onCambio={(v) => campo("cuit", v || null)}
+          />
+          <label className="block">
+            <span className="text-sm font-medium">Condición frente al IVA</span>
+            <select
+              value={datos.condicionIva}
+              onChange={(e) => campo("condicionIva", e.target.value)}
+              className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            >
+              {Object.entries(CONDICIONES).map(([valor, texto]) => (
+                <option key={valor} value={valor}>
+                  {texto}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Campo
+            etiqueta="Rubro"
+            valor={datos.rubro ?? ""}
+            onCambio={(v) => campo("rubro", v || null)}
+          />
+        </div>
+      </fieldset>
+      <fieldset className="space-y-3">
+        <legend className="text-base font-semibold">Contacto</legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Campo
+            etiqueta="Con quién se habla"
+            valor={datos.contacto ?? ""}
+            onCambio={(v) => campo("contacto", v || null)}
+          />
+          <Campo
+            etiqueta="Teléfono"
+            valor={datos.telefono ?? ""}
+            onCambio={(v) => campo("telefono", v || null)}
+          />
+          <Campo
+            etiqueta="Correo"
+            valor={datos.email ?? ""}
+            onCambio={(v) => campo("email", v || null)}
+          />
+          <Campo
+            etiqueta="Dirección"
+            valor={datos.direccion ?? ""}
+            onCambio={(v) => campo("direccion", v || null)}
+          />
+        </div>
+      </fieldset>
+      <fieldset className="space-y-3">
+        <legend className="text-base font-semibold">Pago</legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-sm font-medium">Días de pago</span>
+            <input
+              type="number"
+              min="0"
+              max="365"
+              value={datos.diasPago}
+              onChange={(e) => campo("diasPago", Number(e.target.value))}
+              className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            />
+            <span className="text-sm text-muted-foreground">
+              Cero es contra entrega.
+            </span>
+          </label>
+          <Campo
+            etiqueta="CBU"
+            valor={datos.cbu ?? ""}
+            onCambio={(v) => campo("cbu", v || null)}
+          />
+          <Campo
+            etiqueta="Alias"
+            valor={datos.aliasCbu ?? ""}
+            onCambio={(v) => campo("aliasCbu", v || null)}
+          />
+        </div>
+      </fieldset>
 
       <label className="block">
         <span className="text-sm font-medium">Notas</span>

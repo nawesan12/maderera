@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { crearPresupuesto } from "@/app/admin/ventas-actions";
 import { buscarClientes, buscarEnMostrador } from "@/app/mostrador/actions";
 import { formatearMonto } from "@/components/admin/formato";
+import { sinReiniciar } from "@/components/admin/formulario";
 
 interface Linea {
   variantId: string | null;
@@ -105,7 +106,7 @@ export function FormularioPresupuesto({
   }
 
   return (
-    <form action={accion} className="space-y-5">
+    <form {...sinReiniciar(accion)} className="space-y-5">
       <input type="hidden" name="branchId" value={sucursal} />
       {cliente && <input type="hidden" name="customerId" value={cliente.id} />}
       {lineas.map((linea, i) => (

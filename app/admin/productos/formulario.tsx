@@ -23,6 +23,7 @@ import {
 import { generarSlug } from "@/lib/validation/product";
 import { admiteDecimales } from "@/lib/unidades";
 import { guardarProducto, type EstadoFormulario } from "./actions";
+import { BarraGuardar, Pestanas, sinReiniciar } from "@/components/admin/formulario";
 
 export interface VarianteForm {
   id?: string;
@@ -143,6 +144,7 @@ export function FormularioProducto({
     guardarProducto,
     estadoInicial,
   );
+  const [pestana, setPestana] = useState<(typeof PESTANAS)[number]["id"]>("datos");
 
   const [nombre, setNombre] = useState(inicial.name);
   const [slug, setSlug] = useState(inicial.slug);
@@ -204,7 +206,7 @@ export function FormularioProducto({
   }
 
   return (
-    <form action={accion} className="space-y-6">
+    <form {...sinReiniciar(accion)} className="space-y-6">
       {inicial.id && <input type="hidden" name="id" value={inicial.id} />}
       <input
         type="hidden"
@@ -249,8 +251,10 @@ export function FormularioProducto({
         </p>
       )}
 
+      <Pestanas pestanas={PESTANAS} activa={pestana} alCambiar={setPestana} />
+
       {/* Datos generales */}
-      <Card className="border-border bg-card">
+      <Card hidden={pestana !== "datos"} className="border-border bg-card">
         <CardContent className="space-y-4 p-6">
           <h2 className="text-base font-semibold text-foreground">Datos generales</h2>
 
@@ -490,7 +494,7 @@ export function FormularioProducto({
 
       {/* Fotos */}
       {inicial.id ? (
-        <Card className="tarjeta border-0">
+        <Card hidden={pestana !== "fotos"} className="tarjeta border-0">
           <CardContent className="space-y-4 p-6">
             <div>
               <h2 className="text-base font-semibold">Fotos</h2>
@@ -502,7 +506,7 @@ export function FormularioProducto({
           </CardContent>
         </Card>
       ) : (
-        <Card className="tarjeta-hundida border-0">
+        <Card hidden={pestana !== "fotos"} className="tarjeta-hundida border-0">
           <CardContent className="p-6 text-center">
             <p className="text-base text-muted-foreground">
               Guardá el producto y después le cargás las fotos.
@@ -512,7 +516,7 @@ export function FormularioProducto({
       )}
 
       {/* Variantes */}
-      <Card className="border-border bg-card">
+      <Card hidden={pestana !== "medidas"} className="border-border bg-card">
         <CardContent className="space-y-4 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -740,7 +744,7 @@ export function FormularioProducto({
         </CardContent>
       </Card>
 
-      <div className="flex items-center gap-3">
+      <BarraGuardar>
         <Button
           type="submit"
           disabled={pendiente}
@@ -758,11 +762,18 @@ export function FormularioProducto({
         <Button render={<Link href="/admin/productos" />} variant="ghost">
           Cancelar
         </Button>
-      </div>
+      </BarraGuardar>
     </form>
   );
 }
 
+
+/** El producto, partido en tres: lo que es, cómo se ve y cómo se vende. */
+const PESTANAS = [
+  { id: "datos", nombre: "Datos" },
+  { id: "fotos", nombre: "Fotos" },
+  { id: "medidas", nombre: "Medidas y precios" },
+] as const;
 
 const FORMAS_DE_VENTA = [
   {

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { guardarCliente, type EstadoCliente } from "./actions";
 import { RUBROS_CLIENTE } from "@/lib/rubros-cliente";
+import { sinReiniciar } from "@/components/admin/formulario";
 
 const CONDICIONES = {
   consumidor_final: "Consumidor final",
@@ -132,7 +133,7 @@ export function DialogoCliente({
           <DialogTitle>Nuevo cliente</DialogTitle>
         </DialogHeader>
 
-        <form action={accion} className="space-y-4">
+        <form {...sinReiniciar(accion)} className="space-y-4">
           <input type="hidden" name="tipo" value={tipo} />
           <input type="hidden" name="condicionIva" value={condicion} />
           <input type="hidden" name="priceListId" value={lista} />

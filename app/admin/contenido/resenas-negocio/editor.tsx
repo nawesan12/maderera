@@ -9,6 +9,7 @@ import {
   traerDeGoogle,
   type EstadoResena,
 } from "./actions";
+import { sinReiniciar } from "@/components/admin/formulario";
 
 const inicial: EstadoResena = {};
 
@@ -78,7 +79,7 @@ export function EditorDeResenas({
           puso y el texto tal cual.
         </p>
 
-        <form action={guardar} className="mt-4 space-y-3">
+        <form {...sinReiniciar(guardar)} className="mt-4 space-y-3">
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="block">
               <span className="text-base font-medium">Quién la escribió</span>

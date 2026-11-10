@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Loader2, Trash2 } from "lucide-react";
 import { borrarBanner, guardarBanner, type EstadoBanner } from "./actions";
 import { UBICACIONES } from "./ubicaciones";
+import { sinReiniciar } from "@/components/admin/formulario";
 
 const inicial: EstadoBanner = {};
 
@@ -37,7 +38,7 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
   // mismos campos y no hay nada que esconder según dónde vaya.
 
   return (
-    <form action={guardar} className="space-y-4 rounded-xl border bg-card p-5">
+    <form {...sinReiniciar(guardar)} className="space-y-4 rounded-xl border bg-card p-5">
       {banner && <input type="hidden" name="id" value={banner.id} />}
 
       <div className="grid gap-4 sm:grid-cols-2">

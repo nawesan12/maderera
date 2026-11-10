@@ -16,6 +16,7 @@ import { usePlano } from "@/lib/cortes/en-vivo";
 import { PlanoEnVivo } from "@/components/cortes/plano-en-vivo";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";
+import { sinReiniciar } from "@/components/admin/formulario";
 
 /** La placa elegida del catálogo, con lo que el plano necesita saber de ella. */
 export interface PlacaElegida {
@@ -222,7 +223,7 @@ export function FormularioCorte({
   }
 
   return (
-    <form action={accion} className="space-y-5">
+    <form {...sinReiniciar(accion)} className="space-y-5">
       <input type="hidden" name="branchId" value={sucursal} />
       {desdePedido && (
         <input type="hidden" name="orderId" value={desdePedido.id} />

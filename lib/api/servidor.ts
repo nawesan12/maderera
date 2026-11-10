@@ -1,6 +1,7 @@
 import "server-only";
 
 import createClient from "openapi-fetch";
+import { traducirMensaje } from "@/lib/api/mensajes";
 import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import type { paths } from "./tipos";
@@ -115,8 +116,9 @@ export interface Problema {
 /** El primer mensaje para mostrar de un problema: el de un campo, o el general. */
 export function mensajeDe(p: Problema | undefined, porDefecto = "Algo falló. Probá de nuevo en un momento."): string {
   if (!p) return porDefecto;
-  const deCampo = p.errores ? Object.values(p.errores)[0] : undefined;
-  return deCampo ?? p.detail ?? p.title ?? porDefecto;
+  const [campo, deCampo] = p.errores ? (Object.entries(p.errores)[0] ?? []) : [];
+  if (deCampo) return traducirMensaje(deCampo, campo);
+  return p.detail ? traducirMensaje(p.detail) : (p.title ?? porDefecto);
 }
 
 /**

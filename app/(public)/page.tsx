@@ -321,9 +321,8 @@ function BannerCorte() {
                 mientras esperás
               </h2>
               <p className="mt-3 max-w-[420px] text-base leading-relaxed text-white/70">
-                Cargá el despiece en milímetros, mirá cómo entra en la placa y
-                comprá el corte hecho. Si son más de 20 piezas, dejalo y lo
-                pasás a buscar.
+                Cargá las medidas, elegí el canto de cada pieza y mandalo por
+                WhatsApp.
               </p>
               <div className="mt-6 flex flex-wrap gap-2.5">
                 <Link
@@ -331,12 +330,6 @@ function BannerCorte() {
                   className="flex h-12 items-center rounded-[10px] bg-accion px-[22px] text-[15.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
                 >
                   Pedir un corte
-                </Link>
-                <Link
-                  href="/contacto"
-                  className="flex h-12 items-center rounded-[10px] border border-white/25 px-[22px] text-[15.5px] font-semibold text-white transition-colors hover:bg-white/10"
-                >
-                  Cómo mandar el despiece
                 </Link>
               </div>
             </div>

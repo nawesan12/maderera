@@ -6,6 +6,8 @@ import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { requireStaff } from "@/lib/dal/session";
 import { anchoDeSierra } from "@/lib/dal/sierra";
 import { FormularioCorte } from "./formulario";
+import { consultaDeCorte } from "@/lib/dal/consultas-corte";
+import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
 
 export const metadata = { title: "Nuevo corte" };
 
@@ -24,16 +26,22 @@ export const metadata = { title: "Nuevo corte" };
 export default async function NuevoCortePage({
   searchParams,
 }: {
-  searchParams: Promise<{ pedido?: string }>;
+  searchParams: Promise<{ pedido?: string; consulta?: string }>;
 }) {
   await requireStaff();
 
-  const { pedido: pedidoId } = await searchParams;
-  const [sucursales, pedido, sierra] = await Promise.all([
+  const { pedido: pedidoId, consulta: token } = await searchParams;
+  const [sucursales, pedido, sierra, consulta, placas] = await Promise.all([
     listarSucursalesPublicas(),
     pedidoId ? obtenerPedido(pedidoId) : Promise.resolve(null),
     anchoDeSierra(),
+    token ? consultaDeCorte(token) : Promise.resolve(null),
+    token ? placasCortablesPublicas() : Promise.resolve([]),
   ]);
+  if (token && !consulta) notFound();
+  // La placa entera de la consulta: lo guardado es la medida ya partida, y el
+  // formulario parte la entera él mismo.
+  const placaDeLaConsulta = consulta?.variantId ? placas.find((p) => p.variantId === consulta.variantId) : undefined;
 
   // Un id de pedido que no existe no es lo mismo que no haber pasado ninguno:
   // seguir de largo dejaría un corte suelto creyendo que quedó atado.
@@ -71,6 +79,34 @@ export default async function NuevoCortePage({
 
       <FormularioCorte
         sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
+        desdeConsulta={
+          consulta
+            ? {
+                token: consulta.token,
+                placa: placaDeLaConsulta
+                  ? {
+                      variantId: placaDeLaConsulta.variantId,
+                      descripcion: consulta.material,
+                      largoMm: placaDeLaConsulta.largoMm,
+                      anchoMm: placaDeLaConsulta.anchoMm,
+                      color: placaDeLaConsulta.color,
+                    }
+                  : null,
+                mitad: consulta.mitad === "largo" || consulta.mitad === "ancho" ? consulta.mitad : null,
+                cantoDescripcion: consulta.cantoDescripcion ?? "",
+                piezas: consulta.piezas.map((p) => ({
+                  largoMm: p.largoMm,
+                  anchoMm: p.anchoMm,
+                  cantidad: p.cantidad,
+                  respetaVeta: p.respetaVeta === 1,
+                  cantoLargo: p.cantoLargo ?? 0,
+                  cantoAncho: p.cantoAncho ?? 0,
+                  aclaracion: "",
+                  etiqueta: p.etiqueta ?? "",
+                })),
+              }
+            : undefined
+        }
         anchoSierra={sierra}
         desdePedido={
           pedido

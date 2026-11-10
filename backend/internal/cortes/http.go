@@ -67,12 +67,16 @@ func (o respuesta) VisitFichaDeCorteResponse(w http.ResponseWriter) error      {
 func (o respuesta) VisitGuardarAcomodoResponse(w http.ResponseWriter) error    { return o.escribir(w) }
 func (o respuesta) VisitGuardarParametrosResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitGuardarSierraResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitGuardarPerfilResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitGuardarTarifaResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitHojaDelCorteResponse(w http.ResponseWriter) error      { return o.escribir(w) }
-func (o respuesta) VisitListarCortesResponse(w http.ResponseWriter) error      { return o.escribir(w) }
-func (o respuesta) VisitListarPerfilesResponse(w http.ResponseWriter) error    { return o.escribir(w) }
-func (o respuesta) VisitListarTarifasResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitGuardarConsultaDeCorteResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitConsultaDeCorteResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitGuardarPerfilResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+func (o respuesta) VisitGuardarTarifaResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+func (o respuesta) VisitHojaDelCorteResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitListarCortesResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitListarPerfilesResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitListarTarifasResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitParametrosDeCalculoResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -118,6 +122,7 @@ func (a *API) CrearCorte(ctx context.Context, r cortesapi.CrearCorteRequestObjec
 		PlacaLargoMm: texto(b.PlacaLargoMm), PlacaAnchoMm: texto(b.PlacaAnchoMm), Mitad: texto(b.Mitad),
 		Placas: texto(b.Placas), CantoDescripcion: texto(b.CantoDescripcion), Urgente: b.Urgente != nil && *b.Urgente,
 		Notas: texto(b.Notas), AcomodoManual: texto(b.AcomodoManual), AnchoSierraMm: texto(b.AnchoSierraMm),
+		Consulta: texto(b.Consulta),
 	}
 	for _, p := range b.Piezas {
 		crudo, err := json.Marshal(p)
@@ -449,6 +454,29 @@ func (a *API) CotizarCorte(ctx context.Context, r cortesapi.CotizarCorteRequestO
 		return nil, err
 	}
 	return ok(v), nil
+}
+
+func (a *API) GuardarConsultaDeCorte(ctx context.Context, r cortesapi.GuardarConsultaDeCorteRequestObject) (cortesapi.GuardarConsultaDeCorteResponseObject, error) {
+	ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
+	if v := a.lim.Permitido(ctx, limites.Corte, "ip:"+ip); !v.Permitido {
+		return nil, plataforma.NuevoProblema(http.StatusTooManyRequests, limites.AvisoDeEspera(v))
+	}
+	token, err := a.s.GuardarConsulta(ctx, *r.Body, ip)
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]string{"token": token}), nil
+}
+
+func (a *API) ConsultaDeCorte(ctx context.Context, r cortesapi.ConsultaDeCorteRequestObject) (cortesapi.ConsultaDeCorteResponseObject, error) {
+	c, err := a.s.Consulta(ctx, r.Token)
+	if errors.Is(err, ErrConsultaNoExiste) {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "Ese corte no está.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ok(c), nil
 }
 
 // --- las rutas del agente del taller (las de siempre, fuera del contrato) ---

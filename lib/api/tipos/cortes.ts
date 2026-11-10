@@ -328,6 +328,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cortes/consulta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description El corte armado en el sitio que se manda por WhatsApp: se guarda y
+         *     devuelve el token del enlace. Con el freno «corte» por IP.
+         */
+        post: operations["GuardarConsultaDeCorte"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cortes/consulta/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ConsultaDeCorte"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -375,6 +411,7 @@ export interface components {
             notas?: string;
             acomodoManual?: string;
             anchoSierraMm?: string;
+            consulta?: string;
             piezas: {
                 [key: string]: unknown;
             }[];
@@ -759,6 +796,27 @@ export interface components {
                 grandis: components["schemas"]["MedidaDeTabla"];
                 pvc: components["schemas"]["MedidaDeTabla"];
             };
+        };
+        ConsultaDeCorte: {
+            token: string;
+            variantId: string | null;
+            material: string;
+            /** Format: double */
+            placaLargoMm: number;
+            /** Format: double */
+            placaAnchoMm: number;
+            mitad: string | null;
+            cantoDescripcion: string | null;
+            piezas: components["schemas"]["PiezaAcortar"][];
+            /** Format: double */
+            anchoSierraMm: number;
+            sucursal: string | null;
+            /** Format: double */
+            metrosCanto: number;
+            plano: components["schemas"]["Plano"];
+            corteId: string | null;
+            /** Format: date-time */
+            createdAt: string;
         };
         PlacaCortable: {
             variantId: string;
@@ -1423,6 +1481,59 @@ export interface operations {
             };
             422: components["responses"]["Problema"];
             429: components["responses"]["Problema"];
+        };
+    };
+    GuardarConsultaDeCorte: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description El token del enlace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        token: string;
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+            429: components["responses"]["Problema"];
+        };
+    };
+    ConsultaDeCorte: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La consulta con su plano */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsultaDeCorte"];
+                };
+            };
+            404: components["responses"]["Problema"];
         };
     };
 }

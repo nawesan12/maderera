@@ -385,6 +385,41 @@ paths:
               schema: { $ref: "#/components/schemas/CorteCotizado" }
         "422": { $ref: "#/components/responses/Problema" }
         "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/cortes/consulta:
+    post:
+      operationId: GuardarConsultaDeCorte
+      description: |
+        El corte armado en el sitio que se manda por WhatsApp: se guarda y
+        devuelve el token del enlace. Con el freno «corte» por IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: El token del enlace
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token]
+                properties:
+                  token: { type: string }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/cortes/consulta/{token}:
+    get:
+      operationId: ConsultaDeCorte
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string, maxLength: 40 } }
+      responses:
+        "200":
+          description: La consulta con su plano
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConsultaDeCorte" }
+        "404": { $ref: "#/components/responses/Problema" }
 components:
   parameters:
     Id:
@@ -450,6 +485,7 @@ components:
         notas: { type: string }
         acomodoManual: { type: string }
         anchoSierraMm: { type: string }
+        consulta: { type: string, maxLength: 40 }
         piezas: { type: array, maxItems: 500, items: { type: object, additionalProperties: true } }
     PiezaDelCorte:
       type: object
@@ -826,6 +862,24 @@ components:
           properties:
             grandis: { $ref: "#/components/schemas/MedidaDeTabla" }
             pvc: { $ref: "#/components/schemas/MedidaDeTabla" }
+    ConsultaDeCorte:
+      type: object
+      required: [token, variantId, material, placaLargoMm, placaAnchoMm, mitad, cantoDescripcion, piezas, anchoSierraMm, sucursal, metrosCanto, plano, corteId, createdAt]
+      properties:
+        token: { type: string }
+        variantId: { type: string, nullable: true }
+        material: { type: string }
+        placaLargoMm: { type: number, format: double }
+        placaAnchoMm: { type: number, format: double }
+        mitad: { type: string, nullable: true }
+        cantoDescripcion: { type: string, nullable: true }
+        piezas: { type: array, items: { $ref: "#/components/schemas/PiezaAcortar" } }
+        anchoSierraMm: { type: number, format: double }
+        sucursal: { type: string, nullable: true }
+        metrosCanto: { type: number, format: double }
+        plano: { $ref: "#/components/schemas/Plano" }
+        corteId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
     PlacaCortable:
       type: object
       required: [variantId, descripcion, largoMm, anchoMm, color, precio, admiteMedia, precioMediaPct, precioPorPasada, precioPorMetroCanto]

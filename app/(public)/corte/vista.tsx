@@ -1,21 +1,17 @@
 "use client";
 
-import { Suspense, use, useMemo, useState, useTransition } from "react";
+import { Suspense, use, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, MessageCircle, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import type { PlacaCortable } from "@/lib/dal/cortes-publico";
 import type { PreciosDePlaca } from "@/lib/dal/visitante";
 import { usePlano } from "@/lib/cortes/en-vivo";
-import {
-  fraccionDePlaca,
-  medidaDePlaca,
-  nombreDeLaMitad,
-  type Mitad,
-} from "@/lib/cortes/placa";
+import { fraccionDePlaca, medidaDePlaca, nombreDeLaMitad, type Mitad } from "@/lib/cortes/placa";
+import { tirasDePlaca } from "@/lib/cortes/tiras";
 import { PlanoSimple } from "@/components/cortes/plano-simple";
+import { contarCanto, SelectorDeCanto, SIN_CANTO, type LadosConCanto } from "@/components/cortes/selector-canto";
 import { formatearMonto } from "@/lib/formato";
-import { agregarCorteAlCarrito } from "./actions";
-import { formatearSierra } from "@/lib/cortes/sierra";
+import { agregarCorteAlCarrito, guardarConsultaDeCorte } from "./actions";
 import { useTienda } from "@/lib/tienda-context";
 
 interface Fila {
@@ -23,43 +19,43 @@ interface Fila {
   ancho: string;
   cantidad: string;
   veta: boolean;
-  canto: boolean;
+  lados: LadosConCanto;
 }
 
-const vacia = (): Fila => ({
-  largo: "",
-  ancho: "",
-  cantidad: "1",
-  veta: false,
-  canto: false,
-});
+const vacia = (): Fila => ({ largo: "", ancho: "", cantidad: "1", veta: false, lados: SIN_CANTO });
+
+/** A dónde va el pedido por WhatsApp: cada sucursal con su número. */
+export interface SucursalDelCorte {
+  slug: string;
+  nombre: string;
+  whatsapp: string | null;
+}
+
+type Pieza = {
+  largoMm: number;
+  anchoMm: number;
+  cantidad: number;
+  respetaVeta: number;
+  cantoLargo: number;
+  cantoAncho: number;
+  etiqueta: string | null;
+};
 
 /**
- * El armador de cortes del sitio.
+ * El armador de cortes del sitio: la herramienta principal desde que salieron
+ * las calculadoras (notas del 9/11/2026).
  *
- * Es la versión simplificada del alta del panel, y lo simplificado es a
- * propósito:
- *
- * - **Una sola casilla de tapacanto por medida**, no cuatro lados. Quien pide
- *   un corte desde el teléfono quiere decir "con canto" o "sin canto"; el
- *   detalle de qué lado lleva se acuerda en el mostrador. La casilla marca los
- *   dos lados del largo, que es el caso de una repisa o un estante.
+ * - **Dos modos.** Piezas, como un despiece de mueble; o tiras por metro
+ *   lineal, que se convierten en piezas del largo de la placa
+ *   (`lib/cortes/tiras.ts`). El motor no distingue: le llegan piezas.
+ * - **El canto se elige por lado** tocando el dibujo de la pieza, y se guarda
+ *   como cuántos lados del largo y del ancho (`SelectorDeCanto`).
  * - **Sin acomodo a mano.** De qué placa sale cada pieza lo decide el taller.
- * - **Enter agrega una medida**, igual que en el mostrador: un despiece son
- *   cinco o seis renglones seguidos y ir al botón con el mouse entre uno y otro
- *   es el rodeo que hace que se termine mandando por WhatsApp.
+ * - **Enter agrega una medida**, igual que en el mostrador.
  *
- * El plano se rehace en el navegador con cada tecla —`lib/cortes/plano.ts` es
- * geometría pura— y el precio sale del mismo `presupuestarCorte` que usa el
- * panel. Al agregarlo al carrito, el servidor recalcula todo.
- */
-/**
- * La pantalla con el precio de quien mira.
- *
- * Sale armada con el precio de público —que es lo que queda en la página hecha
- * de antemano— y la de quien mira la reemplaza en la misma respuesta, antes de
- * que se pueda tocar nada. Antes la corregía el navegador con
- * `/api/mis-placas`, y el profesional veía el cambio.
+ * Termina en WhatsApp: el corte se guarda (`/api/v1/cortes/consulta`) y el
+ * mensaje lleva el enlace al plano, que quien atiende convierte en orden de
+ * corte desde el panel. Con la tienda encendida, además, al carrito.
  */
 export function VistaDeCorteDeQuienMira({
   precios,
@@ -67,8 +63,7 @@ export function VistaDeCorteDeQuienMira({
 }: {
   placas: PlacaCortable[];
   anchoSierra: number;
-  /** El número del negocio, en dígitos: sin tienda, el corte se pide por ahí. */
-  whatsapp: string;
+  sucursales: SucursalDelCorte[];
   precios: Promise<PreciosDePlaca>;
 }) {
   return (
@@ -84,7 +79,7 @@ function VistaConPrecios({
 }: {
   placas: PlacaCortable[];
   anchoSierra: number;
-  whatsapp: string;
+  sucursales: SucursalDelCorte[];
   promesa: Promise<PreciosDePlaca>;
 }) {
   return <VistaDeCorte {...props} propios={use(promesa)} />;
@@ -93,18 +88,18 @@ function VistaConPrecios({
 function VistaDeCorte({
   placas: deLaPagina,
   anchoSierra,
-  whatsapp,
+  sucursales,
   propios,
 }: {
   placas: PlacaCortable[];
   anchoSierra: number;
-  whatsapp: string;
+  sucursales: SucursalDelCorte[];
   /** El precio propio de cada placa y de su corte. Vacío para el público. */
   propios: PreciosDePlaca;
 }) {
   const router = useRouter();
   // Con la tienda apagada la API manda los precios en cero: el armador dibuja
-  // y cuenta, pero no cobra, y el corte se pide por WhatsApp.
+  // y cuenta, pero no cobra.
   const { activa } = useTienda();
 
   const placas = useMemo(
@@ -115,48 +110,56 @@ function VistaDeCorte({
       }),
     [deLaPagina, propios],
   );
-  const [variantId, setVariantId] = useState(placas[0]?.variantId ?? "");
+  // La placa con que arranca: la del enlace (`/corte#placa=<variante>`, el
+  // «Pedila cortada» de la ficha) o la primera.
+  const delEnlace = usePlacaDelEnlace();
+  const [elegida, setVariantId] = useState<string | null>(null);
+  const variantId =
+    elegida ?? (placas.some((p) => p.variantId === delEnlace) ? delEnlace : (placas[0]?.variantId ?? ""));
   const [mitadElegida, setMitad] = useState<Mitad>(null);
   const [canto, setCanto] = useState("");
+  const [modo, setModo] = useState<"piezas" | "tiras">("piezas");
   const [filas, setFilas] = useState<Fila[]>([vacia()]);
-  const [aviso, setAviso] = useState<{ texto: string; mal: boolean } | null>(
-    null,
+  const [tiras, setTiras] = useState({ ancho: "", metros: "", lados: SIN_CANTO });
+  // El aserradero es donde está la seccionadora: es la que arranca elegida.
+  const [sucursal, setSucursal] = useState(
+    sucursales.find((s) => s.slug === "aserradero")?.slug ?? sucursales[0]?.slug ?? "",
   );
+  const [aviso, setAviso] = useState<string | null>(null);
   const [guardando, empezar] = useTransition();
 
   const placa = placas.find((p) => p.variantId === variantId) ?? placas[0];
-  // La mitad vale solo sobre una placa que se vende partida: si se cambia a
-  // una que se vende entera, el corte vuelve a la placa completa sin que haya
-  // que acordarse de destildar nada.
+  // La mitad vale solo sobre una placa que se vende partida.
   const mitad = placa?.admiteMedia ? mitadElegida : null;
 
-  const medida = medidaDePlaca({
-    varianteLargo: placa?.largoMm,
-    varianteAncho: placa?.anchoMm,
-    mitad,
-  });
+  const medida = medidaDePlaca({ varianteLargo: placa?.largoMm, varianteAncho: placa?.anchoMm, mitad });
 
-  const piezas = useMemo(
-    () =>
-      filas
-        .map((f) => ({
-          largoMm: Math.round(Number(f.largo) || 0),
-          anchoMm: Math.round(Number(f.ancho) || 0),
-          cantidad: Math.round(Number(f.cantidad) || 0),
-          respetaVeta: f.veta ? 1 : 0,
-          // La casilla marca los dos lados del largo: es el canto que se ve en
-          // un estante. El detalle fino se acuerda en el mostrador.
-          cantoLargo: f.canto ? 2 : 0,
-          cantoAncho: 0,
-          etiqueta: null,
-        }))
-        .filter((p) => p.largoMm > 0 && p.anchoMm > 0 && p.cantidad > 0),
-    [filas],
-  );
+  const piezas = useMemo((): Pieza[] => {
+    if (modo === "tiras") {
+      const t = tirasDePlaca(
+        {
+          anchoMm: Number(tiras.ancho) || 0,
+          metros: Number(tiras.metros.replace(",", ".")) || 0,
+          cantoLargo: contarCanto(tiras.lados).cantoLargo,
+        },
+        medida.largo,
+      );
+      return t ? [t] : [];
+    }
+    return filas
+      .map((f) => ({
+        largoMm: Math.round(Number(f.largo) || 0),
+        anchoMm: Math.round(Number(f.ancho) || 0),
+        cantidad: Math.round(Number(f.cantidad) || 0),
+        respetaVeta: f.veta ? 1 : 0,
+        ...contarCanto(f.lados),
+        etiqueta: null,
+      }))
+      .filter((p) => p.largoMm > 0 && p.anchoMm > 0 && p.cantidad > 0);
+  }, [modo, filas, tiras, medida.largo]);
 
   // El plano y el precio los calcula Go mientras se tipea (ver
-  // `lib/cortes/en-vivo.ts`): el mismo cálculo que vuelve a hacer al agregar
-  // el corte al carrito, con la lista de quien compra.
+  // `lib/cortes/en-vivo.ts`).
   const { plano, cuenta: calculada, calculando } = usePlano({
     piezas,
     placaLargo: medida.largo,
@@ -190,50 +193,63 @@ function VistaDeCorte({
   };
 
   const sePuede = piezas.length > 0 && plano.noEntran.length === 0 && !calculando;
+  const destino = sucursales.find((s) => s.slug === sucursal);
 
-  function actualizar(i: number, campo: keyof Fila, valor: string | boolean) {
-    setFilas((previas) =>
-      previas.map((f, j) => (j === i ? { ...f, [campo]: valor } : f)),
-    );
+  function actualizar<K extends keyof Fila>(i: number, campo: K, valor: Fila[K]) {
+    setFilas((previas) => previas.map((f, j) => (j === i ? { ...f, [campo]: valor } : f)));
   }
 
   function agregarFila() {
     setFilas((previas) => [...previas, vacia()]);
   }
 
+  const pedido = () => ({
+    variantId: placa!.variantId,
+    mitad,
+    cantoDescripcion: canto.trim() || null,
+    piezas,
+  });
+
   function comprar() {
     if (!placa || !sePuede) return;
-
     empezar(async () => {
-      const r = await agregarCorteAlCarrito({
-        variantId: placa.variantId,
-        mitad,
-        cantoDescripcion: canto.trim() || null,
-        piezas,
-      });
-
+      const r = await agregarCorteAlCarrito(pedido());
       if (r.error) {
-        setAviso({ texto: r.error, mal: true });
+        setAviso(r.error);
         return;
       }
-
-      // Al carrito, que es donde sigue la compra. El corte ya está guardado.
       router.push("/carrito");
     });
   }
 
+  function pedirPorWhatsapp() {
+    if (!placa || !sePuede || !destino?.whatsapp) return;
+    // La ventana se abre ya, dentro del clic: abierta después de esperar al
+    // servidor, el navegador del teléfono la bloquea.
+    const ventana = window.open("", "_blank");
+    empezar(async () => {
+      const r = await guardarConsultaDeCorte({ ...pedido(), sucursal });
+      if (!r.token) {
+        ventana?.close();
+        setAviso(r.error ?? "No se pudo guardar el corte.");
+        return;
+      }
+      const url = enlaceDelPedido(destino.whatsapp!, placa.descripcion, mitad, canto, piezas, r.token);
+      if (ventana) ventana.location.href = url;
+      else window.location.href = url;
+    });
+  }
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+    <div className="grid items-start gap-6 lg:grid-cols-[1fr_360px]">
       <div className="space-y-5">
         <section className="rounded-xl border border-linea bg-card p-5">
-          <h2 className="text-base font-semibold">Qué placa</h2>
-
-          <label className="mt-3 block">
-            <span className="text-sm font-medium">Placa</span>
+          <label className="block">
+            <span className="text-base font-semibold">Placa</span>
             <select
               value={variantId}
               onChange={(e) => setVariantId(e.target.value)}
-              className="mt-1 h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
+              className="mt-2 h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
             >
               {placas.map((p) => (
                 <option key={p.variantId} value={p.variantId}>
@@ -244,169 +260,120 @@ function VistaDeCorte({
           </label>
 
           {placa?.admiteMedia && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium">De qué sale:</span>
+            <div className="mt-3 flex flex-wrap gap-2">
               {([null, "largo", "ancho"] as const).map((m) => (
-                <button
-                  key={m ?? "entera"}
-                  type="button"
-                  onClick={() => setMitad(m)}
-                  aria-pressed={mitad === m}
-                  className={`h-10 rounded-lg px-3 text-[14.5px] font-medium transition-colors ${
-                    mitad === m
-                      ? "bg-accion text-white"
-                      : "border border-linea text-texto-2 hover:bg-sitio-alt"
-                  }`}
-                >
-                  {m === null
-                    ? "Placa entera"
-                    : m === "largo"
-                      ? "Media a lo largo"
-                      : "Media al ancho"}
-                </button>
+                <Chip key={m ?? "entera"} activo={mitad === m} onClick={() => setMitad(m)}>
+                  {m === null ? "Placa entera" : m === "largo" ? "Media a lo largo" : "Media al ancho"}
+                </Chip>
               ))}
             </div>
           )}
 
-          <p className="mt-2 text-sm text-texto-2">
-            {nombreDeLaMitad(mitad)} de{" "}
-            <span className="tabular">
-              {medida.largo} × {medida.ancho} mm
-            </span>
-            . La sierra se lleva {formatearSierra(anchoSierra)} en cada corte, y eso ya está
-            descontado en el dibujo.
+          <p className="tabular mt-3 text-sm text-texto-2">
+            {nombreDeLaMitad(mitad)} · {medida.largo} × {medida.ancho} mm
           </p>
-
-          {mitad && placa?.color && (
-            <p className="mt-2 rounded-lg bg-naranja-claro px-3.5 py-2.5 text-[14.5px] text-acento-sobre-claro">
-              Es una placa <strong>{placa.color}</strong>: el dibujo corre a lo
-              largo. Partida al ancho, las dos mitades quedan con la veta
-              cruzada.
-            </p>
-          )}
         </section>
 
         <section className="rounded-xl border border-linea bg-card p-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-base font-semibold">Las medidas</h2>
-            <p className="text-sm text-texto-2">
-              En milímetros. Enter agrega otra.
-            </p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Qué querés cortar">
+            <Chip activo={modo === "piezas"} onClick={() => setModo("piezas")}>
+              Piezas
+            </Chip>
+            <Chip activo={modo === "tiras"} onClick={() => setModo("tiras")}>
+              Tiras por metro
+            </Chip>
           </div>
 
-          <div className="mt-3 space-y-2.5">
-            {filas.map((f, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-[1fr_1fr_72px_auto] items-end gap-2"
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter") return;
-                  e.preventDefault();
-                  if (i === filas.length - 1) agregarFila();
-                }}
-              >
-                <label className="block">
-                  {i === 0 && (
-                    <span className="mb-1 block text-sm font-medium">
-                      Largo
-                    </span>
-                  )}
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min="1"
-                    value={f.largo}
-                    onChange={(e) => actualizar(i, "largo", e.target.value)}
-                    placeholder="1200"
-                    className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
-                  />
-                </label>
+          {modo === "piezas" ? (
+            <>
+              <div className="mt-4 divide-y divide-linea-tenue">
+                {filas.map((f, i) => (
+                  <div
+                    key={i}
+                    className="flex flex-wrap items-center gap-x-4 gap-y-3 py-3 first:pt-0"
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      if (i === filas.length - 1) agregarFila();
+                    }}
+                  >
+                    <div className="grid min-w-[15rem] flex-1 grid-cols-[1fr_1fr_72px] gap-2">
+                      <Numero etiqueta="Largo (mm)" valor={f.largo} alCambiar={(v) => actualizar(i, "largo", v)} oculta={i > 0} placeholder="1200" />
+                      <Numero etiqueta="Ancho (mm)" valor={f.ancho} alCambiar={(v) => actualizar(i, "ancho", v)} oculta={i > 0} placeholder="400" />
+                      <Numero etiqueta="Cant." valor={f.cantidad} alCambiar={(v) => actualizar(i, "cantidad", v)} oculta={i > 0} />
+                    </div>
 
-                <label className="block">
-                  {i === 0 && (
-                    <span className="mb-1 block text-sm font-medium">
-                      Ancho
-                    </span>
-                  )}
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min="1"
-                    value={f.ancho}
-                    onChange={(e) => actualizar(i, "ancho", e.target.value)}
-                    placeholder="400"
-                    className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
-                  />
-                </label>
-
-                <label className="block">
-                  {i === 0 && (
-                    <span className="mb-1 block text-sm font-medium">
-                      Cant.
-                    </span>
-                  )}
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min="1"
-                    value={f.cantidad}
-                    onChange={(e) => actualizar(i, "cantidad", e.target.value)}
-                    className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
-                  />
-                </label>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFilas((previas) =>
-                      previas.length === 1
-                        ? [vacia()]
-                        : previas.filter((_, j) => j !== i),
-                    )
-                  }
-                  aria-label={`Sacar la medida ${i + 1}`}
-                  className="flex h-11 w-11 items-center justify-center rounded-lg text-texto-3 transition-colors hover:bg-sitio-alt hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-
-                <div className="col-span-4 -mt-1 flex flex-wrap gap-4">
-                  <label className="flex items-center gap-2 text-[14.5px] text-texto-2">
-                    <input
-                      type="checkbox"
-                      checked={f.veta}
-                      onChange={(e) => actualizar(i, "veta", e.target.checked)}
-                      className="h-4 w-4 accent-brand-orange"
+                    <SelectorDeCanto
+                      largo={Number(f.largo) || 0}
+                      ancho={Number(f.ancho) || 0}
+                      lados={f.lados}
+                      alCambiar={(lados) => actualizar(i, "lados", lados)}
                     />
-                    Respeta la veta
-                  </label>
-                  <label className="flex items-center gap-2 text-[14.5px] text-texto-2">
-                    <input
-                      type="checkbox"
-                      checked={f.canto}
-                      onChange={(e) => actualizar(i, "canto", e.target.checked)}
-                      className="h-4 w-4 accent-brand-orange"
-                    />
-                    Con tapacanto
-                  </label>
-                </div>
+
+                    <div className="flex items-center gap-1">
+                      <Chip activo={f.veta} onClick={() => actualizar(i, "veta", !f.veta)}>
+                        Veta
+                      </Chip>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFilas((previas) =>
+                            previas.length === 1 ? [vacia()] : previas.filter((_, j) => j !== i),
+                          )
+                        }
+                        aria-label={`Sacar la medida ${i + 1}`}
+                        className="flex h-11 w-11 items-center justify-center rounded-lg text-texto-3 transition-colors hover:bg-sitio-alt hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <button
-            type="button"
-            onClick={agregarFila}
-            className="mt-3 inline-flex h-11 items-center gap-2 rounded-lg border border-linea px-4 text-[14.5px] font-semibold transition-colors hover:bg-sitio-alt"
-          >
-            <Plus className="h-4 w-4" />
-            Otra medida
-          </button>
+              <button
+                type="button"
+                onClick={agregarFila}
+                className="mt-2 inline-flex h-11 items-center gap-2 rounded-lg border border-linea px-4 text-[14.5px] font-semibold transition-colors hover:bg-sitio-alt"
+              >
+                <Plus className="h-4 w-4" />
+                Otra medida
+              </button>
+            </>
+          ) : (
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3">
+              <div className="grid min-w-[15rem] flex-1 grid-cols-2 gap-2">
+                <Numero
+                  etiqueta="Ancho de la tira (mm)"
+                  valor={tiras.ancho}
+                  alCambiar={(v) => setTiras((t) => ({ ...t, ancho: v }))}
+                  placeholder="80"
+                />
+                <Numero
+                  etiqueta="Metros en total"
+                  valor={tiras.metros}
+                  alCambiar={(v) => setTiras((t) => ({ ...t, metros: v }))}
+                  placeholder="12"
+                  decimal
+                />
+              </div>
+              <SelectorDeCanto
+                largo={medida.largo}
+                ancho={Number(tiras.ancho) || 80}
+                soloLargos
+                lados={{ ...tiras.lados, izquierda: false, derecha: false }}
+                alCambiar={(lados) => setTiras((t) => ({ ...t, lados: { ...lados, izquierda: false, derecha: false } }))}
+              />
+              {piezas[0] && (
+                <p className="tabular w-full text-sm text-texto-2">
+                  {piezas[0].cantidad} tiras de {piezas[0].largoMm} × {piezas[0].anchoMm} mm
+                </p>
+              )}
+            </div>
+          )}
 
-          <label className="mt-4 block">
-            <span className="text-sm font-medium">
-              Color del tapacanto (opcional)
-            </span>
+          <label className="mt-5 block">
+            <span className="text-sm font-medium">Color del tapacanto</span>
             <input
               value={canto}
               onChange={(e) => setCanto(e.target.value)}
@@ -421,167 +388,81 @@ function VistaDeCorte({
             {plano.noEntran.length === 1
               ? "Una medida no entra en la placa"
               : `${plano.noEntran.length} medidas no entran en la placa`}
-            :{" "}
-            {plano.noEntran
-              .map((p) => `${p.largoMm} × ${p.anchoMm} mm`)
-              .join(", ")}
-            . Revisalas, o probá con una placa más grande.
+            : {plano.noEntran.map((p) => `${p.largoMm} × ${p.anchoMm} mm`).join(", ")}.
           </p>
         )}
 
         {plano.placas.length > 0 && (
           <section className="rounded-xl border border-linea bg-card p-5">
-            <h2 className="text-base font-semibold">Cómo entra</h2>
-            <p className="mt-0.5 text-sm text-texto-2">
-              Las líneas naranjas son los cortes; el punteado, lo que sobra.
-            </p>
-            <div className="mt-3">
-              <PlanoSimple plano={plano} />
-            </div>
+            <PlanoSimple plano={plano} />
           </section>
         )}
       </div>
 
-      {/* El precio, siempre a la vista: es lo que la persona vino a averiguar. */}
       <aside className="space-y-3 lg:sticky lg:top-[92px]">
         <section className="rounded-xl border border-linea bg-card p-5">
-          <h2 className="text-base font-semibold">Tu corte</h2>
+          <dl className="grid grid-cols-3 gap-2 text-center">
+            <Cifra valor={plano.placas.length} nombre={plano.placas.length === 1 ? "placa" : "placas"} />
+            <Cifra valor={plano.pasadas} nombre={plano.pasadas === 1 ? "pasada" : "pasadas"} />
+            <Cifra
+              valor={Math.round(cuenta.metrosCanto * 100) / 100}
+              nombre="m de canto"
+            />
+          </dl>
 
-          {piezas.length === 0 ? (
-            <p className="mt-2 text-base text-texto-2">
-              Cargá la primera medida y vas a ver acá el precio y el dibujo.
-            </p>
-          ) : (
+          {activa && piezas.length > 0 && (
             <>
-              {!activa ? (
-                <dl className="mt-3 space-y-1.5 text-[14.5px]">
-                  <Renglon
-                    que={`${plano.placas.length} ${plano.placas.length === 1 ? "placa" : "placas"}`}
-                    cuanto={null}
-                  />
-                  <Renglon
-                    que={`${plano.pasadas} ${plano.pasadas === 1 ? "pasada" : "pasadas"} de sierra`}
-                    cuanto={null}
-                  />
-                  {cuenta.metrosCanto > 0 && (
-                    <Renglon
-                      que={`${cuenta.metrosCanto.toFixed(2).replace(".", ",")} m de tapacanto`}
-                      cuanto={null}
-                    />
-                  )}
-                </dl>
-              ) : (
-                <>
-                <dl className="mt-3 space-y-1.5 text-[14.5px]">
-                  {cuenta.placasEnteras > 0 && (
-                    <Renglon
-                      que={`${cuenta.placasEnteras} ${
-                        mitad
-                          ? cuenta.placasEnteras === 1
-                            ? "media placa"
-                            : "medias placas"
-                          : cuenta.placasEnteras === 1
-                            ? "placa"
-                            : "placas"
-                      }`}
-                      cuanto={cuenta.subtotalPlacas}
-                    />
-                  )}
-                  {cuenta.subtotalCorte > 0 && (
-                    <Renglon
-                      que={`${cuenta.pasadasCobrables} ${
-                        cuenta.pasadasCobrables === 1 ? "pasada" : "pasadas"
-                      } de sierra`}
-                      cuanto={cuenta.subtotalCorte}
-                    />
-                  )}
-                  {cuenta.subtotalCanto > 0 && (
-                    <Renglon
-                      que={`${cuenta.metrosCanto
-                        .toFixed(2)
-                        .replace(".", ",")} m de tapacanto`}
-                      cuanto={cuenta.subtotalCanto}
-                    />
-                  )}
-                </dl>
-
-                <div className="mt-3 flex items-baseline justify-between border-t border-linea pt-3">
-                  <span className="text-base font-semibold">Total</span>
-                  <span className="tabular text-2xl font-bold">
-                    {formatearMonto(cuenta.total)}
-                  </span>
-                </div>
-
-                {cuenta.placasEnteras > 0 && (
-                  <p className="mt-2 text-sm text-texto-2">
-                    De {cuenta.placasEnteras === 1 ? "esta placa" : "estas placas"}{" "}
-                    sale más de la mitad, así que se{" "}
-                    {cuenta.placasEnteras === 1 ? "vende" : "venden"} entera
-                    {cuenta.placasEnteras === 1 ? "" : "s"} y el corte va sin
-                    cargo. El recorte te lo llevás vos.
-                  </p>
-                )}
-
-                {cuenta.faltan.length > 0 && (
-                  <ul className="mt-2 space-y-1 text-sm text-texto-2">
-                    {cuenta.faltan.map((f) => (
-                      <li key={f}>{f}</li>
-                    ))}
-                  </ul>
-                )}
-                </>
+              <dl className="mt-4 space-y-1.5 border-t border-linea pt-3 text-[14.5px]">
+                {cuenta.placasEnteras > 0 && <Renglon que="Placas" cuanto={cuenta.subtotalPlacas} />}
+                {cuenta.subtotalCorte > 0 && <Renglon que="Corte" cuanto={cuenta.subtotalCorte} />}
+                {cuenta.subtotalCanto > 0 && <Renglon que="Tapacanto" cuanto={cuenta.subtotalCanto} />}
+              </dl>
+              <div className="mt-3 flex items-baseline justify-between border-t border-linea pt-3">
+                <span className="text-base font-semibold">Total</span>
+                <span className="tabular text-2xl font-bold">{formatearMonto(cuenta.total)}</span>
+              </div>
+              {cuenta.placasEnteras > 0 && (
+                <p className="mt-2 text-sm text-texto-2">
+                  Más de media placa se vende entera y el corte va sin cargo.
+                </p>
               )}
             </>
           )}
 
-          {aviso && (
-            <p
-              className={`mt-3 rounded-lg px-3.5 py-2.5 text-[14.5px] ${
-                aviso.mal
-                  ? "bg-[#fdf1ea] text-[#8a3b12]"
-                  : "bg-naranja-claro text-acento-sobre-claro"
-              }`}
-            >
-              {aviso.texto}
-            </p>
+          {sucursales.length > 1 && (
+            <div className="mt-5 flex gap-2" role="group" aria-label="Sucursal">
+              {sucursales.map((s) => (
+                <Chip key={s.slug} activo={sucursal === s.slug} onClick={() => setSucursal(s.slug)} ancho>
+                  {s.nombre}
+                </Chip>
+              ))}
+            </div>
           )}
 
-          {!activa ? (
-            <>
-              <a
-                href={sePuede && placa ? enlaceDelPedido(whatsapp, placa.descripcion, mitad, canto, piezas) : undefined}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-disabled={!sePuede}
-                className={`mt-4 inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-[10px] bg-verde-whatsapp text-base font-semibold text-white transition-colors hover:bg-brand-green/90 ${
-                  sePuede ? "" : "pointer-events-none opacity-50"
-                }`}
-              >
-                <MessageCircle className="h-4 w-4" />
-                Pedir este corte por WhatsApp
-              </a>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={comprar}
-                disabled={!sePuede || guardando}
-                className="mt-4 inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-[10px] bg-accion text-base font-semibold text-white transition-colors hover:bg-accion-hover disabled:opacity-50"
-              >
-                {guardando ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ShoppingCart className="h-4 w-4" />
-                )}
-                Agregarlo al carrito
-              </button>
+          {aviso && (
+            <p className="mt-3 rounded-lg bg-[#fdf1ea] px-3.5 py-2.5 text-[14.5px] text-[#8a3b12]">{aviso}</p>
+          )}
 
-              <p className="mt-2 text-sm text-texto-3">
-                El precio se confirma al comprar. Si el despiece cambia el acomodo,
-                el mostrador te avisa antes de cortar.
-              </p>
-            </>
+          <button
+            type="button"
+            onClick={pedirPorWhatsapp}
+            disabled={!sePuede || guardando || !destino?.whatsapp}
+            className="mt-3 inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-[10px] bg-verde-whatsapp text-base font-semibold text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
+          >
+            {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+            Pedir por WhatsApp
+          </button>
+
+          {activa && (
+            <button
+              type="button"
+              onClick={comprar}
+              disabled={!sePuede || guardando}
+              className="mt-2 inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-[10px] bg-accion text-base font-semibold text-white transition-colors hover:bg-accion-hover disabled:opacity-50"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Agregarlo al carrito
+            </button>
           )}
         </section>
       </aside>
@@ -590,36 +471,126 @@ function VistaDeCorte({
 }
 
 /**
- * El pedido del corte, escrito para WhatsApp: placa, medidas y canto, como lo
- * anota quien atiende. Sin tienda es la única salida del armador.
+ * La placa que pide el enlace, por el hash y no por `?placa=`: con la URL de
+ * búsqueda la página dejaría de armarse de antemano. En el servidor no hay
+ * hash, así que la primera pintura es la de siempre y React la corrige al
+ * hidratar, sin aviso de diferencia.
+ */
+function usePlacaDelEnlace(): string {
+  return useSyncExternalStore(
+    (avisar) => {
+      window.addEventListener("hashchange", avisar);
+      return () => window.removeEventListener("hashchange", avisar);
+    },
+    () => new URLSearchParams(window.location.hash.slice(1)).get("placa") ?? "",
+    () => "",
+  );
+}
+
+function Chip({
+  activo,
+  onClick,
+  ancho,
+  children,
+}: {
+  activo: boolean;
+  onClick: () => void;
+  ancho?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={activo}
+      className={`h-11 rounded-lg px-3.5 text-[14.5px] font-medium transition-colors ${ancho ? "flex-1" : ""} ${
+        activo ? "bg-accion text-white" : "border border-linea text-texto-2 hover:bg-sitio-alt"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Numero({
+  etiqueta,
+  valor,
+  alCambiar,
+  oculta,
+  placeholder,
+  decimal,
+}: {
+  etiqueta: string;
+  valor: string;
+  alCambiar: (v: string) => void;
+  /** En los renglones de abajo la etiqueta queda solo para el lector de pantalla. */
+  oculta?: boolean;
+  placeholder?: string;
+  decimal?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className={oculta ? "sr-only" : "mb-1 block text-sm font-medium"}>{etiqueta}</span>
+      <input
+        type={decimal ? "text" : "number"}
+        inputMode={decimal ? "decimal" : "numeric"}
+        min="1"
+        value={valor}
+        onChange={(e) => alCambiar(e.target.value)}
+        placeholder={placeholder}
+        className="tabular h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
+      />
+    </label>
+  );
+}
+
+function Cifra({ valor, nombre }: { valor: number; nombre: string }) {
+  return (
+    <div className="flex flex-col-reverse">
+      <dt className="mt-1 text-sm text-texto-2">{nombre}</dt>
+      <dd className="tabular text-[28px] font-bold leading-none tracking-[-0.02em]">
+        {String(valor).replace(".", ",")}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * El pedido del corte, escrito para WhatsApp como lo anota quien atiende:
+ * placa, medidas con su canto, y el enlace al plano.
  */
 function enlaceDelPedido(
   whatsapp: string,
   placa: string,
   mitad: Mitad,
   canto: string,
-  piezas: { largoMm: number; anchoMm: number; cantidad: number; respetaVeta: number; cantoLargo: number }[],
+  piezas: Pieza[],
+  token: string,
 ): string {
-  const renglones = piezas.map(
-    (p) =>
-      `• ${p.cantidad} de ${p.largoMm} × ${p.anchoMm} mm${p.respetaVeta ? ", respetando la veta" : ""}${
-        p.cantoLargo ? ", con canto en los largos" : ""
-      }`,
-  );
+  const lados = (p: Pieza) => {
+    const partes = [
+      p.cantoLargo ? `${p.cantoLargo} ${p.cantoLargo === 1 ? "largo" : "largos"}` : "",
+      p.cantoAncho ? `${p.cantoAncho} ${p.cantoAncho === 1 ? "ancho" : "anchos"}` : "",
+    ].filter(Boolean);
+    return partes.length ? `, canto en ${partes.join(" y ")}` : "";
+  };
   const texto = [
     "Hola! Quería pedir este corte:",
     `Placa: ${placa}${mitad ? ` (media, al ${mitad})` : ""}`,
-    ...renglones,
+    ...piezas.map(
+      (p) => `• ${p.cantidad} de ${p.largoMm} × ${p.anchoMm} mm${p.respetaVeta ? ", con veta" : ""}${lados(p)}`,
+    ),
     ...(canto.trim() ? [`Tapacanto: ${canto.trim()}`] : []),
+    `${window.location.origin}/corte/c/${token}`,
   ].join("\n");
   return `https://wa.me/${whatsapp}?text=${encodeURIComponent(texto)}`;
 }
 
-function Renglon({ que, cuanto }: { que: string; cuanto: number | null }) {
+function Renglon({ que, cuanto }: { que: string; cuanto: number }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="text-texto-2">{que}</dt>
-      {cuanto !== null && <dd className="tabular font-medium">{formatearMonto(cuanto)}</dd>}
+      <dd className="tabular font-medium">{formatearMonto(cuanto)}</dd>
     </div>
   );
 }

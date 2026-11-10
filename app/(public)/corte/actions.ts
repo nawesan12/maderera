@@ -40,3 +40,20 @@ export async function quitarCorteDelCarrito(id: string): Promise<EstadoCorte> {
   const r = await (await api()).DELETE("/api/v1/carrito/cortes/{id}", { params: { path: { id: String(id).slice(0, 64) } } });
   return despues(r, "No se pudo quitar.");
 }
+
+/**
+ * Guarda el corte que se manda por WhatsApp y devuelve el token del enlace.
+ * Go lo valida con las mismas reglas que el carrito y le pone el freno por IP;
+ * anda con la tienda apagada, que es justamente cuando más se usa.
+ */
+export async function guardarConsultaDeCorte(datos: {
+  variantId: string;
+  mitad?: "largo" | "ancho" | null;
+  cantoDescripcion?: string | null;
+  sucursal: string;
+  piezas: unknown[];
+}): Promise<{ token?: string; error?: string }> {
+  const r = await (await api()).POST("/api/v1/cortes/consulta", { body: datos as Record<string, unknown> });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá las medidas.") };
+  return { token: r.data.token };
+}

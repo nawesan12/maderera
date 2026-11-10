@@ -8,13 +8,13 @@ import { anchoDeSierra } from "@/lib/dal/sierra";
 import { HORARIO_CORTES } from "@/lib/sucursales";
 import { VistaDeCorteDeQuienMira } from "./vista";
 import { preciosDePlacas } from "@/lib/dal/visitante";
-import { numeroWhatsapp } from "@/lib/whatsapp/enlace";
+import { listarSucursalesPublicas } from "@/lib/dal/envios";
 
 export const metadata: Metadata = {
   ...metadatosDePagina({
     titulo: "Corte de placas a medida en Mar del Plata",
     descripcion:
-      "Armá tu despiece en milímetros, mirá cómo entra en la placa y comprá el corte hecho. Melamina, MDF, fenólicos y tableros cortados en el aserradero.",
+      "Armá tu despiece en milímetros, elegí el canto de cada pieza y mirá cómo entra en la placa. Melamina, MDF, fenólicos y tableros cortados en el aserradero.",
     ruta: "/corte",
   }),
   keywords: [
@@ -52,10 +52,10 @@ export default async function CortePage() {
    * de precios corresponde, era pagar dos veces. El precio del profesional
    * llega aparte, en la misma respuesta: ver `VistaDeCorteDeQuienMira`.
    */
-  const [placas, sierra, whatsapp] = await Promise.all([
+  const [placas, sierra, sucursales] = await Promise.all([
     placasCortablesPublicas(),
     anchoDeSierra(),
-    numeroWhatsapp(),
+    listarSucursalesPublicas(),
   ]);
 
   return (
@@ -78,11 +78,8 @@ export default async function CortePage() {
           <h1 className="mt-3 text-[34px] font-bold leading-[1.1] tracking-[-0.03em]">
             Corte de placas a medida
           </h1>
-          <p className="mt-2.5 text-base leading-relaxed text-texto-2">
-            Pasá las medidas y mirá cómo entra en la placa: elegí la placa,
-            cargá el despiece en milímetros y vas a ver el dibujo, cuántas
-            placas hacen falta y cuánto sale, antes de comprar. El corte se
-            hace en el aserradero: {HORARIO_CORTES}.
+          <p className="mt-2.5 text-base text-texto-2">
+            En el aserradero · {HORARIO_CORTES}
           </p>
         </div>
 
@@ -102,14 +99,11 @@ export default async function CortePage() {
               precios={preciosDePlacas()}
               placas={placas}
               anchoSierra={sierra}
-              whatsapp={whatsapp}
+              sucursales={sucursales.map((s) => ({ slug: s.slug, nombre: s.nombre, whatsapp: s.whatsapp }))}
             />
           </div>
         )}
 
-        <p className="mt-8 text-sm text-texto-3">
-          El plano es orientativo: el corte final lo arma el taller.
-        </p>
       </div>
     </div>
   );

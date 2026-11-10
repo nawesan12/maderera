@@ -87,6 +87,9 @@ const herramientas = [
  * del sitio el 9/11/2026.
  */
 const enlacesDirectos = [
+  // El corte a medida es la herramienta del sitio desde que salieron las
+  // calculadoras (9/11/2026): va primero y a la vista.
+  { name: "Cortes", href: "/corte" },
   // Moldava salió de "Más" a la barra: es la marca propia, y la clienta pidió
   // darle mucha más presencia. Escondida detrás de un desplegable no la
   // encontraba nadie.
@@ -455,7 +458,7 @@ export function Navbar({
                 key={link.href}
                 href={link.href}
                 clase={(activa) =>
-                  `relative flex h-10 items-center rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors hover:bg-sitio-alt hover:text-acento-texto ${
+                  `relative flex h-10 items-center whitespace-nowrap rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors hover:bg-sitio-alt hover:text-acento-texto ${
                     activa
                       ? "text-acento-texto after:absolute after:inset-x-[11px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
                       : "text-foreground"

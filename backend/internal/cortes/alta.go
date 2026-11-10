@@ -26,22 +26,25 @@ import (
 // navegador (texto; vacío es «no vino»). Cada pieza es el JSON que arma la
 // pantalla.
 type FormCorte struct {
-	CustomerID          string            `json:"customerId"`
-	OrderID             string            `json:"orderId"`
-	ContactoNombre      string            `json:"contactoNombre"`
-	BranchID            string            `json:"branchId"`
-	VariantID           string            `json:"variantId"`
-	MaterialDescripcion string            `json:"materialDescripcion"`
-	PlacaLargoMm        string            `json:"placaLargoMm"`
-	PlacaAnchoMm        string            `json:"placaAnchoMm"`
-	Mitad               string            `json:"mitad"`
-	Placas              string            `json:"placas"`
-	CantoDescripcion    string            `json:"cantoDescripcion"`
-	Urgente             bool              `json:"urgente"`
-	Notas               string            `json:"notas"`
-	AcomodoManual       string            `json:"acomodoManual"`
-	AnchoSierraMm       string            `json:"anchoSierraMm"`
-	Piezas              []json.RawMessage `json:"piezas"`
+	CustomerID          string `json:"customerId"`
+	OrderID             string `json:"orderId"`
+	ContactoNombre      string `json:"contactoNombre"`
+	BranchID            string `json:"branchId"`
+	VariantID           string `json:"variantId"`
+	MaterialDescripcion string `json:"materialDescripcion"`
+	PlacaLargoMm        string `json:"placaLargoMm"`
+	PlacaAnchoMm        string `json:"placaAnchoMm"`
+	Mitad               string `json:"mitad"`
+	Placas              string `json:"placas"`
+	CantoDescripcion    string `json:"cantoDescripcion"`
+	Urgente             bool   `json:"urgente"`
+	Notas               string `json:"notas"`
+	AcomodoManual       string `json:"acomodoManual"`
+	AnchoSierraMm       string `json:"anchoSierraMm"`
+	// Consulta es el token del corte que vino por WhatsApp, si nació de ahí:
+	// queda atada al corte y su enlace deja de ofrecer pasarla otra vez.
+	Consulta string            `json:"consulta"`
+	Piezas   []json.RawMessage `json:"piezas"`
 }
 
 type piezaNueva struct {
@@ -239,6 +242,12 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 					canto_ancho, aclaracion, etiqueta, orden)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 				id, p.largo, p.ancho, p.cantidad, p.veta, p.cantoLargo, p.cantoAncho, p.aclaracion, p.etiqueta, orden); err != nil {
+				return err
+			}
+		}
+		if f.Consulta != "" {
+			if _, err := tx.Exec(ctx, `UPDATE consultas_corte SET cutting_order_id = $1
+				WHERE token = $2 AND cutting_order_id IS NULL`, id, f.Consulta); err != nil {
 				return err
 			}
 		}

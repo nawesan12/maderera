@@ -18,7 +18,7 @@ import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";
 
 /** La placa elegida del catálogo, con lo que el plano necesita saber de ella. */
-interface PlacaElegida {
+export interface PlacaElegida {
   variantId: string;
   descripcion: string;
   largoMm: number | null;
@@ -27,7 +27,7 @@ interface PlacaElegida {
   color: string | null;
 }
 
-interface Pieza {
+export interface Pieza {
   largoMm: number;
   anchoMm: number;
   cantidad: number;
@@ -56,11 +56,12 @@ const estadoInicial = {} as { error?: string; ok?: string };
 export function FormularioCorte({
   sucursales,
   desdePedido,
+  desdeConsulta,
   anchoSierra: anchoSierraGeneral,
 }: {
   sucursales: { id: string; nombre: string }[];
   /**
-   * Lo que se lleva el disco en cada pasada, de /admin/calculadoras.
+   * Lo que se lleva el disco en cada pasada, de /admin/cortes/tarifas.
    *
    * Viaja como prop porque esta pantalla es de cliente —el plano se rehace con
    * cada tecla— y el valor vive en la base. Antes el motor usaba su constante
@@ -83,6 +84,17 @@ export function FormularioCorte({
     cliente: { id: string; nombre: string; razonSocial: string | null } | null;
     contactoNombre: string;
   };
+  /**
+   * El corte que alguien mandó por WhatsApp desde el sitio (`?consulta=`):
+   * arranca cargado con su placa, su mitad, su canto y sus piezas.
+   */
+  desdeConsulta?: {
+    token: string;
+    placa: PlacaElegida | null;
+    mitad: Mitad;
+    cantoDescripcion: string;
+    piezas: Pieza[];
+  };
 }) {
   const [estado, accion, pendiente] = useActionState(crearCorte, estadoInicial);
 
@@ -100,14 +112,14 @@ export function FormularioCorte({
     desdePedido?.cliente ?? null,
   );
   const [nombre, setNombre] = useState(desdePedido?.contactoNombre ?? "");
-  const [placa, setPlaca] = useState<PlacaElegida | null>(null);
+  const [placa, setPlaca] = useState<PlacaElegida | null>(desdeConsulta?.placa ?? null);
   /** La medida de la placa, en milímetros, como está en pantalla. */
   const [largoPlaca, setLargoPlaca] = useState("");
   const [anchoPlaca, setAnchoPlaca] = useState("");
   /** Si sale de media placa, y en qué sentido se parte. */
-  const [mitad, setMitad] = useState<Mitad>(null);
-  const [material, setMaterial] = useState("");
-  const [piezas, setPiezas] = useState<Pieza[]>([piezaVacia()]);
+  const [mitad, setMitad] = useState<Mitad>(desdeConsulta?.mitad ?? null);
+  const [material, setMaterial] = useState(desdeConsulta?.placa?.descripcion ?? "");
+  const [piezas, setPiezas] = useState<Pieza[]>(desdeConsulta?.piezas.length ? desdeConsulta.piezas : [piezaVacia()]);
   const [placas, setPlacas] = useState(1);
   /** Las piezas que alguien mandó a mano a una placa. */
   const [fijadas, setFijadas] = useState<PiezaFijada[]>([]);
@@ -215,6 +227,7 @@ export function FormularioCorte({
       {desdePedido && (
         <input type="hidden" name="orderId" value={desdePedido.id} />
       )}
+      {desdeConsulta && <input type="hidden" name="consulta" value={desdeConsulta.token} />}
       {cliente && <input type="hidden" name="customerId" value={cliente.id} />}
       {placa && <input type="hidden" name="variantId" value={placa.variantId} />}
       {/* El acomodo corregido a mano viaja con el formulario: sin esto, mover
@@ -423,12 +436,9 @@ export function FormularioCorte({
             <Input
               id="cantoDescripcion"
               name="cantoDescripcion"
+              defaultValue={desdeConsulta?.cantoDescripcion}
               placeholder="Blanco 0,45 mm — vacío si no lleva"
             />
-            <p className="text-sm text-muted-foreground">
-              El color y el espesor del canto, una vez para todo el despiece. La
-              excepción de una pieza va en su aclaración.
-            </p>
           </div>
         </CardContent>
       </Card>

@@ -53,9 +53,6 @@
   "/admin/precios": [
    "admin"
   ],
-  "/admin/calculadoras": [
-   "admin"
-  ],
   "/admin/clientes": [
    "admin",
    "vendedor"
@@ -184,11 +181,6 @@
   ],
   "/admin/caja/algo": null,
   "/admin/caja/nuevo/123": null,
-  "/admin/calculadoras": [
-   "admin"
-  ],
-  "/admin/calculadoras/algo": null,
-  "/admin/calculadoras/nuevo/123": null,
   "/admin/campanas": [
    "admin"
   ],
@@ -842,81 +834,6 @@
   },
   {
    "ruta": "/admin/caja/nuevo/123",
-   "rol": null,
-   "puede": false
-  },
-  {
-   "ruta": "/admin/calculadoras",
-   "rol": "admin",
-   "puede": true
-  },
-  {
-   "ruta": "/admin/calculadoras",
-   "rol": "vendedor",
-   "puede": false
-  },
-  {
-   "ruta": "/admin/calculadoras",
-   "rol": "deposito",
-   "puede": false
-  },
-  {
-   "ruta": "/admin/calculadoras",
-   "rol": "aserradero",
-   "puede": false
-  },
-  {
-   "ruta": "/admin/calculadoras",
-   "rol": null,
-   "puede": false
-  },
-  {
-   "ruta": "/admin/calculadoras/algo",
-   "rol": "admin",
-   "puede": true
-  },
-  {
-   "ruta": "/admin/calculadoras/algo",
-   "rol": "vendedor",
-   "puede": false
-  },
-  {
-   "ruta": "/admin/calculadoras/algo",
-   "rol": "deposito",
-   "puede": false
-  },
-  {
-   "ruta": "/admin/calculadoras/algo",
-   "rol": "aserradero",
-   "puede": false
-  },
-  {
-   "ruta": "/admin/calculadoras/algo",
-   "rol": null,
-   "puede": false
-  },
-  {
-   "ruta": "/admin/calculadoras/nuevo/123",
-   "rol": "admin",
-   "puede": true
-  },
-  {
-   "ruta": "/admin/calculadoras/nuevo/123",
-   "rol": "vendedor",
-   "puede": false
-  },
-  {
-   "ruta": "/admin/calculadoras/nuevo/123",
-   "rol": "deposito",
-   "puede": false
-  },
-  {
-   "ruta": "/admin/calculadoras/nuevo/123",
-   "rol": "aserradero",
-   "puede": false
-  },
-  {
-   "ruta": "/admin/calculadoras/nuevo/123",
    "rol": null,
    "puede": false
   },

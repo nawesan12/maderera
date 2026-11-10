@@ -69,6 +69,7 @@ export async function crearCorte(_previo: EstadoCorte, formData: FormData): Prom
       urgente: formData.get("urgente") === "si",
       notas: campo("notas"),
       acomodoManual: campo("acomodoManual"),
+      consulta: campo("consulta"),
       anchoSierraMm: campo("anchoSierraMm"),
       piezas,
     },

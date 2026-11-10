@@ -42,6 +42,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"VentasSinCaja":                  "/admin/caja",                   // GET /api/v1/admin/caja/ventas-sueltas
 	"GuardarParametros":              "/admin/cortes/tarifas",         // PUT /api/v1/admin/calculadoras
 	"GuardarSierra":                  "/admin/cortes/tarifas",         // PUT /api/v1/admin/cortes/sierra
+	"GuardarConsultaDeCorte":         "publico",                       // POST /api/v1/cortes/consulta
+	"ConsultaDeCorte":                "publico",                       // GET /api/v1/cortes/consulta/{token}
 	"AlcanceDelSegmento":             "/admin/campanas",               // POST /api/v1/admin/campanas/alcance
 	"EstadoDeCampanas":               "/admin/campanas",               // GET /api/v1/admin/campanas/estado
 	"EnviarPruebaDeCampana":          "/admin/campanas",               // POST /api/v1/admin/campanas/prueba

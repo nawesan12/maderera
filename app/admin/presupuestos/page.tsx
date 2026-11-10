@@ -39,6 +39,7 @@ const ORIGEN: Record<string, string> = {
   mostrador: "Mostrador",
   telefono: "Por teléfono",
   express: "Express de un profesional",
+  whatsapp: "Por WhatsApp",
 };
 
 const SUCURSALES_FILTRO = {

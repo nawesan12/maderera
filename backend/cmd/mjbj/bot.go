@@ -44,3 +44,37 @@ func buscadorDelBot(pool *pgxpool.Pool) whatsapp.Buscador {
 		return out, nil
 	}
 }
+
+// fichaDelBot trae las medidas con el precio de la lista general: van al
+// presupuesto en revisión, no al cliente.
+func fichaDelBot(pool *pgxpool.Pool) whatsapp.Ficheador {
+	cat := catalogo.Nuevo(pool)
+	return func(ctx context.Context, slug string) (*whatsapp.FichaBot, error) {
+		general, err := cat.General(ctx)
+		if err != nil {
+			return nil, err
+		}
+		p, err := cat.Producto(ctx, slug, general)
+		if err != nil || p == nil {
+			return nil, err
+		}
+		f := &whatsapp.FichaBot{Nombre: p.Name, Unidad: p.Unit}
+		for _, v := range p.Variantes {
+			vb := whatsapp.VarianteBot{ID: v.ID, Label: v.Label}
+			if v.EspesorMm != nil {
+				vb.EspesorMm = int(*v.EspesorMm)
+			}
+			if v.LargoMm != nil {
+				vb.LargoMm = int(*v.LargoMm)
+			}
+			if v.AnchoMm != nil {
+				vb.AnchoMm = int(*v.AnchoMm)
+			}
+			if v.Precio != nil {
+				vb.Precio = *v.Precio
+			}
+			f.Variantes = append(f.Variantes, vb)
+		}
+		return f, nil
+	}
+}

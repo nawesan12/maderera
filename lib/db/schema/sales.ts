@@ -42,6 +42,7 @@ export const origenPresupuesto = pgEnum("origen_presupuesto", [
   "mostrador",
   "telefono",
   "express",
+  "whatsapp",
 ]);
 
 export const quotes = pgTable(

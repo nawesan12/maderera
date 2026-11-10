@@ -1,6 +1,7 @@
 package whatsapp
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -53,12 +54,31 @@ func TestBotBuscaYFiltraPorEspesor(t *testing.T) {
 	}
 }
 
-func TestBotNoDaPreciosYDeriva(t *testing.T) {
+func TestBotPresupuestaSinMostrarPrecios(t *testing.T) {
 	d := datosDePrueba
-	d.Productos = []ProductoBot{{Nombre: "Melamina Blanca", Slug: "melamina-blanca", Medidas: []string{"18mm"}}}
-	r := Responder("cuánto sale la melamina blanca", EstadoBot{}, d, true)
-	if !r.Derivar || !strings.Contains(r.Texto, "https://wa.me/5492235903118?text=") || strings.Contains(r.Texto, "$") {
-		t.Errorf("precio: %+v", r)
+	d.Productos = []ProductoBot{{Nombre: "Melamina Blanca", Slug: "melamina-blanca", Medidas: []string{"1830 x 2600mm — 18mm"}}}
+	r := Responder("cuánto salen 10 placas de melamina blanca de 18", EstadoBot{}, d, true)
+	if r.Derivar || r.Presupuestar == nil || strings.Contains(r.Texto, "$") {
+		t.Fatalf("precio: %+v", r)
+	}
+	if p := r.Presupuestar; p.Slug != "melamina-blanca" || p.Cantidad != 10 || p.Medida.EspesorMm != 18 {
+		t.Errorf("presupuesto: %+v", p)
+	}
+	// Con varios productos pregunta cuál.
+	d.Productos = append(d.Productos, ProductoBot{Nombre: "Melamina Negra", Slug: "melamina-negra"})
+	r = Responder("precio de la melamina", EstadoBot{}, d, true)
+	if r.Presupuestar != nil || !strings.Contains(r.Texto, "¿De cuál") {
+		t.Errorf("varios: %+v", r)
+	}
+}
+
+func TestElegirVariantes(t *testing.T) {
+	vs := []VarianteBot{{ID: "a", EspesorMm: 15, LargoMm: 2600, AnchoMm: 1830}, {ID: "b", EspesorMm: 18, LargoMm: 2600, AnchoMm: 1830}}
+	if got := elegirVariantes(vs, asistente.Medida{EspesorMm: 18}); len(got) != 1 || got[0].ID != "b" {
+		t.Errorf("espesor: %+v", got)
+	}
+	if got := elegirVariantes(vs, asistente.Medida{LargoMm: 1830, AnchoMm: 2600, EspesorMm: 15}); len(got) != 1 || got[0].ID != "a" {
+		t.Errorf("medida dada vuelta: %+v", got)
 	}
 }
 
@@ -143,5 +163,46 @@ func TestBotEnLaBandeja(t *testing.T) {
 	entra("wamid.bot3", "hola?")
 	if r := respuestas(); len(r) != 2 {
 		t.Fatalf("derivada, el bot no contesta: %v", r)
+	}
+}
+
+// El presupuesto de punta a punta: queda en revisión, con origen whatsapp y
+// el precio de la lista; al cliente no le llega ningún número de plata.
+func TestBotArmaElPresupuesto(t *testing.T) {
+	e := armar(t, false)
+	ctx := e.ctx
+	if _, err := e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('whatsapp_bot', 'si')`); err != nil {
+		t.Fatal(err)
+	}
+	e.wa.ConBuscador(
+		func(context.Context, string, string) ([]ProductoBot, error) {
+			return []ProductoBot{{Nombre: "Melamina Blanca", Slug: "melamina-blanca", Medidas: []string{"1830 x 2600mm — 15mm", "1830 x 2600mm — 18mm"}}}, nil
+		},
+		func(context.Context, string) (*FichaBot, error) {
+			return &FichaBot{Nombre: "Melamina Blanca", Unidad: "placa", Variantes: []VarianteBot{
+				{Label: "1830 x 2600mm — 15mm", EspesorMm: 15, Precio: "40000"},
+				{Label: "1830 x 2600mm — 18mm", EspesorMm: 18, Precio: "52000.50"},
+			}}, nil
+		})
+	jid := "5492235550002"
+	if _, err := e.wa.AtenderEntrante(ctx, MensajeMeta{WaMessageID: "wamid.p1", Tipo: "text", Texto: "cuánto salen 10 placas de melamina blanca?"}, jid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.wa.AtenderEntrante(ctx, MensajeMeta{WaMessageID: "wamid.p2", Tipo: "text", Texto: "de 18"}, jid); err != nil {
+		t.Fatal(err)
+	}
+	var estado, origen, total, descripcion string
+	if err := e.pool.QueryRow(ctx, `select q.estado::text, q.origen::text, q.total::text, i.descripcion from quotes q join quote_items i on i.quote_id = q.id
+		where q.contacto_telefono = '+5492235550002'`).Scan(&estado, &origen, &total, &descripcion); err != nil {
+		t.Fatal(err)
+	}
+	if estado != "revision" || origen != "whatsapp" || total != "520005.00" || !strings.Contains(descripcion, "18mm") {
+		t.Errorf("presupuesto: %s %s %s %s", estado, origen, total, descripcion)
+	}
+	var salientes string
+	_ = e.pool.QueryRow(ctx, `select string_agg(m.cuerpo, ' | ' order by m.created_at) from whatsapp_mensajes m join whatsapp_conversaciones c on c.id = m.conversacion_id
+		where c.wa_jid = $1 and m.origen = 'bot'`, jid).Scan(&salientes)
+	if strings.Contains(salientes, "52000") || strings.Contains(salientes, "$") || !strings.Contains(salientes, "¿En qué medida") || !strings.Contains(salientes, "te armo el presupuesto") {
+		t.Errorf("lo que se le dijo al cliente: %s", salientes)
 	}
 }

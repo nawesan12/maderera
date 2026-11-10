@@ -2,15 +2,19 @@ package whatsapp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/asistente"
+	"mjbj/internal/numeracion"
 	"mjbj/internal/push"
 )
 
@@ -41,13 +45,47 @@ type ProductoBot struct {
 // catálogo para no atarse a él.
 type Buscador func(ctx context.Context, consulta, rubro string) ([]ProductoBot, error)
 
-// ConBuscador conecta el catálogo.
-func (s *Servicio) ConBuscador(b Buscador) *Servicio { s.buscar = b; return s }
+// VarianteBot es una medida de un producto, con el precio de la lista
+// general: va al presupuesto que revisa una persona, nunca al cliente.
+type VarianteBot struct {
+	ID        string
+	Label     string
+	EspesorMm int
+	LargoMm   int
+	AnchoMm   int
+	Precio    string // vacío: sin precio cargado
+}
+
+// FichaBot es lo que el bot necesita para presupuestar un producto.
+type FichaBot struct {
+	Nombre    string
+	Unidad    string
+	Variantes []VarianteBot
+}
+
+// Ficheador trae las medidas de un producto por su slug.
+type Ficheador func(ctx context.Context, slug string) (*FichaBot, error)
+
+// ConBuscador conecta el catálogo: la búsqueda y la ficha de cada producto.
+func (s *Servicio) ConBuscador(b Buscador, f Ficheador) *Servicio {
+	s.buscar, s.ficha = b, f
+	return s
+}
+
+// Presupuestar es el pedido de presupuesto que sacó el bot de la charla.
+type Presupuestar struct {
+	Slug     string           `json:"slug"`
+	Medida   asistente.Medida `json:"medida"`
+	Cantidad float64          `json:"cantidad"`
+	Texto    string           `json:"texto"`
+}
 
 // EstadoBot es lo que el bot recuerda de una conversación.
 type EstadoBot struct {
 	Fallos   int
 	Consulta string
+	// Pendiente: el presupuesto que espera la medida.
+	Pendiente *Presupuestar
 }
 
 // DatosBot es lo que el bot sabe del negocio.
@@ -69,6 +107,9 @@ type RespuestaBot struct {
 	Rubro    string
 	Estado   EstadoBot
 	Entendio asistente.Intencion
+	// Presupuestar: hay un producto elegido y pidieron precio. Lo arma
+	// atenderConBot con la ficha, en revisión.
+	Presupuestar *Presupuestar
 }
 
 const pieDerivar = "Escribile acá y seguís con una persona del mostrador:"
@@ -76,6 +117,18 @@ const pieDerivar = "Escribile acá y seguís con una persona del mostrador:"
 // Responder decide la respuesta a un texto. Si hace falta el catálogo,
 // devuelve Buscar y hay que llamarla de nuevo con DatosBot.Productos lleno.
 func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) RespuestaBot {
+	// Si estaba esperando la medida de un presupuesto y la medida llegó, se
+	// completa; si escribieron otra cosa, el pendiente se olvida.
+	if p := est.Pendiente; p != nil {
+		if m := medidaSuelta(texto); m.EspesorMm != 0 || m.LargoMm != 0 {
+			q := *p
+			q.Medida = m
+			if c := cantidadPedida(texto, asistente.Entender(texto)); c != 1 {
+				q.Cantidad = c
+			}
+			return RespuestaBot{Entendio: asistente.Precio, Presupuestar: &q, Estado: EstadoBot{Consulta: est.Consulta}}
+		}
+	}
 	consulta := asistente.ConContexto(texto, est.Consulta)
 	e := asistente.Entender(consulta)
 	r := RespuestaBot{Entendio: e.Intencion, Estado: EstadoBot{Consulta: est.Consulta}}
@@ -130,8 +183,6 @@ func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) Respue
 		r.Texto = "Te hago la cuenta: si son placas, pasame las piezas («4 de 600x400 en melamina») y te armo el corte. Para techos, pisos o decks, contame los metros y lo que querés usar."
 	case asistente.Persona, asistente.Acopio:
 		return derivar(r, d, texto)
-	case asistente.Precio:
-		return derivar(r, d, texto)
 	default: // buscar, stock, sin_idea
 		if e.Consulta == "" && e.Rubro == "" {
 			return noEntendio(r, est, d, texto)
@@ -145,17 +196,58 @@ func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) Respue
 			return noEntendio(r, est, d, texto)
 		}
 		r.Estado = EstadoBot{Consulta: e.Consulta}
-		r.Texto = listarProductos(ps, sitio, d.StockVisible)
 		if preguntaPrecio(texto) {
-			r.Texto += "\n\nEl precio te lo pasa una persona del mostrador. " + pieDerivar + "\n" + enlaceHumano(d.NumeroHumano, texto)
-			r.Derivar = d.NumeroHumano != ""
+			if len(ps) == 1 {
+				// Un producto: se arma el presupuesto y lo revisa una persona.
+				r.Presupuestar = &Presupuestar{Slug: ps[0].Slug, Medida: e.Medida, Cantidad: cantidadPedida(texto, e), Texto: texto}
+				return r
+			}
+			r.Texto = listarProductos(ps, sitio, d.StockVisible) + "\n\n¿De cuál te paso el presupuesto? Decime el nombre y la medida."
+			return r
 		}
+		r.Texto = listarProductos(ps, sitio, d.StockVisible)
 		return r
 	}
 	return r
 }
 
-var rePrecio = regexp.MustCompile(`\b(precio|cuanto sale|cuanto vale|cuanto cuesta|cuanto esta)\b`)
+var rePrecio = regexp.MustCompile(`\b(precio|precios|cuanto sale|cuanto salen|cuanto vale|cuanto valen|cuanto cuesta|cuanto cuestan|cuanto esta|cuanto estan|presupuesto|cotizacion|cotizame|pasame)\b`)
+
+// reCantidad es «10 placas», «5 u», «3 tirantes»: un número chico seguido de
+// una unidad. No lee el «18» de un espesor ni el «600» de una medida.
+var reCantidad = regexp.MustCompile(`\b(\d{1,3})\s*(?:u|un|unid|unidades|placas?|tirantes?|tablas?|piezas?|rollos?|bolsas?|chapas?|barras?|listones?|varillas?|cajas?|latas?)\b`)
+
+var reNumeroSolo = regexp.MustCompile(`^(\d{1,2})\s*(mm)?$`)
+
+// medidaSuelta lee la medida de una respuesta corta: «18», «de 18», «18mm»,
+// «1830x2600».
+func medidaSuelta(texto string) asistente.Medida {
+	t := asistente.Normalizar(texto)
+	if g := reNumeroSolo.FindStringSubmatch(t); g != nil {
+		var n int
+		fmt.Sscan(g[1], &n)
+		if n >= 3 && n <= 50 {
+			return asistente.Medida{EspesorMm: n}
+		}
+	}
+	return asistente.Entender(t).Medida
+}
+
+// cantidadPedida es cuánto piden: los metros si los dijeron, si no las
+// unidades, y si no una.
+func cantidadPedida(texto string, e asistente.Entendido) float64 {
+	if e.Cantidad != nil && e.Cantidad.Valor > 0 {
+		return e.Cantidad.Valor
+	}
+	if g := reCantidad.FindStringSubmatch(asistente.Normalizar(texto)); g != nil {
+		var n float64
+		fmt.Sscan(g[1], &n)
+		if n > 0 {
+			return n
+		}
+	}
+	return 1
+}
 
 func preguntaPrecio(texto string) bool { return rePrecio.MatchString(asistente.Normalizar(texto)) }
 
@@ -316,12 +408,13 @@ func (s *Servicio) atenderConBot(ctx context.Context, convID, waJid, texto strin
 	var estado string
 	var fallos int
 	var consulta *string
+	var pendiente *string
 	var humanoReciente bool
 	err = s.pool.QueryRow(ctx, `
-		select c.bot_estado, c.bot_fallos, c.bot_consulta,
+		select c.bot_estado, c.bot_fallos, c.bot_consulta, c.bot_pendiente::text,
 			exists (select 1 from whatsapp_mensajes m where m.conversacion_id = c.id and m.direccion = 'saliente'
 				and coalesce(m.origen, '') in ('panel', 'telefono') and m.ocurrido_at > now() - interval '12 hours')
-		  from whatsapp_conversaciones c where c.id = $1`, convID).Scan(&estado, &fallos, &consulta, &humanoReciente)
+		  from whatsapp_conversaciones c where c.id = $1`, convID).Scan(&estado, &fallos, &consulta, &pendiente, &humanoReciente)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -335,6 +428,12 @@ func (s *Servicio) atenderConBot(ctx context.Context, convID, waJid, texto strin
 	est := EstadoBot{Fallos: fallos}
 	if consulta != nil {
 		est.Consulta = *consulta
+	}
+	if pendiente != nil {
+		var p Presupuestar
+		if json.Unmarshal([]byte(*pendiente), &p) == nil && p.Slug != "" {
+			est.Pendiente = &p
+		}
 	}
 	d := DatosBot{Sitio: s.cfg.URLBase, NumeroHumano: aj.numeroHumano, StockVisible: aj.stockVisible}
 	r := Responder(texto, est, d, false)
@@ -353,14 +452,38 @@ func (s *Servicio) atenderConBot(ctx context.Context, convID, waJid, texto strin
 		r = Responder(texto, est, d, true)
 	}
 
+	var avisoPresupuesto *push.Aviso
+	if r.Presupuestar != nil {
+		texto, consulta, aviso, err := s.presupuestar(ctx, convID, waJid, *r.Presupuestar)
+		if err != nil {
+			return err
+		}
+		switch {
+		case aviso != nil:
+			r.Texto, avisoPresupuesto = texto, aviso
+		case texto != "":
+			// Falta la medida: queda pendiente hasta la respuesta.
+			r.Texto, r.Estado.Consulta, r.Estado.Pendiente = texto, consulta, r.Presupuestar
+		default:
+			// Sin precio cargado o sin ficha: lo resuelve una persona.
+			r = derivar(r, d, r.Presupuestar.Texto)
+		}
+	}
+
 	if r.Derivar {
-		_, err = s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_fallos = 0 where id = $1`, convID)
+		_, err = s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_fallos = 0, bot_pendiente = null where id = $1`, convID)
 	} else {
 		var c *string
 		if r.Estado.Consulta != "" {
 			c = &r.Estado.Consulta
 		}
-		_, err = s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_fallos = $2, bot_consulta = $3 where id = $1`, convID, r.Estado.Fallos, c)
+		var p *string
+		if r.Estado.Pendiente != nil {
+			b, _ := json.Marshal(r.Estado.Pendiente)
+			j := string(b)
+			p = &j
+		}
+		_, err = s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_fallos = $2, bot_consulta = $3, bot_pendiente = $4::jsonb where id = $1`, convID, r.Estado.Fallos, c, p)
 	}
 	if err != nil {
 		return err
@@ -368,6 +491,9 @@ func (s *Servicio) atenderConBot(ctx context.Context, convID, waJid, texto strin
 	if _, err := s.EnviarYRegistrar(ctx, Envio{ConversacionID: convID, WaJid: waJid, Mensaje: Saliente{Tipo: "texto", Cuerpo: r.Texto},
 		Registro: Registro{Cuerpo: r.Texto}, Origen: "bot"}); err != nil {
 		return err
+	}
+	if avisoPresupuesto != nil {
+		s.avisar(ctx, *avisoPresupuesto)
 	}
 	if r.Derivar {
 		s.avisar(ctx, push.Aviso{Titulo: "WhatsApp: pasa a una persona", Cuerpo: cortarJS(texto, 140),
@@ -378,6 +504,111 @@ func (s *Servicio) atenderConBot(ctx context.Context, convID, waJid, texto strin
 
 // ReactivarBot le devuelve la conversación al bot.
 func (s *Servicio) ReactivarBot(ctx context.Context, convID string) error {
-	_, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'activo', bot_fallos = 0, bot_derivada_at = null where id = $1`, convID)
+	_, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'activo', bot_fallos = 0, bot_derivada_at = null, bot_pendiente = null where id = $1`, convID)
 	return err
 }
+
+// presupuestar elige la medida y arma el presupuesto en revisión. Devuelve:
+//   - el texto y el aviso, si lo armó;
+//   - solo el texto (y la consulta para seguir) si falta saber la medida;
+//   - nada, si no se puede: sin ficha o sin precio, lo ve una persona.
+func (s *Servicio) presupuestar(ctx context.Context, convID, waJid string, p Presupuestar) (string, string, *push.Aviso, error) {
+	if s.ficha == nil {
+		return "", "", nil, nil
+	}
+	f, err := s.ficha(ctx, p.Slug)
+	if err != nil || f == nil {
+		return "", "", nil, err
+	}
+	vs := elegirVariantes(f.Variantes, p.Medida)
+	if len(vs) == 0 {
+		vs = f.Variantes
+	}
+	if len(vs) > 1 {
+		var ms []string
+		for _, v := range vs {
+			if len(ms) == 6 {
+				break
+			}
+			ms = append(ms, "• "+v.Label)
+		}
+		return fmt.Sprintf("¿En qué medida querés el *%s*?\n%s", f.Nombre, strings.Join(ms, "\n")), asistente.ConsultaLimpia(f.Nombre), nil, nil
+	}
+	if len(vs) == 0 || vs[0].Precio == "" {
+		return "", "", nil, nil
+	}
+	v := vs[0]
+
+	var nombre, telefono string
+	var clienteID, sucursalID *string
+	if err := s.pool.QueryRow(ctx, `
+		select coalesce(cu.nombre, c.display_name, 'Cliente de WhatsApp'), c.customer_id, c.branch_id
+		  from whatsapp_conversaciones c left join customers cu on cu.id = c.customer_id where c.id = $1`, convID).Scan(&nombre, &clienteID, &sucursalID); err != nil {
+		return "", "", nil, err
+	}
+	telefono = "+" + soloDigitos(waJid)
+	var variante *string
+	if v.ID != "" {
+		variante = &v.ID
+	}
+	descripcion := strings.TrimSpace(f.Nombre + " " + v.Label)
+	ahora := s.ahora()
+	var id, numero string
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", "", nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if numero, err = numeracion.Presupuesto(ctx, tx, ahora.In(argentina)); err != nil {
+		return "", "", nil, err
+	}
+	if err := tx.QueryRow(ctx, `
+		insert into quotes (numero, customer_id, contacto_nombre, contacto_telefono, branch_id, estado, origen,
+		                    subtotal, total, notas, asesor, valido_hasta)
+		values ($1, $2, $3, $4, $5, 'revision', 'whatsapp', round($6::numeric * $7::numeric, 2), round($6::numeric * $7::numeric, 2),
+		        $8, 'Bot de WhatsApp', $9)
+		returning id`, numero, clienteID, nombre, telefono, sucursalID, v.Precio, p.Cantidad,
+		"Pedido por WhatsApp: «"+cortarJS(trimJS(p.Texto), 300)+"»", ahora.UTC().AddDate(0, 0, 7)).Scan(&id); err != nil {
+		return "", "", nil, err
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into quote_items (quote_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden)
+		values ($1, $2, $3, $4, $5::numeric, $6::numeric, round($5::numeric * $6::numeric, 2), 0)`,
+		id, variante, descripcion, f.Unidad, p.Cantidad, v.Precio); err != nil {
+		return "", "", nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", "", nil, err
+	}
+	cant := strconv.FormatFloat(p.Cantidad, 'f', -1, 64)
+	texto := fmt.Sprintf("Listo: te armo el presupuesto de *%s × %s*. Una persona lo revisa y te lo manda por acá en un rato.", cant, descripcion)
+	aviso := &push.Aviso{Titulo: "Presupuesto " + numero + " por WhatsApp", Cuerpo: nombre + ": " + cant + " × " + descripcion + ". Revisalo y mandalo.",
+		URL: "/admin/presupuestos/" + id, Etiqueta: "presupuesto-" + id, Pantalla: "/admin/presupuestos"}
+	return texto, "", aviso, nil
+}
+
+// elegirVariantes deja las medidas que coinciden con lo que dijeron.
+func elegirVariantes(vs []VarianteBot, m asistente.Medida) []VarianteBot {
+	if m.EspesorMm == 0 && m.LargoMm == 0 {
+		return vs
+	}
+	var quedan []VarianteBot
+	for _, v := range vs {
+		if m.EspesorMm != 0 && v.EspesorMm != m.EspesorMm {
+			continue
+		}
+		if m.LargoMm != 0 && !((v.LargoMm == m.LargoMm && v.AnchoMm == m.AnchoMm) || (v.LargoMm == m.AnchoMm && v.AnchoMm == m.LargoMm)) {
+			continue
+		}
+		quedan = append(quedan, v)
+	}
+	return quedan
+}
+
+var argentina = func() *time.Location {
+	l, err := time.LoadLocation("America/Argentina/Buenos_Aires")
+	if err != nil {
+		return time.FixedZone("ART", -3*3600)
+	}
+	return l
+}()

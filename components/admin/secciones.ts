@@ -6,7 +6,6 @@ import {
   BookOpen,
   Boxes,
   Building2,
-  Calculator,
   CalendarCheck,
   CalendarDays,
   ClipboardList,
@@ -118,7 +117,6 @@ export const secciones: { titulo: string; items: ItemNav[] }[] = [
       { href: "/admin/productos", icon: Boxes, label: "Productos" },
       { href: "/admin/stock", icon: Package, label: "Stock" },
       { href: "/admin/precios", icon: Tags, label: "Precios" },
-      { href: "/admin/calculadoras", icon: Calculator, label: "Calculadoras" },
     ],
   },
   {

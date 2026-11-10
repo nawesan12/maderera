@@ -40,7 +40,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"TurnosParaAsignar":              "/admin/caja",                   // GET /api/v1/admin/caja/turnos-para-asignar
 	"AsignarVentaAlTurno":            "/admin/caja",                   // POST /api/v1/admin/caja/ventas-sueltas/{id}/asignar
 	"VentasSinCaja":                  "/admin/caja",                   // GET /api/v1/admin/caja/ventas-sueltas
-	"GuardarParametros":              "/admin/calculadoras",           // PUT /api/v1/admin/calculadoras
+	"GuardarParametros":              "/admin/cortes/tarifas",         // PUT /api/v1/admin/calculadoras
+	"GuardarSierra":                  "/admin/cortes/tarifas",         // PUT /api/v1/admin/cortes/sierra
 	"AlcanceDelSegmento":             "/admin/campanas",               // POST /api/v1/admin/campanas/alcance
 	"EstadoDeCampanas":               "/admin/campanas",               // GET /api/v1/admin/campanas/estado
 	"EnviarPruebaDeCampana":          "/admin/campanas",               // POST /api/v1/admin/campanas/prueba
@@ -310,12 +311,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"GuardarTope":                    "/admin/whatsapp/configuracion", // POST /api/v1/admin/whatsapp/tope
 	"LeerBaja":                       "publico",                       // GET /api/v1/bajas
 	"ConfirmarBaja":                  "publico",                       // POST /api/v1/bajas
-	"CalcularDeck":                   "publico",                       // POST /api/v1/calculadora/deck
 	"ParametrosDeCalculo":            "publico",                       // GET /api/v1/calculadora/parametros
-	"CalcularPiso":                   "publico",                       // POST /api/v1/calculadora/piso
-	"CalcularPlacas":                 "publico",                       // POST /api/v1/calculadora/placas
-	"SugerirDelCatalogo":             "publico",                       // POST /api/v1/calculadora/sugerencias
-	"CalcularTecho":                  "publico",                       // POST /api/v1/calculadora/techo
 	"ConfirmarCompra":                "publico",                       // POST /api/v1/carrito/confirmar
 	"QuitarCorteDelCarrito":          "publico",                       // DELETE /api/v1/carrito/cortes/{id}
 	"AgregarCorteAlCarrito":          "publico",                       // POST /api/v1/carrito/cortes

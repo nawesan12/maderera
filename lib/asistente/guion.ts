@@ -24,8 +24,6 @@ export type AccionDelPaso =
   | { tipo: "categoria"; slug: string }
   /** Deja escribir y busca en el catálogo. */
   | { tipo: "buscar" }
-  /** Abre una de las calculadoras que ya existen en el sitio. */
-  | { tipo: "calculadora"; cual: "techos" | "placas" | "pisos" | "decks" }
   /** Manda a una página del sitio. */
   | { tipo: "ir"; ruta: string }
   /** Pasa la conversación a una persona, con el texto ya escrito. */
@@ -99,36 +97,22 @@ const PASOS: PasoDelGuion[] = [
     mensaje:
       "Te hago la cuenta. ¿Qué estás por hacer?",
     opciones: [
-      { texto: "Un techo", va: "calc-techos" },
       { texto: "Cortar placas para un mueble", va: "calc-placas" },
-      { texto: "Un piso", va: "calc-pisos" },
-      { texto: "Un deck", va: "calc-decks" },
+      { texto: "Un techo, un piso o un deck", va: "calc-obra" },
     ],
   },
   {
-    id: "calc-techos",
-    mensaje:
-      "Pasame el largo y el ancho del techo y te digo los tirantes, el machimbre, la aislación y los clavos que entran.",
-    accion: { tipo: "calculadora", cual: "techos" },
-    opciones: [],
-  },
-  {
     id: "calc-placas",
-    mensaje:
-      "Cargá las piezas que necesitás y te digo cuántas placas salen y cuánto se aprovecha.",
-    accion: { tipo: "calculadora", cual: "placas" },
+    mensaje: "Cargá las piezas y te muestro cómo entran en la placa.",
+    accion: { tipo: "ir", ruta: "/corte" },
     opciones: [],
   },
   {
-    id: "calc-pisos",
-    mensaje: "Con el largo y el ancho del ambiente te calculo cajas y zócalos.",
-    accion: { tipo: "calculadora", cual: "pisos" },
-    opciones: [],
-  },
-  {
-    id: "calc-decks",
-    mensaje: "Decime la medida del deck y el material, y te doy las tablas y la estructura.",
-    accion: { tipo: "calculadora", cual: "decks" },
+    // Las calculadoras de materiales salieron del sitio (9/11/2026): la cuenta
+    // de una obra la hace alguien del mostrador.
+    id: "calc-obra",
+    mensaje: "Pasanos las medidas por WhatsApp y te hacemos la cuenta.",
+    accion: { tipo: "whatsapp", mensaje: "Hola! Quería que me ayuden a calcular el material para " },
     opciones: [],
   },
 

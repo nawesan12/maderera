@@ -42,7 +42,6 @@ const FIJAS: {
   { ruta: "/stock", prioridad: 0.6, frecuencia: "daily", conElCatalogo: true },
   // La busca gente que todavía no conoce la maderera: "cuántas placas
   // necesito" se escribe en el buscador, no en el catálogo.
-  { ruta: "/calculadora", prioridad: 0.7, frecuencia: "monthly" },
   // Lo mismo con "corte de melamina a medida": es el servicio que trae gente
   // al sitio, y la pantalla se puede usar sin cuenta.
   { ruta: "/corte", prioridad: 0.8, frecuencia: "monthly" },

@@ -9,7 +9,6 @@ package cortes
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -93,67 +92,6 @@ func (s *Servicio) placa(ctx context.Context, l catalogo.Lista, variantID string
 		}
 	}
 	return nil, nil
-}
-
-// Sugerencia es el producto del catálogo para un renglón de la calculadora.
-type Sugerencia struct {
-	Busqueda    string  `json:"busqueda"`
-	VariantID   string  `json:"variantId"`
-	Descripcion string  `json:"descripcion"`
-	Unidad      string  `json:"unidad"`
-	Precio      *string `json:"precio"`
-	HayStock    bool    `json:"hayStock"`
-}
-
-// Sugerir es sugerirDelCatalogo: por término, la más barata con stock.
-func (s *Servicio) Sugerir(ctx context.Context, l catalogo.Lista, terminos []string) ([]Sugerencia, error) {
-	vistos := map[string]bool{}
-	out := []Sugerencia{}
-	for _, t := range terminos {
-		t = trimJS(t)
-		if t == "" || vistos[t] {
-			continue
-		}
-		vistos[t] = true
-		args := []any{l.ID, l.GeneralID}
-		cond := condicionBusqueda(t, []string{"p.name", "pv.label", "p.brand", "c.name"}, &args)
-		if cond == "" {
-			continue
-		}
-		var sg Sugerencia
-		var producto string
-		var medida string
-		var stock jsmath.Num
-		err := s.pool.QueryRow(ctx, `
-			SELECT pv.id::text, p.name, pv.label, p.unit::text, coalesce(pp.price, pg.price)::text,
-			       coalesce(sum(i.qty), 0)
-			FROM product_variants pv
-			JOIN products p ON p.id = pv.product_id
-			JOIN categories c ON c.id = p.category_id
-			LEFT JOIN price_list_items pp ON pp.variant_id = pv.id AND $1::uuid IS NOT NULL AND pp.price_list_id = $1
-			LEFT JOIN price_list_items pg ON pg.variant_id = pv.id AND $2::uuid IS NOT NULL AND pg.price_list_id = $2
-			LEFT JOIN inventory i ON i.variant_id = pv.id
-			WHERE pv.active AND p.active AND `+cond+`
-			GROUP BY pv.id, p.name, pv.label, p.unit, pp.price, pg.price
-			ORDER BY CASE WHEN coalesce(sum(i.qty), 0) > 0 THEN 0 ELSE 1 END,
-			         CASE WHEN coalesce(pp.price, pg.price) IS NULL THEN 1 ELSE 0 END,
-			         coalesce(pp.price, pg.price) ASC
-			LIMIT 1`, args...).Scan(&sg.VariantID, &producto, &medida, &sg.Unidad, &sg.Precio, &stock)
-		if errors.Is(err, pgx.ErrNoRows) {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		sg.Busqueda = t
-		sg.Descripcion = producto
-		if medida != "" {
-			sg.Descripcion = producto + " — " + medida
-		}
-		sg.HayStock = stock.F() > 0
-		out = append(out, sg)
-	}
-	return out, nil
 }
 
 // --- el corte del sitio ---

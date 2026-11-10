@@ -3,20 +3,15 @@ import { SESION_ADMIN } from "./sesion-guardada";
 
 /*
  * Los cortes, de punta a punta, con el motor en Go (backend/internal/cortes):
- * la calculadora del sitio, el plano que se dibuja mientras se tipea en
+ * el plano que se dibuja mientras se tipea en
  * /corte, y la ficha del panel con el plano, la hoja y el PTX que baja al
  * taller. Nada de esto escribe en la base: los datos de desarrollo quedan
  * como estaban.
  */
 
-test("la calculadora de deck cuenta tablas enteras", async ({ page }) => {
+test("la calculadora vieja lleva al corte", async ({ page }) => {
   await page.goto("/calculadora");
-  await page.getByRole("tab", { name: /deck/i }).click();
-  await page.getByPlaceholder("ej: 5").last().fill("4");
-  await page.getByPlaceholder("ej: 3").last().fill("3");
-  await page.getByRole("button", { name: /Calcular Materiales/ }).last().click();
-  // 4 × 3 m con el margen, en tablas de 2,4 m × 10 cm: un número entero.
-  await expect(page.getByText(/tablas de .* m x .* cm/)).toBeVisible();
+  await expect(page).toHaveURL(/\/corte$/);
 });
 
 test("el armador de /corte dibuja el plano mientras se tipea", async ({ page }) => {

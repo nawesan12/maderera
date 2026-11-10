@@ -23,7 +23,6 @@ import {
   UserRound,
   LayoutDashboard,
   Scissors,
-  Calculator,
   Warehouse,
   MessageCircle,
 } from "lucide-react";
@@ -69,12 +68,6 @@ const herramientas = [
     desc: "Cargá el despiece y mirá cómo entra",
   },
   {
-    name: "Calculadora",
-    href: "/calculadora",
-    icon: Calculator,
-    desc: "Cuánto material lleva tu obra",
-  },
-  {
     name: "Stock en sucursal",
     href: "/stock",
     icon: Warehouse,
@@ -90,8 +83,8 @@ const herramientas = [
  * qué quedaba a la vista y qué se escondía en "Más". Ahora cada grupo se
  * declara.
  *
- * Calculadora y Stock salieron del chrome por pedido del cliente. Las rutas
- * siguen existiendo y enlazadas desde el inicio y el presupuesto.
+ * Stock salió del chrome por pedido del cliente; las calculadoras salieron
+ * del sitio el 9/11/2026.
  */
 const enlacesDirectos = [
   // Moldava salió de "Más" a la barra: es la marca propia, y la clienta pidió
@@ -117,9 +110,6 @@ const enlacesMas = [
   { name: "Nosotros", href: "/nosotros" },
   { name: "Documentación", href: "/documentacion" },
   { name: "Eventos", href: "/eventos" },
-  // La calculadora vuelve a tener lugar en el menú, sin ocupar la barra: salió
-  // de ahí a pedido de la clienta y quedó sin ninguna puerta de entrada.
-  { name: "Calculadora", href: "/calculadora" },
 ];
 
 /**

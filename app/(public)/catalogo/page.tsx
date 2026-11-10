@@ -368,9 +368,6 @@ async function SobreLaCategoria({
   const herramientas: { ruta: string; texto: string }[] = [
     ...(slug === "placas" ? [{ ruta: "/corte", texto: "Armar un corte a medida" }] : []),
     ...(slug === "molduras" ? [{ ruta: "/moldava", texto: "Conocer la línea Moldava" }] : []),
-    ...(["techos", "placas", "pisos", "decks-y-escaleras"].includes(slug)
-      ? [{ ruta: "/calculadora", texto: "Calcular cuánto material necesito" }]
-      : []),
     { ruta: "/sucursales", texto: "Dónde retirar: nuestras sucursales" },
   ];
 

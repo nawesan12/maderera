@@ -11,7 +11,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   agregarAlCarrito,
-  agregarVarios,
   cambiarCantidad,
   quitarDelCarrito,
   vaciarCarrito,
@@ -47,7 +46,6 @@ interface ContextoCarrito {
   listaDiferenciada: string | null;
   guardando: boolean;
   agregar: (item: ItemNuevo) => void;
-  agregarLista: (items: ItemNuevo[]) => void;
   cambiar: (itemId: string, cantidad: number) => void;
   quitar: (itemId: string) => void;
   vaciar: () => void;
@@ -149,19 +147,6 @@ export function CarritoProvider({
           origen: item.origen ?? "catalogo",
           notas: item.notas,
         }),
-      ),
-    agregarLista: (items) =>
-      conAviso(() =>
-        agregarVarios(
-          items.map((i) => ({
-            variantId: i.variantId,
-            descripcion: i.descripcion,
-            unidad: i.unidad ?? "unidad",
-            cantidad: i.cantidad,
-            origen: i.origen ?? "calculadora",
-            notas: i.notas,
-          })),
-        ),
       ),
     cambiar: (itemId, cantidad) =>
       conAviso(

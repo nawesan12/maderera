@@ -6,6 +6,8 @@ import { todasLasTarifas } from "@/lib/dal/cortes-tarifas";
 import { requireStaffRole } from "@/lib/dal/session";
 import { listarListasDePrecios } from "@/lib/dal/admin/precios";
 import { EditorDeTarifa } from "./editor";
+import { EditorDeSierra } from "./sierra";
+import { anchoDeSierra } from "@/lib/dal/sierra";
 
 export const metadata: Metadata = { title: "Tarifas de corte" };
 
@@ -21,9 +23,10 @@ export const metadata: Metadata = { title: "Tarifas de corte" };
 export default async function TarifasDeCortePage() {
   await requireStaffRole("admin");
 
-  const [tarifas, listas] = await Promise.all([
+  const [tarifas, listas, sierra] = await Promise.all([
     todasLasTarifas(),
     listarListasDePrecios(),
+    anchoDeSierra(),
   ]);
 
   const opciones = listas.map((l) => ({
@@ -47,23 +50,9 @@ export default async function TarifasDeCortePage() {
 
       <EncabezadoPanel
         titulo="Tarifas de corte"
-        detalle="Cuánto se cobra cada pasada de sierra, según el material y quién compra."
       />
 
-      <div className="rounded-xl border bg-muted/40 p-5 text-base">
-        <p>
-          <strong>El corte se cobra por pasada.</strong> Cuántas pasadas lleva un
-          trabajo lo decide el patrón que arma el optimizador de la máquina, así
-          que el número se carga en la ficha del corte{" "}
-          <strong>después de optimizar</strong>. Hasta entonces la ficha avisa
-          que el trabajo todavía no se puede cobrar, en vez de inventar un
-          mínimo.
-        </p>
-        <p className="mt-2 text-muted-foreground">
-          Una lista sin tarifa propia cae a la de público, igual que el precio
-          del catálogo: quedarse sin tarifa significaría no cobrar el corte.
-        </p>
-      </div>
+      <EditorDeSierra anchoSierraMm={sierra} />
 
       <div className="space-y-4">
         {tarifas.map((tarifa) => (

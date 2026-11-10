@@ -55,7 +55,7 @@ export async function agregarAlCarrito(datos: ItemParaAgregar): Promise<EstadoCa
   return despues(r, "No se pudo agregar.");
 }
 
-/** Agrega varias líneas de una sola vez: la calculadora manda todo junto. */
+/** Agrega varias líneas de una sola vez: lo usa «Volver a pedir». */
 export async function agregarVarios(items: ItemParaAgregar[]): Promise<EstadoCarrito> {
   const r = await (await api()).POST("/api/v1/carrito/items/varios", { body: { items } });
   return despues(r, "No se pudo agregar.");

@@ -96,21 +96,6 @@ func (e PatronDeCorteDibujoSobrantesTipo) Valid() bool {
 	}
 }
 
-// Defines values for ResultadoTechoClavosEstimado.
-const (
-	True ResultadoTechoClavosEstimado = true
-)
-
-// Valid indicates whether the value is a known member of the ResultadoTechoClavosEstimado enum.
-func (e ResultadoTechoClavosEstimado) Valid() bool {
-	switch e {
-	case True:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SalidaTipo.
 const (
 	SalidaTipoPieza SalidaTipo = "pieza"
@@ -201,42 +186,6 @@ func (e VistaPreviaDePerfilJSONBodyPerfilUnidad) Valid() bool {
 	case M:
 		return true
 	case Mm:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CalcularDeckJSONBodyMaterial.
-const (
-	Grandis CalcularDeckJSONBodyMaterial = "grandis"
-	Pvc     CalcularDeckJSONBodyMaterial = "pvc"
-)
-
-// Valid indicates whether the value is a known member of the CalcularDeckJSONBodyMaterial enum.
-func (e CalcularDeckJSONBodyMaterial) Valid() bool {
-	switch e {
-	case Grandis:
-		return true
-	case Pvc:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CalcularTechoJSONBodyTipo.
-const (
-	Pino    CalcularTechoJSONBodyTipo = "pino"
-	Saligna CalcularTechoJSONBodyTipo = "saligna"
-)
-
-// Valid indicates whether the value is a known member of the CalcularTechoJSONBodyTipo enum.
-func (e CalcularTechoJSONBodyTipo) Valid() bool {
-	switch e {
-	case Pino:
-		return true
-	case Saligna:
 		return true
 	default:
 		return false
@@ -385,12 +334,6 @@ type HojaDeCorte struct {
 	TotalPiezas int             `json:"totalPiezas"`
 }
 
-// Item defines model for Item.
-type Item struct {
-	Busqueda    string `json:"busqueda"`
-	Descripcion string `json:"descripcion"`
-}
-
 // LineaDeCorte defines model for LineaDeCorte.
 type LineaDeCorte struct {
 	Direccion LineaDeCorteDireccion `json:"direccion"`
@@ -416,9 +359,6 @@ type MedidaDeTabla struct {
 	AnchoM float64 `json:"anchoM"`
 	LargoM float64 `json:"largoM"`
 }
-
-// Metros defines model for Metros.
-type Metros = float64
 
 // NoEntra defines model for NoEntra.
 type NoEntra struct {
@@ -644,92 +584,6 @@ type Rect struct {
 	Y     float64 `json:"y"`
 }
 
-// ResultadoDeck defines model for ResultadoDeck.
-type ResultadoDeck struct {
-	Estructura struct {
-		Busqueda    string  `json:"busqueda"`
-		Descripcion string  `json:"descripcion"`
-		Medida      string  `json:"medida"`
-		Tirantes    float64 `json:"tirantes"`
-	} `json:"estructura"`
-	Protector struct {
-		Busqueda    string  `json:"busqueda"`
-		Descripcion string  `json:"descripcion"`
-		Litros      float64 `json:"litros"`
-	} `json:"protector"`
-	TablasDeck struct {
-		Busqueda    string  `json:"busqueda"`
-		Descripcion string  `json:"descripcion"`
-		M2          float64 `json:"m2"`
-		Medida      string  `json:"medida"`
-		Tablas      float64 `json:"tablas"`
-	} `json:"tablasDeck"`
-	Tornillos struct {
-		Busqueda    string  `json:"busqueda"`
-		Cantidad    float64 `json:"cantidad"`
-		Descripcion string  `json:"descripcion"`
-	} `json:"tornillos"`
-}
-
-// ResultadoPiso defines model for ResultadoPiso.
-type ResultadoPiso struct {
-	CajasNecesarias     float64 `json:"cajasNecesarias"`
-	M2PorCaja           float64 `json:"m2PorCaja"`
-	PisoM2              float64 `json:"pisoM2"`
-	TirantesDeEntrepiso float64 `json:"tirantesDeEntrepiso"`
-	UnderlayM2          float64 `json:"underlayM2"`
-	ZocaloML            float64 `json:"zocaloML"`
-	Zocalos             float64 `json:"zocalos"`
-}
-
-// ResultadoPlacas defines model for ResultadoPlacas.
-type ResultadoPlacas struct {
-	Aprovechamiento     float64 `json:"aprovechamiento"`
-	Desperdicio         float64 `json:"desperdicio"`
-	PerdidaPorSierraMm2 float64 `json:"perdidaPorSierraMm2"`
-	Piezas              []struct {
-		Ancho    float64 `json:"ancho"`
-		Cantidad float64 `json:"cantidad"`
-		Largo    float64 `json:"largo"`
-	} `json:"piezas"`
-	PlacaDimension   string  `json:"placaDimension"`
-	PlacasNecesarias float64 `json:"placasNecesarias"`
-}
-
-// ResultadoTecho defines model for ResultadoTecho.
-type ResultadoTecho struct {
-	Aislacion struct {
-		Busqueda    string  `json:"busqueda"`
-		Descripcion string  `json:"descripcion"`
-		Rollos      float64 `json:"rollos"`
-	} `json:"aislacion"`
-	Clavos struct {
-		Busqueda    string                       `json:"busqueda"`
-		Descripcion string                       `json:"descripcion"`
-		Estimado    ResultadoTechoClavosEstimado `json:"estimado"`
-		Kg          float64                      `json:"kg"`
-	} `json:"clavos"`
-	Machimbre struct {
-		Busqueda    string  `json:"busqueda"`
-		Descripcion string  `json:"descripcion"`
-		M2          float64 `json:"m2"`
-	} `json:"machimbre"`
-	Membrana struct {
-		Busqueda    string  `json:"busqueda"`
-		Descripcion string  `json:"descripcion"`
-		Rollos      float64 `json:"rollos"`
-	} `json:"membrana"`
-	Tirantes struct {
-		Busqueda    string  `json:"busqueda"`
-		Cantidad    float64 `json:"cantidad"`
-		Descripcion string  `json:"descripcion"`
-		Medida      string  `json:"medida"`
-	} `json:"tirantes"`
-}
-
-// ResultadoTechoClavosEstimado defines model for ResultadoTecho.Clavos.Estimado.
-type ResultadoTechoClavosEstimado bool
-
 // Salida defines model for Salida.
 type Salida struct {
 	Ancho    float64    `json:"ancho"`
@@ -826,6 +680,11 @@ type VistaPreviaDePerfilJSONBodyPerfilDecimal string
 // VistaPreviaDePerfilJSONBodyPerfilUnidad defines parameters for VistaPreviaDePerfil.
 type VistaPreviaDePerfilJSONBodyPerfilUnidad string
 
+// GuardarSierraJSONBody defines parameters for GuardarSierra.
+type GuardarSierraJSONBody struct {
+	AnchoSierraMm float64 `json:"anchoSierraMm"`
+}
+
 // GuardarTarifaJSONBody defines parameters for GuardarTarifa.
 type GuardarTarifaJSONBody struct {
 	Activo              bool    `json:"activo"`
@@ -850,48 +709,6 @@ type CargarPasadasJSONBody struct {
 type CambiarSierraJSONBody struct {
 	Valor string `json:"valor"`
 }
-
-// CalcularDeckJSONBody defines parameters for CalcularDeck.
-type CalcularDeckJSONBody struct {
-	Ancho    Metros                       `json:"ancho"`
-	Largo    Metros                       `json:"largo"`
-	Material CalcularDeckJSONBodyMaterial `json:"material"`
-}
-
-// CalcularDeckJSONBodyMaterial defines parameters for CalcularDeck.
-type CalcularDeckJSONBodyMaterial string
-
-// CalcularPisoJSONBody defines parameters for CalcularPiso.
-type CalcularPisoJSONBody struct {
-	Ancho Metros `json:"ancho"`
-	Largo Metros `json:"largo"`
-}
-
-// CalcularPlacasJSONBody defines parameters for CalcularPlacas.
-type CalcularPlacasJSONBody struct {
-	Piezas []struct {
-		Ancho    float64 `json:"ancho"`
-		Cantidad float64 `json:"cantidad"`
-		Largo    float64 `json:"largo"`
-	} `json:"piezas"`
-	PlacaAncho float64 `json:"placaAncho"`
-	PlacaLargo float64 `json:"placaLargo"`
-}
-
-// SugerirDelCatalogoJSONBody defines parameters for SugerirDelCatalogo.
-type SugerirDelCatalogoJSONBody struct {
-	Terminos []string `json:"terminos"`
-}
-
-// CalcularTechoJSONBody defines parameters for CalcularTecho.
-type CalcularTechoJSONBody struct {
-	Ancho Metros                    `json:"ancho"`
-	Largo Metros                    `json:"largo"`
-	Tipo  CalcularTechoJSONBodyTipo `json:"tipo"`
-}
-
-// CalcularTechoJSONBodyTipo defines parameters for CalcularTecho.
-type CalcularTechoJSONBodyTipo string
 
 // CotizarCorteJSONBody defines parameters for CotizarCorte.
 type CotizarCorteJSONBody map[string]interface{}
@@ -929,6 +746,9 @@ type GuardarPerfilJSONRequestBody = FormPerfil
 // VistaPreviaDePerfilJSONRequestBody defines body for VistaPreviaDePerfil for application/json ContentType.
 type VistaPreviaDePerfilJSONRequestBody VistaPreviaDePerfilJSONBody
 
+// GuardarSierraJSONRequestBody defines body for GuardarSierra for application/json ContentType.
+type GuardarSierraJSONRequestBody GuardarSierraJSONBody
+
 // GuardarTarifaJSONRequestBody defines body for GuardarTarifa for application/json ContentType.
 type GuardarTarifaJSONRequestBody GuardarTarifaJSONBody
 
@@ -940,21 +760,6 @@ type CargarPasadasJSONRequestBody CargarPasadasJSONBody
 
 // CambiarSierraJSONRequestBody defines body for CambiarSierra for application/json ContentType.
 type CambiarSierraJSONRequestBody CambiarSierraJSONBody
-
-// CalcularDeckJSONRequestBody defines body for CalcularDeck for application/json ContentType.
-type CalcularDeckJSONRequestBody CalcularDeckJSONBody
-
-// CalcularPisoJSONRequestBody defines body for CalcularPiso for application/json ContentType.
-type CalcularPisoJSONRequestBody CalcularPisoJSONBody
-
-// CalcularPlacasJSONRequestBody defines body for CalcularPlacas for application/json ContentType.
-type CalcularPlacasJSONRequestBody CalcularPlacasJSONBody
-
-// SugerirDelCatalogoJSONRequestBody defines body for SugerirDelCatalogo for application/json ContentType.
-type SugerirDelCatalogoJSONRequestBody SugerirDelCatalogoJSONBody
-
-// CalcularTechoJSONRequestBody defines body for CalcularTecho for application/json ContentType.
-type CalcularTechoJSONRequestBody CalcularTechoJSONBody
 
 // CotizarCorteJSONRequestBody defines body for CotizarCorte for application/json ContentType.
 type CotizarCorteJSONRequestBody CotizarCorteJSONBody
@@ -985,6 +790,9 @@ type ServerInterface interface {
 
 	// (DELETE /api/v1/admin/cortes/perfiles/{perfil})
 	BorrarPerfil(w http.ResponseWriter, r *http.Request, perfil string)
+
+	// (PUT /api/v1/admin/cortes/sierra)
+	GuardarSierra(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/admin/cortes/tarifas)
 	ListarTarifas(w http.ResponseWriter, r *http.Request)
@@ -1019,23 +827,8 @@ type ServerInterface interface {
 	// (GET /api/v1/admin/pedidos/{id}/cortes)
 	CortesDelPedido(w http.ResponseWriter, r *http.Request, id Id)
 
-	// (POST /api/v1/calculadora/deck)
-	CalcularDeck(w http.ResponseWriter, r *http.Request)
-
 	// (GET /api/v1/calculadora/parametros)
 	ParametrosDeCalculo(w http.ResponseWriter, r *http.Request)
-
-	// (POST /api/v1/calculadora/piso)
-	CalcularPiso(w http.ResponseWriter, r *http.Request)
-
-	// (POST /api/v1/calculadora/placas)
-	CalcularPlacas(w http.ResponseWriter, r *http.Request)
-
-	// (POST /api/v1/calculadora/sugerencias)
-	SugerirDelCatalogo(w http.ResponseWriter, r *http.Request)
-
-	// (POST /api/v1/calculadora/techo)
-	CalcularTecho(w http.ResponseWriter, r *http.Request)
 
 	// (POST /api/v1/cortes/cotizar)
 	CotizarCorte(w http.ResponseWriter, r *http.Request)
@@ -1189,6 +982,20 @@ func (siw *ServerInterfaceWrapper) BorrarPerfil(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.BorrarPerfil(w, r, perfil)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GuardarSierra operation middleware
+func (siw *ServerInterfaceWrapper) GuardarSierra(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GuardarSierra(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1448,81 +1255,11 @@ func (siw *ServerInterfaceWrapper) CortesDelPedido(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
-// CalcularDeck operation middleware
-func (siw *ServerInterfaceWrapper) CalcularDeck(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CalcularDeck(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ParametrosDeCalculo operation middleware
 func (siw *ServerInterfaceWrapper) ParametrosDeCalculo(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ParametrosDeCalculo(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CalcularPiso operation middleware
-func (siw *ServerInterfaceWrapper) CalcularPiso(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CalcularPiso(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CalcularPlacas operation middleware
-func (siw *ServerInterfaceWrapper) CalcularPlacas(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CalcularPlacas(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SugerirDelCatalogo operation middleware
-func (siw *ServerInterfaceWrapper) SugerirDelCatalogo(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SugerirDelCatalogo(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CalcularTecho operation middleware
-func (siw *ServerInterfaceWrapper) CalcularTecho(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CalcularTecho(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1744,12 +1481,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/cortes/tarifas/activas", wrapper.TarifasActivas)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/cortes", wrapper.CortesDelPedido)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/calculadoras", wrapper.GuardarParametros)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/cortes/sierra", wrapper.GuardarSierra)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/calculadora/parametros", wrapper.ParametrosDeCalculo)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/calculadora/techo", wrapper.CalcularTecho)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/calculadora/placas", wrapper.CalcularPlacas)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/calculadora/piso", wrapper.CalcularPiso)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/calculadora/deck", wrapper.CalcularDeck)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/calculadora/sugerencias", wrapper.SugerirDelCatalogo)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/cortes/placas", wrapper.PlacasCortables)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/cortes/plano", wrapper.CalcularPlano)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/cortes/cotizar", wrapper.CotizarCorte)
@@ -1956,6 +1689,38 @@ type BorrarPerfil422ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response BorrarPerfil422ApplicationProblemPlusJSONResponse) VisitBorrarPerfilResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GuardarSierraRequestObject struct {
+	Body *GuardarSierraJSONRequestBody
+}
+
+type GuardarSierraResponseObject interface {
+	VisitGuardarSierraResponse(w http.ResponseWriter) error
+}
+
+type GuardarSierra204Response struct {
+}
+
+func (response GuardarSierra204Response) VisitGuardarSierraResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type GuardarSierra422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response GuardarSierra422ApplicationProblemPlusJSONResponse) VisitGuardarSierraResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -2381,28 +2146,6 @@ func (response CortesDelPedido200JSONResponse) VisitCortesDelPedidoResponse(w ht
 	return err
 }
 
-type CalcularDeckRequestObject struct {
-	Body *CalcularDeckJSONRequestBody
-}
-
-type CalcularDeckResponseObject interface {
-	VisitCalcularDeckResponse(w http.ResponseWriter) error
-}
-
-type CalcularDeck200JSONResponse ResultadoDeck
-
-func (response CalcularDeck200JSONResponse) VisitCalcularDeckResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type ParametrosDeCalculoRequestObject struct {
 }
 
@@ -2413,101 +2156,6 @@ type ParametrosDeCalculoResponseObject interface {
 type ParametrosDeCalculo200JSONResponse ParametrosDeCalculo
 
 func (response ParametrosDeCalculo200JSONResponse) VisitParametrosDeCalculoResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CalcularPisoRequestObject struct {
-	Body *CalcularPisoJSONRequestBody
-}
-
-type CalcularPisoResponseObject interface {
-	VisitCalcularPisoResponse(w http.ResponseWriter) error
-}
-
-type CalcularPiso200JSONResponse ResultadoPiso
-
-func (response CalcularPiso200JSONResponse) VisitCalcularPisoResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CalcularPlacasRequestObject struct {
-	Body *CalcularPlacasJSONRequestBody
-}
-
-type CalcularPlacasResponseObject interface {
-	VisitCalcularPlacasResponse(w http.ResponseWriter) error
-}
-
-type CalcularPlacas200JSONResponse ResultadoPlacas
-
-func (response CalcularPlacas200JSONResponse) VisitCalcularPlacasResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SugerirDelCatalogoRequestObject struct {
-	Body *SugerirDelCatalogoJSONRequestBody
-}
-
-type SugerirDelCatalogoResponseObject interface {
-	VisitSugerirDelCatalogoResponse(w http.ResponseWriter) error
-}
-
-type SugerirDelCatalogo200JSONResponse []struct {
-	Busqueda    string  `json:"busqueda"`
-	Descripcion string  `json:"descripcion"`
-	HayStock    bool    `json:"hayStock"`
-	Precio      *string `json:"precio"`
-	Unidad      string  `json:"unidad"`
-	VariantId   string  `json:"variantId"`
-}
-
-func (response SugerirDelCatalogo200JSONResponse) VisitSugerirDelCatalogoResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CalcularTechoRequestObject struct {
-	Body *CalcularTechoJSONRequestBody
-}
-
-type CalcularTechoResponseObject interface {
-	VisitCalcularTechoResponse(w http.ResponseWriter) error
-}
-
-type CalcularTecho200JSONResponse ResultadoTecho
-
-func (response CalcularTecho200JSONResponse) VisitCalcularTechoResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -2674,6 +2322,9 @@ type StrictServerInterface interface {
 	// (DELETE /api/v1/admin/cortes/perfiles/{perfil})
 	BorrarPerfil(ctx context.Context, request BorrarPerfilRequestObject) (BorrarPerfilResponseObject, error)
 
+	// (PUT /api/v1/admin/cortes/sierra)
+	GuardarSierra(ctx context.Context, request GuardarSierraRequestObject) (GuardarSierraResponseObject, error)
+
 	// (GET /api/v1/admin/cortes/tarifas)
 	ListarTarifas(ctx context.Context, request ListarTarifasRequestObject) (ListarTarifasResponseObject, error)
 
@@ -2707,23 +2358,8 @@ type StrictServerInterface interface {
 	// (GET /api/v1/admin/pedidos/{id}/cortes)
 	CortesDelPedido(ctx context.Context, request CortesDelPedidoRequestObject) (CortesDelPedidoResponseObject, error)
 
-	// (POST /api/v1/calculadora/deck)
-	CalcularDeck(ctx context.Context, request CalcularDeckRequestObject) (CalcularDeckResponseObject, error)
-
 	// (GET /api/v1/calculadora/parametros)
 	ParametrosDeCalculo(ctx context.Context, request ParametrosDeCalculoRequestObject) (ParametrosDeCalculoResponseObject, error)
-
-	// (POST /api/v1/calculadora/piso)
-	CalcularPiso(ctx context.Context, request CalcularPisoRequestObject) (CalcularPisoResponseObject, error)
-
-	// (POST /api/v1/calculadora/placas)
-	CalcularPlacas(ctx context.Context, request CalcularPlacasRequestObject) (CalcularPlacasResponseObject, error)
-
-	// (POST /api/v1/calculadora/sugerencias)
-	SugerirDelCatalogo(ctx context.Context, request SugerirDelCatalogoRequestObject) (SugerirDelCatalogoResponseObject, error)
-
-	// (POST /api/v1/calculadora/techo)
-	CalcularTecho(ctx context.Context, request CalcularTechoRequestObject) (CalcularTechoResponseObject, error)
 
 	// (POST /api/v1/cortes/cotizar)
 	CotizarCorte(ctx context.Context, request CotizarCorteRequestObject) (CotizarCorteResponseObject, error)
@@ -2967,6 +2603,37 @@ func (sh *strictHandler) BorrarPerfil(w http.ResponseWriter, r *http.Request, pe
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(BorrarPerfilResponseObject); ok {
 		if err := validResponse.VisitBorrarPerfilResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GuardarSierra operation middleware
+func (sh *strictHandler) GuardarSierra(w http.ResponseWriter, r *http.Request) {
+	var request GuardarSierraRequestObject
+
+	var body GuardarSierraJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GuardarSierra(ctx, request.(GuardarSierraRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GuardarSierra")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GuardarSierraResponseObject); ok {
+		if err := validResponse.VisitGuardarSierraResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3282,37 +2949,6 @@ func (sh *strictHandler) CortesDelPedido(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-// CalcularDeck operation middleware
-func (sh *strictHandler) CalcularDeck(w http.ResponseWriter, r *http.Request) {
-	var request CalcularDeckRequestObject
-
-	var body CalcularDeckJSONRequestBody
-	if err := runtime.BindJSONBody(r, &body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CalcularDeck(ctx, request.(CalcularDeckRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CalcularDeck")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CalcularDeckResponseObject); ok {
-		if err := validResponse.VisitCalcularDeckResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // ParametrosDeCalculo operation middleware
 func (sh *strictHandler) ParametrosDeCalculo(w http.ResponseWriter, r *http.Request) {
 	var request ParametrosDeCalculoRequestObject
@@ -3330,130 +2966,6 @@ func (sh *strictHandler) ParametrosDeCalculo(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ParametrosDeCalculoResponseObject); ok {
 		if err := validResponse.VisitParametrosDeCalculoResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CalcularPiso operation middleware
-func (sh *strictHandler) CalcularPiso(w http.ResponseWriter, r *http.Request) {
-	var request CalcularPisoRequestObject
-
-	var body CalcularPisoJSONRequestBody
-	if err := runtime.BindJSONBody(r, &body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CalcularPiso(ctx, request.(CalcularPisoRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CalcularPiso")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CalcularPisoResponseObject); ok {
-		if err := validResponse.VisitCalcularPisoResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CalcularPlacas operation middleware
-func (sh *strictHandler) CalcularPlacas(w http.ResponseWriter, r *http.Request) {
-	var request CalcularPlacasRequestObject
-
-	var body CalcularPlacasJSONRequestBody
-	if err := runtime.BindJSONBody(r, &body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CalcularPlacas(ctx, request.(CalcularPlacasRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CalcularPlacas")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CalcularPlacasResponseObject); ok {
-		if err := validResponse.VisitCalcularPlacasResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// SugerirDelCatalogo operation middleware
-func (sh *strictHandler) SugerirDelCatalogo(w http.ResponseWriter, r *http.Request) {
-	var request SugerirDelCatalogoRequestObject
-
-	var body SugerirDelCatalogoJSONRequestBody
-	if err := runtime.BindJSONBody(r, &body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.SugerirDelCatalogo(ctx, request.(SugerirDelCatalogoRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "SugerirDelCatalogo")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(SugerirDelCatalogoResponseObject); ok {
-		if err := validResponse.VisitSugerirDelCatalogoResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CalcularTecho operation middleware
-func (sh *strictHandler) CalcularTecho(w http.ResponseWriter, r *http.Request) {
-	var request CalcularTechoRequestObject
-
-	var body CalcularTechoJSONRequestBody
-	if err := runtime.BindJSONBody(r, &body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CalcularTecho(ctx, request.(CalcularTechoRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CalcularTecho")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CalcularTechoResponseObject); ok {
-		if err := validResponse.VisitCalcularTechoResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3554,96 +3066,83 @@ func (sh *strictHandler) CalcularPlano(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"tHmtSUlu/7Zd5HZz8/8DAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

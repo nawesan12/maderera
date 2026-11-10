@@ -33,7 +33,6 @@ export interface RespuestaLocal {
   texto: string;
   datos?: DatoSuelto[];
   sugerencias?: { texto: string; va: string }[];
-  calculadora?: "techos" | "placas" | "pisos" | "decks";
   aPersona?: boolean;
 }
 
@@ -53,14 +52,6 @@ const SIN_SERVIDOR: Intencion[] = [
 export function seContestaSolo(leido: Entendido): boolean {
   return SIN_SERVIDOR.includes(leido.intencion);
 }
-
-const CALCULADORA_POR_RUBRO: Record<string, RespuestaLocal["calculadora"]> = {
-  techos: "techos",
-  cubiertas: "techos",
-  placas: "placas",
-  pisos: "pisos",
-  decks: "decks",
-};
 
 /**
  * La respuesta, si se puede dar sin preguntarle a nadie.
@@ -125,21 +116,15 @@ export function responderLocal(
       };
 
     case "calcular": {
-      const cual = leido.rubro ? CALCULADORA_POR_RUBRO[leido.rubro] : undefined;
-
       return {
-        texto: cual
-          ? "Te hago la cuenta. Abrí la calculadora y cargá las medidas:"
-          : "Te hago la cuenta. ¿Qué estás por hacer?",
-        calculadora: cual,
-        sugerencias: cual
-          ? undefined
-          : [
-              { texto: "Un techo", va: "calc-techos" },
-              { texto: "Placas para un mueble", va: "calc-placas" },
-              { texto: "Un piso", va: "calc-pisos" },
-              { texto: "Un deck", va: "calc-decks" },
-            ],
+        texto: "Te hago la cuenta. ¿Qué estás por hacer?",
+        sugerencias:
+          leido.rubro === "placas"
+            ? [{ texto: "Armar el corte", va: "calc-placas" }]
+            : [
+                { texto: "Cortar placas", va: "calc-placas" },
+                { texto: "Un techo, un piso o un deck", va: "calc-obra" },
+              ],
       };
     }
 

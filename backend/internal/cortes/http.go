@@ -57,11 +57,7 @@ var sinContenido = respuesta{codigo: http.StatusNoContent}
 func (o respuesta) VisitAlternarUrgenteResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitAvanzarCorteResponse(w http.ResponseWriter) error      { return o.escribir(w) }
 func (o respuesta) VisitBorrarPerfilResponse(w http.ResponseWriter) error      { return o.escribir(w) }
-func (o respuesta) VisitCalcularDeckResponse(w http.ResponseWriter) error      { return o.escribir(w) }
-func (o respuesta) VisitCalcularPisoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
-func (o respuesta) VisitCalcularPlacasResponse(w http.ResponseWriter) error    { return o.escribir(w) }
 func (o respuesta) VisitCalcularPlanoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitCalcularTechoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitCambiarSierraResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitCargarPasadasResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitCortesDelPedidoResponse(w http.ResponseWriter) error   { return o.escribir(w) }
@@ -70,6 +66,7 @@ func (o respuesta) VisitCrearCorteResponse(w http.ResponseWriter) error        {
 func (o respuesta) VisitFichaDeCorteResponse(w http.ResponseWriter) error      { return o.escribir(w) }
 func (o respuesta) VisitGuardarAcomodoResponse(w http.ResponseWriter) error    { return o.escribir(w) }
 func (o respuesta) VisitGuardarParametrosResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitGuardarSierraResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitGuardarPerfilResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitGuardarTarifaResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitHojaDelCorteResponse(w http.ResponseWriter) error      { return o.escribir(w) }
@@ -79,10 +76,9 @@ func (o respuesta) VisitListarTarifasResponse(w http.ResponseWriter) error     {
 func (o respuesta) VisitParametrosDeCalculoResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
-func (o respuesta) VisitPlacasCortablesResponse(w http.ResponseWriter) error    { return o.escribir(w) }
-func (o respuesta) VisitResolverCarritoResponse(w http.ResponseWriter) error    { return o.escribir(w) }
-func (o respuesta) VisitSugerirDelCatalogoResponse(w http.ResponseWriter) error { return o.escribir(w) }
-func (o respuesta) VisitTarifasActivasResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitPlacasCortablesResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitResolverCarritoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitTarifasActivasResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 
 // gestion: quien entra a /admin/cortes (incluido el aserradero).
 func gestion(ctx context.Context) (*auth.Sesion, error) {
@@ -327,6 +323,17 @@ func (a *API) GuardarTarifa(ctx context.Context, r cortesapi.GuardarTarifaReques
 	return sinContenido, nil
 }
 
+func (a *API) GuardarSierra(ctx context.Context, r cortesapi.GuardarSierraRequestObject) (cortesapi.GuardarSierraResponseObject, error) {
+	ses, err := soloAdmin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.s.GuardarSierra(ctx, ses, r.Body.AnchoSierraMm); err != nil {
+		return nil, err
+	}
+	return sinContenido, nil
+}
+
 func (a *API) GuardarParametros(ctx context.Context, r cortesapi.GuardarParametrosRequestObject) (cortesapi.GuardarParametrosResponseObject, error) {
 	ses, err := soloAdmin(ctx)
 	if err != nil {
@@ -338,51 +345,9 @@ func (a *API) GuardarParametros(ctx context.Context, r cortesapi.GuardarParametr
 	return sinContenido, nil
 }
 
-// --- las calculadoras ---
-
 func (a *API) ParametrosDeCalculo(ctx context.Context, _ cortesapi.ParametrosDeCalculoRequestObject) (cortesapi.ParametrosDeCalculoResponseObject, error) {
 	v, err := a.s.Parametros(ctx)
 	return ok(v), err
-}
-
-func (a *API) CalcularTecho(ctx context.Context, r cortesapi.CalcularTechoRequestObject) (cortesapi.CalcularTechoResponseObject, error) {
-	p, err := a.s.Parametros(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return ok(CalcularTecho(r.Body.Largo, r.Body.Ancho, string(r.Body.Tipo), p)), nil
-}
-
-func (a *API) CalcularPlacas(ctx context.Context, r cortesapi.CalcularPlacasRequestObject) (cortesapi.CalcularPlacasResponseObject, error) {
-	p, err := a.s.Parametros(ctx)
-	if err != nil {
-		return nil, err
-	}
-	piezas := make([]PiezaDePlaca, len(r.Body.Piezas))
-	for i, x := range r.Body.Piezas {
-		piezas[i] = PiezaDePlaca{x.Ancho, x.Largo, x.Cantidad}
-	}
-	return ok(CalcularPlacas(piezas, r.Body.PlacaAncho, r.Body.PlacaLargo, p.AnchoSierraMm, p.MargenSeguridad)), nil
-}
-
-func (a *API) CalcularPiso(ctx context.Context, r cortesapi.CalcularPisoRequestObject) (cortesapi.CalcularPisoResponseObject, error) {
-	p, err := a.s.Parametros(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return ok(CalcularPiso(r.Body.Largo, r.Body.Ancho, 0, p.SeparacionPisoM)), nil
-}
-
-func (a *API) CalcularDeck(ctx context.Context, r cortesapi.CalcularDeckRequestObject) (cortesapi.CalcularDeckResponseObject, error) {
-	p, err := a.s.Parametros(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tabla := p.Deck.Grandis
-	if r.Body.Material == "pvc" {
-		tabla = p.Deck.Pvc
-	}
-	return ok(CalcularDeck(r.Body.Largo, r.Body.Ancho, string(r.Body.Material), tabla, p.MargenSeguridad, p.SeparacionPisoM)), nil
 }
 
 // lista es la de quien pide; la general con publico=true; la pedida con
@@ -398,30 +363,6 @@ func (a *API) lista(ctx context.Context, publico *bool, pedida *openapi_types.UU
 		return a.s.cat.General(ctx)
 	}
 	return a.s.cat.Vigente(ctx, auth.DeContexto(ctx))
-}
-
-func (a *API) SugerirDelCatalogo(ctx context.Context, r cortesapi.SugerirDelCatalogoRequestObject) (cortesapi.SugerirDelCatalogoResponseObject, error) {
-	l, err := a.lista(ctx, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	terminos := r.Body.Terminos
-	// Tope duro: la calculadora manda como mucho cinco renglones.
-	if len(terminos) > 8 {
-		terminos = terminos[:8]
-	}
-	v, err := a.s.Sugerir(ctx, l, terminos)
-	if err != nil {
-		return nil, err
-	}
-	if t, err := a.s.cat.Tienda(ctx); err != nil {
-		return nil, err
-	} else if !t.Activa {
-		for i := range v {
-			v[i].Precio = nil
-		}
-	}
-	return ok(v), nil
 }
 
 // --- el armador de cortes ---

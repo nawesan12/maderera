@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { metadatosDePagina, migasJsonLd } from "@/lib/seo";
 import Link from "next/link";
-import { ArrowRight, Ruler } from "lucide-react";
+import { Ruler } from "lucide-react";
 import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
-import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
+import { anchoDeSierra } from "@/lib/dal/sierra";
 import { HORARIO_CORTES } from "@/lib/sucursales";
 import { VistaDeCorteDeQuienMira } from "./vista";
 import { preciosDePlacas } from "@/lib/dal/visitante";
@@ -52,9 +52,9 @@ export default async function CortePage() {
    * de precios corresponde, era pagar dos veces. El precio del profesional
    * llega aparte, en la misma respuesta: ver `VistaDeCorteDeQuienMira`.
    */
-  const [placas, parametros, whatsapp] = await Promise.all([
+  const [placas, sierra, whatsapp] = await Promise.all([
     placasCortablesPublicas(),
-    parametrosDeCalculo(),
+    anchoDeSierra(),
     numeroWhatsapp(),
   ]);
 
@@ -101,20 +101,14 @@ export default async function CortePage() {
               // Sin esperar: la pantalla sale armada y solo el precio espera.
               precios={preciosDePlacas()}
               placas={placas}
-              anchoSierra={parametros.anchoSierraMm}
+              anchoSierra={sierra}
               whatsapp={whatsapp}
             />
           </div>
         )}
 
         <p className="mt-8 text-sm text-texto-3">
-          El plano es una propuesta: el patrón definitivo lo arma el optimizador
-          del taller, y puede mejorarlo. Las medidas son en milímetros y el
-          precio incluye IVA.{" "}
-          <Link href="/calculadora" className="font-medium underline underline-offset-2">
-            ¿No sabés cuánto material lleva?
-            <ArrowRight className="ml-1 inline h-3.5 w-3.5" />
-          </Link>
+          El plano es orientativo: el corte final lo arma el taller.
         </p>
       </div>
     </div>

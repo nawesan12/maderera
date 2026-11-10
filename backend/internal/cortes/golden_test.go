@@ -183,20 +183,6 @@ func TestGoldenSueltos(t *testing.T) {
 			Texto string   `json:"texto"`
 			Mm    *float64 `json:"mm"`
 		} `json:"sierras"`
-		Calculadoras []struct {
-			P          ParametrosDeCalculo `json:"p"`
-			Largo      float64             `json:"largo"`
-			Ancho      float64             `json:"ancho"`
-			Tipo       string              `json:"tipo"`
-			Material   string              `json:"material"`
-			Piezas     []PiezaDePlaca      `json:"piezas"`
-			PlacaAncho float64             `json:"placaAncho"`
-			PlacaLargo float64             `json:"placaLargo"`
-			Techo      json.RawMessage     `json:"techo"`
-			Placas     json.RawMessage     `json:"placas"`
-			Piso       json.RawMessage     `json:"piso"`
-			Deck       json.RawMessage     `json:"deck"`
-		} `json:"calculadoras"`
 		Textos []struct {
 			Texto, Ptx, Ptx25 string
 		} `json:"textos"`
@@ -279,20 +265,6 @@ func TestGoldenSueltos(t *testing.T) {
 		got := LeerAnchoDeSierra(s.Texto)
 		if (got == nil) != (s.Mm == nil) || (got != nil && *got != *s.Mm) {
 			t.Errorf("sierra %q: %v, TS %v", s.Texto, got, s.Mm)
-		}
-	}
-	for i, c := range g.Calculadoras {
-		if !igualJSON(t, fmt.Sprintf("techo %d", i), CalcularTecho(c.Largo, c.Ancho, c.Tipo, c.P), c.Techo) ||
-			!igualJSON(t, fmt.Sprintf("placas %d", i), CalcularPlacas(c.Piezas, c.PlacaAncho, c.PlacaLargo, c.P.AnchoSierraMm, c.P.MargenSeguridad), c.Placas) ||
-			!igualJSON(t, fmt.Sprintf("piso %d", i), CalcularPiso(c.Largo, c.Ancho, 0, c.P.SeparacionPisoM), c.Piso) {
-			break
-		}
-		tabla := c.P.Deck.Grandis
-		if c.Material == "pvc" {
-			tabla = c.P.Deck.Pvc
-		}
-		if !igualJSON(t, fmt.Sprintf("deck %d", i), CalcularDeck(c.Largo, c.Ancho, c.Material, tabla, c.P.MargenSeguridad, c.P.SeparacionPisoM), c.Deck) {
-			break
 		}
 	}
 	for _, x := range g.Textos {

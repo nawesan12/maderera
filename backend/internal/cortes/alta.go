@@ -612,6 +612,32 @@ func (s *Servicio) Parametros(ctx context.Context) (ParametrosDeCalculo, error) 
 	return p, nil
 }
 
+// GuardarSierra cambia solo el ancho de sierra con que nacen los cortes. Es
+// lo único de la fila de parámetros que sigue en uso desde que salieron las
+// calculadoras (ver parametros.go). Sin fila, la crea con los demás valores
+// por defecto de la tabla.
+func (s *Servicio) GuardarSierra(ctx context.Context, ses *auth.Sesion, mm float64) error {
+	if msg := validarNumero(mm, reglaNumero{min: pf(0.5), msgMin: "El disco tiene que medir más de medio milímetro.",
+		max: pf(10), msgMax: "Más de 10 mm no es un disco de sierra."}); msg != "" {
+		return error422(msg)
+	}
+	sierra := jsmath.Num(jsmath.Round(float64(mm*10)) / 10)
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE calculator_settings SET ancho_sierra_mm = $1, updated_at = now()`, sierra)
+		if err != nil || tag.RowsAffected() > 0 {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO calculator_settings (ancho_sierra_mm) VALUES ($1)`, sierra)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "configuracion", "",
+		"Cambió el ancho de sierra a "+jsmath.Texto(float64(sierra))+" mm", nil)
+	return nil
+}
+
 // CamposDeParametros son los campos del formulario, en el orden del esquema.
 var CamposDeParametros = []string{
 	"mermaMachimbre", "factorPendiente", "margenSeguridad", "anchoSierraMm", "rindeRolloMembrana",

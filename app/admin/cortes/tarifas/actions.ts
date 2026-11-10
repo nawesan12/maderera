@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { ETIQUETAS } from "@/lib/cache-publico";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 
 /*
@@ -32,4 +33,15 @@ export async function guardarTarifaDeCorte(_previo: EstadoTarifa, formData: Form
   if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
   revalidatePath("/admin/cortes/tarifas");
   return { ok: "Tarifa guardada." };
+}
+
+/** El ancho de sierra con que nacen los cortes (ver `lib/dal/sierra.ts`). */
+export async function guardarSierra(_previo: EstadoTarifa, formData: FormData): Promise<EstadoTarifa> {
+  const mm = Number(String(formData.get("anchoSierraMm") ?? "").replace(",", "."));
+  const r = await (await api()).PUT("/api/v1/admin/cortes/sierra", { body: { anchoSierraMm: mm } });
+  if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "Revisá el ancho.") };
+  // El cortador del sitio la lee de la caché del catálogo.
+  updateTag(ETIQUETAS.catalogo);
+  revalidatePath("/admin/cortes/tarifas");
+  return { ok: "Guardado." };
 }

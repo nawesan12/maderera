@@ -91,7 +91,6 @@ export async function Footer() {
             <ul className="flex flex-col gap-[9px] text-sm">
               {[
                 ["Catálogo", "/catalogo"],
-                ["Calculadora de materiales", "/calculadora"],
                 ...(laTienda.activa ? [["Pedir Presupuesto", "/carrito"]] : []),
                 ["Crear una cuenta", "/registro"],
                 ["Portal Profesionales", "/profesionales"],

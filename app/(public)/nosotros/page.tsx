@@ -55,7 +55,7 @@ export const metadata: Metadata = {
  */
 const TRAYECTORIA = [
   { anio: String(ANIO_FUNDACION), titulo: "Fundación", detalle: "Abre Maderera Juan B. Justo en Mar del Plata, como empresa familiar." },
-  { anio: "2026", titulo: "Tienda y gestión online", detalle: "Catálogo con stock por sucursal, calculadoras de materiales, presupuestos y cuenta corriente desde el sitio." },
+  { anio: "2026", titulo: "Tienda y gestión online", detalle: "Catálogo con stock por sucursal, corte a medida, presupuestos y cuenta corriente desde el sitio." },
 ];
 
 const VALORES = [

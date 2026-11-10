@@ -55,7 +55,7 @@ pantalla.
 
 Es lo que explica por qué dos piezas de 900 no entran en una placa de 1830.
 
-El valor se cambia en **Calculadoras**, y vale para el plano, el presupuesto y la
+El valor se cambia en **Cortes → Tarifas**, y vale para el plano, el presupuesto y la
 hoja del taller a la vez.
 
 ### El reporte del corte

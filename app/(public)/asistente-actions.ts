@@ -194,8 +194,6 @@ export interface RespuestaDelAsistente {
   datos?: DatoDelAsistente[];
   /** Botones para seguir, según lo que se entendió. */
   sugerencias?: { texto: string; va: string }[];
-  /** Si conviene ofrecer una calculadora, cuál. */
-  calculadora?: "techos" | "placas" | "pisos" | "decks";
   /** Si la respuesta honesta es pasar a una persona. */
   aPersona?: boolean;
 }
@@ -275,30 +273,15 @@ export async function preguntarAlAsistente(
       };
 
     case "calcular": {
-      // Se ofrece la calculadora del rubro que nombraron, si nombraron alguno.
-      const porRubro: Record<string, RespuestaDelAsistente["calculadora"]> = {
-        techos: "techos",
-        cubiertas: "techos",
-        placas: "placas",
-        pisos: "pisos",
-        decks: "decks",
-      };
-
-      const cual = leido.rubro ? porRubro[leido.rubro] : undefined;
-
       return {
-        texto: cual
-          ? "Te hago la cuenta. Abrí la calculadora y cargá las medidas:"
-          : "Te hago la cuenta. ¿Qué estás por hacer?",
-        calculadora: cual,
-        sugerencias: cual
-          ? undefined
-          : [
-              { texto: "Un techo", va: "calc-techos" },
-              { texto: "Placas para un mueble", va: "calc-placas" },
-              { texto: "Un piso", va: "calc-pisos" },
-              { texto: "Un deck", va: "calc-decks" },
-            ],
+        texto: "Te hago la cuenta. ¿Qué estás por hacer?",
+        sugerencias:
+          leido.rubro === "placas"
+            ? [{ texto: "Armar el corte", va: "calc-placas" }]
+            : [
+                { texto: "Cortar placas", va: "calc-placas" },
+                { texto: "Un techo, un piso o un deck", va: "calc-obra" },
+              ],
       };
     }
 
@@ -372,7 +355,6 @@ export async function preguntarAlAsistente(
           ? `Eso puntual no lo encontré, pero esto es lo que tengo en el rubro:${cantidad}`
           : `Esto es lo que tengo:${cantidad}`,
         productos,
-        calculadora: leido.cantidad && leido.rubro === "pisos" ? "pisos" : undefined,
         sugerencias: [
           { texto: "Buscar otra cosa", va: "buscar-texto" },
           { texto: "Hablar con alguien", va: "persona" },

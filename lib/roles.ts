@@ -96,13 +96,6 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/productos": ["admin", "vendedor"],
   "/admin/stock": ["admin", "vendedor", "deposito"],
   "/admin/precios": ["admin"],
-  /*
-   * Los parámetros de las calculadoras solo los toca el admin, por el mismo
-   * motivo que los precios: un desperdicio mal cargado le hace comprar de menos
-   * a alguien que está por techar una casa, y eso se descubre con el techo a
-   * medio hacer.
-   */
-  "/admin/calculadoras": ["admin"],
   "/admin/clientes": ["admin", "vendedor"],
   "/admin/profesionales": ["admin", "vendedor"],
   "/admin/documentacion": ["admin", "vendedor"],

@@ -360,7 +360,7 @@ func TestAgenteYArchivos(t *testing.T) {
 	}
 }
 
-func TestTarifasParametrosYCalculadoras(t *testing.T) {
+func TestTarifasParametrosYSierra(t *testing.T) {
 	e := armar(t)
 	adm := e.staff(t, "admin@prueba.test", "admin")
 	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
@@ -404,21 +404,19 @@ func TestTarifasParametrosYCalculadoras(t *testing.T) {
 	if _, b := pedir(t, http.DefaultClient, "GET", u+"calculadora/parametros", nil); !strings.Contains(b, `"mermaMachimbre":0.25`) || !strings.Contains(b, `"anchoSierraMm":4.4`) {
 		t.Errorf("guardados: %s", b)
 	}
-	// Las calculadoras, con los parámetros de la base.
-	if _, b := pedir(t, http.DefaultClient, "POST", u+"calculadora/deck", map[string]any{"largo": 4, "ancho": 3, "material": "grandis"}); !strings.Contains(b, `"tablas":56`) {
-		t.Errorf("deck: %s", b)
+	// La sierra sola: la usa /admin/cortes/tarifas. Crea la fila si no está.
+	_, _ = e.pool.Exec(context.Background(), `delete from calculator_settings`)
+	if code, _ := pedir(t, ven, "PUT", u+"admin/cortes/sierra", map[string]any{"anchoSierraMm": 4}); code != 403 {
+		t.Errorf("sierra del vendedor: %d", code)
 	}
-	if _, b := pedir(t, http.DefaultClient, "POST", u+"calculadora/techo", map[string]any{"largo": 5, "ancho": 4, "tipo": "saligna"}); !strings.Contains(b, `"medida":"3\" x 6\" x 6m"`) {
-		t.Errorf("techo: %s", b)
+	if code, b := pedir(t, adm, "PUT", u+"admin/cortes/sierra", map[string]any{"anchoSierraMm": 12}); code != 422 || !strings.Contains(b, "Más de 10 mm") {
+		t.Errorf("sierra de 12: %d %s", code, b)
 	}
-	if code, _ := pedir(t, http.DefaultClient, "POST", u+"calculadora/placas", map[string]any{"piezas": []any{map[string]any{"ancho": 600, "largo": 900, "cantidad": 4}}, "placaAncho": 1830, "placaLargo": 2750}); code != 200 {
-		t.Errorf("placas: %d", code)
+	if code, b := pedir(t, adm, "PUT", u+"admin/cortes/sierra", map[string]any{"anchoSierraMm": 3.24}); code != 204 {
+		t.Fatalf("sierra: %d %s", code, b)
 	}
-	if code, _ := pedir(t, http.DefaultClient, "POST", u+"calculadora/piso", map[string]any{"largo": 4, "ancho": 3}); code != 200 {
-		t.Errorf("piso: %d", code)
-	}
-	if _, b := pedir(t, http.DefaultClient, "POST", u+"calculadora/sugerencias", map[string]any{"terminos": []string{"fenolico", "nada que exista"}}); !strings.Contains(b, `"precio":"60000.55"`) || strings.Count(b, "variantId") != 1 {
-		t.Errorf("sugerencias: %s", b)
+	if _, b := pedir(t, http.DefaultClient, "GET", u+"calculadora/parametros", nil); !strings.Contains(b, `"anchoSierraMm":3.2`) || !strings.Contains(b, `"mermaMachimbre":0.2`) {
+		t.Errorf("sierra guardada: %s", b)
 	}
 }
 

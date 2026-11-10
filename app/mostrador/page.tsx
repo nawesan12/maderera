@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { promosVigentes } from "@/lib/dal/contenido";
 import { tarifasDeCorte } from "@/lib/dal/cortes-tarifas";
-import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
+import { anchoDeSierra } from "@/lib/dal/sierra";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/dal/session";
 import { inicioDelRol, puedeEntrar } from "@/lib/roles";
@@ -62,7 +62,7 @@ export default async function MostradorPage({
    * sabe si el cliente compra con precio de profesional, que es de contado) y
    * el cambio que tiene que quedar en el cajón: todo de Go, en un pedido.
    */
-  const [pantalla, tarifas, promos, parametros] = await Promise.all([
+  const [pantalla, tarifas, promos, sierra] = await Promise.all([
     (async () =>
       datos(
         await (await api()).GET("/api/v1/mostrador/pantalla", {
@@ -77,7 +77,7 @@ export default async function MostradorPage({
     promosVigentes(),
     // El espesor del disco, que el plano descuenta entre pieza y pieza y
     // ahora además se dice en pantalla.
-    parametrosDeCalculo(),
+    anchoDeSierra(),
   ]);
   const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre } = pantalla;
 
@@ -95,7 +95,7 @@ export default async function MostradorPage({
       cierre={cierre}
       movimientos={movimientos}
       tarifasDeCorte={tarifas}
-      anchoSierra={parametros.anchoSierraMm}
+      anchoSierra={sierra}
       fondoBase={fondoBase}
       promos={promos}
       ventas={ventas}

@@ -291,6 +291,21 @@ paths:
       responses:
         "204": { description: Guardados }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/sierra:
+    put:
+      operationId: GuardarSierra
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [anchoSierraMm]
+              properties:
+                anchoSierraMm: { type: number, format: double }
+      responses:
+        "204": { description: Guardado }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/calculadora/parametros:
     get:
       operationId: ParametrosDeCalculo
@@ -300,129 +315,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ParametrosDeCalculo" }
-  /api/v1/calculadora/techo:
-    post:
-      operationId: CalcularTecho
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [largo, ancho, tipo]
-              additionalProperties: false
-              properties:
-                largo: { $ref: "#/components/schemas/Metros" }
-                ancho: { $ref: "#/components/schemas/Metros" }
-                tipo: { type: string, enum: [pino, saligna] }
-      responses:
-        "200":
-          description: Tirantes, machimbre, aislación, membrana y clavos
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ResultadoTecho" }
-  /api/v1/calculadora/placas:
-    post:
-      operationId: CalcularPlacas
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [piezas, placaAncho, placaLargo]
-              additionalProperties: false
-              properties:
-                piezas:
-                  type: array
-                  maxItems: 200
-                  items:
-                    type: object
-                    required: [ancho, largo, cantidad]
-                    additionalProperties: false
-                    properties:
-                      ancho: { type: number, format: double, minimum: 0, maximum: 100000 }
-                      largo: { type: number, format: double, minimum: 0, maximum: 100000 }
-                      cantidad: { type: number, format: double, minimum: 0, maximum: 100000 }
-                placaAncho: { type: number, format: double, minimum: 1, maximum: 10000 }
-                placaLargo: { type: number, format: double, minimum: 1, maximum: 10000 }
-      responses:
-        "200":
-          description: Cuántas placas, con la sierra y el margen de seguridad
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ResultadoPlacas" }
-  /api/v1/calculadora/piso:
-    post:
-      operationId: CalcularPiso
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [largo, ancho]
-              additionalProperties: false
-              properties:
-                largo: { $ref: "#/components/schemas/Metros" }
-                ancho: { $ref: "#/components/schemas/Metros" }
-      responses:
-        "200":
-          description: Cajas, zócalos y bajo piso
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ResultadoPiso" }
-  /api/v1/calculadora/deck:
-    post:
-      operationId: CalcularDeck
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [largo, ancho, material]
-              additionalProperties: false
-              properties:
-                largo: { $ref: "#/components/schemas/Metros" }
-                ancho: { $ref: "#/components/schemas/Metros" }
-                material: { type: string, enum: [grandis, pvc] }
-      responses:
-        "200":
-          description: Tablas enteras, estructura, tornillos y protector
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ResultadoDeck" }
-  /api/v1/calculadora/sugerencias:
-    post:
-      operationId: SugerirDelCatalogo
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [terminos]
-              additionalProperties: false
-              properties:
-                terminos: { type: array, maxItems: 50, items: { type: string, maxLength: 200 } }
-      responses:
-        "200":
-          description: Una variante por término, la más barata con stock, con el precio de quien mira
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  required: [busqueda, variantId, descripcion, unidad, precio, hayStock]
-                  properties:
-                    busqueda: { type: string }
-                    variantId: { type: string }
-                    descripcion: { type: string }
-                    unidad: { type: string }
-                    precio: { type: string, nullable: true }
-                    hayStock: { type: boolean }
   /api/v1/cortes/placas:
     get:
       operationId: PlacasCortables
@@ -934,85 +826,6 @@ components:
           properties:
             grandis: { $ref: "#/components/schemas/MedidaDeTabla" }
             pvc: { $ref: "#/components/schemas/MedidaDeTabla" }
-    Item:
-      type: object
-      required: [descripcion, busqueda]
-      properties:
-        descripcion: { type: string }
-        busqueda: { type: string }
-    ResultadoTecho:
-      type: object
-      required: [tirantes, machimbre, aislacion, membrana, clavos]
-      properties:
-        tirantes:
-          allOf:
-            - { $ref: "#/components/schemas/Item" }
-            - { type: object, required: [cantidad, medida], properties: { cantidad: { type: number, format: double }, medida: { type: string } } }
-        machimbre:
-          allOf:
-            - { $ref: "#/components/schemas/Item" }
-            - { type: object, required: [m2], properties: { m2: { type: number, format: double } } }
-        aislacion:
-          allOf:
-            - { $ref: "#/components/schemas/Item" }
-            - { type: object, required: [rollos], properties: { rollos: { type: number, format: double } } }
-        membrana:
-          allOf:
-            - { $ref: "#/components/schemas/Item" }
-            - { type: object, required: [rollos], properties: { rollos: { type: number, format: double } } }
-        clavos:
-          allOf:
-            - { $ref: "#/components/schemas/Item" }
-            - { type: object, required: [kg, estimado], properties: { kg: { type: number, format: double }, estimado: { type: boolean, enum: [true] } } }
-    ResultadoPlacas:
-      type: object
-      required: [placasNecesarias, placaDimension, piezas, aprovechamiento, desperdicio, perdidaPorSierraMm2]
-      properties:
-        placasNecesarias: { type: number, format: double }
-        placaDimension: { type: string }
-        piezas:
-          type: array
-          items:
-            type: object
-            required: [ancho, largo, cantidad]
-            properties:
-              ancho: { type: number, format: double }
-              largo: { type: number, format: double }
-              cantidad: { type: number, format: double }
-        aprovechamiento: { type: number, format: double }
-        desperdicio: { type: number, format: double }
-        perdidaPorSierraMm2: { type: number, format: double }
-    ResultadoPiso:
-      type: object
-      required: [pisoM2, cajasNecesarias, m2PorCaja, zocalos, zocaloML, underlayM2, tirantesDeEntrepiso]
-      properties:
-        pisoM2: { type: number, format: double }
-        cajasNecesarias: { type: number, format: double }
-        m2PorCaja: { type: number, format: double }
-        zocalos: { type: number, format: double }
-        zocaloML: { type: number, format: double }
-        underlayM2: { type: number, format: double }
-        tirantesDeEntrepiso: { type: number, format: double }
-    ResultadoDeck:
-      type: object
-      required: [tablasDeck, estructura, tornillos, protector]
-      properties:
-        tablasDeck:
-          allOf:
-            - { $ref: "#/components/schemas/Item" }
-            - { type: object, required: [tablas, m2, medida], properties: { tablas: { type: number, format: double }, m2: { type: number, format: double }, medida: { type: string } } }
-        estructura:
-          allOf:
-            - { $ref: "#/components/schemas/Item" }
-            - { type: object, required: [tirantes, medida], properties: { tirantes: { type: number, format: double }, medida: { type: string } } }
-        tornillos:
-          allOf:
-            - { $ref: "#/components/schemas/Item" }
-            - { type: object, required: [cantidad], properties: { cantidad: { type: number, format: double } } }
-        protector:
-          allOf:
-            - { $ref: "#/components/schemas/Item" }
-            - { type: object, required: [litros], properties: { litros: { type: number, format: double } } }
     PlacaCortable:
       type: object
       required: [variantId, descripcion, largoMm, anchoMm, color, precio, admiteMedia, precioMediaPct, precioPorPasada, precioPorMetroCanto]

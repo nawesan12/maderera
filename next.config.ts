@@ -123,6 +123,8 @@ const nextConfig: NextConfig = {
       { source: "/blog", destination: "/", permanent: true },
       { source: "/blog/:slug", destination: "/", permanent: true },
       { source: "/presupuesto", destination: "/carrito", permanent: true },
+      // Las calculadoras salieron el 9/11/2026: el corte a medida queda solo.
+      { source: "/calculadora", destination: "/corte", permanent: true },
       {
         source: "/checkout",
         destination: "/carrito/confirmar",

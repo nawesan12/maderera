@@ -4,7 +4,7 @@ import { ArrowLeft, Truck } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { requireStaff } from "@/lib/dal/session";
-import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
+import { anchoDeSierra } from "@/lib/dal/sierra";
 import { FormularioCorte } from "./formulario";
 
 export const metadata = { title: "Nuevo corte" };
@@ -29,10 +29,10 @@ export default async function NuevoCortePage({
   await requireStaff();
 
   const { pedido: pedidoId } = await searchParams;
-  const [sucursales, pedido, parametros] = await Promise.all([
+  const [sucursales, pedido, sierra] = await Promise.all([
     listarSucursalesPublicas(),
     pedidoId ? obtenerPedido(pedidoId) : Promise.resolve(null),
-    parametrosDeCalculo(),
+    anchoDeSierra(),
   ]);
 
   // Un id de pedido que no existe no es lo mismo que no haber pasado ninguno:
@@ -71,7 +71,7 @@ export default async function NuevoCortePage({
 
       <FormularioCorte
         sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
-        anchoSierra={parametros.anchoSierraMm}
+        anchoSierra={sierra}
         desdePedido={
           pedido
             ? {

@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
-  Calculator,
   MessageCircle,
   Plus,
   Search,
@@ -53,13 +52,6 @@ type Renglon =
   | { tipo: "datos"; items: DatoDelAsistente[] }
   | { tipo: "vacio"; texto: string };
 
-const CALCULADORAS: Record<string, string> = {
-  techos: "/calculadora#techos",
-  placas: "/calculadora#placas",
-  pisos: "/calculadora#pisos",
-  decks: "/calculadora#decks",
-};
-
 /**
  * El asistente del sitio.
  *
@@ -82,12 +74,11 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
   const [texto, setTexto] = useState("");
   const [trabajando, setTrabajando] = useState(false);
 
-  /** Lo que dejó la última respuesta escrita a mano: botones, calculadora, WhatsApp. */
+  /** Lo que dejó la última respuesta escrita a mano: botones y WhatsApp. */
   const [extra, setExtra] = useState<{
     sugerencias: { texto: string; va: string }[];
-    calculadora: string | null;
     aPersona: boolean;
-  }>({ sugerencias: [], calculadora: null, aPersona: false });
+  }>({ sugerencias: [], aPersona: false });
 
   const finRef = useRef<HTMLDivElement>(null);
 
@@ -160,7 +151,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     setPaso(destino);
     decir([{ tipo: "asistente", texto: destino.mensaje }]);
     setTexto("");
-    setExtra({ sugerencias: [], calculadora: null, aPersona: false });
+    setExtra({ sugerencias: [], aPersona: false });
 
     const accion = destino.accion;
     if (!accion) return;
@@ -244,18 +235,11 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     decir(nuevos);
     setExtra({
       sugerencias: respuesta.sugerencias ?? [],
-      calculadora: respuesta.calculadora ?? null,
       aPersona: respuesta.aPersona ?? false,
     });
   }
 
   const enRubros = paso.id === "rubros";
-  const calculadora =
-    extra.calculadora
-      ? CALCULADORAS[extra.calculadora]
-      : paso.accion?.tipo === "calculadora"
-        ? CALCULADORAS[paso.accion.cual]
-        : null;
   const aWhatsapp = extra.aPersona || paso.accion?.tipo === "whatsapp";
   const irA = paso.accion?.tipo === "ir" ? paso.accion.ruta : null;
 
@@ -366,16 +350,6 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
               </button>
             ))}
           </div>
-        )}
-
-        {calculadora && (
-          <Button
-            render={<Link href={calculadora} />}
-            className="w-full bg-accion text-white hover:bg-accion-hover"
-          >
-            <Calculator className="h-4 w-4" />
-            Abrir la calculadora
-          </Button>
         )}
 
         {aWhatsapp && (

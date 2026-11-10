@@ -244,6 +244,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cortes/sierra": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["GuardarSierra"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/calculadora/parametros": {
         parameters: {
             query?: never;
@@ -254,86 +270,6 @@ export interface paths {
         get: operations["ParametrosDeCalculo"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/calculadora/techo": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["CalcularTecho"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/calculadora/placas": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["CalcularPlacas"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/calculadora/piso": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["CalcularPiso"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/calculadora/deck": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["CalcularDeck"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/calculadora/sugerencias": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["SugerirDelCatalogo"];
         delete?: never;
         options?: never;
         head?: never;
@@ -822,92 +758,6 @@ export interface components {
             deck: {
                 grandis: components["schemas"]["MedidaDeTabla"];
                 pvc: components["schemas"]["MedidaDeTabla"];
-            };
-        };
-        Item: {
-            descripcion: string;
-            busqueda: string;
-        };
-        ResultadoTecho: {
-            tirantes: components["schemas"]["Item"] & {
-                /** Format: double */
-                cantidad: number;
-                medida: string;
-            };
-            machimbre: components["schemas"]["Item"] & {
-                /** Format: double */
-                m2: number;
-            };
-            aislacion: components["schemas"]["Item"] & {
-                /** Format: double */
-                rollos: number;
-            };
-            membrana: components["schemas"]["Item"] & {
-                /** Format: double */
-                rollos: number;
-            };
-            clavos: components["schemas"]["Item"] & {
-                /** Format: double */
-                kg: number;
-                /** @enum {boolean} */
-                estimado: true;
-            };
-        };
-        ResultadoPlacas: {
-            /** Format: double */
-            placasNecesarias: number;
-            placaDimension: string;
-            piezas: {
-                /** Format: double */
-                ancho: number;
-                /** Format: double */
-                largo: number;
-                /** Format: double */
-                cantidad: number;
-            }[];
-            /** Format: double */
-            aprovechamiento: number;
-            /** Format: double */
-            desperdicio: number;
-            /** Format: double */
-            perdidaPorSierraMm2: number;
-        };
-        ResultadoPiso: {
-            /** Format: double */
-            pisoM2: number;
-            /** Format: double */
-            cajasNecesarias: number;
-            /** Format: double */
-            m2PorCaja: number;
-            /** Format: double */
-            zocalos: number;
-            /** Format: double */
-            zocaloML: number;
-            /** Format: double */
-            underlayM2: number;
-            /** Format: double */
-            tirantesDeEntrepiso: number;
-        };
-        ResultadoDeck: {
-            tablasDeck: components["schemas"]["Item"] & {
-                /** Format: double */
-                tablas: number;
-                /** Format: double */
-                m2: number;
-                medida: string;
-            };
-            estructura: components["schemas"]["Item"] & {
-                /** Format: double */
-                tirantes: number;
-                medida: string;
-            };
-            tornillos: components["schemas"]["Item"] & {
-                /** Format: double */
-                cantidad: number;
-            };
-            protector: components["schemas"]["Item"] & {
-                /** Format: double */
-                litros: number;
             };
         };
         PlacaCortable: {
@@ -1432,6 +1282,32 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
+    GuardarSierra: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: double */
+                    anchoSierraMm: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Guardado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
     ParametrosDeCalculo: {
         parameters: {
             query?: never;
@@ -1448,161 +1324,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParametrosDeCalculo"];
-                };
-            };
-        };
-    };
-    CalcularTecho: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    largo: components["schemas"]["Metros"];
-                    ancho: components["schemas"]["Metros"];
-                    /** @enum {string} */
-                    tipo: "pino" | "saligna";
-                };
-            };
-        };
-        responses: {
-            /** @description Tirantes, machimbre, aislación, membrana y clavos */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultadoTecho"];
-                };
-            };
-        };
-    };
-    CalcularPlacas: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    piezas: {
-                        /** Format: double */
-                        ancho: number;
-                        /** Format: double */
-                        largo: number;
-                        /** Format: double */
-                        cantidad: number;
-                    }[];
-                    /** Format: double */
-                    placaAncho: number;
-                    /** Format: double */
-                    placaLargo: number;
-                };
-            };
-        };
-        responses: {
-            /** @description Cuántas placas, con la sierra y el margen de seguridad */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultadoPlacas"];
-                };
-            };
-        };
-    };
-    CalcularPiso: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    largo: components["schemas"]["Metros"];
-                    ancho: components["schemas"]["Metros"];
-                };
-            };
-        };
-        responses: {
-            /** @description Cajas, zócalos y bajo piso */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultadoPiso"];
-                };
-            };
-        };
-    };
-    CalcularDeck: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    largo: components["schemas"]["Metros"];
-                    ancho: components["schemas"]["Metros"];
-                    /** @enum {string} */
-                    material: "grandis" | "pvc";
-                };
-            };
-        };
-        responses: {
-            /** @description Tablas enteras, estructura, tornillos y protector */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultadoDeck"];
-                };
-            };
-        };
-    };
-    SugerirDelCatalogo: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    terminos: string[];
-                };
-            };
-        };
-        responses: {
-            /** @description Una variante por término, la más barata con stock, con el precio de quien mira */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        busqueda: string;
-                        variantId: string;
-                        descripcion: string;
-                        unidad: string;
-                        precio: string | null;
-                        hayStock: boolean;
-                    }[];
                 };
             };
         };

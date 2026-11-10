@@ -20,7 +20,7 @@ A la izquierda está el menú, en seis bloques, y el orden de cada uno es el del
 circuito real, no el alfabético:
 
 - **Operación** — lo del día: pedidos, WhatsApp, presupuestos, cortes y mostrador.
-- **Catálogo** — lo que se vende: productos, stock, precios y calculadoras.
+- **Catálogo** — lo que se vende: productos, stock y precios.
 - **Ventas** — el cliente y su plata: clientes, profesionales, facturación,
   cobros, caja, ARCA y cierre del mes.
 - **Compras** — el otro lado: proveedores, órdenes, recepciones, facturas,

@@ -59,10 +59,6 @@ export default async function NuevoCortePage({
 
       <div>
         <h1 className="text-3xl font-bold text-foreground">Nuevo corte</h1>
-        <p className="mt-1 text-base text-muted-foreground">
-          El despiece va en milímetros: son los números que después necesita el
-          optimizador de la máquina.
-        </p>
       </div>
 
       {pedido && (

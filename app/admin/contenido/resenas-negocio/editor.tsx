@@ -1,7 +1,14 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { Download, Loader2, Star, Trash2 } from "lucide-react";
+import {
+  Download,
+  Eye,
+  Loader2,
+  MessageSquareQuote,
+  Star,
+  Trash2,
+} from "lucide-react";
 import {
   borrarResenaDelNegocio,
   guardarResenaDelNegocio,
@@ -9,7 +16,13 @@ import {
   traerDeGoogle,
   type EstadoResena,
 } from "./actions";
-import { sinReiniciar } from "@/components/admin/formulario";
+import {
+  Hoja,
+  Interruptor,
+  Opciones,
+  Seccion,
+  sinReiniciar,
+} from "@/components/admin/formulario";
 
 const inicial: EstadoResena = {};
 
@@ -72,11 +85,9 @@ export function EditorDeResenas({
         ))}
       </ul>
 
-      <section className="tarjeta p-5">
-        <h2 className="text-base font-medium">Cargar una reseña</h2>
-
-        <form {...sinReiniciar(guardar)} className="mt-4 space-y-3">
-          <div className="grid gap-3 sm:grid-cols-3">
+      <form {...sinReiniciar(guardar)} className="space-y-4">
+        <Hoja>
+          <Seccion titulo="Cargar una reseña" icono={MessageSquareQuote}>
             <label className="block">
               <span className="text-base font-medium">Quién la escribió</span>
               <input
@@ -86,20 +97,6 @@ export function EditorDeResenas({
               />
             </label>
             <label className="block">
-              <span className="text-base font-medium">Estrellas</span>
-              <select
-                name="estrellas"
-                defaultValue="5"
-                className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
-              >
-                {[5, 4, 3, 2, 1].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
               <span className="text-base font-medium">Cuándo</span>
               <input
                 name="fecha"
@@ -107,47 +104,58 @@ export function EditorDeResenas({
                 className="tabular mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
               />
             </label>
-          </div>
+            <div className="md:col-span-2">
+              <p className="text-base font-medium">Estrellas</p>
+              <div className="mt-1">
+                <Opciones
+                  nombre="estrellas"
+                  defecto="5"
+                  opciones={[5, 4, 3, 2, 1].map((n) => ({
+                    valor: String(n),
+                    texto: String(n),
+                    icono: Star,
+                  }))}
+                />
+              </div>
+            </div>
+            <label className="block md:col-span-2">
+              <span className="text-base font-medium">La reseña</span>
+              <textarea
+                name="texto"
+                required
+                rows={3}
+                className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-base"
+              />
+            </label>
+            <div className="md:col-span-2">
+              <Interruptor
+                nombre="publicada"
+                etiqueta="Mostrarla en el sitio"
+                icono={Eye}
+                defecto
+              />
+            </div>
+          </Seccion>
+        </Hoja>
 
-          <label className="block">
-            <span className="text-base font-medium">La reseña</span>
-            <textarea
-              name="texto"
-              required
-              rows={3}
-              className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-base"
-            />
-          </label>
-
-          <label className="flex items-center gap-2.5 text-base">
-            <input
-              type="checkbox"
-              name="publicada"
-              defaultChecked
-              className="h-4 w-4 accent-brand-orange"
-            />
-            Mostrarla en el sitio
-          </label>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              disabled={guardando}
-              className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={guardando}
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+          >
+            {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+            Guardar
+          </button>
+          {(estado.error || estado.ok) && (
+            <span
+              className={`text-base ${estado.error ? "text-destructive" : "text-muted-foreground"}`}
             >
-              {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
-              Guardar
-            </button>
-            {(estado.error || estado.ok) && (
-              <span
-                className={`text-base ${estado.error ? "text-destructive" : "text-muted-foreground"}`}
-              >
-                {estado.error ?? estado.ok}
-              </span>
-            )}
-          </div>
-        </form>
-      </section>
+              {estado.error ?? estado.ok}
+            </span>
+          )}
+        </div>
+      </form>
     </div>
   );
 }

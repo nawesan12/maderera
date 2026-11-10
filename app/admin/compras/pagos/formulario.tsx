@@ -2,9 +2,26 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { FileCheck2, Loader2 } from "lucide-react";
+import {
+  ArrowRightLeft,
+  Banknote,
+  FileCheck2,
+  FileDigit,
+  FileText,
+  Landmark,
+  Loader2,
+  ReceiptText,
+  Truck,
+  Wallet,
+} from "lucide-react";
 import { formatearMonto } from "@/lib/formato";
-import { ETIQUETA_CIRCUITO } from "@/lib/circuito";
+import { CIRCUITOS, ETIQUETA_CIRCUITO } from "@/lib/circuito";
+import {
+  BarraGuardar,
+  Hoja,
+  Opciones,
+  Seccion,
+} from "@/components/admin/formulario";
 import {
   pagarAProveedor,
   verAcumulado,
@@ -62,6 +79,18 @@ interface ParteUI {
   banco: string;
   fechaPago: string;
 }
+
+const MEDIOS = [
+  { valor: "transferencia", texto: "Transferencia", icono: ArrowRightLeft },
+  { valor: "efectivo", texto: "Efectivo", icono: Banknote },
+  { valor: "cheque", texto: "Cheque", icono: FileText },
+  { valor: "echeq", texto: "e-Cheq", icono: FileDigit },
+];
+
+const OPCIONES_CIRCUITO = CIRCUITOS.map((c) => ({
+  valor: c,
+  texto: ETIQUETA_CIRCUITO[c],
+}));
 
 const parteVacia = (medio: ParteUI["medio"] = "transferencia"): ParteUI => ({
   medio,
@@ -150,9 +179,7 @@ export function FormularioPago({
        * para corregir si se paga una parte, en vez de obligar a tipearlo.
        */
       const objetivo = filas.find((f) => f.id === facturaInicial);
-      setImputado(
-        objetivo ? { [objetivo.id]: String(objetivo.saldo) } : {},
-      );
+      setImputado(objetivo ? { [objetivo.id]: String(objetivo.saldo) } : {});
       if (objetivo) setTotal(String(objetivo.saldo));
     });
 
@@ -235,457 +262,438 @@ export function FormularioPago({
   }
 
   return (
-    <section className="tarjeta space-y-4 p-5">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="block">
-          <span className="text-sm font-medium">Proveedor</span>
-          <select
-            value={supplierId}
-            onChange={(e) => setSupplierId(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre} · debe {formatearMonto(p.saldo)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="text-sm font-medium">Se le imputa</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={total}
-            onChange={(e) => setTotal(e.target.value)}
-            className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
-          />
-          {proveedor && (
-            <button
-              type="button"
-              onClick={() => setTotal(String(proveedor.saldo))}
-              className="mt-1 text-sm text-muted-foreground underline"
+    <div className="space-y-4">
+      <Hoja>
+        <Seccion titulo="Proveedor" icono={Truck}>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-medium">Proveedor</span>
+            <select
+              value={supplierId}
+              onChange={(e) => setSupplierId(e.target.value)}
+              className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             >
-              Saldar todo: {formatearMonto(proveedor.saldo)}
-            </button>
-          )}
-        </label>
+              {proveedores.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre} · debe {formatearMonto(p.saldo)}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="block">
-          <span className="text-sm font-medium">Forma de pago</span>
-          <select
-            value={medio}
-            onChange={(e) => {
-              const elegido = e.target.value;
-              setMedio(elegido);
-              // Un cheque necesita sus datos —número, banco, fecha de pago—,
-              // así que elegirlo abre el detalle con un renglón ya armado.
-              if ((elegido === "cheque" || elegido === "echeq") && !partes) {
-                setPartes([
-                  {
-                    ...parteVacia(elegido as ParteUI["medio"]),
-                    importe: total,
-                  },
-                ]);
-              }
-            }}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            <option value="transferencia">Transferencia</option>
-            <option value="efectivo">Efectivo</option>
-            <option value="cheque">Cheque</option>
-            {/* El e-Cheq solo en el circuito de facturas: es electrónico y
-                queda a nombre de la empresa en el banco, así que por el otro
-                circuito cruzaría las dos cajas. Lo pidió la clienta y el
-                servidor lo rechaza igual. */}
-            {circuito !== "negro" && <option value="echeq">e-Cheq</option>}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="text-sm font-medium">Referencia</span>
-          <input
-            value={referencia}
-            onChange={(e) => setReferencia(e.target.value)}
-            placeholder="N.º de operación"
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          />
-        </label>
-
-        {/* Por qué circuito sale el pago. Los cheques que se emitan en él lo
-            heredan: salen con esa plata y por esa vía. */}
-        <label className="block">
-          <span className="text-sm font-medium">Circuito de facturación</span>
-          <div
-            className="mt-1 flex gap-1.5"
-            role="group"
-            aria-label="Circuito de facturación"
-          >
-            {(["blanco", "negro"] as const).map((c) => (
+          <label className="block">
+            <span className="text-sm font-medium">Se le imputa</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={total}
+              onChange={(e) => setTotal(e.target.value)}
+              className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
+            />
+            {proveedor && (
               <button
-                key={c}
                 type="button"
-                onClick={() => {
-                  setCircuito(c);
+                onClick={() => setTotal(String(proveedor.saldo))}
+                className="mt-1 text-sm text-muted-foreground underline"
+              >
+                Saldar todo: {formatearMonto(proveedor.saldo)}
+              </button>
+            )}
+          </label>
 
-                  /*
-                   * Pasar el pago al circuito B saca los e-Cheq.
-                   *
-                   * Sin esto se podía elegir e-Cheq, cambiar el circuito
-                   * después y mandar el formulario: el servidor lo rechaza,
-                   * pero recién al guardar, con todo tipeado.
-                   */
-                  if (c === "negro") {
-                    if (medio === "echeq") setMedio("cheque");
-                    setPartes((previas) =>
-                      previas
-                        ? previas.map((p) =>
-                            p.medio === "echeq"
-                              ? { ...p, medio: "cheque", chequeId: "" }
-                              : p,
-                          )
-                        : previas,
-                    );
-                  }
-                }}
-                aria-pressed={circuito === c}
-                className={`h-11 flex-1 rounded-lg text-base font-medium transition-colors ${
-                  circuito === c
-                    ? "boton-accion"
-                    : "border border-linea text-muted-foreground hover:bg-hundida"
+          {/* Por qué circuito sale el pago. Los cheques que se emitan en él lo
+            heredan: salen con esa plata y por esa vía. */}
+          <div className="space-y-1">
+            <span className="text-sm font-medium">Circuito de facturación</span>
+            <Opciones
+              nombre="pago-circuito"
+              opciones={OPCIONES_CIRCUITO}
+              valor={circuito}
+              columnas={2}
+              alCambiar={(v) => {
+                const c = v as "blanco" | "negro";
+                setCircuito(c);
+
+                /*
+                 * Pasar el pago al circuito B saca los e-Cheq.
+                 *
+                 * Sin esto se podía elegir e-Cheq, cambiar el circuito
+                 * después y mandar el formulario: el servidor lo rechaza,
+                 * pero recién al guardar, con todo tipeado.
+                 */
+                if (c === "negro") {
+                  if (medio === "echeq") setMedio("cheque");
+                  setPartes((previas) =>
+                    previas
+                      ? previas.map((p) =>
+                          p.medio === "echeq"
+                            ? { ...p, medio: "cheque", chequeId: "" }
+                            : p,
+                        )
+                      : previas,
+                  );
+                }
+              }}
+            />
+          </div>
+        </Seccion>
+
+        {/* Qué facturas cubre. Es la relación pago↔factura que pidió la
+          clienta: después, cada factura sabe si está paga entera o en parte. */}
+        {facturas.length > 0 && (
+          <Seccion titulo="Qué facturas paga" icono={ReceiptText} columnas={1}>
+            <div>
+              {importe > 0 && (
+                <button
+                  type="button"
+                  onClick={repartirEntreFacturas}
+                  className="text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  Repartir {formatearMonto(importe)} entre las más viejas
+                </button>
+              )}
+            </div>
+
+            <ul className="space-y-2">
+              {facturas.map((f) => (
+                <li key={f.id} className="flex flex-wrap items-center gap-3">
+                  <span className="tabular min-w-36 text-base font-medium">
+                    {f.numero}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {f.saldo < f.total
+                      ? `quedan ${formatearMonto(f.saldo)} de ${formatearMonto(f.total)}`
+                      : formatearMonto(f.total)}
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={imputado[f.id] ?? ""}
+                    onChange={(e) =>
+                      setImputado((prev) => ({
+                        ...prev,
+                        [f.id]: e.target.value,
+                      }))
+                    }
+                    placeholder="0"
+                    className="tabular h-10 w-32 rounded-lg border border-linea bg-card px-3 text-right text-base"
+                  />
+                </li>
+              ))}
+            </ul>
+
+            {sumaImputada > 0 && (
+              <p
+                className={`mt-2 text-sm font-medium ${
+                  sumaImputada - importe > 0.01
+                    ? "text-saldo-debe"
+                    : "text-muted-foreground"
                 }`}
               >
-                {ETIQUETA_CIRCUITO[c]}
-              </button>
-            ))}
-          </div>
-        </label>
-      </div>
+                Imputado: {formatearMonto(sumaImputada)} de{" "}
+                {formatearMonto(importe)}
+                {sumaImputada - importe > 0.01 && " — suma más que el pago"}
+              </p>
+            )}
+          </Seccion>
+        )}
 
-      {/* Qué facturas cubre. Es la relación pago↔factura que pidió la
-          clienta: después, cada factura sabe si está paga entera o en parte. */}
-      {facturas.length > 0 && (
-        <div className="border-t border-linea pt-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Qué facturas paga
-            </h3>
-            {importe > 0 && (
+        {/* Con qué sale la plata: la transferencia más los cheques a fecha. Cada
+          cheque queda en la cartera con su vencimiento. */}
+        <Seccion titulo="Con qué sale" icono={Wallet}>
+          <div className="space-y-1 md:col-span-2">
+            <span className="text-sm font-medium">Forma de pago</span>
+            <Opciones
+              nombre="pago-medio"
+              /* El e-Cheq solo en el circuito de facturas: es electrónico y
+               queda a nombre de la empresa en el banco, así que por el otro
+               circuito cruzaría las dos cajas. Lo pidió la clienta y el
+               servidor lo rechaza igual. */
+              opciones={MEDIOS.filter(
+                (m) => m.valor !== "echeq" || circuito !== "negro",
+              )}
+              valor={medio}
+              alCambiar={(elegido) => {
+                setMedio(elegido);
+                // Un cheque necesita sus datos —número, banco, fecha de pago—,
+                // así que elegirlo abre el detalle con un renglón ya armado.
+                if ((elegido === "cheque" || elegido === "echeq") && !partes) {
+                  setPartes([
+                    {
+                      ...parteVacia(elegido as ParteUI["medio"]),
+                      importe: total,
+                    },
+                  ]);
+                }
+              }}
+            />
+          </div>
+
+          <label className="block">
+            <span className="text-sm font-medium">Referencia</span>
+            <input
+              value={referencia}
+              onChange={(e) => setReferencia(e.target.value)}
+              placeholder="N.º de operación"
+              className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            />
+          </label>
+
+          <div className="flex items-end md:justify-end">
+            {partes === null ? (
               <button
                 type="button"
-                onClick={repartirEntreFacturas}
+                onClick={() =>
+                  setPartes([
+                    {
+                      ...parteVacia(medio as ParteUI["medio"]),
+                      importe: total,
+                    },
+                  ])
+                }
                 className="text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
               >
-                Repartir {formatearMonto(importe)} entre las más viejas
+                Partir en varios medios o detallar cheques
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPartes(null)}
+                className="text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Un solo medio, sin detalle
               </button>
             )}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Opcional: sin elegir ninguna queda como pago a cuenta y se imputa
-            después desde la factura.
-          </p>
 
-          <ul className="mt-3 space-y-2">
-            {facturas.map((f) => (
-              <li key={f.id} className="flex flex-wrap items-center gap-3">
-                <span className="tabular min-w-36 text-base font-medium">
-                  {f.numero}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {f.saldo < f.total
-                    ? `quedan ${formatearMonto(f.saldo)} de ${formatearMonto(f.total)}`
-                    : formatearMonto(f.total)}
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={imputado[f.id] ?? ""}
-                  onChange={(e) =>
-                    setImputado((prev) => ({ ...prev, [f.id]: e.target.value }))
-                  }
-                  placeholder="0"
-                  className="tabular h-10 w-32 rounded-lg border border-linea bg-card px-3 text-right text-base"
-                />
-              </li>
-            ))}
-          </ul>
-
-          {sumaImputada > 0 && (
-            <p
-              className={`mt-2 text-sm font-medium ${
-                sumaImputada - importe > 0.01
-                  ? "text-saldo-debe"
-                  : "text-muted-foreground"
-              }`}
-            >
-              Imputado: {formatearMonto(sumaImputada)} de{" "}
-              {formatearMonto(importe)}
-              {sumaImputada - importe > 0.01 && " — suma más que el pago"}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Con qué sale la plata: la transferencia más los cheques a fecha. Cada
-          cheque queda en la cartera con su vencimiento. */}
-      <div className="border-t border-linea pt-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Con qué sale
-          </h3>
-          {partes === null ? (
-            <button
-              type="button"
-              onClick={() =>
-                setPartes([
-                  { ...parteVacia(medio as ParteUI["medio"]), importe: total },
-                ])
-              }
-              className="text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              Partir en varios medios o detallar cheques
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setPartes(null)}
-              className="text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              Un solo medio, sin detalle
-            </button>
-          )}
-        </div>
-
-        {partes === null ? (
-          <p className="mt-1 text-sm text-muted-foreground">
-            Sale todo por {medio === "echeq" ? "e-Cheq" : medio}.
-          </p>
-        ) : (
-          <div className="mt-3 space-y-3">
-            {partes.map((parte, i) => (
-              <div
-                key={i}
-                className="space-y-2 rounded-lg border border-linea p-3"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={parte.medio}
-                    onChange={(e) =>
-                      actualizarParte(i, {
-                        medio: e.target.value as ParteUI["medio"],
-                        chequeId: "",
-                      })
-                    }
-                    className="h-10 rounded-lg border border-linea bg-card px-2 text-base"
-                  >
-                    <option value="transferencia">Transferencia</option>
-                    <option value="efectivo">Efectivo</option>
-                    <option value="cheque">Cheque</option>
-                    {circuito !== "negro" && (
-                      <option value="echeq">e-Cheq</option>
-                    )}
-                  </select>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={parte.importe}
-                    onChange={(e) => actualizarParte(i, { importe: e.target.value })}
-                    placeholder="Importe"
-                    className="tabular h-10 w-32 rounded-lg border border-linea bg-card px-3 text-right text-base"
-                  />
-                  {parte.medio === "transferencia" && (
-                    <input
-                      value={parte.referencia}
+          {partes !== null && (
+            <div className="space-y-3 md:col-span-2">
+              {partes.map((parte, i) => (
+                <div
+                  key={i}
+                  className="space-y-2 rounded-lg border border-linea p-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={parte.medio}
                       onChange={(e) =>
-                        actualizarParte(i, { referencia: e.target.value })
+                        actualizarParte(i, {
+                          medio: e.target.value as ParteUI["medio"],
+                          chequeId: "",
+                        })
                       }
-                      placeholder="N.º de operación"
-                      className="h-10 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base"
-                    />
-                  )}
-                  {partes.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPartes(partes.filter((_, j) => j !== i))
-                      }
-                      aria-label="Sacar este renglón"
-                      className="h-10 w-9 rounded-lg border border-linea text-muted-foreground hover:bg-hundida"
+                      className="h-10 rounded-lg border border-linea bg-card px-2 text-base"
                     >
-                      ×
-                    </button>
-                  )}
-                </div>
-
-                {(parte.medio === "cheque" || parte.medio === "echeq") && (
-                  <div className="space-y-2">
-                    {/* Endosar uno de los que están en cartera, en vez de
-                        tipear uno nuevo. Se ofrecen los del mismo tipo: un
-                        e-Cheq recibido no se endosa como cheque de papel. */}
-                    {chequesParaEndosar(cartera, parte.medio).length > 0 && (
-                      <select
-                        value={parte.chequeId}
-                        onChange={(e) => {
-                          const elegido = cartera.find(
-                            (c) => c.id === e.target.value,
-                          );
-                          actualizarParte(i, {
-                            chequeId: e.target.value,
-                            // El importe del endoso es el del cheque: no se
-                            // endosa medio cheque.
-                            ...(elegido
-                              ? { importe: String(elegido.importe) }
-                              : {}),
-                          });
-                        }}
-                        className="h-10 w-full rounded-lg border border-linea bg-card px-2 text-base"
-                      >
-                        <option value="">Cheque nuevo (propio)</option>
-                        {chequesParaEndosar(cartera, parte.medio).map((c) => (
-                          <option key={c.id} value={c.id}>
-                            Endosar {c.numero}
-                            {c.banco ? ` · ${c.banco}` : ""} ·{" "}
-                            {formatearMonto(c.importe)}
-                            {c.cliente ? ` · de ${c.cliente}` : ""}
-                          </option>
-                        ))}
-                      </select>
+                      <option value="transferencia">Transferencia</option>
+                      <option value="efectivo">Efectivo</option>
+                      <option value="cheque">Cheque</option>
+                      {circuito !== "negro" && (
+                        <option value="echeq">e-Cheq</option>
+                      )}
+                    </select>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={parte.importe}
+                      onChange={(e) =>
+                        actualizarParte(i, { importe: e.target.value })
+                      }
+                      placeholder="Importe"
+                      className="tabular h-10 w-32 rounded-lg border border-linea bg-card px-3 text-right text-base"
+                    />
+                    {parte.medio === "transferencia" && (
+                      <input
+                        value={parte.referencia}
+                        onChange={(e) =>
+                          actualizarParte(i, { referencia: e.target.value })
+                        }
+                        placeholder="N.º de operación"
+                        className="h-10 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base"
+                      />
                     )}
-
-                    {!parte.chequeId && (
-                      <div className="grid grid-cols-3 gap-2">
-                        <input
-                          value={parte.numero}
-                          onChange={(e) =>
-                            actualizarParte(i, { numero: e.target.value })
-                          }
-                          placeholder="N.º de cheque"
-                          className="tabular h-10 rounded-lg border border-linea bg-card px-2.5 text-base"
-                        />
-                        <input
-                          value={parte.banco}
-                          onChange={(e) =>
-                            actualizarParte(i, { banco: e.target.value })
-                          }
-                          placeholder="Banco"
-                          className="h-10 rounded-lg border border-linea bg-card px-2.5 text-base"
-                        />
-                        <label className="block">
-                          <input
-                            type="date"
-                            value={parte.fechaPago}
-                            onChange={(e) =>
-                              actualizarParte(i, { fechaPago: e.target.value })
-                            }
-                            aria-label="Fecha de pago del cheque"
-                            className="tabular h-10 w-full rounded-lg border border-linea bg-card px-2.5 text-base"
-                          />
-                        </label>
-                      </div>
+                    {partes.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPartes(partes.filter((_, j) => j !== i))
+                        }
+                        aria-label="Sacar este renglón"
+                        className="h-10 w-9 rounded-lg border border-linea text-muted-foreground hover:bg-hundida"
+                      >
+                        ×
+                      </button>
                     )}
                   </div>
-                )}
-              </div>
-            ))}
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {partes.length < 6 && (
-                <button
-                  type="button"
-                  onClick={() => setPartes([...partes, parteVacia()])}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground"
-                >
-                  + Otro renglón
-                </button>
-              )}
-              <p className="text-sm text-muted-foreground">
-                Suman {formatearMonto(sumaPartes)}
-                {hayRetenciones
-                  ? " — tienen que dar lo que sale del banco, ya sin retenciones"
-                  : importe > 0 && Math.abs(sumaPartes - importe) > 0.01
-                    ? ` de ${formatearMonto(importe)}`
-                    : ""}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
+                  {(parte.medio === "cheque" || parte.medio === "echeq") && (
+                    <div className="space-y-2">
+                      {/* Endosar uno de los que están en cartera, en vez de
+                        tipear uno nuevo. Se ofrecen los del mismo tipo: un
+                        e-Cheq recibido no se endosa como cheque de papel. */}
+                      {chequesParaEndosar(cartera, parte.medio).length > 0 && (
+                        <select
+                          value={parte.chequeId}
+                          onChange={(e) => {
+                            const elegido = cartera.find(
+                              (c) => c.id === e.target.value,
+                            );
+                            actualizarParte(i, {
+                              chequeId: e.target.value,
+                              // El importe del endoso es el del cheque: no se
+                              // endosa medio cheque.
+                              ...(elegido
+                                ? { importe: String(elegido.importe) }
+                                : {}),
+                            });
+                          }}
+                          className="h-10 w-full rounded-lg border border-linea bg-card px-2 text-base"
+                        >
+                          <option value="">Cheque nuevo (propio)</option>
+                          {chequesParaEndosar(cartera, parte.medio).map((c) => (
+                            <option key={c.id} value={c.id}>
+                              Endosar {c.numero}
+                              {c.banco ? ` · ${c.banco}` : ""} ·{" "}
+                              {formatearMonto(c.importe)}
+                              {c.cliente ? ` · de ${c.cliente}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
 
-      {regimenes.length > 0 && (
-        <div className="border-t border-linea pt-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Retenciones a practicar
-          </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Poné la base de cada régimen: para Ganancias e Ingresos Brutos es
-            el neto de IVA de lo que se paga.{" "}
-            {basePropuesta > 0
-              ? `Con las facturas elegidas da ${formatearMonto(basePropuesta)}.`
-              : "Sin facturas elegidas no se puede calcular: escribila a mano."}{" "}
-            El sistema mira el acumulado del mes: puede no retener aunque
-            cargues una base, si todavía no llega al mínimo.
-          </p>
-
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {regimenes.map((r) => (
-              <label key={r.id} className="block">
-                <span className="text-sm font-medium">
-                  {r.codigo} · {r.nombre}
-                </span>
-                <span className="block text-sm text-muted-foreground">
-                  {r.alicuota}%
-                  {r.minimoNoImponible > 0 &&
-                    ` · mínimo ${formatearMonto(r.minimoNoImponible)} en el mes`}
-                </span>
-                {acumulado[r.codigo] && (
-                  <span className="block text-sm text-muted-foreground">
-                    Este mes ya lleva{" "}
-                    {formatearMonto(acumulado[r.codigo].base)} de base y{" "}
-                    {formatearMonto(acumulado[r.codigo].retenido)} retenidos.
-                  </span>
-                )}
-                <div className="mt-1 flex gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={bases[r.id] ?? ""}
-                    onChange={(e) =>
-                      setBases((prev) => ({ ...prev, [r.id]: e.target.value }))
-                    }
-                    placeholder="Base"
-                    className="tabular h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-right text-base"
-                  />
-                  {basePropuesta > 0 && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setBases((prev) => ({
-                          ...prev,
-                          [r.id]: basePropuesta.toFixed(2),
-                        }))
-                      }
-                      title="El neto de IVA de las facturas imputadas"
-                      className="h-11 shrink-0 rounded-lg border border-linea px-3 text-sm"
-                    >
-                      Neto sin IVA
-                    </button>
+                      {!parte.chequeId && (
+                        <div className="grid grid-cols-3 gap-2">
+                          <input
+                            value={parte.numero}
+                            onChange={(e) =>
+                              actualizarParte(i, { numero: e.target.value })
+                            }
+                            placeholder="N.º de cheque"
+                            className="tabular h-10 rounded-lg border border-linea bg-card px-2.5 text-base"
+                          />
+                          <input
+                            value={parte.banco}
+                            onChange={(e) =>
+                              actualizarParte(i, { banco: e.target.value })
+                            }
+                            placeholder="Banco"
+                            className="h-10 rounded-lg border border-linea bg-card px-2.5 text-base"
+                          />
+                          <label className="block">
+                            <input
+                              type="date"
+                              value={parte.fechaPago}
+                              onChange={(e) =>
+                                actualizarParte(i, {
+                                  fechaPago: e.target.value,
+                                })
+                              }
+                              aria-label="Fecha de pago del cheque"
+                              className="tabular h-10 w-full rounded-lg border border-linea bg-card px-2.5 text-base"
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-                {Number(bases[r.id]) - importe > 0.009 && (
-                  <span className="mt-1 block text-sm text-saldo-debe">
-                    La base no puede ser mayor al pago.
-                  </span>
+              ))}
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {partes.length < 6 && (
+                  <button
+                    type="button"
+                    onClick={() => setPartes([...partes, parteVacia()])}
+                    className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    + Otro renglón
+                  </button>
                 )}
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
+                <p className="text-sm text-muted-foreground">
+                  Suman {formatearMonto(sumaPartes)}
+                  {hayRetenciones
+                    ? " — tienen que dar lo que sale del banco, ya sin retenciones"
+                    : importe > 0 && Math.abs(sumaPartes - importe) > 0.01
+                      ? ` de ${formatearMonto(importe)}`
+                      : ""}
+                </p>
+              </div>
+            </div>
+          )}
+        </Seccion>
+
+        {regimenes.length > 0 && (
+          <Seccion titulo="Retenciones" icono={Landmark} columnas={1}>
+            {/* La base equivocada retiene de más: el aviso se queda. */}
+            <p className="text-sm text-muted-foreground">
+              Para Ganancias e Ingresos Brutos la base es el neto de IVA de lo
+              que se paga.{" "}
+              {basePropuesta > 0
+                ? `Con las facturas elegidas da ${formatearMonto(basePropuesta)}.`
+                : "Sin facturas elegidas no se puede calcular: escribila a mano."}
+            </p>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              {regimenes.map((r) => (
+                <label key={r.id} className="block">
+                  <span className="text-sm font-medium">
+                    {r.codigo} · {r.nombre}
+                  </span>
+                  <span className="block text-sm text-muted-foreground">
+                    {r.alicuota}%
+                    {r.minimoNoImponible > 0 &&
+                      ` · mínimo ${formatearMonto(r.minimoNoImponible)} en el mes`}
+                  </span>
+                  {acumulado[r.codigo] && (
+                    <span className="block text-sm text-muted-foreground">
+                      Este mes ya lleva{" "}
+                      {formatearMonto(acumulado[r.codigo].base)} de base y{" "}
+                      {formatearMonto(acumulado[r.codigo].retenido)} retenidos.
+                    </span>
+                  )}
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={bases[r.id] ?? ""}
+                      onChange={(e) =>
+                        setBases((prev) => ({
+                          ...prev,
+                          [r.id]: e.target.value,
+                        }))
+                      }
+                      placeholder="Base"
+                      className="tabular h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-right text-base"
+                    />
+                    {basePropuesta > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBases((prev) => ({
+                            ...prev,
+                            [r.id]: basePropuesta.toFixed(2),
+                          }))
+                        }
+                        title="El neto de IVA de las facturas imputadas"
+                        className="h-11 shrink-0 rounded-lg border border-linea px-3 text-sm"
+                      >
+                        Neto sin IVA
+                      </button>
+                    )}
+                  </div>
+                  {Number(bases[r.id]) - importe > 0.009 && (
+                    <span className="mt-1 block text-sm text-saldo-debe">
+                      La base no puede ser mayor al pago.
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+          </Seccion>
+        )}
+      </Hoja>
 
       {(estado.error || estado.ok) && (
         <p
@@ -712,7 +720,7 @@ export function FormularioPago({
         </ul>
       )}
 
-      <div className="flex justify-end border-t border-linea pt-4">
+      <BarraGuardar>
         <button
           type="button"
           onClick={() =>
@@ -755,7 +763,9 @@ export function FormularioPago({
                                       : ("fisico" as const),
                                   numero: p.numero,
                                   banco: p.banco || null,
-                                  fechaPago: new Date(`${p.fechaPago}T12:00:00`),
+                                  fechaPago: new Date(
+                                    `${p.fechaPago}T12:00:00`,
+                                  ),
                                 }
                               : null,
                         })),
@@ -782,8 +792,8 @@ export function FormularioPago({
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
           Registrar el pago
         </button>
-      </div>
-    </section>
+      </BarraGuardar>
+    </div>
   );
 }
 

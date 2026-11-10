@@ -2,9 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus } from "lucide-react";
+import { Calculator, FileText, Loader2, Plus } from "lucide-react";
+import { Hoja, Seccion } from "@/components/admin/formulario";
 import { fechaCorta, formatearMonto, hoyEnArgentina } from "@/lib/formato";
-import { COMPROBANTES_DE_COMPRA, daCreditoFiscal } from "@/lib/fiscal/comprobantes-compra";
+import {
+  COMPROBANTES_DE_COMPRA,
+  daCreditoFiscal,
+} from "@/lib/fiscal/comprobantes-compra";
 import { cargarFacturaDeCompra, type EstadoFacturaCompra } from "./actions";
 
 /**
@@ -41,7 +45,8 @@ export function CargarFactura({
   const [enCurso, empezar] = useTransition();
 
   const [supplierId, setSupplierId] = useState(proveedores[0]?.id ?? "");
-  const [tipo, setTipo] = useState<keyof typeof COMPROBANTES_DE_COMPRA>("factura_a");
+  const [tipo, setTipo] =
+    useState<keyof typeof COMPROBANTES_DE_COMPRA>("factura_a");
   const [puntoVenta, setPuntoVenta] = useState("");
   const [numero, setNumero] = useState("");
   const [fechaEmision, setFecha] = useState(hoyEnArgentina);
@@ -114,8 +119,8 @@ export function CargarFactura({
   }
 
   return (
-    <section className="tarjeta space-y-4 p-5">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <Hoja>
+      <Seccion titulo="Comprobante" icono={FileText}>
         <label className="block">
           <span className="text-sm font-medium">Proveedor</span>
           <select
@@ -156,7 +161,12 @@ export function CargarFactura({
           )}
         </label>
 
-        <Campo etiqueta="Punto de venta" valor={puntoVenta} onCambio={setPuntoVenta} numerico />
+        <Campo
+          etiqueta="Punto de venta"
+          valor={puntoVenta}
+          onCambio={setPuntoVenta}
+          numerico
+        />
         <Campo etiqueta="Número" valor={numero} onCambio={setNumero} numerico />
 
         <label className="block">
@@ -172,7 +182,7 @@ export function CargarFactura({
         <Campo etiqueta="CAE" valor={cae} onCambio={setCae} />
 
         {delProveedor.length > 0 && (
-          <label className="block sm:col-span-2">
+          <label className="block md:col-span-2">
             <span className="text-sm font-medium">Recepción que cubre</span>
             <select
               value={receiptId}
@@ -189,14 +199,15 @@ export function CargarFactura({
             </select>
             {receiptId && (
               <span className="text-sm text-muted-foreground">
-                La recepción ya cargó la deuda: la factura suma solo la diferencia.
+                La recepción ya cargó la deuda: la factura suma solo la
+                diferencia.
               </span>
             )}
           </label>
         )}
-      </div>
+      </Seccion>
 
-      <div className="grid gap-4 border-t border-linea pt-4 sm:grid-cols-3 lg:grid-cols-6">
+      <Seccion titulo="Importes" icono={Calculator} columnas={3}>
         <label className="block">
           <span className="text-sm font-medium">Neto (sin IVA)</span>
           <input
@@ -219,7 +230,12 @@ export function CargarFactura({
         </label>
 
         <Campo etiqueta="IVA 21%" valor={iva21} onCambio={setIva21} numerico />
-        <Campo etiqueta="IVA 10,5%" valor={iva105} onCambio={setIva105} numerico />
+        <Campo
+          etiqueta="IVA 10,5%"
+          valor={iva105}
+          onCambio={setIva105}
+          numerico
+        />
         <Campo etiqueta="IVA 27%" valor={iva27} onCambio={setIva27} numerico />
         <Campo etiqueta="Exento" valor={exento} onCambio={setExento} numerico />
         <Campo
@@ -228,44 +244,48 @@ export function CargarFactura({
           onCambio={setPercepciones}
           numerico
         />
-      </div>
+      </Seccion>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-linea pt-4">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            Total (suma de las partes)
+      <div className="space-y-3 py-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm text-muted-foreground">
+              Total (suma de las partes)
+            </p>
+            <p className="tabular text-2xl font-bold">
+              {formatearMonto(total)}
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setAbierto(false)}
+              className="h-12 rounded-xl border border-linea px-4 text-base"
+            >
+              Cerrar
+            </button>
+            <button
+              type="button"
+              onClick={guardar}
+              disabled={enCurso || total <= 0 || !supplierId}
+              className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
+              Cargar
+            </button>
+          </div>
+        </div>
+
+        {(estado.error || estado.ok) && (
+          <p
+            className={`text-base ${estado.error ? "text-saldo-debe" : "text-saldo-favor"}`}
+          >
+            {estado.error ?? estado.ok}
           </p>
-          <p className="tabular text-2xl font-bold">{formatearMonto(total)}</p>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setAbierto(false)}
-            className="h-12 rounded-xl border border-linea px-4 text-base"
-          >
-            Cerrar
-          </button>
-          <button
-            type="button"
-            onClick={guardar}
-            disabled={enCurso || total <= 0 || !supplierId}
-            className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
-            Cargar
-          </button>
-        </div>
+        )}
       </div>
-
-      {(estado.error || estado.ok) && (
-        <p
-          className={`text-base ${estado.error ? "text-saldo-debe" : "text-saldo-favor"}`}
-        >
-          {estado.error ?? estado.ok}
-        </p>
-      )}
-    </section>
+    </Hoja>
   );
 }
 

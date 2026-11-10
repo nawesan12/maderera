@@ -1,7 +1,27 @@
 "use client";
 
 import { useActionState } from "react";
-import { AlertCircle, Check, Loader2 } from "lucide-react";
+import {
+  AlertCircle,
+  Building2,
+  Check,
+  CircleHelp,
+  IdCard,
+  Landmark,
+  Loader2,
+  MapIcon,
+  MapPin,
+  Receipt,
+  ScrollText,
+  ShieldCheck,
+  User,
+} from "lucide-react";
+import {
+  Hoja,
+  Interruptor,
+  Opciones,
+  Seccion,
+} from "@/components/admin/formulario";
 import { guardarDatosEmisor, type EstadoFactura } from "../facturacion/actions";
 
 const inicial: EstadoFactura = {};
@@ -25,17 +45,25 @@ export interface DatosEmisor {
 }
 
 const CONDICIONES = [
-  { valor: "responsable_inscripto", texto: "Responsable inscripto" },
-  { valor: "monotributista", texto: "Monotributista" },
-  { valor: "exento", texto: "Exento" },
-  { valor: "no_categorizado", texto: "No categorizado" },
+  {
+    valor: "responsable_inscripto",
+    texto: "Responsable inscripto",
+    icono: Building2,
+  },
+  { valor: "monotributista", texto: "Monotributista", icono: User },
+  { valor: "exento", texto: "Exento", icono: ShieldCheck },
+  { valor: "no_categorizado", texto: "No categorizado", icono: CircleHelp },
 ];
 
 const REGIMENES = [
-  { valor: "local", texto: "Local (una sola provincia)" },
-  { valor: "convenio_multilateral", texto: "Convenio Multilateral" },
-  { valor: "exento", texto: "Exento" },
-  { valor: "no_inscripto", texto: "No inscripto" },
+  { valor: "local", texto: "Local (una sola provincia)", icono: MapPin },
+  {
+    valor: "convenio_multilateral",
+    texto: "Convenio Multilateral",
+    icono: MapIcon,
+  },
+  { valor: "exento", texto: "Exento", icono: ShieldCheck },
+  { valor: "no_inscripto", texto: "No inscripto", icono: CircleHelp },
 ];
 
 export function FormularioEmisor({ emisor }: { emisor: DatosEmisor }) {
@@ -46,10 +74,8 @@ export function FormularioEmisor({ emisor }: { emisor: DatosEmisor }) {
 
   return (
     <form action={accion} className="space-y-4">
-      <section className="tarjeta p-5">
-        <h3 className="mb-4 text-base font-medium">Identificación</h3>
-
-        <div className="grid gap-4 sm:grid-cols-2">
+      <Hoja>
+        <Seccion titulo="Identificación" icono={IdCard}>
           <Campo
             id="razonSocial"
             etiqueta="Razón social"
@@ -69,119 +95,106 @@ export function FormularioEmisor({ emisor }: { emisor: DatosEmisor }) {
             required
             tabular
           />
-          <div>
-            <label
-              htmlFor="condicionIva"
-              className="mb-1.5 block text-base font-medium"
-            >
-              Condición frente al IVA
-            </label>
-            <select
-              id="condicionIva"
-              name="condicionIva"
-              defaultValue={emisor.condicionIva}
-              className="h-10 w-full rounded-lg border bg-background px-2.5 text-base"
-            >
-              {CONDICIONES.map((c) => (
-                <option key={c.valor} value={c.valor}>
-                  {c.texto}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Define la letra de los comprobantes: un responsable inscripto
-              emite A y B.
-            </p>
-          </div>
           <Campo
             id="inicioActividades"
             etiqueta="Inicio de actividades"
             defaultValue={emisor.inicioActividades}
             type="date"
           />
-        </div>
-      </section>
+          <div className="md:col-span-2">
+            <p className="mb-1.5 block text-base font-medium">
+              Condición frente al IVA
+            </p>
+            <Opciones
+              nombre="condicionIva"
+              defecto={emisor.condicionIva}
+              opciones={CONDICIONES}
+            />
+            {/* Se queda: elegir mal la condición cambia la letra de todo lo
+                que se emite ante ARCA. */}
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Define la letra de los comprobantes: un responsable inscripto
+              emite A y B.
+            </p>
+          </div>
+        </Seccion>
 
-      <section className="tarjeta p-5">
-        <h3 className="mb-4 text-base font-medium">Domicilio y contacto</h3>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Campo id="domicilio" etiqueta="Domicilio fiscal" defaultValue={emisor.domicilio} />
-          <Campo id="localidad" etiqueta="Localidad" defaultValue={emisor.localidad} />
-          <Campo id="codigoPostal" etiqueta="Código postal" defaultValue={emisor.codigoPostal} tabular />
-          <Campo id="telefono" etiqueta="Teléfono" defaultValue={emisor.telefono} tabular />
+        <Seccion titulo="Domicilio y contacto" icono={MapPin}>
+          <Campo
+            id="domicilio"
+            etiqueta="Domicilio fiscal"
+            defaultValue={emisor.domicilio}
+          />
+          <Campo
+            id="localidad"
+            etiqueta="Localidad"
+            defaultValue={emisor.localidad}
+          />
+          <Campo
+            id="codigoPostal"
+            etiqueta="Código postal"
+            defaultValue={emisor.codigoPostal}
+            tabular
+          />
+          <Campo
+            id="telefono"
+            etiqueta="Teléfono"
+            defaultValue={emisor.telefono}
+            tabular
+          />
           <Campo id="email" etiqueta="Correo" defaultValue={emisor.email} />
-        </div>
-      </section>
+        </Seccion>
 
-      <section className="tarjeta p-5">
-        <h3 className="text-base font-medium">Ingresos Brutos</h3>
-        <p className="mt-1 text-base text-muted-foreground">
-          Si la empresa es agente de percepción, el importe se suma al
-          comprobante como un tributo aparte del IVA.
-        </p>
-
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Seccion titulo="Ingresos Brutos" icono={Landmark}>
           <Campo
             id="ingresosBrutos"
             etiqueta="Número de inscripción"
             defaultValue={emisor.ingresosBrutos}
             tabular
           />
-          <div>
-            <label
-              htmlFor="regimenIibb"
-              className="mb-1.5 block text-base font-medium"
-            >
-              Régimen
-            </label>
-            <select
-              id="regimenIibb"
-              name="regimenIibb"
-              defaultValue={emisor.regimenIibb}
-              className="h-10 w-full rounded-lg border bg-background px-2.5 text-base"
-            >
-              {REGIMENES.map((r) => (
-                <option key={r.valor} value={r.valor}>
-                  {r.texto}
-                </option>
-              ))}
-            </select>
-          </div>
           <Campo
             id="alicuotaPercepcionIibb"
             etiqueta="Alícuota de percepción (%)"
             defaultValue={emisor.alicuotaPercepcionIibb}
             tabular
           />
-          <label className="flex items-end gap-2.5 pb-2 text-base">
-            <input
-              type="checkbox"
-              name="percibeIibb"
-              defaultChecked={emisor.percibeIibb}
-              className="h-4 w-4 accent-[var(--brand-orange,#e2711d)]"
+          <div className="md:col-span-2">
+            <p className="mb-1.5 block text-base font-medium">Régimen</p>
+            <Opciones
+              nombre="regimenIibb"
+              defecto={emisor.regimenIibb}
+              opciones={REGIMENES}
             />
-            Actuar como agente de percepción
-          </label>
-        </div>
-      </section>
+          </div>
+          <div className="md:col-span-2">
+            <Interruptor
+              nombre="percibeIibb"
+              etiqueta="Actuar como agente de percepción"
+              icono={Receipt}
+              defecto={emisor.percibeIibb}
+            />
+          </div>
+        </Seccion>
 
-      <section className="tarjeta p-5">
-        <label htmlFor="leyenda" className="block text-base font-medium">
-          Leyenda al pie del comprobante
-        </label>
-        <p className="mt-1 text-base text-muted-foreground">
-          Condiciones de venta, aclaraciones sobre garantías o devoluciones.
-        </p>
-        <textarea
-          id="leyenda"
-          name="leyenda"
-          rows={2}
-          maxLength={500}
-          defaultValue={emisor.leyenda}
-          className="mt-2 w-full rounded-lg border bg-background px-3 py-2.5 text-base"
-        />
-      </section>
+        <Seccion titulo="Leyenda" icono={ScrollText} columnas={1}>
+          <div>
+            <label
+              htmlFor="leyenda"
+              className="mb-1.5 block text-base font-medium"
+            >
+              Leyenda al pie del comprobante
+            </label>
+            <textarea
+              id="leyenda"
+              name="leyenda"
+              rows={2}
+              maxLength={500}
+              defaultValue={emisor.leyenda}
+              className="w-full rounded-lg border bg-background px-3 py-2.5 text-base"
+            />
+          </div>
+        </Seccion>
+      </Hoja>
 
       {estado.error && (
         <p

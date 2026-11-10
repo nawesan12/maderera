@@ -3,10 +3,17 @@
 import { useActionState, useEffect, useState } from "react";
 import {
   AlertCircle,
+  BadgeCheck,
+  Briefcase,
+  CircleSlash,
   Loader2,
   Plus,
+  ReceiptText,
   Search,
+  ShieldCheck,
+  StickyNote,
   Trash2,
+  UserPlus,
   UserRound,
   X,
 } from "lucide-react";
@@ -18,16 +25,27 @@ import {
   type CondicionIva,
 } from "@/lib/fiscal/comprobantes";
 import { moneda } from "@/lib/formato";
-import { sinReiniciar } from "@/components/admin/formulario";
+import {
+  BarraGuardar,
+  Hoja,
+  Interruptor,
+  Opciones,
+  Seccion,
+  sinReiniciar,
+} from "@/components/admin/formulario";
 
 const inicial: EstadoFactura = {};
 
 const CONDICIONES = [
-  { valor: "consumidor_final", texto: "Consumidor final" },
-  { valor: "responsable_inscripto", texto: "Responsable inscripto" },
-  { valor: "monotributista", texto: "Monotributista" },
-  { valor: "exento", texto: "Exento" },
-  { valor: "no_categorizado", texto: "No categorizado" },
+  { valor: "consumidor_final", texto: "Consumidor final", icono: UserRound },
+  {
+    valor: "responsable_inscripto",
+    texto: "Responsable inscripto",
+    icono: BadgeCheck,
+  },
+  { valor: "monotributista", texto: "Monotributista", icono: Briefcase },
+  { valor: "exento", texto: "Exento", icono: ShieldCheck },
+  { valor: "no_categorizado", texto: "No categorizado", icono: CircleSlash },
 ];
 
 interface Linea {
@@ -104,38 +122,34 @@ export function FormularioFacturaManual({
 
   return (
     <form {...sinReiniciar(accion)} className="space-y-4">
-      {/* Receptor */}
-      <section className="tarjeta p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-medium">A quién se le factura</h2>
-          <p className="flex items-center gap-2 text-base">
-            <span className="text-muted-foreground">Comprobante</span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-foreground text-lg font-bold">
-              {letra}
-            </span>
-          </p>
-        </div>
+      <Hoja>
+        <Seccion titulo="Receptor" icono={UserRound}>
+          <div className="md:col-span-2">
+            <BuscadorDeCliente
+              elegido={cliente}
+              onElegir={(c) => {
+                setCliente(c);
+                if (c) {
+                  setCondicion(c.condicionIva as CondicionIva);
+                  setReceptor({
+                    nombre: c.razonSocial || c.nombre,
+                    cuit: c.cuit ?? "",
+                    domicilio: c.direccion ?? "",
+                  });
+                }
+              }}
+            />
+          </div>
 
-        <BuscadorDeCliente
-          elegido={cliente}
-          onElegir={(c) => {
-            setCliente(c);
-            if (c) {
-              setCondicion(c.condicionIva as CondicionIva);
-              setReceptor({
-                nombre: c.razonSocial || c.nombre,
-                cuit: c.cuit ?? "",
-                domicilio: c.direccion ?? "",
-              });
-            }
-          }}
-        />
+          {cliente && (
+            <input type="hidden" name="customerId" value={cliente.id} />
+          )}
 
-        {cliente && <input type="hidden" name="customerId" value={cliente.id} />}
-
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="receptorNombre" className="mb-1.5 block text-base font-medium">
+            <label
+              htmlFor="receptorNombre"
+              className="mb-1.5 block text-base font-medium"
+            >
               Nombre o razón social
             </label>
             <input
@@ -151,7 +165,10 @@ export function FormularioFacturaManual({
           </div>
 
           <div>
-            <label htmlFor="receptorCuit" className="mb-1.5 block text-base font-medium">
+            <label
+              htmlFor="receptorCuit"
+              className="mb-1.5 block text-base font-medium"
+            >
               CUIT
             </label>
             <input
@@ -166,32 +183,7 @@ export function FormularioFacturaManual({
             />
           </div>
 
-          <div>
-            <label
-              htmlFor="receptorCondicionIva"
-              className="mb-1.5 block text-base font-medium"
-            >
-              Condición frente al IVA
-            </label>
-            <select
-              id="receptorCondicionIva"
-              name="receptorCondicionIva"
-              value={condicion}
-              onChange={(e) => setCondicion(e.target.value as CondicionIva)}
-              className="h-10 w-full rounded-lg border bg-background px-2.5 text-base"
-            >
-              {CONDICIONES.map((c) => (
-                <option key={c.valor} value={c.valor}>
-                  {c.texto}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Define la letra del comprobante.
-            </p>
-          </div>
-
-          <div>
+          <div className="md:col-span-2">
             <label
               htmlFor="receptorDomicilio"
               className="mb-1.5 block text-base font-medium"
@@ -208,150 +200,176 @@ export function FormularioFacturaManual({
               className="h-10 w-full rounded-lg border bg-background px-3 text-base"
             />
           </div>
-        </div>
 
-        {/* Dar de alta la ficha con lo que se está tipeando.
-            Es el pedido de «poder crear clientes desde facturación» sin otra
-            pantalla: los datos del receptor son los de la ficha. Con cliente
-            elegido no aparece, porque ya existe. */}
-        {!cliente && (
-          <label className="mt-4 flex items-start gap-2.5 text-base">
-            <input
-              type="checkbox"
-              name="guardarComoCliente"
-              className="mt-1 h-4 w-4 accent-brand-orange"
-            />
-            <span>
-              Guardarlo como cliente nuevo
-              <span className="block text-sm text-muted-foreground">
-                Queda la ficha con estos datos y la factura se le carga a su
-                cuenta corriente.
+          {/* La condición decide la letra: la letra queda a la vista al lado,
+              así no se emite una A a un consumidor final por descuido. */}
+          <div className="space-y-2 md:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-base font-medium">
+                Condición frente al IVA
               </span>
-            </span>
-          </label>
-        )}
-      </section>
-
-      {/* Ítems */}
-      <section className="tarjeta p-5">
-        <h2 className="text-base font-medium">Qué se factura</h2>
-
-        <div className="mt-4 space-y-2">
-          {lineas.map((linea, i) => (
-            <div
-              key={i}
-              className="grid gap-2 sm:grid-cols-[1fr_5rem_8rem_6rem_2.5rem]"
-            >
-              <input
-                name="descripcion"
-                value={linea.descripcion}
-                onChange={(e) => cambiar(i, "descripcion", e.target.value)}
-                placeholder="Descripción"
-                className="h-10 rounded-lg border bg-background px-3 text-base"
-                aria-label={`Descripción del renglón ${i + 1}`}
-              />
-              <input
-                name="cantidad"
-                value={linea.cantidad}
-                onChange={(e) => cambiar(i, "cantidad", e.target.value)}
-                inputMode="decimal"
-                className="tabular h-10 rounded-lg border bg-background px-3 text-base"
-                aria-label={`Cantidad del renglón ${i + 1}`}
-              />
-              <input
-                name="precio"
-                value={linea.precio}
-                onChange={(e) => cambiar(i, "precio", e.target.value)}
-                inputMode="decimal"
-                placeholder="Precio final"
-                className="tabular h-10 rounded-lg border bg-background px-3 text-base"
-                aria-label={`Precio del renglón ${i + 1}`}
-              />
-              <select
-                name="alicuota"
-                value={linea.alicuota}
-                onChange={(e) => cambiar(i, "alicuota", e.target.value)}
-                className="h-10 rounded-lg border bg-background px-2 text-base"
-                aria-label={`IVA del renglón ${i + 1}`}
-              >
-                <option value="21">21%</option>
-                <option value="10.5">10,5%</option>
-                <option value="0">Exento</option>
-              </select>
-              <button
-                type="button"
-                onClick={() =>
-                  setLineas((previas) =>
-                    previas.length === 1
-                      ? [{ ...LINEA_VACIA }]
-                      : previas.filter((_, indice) => indice !== i),
-                  )
-                }
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                aria-label={`Quitar el renglón ${i + 1}`}
-              >
-                <Trash2 className="h-5 w-5" />
-              </button>
+              <p className="flex items-center gap-2 text-base">
+                <span className="text-muted-foreground">Comprobante</span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-foreground text-lg font-bold">
+                  {letra}
+                </span>
+              </p>
             </div>
-          ))}
-        </div>
+            <input
+              type="hidden"
+              name="receptorCondicionIva"
+              value={condicion}
+            />
+            <Opciones
+              nombre="receptorCondicionIva-opcion"
+              opciones={CONDICIONES}
+              valor={condicion}
+              alCambiar={(v) => setCondicion(v as CondicionIva)}
+              columnas={3}
+            />
+          </div>
 
-        <button
-          type="button"
-          onClick={() => setLineas((previas) => [...previas, { ...LINEA_VACIA }])}
-          className="mt-3 inline-flex h-10 items-center gap-2 rounded-lg border border-dashed px-3.5 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Plus className="h-5 w-5" />
-          Agregar renglón
-        </button>
-
-        {/* Desagregación en vivo */}
-        {totales.total > 0 && (
-          <dl className="mt-5 space-y-1.5 border-t pt-4 text-base">
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Neto gravado</dt>
-              {/* calcularTotales del TS suma lo exento al neto; la factura
-                  (Go) deja en el neto solo lo gravado. */}
-              <dd className="tabular">
-                {moneda.format(Math.round((totales.neto - totales.exento) * 100) / 100)}
-              </dd>
+          {/* Dar de alta la ficha con lo que se está tipeando.
+              Es el pedido de «poder crear clientes desde facturación» sin otra
+              pantalla: los datos del receptor son los de la ficha. Con cliente
+              elegido no aparece, porque ya existe. Queda la ficha y la factura
+              se le carga a su cuenta corriente. */}
+          {!cliente && (
+            <div className="md:col-span-2">
+              <Interruptor
+                nombre="guardarComoCliente"
+                etiqueta="Guardarlo como cliente nuevo"
+                icono={UserPlus}
+              />
             </div>
-            {[...totales.ivaPorAlicuota.entries()].map(([alicuota, valores]) => (
-              <div key={alicuota} className="flex justify-between">
-                <dt className="text-muted-foreground">
-                  IVA {String(alicuota).replace(".", ",")}%
-                </dt>
-                <dd className="tabular">{moneda.format(valores.importe)}</dd>
+          )}
+        </Seccion>
+
+        {/* Ítems */}
+        <Seccion titulo="Qué se factura" icono={ReceiptText} columnas={1}>
+          <div className="space-y-2">
+            {lineas.map((linea, i) => (
+              <div
+                key={i}
+                className="grid gap-2 sm:grid-cols-[1fr_5rem_8rem_6rem_2.5rem]"
+              >
+                <input
+                  name="descripcion"
+                  value={linea.descripcion}
+                  onChange={(e) => cambiar(i, "descripcion", e.target.value)}
+                  placeholder="Descripción"
+                  className="h-10 rounded-lg border bg-background px-3 text-base"
+                  aria-label={`Descripción del renglón ${i + 1}`}
+                />
+                <input
+                  name="cantidad"
+                  value={linea.cantidad}
+                  onChange={(e) => cambiar(i, "cantidad", e.target.value)}
+                  inputMode="decimal"
+                  className="tabular h-10 rounded-lg border bg-background px-3 text-base"
+                  aria-label={`Cantidad del renglón ${i + 1}`}
+                />
+                <input
+                  name="precio"
+                  value={linea.precio}
+                  onChange={(e) => cambiar(i, "precio", e.target.value)}
+                  inputMode="decimal"
+                  placeholder="Precio final"
+                  className="tabular h-10 rounded-lg border bg-background px-3 text-base"
+                  aria-label={`Precio del renglón ${i + 1}`}
+                />
+                <select
+                  name="alicuota"
+                  value={linea.alicuota}
+                  onChange={(e) => cambiar(i, "alicuota", e.target.value)}
+                  className="h-10 rounded-lg border bg-background px-2 text-base"
+                  aria-label={`IVA del renglón ${i + 1}`}
+                >
+                  <option value="21">21%</option>
+                  <option value="10.5">10,5%</option>
+                  <option value="0">Exento</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLineas((previas) =>
+                      previas.length === 1
+                        ? [{ ...LINEA_VACIA }]
+                        : previas.filter((_, indice) => indice !== i),
+                    )
+                  }
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  aria-label={`Quitar el renglón ${i + 1}`}
+                >
+                  <Trash2 className="h-5 w-5" />
+                </button>
               </div>
             ))}
-            {totales.exento > 0 && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Exento</dt>
-                <dd className="tabular">{moneda.format(totales.exento)}</dd>
-              </div>
-            )}
-            <div className="flex items-baseline justify-between border-t pt-2">
-              <dt className="font-semibold">Total</dt>
-              <dd className="tabular text-2xl font-bold">
-                {moneda.format(totales.total)}
-              </dd>
-            </div>
-          </dl>
-        )}
-      </section>
+          </div>
 
-      <section className="tarjeta p-5">
-        <label htmlFor="observaciones" className="block text-base font-medium">
-          Observaciones
-        </label>
-        <textarea
-          id="observaciones"
-          name="observaciones"
-          rows={2}
-          maxLength={600}
-          className="mt-2 w-full rounded-lg border bg-background px-3 py-2.5 text-base"
-        />
-      </section>
+          <button
+            type="button"
+            onClick={() =>
+              setLineas((previas) => [...previas, { ...LINEA_VACIA }])
+            }
+            className="mt-3 inline-flex h-10 items-center gap-2 rounded-lg border border-dashed px-3.5 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Plus className="h-5 w-5" />
+            Agregar renglón
+          </button>
+
+          {/* Desagregación en vivo */}
+          {totales.total > 0 && (
+            <dl className="mt-5 space-y-1.5 border-t pt-4 text-base">
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Neto gravado</dt>
+                {/* calcularTotales del TS suma lo exento al neto; la factura
+                  (Go) deja en el neto solo lo gravado. */}
+                <dd className="tabular">
+                  {moneda.format(
+                    Math.round((totales.neto - totales.exento) * 100) / 100,
+                  )}
+                </dd>
+              </div>
+              {[...totales.ivaPorAlicuota.entries()].map(
+                ([alicuota, valores]) => (
+                  <div key={alicuota} className="flex justify-between">
+                    <dt className="text-muted-foreground">
+                      IVA {String(alicuota).replace(".", ",")}%
+                    </dt>
+                    <dd className="tabular">
+                      {moneda.format(valores.importe)}
+                    </dd>
+                  </div>
+                ),
+              )}
+              {totales.exento > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Exento</dt>
+                  <dd className="tabular">{moneda.format(totales.exento)}</dd>
+                </div>
+              )}
+              <div className="flex items-baseline justify-between border-t pt-2">
+                <dt className="font-semibold">Total</dt>
+                <dd className="tabular text-2xl font-bold">
+                  {moneda.format(totales.total)}
+                </dd>
+              </div>
+            </dl>
+          )}
+        </Seccion>
+
+        <Seccion titulo="Observaciones" icono={StickyNote} columnas={1}>
+          <textarea
+            id="observaciones"
+            name="observaciones"
+            rows={2}
+            maxLength={600}
+            aria-label="Observaciones"
+            className="w-full rounded-lg border bg-background px-3 py-2.5 text-base"
+          />
+        </Seccion>
+      </Hoja>
 
       {estado.error && (
         <p
@@ -363,14 +381,21 @@ export function FormularioFacturaManual({
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={pendiente || totales.total <= 0}
-        className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
-      >
-        {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
-        Emitir {letra === "A" ? "factura A" : letra === "B" ? "factura B" : "factura C"}
-      </button>
+      <BarraGuardar>
+        <button
+          type="submit"
+          disabled={pendiente || totales.total <= 0}
+          className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
+        >
+          {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
+          Emitir{" "}
+          {letra === "A"
+            ? "factura A"
+            : letra === "B"
+              ? "factura B"
+              : "factura C"}
+        </button>
+      </BarraGuardar>
     </form>
   );
 }
@@ -440,7 +465,7 @@ function BuscadorDeCliente({
 
   if (elegido) {
     return (
-      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-linea bg-hundida px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-linea bg-hundida px-4 py-3">
         <UserRound className="h-5 w-5 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 text-base font-medium">
           {elegido.razonSocial || elegido.nombre}
@@ -469,8 +494,11 @@ function BuscadorDeCliente({
   }
 
   return (
-    <div className="mt-4">
-      <label htmlFor="buscarCliente" className="mb-1.5 block text-base font-medium">
+    <div>
+      <label
+        htmlFor="buscarCliente"
+        className="mb-1.5 block text-base font-medium"
+      >
         Buscar un cliente cargado
       </label>
       <div className="relative">

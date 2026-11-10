@@ -1,7 +1,18 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { AlertCircle, Check, Loader2, Plus, X } from "lucide-react";
+import {
+  AlertCircle,
+  Building2,
+  Check,
+  Hash,
+  ListOrdered,
+  Loader2,
+  Plus,
+  Power,
+  X,
+} from "lucide-react";
+import { Hoja, Interruptor, Seccion } from "@/components/admin/formulario";
 import { guardarPuntoVenta, type EstadoFactura } from "../facturacion/actions";
 
 const inicial: EstadoFactura = {};
@@ -132,7 +143,7 @@ function Formulario({
   }, [estado.ok, onCerrar]);
 
   return (
-    <form action={accion} className="tarjeta-atencion space-y-4 p-5">
+    <form action={accion} className="space-y-4">
       {punto && <input type="hidden" name="id" value={punto.id} />}
 
       <div className="flex items-center justify-between gap-4">
@@ -149,96 +160,112 @@ function Formulario({
         </button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-[9rem_1fr]">
-        <div>
-          <label htmlFor="numero" className="mb-1.5 block text-base font-medium">
-            Número
-          </label>
-          <input
-            id="numero"
-            name="numero"
-            required
-            inputMode="numeric"
-            defaultValue={punto?.numero}
-            className="tabular h-10 w-full rounded-lg border bg-background px-3 text-base"
-          />
-        </div>
+      <Hoja>
+        <Seccion titulo="Punto de venta" icono={Hash}>
+          <div>
+            <label
+              htmlFor="numero"
+              className="mb-1.5 block text-base font-medium"
+            >
+              Número
+            </label>
+            <input
+              id="numero"
+              name="numero"
+              required
+              inputMode="numeric"
+              defaultValue={punto?.numero}
+              className="tabular h-10 w-full rounded-lg border bg-background px-3 text-base"
+            />
+          </div>
 
-        <div>
-          <label htmlFor="nombre" className="mb-1.5 block text-base font-medium">
-            Nombre
-          </label>
-          <input
-            id="nombre"
-            name="nombre"
-            required
-            defaultValue={punto?.nombre}
-            placeholder="Casa Central"
-            className="h-10 w-full rounded-lg border bg-background px-3 text-base"
-          />
-        </div>
-      </div>
+          <div>
+            <label
+              htmlFor="nombre"
+              className="mb-1.5 block text-base font-medium"
+            >
+              Nombre
+            </label>
+            <input
+              id="nombre"
+              name="nombre"
+              required
+              defaultValue={punto?.nombre}
+              placeholder="Casa Central"
+              className="h-10 w-full rounded-lg border bg-background px-3 text-base"
+            />
+          </div>
 
-      <p className="text-base text-muted-foreground">
-        El número tiene que ser el mismo que habilitaste en ARCA con modalidad
-        Webservices. Si no coincide, los comprobantes se rechazan.
-      </p>
+          <p className="text-base text-muted-foreground md:col-span-2">
+            El número tiene que ser el mismo que habilitaste en ARCA con
+            modalidad Webservices. Si no coincide, los comprobantes se rechazan.
+          </p>
+        </Seccion>
 
-      <div>
-        <label
-          htmlFor="numeroInicial"
-          className="mb-1.5 block text-base font-medium"
-        >
-          Último número emitido en el sistema anterior
-        </label>
-        <input
-          id="numeroInicial"
-          name="numeroInicial"
-          type="number"
-          min={0}
-          defaultValue={punto?.numeroInicial ?? 0}
-          className="h-10 w-full rounded-lg border bg-background px-3 text-base sm:w-56"
-        />
-        <p className="mt-1.5 text-base text-muted-foreground">
-          El sistema numera desde el siguiente. Es lo que evita que el primer
-          comprobante salga con el número 1 y choque con una serie que ARCA ya
-          tiene registrada. Se saca del último comprobante emitido en Quality
-          Software para este punto de venta; cero es correcto solo si el punto
-          de venta es nuevo.
-        </p>
-      </div>
+        <Seccion titulo="Numeración" icono={ListOrdered} columnas={1}>
+          <div>
+            <label
+              htmlFor="numeroInicial"
+              className="mb-1.5 block text-base font-medium"
+            >
+              Último número emitido en el sistema anterior
+            </label>
+            <input
+              id="numeroInicial"
+              name="numeroInicial"
+              type="number"
+              min={0}
+              defaultValue={punto?.numeroInicial ?? 0}
+              className="h-10 w-full rounded-lg border bg-background px-3 text-base sm:w-56"
+            />
+            <p className="mt-1.5 text-base text-muted-foreground">
+              El sistema numera desde el siguiente. Es lo que evita que el
+              primer comprobante salga con el número 1 y choque con una serie
+              que ARCA ya tiene registrada. Se saca del último comprobante
+              emitido en Quality Software para este punto de venta; cero es
+              correcto solo si el punto de venta es nuevo.
+            </p>
+          </div>
+        </Seccion>
 
-      <div>
-        <label htmlFor="branchId" className="mb-1.5 block text-base font-medium">
-          Sucursal
-        </label>
-        <select
-          id="branchId"
-          name="branchId"
-          defaultValue={punto?.branchId ?? ""}
-          className="h-10 w-full rounded-lg border bg-background px-2.5 text-base sm:w-72"
-        >
-          <option value="">Para toda la empresa</option>
-          {sucursales.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.nombre}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <label className="flex items-center gap-2.5 text-base">
-        <input
-          type="checkbox"
-          name="activo"
-          defaultChecked={punto?.activo ?? true}
-          className="h-4 w-4 accent-[var(--brand-orange,#e2711d)]"
-        />
-        Activo
-      </label>
+        <Seccion titulo="Dónde se usa" icono={Building2}>
+          <div>
+            <label
+              htmlFor="branchId"
+              className="mb-1.5 block text-base font-medium"
+            >
+              Sucursal
+            </label>
+            <select
+              id="branchId"
+              name="branchId"
+              defaultValue={punto?.branchId ?? ""}
+              className="h-10 w-full rounded-lg border bg-background px-2.5 text-base"
+            >
+              <option value="">Para toda la empresa</option>
+              {sucursales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="self-end">
+            <Interruptor
+              nombre="activo"
+              etiqueta="Activo"
+              icono={Power}
+              defecto={punto?.activo ?? true}
+            />
+          </div>
+        </Seccion>
+      </Hoja>
 
       {estado.error && (
-        <p role="alert" className="flex items-center gap-2 text-base text-red-700">
+        <p
+          role="alert"
+          className="flex items-center gap-2 text-base text-red-700"
+        >
           <AlertCircle className="h-5 w-5 shrink-0" />
           {estado.error}
         </p>

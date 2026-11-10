@@ -38,10 +38,6 @@ export function PlanoEnVivo({
         <p className="text-base font-medium">
           El plano aparece al cargar la primera medida
         </p>
-        <p className="mt-1 text-base text-muted-foreground">
-          Cargá largo, ancho y cantidad y vas a ver cómo entran las piezas en la
-          placa, cuántas hacen falta y si conviene vender la placa entera.
-        </p>
       </div>
     );
   }

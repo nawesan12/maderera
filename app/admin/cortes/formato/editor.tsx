@@ -2,7 +2,19 @@
 
 import { useId, useState } from "react";
 import { useActionState } from "react";
-import { ChevronDown, ChevronUp, Loader2, Plus, Trash2, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Columns3,
+  Eye,
+  FileCog,
+  FileSpreadsheet,
+  Loader2,
+  Plus,
+  Star,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   borrarPerfil,
   guardarPerfil,
@@ -16,7 +28,13 @@ import {
 } from "@/lib/cortes/tipos";
 import { useDeGo } from "@/lib/cortes/en-vivo";
 import type { PerfilGuardado as CuttingExportProfile } from "@/lib/dal/admin/cortes-exportacion";
-import { sinReiniciar } from "@/components/admin/formulario";
+import {
+  Hoja,
+  Interruptor,
+  Opciones,
+  Seccion,
+  sinReiniciar,
+} from "@/components/admin/formulario";
 
 const inicial: EstadoPerfil = {};
 
@@ -47,7 +65,11 @@ const EJEMPLO = {
   ],
 };
 
-export function EditorDeFormato({ perfiles }: { perfiles: CuttingExportProfile[] }) {
+export function EditorDeFormato({
+  perfiles,
+}: {
+  perfiles: CuttingExportProfile[];
+}) {
   const [editando, setEditando] = useState<string | null>(null);
 
   return (
@@ -55,7 +77,10 @@ export function EditorDeFormato({ perfiles }: { perfiles: CuttingExportProfile[]
       {perfiles.length > 0 && (
         <ul className="divide-y rounded-lg border">
           {perfiles.map((p) => (
-            <li key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+            <li
+              key={p.id}
+              className="flex flex-wrap items-center gap-3 px-4 py-3"
+            >
               <div className="min-w-[12rem] flex-1">
                 <p className="text-base font-medium">
                   {p.nombre}
@@ -66,8 +91,11 @@ export function EditorDeFormato({ perfiles }: { perfiles: CuttingExportProfile[]
                   )}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {p.programa ? `Probado con ${p.programa} · ` : "Sin probar contra la máquina · "}
-                  {p.unidad} · separador {p.separador === "tab" ? "tabulación" : p.separador}
+                  {p.programa
+                    ? `Probado con ${p.programa} · `
+                    : "Sin probar contra la máquina · "}
+                  {p.unidad} · separador{" "}
+                  {p.separador === "tab" ? "tabulación" : p.separador}
                 </p>
               </div>
 
@@ -96,7 +124,9 @@ export function EditorDeFormato({ perfiles }: { perfiles: CuttingExportProfile[]
           className="inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-base font-medium transition-colors hover:bg-muted"
         >
           <Plus className="h-4 w-4" />
-          {perfiles.length === 0 ? "Armar el formato del archivo" : "Agregar otro formato"}
+          {perfiles.length === 0
+            ? "Armar el formato del archivo"
+            : "Agregar otro formato"}
         </button>
       ) : (
         <Formulario />
@@ -129,7 +159,9 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
     if (!perfil) return COLUMNAS_GENERICAS;
     try {
       const crudo = JSON.parse(perfil.columnas) as ColumnaConfigurada[];
-      return Array.isArray(crudo) && crudo.length > 0 ? crudo : COLUMNAS_GENERICAS;
+      return Array.isArray(crudo) && crudo.length > 0
+        ? crudo
+        : COLUMNAS_GENERICAS;
     } catch {
       return COLUMNAS_GENERICAS;
     }
@@ -138,7 +170,9 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
   const [separador, setSeparador] = useState(perfil?.separador ?? ";");
   const [unidad, setUnidad] = useState(perfil?.unidad ?? "mm");
   const [decimal, setDecimal] = useState(perfil?.decimal ?? ",");
-  const [conEncabezado, setConEncabezado] = useState(perfil?.conEncabezado ?? true);
+  const [conEncabezado, setConEncabezado] = useState(
+    perfil?.conEncabezado ?? true,
+  );
   const [valorSi, setValorSi] = useState(perfil?.valorSi ?? "Sí");
   const [valorNo, setValorNo] = useState(perfil?.valorNo ?? "No");
 
@@ -146,19 +180,22 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
   // (backend/internal/cortes/formatos.go): si se ve bien acá, sale así. Una
   // previsualización aproximada no serviría para esto, que es justamente
   // acertarle a un formato ajeno.
-  const { datos: vista } = useDeGo<{ archivo: string }>("/api/v1/admin/cortes/perfiles/vista-previa", {
-    perfil: {
-      nombre: "previa",
-      separador: separador === "tab" ? "\t" : separador,
-      conEncabezado,
-      unidad,
-      decimal,
-      siNo: [valorSi, valorNo],
-      finDeLinea: "\n",
-      columnas,
+  const { datos: vista } = useDeGo<{ archivo: string }>(
+    "/api/v1/admin/cortes/perfiles/vista-previa",
+    {
+      perfil: {
+        nombre: "previa",
+        separador: separador === "tab" ? "\t" : separador,
+        conEncabezado,
+        unidad,
+        decimal,
+        siNo: [valorSi, valorNo],
+        finDeLinea: "\n",
+        columnas,
+      },
+      corte: EJEMPLO,
     },
-    corte: EJEMPLO,
-  });
+  );
   const previa = vista?.archivo ?? "";
 
   const sinUsar = (Object.keys(COLUMNAS) as ClaveColumna[]).filter(
@@ -174,186 +211,183 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
   }
 
   return (
-    <form {...sinReiniciar(guardar)} className="tarjeta space-y-5 p-5">
+    <form {...sinReiniciar(guardar)} className="space-y-4">
       {perfil && <input type="hidden" name="id" value={perfil.id} />}
       <input type="hidden" name="columnas" value={JSON.stringify(columnas)} />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Campo
-          nombre="nombre"
-          etiqueta="Nombre"
-          valorInicial={perfil?.nombre ?? ""}
-          placeholder="Seccionadora del aserradero"
-          requerido
-        />
-        <Campo
-          nombre="programa"
-          etiqueta="Programa que usa la máquina"
-          valorInicial={perfil?.programa ?? ""}
-          placeholder="Cut Rite, Ardis, Corte Certo…"
-          ayuda="Se completa cuando se sepa cuál usan. Sirve para saber contra qué se probó."
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Selector
-          nombre="separador"
-          etiqueta="Cómo separa las columnas"
-          valor={separador}
-          alCambiar={setSeparador}
-          opciones={[
-            [";", "Punto y coma ( ; )"],
-            [",", "Coma ( , )"],
-            ["tab", "Tabulación"],
-            ["|", "Barra ( | )"],
-          ]}
-        />
-        <Selector
-          nombre="unidad"
-          etiqueta="Unidad"
-          valor={unidad}
-          alCambiar={setUnidad}
-          opciones={[
-            ["mm", "Milímetros"],
-            ["cm", "Centímetros"],
-            ["m", "Metros"],
-          ]}
-        />
-        <Selector
-          nombre="decimal"
-          etiqueta="Coma o punto en los decimales"
-          valor={decimal}
-          alCambiar={setDecimal}
-          opciones={[
-            [",", "Coma"],
-            [".", "Punto"],
-          ]}
-        />
-        <Selector
-          nombre="finDeLinea"
-          etiqueta="Cómo termina cada renglón"
-          valor={perfil?.finDeLinea ?? "crlf"}
-          opciones={[
-            ["crlf", "Como Windows (lo más común)"],
-            ["lf", "Como Linux o Mac"],
-          ]}
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Campo
-          nombre="valorSi"
-          etiqueta="Cómo se escribe «sí»"
-          valorInicial={valorSi}
-          alCambiar={setValorSi}
-          ayuda="Para las columnas de veta y cantos. Algunos programas quieren 1 y 0."
-        />
-        <Campo
-          nombre="valorNo"
-          etiqueta="Cómo se escribe «no»"
-          valorInicial={valorNo}
-          alCambiar={setValorNo}
-        />
-      </div>
-
-      <div>
-        <p className="text-base font-medium">Columnas, en orden</p>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          El nombre de cada una lo decide el programa que va a importar el
-          archivo, no nosotros.
-        </p>
-
-        <ul className="mt-3 space-y-2">
-          {columnas.map((c, i) => (
-            <li key={c.clave} className="flex flex-wrap items-center gap-2">
-              <span className="w-36 shrink-0 text-base">{COLUMNAS[c.clave]}</span>
-              <input
-                value={c.encabezado}
-                onChange={(e) => {
-                  const copia = [...columnas];
-                  copia[i] = { ...c, encabezado: e.target.value };
-                  setColumnas(copia);
-                }}
-                aria-label={`Encabezado de ${COLUMNAS[c.clave]}`}
-                className="h-9 min-w-[8rem] flex-1 rounded-lg border bg-background px-3 text-base"
-              />
-              <button
-                type="button"
-                onClick={() => mover(i, -1)}
-                disabled={i === 0}
-                aria-label="Subir"
-                className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-30"
-              >
-                <ChevronUp className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => mover(i, 1)}
-                disabled={i === columnas.length - 1}
-                aria-label="Bajar"
-                className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-30"
-              >
-                <ChevronDown className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setColumnas(columnas.filter((x) => x.clave !== c.clave))}
-                aria-label={`Quitar ${COLUMNAS[c.clave]}`}
-                className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </li>
-          ))}
-        </ul>
-
-        {sinUsar.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {sinUsar.map((clave) => (
-              <button
-                key={clave}
-                type="button"
-                onClick={() =>
-                  setColumnas([...columnas, { clave, encabezado: COLUMNAS[clave] }])
-                }
-                className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                {COLUMNAS[clave]}
-              </button>
-            ))}
+      <Hoja>
+        <Seccion titulo="Formato" icono={FileCog}>
+          <Campo
+            nombre="nombre"
+            etiqueta="Nombre"
+            valorInicial={perfil?.nombre ?? ""}
+            placeholder="Seccionadora del aserradero"
+            requerido
+          />
+          <Campo
+            nombre="programa"
+            etiqueta="Programa que usa la máquina"
+            valorInicial={perfil?.programa ?? ""}
+            placeholder="Cut Rite, Ardis, Corte Certo…"
+          />
+          <div className="md:col-span-2">
+            <Interruptor
+              nombre="porDefecto"
+              etiqueta="Usar este al apretar «Para la máquina»"
+              icono={Star}
+              defecto={perfil?.porDefecto ?? true}
+            />
           </div>
-        )}
-      </div>
+        </Seccion>
 
-      <div className="flex flex-wrap gap-x-6 gap-y-2">
-        <label className="flex items-center gap-2.5 text-base">
-          <input
-            type="checkbox"
-            name="conEncabezado"
-            checked={conEncabezado}
-            onChange={(e) => setConEncabezado(e.target.checked)}
-            className="h-4 w-4 accent-brand-orange"
+        <Seccion titulo="Archivo" icono={FileSpreadsheet}>
+          <Selector
+            nombre="separador"
+            etiqueta="Cómo separa las columnas"
+            valor={separador}
+            alCambiar={setSeparador}
+            opciones={[
+              [";", "Punto y coma ( ; )"],
+              [",", "Coma ( , )"],
+              ["tab", "Tabulación"],
+              ["|", "Barra ( | )"],
+            ]}
           />
-          Poner la fila de encabezados
-        </label>
-        <label className="flex items-center gap-2.5 text-base">
-          <input
-            type="checkbox"
-            name="porDefecto"
-            defaultChecked={perfil?.porDefecto ?? true}
-            className="h-4 w-4 accent-brand-orange"
+          <Selector
+            nombre="unidad"
+            etiqueta="Unidad"
+            valor={unidad}
+            alCambiar={setUnidad}
+            opciones={[
+              ["mm", "Milímetros"],
+              ["cm", "Centímetros"],
+              ["m", "Metros"],
+            ]}
           />
-          Usar este al apretar «Para la máquina»
-        </label>
-      </div>
+          <Selector
+            nombre="decimal"
+            etiqueta="Coma o punto en los decimales"
+            valor={decimal}
+            alCambiar={setDecimal}
+            opciones={[
+              [",", "Coma"],
+              [".", "Punto"],
+            ]}
+          />
+          <Selector
+            nombre="finDeLinea"
+            etiqueta="Cómo termina cada renglón"
+            valor={perfil?.finDeLinea ?? "crlf"}
+            opciones={[
+              ["crlf", "Como Windows (lo más común)"],
+              ["lf", "Como Linux o Mac"],
+            ]}
+          />
+          <Campo
+            nombre="valorSi"
+            etiqueta="Cómo se escribe «sí»"
+            valorInicial={valorSi}
+            alCambiar={setValorSi}
+          />
+          <Campo
+            nombre="valorNo"
+            etiqueta="Cómo se escribe «no»"
+            valorInicial={valorNo}
+            alCambiar={setValorNo}
+          />
+        </Seccion>
 
-      <div>
-        <p className="text-base font-medium">Así va a salir</p>
-        <pre className="mt-2 overflow-x-auto rounded-lg bg-muted p-3 text-sm leading-relaxed">
-          {previa}
-        </pre>
-      </div>
+        <Seccion titulo="Columnas, en orden" icono={Columns3} columnas={1}>
+          <div>
+            <ul className="space-y-2">
+              {columnas.map((c, i) => (
+                <li key={c.clave} className="flex flex-wrap items-center gap-2">
+                  <span className="w-36 shrink-0 text-base">
+                    {COLUMNAS[c.clave]}
+                  </span>
+                  <input
+                    value={c.encabezado}
+                    onChange={(e) => {
+                      const copia = [...columnas];
+                      copia[i] = { ...c, encabezado: e.target.value };
+                      setColumnas(copia);
+                    }}
+                    aria-label={`Encabezado de ${COLUMNAS[c.clave]}`}
+                    className="h-9 min-w-[8rem] flex-1 rounded-lg border bg-background px-3 text-base"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => mover(i, -1)}
+                    disabled={i === 0}
+                    aria-label="Subir"
+                    className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-30"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => mover(i, 1)}
+                    disabled={i === columnas.length - 1}
+                    aria-label="Bajar"
+                    className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-30"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setColumnas(columnas.filter((x) => x.clave !== c.clave))
+                    }
+                    aria-label={`Quitar ${COLUMNAS[c.clave]}`}
+                    className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            {sinUsar.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {sinUsar.map((clave) => (
+                  <button
+                    key={clave}
+                    type="button"
+                    onClick={() =>
+                      setColumnas([
+                        ...columnas,
+                        { clave, encabezado: COLUMNAS[clave] },
+                      ])
+                    }
+                    className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {COLUMNAS[clave]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Controlada (la vista previa depende de ella): queda como casilla
+              y no como interruptor. */}
+          <label className="flex items-center gap-2.5 text-base">
+            <input
+              type="checkbox"
+              name="conEncabezado"
+              checked={conEncabezado}
+              onChange={(e) => setConEncabezado(e.target.checked)}
+              className="h-4 w-4 accent-brand-orange"
+            />
+            Poner la fila de encabezados
+          </label>
+        </Seccion>
+
+        <Seccion titulo="Así va a salir" icono={Eye} columnas={1}>
+          <pre className="overflow-x-auto rounded-lg bg-muted p-3 text-sm leading-relaxed">
+            {previa}
+          </pre>
+        </Seccion>
+      </Hoja>
 
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -364,8 +398,12 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
           {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
           Guardar
         </button>
-        {estado.error && <p className="text-base text-destructive">{estado.error}</p>}
-        {estado.ok && <p className="text-base text-muted-foreground">{estado.ok}</p>}
+        {estado.error && (
+          <p className="text-base text-destructive">{estado.error}</p>
+        )}
+        {estado.ok && (
+          <p className="text-base text-muted-foreground">{estado.ok}</p>
+        )}
       </div>
     </form>
   );
@@ -376,7 +414,6 @@ function Campo({
   etiqueta,
   valorInicial,
   placeholder,
-  ayuda,
   requerido = false,
   alCambiar,
 }: {
@@ -384,7 +421,6 @@ function Campo({
   etiqueta: string;
   valorInicial: string;
   placeholder?: string;
-  ayuda?: string;
   requerido?: boolean;
   alCambiar?: (valor: string) => void;
 }) {
@@ -409,7 +445,6 @@ function Campo({
           : { defaultValue: valorInicial })}
         className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
       />
-      {ayuda && <p className="mt-1 text-sm text-muted-foreground">{ayuda}</p>}
     </div>
   );
 }
@@ -427,27 +462,20 @@ function Selector({
   opciones: [string, string][];
   alCambiar?: (valor: string) => void;
 }) {
-  const id = useId();
-
+  // Antes un `<select>`; ahora fichas con el mismo nombre. Las controladas
+  // (las que mueven la vista previa) siguen controladas.
+  const fichas = opciones.map(([v, t]) => ({ valor: v, texto: t }));
   return (
-    <div>
-      <label htmlFor={id} className="block text-base font-medium">
-        {etiqueta}
-      </label>
-      <select
-        id={id}
-        name={nombre}
-        {...(alCambiar
-          ? { value: valor, onChange: (e) => alCambiar(e.target.value) }
-          : { defaultValue: valor })}
-        className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
-      >
-        {opciones.map(([v, t]) => (
-          <option key={v} value={v}>
-            {t}
-          </option>
-        ))}
-      </select>
+    <div className="md:col-span-2">
+      <p className="block text-base font-medium">{etiqueta}</p>
+      <div className="mt-1">
+        <Opciones
+          nombre={nombre}
+          opciones={fichas}
+          columnas={opciones.length === 3 ? 3 : opciones.length === 2 ? 2 : 4}
+          {...(alCambiar ? { valor, alCambiar } : { defecto: valor })}
+        />
+      </div>
     </div>
   );
 }

@@ -1,16 +1,31 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { Loader2, Plus, Search, Trash2, UserRound, X } from "lucide-react";
+import {
+  CalendarClock,
+  Loader2,
+  Package,
+  Plus,
+  Search,
+  Store,
+  Trash2,
+  UserRound,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { crearPresupuesto } from "@/app/admin/ventas-actions";
 import { buscarClientes, buscarEnMostrador } from "@/app/mostrador/actions";
 import { formatearMonto } from "@/components/admin/formato";
-import { sinReiniciar } from "@/components/admin/formulario";
+import {
+  BarraGuardar,
+  Hoja,
+  Opciones,
+  Seccion,
+  sinReiniciar,
+} from "@/components/admin/formulario";
 
 interface Linea {
   variantId: string | null;
@@ -43,10 +58,10 @@ const estadoInicial = {} as { error?: string; ok?: string };
  */
 export function FormularioPresupuesto({
   sucursales,
-  asesor,
   clienteInicial,
 }: {
   sucursales: { id: string; nombre: string }[];
+  /** Quien lo carga: el presupuesto queda a su nombre, con origen «por teléfono». */
   asesor: string;
   /**
    * Con quién arranca, cuando se llega desde la ficha o la lista de clientes.
@@ -110,71 +125,71 @@ export function FormularioPresupuesto({
       <input type="hidden" name="branchId" value={sucursal} />
       {cliente && <input type="hidden" name="customerId" value={cliente.id} />}
       {lineas.map((linea, i) => (
-        <input key={i} type="hidden" name="linea" value={JSON.stringify(linea)} />
+        <input
+          key={i}
+          type="hidden"
+          name="linea"
+          value={JSON.stringify(linea)}
+        />
       ))}
 
-      <Card className="border-border bg-card">
-        <CardContent className="space-y-4 p-6">
-          <h2 className="text-base font-semibold">Para quién</h2>
-
-          <BuscadorDeCliente
-            elegido={cliente}
-            onElegir={(c) => {
-              setCliente(c);
-              if (c) setNombre(c.razonSocial ?? c.nombre);
-            }}
-          />
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="contactoNombre">Nombre</Label>
-              <Input
-                id="contactoNombre"
-                name="contactoNombre"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="A nombre de quién va"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="contactoTelefono">Teléfono</Label>
-              <Input
-                id="contactoTelefono"
-                name="contactoTelefono"
-                placeholder="223 555-1234"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="contactoEmail">Correo</Label>
-              <Input id="contactoEmail" name="contactoEmail" type="email" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="branch">Sucursal</Label>
-              <select
-                id="branch"
-                value={sucursal}
-                onChange={(e) => setSucursal(e.target.value)}
-                className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-base"
-              >
-                {sucursales.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
+      <Hoja>
+        <Seccion titulo="Para quién" icono={UserRound}>
+          <div className="md:col-span-2">
+            <BuscadorDeCliente
+              elegido={cliente}
+              onElegir={(c) => {
+                setCliente(c);
+                if (c) setNombre(c.razonSocial ?? c.nombre);
+              }}
+            />
           </div>
-        </CardContent>
-      </Card>
 
-      <Card className="border-border bg-card">
-        <CardContent className="space-y-4 p-6">
-          <h2 className="text-base font-semibold">Qué lleva</h2>
+          <div className="space-y-2">
+            <Label htmlFor="contactoNombre">Nombre</Label>
+            <Input
+              id="contactoNombre"
+              name="contactoNombre"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="A nombre de quién va"
+              required
+            />
+          </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="contactoTelefono">Teléfono</Label>
+            <Input
+              id="contactoTelefono"
+              name="contactoTelefono"
+              placeholder="223 555-1234"
+            />
+          </div>
+
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="contactoEmail">Correo</Label>
+            <Input id="contactoEmail" name="contactoEmail" type="email" />
+          </div>
+
+          {/* La sucursal viaja en el oculto `branchId`; las fichas solo la
+              eligen. Cambiarla cambia los precios y el stock del buscador. */}
+          <div className="space-y-2 md:col-span-2">
+            <Label>Sucursal</Label>
+            <Opciones
+              nombre="branch-opcion"
+              opciones={sucursales.map((s) => ({
+                valor: s.id,
+                texto: s.nombre,
+                icono: Store,
+              }))}
+              valor={sucursal}
+              alCambiar={setSucursal}
+              columnas={sucursales.length > 2 ? 3 : 2}
+            />
+          </div>
+        </Seccion>
+
+        <Seccion titulo="Qué lleva" icono={Package} columnas={1}>
           <BuscadorDeProductos
             branchId={sucursal}
             customerId={cliente?.id ?? null}
@@ -209,7 +224,9 @@ export function FormularioPresupuesto({
                       min="0.01"
                       step="0.01"
                       value={linea.cantidad}
-                      onChange={(e) => actualizar(i, "cantidad", e.target.value)}
+                      onChange={(e) =>
+                        actualizar(i, "cantidad", e.target.value)
+                      }
                     />
                   </div>
 
@@ -258,40 +275,32 @@ export function FormularioPresupuesto({
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </Seccion>
 
-      <Card className="border-border bg-card">
-        <CardContent className="space-y-4 p-6">
-          <div className="grid gap-4 sm:grid-cols-[160px_1fr]">
-            <div className="space-y-2">
-              <Label htmlFor="diasValidez">Validez (días)</Label>
-              <Input
-                id="diasValidez"
-                name="diasValidez"
-                type="number"
-                min="1"
-                max="180"
-                defaultValue={15}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notas">Notas</Label>
-              <Textarea
-                id="notas"
-                name="notas"
-                rows={3}
-                placeholder="Lo que haya que aclarar: plazos, medidas especiales, quién retira."
-              />
-            </div>
+        <Seccion titulo="Condiciones" icono={CalendarClock}>
+          <div className="space-y-2">
+            <Label htmlFor="diasValidez">Validez (días)</Label>
+            <Input
+              id="diasValidez"
+              name="diasValidez"
+              type="number"
+              min="1"
+              max="180"
+              defaultValue={15}
+            />
           </div>
 
-          <p className="text-sm text-muted-foreground">
-            Queda a tu nombre ({asesor}) y con origen &laquo;por teléfono&raquo;.
-          </p>
-        </CardContent>
-      </Card>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="notas">Notas</Label>
+            <Textarea
+              id="notas"
+              name="notas"
+              rows={3}
+              placeholder="Lo que haya que aclarar: plazos, medidas especiales, quién retira."
+            />
+          </div>
+        </Seccion>
+      </Hoja>
 
       {estado.error && (
         <p
@@ -308,7 +317,7 @@ export function FormularioPresupuesto({
         </p>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
+      <BarraGuardar>
         <Button
           type="submit"
           disabled={pendiente || lineas.length === 0}
@@ -330,7 +339,7 @@ export function FormularioPresupuesto({
         >
           Guardar y pasar a pedido
         </Button>
-      </div>
+      </BarraGuardar>
     </form>
   );
 }
@@ -346,9 +355,10 @@ function BuscadorDeCliente({
   // Se guarda junto con el texto que los produjo, y se muestran solo si siguen
   // correspondiendo a lo que hay tipeado. Así el efecto nunca limpia estado en
   // el render, que es lo que la regla de hooks no quiere.
-  const [traidos, setTraidos] = useState<{ texto: string; items: ClienteElegido[] }>(
-    { texto: "", items: [] },
-  );
+  const [traidos, setTraidos] = useState<{
+    texto: string;
+    items: ClienteElegido[];
+  }>({ texto: "", items: [] });
 
   const consulta = texto.trim();
   const resultados =
@@ -429,10 +439,6 @@ function BuscadorDeCliente({
           ))}
         </ul>
       )}
-
-      <p className="text-sm text-muted-foreground">
-        Si lo elegís, los precios salen de su lista. Sin cliente, la general.
-      </p>
     </div>
   );
 }
@@ -456,9 +462,10 @@ function BuscadorDeProductos({
   };
 
   const [texto, setTexto] = useState("");
-  const [traidos, setTraidos] = useState<{ clave: string; items: Encontrado[] }>(
-    { clave: "", items: [] },
-  );
+  const [traidos, setTraidos] = useState<{
+    clave: string;
+    items: Encontrado[];
+  }>({ clave: "", items: [] });
 
   const consulta = texto.trim();
   // El cliente entra en la clave: cambiar de cliente cambia los precios, y los
@@ -473,7 +480,11 @@ function BuscadorDeProductos({
 
     let vigente = true;
     const id = setTimeout(async () => {
-      const encontrados = await buscarEnMostrador(consulta, branchId, customerId);
+      const encontrados = await buscarEnMostrador(
+        consulta,
+        branchId,
+        customerId,
+      );
       if (vigente) setTraidos({ clave, items: encontrados });
     }, 250);
 
@@ -521,7 +532,9 @@ function BuscadorDeProductos({
                   <span className="font-medium">{r.producto}</span>{" "}
                   <span className="text-muted-foreground">{r.medida}</span>
                 </span>
-                <span className="tabular font-semibold">{formatearMonto(r.precio)}</span>
+                <span className="tabular font-semibold">
+                  {formatearMonto(r.precio)}
+                </span>
               </button>
             </li>
           ))}

@@ -2,8 +2,18 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Search, Trash2 } from "lucide-react";
-import { formatearMonto, hoyEnArgentina, importeParaEditar } from "@/lib/formato";
+import { FileText, Loader2, Search, Store, Trash2, Truck } from "lucide-react";
+import {
+  BarraGuardar,
+  Hoja,
+  Opciones,
+  Seccion,
+} from "@/components/admin/formulario";
+import {
+  formatearMonto,
+  hoyEnArgentina,
+  importeParaEditar,
+} from "@/lib/formato";
 import {
   buscarMercaderia,
   crearRecepcion,
@@ -94,7 +104,8 @@ export function FormularioRecepcion({
               // excepción.
               costoUnitario: importeParaEditar(h.costoActual),
               alicuotaIva: h.alicuotaIva,
-              costoActual: h.costoActual === null ? null : Number(h.costoActual),
+              costoActual:
+                h.costoActual === null ? null : Number(h.costoActual),
             },
           ],
     );
@@ -140,62 +151,83 @@ export function FormularioRecepcion({
     branchId !== "" &&
     lineas.length > 0 &&
     lineas.every(
-      (l) => Number(l.cantidad) > 0 && l.costoUnitario !== "" && Number(l.costoUnitario) >= 0,
+      (l) =>
+        Number(l.cantidad) > 0 &&
+        l.costoUnitario !== "" &&
+        Number(l.costoUnitario) >= 0,
     );
 
   return (
     <div className="space-y-4">
-      <section className="tarjeta grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="block">
-          <span className="text-sm font-medium">Proveedor</span>
-          <select
-            value={supplierId}
-            onChange={(e) => setSupplierId(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-              </option>
-            ))}
-          </select>
-        </label>
+      <Hoja>
+        <Seccion titulo="Remito" icono={FileText}>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-medium">Proveedor</span>
+            <select
+              value={supplierId}
+              onChange={(e) => setSupplierId(e.target.value)}
+              className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            >
+              {proveedores.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="block">
-          <span className="text-sm font-medium">Sucursal</span>
-          <select
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            {sucursales.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nombre}
-              </option>
-            ))}
-          </select>
-        </label>
+          <div className="space-y-1 md:col-span-2">
+            <span className="text-sm font-medium">Sucursal</span>
+            {/* Las sucursales son pocas: fichas. Si algún día son muchas,
+              vuelve el desplegable. */}
+            {sucursales.length <= 6 ? (
+              <Opciones
+                nombre="recepcion-sucursal"
+                opciones={sucursales.map((s) => ({
+                  valor: s.id,
+                  texto: s.nombre,
+                  icono: Store,
+                }))}
+                valor={branchId}
+                alCambiar={setBranchId}
+                columnas={sucursales.length <= 2 ? 2 : 3}
+              />
+            ) : (
+              <select
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+                className="h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              >
+                {sucursales.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nombre}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
-        <label className="block">
-          <span className="text-sm font-medium">Remito</span>
-          <input
-            value={numeroRemito}
-            onChange={(e) => setNumeroRemito(e.target.value)}
-            placeholder="0002-00034512"
-            className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          />
-        </label>
+          <label className="block">
+            <span className="text-sm font-medium">Remito</span>
+            <input
+              value={numeroRemito}
+              onChange={(e) => setNumeroRemito(e.target.value)}
+              placeholder="0002-00034512"
+              className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            />
+          </label>
 
-        <label className="block">
-          <span className="text-sm font-medium">Fecha de entrada</span>
-          <input
-            type="date"
-            value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
-            className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          />
-        </label>
-      </section>
+          <label className="block">
+            <span className="text-sm font-medium">Fecha de entrada</span>
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            />
+          </label>
+        </Seccion>
+      </Hoja>
 
       <section className="tarjeta overflow-hidden">
         <div className="border-b border-linea p-4">
@@ -248,7 +280,9 @@ export function FormularioRecepcion({
               <thead>
                 <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                   <th className="px-4 py-2.5 font-semibold">Mercadería</th>
-                  <th className="px-4 py-2.5 text-right font-semibold">Cant.</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">
+                    Cant.
+                  </th>
                   <th className="px-4 py-2.5 text-right font-semibold">
                     Costo neto
                   </th>
@@ -295,7 +329,9 @@ export function FormularioRecepcion({
                           min="0"
                           step="0.01"
                           value={l.cantidad}
-                          onChange={(e) => cambiar(i, "cantidad", e.target.value)}
+                          onChange={(e) =>
+                            cambiar(i, "cantidad", e.target.value)
+                          }
                           className="tabular h-10 w-24 rounded-lg border border-linea bg-background px-2 text-right text-base"
                         />
                       </td>
@@ -328,7 +364,8 @@ export function FormularioRecepcion({
                       </td>
                       <td className="tabular px-4 py-2.5 text-right font-semibold">
                         {formatearMonto(
-                          Number(l.cantidad || 0) * Number(l.costoUnitario || 0),
+                          Number(l.cantidad || 0) *
+                            Number(l.costoUnitario || 0),
                         )}
                       </td>
                       <td className="px-2 py-2.5">
@@ -352,54 +389,49 @@ export function FormularioRecepcion({
         )}
       </section>
 
-      <section className="tarjeta grid gap-4 p-5 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-sm font-medium">Flete y otros gastos</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={gastos}
-            onChange={(e) => setGastos(e.target.value)}
-            className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
-          />
-          <span className="text-sm text-muted-foreground">
-            Netos. Se reparten entre los renglones en proporción a su valor.
-          </span>
-        </label>
+      <Hoja>
+        <Seccion titulo="Flete y notas" icono={Truck}>
+          <label className="block">
+            <span className="text-sm font-medium">
+              Flete y otros gastos, netos
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={gastos}
+              onChange={(e) => setGastos(e.target.value)}
+              className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
+            />
+          </label>
 
-        <label className="block">
-          <span className="text-sm font-medium">Notas</span>
-          <input
-            value={notas}
-            onChange={(e) => setNotas(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          />
-        </label>
+          <label className="block">
+            <span className="text-sm font-medium">Notas</span>
+            <input
+              value={notas}
+              onChange={(e) => setNotas(e.target.value)}
+              className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            />
+          </label>
+        </Seccion>
+      </Hoja>
 
-        <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 border-t border-linea pt-4">
-          <div>
-            <p className="text-sm text-muted-foreground">Neto de la recepción</p>
-            <p className="tabular text-2xl font-bold">
-              {formatearMonto(total)}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={guardar}
-            disabled={enCurso || !listo}
-            className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
-            Guardar en borrador
-          </button>
+      <BarraGuardar error={estado.error}>
+        <div className="mr-auto">
+          <p className="text-sm text-muted-foreground">Neto de la recepción</p>
+          <p className="tabular text-2xl font-bold">{formatearMonto(total)}</p>
         </div>
 
-        {estado.error && (
-          <p className="sm:col-span-2 text-sm text-saldo-debe">{estado.error}</p>
-        )}
-      </section>
+        <button
+          type="button"
+          onClick={guardar}
+          disabled={enCurso || !listo}
+          className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
+          Guardar en borrador
+        </button>
+      </BarraGuardar>
     </div>
   );
 }

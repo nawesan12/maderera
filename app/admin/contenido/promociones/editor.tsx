@@ -2,9 +2,25 @@
 
 import { useActionState, useId, useState, useTransition } from "react";
 import Image from "next/image";
-import { Loader2, Trash2 } from "lucide-react";
+import {
+  BadgePercent,
+  CalendarDays,
+  ImageIcon,
+  ImageOff,
+  Landmark,
+  Loader2,
+  Power,
+  Store,
+  Trash2,
+} from "lucide-react";
 import { borrarPromo, guardarPromo, type EstadoPromo } from "./actions";
-import { sinReiniciar } from "@/components/admin/formulario";
+import {
+  Hoja,
+  Interruptor,
+  Opciones,
+  Seccion,
+  sinReiniciar,
+} from "@/components/admin/formulario";
 
 const inicial: EstadoPromo = {};
 
@@ -30,176 +46,162 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
   const [borrando, empezarBorrado] = useTransition();
   const [avisoBorrado, setAvisoBorrado] = useState<string | null>(null);
   const id = useId();
+  const [quienPaga, setQuienPaga] = useState<PromoEditable["quienPaga"]>(
+    promo?.quienPaga ?? "banco",
+  );
 
   return (
-    <form {...sinReiniciar(guardar)} className="space-y-4 tarjeta p-5">
+    <form {...sinReiniciar(guardar)} className="space-y-4">
       {promo && <input type="hidden" name="id" value={promo.id} />}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Campo
-          nombre="medio"
-          etiqueta="Con qué se paga"
-          valorInicial={promo?.medio ?? ""}
-          placeholder="Banco Nación"
-          requerido
-        />
-        <Campo
-          nombre="titulo"
-          etiqueta="El beneficio, en una línea"
-          valorInicial={promo?.titulo ?? ""}
-          placeholder="12 cuotas sin interés"
-          requerido
-        />
-      </div>
+      <Hoja>
+        <Seccion titulo="La promoción" icono={BadgePercent}>
+          <Campo
+            nombre="medio"
+            etiqueta="Con qué se paga"
+            valorInicial={promo?.medio ?? ""}
+            placeholder="Banco Nación"
+            requerido
+          />
+          <Campo
+            nombre="titulo"
+            etiqueta="El beneficio, en una línea"
+            valorInicial={promo?.titulo ?? ""}
+            placeholder="12 cuotas sin interés"
+            requerido
+          />
+          <div className="md:col-span-2">
+            <label
+              htmlFor={`${id}-detalle`}
+              className="block text-base font-medium"
+            >
+              La letra chica
+            </label>
+            <textarea
+              id={`${id}-detalle`}
+              name="detalle"
+              rows={2}
+              defaultValue={promo?.detalle ?? ""}
+              placeholder="Sólo pagando con MODO BNA. Tope de reintegro $15.000."
+              className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-base"
+            />
+          </div>
+        </Seccion>
 
-      <div>
-        <label htmlFor={`${id}-detalle`} className="block text-base font-medium">
-          La letra chica
-        </label>
-        <textarea
-          id={`${id}-detalle`}
-          name="detalle"
-          rows={2}
-          defaultValue={promo?.detalle ?? ""}
-          placeholder="Sólo pagando con MODO BNA. Tope de reintegro $15.000."
-          className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-base"
-        />
-        <p className="mt-1 text-sm text-muted-foreground">
-          Condiciones, topes, qué tarjetas entran. Sale tal cual en el sitio.
-        </p>
-      </div>
-
-      {/* El logo del banco. Es lo que hace que la grilla de la portada se lea
-          de un vistazo: el cliente reconoce a su banco por la marca antes que
-          por el nombre escrito. */}
-      <div>
-        <label htmlFor={`${id}-img`} className="block text-base font-medium">
-          Logo del banco o la billetera
-        </label>
-
-        <div className="mt-1 flex flex-wrap items-center gap-4">
+        {/* El logo del banco. Es lo que hace que la grilla de la portada se lea
+            de un vistazo: el cliente reconoce a su banco por la marca antes que
+            por el nombre escrito. */}
+        <Seccion titulo="Logo" icono={ImageIcon} columnas={1}>
+          <div>
+            <label
+              htmlFor={`${id}-img`}
+              className="block text-base font-medium"
+            >
+              Logo del banco o la billetera
+            </label>
+            <div className="mt-1 flex flex-wrap items-center gap-4">
+              {promo?.imagenUrl && (
+                <Image
+                  src={promo.imagenUrl}
+                  alt=""
+                  width={120}
+                  height={40}
+                  className="h-10 w-auto max-w-[120px] object-contain"
+                />
+              )}
+              <input
+                id={`${id}-img`}
+                type="file"
+                name="imagen"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                className="block text-base"
+              />
+            </div>
+          </div>
           {promo?.imagenUrl && (
-            <Image
-              src={promo.imagenUrl}
-              alt=""
-              width={120}
-              height={40}
-              className="h-10 w-auto max-w-[120px] object-contain"
+            <Interruptor
+              nombre="quitarImagen"
+              etiqueta="Sacar el logo al guardar"
+              icono={ImageOff}
             />
           )}
-          <input
-            id={`${id}-img`}
-            type="file"
-            name="imagen"
-            accept="image/jpeg,image/png,image/webp,image/avif"
-            className="block text-base"
+        </Seccion>
+
+        {/* Quién pone la plata.
+            Es el campo que evita que alguien descuente en el mostrador un
+            reintegro que iba a pagar el banco. El aviso de abajo se queda por
+            eso: es lo que distingue un reintegro de un descuento en caja. */}
+        <Seccion
+          titulo="¿Quién pone el descuento?"
+          icono={Landmark}
+          columnas={1}
+        >
+          <Opciones
+            nombre="quienPaga"
+            columnas={2}
+            valor={quienPaga}
+            alCambiar={(v) => setQuienPaga(v as PromoEditable["quienPaga"])}
+            opciones={[
+              {
+                valor: "banco",
+                texto: "El banco o la tarjeta",
+                icono: Landmark,
+              },
+              { valor: "nosotros", texto: "La maderera", icono: Store },
+            ]}
           />
-        </div>
+          {quienPaga === "banco" ? (
+            <p className="text-base text-muted-foreground">
+              <strong>En el mostrador no se descuenta:</strong> el cliente paga
+              el total y el banco se lo devuelve.
+            </p>
+          ) : (
+            <p className="text-base text-muted-foreground">
+              Para que se descuente solo al cobrar, cargá el porcentaje en{" "}
+              <a
+                href="/admin/precios/formas-de-pago"
+                className="underline underline-offset-2"
+              >
+                Precios → Formas de pago
+              </a>
+              .
+            </p>
+          )}
+        </Seccion>
 
-        <p className="mt-1 text-sm text-muted-foreground">
-          Opcional. Sin logo se muestra el nombre escrito, como hasta ahora. Que
-          sea apaisado y con fondo transparente o blanco.
-        </p>
-
-        {promo?.imagenUrl && (
-          <label className="mt-2 flex items-center gap-2.5 text-base">
-            <input
-              type="checkbox"
-              name="quitarImagen"
-              className="h-4 w-4 accent-brand-orange"
+        <Seccion titulo="Cuándo" icono={CalendarDays} columnas={3}>
+          <Campo
+            nombre="dias"
+            etiqueta="Qué días corre"
+            valorInicial={promo?.dias ?? ""}
+            placeholder="Todos los días"
+          />
+          <Campo
+            nombre="vigenciaHasta"
+            etiqueta="Vigente hasta"
+            tipo="date"
+            valorInicial={promo?.vigenciaHasta ?? ""}
+          />
+          <Campo
+            nombre="orden"
+            etiqueta="Orden"
+            valorInicial={String(promo?.orden ?? 0)}
+          />
+          <div className="md:col-span-3">
+            <Interruptor
+              nombre="activo"
+              etiqueta="Encendida"
+              icono={Power}
+              defecto={promo?.activo ?? true}
             />
-            Sacar el logo al guardar
-          </label>
-        )}
-      </div>
-
-      {/* Quién pone la plata.
-          Es el campo que evita que alguien descuente en el mostrador un
-          reintegro que iba a pagar el banco. Va con las dos opciones escritas
-          enteras, sin valor por defecto elegido de antemano: hay que decidirlo. */}
-      <fieldset className="rounded-lg border border-linea p-4">
-        <legend className="px-1.5 text-base font-medium">
-          ¿Quién pone el descuento?
-        </legend>
-        <div className="mt-1 space-y-2">
-          <label className="flex items-start gap-2.5 text-base">
-            <input
-              type="radio"
-              name="quienPaga"
-              value="banco"
-              defaultChecked={(promo?.quienPaga ?? "banco") === "banco"}
-              className="mt-1 h-5 w-5"
-            />
-            <span>
-              <span className="font-medium">El banco o la tarjeta.</span>{" "}
-              <span className="text-muted-foreground">
-                El cliente paga el total y el banco se lo devuelve. Es lo normal
-                en reintegros y cuotas sin interés.{" "}
-                <strong>En el mostrador no se descuenta.</strong>
-              </span>
-            </span>
-          </label>
-          <label className="flex items-start gap-2.5 text-base">
-            <input
-              type="radio"
-              name="quienPaga"
-              value="nosotros"
-              defaultChecked={promo?.quienPaga === "nosotros"}
-              className="mt-1 h-5 w-5"
-            />
-            <span>
-              <span className="font-medium">La maderera.</span>{" "}
-              <span className="text-muted-foreground">
-                Sale de nuestro bolsillo. Para que además se descuente solo al
-                cobrar, hay que cargar el porcentaje en{" "}
-                <a
-                  href="/admin/precios/formas-de-pago"
-                  className="underline underline-offset-2"
-                >
-                  Precios → Formas de pago
-                </a>
-                , que es la única pantalla que mueve precios.
-              </span>
-            </span>
-          </label>
-        </div>
-      </fieldset>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Campo
-          nombre="dias"
-          etiqueta="Qué días corre"
-          valorInicial={promo?.dias ?? ""}
-          placeholder="Todos los días"
-        />
-        <Campo
-          nombre="vigenciaHasta"
-          etiqueta="Vigente hasta"
-          tipo="date"
-          valorInicial={promo?.vigenciaHasta ?? ""}
-          ayuda="Vacía es «hasta nuevo aviso». Con fecha, se apaga sola."
-        />
-        <Campo
-          nombre="orden"
-          etiqueta="Orden"
-          valorInicial={String(promo?.orden ?? 0)}
-        />
-      </div>
-
-      <label className="flex items-center gap-2.5 text-base">
-        <input
-          type="checkbox"
-          name="activo"
-          defaultChecked={promo?.activo ?? true}
-          className="h-4 w-4 accent-brand-orange"
-        />
-        Encendida
-        {promo && !promo.alAire && promo.activo && (
-          <span className="text-sm text-muted-foreground">
-            · hoy no se ve: la vigencia ya pasó
-          </span>
-        )}
-      </label>
+            {promo && !promo.alAire && promo.activo && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Hoy no se ve: la vigencia ya pasó.
+              </p>
+            )}
+          </div>
+        </Seccion>
+      </Hoja>
 
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -232,8 +234,12 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
           </button>
         )}
 
-        {estado.error && <p className="text-base text-destructive">{estado.error}</p>}
-        {estado.ok && <p className="text-base text-muted-foreground">{estado.ok}</p>}
+        {estado.error && (
+          <p className="text-base text-destructive">{estado.error}</p>
+        )}
+        {estado.ok && (
+          <p className="text-base text-muted-foreground">{estado.ok}</p>
+        )}
         {avisoBorrado && (
           <p className="text-base text-muted-foreground">{avisoBorrado}</p>
         )}
@@ -247,7 +253,6 @@ function Campo({
   etiqueta,
   valorInicial,
   placeholder,
-  ayuda,
   tipo = "text",
   requerido = false,
 }: {
@@ -255,7 +260,6 @@ function Campo({
   etiqueta: string;
   valorInicial: string;
   placeholder?: string;
-  ayuda?: string;
   tipo?: string;
   requerido?: boolean;
 }) {
@@ -275,7 +279,6 @@ function Campo({
         placeholder={placeholder}
         className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
       />
-      {ayuda && <p className="mt-1 text-sm text-muted-foreground">{ayuda}</p>}
     </div>
   );
 }

@@ -1,7 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import {
+  BadgeCheck,
+  Briefcase,
+  Building2,
+  CircleSlash,
+  Loader2,
+  Phone,
+  Plus,
+  ShieldCheck,
+  ShoppingBag,
+  StickyNote,
+  UserRound,
+} from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useAccionDeDialogo } from "@/components/admin/usar-accion";
 import {
@@ -23,15 +36,19 @@ import {
 } from "@/components/ui/select";
 import { guardarCliente, type EstadoCliente } from "./actions";
 import { RUBROS_CLIENTE } from "@/lib/rubros-cliente";
-import { sinReiniciar } from "@/components/admin/formulario";
+import { Opciones, Seccion, sinReiniciar } from "@/components/admin/formulario";
 
-const CONDICIONES = {
-  consumidor_final: "Consumidor final",
-  responsable_inscripto: "Responsable inscripto",
-  monotributista: "Monotributista",
-  exento: "Exento",
-  no_categorizado: "No categorizado",
-};
+const CONDICIONES = [
+  { valor: "consumidor_final", texto: "Consumidor final", icono: UserRound },
+  {
+    valor: "responsable_inscripto",
+    texto: "Responsable inscripto",
+    icono: BadgeCheck,
+  },
+  { valor: "monotributista", texto: "Monotributista", icono: Briefcase },
+  { valor: "exento", texto: "Exento", icono: ShieldCheck },
+  { valor: "no_categorizado", texto: "No categorizado", icono: CircleSlash },
+];
 
 /**
  * El rubro reemplazó al «tipo de cliente» como campo principal.
@@ -86,7 +103,6 @@ export function DialogoCliente({
     ),
   };
 
-
   // La lista de precios se elegía en ningún lado: el diálogo ya recibía
   // `listas` y nunca las mostraba, así que un cliente con precio especial había
   // que corregirlo por consola. La opción vacía es "la general".
@@ -139,9 +155,8 @@ export function DialogoCliente({
           <input type="hidden" name="priceListId" value={lista} />
           <input type="hidden" name="sellerId" value={vendedor} />
 
-          <fieldset className="space-y-3">
-            <legend className="text-base font-semibold">Quién es</legend>
-            <div className="grid gap-4 sm:grid-cols-2">
+          <div className="divide-y divide-linea-suave">
+            <Seccion titulo="Quién es" icono={UserRound}>
               <div className="space-y-2">
                 <Label htmlFor="nombre">Nombre y apellido</Label>
                 <Input id="nombre" name="nombre" required autoFocus />
@@ -172,33 +187,26 @@ export function DialogoCliente({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="cuit">CUIT</Label>
-                <Input id="cuit" name="cuit" placeholder="20-12345678-9" inputMode="numeric" />
+                <Input
+                  id="cuit"
+                  name="cuit"
+                  placeholder="20-12345678-9"
+                  inputMode="numeric"
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="cliente-condicion">Condición frente al IVA</Label>
-                <Select
-                  value={condicion}
-                  onValueChange={(v) => v && setCondicion(v)}
-                  items={CONDICIONES}
-                >
-                  <SelectTrigger id="cliente-condicion" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CONDICIONES).map(([valor, texto]) => (
-                      <SelectItem key={valor} value={valor}>
-                        {texto}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Condición frente al IVA</Label>
+                <Opciones
+                  nombre="condicionIva-opcion"
+                  opciones={CONDICIONES}
+                  valor={condicion}
+                  alCambiar={setCondicion}
+                  columnas={3}
+                />
               </div>
-            </div>
-          </fieldset>
+            </Seccion>
 
-          <fieldset className="space-y-3">
-            <legend className="text-base font-semibold">Contacto</legend>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <Seccion titulo="Contacto" icono={Phone}>
               <div className="space-y-2">
                 <Label htmlFor="email">Correo</Label>
                 <Input id="email" name="email" type="email" />
@@ -207,34 +215,31 @@ export function DialogoCliente({
                 <Label htmlFor="telefono">Teléfono</Label>
                 <Input id="telefono" name="telefono" inputMode="tel" />
               </div>
-              <div className="space-y-2 sm:col-span-2">
+              <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="direccion">Domicilio</Label>
                 <Input id="direccion" name="direccion" />
               </div>
-            </div>
-          </fieldset>
+            </Seccion>
 
-          <fieldset className="space-y-3">
-            <legend className="text-base font-semibold">Cómo compra</legend>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="cliente-profesional">Cuenta profesional</Label>
-                <label
-                  htmlFor="cliente-profesional"
-                  className="flex h-10 items-center gap-2.5 text-base"
-                >
-                  <input
-                    id="cliente-profesional"
-                    type="checkbox"
-                    checked={tipo === "profesional"}
-                    onChange={(e) =>
-                      setTipo(e.target.checked ? "profesional" : "particular")
-                    }
-                    className="h-4 w-4 accent-brand-orange"
-                  />
-                  Tiene precio y cuenta corriente propios
-                </label>
-              </div>
+            <Seccion titulo="Cómo compra" icono={ShoppingBag}>
+              {/* Controlado: el rubro la propone y se puede desmarcar, así que
+                  no es el `Interruptor` del molde (que va sin estado). El tipo
+                  viaja en el campo oculto `tipo`. */}
+              <label className="ficha-interruptor flex cursor-pointer items-center gap-3 rounded-xl p-3.5 md:col-span-2">
+                <span className="ficha-icono flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+                  <Building2 className="h-5 w-5" />
+                </span>
+                <span className="flex-1 text-[15px] font-semibold leading-tight">
+                  Cuenta profesional
+                </span>
+                <Switch
+                  id="cliente-profesional"
+                  checked={tipo === "profesional"}
+                  onCheckedChange={(marcado) =>
+                    setTipo(marcado ? "profesional" : "particular")
+                  }
+                />
+              </label>
               <div className="space-y-2">
                 <Label htmlFor="cliente-vendedor">Vendedor asignado</Label>
                 <Select
@@ -246,11 +251,13 @@ export function DialogoCliente({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(opcionesDeVendedor).map(([valor, texto]) => (
-                      <SelectItem key={valor} value={valor}>
-                        {texto}
-                      </SelectItem>
-                    ))}
+                    {Object.entries(opcionesDeVendedor).map(
+                      ([valor, texto]) => (
+                        <SelectItem key={valor} value={valor}>
+                          {texto}
+                        </SelectItem>
+                      ),
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -274,21 +281,21 @@ export function DialogoCliente({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="limiteCredito">Límite de cuenta corriente</Label>
+                <Label htmlFor="limiteCredito">
+                  Límite de cuenta corriente
+                </Label>
                 <Input
                   id="limiteCredito"
                   name="limiteCredito"
                   defaultValue="0"
                   inputMode="decimal"
                 />
-                <p className="text-sm text-muted-foreground">Cero: no opera a cuenta.</p>
               </div>
-            </div>
-          </fieldset>
+            </Seccion>
 
-          <div className="space-y-2">
-            <Label htmlFor="notas">Notas</Label>
-            <Textarea id="notas" name="notas" rows={2} />
+            <Seccion titulo="Notas" icono={StickyNote} columnas={1}>
+              <Textarea id="notas" name="notas" rows={2} aria-label="Notas" />
+            </Seccion>
           </div>
 
           <Button

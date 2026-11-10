@@ -1,7 +1,21 @@
 "use client";
 
 import { useActionState, useId, useState } from "react";
-import { Loader2 } from "lucide-react";
+import {
+  Banknote,
+  Eye,
+  Loader2,
+  MapPin,
+  MessageCircleQuestion,
+  ShoppingCart,
+  Truck,
+} from "lucide-react";
+import {
+  Hoja,
+  Interruptor,
+  Opciones,
+  Seccion,
+} from "@/components/admin/formulario";
 import { guardarZona, type EstadoZona } from "./actions";
 
 const inicial: EstadoZona = {};
@@ -29,93 +43,91 @@ export interface ZonaEditable {
 export function EditorDeZona({ zona }: { zona: ZonaEditable | null }) {
   const [estado, guardar, guardando] = useActionState(guardarZona, inicial);
   const [aCotizar, setACotizar] = useState(zona?.aCotizar ?? true);
-  const id = useId();
 
   return (
-    <form action={guardar} className="space-y-4 tarjeta p-5">
+    <form action={guardar} className="space-y-4">
       {zona && <input type="hidden" name="id" value={zona.id} />}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Campo
-          nombre="nombre"
-          etiqueta="Zona"
-          valorInicial={zona?.nombre ?? ""}
-          placeholder="Mar del Plata"
-          requerido
-        />
-        <Campo
-          nombre="demoraEstimada"
-          etiqueta="Plazo"
-          valorInicial={zona?.demoraEstimada ?? ""}
-          placeholder="Coordinamos al confirmar"
-          ayuda="Lo que ve el cliente al elegir la zona."
-        />
-      </div>
-
-      <Campo
-        nombre="cobertura"
-        etiqueta="Códigos postales o localidades"
-        valorInicial={zona?.cobertura ?? ""}
-        placeholder="7600, 7601"
-        ayuda="Separados por coma. Es para uso interno: todavía no filtra nada solo."
-      />
-
-      <label className="flex items-start gap-2.5 text-base">
-        <input
-          type="checkbox"
-          name="aCotizar"
-          checked={aCotizar}
-          onChange={(e) => setACotizar(e.target.checked)}
-          className="mt-1 h-4 w-4 accent-brand-orange"
-        />
-        <span>
-          El flete de esta zona se cotiza en cada pedido
-          <span className="mt-0.5 block text-sm text-muted-foreground">
-            El pedido entra sin cargo de envío y el carrito dice «A cotizar».
-            Es lo que corresponde cuando el precio depende del volumen o de si
-            va en camión propio.
-          </span>
-        </span>
-      </label>
-
-      {!aCotizar && (
-        <div className="grid gap-4 sm:grid-cols-2">
+      <Hoja>
+        <Seccion titulo="Zona" icono={MapPin}>
           <Campo
-            nombre="costo"
-            etiqueta="Costo del envío"
-            valorInicial={zona?.costo ?? "0"}
-            placeholder="18.000"
+            nombre="nombre"
+            etiqueta="Zona"
+            valorInicial={zona?.nombre ?? ""}
+            placeholder="Mar del Plata"
+            requerido
           />
           <Campo
-            nombre="envioGratisDesde"
-            etiqueta="Envío sin cargo desde"
-            valorInicial={zona?.envioGratisDesde ?? "0"}
-            placeholder="0"
-            ayuda="Cero desactiva la promoción."
+            nombre="demoraEstimada"
+            etiqueta="Plazo"
+            valorInicial={zona?.demoraEstimada ?? ""}
+            placeholder="Coordinamos al confirmar"
           />
-        </div>
-      )}
+          <div className="md:col-span-2">
+            <Campo
+              nombre="cobertura"
+              etiqueta="Códigos postales o localidades"
+              valorInicial={zona?.cobertura ?? ""}
+              placeholder="7600, 7601"
+            />
+          </div>
+        </Seccion>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Campo
-          nombre="orden"
-          etiqueta="Orden en la lista"
-          valorInicial={zona?.orden ?? "0"}
-        />
-        <label
-          htmlFor={`${id}-activa`}
-          className="flex items-center gap-2.5 self-end pb-2 text-base"
-        >
-          <input
-            id={`${id}-activa`}
-            type="checkbox"
-            name="activa"
-            defaultChecked={zona?.activa ?? true}
-            className="h-4 w-4 accent-brand-orange"
+        <Seccion titulo="Flete" icono={Truck}>
+          {/* Antes era una casilla: viaja igual que ella, `aCotizar=on` solo
+              cuando se cotiza. Las fichas llevan otro nombre. */}
+          {aCotizar && <input type="hidden" name="aCotizar" value="on" />}
+          <div className="md:col-span-2">
+            <Opciones
+              nombre="tipo-de-flete"
+              columnas={2}
+              valor={aCotizar ? "cotizar" : "tarifa"}
+              alCambiar={(v) => setACotizar(v === "cotizar")}
+              opciones={[
+                {
+                  valor: "cotizar",
+                  texto: "Se cotiza en cada pedido",
+                  icono: MessageCircleQuestion,
+                },
+                { valor: "tarifa", texto: "Tarifa fija", icono: Banknote },
+              ]}
+            />
+          </div>
+
+          {!aCotizar && (
+            <>
+              <Campo
+                nombre="costo"
+                etiqueta="Costo del envío"
+                valorInicial={zona?.costo ?? "0"}
+                placeholder="18.000"
+              />
+              <Campo
+                nombre="envioGratisDesde"
+                etiqueta="Envío sin cargo desde"
+                valorInicial={zona?.envioGratisDesde ?? "0"}
+                placeholder="0"
+              />
+            </>
+          )}
+        </Seccion>
+
+        <Seccion titulo="En el carrito" icono={ShoppingCart}>
+          <Campo
+            nombre="orden"
+            etiqueta="Orden en la lista"
+            valorInicial={zona?.orden ?? "0"}
           />
-          Se ofrece en el carrito
-        </label>
-      </div>
+          <div className="self-end">
+            <Interruptor
+              nombre="activa"
+              etiqueta="Se ofrece en el carrito"
+              icono={Eye}
+              defecto={zona?.activa ?? true}
+            />
+          </div>
+        </Seccion>
+      </Hoja>
 
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -127,8 +139,12 @@ export function EditorDeZona({ zona }: { zona: ZonaEditable | null }) {
           {zona ? "Guardar" : "Agregar zona"}
         </button>
 
-        {estado.error && <p className="text-base text-destructive">{estado.error}</p>}
-        {estado.ok && <p className="text-base text-muted-foreground">{estado.ok}</p>}
+        {estado.error && (
+          <p className="text-base text-destructive">{estado.error}</p>
+        )}
+        {estado.ok && (
+          <p className="text-base text-muted-foreground">{estado.ok}</p>
+        )}
       </div>
     </form>
   );
@@ -139,14 +155,12 @@ function Campo({
   etiqueta,
   valorInicial,
   placeholder,
-  ayuda,
   requerido = false,
 }: {
   nombre: string;
   etiqueta: string;
   valorInicial: string;
   placeholder?: string;
-  ayuda?: string;
   requerido?: boolean;
 }) {
   // Uno por campo y por zona: la pantalla dibuja varios formularios iguales, y
@@ -166,7 +180,6 @@ function Campo({
         placeholder={placeholder}
         className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
       />
-      {ayuda && <p className="mt-1 text-sm text-muted-foreground">{ayuda}</p>}
     </div>
   );
 }

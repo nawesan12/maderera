@@ -117,12 +117,13 @@ export function Opciones({
   valor?: string;
   defecto?: string;
   alCambiar?: (valor: string) => void;
-  columnas?: 2 | 3 | 4;
+  columnas?: 2 | 3 | 4 | 5;
 }) {
   const grilla = {
     2: "grid-cols-2",
     3: "grid-cols-2 sm:grid-cols-3",
     4: "grid-cols-2 sm:grid-cols-4",
+    5: "grid-cols-3 sm:grid-cols-5",
   }[columnas];
   return (
     <div role="radiogroup" className={`grid gap-2.5 ${grilla}`}>
@@ -154,18 +155,35 @@ export function Opciones({
   );
 }
 
-/** Un interruptor grande, con ícono: la tarjeta se enciende con él. */
+/**
+ * Un interruptor grande, con ícono: la tarjeta se enciende con él. Manda «on»
+ * como una casilla, o `valor` si la acción espera otra cosa («si»). Con
+ * `marcado` y `alCambiar` es controlado.
+ */
 export function Interruptor({
   nombre,
   etiqueta,
   icono: IconoInterruptor,
   defecto,
+  valor,
+  marcado,
+  alCambiar,
 }: {
-  nombre: string;
+  nombre?: string;
   etiqueta: string;
   icono: Icono;
   defecto?: boolean;
+  valor?: string;
+  marcado?: boolean;
+  alCambiar?: (marcado: boolean) => void;
 }) {
+  const control =
+    marcado !== undefined
+      ? { checked: marcado, onCheckedChange: (v: boolean) => alCambiar?.(v) }
+      : {
+          defaultChecked: defecto,
+          onCheckedChange: (v: boolean) => alCambiar?.(v),
+        };
   return (
     <label className="ficha-interruptor flex cursor-pointer items-center gap-3 rounded-xl p-3.5">
       <span className="ficha-icono flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
@@ -174,7 +192,7 @@ export function Interruptor({
       <span className="flex-1 text-[15px] font-semibold leading-tight">
         {etiqueta}
       </span>
-      <Switch name={nombre} defaultChecked={defecto} />
+      <Switch name={nombre} value={valor} {...control} />
     </label>
   );
 }

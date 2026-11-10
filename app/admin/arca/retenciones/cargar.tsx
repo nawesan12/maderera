@@ -2,8 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import {
+  BadgeCheck,
+  Landmark,
+  Loader2,
+  MapPin,
+  Percent,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import { formatearMonto, hoyEnArgentina } from "@/lib/formato";
+import { Hoja, Opciones, Seccion } from "@/components/admin/formulario";
 import { cargarSufrida, type EstadoSufrida } from "./actions";
 
 const IMPUESTOS = {
@@ -12,6 +21,13 @@ const IMPUESTOS = {
   suss: "SUSS",
   iibb: "Ingresos Brutos",
 };
+
+const OPCIONES_IMPUESTO = [
+  { valor: "ganancias", texto: IMPUESTOS.ganancias, icono: TrendingUp },
+  { valor: "iva", texto: IMPUESTOS.iva, icono: Percent },
+  { valor: "suss", texto: IMPUESTOS.suss, icono: Users },
+  { valor: "iibb", texto: IMPUESTOS.iibb, icono: MapPin },
+];
 
 /**
  * Carga de un certificado que trajo un cliente.
@@ -46,9 +62,9 @@ export function CargarSufrida({
   const alicuota = n(base) > 0 ? (n(importe) / n(base)) * 100 : null;
 
   return (
-    <section className="tarjeta space-y-4 p-5">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="block">
+    <Hoja>
+      <Seccion titulo="Certificado" icono={BadgeCheck}>
+        <label className="block md:col-span-2">
           <span className="text-sm font-medium">Cliente</span>
           <select
             value={customerId}
@@ -73,21 +89,36 @@ export function CargarSufrida({
         </label>
 
         <label className="block">
-          <span className="text-sm font-medium">Impuesto</span>
-          <select
-            value={impuesto}
-            onChange={(e) =>
-              setImpuesto(e.target.value as keyof typeof IMPUESTOS)
-            }
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            {Object.entries(IMPUESTOS).map(([valor, texto]) => (
-              <option key={valor} value={valor}>
-                {texto}
-              </option>
-            ))}
-          </select>
+          <span className="text-sm font-medium">Fecha</span>
+          <input
+            type="date"
+            value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+            className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+          />
         </label>
+
+        <label className="block md:col-span-2">
+          <span className="text-sm font-medium">Comprobante</span>
+          <input
+            value={referencia}
+            onChange={(e) => setReferencia(e.target.value)}
+            placeholder="Factura sobre la que retuvieron"
+            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+          />
+        </label>
+      </Seccion>
+
+      <Seccion titulo="Retención" icono={Landmark} columnas={3}>
+        <div className="space-y-1 md:col-span-3">
+          <span className="text-sm font-medium">Impuesto</span>
+          <Opciones
+            nombre="sufrida-impuesto"
+            opciones={OPCIONES_IMPUESTO}
+            valor={impuesto}
+            alCambiar={(v) => setImpuesto(v as keyof typeof IMPUESTOS)}
+          />
+        </div>
 
         <label className="block">
           <span className="text-sm font-medium">Régimen</span>
@@ -127,75 +158,56 @@ export function CargarSufrida({
             </span>
           )}
         </label>
+      </Seccion>
 
-        <label className="block">
-          <span className="text-sm font-medium">Fecha</span>
-          <input
-            type="date"
-            value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
-            className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          />
-        </label>
+      <div className="space-y-3 py-6">
+        {(estado.error || estado.ok) && (
+          <p
+            className={`text-base ${estado.error ? "text-saldo-debe" : "text-saldo-favor"}`}
+          >
+            {estado.error ?? estado.ok}
+          </p>
+        )}
 
-        <label className="block">
-          <span className="text-sm font-medium">Comprobante</span>
-          <input
-            value={referencia}
-            onChange={(e) => setReferencia(e.target.value)}
-            placeholder="Factura sobre la que retuvieron"
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          />
-        </label>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {n(importe) > 0 &&
+              `La cuenta del cliente baja ${formatearMonto(n(importe))}.`}
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              empezar(async () => {
+                const r = await cargarSufrida({
+                  customerId,
+                  numero,
+                  impuesto,
+                  codigoRegimen,
+                  base: n(base),
+                  alicuota: alicuota ?? undefined,
+                  importe: n(importe),
+                  fecha,
+                  referencia,
+                });
+                setEstado(r);
+                if (r.ok) {
+                  setNumero("");
+                  setBase("");
+                  setImporte("");
+                  setReferencia("");
+                  router.refresh();
+                }
+              })
+            }
+            disabled={enCurso || !numero.trim() || n(importe) <= 0}
+            className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
+            Cargar el certificado
+          </button>
+        </div>
       </div>
-
-      {(estado.error || estado.ok) && (
-        <p
-          className={`text-base ${estado.error ? "text-saldo-debe" : "text-saldo-favor"}`}
-        >
-          {estado.error ?? estado.ok}
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-linea pt-4">
-        <p className="text-sm text-muted-foreground">
-          {n(importe) > 0
-            ? `La cuenta del cliente baja ${formatearMonto(n(importe))}.`
-            : "El certificado salda deuda: no es un descuento."}
-        </p>
-
-        <button
-          type="button"
-          onClick={() =>
-            empezar(async () => {
-              const r = await cargarSufrida({
-                customerId,
-                numero,
-                impuesto,
-                codigoRegimen,
-                base: n(base),
-                alicuota: alicuota ?? undefined,
-                importe: n(importe),
-                fecha,
-                referencia,
-              });
-              setEstado(r);
-              if (r.ok) {
-                setNumero("");
-                setBase("");
-                setImporte("");
-                setReferencia("");
-                router.refresh();
-              }
-            })
-          }
-          disabled={enCurso || !numero.trim() || n(importe) <= 0}
-          className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
-          Cargar el certificado
-        </button>
-      </div>
-    </section>
+    </Hoja>
   );
 }

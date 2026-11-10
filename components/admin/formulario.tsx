@@ -28,7 +28,25 @@ export function sinReiniciar(accion: (datos: FormData) => void) {
   };
 }
 
-/** Un grupo de campos con su título. Sin bajada: el título alcanza. */
+/**
+ * La hoja del formulario: una sola superficie con sus secciones separadas por
+ * una línea suave, en vez de una caja por grupo (10/11/2026, Nahuel: «los
+ * formularios todos también están horribles»).
+ */
+export function Hoja({ children, hidden }: { children: ReactNode; hidden?: boolean }) {
+  return (
+    <div hidden={hidden} className="tarjeta divide-y divide-linea-suave px-5 sm:px-8">
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Un grupo de campos: el título a la izquierda y los campos a la derecha, así
+ * el ojo recorre los títulos para encontrar el grupo y no lee campo por campo.
+ * En pantallas angostas el título va arriba. Sin bajada: el título alcanza.
+ * Un campo que tiene que ir a lo ancho lleva `md:col-span-2` (o `-3`).
+ */
 export function Seccion({
   titulo,
   children,
@@ -42,9 +60,9 @@ export function Seccion({
 }) {
   const grilla = { 1: "", 2: "md:grid-cols-2", 3: "md:grid-cols-3" }[columnas];
   return (
-    <section hidden={hidden} className="tarjeta p-6">
-      <h2 className="mb-5 text-lg font-semibold">{titulo}</h2>
-      <div className={`grid gap-x-5 gap-y-4 ${grilla}`}>{children}</div>
+    <section hidden={hidden} className="grid gap-x-10 gap-y-4 py-7 lg:grid-cols-[11rem_minmax(0,1fr)]">
+      <h2 className="text-[17px] font-semibold tracking-tight lg:pt-1.5">{titulo}</h2>
+      <div className={`grid gap-x-5 gap-y-5 ${grilla}`}>{children}</div>
     </section>
   );
 }

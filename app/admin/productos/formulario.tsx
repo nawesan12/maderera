@@ -23,7 +23,13 @@ import {
 import { generarSlug } from "@/lib/validation/product";
 import { admiteDecimales } from "@/lib/unidades";
 import { guardarProducto, type EstadoFormulario } from "./actions";
-import { BarraGuardar, Pestanas, sinReiniciar } from "@/components/admin/formulario";
+import {
+  BarraGuardar,
+  Hoja,
+  Pestanas,
+  Seccion,
+  sinReiniciar,
+} from "@/components/admin/formulario";
 
 export interface VarianteForm {
   id?: string;
@@ -144,7 +150,8 @@ export function FormularioProducto({
     guardarProducto,
     estadoInicial,
   );
-  const [pestana, setPestana] = useState<(typeof PESTANAS)[number]["id"]>("datos");
+  const [pestana, setPestana] =
+    useState<(typeof PESTANAS)[number]["id"]>("datos");
 
   const [nombre, setNombre] = useState(inicial.name);
   const [slug, setSlug] = useState(inicial.slug);
@@ -216,14 +223,18 @@ export function FormularioProducto({
             // Lo que se vio al abrir la ficha: Go corrige el stock por
             // diferencia contra esto, así una venta hecha mientras tanto no
             // se pisa. Un stock vacío viaja vacío y no toca el físico.
-            const visto = v.id ? inicial.variantes.find((x) => x.id === v.id) : undefined;
+            const visto = v.id
+              ? inicial.variantes.find((x) => x.id === v.id)
+              : undefined;
             return {
               ...v,
               largoMm: v.largoMm === null ? "" : String(v.largoMm),
               anchoMm: v.anchoMm === null ? "" : String(v.anchoMm),
               espesorMm: v.espesorMm === null ? "" : String(v.espesorMm),
-              stockCentral: v.stockCentral === null ? "" : String(v.stockCentral),
-              stockAserradero: v.stockAserradero === null ? "" : String(v.stockAserradero),
+              stockCentral:
+                v.stockCentral === null ? "" : String(v.stockCentral),
+              stockAserradero:
+                v.stockAserradero === null ? "" : String(v.stockAserradero),
               minCentral: String(v.minCentral ?? 0),
               minAserradero: String(v.minAserradero ?? 0),
               ...(visto
@@ -237,7 +248,11 @@ export function FormularioProducto({
         )}
       />
       <input type="hidden" name="unit" value={unidad} />
-      <input type="hidden" name="formaDeVenta" value={unidad === "placa" ? forma : "entera"} />
+      <input
+        type="hidden"
+        name="formaDeVenta"
+        value={unidad === "placa" ? forma : "entera"}
+      />
       <input type="hidden" name="precioMediaPct" value={pctMedia} />
       <input type="hidden" name="categoryId" value={categoria} />
 
@@ -254,189 +269,122 @@ export function FormularioProducto({
       <Pestanas pestanas={PESTANAS} activa={pestana} alCambiar={setPestana} />
 
       {/* Datos generales */}
-      <Card hidden={pestana !== "datos"} className="border-border bg-card">
-        <CardContent className="space-y-4 p-6">
-          <h2 className="text-base font-semibold text-foreground">Datos generales</h2>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nombre</Label>
-              <Input
-                id="name"
-                name="name"
-                value={nombre}
-                onChange={(e) => cambiarNombre(e.target.value)}
-                required
-              />
-            </div>
-
-            {/* La "dirección web" salió del formulario a pedido de la
+      <Hoja hidden={pestana !== "datos"}>
+        <Seccion titulo="Producto">
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="name">Nombre</Label>
+            <Input
+              id="name"
+              name="name"
+              value={nombre}
+              onChange={(e) => cambiarNombre(e.target.value)}
+              required
+            />
+          </div>
+          {/* La "dirección web" salió del formulario a pedido de la
                 clienta: el slug se genera solo desde el nombre en el alta y
                 no se regenera al editar —la URL publicada ya está indexada—.
                 Viaja oculto; si choca con otro producto, el alta lo
                 desambigua sola. */}
-            <input type="hidden" name="slug" value={slug} />
-
-            <div className="space-y-2">
-              <Label htmlFor="categoria">Categoría</Label>
-              <Select
-                value={categoria}
-                onValueChange={(v) => v && setCategoria(v)}
-                items={Object.fromEntries(
-                  categorias.map((c) => [c.id, c.name]),
-                )}
-              >
-                <SelectTrigger id="categoria">
-                  <SelectValue placeholder="Elegí una categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categorias.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="rubro">Rubro</Label>
-              {/* El valor viaja en un campo oculto: `Select` no es un
-                  `<select>` nativo y no se envía solo con el formulario. */}
-              <input type="hidden" name="subcategoryId" value={rubroValido} />
-              <Select
-                value={rubroValido}
-                onValueChange={(v) => setRubro(v ?? "")}
-                items={Object.fromEntries([
-                  ["", "Sin rubro"],
-                  ...rubrosDeLaCategoria.map((r) => [r.id, r.name]),
-                ])}
-              >
-                <SelectTrigger id="rubro">
-                  <SelectValue placeholder="Sin rubro" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Sin rubro</SelectItem>
-                  {rubrosDeLaCategoria.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
-                      {r.name}
-                      {r.active ? "" : " (dado de baja)"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {rubrosDeLaCategoria.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Esta categoría todavía no tiene rubros cargados.
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="brand">Marca</Label>
-              <Input
-                id="brand"
-                name="brand"
-                defaultValue={inicial.brand}
-                placeholder="Moldava, Curvin…"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="unidad-de-venta">Unidad de venta</Label>
-              <Select
-                value={unidad}
-                onValueChange={(v) => v && setUnidad(v)}
-                items={Object.fromEntries(
-                  UNIDADES.map((u) => [u.valor, u.texto]),
-                )}
-              >
-                <SelectTrigger id="unidad-de-venta">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {UNIDADES.map((u) => (
-                    <SelectItem key={u.valor} value={u.valor}>
-                      {u.texto}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {unidad === "placa" && (
-            <FormaDeVentaDePlaca
-              forma={forma}
-              onForma={setForma}
-              pct={pctMedia}
-              onPct={setPctMedia}
-              precioEjemplo={Number(
-                (variantes[0]?.precioGeneral ?? "0").replace(",", "."),
-              )}
-              sinMedidas={variantes.filter((v) => !v.largoMm || !v.anchoMm).length}
-            />
-          )}
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            {/* La clienta pidió "tipos de IVA" en productos. El campo existía
-                en la base desde el primer schema y el formulario nunca lo
-                ofreció, así que todo el catálogo quedaba al 21. */}
-            <div className="space-y-2">
-              <Label htmlFor="alicuotaIva">IVA</Label>
-              <select
-                id="alicuotaIva"
-                name="alicuotaIva"
-                defaultValue={inicial.alicuotaIva || "21"}
-                className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-base"
-              >
-                <option value="21">21 % — general</option>
-                <option value="10.5">10,5 % — reducida</option>
-                <option value="0">Exento</option>
-              </select>
-            </div>
-
-            {/*
-              La imputación contable, que pidió la clienta junto con subrubros,
-              IVA y SKU. Las otras tres existían; esta no.
-
-              Va como texto con sugerencias y no como lista cerrada porque el
-              plan de cuentas lo maneja el contador y todavía no lo dio. El
-              `datalist` es lo que evita que la misma cuenta se escriba de tres
-              maneras: propone lo ya usado sin impedir cargar una nueva.
-            */}
-            <div className="space-y-2">
-              <Label htmlFor="imputacion">Imputación contable</Label>
-              <Input
-                id="imputacion"
-                name="imputacion"
-                list="imputaciones-cargadas"
-                defaultValue={inicial.imputacion}
-                placeholder="Mercaderías"
-              />
-              <datalist id="imputaciones-cargadas">
-                {imputaciones.map((i) => (
-                  <option key={i} value={i} />
-                ))}
-              </datalist>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="recargoElaboracionPct">
-                Recargo por elaboración
-              </Label>
-              <Input
-                id="recargoElaboracionPct"
-                name="recargoElaboracionPct"
-                defaultValue={inicial.recargoElaboracionPct}
-                inputMode="decimal"
-                placeholder="0"
-              />
-              <p className="text-sm text-muted-foreground">% sobre el costo.</p>
-            </div>
-          </div>
-
+          <input type="hidden" name="slug" value={slug} />
           <div className="space-y-2">
+            <Label htmlFor="categoria">Categoría</Label>
+            <Select
+              value={categoria}
+              onValueChange={(v) => v && setCategoria(v)}
+              items={Object.fromEntries(categorias.map((c) => [c.id, c.name]))}
+            >
+              <SelectTrigger id="categoria" className="w-full">
+                <SelectValue placeholder="Elegí una categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                {categorias.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rubro">Rubro</Label>
+            {/* El valor viaja en un campo oculto: `Select` no es un
+                  `<select>` nativo y no se envía solo con el formulario. */}
+            <input type="hidden" name="subcategoryId" value={rubroValido} />
+            <Select
+              value={rubroValido}
+              onValueChange={(v) => setRubro(v ?? "")}
+              items={Object.fromEntries([
+                ["", "Sin rubro"],
+                ...rubrosDeLaCategoria.map((r) => [r.id, r.name]),
+              ])}
+            >
+              <SelectTrigger id="rubro" className="w-full">
+                <SelectValue placeholder="Sin rubro" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Sin rubro</SelectItem>
+                {rubrosDeLaCategoria.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.name}
+                    {r.active ? "" : " (dado de baja)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {rubrosDeLaCategoria.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Esta categoría todavía no tiene rubros cargados.
+              </p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="brand">Marca</Label>
+            <Input
+              id="brand"
+              name="brand"
+              defaultValue={inicial.brand}
+              placeholder="Moldava, Curvin…"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="unidad-de-venta">Unidad de venta</Label>
+            <Select
+              value={unidad}
+              onValueChange={(v) => v && setUnidad(v)}
+              items={Object.fromEntries(
+                UNIDADES.map((u) => [u.valor, u.texto]),
+              )}
+            >
+              <SelectTrigger id="unidad-de-venta" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {UNIDADES.map((u) => (
+                  <SelectItem key={u.valor} value={u.valor}>
+                    {u.texto}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {unidad === "placa" && (
+            <div className="md:col-span-2">
+              <FormaDeVentaDePlaca
+                forma={forma}
+                onForma={setForma}
+                pct={pctMedia}
+                onPct={setPctMedia}
+                precioEjemplo={Number(
+                  (variantes[0]?.precioGeneral ?? "0").replace(",", "."),
+                )}
+                sinMedidas={
+                  variantes.filter((v) => !v.largoMm || !v.anchoMm).length
+                }
+              />
+            </div>
+          )}
+          <div className="space-y-2 md:col-span-2">
             <Label htmlFor="description">Descripción</Label>
             <Textarea
               id="description"
@@ -445,21 +393,29 @@ export function FormularioProducto({
               rows={3}
             />
           </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="usos">Usos</Label>
-              <Textarea id="usos" name="usos" defaultValue={inicial.usos} rows={4} placeholder="Muebles de cocina, placares, revestimientos…" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cuidados">Cuidados</Label>
-              <Textarea id="cuidados" name="cuidados" defaultValue={inicial.cuidados} rows={4} placeholder="Limpiar con paño húmedo, sin solventes…" />
-            </div>
+        </Seccion>
+        <Seccion titulo="En el sitio">
+          <div className="space-y-2">
+            <Label htmlFor="usos">Usos</Label>
+            <Textarea
+              id="usos"
+              name="usos"
+              defaultValue={inicial.usos}
+              rows={4}
+              placeholder="Muebles de cocina, placares, revestimientos…"
+            />
           </div>
-
-          <input type="hidden" name="imagen" value={inicial.imagen} />
-
-          <div className="flex flex-wrap gap-8 pt-2">
+          <div className="space-y-2">
+            <Label htmlFor="cuidados">Cuidados</Label>
+            <Textarea
+              id="cuidados"
+              name="cuidados"
+              defaultValue={inicial.cuidados}
+              rows={4}
+              placeholder="Limpiar con paño húmedo, sin solventes…"
+            />
+          </div>
+          <div className="flex flex-wrap gap-8 md:col-span-2">
             <label className="flex items-center gap-2 text-base text-foreground">
               <Switch name="featured" defaultChecked={inicial.featured} />
               Destacado
@@ -473,8 +429,63 @@ export function FormularioProducto({
               Se fabrica a pedido
             </label>
           </div>
-        </CardContent>
-      </Card>
+          <input type="hidden" name="imagen" value={inicial.imagen} />
+        </Seccion>
+        <Seccion titulo="Impuestos" columnas={3}>
+          {/* La clienta pidió "tipos de IVA" en productos. El campo existía
+                en la base desde el primer schema y el formulario nunca lo
+                ofreció, así que todo el catálogo quedaba al 21. */}
+          <div className="space-y-2">
+            <Label htmlFor="alicuotaIva">IVA</Label>
+            <select
+              id="alicuotaIva"
+              name="alicuotaIva"
+              defaultValue={inicial.alicuotaIva || "21"}
+              className="h-10 w-full rounded-lg border border-input bg-transparent px-3 text-base"
+            >
+              <option value="21">21 % — general</option>
+              <option value="10.5">10,5 % — reducida</option>
+              <option value="0">Exento</option>
+            </select>
+          </div>
+          {/*
+              La imputación contable, que pidió la clienta junto con subrubros,
+              IVA y SKU. Las otras tres existían; esta no.
+
+              Va como texto con sugerencias y no como lista cerrada porque el
+              plan de cuentas lo maneja el contador y todavía no lo dio. El
+              `datalist` es lo que evita que la misma cuenta se escriba de tres
+              maneras: propone lo ya usado sin impedir cargar una nueva.
+            */}
+          <div className="space-y-2">
+            <Label htmlFor="imputacion">Imputación contable</Label>
+            <Input
+              id="imputacion"
+              name="imputacion"
+              list="imputaciones-cargadas"
+              defaultValue={inicial.imputacion}
+              placeholder="Mercaderías"
+            />
+            <datalist id="imputaciones-cargadas">
+              {imputaciones.map((i) => (
+                <option key={i} value={i} />
+              ))}
+            </datalist>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="recargoElaboracionPct">
+              Recargo por elaboración (%)
+            </Label>
+            <Input
+              id="recargoElaboracionPct"
+              name="recargoElaboracionPct"
+              defaultValue={inicial.recargoElaboracionPct}
+              inputMode="decimal"
+              placeholder="0"
+            />
+          </div>
+        </Seccion>
+      </Hoja>
 
       {/* Fotos */}
       {inicial.id ? (
@@ -545,7 +556,9 @@ export function FormularioProducto({
                   <Input
                     id={`sku-${i}`}
                     value={variante.sku}
-                    onChange={(e) => actualizarVariante(i, "sku", e.target.value)}
+                    onChange={(e) =>
+                      actualizarVariante(i, "sku", e.target.value)
+                    }
                     placeholder="PLA-MEL-BLA-18"
                   />
                 </div>
@@ -554,8 +567,10 @@ export function FormularioProducto({
                   <Input
                     id={`label-${i}`}
                     value={variante.label}
-                    onChange={(e) => actualizarVariante(i, "label", e.target.value)}
-                    placeholder='1830 x 2600mm — 18mm'
+                    onChange={(e) =>
+                      actualizarVariante(i, "label", e.target.value)
+                    }
+                    placeholder="1830 x 2600mm — 18mm"
                   />
                 </div>
               </div>
@@ -612,7 +627,9 @@ export function FormularioProducto({
                   <Input
                     id={`color-${i}`}
                     value={variante.color}
-                    onChange={(e) => actualizarVariante(i, "color", e.target.value)}
+                    onChange={(e) =>
+                      actualizarVariante(i, "color", e.target.value)
+                    }
                     placeholder="Blanco"
                   />
                 </div>
@@ -702,7 +719,9 @@ export function FormularioProducto({
                       type="number"
                       min={0}
                       step={admiteDecimales(unidad) ? "any" : 1}
-                      inputMode={admiteDecimales(unidad) ? "decimal" : "numeric"}
+                      inputMode={
+                        admiteDecimales(unidad) ? "decimal" : "numeric"
+                      }
                       value={variante[campo] ?? 0}
                       onChange={(e) =>
                         actualizarVariante(i, campo, e.target.value)
@@ -717,11 +736,7 @@ export function FormularioProducto({
       </Card>
 
       <BarraGuardar>
-        <Button
-          type="submit"
-          disabled={pendiente}
-          className="boton-accion"
-        >
+        <Button type="submit" disabled={pendiente} className="boton-accion">
           {pendiente ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -739,7 +754,6 @@ export function FormularioProducto({
   );
 }
 
-
 /** El producto, partido en tres: lo que es, cómo se ve y cómo se vende. */
 const PESTANAS = [
   { id: "datos", nombre: "Datos" },
@@ -751,17 +765,20 @@ const FORMAS_DE_VENTA = [
   {
     valor: "entera",
     titulo: "Solo entera",
-    detalle: "Se vende la placa completa. Es lo que corresponde a un fenólico o a una placa de color con dibujo.",
+    detalle:
+      "Se vende la placa completa. Es lo que corresponde a un fenólico o a una placa de color con dibujo.",
   },
   {
     valor: "entera_o_media",
     titulo: "Entera o media",
-    detalle: "Además media placa, partida al largo o al ancho. La otra mitad queda en el stock.",
+    detalle:
+      "Además media placa, partida al largo o al ancho. La otra mitad queda en el stock.",
   },
   {
     valor: "metro_cuadrado",
     titulo: "Por metro cuadrado",
-    detalle: "El precio de lista es el del m² y se pide en m². El stock se sigue contando en placas.",
+    detalle:
+      "El precio de lista es el del m² y se pide en m². El stock se sigue contando en placas.",
   },
 ] as const;
 
@@ -836,13 +853,16 @@ function FormaDeVentaDePlaca({
                 inputMode="decimal"
                 className="tabular w-24"
               />
-              <span className="text-base text-muted-foreground">% de la entera</span>
+              <span className="text-base text-muted-foreground">
+                % de la entera
+              </span>
             </div>
           </div>
           {media !== null && (
             <p className="text-base">
-              Entera <span className="tabular">{formatearPesos(precioEjemplo)}</span> → media{" "}
-              <strong className="tabular">{formatearPesos(media)}</strong>
+              Entera{" "}
+              <span className="tabular">{formatearPesos(precioEjemplo)}</span> →
+              media <strong className="tabular">{formatearPesos(media)}</strong>
             </p>
           )}
         </div>

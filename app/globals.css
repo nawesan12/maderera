@@ -1505,14 +1505,18 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   transform: none;
 }
 
-/* Los secundarios (claros, con borde): un relieve más leve y sin la línea. */
-:is(button, a).border:is([class*="h-8 "], [class*="h-9 "], [class*="h-10 "], [class*="h-11 "], [class*="h-12 "], [class*="h-[5"], [class*=" h-8"], [class*=" h-9"], [class*=" h-10"], [class*=" h-11"], [class*=" h-12"]):not([aria-pressed="true"]) {
+/* Los secundarios (claros, con borde): un relieve más leve y sin la línea.
+   Los de acción y los de shadcn con borde transparente (default, ghost)
+   también llevan `.border`: sin excluirlos, el degradado claro tapaba el
+   naranja y el texto blanco quedaba ilegible. Los desplegables van hundidos,
+   como los campos. */
+:is(button, a).border:is([class*="h-8 "], [class*="h-9 "], [class*="h-10 "], [class*="h-11 "], [class*="h-12 "], [class*="h-[5"], [class*=" h-8"], [class*=" h-9"], [class*=" h-10"], [class*=" h-11"], [class*=" h-12"]):not(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca, .border-transparent, [data-slot="select-trigger"]):not([aria-pressed="true"]) {
   border-color: transparent;
   background-image: linear-gradient(to bottom, var(--card), var(--hundida));
   box-shadow: var(--relieve-suave);
 }
 
-:is(button, a).border:is([class*="h-8 "], [class*="h-9 "], [class*="h-10 "], [class*="h-11 "], [class*="h-12 "], [class*="h-[5"], [class*=" h-8"], [class*=" h-9"], [class*=" h-10"], [class*=" h-11"], [class*=" h-12"]):active {
+:is(button, a).border:is([class*="h-8 "], [class*="h-9 "], [class*="h-10 "], [class*="h-11 "], [class*="h-12 "], [class*="h-[5"], [class*=" h-8"], [class*=" h-9"], [class*=" h-10"], [class*=" h-11"], [class*=" h-12"]):not(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca, .border-transparent, [data-slot="select-trigger"]):active {
   box-shadow: inset 0 2px 4px rgb(60 50 40 / 0.16);
   background-image: none;
 }

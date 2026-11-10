@@ -653,7 +653,15 @@ function Adjunto({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
   }
 
   if (mensaje.mediaTipo === "audio") {
-    return <audio controls src={mensaje.mediaUrl} className="mb-1.5 w-64 max-w-full" />;
+    // La transcripción de whisper (backend/internal/whatsapp/audio.go): se lee
+    // sin tener que escuchar.
+    const transcripcion = typeof mensaje.datos?.transcripcion === "string" ? mensaje.datos.transcripcion : null;
+    return (
+      <>
+        <audio controls src={mensaje.mediaUrl} className="mb-1.5 w-64 max-w-full" />
+        {transcripcion && <p className="mb-1.5 max-w-64 text-[15px] italic leading-snug">«{transcripcion}»</p>}
+      </>
+    );
   }
 
   if (mensaje.mediaTipo === "video") {

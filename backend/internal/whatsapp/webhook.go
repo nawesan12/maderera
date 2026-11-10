@@ -64,6 +64,13 @@ func (s *Servicio) Registrar(c *cola.Cola) {
 		}
 		return s.AplicarEstado(ctx, c.Estado, c.Intento)
 	})
+	c.Registrar(TrabajoAudio, func(ctx context.Context, crudo json.RawMessage) error {
+		var c cargaAudio
+		if err := json.Unmarshal(crudo, &c); err != nil {
+			return err
+		}
+		return s.atenderAudio(ctx, c)
+	})
 	c.Registrar(TrabajoMedio, func(ctx context.Context, crudo json.RawMessage) error {
 		var c cargaMedio
 		if err := json.Unmarshal(crudo, &c); err != nil {
@@ -204,7 +211,11 @@ func (s *Servicio) AtenderEntrante(ctx context.Context, m MensajeMeta, waJid str
 	}
 	// El bot contesta después de guardar; si falla, el mensaje igual quedó en
 	// la bandeja y la persona lo ve.
-	if err := s.atenderConBot(ctx, g.ConversacionID, waJid, g.Cuerpo); err != nil {
+	if m.Tipo == "audio" {
+		if err := s.encolarAudio(ctx, g, waJid); err != nil {
+			s.log.Error("el audio de WhatsApp no se pudo encolar", "error", err, "conversacion", g.ConversacionID)
+		}
+	} else if err := s.atenderConBot(ctx, g.ConversacionID, waJid, g.Cuerpo); err != nil {
 		s.log.Error("el bot de WhatsApp falló", "error", err, "conversacion", g.ConversacionID)
 	}
 	cuerpo := cortarJS(trimJS(g.Cuerpo), 140)

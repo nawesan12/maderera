@@ -141,6 +141,11 @@ if ! "${COMPOSE[@]}" up -d --no-deps --wait --wait-timeout 120 api; then
   echo "La API nueva no arrancó. Ver: dc logs api" >&2
   exit 1
 fi
+# Whisper transcribe los audios del bot de WhatsApp: sin el modelo, no se
+# levanta y los audios se contestan con «¿me lo escribís?».
+if [ -f "${WHISPER_MODELOS:-../whisper-modelos}/ggml-small-q5_1.bin" ]; then
+  "${COMPOSE[@]}" up -d --no-deps whisper
+fi
 "${COMPOSE[@]}" up -d --no-deps worker
 
 # Los comprobantes de transferencia y los documentos técnicos van a la

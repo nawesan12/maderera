@@ -171,6 +171,8 @@ services:
       # que `app`; ARCA_CUIT y ARCA_AMBIENTE vienen de .env.produccion.
       ARCA_CERTIFICADO_ARCHIVO: /run/secrets/arca/arca.crt
       ARCA_CLAVE_PRIVADA_ARCHIVO: /run/secrets/arca/arca.key
+      # Los audios de WhatsApp los transcribe el servicio `whisper`.
+      WHISPER_URL: http://whisper:8178
     volumes:
       - subidas:/datos/subidas
       - privado:/datos/privado
@@ -215,10 +217,33 @@ services:
       SMTP_HOST: ${SMTP_HOST:-correo}
       SMTP_PUERTO: ${SMTP_PUERTO:-587}
       SMTP_NOMBRE_TLS: ${SMTP_NOMBRE_TLS:-mail.${CORREO_DOMINIO:-${DOMINIO}}}
+      # El worker transcribe los audios de WhatsApp (whatsapp.audio).
+      WHISPER_URL: http://whisper:8178
     volumes:
       - subidas:/datos/subidas
       - privado:/datos/privado
     stop_grace_period: 30s
+
+  # Transcribe los audios de WhatsApp para el bot (10/11/2026): whisper.cpp
+  # con el modelo small cuantizado, en la misma máquina. Gratis y el audio no
+  # sale del servidor. El modelo (190 MB) no va en la imagen ni en el repo:
+  # lo baja scripts/whisper-modelo.sh a ~/whisper-modelos.
+  # Búsqueda voraz (-bs 1 -bo 1): en la VPS de 2 núcleos baja la nota de voz
+  # a más o menos lo que dura, y para frases cortas la diferencia de calidad
+  # no se nota. Con el tope de CPU, una transcripción no frena al resto.
+  # `--convert`: el ogg/opus de WhatsApp lo pasa a wav con ffmpeg él mismo.
+  whisper:
+    image: ghcr.io/ggml-org/whisper.cpp:main
+    entrypoint: ["/app/build/bin/whisper-server"]
+    command: ["-m", "/modelos/ggml-small-q5_1.bin", "-t", "2", "-bs", "1", "-bo", "1", "-l", "es",
+      "--convert", "--host", "0.0.0.0", "--port", "8178"]
+    restart: unless-stopped
+    volumes:
+      - ${WHISPER_MODELOS:-../whisper-modelos}:/modelos:ro
+    expose:
+      - "8178"
+    cpus: 1.5
+    mem_limit: 1g
 
   # Las migraciones, con goose (backend/db/migraciones; la primera vez adopta
   # las 79 de drizzle). Como el migrador viejo: el perfil `herramientas` hace

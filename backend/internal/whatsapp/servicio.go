@@ -52,6 +52,9 @@ type Config struct {
 	// URLBase es la del sitio, para los enlaces que van en los mensajes
 	// (urlBase de lib/pagos/config.ts).
 	URLBase string `env:"APP_URL"`
+	// WhisperURL es el servidor de whisper.cpp que transcribe los audios
+	// (servicio `whisper` del compose). Vacío: los audios no se transcriben.
+	WhisperURL string `env:"WHISPER_URL"`
 }
 
 // limpia recorta los espacios, como el TS (`?.trim()`).

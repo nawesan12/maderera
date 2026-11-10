@@ -139,155 +139,152 @@ export function DialogoCliente({
           <input type="hidden" name="priceListId" value={lista} />
           <input type="hidden" name="sellerId" value={vendedor} />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="nombre">Nombre y apellido</Label>
-              <Input id="nombre" name="nombre" required autoFocus />
+          <fieldset className="space-y-3">
+            <legend className="text-base font-semibold">Quién es</legend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="nombre">Nombre y apellido</Label>
+                <Input id="nombre" name="nombre" required autoFocus />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="razonSocial">Empresa</Label>
+                <Input id="razonSocial" name="razonSocial" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cliente-rubro">A qué se dedica</Label>
+                <input type="hidden" name="rubro" value={rubro} />
+                <Select
+                  value={rubro}
+                  onValueChange={(v) => v && cambiarRubro(v)}
+                  items={RUBROS}
+                >
+                  <SelectTrigger id="cliente-rubro" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(RUBROS).map(([valor, texto]) => (
+                      <SelectItem key={valor} value={valor}>
+                        {texto}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cuit">CUIT</Label>
+                <Input id="cuit" name="cuit" placeholder="20-12345678-9" inputMode="numeric" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cliente-condicion">Condición frente al IVA</Label>
+                <Select
+                  value={condicion}
+                  onValueChange={(v) => v && setCondicion(v)}
+                  items={CONDICIONES}
+                >
+                  <SelectTrigger id="cliente-condicion" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(CONDICIONES).map(([valor, texto]) => (
+                      <SelectItem key={valor} value={valor}>
+                        {texto}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="razonSocial">Empresa</Label>
-              <Input id="razonSocial" name="razonSocial" />
+          </fieldset>
+
+          <fieldset className="space-y-3">
+            <legend className="text-base font-semibold">Contacto</legend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="email">Correo</Label>
+                <Input id="email" name="email" type="email" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="telefono">Teléfono</Label>
+                <Input id="telefono" name="telefono" inputMode="tel" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="direccion">Domicilio</Label>
+                <Input id="direccion" name="direccion" />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="cliente-rubro">A qué se dedica</Label>
-              <input type="hidden" name="rubro" value={rubro} />
-              <Select
-                value={rubro}
-                onValueChange={(v) => v && cambiarRubro(v)}
-                items={RUBROS}
-              >
-                <SelectTrigger id="cliente-rubro" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(RUBROS).map(([valor, texto]) => (
-                    <SelectItem key={valor} value={valor}>
-                      {texto}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                Es por donde se corta la lista y los reportes.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cliente-profesional">Cuenta profesional</Label>
-              <label
-                htmlFor="cliente-profesional"
-                className="flex h-10 items-center gap-2.5 text-base"
-              >
-                <input
-                  id="cliente-profesional"
-                  type="checkbox"
-                  checked={tipo === "profesional"}
-                  onChange={(e) =>
-                    setTipo(e.target.checked ? "profesional" : "particular")
-                  }
-                  className="h-4 w-4 accent-brand-orange"
+          </fieldset>
+
+          <fieldset className="space-y-3">
+            <legend className="text-base font-semibold">Cómo compra</legend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="cliente-profesional">Cuenta profesional</Label>
+                <label
+                  htmlFor="cliente-profesional"
+                  className="flex h-10 items-center gap-2.5 text-base"
+                >
+                  <input
+                    id="cliente-profesional"
+                    type="checkbox"
+                    checked={tipo === "profesional"}
+                    onChange={(e) =>
+                      setTipo(e.target.checked ? "profesional" : "particular")
+                    }
+                    className="h-4 w-4 accent-brand-orange"
+                  />
+                  Tiene precio y cuenta corriente propios
+                </label>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cliente-vendedor">Vendedor asignado</Label>
+                <Select
+                  value={vendedor}
+                  onValueChange={(v) => setVendedor(v ?? "")}
+                  items={opcionesDeVendedor}
+                >
+                  <SelectTrigger id="cliente-vendedor" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(opcionesDeVendedor).map(([valor, texto]) => (
+                      <SelectItem key={valor} value={valor}>
+                        {texto}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cliente-lista">Lista de precios</Label>
+                <Select
+                  value={lista}
+                  onValueChange={(v) => setLista(v ?? "")}
+                  items={opcionesDeLista}
+                >
+                  <SelectTrigger id="cliente-lista" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(opcionesDeLista).map(([valor, texto]) => (
+                      <SelectItem key={valor} value={valor}>
+                        {texto}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="limiteCredito">Límite de cuenta corriente</Label>
+                <Input
+                  id="limiteCredito"
+                  name="limiteCredito"
+                  defaultValue="0"
+                  inputMode="decimal"
                 />
-                Tiene precio y cuenta corriente propios
-              </label>
-              <p className="text-sm text-muted-foreground">
-                Es lo que decide qué paga. Se propone solo al elegir un rubro
-                del gremio.
-              </p>
+                <p className="text-sm text-muted-foreground">Cero: no opera a cuenta.</p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="cuit">CUIT</Label>
-              <Input id="cuit" name="cuit" placeholder="20-12345678-9" inputMode="numeric" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cliente-condicion">Condición frente al IVA</Label>
-              <Select
-                value={condicion}
-                onValueChange={(v) => v && setCondicion(v)}
-                items={CONDICIONES}
-              >
-                <SelectTrigger id="cliente-condicion" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(CONDICIONES).map(([valor, texto]) => (
-                    <SelectItem key={valor} value={valor}>
-                      {texto}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                ARCA la exige en cada factura, así que conviene cargarla ahora.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Correo</Label>
-              <Input id="email" name="email" type="email" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="telefono">Teléfono</Label>
-              <Input id="telefono" name="telefono" inputMode="tel" />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="direccion">Domicilio</Label>
-              <Input id="direccion" name="direccion" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cliente-vendedor">Vendedor asignado</Label>
-              <Select
-                value={vendedor}
-                onValueChange={(v) => setVendedor(v ?? "")}
-                items={opcionesDeVendedor}
-              >
-                <SelectTrigger id="cliente-vendedor" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(opcionesDeVendedor).map(([valor, texto]) => (
-                    <SelectItem key={valor} value={valor}>
-                      {texto}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                Quién lo atiende. Se administran en Clientes → Vendedores.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cliente-lista">Lista de precios</Label>
-              <Select
-                value={lista}
-                onValueChange={(v) => setLista(v ?? "")}
-                items={opcionesDeLista}
-              >
-                <SelectTrigger id="cliente-lista" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(opcionesDeLista).map(([valor, texto]) => (
-                    <SelectItem key={valor} value={valor}>
-                      {texto}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                Sin elegir, paga la lista general.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="limiteCredito">Límite de cuenta corriente</Label>
-              <Input
-                id="limiteCredito"
-                name="limiteCredito"
-                defaultValue="0"
-                inputMode="decimal"
-              />
-              <p className="text-sm text-muted-foreground">
-                Cero significa que no opera a cuenta.
-              </p>
-            </div>
-          </div>
+          </fieldset>
 
           <div className="space-y-2">
             <Label htmlFor="notas">Notas</Label>

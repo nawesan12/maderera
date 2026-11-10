@@ -45,27 +45,27 @@ export function CrearEvento() {
           <Campo
             nombre="resumen"
             etiqueta="Resumen"
-            ayuda="Una línea. Es lo que se lee en la agenda."
+            ayuda="Una línea, para la agenda."
           />
         </div>
 
         <Campo nombre="inicia" etiqueta="Cuándo empieza" tipo="datetime-local" requerido />
         <Campo nombre="termina" etiqueta="Cuándo termina" tipo="datetime-local" />
 
-        <Campo nombre="lugar" etiqueta="Dónde" ayuda="Casa Central, Aserradero, u otra dirección" />
+        <Campo nombre="lugar" etiqueta="Dónde" placeholder="Casa Central, Aserradero u otra dirección" />
         <Campo
           nombre="cupo"
           etiqueta="Cupo"
           tipo="number"
           defecto="0"
-          ayuda="Cero es sin tope"
+          ayuda="Cero: sin tope."
         />
 
         <Campo
           nombre="precio"
           etiqueta="Precio"
           defecto="0"
-          ayuda="Cero es sin cargo: la inscripción no pasa por el cobro"
+          ayuda="Cero: sin cargo."
         />
 
         <label className="flex items-end gap-2 pb-2 text-base">
@@ -132,6 +132,7 @@ function Campo({
   requerido = false,
   ayuda,
   defecto,
+  placeholder,
 }: {
   nombre: string;
   etiqueta: string;
@@ -139,6 +140,7 @@ function Campo({
   requerido?: boolean;
   ayuda?: string;
   defecto?: string;
+  placeholder?: string;
 }) {
   return (
     <div>
@@ -154,6 +156,7 @@ function Campo({
         type={tipo}
         required={requerido}
         defaultValue={defecto}
+        placeholder={placeholder}
         className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
       />
       {ayuda && <p className="mt-1 text-base text-muted-foreground">{ayuda}</p>}

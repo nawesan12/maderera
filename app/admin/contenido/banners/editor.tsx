@@ -41,6 +41,32 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
     <form {...sinReiniciar(guardar)} className="space-y-4 rounded-xl border bg-card p-5">
       {banner && <input type="hidden" name="id" value={banner.id} />}
 
+      <fieldset className="space-y-3">
+        <legend className="text-base font-semibold">Qué dice</legend>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Campo
+          nombre="titulo"
+          etiqueta="Título"
+          valorInicial={banner?.titulo ?? ""}
+          placeholder="30% de descuento con MODO los martes"
+          requerido
+        />
+        <Campo
+          nombre="bajada"
+          etiqueta="Bajada"
+          valorInicial={banner?.bajada ?? ""}
+          placeholder="Placas de yeso, perfilería y aislantes con 15% de descuento"
+        />
+        <Campo
+          nombre="etiqueta"
+          etiqueta="Etiqueta"
+          valorInicial={banner?.etiqueta ?? ""}
+          placeholder="Promoción"
+        />
+      </div>
+      </fieldset>
+      <fieldset className="space-y-3">
+        <legend className="text-base font-semibold">Dónde va</legend>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor={`${id}-ubi`} className="block text-base font-medium">
@@ -59,38 +85,7 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
               </option>
             ))}
           </select>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {UBICACIONES.find((u) => u.valor === ubicacion)?.ayuda}
-          </p>
         </div>
-
-        <Campo
-          nombre="etiqueta"
-          etiqueta="Etiqueta"
-          valorInicial={banner?.etiqueta ?? ""}
-          placeholder="Promoción"
-          ayuda="El chip de arriba del título. Dos o tres palabras: «Promoción», «Nuevo», «-15%»."
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Campo
-          nombre="titulo"
-          etiqueta="Título"
-          valorInicial={banner?.titulo ?? ""}
-          placeholder="30% de descuento con MODO los martes"
-          requerido
-        />
-      </div>
-
-      <Campo
-        nombre="bajada"
-        etiqueta="Bajada"
-        valorInicial={banner?.bajada ?? ""}
-        placeholder="Placas de yeso, perfilería y aislantes con 15% de descuento"
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2">
         <Campo
           nombre="enlace"
           etiqueta="A dónde lleva"
@@ -105,55 +100,58 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
           placeholder="Ver la promo"
         />
       </div>
-
-      <div>
-        <label htmlFor={`${id}-img`} className="block text-base font-medium">
-          Imagen de fondo
-        </label>
-        <input
-          id={`${id}-img`}
-          type="file"
-          name="imagen"
-          accept="image/jpeg,image/png,image/webp,image/avif"
-          className="mt-1 block w-full text-base"
-        />
-        <p className="mt-1 text-sm text-muted-foreground">
-          Opcional. Sin imagen el banner sale sobre el color de marca, que se ve
-          mejor que una foto mal recortada. Apaisada, mínimo 1200 px de ancho.
-        </p>
-
-        {banner?.imagenUrl && (
-          <Image
-            src={banner.imagenUrl}
-            alt=""
-            width={280}
-            height={90}
-            className="mt-2 h-[90px] w-[280px] rounded-lg object-cover"
+      </fieldset>
+      <fieldset className="space-y-3">
+        <legend className="text-base font-semibold">Imagen</legend>
+        <div>
+          <label htmlFor={`${id}-img`} className="block text-base font-medium">
+            Imagen de fondo
+          </label>
+          <input
+            id={`${id}-img`}
+            type="file"
+            name="imagen"
+            accept="image/jpeg,image/png,image/webp,image/avif"
+            className="mt-1 block w-full text-base"
           />
-        )}
-      </div>
+          <p className="mt-1 text-sm text-muted-foreground">Opcional. Apaisada, de 1200 px o más.</p>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Campo
-          nombre="desde"
-          etiqueta="Desde"
-          tipo="date"
-          valorInicial={banner?.desde ?? ""}
-          ayuda="Vacío es «ya»."
-        />
-        <Campo
-          nombre="hasta"
-          etiqueta="Hasta"
-          tipo="date"
-          valorInicial={banner?.hasta ?? ""}
-          ayuda="Vacío es «hasta que lo apagues»."
-        />
-        <Campo
-          nombre="orden"
-          etiqueta="Orden"
-          valorInicial={String(banner?.orden ?? 0)}
-        />
-      </div>
+          {banner?.imagenUrl && (
+            <Image
+              src={banner.imagenUrl}
+              alt=""
+              width={280}
+              height={90}
+              className="mt-2 h-[90px] w-[280px] rounded-lg object-cover"
+            />
+          )}
+        </div>
+      </fieldset>
+      <fieldset className="space-y-3">
+        <legend className="text-base font-semibold">Cuándo</legend>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Campo
+            nombre="desde"
+            etiqueta="Desde"
+            tipo="date"
+            valorInicial={banner?.desde ?? ""}
+            ayuda="Vacío es «ya»."
+          />
+          <Campo
+            nombre="hasta"
+            etiqueta="Hasta"
+            tipo="date"
+            valorInicial={banner?.hasta ?? ""}
+            ayuda="Vacío es «hasta que lo apagues»."
+          />
+          <Campo
+            nombre="orden"
+            etiqueta="Orden"
+            valorInicial={String(banner?.orden ?? 0)}
+          />
+        </div>
+
+      </fieldset>
 
       <label className="flex items-center gap-2.5 text-base">
         <input

@@ -560,9 +560,6 @@ function VistaDeCorte({
                 <MessageCircle className="h-4 w-4" />
                 Pedir este corte por WhatsApp
               </a>
-              <p className="mt-2 text-sm text-texto-3">
-                Te contestamos con el precio y cuándo está listo para retirar.
-              </p>
             </>
           ) : (
             <>

@@ -482,9 +482,6 @@ function ConsultaDeLaMedida({
         <MessageCircle className="h-[18px] w-[18px]" />
         Consultar precio por WhatsApp
       </a>
-      <p className="-mt-2 text-center text-sm text-texto-2">
-        Te contestamos con el precio de esta medida{stockVisible ? "" : " y si hay en cada sucursal"}.
-      </p>
     </>
   );
 }

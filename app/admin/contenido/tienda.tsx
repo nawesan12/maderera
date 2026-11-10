@@ -14,8 +14,6 @@ const INTERRUPTORES: {
   clave: Clave;
   campo: keyof Tienda;
   titulo: string;
-  encendido: string;
-  apagado: string;
   /** Lo que cambia para quien visita el sitio, dicho antes de apretar. */
   alEncender: string;
   alApagar: string;
@@ -24,23 +22,15 @@ const INTERRUPTORES: {
     clave: "tienda_activa",
     campo: "activa",
     titulo: "Tienda online",
-    encendido: "Los precios se ven en el sitio y se puede comprar y pedir presupuesto con el carrito.",
-    apagado:
-      "El sitio muestra el catálogo sin precios. Cada producto y cada corte se consultan por WhatsApp.",
-    alEncender:
-      "Los precios, el carrito y la compra quedan a la vista de todo el que entre al sitio. Revisá antes que los precios estén cargados. Se puede volver a apagar.",
-    alApagar:
-      "El sitio deja de mostrar precios y nadie puede comprar ni armar un carrito. Los pedidos que ya entraron no cambian. Se puede volver a encender.",
+    alEncender: "Los precios y el carrito quedan a la vista de todos.",
+    alApagar: "El sitio deja de mostrar precios y de vender.",
   },
   {
     clave: "stock_visible",
     campo: "stockVisible",
     titulo: "Disponibilidad en el sitio",
-    encendido: "Cada producto dice si hay en Casa Central o en el Aserradero, y se puede filtrar por stock.",
-    apagado: "El sitio no dice si hay o no hay. Conviene dejarlo así hasta tener el stock cargado.",
-    alEncender:
-      "El sitio va a mostrar si hay stock de cada medida. Si el stock no está cargado, va a decir «sin stock» en todo. Se puede volver a apagar.",
-    alApagar: "El sitio deja de mostrar la disponibilidad y el filtro por stock. Se puede volver a encender.",
+    alEncender: "Con el stock sin cargar, el sitio va a decir «sin stock» en todo.",
+    alApagar: "El sitio deja de mostrar si hay stock.",
   },
 ];
 
@@ -71,10 +61,6 @@ export function InterruptoresDeTienda({ tienda }: { tienda: Tienda }) {
         <Store className="h-5 w-5 text-muted-foreground" />
         Qué muestra el sitio
       </h2>
-      <p className="mt-0.5 text-base text-muted-foreground">
-        Lo que el sitio muestra mientras se termina de cargar el inventario.
-      </p>
-
       <ul className="mt-4 divide-y divide-linea-tenue">
         {INTERRUPTORES.map((i) => {
           const prendido = tienda[i.campo];
@@ -91,7 +77,6 @@ export function InterruptoresDeTienda({ tienda }: { tienda: Tienda }) {
                     {prendido ? "Encendida" : "Apagada"}
                   </span>
                 </p>
-                <p className="mt-0.5 text-base text-muted-foreground">{prendido ? i.encendido : i.apagado}</p>
               </div>
               <button
                 type="button"

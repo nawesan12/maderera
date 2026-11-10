@@ -39,10 +39,6 @@ export function ProductosSugeridos({
   return (
     <section className="tarjeta p-5">
       <h2 className="text-lg font-medium">Productos sugeridos</h2>
-      <p className="mt-1 text-base text-muted-foreground">
-        Se muestran en la ficha del sitio y en el carrito. Los cargás vos porque
-        el criterio no lo puede adivinar el sistema.
-      </p>
 
       <div className="mt-5 grid gap-6 lg:grid-cols-2">
         <Lista

@@ -137,9 +137,6 @@ export default async function ReportesPage({
       {meses.length > 1 && (
         <section className="tarjeta p-5">
           <h2 className="text-base font-medium">Mes a mes</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Lo vendido en cada mes del período, con los mismos filtros.
-          </p>
           <div className="mt-3">
             <GraficoDeEvolucion meses={meses} />
           </div>

@@ -58,9 +58,6 @@ export default async function CandidatosPage() {
               {candidatos.length}{" "}
               {candidatos.length === 1 ? "producto" : "productos"} para revisar
             </h2>
-            <p className="text-base text-muted-foreground">
-              Dar de baja solo lo saca del sitio; el histórico queda
-            </p>
           </div>
 
           <ul className="divide-y">

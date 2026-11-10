@@ -235,9 +235,6 @@ export function FormularioFacturaManual({
       {/* Ítems */}
       <section className="tarjeta p-5">
         <h2 className="text-base font-medium">Qué se factura</h2>
-        <p className="mt-1 text-base text-muted-foreground">
-          Los precios van finales, con IVA incluido, como en el catálogo.
-        </p>
 
         <div className="mt-4 space-y-2">
           {lineas.map((linea, i) => (

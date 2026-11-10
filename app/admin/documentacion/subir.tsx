@@ -19,9 +19,6 @@ export function SubirDocumento({ categorias }: { categorias: string[] }) {
   return (
     <section className="tarjeta p-5">
       <h2 className="text-base font-medium">Publicar un documento</h2>
-      <p className="mt-0.5 text-base text-muted-foreground">
-        PDF, planilla o imagen. Aparece en el portal apenas se sube.
-      </p>
 
       <form action={accion} className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">

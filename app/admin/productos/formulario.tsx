@@ -394,10 +394,6 @@ export function FormularioProducto({
                 <option value="10.5">10,5 % — reducida</option>
                 <option value="0">Exento</option>
               </select>
-              <p className="text-sm text-muted-foreground">
-                Los precios siguen siendo finales; esto decide cómo se
-                desagrega en la factura.
-              </p>
             </div>
 
             {/*
@@ -423,10 +419,6 @@ export function FormularioProducto({
                   <option key={i} value={i} />
                 ))}
               </datalist>
-              <p className="text-sm text-muted-foreground">
-                A qué cuenta va este producto. Se escribe libre: cuando esté el
-                plan de cuentas del contador, se pasa a una lista.
-              </p>
             </div>
 
             <div className="space-y-2">
@@ -440,10 +432,7 @@ export function FormularioProducto({
                 inputMode="decimal"
                 placeholder="0"
               />
-              <p className="text-sm text-muted-foreground">
-                % sobre el costo por maquinarlo en planta. Lo usa el ajuste de
-                precios con base «costo con elaboración».
-              </p>
+              <p className="text-sm text-muted-foreground">% sobre el costo.</p>
             </div>
           </div>
 
@@ -484,11 +473,6 @@ export function FormularioProducto({
               Se fabrica a pedido
             </label>
           </div>
-          <p className="text-sm text-muted-foreground">
-            «Se fabrica a pedido» es para los maquinados especiales: escaleras a
-            medida, tirantes que no vienen de origen. La ficha deja de decir
-            «sin stock» y pasa a ofrecer encargarlo.
-          </p>
         </CardContent>
       </Card>
 
@@ -498,9 +482,6 @@ export function FormularioProducto({
           <CardContent className="space-y-4 p-6">
             <div>
               <h2 className="text-base font-semibold">Fotos</h2>
-              <p className="text-sm text-muted-foreground">
-                Lo primero que mira quien entra al catálogo.
-              </p>
             </div>
             <GaleriaImagenes productId={inicial.id} imagenes={galeria} />
           </CardContent>
@@ -523,9 +504,6 @@ export function FormularioProducto({
               <h2 className="text-base font-semibold text-foreground">
                 Medidas y presentaciones
               </h2>
-              <p className="text-sm text-muted-foreground">
-                Cada medida tiene su propio código, precio y stock.
-              </p>
             </div>
             <Button
               type="button"
@@ -684,9 +662,6 @@ export function FormularioProducto({
                     }
                     inputMode="decimal"
                   />
-                  <p className="text-sm text-muted-foreground">
-                    El precio final, como se cobra en el mostrador.
-                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor={`precio-prof-${i}`}>
@@ -700,9 +675,6 @@ export function FormularioProducto({
                     }
                     inputMode="decimal"
                   />
-                  <p className="text-sm text-muted-foreground">
-                    También final. Al profesional se le muestra el neto aparte.
-                  </p>
                 </div>
               </div>
 
@@ -871,10 +843,6 @@ function FormaDeVentaDePlaca({
             <p className="text-base">
               Entera <span className="tabular">{formatearPesos(precioEjemplo)}</span> → media{" "}
               <strong className="tabular">{formatearPesos(media)}</strong>
-              <span className="block text-sm text-muted-foreground">
-                Con la primera medida y el precio general. Vale igual para cada
-                lista de precios.
-              </span>
             </p>
           )}
         </div>

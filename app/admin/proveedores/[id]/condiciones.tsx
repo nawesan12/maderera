@@ -49,10 +49,6 @@ export function CondicionesDelProveedor({
     <section className="tarjeta space-y-4 p-5">
       <div>
         <h2 className="text-base font-semibold">Condiciones comerciales</h2>
-        <p className="text-sm text-muted-foreground">
-          Cómo acepta cobrar y qué bonifica por cada forma. Queda por escrito y
-          el formulario de pago lo muestra.
-        </p>
       </div>
 
       {condiciones.length > 0 && (

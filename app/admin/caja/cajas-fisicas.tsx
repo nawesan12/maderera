@@ -60,10 +60,6 @@ export function CajasFisicas({
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-linea px-5 py-3.5">
         <div>
           <h2 className="text-base font-semibold">Cajas del mostrador</h2>
-          <p className="text-sm text-muted-foreground">
-            Las máquinas que pueden cobrar sin internet. El código sale impreso
-            en el ticket mientras no hay conexión.
-          </p>
         </div>
         <button
           type="button"

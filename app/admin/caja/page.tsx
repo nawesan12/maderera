@@ -260,9 +260,6 @@ export default async function CajaPage({
           <h2 className="text-base font-semibold">
             Emitido en el mostrador
           </h2>
-          <p className="text-base text-muted-foreground">
-            Para reimprimir desde cualquier equipo
-          </p>
         </div>
 
         {emitido.length === 0 ? (

@@ -611,9 +611,6 @@ export function FormularioCorte({
         <CardContent className="space-y-4 p-6">
           <div className="space-y-1">
             <h2 className="text-base font-semibold">Cómo entra en la placa</h2>
-            <p className="text-base text-muted-foreground">
-              Se rehace solo a medida que cargás las piezas.
-            </p>
           </div>
 
           <PlanoEnVivo

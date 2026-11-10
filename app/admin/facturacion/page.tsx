@@ -166,10 +166,6 @@ export default async function FacturacionPage({
         <section className="tarjeta px-6 py-16 text-center">
           <ReceiptText className="mx-auto h-10 w-10 text-muted-foreground/60" />
           <h2 className="mt-4 text-lg font-medium">Todavía no hay comprobantes</h2>
-          <p className="mx-auto mt-1 max-w-md text-base text-muted-foreground">
-            Se factura desde un pedido entregado, o a mano con el botón de
-            arriba para la venta de mostrador.
-          </p>
         </section>
       ) : (
         <div className="space-y-6">

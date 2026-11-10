@@ -121,10 +121,6 @@ export default async function PagosPage({
         <section className="tarjeta px-6 py-16 text-center">
           <Wallet className="mx-auto h-10 w-10 text-muted-foreground/60" />
           <h2 className="mt-4 text-lg font-medium">Todavía no hay cobros</h2>
-          <p className="mx-auto mt-1 max-w-md text-base text-muted-foreground">
-            Aparecen acá apenas alguien pague un pedido desde la tienda o
-            cancele deuda de su cuenta corriente.
-          </p>
         </section>
       ) : (
         <div className="space-y-6">

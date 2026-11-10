@@ -74,10 +74,6 @@ export function EditorDeResenas({
 
       <section className="tarjeta p-5">
         <h2 className="text-base font-medium">Cargar una reseña</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Copiala de la ficha de Google: quién la escribió, cuántas estrellas
-          puso y el texto tal cual.
-        </p>
 
         <form {...sinReiniciar(guardar)} className="mt-4 space-y-3">
           <div className="grid gap-3 sm:grid-cols-3">

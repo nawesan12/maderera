@@ -72,9 +72,6 @@ export default async function ContenidoPage() {
           <Settings2 className="h-5 w-5 text-muted-foreground" />
           Textos del sitio
         </h2>
-        <p className="mt-0.5 text-base text-muted-foreground">
-          Cosas que cambian cada tanto y no deberían necesitar un programador.
-        </p>
 
         <div className="mt-4">
           <Ajustes ajustes={textos} />

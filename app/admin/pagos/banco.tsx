@@ -24,10 +24,6 @@ export function FormularioBanco({ datos }: { datos: DatosBancariosDelPanel | nul
   return (
     <section className="tarjeta p-5">
       <h2 className="text-base font-medium">Datos para transferencias</h2>
-      <p className="mt-0.5 text-base text-muted-foreground">
-        Es lo que ve quien elige transferencia en el carrito. Sin esto cargado,
-        la tienda le pide que los solicite por WhatsApp.
-      </p>
 
       <form action={accion} className="mt-4 grid gap-3 sm:grid-cols-2">
         <Campo

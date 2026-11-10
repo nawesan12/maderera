@@ -53,10 +53,6 @@ export default async function DocumentacionAdminPage() {
           <h2 className="mt-4 text-lg font-medium">
             Todavía no hay documentos cargados
           </h2>
-          <p className="mx-auto mt-1 max-w-md text-base text-muted-foreground">
-            Los que el cliente entregue en digital se suben acá y quedan
-            disponibles en el portal.
-          </p>
         </section>
       ) : (
         <>
@@ -87,10 +83,6 @@ export default async function DocumentacionAdminPage() {
         <section className="tarjeta">
           <div className="border-b px-5 py-4">
             <h2 className="text-base font-medium">Dados de baja</h2>
-            <p className="text-base text-muted-foreground">
-              El archivo sigue existiendo: un enlace roto en el pliego de otro es
-              peor que un documento viejo.
-            </p>
           </div>
           <ul className="divide-y">
             {bajas.map((doc) => (

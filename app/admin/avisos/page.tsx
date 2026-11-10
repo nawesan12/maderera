@@ -113,9 +113,6 @@ export default async function AvisosPage() {
       <section className="tarjeta">
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-4">
           <h2 className="text-base font-medium">Últimos avisos</h2>
-          <p className="text-base text-muted-foreground">
-            Los dos canales, del más nuevo al más viejo
-          </p>
         </div>
 
         {enviados.length === 0 ? (

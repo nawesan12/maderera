@@ -375,9 +375,6 @@ function DelSistemaAnterior({ anterior }: { anterior: FichaDeCliente["anterior"]
     <section className="tarjeta overflow-hidden">
       <header className="px-4 py-3.5">
         <h2 className="text-base font-medium">Del sistema anterior</h2>
-        <p className="text-sm text-muted-foreground">
-          Lo que se migró de ISIS. Es historia: no mueve la cuenta corriente.
-        </p>
       </header>
       <div className="grid gap-px border-t bg-linea sm:grid-cols-2">
         {anterior.cantidadVentas > 0 && (

@@ -397,10 +397,6 @@ export default async function ConfiguracionWhatsappPage() {
           <BellOff className="h-5 w-5 text-muted-foreground" />
           Números que pidieron no recibir avisos
         </h2>
-        <p className="mt-1 max-w-2xl text-base text-muted-foreground">
-          WhatsApp obliga a respetarlo. Se registra solo cuando alguien escribe BAJA, o desde la conversación. A estos
-          números no les sale ningún aviso automático; si escriben, se les contesta igual.
-        </p>
         {bajas.length === 0 ? (
           <p className="tarjeta-hundida mt-3 p-4 text-base text-muted-foreground">Nadie pidió la baja.</p>
         ) : (

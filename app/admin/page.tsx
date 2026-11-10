@@ -130,11 +130,6 @@ export default async function ResumenPage({
                 <span className="mt-1.5 block text-[14.5px] font-semibold leading-tight">
                   {p.texto}
                 </span>
-                {p.detalle && (
-                  <span className="mt-0.5 block text-[12.5px] leading-snug text-texto-3">
-                    {p.detalle}
-                  </span>
-                )}
               </Link>
             ))}
           </div>

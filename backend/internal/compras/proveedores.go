@@ -113,6 +113,9 @@ type MovimientoDeCuenta struct {
 	Referencia *string   `json:"referencia"`
 	CreatedAt  time.Time `json:"createdAt"`
 	Saldo      float64   `json:"saldo"`
+	// De dónde salió: la ficha lleva a la factura o al pago.
+	PurchaseInvoiceID *string `json:"purchaseInvoiceId"`
+	SupplierPaymentID *string `json:"supplierPaymentId"`
 }
 
 // Proveedor es la ficha completa, con el libro de la cuenta.
@@ -161,7 +164,7 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 		return nil, err
 	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT id, tipo::text, monto, detalle, referencia, created_at FROM supplier_movements
+		SELECT id, tipo::text, monto, detalle, referencia, created_at, purchase_invoice_id, supplier_payment_id FROM supplier_movements
 		WHERE supplier_id = $1 ORDER BY created_at DESC LIMIT 200`, id)
 	if err != nil {
 		return nil, err
@@ -169,7 +172,7 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 	p.Movimientos, err = pgx.CollectRows(filas, func(r pgx.CollectableRow) (MovimientoDeCuenta, error) {
 		var m MovimientoDeCuenta
 		var monto jsmath.Num
-		err := r.Scan(&m.ID, &m.Tipo, &monto, &m.Detalle, &m.Referencia, &m.CreatedAt)
+		err := r.Scan(&m.ID, &m.Tipo, &monto, &m.Detalle, &m.Referencia, &m.CreatedAt, &m.PurchaseInvoiceID, &m.SupplierPaymentID)
 		m.Monto = float64(monto)
 		return m, err
 	})
@@ -268,18 +271,32 @@ func (s *Servicio) GuardarProveedor(ctx context.Context, ses *auth.Sesion, m map
 	return id, "Proveedor creado.", nil
 }
 
-// subeLaDeuda son los tipos que suman: el signo lo pone el tipo, no quien carga.
-var subeLaDeuda = map[string]bool{"factura": true, "nota_debito": true, "ajuste": true}
-
-// RegistrarMovimiento es registrarMovimientoDeProveedor.
+// RegistrarMovimiento es registrarMovimientoDeProveedor, limitado a ajustes.
+//
+// Bug arreglado: dejaba anotar a mano una «Factura» o un «Pago» que no
+// pasaba por compras ni por el libro IVA: la deuda bajaba sin pago (ni
+// retenciones, ni caja, ni cheque) y subía sin factura (ni crédito fiscal).
+// Las facturas y los pagos van por su pantalla; acá queda el ajuste (un
+// saldo inicial, un redondeo, una diferencia acordada), con su motivo y para
+// el lado que diga `sentido`: «sube» (le debemos más) o «baja».
 func (s *Servicio) RegistrarMovimiento(ctx context.Context, ses *auth.Sesion, m map[string]any) (string, error) {
 	x, err := leerMovimiento(m)
 	if err != nil {
 		return "", err
 	}
+	if x.Tipo != "ajuste" {
+		return "", fallo("A mano solo se anotan ajustes: las facturas se cargan en Compras › Facturas y los pagos en Compras › Pagos.")
+	}
+	if x.Detalle == nil {
+		return "", plataforma.Invalido(map[string]string{"detalle": "Poné el motivo del ajuste."})
+	}
 	conSigno := x.Monto
-	if !subeLaDeuda[x.Tipo] {
+	switch m["sentido"] {
+	case "baja":
 		conSigno = -x.Monto
+	case "sube", nil:
+	default:
+		return "", fallo("Elegí si el ajuste sube o baja la deuda.")
 	}
 	if _, err := s.pool.Exec(ctx, `
 		INSERT INTO supplier_movements (supplier_id, tipo, monto, detalle, referencia, created_by_user_id)
@@ -295,7 +312,7 @@ func (s *Servicio) RegistrarMovimiento(ctx context.Context, ses *auth.Sesion, m 
 		ref = " (" + *x.Referencia + ")"
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "proveedor", x.SupplierID,
-		"Anotó "+strings.Replace(x.Tipo, "_", " ", 1)+" por $"+jsmath.Fijo2(x.Monto)+ref, nil)
+		"Anotó un ajuste de $"+jsmath.Fijo2(conSigno)+ref+": "+*x.Detalle, nil)
 	return x.SupplierID, nil
 }
 

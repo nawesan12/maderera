@@ -150,12 +150,21 @@ func TestProveedores(t *testing.T) {
 	if c, _ := pedir(t, ven, "POST", e.u+"proveedores", map[string]any{"nombre": "Otro", "condicionIva": "exento", "diasPago": 0}); c != 403 {
 		t.Errorf("el vendedor no da de alta: %d", c)
 	}
-	// La cuenta: una factura sube la deuda, un pago la baja (el signo lo pone el tipo).
-	pedir(t, adm, "POST", e.u+"proveedores/"+id+"/movimientos", map[string]any{"tipo": "factura", "monto": 1000, "referencia": "A-1"})
-	if c, b := pedir(t, adm, "POST", e.u+"proveedores/"+id+"/movimientos", map[string]any{"tipo": "pago", "monto": 400}); c != 200 {
-		t.Fatalf("pago: %d %s", c, b)
+	// La cuenta a mano: solo ajustes, con motivo; el lado lo dice `sentido`
+	// (una factura o un pago a mano no pasaban por compras ni por el libro IVA).
+	for _, tipo := range []string{"factura", "pago", "nota_credito"} {
+		if c, b := pedir(t, adm, "POST", e.u+"proveedores/"+id+"/movimientos", map[string]any{"tipo": tipo, "monto": 1000, "detalle": "x"}); c != 422 || !strings.Contains(b, "solo se anotan ajustes") {
+			t.Errorf("%s a mano: %d %s", tipo, c, b)
+		}
 	}
-	if c, b := pedir(t, adm, "POST", e.u+"proveedores/"+id+"/movimientos", map[string]any{"tipo": "pago", "monto": -1}); c != 422 || !strings.Contains(b, "El monto tiene que ser mayor a cero.") {
+	if c, b := pedir(t, adm, "POST", e.u+"proveedores/"+id+"/movimientos", map[string]any{"tipo": "ajuste", "monto": 1000}); c != 422 || !strings.Contains(b, "Poné el motivo del ajuste.") {
+		t.Errorf("ajuste sin motivo: %d %s", c, b)
+	}
+	pedir(t, adm, "POST", e.u+"proveedores/"+id+"/movimientos", map[string]any{"tipo": "ajuste", "sentido": "sube", "monto": 1000, "referencia": "A-1", "detalle": "Saldo inicial"})
+	if c, b := pedir(t, adm, "POST", e.u+"proveedores/"+id+"/movimientos", map[string]any{"tipo": "ajuste", "sentido": "baja", "monto": 400, "detalle": "Bonificación acordada"}); c != 200 {
+		t.Fatalf("ajuste que baja: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"proveedores/"+id+"/movimientos", map[string]any{"tipo": "ajuste", "monto": -1, "detalle": "x"}); c != 422 || !strings.Contains(b, "El monto tiene que ser mayor a cero.") {
 		t.Errorf("monto negativo: %d %s", c, b)
 	}
 	// Los proveedores son de /admin/proveedores: el vendedor no ve la ficha
@@ -597,7 +606,10 @@ func TestListasVacias(t *testing.T) {
 	e := armar(t)
 	adm := e.staff(t, "admin@prueba.test", "admin")
 	q := "?desde=2026-10-01T00:00:00Z&hasta=2026-10-31T23:59:59.999Z"
-	for _, ruta := range []string{"compras/ordenes", "recepciones", "compras/facturas", "compras/pagos", "compras/regimenes", "compras/regimenes?todos=true",
+	if c, b := pedir(t, adm, "GET", e.u+"compras/facturas", nil); c != 200 || !strings.Contains(b, `"facturas":[]`) {
+		t.Errorf("compras/facturas: %d %s", c, b)
+	}
+	for _, ruta := range []string{"compras/ordenes", "recepciones", "compras/pagos", "compras/regimenes", "compras/regimenes?todos=true",
 		"compras/retenciones-sufridas", "compras/retenciones-sufridas/credito" + q, "compras/gastos" + q, "compras/gastos/por-categoria" + q,
 		"compras/gastos/por-circuito" + q, "compras/por-llegar", "compras/mercaderia?texto=zz", "compras/mercaderia?ids=",
 		"proveedores/" + e.proveedor + "/condiciones", "proveedores/" + e.proveedor + "/facturas-con-saldo", "proveedores/" + e.proveedor + "/acumulado-del-mes"} {

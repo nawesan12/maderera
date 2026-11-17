@@ -98,11 +98,27 @@ func (o respuesta) VisitPagarAProveedorResponse(w http.ResponseWriter) error { r
 func (o respuesta) VisitAnularPagoAProveedorResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
+func (o respuesta) VisitFichaDeFacturaDeCompraResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitCorregirFacturaDeCompraResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitAnularFacturaDeCompraResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitFichaDePagoAProveedorResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 
 // archivoPdf es un PDF para mostrar en el navegador.
 type archivoPdf struct {
 	nombre string
 	datos  []byte
+}
+
+func (a archivoPdf) VisitOrdenDePagoPdfResponse(w http.ResponseWriter) error {
+	return a.VisitCertificadoDeRetencionPdfResponse(w)
 }
 
 func (a archivoPdf) VisitCertificadoDeRetencionPdfResponse(w http.ResponseWriter) error {
@@ -560,8 +576,53 @@ func (a *API) ListarFacturasDeCompra(ctx context.Context, r comprasapi.ListarFac
 	if _, err := compras(ctx); err != nil {
 		return nil, err
 	}
-	v, err := a.s.ListarFacturas(ctx, limite(r.Params.Limite, 60))
+	f := FiltroDeFacturas{Proveedor: deTexto(r.Params.Proveedor), Desde: r.Params.Desde, Hasta: r.Params.Hasta,
+		Pagina: limite(r.Params.Pagina, 1), PorPagina: limite(r.Params.Limite, 50)}
+	if r.Params.Estado != nil {
+		f.Estado = string(*r.Params.Estado)
+	}
+	v, err := a.s.ListarFacturas(ctx, f, time.Now())
 	return ok(v), err
+}
+
+func (a *API) FichaDeFacturaDeCompra(ctx context.Context, r comprasapi.FichaDeFacturaDeCompraRequestObject) (comprasapi.FichaDeFacturaDeCompraResponseObject, error) {
+	if _, err := compras(ctx); err != nil {
+		return nil, err
+	}
+	f, err := a.s.ObtenerFactura(ctx, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	if f == nil {
+		return nil, noEncontrado("Esa factura no existe.")
+	}
+	return ok(f), nil
+}
+
+func (a *API) CorregirFacturaDeCompra(ctx context.Context, r comprasapi.CorregirFacturaDeCompraRequestObject) (comprasapi.CorregirFacturaDeCompraResponseObject, error) {
+	ses, err := compras(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.CorregirFactura(ctx, ses, r.Id, *r.Body)
+	if err != nil {
+		return nil, err
+	}
+	return hecho(m), nil
+}
+
+// AnularFacturaDeCompra es del admin con nombre, como anular un pago: saca
+// crédito fiscal del libro y mueve la cuenta del proveedor.
+func (a *API) AnularFacturaDeCompra(ctx context.Context, r comprasapi.AnularFacturaDeCompraRequestObject) (comprasapi.AnularFacturaDeCompraResponseObject, error) {
+	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.AnularFactura(ctx, ses, r.Id, r.Body.Motivo)
+	if err != nil {
+		return nil, err
+	}
+	return hecho(m), nil
 }
 
 func (a *API) CargarFacturaDeCompra(ctx context.Context, r comprasapi.CargarFacturaDeCompraRequestObject) (comprasapi.CargarFacturaDeCompraResponseObject, error) {
@@ -614,11 +675,52 @@ func (a *API) PagarAProveedor(ctx context.Context, r comprasapi.PagarAProveedorR
 	if err != nil {
 		return nil, err
 	}
-	m, certificados, err := a.s.PagarAProveedor(ctx, ses, *r.Body)
+	p, err := a.s.PagarAProveedor(ctx, ses, *r.Body)
 	if err != nil {
 		return nil, err
 	}
-	return ok(map[string]any{"ok": m, "certificados": certificados}), nil
+	out := map[string]any{"ok": p.Ok, "id": p.ID, "certificados": p.Certificados}
+	if p.Aviso != "" {
+		out["aviso"] = p.Aviso
+	}
+	return ok(out), nil
+}
+
+func (a *API) FichaDePagoAProveedor(ctx context.Context, r comprasapi.FichaDePagoAProveedorRequestObject) (comprasapi.FichaDePagoAProveedorResponseObject, error) {
+	if _, err := compras(ctx); err != nil {
+		return nil, err
+	}
+	p, err := a.s.ObtenerPago(ctx, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, noEncontrado("Ese pago no existe.")
+	}
+	return ok(p), nil
+}
+
+// OrdenDePagoPdf es el papel del pago, para que el proveedor firme.
+func (a *API) OrdenDePagoPdf(ctx context.Context, r comprasapi.OrdenDePagoPdfRequestObject) (comprasapi.OrdenDePagoPdfResponseObject, error) {
+	if _, err := compras(ctx); err != nil {
+		return nil, err
+	}
+	p, err := a.s.ObtenerPago(ctx, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, noEncontrado("Ese pago no existe.")
+	}
+	emisor, err := documentos.EmisorDe(ctx, a.s.pool)
+	if err != nil {
+		return nil, err
+	}
+	b, err := pdf.OrdenDePago(DatosDeLaOrdenDePago(p, emisor))
+	if err != nil {
+		return nil, err
+	}
+	return archivoPdf{"orden-de-pago-" + diaArgentino(p.Fecha) + ".pdf", b}, nil
 }
 
 // AnularPagoAProveedor es solo del admin (con nombre, no por pantalla):
@@ -766,9 +868,10 @@ func (a *API) GastosPorCircuito(ctx context.Context, r comprasapi.GastosPorCircu
 }
 
 func (a *API) SucursalesParaGasto(ctx context.Context, _ comprasapi.SucursalesParaGastoRequestObject) (comprasapi.SucursalesParaGastoResponseObject, error) {
-	if _, err := compras(ctx); err != nil {
+	ses, err := compras(ctx)
+	if err != nil {
 		return nil, err
 	}
-	v, err := a.s.SucursalesParaGasto(ctx)
+	v, err := a.s.SucursalesParaGasto(ctx, ses.UserID)
 	return ok(v), err
 }

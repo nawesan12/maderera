@@ -13,6 +13,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/caja"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/pdf"
@@ -108,9 +109,11 @@ type FacturaConSaldo struct {
 	Numero       string    `json:"numero"`
 	Tipo         string    `json:"tipo"`
 	FechaEmision time.Time `json:"fechaEmision"`
-	Total        float64   `json:"total"`
-	Imputado     float64   `json:"imputado"`
-	Saldo        float64   `json:"saldo"`
+	// FechaVencimiento es cuándo vence: el pago arranca por las vencidas.
+	FechaVencimiento *time.Time `json:"fechaVencimiento"`
+	Total            float64    `json:"total"`
+	Imputado         float64    `json:"imputado"`
+	Saldo            float64    `json:"saldo"`
 	// NetoSinIva es lo que de la factura entra en la base de Ganancias e
 	// IIBB: el neto gravado más lo no gravado o exento, sin el IVA ni las
 	// percepciones. La pantalla del pago propone la base con la proporción
@@ -118,17 +121,21 @@ type FacturaConSaldo struct {
 	NetoSinIva float64 `json:"netoSinIva"`
 }
 
-// FacturasConSaldo es facturasConSaldo: lo facturado menos lo ya imputado.
+// FacturasConSaldo es facturasConSaldo: lo facturado menos lo ya imputado,
+// por vencimiento (la que vence antes, primero). Sin las anuladas ni las
+// notas de crédito, que restan deuda y no se pagan.
 func (s *Servicio) FacturasConSaldo(ctx context.Context, proveedor string) ([]FacturaConSaldo, error) {
 	out := []FacturaConSaldo{}
 	if !plataforma.UUIDValido(proveedor) {
 		return out, nil
 	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT f.id, f.punto_venta, f.numero, f.tipo::text, f.fecha_emision, f.total,
+		SELECT f.id, f.punto_venta, f.numero, f.tipo::text, f.fecha_emision, f.fecha_vencimiento, f.total,
 		  coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0),
 		  f.neto + f.exento
-		FROM purchase_invoices f WHERE f.supplier_id = $1 ORDER BY f.fecha_emision`, proveedor)
+		FROM purchase_invoices f
+		WHERE f.supplier_id = $1 AND f.anulada_at IS NULL AND f.tipo::text NOT LIKE 'nota_credito%'
+		ORDER BY f.fecha_vencimiento NULLS LAST, f.fecha_emision`, proveedor)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +144,7 @@ func (s *Servicio) FacturasConSaldo(ctx context.Context, proveedor string) ([]Fa
 		var f FacturaConSaldo
 		var pv, n int64
 		var total, imputado, netoSinIva jsmath.Num
-		if err := filas.Scan(&f.ID, &pv, &n, &f.Tipo, &f.FechaEmision, &total, &imputado, &netoSinIva); err != nil {
+		if err := filas.Scan(&f.ID, &pv, &n, &f.Tipo, &f.FechaEmision, &f.FechaVencimiento, &total, &imputado, &netoSinIva); err != nil {
 			return nil, err
 		}
 		f.Numero, f.Total, f.Imputado, f.NetoSinIva = NumeroDeCompra(pv, n), float64(total), float64(imputado), float64(netoSinIva)
@@ -337,13 +344,67 @@ func siguienteCertificado(ctx context.Context, tx pgx.Tx, impuesto string, fecha
 	return fmt.Sprintf("%s%06d", prefijo, maximo+1), nil
 }
 
+// PagoRegistrado es lo que contesta PagarAProveedor.
+type PagoRegistrado struct {
+	ID           string
+	Ok           string
+	Aviso        string
+	Certificados []CertificadoEmitido
+}
+
+// fechaDelPago es el instante con que queda el pago: ahora si es de hoy (o
+// no vino), el mediodía argentino de ese día si es de antes. Un pago con
+// fecha futura no se registra: la plata todavía no salió.
+func fechaDelPago(dia *string, ahora time.Time) (time.Time, error) {
+	if dia == nil {
+		return ahora.UTC(), nil
+	}
+	d, err := time.ParseInLocation("2006-01-02", *dia, caja.Argentina)
+	if err != nil {
+		return time.Time{}, plataforma.Invalido(map[string]string{"fecha": "La fecha del pago no es válida."})
+	}
+	hoy := caja.InicioDelDia(ahora)
+	switch {
+	case d.After(hoy):
+		return time.Time{}, fallo("La fecha del pago no puede ser posterior a hoy.")
+	case d.Equal(hoy):
+		return ahora.UTC(), nil
+	}
+	return d.Add(12 * time.Hour).UTC(), nil
+}
+
+// efectivoDelPago es lo que sale en billetes: los renglones en efectivo o,
+// sin renglones, el neto entero si el medio es efectivo.
+func efectivoDelPago(medio string, neto float64, partes []ParteDePago) float64 {
+	if len(partes) == 0 {
+		if medio == "efectivo" {
+			return neto
+		}
+		return 0
+	}
+	suma := 0.0
+	for _, p := range partes {
+		if p.Medio == "efectivo" {
+			suma += p.Importe
+		}
+	}
+	return jsmath.Redondear2(suma)
+}
+
 // PagarAProveedor es pagarAProveedor + registrarPagoAProveedor: el pago, las
 // retenciones con sus certificados, las imputaciones a facturas, las partes
 // (con los cheques) y un solo movimiento de cuenta por el total.
-func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[string]any) (string, []CertificadoEmitido, error) {
+//
+// Bug arreglado: la parte en efectivo no salía de ninguna caja (un gasto en
+// efectivo sí), y el arqueo del turno mostraba un sobrante que no existía.
+// Ahora sale del turno de la sucursal elegida, con la misma regla que un
+// gasto (turnoDelGasto); si no hay turno, el pago se registra igual y se
+// avisa.
+func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[string]any) (PagoRegistrado, error) {
+	var out PagoRegistrado
 	d, err := leerPago(m)
 	if err != nil {
-		return "", nil, err
+		return out, err
 	}
 	// Lo que filtraba la acción antes de llamar.
 	var retenciones []RetencionPedida
@@ -361,7 +422,7 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 	for i := range d.Partes {
 		if c := d.Partes[i].Cheque; c != nil {
 			if p := RevisarNumeroDeCheque(c.Numero); p != "" {
-				return "", nil, fallo(p)
+				return out, fallo(p)
 			}
 			c.Numero = NormalizarNumeroDeCheque(c.Numero)
 		}
@@ -372,10 +433,14 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 	// total con IVA de otra factura) y haría retener de más.
 	for _, r := range retenciones {
 		if r.Base-d.Total > 0.009 {
-			return "", nil, fallo(fmt.Sprintf("La base de una retención (%s) no puede ser mayor al pago (%s).", Monto(r.Base), Monto(d.Total)))
+			return out, fallo(fmt.Sprintf("La base de una retención (%s) no puede ser mayor al pago (%s).", Monto(r.Base), Monto(d.Total)))
 		}
 	}
-	fecha := time.Now().UTC()
+	ahora := time.Now()
+	fecha, err := fechaDelPago(d.Fecha, ahora)
+	if err != nil {
+		return out, err
+	}
 	var pagoID string
 	var neto float64
 	certificados := []CertificadoEmitido{}
@@ -466,17 +531,25 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 		for i, imp := range imputaciones {
 			importes[i] = imp.Importe
 			var f FacturaImputada
-			var proveedor string
+			var proveedor, tipo string
+			var anulada bool
 			var total, imputado jsmath.Num
 			err := tx.QueryRow(ctx, `
 				SELECT supplier_id, numero, total,
-				  coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0)
-				FROM purchase_invoices f WHERE id = $1 FOR UPDATE`, imp.PurchaseInvoiceID).Scan(&proveedor, &f.Numero, &total, &imputado)
+				  coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0),
+				  tipo::text, anulada_at IS NOT NULL
+				FROM purchase_invoices f WHERE id = $1 FOR UPDATE`, imp.PurchaseInvoiceID).Scan(&proveedor, &f.Numero, &total, &imputado, &tipo, &anulada)
 			if errors.Is(err, pgx.ErrNoRows) || err == nil && proveedor != d.SupplierID {
 				return fallo("Una de las facturas no es de este proveedor.")
 			}
 			if err != nil {
 				return err
+			}
+			if anulada {
+				return fallo(fmt.Sprintf("La factura %d está anulada: no se le aplica un pago.", f.Numero))
+			}
+			if strings.HasPrefix(tipo, "nota_credito") {
+				return fallo(fmt.Sprintf("La %d es una nota de crédito: resta deuda, no se paga.", f.Numero))
 			}
 			f.Total, f.Imputado, f.Importe = float64(total), float64(imputado), imp.Importe
 			if err := revisarImputacion(f); err != nil {
@@ -503,28 +576,58 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 				return err
 			}
 		}
+		if efectivo := efectivoDelPago(d.Medio, neto, partes); efectivo > 0 {
+			if d.BranchID == nil {
+				out.Aviso = "No se eligió de qué caja salió el efectivo: no se descontó de ningún turno. La plata igual se fue: el arqueo va a mostrar la diferencia."
+			} else {
+				turno, momento, hay, err := turnoDelGasto(ctx, tx, *d.BranchID, diaArgentino(fecha), ahora)
+				if err != nil {
+					return err
+				}
+				if !hay {
+					out.Aviso = "No había caja abierta en ese momento, así que el efectivo no salió del turno. La plata igual se fue: el arqueo va a mostrar la diferencia."
+				} else if _, err := tx.Exec(ctx, `
+					INSERT INTO cash_movements (session_id, tipo, monto, motivo, supplier_payment_id, creado_por, created_at)
+					VALUES ($1, 'gasto', $2::numeric, $3, $4, $5, $6)`,
+					turno, jsmath.Fijo2(-efectivo), "Pago a "+nombre, pagoID, ses.UserID, momento); err != nil {
+					return err
+				}
+			}
+		}
 		detalle := "Pago " + d.Medio
 		if retenido > 0 {
 			detalle = fmt.Sprintf("Pago %s por $%s más $%s de retenciones", d.Medio, jsmath.Fijo2(neto), jsmath.Fijo2(retenido))
 		}
 		_, err = tx.Exec(ctx, `
-			INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id)
-			VALUES ($1, 'pago', $2::numeric, $3, $4, $5)`, d.SupplierID, jsmath.Fijo2(-d.Total), d.Referencia, detalle, ses.UserID)
+			INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id, supplier_payment_id, created_at)
+			VALUES ($1, 'pago', $2::numeric, $3, $4, $5, $6, $7)`, d.SupplierID, jsmath.Fijo2(-d.Total), d.Referencia, detalle, ses.UserID, pagoID,
+			fechaDelMovimiento(fecha, ahora))
 		return err
 	})
 	if err != nil {
-		return "", nil, err
+		return out, err
 	}
 	desc := "Pagó " + Monto(d.Total) + " por " + d.Medio
 	if len(certificados) > 0 {
 		desc += fmt.Sprintf(", con %d retenciones", len(certificados))
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "pago_proveedor", pagoID, desc, nil)
-	ok := "Pago registrado por " + Monto(neto) + "."
+	out.ID, out.Certificados = pagoID, certificados
+	out.Ok = "Pago registrado por " + Monto(neto) + "."
 	if len(certificados) > 0 {
-		ok = "Pago registrado. Salieron " + Monto(neto) + " y se retuvieron " + Monto(d.Total-neto) + "."
+		out.Ok = "Pago registrado. Salieron " + Monto(neto) + " y se retuvieron " + Monto(d.Total-neto) + "."
 	}
-	return ok, certificados, nil
+	return out, nil
+}
+
+// fechaDelMovimiento es el created_at del movimiento de cuenta de un pago:
+// el de la transacción si es de hoy (como siempre), el día del pago si es de
+// antes, así el libro de la cuenta queda en orden.
+func fechaDelMovimiento(fecha, ahora time.Time) time.Time {
+	if diaArgentino(fecha) == diaArgentino(ahora) {
+		return ahora.UTC()
+	}
+	return fecha
 }
 
 // registrarParte es un renglón de con qué salió la plata: un cheque nuevo

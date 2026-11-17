@@ -100,6 +100,11 @@ var pantallaDeCadaRuta = map[string]string{
 	"CrearOrdenDeCompra":             "/admin/compras",                // POST /api/v1/admin/compras/ordenes
 	"RetencionesPracticadasCsv":      "/admin/compras",                // GET /api/v1/admin/compras/pagos/retenciones-csv
 	"AnularPagoAProveedor":           "/admin/compras",                // POST /api/v1/admin/compras/pagos/{id}/anular
+	"FichaDePagoAProveedor":          "/admin/compras",                // GET /api/v1/admin/compras/pagos/{id}
+	"OrdenDePagoPdf":                 "/admin/compras",                // GET /api/v1/admin/compras/pagos/{id}/pdf
+	"FichaDeFacturaDeCompra":         "/admin/compras",                // GET /api/v1/admin/compras/facturas/{id}
+	"CorregirFacturaDeCompra":        "/admin/compras",                // PUT /api/v1/admin/compras/facturas/{id}
+	"AnularFacturaDeCompra":          "/admin/compras",                // POST /api/v1/admin/compras/facturas/{id}/anular
 	"ListarPagosAProveedores":        "/admin/compras",                // GET /api/v1/admin/compras/pagos
 	"PagarAProveedor":                "/admin/compras",                // POST /api/v1/admin/compras/pagos
 	"LoQueEstaPorLlegar":             "/admin/stock",                  // GET /api/v1/admin/compras/por-llegar

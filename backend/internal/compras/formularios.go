@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 )
 
@@ -217,6 +218,15 @@ type FormFactura struct {
 	// ReceiptID es la recepción que cubre la factura, si la hay (ver
 	// CargarFactura). Es opcional: hay facturas sin remito.
 	ReceiptID *string `json:"receiptId,omitempty"`
+
+	// Lo que se sumó en la revisión del 17/11/2026 (fuera del golden de zod:
+	// el TS no lo tenía). El vencimiento, si se cambió a mano (si no, la
+	// emisión más los días de pago del proveedor), y las percepciones por
+	// impuesto: si vienen, `percepciones` es su suma.
+	FechaVencimiento *string `json:"-"`
+	PercepcionIva    float64 `json:"-"`
+	PercepcionIibb   float64 `json:"-"`
+	conPercepciones  bool
 }
 
 func leerFactura(m map[string]any) (FormFactura, error) {
@@ -238,6 +248,17 @@ func leerFactura(m map[string]any) (FormFactura, error) {
 	if v, esta := m["receiptId"]; esta && v != nil && v != "" {
 		r := l.uuid("receiptId", "Esa recepción no existe.")
 		x.ReceiptID = &r
+	}
+	if v, esta := m["fechaVencimiento"]; esta && v != nil && v != "" {
+		x.FechaVencimiento, _ = l.texto("fechaVencimiento", opcionesTexto{})
+	}
+	_, iva := m["percepcionIva"]
+	_, iibb := m["percepcionIibb"]
+	if iva || iibb {
+		x.conPercepciones = true
+		x.PercepcionIva = l.numero("percepcionIva", f(0), minimo(0))
+		x.PercepcionIibb = l.numero("percepcionIibb", f(0), minimo(0))
+		x.Percepciones = jsmath.Redondear2(x.PercepcionIva + x.PercepcionIibb)
 	}
 	return x, l.Problema()
 }
@@ -321,6 +342,12 @@ type FormPago struct {
 	Partes       []ParteDePago     `json:"partes,omitempty"`
 	hayImput     bool
 	hayPartes    bool
+
+	// Lo que se sumó en la revisión del 17/11/2026 (fuera del golden de zod).
+	// Fecha es el día del pago (aaaa-mm-dd; si falta, hoy) y BranchID la
+	// sucursal de cuya caja sale el efectivo.
+	Fecha    *string `json:"-"`
+	BranchID *string `json:"-"`
 }
 
 var mediosDePago = []string{"transferencia", "efectivo", "cheque", "echeq"}
@@ -359,6 +386,13 @@ func leerPago(m map[string]any) (FormPago, error) {
 		x.ChequeID, _ = e.texto("chequeId", opcionesTexto{opcional: true, nulo: true, uuid: true})
 		p.Partes = append(p.Partes, x)
 	})
+	if v, esta := m["fecha"]; esta && v != nil && v != "" {
+		p.Fecha, _ = l.texto("fecha", opcionesTexto{})
+	}
+	if v, esta := m["branchId"]; esta && v != nil && v != "" {
+		b := l.uuid("branchId", "Esa sucursal no existe.")
+		p.BranchID = &b
+	}
 	return p, l.Problema()
 }
 

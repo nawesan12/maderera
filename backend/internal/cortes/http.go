@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -163,7 +164,10 @@ func (a *API) HojaDelCorte(ctx context.Context, r cortesapi.HojaDelCorteRequestO
 	if c == nil {
 		return nil, noEncontrado
 	}
-	plano := PlanoDelCorte(c)
+	plano, err := PlanoDelCorteConTope(c)
+	if err != nil {
+		return nil, err
+	}
 	hoja, err := ArmarHojaDeCorte(plano)
 	var ng ErrNoGuillotina
 	if errors.As(err, &ng) {
@@ -394,11 +398,25 @@ func (a *API) PlacasCortables(ctx context.Context, r cortesapi.PlacasCortablesRe
 	return ok(v), nil
 }
 
-// TopeDeUnidades es cuántas piezas acomoda el plano de un pedido: más allá
-// es un despiece que no se tipea en una pantalla.
+// TopeDeUnidades es cuántas piezas acomoda el plano de un corte: más allá
+// es un despiece que no se tipea en una pantalla, y el motor crece
+// cuadrático (10 000 piezas son 5 s de CPU). Lo respetan el alta, el
+// mostrador y el plano de un corte guardado.
 const TopeDeUnidades = 5_000
 
+// CalcularPlano es el plano mientras alguien tipea. La ruta es anónima (la
+// usa el /corte del sitio) y es CPU pura: sin sesión del personal, con freno
+// por IP y el tope del sitio (MaximoDePiezas); el panel y el mostrador, con
+// el tope de un corte.
 func (a *API) CalcularPlano(ctx context.Context, r cortesapi.CalcularPlanoRequestObject) (cortesapi.CalcularPlanoResponseObject, error) {
+	tope := TopeDeUnidades
+	if !auth.DeContexto(ctx).EsStaff() {
+		ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
+		if v := a.lim.Permitido(ctx, limites.Plano, "ip:"+ip); !v.Permitido {
+			return nil, plataforma.NuevoProblema(http.StatusTooManyRequests, limites.AvisoDeEspera(v))
+		}
+		tope = MaximoDePiezas
+	}
 	b := r.Body
 	piezas := make([]PiezaAcortar, len(b.Piezas))
 	total := 0.0
@@ -412,8 +430,8 @@ func (a *API) CalcularPlano(ctx context.Context, r cortesapi.CalcularPlanoReques
 		}
 		total += p.Cantidad
 	}
-	if total > TopeDeUnidades {
-		return nil, error422("Son demasiadas piezas para dibujar el plano acá.")
+	if total > float64(tope) {
+		return nil, error422(fmt.Sprintf("Son demasiadas piezas para dibujar el plano acá (el máximo es %d).", tope))
 	}
 	d := DatosDelPlano{Piezas: piezas, PlacaLargo: b.PlacaLargo, PlacaAncho: b.PlacaAncho, AnchoSierra: b.AnchoSierra, Busqueda: b.Busqueda}
 	if b.Fijadas != nil {
@@ -536,7 +554,9 @@ func (a *API) Registrar(m *http.ServeMux) {
 }
 
 // pendientes son los cortes en cola que el agente tiene que bajar. Solo
-// lectura: el agente lleva su registro.
+// lectura: el agente lleva su registro. «actualizado» es updated_at: el
+// agente vuelve a bajar el archivo cuando cambia, y con created_at un corte
+// corregido después de bajado nunca se volvía a escribir.
 func (a *API) pendientes(w http.ResponseWriter, r *http.Request) {
 	if TokenDelAgente() == "" {
 		textoPlano(w, http.StatusNotFound, "No encontrado")
@@ -565,7 +585,7 @@ func (a *API) pendientes(w http.ResponseWriter, r *http.Request) {
 	for _, c := range cortes {
 		if c.Piezas > 0 {
 			out = append(out, pendiente{c.ID, c.Numero, c.Cliente, c.Material, c.Piezas, c.Urgente,
-				c.CreatedAt.UTC().Format("2006-01-02T15:04:05.000Z")})
+				c.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000Z")})
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -629,7 +649,11 @@ func (a *API) ptx(w http.ResponseWriter, r *http.Request) {
 		textoPlano(w, http.StatusConflict, "El corte no tiene piezas cargadas.")
 		return
 	}
-	plano := PlanoDelCorte(c)
+	plano, err := PlanoDelCorteConTope(c)
+	if err != nil {
+		textoPlano(w, http.StatusConflict, msgDemasiadasPiezas)
+		return
+	}
 	if len(plano.Placas) == 0 {
 		textoPlano(w, http.StatusConflict, "Ninguna pieza entra en la placa: no hay programa que armar. Revisá el despiece.")
 		return

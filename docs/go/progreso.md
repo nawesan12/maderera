@@ -1847,3 +1847,29 @@ Para revisar algo de la caché: preguntarle a Go directo desde la app
 - [ ] Claves VAPID para las notificaciones push (no hay).
 - [ ] Credenciales de Mercado Pago y certificado de ARCA reales; el dominio
       con Cloudflare (y `trusted_proxies`, ver arriba).
+
+## La revisión de cortes (17/11, sobre `n211-bugs`)
+
+Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
+`checkout`, `mostrador/revision_test.go`):
+
+- `POST /api/v1/cortes/plano` sin sesión del personal: freno por IP
+  (`limites.Plano`, 600 cada 10 min, solo de Go) y tope del sitio
+  (`MaximoDePiezas`, 1000). El panel y el mostrador siguen con
+  `TopeDeUnidades` (5000) y sin freno.
+- `TopeDeUnidades` en el alta, en el carrito al confirmar (con
+  `MaximoDePiezas`) y en el plano de un corte guardado: uno viejo que lo pasa
+  abre la ficha sin plano, y la hoja, el PTX y el cambio de disco avisan.
+- Una consulta da una sola orden de corte: se bloquea con `FOR UPDATE` antes
+  de numerar, y un token que no existe es un error.
+- **El plano ya no es el del TS byte a byte en un caso**: una pieza fijada a
+  una placa lejana dejaba placas vacías en el medio. Go las saca al final
+  (la búsqueda compara igual que antes) y el número de placa fijada se topea
+  a la cantidad de piezas. El golden de esos casos (19 de los de
+  `planos.json.gz`) se compara por lo que tiene que cumplir, no por igualdad.
+- El acomodo, como el disco, solo en un corte `en-cola`.
+- El agente compara `updated_at` (antes `created_at`: nunca volvía a bajar un
+  corte corregido).
+- La lista para el optimizador pasa material, etiqueta y cliente por
+  `SinFormula`.
+- El corte del mostrador sin disco toma el configurado.

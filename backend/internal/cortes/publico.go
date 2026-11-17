@@ -392,6 +392,16 @@ func (s *Servicio) ResolverCarrito(ctx context.Context, l catalogo.Lista, cartID
 		if c.variant == nil {
 			return []CorteResuelto{}, "El corte de " + c.material + " quedó sin placa. Sacalo del carrito y armalo de nuevo.", nil
 		}
+		// Lo guardado se vuelve a acomodar acá, antes de cobrar: una fila que
+		// no pasó por validarPedido (vieja, o escrita a mano) con miles de
+		// piezas colgaba la compra. El mismo tope que al cotizar.
+		total := 0.0
+		for _, p := range leerPiezasDelCarrito(c.piezas) {
+			total += p.Cantidad
+		}
+		if total > MaximoDePiezas {
+			return []CorteResuelto{}, fmt.Sprintf("El corte de %s tiene demasiadas piezas para el sitio (el máximo es %d). Sacalo del carrito y pedinos el despiece por WhatsApp.", c.material, MaximoDePiezas), nil
+		}
 		placa, err := s.placa(ctx, l, *c.variant)
 		if err != nil {
 			return nil, "", err

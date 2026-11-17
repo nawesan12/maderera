@@ -74,6 +74,47 @@ func (d datosGolden) motor() DatosDelPlano {
 	return DatosDelPlano{d.Piezas, d.PlacaLargo, d.PlacaAncho, d.AnchoSierra, d.Fijadas, d.Busqueda, d.Semilla, d.Presupuesto}
 }
 
+// placasDelTS son las placas del plano del TS y cuántas venían vacías.
+func placasDelTS(t *testing.T, crudo json.RawMessage) (Plano, int) {
+	t.Helper()
+	var p Plano
+	if err := json.Unmarshal(crudo, &p); err != nil {
+		t.Fatal(err)
+	}
+	vacias := 0
+	for _, pl := range p.Placas {
+		if len(pl.Piezas) == 0 {
+			vacias++
+		}
+	}
+	return p, vacias
+}
+
+// planoSinHuecos: ninguna placa vacía, numeradas de corrido, las mismas
+// piezas acomodadas que en el TS y nunca más placas.
+func planoSinHuecos(t *testing.T, donde string, gotGo, ts Plano, vacias int) bool {
+	t.Helper()
+	acomodadas := func(p Plano) int {
+		n := 0
+		for _, pl := range p.Placas {
+			n += len(pl.Piezas)
+		}
+		return n
+	}
+	for i, pl := range gotGo.Placas {
+		if len(pl.Piezas) == 0 || pl.Numero != i+1 {
+			t.Errorf("%s: la placa %d (número %d) tiene %d piezas", donde, i+1, pl.Numero, len(pl.Piezas))
+			return false
+		}
+	}
+	if acomodadas(gotGo) != acomodadas(ts) || gotGo.TotalPiezas != ts.TotalPiezas || len(gotGo.Placas) > len(ts.Placas)-vacias {
+		t.Errorf("%s: Go acomodó %d en %d placas; el TS, %d en %d (%d vacías)", donde,
+			acomodadas(gotGo), len(gotGo.Placas), acomodadas(ts), len(ts.Placas), vacias)
+		return false
+	}
+	return true
+}
+
 func TestGoldenPlanos(t *testing.T) {
 	var casos []struct {
 		Datos       datosGolden     `json:"datos"`
@@ -91,12 +132,22 @@ func TestGoldenPlanos(t *testing.T) {
 	if len(casos) < 1000 {
 		t.Fatalf("muy pocos casos: %d", len(casos))
 	}
-	fallas := 0
+	fallas, corridos := 0, 0
 	for i, c := range casos {
 		if fallas > 5 {
 			t.Fatal("demasiadas diferencias")
 		}
 		plano := CalcularPlano(c.Datos.motor())
+		// El TS dejaba placas vacías cuando una pieza se fijaba a una placa
+		// lejana (revisión del 17/11): Go las saca. Esos casos no se comparan
+		// byte a byte sino por lo que tienen que cumplir.
+		if ts, vacias := placasDelTS(t, c.Plano); vacias > 0 {
+			corridos++
+			if !planoSinHuecos(t, fmt.Sprintf("caso %d", i), plano, ts, vacias) {
+				fallas++
+			}
+			continue
+		}
 		if !igualJSON(t, fmt.Sprintf("caso %d: plano", i), plano, c.Plano) {
 			fallas++
 			continue
@@ -133,6 +184,11 @@ func TestGoldenPlanos(t *testing.T) {
 			}
 		}
 	}
+	// Si de golpe son muchos, cambió el motor y no solo las vacías.
+	if corridos > len(casos)/50 {
+		t.Errorf("%d casos con placas vacías en el TS: son demasiados", corridos)
+	}
+	t.Logf("%d casos sin las placas vacías del TS", corridos)
 }
 
 func TestGoldenSueltos(t *testing.T) {

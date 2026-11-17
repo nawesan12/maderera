@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Truck } from "lucide-react";
+import { ArrowLeft, Scissors, Truck } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
+import { obtenerCorte } from "@/lib/dal/admin/cortes";
 import { requireStaff } from "@/lib/dal/session";
 import { anchoDeSierra } from "@/lib/dal/sierra";
 import { FormularioCorte } from "./formulario";
@@ -39,6 +40,33 @@ export default async function NuevoCortePage({
     token ? placasCortablesPublicas() : Promise.resolve([]),
   ]);
   if (token && !consulta) notFound();
+  // Una consulta que ya se pasó a corte no se ofrece otra vez: el alta la
+  // rechazaría, y mostrar el formulario lleno invita a cargarla dos veces.
+  const yaPasada = consulta?.corteId ? await obtenerCorte(consulta.corteId) : null;
+  if (consulta?.corteId) {
+    return (
+      <div className="space-y-6">
+        <Link
+          href="/admin/cortes"
+          className="inline-flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          Volver a cortes
+        </Link>
+        <h1 className="text-3xl font-bold text-foreground">Nuevo corte</h1>
+        <p className="tarjeta-atencion flex items-center gap-2.5 px-4 py-3 text-base">
+          <Scissors className="h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
+          <span>
+            Esta consulta ya se pasó a corte:{" "}
+            <Link href={`/admin/cortes/${consulta.corteId}`} className="font-semibold underline underline-offset-4">
+              {yaPasada ? `ver el ${yaPasada.numero}` : "ver el corte"}
+            </Link>
+            .
+          </span>
+        </p>
+      </div>
+    );
+  }
   // La placa entera de la consulta: lo guardado es la medida ya partida, y el
   // formulario parte la entera él mismo.
   const placaDeLaConsulta = consulta?.variantId ? placas.find((p) => p.variantId === consulta.variantId) : undefined;

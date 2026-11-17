@@ -198,6 +198,15 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 	if len(piezas) == 0 {
 		return "", error422("Agregá al menos una pieza al despiece.")
 	}
+	// 500 renglones de 999 eran medio millón de piezas: el alta las
+	// guardaba y la ficha se colgaba armando el plano.
+	unidades := 0
+	for _, p := range piezas {
+		unidades += int(p.cantidad)
+	}
+	if unidades > TopeDeUnidades {
+		return "", error422(msgDemasiadasPiezas)
+	}
 
 	sierra := LeerAnchoDeSierra(f.AnchoSierraMm)
 	if sierra == nil {
@@ -211,6 +220,13 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 	var numero string
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
+		// La consulta primero, con candado: dos altas de la misma consulta a
+		// la vez daban dos órdenes de corte.
+		if f.Consulta != "" {
+			if err := tomarConsulta(ctx, tx, f.Consulta); err != nil {
+				return err
+			}
+		}
 		if numero, err = numeracion.Corte(ctx, tx); err != nil {
 			return err
 		}
@@ -246,9 +262,13 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 			}
 		}
 		if f.Consulta != "" {
-			if _, err := tx.Exec(ctx, `UPDATE consultas_corte SET cutting_order_id = $1
-				WHERE token = $2 AND cutting_order_id IS NULL`, id, f.Consulta); err != nil {
+			tag, err := tx.Exec(ctx, `UPDATE consultas_corte SET cutting_order_id = $1
+				WHERE token = $2 AND cutting_order_id IS NULL`, id, f.Consulta)
+			if err != nil {
 				return err
+			}
+			if tag.RowsAffected() != 1 {
+				return error422("Esa consulta ya se pasó a corte.")
 			}
 		}
 		return nil
@@ -259,6 +279,29 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "corte", numero,
 		"Cargó el corte "+numero+" para "+contacto, nil)
 	return numero, nil
+}
+
+// tomarConsulta bloquea la consulta que se pasa a corte y avisa si no está o
+// si ya se pasó: el error deshace el alta entera (y el número).
+func tomarConsulta(ctx context.Context, tx pgx.Tx, token string) error {
+	var corte, numero *string
+	err := tx.QueryRow(ctx, `
+		SELECT c.cutting_order_id::text, co.numero
+		FROM consultas_corte c LEFT JOIN cutting_orders co ON co.id = c.cutting_order_id
+		WHERE c.token = $1 FOR UPDATE OF c`, token).Scan(&corte, &numero)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return error422("No encontramos esa consulta: revisá el enlace.")
+	}
+	if err != nil {
+		return err
+	}
+	if corte != nil {
+		if numero != nil {
+			return error422("Esa consulta ya se pasó a corte: es el " + *numero + ".")
+		}
+		return error422("Esa consulta ya se pasó a corte.")
+	}
+	return nil
 }
 
 // --- los formatos para la máquina ---

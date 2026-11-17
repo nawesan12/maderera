@@ -503,3 +503,26 @@ func TestElProfesionalNoVePreciosDesactualizados(t *testing.T) {
 		t.Fatalf("después de actualizar quedan %d desactualizados", car.ConPrecioDesactualizado)
 	}
 }
+
+// Un corte guardado en el carrito con miles de piezas no se acomoda al
+// confirmar (colgaba la compra): el mismo tope que al cotizar.
+func TestCorteDelCarritoConTope(t *testing.T) {
+	e := armar(t)
+	c := e.anonimo()
+	u := e.srv.URL + "/api/v1/carrito"
+	pedir(t, c, "POST", u+"/items", map[string]any{"variantId": e.tirante, "descripcion": "Tirante", "cantidad": 1})
+	cart := e.id(t, `select id::text from carts limit 1`)
+	// La placa se puede cortar: sin el tope, la compra acomodaba las piezas
+	// y abría el corte.
+	e.exec(t, `update product_variants set largo_mm = 2440, ancho_mm = 1220 where id = $1`, e.placa)
+	e.exec(t, `insert into cutting_rates (material, precio_por_pasada) values ('Placas', 1000)`)
+	e.exec(t, `insert into cart_cortes (cart_id, variant_id, material_descripcion, placa_largo_mm, placa_ancho_mm, piezas, placas, pasadas, total)
+		values ($1, $2, 'Fenólico', 2440, 1220, '[{"largoMm":100,"anchoMm":100,"cantidad":3000,"respetaVeta":0}]', 1, 1, '1000')`, cart, e.placa)
+	code, b := pedir(t, c, "POST", u+"/confirmar", e.compra(nil))
+	if code != 422 || !strings.Contains(b, "demasiadas piezas") {
+		t.Fatalf("confirmar: %d %s", code, b)
+	}
+	if n := e.numero(t, `select count(*) from cutting_orders`); n != 0 {
+		t.Fatalf("se abrieron %v cortes", n)
+	}
+}

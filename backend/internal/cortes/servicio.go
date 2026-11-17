@@ -62,6 +62,9 @@ type CorteListado struct {
 	Piezas          int32     `json:"piezas"`
 	MetrosCuadrados float64   `json:"metrosCuadrados"`
 	CreatedAt       time.Time `json:"createdAt"`
+	// UpdatedAt es lo que compara el agente del taller para volver a bajar
+	// un corte corregido. No sale en la cola.
+	UpdatedAt time.Time `json:"-"`
 }
 
 // condicionBusqueda es coincideBusqueda: cada palabra (hasta 6) en alguna
@@ -104,7 +107,7 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string) ([]Corte
 	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT co.id::text, co.numero, co.contacto_nombre, co.material_descripcion, co.placas, co.pasadas,
-		       co.estado::text, co.urgente, co.notas, b.name, co.created_at, r.piezas, r.superficie
+		       co.estado::text, co.urgente, co.notas, b.name, co.created_at, co.updated_at, r.piezas, r.superficie
 		FROM cutting_orders co
 		LEFT JOIN branches b ON b.id = co.branch_id
 		LEFT JOIN (
@@ -125,7 +128,7 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string) ([]Corte
 		var piezas *int32
 		var sup *jsmath.Num
 		if err := filas.Scan(&c.ID, &c.Numero, &c.Cliente, &c.Material, &c.Placas, &c.Pasadas, &c.Estado, &urgente,
-			&c.Notas, &c.Sucursal, &c.CreatedAt, &piezas, &sup); err != nil {
+			&c.Notas, &c.Sucursal, &c.CreatedAt, &c.UpdatedAt, &piezas, &sup); err != nil {
 			return nil, err
 		}
 		c.Urgente = urgente == 1
@@ -335,12 +338,32 @@ func (s *Servicio) precioPara(ctx context.Context, variantID string, customerID 
 	return &v, nil
 }
 
+// UnidadesDelCorte son las piezas sueltas del despiece (la suma de las
+// cantidades).
+func UnidadesDelCorte(c *Corte) float64 {
+	total := 0.0
+	for _, p := range c.Piezas {
+		total += p.Cantidad
+	}
+	return total
+}
+
+// errDemasiadasPiezas es un corte que pasa TopeDeUnidades: el motor crece
+// cuadrático (10 000 piezas son 5 s de CPU) y no se arma su plano.
+var errDemasiadasPiezas = plataforma.NuevoProblema(http.StatusConflict, msgDemasiadasPiezas)
+
+var msgDemasiadasPiezas = fmt.Sprintf("Son demasiadas piezas para un corte (el máximo es %d). Partí el despiece en más de uno.", TopeDeUnidades)
+
 // PlanoDelCorte rehace el plano de un trabajo con el disco, lo fijado a
-// mano y el motor con que nació.
+// mano y el motor con que nació. Un corte viejo que pasa el tope sale sin
+// placas, para que la ficha abra igual (ver PlanoDelCorteConTope).
 func PlanoDelCorte(c *Corte) Plano {
 	piezas := make([]PiezaAcortar, len(c.Piezas))
 	for i, p := range c.Piezas {
 		piezas[i] = PiezaAcortar{p.LargoMm, p.AnchoMm, p.Cantidad, p.RespetaVeta, p.Etiqueta, p.CantoLargo, p.CantoAncho}
+	}
+	if UnidadesDelCorte(c) > TopeDeUnidades {
+		piezas = nil
 	}
 	acomodo := ""
 	if c.AcomodoManual != nil {
@@ -352,6 +375,15 @@ func PlanoDelCorte(c *Corte) Plano {
 		Piezas: piezas, PlacaLargo: c.Medida.Largo, PlacaAncho: c.Medida.Ancho,
 		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(acomodo), Busqueda: &busqueda,
 	})
+}
+
+// PlanoDelCorteConTope es PlanoDelCorte para lo que no tiene sentido sin
+// plano (la hoja, el PTX, cambiar el disco): pasado el tope, el aviso.
+func PlanoDelCorteConTope(c *Corte) (Plano, error) {
+	if UnidadesDelCorte(c) > TopeDeUnidades {
+		return Plano{}, errDemasiadasPiezas
+	}
+	return PlanoDelCorte(c), nil
 }
 
 func piezasConCanto(c *Corte) []PiezaConCanto {
@@ -493,7 +525,8 @@ func (s *Servicio) CargarPasadas(ctx context.Context, ses *auth.Sesion, id strin
 }
 
 // GuardarAcomodo guarda el acomodo corregido a mano. Una lista vacía vuelve
-// al automático (la columna en nulo).
+// al automático (la columna en nulo). Como el disco, solo en un trabajo que
+// todavía no pasó por la máquina: el plano de uno cortado es el que se cortó.
 func (s *Servicio) GuardarAcomodo(ctx context.Context, ses *auth.Sesion, id string, fijadas []PiezaFijada) (string, error) {
 	var guardado *string
 	if len(fijadas) > 0 {
@@ -504,9 +537,19 @@ func (s *Servicio) GuardarAcomodo(ctx context.Context, ses *auth.Sesion, id stri
 		guardado = &b
 	}
 	var numero string
-	err := s.pool.QueryRow(ctx, `UPDATE cutting_orders SET acomodo_manual = $2, updated_at = now() WHERE id = $1 RETURNING numero`, id, guardado).Scan(&numero)
+	// El estado va en el mismo UPDATE: entre leerlo y escribir, el taller
+	// puede haberlo pasado a la máquina.
+	err := s.pool.QueryRow(ctx, `UPDATE cutting_orders SET acomodo_manual = $2, updated_at = now()
+		WHERE id = $1 AND estado = 'en-cola' RETURNING numero`, id, guardado).Scan(&numero)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", plataforma.NuevoProblema(http.StatusNotFound, "No encontramos la orden de corte.")
+		var hay bool
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM cutting_orders WHERE id = $1)`, id).Scan(&hay); err != nil {
+			return "", err
+		}
+		if !hay {
+			return "", plataforma.NuevoProblema(http.StatusNotFound, "No encontramos la orden de corte.")
+		}
+		return "", error422("Ese trabajo ya pasó por la máquina: su plano es el que se cortó.")
 	}
 	if err != nil {
 		return "", err
@@ -545,6 +588,9 @@ func (s *Servicio) CambiarSierra(ctx context.Context, ses *auth.Sesion, id, valo
 	}
 	anterior := c.AnchoSierraMm
 	c.AnchoSierraMm, c.MotorPlano = *ancho, 2
+	if UnidadesDelCorte(c) > TopeDeUnidades {
+		return "", error422(msgDemasiadasPiezas)
+	}
 	plano := PlanoDelCorte(c)
 	if _, err := s.pool.Exec(ctx, `
 		UPDATE cutting_orders SET ancho_sierra_mm = $2, motor_plano = 2, placas = $3, pasadas = $4, updated_at = now()

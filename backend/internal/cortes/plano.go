@@ -282,6 +282,12 @@ func CalcularPlano(d DatosDelPlano) Plano {
 	type claveFijada struct{ i, u int }
 	porClave := map[claveFijada]PiezaFijada{}
 	for _, f := range d.Fijadas {
+		// Más placas que piezas no puede haber: una fijada a la placa 5000
+		// (o a la 10¹², desde un acomodo guardado) armaba todas las del medio
+		// antes de acomodar nada.
+		if f.Placa > len(unidades) {
+			f.Placa = len(unidades)
+		}
 		porClave[claveFijada{f.Indice, f.Unidad}] = f
 	}
 	var aFijar, sueltas []*unidad
@@ -320,7 +326,10 @@ func CalcularPlano(d DatosDelPlano) Plano {
 		mejor = &m
 	}
 
-	enCurso := mejor.placas
+	// Las vacías salen recién acá, con el plano ya elegido: la búsqueda
+	// compara igual que antes y el plano sin huecos en el medio es el
+	// mismo que el TS, corrido.
+	enCurso := sinVacias(mejor.placas)
 	descartadas := mejor.descartadas
 	if descartadas == nil {
 		descartadas = []PiezaFijada{}
@@ -641,6 +650,20 @@ func partirLibre(p *placaEnCurso, l libre, o orientacion, sierra float64, partir
 	if sobraAbajo > 0 {
 		p.libres = append(p.libres, libre{l.x, l.y + o.alto + sierra, o.ancho, sobraAbajo})
 	}
+}
+
+// sinVacias saca las placas que quedaron sin piezas: una fijada a la placa 4
+// en un despiece de dos piezas sembraba la 2 y la 3 vacías, y el plano
+// cobraba cuatro placas. Lo que el acomodo pide es «otra placa», no un número:
+// las de después se corren y quedan numeradas sin huecos.
+func sinVacias(placas []*placaEnCurso) []*placaEnCurso {
+	out := placas[:0]
+	for _, p := range placas {
+		if len(p.piezas) > 0 {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func sembrarFijadas(

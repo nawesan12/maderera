@@ -589,6 +589,7 @@ func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, pedido, usuari
 	}
 	k := v.Corte
 	sierra := float64(cortes.AnchoDeSierraMm)
+	_ = tx.QueryRow(ctx, `SELECT ancho_sierra_mm::float8 FROM calculator_settings LIMIT 1`).Scan(&sierra) // el configurado, como el alta
 	if k.AnchoSierraMm != nil {
 		if a := cortes.LeerAnchoDeSierra(jsmath.Texto(*k.AnchoSierraMm)); a != nil {
 			sierra = *a

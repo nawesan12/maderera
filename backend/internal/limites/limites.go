@@ -44,6 +44,10 @@ const (
 	// lo tenía). Sin cookie, cada «agregar» crea uno, y un bot que no guarda
 	// cookies llenaba la tabla.
 	Carrito Accion = "carrito"
+	// Plano es el plano de corte del sitio mientras se tipea: solo de Go.
+	// Más generoso que Corte porque se pide en cada cambio del despiece,
+	// pero con techo: es CPU pura y la ruta es anónima.
+	Plano Accion = "plano"
 )
 
 // Los valores de LIMITES en lib/limites/index.ts.
@@ -60,6 +64,7 @@ var limites = map[Accion]Limite{
 	Comprobante:    {10, time.Hour},
 	Diagnostico:    {20, time.Hour},
 	Carrito:        {60, time.Hour},
+	Plano:          {600, 10 * time.Minute},
 }
 
 // Veredicto es si pasa, cuántos le quedan y cuánto esperar si no.

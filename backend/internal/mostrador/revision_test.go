@@ -109,3 +109,24 @@ func TestCobroDeCuentaDesdeMostrador(t *testing.T) {
 		t.Fatalf("una retención sin certificado bajó deuda: %s", b)
 	}
 }
+
+// El corte del mostrador sin disco elegido toma el configurado, como el alta
+// del panel, y no el de 5 mm del código (revisión de cortes del 17/11).
+func TestCorteConLaSierraConfigurada(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "v@prueba.test", sqlc.StaffRoleVendedor)
+	if _, err := e.pool.Exec(context.Background(), `insert into calculator_settings (ancho_sierra_mm) values (3.2)`); err != nil {
+		t.Fatal(err)
+	}
+	v := e.venta("transferencia", e.lineaPlaca(1))
+	v["corte"] = map[string]any{"variantId": e.placa, "materialDescripcion": "Placa", "placas": 1, "pasadas": 2,
+		"cantoDescripcion": nil, "placaLargoMm": nil, "placaAnchoMm": nil, "mitad": nil, "acomodoManual": nil,
+		"piezas": []map[string]any{{"largoMm": 600, "anchoMm": 400, "cantidad": 2, "respetaVeta": 0, "cantoLargo": 0, "cantoAncho": 0,
+			"etiqueta": nil, "aclaracion": nil}}}
+	if _, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v); m["ok"] != true {
+		t.Fatalf("%s", b)
+	}
+	if s := e.num(t, `select ancho_sierra_mm::float8 from cutting_orders`); s != 3.2 {
+		t.Fatalf("el corte nació con disco de %v mm y no con el configurado (3,2)", s)
+	}
+}

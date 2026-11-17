@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"mjbj/internal/csvexcel"
 	"mjbj/internal/jsmath"
 )
 
@@ -153,6 +154,10 @@ func escapar(valor, separador string) string {
 }
 
 // ArmarArchivoDeCorte arma el archivo entero (armarArchivoDeCorte).
+//
+// Los textos (material, etiqueta, cliente) pasan por SinFormula, como los CSV
+// de precios: el genérico es una planilla que se abre en Excel, y la etiqueta
+// la escribe cualquiera desde el /corte del sitio.
 func ArmarArchivoDeCorte(corte CorteParaExportar, perfil PerfilDeExportacion) string {
 	si, no := perfil.SiNo[0], perfil.SiNo[1]
 	canto := func(n float64) string {
@@ -173,12 +178,12 @@ func ArmarArchivoDeCorte(corte CorteParaExportar, perfil PerfilDeExportacion) st
 		case "cantidad":
 			return jsmath.Texto(p.Cantidad)
 		case "material":
-			return corte.Material
+			return csvexcel.SinFormula(corte.Material)
 		case "etiqueta":
 			if p.Etiqueta == nil {
 				return ""
 			}
-			return *p.Etiqueta
+			return csvexcel.SinFormula(*p.Etiqueta)
 		case "veta":
 			if p.RespetaVeta == 1 {
 				return si
@@ -191,7 +196,7 @@ func ArmarArchivoDeCorte(corte CorteParaExportar, perfil PerfilDeExportacion) st
 		case "numero":
 			return corte.Numero
 		case "cliente":
-			return corte.Cliente
+			return csvexcel.SinFormula(corte.Cliente)
 		}
 		return ""
 	}

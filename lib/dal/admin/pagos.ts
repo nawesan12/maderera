@@ -20,6 +20,20 @@ export type AvisoListado = Omit<Esquemas["AvisoDePago"], "createdAt" | "procesad
 };
 export type DatosBancariosDelPanel = NonNullable<Esquemas["DatosBancariosDelPanel"]>;
 
+/**
+ * Las cobranzas del período: los recibos de cualquier origen y los cobros en
+ * línea sin recibo, de a `porPagina`, con lo cobrado y el total por medio del
+ * período entero (backend/internal/reportes/cobranzas.go).
+ */
+export async function cobranzasDelPeriodo(periodo: string, pagina = 1, porPagina = 30) {
+  const r = datos(
+    await (await api()).GET("/api/v1/admin/cobranzas", {
+      params: { query: { periodo, limite: porPagina, desplazamiento: (pagina - 1) * porPagina } },
+    }),
+  );
+  return { ...r, filas: r.filas.map((f) => ({ ...f, fecha: new Date(f.fecha) })) };
+}
+
 export async function panelDePagos(periodo: string, estado?: string) {
   const p = datos(
     await (await api()).GET("/api/v1/admin/pagos", { params: { query: { periodo, ...(estado ? { estado } : {}) } } }),

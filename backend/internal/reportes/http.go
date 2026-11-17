@@ -70,7 +70,10 @@ func (o respuesta) VisitActividadRecienteResponse(w http.ResponseWriter) error  
 func (o respuesta) VisitMetricasDelResumenResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitPendientesDelRolResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitNumerosDelDuenoResponse(w http.ResponseWriter) error    { return o.escribir(w) }
-func (o respuesta) VisitStockParaReponerResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+func (o respuesta) VisitCobranzasDelPeriodoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitStockParaReponerResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitInicioVentasPorSucursalResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -155,6 +158,23 @@ func (a *API) ReporteDeVentasArchivo(ctx context.Context, r reportesapi.ReporteD
 		return nil, err
 	}
 	return pdfDe(nombre+".pdf", b), nil
+}
+
+// CobranzasDelPeriodo: los recibos y los cobros en línea del período, para
+// quien entra a /admin/pagos.
+func (a *API) CobranzasDelPeriodo(ctx context.Context, r reportesapi.CobranzasDelPeriodoRequestObject) (reportesapi.CobranzasDelPeriodoResponseObject, error) {
+	if _, err := pantalla(ctx, "/admin/pagos"); err != nil {
+		return nil, err
+	}
+	limite, desplazamiento := 30, 0
+	if r.Params.Limite != nil {
+		limite = *r.Params.Limite
+	}
+	if r.Params.Desplazamiento != nil {
+		desplazamiento = *r.Params.Desplazamiento
+	}
+	v, err := a.s.Cobranzas(ctx, a.periodo(r.Params.Periodo), limite, desplazamiento)
+	return ok(v), err
 }
 
 // --- la reposición ---

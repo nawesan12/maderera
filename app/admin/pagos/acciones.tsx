@@ -1,7 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useId, useState } from "react";
 import { Check, ExternalLink, Loader2, RefreshCw, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   conciliarTransferencia,
   reconsultarCobro,
@@ -23,14 +29,31 @@ export function AccionesCobro({
   estado,
   proveedor,
   comprobanteUrl,
+  cliente,
+  monto,
 }: {
   pagoId: string;
   estado: string;
   proveedor: string;
   comprobanteUrl: string | null;
+  /** Para el título del rechazo: nombra el cobro, no la acción. */
+  cliente?: string | null;
+  monto?: string;
 }) {
+  /*
+   * Rechazar una transferencia pide motivo y se confirma en un diálogo: antes
+   * era un botón suelto pegado a «Acreditar», sin preguntar nada, y el motivo
+   * —que el cliente lee en el aviso y en Mi cuenta— no se podía escribir.
+   */
+  const [rechazando, setRechazando] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const idMotivo = useId();
   const [resultado, conciliar, conciliando] = useActionState(
-    conciliarTransferencia,
+    async (previo: EstadoAccionPago, formData: FormData) => {
+      const r = await conciliarTransferencia(previo, formData);
+      if (r.ok) setRechazando(false);
+      return r;
+    },
     inicial,
   );
   const [consulta, reconsultar, consultando] = useActionState(
@@ -74,18 +97,64 @@ export function AccionesCobro({
             </button>
           </form>
 
-          <form action={conciliar}>
-            <input type="hidden" name="pagoId" value={pagoId} />
-            <input type="hidden" name="decision" value="rechazar" />
-            <button
-              type="submit"
-              disabled={conciliando}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted disabled:opacity-60"
-            >
-              <X className="h-4 w-4" />
-              Rechazar
-            </button>
-          </form>
+          <button
+            type="button"
+            disabled={conciliando}
+            onClick={() => setRechazando(true)}
+            className="inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-base font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60"
+          >
+            <X className="h-4 w-4" />
+            Rechazar
+          </button>
+
+          <Dialog open={rechazando} onOpenChange={(v) => !v && setRechazando(false)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>
+                  Rechazar la transferencia{cliente ? ` de ${cliente}` : ""}
+                  {monto ? ` por ${monto}` : ""}
+                </DialogTitle>
+              </DialogHeader>
+              <form action={conciliar} className="space-y-3">
+                <input type="hidden" name="pagoId" value={pagoId} />
+                <input type="hidden" name="decision" value="rechazar" />
+                <label htmlFor={idMotivo} className="block text-base font-medium">
+                  Motivo
+                </label>
+                <input
+                  id={idMotivo}
+                  name="motivo"
+                  autoFocus
+                  data-enter="enviar"
+                  maxLength={300}
+                  value={motivo}
+                  onChange={(e) => setMotivo(e.target.value)}
+                  placeholder="No está en el extracto, el importe no coincide…"
+                  className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
+                />
+                {resultado.error && (
+                  <p className="estado-problema text-base font-medium">{resultado.error}</p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRechazando(false)}
+                    className="h-11 rounded-lg px-4 text-base font-medium transition-colors hover:bg-hundida"
+                  >
+                    Volver
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={conciliando || !motivo.trim()}
+                    className="inline-flex h-11 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white disabled:opacity-50"
+                  >
+                    {conciliando && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Rechazar
+                  </button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </>
       )}
 

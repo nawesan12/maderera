@@ -146,6 +146,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/InicioMetricas" }
+  /api/v1/admin/cobranzas:
+    get:
+      operationId: CobranzasDelPeriodo
+      parameters:
+        - $ref: "#/components/parameters/Periodo"
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: Los recibos del período (de cualquier origen) y los cobros en línea sin recibo, lo último primero, con el total por medio
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cobranzas" }
   /api/v1/admin/inicio/dueno:
     get:
       operationId: NumerosDelDueno
@@ -455,3 +468,43 @@ components:
             cheques: { $ref: "#/components/schemas/Monto" }
             total: { type: number, format: double }
         ganancia: { $ref: "#/components/schemas/ResultadoComparado" }
+    Cobranzas:
+      type: object
+      required: [filas, total, cobrado, porMedio]
+      properties:
+        total: { type: integer, description: Cuántos renglones hay en el período }
+        cobrado: { type: number, format: double, description: Lo cobrado en el período, sin los recibos anulados }
+        porMedio:
+          type: array
+          items:
+            type: object
+            required: [medio, total, cantidad]
+            properties:
+              medio: { type: string }
+              total: { type: number, format: double }
+              cantidad: { type: integer }
+        filas:
+          type: array
+          items:
+            type: object
+            required: [id, tipo, numero, fecha, cliente, customerId, orderId, origen, anulado, total, partes]
+            properties:
+              id: { type: string }
+              tipo: { type: string, enum: [recibo, en-linea] }
+              numero: { type: string, nullable: true }
+              fecha: { type: string, format: date-time }
+              cliente: { type: string }
+              customerId: { type: string, nullable: true }
+              orderId: { type: string, nullable: true }
+              origen: { type: string }
+              anulado: { type: boolean }
+              total: { type: number, format: double }
+              partes:
+                type: array
+                items:
+                  type: object
+                  required: [medio, importe, chequeId]
+                  properties:
+                    medio: { type: string }
+                    importe: { type: number, format: double }
+                    chequeId: { type: string, nullable: true }

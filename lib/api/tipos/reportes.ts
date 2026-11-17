@@ -164,6 +164,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cobranzas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CobranzasDelPeriodo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/inicio/dueno": {
         parameters: {
             query?: never;
@@ -493,6 +509,42 @@ export interface components {
             };
             ganancia: components["schemas"]["ResultadoComparado"];
         };
+        Cobranzas: {
+            /** @description Cuántos renglones hay en el período */
+            total: number;
+            /**
+             * Format: double
+             * @description Lo cobrado en el período
+             */
+            cobrado: number;
+            porMedio: {
+                medio: string;
+                /** Format: double */
+                total: number;
+                cantidad: number;
+            }[];
+            filas: {
+                id: string;
+                /** @enum {string} */
+                tipo: "recibo" | "en-linea";
+                numero: string | null;
+                /** Format: date-time */
+                fecha: string;
+                cliente: string;
+                customerId: string | null;
+                orderId: string | null;
+                origen: string;
+                anulado: boolean;
+                /** Format: double */
+                total: number;
+                partes: {
+                    medio: string;
+                    /** Format: double */
+                    importe: number;
+                    chequeId: string | null;
+                }[];
+            }[];
+        };
     };
     responses: never;
     parameters: {
@@ -775,6 +827,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InicioMetricas"];
+                };
+            };
+        };
+    };
+    CobranzasDelPeriodo: {
+        parameters: {
+            query?: {
+                /** @description mes */
+                periodo?: components["parameters"]["Periodo"];
+                limite?: number;
+                desplazamiento?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los recibos del período (de cualquier origen) y los cobros en línea sin recibo, lo último primero, con el total por medio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cobranzas"];
                 };
             };
         };

@@ -1,7 +1,20 @@
 "use client";
 
-import { useActionState, useId, useState, useTransition } from "react";
-import { AlertTriangle, Loader2, Plus } from "lucide-react";
+import {
+  useActionState,
+  useEffect,
+  useId,
+  useState,
+  useTransition,
+} from "react";
+import {
+  AlertTriangle,
+  Loader2,
+  Plus,
+  Search,
+  UserRound,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -11,6 +24,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Confirmar } from "@/components/admin/confirmar";
+import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
+import { buscarClientes } from "@/app/mostrador/actions";
 import { ETIQUETA_CIRCUITO } from "@/lib/circuito";
 import {
   cambiarEstadoDeCheque,
@@ -107,7 +122,8 @@ export function AccionesDeCheque({
           action: r.receiptId
             ? {
                 label: "Ver recibo",
-                onClick: () => window.open(`/api/recibos/${r.receiptId}/pdf`, "_blank"),
+                onClick: () =>
+                  window.open(`/api/recibos/${r.receiptId}/pdf`, "_blank"),
               }
             : undefined,
         });
@@ -162,11 +178,15 @@ export function AccionesDeCheque({
         </p>
       )}
 
-      <Dialog open={rechazando} onOpenChange={(v) => !v && setRechazando(false)}>
+      <Dialog
+        open={rechazando}
+        onOpenChange={(v) => !v && setRechazando(false)}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {estado === "informado" ? "Rechazar" : "El banco rechazó"} el cheque {numero}
+              {estado === "informado" ? "Rechazar" : "El banco rechazó"} el
+              cheque {numero}
             </DialogTitle>
           </DialogHeader>
           <p className="text-base text-muted-foreground">
@@ -193,7 +213,11 @@ export function AccionesDeCheque({
               data-enter="enviar"
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
-              placeholder={estado === "informado" ? "La fecha está mal, falta la firma…" : "Sin fondos, firma no coincide…"}
+              placeholder={
+                estado === "informado"
+                  ? "La fecha está mal, falta la firma…"
+                  : "Sin fondos, firma no coincide…"
+              }
               className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
             />
             {aviso && (
@@ -239,11 +263,24 @@ export function AccionesDeCheque({
   );
 }
 
-export function AltaDeCheque({
-  clientes,
-}: {
-  clientes: { id: string; nombre: string }[];
-}) {
+/**
+ * Cargar un cheque a mano.
+ *
+ * **Un cheque que trae un cliente no se carga acá: se le cobra.** El alta
+ * manual no emitía recibo ni le bajaba la deuda, pero dejaba el cheque a su
+ * nombre; si después rebotaba, el rechazo le sumaba una nota de débito por
+ * plata que nunca había debido. Elegir al cliente abre el cobro
+ * (`DialogoCobro`), que pide el cheque con banco, número y fecha, emite el
+ * recibo y baja la deuda: el cheque entra a la cartera igual. El alta queda
+ * para los cheques de terceros sin cliente y los propios.
+ *
+ * El cliente se busca (nombre, razón social o CUIT, el mismo buscador del
+ * mostrador): antes era un desplegable con la cartera entera.
+ *
+ * El e-Cheq va siempre por el circuito de facturas: queda registrado en el
+ * banco a nombre de la empresa.
+ */
+export function AltaDeCheque() {
   const [abierto, setAbierto] = useState(false);
   const [estado, guardar, guardando] = useActionState(
     async (previo: EstadoCheque, formData: FormData) => {
@@ -256,6 +293,7 @@ export function AltaDeCheque({
   const [sentido, setSentido] = useState("recibido");
   const [tipo, setTipo] = useState("fisico");
   const [circuito, setCircuito] = useState("blanco");
+  const [cliente, setCliente] = useState<ClienteBuscado | null>(null);
   const id = useId();
 
   return (
@@ -269,154 +307,278 @@ export function AltaDeCheque({
           <DialogTitle>Cargar un cheque</DialogTitle>
         </DialogHeader>
 
-        <form action={guardar} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-base font-medium">Sentido</span>
-              <select
-                name="sentido"
-                value={sentido}
-                onChange={(e) => setSentido(e.target.value)}
-                className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
-              >
-                <option value="recibido">Recibido — nos lo dieron</option>
-                <option value="entregado">Entregado — salió de acá</option>
-              </select>
-            </label>
+        <label className="block">
+          <span className="text-base font-medium">Sentido</span>
+          <select
+            value={sentido}
+            onChange={(e) => {
+              setSentido(e.target.value);
+              setCliente(null);
+            }}
+            className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
+          >
+            <option value="recibido">Recibido — nos lo dieron</option>
+            <option value="entregado">Entregado — salió de acá</option>
+          </select>
+        </label>
 
-            <label className="block">
-              <span className="text-base font-medium">Tipo</span>
-              <select
-                name="tipo"
-                value={tipo}
-                onChange={(e) => {
-                  setTipo(e.target.value);
-                  // El e-Cheq solo va por el circuito de facturas.
-                  if (e.target.value === "echeq") setCircuito("blanco");
-                }}
-                className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
-              >
-                <option value="fisico">Físico</option>
-                <option value="echeq">e-Cheq</option>
-              </select>
-            </label>
+        {sentido === "recibido" && (
+          <BuscadorDeCliente elegido={cliente} onElegir={setCliente} />
+        )}
 
-            {/* Por qué circuito va. Antes no se preguntaba y todo lo cargado a
+        {cliente && sentido === "recibido" ? (
+          <DialogoCobro
+            customerId={cliente.id}
+            nombre={cliente.razonSocial || cliente.nombre}
+            aCobrar={0}
+            etiqueta={`Cobrarle a ${cliente.razonSocial || cliente.nombre}`}
+            claseBoton="boton-accion inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg text-base font-semibold"
+            alCobrar={() => {
+              setCliente(null);
+              setAbierto(false);
+            }}
+          />
+        ) : (
+          <form action={guardar} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <input type="hidden" name="sentido" value={sentido} />
+
+              <label className="block">
+                <span className="text-base font-medium">Tipo</span>
+                <select
+                  name="tipo"
+                  value={tipo}
+                  onChange={(e) => {
+                    setTipo(e.target.value);
+                    // El e-Cheq solo va por el circuito de facturas.
+                    if (e.target.value === "echeq") setCircuito("blanco");
+                  }}
+                  className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
+                >
+                  <option value="fisico">Físico</option>
+                  <option value="echeq">e-Cheq</option>
+                </select>
+              </label>
+
+              {/* Por qué circuito va. Antes no se preguntaba y todo lo cargado a
                 mano quedaba en «Facturas», así que los dos totales de la
                 cartera no eran los de nadie. */}
-            <label className="block">
-              <span className="text-base font-medium">Circuito</span>
-              <select
-                name="circuito"
-                value={circuito}
-                onChange={(e) => setCircuito(e.target.value)}
-                disabled={tipo === "echeq"}
-                className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base disabled:opacity-60"
-              >
-                <option value="blanco">{ETIQUETA_CIRCUITO.blanco}</option>
-                <option value="negro">{ETIQUETA_CIRCUITO.negro}</option>
-              </select>
-              {tipo === "echeq" && (
-                <span className="mt-1 block text-sm text-muted-foreground">
-                  Un e-Cheq queda registrado en el banco: va siempre por
-                  facturas.
-                </span>
+              <label className="block">
+                <span className="text-base font-medium">Circuito</span>
+                <select
+                  name="circuito"
+                  value={circuito}
+                  onChange={(e) => setCircuito(e.target.value)}
+                  disabled={tipo === "echeq"}
+                  className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base disabled:opacity-60"
+                >
+                  <option value="blanco">{ETIQUETA_CIRCUITO.blanco}</option>
+                  <option value="negro">{ETIQUETA_CIRCUITO.negro}</option>
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="text-base font-medium">Número</span>
+                <input
+                  name="numero"
+                  required
+                  className="tabular mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-base font-medium">Banco</span>
+                <input
+                  name="banco"
+                  className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-base font-medium">Fecha de pago</span>
+                <input
+                  id={`${id}-fecha`}
+                  name="fechaPago"
+                  type="date"
+                  required
+                  className="tabular mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-base font-medium">Importe</span>
+                <input
+                  name="importe"
+                  required
+                  inputMode="decimal"
+                  className="tabular mt-1 h-11 w-full rounded-lg border bg-background px-3 text-right text-base"
+                />
+              </label>
+
+              {sentido === "recibido" && (
+                <>
+                  <label className="block">
+                    <span className="text-base font-medium">Librador</span>
+                    <input
+                      name="librador"
+                      placeholder="Quién lo firmó, si es de un tercero"
+                      className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
+                    />
+                  </label>
+                </>
               )}
-            </label>
+            </div>
 
             <label className="block">
-              <span className="text-base font-medium">Número</span>
+              <span className="text-base font-medium">Notas</span>
               <input
-                name="numero"
-                required
-                className="tabular mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-base font-medium">Banco</span>
-              <input
-                name="banco"
+                name="notas"
                 className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
               />
             </label>
 
-            <label className="block">
-              <span className="text-base font-medium">Fecha de pago</span>
-              <input
-                id={`${id}-fecha`}
-                name="fechaPago"
-                type="date"
-                required
-                className="tabular mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
-              />
-              <span className="mt-1 block text-sm text-muted-foreground">
-                El 30/60/90. Es lo que ordena la cartera.
-              </span>
-            </label>
-
-            <label className="block">
-              <span className="text-base font-medium">Importe</span>
-              <input
-                name="importe"
-                required
-                inputMode="decimal"
-                className="tabular mt-1 h-11 w-full rounded-lg border bg-background px-3 text-right text-base"
-              />
-            </label>
-
-            {sentido === "recibido" && (
-              <>
-                <label className="block">
-                  <span className="text-base font-medium">Quién lo entregó</span>
-                  <select
-                    name="customerId"
-                    defaultValue=""
-                    className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
-                  >
-                    <option value="">Sin cliente asociado</option>
-                    {clientes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="block">
-                  <span className="text-base font-medium">Librador</span>
-                  <input
-                    name="librador"
-                    placeholder="Quién lo firmó, si es de un tercero"
-                    className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
-                  />
-                </label>
-              </>
+            {estado.error && (
+              <p className="text-base text-destructive">{estado.error}</p>
             )}
-          </div>
 
-          <label className="block">
-            <span className="text-base font-medium">Notas</span>
-            <input
-              name="notas"
-              className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
-            />
-          </label>
-
-          {estado.error && (
-            <p className="text-base text-destructive">{estado.error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={guardando}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg boton-accion text-base font-medium"
-          >
-            {guardando && <Loader2 className="h-5 w-5 animate-spin" />}
-            Guardar en la cartera
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={guardando}
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg boton-accion text-base font-medium"
+            >
+              {guardando && <Loader2 className="h-5 w-5 animate-spin" />}
+              Guardar en la cartera
+            </button>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+interface ClienteBuscado {
+  id: string;
+  nombre: string;
+  razonSocial: string | null;
+  cuit: string | null;
+}
+
+/**
+ * El cliente que trajo el cheque, buscado y no elegido de un desplegable con
+ * toda la cartera. Los resultados se guardan con la consulta que los trajo,
+ * como en el buscador de facturación: si la consulta cambió, no se muestran.
+ */
+function BuscadorDeCliente({
+  elegido,
+  onElegir,
+}: {
+  elegido: ClienteBuscado | null;
+  onElegir: (c: ClienteBuscado | null) => void;
+}) {
+  const [texto, setTexto] = useState("");
+  const [traidos, setTraidos] = useState<{
+    clave: string;
+    items: ClienteBuscado[];
+  }>({
+    clave: "",
+    items: [],
+  });
+  const consulta = texto.trim();
+  const resultados = traidos.clave === consulta ? traidos.items : [];
+  const buscando = consulta.length >= 2 && traidos.clave !== consulta;
+  const idCampo = useId();
+
+  useEffect(() => {
+    if (consulta.length < 2) return;
+    let vigente = true;
+    const espera = setTimeout(async () => {
+      const encontrados = await buscarClientes(consulta);
+      if (vigente) setTraidos({ clave: consulta, items: encontrados });
+    }, 250);
+    return () => {
+      vigente = false;
+      clearTimeout(espera);
+    };
+  }, [consulta]);
+
+  if (elegido) {
+    return (
+      <div className="tarjeta-hundida flex items-center gap-3 px-4 py-3">
+        <UserRound className="h-5 w-5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 text-base font-medium">
+          {elegido.razonSocial || elegido.nombre}
+          {elegido.cuit && (
+            <span className="tabular ml-2 font-normal text-muted-foreground">
+              {elegido.cuit}
+            </span>
+          )}
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            onElegir(null);
+            setTexto("");
+          }}
+          className="inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-base font-medium transition-colors hover:bg-background"
+        >
+          <X className="h-4 w-4" />
+          Quitar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <label htmlFor={idCampo} className="mb-1 block text-base font-medium">
+        Cliente
+      </label>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          id={idCampo}
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder="Nombre, razón social o CUIT"
+          data-enter="enviar"
+          className="h-11 w-full rounded-lg border bg-background pl-9 pr-3 text-base"
+        />
+      </div>
+      {consulta.length >= 2 && (
+        <ul className="tarjeta mt-1.5 overflow-hidden">
+          {buscando && resultados.length === 0 && (
+            <li className="px-3.5 py-2.5 text-base text-muted-foreground">
+              Buscando…
+            </li>
+          )}
+          {!buscando && resultados.length === 0 && (
+            <li className="px-3.5 py-2.5 text-base text-muted-foreground">
+              Ninguno con ese nombre.
+            </li>
+          )}
+          {resultados.map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  onElegir(c);
+                  setTexto("");
+                }}
+                className="flex w-full flex-col items-start px-3.5 py-2.5 text-left transition-colors hover:bg-hundida"
+              >
+                <span className="text-base font-medium">
+                  {c.razonSocial || c.nombre}
+                </span>
+                {c.cuit && (
+                  <span className="tabular text-base text-muted-foreground">
+                    {c.cuit}
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

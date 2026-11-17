@@ -186,6 +186,11 @@ func (s *Servicio) CargarCheque(ctx context.Context, ses *auth.Sesion, f FormChe
 		return mal("fechaPago", "Poné la fecha de pago: es lo que ordena la cartera.")
 	case f.Importe == "":
 		return mal("importe", "Poné el importe.")
+	case f.CustomerID != "" && f.Sentido == "recibido":
+		// Un cheque que trae un cliente para pagar se carga cobrándole
+		// (EmitirRecibo): así sale el recibo y le baja la deuda. Cargado acá
+		// quedaba en la cartera a su nombre sin tocar la cuenta.
+		return mal("customerId", "Un cheque de un cliente se carga cobrándole: así sale el recibo y le baja la deuda.")
 	case f.CustomerID != "" && !plataforma.UUIDValido(f.CustomerID):
 		return mal("customerId", "Invalid UUID")
 	case f.Circuito != "blanco" && f.Circuito != "negro":
@@ -311,6 +316,20 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 		efecto := "nada"
 		if cheque.Sentido == sqlc.SentidoChequeRecibido {
 			efecto = Efecto(desde, hacia)
+		}
+		// Rechazar devuelve la deuda solo si el cheque la había bajado: entró
+		// con un recibo, pagó una venta del mostrador o tiene un pago en la
+		// cuenta (los de antes de los recibos). Uno cargado a mano en la
+		// cartera nunca tocó la cuenta, y rechazarlo le sumaba al cliente una
+		// nota de débito por plata que no debía.
+		if efecto == "debitar" && cheque.ReceiptID == nil && cheque.OrderPaymentID == nil {
+			var bajoLaDeuda bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM account_movements WHERE cheque_id = $1 AND monto < 0)`, id).Scan(&bajoLaDeuda); err != nil {
+				return err
+			}
+			if !bajoLaDeuda {
+				efecto = "nada"
+			}
 		}
 		if efecto == "acreditar" {
 			medio := Medio("cheque")

@@ -273,7 +273,7 @@ paths:
     get:
       operationId: ListarCheques
       parameters:
-        - { name: estado, in: query, schema: { type: string } }
+        - { name: estado, in: query, description: Un estado, «vivos» (los que todavía mueven plata) o «todos», schema: { type: string } }
         - { name: sentido, in: query, schema: { type: string } }
       responses:
         "200":
@@ -304,6 +304,23 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cheques/terminados:
+    get:
+      operationId: ChequesTerminados
+      parameters:
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: Los acreditados, rechazados y anulados, lo último que cambió primero, con el total para paginar
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [filas, total]
+                properties:
+                  filas: { type: array, items: { $ref: "#/components/schemas/ChequeListado" } }
+                  total: { type: integer }
   /api/v1/admin/cheques/cartera:
     get:
       operationId: ChequesEnCartera
@@ -812,7 +829,7 @@ components:
         emitidoPor: { type: string, nullable: true }
     ChequeListado:
       type: object
-      required: [id, sentido, tipo, numero, banco, librador, fechaPago, importe, estado, cliente, customerId, circuito, proveedor,
+      required: [id, sentido, tipo, numero, banco, librador, fechaPago, importe, estado, cliente, customerId, circuito, proveedor, proveedorId,
         notas, receiptId, recibo, motivoRechazo]
       properties:
         id: { type: string }
@@ -828,6 +845,7 @@ components:
         customerId: { type: string, nullable: true }
         circuito: { type: string }
         proveedor: { type: string, nullable: true }
+        proveedorId: { type: string, nullable: true }
         notas: { type: string, nullable: true }
         receiptId: { type: string, nullable: true }
         recibo: { type: string, nullable: true }

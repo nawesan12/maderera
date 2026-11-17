@@ -21,6 +21,22 @@ export async function listarCheques(filtros: { estado?: string; sentido?: string
   return filas.map((f) => ({ ...f, fechaPago: new Date(f.fechaPago) }));
 }
 
+/**
+ * Los acreditados, rechazados y anulados, lo último que cambió primero, de a
+ * `porPagina`, con el total para paginar.
+ */
+export async function chequesTerminados(pagina = 1, porPagina = 30) {
+  const r = datos(
+    await (await api()).GET("/api/v1/admin/cheques/terminados", {
+      params: { query: { limite: porPagina, desplazamiento: (pagina - 1) * porPagina } },
+    }),
+  );
+  return {
+    total: r.total,
+    filas: r.filas.map((f): ChequeListado => ({ ...f, fechaPago: new Date(f.fechaPago) })),
+  };
+}
+
 /** Los recibidos que siguen en la cartera, para entregarlos a un proveedor. */
 export async function chequesEnCartera() {
   const filas = datos(await (await api()).GET("/api/v1/admin/cheques/cartera"));

@@ -25,7 +25,12 @@ test("un retiro parcial con remito, su firma y su anulación", async ({ page }) 
   let ficha: string | null = null;
   for (const href of fichas) {
     await page.goto(href);
-    if (await page.getByRole("button", { name: "Preparar remito" }).isVisible()) {
+    // Uno ya entregado también ofrece «Preparar remito» (el de constancia,
+    // que no descuenta stock): ese no sirve para probar el retiro parcial.
+    if (
+      (await page.getByRole("button", { name: "Preparar remito" }).isVisible()) &&
+      !(await page.getByText("Este pedido ya salió del depósito").isVisible())
+    ) {
       ficha = href;
       break;
     }

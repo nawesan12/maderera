@@ -57,6 +57,9 @@ func mensaje(m string) respuesta { return ok(map[string]string{"ok": m}) }
 func (o respuesta) VisitListarChequesResponse(w http.ResponseWriter) error    { return o.escribir(w) }
 func (o respuesta) VisitCargarChequeResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitChequesEnCarteraResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitChequesTerminadosResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitCambiarEstadoDeChequeResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -332,6 +335,25 @@ func (a *API) ListarCheques(ctx context.Context, r cuentasapi.ListarChequesReque
 	}
 	v, err := cobros.Cheques(ctx, a.pool, texto(r.Params.Estado), texto(r.Params.Sentido))
 	return ok(v), err
+}
+
+// ChequesTerminados: los que ya no mueven plata, de a páginas.
+func (a *API) ChequesTerminados(ctx context.Context, r cuentasapi.ChequesTerminadosRequestObject) (cuentasapi.ChequesTerminadosResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/cheques")...); err != nil {
+		return nil, err
+	}
+	limite, desplazamiento := 30, 0
+	if r.Params.Limite != nil {
+		limite = *r.Params.Limite
+	}
+	if r.Params.Desplazamiento != nil {
+		desplazamiento = *r.Params.Desplazamiento
+	}
+	v, total, err := cobros.ChequesTerminados(ctx, a.pool, limite, desplazamiento)
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]any{"filas": v, "total": total}), nil
 }
 
 func (a *API) ChequesEnCartera(ctx context.Context, _ cuentasapi.ChequesEnCarteraRequestObject) (cuentasapi.ChequesEnCarteraResponseObject, error) {

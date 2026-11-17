@@ -230,11 +230,26 @@ func TestTurnosVentasSueltasYFondo(t *testing.T) {
 		($1, 'apertura', 10000, null, $2), ($1, 'venta', 5000, $3, $4), ($1, 'retiro', -1000, null, $4), ($1, 'venta', 1000, $5, $6)`,
 		turno, abre, v1, abre.Add(time.Hour), v2, cierra.Add(time.Hour))
 
-	c, b := pedir(t, adm, "GET", e.u+"turnos-cerrados", nil)
-	var cerrados []TurnoCerrado
-	_ = json.Unmarshal([]byte(b), &cerrados)
-	if c != 200 || len(cerrados) != 1 {
+	c, b := pedir(t, adm, "GET", e.u+"turnos-cerrados?periodo=2026-10", nil)
+	var pagina struct {
+		Filas []TurnoCerrado `json:"filas"`
+		Total int            `json:"total"`
+	}
+	_ = json.Unmarshal([]byte(b), &pagina)
+	cerrados := pagina.Filas
+	if c != 200 || len(cerrados) != 1 || pagina.Total != 1 {
 		t.Fatalf("turnos: %d %s", c, b)
+	}
+	// De a uno: el segundo turno del mes en la segunda página.
+	cierra2 := cierra.Add(24 * time.Hour)
+	e.turno(t, e.aserradero, idAdm, abre.Add(24*time.Hour), &cierra2, &contado)
+	if _, b := pedir(t, adm, "GET", e.u+"turnos-cerrados?periodo=2026-10&limite=1&desplazamiento=1", nil); !strings.Contains(b, `"total":2`) ||
+		!strings.Contains(b, `"id":"`+turno+`"`) || strings.Count(b, `"abiertaPor"`) != 1 {
+		t.Errorf("segunda página: %s", b)
+	}
+	// Otro mes no lo trae.
+	if _, b := pedir(t, adm, "GET", e.u+"turnos-cerrados?periodo=2026-09", nil); !strings.Contains(b, `"total":0`) {
+		t.Errorf("septiembre: %s", b)
 	}
 	tc := cerrados[0]
 	if tc.Esperado != 15000 || *tc.Contado != 14000 || tc.Tardios != 1 || tc.AbiertaPor != "Persona admin" || tc.Sucursal != "Casa Central" {
@@ -267,6 +282,11 @@ func TestTurnosVentasSueltasYFondo(t *testing.T) {
 		t.Errorf("etiqueta en hora argentina: %s", b)
 	}
 	otro := e.turno(t, e.aserradero, idAdm, abre, nil, nil)
+	// El turno abierto dice cuánto efectivo tendría que haber ahora.
+	e.pool.Exec(ctx, `insert into cash_movements (session_id, tipo, monto) values ($1, 'apertura', 500), ($1, 'retiro', -200)`, otro)
+	if _, b := pedir(t, adm, "GET", e.u+"sucursales", nil); !strings.Contains(b, `"esperado":300`) || !strings.Contains(b, `"esperado":null`) {
+		t.Errorf("esperado del turno abierto: %s", b)
+	}
 	if c, b := pedir(t, adm, "POST", e.u+"ventas-sueltas/"+suelta+"/asignar", map[string]string{"sessionId": otro}); c != 422 || !strings.Contains(b, "Ese turno es de otra sucursal.") {
 		t.Errorf("otra sucursal: %d %s", c, b)
 	}
@@ -339,9 +359,12 @@ func TestAnularNoCambiaElCierreDeOtroTurno(t *testing.T) {
 	e.pool.Exec(ctx, `insert into order_status_history (order_id, estado, nota) values ($1, 'cancelado', 'Anulada en el mostrador')`, venta)
 	e.pool.Exec(ctx, `insert into cash_movements (session_id, tipo, monto, order_id) values ($1, 'devolucion', -1000, $2)`, hoy, venta)
 
-	_, b := pedir(t, adm, "GET", e.u+"turnos-cerrados", nil)
-	var cerrados []TurnoCerrado
-	_ = json.Unmarshal([]byte(b), &cerrados)
+	_, b := pedir(t, adm, "GET", e.u+"turnos-cerrados?periodo="+cierra.In(Argentina).Format("2006-01"), nil)
+	var pagina struct {
+		Filas []TurnoCerrado `json:"filas"`
+	}
+	_ = json.Unmarshal([]byte(b), &pagina)
+	cerrados := pagina.Filas
 	if len(cerrados) != 1 || fmt.Sprint(cerrados[0].Cierre) != "[{efectivo 1 1000 false}]" {
 		t.Errorf("el Z del turno cerrado no cambia con la anulación de hoy: %s", b)
 	}

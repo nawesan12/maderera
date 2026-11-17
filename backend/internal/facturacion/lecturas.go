@@ -3,7 +3,6 @@ package facturacion
 import (
 	"context"
 	"errors"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -47,9 +46,11 @@ type Filtros struct {
 	Tope     int
 }
 
-// Listar es listarComprobantes: lo cobrado se suma de los cobros (no se
-// guarda en la factura) y «contado» es tener algún cobro de contado.
-func (s *Servicio) Listar(ctx context.Context, f Filtros) ([]Listado, error) {
+// condicionesDeListado arma el WHERE de los filtros. El de la forma de
+// cobro va en la consulta: antes se aplicaba en Go después del LIMIT, y
+// «las de contado» de un mes con muchas facturas a cuenta salían cortas sin
+// avisar.
+func condicionesDeListado(f Filtros) (string, []any) {
 	var cond []string
 	var args []any
 	arg := func(v any) string {
@@ -73,22 +74,26 @@ func (s *Servicio) Listar(ctx context.Context, f Filtros) ([]Listado, error) {
 		}
 		cond = append(cond, "("+strings.Join(o, " OR ")+")")
 	}
-	where := ""
-	if len(cond) > 0 {
-		where = "WHERE " + strings.Join(cond, " AND ")
+	if f.Cobro == "contado" || f.Cobro == "cuenta" {
+		de := "EXISTS (SELECT 1 FROM invoice_payments p WHERE p.invoice_id = i.id AND p.medio::text = ANY(" + arg(MediosDeContado) + "))"
+		if f.Cobro == "cuenta" {
+			de = "NOT " + de
+		}
+		cond = append(cond, de)
 	}
-	tope := f.Tope
-	if tope <= 0 {
-		tope = 200
+	if len(cond) == 0 {
+		return "", args
 	}
-	filas, err := s.pool.Query(ctx, `SELECT i.id, i.tipo::text, i.punto_venta, i.numero, i.estado::text, i.receptor_nombre, i.receptor_cuit,
+	return "WHERE " + strings.Join(cond, " AND "), args
+}
+
+const columnasDeListado = `SELECT i.id, i.tipo::text, i.punto_venta, i.numero, i.estado::text, i.receptor_nombre, i.receptor_cuit,
 		i.total::float8, coalesce(c.cobrado, 0)::float8, i.cae, i.fecha_emision, i.fecha_vencimiento, coalesce(c.medios, '{}')
 		FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado, array_agg(DISTINCT medio::text) AS medios
 			FROM invoice_payments GROUP BY invoice_id) c ON c.invoice_id = i.id
-		`+where+` ORDER BY i.fecha_emision DESC, i.numero DESC LIMIT `+strconv.Itoa(tope), args...)
-	if err != nil {
-		return nil, err
-	}
+		`
+
+func leerListado(filas pgx.Rows) ([]Listado, error) {
 	defer filas.Close()
 	out := []Listado{}
 	for filas.Next() {
@@ -104,13 +109,60 @@ func (s *Servicio) Listar(ctx context.Context, f Filtros) ([]Listado, error) {
 				l.Medios = append(l.Medios, *m)
 			}
 		}
-		de := slices.ContainsFunc(l.Medios, func(m string) bool { return slices.Contains(MediosDeContado, m) })
-		if f.Cobro == "contado" && !de || f.Cobro == "cuenta" && de {
-			continue
-		}
 		out = append(out, l)
 	}
 	return out, filas.Err()
+}
+
+// Listar es listarComprobantes: lo cobrado se suma de los cobros (no se
+// guarda en la factura) y «contado» es tener algún cobro de contado.
+func (s *Servicio) Listar(ctx context.Context, f Filtros) ([]Listado, error) {
+	where, args := condicionesDeListado(f)
+	tope := f.Tope
+	if tope <= 0 {
+		tope = 200
+	}
+	filas, err := s.pool.Query(ctx, columnasDeListado+where+` ORDER BY i.fecha_emision DESC, i.numero DESC LIMIT `+strconv.Itoa(tope), args...)
+	if err != nil {
+		return nil, err
+	}
+	return leerListado(filas)
+}
+
+// PaginaDeComprobantes es una página del listado con lo que suma el filtro
+// entero.
+type PaginaDeComprobantes struct {
+	Filas []Listado `json:"filas"`
+	// Total: cuántos comprobantes cumplen el filtro.
+	Total int `json:"total"`
+	// Suma: lo facturado por el filtro entero, sumado en la base. Las notas
+	// de crédito restan; las anuladas, las rechazadas y los borradores no
+	// cuentan (no son facturación).
+	Suma float64 `json:"suma"`
+}
+
+// ListarPagina es el listado de a páginas. Antes la pantalla pedía 200 (o
+// 500 con un rango o una búsqueda), sumaba en Next lo que había llegado y no
+// decía que había más: un mes con 600 facturas mostraba un total falso.
+func (s *Servicio) ListarPagina(ctx context.Context, f Filtros, limite, desplazamiento int) (PaginaDeComprobantes, error) {
+	p := PaginaDeComprobantes{Filas: []Listado{}}
+	where, args := condicionesDeListado(f)
+	var suma jsmath.Num
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int,
+		  coalesce(sum(CASE WHEN i.tipo::text LIKE 'nota_credito%' THEN -i.total ELSE i.total END)
+		    FILTER (WHERE i.estado NOT IN ('anulada', 'rechazada', 'borrador')), 0)
+		FROM invoices i `+where, args...).Scan(&p.Total, &suma); err != nil {
+		return p, err
+	}
+	p.Suma = suma.F()
+	n := len(args)
+	filas, err := s.pool.Query(ctx, columnasDeListado+where+` ORDER BY i.fecha_emision DESC, i.numero DESC LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2),
+		append(args, limite, desplazamiento)...)
+	if err != nil {
+		return p, err
+	}
+	p.Filas, err = leerListado(filas)
+	return p, err
 }
 
 // Item es una fila de invoice_items, como la devolvía drizzle (los numeric

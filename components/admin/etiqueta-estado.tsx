@@ -65,8 +65,10 @@ const ESTADOS: Record<string, Estilo> = {
   moroso: { etiqueta: "Moroso", familia: "problema", abierto: true },
   inactivo: { etiqueta: "Inactivo", familia: "cerrado", abierto: false },
 
-  // Comprobantes
-  emitida: { etiqueta: "Emitida", familia: "info", abierto: true },
+  // Comprobantes. «emitida» es la que se numeró pero no tiene CAE: decía
+  // «Emitida» y se leía como lista para entregar, cuando para ARCA todavía
+  // no existe. Solo la usan los comprobantes.
+  emitida: { etiqueta: "Sin autorizar", familia: "espera", abierto: true },
   autorizada: { etiqueta: "Autorizada", familia: "ok", abierto: false },
   anulada: { etiqueta: "Anulada", familia: "cerrado", abierto: false },
   rechazada: { etiqueta: "Rechazada por ARCA", familia: "problema", abierto: true },

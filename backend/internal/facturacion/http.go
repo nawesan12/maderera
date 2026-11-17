@@ -67,7 +67,10 @@ func emitido(id string) respuesta { return ok(map[string]string{"invoiceId": id}
 
 func (o respuesta) VisitEstadoDeArcaResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o respuesta) VisitListarComprobantesResponse(w http.ResponseWriter) error { return o.escribir(w) }
-func (o respuesta) VisitAnularComprobanteResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitListarComprobantesPaginaResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitAnularComprobanteResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitAutorizarComprobanteResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -217,6 +220,28 @@ func (a *API) ListarComprobantes(ctx context.Context, r facturacionapi.ListarCom
 		f.Tope = *p.Tope
 	}
 	v, err := a.s.Listar(ctx, f)
+	return ok(v), err
+}
+
+// ListarComprobantesPagina: el listado de la pantalla, de a páginas, con el
+// total y la suma del filtro entero.
+func (a *API) ListarComprobantesPagina(ctx context.Context, r facturacionapi.ListarComprobantesPaginaRequestObject) (facturacionapi.ListarComprobantesPaginaResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/facturacion")...); err != nil {
+		return nil, err
+	}
+	p := r.Params
+	f := Filtros{Estado: texto2(p.Estado), Desde: p.Desde, Hasta: p.Hasta, Busqueda: texto2(p.Busqueda)}
+	if p.Cobro != nil {
+		f.Cobro = string(*p.Cobro)
+	}
+	limite, desplazamiento := 50, 0
+	if p.Limite != nil {
+		limite = *p.Limite
+	}
+	if p.Desplazamiento != nil {
+		desplazamiento = *p.Desplazamiento
+	}
+	v, err := a.s.ListarPagina(ctx, f, limite, desplazamiento)
 	return ok(v), err
 }
 

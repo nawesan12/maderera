@@ -13,7 +13,7 @@ import {
  * los cobros registrados. Una factura con algún cobro de contado —efectivo,
  * transferencia, tarjeta, cheque— cuenta como contado; una sin ningún cobro, o
  * cobrada solo contra la cuenta, es cuenta corriente. Está explicado así en
- * `listarComprobantes`, que es donde se aplica.
+ * `listarComprobantesPagina`, que es donde se aplica.
  */
 export function BuscadorDeComprobantes({
   busquedaActual,

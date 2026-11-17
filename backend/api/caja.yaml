@@ -40,13 +40,20 @@ paths:
     get:
       operationId: TurnosCerrados
       parameters:
+        - { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso), schema: { type: string } }
         - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0 } }
       responses:
         "200":
-          description: Los últimos turnos cerrados (30 si no se dice), con lo esperado, lo contado y el cierre Z
+          description: Los turnos cerrados en el mes (argentino), del más nuevo al más viejo, de a 30 si no se dice, con el total para paginar
           content:
             application/json:
-              schema: { type: array, items: { $ref: "#/components/schemas/TurnoCerrado" } }
+              schema:
+                type: object
+                required: [filas, total]
+                properties:
+                  filas: { type: array, items: { $ref: "#/components/schemas/TurnoCerrado" } }
+                  total: { type: integer }
   /api/v1/admin/caja/cajas-fisicas:
     get:
       operationId: ListarCajasFisicas
@@ -151,13 +158,14 @@ components:
         errores: { type: object, additionalProperties: { type: string } }
     CajaSucursal:
       type: object
-      required: [id, nombre, fondoBase, turnoId, abiertaAt]
+      required: [id, nombre, fondoBase, turnoId, abiertaAt, esperado]
       properties:
         id: { type: string }
         nombre: { type: string }
         fondoBase: { type: number, format: double }
         turnoId: { type: string, nullable: true }
         abiertaAt: { type: string, format: date-time, nullable: true }
+        esperado: { type: number, format: double, nullable: true, description: El efectivo que tendría que haber ahora en el turno abierto }
     CajaRenglonDelCierre:
       type: object
       required: [medioPago, cantidad, total, devolucion]

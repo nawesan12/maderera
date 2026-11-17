@@ -15,14 +15,22 @@ export async function sucursalesConCaja() {
 }
 
 /**
- * Los turnos ya cerrados, del más nuevo al más viejo, cada uno con su cierre
- * Z (cuánto entró por cada medio) en `cierre`.
+ * Los turnos cerrados en el mes (`aaaa-mm`, el argentino), del más nuevo al
+ * más viejo, de a `porPagina`, cada uno con su cierre Z (cuánto entró por cada
+ * medio) en `cierre`, y cuántos hay en total para paginar.
  */
-export async function turnosCerrados(limite = 30) {
-  const filas = datos(await (await api()).GET("/api/v1/admin/caja/turnos-cerrados", { params: { query: { limite } } }));
-  return filas.map((t) => ({
-    ...t,
-    abiertaAt: new Date(t.abiertaAt),
-    cerradaAt: t.cerradaAt ? new Date(t.cerradaAt) : null,
-  }));
+export async function turnosCerrados(periodo: string, pagina = 1, porPagina = 30) {
+  const r = datos(
+    await (await api()).GET("/api/v1/admin/caja/turnos-cerrados", {
+      params: { query: { periodo, limite: porPagina, desplazamiento: (pagina - 1) * porPagina } },
+    }),
+  );
+  return {
+    total: r.total,
+    filas: r.filas.map((t) => ({
+      ...t,
+      abiertaAt: new Date(t.abiertaAt),
+      cerradaAt: t.cerradaAt ? new Date(t.cerradaAt) : null,
+    })),
+  };
 }

@@ -290,6 +290,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cheques/terminados": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ChequesTerminados"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/cheques/cartera": {
         parameters: {
             query?: never;
@@ -748,6 +764,7 @@ export interface components {
             customerId: string | null;
             circuito: string;
             proveedor: string | null;
+            proveedorId: string | null;
             notas: string | null;
             receiptId: string | null;
             recibo: string | null;
@@ -1172,6 +1189,7 @@ export interface operations {
     ListarCheques: {
         parameters: {
             query?: {
+                /** @description Un estado */
                 estado?: string;
                 sentido?: string;
             };
@@ -1218,6 +1236,32 @@ export interface operations {
         responses: {
             200: components["responses"]["Ok"];
             422: components["responses"]["Problema"];
+        };
+    };
+    ChequesTerminados: {
+        parameters: {
+            query?: {
+                limite?: number;
+                desplazamiento?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los acreditados, rechazados y anulados, lo último que cambió primero, con el total para paginar */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        filas: components["schemas"]["ChequeListado"][];
+                        total: number;
+                    };
+                };
+            };
         };
     };
     ChequesEnCartera: {

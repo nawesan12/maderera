@@ -146,6 +146,28 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/InicioMetricas" }
+  /api/v1/admin/cobranzas:
+    get:
+      operationId: CobranzasDelPeriodo
+      parameters:
+        - $ref: "#/components/parameters/Periodo"
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: Los recibos del período (de cualquier origen) y los cobros en línea sin recibo, lo último primero, con el total por medio
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cobranzas" }
+  /api/v1/admin/inicio/dueno:
+    get:
+      operationId: NumerosDelDueno
+      responses:
+        "200":
+          description: Me deben, debo, cheques de la semana, plata de hoy y ganancia del mes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NumerosDelDueno" }
   /api/v1/admin/inicio/ventas-por-sucursal:
     get:
       operationId: InicioVentasPorSucursal
@@ -295,7 +317,7 @@ components:
         cantidad: { type: integer }
     CierreResumen:
       type: object
-      required: [ventas, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva]
+      required: [ventas, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva, resultado]
       properties:
         ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
         compras: { $ref: "#/components/schemas/CierreTotalesConIva" }
@@ -303,6 +325,7 @@ components:
         retencionesPracticadas: { $ref: "#/components/schemas/CierreTotales" }
         retencionesSufridas: { $ref: "#/components/schemas/CierreTotales" }
         posicionIva: { type: number, format: double, description: Positivo, hay que depositar }
+        resultado: { $ref: "#/components/schemas/ResultadoComparado" }
     InicioMetricas:
       type: object
       required: [ventasMes, variacionVentas, presupuestosPendientes, presupuestosRevision, clientesActivos, reponer, reponerCentral, reponerAserradero, pedidosSinEntregar, clientesConPedido]
@@ -375,3 +398,113 @@ components:
         detalle: { type: string }
         href: { type: string }
         urgente: { type: boolean }
+    Monto:
+      type: object
+      required: [total, cantidad]
+      properties:
+        total: { type: number, format: double }
+        cantidad: { type: integer }
+    Resultado:
+      type: object
+      required: [ventasNetas, costo, gastos, resultado, lineasSinCosto]
+      properties:
+        ventasNetas: { type: number, format: double, description: Sin IVA }
+        costo: { type: number, format: double }
+        gastos: { type: number, format: double }
+        resultado: { type: number, format: double }
+        lineasSinCosto: { type: integer, description: Renglones vendidos sin costo cargado }
+    ResultadoComparado:
+      type: object
+      required: [actual, anterior, variacion]
+      properties:
+        actual: { $ref: "#/components/schemas/Resultado" }
+        anterior: { $ref: "#/components/schemas/Resultado" }
+        variacion: { type: number, format: double, nullable: true }
+    NumerosDelDueno:
+      type: object
+      required: [meDeben, debo, cheques, plataHoy, ganancia]
+      properties:
+        meDeben:
+          type: object
+          required: [total, vencido, clientes, clientesConVencido]
+          properties:
+            total: { type: number, format: double }
+            vencido: { type: number, format: double }
+            clientes: { type: integer }
+            clientesConVencido: { type: integer }
+        debo:
+          type: object
+          required: [total, facturas, vencido, facturasVencidas, estaSemana, facturasEstaSemana]
+          properties:
+            total: { type: number, format: double }
+            facturas: { type: integer }
+            vencido: { type: number, format: double }
+            facturasVencidas: { type: integer }
+            estaSemana: { type: number, format: double }
+            facturasEstaSemana: { type: integer }
+        cheques:
+          type: object
+          required: [aCobrar, aCubrir]
+          properties:
+            aCobrar: { $ref: "#/components/schemas/Monto" }
+            aCubrir: { $ref: "#/components/schemas/Monto" }
+        plataHoy:
+          type: object
+          required: [cajas, efectivo, banco, mercadoPago, tarjetas, cheques, total]
+          properties:
+            cajas:
+              type: array
+              items:
+                type: object
+                required: [branchId, sucursal, esperado]
+                properties:
+                  branchId: { type: string }
+                  sucursal: { type: string }
+                  esperado: { type: number, format: double }
+            efectivo: { type: number, format: double }
+            banco: { type: number, format: double }
+            mercadoPago: { type: number, format: double }
+            tarjetas: { type: number, format: double }
+            cheques: { $ref: "#/components/schemas/Monto" }
+            total: { type: number, format: double }
+        ganancia: { $ref: "#/components/schemas/ResultadoComparado" }
+    Cobranzas:
+      type: object
+      required: [filas, total, cobrado, porMedio]
+      properties:
+        total: { type: integer, description: Cuántos renglones hay en el período }
+        cobrado: { type: number, format: double, description: Lo cobrado en el período, sin los recibos anulados }
+        porMedio:
+          type: array
+          items:
+            type: object
+            required: [medio, total, cantidad]
+            properties:
+              medio: { type: string }
+              total: { type: number, format: double }
+              cantidad: { type: integer }
+        filas:
+          type: array
+          items:
+            type: object
+            required: [id, tipo, numero, fecha, cliente, customerId, orderId, origen, anulado, total, partes]
+            properties:
+              id: { type: string }
+              tipo: { type: string, enum: [recibo, en-linea] }
+              numero: { type: string, nullable: true }
+              fecha: { type: string, format: date-time }
+              cliente: { type: string }
+              customerId: { type: string, nullable: true }
+              orderId: { type: string, nullable: true }
+              origen: { type: string }
+              anulado: { type: boolean }
+              total: { type: number, format: double }
+              partes:
+                type: array
+                items:
+                  type: object
+                  required: [medio, importe, chequeId]
+                  properties:
+                    medio: { type: string }
+                    importe: { type: number, format: double }
+                    chequeId: { type: string, nullable: true }

@@ -10,9 +10,14 @@ import { AcentoEstado, EtiquetaEstado } from "@/components/admin/etiqueta-estado
 import { fechaCorta, moneda, plural } from "@/lib/formato";
 import {
   estadoArca,
-  listarComprobantes,
+  listarComprobantesPagina,
   resumenFacturacion,
+  type ComprobanteListado,
 } from "@/lib/dal/admin/facturacion";
+import { leerPagina, Paginador } from "@/components/admin/paginador";
+
+/** Cuántos comprobantes por página. */
+const POR_PAGINA = 50;
 import {
   nombreComprobante,
   numeroFormateado,
@@ -29,6 +34,7 @@ export default async function FacturacionPage({
     hasta?: string;
     cobro?: string;
     buscar?: string;
+    pagina?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -43,64 +49,58 @@ export default async function FacturacionPage({
    */
   const rango = leerRango(params.desde, params.hasta);
 
-  const cobro =
+  const cobro: "contado" | "cuenta" | "todos" =
     params.cobro === "contado" || params.cobro === "cuenta"
       ? params.cobro
       : "todos";
 
-  const [comprobantes, resumen, arca] = await Promise.all([
-    listarComprobantes({
-      ...(rango
-        ? { desde: rango.desde, hasta: rango.hasta }
-        : periodo.desde
-          ? { desde: periodo.desde }
-          : {}),
-      cobro,
-      busqueda: params.buscar,
-      // Con un día concreto o una búsqueda, 200 renglones no alcanzan para
-      // nada: el tope está para que "todo" no traiga la historia entera.
-      tope: rango || params.buscar ? 500 : 200,
-    }),
+  const pagina = leerPagina(params.pagina);
+  const filtros = {
+    ...(rango
+      ? { desde: rango.desde, hasta: rango.hasta }
+      : periodo.desde
+        ? { desde: periodo.desde }
+        : {}),
+    cobro,
+    busqueda: params.buscar,
+  };
+
+  /*
+   * Lo pendiente va arriba y es de cualquier fecha: un comprobante rechazado
+   * en septiembre sigue sin poder entregarse en noviembre. El listado, de a
+   * páginas, es el del filtro, con su total y su suma calculados en Go sobre
+   * el filtro entero: antes se pedían 200 (o 500) y se sumaba lo que había
+   * llegado, sin avisar que había más.
+   */
+  const [lista, rechazados, sinAutorizar, resumen, arca] = await Promise.all([
+    listarComprobantesPagina(filtros, pagina, POR_PAGINA),
+    listarComprobantesPagina({ estado: "rechazada" }, 1, 100),
+    listarComprobantesPagina({ estado: "emitida" }, 1, 100),
     resumenFacturacion(periodo),
     estadoArca(),
   ]);
 
-  // Lo que se está mirando, sumado: es la respuesta a "¿cuánto facturamos el
-  // sábado?", que hasta ahora había que sacar a mano de la lista.
-  const totalFiltrado = comprobantes
-    .filter((c) => c.estado !== "anulada")
-    .reduce((total, c) => total + c.total, 0);
-
-  // Lo que necesita una decisión va arriba: rechazados por ARCA primero, que
-  // son los que no se pueden entregar al cliente, y después los que todavía no
-  // se mandaron a autorizar.
-  const rechazados = comprobantes.filter((c) => c.estado === "rechazada");
-  const sinAutorizar = comprobantes.filter((c) => c.estado === "emitida");
-  const resto = comprobantes.filter(
-    (c) => c.estado !== "rechazada" && c.estado !== "emitida",
-  );
+  const queSeMira = rango
+    ? `del ${fechaCorta.format(rango.desde)} al ${fechaCorta.format(rango.hasta)}`
+    : periodo.etiqueta.toLowerCase();
 
   return (
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Facturación"
-        resumen={
-          rango
-            ? `Comprobantes del ${fechaCorta.format(rango.desde)} al ${fechaCorta.format(rango.hasta)}${cobro === "contado" ? ", cobrados de contado" : cobro === "cuenta" ? ", en cuenta corriente" : ""} · ${moneda.format(totalFiltrado)} en ${plural(comprobantes.length, "comprobante")}`
-            : periodo.etiqueta
-        }
+        resumen={`${queSeMira.charAt(0).toUpperCase()}${queSeMira.slice(1)}${cobro === "contado" ? ", cobrados de contado" : cobro === "cuenta" ? ", en cuenta corriente" : ""} · ${moneda.format(lista.suma)} en ${plural(lista.total, "comprobante")}`}
       >
         {!rango && <FiltroPeriodo actual={periodo.clave} />}
         <Link
           href="/admin/arca"
-          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+          className="tarjeta inline-flex h-11 items-center gap-2 px-3.5 text-base font-medium transition-colors hover:text-acento-texto"
         >
           <Landmark className="h-5 w-5" />
           ARCA
         </Link>
         <Link
           href="/admin/facturacion/nueva"
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"
+          className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-3.5 text-base font-medium transition-colors"
         >
           <FilePlus2 className="h-5 w-5" />
           Nueva factura
@@ -119,75 +119,74 @@ export default async function FacturacionPage({
       </section>
 
       {!arca.operativo && (
-        <section className="tarjeta-atencion flex flex-wrap items-start gap-x-4 gap-y-2 p-5">
-          <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
-          <div className="min-w-[18rem] flex-1">
-            <h2 className="text-base font-medium">
-              Los comprobantes todavía no tienen valor fiscal
-            </h2>
-            <p className="mt-1 text-base text-muted-foreground">
-              {arca.detalle ??
-                "Falta conectar con ARCA para que los comprobantes reciban CAE."}
-            </p>
-          </div>
+        <section className="tarjeta-atencion flex flex-wrap items-center gap-x-4 gap-y-2 p-4">
+          <TriangleAlert className="h-5 w-5 shrink-0 text-brand-orange" />
+          <h2 className="min-w-[14rem] flex-1 text-base font-medium">
+            Los comprobantes todavía no tienen valor fiscal
+          </h2>
           <Link
-            href="/admin/arca"
-            className="inline-flex h-10 items-center rounded-lg border bg-card px-3.5 text-base font-medium transition-colors hover:bg-muted"
+            href="/admin/arca/configuracion"
+            className="tarjeta inline-flex h-11 items-center px-3.5 text-base font-medium"
           >
             Qué falta
           </Link>
         </section>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      {rechazados.total > 0 && (
+        <Grupo
+          titulo="Rechazados por ARCA"
+          cantidad={rechazados.total}
+          comprobantes={rechazados.filas}
+          atencion
+        />
+      )}
+      {sinAutorizar.total > 0 && (
+        <Grupo
+          titulo="Sin autorizar"
+          cantidad={sinAutorizar.total}
+          comprobantes={sinAutorizar.filas}
+          atencion
+        />
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
         <Indicador
-          titulo="Facturado este mes"
+          titulo={`Facturado · ${periodo.etiqueta.toLowerCase()}`}
           valor={moneda.format(resumen.totalMes)}
           detalle={plural(resumen.cantidadMes, "comprobante")}
         />
         <Indicador
-          titulo="IVA del mes"
+          titulo={`IVA · ${periodo.etiqueta.toLowerCase()}`}
           valor={moneda.format(resumen.ivaMes)}
-          detalle="Débito fiscal a declarar"
-        />
-        <Indicador
-          titulo="Sin autorizar"
-          valor={String(resumen.pendientesDeAutorizar)}
-          detalle={
-            resumen.pendientesDeAutorizar > 0
-              ? "Esperan CAE de ARCA"
-              : "Todo al día"
-          }
-          atencion={resumen.pendientesDeAutorizar > 0}
+          detalle="Débito fiscal"
         />
       </div>
 
-      {comprobantes.length === 0 ? (
+      {lista.total === 0 ? (
         <section className="tarjeta px-6 py-16 text-center">
           <ReceiptText className="mx-auto h-10 w-10 text-muted-foreground/60" />
-          <h2 className="mt-4 text-lg font-medium">Todavía no hay comprobantes</h2>
+          <h2 className="mt-4 text-lg font-medium">Sin comprobantes {queSeMira}</h2>
         </section>
       ) : (
-        <div className="space-y-6">
-          {rechazados.length > 0 && (
-            <Grupo
-              titulo="Rechazados por ARCA"
-              detalle="Hay que corregir y reenviar"
-              comprobantes={rechazados}
-              atencion
-            />
-          )}
-          {sinAutorizar.length > 0 && (
-            <Grupo
-              titulo="Sin autorizar"
-              detalle={plural(sinAutorizar.length, "comprobante")}
-              comprobantes={sinAutorizar}
-            />
-          )}
-          {resto.length > 0 && (
-            <Grupo titulo="Emitidos" comprobantes={resto} />
-          )}
-        </div>
+        <>
+          <Grupo
+            titulo="Comprobantes"
+            cantidad={lista.total}
+            comprobantes={lista.filas}
+          />
+          <Paginador
+            pagina={pagina}
+            total={lista.total}
+            params={{
+              periodo: params.periodo,
+              desde: params.desde,
+              hasta: params.hasta,
+              cobro: params.cobro,
+              buscar: params.buscar,
+            }}
+          />
+        </>
       )}
     </div>
   );
@@ -230,28 +229,26 @@ function Indicador({
  */
 function Grupo({
   titulo,
-  detalle,
+  cantidad,
   comprobantes,
   atencion = false,
 }: {
   titulo: string;
-  detalle?: string;
-  comprobantes: Awaited<ReturnType<typeof listarComprobantes>>;
+  cantidad: number;
+  comprobantes: ComprobanteListado[];
   atencion?: boolean;
 }) {
   return (
     <section>
       <h2 className="mb-3 flex items-baseline gap-2.5 text-lg font-medium">
         {titulo}
-        {detalle && (
-          <span
-            className={`text-base font-normal ${
-              atencion ? "text-brand-orange-dark" : "text-muted-foreground"
-            }`}
-          >
-            {detalle}
-          </span>
-        )}
+        <span
+          className={`tabular rounded-full px-2.5 py-0.5 text-base font-semibold ${
+            atencion ? "bg-brand-orange/15 text-brand-orange-dark" : "bg-chip text-texto-2"
+          }`}
+        >
+          {cantidad}
+        </span>
       </h2>
 
       <div className="tarjeta overflow-hidden">

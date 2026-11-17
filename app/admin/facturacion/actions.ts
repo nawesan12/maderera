@@ -174,6 +174,7 @@ export async function guardarDatosEmisor(
   const r = await (await api()).PUT("/api/v1/admin/facturacion/emisor", { body: campos(formData) });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
   revalidatePath("/admin/arca");
+  revalidatePath("/admin/arca/configuracion");
   return { ok: r.data.ok };
 }
 
@@ -187,7 +188,7 @@ export async function guardarPuntoVenta(
       error: mensajeDe(r.error as Problema | undefined, "El número de punto de venta tiene que ser el que habilitaste en ARCA."),
     };
   }
-  revalidatePath("/admin/arca");
+  revalidatePath("/admin/arca/configuracion");
   return { ok: r.data.ok };
 }
 

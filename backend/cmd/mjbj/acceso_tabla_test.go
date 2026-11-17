@@ -205,6 +205,10 @@ var pantallaDeCadaRuta = map[string]string{
 	"RemitosDelPedido":               "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/remitos
 	"FichaDePedido":                  "personal",                      // GET /api/v1/admin/pedidos/{id}
 	"ListarPedidos":                  "/admin/pedidos",                // GET /api/v1/admin/pedidos
+	"ChequesTerminados":              "/admin/cheques",                // GET /api/v1/admin/cheques/terminados
+	"CobranzasDelPeriodo":            "/admin/pagos",                  // GET /api/v1/admin/cobranzas
+	"ListarComprobantesPagina":       "/admin/facturacion",            // GET /api/v1/admin/facturacion/comprobantes/pagina
+	"NumerosDelDueno":                "/admin/reportes",               // GET /api/v1/admin/inicio/dueno
 	"AjustarPrecios":                 "/admin/precios",                // POST /api/v1/admin/precios/ajuste
 	"PrevisualizarAjuste":            "/admin/precios",                // POST /api/v1/admin/precios/ajuste/previa
 	"UltimoAjuste":                   "/admin/precios",                // GET /api/v1/admin/precios/ajuste/ultimo

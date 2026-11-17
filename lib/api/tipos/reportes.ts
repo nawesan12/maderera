@@ -164,6 +164,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cobranzas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CobranzasDelPeriodo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/inicio/dueno": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NumerosDelDueno"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/inicio/ventas-por-sucursal": {
         parameters: {
             query?: never;
@@ -340,6 +372,7 @@ export interface components {
              * @description Positivo
              */
             posicionIva: number;
+            resultado: components["schemas"]["ResultadoComparado"];
         };
         InicioMetricas: {
             /** Format: double */
@@ -404,6 +437,113 @@ export interface components {
             detalle?: string;
             href: string;
             urgente?: boolean;
+        };
+        Monto: {
+            /** Format: double */
+            total: number;
+            cantidad: number;
+        };
+        Resultado: {
+            /**
+             * Format: double
+             * @description Sin IVA
+             */
+            ventasNetas: number;
+            /** Format: double */
+            costo: number;
+            /** Format: double */
+            gastos: number;
+            /** Format: double */
+            resultado: number;
+            /** @description Renglones vendidos sin costo cargado */
+            lineasSinCosto: number;
+        };
+        ResultadoComparado: {
+            actual: components["schemas"]["Resultado"];
+            anterior: components["schemas"]["Resultado"];
+            /** Format: double */
+            variacion: number | null;
+        };
+        NumerosDelDueno: {
+            meDeben: {
+                /** Format: double */
+                total: number;
+                /** Format: double */
+                vencido: number;
+                clientes: number;
+                clientesConVencido: number;
+            };
+            debo: {
+                /** Format: double */
+                total: number;
+                facturas: number;
+                /** Format: double */
+                vencido: number;
+                facturasVencidas: number;
+                /** Format: double */
+                estaSemana: number;
+                facturasEstaSemana: number;
+            };
+            cheques: {
+                aCobrar: components["schemas"]["Monto"];
+                aCubrir: components["schemas"]["Monto"];
+            };
+            plataHoy: {
+                cajas: {
+                    branchId: string;
+                    sucursal: string;
+                    /** Format: double */
+                    esperado: number;
+                }[];
+                /** Format: double */
+                efectivo: number;
+                /** Format: double */
+                banco: number;
+                /** Format: double */
+                mercadoPago: number;
+                /** Format: double */
+                tarjetas: number;
+                cheques: components["schemas"]["Monto"];
+                /** Format: double */
+                total: number;
+            };
+            ganancia: components["schemas"]["ResultadoComparado"];
+        };
+        Cobranzas: {
+            /** @description Cuántos renglones hay en el período */
+            total: number;
+            /**
+             * Format: double
+             * @description Lo cobrado en el período
+             */
+            cobrado: number;
+            porMedio: {
+                medio: string;
+                /** Format: double */
+                total: number;
+                cantidad: number;
+            }[];
+            filas: {
+                id: string;
+                /** @enum {string} */
+                tipo: "recibo" | "en-linea";
+                numero: string | null;
+                /** Format: date-time */
+                fecha: string;
+                cliente: string;
+                customerId: string | null;
+                orderId: string | null;
+                origen: string;
+                anulado: boolean;
+                /** Format: double */
+                total: number;
+                partes: {
+                    medio: string;
+                    /** Format: double */
+                    importe: number;
+                    chequeId: string | null;
+                }[];
+            }[];
         };
     };
     responses: never;
@@ -687,6 +827,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InicioMetricas"];
+                };
+            };
+        };
+    };
+    CobranzasDelPeriodo: {
+        parameters: {
+            query?: {
+                /** @description mes */
+                periodo?: components["parameters"]["Periodo"];
+                limite?: number;
+                desplazamiento?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los recibos del período (de cualquier origen) y los cobros en línea sin recibo, lo último primero, con el total por medio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cobranzas"];
+                };
+            };
+        };
+    };
+    NumerosDelDueno: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Me deben, debo, cheques de la semana, plata de hoy y ganancia del mes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NumerosDelDueno"];
                 };
             };
         };

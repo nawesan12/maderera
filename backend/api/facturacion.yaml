@@ -73,6 +73,29 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ResumenDeFacturacion" }
+  /api/v1/admin/facturacion/comprobantes/pagina:
+    get:
+      operationId: ListarComprobantesPagina
+      parameters:
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: desde, in: query, schema: { type: string, format: date-time } }
+        - { name: hasta, in: query, description: inclusive, schema: { type: string, format: date-time } }
+        - { name: cobro, in: query, schema: { type: string, enum: [contado, cuenta, todos] } }
+        - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: Del más nuevo al más viejo, de a páginas, con cuántos son y lo que suman (las notas de crédito restan; anuladas, rechazadas y borradores no)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [filas, total, suma]
+                properties:
+                  filas: { type: array, items: { $ref: "#/components/schemas/ComprobanteListado" } }
+                  total: { type: integer }
+                  suma: { type: number, format: double }
   /api/v1/admin/facturacion/comprobantes:
     get:
       operationId: ListarComprobantes

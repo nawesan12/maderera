@@ -87,7 +87,7 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 	rs, err = s.pool.Query(ctx, `
 		SELECT f.fecha_emision, f.tipo::text, f.punto_venta, f.numero, s.nombre, f.neto, f.iva21, f.iva105, f.iva27, f.percepciones, f.total, f.exento
 		FROM purchase_invoices f JOIN suppliers s ON s.id = f.supplier_id
-		WHERE f.fecha_emision >= $1 AND f.fecha_emision <= $2 ORDER BY f.fecha_emision`, desde, hasta)
+		WHERE f.fecha_emision >= $1 AND f.fecha_emision <= $2 AND f.anulada_at IS NULL ORDER BY f.fecha_emision`, desde, hasta)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +189,7 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 		  (SELECT count(*)::int FROM goods_receipts WHERE estado = 'borrador' AND fecha >= $1 AND fecha <= $2),
 		  (SELECT count(*)::int FROM cash_sessions WHERE estado = 'abierta' AND abierta_at <= $3),
 		  (SELECT count(*)::int FROM goods_receipts g WHERE g.estado = 'confirmada' AND g.fecha >= $1 AND g.fecha <= $2
-		     AND NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = g.id))`, desde, hasta, ihasta).
+		     AND NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = g.id AND f.anulada_at IS NULL))`, desde, hasta, ihasta).
 		Scan(&borradores, &cajas, &sinFactura)
 	if err != nil {
 		return nil, err
@@ -233,6 +233,9 @@ type ResumenDelMes struct {
 	RetencionesSufridas    Totales       `json:"retencionesSufridas"`
 	// PosicionIva: positivo, hay que depositar; negativo, saldo a favor.
 	PosicionIva float64 `json:"posicionIva"`
+	// Resultado: ventas netas − costo − gastos, contra el mes anterior (lo
+	// llena la API con ResultadoDelMes).
+	Resultado ResultadoComparado `json:"resultado"`
 }
 
 // ResumenDelMes es resumenDelMes: las notas de crédito restan, y en las
@@ -259,7 +262,7 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 		    FILTER (WHERE tipo::text IN ('factura_a','factura_m','nota_credito_a','nota_debito_a')), 0),
 		  coalesce(sum(CASE WHEN tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * total), 0),
 		  count(*)::int
-		FROM purchase_invoices WHERE fecha_emision >= $1 AND fecha_emision <= $2`, desde, hasta).
+		FROM purchase_invoices WHERE fecha_emision >= $1 AND fecha_emision <= $2 AND anulada_at IS NULL`, desde, hasta).
 		Scan(&cn, &ci, &ct, &r.Compras.Cantidad)
 	if err != nil {
 		return r, err

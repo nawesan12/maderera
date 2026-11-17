@@ -229,7 +229,7 @@ func (s *Servicio) Estado(ctx context.Context) EstadoArca {
 	case !arriba:
 		e.Detalle = cad("Los servicios de ARCA no están respondiendo en este momento.")
 	case cfg.Ambiente == "homologacion":
-		e.Detalle = cad("Conectado al ambiente de homologación: los comprobantes son de prueba y no tienen valor fiscal.")
+		e.Detalle = cad("Conectado a ARCA de prueba: los comprobantes no tienen valor fiscal.")
 	}
 	return e
 }

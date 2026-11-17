@@ -30,6 +30,7 @@ export function DialogoCobro({
   numeroPedido,
   etiqueta = "Registrar cobro",
   claseBoton,
+  alCobrar,
 }: {
   customerId: string;
   nombre: string;
@@ -39,6 +40,8 @@ export function DialogoCobro({
   numeroPedido?: string;
   etiqueta?: string;
   claseBoton?: string;
+  /** Después de un cobro que salió bien (la cartera de cheques cierra su alta). */
+  alCobrar?: () => void;
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
@@ -60,6 +63,7 @@ export function DialogoCobro({
         // un aviso aparte y en amarillo: pegado al verde del éxito no se lee.
         if (r.aviso) toast.warning(r.aviso, { duration: 15_000 });
         setAbierto(false);
+        alCobrar?.();
         router.refresh();
       }
       return r;

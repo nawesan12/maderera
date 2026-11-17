@@ -196,10 +196,9 @@ function Formulario({
             />
           </div>
 
-          <p className="text-base text-muted-foreground md:col-span-2">
-            El número tiene que ser el mismo que habilitaste en ARCA con
-            modalidad Webservices. Si no coincide, los comprobantes se rechazan.
-          </p>
+          {/* El número tiene que ser el mismo que se habilitó en ARCA (con
+              la modalidad «RECE para aplicativo y web services»): si no
+              coincide, los comprobantes se rechazan. */}
         </Seccion>
 
         <Seccion titulo="Numeración" icono={ListOrdered} columnas={1}>

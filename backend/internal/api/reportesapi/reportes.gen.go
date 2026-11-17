@@ -24,6 +24,24 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for CobranzasFilasTipo.
+const (
+	EnLinea CobranzasFilasTipo = "en-linea"
+	Recibo  CobranzasFilasTipo = "recibo"
+)
+
+// Valid indicates whether the value is a known member of the CobranzasFilasTipo enum.
+func (e CobranzasFilasTipo) Valid() bool {
+	switch e {
+	case EnLinea:
+		return true
+	case Recibo:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Formato.
 const (
 	FormatoCsv Formato = "csv"
@@ -131,6 +149,7 @@ type CierreResumen struct {
 
 	// PosicionIva Positivo
 	PosicionIva            float64             `json:"posicionIva"`
+	Resultado              ResultadoComparado  `json:"resultado"`
 	RetencionesPracticadas CierreTotales       `json:"retencionesPracticadas"`
 	RetencionesSufridas    CierreTotales       `json:"retencionesSufridas"`
 	Ventas                 CierreTotalesConIva `json:"ventas"`
@@ -149,6 +168,40 @@ type CierreTotalesConIva struct {
 	Neto     float64 `json:"neto"`
 	Total    float64 `json:"total"`
 }
+
+// Cobranzas defines model for Cobranzas.
+type Cobranzas struct {
+	// Cobrado Lo cobrado en el período
+	Cobrado float64 `json:"cobrado"`
+	Filas   []struct {
+		Anulado    bool      `json:"anulado"`
+		Cliente    string    `json:"cliente"`
+		CustomerId *string   `json:"customerId"`
+		Fecha      time.Time `json:"fecha"`
+		Id         string    `json:"id"`
+		Numero     *string   `json:"numero"`
+		OrderId    *string   `json:"orderId"`
+		Origen     string    `json:"origen"`
+		Partes     []struct {
+			ChequeId *string `json:"chequeId"`
+			Importe  float64 `json:"importe"`
+			Medio    string  `json:"medio"`
+		} `json:"partes"`
+		Tipo  CobranzasFilasTipo `json:"tipo"`
+		Total float64            `json:"total"`
+	} `json:"filas"`
+	PorMedio []struct {
+		Cantidad int     `json:"cantidad"`
+		Medio    string  `json:"medio"`
+		Total    float64 `json:"total"`
+	} `json:"porMedio"`
+
+	// Total Cuántos renglones hay en el período
+	Total int `json:"total"`
+}
+
+// CobranzasFilasTipo defines model for Cobranzas.Filas.Tipo.
+type CobranzasFilasTipo string
 
 // InicioActividad defines model for InicioActividad.
 type InicioActividad struct {
@@ -202,6 +255,48 @@ type InicioReponer struct {
 	Qty       float64 `json:"qty"`
 	Sucursal  string  `json:"sucursal"`
 	VariantId string  `json:"variantId"`
+}
+
+// Monto defines model for Monto.
+type Monto struct {
+	Cantidad int     `json:"cantidad"`
+	Total    float64 `json:"total"`
+}
+
+// NumerosDelDueno defines model for NumerosDelDueno.
+type NumerosDelDueno struct {
+	Cheques struct {
+		ACobrar Monto `json:"aCobrar"`
+		ACubrir Monto `json:"aCubrir"`
+	} `json:"cheques"`
+	Debo struct {
+		EstaSemana         float64 `json:"estaSemana"`
+		Facturas           int     `json:"facturas"`
+		FacturasEstaSemana int     `json:"facturasEstaSemana"`
+		FacturasVencidas   int     `json:"facturasVencidas"`
+		Total              float64 `json:"total"`
+		Vencido            float64 `json:"vencido"`
+	} `json:"debo"`
+	Ganancia ResultadoComparado `json:"ganancia"`
+	MeDeben  struct {
+		Clientes           int     `json:"clientes"`
+		ClientesConVencido int     `json:"clientesConVencido"`
+		Total              float64 `json:"total"`
+		Vencido            float64 `json:"vencido"`
+	} `json:"meDeben"`
+	PlataHoy struct {
+		Banco float64 `json:"banco"`
+		Cajas []struct {
+			BranchId string  `json:"branchId"`
+			Esperado float64 `json:"esperado"`
+			Sucursal string  `json:"sucursal"`
+		} `json:"cajas"`
+		Cheques     Monto   `json:"cheques"`
+		Efectivo    float64 `json:"efectivo"`
+		MercadoPago float64 `json:"mercadoPago"`
+		Tarjetas    float64 `json:"tarjetas"`
+		Total       float64 `json:"total"`
+	} `json:"plataHoy"`
 }
 
 // PendienteDelRol defines model for PendienteDelRol.
@@ -267,6 +362,26 @@ type ReposicionFila struct {
 	Vendido              float64  `json:"vendido"`
 }
 
+// Resultado defines model for Resultado.
+type Resultado struct {
+	Costo  float64 `json:"costo"`
+	Gastos float64 `json:"gastos"`
+
+	// LineasSinCosto Renglones vendidos sin costo cargado
+	LineasSinCosto int     `json:"lineasSinCosto"`
+	Resultado      float64 `json:"resultado"`
+
+	// VentasNetas Sin IVA
+	VentasNetas float64 `json:"ventasNetas"`
+}
+
+// ResultadoComparado defines model for ResultadoComparado.
+type ResultadoComparado struct {
+	Actual    Resultado `json:"actual"`
+	Anterior  Resultado `json:"anterior"`
+	Variacion *float64  `json:"variacion"`
+}
+
 // Categoria defines model for Categoria.
 type Categoria = string
 
@@ -322,6 +437,14 @@ type PendientesDelCierreParams struct {
 type ResumenDelMesParams struct {
 	// Periodo aaaa-mm (si falta
 	Periodo *Mes `form:"periodo,omitempty" json:"periodo,omitempty"`
+}
+
+// CobranzasDelPeriodoParams defines parameters for CobranzasDelPeriodo.
+type CobranzasDelPeriodoParams struct {
+	// Periodo mes
+	Periodo        *Periodo `form:"periodo,omitempty" json:"periodo,omitempty"`
+	Limite         *int     `form:"limite,omitempty" json:"limite,omitempty"`
+	Desplazamiento *int     `form:"desplazamiento,omitempty" json:"desplazamiento,omitempty"`
 }
 
 // MetricasDelResumenParams defines parameters for MetricasDelResumen.
@@ -434,8 +557,14 @@ type ServerInterface interface {
 	// (GET /api/v1/admin/cierre/resumen)
 	ResumenDelMes(w http.ResponseWriter, r *http.Request, params ResumenDelMesParams)
 
+	// (GET /api/v1/admin/cobranzas)
+	CobranzasDelPeriodo(w http.ResponseWriter, r *http.Request, params CobranzasDelPeriodoParams)
+
 	// (GET /api/v1/admin/inicio/actividad)
 	ActividadReciente(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/admin/inicio/dueno)
+	NumerosDelDueno(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/admin/inicio/metricas)
 	MetricasDelResumen(w http.ResponseWriter, r *http.Request, params MetricasDelResumenParams)
@@ -606,11 +735,84 @@ func (siw *ServerInterfaceWrapper) ResumenDelMes(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// CobranzasDelPeriodo operation middleware
+func (siw *ServerInterfaceWrapper) CobranzasDelPeriodo(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CobranzasDelPeriodoParams
+
+	// ------------- Optional query parameter "periodo" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "periodo", r.URL.Query(), &params.Periodo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "periodo"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "periodo", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limite" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limite", r.URL.Query(), &params.Limite, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limite"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limite", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "desplazamiento" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "desplazamiento", r.URL.Query(), &params.Desplazamiento, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "desplazamiento"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "desplazamiento", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CobranzasDelPeriodo(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ActividadReciente operation middleware
 func (siw *ServerInterfaceWrapper) ActividadReciente(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ActividadReciente(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// NumerosDelDueno operation middleware
+func (siw *ServerInterfaceWrapper) NumerosDelDueno(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.NumerosDelDueno(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1275,6 +1477,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/cierre/pendientes", wrapper.PendientesDelCierre)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/cierre/resumen", wrapper.ResumenDelMes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/inicio/metricas", wrapper.MetricasDelResumen)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/cobranzas", wrapper.CobranzasDelPeriodo)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/inicio/dueno", wrapper.NumerosDelDueno)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/inicio/ventas-por-sucursal", wrapper.InicioVentasPorSucursal)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/inicio/reponer", wrapper.StockParaReponer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/inicio/actividad", wrapper.ActividadReciente)
@@ -1377,6 +1581,28 @@ func (response ResumenDelMes200JSONResponse) VisitResumenDelMesResponse(w http.R
 	return err
 }
 
+type CobranzasDelPeriodoRequestObject struct {
+	Params CobranzasDelPeriodoParams
+}
+
+type CobranzasDelPeriodoResponseObject interface {
+	VisitCobranzasDelPeriodoResponse(w http.ResponseWriter) error
+}
+
+type CobranzasDelPeriodo200JSONResponse Cobranzas
+
+func (response CobranzasDelPeriodo200JSONResponse) VisitCobranzasDelPeriodoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ActividadRecienteRequestObject struct {
 }
 
@@ -1387,6 +1613,27 @@ type ActividadRecienteResponseObject interface {
 type ActividadReciente200JSONResponse InicioActividad
 
 func (response ActividadReciente200JSONResponse) VisitActividadRecienteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type NumerosDelDuenoRequestObject struct {
+}
+
+type NumerosDelDuenoResponseObject interface {
+	VisitNumerosDelDuenoResponse(w http.ResponseWriter) error
+}
+
+type NumerosDelDueno200JSONResponse NumerosDelDueno
+
+func (response NumerosDelDueno200JSONResponse) VisitNumerosDelDuenoResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -1662,8 +1909,14 @@ type StrictServerInterface interface {
 	// (GET /api/v1/admin/cierre/resumen)
 	ResumenDelMes(ctx context.Context, request ResumenDelMesRequestObject) (ResumenDelMesResponseObject, error)
 
+	// (GET /api/v1/admin/cobranzas)
+	CobranzasDelPeriodo(ctx context.Context, request CobranzasDelPeriodoRequestObject) (CobranzasDelPeriodoResponseObject, error)
+
 	// (GET /api/v1/admin/inicio/actividad)
 	ActividadReciente(ctx context.Context, request ActividadRecienteRequestObject) (ActividadRecienteResponseObject, error)
+
+	// (GET /api/v1/admin/inicio/dueno)
+	NumerosDelDueno(ctx context.Context, request NumerosDelDuenoRequestObject) (NumerosDelDuenoResponseObject, error)
 
 	// (GET /api/v1/admin/inicio/metricas)
 	MetricasDelResumen(ctx context.Context, request MetricasDelResumenRequestObject) (MetricasDelResumenResponseObject, error)
@@ -1836,6 +2089,32 @@ func (sh *strictHandler) ResumenDelMes(w http.ResponseWriter, r *http.Request, p
 	}
 }
 
+// CobranzasDelPeriodo operation middleware
+func (sh *strictHandler) CobranzasDelPeriodo(w http.ResponseWriter, r *http.Request, params CobranzasDelPeriodoParams) {
+	var request CobranzasDelPeriodoRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CobranzasDelPeriodo(ctx, request.(CobranzasDelPeriodoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CobranzasDelPeriodo")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CobranzasDelPeriodoResponseObject); ok {
+		if err := validResponse.VisitCobranzasDelPeriodoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ActividadReciente operation middleware
 func (sh *strictHandler) ActividadReciente(w http.ResponseWriter, r *http.Request) {
 	var request ActividadRecienteRequestObject
@@ -1853,6 +2132,30 @@ func (sh *strictHandler) ActividadReciente(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ActividadRecienteResponseObject); ok {
 		if err := validResponse.VisitActividadRecienteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// NumerosDelDueno operation middleware
+func (sh *strictHandler) NumerosDelDueno(w http.ResponseWriter, r *http.Request) {
+	var request NumerosDelDuenoRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.NumerosDelDueno(ctx, request.(NumerosDelDuenoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "NumerosDelDueno")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(NumerosDelDuenoResponseObject); ok {
+		if err := validResponse.VisitNumerosDelDuenoResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2097,53 +2400,65 @@ func (sh *strictHandler) VentasPorMes(w http.ResponseWriter, r *http.Request, pa
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"AA==",
+	"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",
+	"DGotR/seRk4KH54vl/8dAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

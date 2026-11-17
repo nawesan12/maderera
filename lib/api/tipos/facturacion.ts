@@ -88,6 +88,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/facturacion/comprobantes/pagina": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ListarComprobantesPagina"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/facturacion/comprobantes": {
         parameters: {
             query?: never;
@@ -887,6 +903,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResumenDeFacturacion"];
+                };
+            };
+        };
+    };
+    ListarComprobantesPagina: {
+        parameters: {
+            query?: {
+                estado?: string;
+                desde?: string;
+                /** @description inclusive */
+                hasta?: string;
+                cobro?: "contado" | "cuenta" | "todos";
+                busqueda?: string;
+                limite?: number;
+                desplazamiento?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Del más nuevo al más viejo, de a páginas, con cuántos son y lo que suman (las notas de crédito restan; anuladas, rechazadas y borradores no) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        filas: components["schemas"]["ComprobanteListado"][];
+                        total: number;
+                        /** Format: double */
+                        suma: number;
+                    };
                 };
             };
         };

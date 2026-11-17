@@ -97,12 +97,23 @@ func (a *PanelAPI) TurnosCerrados(ctx context.Context, r cajaapi.TurnosCerradosR
 	if _, err := pantallaDeCaja(ctx); err != nil {
 		return nil, err
 	}
-	limite := 30
+	limite, desplazamiento := 30, 0
 	if r.Params.Limite != nil {
 		limite = *r.Params.Limite
 	}
-	v, err := a.p.TurnosCerrados(ctx, limite)
-	return okPanel(v), err
+	if r.Params.Desplazamiento != nil {
+		desplazamiento = *r.Params.Desplazamiento
+	}
+	periodo := ""
+	if r.Params.Periodo != nil {
+		periodo = *r.Params.Periodo
+	}
+	desde, hasta := MesArgentino(periodo, a.ahora())
+	v, total, err := a.p.TurnosCerrados(ctx, desde, hasta, limite, desplazamiento)
+	if err != nil {
+		return nil, err
+	}
+	return okPanel(map[string]any{"filas": v, "total": total}), nil
 }
 
 func (a *PanelAPI) ListarCajasFisicas(ctx context.Context, _ cajaapi.ListarCajasFisicasRequestObject) (cajaapi.ListarCajasFisicasResponseObject, error) {

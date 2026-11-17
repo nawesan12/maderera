@@ -1,6 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Check,
   Landmark,
@@ -22,10 +29,41 @@ const inicial: EstadoAccionPago = {};
  * para eso. El CBU se valida por largo: uno mal tipeado manda la plata de un
  * cliente a otra cuenta, y eso no vuelve.
  */
-export function FormularioBanco({
+/**
+ * El botón «Datos bancarios» del encabezado de Cobros.
+ *
+ * El formulario vivía al pie de la pantalla, mezclado con los cobros: se
+ * carga una vez y se toca cuando cambia la cuenta, no todos los días. Ahora
+ * está detrás de un botón.
+ */
+export function DatosBancarios({
   datos,
 }: {
   datos: DatosBancariosDelPanel | null;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  return (
+    <Dialog open={abierto} onOpenChange={setAbierto}>
+      <DialogTrigger className="tarjeta inline-flex h-11 items-center gap-2 px-3.5 text-base font-medium transition-colors hover:text-acento-texto">
+        <Landmark className="h-5 w-5" />
+        Datos bancarios
+      </DialogTrigger>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Datos para transferencias</DialogTitle>
+        </DialogHeader>
+        <FormularioBanco datos={datos} sinTitulo />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function FormularioBanco({
+  datos,
+  sinTitulo = false,
+}: {
+  datos: DatosBancariosDelPanel | null;
+  sinTitulo?: boolean;
 }) {
   const [estado, accion, guardando] = useActionState(
     guardarDatosBancarios,
@@ -34,7 +72,9 @@ export function FormularioBanco({
 
   return (
     <section className="space-y-4">
-      <h2 className="text-base font-medium">Datos para transferencias</h2>
+      {!sinTitulo && (
+        <h2 className="text-base font-medium">Datos para transferencias</h2>
+      )}
 
       <form action={accion} className="space-y-4">
         <Hoja>

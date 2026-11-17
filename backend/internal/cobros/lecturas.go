@@ -28,14 +28,41 @@ type ChequeListado struct {
 	CustomerID    *string   `json:"customerId"`
 	Circuito      string    `json:"circuito"`
 	Proveedor     *string   `json:"proveedor"`
+	ProveedorID   *string   `json:"proveedorId"`
 	Notas         *string   `json:"notas"`
 	ReceiptID     *string   `json:"receiptId"`
 	Recibo        *string   `json:"recibo"`
 	MotivoRechazo *string   `json:"motivoRechazo"`
 }
 
+// EstadosVivos son los cheques que todavía mueven plata; el resto terminó.
+const EstadosVivos = `('informado', 'cartera', 'depositado', 'entregado')`
+
+// columnasDeCheque: el proveedor es el del último pago que lo nombra y no
+// se anuló (un cheque de un pago anulado vuelve a la cartera y puede salir
+// en otro: un JOIN directo lo repetía una vez por pago).
+const columnasDeCheque = `
+		SELECT ch.id, ch.sentido::text, ch.tipo::text, ch.numero, ch.banco, ch.librador, ch.fecha_pago, ch.importe::float8,
+		  ch.estado::text, cu.nombre, ch.customer_id, ch.circuito::text, pr.nombre, pr.id, ch.notas, ch.receipt_id, r.numero, ch.motivo_rechazo
+		FROM cheques ch
+		LEFT JOIN customers cu ON cu.id = ch.customer_id
+		LEFT JOIN LATERAL (
+		  SELECT su.id, su.nombre FROM supplier_payment_parts spp
+		  JOIN supplier_payments sp ON sp.id = spp.payment_id JOIN suppliers su ON su.id = sp.supplier_id
+		  WHERE spp.cheque_id = ch.id ORDER BY (sp.anulado_at IS NULL) DESC, sp.fecha DESC LIMIT 1) pr ON true
+		LEFT JOIN receipts r ON r.id = ch.receipt_id`
+
+func leerCheques(filas pgx.Rows) ([]ChequeListado, error) {
+	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (ChequeListado, error) {
+		var c ChequeListado
+		return c, r.Scan(&c.ID, &c.Sentido, &c.Tipo, &c.Numero, &c.Banco, &c.Librador, &c.FechaPago, &c.Importe, &c.Estado,
+			&c.Cliente, &c.CustomerID, &c.Circuito, &c.Proveedor, &c.ProveedorID, &c.Notas, &c.ReceiptID, &c.Recibo, &c.MotivoRechazo)
+	})
+}
+
 // Cheques es listarCheques: los vivos primero (por fecha de pago), después
-// el resto.
+// el resto. `estado` «vivos» trae solo los que todavía mueven plata (la
+// pantalla pide los terminados aparte, de a páginas: ChequesTerminados).
 func Cheques(ctx context.Context, pool *pgxpool.Pool, estado, sentido string) ([]ChequeListado, error) {
 	if estado == "todos" {
 		estado = ""
@@ -43,26 +70,34 @@ func Cheques(ctx context.Context, pool *pgxpool.Pool, estado, sentido string) ([
 	if sentido == "todos" {
 		sentido = ""
 	}
-	filas, err := pool.Query(ctx, `
-		SELECT ch.id, ch.sentido::text, ch.tipo::text, ch.numero, ch.banco, ch.librador, ch.fecha_pago, ch.importe::float8,
-		  ch.estado::text, cu.nombre, ch.customer_id, ch.circuito::text, su.nombre, ch.notas, ch.receipt_id, r.numero, ch.motivo_rechazo
-		FROM cheques ch
-		LEFT JOIN customers cu ON cu.id = ch.customer_id
-		LEFT JOIN supplier_payment_parts spp ON spp.cheque_id = ch.id
-		LEFT JOIN supplier_payments sp ON sp.id = spp.payment_id
-		LEFT JOIN suppliers su ON su.id = sp.supplier_id
-		LEFT JOIN receipts r ON r.id = ch.receipt_id
-		WHERE ($1 = '' OR ch.estado::text = $1) AND ($2 = '' OR ch.sentido::text = $2)
-		ORDER BY CASE WHEN ch.estado IN ('informado', 'cartera', 'depositado', 'entregado') THEN 0 ELSE 1 END,
+	filas, err := pool.Query(ctx, columnasDeCheque+`
+		WHERE ($1 = '' OR ch.estado::text = $1 OR ($1 = 'vivos' AND ch.estado IN `+EstadosVivos+`))
+		  AND ($2 = '' OR ch.sentido::text = $2)
+		ORDER BY CASE WHEN ch.estado IN `+EstadosVivos+` THEN 0 ELSE 1 END,
 		  ch.fecha_pago, ch.created_at DESC`, estado, sentido)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (ChequeListado, error) {
-		var c ChequeListado
-		return c, r.Scan(&c.ID, &c.Sentido, &c.Tipo, &c.Numero, &c.Banco, &c.Librador, &c.FechaPago, &c.Importe, &c.Estado,
-			&c.Cliente, &c.CustomerID, &c.Circuito, &c.Proveedor, &c.Notas, &c.ReceiptID, &c.Recibo, &c.MotivoRechazo)
-	})
+	return leerCheques(filas)
+}
+
+// ChequesTerminados son los acreditados, rechazados y anulados, lo último
+// que cambió primero, de a `limite`, con cuántos hay. Antes salían todos,
+// sin tope, debajo de la cartera: con los años, la pantalla eran miles.
+func ChequesTerminados(ctx context.Context, pool *pgxpool.Pool, limite, desplazamiento int) ([]ChequeListado, int, error) {
+	var total int
+	if err := pool.QueryRow(ctx, `SELECT count(*)::int FROM cheques WHERE estado NOT IN `+EstadosVivos).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	filas, err := pool.Query(ctx, columnasDeCheque+`
+		WHERE ch.estado NOT IN `+EstadosVivos+`
+		ORDER BY ch.updated_at DESC, ch.id
+		LIMIT $1 OFFSET $2`, limite, desplazamiento)
+	if err != nil {
+		return nil, 0, err
+	}
+	out, err := leerCheques(filas)
+	return out, total, err
 }
 
 // ChequeEnCartera es uno recibido que se puede entregar a un proveedor.

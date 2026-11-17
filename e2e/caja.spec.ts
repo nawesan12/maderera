@@ -50,5 +50,7 @@ test("el reporte de ventas y la reposición, con sus archivos", async ({ page, r
 
 test("el inicio del panel muestra los números y lo pendiente", async ({ page }) => {
   await page.goto("/admin");
-  await expect(page.getByText(/Ventas · este mes/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Me deben" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plata hoy" })).toBeVisible();
+  await expect(page.getByText(/Vendido · este mes/i)).toBeVisible();
 });

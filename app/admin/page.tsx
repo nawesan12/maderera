@@ -184,13 +184,13 @@ function Encabezado({
 function NumerosCargando() {
   return (
     <div
-      className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+      className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
       aria-busy="true"
       aria-live="polite"
     >
       <span className="sr-only">Trayendo los números…</span>
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="h-[92px] animate-pulse rounded-xl bg-hundida" />
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="h-[180px] animate-pulse rounded-xl bg-hundida" />
       ))}
     </div>
   );

@@ -33,7 +33,7 @@ export default async function NuevaFacturaPage() {
             comprobante.
           </p>
           <Link
-            href="/admin/arca"
+            href="/admin/arca/configuracion"
             className="mt-3 inline-flex h-10 items-center rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"
           >
             Cargar datos fiscales

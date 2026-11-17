@@ -64,6 +64,51 @@ export async function listarComprobantes(
   }));
 }
 
+/**
+ * El listado de la pantalla de a páginas, con cuántos comprobantes cumplen el
+ * filtro y lo que suman (las notas de crédito restan; anuladas, rechazadas y
+ * borradores no cuentan), todo calculado en Go sobre el filtro entero.
+ */
+export async function listarComprobantesPagina(
+  filtros: {
+    estado?: string;
+    desde?: Date;
+    hasta?: Date;
+    cobro?: "contado" | "cuenta" | "todos";
+    busqueda?: string;
+  },
+  pagina = 1,
+  porPagina = 50,
+) {
+  const r = datos(
+    await (await api()).GET("/api/v1/admin/facturacion/comprobantes/pagina", {
+      params: {
+        query: {
+          estado: filtros.estado,
+          desde: filtros.desde?.toISOString(),
+          hasta: filtros.hasta?.toISOString(),
+          cobro: filtros.cobro,
+          busqueda: filtros.busqueda?.slice(0, 200),
+          limite: porPagina,
+          desplazamiento: (pagina - 1) * porPagina,
+        },
+      },
+    }),
+  );
+  return {
+    total: r.total,
+    suma: r.suma,
+    filas: r.filas.map(
+      (f): ComprobanteListado => ({
+        ...f,
+        tipo: f.tipo as TipoComprobante,
+        fechaEmision: new Date(f.fechaEmision),
+        fechaVencimiento: f.fechaVencimiento ? new Date(f.fechaVencimiento) : null,
+      }),
+    ),
+  };
+}
+
 type Crudo = Esquemas["ComprobanteCompleto"];
 type CobroCrudo = Crudo["cobros"][number];
 

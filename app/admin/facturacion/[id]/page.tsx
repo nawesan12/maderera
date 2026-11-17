@@ -1,3 +1,4 @@
+import { motivosDeRechazo } from "@/lib/fiscal/rechazos-arca";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
@@ -152,10 +153,19 @@ export default async function FichaComprobantePage({
             <ShieldAlert className="h-5 w-5 text-brand-orange" />
             Sin autorización de ARCA
           </h2>
-          <p className="mt-1 text-base text-muted-foreground">
-            {comprobante.observacionesArca ??
-              "Este comprobante todavía no tiene CAE, así que no tiene valor fiscal. Se puede imprimir para uso interno."}
-          </p>
+          {/* El motivo de ARCA viene crudo («[10016] El numero o fecha…»):
+              se muestra qué hay que hacer y el texto original queda plegado
+              para el contador o para quien mantiene el sistema
+              (lib/fiscal/rechazos-arca.ts). */}
+          {motivosDeRechazo(comprobante.observacionesArca).map((m, i) => (
+            <div key={i} className="mt-2">
+              <p className="text-base font-medium">{m.queHacer}</p>
+              <details className="mt-1 text-base text-muted-foreground">
+                <summary className="cursor-pointer">Lo que dijo ARCA</summary>
+                <p className="mt-1">{m.original}</p>
+              </details>
+            </div>
+          ))}
           {!anulada && (
             <div className="mt-3">
               <BotonAutorizar

@@ -13,6 +13,7 @@ import { formatearMonto, haceCuanto } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { Vacio } from "@/components/admin/vacio";
+import { leerPagina, Paginador, POR_PAGINA } from "@/components/admin/paginador";
 import { leerPeriodoMensual } from "@/lib/periodos";
 import { nombreComprobante, type TipoComprobante } from "@/lib/fiscal/comprobantes";
 import { CajasFisicas } from "./cajas-fisicas";
@@ -52,16 +53,17 @@ const MEDIOS: Record<string, string> = {
 export default async function CajaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<{ periodo?: string; pagina?: string }>;
 }) {
   await requireStaff();
 
-  const { periodo: crudo } = await searchParams;
+  const { periodo: crudo, pagina: paginaCruda } = await searchParams;
   const periodo = leerPeriodoMensual(crudo, new Date());
+  const pagina = leerPagina(paginaCruda);
 
-  const [sucursales, cerrados, cajas, sueltas, emitido] = await Promise.all([
+  const [sucursales, turnosDelMes, cajas, sueltas, emitido] = await Promise.all([
     sucursalesConCaja(),
-    turnosCerrados(),
+    turnosCerrados(periodo.clave, pagina, POR_PAGINA),
     listarCajasFisicas(),
     ventasSinCaja(),
     emitidoPorCaja(periodo.clave),
@@ -72,6 +74,7 @@ export default async function CajaPage({
    * las sucursales que efectivamente tienen alguna colgada: sin ventas sueltas
    * —que es lo normal— esto no consulta nada.
    */
+  const cerrados = turnosDelMes.filas;
   const conSueltas = [...new Set(sueltas.map((v) => v.branchId))];
   const turnos = (
     await Promise.all(conSueltas.map((id) => turnosParaAsignar(id)))
@@ -111,6 +114,17 @@ export default async function CajaPage({
                   ? `Abierta ${haceCuanto(new Date(s.abiertaAt))}`
                   : "Sin turno abierto"}
               </p>
+              {/* Lo que tendría que haber ahora en el cajón: la suma de los
+                  movimientos del turno, el mismo número que va a pedir el
+                  arqueo. Es la pregunta del dueño cuando pasa por la caja. */}
+              {s.esperado != null && (
+                <p className="tabular mt-1 text-2xl font-bold leading-tight">
+                  {formatearMonto(s.esperado)}
+                  <span className="ml-2 text-base font-medium text-muted-foreground">
+                    en efectivo
+                  </span>
+                </p>
+              )}
               {/* El cambio que no se retira nunca. Ver `FondoBase`. */}
               <FondoBase branchId={s.id} valor={Number(s.fondoBase)} />
             </div>
@@ -133,13 +147,16 @@ export default async function CajaPage({
       />
 
       <section className="tarjeta overflow-hidden">
-        <header className="border-b border-linea px-5 py-3.5">
+        <header className="tarjeta-cabecera flex items-baseline justify-between gap-3 px-5 py-3.5">
           <h2 className="text-base font-semibold">Turnos cerrados</h2>
+          <span className="tabular text-base text-muted-foreground">
+            {turnosDelMes.total}
+          </span>
         </header>
 
         {cerrados.length === 0 ? (
           <p className="px-5 py-10 text-center text-base text-muted-foreground">
-            Todavía no se cerró ningún turno.
+            Ningún turno cerrado en el mes elegido.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -241,6 +258,13 @@ export default async function CajaPage({
             </table>
           </div>
         )}
+        <div className="px-4">
+          <Paginador
+            pagina={pagina}
+            total={turnosDelMes.total}
+            params={{ periodo: crudo }}
+          />
+        </div>
       </section>
 
       {/*

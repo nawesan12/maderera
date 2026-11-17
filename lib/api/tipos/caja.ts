@@ -174,6 +174,11 @@ export interface components {
             turnoId: string | null;
             /** Format: date-time */
             abiertaAt: string | null;
+            /**
+             * Format: double
+             * @description El efectivo que tendría que haber ahora en el turno abierto
+             */
+            esperado: number | null;
         };
         CajaRenglonDelCierre: {
             medioPago: string;
@@ -337,7 +342,10 @@ export interface operations {
     TurnosCerrados: {
         parameters: {
             query?: {
+                /** @description aaaa-mm (si falta */
+                periodo?: string;
                 limite?: number;
+                desplazamiento?: number;
             };
             header?: never;
             path?: never;
@@ -345,13 +353,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Los últimos turnos cerrados (30 si no se dice), con lo esperado, lo contado y el cierre Z */
+            /** @description Los turnos cerrados en el mes (argentino), del más nuevo al más viejo, de a 30 si no se dice, con el total para paginar */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TurnoCerrado"][];
+                    "application/json": {
+                        filas: components["schemas"]["TurnoCerrado"][];
+                        total: number;
+                    };
                 };
             };
         };

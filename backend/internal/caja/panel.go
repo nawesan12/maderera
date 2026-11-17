@@ -48,12 +48,17 @@ type SucursalConCaja struct {
 	FondoBase float64    `json:"fondoBase"`
 	TurnoID   *string    `json:"turnoId"`
 	AbiertaAt *time.Time `json:"abiertaAt"`
+	// Esperado es el efectivo que tendría que haber ahora en el cajón del
+	// turno abierto (la suma de sus movimientos, como el arqueo); nil sin
+	// turno.
+	Esperado *float64 `json:"esperado"`
 }
 
 // SucursalesConCaja es sucursalesConCaja: las activas, en su orden.
 func (p *Panel) SucursalesConCaja(ctx context.Context) ([]SucursalConCaja, error) {
 	filas, err := p.pool.Query(ctx, `
-		SELECT b.id, b.name, b.fondo_base, s.id, s.abierta_at
+		SELECT b.id, b.name, b.fondo_base, s.id, s.abierta_at,
+		       CASE WHEN s.id IS NOT NULL THEN (SELECT coalesce(sum(m.monto), 0) FROM cash_movements m WHERE m.session_id = s.id) END
 		FROM branches b
 		LEFT JOIN cash_sessions s ON s.branch_id = b.id AND s.estado = 'abierta'
 		WHERE b.active = true
@@ -66,10 +71,15 @@ func (p *Panel) SucursalesConCaja(ctx context.Context) ([]SucursalConCaja, error
 	for filas.Next() {
 		var x SucursalConCaja
 		var f jsmath.Num
-		if err := filas.Scan(&x.ID, &x.Nombre, &f, &x.TurnoID, &x.AbiertaAt); err != nil {
+		var esperado *jsmath.Num
+		if err := filas.Scan(&x.ID, &x.Nombre, &f, &x.TurnoID, &x.AbiertaAt, &esperado); err != nil {
 			return nil, err
 		}
 		x.FondoBase = f.F()
+		if esperado != nil {
+			e := esperado.F()
+			x.Esperado = &e
+		}
 		out = append(out, x)
 	}
 	return out, filas.Err()
@@ -91,9 +101,17 @@ type TurnoCerrado struct {
 	Cierre  []RenglonDelCierre `json:"cierre"`
 }
 
-// TurnosCerrados es turnosCerrados con cierresDeTurnos: los últimos
-// `limite` turnos cerrados, del más nuevo al más viejo.
-func (p *Panel) TurnosCerrados(ctx context.Context, limite int) ([]TurnoCerrado, error) {
+// TurnosCerrados son los turnos cerrados entre `desde` y `hasta` (el mes
+// argentino de la pantalla), del más nuevo al más viejo, de a `limite` a
+// partir de `desplazamiento`, con cuántos hay en total para paginar. Antes
+// traía los últimos 30 sin importar el mes elegido arriba, y el turno de hace
+// dos meses que había que revisar no aparecía nunca.
+func (p *Panel) TurnosCerrados(ctx context.Context, desde, hasta time.Time, limite, desplazamiento int) ([]TurnoCerrado, int, error) {
+	var total int
+	if err := p.pool.QueryRow(ctx, `SELECT count(*)::int FROM cash_sessions WHERE estado = 'cerrada' AND cerrada_at >= $1 AND cerrada_at <= $2`,
+		desde, hasta).Scan(&total); err != nil {
+		return nil, 0, err
+	}
 	filas, err := p.pool.Query(ctx, `
 		SELECT s.id, b.name, s.abierta_at, s.cerrada_at, s.contado, s.notas, u.name,
 		       coalesce(sum(m.monto), 0),
@@ -102,12 +120,12 @@ func (p *Panel) TurnosCerrados(ctx context.Context, limite int) ([]TurnoCerrado,
 		JOIN branches b ON b.id = s.branch_id
 		JOIN "user" u ON u.id = s.abierta_por
 		LEFT JOIN cash_movements m ON m.session_id = s.id
-		WHERE s.estado = 'cerrada'
+		WHERE s.estado = 'cerrada' AND s.cerrada_at >= $1 AND s.cerrada_at <= $2
 		GROUP BY s.id, b.name, s.abierta_at, s.cerrada_at, s.contado, s.notas, u.name
 		ORDER BY s.cerrada_at DESC
-		LIMIT $1`, limite)
+		LIMIT $3 OFFSET $4`, desde, hasta, limite, desplazamiento)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer filas.Close()
 	out := []TurnoCerrado{}
@@ -117,7 +135,7 @@ func (p *Panel) TurnosCerrados(ctx context.Context, limite int) ([]TurnoCerrado,
 		var contado *jsmath.Num
 		var esperado jsmath.Num
 		if err := filas.Scan(&t.ID, &t.Sucursal, &t.AbiertaAt, &t.CerradaAt, &contado, &t.Notas, &t.AbiertaPor, &esperado, &t.Tardios); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		t.Esperado = esperado.F()
 		if contado != nil {
@@ -128,11 +146,11 @@ func (p *Panel) TurnosCerrados(ctx context.Context, limite int) ([]TurnoCerrado,
 		ids = append(ids, t.ID)
 	}
 	if err := filas.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	cierres, err := CierresDeTurnos(ctx, p.pool, ids)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for i := range out {
 		out[i].Cierre = cierres[out[i].ID]
@@ -140,7 +158,7 @@ func (p *Panel) TurnosCerrados(ctx context.Context, limite int) ([]TurnoCerrado,
 			out[i].Cierre = []RenglonDelCierre{}
 		}
 	}
-	return out, nil
+	return out, total, nil
 }
 
 // CajaFisica es una máquina del mostrador.

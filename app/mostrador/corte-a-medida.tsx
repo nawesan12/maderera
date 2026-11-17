@@ -386,6 +386,7 @@ export function CorteAMedida({
                         inputMode="numeric"
                         value={p.largo}
                         onChange={(e) => cambiar(i, "largo", e.target.value)}
+                        aria-label={`Largo de la pieza ${i + 1}, en mm`}
                         className="tabular h-12 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
                       />
                     </label>
@@ -397,6 +398,7 @@ export function CorteAMedida({
                         inputMode="numeric"
                         value={p.ancho}
                         onChange={(e) => cambiar(i, "ancho", e.target.value)}
+                        aria-label={`Ancho de la pieza ${i + 1}, en mm`}
                         className="tabular h-12 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
                       />
                     </label>
@@ -408,6 +410,7 @@ export function CorteAMedida({
                         inputMode="numeric"
                         value={p.cantidad}
                         onChange={(e) => cambiar(i, "cantidad", e.target.value)}
+                        aria-label={`Cantidad de la pieza ${i + 1}`}
                         className="tabular h-12 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
                       />
                     </label>
@@ -418,6 +421,7 @@ export function CorteAMedida({
                       <input
                         value={p.etiqueta}
                         onChange={(e) => cambiar(i, "etiqueta", e.target.value)}
+                        aria-label={`Etiqueta de la pieza ${i + 1}`}
                         placeholder="Puerta, estante…"
                         className="h-12 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
                       />

@@ -389,7 +389,11 @@ func (s *Servicio) Descargar(ctx context.Context, ses *auth.Sesion, lote []Venta
 		usuario := ses.UserID
 		if v.UsuarioID != nil && *v.UsuarioID != ses.UserID {
 			var existe bool
-			if err := s.pool.QueryRow(ctx, `SELECT exists(SELECT 1 FROM "user" WHERE id = $1)`, *v.UsuarioID).Scan(&existe); err == nil && existe {
+			// Y que sea alguien que atiende el mostrador: si no, cualquier
+			// vendedor firmaba ventas a nombre del administrador.
+			if err := s.pool.QueryRow(ctx, `
+				SELECT exists(SELECT 1 FROM profiles WHERE user_id = $1 AND role = 'staff' AND staff_role IN ('admin', 'vendedor'))`,
+				*v.UsuarioID).Scan(&existe); err == nil && existe {
 				usuario = *v.UsuarioID
 			}
 		}

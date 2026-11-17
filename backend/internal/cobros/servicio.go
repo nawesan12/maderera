@@ -67,6 +67,9 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 	if e != "" {
 		return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"partes": e})
 	}
+	if ConRetencion(partes) && (ses.RolStaff == nil || *ses.RolStaff != sqlc.StaffRoleAdmin) {
+		return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"partes": "Una retención la carga un administrador, con su certificado."})
+	}
 	var r ReciboEmitido
 	var numeroPedido string
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {

@@ -144,6 +144,14 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario st
 		}
 	}
 
+	// El corte viaja aparte de los renglones: tiene que ser de una placa que
+	// se está vendiendo, o la orden llega al taller sin el material cobrado.
+	if v.Corte != nil && len(v.Corte.Piezas) > 0 {
+		if p := revisarCorte(*v.Corte, v.Lineas); p != "" {
+			return fallo(p), nil
+		}
+	}
+
 	subtotal := ventas.TotalDeLaVenta(v.Lineas)
 
 	// El descuento por forma de pago lo resuelve el servidor; uno tipeado a
@@ -156,7 +164,14 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario st
 	if err != nil {
 		return ResultadoVenta{}, err
 	}
-	escala := ventas.DescuentoPorMedioDePago(esc, v.MedioPago, subtotal)
+	// La escala sigue a la plata que entra, no al medio declarado: con el
+	// pago partido en medios distintos no hay descuento automático (el que
+	// atiende puede tipear uno), y declarar efectivo pagando con crédito no
+	// se lleva el de contado.
+	var escala *ventas.EscalaDePago
+	if ventas.UnSoloMedio(v.Pagos, v.MedioPago) {
+		escala = ventas.DescuentoPorMedioDePago(esc, v.MedioPago, subtotal)
+	}
 	automatico := 0.0
 	if escala != nil {
 		automatico = ventas.MontoDelDescuentoDePago(subtotal, escala.Porcentaje)
@@ -171,6 +186,9 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario st
 	}
 	lineas, descuento := ventas.AplicarDescuento(v.Lineas, aDescontar)
 	total := ventas.TotalDeLaVenta(lineas)
+	if total <= 0 {
+		return fallo("El descuento no puede llevarse toda la venta."), nil
+	}
 
 	pagos := ventas.NormalizarPagos(v.Pagos, v.MedioPago, total)
 	if p := ventas.RevisarPagos(pagos, total, v.CustomerID); p != "" {
@@ -305,6 +323,17 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		}
 		if !hay && !diferida {
 			return fallo("No hay caja abierta en esta sucursal. Abrila antes de cobrar en efectivo."), nil
+		}
+		if hay && !diferida {
+			// El candado compartido frena el cierre hasta que esta venta
+			// confirme: si no, el arqueo podía hacerse sin su efectivo.
+			var estado string
+			if err := tx.QueryRow(ctx, `SELECT estado FROM cash_sessions WHERE id = $1 FOR SHARE`, turno).Scan(&estado); err != nil {
+				return ResultadoVenta{}, err
+			}
+			if estado != "abierta" {
+				return fallo("La caja se acaba de cerrar. Abrila antes de cobrar en efectivo."), nil
+			}
 		}
 		if hay {
 			sesion = &turno
@@ -521,7 +550,9 @@ func descontarStock(ctx context.Context, tx pgx.Tx, sucursal, numero, usuario st
 		}
 	}
 	for _, x := range salidas {
-		if _, err := tx.Exec(ctx, `UPDATE inventory SET qty = qty - $3::numeric, updated_at = now() WHERE variant_id = $1 AND branch_id = $2`,
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO inventory (variant_id, branch_id, qty) VALUES ($1, $2, -$3::numeric)
+			ON CONFLICT (variant_id, branch_id) DO UPDATE SET qty = inventory.qty - $3::numeric, updated_at = now()`,
 			x.variante, sucursal, jsmath.Texto(x.unidades)); err != nil {
 			return err
 		}
@@ -532,6 +563,34 @@ func descontarStock(ctx context.Context, tx pgx.Tx, sucursal, numero, usuario st
 		}
 	}
 	return nil
+}
+
+// revisarCorte: la placa del corte está entre las líneas y el despiece entra
+// en lo que el plano puede acomodar.
+func revisarCorte(k CorteDeMostrador, lineas []ventas.LineaDeVenta) string {
+	if k.VariantID != nil {
+		esta := false
+		for _, l := range lineas {
+			if l.VariantID != nil && *l.VariantID == *k.VariantID {
+				esta = true
+				break
+			}
+		}
+		if !esta {
+			return "El corte es de una placa que no está en la venta. Volvé a cargar la placa o sacá el corte."
+		}
+	}
+	unidades := 0
+	for _, p := range k.Piezas {
+		if p.Cantidad <= 0 || p.LargoMm <= 0 || p.AnchoMm <= 0 {
+			return "Hay una pieza del corte sin medidas o sin cantidad."
+		}
+		unidades += p.Cantidad
+	}
+	if unidades > cortes.TopeDeUnidades {
+		return fmt.Sprintf("Son demasiadas piezas para un corte (el máximo es %d).", cortes.TopeDeUnidades)
+	}
+	return ""
 }
 
 func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, pedido, usuario string) error {

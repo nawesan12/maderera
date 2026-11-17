@@ -215,19 +215,29 @@ func (q *Queries) ChequeCompleto(ctx context.Context, id string) (Cheque, error)
 }
 
 const chequePorID = `-- name: ChequePorID :one
-SELECT id, estado, importe FROM cheques WHERE id = $1
+SELECT id, estado, importe, customer_id, receipt_id, order_payment_id FROM cheques WHERE id = $1 FOR UPDATE
 `
 
 type ChequePorIDRow struct {
-	ID      string       `json:"id"`
-	Estado  EstadoCheque `json:"estado"`
-	Importe jsmath.Num   `json:"importe"`
+	ID             string       `json:"id"`
+	Estado         EstadoCheque `json:"estado"`
+	Importe        jsmath.Num   `json:"importe"`
+	CustomerID     *string      `json:"customerId"`
+	ReceiptID      *string      `json:"receiptId"`
+	OrderPaymentID *string      `json:"orderPaymentId"`
 }
 
 func (q *Queries) ChequePorID(ctx context.Context, id string) (ChequePorIDRow, error) {
 	row := q.db.QueryRow(ctx, chequePorID, id)
 	var i ChequePorIDRow
-	err := row.Scan(&i.ID, &i.Estado, &i.Importe)
+	err := row.Scan(
+		&i.ID,
+		&i.Estado,
+		&i.Importe,
+		&i.CustomerID,
+		&i.ReceiptID,
+		&i.OrderPaymentID,
+	)
 	return i, err
 }
 

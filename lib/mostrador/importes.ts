@@ -79,6 +79,11 @@ export function revisarVenta(
     if (!Number.isFinite(l.cantidad) || l.cantidad <= 0) {
       return `La cantidad de "${l.descripcion}" tiene que ser mayor a cero.`;
     }
+    // El renglón guarda la cantidad con dos decimales: con una tercera el
+    // papel diría 2,38 × precio y el subtotal sería el de 2,375.
+    if (Math.abs(l.cantidad * 100 - Math.round(l.cantidad * 100)) > 1e-6) {
+      return `La cantidad de "${l.descripcion}" va con dos decimales como mucho.`;
+    }
     if (!Number.isFinite(l.precioUnitario) || l.precioUnitario < 0) {
       return `El precio de "${l.descripcion}" no puede ser negativo.`;
     }
@@ -317,7 +322,9 @@ export function leerTipeo(texto: string): TipeoDelBuscador {
 
   if (!m) return { cantidad: 1, consulta: limpio, explicita: false };
 
-  const cantidad = Number(m[1].replace(",", "."));
+  // Dos decimales, como se guarda el renglón: "2,375 x" sería 2,38 en el
+  // papel y el servidor lo rechaza.
+  const cantidad = Math.round(Number(m[1].replace(",", ".")) * 100) / 100;
   // Cero unidades no es una venta; se lee como si no hubiera prefijo.
   if (!(cantidad > 0)) {
     return { cantidad: 1, consulta: limpio, explicita: false };

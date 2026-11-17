@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"mjbj/internal/jsmath"
 )
 
@@ -3037,6 +3038,7 @@ const (
 	OrigenPresupuestoMostrador   OrigenPresupuesto = "mostrador"
 	OrigenPresupuestoTelefono    OrigenPresupuesto = "telefono"
 	OrigenPresupuestoExpress     OrigenPresupuesto = "express"
+	OrigenPresupuestoWhatsapp    OrigenPresupuesto = "whatsapp"
 )
 
 func (e *OrigenPresupuesto) Scan(src interface{}) error {
@@ -3080,7 +3082,8 @@ func (e OrigenPresupuesto) Valid() bool {
 		OrigenPresupuestoCalculadora,
 		OrigenPresupuestoMostrador,
 		OrigenPresupuestoTelefono,
-		OrigenPresupuestoExpress:
+		OrigenPresupuestoExpress,
+		OrigenPresupuestoWhatsapp:
 		return true
 	}
 	return false
@@ -3093,6 +3096,7 @@ func AllOrigenPresupuestoValues() []OrigenPresupuesto {
 		OrigenPresupuestoMostrador,
 		OrigenPresupuestoTelefono,
 		OrigenPresupuestoExpress,
+		OrigenPresupuestoWhatsapp,
 	}
 }
 
@@ -4893,6 +4897,15 @@ type Banner struct {
 	Etiqueta    string          `json:"etiqueta"`
 }
 
+type BasesDeRetencion struct {
+	ID            string             `json:"id"`
+	PaymentID     string             `json:"paymentId"`
+	SupplierID    string             `json:"supplierId"`
+	CodigoRegimen string             `json:"codigoRegimen"`
+	Base          jsmath.Num         `json:"base"`
+	Fecha         pgtype.Timestamptz `json:"fecha"`
+}
+
 type Branch struct {
 	ID        string     `json:"id"`
 	Slug      string     `json:"slug"`
@@ -5082,6 +5095,23 @@ type ConfiguracionFiscal struct {
 	InicioActividades      *time.Time   `json:"inicioActividades"`
 	Leyenda                *string      `json:"leyenda"`
 	UpdatedAt              time.Time    `json:"updatedAt"`
+}
+
+type ConsultasCorte struct {
+	ID               string             `json:"id"`
+	Token            string             `json:"token"`
+	VariantID        *string            `json:"variantId"`
+	Material         string             `json:"material"`
+	PlacaLargoMm     jsmath.Num         `json:"placaLargoMm"`
+	PlacaAnchoMm     jsmath.Num         `json:"placaAnchoMm"`
+	Mitad            *string            `json:"mitad"`
+	CantoDescripcion *string            `json:"cantoDescripcion"`
+	Piezas           json.RawMessage    `json:"piezas"`
+	AnchoSierraMm    jsmath.Num         `json:"anchoSierraMm"`
+	BranchID         *string            `json:"branchId"`
+	Ip               *string            `json:"ip"`
+	CuttingOrderID   *string            `json:"cuttingOrderId"`
+	CreatedAt        pgtype.Timestamptz `json:"createdAt"`
 }
 
 type CorreoHilo struct {
@@ -5660,6 +5690,16 @@ type PaymentEvent struct {
 	CreatedAt   time.Time       `json:"createdAt"`
 }
 
+type PaymentRefund struct {
+	ID                string             `json:"id"`
+	PaymentID         string             `json:"paymentId"`
+	Importe           jsmath.Num         `json:"importe"`
+	Acumulado         jsmath.Num         `json:"acumulado"`
+	Referencia        *string            `json:"referencia"`
+	AccountMovementID *string            `json:"accountMovementId"`
+	CreatedAt         pgtype.Timestamptz `json:"createdAt"`
+}
+
 type PosDevice struct {
 	ID          string     `json:"id"`
 	Codigo      string     `json:"codigo"`
@@ -5726,6 +5766,8 @@ type Product struct {
 	Imputacion            *string      `json:"imputacion"`
 	FormaDeVenta          FormaDeVenta `json:"formaDeVenta"`
 	PrecioMediaPct        jsmath.Num   `json:"precioMediaPct"`
+	Usos                  *string      `json:"usos"`
+	Cuidados              *string      `json:"cuidados"`
 }
 
 type ProductImage struct {
@@ -5793,6 +5835,7 @@ type ProfessionalApplication struct {
 	DocumentoTipo   TipoDocumento    `json:"documentoTipo"`
 	DocumentoNumero string           `json:"documentoNumero"`
 	RedSocial       *string          `json:"redSocial"`
+	CuentaCreada    bool             `json:"cuentaCreada"`
 }
 
 type Profile struct {
@@ -5979,34 +6022,40 @@ type RelatedProduct struct {
 }
 
 type RetencionesPracticada struct {
-	ID              string           `json:"id"`
-	PaymentID       string           `json:"paymentId"`
-	SupplierID      string           `json:"supplierId"`
-	RegimenID       string           `json:"regimenId"`
-	Numero          string           `json:"numero"`
-	CodigoRegimen   string           `json:"codigoRegimen"`
-	Impuesto        ImpuestoRetenido `json:"impuesto"`
-	Base            jsmath.Num       `json:"base"`
-	Alicuota        jsmath.Num       `json:"alicuota"`
-	Importe         jsmath.Num       `json:"importe"`
-	Fecha           time.Time        `json:"fecha"`
-	CreatedByUserID *string          `json:"createdByUserId"`
-	CreatedAt       time.Time        `json:"createdAt"`
+	ID              string             `json:"id"`
+	PaymentID       string             `json:"paymentId"`
+	SupplierID      string             `json:"supplierId"`
+	RegimenID       string             `json:"regimenId"`
+	Numero          string             `json:"numero"`
+	CodigoRegimen   string             `json:"codigoRegimen"`
+	Impuesto        ImpuestoRetenido   `json:"impuesto"`
+	Base            jsmath.Num         `json:"base"`
+	Alicuota        jsmath.Num         `json:"alicuota"`
+	Importe         jsmath.Num         `json:"importe"`
+	Fecha           time.Time          `json:"fecha"`
+	CreatedByUserID *string            `json:"createdByUserId"`
+	CreatedAt       time.Time          `json:"createdAt"`
+	Acumulado       *jsmath.Num        `json:"acumulado"`
+	Imponible       *jsmath.Num        `json:"imponible"`
+	RetenidoAntes   *jsmath.Num        `json:"retenidoAntes"`
+	AnuladaAt       pgtype.Timestamptz `json:"anuladaAt"`
 }
 
 type RetencionesSufrida struct {
-	ID              string           `json:"id"`
-	CustomerID      string           `json:"customerId"`
-	Numero          string           `json:"numero"`
-	Impuesto        ImpuestoRetenido `json:"impuesto"`
-	CodigoRegimen   *string          `json:"codigoRegimen"`
-	Base            jsmath.Num       `json:"base"`
-	Alicuota        *jsmath.Num      `json:"alicuota"`
-	Importe         jsmath.Num       `json:"importe"`
-	Fecha           time.Time        `json:"fecha"`
-	Referencia      *string          `json:"referencia"`
-	CreatedByUserID *string          `json:"createdByUserId"`
-	CreatedAt       time.Time        `json:"createdAt"`
+	ID              string             `json:"id"`
+	CustomerID      string             `json:"customerId"`
+	Numero          string             `json:"numero"`
+	Impuesto        ImpuestoRetenido   `json:"impuesto"`
+	CodigoRegimen   *string            `json:"codigoRegimen"`
+	Base            jsmath.Num         `json:"base"`
+	Alicuota        *jsmath.Num        `json:"alicuota"`
+	Importe         jsmath.Num         `json:"importe"`
+	Fecha           time.Time          `json:"fecha"`
+	Referencia      *string            `json:"referencia"`
+	CreatedByUserID *string            `json:"createdByUserId"`
+	CreatedAt       time.Time          `json:"createdAt"`
+	ReceiptID       *string            `json:"receiptId"`
+	AnuladaAt       pgtype.Timestamptz `json:"anuladaAt"`
 }
 
 type Seller struct {
@@ -6115,20 +6164,24 @@ type SupplierMovement struct {
 	Referencia      *string                 `json:"referencia"`
 	CreatedByUserID *string                 `json:"createdByUserId"`
 	CreatedAt       time.Time               `json:"createdAt"`
+	GoodsReceiptID  *string                 `json:"goodsReceiptId"`
 }
 
 type SupplierPayment struct {
-	ID              string     `json:"id"`
-	SupplierID      string     `json:"supplierId"`
-	Fecha           time.Time  `json:"fecha"`
-	Total           jsmath.Num `json:"total"`
-	Neto            jsmath.Num `json:"neto"`
-	Medio           string     `json:"medio"`
-	Referencia      *string    `json:"referencia"`
-	Notas           *string    `json:"notas"`
-	CreatedByUserID *string    `json:"createdByUserId"`
-	CreatedAt       time.Time  `json:"createdAt"`
-	Circuito        Circuito   `json:"circuito"`
+	ID               string             `json:"id"`
+	SupplierID       string             `json:"supplierId"`
+	Fecha            time.Time          `json:"fecha"`
+	Total            jsmath.Num         `json:"total"`
+	Neto             jsmath.Num         `json:"neto"`
+	Medio            string             `json:"medio"`
+	Referencia       *string            `json:"referencia"`
+	Notas            *string            `json:"notas"`
+	CreatedByUserID  *string            `json:"createdByUserId"`
+	CreatedAt        time.Time          `json:"createdAt"`
+	Circuito         Circuito           `json:"circuito"`
+	AnuladoAt        pgtype.Timestamptz `json:"anuladoAt"`
+	MotivoAnulacion  *string            `json:"motivoAnulacion"`
+	AnuladoPorUserID *string            `json:"anuladoPorUserId"`
 }
 
 type SupplierPaymentAllocation struct {
@@ -6205,6 +6258,13 @@ type TechnicalDocument struct {
 	Orden             int32     `json:"orden"`
 	CreatedAt         time.Time `json:"createdAt"`
 	UpdatedAt         time.Time `json:"updatedAt"`
+}
+
+type TechnicalDocumentTarget struct {
+	ID         string  `json:"id"`
+	DocumentID string  `json:"documentId"`
+	ProductID  *string `json:"productId"`
+	CategoryID *string `json:"categoryId"`
 }
 
 type Trabajo struct {
@@ -6291,6 +6351,11 @@ type WhatsappConversacione struct {
 	BajaDetalle          *string            `json:"bajaDetalle"`
 	ResueltaPorUserID    *string            `json:"resueltaPorUserId"`
 	ResueltaAt           *time.Time         `json:"resueltaAt"`
+	BotEstado            string             `json:"botEstado"`
+	BotFallos            int32              `json:"botFallos"`
+	BotConsulta          *string            `json:"botConsulta"`
+	BotDerivadaAt        pgtype.Timestamptz `json:"botDerivadaAt"`
+	BotPendiente         json.RawMessage    `json:"botPendiente"`
 }
 
 type WhatsappMensaje struct {

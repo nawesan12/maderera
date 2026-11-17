@@ -84,6 +84,11 @@ func RevisarVenta(lineas []LineaDeVenta, medio string, cliente *string) string {
 		if !finito(l.Cantidad) || l.Cantidad <= 0 {
 			return `La cantidad de "` + l.Descripcion + `" tiene que ser mayor a cero.`
 		}
+		// Los renglones guardan la cantidad con dos decimales: con una tercera
+		// el papel diría 2,38 × precio y el subtotal sería el de 2,375.
+		if math.Abs(float64(l.Cantidad*100)-jsmath.Round(float64(l.Cantidad*100))) > 1e-6 {
+			return `La cantidad de "` + l.Descripcion + `" va con dos decimales como mucho.`
+		}
 		if !finito(l.PrecioUnitario) || l.PrecioUnitario < 0 {
 			return `El precio de "` + l.Descripcion + `" no puede ser negativo.`
 		}

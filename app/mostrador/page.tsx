@@ -8,6 +8,7 @@ import { inicioDelRol, puedeEntrar } from "@/lib/roles";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { api, datos } from "@/lib/api/servidor";
 import { VistaMostrador } from "./vista";
+import { escalasDePago } from "@/lib/dal/descuentos-pago";
 
 export const metadata: Metadata = {
   title: "Mostrador",
@@ -62,7 +63,7 @@ export default async function MostradorPage({
    * sabe si el cliente compra con precio de profesional, que es de contado) y
    * el cambio que tiene que quedar en el cajón: todo de Go, en un pedido.
    */
-  const [pantalla, tarifas, promos, sierra] = await Promise.all([
+  const [pantalla, tarifas, promos, sierra, escalas] = await Promise.all([
     (async () =>
       datos(
         await (await api()).GET("/api/v1/mostrador/pantalla", {
@@ -78,6 +79,9 @@ export default async function MostradorPage({
     // El espesor del disco, que el plano descuenta entre pieza y pieza y
     // ahora además se dice en pantalla.
     anchoDeSierra(),
+    // El descuento por forma de pago, para que el total de la pantalla sea
+    // el que va a registrar el servidor.
+    escalasDePago(),
   ]);
   const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre } = pantalla;
 
@@ -98,6 +102,7 @@ export default async function MostradorPage({
       anchoSierra={sierra}
       fondoBase={fondoBase}
       promos={promos}
+      escalasDePago={escalas}
       ventas={ventas}
     />
   );

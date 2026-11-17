@@ -531,7 +531,9 @@ func (s *Servicio) AnularRecepcion(ctx context.Context, ses *auth.Sesion, id, mo
 				if unidades <= 0 {
 					continue
 				}
-				if _, err := tx.Exec(ctx, `UPDATE inventory SET qty = qty - $3::numeric, updated_at = now() WHERE variant_id = $1 AND branch_id = $2`,
+				if _, err := tx.Exec(ctx, `
+			INSERT INTO inventory (variant_id, branch_id, qty) VALUES ($1, $2, -$3::numeric)
+			ON CONFLICT (variant_id, branch_id) DO UPDATE SET qty = inventory.qty - $3::numeric, updated_at = now()`,
 					it.variante, c.branch, jsmath.Texto(unidades)); err != nil {
 					return err
 				}

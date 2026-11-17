@@ -44,7 +44,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatearMonto, formatearPrecio, formatearUnidad } from "@/lib/formato";
-import { medioPermitido } from "@/lib/precios/medio-pago";
+import {
+  descuentoPorMedioDePago,
+  medioPermitido,
+  montoDelDescuentoDePago,
+  type EscalaDePago,
+} from "@/lib/precios/medio-pago";
 import { formatearCantidad } from "@/lib/unidades";
 import { leerDocumento, precargaDelAlta, sugerirCondicionIva } from "@/lib/clientes/documento";
 import { ordenarClientes } from "@/lib/mostrador/ranking-clientes";
@@ -327,6 +332,7 @@ export function VistaMostrador({
   anchoSierra,
   fondoBase,
   promos,
+  escalasDePago,
 }: {
   usuario: { nombre: string; userId: string };
   /** La lista de precios general. Lo que no sea esta es precio diferenciado. */
@@ -345,6 +351,8 @@ export function VistaMostrador({
   fondoBase: number;
   /** Las promociones vigentes. Se cuentan, no se descuentan. */
   promos: PromoVigente[];
+  /** El descuento por forma de pago: lo aplica el servidor, acá se muestra. */
+  escalasDePago: EscalaDePago[];
 }) {
   const router = useRouter();
   const [enviando, empezar] = useTransition();
@@ -492,10 +500,29 @@ export function VistaMostrador({
   );
 
   const subtotal = useMemo(() => totalDeLaVenta(lineas), [lineas]);
-  const descuento = useMemo(
+  const descuentoManual = useMemo(
     () => montoDelDescuento(subtotal, tipoDesc, Number(valorDesc)),
     [subtotal, tipoDesc, valorDesc],
   );
+  /*
+   * El de la forma de pago, con la misma regla que `RegistrarVenta`: sigue a
+   * la plata que entra, así que con el pago partido en medios distintos no
+   * hay. Uno tipeado a mano gana y nunca se suman. Sin esto la pantalla
+   * cobraba y daba vuelto sobre un total y la caja registraba otro.
+   */
+  const escalaDePago = useMemo(() => {
+    const unSoloMedio =
+      !partes || partes.every((p) => !(Number(p.importe) > 0) || p.medio === medio);
+    return unSoloMedio ? descuentoPorMedioDePago(escalasDePago, medio, subtotal) : null;
+  }, [escalasDePago, partes, medio, subtotal]);
+  const descuento =
+    descuentoManual > 0
+      ? descuentoManual
+      : escalaDePago
+        ? montoDelDescuentoDePago(subtotal, escalaDePago.porcentaje)
+        : 0;
+  const motivoDelDescuento =
+    descuentoManual > 0 ? motivoDesc : (escalaDePago?.etiqueta ?? "");
   const total = useMemo(() => subtotal - descuento, [subtotal, descuento]);
   // Sin nada tipeado no hay vuelto que mostrar: `Number("")` es 0, y un vuelto
   // de $0 en pantalla antes de que el cliente saque la plata se lee como si ya
@@ -650,7 +677,7 @@ export function VistaMostrador({
           pagos,
           acopio,
           descuento,
-          descuentoMotivo: motivoDesc || null,
+          descuentoMotivo: motivoDelDescuento || null,
           lineas,
         },
         contextoDelTicket,
@@ -669,7 +696,7 @@ export function VistaMostrador({
           acopio,
           comprobante: "interno",
           cuit: cuit || null,
-          descuento,
+          descuento: descuentoManual,
           descuentoMotivo: motivoDesc || null,
           usuarioId: usuario.userId,
           cobradaAt,
@@ -708,6 +735,7 @@ export function VistaMostrador({
     setTarjeta({ nroLote: "", nroCupon: "", marca: "", cuotas: 1 });
     setCheque(CHEQUE_VACIO);
     setPartes(null);
+    setCorte(null);
     // Terminada la venta, el foco vuelve al buscador: lo que sigue siempre es
     // el primer producto del que viene atrás en la fila.
     enfocar("buscador");
@@ -872,10 +900,14 @@ export function VistaMostrador({
         medioPago: medio,
         pagos: pagosDeLaVenta(),
         acopio,
-        ...(corte ? { corte } : {}),
+        // Si se sacó la placa, el corte no viaja: el servidor lo rechazaría
+        // y el taller cortaría material que no se cobró.
+        ...(corte && (corte.variantId == null || lineas.some((l) => l.variantId === corte.variantId))
+          ? { corte }
+          : {}),
         comprobante,
         cuit: cuit || null,
-        descuento,
+        descuento: descuentoManual,
         descuentoMotivo: motivoDesc || null,
         autorizado,
       });
@@ -1052,6 +1084,7 @@ export function VistaMostrador({
             listaGeneral={listaGeneral}
             subtotal={subtotal}
             descuento={descuento}
+            etiquetaDelDescuento={motivoDelDescuento}
             tipoDesc={tipoDesc}
             onTipoDesc={setTipoDesc}
             valorDesc={valorDesc}
@@ -1704,6 +1737,7 @@ function Cobro({
   buscarClienteLocal,
   subtotal,
   descuento,
+  etiquetaDelDescuento,
   tipoDesc,
   onTipoDesc,
   valorDesc,
@@ -1748,6 +1782,8 @@ function Cobro({
 }: {
   subtotal: number;
   descuento: number;
+  /** El motivo tipeado o el nombre de la escala de la forma de pago. */
+  etiquetaDelDescuento: string;
   tipoDesc: TipoDescuento;
   onTipoDesc: (t: TipoDescuento) => void;
   valorDesc: string;
@@ -2462,7 +2498,7 @@ function Cobro({
             </p>
             <p className="flex items-baseline justify-between text-base">
               <span className="text-muted-foreground">
-                Descuento{motivoDesc ? ` · ${motivoDesc}` : ""}
+                Descuento{etiquetaDelDescuento ? ` · ${etiquetaDelDescuento}` : ""}
               </span>
               <span className="tabular font-semibold text-saldo-favor">
                 −{formatearMonto(descuento)}

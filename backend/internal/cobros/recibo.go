@@ -177,6 +177,14 @@ func chequeDeLaParte(ctx context.Context, tx pgx.Tx, p Parte, recibo string, cli
 		if ex.Estado != sqlc.EstadoChequeInformado && ex.Estado != sqlc.EstadoChequeCartera {
 			return "", errCobro("Ese cheque ya no está en cartera.")
 		}
+		// Uno de la cartera que ya entró por un recibo o por una venta ya
+		// canceló deuda: volver a usarlo la cancelaría dos veces.
+		if ex.Estado == sqlc.EstadoChequeCartera && (ex.ReceiptID != nil || ex.OrderPaymentID != nil) {
+			return "", errCobro("Ese cheque ya se usó en otro cobro.")
+		}
+		if ex.CustomerID != nil && (cliente == nil || *ex.CustomerID != *cliente) {
+			return "", errCobro("Ese cheque es de otro cliente.")
+		}
 		if math.Abs(float64(ex.Importe)-p.Importe) > 0.005 {
 			return "", errCobro("El importe de la parte no coincide con el del cheque.")
 		}

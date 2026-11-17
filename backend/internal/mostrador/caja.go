@@ -81,31 +81,44 @@ func (s *Servicio) MovimientoDeCaja(ctx context.Context, ses *auth.Sesion, sesio
 	if motivo == "" {
 		return "", rechazo("Poné el motivo: un movimiento sin explicación no se puede revisar después.")
 	}
-	if tipo == "retiro" {
-		var esperado, base jsmath.Num
-		err := s.pool.QueryRow(ctx, `
-			SELECT coalesce(sum(m.monto), 0), b.fondo_base
-			FROM cash_sessions s JOIN branches b ON b.id = s.branch_id
-			LEFT JOIN cash_movements m ON m.session_id = s.id
-			WHERE s.id::text = $1 GROUP BY s.id, b.fondo_base LIMIT 1`, sesion).Scan(&esperado, &base)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return "", err
-		}
-		enCaja := esperado.F()
-		if base.F() > 0 && enCaja-monto < base.F() {
-			disponible := math.Max(0, enCaja-base.F())
-			if disponible > 0 {
-				return "", rechazo("Ese retiro deja el cajón sin el cambio de la base ($" + f2(base.F()) + "). Podés retirar hasta $" + f2(disponible) + ".")
-			}
-			return "", rechazo("No se puede retirar: en el cajón hay $" + f2(enCaja) + " y la base de cambio es $" + f2(base.F()) + ".")
-		}
-	}
+	// Todo en una transacción con el turno bloqueado: un movimiento no entra
+	// en una caja ya arqueada, y dos retiros a la vez no pasan los dos el
+	// control de la base de cambio.
 	firmado := monto
 	if tipo == "retiro" {
 		firmado = -monto
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por) VALUES ($1, $2, $3::numeric, $4, $5)`,
-		sesion, tipo, f2(firmado), motivo, ses.UserID); err != nil {
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var estado string
+		var base jsmath.Num
+		err := tx.QueryRow(ctx, `
+			SELECT s.estado, b.fondo_base FROM cash_sessions s JOIN branches b ON b.id = s.branch_id
+			WHERE s.id::text = $1 FOR UPDATE OF s`, sesion).Scan(&estado, &base)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && estado != "abierta") {
+			return rechazo("Esa caja ya está cerrada.")
+		}
+		if err != nil {
+			return err
+		}
+		if tipo == "retiro" {
+			var esperado jsmath.Num
+			if err := tx.QueryRow(ctx, `SELECT coalesce(sum(monto), 0) FROM cash_movements WHERE session_id::text = $1`, sesion).Scan(&esperado); err != nil {
+				return err
+			}
+			enCaja := esperado.F()
+			if base.F() > 0 && enCaja-monto < base.F() {
+				disponible := math.Max(0, enCaja-base.F())
+				if disponible > 0 {
+					return rechazo("Ese retiro deja el cajón sin el cambio de la base ($" + f2(base.F()) + "). Podés retirar hasta $" + f2(disponible) + ".")
+				}
+				return rechazo("No se puede retirar: en el cajón hay $" + f2(enCaja) + " y la base de cambio es $" + f2(base.F()) + ".")
+			}
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por) VALUES ($1, $2, $3::numeric, $4, $5)`,
+			sesion, tipo, f2(firmado), motivo, ses.UserID)
+		return err
+	})
+	if err != nil {
 		return "", err
 	}
 	verbo := "Ingresó"
@@ -145,30 +158,42 @@ func (s *Servicio) CerrarCaja(ctx context.Context, ses *auth.Sesion, sesion stri
 		}
 		return "", rechazo("Hay ventas sin subir en " + strings.Join(partes, ", ") + ". Esperá a que la caja recupere conexión: esa plata está en el cajón pero todavía no en el turno.")
 	}
-	var esperado jsmath.Num
-	if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(monto), 0) FROM cash_movements WHERE session_id = $1`, sesion).Scan(&esperado); err != nil {
-		return "", err
-	}
-	diferencia := contado - esperado.F()
-	nombre := caja.NombreDeLaDiferencia(diferencia)
 	notas = zodjs.TrimJS(notas)
-	if math.Abs(diferencia) > caja.ToleranciaArqueo && notas == "" {
-		return "", rechazo("Hay un " + nombre + " de $" + f2(math.Abs(diferencia)) + ". Escribí qué pasó antes de cerrar: mañana nadie se va a acordar.")
-	}
-	sinCambio := base.F() > 0 && contado < base.F()
 	var nota *string
 	if notas != "" {
 		nota = &notas
 	}
-	tag, err := s.pool.Exec(ctx, `
-		UPDATE cash_sessions SET estado = 'cerrada', cerrada_por = $2, cerrada_at = now(), contado = $3::numeric, notas = $4
-		WHERE id = $1 AND estado = 'abierta'`, sesion, ses.UserID, f2(contado), nota)
+	// El esperado se suma con el turno bloqueado: una venta en efectivo que
+	// está confirmando tiene el turno compartido, así que el cierre la
+	// espera y la cuenta.
+	var esperado jsmath.Num
+	var diferencia float64
+	var nombre string
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var estado string
+		if err := tx.QueryRow(ctx, `SELECT estado FROM cash_sessions WHERE id::text = $1 FOR UPDATE`, sesion).Scan(&estado); err != nil {
+			return err
+		}
+		if estado != "abierta" {
+			return rechazo("Esa caja ya estaba cerrada.")
+		}
+		if err := tx.QueryRow(ctx, `SELECT coalesce(sum(monto), 0) FROM cash_movements WHERE session_id::text = $1`, sesion).Scan(&esperado); err != nil {
+			return err
+		}
+		diferencia = contado - esperado.F()
+		nombre = caja.NombreDeLaDiferencia(diferencia)
+		if math.Abs(diferencia) > caja.ToleranciaArqueo && notas == "" {
+			return rechazo("Hay un " + nombre + " de $" + f2(math.Abs(diferencia)) + ". Escribí qué pasó antes de cerrar: mañana nadie se va a acordar.")
+		}
+		_, err := tx.Exec(ctx, `
+			UPDATE cash_sessions SET estado = 'cerrada', cerrada_por = $2, cerrada_at = now(), contado = $3::numeric, notas = $4
+			WHERE id::text = $1`, sesion, ses.UserID, f2(contado), nota)
+		return err
+	})
 	if err != nil {
 		return "", err
 	}
-	if tag.RowsAffected() == 0 {
-		return "", rechazo("Esa caja ya estaba cerrada.")
-	}
+	sinCambio := base.F() > 0 && contado < base.F()
 	desc := "Cerró la caja. Esperado $" + f2(esperado.F()) + ", contado $" + f2(contado)
 	if nombre == "sin diferencia" {
 		desc += ", sin diferencia"

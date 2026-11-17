@@ -22,7 +22,7 @@ RETURNING id;
 UPDATE receipts SET account_movement_id = $2 WHERE id = $1;
 
 -- name: ChequePorID :one
-SELECT id, estado, importe FROM cheques WHERE id = $1;
+SELECT id, estado, importe, customer_id, receipt_id, order_payment_id FROM cheques WHERE id = $1 FOR UPDATE;
 
 -- name: ChequeACartera :exec
 UPDATE cheques SET estado = 'cartera', receipt_id = $2, updated_at = now() WHERE id = $1;

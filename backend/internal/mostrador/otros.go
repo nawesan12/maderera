@@ -185,6 +185,9 @@ func (s *Servicio) CobrarCuenta(ctx context.Context, ses *auth.Sesion, cliente, 
 	if e != "" {
 		return CobroDeCuenta{}, rechazo(e)
 	}
+	if cobros.ConRetencion(partes) {
+		return CobroDeCuenta{}, rechazo("Una retención se carga en el panel con su certificado, no desde el mostrador.")
+	}
 	var r cobros.ReciboEmitido
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		hayEfectivo := false

@@ -139,6 +139,17 @@ func DescuentoPorMedioDePago(escalas []EscalaDePago, medio string, total float64
 	return &e
 }
 
+// UnSoloMedio: todo lo que se paga (los pagos con importe) va por el medio
+// declarado. Sin pagos sueltos es la venta de siempre, toda por ese medio.
+func UnSoloMedio(pagos []PagoDeVenta, medio string) bool {
+	for _, p := range pagos {
+		if finito(p.Importe) && p.Importe > 0 && p.Medio != medio {
+			return false
+		}
+	}
+	return true
+}
+
 // MontoDelDescuentoDePago es Math.round(total * min(p, 90)) / 100.
 func MontoDelDescuentoDePago(total, porcentaje float64) float64 {
 	if total <= 0 || porcentaje <= 0 {

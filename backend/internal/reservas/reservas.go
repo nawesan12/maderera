@@ -312,7 +312,9 @@ func SalidaPorEntrega(ctx context.Context, tx Tx, s Salida) error {
 		return err
 	}
 	for _, r := range rs {
-		if _, err := tx.Exec(ctx, `UPDATE inventory SET qty = qty - $3::numeric, updated_at = now() WHERE variant_id = $1 AND branch_id = $2`,
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO inventory (variant_id, branch_id, qty) VALUES ($1, $2, -$3::numeric)
+			ON CONFLICT (variant_id, branch_id) DO UPDATE SET qty = inventory.qty - $3::numeric, updated_at = now()`,
 			r.variante, r.sucursal, num(r.cantidad)); err != nil {
 			return err
 		}

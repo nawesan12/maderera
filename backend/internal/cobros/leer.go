@@ -125,3 +125,15 @@ func deref(s *string) string {
 	}
 	return *s
 }
+
+// ConRetencion: alguna parte es una retención. Una retención baja deuda sin
+// plata: entra con su certificado (CargarRetencionSufrida) o la carga un
+// administrador, nunca desde el mostrador.
+func ConRetencion(partes []Parte) bool {
+	for _, p := range partes {
+		if p.Medio == "retencion" {
+			return true
+		}
+	}
+	return false
+}

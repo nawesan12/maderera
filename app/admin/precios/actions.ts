@@ -33,18 +33,43 @@ export async function editarPrecio(_previo: EstadoPrecios, formData: FormData): 
   return { ok: "Precio actualizado." };
 }
 
+function pedidoDeAjuste(formData: FormData) {
+  return {
+    porcentaje: texto(formData, "porcentaje"),
+    categoria: texto(formData, "categoria"),
+    rubro: texto(formData, "rubro"),
+    listaSlug: texto(formData, "listaSlug") || "ambas",
+    base: texto(formData, "base") || "precio",
+    redondeo: texto(formData, "redondeo") || "ninguno",
+    motivo: texto(formData, "motivo"),
+    proveedor: texto(formData, "proveedor"),
+    marca: texto(formData, "marca"),
+  };
+}
+
+export interface VistaDeAjuste {
+  tocados: number;
+  sinCosto: number;
+  muestra: { producto: string; medida: string; lista: string; antes: string; despues: string }[];
+  error?: string;
+}
+
+/** Cuántos precios toca el ajuste y cómo quedan, sin escribir nada. */
+export async function previsualizarAjuste(formData: FormData): Promise<VistaDeAjuste> {
+  const r = await (await api()).POST("/api/v1/admin/precios/ajuste/previa", { body: pedidoDeAjuste(formData) });
+  if (!r.data) return { tocados: 0, sinCosto: 0, muestra: [], error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
+  return r.data;
+}
+
+export async function deshacerUltimoAjuste(): Promise<EstadoPrecios> {
+  const r = await (await api()).DELETE("/api/v1/admin/precios/ajuste/ultimo");
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo deshacer.") };
+  refrescar();
+  return { ok: r.data.ok };
+}
+
 export async function ajustarPrecios(_previo: EstadoPrecios, formData: FormData): Promise<EstadoPrecios> {
-  const r = await (await api()).POST("/api/v1/admin/precios/ajuste", {
-    body: {
-      porcentaje: texto(formData, "porcentaje"),
-      categoria: texto(formData, "categoria"),
-      rubro: texto(formData, "rubro"),
-      listaSlug: texto(formData, "listaSlug") || "ambas",
-      base: texto(formData, "base") || "precio",
-      redondeo: texto(formData, "redondeo") || "ninguno",
-      motivo: texto(formData, "motivo"),
-    },
-  });
+  const r = await (await api()).POST("/api/v1/admin/precios/ajuste", { body: pedidoDeAjuste(formData) });
   // «No se encontraron precios» llega como 422, pero el ajuste ya corrió:
   // se revalida igual.
   refrescar();

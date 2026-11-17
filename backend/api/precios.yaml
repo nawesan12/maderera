@@ -120,9 +120,61 @@ paths:
                 base: { type: string }
                 redondeo: { type: string }
                 motivo: { type: string }
+                proveedor: { type: string, description: id del proveedor; las medidas que tienen su código }
+                marca: { type: string }
       responses:
         "200":
           description: Cuántos cambiaron
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Mensaje" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/precios/ajuste/previa:
+    post:
+      operationId: PrevisualizarAjuste
+      description: Lo mismo que el ajuste, sin escribir nada. Cuántos precios toca y una muestra de cómo quedan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [porcentaje]
+              additionalProperties: false
+              properties:
+                porcentaje: { type: string }
+                categoria: { type: string }
+                rubro: { type: string }
+                listaSlug: { type: string }
+                base: { type: string }
+                redondeo: { type: string }
+                motivo: { type: string }
+                proveedor: { type: string }
+                marca: { type: string }
+      responses:
+        "200":
+          description: La vista previa
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VistaDeAjuste" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/precios/ajuste/ultimo:
+    get:
+      operationId: UltimoAjuste
+      responses:
+        "200":
+          description: El último ajuste masivo, para poder deshacerlo (null si no hay)
+          content:
+            application/json:
+              schema:
+                nullable: true
+                allOf: [{ $ref: "#/components/schemas/UltimoAjuste" }]
+    delete:
+      operationId: DeshacerUltimoAjuste
+      description: Vuelve al precio anterior lo que el último ajuste cambió y nadie tocó después.
+      responses:
+        "200":
+          description: Cuántos volvieron
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Mensaje" }
@@ -221,6 +273,32 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problema" }
   schemas:
+    VistaDeAjuste:
+      type: object
+      required: [tocados, sinCosto, muestra]
+      properties:
+        tocados: { type: integer }
+        sinCosto: { type: integer }
+        muestra:
+          type: array
+          items:
+            type: object
+            required: [producto, medida, lista, antes, despues]
+            properties:
+              producto: { type: string }
+              medida: { type: string }
+              lista: { type: string }
+              antes: { type: string }
+              despues: { type: string }
+    UltimoAjuste:
+      type: object
+      required: [loteId, cuando, motivo, precios, deshacibles]
+      properties:
+        loteId: { type: string }
+        cuando: { type: string, format: date-time }
+        motivo: { type: string, nullable: true }
+        precios: { type: integer }
+        deshacibles: { type: integer, description: Los que siguen en el precio del ajuste }
     Problema:
       type: object
       required: [title, status]

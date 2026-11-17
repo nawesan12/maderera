@@ -48,7 +48,11 @@ LEFT JOIN subcategories s ON s.id = p.subcategory_id
 LEFT JOIN variant_costs vc ON vc.variant_id = v.id
 WHERE p.active AND v.active
   AND (sqlc.narg(categoria)::text IS NULL OR c.slug = sqlc.narg(categoria))
-  AND (sqlc.narg(rubro)::text IS NULL OR s.slug = sqlc.narg(rubro));
+  AND (sqlc.narg(rubro)::text IS NULL OR s.slug = sqlc.narg(rubro))
+  -- Lo que trae un proveedor: el aumento llega por proveedor, no por rubro.
+  AND (sqlc.narg(proveedor)::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM supplier_variant_codes sc WHERE sc.variant_id = v.id AND sc.supplier_id = sqlc.narg(proveedor)))
+  AND (sqlc.narg(marca)::text IS NULL OR lower(btrim(p.brand)) = lower(btrim(sqlc.narg(marca))));
 
 -- name: PreciosDeLista :many
 SELECT variant_id, price::text AS price FROM price_list_items

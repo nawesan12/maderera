@@ -134,6 +134,30 @@ type Problema struct {
 	Title   string             `json:"title"`
 }
 
+// UltimoAjuste defines model for UltimoAjuste.
+type UltimoAjuste struct {
+	Cuando time.Time `json:"cuando"`
+
+	// Deshacibles Los que siguen en el precio del ajuste
+	Deshacibles int     `json:"deshacibles"`
+	LoteId      string  `json:"loteId"`
+	Motivo      *string `json:"motivo"`
+	Precios     int     `json:"precios"`
+}
+
+// VistaDeAjuste defines model for VistaDeAjuste.
+type VistaDeAjuste struct {
+	Muestra []struct {
+		Antes    string `json:"antes"`
+		Despues  string `json:"despues"`
+		Lista    string `json:"lista"`
+		Medida   string `json:"medida"`
+		Producto string `json:"producto"`
+	} `json:"muestra"`
+	SinCosto int `json:"sinCosto"`
+	Tocados  int `json:"tocados"`
+}
+
 // VistaPrevia defines model for VistaPrevia.
 type VistaPrevia struct {
 	Cambian int     `json:"cambian"`
@@ -168,8 +192,25 @@ type AjustarPreciosJSONBody struct {
 	Base       *string `json:"base,omitempty"`
 	Categoria  *string `json:"categoria,omitempty"`
 	ListaSlug  *string `json:"listaSlug,omitempty"`
+	Marca      *string `json:"marca,omitempty"`
 	Motivo     *string `json:"motivo,omitempty"`
 	Porcentaje string  `json:"porcentaje"`
+
+	// Proveedor id del proveedor; las medidas que tienen su código
+	Proveedor *string `json:"proveedor,omitempty"`
+	Redondeo  *string `json:"redondeo,omitempty"`
+	Rubro     *string `json:"rubro,omitempty"`
+}
+
+// PrevisualizarAjusteJSONBody defines parameters for PrevisualizarAjuste.
+type PrevisualizarAjusteJSONBody struct {
+	Base       *string `json:"base,omitempty"`
+	Categoria  *string `json:"categoria,omitempty"`
+	ListaSlug  *string `json:"listaSlug,omitempty"`
+	Marca      *string `json:"marca,omitempty"`
+	Motivo     *string `json:"motivo,omitempty"`
+	Porcentaje string  `json:"porcentaje"`
+	Proveedor  *string `json:"proveedor,omitempty"`
 	Redondeo   *string `json:"redondeo,omitempty"`
 	Rubro      *string `json:"rubro,omitempty"`
 }
@@ -219,6 +260,9 @@ type FijarPorcentajeDeListaJSONBody struct {
 // AjustarPreciosJSONRequestBody defines body for AjustarPrecios for application/json ContentType.
 type AjustarPreciosJSONRequestBody AjustarPreciosJSONBody
 
+// PrevisualizarAjusteJSONRequestBody defines body for PrevisualizarAjuste for application/json ContentType.
+type PrevisualizarAjusteJSONRequestBody PrevisualizarAjusteJSONBody
+
 // GuardarDescuentoDePagoJSONRequestBody defines body for GuardarDescuentoDePago for application/json ContentType.
 type GuardarDescuentoDePagoJSONRequestBody GuardarDescuentoDePagoJSONBody
 
@@ -242,6 +286,15 @@ type ServerInterface interface {
 
 	// (POST /api/v1/admin/precios/ajuste)
 	AjustarPrecios(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/admin/precios/ajuste/previa)
+	PrevisualizarAjuste(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /api/v1/admin/precios/ajuste/ultimo)
+	DeshacerUltimoAjuste(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/admin/precios/ajuste/ultimo)
+	UltimoAjuste(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/admin/precios/descuentos)
 	DescuentosDePago(w http.ResponseWriter, r *http.Request)
@@ -331,6 +384,48 @@ func (siw *ServerInterfaceWrapper) AjustarPrecios(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AjustarPrecios(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PrevisualizarAjuste operation middleware
+func (siw *ServerInterfaceWrapper) PrevisualizarAjuste(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PrevisualizarAjuste(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeshacerUltimoAjuste operation middleware
+func (siw *ServerInterfaceWrapper) DeshacerUltimoAjuste(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeshacerUltimoAjuste(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UltimoAjuste operation middleware
+func (siw *ServerInterfaceWrapper) UltimoAjuste(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UltimoAjuste(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -624,6 +719,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/precios/rubros", wrapper.RubrosParaAjuste)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/precios/editar", wrapper.EditarPrecio)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/precios/ajuste", wrapper.AjustarPrecios)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/precios/ajuste/previa", wrapper.PrevisualizarAjuste)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/admin/precios/ajuste/ultimo", wrapper.DeshacerUltimoAjuste)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/precios/ajuste/ultimo", wrapper.UltimoAjuste)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/precios/importar/previa", wrapper.PrevisualizarImportacion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/precios/importar", wrapper.ConfirmarImportacion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/precios/descuentos", wrapper.DescuentosDePago)
@@ -690,6 +788,102 @@ func (response AjustarPrecios422ApplicationProblemPlusJSONResponse) VisitAjustar
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PrevisualizarAjusteRequestObject struct {
+	Body *PrevisualizarAjusteJSONRequestBody
+}
+
+type PrevisualizarAjusteResponseObject interface {
+	VisitPrevisualizarAjusteResponse(w http.ResponseWriter) error
+}
+
+type PrevisualizarAjuste200JSONResponse VistaDeAjuste
+
+func (response PrevisualizarAjuste200JSONResponse) VisitPrevisualizarAjusteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PrevisualizarAjuste422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response PrevisualizarAjuste422ApplicationProblemPlusJSONResponse) VisitPrevisualizarAjusteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeshacerUltimoAjusteRequestObject struct {
+}
+
+type DeshacerUltimoAjusteResponseObject interface {
+	VisitDeshacerUltimoAjusteResponse(w http.ResponseWriter) error
+}
+
+type DeshacerUltimoAjuste200JSONResponse Mensaje
+
+func (response DeshacerUltimoAjuste200JSONResponse) VisitDeshacerUltimoAjusteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeshacerUltimoAjuste422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response DeshacerUltimoAjuste422ApplicationProblemPlusJSONResponse) VisitDeshacerUltimoAjusteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UltimoAjusteRequestObject struct {
+}
+
+type UltimoAjusteResponseObject interface {
+	VisitUltimoAjusteResponse(w http.ResponseWriter) error
+}
+
+type UltimoAjuste200JSONResponse UltimoAjuste
+
+func (response UltimoAjuste200JSONResponse) VisitUltimoAjusteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -977,6 +1171,15 @@ type StrictServerInterface interface {
 	// (POST /api/v1/admin/precios/ajuste)
 	AjustarPrecios(ctx context.Context, request AjustarPreciosRequestObject) (AjustarPreciosResponseObject, error)
 
+	// (POST /api/v1/admin/precios/ajuste/previa)
+	PrevisualizarAjuste(ctx context.Context, request PrevisualizarAjusteRequestObject) (PrevisualizarAjusteResponseObject, error)
+
+	// (DELETE /api/v1/admin/precios/ajuste/ultimo)
+	DeshacerUltimoAjuste(ctx context.Context, request DeshacerUltimoAjusteRequestObject) (DeshacerUltimoAjusteResponseObject, error)
+
+	// (GET /api/v1/admin/precios/ajuste/ultimo)
+	UltimoAjuste(ctx context.Context, request UltimoAjusteRequestObject) (UltimoAjusteResponseObject, error)
+
 	// (GET /api/v1/admin/precios/descuentos)
 	DescuentosDePago(ctx context.Context, request DescuentosDePagoRequestObject) (DescuentosDePagoResponseObject, error)
 
@@ -1094,6 +1297,85 @@ func (sh *strictHandler) AjustarPrecios(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AjustarPreciosResponseObject); ok {
 		if err := validResponse.VisitAjustarPreciosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PrevisualizarAjuste operation middleware
+func (sh *strictHandler) PrevisualizarAjuste(w http.ResponseWriter, r *http.Request) {
+	var request PrevisualizarAjusteRequestObject
+
+	var body PrevisualizarAjusteJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PrevisualizarAjuste(ctx, request.(PrevisualizarAjusteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PrevisualizarAjuste")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PrevisualizarAjusteResponseObject); ok {
+		if err := validResponse.VisitPrevisualizarAjusteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeshacerUltimoAjuste operation middleware
+func (sh *strictHandler) DeshacerUltimoAjuste(w http.ResponseWriter, r *http.Request) {
+	var request DeshacerUltimoAjusteRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeshacerUltimoAjuste(ctx, request.(DeshacerUltimoAjusteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeshacerUltimoAjuste")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeshacerUltimoAjusteResponseObject); ok {
+		if err := validResponse.VisitDeshacerUltimoAjusteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UltimoAjuste operation middleware
+func (sh *strictHandler) UltimoAjuste(w http.ResponseWriter, r *http.Request) {
+	var request UltimoAjusteRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UltimoAjuste(ctx, request.(UltimoAjusteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UltimoAjuste")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UltimoAjusteResponseObject); ok {
+		if err := validResponse.VisitUltimoAjusteResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1361,38 +1643,44 @@ func (sh *strictHandler) RubrosParaAjuste(w http.ResponseWriter, r *http.Request
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"9iFNZaBGyXFp1mVCTwkUs6YjoH7yG32/2fx3AA==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

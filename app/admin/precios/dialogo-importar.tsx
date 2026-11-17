@@ -36,6 +36,8 @@ const money = (valor?: string) =>
  */
 export function DialogoImportar() {
   const router = useRouter();
+  // Decía «arrastrala acá» y soltar el archivo no hacía nada.
+  const [arrastrando, setArrastrando] = useState(false);
   const [abierto, setAbierto] = useState(false);
   const [previa, setPrevia] = useState<VistaPreviaImportacion | null>(null);
   const [leyendo, startLectura] = useTransition();
@@ -109,7 +111,22 @@ export function DialogoImportar() {
               <li>3. Subilo acá: antes de aplicar nada vas a ver qué cambia.</li>
             </ol>
 
-            <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-10 text-center transition-colors hover:border-brand-orange/50 hover:bg-muted/40">
+            <label
+              onDragOver={(e) => {
+                e.preventDefault();
+                setArrastrando(true);
+              }}
+              onDragLeave={() => setArrastrando(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setArrastrando(false);
+                const archivo = e.dataTransfer.files?.[0];
+                if (archivo && !leyendo) elegirArchivo(archivo);
+              }}
+              className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+                arrastrando ? "border-brand-orange bg-brand-orange/5" : "hover:border-brand-orange/50 hover:bg-muted/40"
+              }`}
+            >
               <Upload className="h-6 w-6 text-muted-foreground" />
               <span className="text-base font-medium">
                 Elegí la planilla o arrastrala acá

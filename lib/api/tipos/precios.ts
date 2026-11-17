@@ -116,6 +116,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/precios/ajuste/previa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Lo mismo que el ajuste, sin escribir nada. Cuántos precios toca y una muestra de cómo quedan. */
+        post: operations["PrevisualizarAjuste"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/precios/ajuste/ultimo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["UltimoAjuste"];
+        put?: never;
+        post?: never;
+        /** @description Vuelve al precio anterior lo que el último ajuste cambió y nadie tocó después. */
+        delete: operations["DeshacerUltimoAjuste"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/precios/importar/previa": {
         parameters: {
             query?: never;
@@ -168,6 +202,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        VistaDeAjuste: {
+            tocados: number;
+            sinCosto: number;
+            muestra: {
+                producto: string;
+                medida: string;
+                lista: string;
+                antes: string;
+                despues: string;
+            }[];
+        };
+        UltimoAjuste: {
+            loteId: string;
+            /** Format: date-time */
+            cuando: string;
+            motivo: string | null;
+            precios: number;
+            /** @description Los que siguen en el precio del ajuste */
+            deshacibles: number;
+        };
         Problema: {
             title: string;
             status: number;
@@ -428,11 +482,90 @@ export interface operations {
                     base?: string;
                     redondeo?: string;
                     motivo?: string;
+                    /** @description id del proveedor; las medidas que tienen su código */
+                    proveedor?: string;
+                    marca?: string;
                 };
             };
         };
         responses: {
             /** @description Cuántos cambiaron */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Mensaje"];
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    PrevisualizarAjuste: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    porcentaje: string;
+                    categoria?: string;
+                    rubro?: string;
+                    listaSlug?: string;
+                    base?: string;
+                    redondeo?: string;
+                    motivo?: string;
+                    proveedor?: string;
+                    marca?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description La vista previa */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VistaDeAjuste"];
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    UltimoAjuste: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El último ajuste masivo, para poder deshacerlo (null si no hay) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UltimoAjuste"] | null;
+                };
+            };
+        };
+    };
+    DeshacerUltimoAjuste: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cuántos volvieron */
             200: {
                 headers: {
                     [name: string]: unknown;

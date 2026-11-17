@@ -59,3 +59,9 @@ export async function descuentosDePago() {
   const filas = datos(await (await api()).GET("/api/v1/admin/precios/descuentos"));
   return filas.map((f) => ({ ...f, createdAt: new Date(f.createdAt) }));
 }
+
+/** El último ajuste masivo, para ofrecer deshacerlo. Null si no hay. */
+export async function ultimoAjuste() {
+  const u = datos(await (await api()).GET("/api/v1/admin/precios/ajuste/ultimo"));
+  return u ? { ...u, cuando: new Date(u.cuando) } : null;
+}

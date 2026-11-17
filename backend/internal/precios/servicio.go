@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -297,6 +298,9 @@ func (s *Servicio) Editar(ctx context.Context, ses *auth.Sesion, variante, lista
 // PedidoDeAjuste es el formulario del ajuste masivo, como texto.
 type PedidoDeAjuste struct {
 	Porcentaje, Categoria, Rubro, ListaSlug, Base, Redondeo, Motivo string
+	// Proveedor (su id) y Marca acotan a lo que trae un proveedor o a una
+	// marca: el aumento llega así, no por rubro.
+	Proveedor, Marca string
 }
 
 // ResultadoDeAjuste es cuántos precios cambiaron y cuántos no tenían costo.
@@ -309,14 +313,22 @@ func plural(n int) string {
 	return "s"
 }
 
-// Ajustar es ajustarPrecios: un porcentaje sobre el precio (o sobre el
-// costo, con o sin elaboración) de las medidas activas de una categoría o
-// rubro, en una o las dos listas, con redondeo opcional, en un lote del
-// historial.
-func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, p PedidoDeAjuste) (string, error) {
+// planDeAjuste es lo que el ajuste cambiaría, lista por lista.
+type planDeAjuste struct {
+	porcentaje float64
+	motivo     string
+	texto      string
+	listas     []sqlc.PriceList
+	cambios    []cambiosEnLote
+	r          ResultadoDeAjuste
+}
+
+// planear valida el pedido y calcula los precios nuevos sin escribir nada.
+// Lo usan el ajuste y su vista previa: la vista previa no puede mentir.
+func (s *Servicio) planear(ctx context.Context, q *sqlc.Queries, p PedidoDeAjuste) (*planDeAjuste, error) {
 	porcentaje, e := PorcentajeDeAjuste(p.Porcentaje)
 	if e != "" {
-		return "", plataforma.Invalido(map[string]string{"porcentaje": e})
+		return nil, plataforma.Invalido(map[string]string{"porcentaje": e})
 	}
 	if p.ListaSlug == "" {
 		p.ListaSlug = "ambas"
@@ -329,77 +341,78 @@ func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, p PedidoDeAjus
 	}
 	switch {
 	case p.ListaSlug != "ambas" && p.ListaSlug != "general" && p.ListaSlug != "profesional":
-		return "", plataforma.Invalido(map[string]string{"listaSlug": `Invalid option: expected one of "ambas"|"general"|"profesional"`})
+		return nil, plataforma.Invalido(map[string]string{"listaSlug": `Invalid option: expected one of "ambas"|"general"|"profesional"`})
 	case p.Base != "precio" && p.Base != "costo" && p.Base != "costo_elaborado":
-		return "", plataforma.Invalido(map[string]string{"base": `Invalid option: expected one of "precio"|"costo"|"costo_elaborado"`})
+		return nil, plataforma.Invalido(map[string]string{"base": `Invalid option: expected one of "precio"|"costo"|"costo_elaborado"`})
 	case p.Redondeo != "ninguno" && p.Redondeo != "decena" && p.Redondeo != "centena" && p.Redondeo != "mil":
-		return "", plataforma.Invalido(map[string]string{"redondeo": `Invalid option: expected one of "ninguno"|"decena"|"centena"|"mil"`})
+		return nil, plataforma.Invalido(map[string]string{"redondeo": `Invalid option: expected one of "ninguno"|"decena"|"centena"|"mil"`})
+	case p.Proveedor != "" && p.Proveedor != "todos" && !plataforma.UUIDValido(p.Proveedor):
+		return nil, plataforma.Invalido(map[string]string{"proveedor": "Elegí un proveedor de la lista."})
 	}
 	motivo := strings.TrimSpace(p.Motivo)
 	if plataforma.LargoJS(motivo) > 200 {
-		return "", plataforma.Invalido(map[string]string{"motivo": "Too big: expected string to have <=200 characters"})
+		return nil, plataforma.Invalido(map[string]string{"motivo": "Too big: expected string to have <=200 characters"})
 	}
 	factor := Factor(porcentaje)
-	lote := uuid()
-	var r ResultadoDeAjuste
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		q := s.q.WithTx(tx)
-		_, todas, err := s.listas(ctx, q)
-		if err != nil {
-			return err
+	plan := &planDeAjuste{porcentaje: porcentaje, motivo: motivo}
+
+	_, todas, err := s.listas(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range todas {
+		if p.ListaSlug == "ambas" || (p.ListaSlug == "general" && l.IsDefault) || (p.ListaSlug == "profesional" && l.Slug == "profesional") {
+			plan.listas = append(plan.listas, l)
 		}
-		var objetivo []sqlc.PriceList
-		for _, l := range todas {
-			if p.ListaSlug == "ambas" || (p.ListaSlug == "general" && l.IsDefault) || (p.ListaSlug == "profesional" && l.Slug == "profesional") {
-				objetivo = append(objetivo, l)
-			}
+	}
+	filtro := func(v string) *string {
+		v = strings.TrimSpace(v)
+		if v == "" || v == "todos" {
+			return nil
 		}
-		filtro := func(v string) *string {
-			if v == "" || v == "todos" {
-				return nil
-			}
-			return &v
+		return &v
+	}
+	variantes, err := q.VariantesParaAjuste(ctx, sqlc.VariantesParaAjusteParams{Categoria: filtro(p.Categoria), Rubro: filtro(p.Rubro),
+		Proveedor: filtro(p.Proveedor), Marca: filtro(p.Marca)})
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(variantes))
+	desdeCosto := map[string]float64{}
+	for i, v := range variantes {
+		ids[i] = v.ID
+		if p.Base == "precio" || v.Costo == nil || !(float64(*v.Costo) > 0) {
+			continue
 		}
-		variantes, err := q.VariantesParaAjuste(ctx, sqlc.VariantesParaAjusteParams{Categoria: filtro(p.Categoria), Rubro: filtro(p.Rubro)})
-		if err != nil || len(variantes) == 0 {
-			return err
+		var recargo *float64
+		if p.Base == "costo_elaborado" && v.Recargo != nil {
+			x := float64(*v.Recargo)
+			recargo = &x
 		}
-		ids := make([]string, len(variantes))
-		desdeCosto := map[string]float64{}
-		for i, v := range variantes {
-			ids[i] = v.ID
-			if p.Base == "precio" || v.Costo == nil || !(float64(*v.Costo) > 0) {
-				continue
-			}
-			var recargo *float64
-			if p.Base == "costo_elaborado" && v.Recargo != nil {
-				x := float64(*v.Recargo)
-				recargo = &x
-			}
-			desdeCosto[v.ID] = CostoElaborado(float64(*v.Costo), recargo)
+		desdeCosto[v.ID] = CostoElaborado(float64(*v.Costo), recargo)
+	}
+	if motivo != "" {
+		plan.texto = motivo
+	} else if p.Base == "precio" {
+		sentido := "Baja"
+		if porcentaje > 0 {
+			sentido = "Aumento"
 		}
-		var texto string
-		if motivo != "" {
-			texto = motivo
-		} else if p.Base == "precio" {
-			sentido := "Baja"
-			if porcentaje > 0 {
-				sentido = "Aumento"
-			}
-			texto = sentido + " del " + jsmath.Texto(abs(porcentaje)) + "%"
-		} else {
-			con := ""
-			if p.Base == "costo_elaborado" {
-				con = " con elaboración"
-			}
-			texto = "Recalculado desde el costo" + con + " + " + jsmath.Texto(porcentaje) + "% de margen"
+		plan.texto = sentido + " del " + jsmath.Texto(abs(porcentaje)) + "%"
+	} else {
+		con := ""
+		if p.Base == "costo_elaborado" {
+			con = " con elaboración"
 		}
-		for _, l := range objetivo {
+		plan.texto = "Recalculado desde el costo" + con + " + " + jsmath.Texto(porcentaje) + "% de margen"
+	}
+	for _, l := range plan.listas {
+		var c cambiosEnLote
+		if len(ids) > 0 {
 			actuales, err := q.PreciosDeLista(ctx, sqlc.PreciosDeListaParams{PriceListID: l.ID, Ids: ids})
 			if err != nil {
-				return err
+				return nil, err
 			}
-			var lote_ cambiosEnLote
 			for _, a := range actuales {
 				var base float64
 				if p.Base == "precio" {
@@ -407,43 +420,107 @@ func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, p PedidoDeAjus
 					if !(base > 0) {
 						continue
 					}
-				} else if c, ok := desdeCosto[a.VariantID]; ok && c != 0 {
-					base = c
+				} else if b, ok := desdeCosto[a.VariantID]; ok && b != 0 {
+					base = b
 				} else {
-					r.SinCosto++
+					plan.r.SinCosto++
 					continue
 				}
 				nuevo := jsmath.Fijo2(Ajustar(base, factor, p.Redondeo))
 				if jsmath.Numero(a.Price) == jsmath.Numero(nuevo) {
 					continue
 				}
-				lote_.variantes = append(lote_.variantes, a.VariantID)
-				lote_.anteriores = append(lote_.anteriores, a.Price)
-				lote_.nuevos = append(lote_.nuevos, nuevo)
+				c.variantes = append(c.variantes, a.VariantID)
+				c.anteriores = append(c.anteriores, a.Price)
+				c.nuevos = append(c.nuevos, nuevo)
 			}
-			if err := lote_.aplicar(ctx, tx, l.ID, ses.UserID, texto, lote); err != nil {
+		}
+		plan.cambios = append(plan.cambios, c)
+		plan.r.Tocados += len(c.variantes)
+	}
+	return plan, nil
+}
+
+// FilaDeMuestra es un precio de la vista previa: antes y después.
+type FilaDeMuestra struct {
+	Producto string `json:"producto"`
+	Medida   string `json:"medida"`
+	Lista    string `json:"lista"`
+	Antes    string `json:"antes"`
+	Despues  string `json:"despues"`
+}
+
+// VistaDeAjuste es cuántos precios tocaría el ajuste y una muestra.
+type VistaDeAjuste struct {
+	Tocados  int             `json:"tocados"`
+	SinCosto int             `json:"sinCosto"`
+	Muestra  []FilaDeMuestra `json:"muestra"`
+}
+
+// Previsualizar es el ajuste sin escribir: antes, el diálogo mostraba un
+// ejemplo con $100.000 y no decía a cuántos productos les iba a cambiar el
+// precio.
+func (s *Servicio) Previsualizar(ctx context.Context, p PedidoDeAjuste) (VistaDeAjuste, error) {
+	plan, err := s.planear(ctx, s.q, p)
+	if err != nil {
+		return VistaDeAjuste{}, err
+	}
+	v := VistaDeAjuste{Tocados: plan.r.Tocados, SinCosto: plan.r.SinCosto, Muestra: []FilaDeMuestra{}}
+	for k, c := range plan.cambios {
+		for i := range c.variantes {
+			if len(v.Muestra) >= 8 {
+				break
+			}
+			f := FilaDeMuestra{Lista: plan.listas[k].Name, Antes: c.anteriores[i], Despues: c.nuevos[i]}
+			_ = s.pool.QueryRow(ctx, `SELECT p.name, v.label FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1`,
+				c.variantes[i]).Scan(&f.Producto, &f.Medida)
+			v.Muestra = append(v.Muestra, f)
+		}
+	}
+	slices.SortFunc(v.Muestra, func(a, b FilaDeMuestra) int {
+		return strings.Compare(a.Producto+" "+a.Medida+" "+a.Lista, b.Producto+" "+b.Medida+" "+b.Lista)
+	})
+	return v, nil
+}
+
+// Ajustar es ajustarPrecios: un porcentaje sobre el precio (o sobre el
+// costo, con o sin elaboración) de las medidas activas de una categoría,
+// rubro, proveedor o marca, en una o las dos listas, con redondeo opcional,
+// en un lote del historial.
+func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, p PedidoDeAjuste) (string, error) {
+	lote := uuid()
+	var plan *planDeAjuste
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		var err error
+		if plan, err = s.planear(ctx, q, p); err != nil {
+			return err
+		}
+		for k, c := range plan.cambios {
+			if err := c.aplicar(ctx, tx, plan.listas[k].ID, ses.UserID, plan.texto, lote); err != nil {
 				return err
 			}
-			r.Tocados += len(lote_.variantes)
 		}
 		return nil
 	})
 	if err != nil {
 		return "", err
 	}
+	r, porcentaje, motivo := plan.r, plan.porcentaje, plan.motivo
 	signo, desdeCostoTexto := "", ""
 	if porcentaje > 0 {
 		signo = "+"
 	}
-	if p.Base != "precio" {
+	if p.Base != "" && p.Base != "precio" {
 		desdeCostoTexto = " (desde costo)"
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "precio", "",
 		"Ajuste masivo del "+signo+jsmath.Texto(porcentaje)+"% sobre "+strconv.Itoa(r.Tocados)+" precio"+plural(r.Tocados)+desdeCostoTexto,
 		sinVacios(map[string]any{"porcentaje": porcentaje, "categoria": p.Categoria, "rubro": p.Rubro, "listaSlug": p.ListaSlug,
-			"base": p.Base, "redondeo": p.Redondeo, "motivo": motivo, "loteId": lote, "tocados": r.Tocados, "sinCosto": r.SinCosto}))
+			"base": p.Base, "redondeo": p.Redondeo, "motivo": motivo, "proveedor": p.Proveedor, "marca": p.Marca, "loteId": lote,
+			"tocados": r.Tocados, "sinCosto": r.SinCosto}))
 	if r.Tocados == 0 {
-		if p.Base == "precio" {
+		if p.Base == "" || p.Base == "precio" {
 			return "", plataforma.Invalido(map[string]string{"porcentaje": "No se encontraron precios para ajustar con ese filtro."})
 		}
 		return "", plataforma.Invalido(map[string]string{"base": "Ninguno de esos productos tiene costo cargado, así que no hay de dónde calcular."})
@@ -453,6 +530,94 @@ func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, p PedidoDeAjus
 		ok += " " + strconv.Itoa(r.SinCosto) + " quedaron igual porque no tienen costo cargado."
 	}
 	return ok, nil
+}
+
+// UltimoAjuste es el lote del último ajuste masivo, con cuántos de sus
+// precios siguen como los dejó (los que se pueden deshacer).
+type UltimoAjuste struct {
+	LoteID      string    `json:"loteId"`
+	Cuando      time.Time `json:"cuando"`
+	Motivo      *string   `json:"motivo"`
+	Precios     int       `json:"precios"`
+	Deshacibles int       `json:"deshacibles"`
+}
+
+const consultaUltimoAjuste = `
+	WITH ultimo AS (
+	  SELECT lote_id FROM price_history WHERE origen = 'ajuste_masivo' AND lote_id IS NOT NULL
+	  ORDER BY created_at DESC LIMIT 1
+	)
+	SELECT h.lote_id::text, min(h.created_at), min(h.motivo), count(*)::int,
+	       count(*) FILTER (WHERE i.price = h.precio_nuevo)::int
+	FROM price_history h
+	JOIN ultimo u ON u.lote_id = h.lote_id
+	LEFT JOIN price_list_items i ON i.variant_id = h.variant_id AND i.price_list_id = h.price_list_id
+	GROUP BY h.lote_id`
+
+func (s *Servicio) Ultimo(ctx context.Context) (*UltimoAjuste, error) {
+	var u UltimoAjuste
+	err := s.pool.QueryRow(ctx, consultaUltimoAjuste).Scan(&u.LoteID, &u.Cuando, &u.Motivo, &u.Precios, &u.Deshacibles)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+// DeshacerUltimo vuelve al precio anterior lo que cambió el último ajuste
+// masivo, salvo lo que alguien tocó después: un precio corregido a mano no
+// se pisa. Queda en el historial como otro ajuste.
+func (s *Servicio) DeshacerUltimo(ctx context.Context, ses *auth.Sesion) (string, error) {
+	nuevoLote := uuid()
+	var vueltos int
+	var motivo *string
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var lote string
+		err := tx.QueryRow(ctx, `SELECT lote_id::text, motivo FROM price_history WHERE origen = 'ajuste_masivo' AND lote_id IS NOT NULL
+			ORDER BY created_at DESC LIMIT 1`).Scan(&lote, &motivo)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return plataforma.Invalido(map[string]string{"lote": "No hay ningún ajuste para deshacer."})
+		}
+		if err != nil {
+			return err
+		}
+		texto := "Se deshizo el ajuste"
+		if motivo != nil && *motivo != "" {
+			texto += " «" + *motivo + "»"
+		}
+		return tx.QueryRow(ctx, `
+			WITH volver AS (
+			  SELECT h.variant_id, h.price_list_id, h.precio_nuevo AS ahora, h.precio_anterior AS antes
+			  FROM price_history h
+			  JOIN price_list_items i ON i.variant_id = h.variant_id AND i.price_list_id = h.price_list_id AND i.price = h.precio_nuevo
+			  WHERE h.lote_id = $1::uuid AND h.precio_anterior IS NOT NULL
+			  FOR UPDATE OF i
+			), cambio AS (
+			  UPDATE price_list_items i SET price = v.antes, updated_at = now()
+			  FROM volver v WHERE i.variant_id = v.variant_id AND i.price_list_id = v.price_list_id
+			  RETURNING 1
+			), anotado AS (
+			  INSERT INTO price_history (variant_id, price_list_id, precio_anterior, precio_nuevo, origen, motivo, lote_id, created_by_user_id)
+			  SELECT variant_id, price_list_id, ahora, antes, 'manual', $2, $3::uuid, $4 FROM volver
+			  RETURNING 1
+			)
+			SELECT count(*)::int FROM cambio`, lote, texto, nuevoLote, ses.UserID).Scan(&vueltos)
+	})
+	if err != nil {
+		return "", err
+	}
+	if vueltos == 0 {
+		return "", plataforma.Invalido(map[string]string{"lote": "Ese ajuste ya se deshizo, o todos sus precios se cambiaron después."})
+	}
+	volvio := " volvió al anterior"
+	if vueltos != 1 {
+		volvio = " volvieron al anterior"
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "precio", "",
+		"Deshizo el último ajuste masivo: "+strconv.Itoa(vueltos)+" precio"+plural(vueltos)+volvio, nil)
+	return strconv.Itoa(vueltos) + " precio" + plural(vueltos) + volvio + ".", nil
 }
 
 func abs(x float64) float64 {

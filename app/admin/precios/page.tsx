@@ -13,9 +13,12 @@ import {
   listarListasDePrecios,
   listarPrecios,
   rubrosParaAjuste,
+  ultimoAjuste,
   type FilaPrecio,
 } from "@/lib/dal/admin/precios";
 import { DialogoAjuste } from "./dialogo-ajuste";
+import { DeshacerAjuste } from "./deshacer-ajuste";
+import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { DialogoImportar } from "./dialogo-importar";
 import { PrecioEditable } from "./precio-editable";
 
@@ -34,12 +37,14 @@ export default async function PreciosPage({
 }) {
   const params = await searchParams;
 
-  const [filas, categorias, listas, historial, rubros] = await Promise.all([
+  const [filas, categorias, listas, historial, rubros, proveedores, ultimo] = await Promise.all([
     listarPrecios({ busqueda: params.buscar, categoria: params.cat }),
     listarCategoriasAdmin(),
     listarListasDePrecios(),
     historialDePrecios(10),
     rubrosParaAjuste(),
+    proveedoresParaElegir(),
+    ultimoAjuste(),
   ]);
 
   const general = listas.find((l) => l.isDefault);
@@ -103,10 +108,18 @@ export default async function PreciosPage({
           <Tags className="h-5 w-5" />
           Listas
         </Link>
+        {ultimo && ultimo.deshacibles > 0 && (
+          <DeshacerAjuste
+            cuando={fechaHora.format(ultimo.cuando)}
+            motivo={ultimo.motivo}
+            deshacibles={ultimo.deshacibles}
+          />
+        )}
         <DialogoAjuste
           categorias={categorias.map((c) => ({ slug: c.slug, name: c.name }))}
           categoriaActual={params.cat ?? "todos"}
           rubros={rubros}
+          proveedores={proveedores.map((p) => ({ id: p.id, nombre: p.nombre }))}
         />
       </EncabezadoPanel>
 
@@ -228,6 +241,12 @@ export default async function PreciosPage({
   );
 }
 
+/**
+ * Los precios en tabla: es lo que se compara columna contra columna (la
+ * lista contra la profesional, una medida contra la siguiente). En tarjetas
+ * de dos columnas con foto de 80 px entraban seis por pantalla y había que
+ * leer cada una para ver dos números.
+ */
 function Grilla({
   filas,
   generalId,
@@ -237,21 +256,32 @@ function Grilla({
   generalId?: string;
   profesionalId?: string;
 }) {
+  if (filas.length === 0) return null;
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
-      {filas.map((fila) => (
-        <TarjetaPrecio
-          key={fila.variantId}
-          fila={fila}
-          generalId={generalId}
-          profesionalId={profesionalId}
-        />
-      ))}
+    <div className="tarjeta overflow-x-auto">
+      {/* Anchos fijos: las tablas de los tres grupos quedan alineadas. */}
+      <table className="w-full min-w-[720px] table-fixed text-base">
+        <thead>
+          <tr className="border-b text-left text-sm text-muted-foreground">
+            <th className="w-14 px-3 py-2.5" />
+            <th className="px-3 py-2.5 font-medium">Producto</th>
+            <th className="w-48 px-3 py-2.5 font-medium">Código</th>
+            <th className="w-36 px-3 py-2.5 text-right font-medium">Lista</th>
+            <th className="w-40 px-3 py-2.5 text-right font-medium">Profesional</th>
+            <th className="w-32 px-3 py-2.5 text-right font-medium">Cambió</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filas.map((fila) => (
+            <FilaDePrecio key={fila.variantId} fila={fila} generalId={generalId} profesionalId={profesionalId} />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function TarjetaPrecio({
+function FilaDePrecio({
   fila,
   generalId,
   profesionalId,
@@ -260,75 +290,46 @@ function TarjetaPrecio({
   generalId?: string;
   profesionalId?: string;
 }) {
-  const sinPrecio = Number(fila.precioGeneral) <= 0;
-
   return (
-    <article className={`flex gap-4 p-4 ${sinPrecio ? "tarjeta-atencion" : "tarjeta"}`}>
-      <Link
-        href={`/admin/productos/${fila.productId}`}
-        className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-muted"
-      >
-        {fila.imagen ? (
-          <Image
-            src={fila.imagen}
-            alt={fila.producto}
-            fill
-            className="object-cover"
-            sizes="80px"
-          />
-        ) : (
-          <span className="flex h-full items-center justify-center text-muted-foreground">
-            <ImageOff className="h-5 w-5" />
-          </span>
-        )}
-      </Link>
-
-      <div className="min-w-0 flex-1">
+    <tr className="border-b border-border/60 last:border-0">
+      <td className="px-3 py-1.5">
         <Link
           href={`/admin/productos/${fila.productId}`}
-          className="text-base font-medium leading-snug hover:text-brand-orange"
+          className="relative block h-10 w-10 overflow-hidden rounded-md bg-muted"
+          tabIndex={-1}
         >
+          {fila.imagen ? (
+            <Image src={fila.imagen} alt="" fill className="object-cover" sizes="40px" />
+          ) : (
+            <span className="flex h-full items-center justify-center text-muted-foreground">
+              <ImageOff className="h-4 w-4" />
+            </span>
+          )}
+        </Link>
+      </td>
+      <td className="px-3 py-1.5">
+        <Link href={`/admin/productos/${fila.productId}`} className="font-medium leading-snug hover:text-brand-orange">
           {fila.producto}
         </Link>
-        <p className="text-sm text-muted-foreground">{fila.medida}</p>
-        <p className="tabular text-sm text-muted-foreground">
-          {fila.sku}
-          {fila.actualizado && ` · ${haceCuanto(fila.actualizado)}`}
-        </p>
-
-        <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 border-t pt-3">
-          <dt className="self-center text-sm text-muted-foreground">
-            Lista general
-          </dt>
-          <dd>
-            {generalId && (
-              <PrecioEditable
-                variantId={fila.variantId}
-                priceListId={generalId}
-                valor={fila.precioGeneral}
-              />
-            )}
-          </dd>
-
-          <dt className="self-center text-sm text-muted-foreground">
-            Profesional
-            {fila.brecha !== null && (
-              <span className="tabular ml-1 text-brand-orange">
-                −{fila.brecha}%
-              </span>
-            )}
-          </dt>
-          <dd>
-            {profesionalId && (
-              <PrecioEditable
-                variantId={fila.variantId}
-                priceListId={profesionalId}
-                valor={fila.precioProfesional}
-              />
-            )}
-          </dd>
-        </dl>
-      </div>
-    </article>
+        <span className="block text-sm text-muted-foreground">{fila.medida}</span>
+      </td>
+      <td className="tabular px-3 py-1.5 text-sm text-muted-foreground">{fila.sku}</td>
+      <td className="px-3 py-1.5">
+        {generalId && (
+          <PrecioEditable variantId={fila.variantId} priceListId={generalId} valor={fila.precioGeneral} />
+        )}
+      </td>
+      <td className="px-3 py-1.5">
+        <div className="flex items-center justify-end gap-1.5">
+          {fila.brecha !== null && <span className="tabular text-sm text-brand-orange">−{fila.brecha}%</span>}
+          {profesionalId && (
+            <PrecioEditable variantId={fila.variantId} priceListId={profesionalId} valor={fila.precioProfesional} />
+          )}
+        </div>
+      </td>
+      <td className="px-3 py-1.5 text-right text-sm text-muted-foreground">
+        {fila.actualizado ? haceCuanto(fila.actualizado) : "—"}
+      </td>
+    </tr>
   );
 }

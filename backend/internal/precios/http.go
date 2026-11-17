@@ -60,6 +60,13 @@ func (o respuesta) VisitFijarPorcentajeDeListaResponse(w http.ResponseWriter) er
 func (o respuesta) VisitRubrosParaAjusteResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitEditarPrecioResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitAjustarPreciosResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+func (o respuesta) VisitPrevisualizarAjusteResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitUltimoAjusteResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitDeshacerUltimoAjusteResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitPrevisualizarImportacionResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -146,7 +153,43 @@ func (a *API) AjustarPrecios(ctx context.Context, r preciosapi.AjustarPreciosReq
 	}
 	b := r.Body
 	m, err := a.s.Ajustar(ctx, ses, PedidoDeAjuste{b.Porcentaje, texto(b.Categoria), texto(b.Rubro), texto(b.ListaSlug),
-		texto(b.Base), texto(b.Redondeo), texto(b.Motivo)})
+		texto(b.Base), texto(b.Redondeo), texto(b.Motivo), texto(b.Proveedor), texto(b.Marca)})
+	if err != nil {
+		return nil, err
+	}
+	return mensaje(m), nil
+}
+
+func (a *API) PrevisualizarAjuste(ctx context.Context, r preciosapi.PrevisualizarAjusteRequestObject) (preciosapi.PrevisualizarAjusteResponseObject, error) {
+	if _, err := gestion(ctx); err != nil {
+		return nil, err
+	}
+	b := r.Body
+	v, err := a.s.Previsualizar(ctx, PedidoDeAjuste{b.Porcentaje, texto(b.Categoria), texto(b.Rubro), texto(b.ListaSlug),
+		texto(b.Base), texto(b.Redondeo), texto(b.Motivo), texto(b.Proveedor), texto(b.Marca)})
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
+func (a *API) UltimoAjuste(ctx context.Context, _ preciosapi.UltimoAjusteRequestObject) (preciosapi.UltimoAjusteResponseObject, error) {
+	if _, err := gestion(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.Ultimo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
+func (a *API) DeshacerUltimoAjuste(ctx context.Context, _ preciosapi.DeshacerUltimoAjusteRequestObject) (preciosapi.DeshacerUltimoAjusteResponseObject, error) {
+	ses, err := gestion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.DeshacerUltimo(ctx, ses)
 	if err != nil {
 		return nil, err
 	}

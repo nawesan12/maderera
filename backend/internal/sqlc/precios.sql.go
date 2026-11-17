@@ -452,11 +452,17 @@ LEFT JOIN variant_costs vc ON vc.variant_id = v.id
 WHERE p.active AND v.active
   AND ($1::text IS NULL OR c.slug = $1)
   AND ($2::text IS NULL OR s.slug = $2)
+  -- Lo que trae un proveedor: el aumento llega por proveedor, no por rubro.
+  AND ($3::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM supplier_variant_codes sc WHERE sc.variant_id = v.id AND sc.supplier_id = $3))
+  AND ($4::text IS NULL OR lower(btrim(p.brand)) = lower(btrim($4)))
 `
 
 type VariantesParaAjusteParams struct {
 	Categoria *string `json:"categoria"`
 	Rubro     *string `json:"rubro"`
+	Proveedor *string `json:"proveedor"`
+	Marca     *string `json:"marca"`
 }
 
 type VariantesParaAjusteRow struct {
@@ -466,7 +472,12 @@ type VariantesParaAjusteRow struct {
 }
 
 func (q *Queries) VariantesParaAjuste(ctx context.Context, arg VariantesParaAjusteParams) ([]VariantesParaAjusteRow, error) {
-	rows, err := q.db.Query(ctx, variantesParaAjuste, arg.Categoria, arg.Rubro)
+	rows, err := q.db.Query(ctx, variantesParaAjuste,
+		arg.Categoria,
+		arg.Rubro,
+		arg.Proveedor,
+		arg.Marca,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -46,15 +46,18 @@ export async function guardarProveedor(datos: DatosProveedor): Promise<EstadoPro
   return { ok: r.data.ok, id: r.data.id };
 }
 
-/** Un movimiento de la cuenta: el signo lo pone el tipo, no quien carga. */
+/** Un ajuste de la cuenta: el lado lo pone `sentido`, el monto va siempre en positivo. */
 export async function registrarMovimientoDeProveedor(datos: {
   supplierId: string;
-  tipo: "factura" | "pago" | "nota_credito" | "nota_debito" | "ajuste";
+  /** Sube o baja lo que le debemos. */
+  sentido: "sube" | "baja";
   monto: number;
-  detalle?: string;
+  /** El motivo: obligatorio. */
+  detalle: string;
   referencia?: string;
 }): Promise<EstadoProveedor> {
-  const { supplierId, ...resto } = datos;
+  // A mano solo se anotan ajustes: las facturas y los pagos van por compras.
+  const { supplierId, ...resto } = { ...datos, tipo: "ajuste" as const };
   const r = await (await api()).POST("/api/v1/admin/proveedores/{id}/movimientos", {
     params: { path: { id: supplierId } },
     body: { ...resto },

@@ -241,6 +241,7 @@ type PedidoListado struct {
 	Estado           string    `json:"estado"`
 	TipoEntrega      string    `json:"tipoEntrega"`
 	DireccionEntrega *string   `json:"direccionEntrega"`
+	ZonaEnvio        *string   `json:"zonaEnvio"`
 	MedioPago        *string   `json:"medioPago"`
 	EstadoPago       string    `json:"estadoPago"`
 	Total            float64   `json:"total"`
@@ -304,7 +305,7 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 	filas, err := s.pool.Query(ctx, `
 		SELECT o.id, o.numero, o.contacto_nombre, c.razon_social, b.name, b.slug, o.estado::text, o.tipo_entrega::text,
 		       o.direccion_entrega, o.medio_pago::text, o.estado_pago::text, o.total::text, o.created_at,
-		       coalesce(conteo.items, 0), o.customer_id
+		       coalesce(conteo.items, 0), o.customer_id, o.zona_envio
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -320,7 +321,7 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 		var p PedidoListado
 		var total string
 		if err := filas.Scan(&p.ID, &p.Numero, &p.Cliente, &p.Empresa, &p.Sucursal, &p.SucursalSlug, &p.Estado, &p.TipoEntrega,
-			&p.DireccionEntrega, &p.MedioPago, &p.EstadoPago, &total, &p.CreatedAt, &p.Items, &p.CustomerID); err != nil {
+			&p.DireccionEntrega, &p.MedioPago, &p.EstadoPago, &total, &p.CreatedAt, &p.Items, &p.CustomerID, &p.ZonaEnvio); err != nil {
 			return nil, err
 		}
 		p.Total = jsmath.Numero(total)

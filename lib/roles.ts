@@ -139,6 +139,8 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/sucursales": ["admin"],
   // Una tarifa de envío es un precio: no la cambia quien atiende el mostrador.
   "/admin/envios": ["admin"],
+  /* El reparto lo arma el depósito con quien vende: qué sale y adónde. */
+  "/admin/reparto": ["admin", "vendedor", "deposito"],
   // Las dos reglas que fijan cuánto entra por caja: tarifa de corte y
   // descuento por forma de pago. Son precios, no operación.
   "/admin/cortes/tarifas": ["admin"],

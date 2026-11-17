@@ -324,7 +324,7 @@ components:
     PedidoListado:
       type: object
       required: [id, numero, cliente, empresa, sucursal, sucursalSlug, estado, tipoEntrega, direccionEntrega, medioPago, estadoPago,
-        total, items, customerId, createdAt]
+        total, items, customerId, createdAt, zonaEnvio]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -334,6 +334,7 @@ components:
         sucursalSlug: { type: string, nullable: true }
         estado: { type: string }
         tipoEntrega: { type: string }
+        zonaEnvio: { type: string, nullable: true }
         direccionEntrega: { type: string, nullable: true }
         medioPago: { type: string, nullable: true }
         estadoPago: { type: string }

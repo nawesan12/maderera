@@ -292,6 +292,7 @@ export interface components {
             sucursalSlug: string | null;
             estado: string;
             tipoEntrega: string;
+            zonaEnvio: string | null;
             direccionEntrega: string | null;
             medioPago: string | null;
             estadoPago: string;

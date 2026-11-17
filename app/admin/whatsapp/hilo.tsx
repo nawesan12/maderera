@@ -730,7 +730,7 @@ function AdjuntarArchivo({ conversacionId, citado }: { conversacionId: string; c
       const json = (await res.json().catch(() => ({}))) as { error?: string; requiereConfirmacionTope?: boolean };
       // Con el tope del mes pasado se pregunta antes de pagar.
       if (json.requiereConfirmacionTope && !confirmarTope) {
-        if (window.confirm(`${json.error}\n\n¿Mandarlo igual por la API?`)) return void (await mandar(archivo, true));
+        if (window.confirm(`${json.error}\n\n¿Mandarlo igual? Se paga aparte.`)) return void (await mandar(archivo, true));
         setError(json.error ?? null);
         return;
       }

@@ -1,3 +1,4 @@
+import { enlaceDeWhatsapp } from "@/lib/formato";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { HardHat, Percent, Tags } from "lucide-react";
@@ -179,7 +180,18 @@ function Fila({
             {solicitud.localidad ? ` · ${solicitud.localidad}` : ""}
           </p>
           <p className="text-base text-muted-foreground">
-            {solicitud.email} · {solicitud.telefono}
+            {solicitud.email} ·{" "}
+            {/* El teléfono abre WhatsApp: es por donde se le contesta. */}
+            {solicitud.telefono ? (
+              <a
+                href={enlaceDeWhatsapp(solicitud.telefono, `Hola ${solicitud.nombre}, te escribimos de Maderera Juan B. Justo por tu solicitud.`)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="tabular underline-offset-4 hover:text-foreground hover:underline"
+              >
+                {solicitud.telefono}
+              </a>
+            ) : null}
             {solicitud.matricula ? ` · matrícula ${solicitud.matricula}` : ""}
           </p>
 

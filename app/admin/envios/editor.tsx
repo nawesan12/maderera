@@ -112,7 +112,7 @@ export function EditorDeZona({ zona }: { zona: ZonaEditable | null }) {
           )}
         </Seccion>
 
-        <Seccion titulo="En el carrito" icono={ShoppingCart}>
+        <Seccion titulo="En el sitio" icono={ShoppingCart}>
           <Campo
             nombre="orden"
             etiqueta="Orden en la lista"
@@ -121,7 +121,7 @@ export function EditorDeZona({ zona }: { zona: ZonaEditable | null }) {
           <div className="self-end">
             <Interruptor
               nombre="activa"
-              etiqueta="Se ofrece en el carrito"
+              etiqueta="Se ofrece en el sitio"
               icono={Eye}
               defecto={zona?.activa ?? true}
             />

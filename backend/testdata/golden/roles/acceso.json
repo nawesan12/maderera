@@ -126,6 +126,11 @@
   "/admin/envios": [
    "admin"
   ],
+  "/admin/reparto": [
+   "admin",
+   "vendedor",
+   "deposito"
+  ],
   "/admin/cortes/tarifas": [
    "admin"
   ],
@@ -326,6 +331,13 @@
   ],
   "/admin/recepciones/algo": null,
   "/admin/recepciones/nuevo/123": null,
+  "/admin/reparto": [
+   "admin",
+   "vendedor",
+   "deposito"
+  ],
+  "/admin/reparto/algo": null,
+  "/admin/reparto/nuevo/123": null,
   "/admin/reportes": [
    "admin"
   ],
@@ -2884,6 +2896,81 @@
   },
   {
    "ruta": "/admin/recepciones/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reparto",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/reparto",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/reparto",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/reparto",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reparto",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reparto/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/reparto/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/reparto/algo",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/reparto/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reparto/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reparto/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/reparto/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/reparto/nuevo/123",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/reparto/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/reparto/nuevo/123",
    "rol": null,
    "puede": false
   },

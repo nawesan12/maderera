@@ -67,10 +67,6 @@ export function CreditoDelCliente({
         )}
       </div>
 
-      <p className="mt-1 text-sm text-muted-foreground">
-        Lo que pase de ese plazo cuenta como vencido y lo pone arriba en la lista
-        de cobranza.
-      </p>
 
       <div className="mt-4 border-t border-linea pt-4">
         {bloqueada ? (
@@ -99,11 +95,7 @@ export function CreditoDelCliente({
           </>
         ) : (
           <>
-            <p className="text-base">
-              La cuenta está habilitada. Bloquearla impide venderle a cuenta
-              hasta que alguien la vuelva a abrir —el mostrador no lo puede
-              saltear—.
-            </p>
+            <p className="text-base">Cuenta habilitada</p>
             <div className="mt-2.5 flex flex-wrap gap-2">
               <input
                 value={texto}

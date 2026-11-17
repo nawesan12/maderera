@@ -20,7 +20,7 @@ export function Ajustes({ ajustes }: { ajustes: SiteSetting[] }) {
 
           <div className="min-w-[16rem] flex-1">
             <label htmlFor={`ajuste-${a.clave}`} className="block text-base font-medium">
-              {a.descripcion ?? a.clave}
+              {a.descripcion ?? a.clave.charAt(0).toUpperCase() + a.clave.slice(1).replace(/[-_.]/g, " ")}
             </label>
             <input
               id={`ajuste-${a.clave}`}

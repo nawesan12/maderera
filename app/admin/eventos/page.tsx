@@ -46,10 +46,6 @@ export default async function EventosAdminPage() {
           <h2 className="mt-4 text-lg font-medium">
             Todavía no hay eventos cargados
           </h2>
-          <p className="mx-auto mt-1 max-w-md text-base text-muted-foreground">
-            Cargá el primero arriba. Nace como borrador y se publica cuando esté
-            listo.
-          </p>
         </section>
       ) : (
         <>

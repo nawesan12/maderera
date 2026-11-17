@@ -31,8 +31,10 @@ export function FilaAvisoEmail({ aviso }: { aviso: AvisoEmailConfigurable }) {
   );
   const [editando, setEditando] = useState(false);
 
+  // Sin título cargado, el nombre del evento legible, no como lo guarda la
+  // base («en-camino»).
   const titulo = TITULOS_EVENTO[aviso.evento] ?? {
-    titulo: aviso.evento,
+    titulo: aviso.evento.charAt(0).toUpperCase() + aviso.evento.slice(1).replace(/[-_]/g, " "),
     cuando: "",
   };
 

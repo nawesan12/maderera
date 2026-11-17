@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Truck } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { api, datos } from "@/lib/api/servidor";
 import { requireStaffRole } from "@/lib/dal/session";
@@ -31,40 +30,25 @@ export default async function AdminEnviosPage() {
   return (
     <div className="space-y-6">
       <EncabezadoPanel
-        titulo="Envíos"
+        titulo="Zonas de envío"
+        resumen={`${zonas.filter((z) => z.activa).length} activas${aCotizar > 0 ? ` · ${aCotizar} a cotizar` : ""}`}
       />
 
-      <div className="tarjeta p-5">
-        <p className="flex items-start gap-2.5 text-base text-muted-foreground">
-          <Truck className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
-          <span>
-            Hay <strong className="text-foreground">{zonas.filter((z) => z.activa).length}</strong>{" "}
-            zonas activas
-            {aCotizar > 0 && (
-              <>
-                {" "}
-                y <strong className="text-foreground">{aCotizar}</strong> con el
-                flete a cotizar
-              </>
-            )}
-            . Lo que se cobra sale de acá: el carrito no calcula nada por su
-            cuenta.
-          </span>
-        </p>
-      </div>
-
-      <div className="space-y-4">
+      {/* Una lista, y cada zona se abre al tocarla: con todas abiertas eran
+          cinco formularios completos uno abajo del otro. */}
+      <div className="tarjeta divide-y overflow-hidden">
         {zonas.map((zona) => (
-          <div key={zona.id} className="space-y-2">
-            <p className="text-base font-semibold">
-              {zona.nombre}
-              <span className="ml-2 font-normal text-muted-foreground">
-                {zona.aCotizar
-                  ? "a cotizar"
-                  : formatearMonto(Number(zona.costo))}
-                {!zona.activa && " · no se ofrece"}
+          <details key={zona.id} className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 hover:bg-muted/40">
+              <span className="text-base font-semibold">
+                {zona.nombre}
+                {!zona.activa && <span className="ml-2 font-normal text-muted-foreground">· no se ofrece</span>}
               </span>
-            </p>
+              <span className="tabular text-base text-muted-foreground">
+                {zona.aCotizar ? "a cotizar" : formatearMonto(Number(zona.costo))}
+              </span>
+            </summary>
+            <div className="px-5 pb-5">
             <EditorDeZona
               zona={{
                 id: zona.id,
@@ -78,7 +62,8 @@ export default async function AdminEnviosPage() {
                 activa: zona.activa,
               }}
             />
-          </div>
+            </div>
+          </details>
         ))}
       </div>
 

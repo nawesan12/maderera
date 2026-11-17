@@ -37,6 +37,18 @@ func TestProductosConAtributosYStockConDecimales(t *testing.T) {
 	if r.Creados != 1 || len(r.Rechazos) != 1 {
 		t.Fatalf("resultado: %+v", r)
 	}
+	// Y un producto nuevo cuyo único renglón se rechaza no queda creado vacío.
+	r, err = AplicarLote(ctx, e.pool, "productos", NormalizarFilas(prod, m, [][]string{
+		{"AGL-18", "Aglomerado", "Placas", "18 mm", "", "", "7790001000018", "", "", ""},
+	}), op)
+	if err != nil || len(r.Rechazos) != 1 {
+		t.Fatalf("aglomerado: %+v %v", r, err)
+	}
+	var vacios int
+	_ = e.pool.QueryRow(ctx, `select count(*) from products p where not exists (select 1 from product_variants v where v.product_id = p.id)`).Scan(&vacios)
+	if vacios != 0 {
+		t.Fatalf("quedaron %d productos sin medidas", vacios)
+	}
 
 	var color, material, barras, codProv string
 	var costo float64

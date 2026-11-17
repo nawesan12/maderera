@@ -299,6 +299,8 @@ export function FormularioPago({
     setAplicado({});
     setTotalTocado(null);
     setBasesAMano({});
+    // Los regímenes tildados eran del proveedor anterior.
+    setRetener({});
     setEstado({});
   }
 
@@ -773,6 +775,16 @@ export function FormularioPago({
                 setPartes(null);
                 router.refresh();
                 void verFacturasConSaldo(supplierId).then(setFacturas);
+                // El acumulado del mes cambió con este pago, y el cheque que
+                // se entregó ya no está en la cartera.
+                void verAcumulado(supplierId).then((filas) =>
+                  setAcumulado(
+                    Object.fromEntries(
+                      filas.map((f) => [f.codigoRegimen, { base: Number(f.base), retenido: Number(f.retenido) }]),
+                    ),
+                  ),
+                );
+                void verChequesEnCartera().then(setCartera);
               }
             })
           }

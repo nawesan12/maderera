@@ -283,6 +283,25 @@ func aplicarProductos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resulta
 			}
 		}
 
+		variante, err := unID(ctx, tx, `SELECT id FROM product_variants WHERE sku = $1 LIMIT 1`, d["sku"])
+		if err != nil {
+			return err
+		}
+		// Antes de tocar el producto: un renglón rechazado acá dejaba un
+		// producto nuevo creado y sin ninguna medida.
+		// El código de barras no se repite: si ya es de otra medida, el
+		// renglón se rechaza en vez de robárselo.
+		if cb := d["codigoBarras"]; cb != "" {
+			duenio, err := unID(ctx, tx, `SELECT id FROM product_variants WHERE codigo_barras = $1 LIMIT 1`, cb)
+			if err != nil {
+				return err
+			}
+			if duenio != "" && duenio != variante {
+				res.rechazar(f.Linea, d["sku"], "El código de barras "+cb+" ya es de otra medida.")
+				continue
+			}
+		}
+
 		// Los renglones con el mismo nombre y categoría son medidas de un
 		// mismo producto.
 		producto, err := nombres.buscar(ctx, tx, d["nombre"], categoria)
@@ -306,27 +325,10 @@ func aplicarProductos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resulta
 			nombres.poner(producto, claveDeNombre(d["nombre"], categoria))
 		}
 
-		variante, err := unID(ctx, tx, `SELECT id FROM product_variants WHERE sku = $1 LIMIT 1`, d["sku"])
-		if err != nil {
-			return err
-		}
 		etiqueta := d["medida"]
 		if etiqueta == "" {
 			etiqueta = d["sku"]
 		}
-		// El código de barras no se repite: si ya es de otra medida, el
-		// renglón se rechaza en vez de robárselo.
-		if cb := d["codigoBarras"]; cb != "" {
-			duenio, err := unID(ctx, tx, `SELECT id FROM product_variants WHERE codigo_barras = $1 LIMIT 1`, cb)
-			if err != nil {
-				return err
-			}
-			if duenio != "" && duenio != variante {
-				res.rechazar(f.Linea, d["sku"], "El código de barras "+cb+" ya es de otra medida.")
-				continue
-			}
-		}
-
 		// Los atributos y el código de barras, si vienen: una columna vacía
 		// no borra lo que ya estaba cargado.
 		medida := []any{producto, d["sku"], etiqueta, enteroONulo(d["largoMm"]), enteroONulo(d["anchoMm"]), enteroONulo(d["espesorMm"]),

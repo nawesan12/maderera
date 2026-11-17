@@ -68,7 +68,10 @@ export async function guardarProducto(_previo: EstadoFormulario, formData: FormD
   if (formData.get("despues") === "otro") redirect(`/admin/productos/nuevo?guardado=${Date.now()}`);
   const guardado = id || (r.data as { id?: string } | undefined)?.id;
   if (!guardado) redirect("/admin/productos?guardado=1");
-  redirect(`/admin/productos/${guardado}?guardado=1${id ? "" : "&pestana=fotos"}`);
+  // Un número distinto en cada guardado: la ficha vuelve a armarse con lo
+  // que quedó en la base (las medidas nuevas ya con su id). Con el mismo
+  // URL quedaba el estado viejo, y el segundo guardado recreaba la medida.
+  redirect(`/admin/productos/${guardado}?guardado=${Date.now()}${id ? "" : "&pestana=fotos"}`);
 }
 
 export async function alternarActivo(id: string, activo: boolean) {

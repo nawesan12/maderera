@@ -53,6 +53,8 @@ import {
 
 export interface VarianteForm {
   id?: string;
+  /** Para la pantalla: identifica la fila nueva hasta que tenga id. */
+  clave?: string;
   sku: string;
   label: string;
   largoMm: number | null;
@@ -236,7 +238,8 @@ export function FormularioProducto({
         type="hidden"
         name="variantes"
         value={JSON.stringify(
-          variantes.map((v) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars -- la clave es solo de la pantalla
+          variantes.map(({ clave, ...v }) => {
             // Lo que se vio al abrir la ficha: Go corrige el stock por
             // diferencia contra esto, así una venta hecha mientras tanto no
             // se pisa. Un stock vacío viaja vacío y no toca el físico.

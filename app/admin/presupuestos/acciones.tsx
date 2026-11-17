@@ -178,7 +178,11 @@ function PasarAPedido({
     ...MEDIOS_DEL_PEDIDO,
     ...(conCliente ? [{ valor: "cuenta_corriente" as const, texto: "Cuenta corriente" }] : []),
   ];
-  const costoEnvio = tipo === "envio" ? Number(costo.replace(",", ".")) || 0 : 0;
+  // «1.500» es mil quinientos y «1.500,50» lleva centavos: se sacan los
+  // puntos de miles antes de leer la coma. Leído como venía, era $1,50.
+  const costoLeido = Number(costo.trim().replace(/\./g, "").replace(",", "."));
+  const costoMal = tipo === "envio" && costo.trim() !== "" && !(Number.isFinite(costoLeido) && costoLeido >= 0);
+  const costoEnvio = tipo === "envio" && !costoMal ? costoLeido || 0 : 0;
 
   function elegirZona(nombre: string) {
     setZona(nombre);
@@ -271,6 +275,7 @@ function PasarAPedido({
                       inputMode="decimal"
                       value={costo}
                       onChange={(e) => setCosto(e.target.value)}
+                      aria-invalid={costoMal}
                       className="tabular"
                     />
                   </div>
@@ -298,7 +303,7 @@ function PasarAPedido({
               </button>
               <button
                 type="button"
-                disabled={pendiente || (tipo === "envio" && !direccion.trim())}
+                disabled={pendiente || costoMal || (tipo === "envio" && !direccion.trim())}
                 onClick={pasar}
                 className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
               >

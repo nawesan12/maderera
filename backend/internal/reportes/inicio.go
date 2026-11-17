@@ -266,10 +266,10 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		  CASE WHEN $3 THEN (SELECT count(*) FILTER (WHERE fecha_pago >= now() AND fecha_pago < now() + interval '7 days')::int FROM cheques
 		                     WHERE estado IN ('cartera', 'entregado', 'depositado')) ELSE 0 END,
 		  CASE WHEN $4 THEN (SELECT count(*) FILTER (WHERE fecha_vencimiento < now())::int FROM purchase_invoices f
-		                     WHERE fecha_vencimiento IS NOT NULL AND f.anulada_at IS NULL
+		                     WHERE fecha_vencimiento IS NOT NULL AND f.anulada_at IS NULL AND f.tipo::text NOT LIKE 'nota_credito%'
 		                       AND f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0) > 0.01) ELSE 0 END,
 		  CASE WHEN $4 THEN (SELECT count(*) FILTER (WHERE fecha_vencimiento >= now() AND fecha_vencimiento < now() + interval '7 days')::int FROM purchase_invoices f
-		                     WHERE fecha_vencimiento IS NOT NULL AND f.anulada_at IS NULL
+		                     WHERE fecha_vencimiento IS NOT NULL AND f.anulada_at IS NULL AND f.tipo::text NOT LIKE 'nota_credito%'
 		                       AND f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0) > 0.01) ELSE 0 END,
 		  CASE WHEN $5 THEN (SELECT count(*)::int FROM professional_applications WHERE estado = 'pendiente') ELSE 0 END,
 		  CASE WHEN $6 THEN (SELECT count(*)::int FROM product_reviews WHERE estado = 'pendiente') ELSE 0 END,

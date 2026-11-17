@@ -40,7 +40,7 @@ export function GrillaDeMedidas({
   /** «variantes.2.sku»: la celda que el servidor rechazó. */
   campoConError?: string;
 }) {
-  const [abiertas, setAbiertas] = useState<Set<number>>(() => new Set());
+  const [abiertas, setAbiertas] = useState<Set<string>>(() => new Set());
   const [aQuitar, setAQuitar] = useState<number | null>(null);
   const decimales = admiteDecimales(unidad);
 
@@ -66,7 +66,7 @@ export function GrillaDeMedidas({
     setVariantes((prev) => {
       const base = prev[desde ?? prev.length - 1];
       const nueva: VarianteForm = base
-        ? { ...base, id: undefined, sku: "", label: "", codigoBarras: "", stockCentral: 0, stockAserradero: 0 }
+        ? { ...base, id: undefined, clave: nuevaClave(), sku: "", label: "", codigoBarras: "", stockCentral: 0, stockAserradero: 0 }
         : vacia();
       const lista = [...prev];
       lista.splice(desde === undefined ? prev.length : desde + 1, 0, nueva);
@@ -76,8 +76,11 @@ export function GrillaDeMedidas({
 
   function quitar(i: number) {
     setVariantes((prev) => prev.filter((_, k) => k !== i));
-    setAbiertas(new Set());
   }
+
+  // Lo desplegado se recuerda por fila, no por posición: copiar una medida
+  // en el medio corría todo un lugar y desplegaba la fila equivocada.
+  const claveDe = (v: VarianteForm, i: number) => v.id ?? v.clave ?? `pos-${i}`;
 
   const error = (i: number, campo: string) => campoConError === `variantes.${i}.${campo}`;
   // Los números en cifras tabulares; el texto, en la letra de siempre, que
@@ -139,10 +142,11 @@ export function GrillaDeMedidas({
             {variantes.map((v, i) => {
               // La fila con el error del servidor se abre sola: el campo puede
               // estar entre los plegados.
-              const abierta = abiertas.has(i) || (campoConError?.startsWith(`variantes.${i}.`) ?? false);
+              const clave = claveDe(v, i);
+              const abierta = abiertas.has(clave) || (campoConError?.startsWith(`variantes.${i}.`) ?? false);
               const sugerido = etiquetaSugerida(v);
               return (
-                <Fragment key={v.id ?? `nueva-${i}`}>
+                <Fragment key={clave}>
                   <tr>
                     <td>
                       <button
@@ -152,8 +156,8 @@ export function GrillaDeMedidas({
                         onClick={() =>
                           setAbiertas((s) => {
                             const n = new Set(s);
-                            if (n.has(i)) n.delete(i);
-                            else n.add(i);
+                            if (n.has(clave)) n.delete(clave);
+                            else n.add(clave);
                             return n;
                           })
                         }
@@ -347,8 +351,13 @@ export function GrillaDeMedidas({
   );
 }
 
+function nuevaClave(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random());
+}
+
 export function vacia(): VarianteForm {
   return {
+    clave: nuevaClave(),
     sku: "",
     label: "",
     largoMm: null,

@@ -194,6 +194,7 @@ export default async function EditarProductoPage({
       </div>
 
       <FormularioProducto
+        key={guardado ?? "ficha"}
         categorias={categorias}
         rubros={rubros}
         imputaciones={imputaciones}

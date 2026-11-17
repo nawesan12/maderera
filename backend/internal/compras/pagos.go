@@ -212,9 +212,10 @@ func (s *Servicio) AcumuladoDelMes(ctx context.Context, proveedor string, ahora 
 	filas, err := s.pool.Query(ctx, `
 		SELECT b.codigo_regimen, sum(b.base)::text,
 		  (SELECT coalesce(sum(r.importe), 0) FROM retenciones_practicadas r
-		   WHERE r.supplier_id = $1 AND r.codigo_regimen = b.codigo_regimen AND r.fecha >= $2 AND r.anulada_at IS NULL)::text
+		   WHERE r.supplier_id = $1 AND r.codigo_regimen = b.codigo_regimen AND r.fecha >= $2 AND r.fecha < $3 AND r.anulada_at IS NULL)::text
 		FROM bases_de_retencion b
-		WHERE b.supplier_id = $1 AND b.fecha >= $2 GROUP BY b.codigo_regimen`, proveedor, inicioDeMes(ahora))
+		WHERE b.supplier_id = $1 AND b.fecha >= $2 AND b.fecha < $3 GROUP BY b.codigo_regimen`, proveedor, inicioDeMes(ahora),
+		inicioDeMes(ahora).AddDate(0, 1, 0))
 	if err != nil {
 		return nil, err
 	}
@@ -485,10 +486,12 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 			var base, ret jsmath.Num
 			if err := tx.QueryRow(ctx, `
 				SELECT (SELECT coalesce(sum(base), 0) FROM bases_de_retencion
-				        WHERE supplier_id = $1 AND codigo_regimen = $2 AND fecha >= $3),
+				        WHERE supplier_id = $1 AND codigo_regimen = $2 AND fecha >= $3 AND fecha < $4),
 				       (SELECT coalesce(sum(importe), 0) FROM retenciones_practicadas
-				        WHERE supplier_id = $1 AND codigo_regimen = $2 AND fecha >= $3 AND anulada_at IS NULL)`,
-				d.SupplierID, reg.Codigo, inicioDeMes(fecha)).Scan(&base, &ret); err != nil {
+				        WHERE supplier_id = $1 AND codigo_regimen = $2 AND fecha >= $3 AND fecha < $4 AND anulada_at IS NULL)`,
+				// Con tope al fin del mes: un pago fechado en un mes anterior
+				// sumaba lo del mes en curso y retenía de más.
+				d.SupplierID, reg.Codigo, inicioDeMes(fecha), inicioDeMes(fecha).AddDate(0, 1, 0)).Scan(&base, &ret); err != nil {
 				return err
 			}
 			if _, err := tx.Exec(ctx, `INSERT INTO bases_de_retencion (payment_id, supplier_id, codigo_regimen, base, fecha)

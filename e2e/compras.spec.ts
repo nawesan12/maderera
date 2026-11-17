@@ -16,16 +16,23 @@ test.use({ storageState: SESION_ADMIN });
 test("una recepción se carga, se confirma y se anula", async ({ page }) => {
   test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
   await page.goto("/admin/recepciones/nueva");
+  // El proveedor ya no viene elegido: se elige el primero.
+  const proveedor = page.locator("select").first();
+  await proveedor.selectOption({ index: 1 });
+  // La sucursal tampoco, si hay más de una y nadie tiene la caja abierta.
+  await page.getByText("Casa Central", { exact: true }).click();
+  await expect(page.getByRole("radio", { name: "Casa Central" })).toBeChecked();
 
   await page.getByPlaceholder("0002-00034512").fill(`E2E-${Date.now()}`);
   await page.getByPlaceholder("Buscar mercadería por nombre, medida o código…").fill("mm");
   const primera = page.locator("ul button").first();
   await expect(primera).toBeVisible();
   await primera.click();
-  // Entra al costo que ya tenía, así el promedio no se mueve; si no tenía
-  // ninguno (la base de desarrollo no trae costos), a cero, que tampoco.
+  await expect(page.locator("tbody tr")).toHaveCount(1);
+  // Entra al costo que ya tenía, así el promedio no se mueve. Una recepción
+  // de neto cero no se guarda: si no tenía costo, a uno.
   const costo = page.locator("tbody tr").first().getByRole("spinbutton").nth(1);
-  if (!(await costo.inputValue())) await costo.fill("0");
+  if (!Number(await costo.inputValue())) await costo.fill("1");
 
   await page.getByRole("button", { name: "Guardar en borrador" }).click();
   await expect(page).toHaveURL(/\/admin\/recepciones\/[0-9a-f-]{36}$/);
@@ -51,25 +58,32 @@ test("las pantallas de compras cargan", async ({ page }) => {
 });
 
 /*
- * Un pago a proveedor se registra y se anula desde la lista. La anulación
- * devuelve la deuda (lo prueba Go, backend/internal/compras); acá, que el
- * desplegable pida el motivo y el pago quede tachado con él.
+ * Un pago a proveedor se registra y se anula desde su ficha. La anulación
+ * devuelve la deuda (lo prueba Go, backend/internal/compras); acá, que pida
+ * el motivo y el pago quede anulado con él.
  */
 test("un pago a proveedor se registra y se anula", async ({ page }) => {
   test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
   await page.goto("/admin/compras/pagos");
-  const referencia = `E2E-${Date.now()}`;
-  await page.getByLabel("Se le imputa").fill("1");
-  await page.getByPlaceholder("N.º de operación").first().fill(referencia);
-  await page.getByRole("button", { name: "Registrar el pago" }).click();
-  const fila = page.locator("tbody tr", { hasText: referencia });
-  await expect(fila).toBeVisible();
+  // Sin proveedor elegido de entrada: el formulario arranca de a quién se le paga.
+  await page.getByLabel("A quién se le paga").selectOption({ index: 1 });
+  // Las facturas del proveedor llegan y reinician el total: se espera.
+  await expect(page.getByRole("heading", { name: "Qué facturas se pagan" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await page.getByLabel("Total del pago").fill("1");
+  await page.getByPlaceholder("N.º de operación").first().fill(`E2E-${Date.now()}`);
+  await page.getByRole("button", { name: /^Pagar/ }).click();
+  await expect(page.getByText(/Pago registrado|Se registró el pago/)).toBeVisible();
 
-  await fila.getByText("Anular", { exact: true }).click();
-  await fila.getByPlaceholder("Motivo").fill("Prueba de punta a punta");
-  await fila.getByRole("button", { name: "Anular el pago" }).click();
-  await expect(fila.getByText("Anulado")).toBeVisible();
-  await expect(fila.getByText("Prueba de punta a punta")).toBeVisible();
+  // El más nuevo de la lista es este: a su ficha, y se anula con motivo.
+  await page.reload();
+  await page.locator("tbody tr").first().getByRole("link").first().click();
+  await page.waitForURL(/\/admin\/compras\/pagos\/[0-9a-f-]{36}/);
+  await page.getByRole("button", { name: /^Anular/ }).first().click();
+  await page.getByRole("dialog").getByLabel("Motivo").fill("Prueba de punta a punta");
+  await page.getByRole("dialog").getByRole("button", { name: "Anular el pago" }).click();
+  await page.reload();
+  await expect(page.getByText("Prueba de punta a punta")).toBeVisible();
 });
 
 // Los mínimos de un régimen se editan desde la pantalla (antes solo por SQL).

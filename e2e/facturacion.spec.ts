@@ -49,7 +49,9 @@ test("la nueva factura rechaza un CUIT mal escrito sin emitir nada", async ({ pa
   await page.getByLabel("Descripción del renglón 1").fill("Renglón de prueba");
   await page.getByLabel("Cantidad del renglón 1").fill("1");
   await page.getByLabel("Precio del renglón 1").fill("1210");
+  // Antes de emitir pide confirmación con el resumen.
   await page.getByRole("button", { name: /^Emitir factura/ }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Emitir" }).click();
   await expect(page.getByText("El CUIT tiene que tener 11 dígitos.")).toBeVisible();
   await expect(page).toHaveURL(/\/admin\/facturacion\/nueva/);
 });

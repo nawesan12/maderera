@@ -21,7 +21,7 @@ test.beforeEach(() => {
 
 test("la pantalla muestra lo cargado, las siete entidades y el historial", async ({ page }) => {
   await page.goto("/admin/migracion");
-  await expect(page.getByRole("heading", { name: "Migración de datos", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Importar planillas", level: 1 })).toBeVisible();
   await expect(page.getByText("Saldos iniciales")).toBeVisible();
   await expect(page.getByText("Corridas anteriores")).toBeVisible();
   for (const titulo of [

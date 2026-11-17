@@ -42,6 +42,7 @@ test("un banner cargado en el panel sale en la portada, y al borrarlo se va", as
   await page.goto("/admin/contenido/banners");
   const suyo = page.locator("form").filter({ has: page.locator(`input[name=titulo][value="${titulo}"]`) });
   await suyo.getByRole("button", { name: "Borrar" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Borrar el banner" }).click();
   await expect(suyo.getByText("Banner borrado.")).toBeVisible();
 
   await expect.poll(async () => (await page.request.get("/").then((r) => r.text())).includes(titulo), { timeout: 20_000 }).toBe(false);
@@ -63,6 +64,7 @@ test("una reseña del negocio cargada a mano sale en la portada, y al borrarla s
 
   await page.goto("/admin/contenido/resenas-negocio");
   await page.getByRole("button", { name: `Borrar la reseña de ${autor}` }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Borrar la reseña" }).click();
   await expect(page.getByRole("button", { name: `Borrar la reseña de ${autor}` })).toHaveCount(0);
   await expect.poll(async () => (await page.request.get("/").then((r) => r.text())).includes(autor), { timeout: 20_000 }).toBe(false);
 });

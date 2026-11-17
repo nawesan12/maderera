@@ -23,41 +23,45 @@ test("un producto cargado en el panel sale en el catálogo, y su stock se edita"
   await page.getByRole("listbox").getByRole("option").filter({ visible: true }).first().click();
   // Las medidas y los precios van en su pestaña (tanda 7).
   await page.getByRole("tab", { name: "Medidas y precios" }).click();
-  await page.locator("#sku-0").fill(`E2E-${Date.now()}`);
-  await page.locator("#label-0").fill("18 mm");
+  await page.locator("#v-0-sku").fill(`E2E-${Date.now()}`);
+  await page.locator("#v-0-label").fill("18 mm");
 
-  // Un código de una letra: el error es el de la validación de Go, en su campo.
-  await page.locator("#sku-0").fill("X");
+  // Un código de una letra: el error es el de la validación de Go, y el
+  // foco queda en su celda.
+  await page.locator("#v-0-sku").fill("X");
   await page.getByRole("button", { name: "Guardar producto" }).click();
   await expect(page.getByText("El código tiene que tener al menos 2 letras o números.")).toBeVisible();
+  await expect(page.locator("#v-0-sku")).toBeFocused();
 
-  await page.locator("#sku-0").fill(`E2E-${Date.now()}`);
-  await page.locator("#precio-lista-0").fill("12345");
-  await page.locator("#stockCentral-0").fill("7");
+  await page.locator("#v-0-sku").fill(`E2E-${Date.now()}`);
+  await page.locator("#v-0-precioGeneral").fill("12345");
+  await page.locator("#v-0-stockCentral").fill("7");
   await page.getByRole("button", { name: "Guardar producto" }).click();
-  await expect(page).toHaveURL(/\/admin\/productos\?guardado=1/);
+  // Guardado, se queda en la ficha y la abre en Fotos.
+  await expect(page).toHaveURL(/\/admin\/productos\/[0-9a-f-]{36}\?guardado=\d+&pestana=fotos/);
+  await expect(page.getByText("Producto creado. Ahora sus fotos.")).toBeVisible();
+  const id = page.url().split("/admin/productos/")[1]?.split(/[?#]/)[0] ?? "";
 
   await page.goto(`/admin/productos?buscar=${encodeURIComponent(nombre)}`);
-  const fila = page.getByRole("link", { name: nombre }).first();
-  await expect(fila).toBeVisible();
-  await fila.click();
-  await expect(page.locator("#name")).toHaveValue(nombre);
-  const id = page.url().split("/admin/productos/")[1]?.split(/[?#]/)[0] ?? "";
+  await expect(page.getByRole("link", { name: nombre }).first()).toBeVisible();
+  await page.goto(`/admin/productos/${id}`);
   await page.getByRole("tab", { name: "Medidas y precios" }).click();
-  await expect(page.locator("#stockCentral-0")).toHaveValue("7");
+  await expect(page.locator("#v-0-stockCentral")).toHaveValue("7");
 
   // Editar el stock.
-  await page.locator("#stockCentral-0").fill("4");
+  await page.locator("#v-0-stockCentral").fill("4");
   await page.getByRole("button", { name: "Guardar producto" }).click();
-  await expect(page).toHaveURL(/\/admin\/productos\?guardado=1/);
-  await page.goBack();
-  await page.reload();
+  await expect(page).toHaveURL(/\/admin\/productos\/[0-9a-f-]{36}\?guardado=\d+$/);
   await page.getByRole("tab", { name: "Medidas y precios" }).click();
-  await expect(page.locator("#stockCentral-0")).toHaveValue("4");
+  await expect(page.locator("#v-0-stockCentral")).toHaveValue("4");
 
   // En el catálogo, con su precio.
-  await page.goto(`/catalogo?q=${encodeURIComponent(nombre)}`);
-  await expect(page.getByText(nombre).first()).toBeVisible();
+  // La caché del catálogo se renueva al guardar, pero puede tardar un
+  // pedido en verse: se recarga hasta que aparece.
+  await expect(async () => {
+    await page.goto(`/catalogo?buscar=${encodeURIComponent(nombre)}`);
+    await expect(page.getByText(nombre).first()).toBeVisible({ timeout: 3000 });
+  }).toPass({ timeout: 30000 });
   if (await tiendaEncendida(page.request)) await expect(page.getByText(/12\.345/).first()).toBeVisible();
 
   // Que no quede en el catálogo de desarrollo.

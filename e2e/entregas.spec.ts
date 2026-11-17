@@ -70,6 +70,7 @@ test("un retiro parcial con remito, su firma y su anulación", async ({ page }) 
 
   // Anularlo devuelve la mercadería; el enlace pasa a decir que se anuló.
   await fila.getByRole("button", { name: "Anular" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Anular el remito" }).click();
   await expect(page.getByText("Remito anulado. La mercadería volvió al stock.")).toBeVisible();
   await firma.reload();
   await expect(firma.getByText("Este remito fue anulado")).toBeVisible();

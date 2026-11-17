@@ -200,9 +200,12 @@ type ClienteDelMostrador struct {
 	Estado        string   `json:"estado"`
 	LimiteCredito *float64 `json:"limiteCredito,omitempty"`
 	PriceListID   *string  `json:"priceListId"`
+	// Para completar el presupuesto al elegir al cliente.
+	Telefono *string `json:"telefono"`
+	Email    *string `json:"email"`
 }
 
-const columnasCliente = `id, nombre, razon_social, cuit, condicion_iva::text, direccion, estado::text, limite_credito, price_list_id`
+const columnasCliente = `id, nombre, razon_social, cuit, condicion_iva::text, direccion, estado::text, limite_credito, price_list_id, telefono, email`
 
 func leerClientes(filas pgx.Rows) ([]ClienteDelMostrador, error) {
 	defer filas.Close()
@@ -210,7 +213,8 @@ func leerClientes(filas pgx.Rows) ([]ClienteDelMostrador, error) {
 	for filas.Next() {
 		var c ClienteDelMostrador
 		var lim jsmath.Num
-		if err := filas.Scan(&c.ID, &c.Nombre, &c.RazonSocial, &c.Cuit, &c.CondicionIva, &c.Direccion, &c.Estado, &lim, &c.PriceListID); err != nil {
+		if err := filas.Scan(&c.ID, &c.Nombre, &c.RazonSocial, &c.Cuit, &c.CondicionIva, &c.Direccion, &c.Estado, &lim, &c.PriceListID,
+			&c.Telefono, &c.Email); err != nil {
 			return nil, err
 		}
 		l := lim.F()

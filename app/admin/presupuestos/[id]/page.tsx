@@ -14,10 +14,13 @@ import { zonasParaPedido } from "../zonas";
 
 export default async function FichaPresupuestoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ pasar?: string }>;
 }) {
   const { id } = await params;
+  const { pasar } = await searchParams;
   if (!esUuid(id)) notFound();
   const [p, aviso, zonas] = await Promise.all([
     obtenerPresupuesto(id),
@@ -62,6 +65,7 @@ export default async function FichaPresupuestoPage({
               zonas={zonas}
               conCliente={!!p.customerId}
               direccion={p.clienteDireccion}
+              abrirPasar={pasar === "1"}
             />
           </>
         }

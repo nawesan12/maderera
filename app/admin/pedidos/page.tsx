@@ -15,6 +15,7 @@ import { puedeEntrar } from "@/lib/roles";
 import { avisosManuales, type AvisoManualListo } from "@/lib/whatsapp/aviso-manual-datos";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { AccionesPedido } from "./acciones";
+import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 
 /** Las etapas por las que pasa un pedido, en orden. */
 const COLUMNAS = [
@@ -27,11 +28,12 @@ const COLUMNAS = [
 export default async function PedidosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; sucursal?: string }>;
+  searchParams: Promise<{ buscar?: string; sucursal?: string; ver?: string; periodo?: string; estado?: string; pagina?: string }>;
 }) {
   const params = await searchParams;
+  if (params.ver === "historial") return <Historial params={params} />;
   const [pedidos, sucursales] = await Promise.all([
-    listarPedidos({ busqueda: params.buscar, sucursal: params.sucursal }),
+    listarPedidos({ busqueda: params.buscar, sucursal: params.sucursal, vista: params.buscar ? undefined : "tablero" }),
     listarSucursalesPublicas(),
   ]);
 
@@ -65,6 +67,8 @@ export default async function PedidosPage({
             : `${plural(pedidos.length, "pedido")} en total`
         }
       />
+
+      <VistasDePedidos actual="curso" />
 
       <BuscadorPedidos
         busquedaActual={params.buscar ?? ""}
@@ -114,10 +118,10 @@ export default async function PedidosPage({
           {entregados.length > 0 && (
             <section className="mt-8">
               <h2 className="mb-2.5 text-base font-semibold text-muted-foreground">
-                Entregados hace poco
+                Cerrados esta semana
               </h2>
               <ul className="overflow-hidden tarjeta">
-                {entregados.slice(0, 6).map((p) => (
+                {entregados.slice(0, 10).map((p) => (
                   <li
                     key={p.id}
                     className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-5 py-3.5 last:border-0"
@@ -143,6 +147,158 @@ export default async function PedidosPage({
             </section>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+/** En curso o el historial: lo que se atiende y lo que ya pasó. */
+function VistasDePedidos({ actual }: { actual: "curso" | "historial" }) {
+  const clase = (activa: boolean) =>
+    `inline-flex h-10 items-center rounded-lg px-4 text-base font-medium ${
+      activa ? "bg-foreground text-background" : "bg-hundida text-muted-foreground hover:text-foreground"
+    }`;
+  return (
+    <nav aria-label="Ver pedidos" className="mb-4 flex gap-2">
+      <Link href="/admin/pedidos" className={clase(actual === "curso")} aria-current={actual === "curso" ? "page" : undefined}>
+        En curso
+      </Link>
+      <Link
+        href="/admin/pedidos?ver=historial"
+        className={clase(actual === "historial")}
+        aria-current={actual === "historial" ? "page" : undefined}
+      >
+        Historial
+      </Link>
+    </nav>
+  );
+}
+
+const PERIODOS: Record<string, { texto: string; dias: number | null }> = {
+  "30": { texto: "Últimos 30 días", dias: 30 },
+  "90": { texto: "Últimos 90 días", dias: 90 },
+  "365": { texto: "Último año", dias: 365 },
+  todo: { texto: "Todo", dias: null },
+};
+
+/** El día de hace `dias` días, en Argentina, como AAAA-MM-DD. */
+function haceDias(dias: number): string {
+  return new Date(Date.now() - dias * 86_400_000).toLocaleDateString("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
+}
+
+const ESTADOS_HISTORIAL: Record<string, string> = { todos: "Todos", entregado: "Entregados", cancelado: "Cancelados" };
+
+/**
+ * Lo cerrado, de a 50. El tablero mostraba solo los últimos seis entregados:
+ * un pedido de hace un mes no había forma de encontrarlo sin saber el número.
+ */
+async function Historial({
+  params,
+}: {
+  params: { buscar?: string; sucursal?: string; periodo?: string; estado?: string; pagina?: string };
+}) {
+  const periodo = params.periodo && params.periodo in PERIODOS ? params.periodo : "30";
+  const estado = params.estado && params.estado in ESTADOS_HISTORIAL ? params.estado : "todos";
+  const pagina = Math.max(1, Number(params.pagina) || 1);
+  const dias = PERIODOS[periodo].dias;
+  const desde = dias ? haceDias(dias) : undefined;
+
+  const filas = await listarPedidos({
+    vista: "historial",
+    busqueda: params.buscar,
+    sucursal: params.sucursal,
+    estado: estado === "todos" ? undefined : estado,
+    desde,
+    pagina,
+  });
+  const hayMas = filas.length > 50;
+  const visibles = filas.slice(0, 50);
+  const enlace = (cambios: Record<string, string | number | undefined>) => {
+    const q = new URLSearchParams({ ver: "historial" });
+    const base = { periodo, estado, buscar: params.buscar, sucursal: params.sucursal, ...cambios };
+    for (const [k, v] of Object.entries(base)) {
+      if (v === undefined || v === "" || (k === "pagina" && Number(v) === 1)) continue;
+      q.set(k, String(v));
+    }
+    return `/admin/pedidos?${q}`;
+  };
+
+  return (
+    <div>
+      <EncabezadoPanel titulo="Pedidos" resumen="Historial" />
+      <VistasDePedidos actual="historial" />
+
+      <div className="mb-4 flex flex-wrap gap-x-5 gap-y-2">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Período">
+          {Object.entries(PERIODOS).map(([valor, p]) => (
+            <Link
+              key={valor}
+              href={enlace({ periodo: valor, pagina: undefined })}
+              aria-current={valor === periodo ? "true" : undefined}
+              className={`inline-flex h-10 items-center rounded-full px-4 text-base ${
+                valor === periodo ? "bg-foreground text-background" : "bg-hundida text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {p.texto}
+            </Link>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Estado">
+          {Object.entries(ESTADOS_HISTORIAL).map(([valor, texto]) => (
+            <Link
+              key={valor}
+              href={enlace({ estado: valor, pagina: undefined })}
+              aria-current={valor === estado ? "true" : undefined}
+              className={`inline-flex h-10 items-center rounded-full px-4 text-base ${
+                valor === estado ? "bg-foreground text-background" : "bg-hundida text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {texto}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {visibles.length === 0 ? (
+        <p className="tarjeta-hundida rounded-xl px-5 py-10 text-center text-base text-muted-foreground">
+          Nada en ese período.
+        </p>
+      ) : (
+        <ul className="tarjeta overflow-hidden">
+          {visibles.map((p) => (
+            <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-5 py-3.5 last:border-0">
+              <Link href={`/admin/pedidos/${p.id}`} className="min-w-0 flex-1 text-base hover:text-brand-orange">
+                {p.cliente}
+                {p.empresa && <span className="text-muted-foreground"> · {p.empresa}</span>}
+              </Link>
+              <span className="tabular text-base text-muted-foreground">{p.numero}</span>
+              <span className="text-base text-muted-foreground">
+                {p.createdAt.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}
+              </span>
+              <EtiquetaEstado estado={p.estado} contexto="pedido" />
+              <span className="tabular w-32 text-right text-base font-medium">{moneda.format(p.total)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {(pagina > 1 || hayMas) && (
+        <div className="mt-4 flex justify-between">
+          {pagina > 1 ? (
+            <Link href={enlace({ pagina: pagina - 1 })} className="inline-flex h-11 items-center rounded-lg bg-hundida px-4 text-base">
+              Más nuevos
+            </Link>
+          ) : (
+            <span />
+          )}
+          {hayMas && (
+            <Link href={enlace({ pagina: pagina + 1 })} className="inline-flex h-11 items-center rounded-lg bg-hundida px-4 text-base">
+              Más viejos
+            </Link>
+          )}
+        </div>
       )}
     </div>
   );

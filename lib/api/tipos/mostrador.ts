@@ -334,6 +334,8 @@ export interface components {
             nombre: string;
             razonSocial: string | null;
             cuit: string | null;
+            telefono: string | null;
+            email: string | null;
             condicionIva: string;
             direccion: string | null;
             estado: string;

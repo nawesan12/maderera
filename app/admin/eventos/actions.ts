@@ -43,6 +43,7 @@ export async function crearEvento(_previo: EstadoEvento, formData: FormData): Pr
   return resultado(
     await (await api()).POST("/api/v1/admin/eventos", {
       body: {
+        ...(campo("id") ? { id: campo("id") } : {}),
         titulo: campo("titulo"),
         resumen: campo("resumen"),
         descripcion: campo("descripcion"),

@@ -95,6 +95,8 @@ func ValidarRechazar(m map[string]any) (id, motivo string, l *zod.Lector) {
 
 // FormEvento es lo validado del alta de un evento.
 type FormEvento struct {
+	// ID, para corregir uno ya cargado.
+	ID                          string
 	Titulo, Inicia              string
 	Resumen, Descripcion, Lugar *string
 	Termina, Precio             *string
@@ -114,9 +116,15 @@ func ValidarEvento(m map[string]any) (FormEvento, *zod.Lector) {
 	cupo := l.EnteroCoercido("cupo", 0, 10000)
 	l.String("precio", true)
 	solo := l.Booleano("soloProfesionales")
+	if id, ok := m["id"].(string); ok && id != "" {
+		l.String("id", false).UUID()
+	}
 	f := FormEvento{Titulo: l.Texto("titulo"), Inicia: l.Texto("inicia"), Resumen: opcional(l, "resumen"),
 		Descripcion: opcional(l, "descripcion"), Lugar: opcional(l, "lugar"), Termina: opcional(l, "termina"),
 		Precio: opcional(l, "precio"), SoloProfesionales: solo}
+	if id, ok := m["id"].(string); ok {
+		f.ID = id
+	}
 	if l.Ok() {
 		f.Cupo = int(cupo)
 	}

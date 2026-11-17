@@ -52,10 +52,10 @@ func (s *Servicio) CrearPresupuesto(ctx context.Context, ses *auth.Sesion, cabec
 		}
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO quotes (numero, customer_id, contacto_nombre, contacto_email, contacto_telefono, branch_id, estado, origen,
-			                    subtotal, total, notas, asesor, seller_id, valido_hasta, created_by_user_id)
-			VALUES ($1, $2, $3, $4, $5, $6, 'pendiente', 'telefono', $7::numeric, $7::numeric, $8, $9, $10, $11, $12)
+			                    subtotal, total, notas, asesor, seller_id, valido_hasta, created_by_user_id, necesita_para)
+			VALUES ($1, $2, $3, $4, $5, $6, 'pendiente', 'telefono', $7::numeric, $7::numeric, $8, $9, $10, $11, $12, $13)
 			RETURNING id`, numero, c.CustomerID, c.ContactoNombre, email, c.ContactoTelefono, c.BranchID, alta.Subtotal, c.Notas,
-			ses.Nombre, sellerID, validoHasta, ses.UserID).Scan(&id); err != nil {
+			ses.Nombre, sellerID, validoHasta, ses.UserID, c.NecesitaPara).Scan(&id); err != nil {
 			return err
 		}
 		for i, l := range alta.Lineas {

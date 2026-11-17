@@ -96,6 +96,10 @@ const ESTADOS: Record<string, Estilo> = {
   // Reseñas de producto.
   publicada: { etiqueta: "Publicada", familia: "ok", abierto: false },
 
+  // Eventos. «Publicado» salía en gris, como si estuviera cerrado.
+  publicado: { etiqueta: "Publicado", familia: "ok", abierto: true },
+  cerrado: { etiqueta: "Cerrado", familia: "cerrado", abierto: false },
+
   // Cheques, en los dos sentidos.
   cartera: { etiqueta: "En cartera", familia: "espera", abierto: true },
   depositado: { etiqueta: "Depositado", familia: "info", abierto: true },
@@ -141,8 +145,19 @@ export function estiloDeEstado(estado: string): Estilo {
   };
 }
 
-export function EtiquetaEstado({ estado }: { estado: string }) {
-  const { etiqueta } = estiloDeEstado(estado);
+/**
+ * «Pendiente» es de tres cosas distintas: un presupuesto que espera respuesta,
+ * un pedido sin preparar y un cobro sin hacer. El tablero de pedidos decía
+ * «Sin preparar» y la ficha «Pendiente» para el mismo pedido. Con el contexto,
+ * cada uno se nombra igual en todas las pantallas.
+ */
+const EN_CONTEXTO: Record<string, Record<string, string>> = {
+  pedido: { pendiente: "Sin preparar" },
+  pago: { pendiente: "Sin cobrar" },
+};
+
+export function EtiquetaEstado({ estado, contexto }: { estado: string; contexto?: "pedido" | "pago" }) {
+  const etiqueta = (contexto && EN_CONTEXTO[contexto][estado]) ?? estiloDeEstado(estado).etiqueta;
 
   return (
     <span

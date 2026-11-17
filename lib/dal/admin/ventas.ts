@@ -89,7 +89,15 @@ export interface PedidoListado extends Omit<Esquemas["PedidoListado"], "createdA
 }
 
 export async function listarPedidos(
-  filtros: { busqueda?: string; estado?: string; sucursal?: string } = {},
+  filtros: {
+    busqueda?: string;
+    estado?: string;
+    sucursal?: string;
+    vista?: "tablero" | "historial";
+    desde?: string;
+    hasta?: string;
+    pagina?: number;
+  } = {},
 ): Promise<PedidoListado[]> {
   const r = await (await api()).GET("/api/v1/admin/pedidos", { params: { query: filtros } });
   return datos(r).map((p) => ({ ...p, createdAt: fecha(p.createdAt) }));

@@ -282,13 +282,14 @@ components:
             createdAt: { type: string, format: date-time }
     EventoAdmin:
       type: object
-      required: [id, slug, titulo, resumen, lugar, sucursal, inicia, termina, cupo, precio, soloProfesionales, estado, inscriptos,
-        confirmados, reservados, recaudado, proximo]
+      required: [id, slug, titulo, resumen, descripcion, lugar, sucursal, inicia, termina, cupo, precio, soloProfesionales, estado,
+        inscriptos, confirmados, reservados, recaudado, proximo]
       properties:
         id: { type: string }
         slug: { type: string }
         titulo: { type: string }
         resumen: { type: string, nullable: true }
+        descripcion: { type: string, nullable: true }
         lugar: { type: string, nullable: true }
         sucursal: { type: string, nullable: true }
         inicia: { type: string, format: date-time }

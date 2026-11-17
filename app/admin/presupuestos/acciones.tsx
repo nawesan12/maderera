@@ -32,7 +32,10 @@ export function AccionesPresupuesto({
   zonas,
   conCliente,
   direccion,
+  abrirPasar = false,
 }: {
+  /** Recién guardado con «Guardar y pasar a pedido»: el paso ya abierto. */
+  abrirPasar?: boolean;
   id: string;
   numero: string;
   estado: string;
@@ -129,6 +132,7 @@ export function AccionesPresupuesto({
           conCliente={conCliente}
           direccion={direccion ?? ""}
           destacado={estado === "aceptado"}
+          abierto={abrirPasar}
         />
       )}
     </div>
@@ -150,7 +154,9 @@ function PasarAPedido({
   conCliente,
   direccion: direccionDelCliente,
   destacado,
+  abierto: abiertoDeEntrada = false,
 }: {
+  abierto?: boolean;
   id: string;
   numero: string;
   total: number;
@@ -160,7 +166,7 @@ function PasarAPedido({
   destacado: boolean;
 }) {
   const router = useRouter();
-  const [abierto, setAbierto] = useState(false);
+  const [abierto, setAbierto] = useState(abiertoDeEntrada);
   const [pendiente, startTransition] = useTransition();
   const [tipo, setTipo] = useState<"retiro" | "envio">("retiro");
   const [direccion, setDireccion] = useState(direccionDelCliente);

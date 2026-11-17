@@ -25,9 +25,18 @@ paths:
         - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
         - { name: estado, in: query, schema: { type: string } }
         - { name: sucursal, in: query, schema: { type: string } }
+        - name: vista
+          in: query
+          description: >-
+            tablero: lo que está en curso más lo entregado o cancelado en la última semana.
+            historial: lo cerrado, de a 50 (pagina), con desde y hasta. Sin vista, todo (como antes).
+          schema: { type: string, enum: [tablero, historial] }
+        - { name: desde, in: query, schema: { type: string, format: date } }
+        - { name: hasta, in: query, schema: { type: string, format: date } }
+        - { name: pagina, in: query, schema: { type: integer, minimum: 1 } }
       responses:
         "200":
-          description: Los pedidos, el más nuevo primero
+          description: Los pedidos, el más nuevo primero. En el historial vienen hasta 51, para saber si hay más
           content:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/PedidoListado" } }

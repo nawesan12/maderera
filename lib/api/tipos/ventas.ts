@@ -418,6 +418,11 @@ export interface operations {
                 busqueda?: string;
                 estado?: string;
                 sucursal?: string;
+                /** @description tablero: lo que está en curso más lo entregado o cancelado en la última semana. historial: lo cerrado, de a 50 (pagina), con desde y hasta. Sin vista, todo (como antes). */
+                vista?: "tablero" | "historial";
+                desde?: string;
+                hasta?: string;
+                pagina?: number;
             };
             header?: never;
             path?: never;
@@ -425,7 +430,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Los pedidos, el más nuevo primero */
+            /** @description Los pedidos, el más nuevo primero. En el historial vienen hasta 51, para saber si hay más */
             200: {
                 headers: {
                     [name: string]: unknown;

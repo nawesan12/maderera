@@ -21,6 +21,7 @@ import {
 } from "@/lib/dal/admin/ventas";
 import { AccionesPresupuesto, type ZonaParaPedido } from "./acciones";
 import { zonasParaPedido } from "./zonas";
+import { listarSucursalesPublicas } from "@/lib/dal/envios";
 
 const ESTADOS = {
   todos: "Todos",
@@ -43,11 +44,7 @@ const ORIGEN: Record<string, string> = {
   whatsapp: "Por WhatsApp",
 };
 
-const SUCURSALES_FILTRO = {
-  todos: "Las dos sucursales",
-  "casa-central": "Casa Central",
-  aserradero: "Aserradero (Canosa)",
-};
+
 
 export default async function PresupuestosPage({
   searchParams,
@@ -55,13 +52,14 @@ export default async function PresupuestosPage({
   searchParams: Promise<{ buscar?: string; estado?: string; sucursal?: string }>;
 }) {
   const params = await searchParams;
-  const [presupuestos, zonas] = await Promise.all([
+  const [presupuestos, zonas, sucursales] = await Promise.all([
     listarPresupuestos({
       busqueda: params.buscar,
       estado: params.estado,
       sucursal: params.sucursal,
     }),
     zonasParaPedido(),
+    listarSucursalesPublicas(),
   ]);
 
   // Lo que espera una respuesta va arriba y separado: es lo que hay que atender.
@@ -96,7 +94,8 @@ export default async function PresupuestosPage({
         extra={{
           parametro: "sucursal",
           etiqueta: "Filtrar por sucursal",
-          opciones: SUCURSALES_FILTRO,
+          // De la base: una sucursal nueva aparece sola.
+          opciones: { todos: "Todas", ...Object.fromEntries(sucursales.map((x) => [x.slug, x.nombre])) },
           actual: params.sucursal ?? "todos",
         }}
       />

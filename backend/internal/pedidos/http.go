@@ -88,7 +88,20 @@ func (a *API) ListarPedidos(ctx context.Context, r ventasapi.ListarPedidosReques
 	if _, err := pedidos(ctx); err != nil {
 		return nil, err
 	}
-	v, err := a.s.ListarPedidos(ctx, Filtros{texto(r.Params.Busqueda), texto(r.Params.Estado), texto(r.Params.Sucursal)})
+	vista := VistaDePedidos{}
+	if r.Params.Vista != nil {
+		vista.Vista = string(*r.Params.Vista)
+	}
+	if r.Params.Desde != nil {
+		vista.Desde = r.Params.Desde.Format("2006-01-02")
+	}
+	if r.Params.Hasta != nil {
+		vista.Hasta = r.Params.Hasta.Format("2006-01-02")
+	}
+	if r.Params.Pagina != nil {
+		vista.Pagina = *r.Params.Pagina
+	}
+	v, err := a.s.ListarPedidosEn(ctx, Filtros{texto(r.Params.Busqueda), texto(r.Params.Estado), texto(r.Params.Sucursal)}, vista)
 	return ok(v), err
 }
 

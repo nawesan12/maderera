@@ -77,6 +77,7 @@ export default async function AdminStockPage({
   // Los tres grupos se recortan, incluidos los que piden atención: con
   // trescientas variantes bajo el mínimo, el grupo urgente es el más largo.
   const verTodo = params.ver === "todo";
+  const verFicha = puedeEntrar("/admin/productos", usuario.staffRole);
   const sinStock = recortar(agotados, verTodo);
   const aReponer = recortar(reponer, verTodo);
   const conStock = recortar(normales, verTodo);
@@ -140,7 +141,8 @@ export default async function AdminStockPage({
               detalle="No hay en ninguna sucursal"
               destacado
             >
-              <Grilla filas={sinStock.visibles} enCamino={pedido} />
+              <Grilla filas={sinStock.visibles} enCamino={pedido}
+                verFicha={verFicha} />
               <VerTodo ocultas={sinStock.ocultas} params={params} />
             </GrupoListado>
 
@@ -150,12 +152,14 @@ export default async function AdminStockPage({
               detalle="Por debajo del mínimo"
               destacado
             >
-              <Grilla filas={aReponer.visibles} enCamino={pedido} />
+              <Grilla filas={aReponer.visibles} enCamino={pedido}
+                verFicha={verFicha} />
               <VerTodo ocultas={aReponer.ocultas} params={params} />
             </GrupoListado>
 
             <GrupoListado titulo="Con stock" cantidad={normales.length}>
-              <Grilla filas={conStock.visibles} enCamino={pedido} />
+              <Grilla filas={conStock.visibles} enCamino={pedido}
+                verFicha={verFicha} />
               <VerTodo ocultas={conStock.ocultas} params={params} />
             </GrupoListado>
           </div>
@@ -176,12 +180,13 @@ export default async function AdminStockPage({
                     className="flex items-baseline justify-between gap-3 border-b border-border/60 px-3 py-3 last:border-0"
                   >
                     <div className="min-w-0">
-                      <Link
+                      <EnlaceSi
+                        si={verFicha}
                         href={`/admin/productos/${m.productId}`}
                         className="block truncate text-base hover:text-brand-orange hover:underline"
                       >
                         {m.productName}
-                      </Link>
+                      </EnlaceSi>
                       <p className="truncate text-sm text-muted-foreground">
                         {m.label}
                       </p>
@@ -214,9 +219,11 @@ export default async function AdminStockPage({
 function Grilla({
   filas,
   enCamino,
+  verFicha,
 }: {
   filas: FilaStock[];
   enCamino: Map<string, { cantidad: number; llega: Date | null }>;
+  verFicha: boolean;
 }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
@@ -225,6 +232,7 @@ function Grilla({
           key={fila.variantId}
           fila={fila}
           enCamino={enCamino.get(fila.variantId)}
+          verFicha={verFicha}
         />
       ))}
     </div>
@@ -234,9 +242,12 @@ function Grilla({
 function TarjetaStock({
   fila,
   enCamino,
+  verFicha,
 }: {
   fila: FilaStock;
   enCamino?: { cantidad: number; llega: Date | null };
+  /** El depósito no entra a la ficha: el enlace lo rebotaba al inicio. */
+  verFicha: boolean;
 }) {
   const necesitaAtencion =
     fila.total === 0 ||
@@ -249,7 +260,8 @@ function TarjetaStock({
         necesitaAtencion ? "tarjeta-atencion" : "tarjeta"
       }`}
     >
-      <Link
+      <EnlaceSi
+        si={verFicha}
         href={`/admin/productos/${fila.productId}`}
         className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-muted"
       >
@@ -266,17 +278,18 @@ function TarjetaStock({
             <ImageOff className="h-5 w-5" />
           </span>
         )}
-      </Link>
+      </EnlaceSi>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <Link
+            <EnlaceSi
+              si={verFicha}
               href={`/admin/productos/${fila.productId}`}
               className="text-base font-medium leading-snug hover:text-brand-orange"
             >
               {fila.productName}
-            </Link>
+            </EnlaceSi>
             <p className="text-sm text-muted-foreground">{fila.label}</p>
             <p className="tabular text-sm text-muted-foreground">{fila.sku}</p>
           </div>
@@ -348,4 +361,26 @@ function TarjetaStock({
       </div>
     </article>
   );
+}
+
+/** Un enlace, o el mismo contenido sin enlace para quien no puede entrar. */
+function EnlaceSi({
+  si,
+  href,
+  className,
+  children,
+}: {
+  si: boolean;
+  href: string;
+  className: string;
+  children: React.ReactNode;
+}) {
+  if (si) {
+    return (
+      <Link href={href} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  return <span className={`block ${className.replace(/hover:\S+/g, "")}`}>{children}</span>;
 }

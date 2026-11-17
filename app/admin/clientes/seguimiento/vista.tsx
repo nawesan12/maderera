@@ -209,21 +209,7 @@ function NuevaGestion({ clientes }: { clientes: { id: string; nombre: string }[]
       className="tarjeta space-y-3 p-4"
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-sm font-medium">Cliente</span>
-          <select
-            name="customerId"
-            required
-            className="mt-1 h-10 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
-          >
-            <option value="">Elegí un cliente</option>
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
-              </option>
-            ))}
-          </select>
-        </label>
+        <ElegirCliente clientes={clientes} />
 
         <label className="block">
           <span className="text-sm font-medium">De qué se trata</span>
@@ -275,5 +261,71 @@ function NuevaGestion({ clientes }: { clientes: { id: string; nombre: string }[]
         {aviso && <span className="text-sm text-muted-foreground">{aviso}</span>}
       </div>
     </form>
+  );
+}
+
+/**
+ * Elegir el cliente escribiendo. Era un desplegable con el padrón entero: con
+ * los clientes del sistema viejo, miles de nombres para bajar con la rueda.
+ */
+function ElegirCliente({ clientes }: { clientes: { id: string; nombre: string }[] }) {
+  const [texto, setTexto] = useState("");
+  const [elegido, setElegido] = useState<{ id: string; nombre: string } | null>(null);
+  const palabras = texto
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/\s+/)
+    .filter(Boolean);
+  const encontrados =
+    palabras.length === 0
+      ? []
+      : clientes
+          .filter((c) => {
+            const n = c.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return palabras.every((p) => n.includes(p));
+          })
+          .slice(0, 8);
+
+  return (
+    <div className="block">
+      <span className="text-sm font-medium">Cliente</span>
+      <input type="hidden" name="customerId" value={elegido?.id ?? ""} />
+      {elegido ? (
+        <div className="mt-1 flex h-10 items-center justify-between gap-2 rounded-lg bg-hundida px-3">
+          <span className="truncate text-base">{elegido.nombre}</span>
+          <button type="button" onClick={() => setElegido(null)} className="text-sm text-muted-foreground hover:text-foreground">
+            Cambiar
+          </button>
+        </div>
+      ) : (
+        <>
+          <input
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            placeholder="Nombre del cliente"
+            aria-label="Buscar el cliente"
+            autoComplete="off"
+            required={!elegido}
+            className="mt-1 h-10 w-full rounded-lg border border-linea bg-background px-3 text-base"
+          />
+          {encontrados.length > 0 && (
+            <ul className="mt-1 max-h-56 overflow-y-auto rounded-lg bg-card shadow-sm">
+              {encontrados.map((c) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    onClick={() => setElegido(c)}
+                    className="w-full px-3 py-2 text-left text-base hover:bg-muted"
+                  >
+                    {c.nombre}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
   );
 }

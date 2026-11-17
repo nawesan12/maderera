@@ -389,12 +389,14 @@ components:
         precioMediaPct: { type: number, format: double }
     MostradorCliente:
       type: object
-      required: [id, nombre, razonSocial, cuit, condicionIva, direccion, estado, priceListId]
+      required: [id, nombre, razonSocial, cuit, condicionIva, direccion, estado, priceListId, telefono, email]
       properties:
         id: { type: string }
         nombre: { type: string }
         razonSocial: { type: string, nullable: true }
         cuit: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        email: { type: string, nullable: true }
         condicionIva: { type: string }
         direccion: { type: string, nullable: true }
         estado: { type: string }

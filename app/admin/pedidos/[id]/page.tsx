@@ -108,7 +108,7 @@ export default async function FichaPedidoPage({
         titulo={pedido.cliente}
         estado={
           <>
-            <EtiquetaEstado estado={pedido.estado} />
+            <EtiquetaEstado estado={pedido.estado} contexto="pedido" />
             {pedido.estadoPago !== "pagado" && (
               <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]">
                 Sin cobrar
@@ -409,7 +409,7 @@ export default async function FichaPedidoPage({
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted-foreground">Estado</dt>
                 <dd>
-                  <EtiquetaEstado estado={pedido.estadoPago} />
+                  <EtiquetaEstado estado={pedido.estadoPago} contexto="pago" />
                 </dd>
               </div>
               {pedido.saldoCliente != null && verCliente && (
@@ -484,7 +484,7 @@ export default async function FichaPedidoPage({
                     aria-hidden="true"
                   />
                   <div>
-                    <EtiquetaEstado estado={h.estado} />
+                    <EtiquetaEstado estado={h.estado} contexto="pedido" />
                     {h.nota && (
                       <p className="mt-1 text-base text-muted-foreground">
                         {h.nota}

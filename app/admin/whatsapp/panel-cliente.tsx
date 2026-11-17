@@ -2,7 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import Link from "next/link";
-import { BellOff, BellRing, Link2, Loader2, Search, UserPlus, Wallet } from "lucide-react";
+import { BellOff, BellRing, ClipboardList, Link2, Loader2, Scissors, Search, UserPlus, Wallet } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, moneda } from "@/lib/formato";
 import {
@@ -52,6 +52,24 @@ export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
         >
           Abrir ficha completa
         </Link>
+        {/* Lo que se pide por WhatsApp se arma desde acá, con el cliente
+            ya puesto. */}
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Link
+            href={`/admin/presupuestos/nuevo?cliente=${detalle.customerId}`}
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida text-base font-medium hover:bg-muted"
+          >
+            <ClipboardList className="h-4 w-4" aria-hidden="true" />
+            Presupuesto
+          </Link>
+          <Link
+            href={`/admin/cortes/nuevo?cliente=${detalle.customerId}`}
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida text-base font-medium hover:bg-muted"
+          >
+            <Scissors className="h-4 w-4" aria-hidden="true" />
+            Corte
+          </Link>
+        </div>
       </section>
 
       <section className="tarjeta p-4">
@@ -71,11 +89,7 @@ export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
           {detalle.limiteCredito > 0 && <> · límite {moneda.format(detalle.limiteCredito)}</>}
         </p>
         {excedido && <p className="mt-1.5 text-base text-red-700">Supera el límite. No debería llevarse más a cuenta.</p>}
-        {detalle.saldo > 0 && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Para recordárselo: «Mensaje preparado» → Recordatorio saldo, o mandale el resumen de cuenta con «Documento».
-          </p>
-        )}
+
       </section>
 
       <section className="tarjeta overflow-hidden">

@@ -102,6 +102,7 @@ export default async function EventosAdminPage() {
 
                 <div className="flex flex-col items-end gap-2">
                   <AccionesEvento id={evento.id} estado={evento.estado} />
+                  <CrearEvento evento={evento} />
                   {evento.estado === "publicado" && (
                     <Link
                       href={`/eventos/${evento.slug}`}

@@ -36,6 +36,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { guardarCliente, type EstadoCliente } from "./actions";
+import { buscarClientes } from "@/app/mostrador/actions";
+import Link from "next/link";
 import { RUBROS_CLIENTE } from "@/lib/rubros-cliente";
 import { Opciones, Seccion, sinReiniciar } from "@/components/admin/formulario";
 
@@ -110,6 +112,19 @@ export function DialogoCliente({
     {} as EstadoCliente,
     () => setAbierto(false),
   );
+
+  /*
+   * ¿Ya existe? Al salir del teléfono o del CUIT se busca por los dígitos.
+   * Con tres fichas del mismo cliente, la deuda queda repartida y nadie la
+   * ve entera.
+   */
+  const [parecido, setParecido] = useState<{ id: string; nombre: string } | null>(null);
+  async function revisarSiExiste(valor: string) {
+    if (cliente || valor.replace(/\D/g, "").length < 6) return;
+    const encontrados = await buscarClientes(valor);
+    const otro = encontrados[0];
+    setParecido(otro ? { id: otro.id, nombre: otro.razonSocial ?? otro.nombre } : null);
+  }
 
   const [tipo, setTipo] = useState(cliente?.tipo ?? "particular");
   const [rubro, setRubro] = useState(cliente?.rubro ?? "particular");
@@ -229,6 +244,7 @@ export function DialogoCliente({
                   placeholder="20-12345678-9"
                   inputMode="numeric"
                   defaultValue={cliente?.cuit ?? ""}
+                  onBlur={(e) => revisarSiExiste(e.target.value)}
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
@@ -250,7 +266,13 @@ export function DialogoCliente({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="telefono">Teléfono</Label>
-                <Input id="telefono" name="telefono" inputMode="tel" defaultValue={cliente?.telefono ?? ""} />
+                <Input
+                  id="telefono"
+                  name="telefono"
+                  inputMode="tel"
+                  defaultValue={cliente?.telefono ?? ""}
+                  onBlur={(e) => revisarSiExiste(e.target.value)}
+                />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="direccion">Domicilio</Label>
@@ -334,6 +356,15 @@ export function DialogoCliente({
               <Textarea id="notas" name="notas" rows={2} aria-label="Notas" defaultValue={cliente?.notas ?? ""} />
             </Seccion>
           </div>
+
+          {parecido && (
+            <p role="status" className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base text-[var(--estado-tinta)]">
+              Ya hay una ficha con ese dato:{" "}
+              <Link href={`/admin/clientes/${parecido.id}`} className="font-semibold underline underline-offset-4">
+                {parecido.nombre}
+              </Link>
+            </p>
+          )}
 
           <Button
             type="submit"

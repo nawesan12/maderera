@@ -39,6 +39,8 @@ interface ClienteElegido {
   id: string;
   nombre: string;
   razonSocial: string | null;
+  telefono?: string | null;
+  email?: string | null;
 }
 
 const estadoInicial = {} as { error?: string; ok?: string };
@@ -84,6 +86,10 @@ export function FormularioPresupuesto({
   const [nombre, setNombre] = useState(
     clienteInicial ? (clienteInicial.razonSocial ?? clienteInicial.nombre) : "",
   );
+  // Al elegir al cliente se completan con lo de su ficha: había que volver a
+  // tipear el teléfono que el sistema ya tenía.
+  const [telefono, setTelefono] = useState(clienteInicial?.telefono ?? "");
+  const [email, setEmail] = useState(clienteInicial?.email ?? "");
   const [lineas, setLineas] = useState<Linea[]>([]);
 
   const total = lineas.reduce(
@@ -140,7 +146,11 @@ export function FormularioPresupuesto({
               elegido={cliente}
               onElegir={(c) => {
                 setCliente(c);
-                if (c) setNombre(c.razonSocial ?? c.nombre);
+                if (c) {
+                  setNombre(c.razonSocial ?? c.nombre);
+                  if (c.telefono) setTelefono(c.telefono);
+                  if (c.email) setEmail(c.email);
+                }
               }}
             />
           </div>
@@ -162,13 +172,21 @@ export function FormularioPresupuesto({
             <Input
               id="contactoTelefono"
               name="contactoTelefono"
-              placeholder="223 555-1234"
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+              inputMode="tel"
             />
           </div>
 
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="contactoEmail">Correo</Label>
-            <Input id="contactoEmail" name="contactoEmail" type="email" />
+            <Input
+              id="contactoEmail"
+              name="contactoEmail"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
 
           {/* La sucursal viaja en el oculto `branchId`; las fichas solo la
@@ -290,13 +308,18 @@ export function FormularioPresupuesto({
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="necesitaPara">Lo necesita para el</Label>
+            <Input id="necesitaPara" name="necesitaPara" type="date" />
+          </div>
+
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="notas">Notas</Label>
             <Textarea
               id="notas"
               name="notas"
               rows={3}
-              placeholder="Lo que haya que aclarar: plazos, medidas especiales, quién retira."
+              placeholder="Medidas especiales, quién retira…"
             />
           </div>
         </Seccion>
@@ -328,7 +351,9 @@ export function FormularioPresupuesto({
         </Button>
 
         {/* Quien llama muchas veces no pide un presupuesto: está comprando.
-            Esto le ahorra cargarlo, aceptarlo y convertirlo por separado. */}
+            Guarda y abre en la ficha el paso a pedido, que pregunta la
+            entrega y el pago (pasarlo de una dejaba el pedido como retiro y
+            sin forma de pago). */}
         <Button
           type="submit"
           name="convertir"

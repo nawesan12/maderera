@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { avisarPedidoNuevo } from "@/lib/dal/existencia";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 
@@ -147,17 +148,19 @@ export async function crearPresupuesto(_previo: EstadoVenta, formData: FormData)
     sellerId: (formData.get("sellerId") as string) || undefined,
     notas: (formData.get("notas") as string) || undefined,
     diasValidez: formData.get("diasValidez") || DIAS_DE_VALIDEZ,
+    necesitaPara: (formData.get("necesitaPara") as string) || undefined,
   };
   const lineas: unknown[] = formData.getAll("linea").map((cruda) => JSON.parse(String(cruda)));
-  const convertir = formData.get("convertir") === "si";
+  // «Guardar y pasar a pedido» guarda y abre el paso a pedido en la ficha,
+  // que pregunta cómo se entrega y cómo paga.
+  const pasar = formData.get("convertir") === "si";
 
-  const r = await (await api()).POST("/api/v1/admin/presupuestos", { body: { cabecera, lineas, convertir } });
+  const r = await (await api()).POST("/api/v1/admin/presupuestos", { body: { cabecera, lineas, convertir: false } });
   if (!r.data) return fallo(r);
 
   refrescar();
-  if (convertir && r.data.numero?.startsWith("PED-")) {
-    revalidatePath("/admin/stock");
-    avisarPedidoNuevo(r.data.numero);
-  }
+  // Al guardar, a la ficha: quedarse en el formulario lleno invitaba a
+  // guardarlo dos veces, y el PDF y el WhatsApp están en la ficha.
+  if (r.data.id) redirect(`/admin/presupuestos/${r.data.id}${pasar ? "?pasar=1" : ""}`);
   return { ok: r.data.ok };
 }

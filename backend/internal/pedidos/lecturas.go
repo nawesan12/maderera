@@ -79,8 +79,8 @@ type PresupuestoListado struct {
 	RespondeHasta *time.Time `json:"respondeHasta"`
 	NecesitaPara  *time.Time `json:"necesitaPara"`
 	Plazo         *Plazo     `json:"plazo"`
-	PedidoID     *string `json:"pedidoId"`
-	NumeroPedido *string `json:"numeroPedido"`
+	PedidoID      *string    `json:"pedidoId"`
+	NumeroPedido  *string    `json:"numeroPedido"`
 }
 
 // ListarPresupuestos es listarPresupuestos: primero lo que tiene compromiso
@@ -249,10 +249,47 @@ type PedidoListado struct {
 	CreatedAt        time.Time `json:"createdAt"`
 }
 
+// VistaDePedidos acota el listado: el tablero no necesita el historial
+// entero (lo traía todo, desde el primer pedido), y el historial va por
+// páginas y por período.
+type VistaDePedidos struct {
+	Vista        string // "", "tablero" o "historial"
+	Desde, Hasta string // AAAA-MM-DD, del historial
+	Pagina       int
+}
+
+// PorPaginaDeHistorial es cuántos pedidos trae cada página del historial.
+const PorPaginaDeHistorial = 50
+
 // ListarPedidos es listarPedidos: lo más nuevo primero.
 func (s *Servicio) ListarPedidos(ctx context.Context, f Filtros) ([]PedidoListado, error) {
+	return s.ListarPedidosEn(ctx, f, VistaDePedidos{})
+}
+
+// ListarPedidosEn es ListarPedidos con la vista del tablero o del historial.
+func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedidos) ([]PedidoListado, error) {
 	var a argumentos
 	var cond []string
+	pie := ""
+	switch v.Vista {
+	case "tablero":
+		cond = append(cond, "(o.estado NOT IN ('entregado', 'cancelado') OR o.updated_at >= now() - interval '7 days')")
+	case "historial":
+		if f.Estado == "" || f.Estado == "todos" {
+			cond = append(cond, "o.estado IN ('entregado', 'cancelado')")
+		}
+		if v.Desde != "" {
+			cond = append(cond, "o.created_at >= ("+a.poner(v.Desde)+"::date AT TIME ZONE 'America/Argentina/Buenos_Aires')")
+		}
+		if v.Hasta != "" {
+			cond = append(cond, "o.created_at < (("+a.poner(v.Hasta)+"::date + 1) AT TIME ZONE 'America/Argentina/Buenos_Aires')")
+		}
+		pagina := v.Pagina
+		if pagina < 1 {
+			pagina = 1
+		}
+		pie = fmt.Sprintf(" LIMIT %d OFFSET %d", PorPaginaDeHistorial+1, (pagina-1)*PorPaginaDeHistorial)
+	}
 	if f.Estado != "" && f.Estado != "todos" {
 		cond = append(cond, "o.estado::text = "+a.poner(f.Estado))
 	}
@@ -273,7 +310,7 @@ func (s *Servicio) ListarPedidos(ctx context.Context, f Filtros) ([]PedidoListad
 		LEFT JOIN branches b ON b.id = o.branch_id
 		LEFT JOIN (SELECT order_id, count(*)::int AS items FROM order_items GROUP BY order_id) conteo ON conteo.order_id = o.id`+
 		donde(cond)+`
-		ORDER BY o.created_at DESC`, a...)
+		ORDER BY o.created_at DESC`+pie, a...)
 	if err != nil {
 		return nil, err
 	}

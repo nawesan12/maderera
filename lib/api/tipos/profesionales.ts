@@ -325,6 +325,7 @@ export interface components {
             slug: string;
             titulo: string;
             resumen: string | null;
+            descripcion: string | null;
             lugar: string | null;
             sucursal: string | null;
             /** Format: date-time */

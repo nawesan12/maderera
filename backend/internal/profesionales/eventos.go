@@ -24,6 +24,7 @@ type EventoAdmin struct {
 	Slug              string     `json:"slug"`
 	Titulo            string     `json:"titulo"`
 	Resumen           *string    `json:"resumen"`
+	Descripcion       *string    `json:"descripcion"`
 	Lugar             *string    `json:"lugar"`
 	Sucursal          *string    `json:"sucursal"`
 	Inicia            time.Time  `json:"inicia"`
@@ -42,7 +43,7 @@ type EventoAdmin struct {
 
 // Eventos son todos, del más nuevo al más viejo.
 func (s *Servicio) Eventos(ctx context.Context) ([]EventoAdmin, error) {
-	filas, err := s.pool.Query(ctx, `select e.id, e.slug, e.titulo, e.resumen, e.lugar, b.name, e.inicia, e.termina, e.cupo, e.precio,
+	filas, err := s.pool.Query(ctx, `select e.id, e.slug, e.titulo, e.resumen, e.descripcion, e.lugar, b.name, e.inicia, e.termina, e.cupo, e.precio,
 		e.solo_profesionales, e.estado::text,
 		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado <> 'cancelada'),
 		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado in ('confirmada', 'asistio')),
@@ -58,7 +59,7 @@ func (s *Servicio) Eventos(ctx context.Context) ([]EventoAdmin, error) {
 	for filas.Next() {
 		var e EventoAdmin
 		var precio jsmath.Num
-		if err := filas.Scan(&e.ID, &e.Slug, &e.Titulo, &e.Resumen, &e.Lugar, &e.Sucursal, &e.Inicia, &e.Termina, &e.Cupo, &precio,
+		if err := filas.Scan(&e.ID, &e.Slug, &e.Titulo, &e.Resumen, &e.Descripcion, &e.Lugar, &e.Sucursal, &e.Inicia, &e.Termina, &e.Cupo, &precio,
 			&e.SoloProfesionales, &e.Estado, &e.Inscriptos, &e.Confirmados, &e.Reservados); err != nil {
 			return nil, err
 		}
@@ -114,6 +115,20 @@ func leerFecha(texto string) (time.Time, bool) {
 
 // CrearEvento da de alta un evento en borrador (publicar es otra decisión).
 func (s *Servicio) CrearEvento(ctx context.Context, f FormEvento) error {
+	_, err := s.GuardarEvento(ctx, f)
+	return err
+}
+
+// GuardarEvento da de alta el evento o, con id, lo corrige: una fecha mal
+// cargada obligaba a hacer otro. La dirección web (slug) no cambia, que ya
+// puede estar compartida. Devuelve si era una corrección.
+func (s *Servicio) GuardarEvento(ctx context.Context, f FormEvento) (bool, error) {
+	editar := f.ID != ""
+	err := s.guardarEvento(ctx, f)
+	return editar, err
+}
+
+func (s *Servicio) guardarEvento(ctx context.Context, f FormEvento) error {
 	inicia, ok := leerFecha(f.Inicia)
 	if !ok {
 		return invalido("La fecha no es válida.")
@@ -132,6 +147,18 @@ func (s *Servicio) CrearEvento(ctx context.Context, f FormEvento) error {
 	}
 	if math.IsNaN(precio) || math.IsInf(precio, 0) || precio < 0 {
 		return invalido("Revisá el precio.")
+	}
+	if f.ID != "" {
+		r, err := s.pool.Exec(ctx, `update events set titulo = $2, resumen = $3, descripcion = $4, lugar = $5, inicia = $6,
+			termina = $7, cupo = $8, precio = $9, solo_profesionales = $10, updated_at = now() where id = $1`,
+			f.ID, f.Titulo, f.Resumen, f.Descripcion, f.Lugar, inicia, termina, f.Cupo, jsmath.Fijo2(precio), f.SoloProfesionales)
+		if err != nil {
+			return err
+		}
+		if r.RowsAffected() == 0 {
+			return invalido("No encontramos ese evento. Recargá la pantalla.")
+		}
+		return nil
 	}
 	// Slug único: dos capacitaciones con el mismo nombre en años distintos
 	// son habituales.

@@ -202,8 +202,12 @@ func (a *API) CrearEvento(ctx context.Context, r profesionalesapi.CrearEventoReq
 	if err := l.Problema(); err != nil {
 		return nil, err
 	}
-	if err := a.s.CrearEvento(ctx, f); err != nil {
+	editado, err := a.s.GuardarEvento(ctx, f)
+	if err != nil {
 		return nil, err
+	}
+	if editado {
+		return listo("Evento actualizado."), nil
 	}
 	return listo("Evento creado como borrador. Revisalo y publicalo."), nil
 }

@@ -4,6 +4,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/zodjs"
+	"time"
 )
 
 // El alta de un presupuesto desde el panel (crearPresupuesto de
@@ -25,6 +26,9 @@ type CabeceraDePresupuesto struct {
 	SellerID         *string `json:"sellerId,omitempty"`
 	Notas            *string `json:"notas,omitempty"`
 	DiasValidez      float64 `json:"diasValidez"`
+	// NecesitaPara es el día que el cliente lo necesita (AAAA-MM-DD): ordena
+	// la lista de presupuestos, y el alta no lo pedía.
+	NecesitaPara *time.Time `json:"necesitaPara,omitempty"`
 }
 
 // LineaDePresupuesto es una línea ya leída.
@@ -88,6 +92,11 @@ func leerCabecera(m map[string]any) (CabeceraDePresupuesto, *ErrorDeAlta) {
 	c.Notas = l.Cadena("notas", zodjs.Texto{Opcional: true, Recortar: true, Max: 1000})
 	if d := l.Numero("diasValidez", zodjs.Num{Coerce: true, Defecto: zodjs.F(DiasDeValidez)}, zodjs.Entero(), zodjs.Min(1), zodjs.Max(180)); d != nil {
 		c.DiasValidez = *d
+	}
+	if t := l.Cadena("necesitaPara", zodjs.Texto{Opcional: true, Recortar: true, Max: 10}); t != nil && *t != "" {
+		if d, err := time.ParseInLocation("2006-01-02", *t, argentina); err == nil {
+			c.NecesitaPara = &d
+		}
 	}
 	if campo, msj := l.Primero(); msj != "" {
 		return c, &ErrorDeAlta{campo, msj}

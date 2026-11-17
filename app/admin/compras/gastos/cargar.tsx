@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { sucursalPropuesta } from "../sucursal-propuesta";
 import {
   ArrowRightLeft,
   Banknote,
@@ -90,7 +91,7 @@ export function CargarGasto({
   sucursales,
   proveedores,
 }: {
-  sucursales: { id: string; nombre: string; conTurno: boolean }[];
+  sucursales: { id: string; nombre: string; conTurno: boolean; deLaSesion: boolean }[];
   proveedores: { id: string; nombre: string }[];
 }) {
   const router = useRouter();
@@ -103,7 +104,8 @@ export function CargarGasto({
   const [importe, setImporte] = useState("");
   const [medio, setMedio] = useState("efectivo");
   const [circuito, setCircuito] = useState<"blanco" | "negro">("blanco");
-  const [branchId, setBranchId] = useState(sucursales[0]?.id ?? "");
+  // La caja de quien carga, si se sabe (sucursalPropuesta); si no, se elige.
+  const [branchId, setBranchId] = useState(() => sucursalPropuesta(sucursales));
   const [supplierId, setSupplierId] = useState("");
 
   const enEfectivo = medio === "efectivo";
@@ -281,7 +283,11 @@ export function CargarGasto({
               })
             }
             disabled={
-              enCurso || !descripcion.trim() || Number(importe || 0) <= 0
+              enCurso ||
+              !descripcion.trim() ||
+              Number(importe || 0) <= 0 ||
+              // Sin sucursal, el efectivo no saldría de ninguna caja (y Go no avisa).
+              (enEfectivo && sucursales.length > 0 && !branchId)
             }
             className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >

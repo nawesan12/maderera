@@ -155,6 +155,7 @@ export default async function GastosPage({
           id: s.id,
           nombre: s.nombre,
           conTurno: Boolean(s.turnoAbierto),
+          deLaSesion: s.deLaSesion,
         }))}
         proveedores={proveedores.map((p) => ({ id: p.id, nombre: p.nombre }))}
       />

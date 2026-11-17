@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { variantesParaPedir } from "@/lib/dal/admin/recepciones";
-import { sucursalesConCaja } from "@/lib/dal/admin/caja";
+import { sucursalesParaGasto } from "@/lib/dal/admin/gastos";
 import { importeParaEditar } from "@/lib/formato";
 import { FormularioOrden } from "./formulario";
 
@@ -32,7 +32,7 @@ export default async function NuevaOrdenPage({
 
   const [proveedores, sucursales, variantes] = await Promise.all([
     proveedoresParaElegir(),
-    sucursalesConCaja(),
+    sucursalesParaGasto(),
     pedidos.length > 0
       ? variantesParaPedir(pedidos.map((p) => p.variantId))
       : Promise.resolve([]),
@@ -86,7 +86,7 @@ export default async function NuevaOrdenPage({
 
       <FormularioOrden
         proveedores={proveedores}
-        sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
+        sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre, deLaSesion: s.deLaSesion }))}
         renglonesIniciales={renglones.length > 0 ? renglones : undefined}
       />
     </div>

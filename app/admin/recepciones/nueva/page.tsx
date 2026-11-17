@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
-import { sucursalesConCaja } from "@/lib/dal/admin/caja";
+import { sucursalesParaGasto } from "@/lib/dal/admin/gastos";
 import { FormularioRecepcion } from "./formulario";
 
 export const metadata: Metadata = { title: "Nueva recepción" };
@@ -13,7 +13,7 @@ export default async function NuevaRecepcionPage() {
 
   const [proveedores, sucursales] = await Promise.all([
     proveedoresParaElegir(),
-    sucursalesConCaja(),
+    sucursalesParaGasto(),
   ]);
 
   return (
@@ -37,7 +37,7 @@ export default async function NuevaRecepcionPage() {
 
       <FormularioRecepcion
         proveedores={proveedores}
-        sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
+        sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre, deLaSesion: s.deLaSesion }))}
       />
     </div>
   );

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { puedeEntrar } from "@/lib/roles";
 import { notFound } from "next/navigation";
 import { Hoja, MUESTRA_DEL_BUILD } from "../../preparando";
 import { getSession } from "@/lib/dal/session";
@@ -45,7 +46,12 @@ async function Contenido({
 
   if (!sesion) notFound();
 
-  if (sesion.role !== "staff") {
+  // Del personal, quien entra a las fichas de clientes, como pide Go: la
+  // lectura va con el secreto interno, así que si no se mira acá el depósito
+  // y el aserradero veían la cuenta corriente de cualquiera.
+  if (sesion.role === "staff") {
+    if (!puedeEntrar("/admin/clientes", sesion.staffRole)) notFound();
+  } else {
     const cliente = await clienteDeLaSesion();
     if (!cliente || cliente.id !== id) notFound();
   }

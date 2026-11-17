@@ -79,9 +79,12 @@ export function ResolverSolicitud({
         {clienteExistente && (
           <p className="flex items-start gap-2 rounded-lg bg-brand-cream/60 p-3 text-base">
             <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-green" />
-            Ya existe la ficha <strong>{clienteExistente.nombre}</strong> con ese
-            CUIT. Se marca esa como profesional en lugar de crear una nueva, para
-            no partir su cuenta corriente en dos.
+            <span>
+              Ya existe la ficha <strong>{clienteExistente.nombre}</strong> con ese
+              CUIT. Si el correo coincide, se usa esa; si no, se crea otra: el CUIT
+              solo no prueba que sea la misma persona. Confirmalo con el cliente y
+              uní las fichas desde su ficha.
+            </span>
           </p>
         )}
 

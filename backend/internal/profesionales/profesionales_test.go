@@ -234,16 +234,19 @@ func TestSolicitudYAprobacion(t *testing.T) {
 		t.Fatalf("límite: %d %v", st, p)
 	}
 	st, p := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/profesionales/aprobacion", map[string]any{"id": sol, "priceListId": lista, "limiteCredito": "1.500.000"})
-	// Pidió el acceso sin cuenta: la aprobación le crea una sin clave.
-	if st != 200 || p["ok"] != "Ana Pérez quedó habilitado. Como no tenía cuenta, le creamos una: mandale el link de acceso desde la lista de aprobados." {
+	// Pidió el acceso sin cuenta: la aprobación le crea una sin clave. El
+	// CUIT es de una ficha del mostrador con otro correo: el CUIT es público,
+	// así que no alcanza para darle esa ficha (con su cuenta corriente) a
+	// quien lo escribió. Se avisa y la ficha queda como estaba.
+	if st != 200 || !strings.HasPrefix(p["ok"].(string), "Ana Pérez quedó habilitado. Como no tenía cuenta, le creamos una: mandale el link de acceso desde la lista de aprobados.") ||
+		!strings.Contains(p["ok"].(string), "Ese CUIT ya está en la ficha de Carpintería Pérez, con otro correo: no se unieron") {
 		t.Fatalf("aprobar: %d %v", st, p)
 	}
-	// Ganó la ficha del mostrador: profesional, con la lista, el límite y los datos de contacto nuevos.
-	if f := e.uno(t, `select tipo::text || '/' || rubro || '/' || price_list_id || '/' || limite_credito || '/' || email from customers where id = $1`, ficha); f != "profesional/carpintero/"+lista+"/1500000.00/ana@prueba.test" {
-		t.Fatalf("la ficha: %s", f)
+	if f := e.uno(t, `select tipo::text || '/' || coalesce(user_id, '-') || '/' || email from customers where id = $1`, ficha); f != "particular/-/viejo@prueba.test" {
+		t.Fatalf("la ficha del mostrador cambió: %s", f)
 	}
-	if n := e.uno(t, `select count(*)::text from customers`); n != "1" { // ni el personal ni la cuenta nueva suman ficha
-		t.Fatalf("fichas: %s", n)
+	if f := e.uno(t, `select tipo::text || '/' || rubro || '/' || price_list_id || '/' || limite_credito || '/' || email from customers where id <> $1`, ficha); f != "profesional/carpintero/"+lista+"/1500000.00/ana@prueba.test" {
+		t.Fatalf("la ficha nueva: %s", f)
 	}
 	if !strings.Contains(e.buzon.asuntos(), "ana@prueba.test: Tu acceso profesional está activo") || !strings.Contains(e.buzon.mensajes[1].HTML, "1.500.000") {
 		t.Fatalf("bienvenida: %s", e.buzon.asuntos())
@@ -269,7 +272,9 @@ func TestAprobarConDosFichas(t *testing.T) {
 			correo, cu = "web2@prueba.test", "30-58944525-9"
 		}
 		cl, userID, fichaWeb := e.web(t, correo)
-		mostrador := e.uno(t, `insert into customers (nombre, cuit) values ('Del mostrador', $1) returning id`, cu)
+		// El mostrador ya tenía su correo: eso, y no el CUIT solo, es lo que
+		// deja unir las dos fichas.
+		mostrador := e.uno(t, `insert into customers (nombre, cuit, email) values ('Del mostrador', $1, $2) returning id`, cu, correo)
 		if conHistoria {
 			e.uno(t, `insert into orders (numero, contacto_nombre, customer_id, estado, total) values ('PED-1', 'x', $1, 'entregado', 1) returning id`, fichaWeb)
 		}

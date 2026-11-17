@@ -277,11 +277,27 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 		var porCuit, porUsuario *Candidata
 		if sol.cuit != nil && *sol.cuit != "" {
 			var c Candidata
-			err := tx.QueryRow(ctx, `select id, user_id from customers where active and cuit = any($1::text[]) limit 1`, cuit.Variantes(*sol.cuit)).
-				Scan(&c.ID, &c.UserID)
-			if err == nil {
-				porCuit = &c
-			} else if !errors.Is(err, pgx.ErrNoRows) {
+			var correo, nombreFicha *string
+			err := tx.QueryRow(ctx, `select id, user_id, email, nombre from customers where active and cuit = any($1::text[]) limit 1`, cuit.Variantes(*sol.cuit)).
+				Scan(&c.ID, &c.UserID, &correo, &nombreFicha)
+			switch {
+			case err == nil:
+				// El CUIT es público (está en el padrón): solo no alcanza para
+				// darle a alguien la ficha de otro, con su cuenta corriente y
+				// sus comprobantes. Se une si la ficha ya es de esa cuenta o
+				// si el correo coincide con el que la ficha ya tenía.
+				mismaCuenta := sol.userID != nil && c.UserID != nil && *c.UserID == *sol.userID
+				mismoCorreo := correo != nil && strings.EqualFold(strings.TrimSpace(*correo), strings.TrimSpace(sol.email))
+				if mismaCuenta || mismoCorreo {
+					porCuit = &c
+				} else {
+					n := "otra ficha"
+					if nombreFicha != nil {
+						n = "la ficha de " + *nombreFicha
+					}
+					advertencia = "Ese CUIT ya está en " + n + ", con otro correo: no se unieron, para que nadie se quede con una cuenta ajena. Si es la misma persona, confirmalo con el cliente y uní las fichas a mano."
+				}
+			case !errors.Is(err, pgx.ErrNoRows):
 				return err
 			}
 		}

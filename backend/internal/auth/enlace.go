@@ -119,6 +119,16 @@ func (s *Servicio) UsarEnlace(ctx context.Context, w http.ResponseWriter, token,
 	if !ok {
 		return nil, "", ErrEnlaceInvalido
 	}
+	// El personal entra solo con clave. Se mira al emitir y otra vez acá: una
+	// cuenta que pasó a ser del personal con un link de activación vigente
+	// (7 días) abría el panel sin clave.
+	var personal bool
+	if err := s.pool.QueryRow(ctx, `SELECT exists(SELECT 1 FROM profiles WHERE user_id = $1 AND role = 'staff')`, userID).Scan(&personal); err != nil {
+		return nil, "", err
+	}
+	if personal {
+		return nil, "", ErrEnlaceInvalido
+	}
 	sesion, err := s.crearSesion(ctx, s.q, userID, ip, agente, true)
 	if err != nil {
 		// La cuenta se borró después de mandar el enlace.

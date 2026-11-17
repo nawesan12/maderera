@@ -42,7 +42,9 @@ func Pedido(ctx context.Context, tx pgx.Tx) (string, error) {
 func Presupuesto(ctx context.Context, tx pgx.Tx, ahora time.Time) (string, error) {
 	anio := ahora.Year()
 	n, err := maximo(ctx, tx, SeriePresupuestos,
-		`SELECT coalesce(max(nullif(regexp_replace(numero, '\D', '', 'g'), '')::bigint % 10000), 0)::int FROM quotes WHERE numero LIKE $1`,
+		// El número es lo que va después del año: con `% 10000` sobre todos
+		// los dígitos, el P-2026-10000 contaba como 0 y la serie se repetía.
+		`SELECT coalesce(max(nullif(regexp_replace(split_part(numero, '-', 3), '\D', '', 'g'), '')::bigint), 0)::int FROM quotes WHERE numero LIKE $1`,
 		fmt.Sprintf("P-%d-%%", anio))
 	return fmt.Sprintf("P-%d-%04d", anio, n+1), err
 }

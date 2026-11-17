@@ -4,6 +4,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import { libroIvaCompras } from "@/lib/dal/admin/compras-fiscal";
 import { leerPeriodoMensual } from "@/lib/periodos";
+import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import {
   daCreditoFiscal,
   nombreComprobanteCompra,
@@ -54,7 +55,7 @@ export default async function LibroIvaComprasPage({
     <div className="space-y-6">
       <div>
         <Link
-          href="/admin/arca"
+          href={`/admin/arca?periodo=${periodo.clave}`}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -72,17 +73,9 @@ export default async function LibroIvaComprasPage({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <form className="flex gap-2">
-              <input
-                type="month"
-                name="periodo"
-                defaultValue={periodo.clave}
-                className="tabular h-11 rounded-lg border border-linea bg-card px-3 text-base"
-              />
-              <button className="h-11 rounded-lg border border-linea px-4 text-base font-medium">
-                Ver
-              </button>
-            </form>
+            {/* El mismo selector de mes que el libro de ventas, el cierre y
+                los impuestos: antes eran tres formas distintas de elegirlo. */}
+            <SelectorDeMes actual={periodo.clave} />
 
             <a
               href={`/admin/arca/libro-iva-compras/exportar?periodo=${periodo.clave}`}

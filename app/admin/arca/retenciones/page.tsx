@@ -60,7 +60,7 @@ export default async function RetencionesSufridasPage({
     <div className="space-y-6">
       <div>
         <Link
-          href="/admin/arca"
+          href={`/admin/arca?periodo=${periodo.clave}`}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />

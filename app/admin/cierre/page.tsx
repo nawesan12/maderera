@@ -11,6 +11,7 @@ import {
 import { leerPeriodoMensual } from "@/lib/periodos";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
 import { ExportarAsientos } from "./exportar-asientos";
+import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 
 export const metadata: Metadata = { title: "Cierre del mes" };
 
@@ -62,18 +63,7 @@ export default async function CierrePage({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <form className="flex gap-2">
-            <input
-              type="month"
-              name="periodo"
-              aria-label="Mes del cierre"
-              defaultValue={periodo.clave}
-              className="tabular h-11 rounded-lg border border-linea bg-card px-3 text-base"
-            />
-            <button className="h-11 rounded-lg border border-linea px-4 text-base font-medium">
-              Ver
-            </button>
-          </form>
+          <SelectorDeMes actual={periodo.clave} etiqueta="Mes del cierre" />
 
           <ExportarAsientos periodo={periodo.clave} rotos={rotos.length} />
         </div>

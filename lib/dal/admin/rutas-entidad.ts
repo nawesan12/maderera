@@ -34,7 +34,7 @@ const LISTADOS: Record<string, string> = {
   caja: "/admin/caja",
   cheque: "/admin/cheques",
   condicion_proveedor: "/admin/proveedores",
-  configuracion: "/admin/arca",
+  configuracion: "/admin/arca/configuracion",
   descuento_pago: "/admin/precios/formas-de-pago",
   factura_compra: "/admin/compras/facturas",
   gasto: "/admin/compras/gastos",

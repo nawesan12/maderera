@@ -19,6 +19,14 @@ export async function metricasDelResumen(periodo?: Periodo) {
   );
 }
 
+/**
+ * Lo que el dueño pregunta al abrir el panel: me deben, debo, cheques de la
+ * semana, plata de hoy y ganancia del mes (backend/internal/reportes/dueno.go).
+ */
+export async function numerosDelDueno() {
+  return datos(await (await api()).GET("/api/v1/admin/inicio/dueno"));
+}
+
 /** Ventas por sucursal de los últimos seis meses, para el gráfico. */
 export async function ventasPorSucursal() {
   return datos(await (await api()).GET("/api/v1/admin/inicio/ventas-por-sucursal"));

@@ -69,6 +69,7 @@ func (o respuesta) VisitResumenDelMesResponse(w http.ResponseWriter) error      
 func (o respuesta) VisitActividadRecienteResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 func (o respuesta) VisitMetricasDelResumenResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitPendientesDelRolResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+func (o respuesta) VisitNumerosDelDuenoResponse(w http.ResponseWriter) error    { return o.escribir(w) }
 func (o respuesta) VisitStockParaReponerResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitInicioVentasPorSucursalResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
@@ -253,6 +254,10 @@ func (a *API) ResumenDelMes(ctx context.Context, r reportesapi.ResumenDelMesRequ
 	}
 	p := a.mes(r.Params.Periodo)
 	v, err := a.s.ResumenDelMes(ctx, p.Desde, p.Hasta)
+	if err != nil {
+		return nil, err
+	}
+	v.Resultado, err = a.s.ResultadoDelMes(ctx, p)
 	return ok(v), err
 }
 
@@ -270,6 +275,15 @@ func (a *API) MetricasDelResumen(ctx context.Context, r reportesapi.MetricasDelR
 		return nil, err
 	}
 	v, err := a.s.MetricasDelResumen(ctx, a.periodo(r.Params.Periodo))
+	return ok(v), err
+}
+
+// NumerosDelDueno: me deben, debo, cheques, plata y ganancia. Solo el admin.
+func (a *API) NumerosDelDueno(ctx context.Context, _ reportesapi.NumerosDelDuenoRequestObject) (reportesapi.NumerosDelDuenoResponseObject, error) {
+	if err := numerosDelNegocio(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.NumerosDelDueno(ctx)
 	return ok(v), err
 }
 

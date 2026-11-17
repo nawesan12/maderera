@@ -233,6 +233,9 @@ type ResumenDelMes struct {
 	RetencionesSufridas    Totales       `json:"retencionesSufridas"`
 	// PosicionIva: positivo, hay que depositar; negativo, saldo a favor.
 	PosicionIva float64 `json:"posicionIva"`
+	// Resultado: ventas netas − costo − gastos, contra el mes anterior (lo
+	// llena la API con ResultadoDelMes).
+	Resultado ResultadoComparado `json:"resultado"`
 }
 
 // ResumenDelMes es resumenDelMes: las notas de crédito restan, y en las

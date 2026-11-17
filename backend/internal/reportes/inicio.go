@@ -287,6 +287,10 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	if err != nil {
 		return nil, err
 	}
+	o, err := s.otrosPendientes(ctx, ve, ahora)
+	if err != nil {
+		return nil, err
+	}
 	f := []Pendiente{}
 	agregar := func(n int, p Pendiente) {
 		if n > 0 {
@@ -318,6 +322,20 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		Detalle: detalle("Quedó en el mínimo o por debajo: hay que reponerlo"), Href: "/admin/stock"})
 	agregar(c.resenas, Pendiente{Clave: "resenas", Texto: uno(c.resenas, "reseña sin moderar", "reseñas sin moderar"),
 		Detalle: detalle("No se publican hasta que alguien las mire"), Href: "/admin/contenido"})
+	agregar(o.whatsapp, Pendiente{Clave: "whatsapp", Texto: uno(o.whatsapp, "conversación de WhatsApp sin contestar", "conversaciones de WhatsApp sin contestar"),
+		Href: "/admin/whatsapp?filtro=sin-leer", Urgente: true})
+	agregar(o.presupuestosVencidos, Pendiente{Clave: "presupuestos-sin-responder", Texto: uno(o.presupuestosVencidos,
+		"presupuesto pasado del plazo de respuesta", "presupuestos pasados del plazo de respuesta"),
+		Href: "/admin/presupuestos?estado=abiertos", Urgente: true})
+	agregar(o.pedidosAtrasados, Pendiente{Clave: "pedidos-atrasados", Texto: uno(o.pedidosAtrasados, "pedido atrasado", "pedidos atrasados"),
+		Href: "/admin/pedidos", Urgente: true})
+	agregar(o.cortesSinRetirar, Pendiente{Clave: "cortes-sin-retirar", Texto: uno(o.cortesSinRetirar, "corte terminado sin retirar", "cortes terminados sin retirar"),
+		Href: "/admin/cortes"})
+	agregar(o.clientesConVencido, Pendiente{Clave: "deuda-vencida", Texto: uno(o.clientesConVencido, "cliente con deuda vencida", "clientes con deuda vencida"),
+		Href: "/admin/clientes", Urgente: true})
+	agregar(o.sinPrecio, Pendiente{Clave: "catalogo-precio", Texto: uno(o.sinPrecio, "medida sin precio", "medidas sin precio"), Href: "/admin/precios"})
+	agregar(o.sinFoto, Pendiente{Clave: "catalogo-foto", Texto: uno(o.sinFoto, "medida sin foto", "medidas sin foto"), Href: "/admin/productos"})
+	agregar(o.sinStock, Pendiente{Clave: "catalogo-stock", Texto: uno(o.sinStock, "medida sin stock", "medidas sin stock"), Href: "/admin/stock"})
 	sort.SliceStable(f, func(i, j int) bool {
 		if f[i].Urgente != f[j].Urgente {
 			return f[i].Urgente
@@ -325,4 +343,78 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		return f[j].Cantidad-f[i].Cantidad < 0
 	})
 	return f, nil
+}
+
+// otros son los pendientes que se sumaron en la revisión del 17/11: los que
+// esperan una respuesta (WhatsApp, presupuestos), lo que se prometió y no
+// salió (pedidos, cortes), la deuda vencida y, mientras la tienda está
+// apagada, cuánto falta para cargar el catálogo.
+type otros struct {
+	whatsapp, presupuestosVencidos, pedidosAtrasados, cortesSinRetirar, clientesConVencido int
+	sinPrecio, sinFoto, sinStock                                                           int
+}
+
+// otrosPendientes los cuenta, solo para lo que el rol puede abrir.
+//
+//   - Presupuesto sin responder: pendiente o en revisión con el plazo de
+//     respuesta (responde_hasta, el compromiso de lib/plazos.ts) cumplido.
+//   - Pedido atrasado: sin entregar, y el presupuesto del que salió decía
+//     para cuándo lo necesitaba el cliente (necesita_para) y ese día pasó.
+//     Un pedido no guarda una fecha comprometida propia: el que no salió de
+//     un presupuesto con fecha no puede estar atrasado.
+//   - Corte sin retirar: terminado (retirado es otro estado).
+//   - WhatsApp sin contestar: abierta con mensajes sin leer, el mismo
+//     criterio que el número del menú.
+//   - El catálogo: medidas activas de productos activos sin precio en la
+//     lista general, sin ninguna foto del producto o sin unidades en ninguna
+//     sucursal. Solo con la tienda apagada (tienda_activa ≠ «si»): es la carga
+//     que la clienta tiene que terminar antes de vender en línea; con la
+//     tienda andando, una medida sin stock es la reposición.
+func (s *Servicio) otrosPendientes(ctx context.Context, ve func(string) bool, ahora time.Time) (otros, error) {
+	var o otros
+	var tienda string
+	hoy := InicioDelDia(ahora)
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+		  CASE WHEN $1 THEN (SELECT count(*)::int FROM whatsapp_conversaciones WHERE estado = 'abierta' AND no_leidos > 0) ELSE 0 END,
+		  CASE WHEN $2 THEN (SELECT count(*)::int FROM quotes WHERE estado IN ('pendiente', 'revision') AND responde_hasta < $5) ELSE 0 END,
+		  CASE WHEN $3 THEN (SELECT count(*)::int FROM orders o JOIN quotes q ON q.id = o.quote_id
+		                     WHERE o.estado NOT IN ('entregado', 'cancelado') AND q.necesita_para < $6) ELSE 0 END,
+		  CASE WHEN $4 THEN (SELECT count(*)::int FROM cutting_orders WHERE estado = 'terminado') ELSE 0 END,
+		  coalesce((SELECT valor FROM site_settings WHERE clave = 'tienda_activa'), 'si')`,
+		ve("/admin/whatsapp"), ve("/admin/presupuestos"), ve("/admin/pedidos"), ve("/admin/cortes"), ahora, hoy).
+		Scan(&o.whatsapp, &o.presupuestosVencidos, &o.pedidosAtrasados, &o.cortesSinRetirar, &tienda)
+	if err != nil {
+		return o, err
+	}
+	if tienda != "si" && (ve("/admin/precios") || ve("/admin/productos") || ve("/admin/stock")) {
+		err = s.pool.QueryRow(ctx, `
+			WITH medidas AS (
+			  SELECT v.id, v.product_id FROM product_variants v JOIN products p ON p.id = v.product_id WHERE p.active AND v.active
+			)
+			SELECT
+			  CASE WHEN $1 THEN (SELECT count(*)::int FROM medidas m WHERE NOT EXISTS (
+			    SELECT 1 FROM price_list_items i JOIN price_lists l ON l.id = i.price_list_id
+			    WHERE i.variant_id = m.id AND l.is_default AND i.price > 0)) ELSE 0 END,
+			  CASE WHEN $2 THEN (SELECT count(*)::int FROM medidas m WHERE NOT EXISTS (
+			    SELECT 1 FROM product_images f WHERE f.product_id = m.product_id)) ELSE 0 END,
+			  CASE WHEN $3 THEN (SELECT count(*)::int FROM medidas m WHERE NOT EXISTS (
+			    SELECT 1 FROM inventory i WHERE i.variant_id = m.id AND i.qty > 0)) ELSE 0 END`,
+			ve("/admin/precios"), ve("/admin/productos"), ve("/admin/stock")).Scan(&o.sinPrecio, &o.sinFoto, &o.sinStock)
+		if err != nil {
+			return o, err
+		}
+	}
+	if ve("/admin/clientes") {
+		deudas, err := s.deudaDeClientes(ctx, ahora)
+		if err != nil {
+			return o, err
+		}
+		for _, d := range deudas {
+			if d[1] > 0.005 {
+				o.clientesConVencido++
+			}
+		}
+	}
+	return o, nil
 }

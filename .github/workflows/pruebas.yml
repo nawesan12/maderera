@@ -1,0 +1,71 @@
+# Las pruebas, en cada push y en cada pull request.
+#
+# Hasta el 16/11/2026 no corría nada solo: los tests de Go contra la base
+# (numeración sin huecos, candados, concurrencia de la caja) se salteaban si
+# nadie ponía MJBJ_PRUEBA_BASE a mano, y un error llegaba a `main` sin que lo
+# frenara nadie. Acá corren con un Postgres de verdad, la misma versión que
+# producción.
+#
+# Los E2E de Playwright no van acá: necesitan la API, Next y la base sembrada
+# (ver playwright.config.ts). Se corren antes de desplegar.
+
+name: Pruebas
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: mjbj
+          POSTGRES_PASSWORD: mjbj
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mjbj"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      MJBJ_PRUEBA_BASE: postgres://mjbj:mjbj@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: go vet ./...
+      - run: go test ./...
+      # Lo generado tiene que coincidir con lo que está en el repo: un
+      # contrato cambiado sin regenerar rompe el front en ejecución.
+      - name: sqlc al día
+        run: |
+          go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
+          git diff --exit-code -- internal/sqlc
+
+  ts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm test

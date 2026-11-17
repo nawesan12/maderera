@@ -282,6 +282,55 @@ func diferencia(a, b string) (float64, error) {
 	return float64(distintos) / float64(len(pa)), nil
 }
 
+// TestActualizarGolden reescribe con lo que arma Go los PDF del golden de
+// los documentos que se apartaron del TS a propósito. Desde ahí el golden de
+// ese documento es el de Go: vigila que no cambie sin querer, y correr
+// scripts/golden/pdf.ts con ese documento devolvería la versión vieja.
+// Correr solo después de mirar a ojo los PDF que cambian:
+//
+//	PDF_ACTUALIZAR=comprobante,remito go test ./internal/pdf -run TestActualizarGolden
+//
+// Lo que cambió a propósito, por documento:
+//   - comprobante (30/10): en la B y la C el precio unitario es el final, y
+//     la B a consumidor final lleva la leyenda de la ley 27.743.
+//   - comprobante, presupuesto, recibo, remito y lista-precios (17/11): los
+//     importes con centavos (Moneda2), lo que pide la RG 1415 en la factura,
+//     las fechas de los instantes en hora argentina, los nombres, domicilios
+//     y descripciones largos en párrafo dentro de su columna, la hoja de
+//     continuación del recibo con su número y el remito que aprovecha la
+//     hoja entera.
+func TestActualizarGolden(t *testing.T) {
+	pedido := os.Getenv("PDF_ACTUALIZAR")
+	if pedido == "" {
+		t.Skip("solo con PDF_ACTUALIZAR=<documento>,<documento>")
+	}
+	for _, doc := range strings.Split(pedido, ",") {
+		gen, ok := generadores[doc]
+		if !ok {
+			t.Fatalf("%s: no hay generador", doc)
+		}
+		casos, _ := filepath.Glob(filepath.Join(dirGolden, doc, "*.json"))
+		for _, c := range casos {
+			crudo, err := os.ReadFile(c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var caso casoGolden
+			if err := json.Unmarshal(crudo, &caso); err != nil {
+				t.Fatal(err)
+			}
+			b, err := gen(caso.Datos, caso.Ahora)
+			if err != nil {
+				t.Fatalf("%s: %v", c, err)
+			}
+			if err := os.WriteFile(strings.TrimSuffix(c, ".json")+".pdf", b, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		t.Logf("%s: %d casos reescritos", doc, len(casos))
+	}
+}
+
 // El logo de Go es una copia del de public/: tienen que ser el mismo archivo.
 func TestLogoIgualAlDePublic(t *testing.T) {
 	publico, err := os.ReadFile("../../../public/marca/logo-maderera.png")

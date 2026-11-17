@@ -137,7 +137,7 @@ func (a *API) MiListaDePreciosPdf(ctx context.Context, _ documentosapi.MiListaDe
 	}
 	return archivo{
 		tipo:        "application/pdf",
-		disposicion: `inline; filename="lista-precios-mjbj-` + ahora.UTC().Format("2006-01-02") + `.pdf"`,
+		disposicion: `inline; filename="lista-precios-mjbj-` + ahora.In(pdf.Argentina).Format("2006-01-02") + `.pdf"`,
 		cache:       "no-store, private",
 		datos:       b,
 	}, nil
@@ -158,7 +158,9 @@ func (a *API) ExportarPrecios(ctx context.Context, r documentosapi.ExportarPreci
 	if err != nil {
 		return nil, err
 	}
-	fecha := ahora.UTC().Format("2006-01-02")
+	// El día argentino, como el «Vigente al» de adentro (en UTC, lo bajado
+	// después de las 21 decía mañana).
+	fecha := ahora.In(pdf.Argentina).Format("2006-01-02")
 
 	if r.Params.Formato != nil && *r.Params.Formato == documentosapi.Pdf {
 		profesional := texto(r.Params.Lista) == "profesional"

@@ -123,7 +123,7 @@ func ResumenCuenta(d DatosResumenCuenta, hoy time.Time) ([]byte, error) {
 	if saldo < 0 || (saldo == 0 && 1/saldo < 0) {
 		saldo = -saldo // Math.abs, también del -0
 	}
-	h.Escribir(Pesos(saldo), Opciones{X: Margen + Mm(4), Y: y - Mm(10.5), Tamano: 16, Fuente: Negrita})
+	h.Escribir(Moneda2(saldo), Opciones{X: Margen + Mm(4), Y: y - Mm(10.5), Tamano: 16, Fuente: Negrita})
 	if r.Saldo < 0 {
 		h.Escribir("a favor del cliente", Opciones{X: Margen + Mm(4) + Mm(38), Y: y - Mm(10.5), Tamano: 8, Color: TintaSuave})
 	}
@@ -138,7 +138,7 @@ func ResumenCuenta(d DatosResumenCuenta, hoy time.Time) ([]byte, error) {
 	x := AnchoA4 - Margen - float64(anchoTramo*float64(len(conDeuda)))
 	for _, t := range conDeuda {
 		h.Escribir(t.Etiqueta, Opciones{X: x, Y: y - Mm(4), Tamano: 7, Color: TintaSuave})
-		h.Escribir(Pesos(t.Monto), Opciones{X: x, Y: y - Mm(10.5), Tamano: 10, Fuente: Negrita})
+		h.Escribir(Moneda2(t.Monto), Opciones{X: x, Y: y - Mm(10.5), Tamano: 10, Fuente: Negrita})
 		x += anchoTramo
 	}
 
@@ -196,7 +196,7 @@ func ResumenCuenta(d DatosResumenCuenta, hoy time.Time) ([]byte, error) {
 		if m.Referencia != nil {
 			referencia = *m.Referencia
 		}
-		celdas := []string{FechaLocal(m.Fecha), concepto, referencia, Pesos(m.Monto), Pesos(m.Saldo)}
+		celdas := []string{FechaLocal(m.Fecha), concepto, referencia, Moneda2(m.Monto), Moneda2(m.Saldo)}
 
 		cx := Margen
 		for i, celda := range celdas {

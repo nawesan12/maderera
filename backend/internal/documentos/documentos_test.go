@@ -43,7 +43,8 @@ type entorno struct {
 }
 
 // El reloj de las pruebas: el 5/3/2026 a las 22:30 de Buenos Aires, que en
-// UTC ya es el 6/3 (la fecha de vigencia tiene que decir 5/3).
+// UTC ya es el 6/3 (la fecha de vigencia y la del nombre del archivo
+// tienen que decir 5/3).
 var reloj = time.Date(2026, 3, 6, 1, 30, 0, 0, time.UTC)
 
 func armar(t *testing.T) *entorno {
@@ -189,7 +190,7 @@ func TestMiListaDePreciosPdf(t *testing.T) {
 	ana := e.cliente(t, "ana@prueba.test")
 	r := pedir(t, ana, u)
 	if r.estado != 200 || r.tipo != "application/pdf" || r.cache != "no-store, private" ||
-		r.disp != `inline; filename="lista-precios-mjbj-2026-03-06.pdf"` {
+		r.disp != `inline; filename="lista-precios-mjbj-2026-03-05.pdf"` {
 		t.Fatalf("la general: %d %q %q %q", r.estado, r.tipo, r.disp, r.cache)
 	}
 	if txt, ok := textoDelPDF(t, r.cuerpo); ok {
@@ -236,7 +237,7 @@ func TestExportarPrecios(t *testing.T) {
 	}
 	adm := e.staff(t, "admin@prueba.test", "admin")
 	r := pedir(t, adm, u+"?buscar=fenol")
-	if r.estado != 200 || r.tipo != "text/csv; charset=utf-8" || r.disp != `attachment; filename="precios-mjbj-2026-03-06.csv"` {
+	if r.estado != 200 || r.tipo != "text/csv; charset=utf-8" || r.disp != `attachment; filename="precios-mjbj-2026-03-05.csv"` {
 		t.Fatalf("csv: %d %q %q", r.estado, r.tipo, r.disp)
 	}
 	csv := string(r.cuerpo)
@@ -249,7 +250,7 @@ func TestExportarPrecios(t *testing.T) {
 	}
 
 	r = pedir(t, adm, u+"?formato=pdf&lista=profesional")
-	if r.estado != 200 || r.tipo != "application/pdf" || r.disp != `inline; filename="precios-mjbj-2026-03-06.pdf"` {
+	if r.estado != 200 || r.tipo != "application/pdf" || r.disp != `inline; filename="precios-mjbj-2026-03-05.pdf"` {
 		t.Fatalf("pdf: %d %q %q", r.estado, r.tipo, r.disp)
 	}
 	if txt, ok := textoDelPDF(t, r.cuerpo); ok {

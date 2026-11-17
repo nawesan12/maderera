@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"mjbj/internal/formato"
+	"mjbj/internal/sucursales"
 )
 
 // La plantilla de los correos (lib/email/plantillas.ts → envolver): HTML con
@@ -186,8 +187,7 @@ func Envolver(sitio string, o Opciones) (html, texto string) {
       ` + si(o.Cierre != "", `<p style="margin:18px 0 0;font-size:14px;color:`+grisSuave+`;line-height:1.6;">`+o.Cierre+`</p>`) + `
     </td></tr>
     <tr><td style="padding:18px 28px;background:` + crema + `;border-top:1px solid ` + borde + `;font-family:` + fuente + `;font-size:12px;color:` + grisSuave + `;line-height:1.6;">
-      Casa Central · Av. Juan B. Justo 4153 · (0223) 474-3328<br>
-      Aserradero · Canosa 61 · (0223) 483-0535<br>
+      ` + pieSucursalesHTML() + `
       <a href="` + sitio + `" style="color:` + naranjaOscuro + `;text-decoration:none;">` + host + `</a>
       ` + pie + `
     </td></tr>
@@ -228,9 +228,29 @@ func Envolver(sitio string, o Opciones) (html, texto string) {
 	if o.Cierre != "" {
 		t = append(t, "\n"+sinEtiquetas(o.Cierre))
 	}
-	t = append(t, "\n—\nMaderera Juan B. Justo · Mar del Plata\nCasa Central (0223) 474-3328 · Aserradero (0223) 483-0535")
+	t = append(t, "\n—\nMaderera Juan B. Justo · Mar del Plata\n"+pieSucursalesTexto())
 	if o.Pie != nil {
 		t = append(t, "\n"+o.Pie.Texto)
 	}
 	return html, strings.Join(t, "\n")
+}
+
+// El pie con las dos sucursales sale de internal/sucursales, como el del
+// presupuesto en PDF: antes estaba escrito acá con dos teléfonos que no eran
+// los publicados («(0223) 474-3328» y «(0223) 483-0535») y «Canosa 61» por
+// «Diagonal Canosa 61». Igual que pieSucursales de lib/email/plantillas.ts.
+func pieSucursalesHTML() string {
+	var b strings.Builder
+	for _, s := range sucursales.Publicadas {
+		b.WriteString(s.Nombre + " · " + s.Direccion + " · " + s.Telefono + "<br>")
+	}
+	return b.String()
+}
+
+func pieSucursalesTexto() string {
+	partes := make([]string, len(sucursales.Publicadas))
+	for i, s := range sucursales.Publicadas {
+		partes[i] = s.Nombre + " " + s.Telefono
+	}
+	return strings.Join(partes, " · ")
 }

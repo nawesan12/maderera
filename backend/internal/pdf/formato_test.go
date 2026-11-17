@@ -84,7 +84,8 @@ func TestFechaDeHoyEnArgentina(t *testing.T) {
 func TestLimpiar(t *testing.T) {
 	for entrada, quiero := range map[string]string{
 		"“Pino” 3’ — 2–4… ok": `"Pino" 3' - 2-4... ok`,
-		"emoji 😀 y € y ™":     "emoji  y  y ",
+		"emoji 😀 y € y ™":     "emoji  y € y ™", // «€» y «™» están en WinAnsi
+		"viñeta • y ‰":        "viñeta • y ‰",
 		"ñandú ÁÉÍÓÚ ÿ":       "ñandú ÁÉÍÓÚ ÿ",
 		"tab\tsalto\nfin":     "tabsaltofin",
 	} {

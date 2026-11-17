@@ -22,10 +22,3 @@ func Desagregar(precioFinal, alicuota float64) Desagregado {
 	neto := jsmath.Redondear2Eps(total / (1 + alicuota/100))
 	return Desagregado{Neto: neto, Iva: jsmath.Redondear2Eps(total - neto), Total: total, Alicuota: alicuota}
 }
-
-// sucursalesPublicadas son las de lib/sucursales.ts (SUCURSALES), con lo
-// que imprime el pie del presupuesto.
-var sucursalesPublicadas = []struct{ nombre, direccion, telefono string }{
-	{"Casa Central", "Av. Juan B. Justo 4153, Mar del Plata", "223 590-3118"},
-	{"Aserradero", "Diagonal Canosa 61, Mar del Plata", "223 506-0817"},
-}

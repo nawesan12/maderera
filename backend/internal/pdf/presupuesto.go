@@ -4,13 +4,15 @@ import (
 	"time"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/sucursales"
 )
 
 // El presupuesto en PDF (lib/pdf/presupuesto.ts), con el modelo del papel
 // que la maderera imprime hoy: número, vendedor, código de cliente,
 // condición de IVA, neto e IVA discriminados para un inscripto o un
 // monotributista, las leyendas de la casa y el pie con las dos sucursales y
-// los datos para transferir.
+// los datos para transferir. Los importes van con centavos (el TS los
+// redondeaba a pesos) y las fechas en la hora argentina.
 //
 // Lo piden los datos de internal/pedidos (tanda 5): la ruta
 // /api/v1/presupuestos/{id}/pdf, que usan app/api/presupuestos/[id]/pdf
@@ -100,12 +102,14 @@ func Presupuesto(d DatosPresupuesto, _ time.Time) ([]byte, error) {
 	h.Escribir(p.Numero, Opciones{X: derecha, Y: y, Tamano: 13, Fuente: Mono, Derecha: true})
 	y -= 13
 
-	cabecera := []string{"Fecha " + FechaSolaCorta(p.CreatedAt), "", ""}
+	// La fecha y el vencimiento son instantes: en la hora argentina (con
+	// FechaSolaCorta, en UTC, uno de las 23:30 salía con la de mañana).
+	cabecera := []string{"Fecha " + FechaCortaHoy(p.CreatedAt), "", ""}
 	if p.Sucursal != "" {
 		cabecera[1] = "Emitido en " + p.Sucursal
 	}
 	if p.ValidoHasta != nil {
-		cabecera[2] = "Vale hasta el " + FechaSolaCorta(*p.ValidoHasta)
+		cabecera[2] = "Vale hasta el " + FechaCortaHoy(*p.ValidoHasta)
 	}
 	for _, t := range cabecera {
 		if t == "" {
@@ -117,9 +121,6 @@ func Presupuesto(d DatosPresupuesto, _ time.Time) ([]byte, error) {
 
 	// Cliente
 	cursor := minimo(finEmisor, y) - Mm(8)
-	altoCaja := Mm(24)
-	h.Recuadro(Margen, cursor-altoCaja, AnchoA4-Margen*2, altoCaja, 0.5, ColorLinea)
-	h.Escribir("CLIENTE", Opciones{X: Margen + 8, Y: cursor - 12, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
 
 	o := func(s, def string) string {
 		if s == "" {
@@ -127,7 +128,6 @@ func Presupuesto(d DatosPresupuesto, _ time.Time) ([]byte, error) {
 		}
 		return s
 	}
-	columna := (AnchoA4 - Margen*2) / 3
 	cliente := p.Cliente
 	if p.Empresa != "" {
 		cliente = p.Cliente + " · " + p.Empresa
@@ -139,29 +139,26 @@ func Presupuesto(d DatosPresupuesto, _ time.Time) ([]byte, error) {
 			iva = c
 		}
 	}
-	datos := [][2]string{
+	altoCaja := h.CuadroDeDatos("CLIENTE", []Dato{
 		{"Cliente", cliente},
 		{"Cód. cliente", o(p.ClienteCodigo, "—")},
 		{"Vendedor", o(p.Vendedor, o(p.Asesor, "—"))},
 		{"Domicilio", o(p.ClienteDireccion, "—")},
 		{"CUIT", o(p.ClienteCuit, "—")},
 		{"IVA", iva},
-	}
-	for i, dato := range datos {
-		x := Margen + 8 + float64(float64(i%3)*columna)
-		yFila := cursor - 26 - float64(i/3*20)
-		h.Escribir(dato[0], Opciones{X: x, Y: yFila, Tamano: 6, Color: TintaSuave})
-		h.Escribir(dato[1], Opciones{X: x, Y: yFila - 9, Tamano: 8.5, Fuente: Negrita})
-	}
+	}, cursor, 3)
 
 	cursor -= altoCaja + Mm(6)
 
 	// Detalle
-	colCantidad := Margen + Mm(16)
-	colUnidad := Margen + Mm(34)
+	// Los importes con centavos son más anchos que los redondeados: el precio
+	// y el total tienen cada uno su ancho, y lo que no entra se achica.
+	colCantidad, anchoCantidad := Margen+Mm(16), Mm(15)
+	colUnidad, anchoUnidad := Margen+Mm(34), Mm(16)
 	colDescripcion := Margen + Mm(38)
-	colPrecio := derecha - Mm(28)
-	anchoDescripcion := colPrecio - colDescripcion - Mm(30)
+	colPrecio, anchoPrecio := derecha-Mm(34), Mm(30)
+	anchoTotal := Mm(32)
+	anchoDescripcion := colPrecio - anchoPrecio - Mm(2) - colDescripcion
 
 	encabezado := func(c float64) float64 {
 		cab := Opciones{Y: c, Tamano: 6, Fuente: Negrita, Color: TintaSuave}
@@ -179,16 +176,18 @@ func Presupuesto(d DatosPresupuesto, _ time.Time) ([]byte, error) {
 
 	for _, item := range p.Items {
 		antes := cursor
-		cursor = presupuestoEspacio(h, cursor, Mm(14))
+		renglones := len(Renglones(item.Descripcion, Helvetica, 9, anchoDescripcion))
+		renglonesUnidad := len(Renglones(Unidad(item.Unidad), Helvetica, 7, anchoUnidad))
+		cursor = presupuestoEspacio(h, cursor, maximo(Mm(14), maximo(float64(renglones)*9*1.35, float64(renglonesUnidad)*9)+4))
 		if cursor != antes {
 			cursor = encabezado(cursor)
 		}
 
-		h.Escribir(numeroJS(num(item.Cantidad)), Opciones{X: colCantidad, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true})
-		h.Escribir(Unidad(item.Unidad), Opciones{X: colUnidad, Y: cursor, Tamano: 7, Color: TintaSuave, Derecha: true})
-		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: colDescripcion, Y: cursor, Tamano: 9}, Ancho: anchoDescripcion})
-		h.Escribir(MonedaDe(item.PrecioUnitario), Opciones{X: colPrecio, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true})
-		h.Escribir(MonedaDe(item.Subtotal), Opciones{X: derecha, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true})
+		h.EscribirNumero(numeroJS(num(item.Cantidad)), Opciones{X: colCantidad, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, anchoCantidad)
+		altoUnidad := h.EscribirParrafo(Unidad(item.Unidad), Parrafo{Opciones: Opciones{X: colUnidad, Y: cursor, Tamano: 7, Color: TintaSuave, Derecha: true}, Ancho: anchoUnidad, Interlineado: 9})
+		alto := maximo(altoUnidad, h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: colDescripcion, Y: cursor, Tamano: 9}, Ancho: anchoDescripcion}))
+		h.EscribirNumero(Moneda2De(item.PrecioUnitario), Opciones{X: colPrecio, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, anchoPrecio)
+		h.EscribirNumero(Moneda2De(item.Subtotal), Opciones{X: derecha, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, anchoTotal)
 
 		cursor -= maximo(alto, 12) + 4
 		h.Raya(cursor+8, 0, Color{})
@@ -208,7 +207,7 @@ func Presupuesto(d DatosPresupuesto, _ time.Time) ([]byte, error) {
 	}
 	var filas []filaTotal
 	if descuento > 0.009 {
-		filas = append(filas, filaTotal{"Subtotal", Moneda(subtotal), false}, filaTotal{"Descuento", "-" + Moneda(descuento), false})
+		filas = append(filas, filaTotal{"Subtotal", Moneda2(subtotal), false}, filaTotal{"Descuento", "-" + Moneda2(descuento), false})
 	}
 	if discrimina {
 		neto, ivaTotal := 0.0, 0.0
@@ -227,19 +226,32 @@ func Presupuesto(d DatosPresupuesto, _ time.Time) ([]byte, error) {
 			neto *= factor
 			ivaTotal = total - neto
 		}
-		filas = append(filas, filaTotal{"Neto gravado", Moneda(neto), false}, filaTotal{"IVA", Moneda(ivaTotal), false})
+		filas = append(filas, filaTotal{"Neto gravado", Moneda2(neto), false}, filaTotal{"IVA", Moneda2(ivaTotal), false})
 	}
-	filas = append(filas, filaTotal{"TOTAL", Moneda(total), true})
+	filas = append(filas, filaTotal{"TOTAL", Moneda2(total), true})
 
-	for _, f := range filas {
-		et := Opciones{X: colPrecio, Y: cursor, Tamano: 8.5, Fuente: Normal, Color: TintaSuave, Derecha: true}
-		va := Opciones{X: derecha, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}
-		baja := 12.0
+	// Las etiquetas se alinean a la derecha de una misma columna, que se
+	// corre a la izquierda si el importe más ancho no entra: un total de diez
+	// cifras en negrita se metía debajo de «TOTAL».
+	opciones := func(f filaTotal) (et, va Opciones, baja float64) {
+		et = Opciones{Y: cursor, Tamano: 8.5, Fuente: Normal, Color: TintaSuave, Derecha: true}
+		va = Opciones{X: derecha, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}
+		baja = 12
 		if f.fuerte {
 			et.Tamano, et.Fuente, et.Color = 10, Negrita, Tinta
 			va.Tamano, va.Fuente = 11, Negrita
 			baja = 16
 		}
+		return et, va, baja
+	}
+	xEtiquetas := colPrecio
+	for _, f := range filas {
+		_, va, _ := opciones(f)
+		xEtiquetas = minimo(xEtiquetas, derecha-va.Fuente.Ancho(Limpiar(f.valor), va.Tamano)-Mm(4))
+	}
+	for _, f := range filas {
+		et, va, baja := opciones(f)
+		et.X, et.Y, va.Y = xEtiquetas, cursor, cursor
 		h.Escribir(f.etiqueta, et)
 		h.Escribir(f.valor, va)
 		cursor -= baja
@@ -277,11 +289,11 @@ func Presupuesto(d DatosPresupuesto, _ time.Time) ([]byte, error) {
 	}
 	anchoPie := (AnchoA4 - Margen*2) / columnas
 
-	for i, s := range sucursalesPublicadas {
+	for i, s := range sucursales.Publicadas {
 		x := Margen + float64(float64(i)*anchoPie)
-		h.Escribir(s.nombre, Opciones{X: x, Y: yPie - 8, Tamano: 7, Fuente: Negrita})
-		h.Escribir(s.direccion, Opciones{X: x, Y: yPie - 17, Tamano: 6.5, Color: TintaSuave})
-		h.Escribir("Tel: "+s.telefono, Opciones{X: x, Y: yPie - 25, Tamano: 6.5, Color: TintaSuave})
+		h.Escribir(s.Nombre, Opciones{X: x, Y: yPie - 8, Tamano: 7, Fuente: Negrita})
+		h.Escribir(s.Direccion, Opciones{X: x, Y: yPie - 17, Tamano: 6.5, Color: TintaSuave})
+		h.Escribir("Tel: "+s.Telefono, Opciones{X: x, Y: yPie - 25, Tamano: 6.5, Color: TintaSuave})
 	}
 
 	if b := d.Banco; b != nil {

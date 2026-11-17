@@ -1,53 +1,12 @@
 package pdf
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
-
-// TestActualizarGoldenComprobante reescribe los PDF del golden del
-// comprobante que no son A con lo que arma Go. Lo del TS dejó de ser la referencia en dos
-// cosas, a propósito: en la B y la C el precio unitario es el final (con
-// IVA), y la B a consumidor final lleva la leyenda de la ley 27.743. Correr
-// solo después de revisar a ojo el cambio:
-//
-//	PDF_ACTUALIZAR_COMPROBANTE=1 go test ./internal/pdf -run TestActualizarGoldenComprobante
-func TestActualizarGoldenComprobante(t *testing.T) {
-	if os.Getenv("PDF_ACTUALIZAR_COMPROBANTE") == "" {
-		t.Skip("solo con PDF_ACTUALIZAR_COMPROBANTE=1")
-	}
-	casos, _ := filepath.Glob(filepath.Join(dirGolden, "comprobante", "*.json"))
-	for _, c := range casos {
-		crudo, err := os.ReadFile(c)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var caso casoGolden
-		if err := json.Unmarshal(crudo, &caso); err != nil {
-			t.Fatal(err)
-		}
-		// La A no cambió: se queda con el PDF del TS.
-		var d DatosComprobante
-		if err := json.Unmarshal(caso.Datos, &d); err != nil {
-			t.Fatal(err)
-		}
-		if comprobanteLetra(d.Comprobante.Tipo) == "A" {
-			continue
-		}
-		b, err := decodificar(Comprobante)(caso.Datos, caso.Ahora)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(strings.TrimSuffix(c, ".json")+".pdf", b, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	t.Logf("%d comprobantes reescritos", len(casos))
-}
 
 // La B a consumidor final: la leyenda de la ley 27.743 con el IVA contenido,
 // y el precio unitario final, que por la cantidad da el subtotal.

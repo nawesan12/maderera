@@ -96,14 +96,17 @@ var comillas = strings.NewReplacer(
 )
 
 // Limpiar saca lo que Helvetica no sabe dibujar, como limpiar() del TS:
-// las comillas tipográficas y las rayas pasan a sus versiones simples, y se
-// borra todo lo que no esté entre el espacio y la «ÿ» de WinAnsi.
+// las comillas tipográficas y las rayas pasan a sus versiones simples (así
+// quedan iguales a las de los golden), y se borra lo que WinAnsi no tiene y
+// los caracteres de control. El TS borraba todo lo que no estuviera entre
+// el espacio y la «ÿ», y se llevaba puestos «€», «•» y «™», que WinAnsi sí
+// tiene (en 0x80, 0x95 y 0x99).
 func Limpiar(texto string) string {
 	t := comillas.Replace(texto)
 	var b strings.Builder
 	b.Grow(len(t))
 	for _, r := range t {
-		if (r >= 0x20 && r <= 0x7e) || (r >= 0xa1 && r <= 0xff) {
+		if _, ok := winAnsi[r]; ok && r >= 0x20 && r != 0xa0 {
 			b.WriteRune(r)
 		}
 	}
@@ -190,6 +193,100 @@ func (h *Hoja) EscribirParrafo(texto string, o Parrafo) float64 {
 		h.Escribir(l, op)
 	}
 	return float64(len(lineas)) * alto
+}
+
+// TamanoQueEntra es el tamaño, a lo sumo tamano y no menos de minimo, con
+// el que el texto entra en el ancho. Se redondea para abajo a la centésima:
+// justo en el borde, el ancho medido con ese tamaño podía pasarse por el
+// último decimal.
+func TamanoQueEntra(texto string, fuente Fuente, tamano, ancho, minimo float64) float64 {
+	a := fuente.Ancho(Limpiar(texto), tamano)
+	if a <= ancho || a == 0 {
+		return tamano
+	}
+	return maximo(minimo, math.Floor(tamano*ancho/a*100)/100)
+}
+
+// EscribirNumero escribe un importe o una cantidad en una columna de ancho
+// fijo: si no entra se achica, hasta la mitad del tamaño, pero nunca se
+// corta (un número cortado dice otro número). Con Derecha, el ancho se
+// cuenta hacia la izquierda de X.
+func (h *Hoja) EscribirNumero(texto string, o Opciones, ancho float64) {
+	o.Tamano = TamanoQueEntra(texto, o.Fuente, o.tamano(), ancho, o.tamano()/2)
+	h.Escribir(texto, o)
+}
+
+// EscribirEnAncho escribe un renglón de texto que no puede pasar de ancho
+// (el de su columna): primero se achica un poco, hasta el 85 % del tamaño,
+// y si así tampoco entra se corta con puntos suspensivos.
+func (h *Hoja) EscribirEnAncho(texto string, o Opciones, ancho float64) {
+	o.Tamano = TamanoQueEntra(texto, o.Fuente, o.tamano(), ancho, float64(o.tamano()*0.85))
+	h.Escribir(Elipsis(texto, o.Fuente, o.Tamano, ancho), o)
+}
+
+// Elipsis corta el texto con «...» para que entre en el ancho. Si ya entra,
+// lo devuelve limpio y entero.
+func Elipsis(texto string, fuente Fuente, tamano, ancho float64) string {
+	limpio := Limpiar(texto)
+	if fuente.Ancho(limpio, tamano) <= ancho {
+		return limpio
+	}
+	r := []rune(limpio)
+	for len(r) > 0 {
+		r = r[:len(r)-1]
+		corto := strings.TrimRight(string(r), " ") + "..."
+		if fuente.Ancho(corto, tamano) <= ancho {
+			return corto
+		}
+	}
+	return ""
+}
+
+// Dato es un par etiqueta y valor de CuadroDeDatos.
+type Dato struct{ Etiqueta, Valor string }
+
+// CuadroDeDatos es el recuadro con los datos del destinatario, del cliente
+// o de quien retira: un título chico y los datos en columnas, la etiqueta
+// arriba y el valor en negrita abajo. El valor va en párrafo dentro de su
+// columna, así una razón social o un domicilio largos bajan de renglón en
+// vez de pisar el dato de al lado, y el recuadro crece lo que haga falta.
+// Devuelve el alto del recuadro.
+func (h *Hoja) CuadroDeDatos(titulo string, datos []Dato, y float64, columnas int) float64 {
+	const (
+		tamanoValor  = 8.5
+		interlineado = 10.0
+	)
+	anchoColumna := (AnchoA4 - Margen*2) / float64(columnas)
+	anchoValor := anchoColumna - 12
+
+	// Cuántos renglones lleva cada fila: los del valor más largo.
+	var altos []float64
+	total := 0.0
+	for i := 0; i < len(datos); i += columnas {
+		renglones := 1
+		for _, d := range datos[i:min(i+columnas, len(datos))] {
+			renglones = max(renglones, len(Renglones(d.Valor, Negrita, tamanoValor, anchoValor)))
+		}
+		alto := 20 + float64(float64(renglones-1)*interlineado)
+		altos = append(altos, alto)
+		total += alto
+	}
+	altoCuadro := 22 + total
+
+	h.Recuadro(Margen, y-altoCuadro, AnchoA4-Margen*2, altoCuadro, 0.5, ColorLinea)
+	h.Escribir(titulo, Opciones{X: Margen + 8, Y: y - 12, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
+
+	yFila := y - 26
+	for i, d := range datos {
+		x := Margen + 8 + float64(float64(i%columnas)*anchoColumna)
+		h.Escribir(d.Etiqueta, Opciones{X: x, Y: yFila, Tamano: 6, Color: TintaSuave})
+		h.EscribirParrafo(d.Valor, Parrafo{Opciones: Opciones{X: x, Y: yFila - 9, Tamano: tamanoValor, Fuente: Negrita},
+			Ancho: anchoValor, Interlineado: interlineado})
+		if i%columnas == columnas-1 {
+			yFila -= altos[i/columnas]
+		}
+	}
+	return altoCuadro
 }
 
 // EscribirCentrado es escribirCentrado(): centrado en el eje centroX.

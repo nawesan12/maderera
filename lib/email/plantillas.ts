@@ -1,6 +1,7 @@
 import { formatearPrecio } from "@/lib/formato";
 import { urlBase } from "@/lib/pagos/config";
 import { enlaceDeSeguimiento } from "@/lib/seguimiento";
+import { SUCURSALES } from "@/lib/sucursales";
 
 /** El enlace de seguimiento, absoluto: en un correo no sirve uno relativo. */
 function urlAbsolutaDelPedido(numero: string, token: string): string {
@@ -181,8 +182,7 @@ export function envolver(opciones: OpcionesEnvoltura): {
       ${opciones.cierre ? `<p style="margin:18px 0 0;font-size:14px;color:${MARCA.grisSuave};line-height:1.6;">${opciones.cierre}</p>` : ""}
     </td></tr>
     <tr><td style="padding:18px 28px;background:${MARCA.crema};border-top:1px solid ${MARCA.borde};font-family:${FUENTE};font-size:12px;color:${MARCA.grisSuave};line-height:1.6;">
-      Casa Central · Av. Juan B. Justo 4153 · (0223) 474-3328<br>
-      Aserradero · Canosa 61 · (0223) 483-0535<br>
+      ${SUCURSALES.map((s) => `${s.nombre} · ${s.direccion} · ${s.telefono}<br>`).join("")}
       <a href="${sitio}" style="color:${MARCA.naranjaOscuro};text-decoration:none;">${new URL(sitio).host}</a>
       ${opciones.pie ? `<br><br>${opciones.pie.html}` : ""}
     </td></tr>
@@ -210,7 +210,10 @@ export function envolver(opciones: OpcionesEnvoltura): {
     opciones.total != null ? `\nTotal: ${formatearPrecio(opciones.total)}` : null,
     opciones.cta ? `\n${opciones.cta.texto}: ${opciones.cta.url}` : null,
     opciones.cierre ? `\n${opciones.cierre.replace(/<[^>]+>/g, "")}` : null,
-    "\n—\nMaderera Juan B. Justo · Mar del Plata\nCasa Central (0223) 474-3328 · Aserradero (0223) 483-0535",
+    // Los teléfonos salen de lib/sucursales.ts (antes estaban escritos acá, y
+    // no eran los publicados). Go hace lo mismo con internal/sucursales.
+    "\n—\nMaderera Juan B. Justo · Mar del Plata\n" +
+      SUCURSALES.map((s) => `${s.nombre} ${s.telefono}`).join(" · "),
     opciones.pie ? `\n${opciones.pie.texto}` : null,
   ]
     .filter((linea) => linea !== null)

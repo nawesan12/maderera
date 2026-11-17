@@ -36,6 +36,64 @@ func Moneda(v float64) string {
 // texto de la base.
 func MonedaDe(texto string) string { return Moneda(jsmath.Numero(texto)) }
 
+// Moneda2 es la plata con centavos, «$ 1.234,56» («-$ 0,00»): la de los
+// documentos donde el importe vale como tal —la factura, el recibo, el
+// presupuesto—. Moneda redondea a pesos y sirve para una lista de precios;
+// en una factura A con neto 101,45 imprimía «Neto $ 101, IVA $ 21, total
+// $ 123», y en una B «3 × $ 40 = $ 121».
+//
+// Es valor.toLocaleString("es-AR", {style: "currency", currency: "ARS",
+// minimumFractionDigits: 2}), la pesos() que repetían recibo.ts y
+// resumen-cuenta.ts. Ojo: Intl (ICU) no redondea el valor exacto del
+// double, como toFixed, sino su representación decimal más corta: 21021.995
+// es 21021.99499… en binario y toFixed da «21021.99», pero Intl lee
+// «21021.995» y da «21.022,00». Se redondea la mitad hacia afuera sobre esa
+// tira.
+func Moneda2(v float64) string {
+	if math.IsNaN(v) {
+		return "$ NaN"
+	}
+	signo := ""
+	if math.Signbit(v) {
+		signo = "-"
+	}
+	a := math.Abs(v)
+	if math.IsInf(a, 0) {
+		return signo + "$ ∞"
+	}
+	entero, dec := redondear2(a)
+	return signo + "$\u00a0" + formato.Miles(entero) + "," + dec
+}
+
+// Moneda2De es Moneda2 para un importe que llega como texto de la base.
+func Moneda2De(texto string) string { return Moneda2(jsmath.Numero(texto)) }
+
+// redondear2 redondea un importe sin signo a dos decimales como Moneda2 (la
+// mitad hacia arriba sobre la tira más corta) y lo devuelve partido en
+// entero y centavos. El importe en letras del recibo sale de acá, así dice
+// lo mismo que los números.
+func redondear2(a float64) (string, string) {
+	entero, dec, _ := strings.Cut(strconv.FormatFloat(a, 'f', -1, 64), ".")
+	dec += "000"
+	digitos := []byte(entero + dec[:2])
+	if dec[2] >= '5' {
+		i := len(digitos) - 1
+		for ; i >= 0; i-- {
+			if digitos[i] == '9' {
+				digitos[i] = '0'
+				continue
+			}
+			digitos[i]++
+			break
+		}
+		if i < 0 {
+			digitos = append([]byte{'1'}, digitos...)
+		}
+	}
+	n := len(digitos)
+	return string(digitos[:n-2]), string(digitos[n-2:])
+}
+
 // Argentina es la hora de los documentos.
 //
 // El TS formatea con la zona del proceso, y el contenedor de Next no tiene
@@ -55,14 +113,18 @@ func FechaLocal(t time.Time) string {
 	return strconv.Itoa(t.Day()) + "/" + strconv.Itoa(int(t.Month())) + "/" + strconv.Itoa(t.Year())
 }
 
-// FechaSolaCorta es fechaSolaCorta de lib/formato.ts: «05/03/26», en UTC
-// (es para fechas que son un día y no un instante).
+// FechaSolaCorta es fechaSolaCorta de lib/formato.ts: «05/03/26», en UTC.
+// Es para fechas que son un día y no un instante (las que llegan ya como el
+// día argentino a medianoche UTC). Un instante —el created_at de un
+// presupuesto o de un remito— va con FechaCortaHoy: el servidor corre en
+// UTC y lo de las 21 en adelante salía con la fecha de mañana.
 func FechaSolaCorta(t time.Time) string {
 	return t.UTC().Format("02/01/06")
 }
 
-// FechaCortaHoy es fechaSolaCorta.format(new Date()): la fecha de hoy. Va
-// en la hora argentina por lo mismo que FechaLocal.
+// FechaCortaHoy es fechaSolaCorta.format(new Date()): «05/03/26» de un
+// instante (hoy, o cuándo se creó algo), en la hora argentina por lo mismo
+// que FechaLocal.
 func FechaCortaHoy(t time.Time) string {
 	return t.In(Argentina).Format("02/01/06")
 }

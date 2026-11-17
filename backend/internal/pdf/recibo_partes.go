@@ -5,15 +5,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"mjbj/internal/formato"
-	"mjbj/internal/jsmath"
 )
 
 // Helpers que recibo.ts y resumen-cuenta.ts importan de otros módulos,
 // copiados acá hasta que se muden sus tandas: NOMBRE_DEL_MEDIO e
-// importeEnLetras son de lib/cobros/partes.ts (commit 9a17128), y Pesos es
-// la función pesos() que repiten los dos documentos.
+// importeEnLetras son de lib/cobros/partes.ts (commit 9a17128). La pesos()
+// que repetían los dos documentos es Moneda2, en formato.go.
 
 // nombreDelMedio es NOMBRE_DEL_MEDIO de lib/cobros/partes.ts.
 var nombreDelMedio = map[string]string{
@@ -26,53 +23,6 @@ var nombreDelMedio = map[string]string{
 	"tarjeta_credito": "Tarjeta de crédito",
 	"mercado_pago":    "Mercado Pago",
 	"retencion":       "Retención",
-}
-
-// Pesos es valor.toLocaleString("es-AR", {style: "currency", currency:
-// "ARS", minimumFractionDigits: 2}): «$ 1.234,56», «-$ 0,00».
-//
-// Ojo: Intl (ICU) no redondea el valor exacto del double, como toFixed, sino
-// su representación decimal más corta: 21021.995 es 21021.99499… en binario
-// y toFixed da «21021.99», pero Intl lee «21021.995» y da «21.022,00». Se
-// redondea la mitad hacia afuera sobre esa tira.
-func Pesos(v float64) string {
-	if math.IsNaN(v) {
-		return "$ NaN"
-	}
-	signo := ""
-	if math.Signbit(v) {
-		signo = "-"
-	}
-	a := math.Abs(v)
-	if math.IsInf(a, 0) {
-		return signo + "$ ∞"
-	}
-	entero, dec := pesosRedondear2(strconv.FormatFloat(a, 'f', -1, 64))
-	return signo + "$ " + formato.Miles(entero) + "," + dec
-}
-
-// pesosRedondear2 redondea una tira decimal sin signo a dos decimales, la
-// mitad hacia arriba, y la devuelve partida en entero y decimales.
-func pesosRedondear2(s string) (string, string) {
-	entero, dec, _ := strings.Cut(s, ".")
-	dec += "000"
-	digitos := []byte(entero + dec[:2])
-	if dec[2] >= '5' {
-		i := len(digitos) - 1
-		for ; i >= 0; i-- {
-			if digitos[i] == '9' {
-				digitos[i] = '0'
-				continue
-			}
-			digitos[i]++
-			break
-		}
-		if i < 0 {
-			digitos = append([]byte{'1'}, digitos...)
-		}
-	}
-	n := len(digitos)
-	return string(digitos[:n-2]), string(digitos[n-2:])
 }
 
 // fechaLocalUTC es toLocaleDateString("es-AR", {timeZone: "UTC"}).
@@ -95,9 +45,7 @@ var (
 	}
 )
 
-// letrasHastaMil es hastaMil. Con n de mil o más (los millones de un importe
-// de mil millones) CENTENAS[c] es undefined en el TS y queda vacío: se
-// reproduce.
+// letrasHastaMil es hastaMil: de 1 a 999.
 func letrasHastaMil(n float64) string {
 	if n == 0 {
 		return ""
@@ -142,40 +90,59 @@ func letrasApocopar(t string) string {
 
 // ImporteEnLetras es importeEnLetras de lib/cobros/partes.ts: «ciento
 // veinte mil con 50/100».
+//
+// Dos cosas cambiaron desde el TS, a propósito. Los centavos salen del mismo
+// redondeo que los números del recibo (Moneda2): antes 999,995 se imprimía
+// «$ 1.000,00» y en letras «novecientos noventa y nueve con 100/100», y
+// 2,675 era «$ 2,68» y «con 67/100». Y desde mil millones el TS perdía los
+// millones (1.234.567.890 decía «treinta y cuatro millones…»): ahora los
+// millones se escriben con sus miles, y arriba están los billones.
 func ImporteEnLetras(importe float64) string {
-	a := math.Abs(importe)
-	entero := math.Floor(a + 1e-9)
-	centavos := jsmath.Round(float64((a - entero) * 100))
+	enteroTexto, c := redondear2(math.Abs(importe))
+	entero, _ := strconv.ParseFloat(enteroTexto, 64)
 
-	millones := math.Floor(entero / 1_000_000)
-	miles := math.Floor(math.Mod(entero, 1_000_000) / 1000)
-	resto := math.Mod(entero, 1000)
+	billones := math.Floor(entero / 1e12)
+	millones := math.Floor(math.Mod(entero, 1e12) / 1e6)
+	resto := math.Mod(entero, 1e6)
 
 	var partes []string
-	if millones > 0 {
-		if millones == 1 {
-			partes = append(partes, "un millón")
-		} else {
-			partes = append(partes, letrasApocopar(letrasHastaMil(millones))+" millones")
-		}
+	switch {
+	case billones == 1:
+		partes = append(partes, "un billón")
+	case billones > 0:
+		partes = append(partes, letrasApocopar(letrasHastaMillon(billones))+" billones")
 	}
-	if miles > 0 {
-		if miles == 1 {
-			partes = append(partes, "mil")
-		} else {
-			partes = append(partes, letrasApocopar(letrasHastaMil(miles))+" mil")
-		}
+	switch {
+	case millones == 1:
+		partes = append(partes, "un millón")
+	case millones > 0:
+		partes = append(partes, letrasApocopar(letrasHastaMillon(millones))+" millones")
 	}
 	if resto > 0 {
-		partes = append(partes, letrasHastaMil(resto))
+		partes = append(partes, letrasHastaMillon(resto))
 	}
 	letras := "cero"
 	if len(partes) > 0 {
 		letras = strings.Join(partes, " ")
 	}
-	c := numeroJS(centavos)
-	for largoJS(c) < 2 {
-		c = "0" + c
-	}
 	return letras + " con " + c + "/100"
+}
+
+// letrasHastaMillon escribe un número de 1 a 999.999: «veintiún mil
+// doscientos». Con el uno final entero («veintiuno»): quien lo usa para los
+// millones lo apocopa.
+func letrasHastaMillon(n float64) string {
+	miles := math.Floor(n / 1000)
+	resto := math.Mod(n, 1000)
+	var partes []string
+	switch {
+	case miles == 1:
+		partes = append(partes, "mil")
+	case miles > 0:
+		partes = append(partes, letrasApocopar(letrasHastaMil(miles))+" mil")
+	}
+	if resto > 0 {
+		partes = append(partes, letrasHastaMil(resto))
+	}
+	return strings.Join(partes, " ")
 }

@@ -107,7 +107,7 @@ export async function certificadoDeRetencionPdf(
   });
 
   escribir(hoja, "Fecha", { x: columna, y, tamano: 8, color: TINTA_SUAVE });
-  escribir(hoja, datos.fecha.toLocaleDateString("es-AR"), {
+  escribir(hoja, datos.fecha.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" }), {
     x: columna,
     y: y - mm(5),
     tamano: 13,
@@ -231,7 +231,7 @@ export async function certificadoDeRetencionPdf(
 
   escribir(
     hoja,
-    `Retención practicada sobre el pago del ${datos.pago.fecha.toLocaleDateString("es-AR")} por ${datos.pago.medio}${
+    `Retención practicada sobre el pago del ${datos.pago.fecha.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })} por ${datos.pago.medio}${
       datos.pago.referencia ? ` (${datos.pago.referencia})` : ""
     }.`,
     { x: MARGEN, y, tamano: 8.5, color: TINTA_SUAVE },

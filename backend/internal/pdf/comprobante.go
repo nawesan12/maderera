@@ -10,8 +10,14 @@ import (
 // El comprobante fiscal en PDF (lib/pdf/comprobante.ts): la letra en
 // recuadro al centro, el IVA discriminado solo en la A, el QR únicamente
 // cuando hay CAE y la marca de agua cuando no la hay. Lo que cambió desde el
-// TS, a propósito: en la B y la C el precio unitario es el final, y la B a
-// consumidor final lleva la leyenda de la ley 27.743.
+// TS, a propósito: en la B y la C el precio unitario es el final; la B a
+// consumidor final lleva la leyenda de la ley 27.743; los importes van con
+// centavos (el TS los redondeaba a pesos: una A con neto 101,45 decía
+// «Neto $ 101, IVA $ 21, total $ 123»); el encabezado lleva lo que pide la
+// RG 1415 —la condición del emisor frente al IVA, el inicio de actividades
+// y el código del comprobante bajo la letra—, y un nombre, un domicilio o
+// una descripción largos bajan de renglón en vez de pisar la columna de al
+// lado.
 //
 // Espera a la tanda 7 (facturación ARCA): hoy lo llaman
 // app/api/comprobantes/[id]/pdf/route.ts, lib/notificaciones/fiscal.ts y
@@ -63,9 +69,11 @@ type ComprobantePdf struct {
 }
 
 // EmisorFiscal es el emisor del comprobante: el del encabezado más los
-// datos fiscales.
+// datos fiscales. InicioActividades es un día (el argentino, a medianoche
+// UTC, como las otras fechas del comprobante).
 type EmisorFiscal struct {
 	Emisor
+	CondicionIva      string     `json:"condicionIva"`
 	IngresosBrutos    string     `json:"ingresosBrutos"`
 	InicioActividades *time.Time `json:"inicioActividades"`
 }
@@ -118,19 +126,30 @@ func comprobanteNumero(puntoVenta, numero float64) string {
 	return rellenarJS(puntoVenta, 4) + "-" + rellenarJS(numero, 8)
 }
 
+// comprobanteCodigo es el código del comprobante que va bajo la letra
+// (RG 1415): «COD. 01» la factura A, «COD. 06» la B, «COD. 11» la C. Vacío
+// si el tipo no es uno de los nueve.
+func comprobanteCodigo(tipo string) string {
+	c, ok := codigoComprobante[tipo]
+	if !ok {
+		return ""
+	}
+	return "COD. " + rellenarJS(c, 2)
+}
+
 // precioImpreso es el precio unitario del renglón. En la A, el neto (el IVA
 // va en su columna); en la B y la C, que no discriminan, el final con IVA,
 // el mismo que da el subtotal impreso. El TS imprimía el neto en todas: en
 // la B, precio por cantidad no daba el subtotal.
 func precioImpreso(item ItemComprobante, discrimina bool) string {
 	if discrimina {
-		return MonedaDe(item.PrecioUnitario)
+		return Moneda2De(item.PrecioUnitario)
 	}
 	cantidad := jsmath.Numero(item.Cantidad)
 	if !(cantidad > 0) {
-		return MonedaDe(item.PrecioUnitario)
+		return Moneda2De(item.PrecioUnitario)
 	}
-	return Moneda(jsmath.Numero(item.Subtotal) / cantidad)
+	return Moneda2(jsmath.Numero(item.Subtotal) / cantidad)
 }
 
 // Comprobante arma el PDF del comprobante fiscal.
@@ -159,8 +178,26 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 	y := AltoA4 - Margen - 10
 	finEmisor := h.EncabezadoEmisor(emisor, y)
 
-	if d.Emisor != nil && d.Emisor.IngresosBrutos != "" {
-		h.Escribir("Ingresos Brutos "+d.Emisor.IngresosBrutos, Opciones{X: Margen, Y: finEmisor, Tamano: 7.5, Color: TintaSuave})
+	// Lo fiscal del emisor que pide la RG 1415, solo lo que está cargado.
+	if f := d.Emisor; f != nil {
+		var lineas []string
+		if f.CondicionIva != "" {
+			condicion, ok := condicionesComprobante[f.CondicionIva]
+			if !ok {
+				condicion = f.CondicionIva
+			}
+			lineas = append(lineas, "IVA "+condicion)
+		}
+		if f.IngresosBrutos != "" {
+			lineas = append(lineas, "Ingresos Brutos "+f.IngresosBrutos)
+		}
+		if f.InicioActividades != nil {
+			lineas = append(lineas, "Inicio de actividades "+FechaSolaCorta(*f.InicioActividades))
+		}
+		for _, l := range lineas {
+			h.EscribirEnAncho(l, Opciones{X: Margen, Y: finEmisor, Tamano: 7.5, Color: TintaSuave}, Mm(72))
+			finEmisor -= 10
+		}
 	}
 
 	// La letra, en recuadro al centro.
@@ -171,7 +208,7 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 
 	h.Recuadro(xCaja, yCaja, anchoCaja, altoCaja, 1.5, Color{})
 	h.EscribirCentrado(comprobanteLetra(c.Tipo), xCaja+anchoCaja/2, Opciones{Y: yCaja + Mm(5.5), Tamano: 26, Fuente: Negrita})
-	h.EscribirCentrado("COMPROBANTE", xCaja+anchoCaja/2, Opciones{Y: yCaja + Mm(2), Tamano: 5, Color: TintaSuave})
+	h.EscribirCentrado(comprobanteCodigo(c.Tipo), xCaja+anchoCaja/2, Opciones{Y: yCaja + Mm(2), Tamano: 6.5, Fuente: Negrita})
 
 	// Numeración y fechas
 	y = AltoA4 - Margen - 10
@@ -183,15 +220,12 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 	y -= 10
 	if c.FechaVencimiento != nil {
 		h.Escribir("Vencimiento "+FechaSolaCorta(*c.FechaVencimiento), Opciones{X: derecha, Y: y, Tamano: 7.5, Color: TintaSuave, Derecha: true})
+		y -= 10
 	}
 
 	// Receptor
-	cursor := minimo(finEmisor, yCaja) - Mm(8)
-	altoReceptor := Mm(20)
-	h.Recuadro(Margen, cursor-altoReceptor, AnchoA4-Margen*2, altoReceptor, 0.5, ColorLinea)
-	h.Escribir("DESTINATARIO", Opciones{X: Margen + 8, Y: cursor - 12, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
+	cursor := minimo(minimo(finEmisor, yCaja), y+10) - Mm(8)
 
-	columna := (AnchoA4 - Margen*2) / 2
 	condicion, ok := condicionesComprobante[c.ReceptorCondicionIva]
 	if !ok {
 		condicion = c.ReceptorCondicionIva
@@ -204,27 +238,26 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 	if cuit == "" {
 		cuit = "—"
 	}
-	datos := [][2]string{
+	altoReceptor := h.CuadroDeDatos("DESTINATARIO", []Dato{
 		{"Razón social", c.ReceptorNombre},
 		{"CUIT / DNI", cuit},
 		{"Condición frente al IVA", condicion},
 		{"Domicilio", domicilio},
-	}
-	for i, dato := range datos {
-		x := Margen + 8 + float64(float64(i%2)*columna)
-		yFila := cursor - 26 - float64(i/2*20)
-		h.Escribir(dato[0], Opciones{X: x, Y: yFila, Tamano: 6, Color: TintaSuave})
-		h.Escribir(dato[1], Opciones{X: x, Y: yFila - 9, Tamano: 8.5, Fuente: Negrita})
-	}
+	}, cursor, 2)
 
 	cursor -= altoReceptor + Mm(6)
 
-	// Detalle
-	colCantidad := Margen + Mm(98)
-	colUnidad := Margen + Mm(118)
-	colPrecio := Margen + Mm(148)
-	colIva := Margen + Mm(160)
-	colSubtotal := derecha
+	// Detalle. Cada columna tiene su ancho (el número de la derecha es el
+	// borde, y el ancho se cuenta hacia la izquierda): la descripción baja
+	// de renglón dentro del suyo, y un importe que no entra se achica. Antes
+	// la descripción, de 100 mm, se metía debajo de la cantidad, y un
+	// subtotal largo pisaba la columna del IVA.
+	anchoDescripcion := Mm(78)
+	colCantidad, anchoCantidad := Margen+Mm(94), Mm(14)
+	colUnidad, anchoUnidad := Margen+Mm(108), Mm(12)
+	colPrecio, anchoPrecio := Margen+Mm(136), Mm(26)
+	colIva, anchoIva := Margen+Mm(150), Mm(11)
+	colSubtotal, anchoSubtotal := derecha, Mm(30)
 
 	encabezarDetalle := func() {
 		cabecera := Opciones{Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave}
@@ -246,8 +279,11 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 
 	// Lo que no entra pasa a otra hoja (antes, como en el TS, se salía por
 	// abajo): arriba van el comprobante y su número, para que la hoja suelta
-	// se sepa de qué es, y el pie fiscal queda en la última.
-	limite := Margen + Mm(30)
+	// se sepa de qué es, y el pie fiscal queda en la última. El detalle llega
+	// hasta abajo de cada hoja; el lugar del pie se guarda solo en la que
+	// lleva los totales.
+	limite := Margen + Mm(12)
+	limitePie := Margen + Mm(46)
 	otraHoja := func() {
 		h.NuevaPagina()
 		marcas()
@@ -256,7 +292,7 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 			Opciones{X: Margen, Y: y, Tamano: 9, Fuente: Negrita})
 		cursor = y - Mm(10)
 	}
-	espacio := func(necesario float64, detalle bool) {
+	espacioHasta := func(necesario, limite float64, detalle bool) {
 		if cursor-necesario >= limite {
 			return
 		}
@@ -265,64 +301,75 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 			encabezarDetalle()
 		}
 	}
+	espacio := func(necesario float64, detalle bool) { espacioHasta(necesario, limite, detalle) }
 
 	for _, item := range c.Items {
-		renglones := len(Renglones(item.Descripcion, Helvetica, 8.5, Mm(100)))
-		espacio(maximo(float64(renglones)*8.5*1.35, 12)+4, true)
-		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8.5}, Ancho: Mm(100)})
-		h.Escribir(numeroJS(num(item.Cantidad)), Opciones{X: colCantidad, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true})
-		h.Escribir(Unidad(item.Unidad), Opciones{X: colUnidad, Y: cursor, Tamano: 8, Derecha: true})
-		h.Escribir(precioImpreso(item, discrimina), Opciones{X: colPrecio, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true})
+		renglones := len(Renglones(item.Descripcion, Helvetica, 8.5, anchoDescripcion))
+		renglonesUnidad := len(Renglones(Unidad(item.Unidad), Helvetica, 8, anchoUnidad))
+		espacio(maximo(maximo(float64(renglones)*8.5*1.35, float64(renglonesUnidad)*10), 12)+4, true)
+		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8.5}, Ancho: anchoDescripcion})
+		h.EscribirNumero(numeroJS(num(item.Cantidad)), Opciones{X: colCantidad, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoCantidad)
+		alto = maximo(alto, h.EscribirParrafo(Unidad(item.Unidad), Parrafo{Opciones: Opciones{X: colUnidad, Y: cursor, Tamano: 8, Derecha: true}, Ancho: anchoUnidad, Interlineado: 10}))
+		h.EscribirNumero(precioImpreso(item, discrimina), Opciones{X: colPrecio, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoPrecio)
 		if discrimina {
-			h.Escribir(numeroJS(num(item.AlicuotaIva))+"%", Opciones{X: colIva, Y: cursor, Tamano: 8, Derecha: true})
+			h.EscribirNumero(numeroJS(num(item.AlicuotaIva))+"%", Opciones{X: colIva, Y: cursor, Tamano: 8, Derecha: true}, anchoIva)
 		}
-		h.Escribir(MonedaDe(item.Subtotal), Opciones{X: colSubtotal, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true})
+		h.EscribirNumero(Moneda2De(item.Subtotal), Opciones{X: colSubtotal, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoSubtotal)
 
 		cursor -= maximo(alto, 12) + 4
 		h.Raya(cursor+8, 0, Color{})
 	}
 
 	// Totales
+	// La etiqueta a la izquierda y el importe a la derecha, cada uno en su
+	// ancho: una percepción con nombre largo baja de renglón y un importe
+	// grande se achica, pero no se pisan.
 	cursor -= Mm(6)
-	xEtiqueta := derecha - Mm(60)
+	xEtiqueta := derecha - Mm(80)
+	anchoEtiqueta, anchoImporte := Mm(44), Mm(34)
 
 	var totales [][2]string
 	if discrimina {
-		totales = append(totales, [2]string{"Neto gravado", MonedaDe(c.Neto)})
+		totales = append(totales, [2]string{"Neto gravado", Moneda2De(c.Neto)})
 		if num(c.Iva21) > 0 {
-			totales = append(totales, [2]string{"IVA 21%", MonedaDe(c.Iva21)})
+			totales = append(totales, [2]string{"IVA 21%", Moneda2De(c.Iva21)})
 		}
 		if num(c.Iva105) > 0 {
-			totales = append(totales, [2]string{"IVA 10,5%", MonedaDe(c.Iva105)})
+			totales = append(totales, [2]string{"IVA 10,5%", Moneda2De(c.Iva105)})
 		}
 		if num(c.Iva27) > 0 {
-			totales = append(totales, [2]string{"IVA 27%", MonedaDe(c.Iva27)})
+			totales = append(totales, [2]string{"IVA 27%", Moneda2De(c.Iva27)})
 		}
 	}
 	if num(c.Exento) > 0 {
-		totales = append(totales, [2]string{"Exento", MonedaDe(c.Exento)})
+		totales = append(totales, [2]string{"Exento", Moneda2De(c.Exento)})
 	}
 	for _, t := range c.Tributos {
-		totales = append(totales, [2]string{t.Descripcion + " " + numeroJS(num(t.Alicuota)) + "%", MonedaDe(t.Importe)})
+		totales = append(totales, [2]string{t.Descripcion + " " + numeroJS(num(t.Alicuota)) + "%", Moneda2De(t.Importe)})
 	}
 	// Los totales van juntos (y con la leyenda de transparencia, si la hay):
 	// partirlos entre dos hojas confunde.
-	bloque := float64(len(totales))*12 + 24 + Mm(10) + Mm(28)
-	if c.Observaciones != "" {
-		bloque += Mm(12)
+	renglonesTotal := make([]int, len(totales))
+	bloque := 24 + Mm(10) + Mm(28)
+	for i, f := range totales {
+		renglonesTotal[i] = max(1, len(Renglones(f[0], Normal, 8.5, anchoEtiqueta)))
+		bloque += 12 + float64(renglonesTotal[i]-1)*10
 	}
-	espacio(bloque, false)
-	for _, f := range totales {
-		h.Escribir(f[0], Opciones{X: xEtiqueta, Y: cursor, Tamano: 8.5, Color: TintaSuave})
-		h.Escribir(f[1], Opciones{X: derecha, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true})
-		cursor -= 12
+	if c.Observaciones != "" {
+		bloque += maximo(Mm(12), float64(len(Renglones(c.Observaciones, Normal, 8, Mm(120))))*8*1.35)
+	}
+	espacioHasta(bloque, limitePie, false)
+	for i, f := range totales {
+		h.EscribirParrafo(f[0], Parrafo{Opciones: Opciones{X: xEtiqueta, Y: cursor, Tamano: 8.5, Color: TintaSuave}, Ancho: anchoEtiqueta, Interlineado: 10})
+		h.EscribirNumero(f[1], Opciones{X: derecha, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoImporte)
+		cursor -= 12 + float64(renglonesTotal[i]-1)*10
 	}
 
 	h.Pagina.DibujarLinea(Linea{X1: xEtiqueta, Y1: cursor + 4, X2: derecha, Y2: cursor + 4, Grosor: 1.5, Color: Naranja})
 	cursor -= 12
 
 	h.Escribir("TOTAL", Opciones{X: xEtiqueta, Y: cursor, Tamano: 12, Fuente: Negrita})
-	h.Escribir(MonedaDe(c.Total), Opciones{X: derecha, Y: cursor, Tamano: 13, Fuente: Negrita, Derecha: true})
+	h.EscribirNumero(Moneda2De(c.Total), Opciones{X: derecha, Y: cursor, Tamano: 13, Fuente: Negrita, Derecha: true}, Mm(62))
 
 	cursor -= Mm(10)
 
@@ -333,9 +380,9 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 		ivaContenido := num(c.Iva21) + num(c.Iva105) + num(c.Iva27)
 		h.Escribir("Régimen de Transparencia Fiscal al Consumidor (Ley 27.743)", Opciones{X: Margen, Y: cursor, Tamano: 7.5, Fuente: Negrita})
 		cursor -= 11
-		h.Escribir("IVA contenido: "+Moneda(ivaContenido), Opciones{X: Margen, Y: cursor, Tamano: 8})
+		h.Escribir("IVA contenido: "+Moneda2(ivaContenido), Opciones{X: Margen, Y: cursor, Tamano: 8})
 		cursor -= 10
-		h.Escribir("Otros impuestos nacionales indirectos: "+Moneda(0), Opciones{X: Margen, Y: cursor, Tamano: 8})
+		h.Escribir("Otros impuestos nacionales indirectos: "+Moneda2(0), Opciones{X: Margen, Y: cursor, Tamano: 8})
 		cursor -= Mm(7)
 	}
 
@@ -345,7 +392,9 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 
 	// Pie fiscal
 	yPie := Margen + Mm(24)
-	h.Raya(yPie+Mm(6), 0, Color{})
+	// La raya va arriba del QR: a 6 mm del pie cruzaba el QR y tachaba
+	// «Comprobante autorizado por ARCA».
+	h.Raya(yPie+Mm(20), 0, Color{})
 
 	if c.Cae != "" && emisor != nil && emisor.Cuit != "" {
 		cr, err := qrPngCrudo(UrlQr(DatosQr{

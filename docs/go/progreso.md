@@ -213,7 +213,7 @@ de diferencia en todos, umbral 0,01 %, y el mismo texto con pdftotext).
     dibuja encima del pie fiscal (tanda 7).
   - `importeEnLetras`: 999,995 sale «con 100/100», y desde mil millones se
     pierden los millones (1.234.567.890 → «treinta y cuatro millones…»)
-    (tanda 4).
+    (tanda 4). Arreglado el 17/11 (ver abajo).
   - Una firma PNG con el CRC roto: UPNG la acepta y la dibuja, Go la
     rechaza y el remito sale sin firma (no está en el golden).
 - Lo aprendido:
@@ -222,12 +222,42 @@ de diferencia en todos, umbral 0,01 %, y el mismo texto con pdftotext).
   - **ICU redondea la tira decimal más corta, no el valor binario**:
     `21021.995` con dos decimales es «21.022,00» en Intl y «21.021,99» con
     `toFixed`. Para los importes con decimales de los documentos (no la
-    moneda sin decimales, donde da igual) va `Pesos` de `recibo_partes.go`.
+    moneda sin decimales, donde da igual) va `Moneda2` de `formato.go`.
   - **El Write de las herramientas escribe el BOM literal** si se le pasa
     `\ufeff` adentro de un string: Go no compila un BOM en medio del
     archivo. Se arregla con `perl -CSD -pi -e 's/\x{FEFF}/\\ufeff/g'`.
   - **pdftoppm + PGM alcanzan para un golden visual** sin dependencias de
     Go: el PGM se lee en veinte líneas.
+- Revisión de los PDF (17/11, sobre `n211-bugs`):
+  - La factura, el recibo y el presupuesto imprimen los importes con
+    centavos (`Moneda2`, «$ 1.234,56»): `Moneda` redondeaba a pesos y una A
+    con neto 101,45 decía «Neto $ 101, IVA $ 21, total $ 123». La lista de
+    precios sigue en pesos redondos, a propósito.
+  - La factura lleva lo que pide la RG 1415: la condición del emisor frente
+    al IVA, el inicio de actividades y el código bajo la letra («COD. 01»).
+  - Nada se pisa: los datos del destinatario o del cliente van en
+    `CuadroDeDatos` (el valor en párrafo dentro de su columna), cada columna
+    del detalle tiene su ancho y los números se achican (`EscribirNumero`,
+    nunca se cortan); el texto que no entra se corta con «...»
+    (`EscribirEnAncho`). La raya del pie de la factura cruzaba el QR.
+  - Las fechas de los instantes (el presupuesto, el remito, el nombre del
+    archivo de la lista) van en hora argentina; los `toLocaleDateString` de
+    `lib/pdf` también.
+  - El recibo dice de qué recibo es cada hoja de más; el remito y la factura
+    llenan cada hoja y guardan el lugar de las firmas o del pie fiscal solo
+    en la última; `Limpiar` deja «€», «•» y «™» (están en WinAnsi), igual
+    que `limpiar()` de `lib/pdf/hoja.ts`.
+  - `ImporteEnLetras` dice los centavos que imprime `Moneda2` y no pierde
+    los millones desde mil millones.
+  - Los golden del comprobante, el presupuesto, el remito, el recibo y la
+    lista **son los de Go** desde acá: se reescriben con
+    `PDF_ACTUALIZAR=comprobante,remito go test ./internal/pdf -run TestActualizarGolden`
+    (correr `scripts/golden/pdf.ts` con esos devolvería la versión vieja).
+    Los del corte, la hoja de corte y la reposición se regeneraron con el TS
+    (`npx tsx scripts/golden/pdf.ts corte`) y siguen iguales a Go.
+  - Los teléfonos del pie de los correos salen de `internal/sucursales`
+    (copia de `lib/sucursales.ts`, con prueba), igual que el pie del
+    presupuesto: decían «(0223) 474-3328» y «(0223) 483-0535».
 
 ### Benchmark de la tanda 12 (29/10/2026, misma Mac, sin base)
 

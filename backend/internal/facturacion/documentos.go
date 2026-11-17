@@ -56,7 +56,7 @@ func (s *Servicio) Pdf(ctx context.Context, c *Completo) ([]byte, string, error)
 		return nil, "", err
 	}
 	emisor := &pdf.EmisorFiscal{Emisor: pdf.Emisor{RazonSocial: e.RazonSocial, NombreFantasia: de(e.NombreFantasia), Domicilio: de(e.Domicilio),
-		Cuit: de(e.Cuit)}, IngresosBrutos: de(e.IngresosBrutos), InicioActividades: e.InicioActividades}
+		Cuit: de(e.Cuit)}, CondicionIva: e.CondicionIva, IngresosBrutos: de(e.IngresosBrutos), InicioActividades: dia(e.InicioActividades)}
 	cp := pdf.ComprobantePdf{Tipo: c.Tipo, PuntoVenta: float64(c.PuntoVenta), Numero: float64(c.Numero), ReceptorNombre: c.ReceptorNombre,
 		ReceptorCuit: de(c.ReceptorCuit), ReceptorCondicionIva: c.ReceptorCondicionIva, ReceptorDomicilio: de(c.ReceptorDomicilio),
 		Neto: c.Neto, Iva21: c.Iva21, Iva27: c.Iva27, Iva105: c.Iva105, Exento: c.Exento, TributosTotal: c.TributosTotal, Total: c.Total,

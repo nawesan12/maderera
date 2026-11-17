@@ -52,7 +52,7 @@ export async function resumenDeCuentaPdf(
     fuente: hoja.negrita,
     derecha: true,
   });
-  escribir(hoja, `Al ${hoy.toLocaleDateString("es-AR")}`, {
+  escribir(hoja, `Al ${hoy.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}`, {
     x: A4.ancho - MARGEN,
     y: hoja.y - 16,
     tamano: 8,
@@ -197,7 +197,7 @@ export async function resumenDeCuentaPdf(
     }
 
     const celdas = [
-      movimiento.fecha.toLocaleDateString("es-AR"),
+      movimiento.fecha.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" }),
       movimiento.detalle || CONCEPTOS[movimiento.tipo] || movimiento.tipo,
       movimiento.referencia ?? "—",
       pesos(movimiento.monto),

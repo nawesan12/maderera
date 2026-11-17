@@ -87,7 +87,7 @@ export async function cortePdf(
     fuente: hoja.mono,
     derecha: true,
   });
-  escribir(hoja, corte.createdAt.toLocaleDateString("es-AR"), {
+  escribir(hoja, corte.createdAt.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" }), {
     x: A4.ancho - MARGEN,
     y: hoja.y - 28,
     tamano: 8,

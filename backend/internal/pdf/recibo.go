@@ -81,10 +81,10 @@ func Recibo(d DatosRecibo, _ time.Time) ([]byte, error) {
 	y -= 18
 
 	// Quién pagó.
+	// Un nombre largo baja de renglón (antes se salía de la hoja).
 	h.Escribir("Recibimos de", Opciones{X: Margen, Y: y, Tamano: 8, Color: TintaSuave})
 	y -= 13
-	h.Escribir(r.RecibidoDe, Opciones{X: Margen, Y: y, Tamano: 12, Fuente: Negrita})
-	y -= 12
+	y -= h.EscribirParrafo(r.RecibidoDe, Parrafo{Opciones: Opciones{X: Margen, Y: y, Tamano: 12, Fuente: Negrita}, Ancho: anchoUtil, Interlineado: 14}) - 2
 	var datosCliente []string
 	if r.Cliente != nil {
 		cuit := ""
@@ -97,15 +97,14 @@ func Recibo(d DatosRecibo, _ time.Time) ([]byte, error) {
 		if dato == "" {
 			continue
 		}
-		h.Escribir(dato, Opciones{X: Margen, Y: y, Tamano: 8, Color: TintaSuave})
-		y -= 11
+		y -= h.EscribirParrafo(dato, Parrafo{Opciones: Opciones{X: Margen, Y: y, Tamano: 8, Color: TintaSuave}, Ancho: anchoUtil, Interlineado: 11})
 	}
 	y -= 6
 
 	// Cuánto, en números y en letras.
 	h.Pagina.DibujarRectangulo(Rectangulo{X: Margen, Y: y - Mm(17), Ancho: anchoUtil, Alto: Mm(19), Relleno: RGB(0.98, 0.97, 0.95)})
 	h.Escribir("La suma de", Opciones{X: Margen + Mm(4), Y: y - Mm(5), Tamano: 8, Color: TintaSuave})
-	h.Escribir(Pesos(r.Total), Opciones{X: Margen + Mm(4), Y: y - Mm(12), Tamano: 17, Fuente: Negrita})
+	h.EscribirNumero(Moneda2(r.Total), Opciones{X: Margen + Mm(4), Y: y - Mm(12), Tamano: 17, Fuente: Negrita}, Mm(64))
 	h.EscribirParrafo("Son pesos "+ImporteEnLetras(r.Total)+".", Parrafo{
 		Opciones: Opciones{X: Margen + Mm(70), Y: y - Mm(8.5), Tamano: 8.5},
 		Ancho:    anchoUtil - Mm(74),
@@ -125,21 +124,28 @@ func Recibo(d DatosRecibo, _ time.Time) ([]byte, error) {
 	h.Pagina.DibujarLinea(Linea{X1: Margen, Y1: y, X2: derecha, Y2: y, Grosor: 0.5, Color: ColorLinea})
 	y -= 13
 
+	// Las hojas de más dicen de qué recibo son.
+	otraHoja := func() {
+		h.NuevaPagina()
+		y = AltoA4 - Margen - 10
+		h.Escribir("Recibo "+r.Numero+" (continuación)", Opciones{X: Margen, Y: y, Tamano: 9, Fuente: Negrita})
+		y -= Mm(10)
+	}
+
 	conCheque := false
 	for _, parte := range r.Partes {
 		if parte.Cheque != nil {
 			conCheque = true
 		}
 		if y < Margen+Mm(45) {
-			h.NuevaPagina()
-			y = AltoA4 - Margen
+			otraHoja()
 		}
 		medio, ok := nombreDelMedio[parte.Medio]
 		if !ok {
 			medio = parte.Medio
 		}
-		h.Escribir(medio, Opciones{X: Margen, Y: y, Tamano: 9.5, Fuente: Negrita})
-		h.Escribir(Pesos(parte.Importe), Opciones{X: derecha, Y: y, Tamano: 9.5, Derecha: true})
+		h.EscribirEnAncho(medio, Opciones{X: Margen, Y: y, Tamano: 9.5, Fuente: Negrita}, anchoUtil-Mm(44))
+		h.EscribirNumero(Moneda2(parte.Importe), Opciones{X: derecha, Y: y, Tamano: 9.5, Derecha: true}, Mm(40))
 		y -= 11
 
 		if detalle := DetalleDeLaParte(parte); detalle != "" {
@@ -151,10 +157,14 @@ func Recibo(d DatosRecibo, _ time.Time) ([]byte, error) {
 		y -= 6
 	}
 
+	// El total, el saldo y la firma van juntos: si no entran, a otra hoja.
+	if y < Margen+Mm(45) {
+		otraHoja()
+	}
 	h.Pagina.DibujarLinea(Linea{X1: Margen, Y1: y + 2, X2: derecha, Y2: y + 2, Grosor: 0.5, Color: ColorLinea})
 	y -= 10
 	h.Escribir("Total", Opciones{X: Margen, Y: y, Tamano: 10, Fuente: Negrita})
-	h.Escribir(Pesos(r.Total), Opciones{X: derecha, Y: y, Tamano: 10, Fuente: Negrita, Derecha: true})
+	h.Escribir(Moneda2(r.Total), Opciones{X: derecha, Y: y, Tamano: 10, Fuente: Negrita, Derecha: true})
 	y -= 20
 
 	if r.SaldoDespues != nil && r.Estado == "emitido" {
@@ -162,14 +172,13 @@ func Recibo(d DatosRecibo, _ time.Time) ([]byte, error) {
 		var texto string
 		switch {
 		case s > 0.005:
-			texto = "Saldo de la cuenta después de este pago: " + Pesos(s) + "."
+			texto = "Saldo de la cuenta después de este pago: " + Moneda2(s) + "."
 		case s < -0.005:
-			texto = "Después de este pago la cuenta queda con " + Pesos(-s) + " a favor."
+			texto = "Después de este pago la cuenta queda con " + Moneda2(-s) + " a favor."
 		default:
 			texto = "Con este pago la cuenta queda saldada."
 		}
-		h.Escribir(texto, Opciones{X: Margen, Y: y, Tamano: 9})
-		y -= 14
+		y -= h.EscribirParrafo(texto, Parrafo{Opciones: Opciones{X: Margen, Y: y, Tamano: 9}, Ancho: anchoUtil}) + 2
 	}
 
 	if conCheque {

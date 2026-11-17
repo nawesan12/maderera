@@ -2,7 +2,6 @@ package pdf
 
 import (
 	"encoding/base64"
-	"math"
 	"strings"
 	"time"
 )
@@ -77,6 +76,9 @@ func LineasDeLaFactura(f *FacturaDelRemito) []string {
 		return []string{f.Etiqueta, "Sin CAE: sin valor fiscal"}
 	}
 	cae := "CAE " + f.Cae
+	// El vencimiento del CAE es un día, y la base lo tiene a la medianoche
+	// argentina (los de antes, del TS, a la de UTC): en UTC da el día en los
+	// dos casos.
 	if f.CaeVencimiento != nil {
 		cae += " · vto. " + FechaSolaCorta(*f.CaeVencimiento)
 	}
@@ -129,14 +131,15 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	if r.Tipo == "envio" {
 		retiro = "Envío a domicilio"
 	}
-	for _, texto := range append([]string{"Fecha " + FechaSolaCorta(r.CreatedAt), "Pedido " + r.PedidoNumero, retiro}, LineasDeLaFactura(r.Factura)...) {
+	// La fecha del remito es un instante: en la hora argentina (en UTC, uno
+	// hecho a la noche salía con la fecha de mañana).
+	for _, texto := range append([]string{"Fecha " + FechaCortaHoy(r.CreatedAt), "Pedido " + r.PedidoNumero, retiro}, LineasDeLaFactura(r.Factura)...) {
 		h.Escribir(texto, Opciones{X: derecha, Y: y, Tamano: 7.5, Color: TintaSuave, Derecha: true})
 		y -= 10
 	}
 
 	// Destinatario.
-	cursor := minimo(finEmisor, yCaja) - Mm(8)
-	columna := (AnchoA4 - Margen*2) / 2
+	cursor := minimo(minimo(finEmisor, yCaja), y+10) - Mm(8)
 
 	oGuion := func(s string) string {
 		if s == "" {
@@ -148,7 +151,7 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	if r.Tipo == "envio" {
 		domicilio = "Domicilio de entrega"
 	}
-	datos := [][2]string{
+	datos := []Dato{
 		{"Cliente", r.ClienteNombre},
 		{"Retira", oGuion(r.ReceptorNombre)},
 		{domicilio, oGuion(r.ClienteDireccion)},
@@ -159,7 +162,7 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 		if r.NumeroSeguimiento != "" {
 			t += " · " + r.NumeroSeguimiento
 		}
-		datos = append(datos, [2]string{"Transporte", t})
+		datos = append(datos, Dato{"Transporte", t})
 	}
 
 	pendiente := "Pendiente de pago"
@@ -176,25 +179,15 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	if !ok {
 		condicion = "—"
 	}
-	datos = append(datos, [2]string{"Condición de pago", condicion})
+	datos = append(datos, Dato{"Condición de pago", condicion})
 
-	filasDeDatos := math.Ceil(float64(len(datos)) / 2)
-	altoCaja2 := 26 + float64(filasDeDatos*20) + 4
-
-	h.Recuadro(Margen, cursor-altoCaja2, AnchoA4-Margen*2, altoCaja2, 0.5, ColorLinea)
-	h.Escribir("DESTINATARIO", Opciones{X: Margen + 8, Y: cursor - 12, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
-
-	for i, dato := range datos {
-		x := Margen + 8 + float64(float64(i%2)*columna)
-		yFila := cursor - 26 - float64(float64(i/2)*20)
-		h.Escribir(dato[0], Opciones{X: x, Y: yFila, Tamano: 6, Color: TintaSuave})
-		h.Escribir(dato[1], Opciones{X: x, Y: yFila - 9, Tamano: 8.5, Fuente: Negrita})
-	}
+	altoCaja2 := h.CuadroDeDatos("DESTINATARIO", datos, cursor, 2)
 
 	cursor -= altoCaja2 + Mm(6)
 
 	// Detalle, sin precios.
 	colCantidad := derecha - Mm(30)
+	anchoDescripcion := colCantidad - Mm(18) - Margen
 	encabezarDetalle := func() {
 		h.Escribir("DESCRIPCIÓN", Opciones{X: Margen, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
 		h.Escribir("CANTIDAD", Opciones{X: colCantidad, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave, Derecha: true})
@@ -207,9 +200,14 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	encabezarDetalle()
 
 	// Lo que no entra pasa a otra hoja (antes se salía por abajo), con el
-	// número del remito arriba. Las firmas van al pie de la última.
-	limite := Margen + Mm(64)
-	espacio := func(necesario float64, detalle bool) {
+	// número del remito arriba. Las firmas van al pie de la última: el
+	// detalle llega hasta abajo de cada hoja, y si en la última no queda
+	// lugar para las firmas, van solas en otra. Antes se dejaba el lugar de
+	// las firmas en todas: 80 renglones ocupaban nueve hojas, con un tercio
+	// de cada una en blanco.
+	limite := Margen + Mm(12)
+	limiteFirmas := Margen + Mm(64)
+	espacioHasta := func(necesario, limite float64, detalle bool) {
 		if cursor-necesario >= limite {
 			return
 		}
@@ -224,12 +222,13 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 			encabezarDetalle()
 		}
 	}
+	espacio := func(necesario float64, detalle bool) { espacioHasta(necesario, limite, detalle) }
 
 	for _, item := range r.Lineas {
-		espacio(maximo(float64(len(Renglones(item.Descripcion, Helvetica, 9, Mm(120))))*9*1.35, 12)+4, true)
-		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 9}, Ancho: Mm(120)})
-		h.Escribir(numeroJS(item.Cantidad), Opciones{X: colCantidad, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true})
-		h.Escribir(Unidad(item.Unidad), Opciones{X: derecha, Y: cursor, Tamano: 8.5, Derecha: true})
+		espacio(maximo(float64(len(Renglones(item.Descripcion, Helvetica, 9, anchoDescripcion)))*9*1.35, 12)+4, true)
+		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 9}, Ancho: anchoDescripcion})
+		h.EscribirNumero(numeroJS(item.Cantidad), Opciones{X: colCantidad, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, Mm(16))
+		h.EscribirEnAncho(Unidad(item.Unidad), Opciones{X: derecha, Y: cursor, Tamano: 8.5, Derecha: true}, Mm(26))
 		cursor -= maximo(alto, 12) + 4
 		h.Raya(cursor+8, 0, Color{})
 	}
@@ -240,10 +239,11 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 		cursor -= Mm(7)
 		h.Escribir("QUEDA EN ACOPIO", Opciones{X: Margen, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
 		cursor -= 12
+		anchoUtil := AnchoA4 - Margen*2
 		for _, p := range r.Pendientes {
-			espacio(11, false)
-			h.Escribir(numeroJS(p.Pendiente)+" "+p.Unidad+" · "+p.Descripcion, Opciones{X: Margen, Y: cursor, Tamano: 8})
-			cursor -= 11
+			texto := numeroJS(p.Pendiente) + " " + p.Unidad + " · " + p.Descripcion
+			espacio(float64(len(Renglones(texto, Helvetica, 8, anchoUtil)))*8*1.35, false)
+			cursor -= h.EscribirParrafo(texto, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8}, Ancho: anchoUtil, Interlineado: 11})
 		}
 		cursor -= 2
 		h.Escribir("Esta mercadería queda guardada en la maderera a nombre del cliente y se retira contra este remito.",
@@ -258,6 +258,7 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	}
 
 	// Firmas.
+	espacioHasta(0, limiteFirmas, false)
 	yFirma := Margen + Mm(34)
 	anchoFirma := (AnchoA4 - Margen*2 - Mm(10)) / 2
 

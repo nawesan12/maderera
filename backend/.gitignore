@@ -1,3 +1,7 @@
 
 # Binarios que deja go test -cpuprofile
 *.test
+
+# El binario que deja `go build ./cmd/mjbj` en esta carpeta (33 MB): se
+# versionó por error en 3c04bc3.
+/mjbj

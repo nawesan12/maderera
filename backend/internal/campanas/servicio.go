@@ -186,57 +186,50 @@ func (s *Servicio) ProcesarTanda(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	// Una transacción corta por correo: se toma la fila, sale el correo y se
+	// marca. Antes la tanda entera iba en una sola, abierta durante todos los
+	// envíos por SMTP: si algo fallaba después de mandar, el ROLLBACK dejaba
+	// «pendiente» lo que ya había salido y la tanda siguiente lo repetía.
+	// Ahora un corte repite, como mucho, un correo.
 	cortar := false
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		filas, err := tx.Query(ctx, `select e.id, e.email, e.nombre,
-			exists (select 1 from bajas_de_correo b where b.email = lower(e.email))
-			from campana_envios e
-			where e.campana_id = $1 and e.estado = 'pendiente'
-			order by e.email limit $2
-			for update of e skip locked`, id, s.PorMinuto())
-		if err != nil {
-			return err
-		}
-		type envio struct {
-			id, email string
-			nombre    *string
-			baja      bool
-		}
-		var tanda []envio
-		for filas.Next() {
-			var e envio
-			if err := filas.Scan(&e.id, &e.email, &e.nombre, &e.baja); err != nil {
-				filas.Close()
+	for i := 0; i < s.PorMinuto() && !cortar; i++ {
+		hubo := false
+		err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			var id2, correoDe string
+			var nombre *string
+			var baja bool
+			err := tx.QueryRow(ctx, `select e.id, e.email, e.nombre,
+				exists (select 1 from bajas_de_correo b where b.email = lower(e.email))
+				from campana_envios e
+				where e.campana_id = $1 and e.estado = 'pendiente'
+				order by e.email limit 1
+				for update of e skip locked`, id).Scan(&id2, &correoDe, &nombre, &baja)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			if err != nil {
 				return err
 			}
-			tanda = append(tanda, e)
-		}
-		filas.Close()
-		if err := filas.Err(); err != nil {
-			return err
-		}
-		for _, e := range tanda {
-			if e.baja {
-				if _, err := tx.Exec(ctx, `update campana_envios set estado = 'omitido' where id = $1`, e.id); err != nil {
-					return err
-				}
-				continue
+			hubo = true
+			if baja {
+				_, err := tx.Exec(ctx, `update campana_envios set estado = 'omitido' where id = $1`, id2)
+				return err
 			}
-			nombre := ""
-			if e.nombre != nil {
-				nombre = *e.nombre
+			n := ""
+			if nombre != nil {
+				n = *nombre
 			}
-			correo := ArmarCorreo(s.cfg.URLDelSitio(), s.cfg.Secreto, c, e.email, nombre)
-			r := s.envio.Enviar(ctx, email.Mensaje{Para: e.email, Asunto: correo.Asunto, HTML: correo.HTML, Texto: correo.Texto, Cabeceras: correo.Cabeceras})
+			correo := ArmarCorreo(s.cfg.URLDelSitio(), s.cfg.Secreto, c, correoDe, n)
+			r := s.envio.Enviar(ctx, email.Mensaje{Para: correoDe, Asunto: correo.Asunto, HTML: correo.HTML, Texto: correo.Texto, Cabeceras: correo.Cabeceras})
 			// Rechazo temporal (el tope de Hostinger, un corte): queda
 			// pendiente y la tanda termina acá.
 			if !r.Enviado && r.Temporal {
 				cortar = true
-				break
+				return nil
 			}
-			nuevo, falla := "enviado", (*string)(nil)
+			estadoNuevo, falla := "enviado", (*string)(nil)
 			if !r.Enviado {
-				nuevo = "fallido"
+				estadoNuevo = "fallido"
 				m := r.Error
 				if m == "" {
 					m = "No salió."
@@ -244,15 +237,16 @@ func (s *Servicio) ProcesarTanda(ctx context.Context, id string) error {
 				m = recortar(m, 500)
 				falla = &m
 			}
-			if _, err := tx.Exec(ctx, `update campana_envios set estado = $2::estado_envio_campana, error = $3, enviado_at = now() where id = $1`,
-				e.id, nuevo, falla); err != nil {
-				return err
-			}
+			_, err = tx.Exec(ctx, `update campana_envios set estado = $2::estado_envio_campana, error = $3, enviado_at = now() where id = $1`,
+				id2, estadoNuevo, falla)
+			return err
+		})
+		if err != nil {
+			return err
 		}
-		return nil
-	})
-	if err != nil {
-		return err
+		if !hubo {
+			break
+		}
 	}
 	var quedan int
 	if err := s.pool.QueryRow(ctx, `select count(*)::int from campana_envios where campana_id = $1 and estado = 'pendiente'`, id).Scan(&quedan); err != nil {

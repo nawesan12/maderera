@@ -35,7 +35,11 @@ COPY scripts ./scripts
 RUN mkdir -p /datos/subidas /datos/privado && chown 1001:1001 /datos/subidas /datos/privado
 ENV HOME=/tmp
 USER 1001:1001
-CMD ["node_modules/.bin/drizzle-kit", "migrate"]
+# Las migraciones las hace `mjbj migrar` (goose). Este contenedor es para los
+# scripts de mudanza: `docker compose run --rm migrador npx tsx scripts/<x>.ts`.
+# Sin comando no hace nada: drizzle-kit migrate contra la base de goose
+# era una mina.
+CMD ["sh", "-c", "echo 'Las migraciones van con mjbj migrar. Pasá el script: docker compose run --rm migrador npx tsx scripts/<script>.ts' >&2; exit 1"]
 
 
 FROM deps AS build

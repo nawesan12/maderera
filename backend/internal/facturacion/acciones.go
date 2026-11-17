@@ -70,6 +70,21 @@ func (s *Servicio) FacturarPedido(ctx context.Context, ses *auth.Sesion, orderID
 		lineas = append(lineas, Linea{LineaEntrada: fiscal.LineaEntrada{Descripcion: i.Descripcion, Unidad: &unidad,
 			Cantidad: jsmath.Numero(i.Cantidad), PrecioFinalUnitario: jsmath.Numero(i.PrecioUnitario), Alicuota: &alic}})
 	}
+	// Lo que se cobró manda. La tienda guarda los renglones a precio lleno y
+	// el descuento (el de la forma de pago) aparte, en el pedido: sin esto la
+	// factura salía por más de lo cobrado y se le informaba a ARCA más IVA.
+	// Va sobre la mercadería y no sobre el envío, como en la compra. Con los
+	// renglones ya rebajados (el mostrador) el factor es 1 y no se toca nada.
+	mercaderia := 0.0
+	for _, l := range lineas {
+		mercaderia = float64(l.Cantidad*l.PrecioFinalUnitario) + mercaderia
+	}
+	if cobrado := jsmath.Numero(p.Total) - jsmath.Numero(p.CostoEnvio); mercaderia > 0 && cobrado > 0 && math.Abs(cobrado-mercaderia) > 0.005 {
+		factor := cobrado / mercaderia
+		for i := range lineas {
+			lineas[i].PrecioFinalUnitario = jsmath.Round(float64(lineas[i].PrecioFinalUnitario*factor*100)) / 100
+		}
+	}
 	if envio := jsmath.Numero(p.CostoEnvio); envio > 0 {
 		d := "Envío"
 		if p.ZonaEnvio != nil && *p.ZonaEnvio != "" {
@@ -332,6 +347,18 @@ func (s *Servicio) LetraQueSaldria(ctx context.Context, customerID, cuitTipeado 
 // mostrador, **después** de la venta y nunca adentro. No tira: devuelve qué
 // pasó, y la venta queda hecha igual.
 func (s *Servicio) EmitirParaLaVenta(ctx context.Context, p PedidoDeComprobante) (ResultadoComprobante, error) {
+	// Una venta, un comprobante: un reintento de la cola o un doble envío no
+	// emite otro (FacturarPedido ya lo miraba; esta no).
+	if p.OrderID != "" {
+		var n int64
+		err := s.pool.QueryRow(ctx, `SELECT numero FROM invoices WHERE order_id = $1 AND estado <> 'anulada' LIMIT 1`, p.OrderID).Scan(&n)
+		if err == nil {
+			return ResultadoComprobante{Aviso: "Esa venta ya tiene el comprobante " + jsmath.Texto(float64(n)) + "."}, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return ResultadoComprobante{}, err
+		}
+	}
 	_, receptor, err := s.LetraQueSaldria(ctx, p.CustomerID, p.Cuit)
 	if err != nil {
 		return ResultadoComprobante{}, err

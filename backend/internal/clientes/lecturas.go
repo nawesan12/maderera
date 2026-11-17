@@ -189,7 +189,7 @@ type Ficha struct {
 	// pantalla cuando el cliente pregunta por el suyo.
 	Cortes   []Comprobante `json:"cortes"`
 	Facturas []Comprobante `json:"facturas"`
-	Anterior             Anterior      `json:"anterior"`
+	Anterior Anterior      `json:"anterior"`
 }
 
 // Anterior es lo que la migración trajo del sistema anterior (ISIS): antes

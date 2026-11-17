@@ -28,7 +28,10 @@ func Correr(ctx context.Context, base *sql.DB, migraciones fs.FS, log *slog.Logg
 	if err := adoptar(ctx, base, log); err != nil {
 		return 0, fmt.Errorf("adoptando la base de drizzle: %w", err)
 	}
-	p, err := goose.NewProvider(goose.DialectPostgres, base, sub)
+	// Desordenadas también: dos ramas que se trabajan a la vez numeran
+	// migraciones en paralelo (la 101 de una y la 103 de otra), y la que
+	// llega después con un número menor quedaba sin aplicar para siempre.
+	p, err := goose.NewProvider(goose.DialectPostgres, base, sub, goose.WithAllowOutofOrder(true))
 	if err != nil {
 		return 0, err
 	}

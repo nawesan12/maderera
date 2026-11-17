@@ -5272,6 +5272,8 @@ type CuttingOrder struct {
 	Mitad               *MitadPlaca `json:"mitad"`
 	AnchoSierraMm       jsmath.Num  `json:"anchoSierraMm"`
 	MotorPlano          int32       `json:"motorPlano"`
+	ContactoTelefono    *string     `json:"contactoTelefono"`
+	RetiraEl            pgtype.Date `json:"retiraEl"`
 }
 
 type CuttingRate struct {

@@ -206,6 +206,9 @@ var pantallaDeCadaRuta = map[string]string{
 	"FichaDePedido":                  "personal",                      // GET /api/v1/admin/pedidos/{id}
 	"ListarPedidos":                  "/admin/pedidos",                // GET /api/v1/admin/pedidos
 	"AjustarPrecios":                 "/admin/precios",                // POST /api/v1/admin/precios/ajuste
+	"PrevisualizarAjuste":            "/admin/precios",                // POST /api/v1/admin/precios/ajuste/previa
+	"UltimoAjuste":                   "/admin/precios",                // GET /api/v1/admin/precios/ajuste/ultimo
+	"DeshacerUltimoAjuste":           "/admin/precios",                // DELETE /api/v1/admin/precios/ajuste/ultimo
 	"DescuentosDePago":               "/admin/precios",                // GET /api/v1/admin/precios/descuentos
 	"GuardarDescuentoDePago":         "/admin/precios",                // POST /api/v1/admin/precios/descuentos
 	"EditarPrecio":                   "/admin/precios",                // POST /api/v1/admin/precios/editar
@@ -224,6 +227,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"CandidatosDeBaja":               "/admin/productos",              // GET /api/v1/admin/productos-candidatos
 	"GuardarMesesSinVender":          "admin",                         // PUT /api/v1/admin/productos-candidatos
 	"ImputacionesUsadas":             "/admin/productos",              // GET /api/v1/admin/productos-imputaciones
+	"AtributosUsados":                "/admin/productos",              // GET /api/v1/admin/productos-atributos
 	"ActivarProducto":                "/admin/productos",              // POST /api/v1/admin/productos/{id}/activo
 	"SubirImagen":                    "/admin/productos",              // POST /api/v1/admin/productos/{id}/imagenes
 	"CandidatosParaSugerir":          "/admin/productos",              // GET /api/v1/admin/productos/{id}/para-sugerir
@@ -275,6 +279,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"EngancharRubro":                 "/admin/productos",              // POST /api/v1/admin/rubros/{id}/enganchar
 	"RubrosAdmin":                    "/admin/productos",              // GET /api/v1/admin/rubros
 	"CrearRubro":                     "/admin/productos",              // POST /api/v1/admin/rubros
+	"CrearCategoria":                 "/admin/productos",              // POST /api/v1/admin/categorias
+	"RenombrarCategoria":             "/admin/productos",              // PUT /api/v1/admin/categorias/{id}
 	"GestionesVencidas":              "/admin/clientes",               // GET /api/v1/admin/seguimiento/vencidas
 	"MoverGestion":                   "/admin/clientes",               // PUT /api/v1/admin/seguimiento/{id}
 	"ListarGestiones":                "/admin/clientes",               // GET /api/v1/admin/seguimiento

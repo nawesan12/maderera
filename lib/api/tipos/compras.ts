@@ -428,9 +428,62 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * @description «pendiente» trae todas las que falta pagar, por vencimiento;
+         *     «pagadas» y «todas» van de a páginas, las más nuevas primero
+         *     («todas» incluye las anuladas). La deuda (impago) se suma en la base
+         *     sobre todas las impagas vivas, con el filtro de proveedor y sin el de
+         *     fechas.
+         */
         get: operations["ListarFacturasDeCompra"];
         put?: never;
         post: operations["CargarFacturaDeCompra"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/compras/facturas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["FichaDeFacturaDeCompra"];
+        /**
+         * @description Los mismos campos que el alta, más el motivo. No cambia el proveedor
+         *     ni la recepción; si el total cambia, la diferencia va a la cuenta del
+         *     proveedor como un ajuste.
+         */
+        put: operations["CorregirFacturaDeCompra"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/compras/facturas/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Devuelve lo que la factura cargó en la cuenta del proveedor, la saca
+         *     del libro IVA, deja a cuenta los pagos que la cancelaban y libera la
+         *     recepción vinculada y el número.
+         */
+        post: operations["AnularFacturaDeCompra"];
         delete?: never;
         options?: never;
         head?: never;
@@ -479,6 +532,42 @@ export interface paths {
         get: operations["ListarPagosAProveedores"];
         put?: never;
         post: operations["PagarAProveedor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/compras/pagos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["FichaDePagoAProveedor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/compras/pagos/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["OrdenDePagoPdf"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -739,6 +828,10 @@ export interface components {
                 createdAt: string;
                 /** Format: double */
                 saldo: number;
+                /** @description la factura de la que salió */
+                purchaseInvoiceId: string | null;
+                /** @description el pago del que salió */
+                supplierPaymentId: string | null;
             }[];
         };
         PerfilDeLista: {
@@ -936,6 +1029,127 @@ export interface components {
                 numero: string;
                 /** Format: double */
                 importe: number;
+            }[];
+        };
+        FichaDeFactura: {
+            id: string;
+            tipo: string;
+            puntoVenta: number;
+            numero: number;
+            /** Format: date-time */
+            fechaEmision: string;
+            /** Format: date-time */
+            fechaVencimiento: string | null;
+            cae: string | null;
+            /** Format: double */
+            neto: number;
+            /** Format: double */
+            iva21: number;
+            /** Format: double */
+            iva105: number;
+            /** Format: double */
+            iva27: number;
+            /** Format: double */
+            exento: number;
+            /** Format: double */
+            percepciones: number;
+            /** Format: double */
+            percepcionIva: number;
+            /** Format: double */
+            percepcionIibb: number;
+            /** Format: double */
+            total: number;
+            /** Format: double */
+            pagado: number;
+            observaciones: string | null;
+            supplierId: string;
+            proveedor: string;
+            condicionIva: string;
+            receiptId: string | null;
+            numeroRemito: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            anuladaAt: string | null;
+            motivoAnulacion: string | null;
+            pagos: {
+                pagoId: string;
+                /** Format: date-time */
+                fecha: string;
+                medio: string;
+                referencia: string | null;
+                /** Format: double */
+                aplicado: number;
+            }[];
+            renglones: {
+                producto: string | null;
+                variante: string | null;
+                /** Format: double */
+                cantidad: number;
+                /** Format: double */
+                costoUnitario: number;
+                /** Format: double */
+                alicuotaIva: number;
+            }[];
+        };
+        FichaDePago: {
+            id: string;
+            /** Format: date-time */
+            fecha: string;
+            /** Format: double */
+            total: number;
+            /** Format: double */
+            neto: number;
+            medio: string;
+            /** @enum {string} */
+            circuito: "blanco" | "negro";
+            referencia: string | null;
+            notas: string | null;
+            supplierId: string;
+            proveedor: string;
+            razonSocial: string | null;
+            cuit: string | null;
+            /** Format: date-time */
+            anuladoAt: string | null;
+            motivoAnulacion: string | null;
+            /** @description la sucursal de cuya caja salió el efectivo */
+            caja: string | null;
+            /** Format: double */
+            efectivoEnCaja: number;
+            facturas: {
+                id: string;
+                numero: string;
+                tipo: string;
+                /** Format: date-time */
+                fechaEmision: string;
+                /** Format: date-time */
+                fechaVencimiento: string | null;
+                /** Format: double */
+                total: number;
+                /** Format: double */
+                aplicado: number;
+            }[];
+            retenciones: {
+                numero: string;
+                impuesto: string;
+                codigoRegimen: string;
+                nombreRegimen: string | null;
+                /** Format: double */
+                base: number;
+                /** Format: double */
+                importe: number;
+                /** Format: date-time */
+                anuladaAt: string | null;
+            }[];
+            partes: {
+                medio: string;
+                /** Format: double */
+                importe: number;
+                referencia: string | null;
+                chequeNumero: string | null;
+                chequeBanco: string | null;
+                /** Format: date-time */
+                chequeFechaPago: string | null;
             }[];
         };
         Certificado: {
@@ -1288,6 +1502,8 @@ export interface operations {
                         tipo: string;
                         /** Format: date-time */
                         fechaEmision: string;
+                        /** Format: date-time */
+                        fechaVencimiento: string | null;
                         /** Format: double */
                         total: number;
                         /** Format: double */
@@ -1680,6 +1896,12 @@ export interface operations {
     ListarFacturasDeCompra: {
         parameters: {
             query?: {
+                estado?: "pendiente" | "pagadas" | "todas";
+                proveedor?: string;
+                desde?: string;
+                hasta?: string;
+                pagina?: number;
+                /** @description por página */
                 limite?: number;
             };
             header?: never;
@@ -1688,27 +1910,38 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Las últimas, con lo ya imputado en pagos */
+            /** @description La página pedida y la deuda entera */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        id: string;
-                        tipo: string;
-                        puntoVenta: number;
-                        numero: number;
-                        /** Format: date-time */
-                        fechaEmision: string;
-                        /** Format: date-time */
-                        fechaVencimiento: string | null;
-                        proveedor: string;
-                        supplierId: string;
-                        neto: string;
-                        total: string;
-                        pagado: string;
-                    }[];
+                        facturas: {
+                            id: string;
+                            tipo: string;
+                            puntoVenta: number;
+                            numero: number;
+                            /** Format: date-time */
+                            fechaEmision: string;
+                            /** Format: date-time */
+                            fechaVencimiento: string | null;
+                            proveedor: string;
+                            supplierId: string;
+                            neto: string;
+                            total: string;
+                            pagado: string;
+                            /** Format: date-time */
+                            anuladaAt: string | null;
+                        }[];
+                        /** Format: double */
+                        impago: number;
+                        impagas: number;
+                        vencidas: number;
+                        /** Format: double */
+                        impagoVencido: number;
+                        hayMas: boolean;
+                    };
                 };
             };
         };
@@ -1721,6 +1954,59 @@ export interface operations {
             cookie?: never;
         };
         requestBody: components["requestBodies"]["Formulario"];
+        responses: {
+            200: components["responses"]["Hecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    FichaDeFacturaDeCompra: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La factura con sus importes, la mercadería de la recepción que cubre y los pagos que la cancelaron */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FichaDeFactura"];
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    CorregirFacturaDeCompra: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Formulario"];
+        responses: {
+            200: components["responses"]["Hecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    AnularFacturaDeCompra: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Motivo"];
         responses: {
             200: components["responses"]["Hecho"];
             422: components["responses"]["Problema"];
@@ -1814,6 +2100,9 @@ export interface operations {
                 content: {
                     "application/json": {
                         ok: string;
+                        id: string;
+                        /** @description si el efectivo no pudo salir de una caja */
+                        aviso?: string;
                         certificados: {
                             numero: string;
                             impuesto: string;
@@ -1824,6 +2113,52 @@ export interface operations {
                 };
             };
             422: components["responses"]["Problema"];
+        };
+    };
+    FichaDePagoAProveedor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El pago con las facturas que canceló, las retenciones, con qué salió la plata y de qué caja */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FichaDePago"];
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    OrdenDePagoPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La orden de pago en PDF, para que el proveedor firme de recibido */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            404: components["responses"]["Problema"];
         };
     };
     AnularPagoAProveedor: {
@@ -2111,6 +2446,8 @@ export interface operations {
                         id: string;
                         nombre: string;
                         turnoAbierto: string | null;
+                        /** @description el turno abierto lo abrió quien pregunta */
+                        deLaSesion: boolean;
                     }[];
                 };
             };

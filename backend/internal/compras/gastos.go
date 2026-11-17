@@ -194,14 +194,18 @@ type SucursalParaGasto struct {
 	ID           string  `json:"id"`
 	Nombre       string  `json:"nombre"`
 	TurnoAbierto *string `json:"turnoAbierto"`
+	// DeLaSesion: el turno abierto lo abrió quien está mirando. El usuario
+	// del panel no tiene una sucursal asignada; la caja que abrió hoy es lo
+	// más parecido, y es la que proponen los formularios de compras.
+	DeLaSesion bool `json:"deLaSesion"`
 }
 
-// SucursalesParaGasto es sucursalesParaGasto.
-func (s *Servicio) SucursalesParaGasto(ctx context.Context) ([]SucursalParaGasto, error) {
+// SucursalesParaGasto es sucursalesParaGasto: las activas, en su orden.
+func (s *Servicio) SucursalesParaGasto(ctx context.Context, usuario string) ([]SucursalParaGasto, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT b.id, b.name, c.id FROM branches b
+		SELECT b.id, b.name, c.id, coalesce(c.abierta_por = $1, false) FROM branches b
 		LEFT JOIN cash_sessions c ON c.branch_id = b.id AND c.estado = 'abierta'
-		WHERE b.active ORDER BY b.sort_order`)
+		WHERE b.active ORDER BY b.sort_order`, usuario)
 	if err != nil {
 		return nil, err
 	}

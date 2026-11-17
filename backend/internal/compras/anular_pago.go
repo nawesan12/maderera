@@ -11,6 +11,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/caja"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/sqlc"
@@ -21,18 +22,23 @@ import (
 //
 //   - La deuda con el proveedor vuelve con un movimiento de cuenta por el
 //     total (lo que bajó el pago, retenciones incluidas).
+//
 //   - Las imputaciones a facturas se borran: las facturas vuelven a tener
 //     saldo.
+//
 //   - Los certificados de retención quedan anulados (anulada_at) y las bases
 //     del pago se borran, así el acumulado del mes, el CSV y el cierre no los
 //     cuentan. El número del certificado no se reusa.
+//
 //   - Los cheques: uno de terceros que se endosó vuelve a la cartera; uno
 //     propio se anula. Si alguno ya lo cobró el proveedor o lo rechazó el
 //     banco, el pago no se anula: la plata ya se movió y hay que arreglarlo
 //     a mano con el proveedor.
 //
-// La parte en efectivo no sale de ninguna caja (el pago no toca la caja del
-// turno), así que no hay nada que devolver ahí.
+//   - El efectivo que salió de una caja vuelve a la caja de esa sucursal, al
+//     turno que está abierto ahora (el del pago puede estar cerrado, y su
+//     arqueo ya se contó). Sin turno abierto, se avisa: la plata está en la
+//     mano de alguien y hay que entrarla al abrir.
 func (s *Servicio) AnularPago(ctx context.Context, ses *auth.Sesion, id, motivo string) (string, error) {
 	motivo = trimJS(motivo)
 	if motivo == "" {
@@ -44,6 +50,8 @@ func (s *Servicio) AnularPago(ctx context.Context, ses *auth.Sesion, id, motivo 
 	var referencia *string
 	var certificados []string
 	var aCartera, anulados int
+	var devuelto float64
+	var sinCaja string
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		// El mismo candado que el pago: el acumulado del mes que lee otro
 		// pago simultáneo no puede ver la anulación a medias.
@@ -129,12 +137,36 @@ func (s *Servicio) AnularPago(ctx context.Context, ses *auth.Sesion, id, motivo 
 			return err
 		}
 
+		// El efectivo vuelve a la caja de la sucursal de donde salió.
+		var sucursal, nombreSucursal *string
+		var salio *jsmath.Num
+		if err := tx.QueryRow(ctx, `
+			SELECT sum(m.monto), min(c.branch_id::text), min(b.name)
+			FROM cash_movements m JOIN cash_sessions c ON c.id = m.session_id JOIN branches b ON b.id = c.branch_id
+			WHERE m.supplier_payment_id = $1`, id).Scan(&salio, &sucursal, &nombreSucursal); err != nil {
+			return err
+		}
+		if devuelto = -numOCero(salio); devuelto > 0.009 && sucursal != nil {
+			turno, hay, err := caja.TurnoAbiertoDe(ctx, tx, *sucursal)
+			if err != nil {
+				return err
+			}
+			if !hay {
+				sinCaja = *nombreSucursal
+			} else if _, err := tx.Exec(ctx, `
+				INSERT INTO cash_movements (session_id, tipo, monto, motivo, supplier_payment_id, creado_por)
+				VALUES ($1, 'ingreso', $2::numeric, $3, $4, $5)`,
+				turno, jsmath.Fijo2(devuelto), "Anulación del pago a "+nombre, id, ses.UserID); err != nil {
+				return err
+			}
+		}
+
 		// La deuda vuelve por lo mismo que la bajó el pago (el total, que
 		// incluye lo retenido).
 		detalle := "Anulación del pago del " + fecha.In(fiscal.Argentina).Format("02/01/2006") + ": " + motivo
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id)
-			VALUES ($1, 'ajuste', $2::numeric, $3, $4, $5)`, proveedor, jsmath.Fijo2(float64(total)), referencia, detalle, ses.UserID); err != nil {
+			INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id, supplier_payment_id)
+			VALUES ($1, 'ajuste', $2::numeric, $3, $4, $5, $6)`, proveedor, jsmath.Fijo2(float64(total)), referencia, detalle, ses.UserID, id); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `
@@ -161,6 +193,12 @@ func (s *Servicio) AnularPago(ctx context.Context, ses *auth.Sesion, id, motivo 
 	}
 	if anulados > 0 {
 		ok += cuantos(anulados, " El cheque propio quedó anulado.", " %d cheques propios quedaron anulados.")
+	}
+	switch {
+	case sinCaja != "":
+		ok += " La caja de " + sinCaja + " no tiene turno abierto: los " + Monto(devuelto) + " en efectivo que vuelven no entraron a ningún turno. Cargalos como ingreso al abrir."
+	case devuelto > 0.009:
+		ok += " Los " + Monto(devuelto) + " en efectivo volvieron a la caja."
 	}
 	return ok, nil
 }

@@ -3,17 +3,22 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
-import { sucursalesConCaja } from "@/lib/dal/admin/caja";
+import { sucursalesParaGasto } from "@/lib/dal/admin/gastos";
 import { FormularioRecepcion } from "./formulario";
 
 export const metadata: Metadata = { title: "Nueva recepción" };
 
+/*
+ * Los costos van netos, como los factura el proveedor. Se guarda en borrador:
+ * el stock y el costo se mueven al confirmar. (Lo decía una bajada en la
+ * pantalla; el porqué va acá, no ahí.)
+ */
 export default async function NuevaRecepcionPage() {
   await requireStaffRole("admin");
 
   const [proveedores, sucursales] = await Promise.all([
     proveedoresParaElegir(),
-    sucursalesConCaja(),
+    sucursalesParaGasto(),
   ]);
 
   return (
@@ -29,15 +34,11 @@ export default async function NuevaRecepcionPage() {
         <h1 className="mt-2 text-[26px] font-bold tracking-tight">
           Nueva recepción
         </h1>
-        <p className="mt-1 text-base text-muted-foreground">
-          Los costos van <strong>netos</strong>, como los factura el proveedor.
-          Se guarda en borrador: el stock y el costo se mueven al confirmar.
-        </p>
       </div>
 
       <FormularioRecepcion
         proveedores={proveedores}
-        sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
+        sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre, deLaSesion: s.deLaSesion }))}
       />
     </div>
   );

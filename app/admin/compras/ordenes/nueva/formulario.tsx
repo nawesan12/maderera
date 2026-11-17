@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { sucursalPropuesta } from "../../sucursal-propuesta";
 import { ClipboardList, Loader2, Search, Store, Trash2 } from "lucide-react";
 import {
   BarraGuardar,
@@ -46,7 +47,7 @@ export function FormularioOrden({
   renglonesIniciales,
 }: {
   proveedores: { id: string; nombre: string }[];
-  sucursales: { id: string; nombre: string }[];
+  sucursales: { id: string; nombre: string; deLaSesion?: boolean }[];
   /**
    * Con qué arranca la orden, cuando se llega desde el reporte de reposición.
    *
@@ -60,8 +61,10 @@ export function FormularioOrden({
   const [estado, setEstado] = useState<EstadoOrden>({});
   const [enCurso, empezar] = useTransition();
 
-  const [supplierId, setSupplierId] = useState(proveedores[0]?.id ?? "");
-  const [branchId, setBranchId] = useState(sucursales[0]?.id ?? "");
+  // Ningún proveedor de entrada (el primero alfabético casi nunca es el que
+  // se quiere) y la sucursal de quien carga, si se sabe (sucursalPropuesta).
+  const [supplierId, setSupplierId] = useState("");
+  const [branchId, setBranchId] = useState(() => sucursalPropuesta(sucursales));
   const [fechaPrometida, setFecha] = useState("");
   const [notas, setNotas] = useState("");
   const [lineas, setLineas] = useState<Linea[]>(renglonesIniciales ?? []);
@@ -127,6 +130,9 @@ export function FormularioOrden({
               onChange={(e) => setSupplierId(e.target.value)}
               className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             >
+              <option value="" disabled>
+                Elegí el proveedor
+              </option>
               {proveedores.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nombre}
@@ -157,6 +163,9 @@ export function FormularioOrden({
                 onChange={(e) => setBranchId(e.target.value)}
                 className="h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
               >
+                <option value="" disabled>
+                  Elegí la sucursal
+                </option>
                 {sucursales.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.nombre}

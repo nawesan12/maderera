@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { sucursalPropuesta } from "../../compras/sucursal-propuesta";
 import { FileText, Loader2, Search, Store, Trash2, Truck } from "lucide-react";
 import {
   BarraGuardar,
@@ -55,14 +56,17 @@ export function FormularioRecepcion({
   sucursales,
 }: {
   proveedores: { id: string; nombre: string }[];
-  sucursales: { id: string; nombre: string }[];
+  sucursales: { id: string; nombre: string; deLaSesion?: boolean }[];
 }) {
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoRecepcion>({});
   const [enCurso, empezar] = useTransition();
 
-  const [supplierId, setSupplierId] = useState(proveedores[0]?.id ?? "");
-  const [branchId, setBranchId] = useState(sucursales[0]?.id ?? "");
+  // Ningún proveedor de entrada (el primero alfabético casi nunca es el que
+  // se quiere) y la sucursal de quien carga, si se sabe (sucursalPropuesta):
+  // una recepción del aserradero quedaba cargada en Casa Central.
+  const [supplierId, setSupplierId] = useState("");
+  const [branchId, setBranchId] = useState(() => sucursalPropuesta(sucursales));
   const [numeroRemito, setNumeroRemito] = useState("");
   const [fecha, setFecha] = useState(hoyEnArgentina);
   const [gastos, setGastos] = useState("");
@@ -168,6 +172,9 @@ export function FormularioRecepcion({
               onChange={(e) => setSupplierId(e.target.value)}
               className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             >
+              <option value="" disabled>
+                Elegí el proveedor
+              </option>
               {proveedores.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nombre}
@@ -198,6 +205,9 @@ export function FormularioRecepcion({
                 onChange={(e) => setBranchId(e.target.value)}
                 className="h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
               >
+                <option value="" disabled>
+                  Elegí la sucursal
+                </option>
                 {sucursales.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.nombre}

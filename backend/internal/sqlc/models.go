@@ -5018,16 +5018,17 @@ type CartItem struct {
 }
 
 type CashMovement struct {
-	ID        string             `json:"id"`
-	SessionID string             `json:"sessionId"`
-	Tipo      TipoMovimientoCaja `json:"tipo"`
-	Monto     jsmath.Num         `json:"monto"`
-	Motivo    *string            `json:"motivo"`
-	OrderID   *string            `json:"orderId"`
-	CreadoPor *string            `json:"creadoPor"`
-	CreatedAt time.Time          `json:"createdAt"`
-	Clave     *string            `json:"clave"`
-	ExpenseID *string            `json:"expenseId"`
+	ID                string             `json:"id"`
+	SessionID         string             `json:"sessionId"`
+	Tipo              TipoMovimientoCaja `json:"tipo"`
+	Monto             jsmath.Num         `json:"monto"`
+	Motivo            *string            `json:"motivo"`
+	OrderID           *string            `json:"orderId"`
+	CreadoPor         *string            `json:"creadoPor"`
+	CreatedAt         time.Time          `json:"createdAt"`
+	Clave             *string            `json:"clave"`
+	ExpenseID         *string            `json:"expenseId"`
+	SupplierPaymentID *string            `json:"supplierPaymentId"`
 }
 
 type CashSession struct {
@@ -5887,6 +5888,11 @@ type PurchaseInvoice struct {
 	CreatedByUserID  *string               `json:"createdByUserId"`
 	CreatedAt        time.Time             `json:"createdAt"`
 	UpdatedAt        time.Time             `json:"updatedAt"`
+	AnuladaAt        pgtype.Timestamptz    `json:"anuladaAt"`
+	MotivoAnulacion  *string               `json:"motivoAnulacion"`
+	AnuladaPorUserID *string               `json:"anuladaPorUserId"`
+	PercepcionIva    jsmath.Num            `json:"percepcionIva"`
+	PercepcionIibb   jsmath.Num            `json:"percepcionIibb"`
 }
 
 type PurchaseOrder struct {
@@ -6157,15 +6163,17 @@ type Supplier struct {
 }
 
 type SupplierMovement struct {
-	ID              string                  `json:"id"`
-	SupplierID      string                  `json:"supplierId"`
-	Tipo            TipoMovimientoProveedor `json:"tipo"`
-	Monto           jsmath.Num              `json:"monto"`
-	Detalle         *string                 `json:"detalle"`
-	Referencia      *string                 `json:"referencia"`
-	CreatedByUserID *string                 `json:"createdByUserId"`
-	CreatedAt       time.Time               `json:"createdAt"`
-	GoodsReceiptID  *string                 `json:"goodsReceiptId"`
+	ID                string                  `json:"id"`
+	SupplierID        string                  `json:"supplierId"`
+	Tipo              TipoMovimientoProveedor `json:"tipo"`
+	Monto             jsmath.Num              `json:"monto"`
+	Detalle           *string                 `json:"detalle"`
+	Referencia        *string                 `json:"referencia"`
+	CreatedByUserID   *string                 `json:"createdByUserId"`
+	CreatedAt         time.Time               `json:"createdAt"`
+	GoodsReceiptID    *string                 `json:"goodsReceiptId"`
+	PurchaseInvoiceID *string                 `json:"purchaseInvoiceId"`
+	SupplierPaymentID *string                 `json:"supplierPaymentId"`
 }
 
 type SupplierPayment struct {

@@ -46,6 +46,12 @@ export default async function CierrePage({
     { month: "long", year: "numeric" },
   );
 
+  const resultado = resumen.resultado;
+  const etiquetaAnterior = new Date(periodo.anio, periodo.mes - 2, 1).toLocaleDateString(
+    "es-AR",
+    { month: "long" },
+  );
+
   // Debería ser siempre cero: un asiento que no cierra hace que el estudio
   // rechace el archivo entero.
   const rotos = asientosDesbalanceados(asientos);
@@ -117,10 +123,6 @@ export default async function CierrePage({
             <h2 className="text-base font-semibold">
               Antes de cerrar conviene resolver esto
             </h2>
-            <p className="text-sm">
-              No bloquea nada. Son las cosas que, si quedan así, el estudio va a
-              preguntar.
-            </p>
           </header>
           <ul className="divide-y divide-linea">
             {pendientes.map((p) => (
@@ -143,7 +145,72 @@ export default async function CierrePage({
         </section>
       )}
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/*
+        El resultado del mes junto a la posición de IVA: son las dos
+        preguntas del dueño al cerrar —cuánto gané y cuánto tengo que pagar—.
+        Ventas netas sin IVA y su costo salen de los pedidos (el mismo cálculo
+        que Reportes y que el inicio), los gastos de lo anotado en Gastos;
+        se compara con el mes anterior entero. Con renglones vendidos sin
+        costo cargado, el costo está corto y el resultado inflado: se dice al
+        lado del número.
+      */}
+      <section className="grid gap-3 lg:grid-cols-2">
+        <article className="tarjeta p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <h2 className="text-lg font-semibold">Resultado del mes</h2>
+            {resultado.variacion !== null && (
+              <span
+                className={`tabular text-base font-semibold ${
+                  resultado.variacion >= 0 ? "text-saldo-favor" : "text-saldo-debe"
+                }`}
+              >
+                {resultado.variacion > 0 ? "+" : ""}
+                {resultado.variacion.toLocaleString("es-AR")}% vs. {etiquetaAnterior}
+              </span>
+            )}
+          </div>
+          <p
+            className={`tabular mt-2 text-[34px] font-bold leading-none tracking-[-0.03em] ${
+              resultado.actual.resultado < 0 ? "text-saldo-debe" : ""
+            }`}
+          >
+            {formatearMonto(resultado.actual.resultado)}
+          </p>
+          <dl className="mt-4 space-y-1.5 text-base">
+            <Linea titulo="Vendido sin IVA" valor={resultado.actual.ventasNetas} />
+            <Linea titulo="Costo de lo vendido" valor={-resultado.actual.costo} />
+            <Linea titulo="Gastos" valor={-resultado.actual.gastos} />
+            <Linea
+              titulo={`Resultado de ${etiquetaAnterior}`}
+              valor={resultado.anterior.resultado}
+              apagado
+            />
+          </dl>
+          {resultado.actual.lineasSinCosto > 0 && (
+            <p className="estado-problema mt-3 text-base font-medium">
+              {resultado.actual.lineasSinCosto === 1
+                ? "1 renglón vendido sin costo"
+                : `${resultado.actual.lineasSinCosto} renglones vendidos sin costo`}
+            </p>
+          )}
+        </article>
+
+        <article className="tarjeta p-5">
+          <h2 className="text-lg font-semibold">Posición de IVA</h2>
+          <p
+            className={`tabular mt-2 text-[34px] font-bold leading-none tracking-[-0.03em] ${
+              resumen.posicionIva >= 0 ? "text-saldo-debe" : "text-saldo-favor"
+            }`}
+          >
+            {formatearMonto(Math.abs(resumen.posicionIva))}
+          </p>
+          <p className="mt-2 text-base text-muted-foreground">
+            {resumen.posicionIva >= 0 ? "A depositar" : "Saldo a favor"}
+          </p>
+        </article>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-3">
         <Tarjeta
           titulo="Ventas netas"
           valor={resumen.ventas.neto}
@@ -162,16 +229,6 @@ export default async function CierrePage({
           detalle={`${resumen.gastos.cantidad} anotados`}
           href={`/admin/compras/gastos?periodo=${periodo.clave}`}
         />
-        <Tarjeta
-          titulo="Posición de IVA"
-          valor={resumen.posicionIva}
-          detalle={
-            resumen.posicionIva >= 0
-              ? "a depositar"
-              : "saldo a favor para el mes que viene"
-          }
-          destacado
-        />
       </section>
 
       <section className="tarjeta overflow-hidden">
@@ -181,35 +238,32 @@ export default async function CierrePage({
         <dl className="divide-y divide-linea">
           <Renglon
             titulo="IVA débito fiscal"
-            detalle="Lo que se le cobró a los clientes"
+            detalle={`${resumen.ventas.cantidad} comprobantes`}
             valor={resumen.ventas.iva}
           />
           <Renglon
             titulo="IVA crédito fiscal computable"
-            detalle="Solo los comprobantes que discriminan IVA: la B y la C no dan crédito"
+            detalle={`${resumen.compras.cantidad} comprobantes`}
             valor={-resumen.compras.iva}
           />
           <Renglon
             titulo="Retenciones practicadas"
-            detalle={`${resumen.retencionesPracticadas.cantidad} certificados entregados · se depositan aparte`}
+            detalle={`${resumen.retencionesPracticadas.cantidad} certificados entregados`}
             valor={resumen.retencionesPracticadas.total}
           />
           <Renglon
             titulo="Retenciones sufridas"
-            detalle={`${resumen.retencionesSufridas.cantidad} certificados recibidos · se descuentan del impuesto`}
+            detalle={`${resumen.retencionesSufridas.cantidad} certificados recibidos`}
             valor={-resumen.retencionesSufridas.total}
           />
         </dl>
       </section>
 
-      <p className="text-base text-muted-foreground">
-        La exportación trae los asientos de ventas, cobros (los recibos, sus
-        anulaciones y las ventas facturadas que se cobraron en el mostrador o en
-        línea), compras, pagos a proveedores y gastos, con código y nombre de
-        cuenta para que el estudio los remapee
-        al plan que usa. El libro diario, el mayor y el balance los lleva el
-        estudio: acá se construye lo que necesita para importar.
-      </p>
+      {/* La exportación trae los asientos de ventas, cobros (los recibos, sus
+          anulaciones y las ventas facturadas que se cobraron en el mostrador
+          o en línea), compras, pagos a proveedores y gastos, con código y
+          nombre de cuenta para que el estudio los remapee al plan que usa. El
+          libro diario, el mayor y el balance los lleva el estudio. */}
     </div>
   );
 }
@@ -283,6 +337,23 @@ function Renglon({
       <dd className="tabular shrink-0 text-base font-semibold">
         {formatearMonto(valor)}
       </dd>
+    </div>
+  );
+}
+
+function Linea({
+  titulo,
+  valor,
+  apagado = false,
+}: {
+  titulo: string;
+  valor: number;
+  apagado?: boolean;
+}) {
+  return (
+    <div className={`flex justify-between gap-3 ${apagado ? "text-muted-foreground" : ""}`}>
+      <dt>{titulo}</dt>
+      <dd className="tabular font-medium">{formatearMonto(valor)}</dd>
     </div>
   );
 }

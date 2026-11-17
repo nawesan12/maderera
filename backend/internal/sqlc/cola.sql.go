@@ -97,15 +97,16 @@ UPDATE trabajos
     LIMIT 1
     FOR UPDATE SKIP LOCKED
  )
-RETURNING id, tipo, carga, intentos, max_intentos
+RETURNING id, tipo, carga, intentos, max_intentos, tomado_hasta::timestamptz AS toma
 `
 
 type TomarTrabajoRow struct {
-	ID          string          `json:"id"`
-	Tipo        string          `json:"tipo"`
-	Carga       json.RawMessage `json:"carga"`
-	Intentos    int32           `json:"intentos"`
-	MaxIntentos int32           `json:"maxIntentos"`
+	ID          string             `json:"id"`
+	Tipo        string             `json:"tipo"`
+	Carga       json.RawMessage    `json:"carga"`
+	Intentos    int32              `json:"intentos"`
+	MaxIntentos int32              `json:"maxIntentos"`
+	Toma        pgtype.Timestamptz `json:"toma"`
 }
 
 // Uno por vez, con SKIP LOCKED: varios procesos pueden tomar en paralelo sin
@@ -121,6 +122,7 @@ func (q *Queries) TomarTrabajo(ctx context.Context, tipos []string) (TomarTrabaj
 		&i.Carga,
 		&i.Intentos,
 		&i.MaxIntentos,
+		&i.Toma,
 	)
 	return i, err
 }
@@ -132,14 +134,15 @@ UPDATE trabajos
        tomado_hasta = null,
        proximo_intento_at = now() + make_interval(secs => $3::float8),
        terminado_at = CASE WHEN $1::estado_trabajo = 'fallido' THEN now() END
- WHERE id = $4
+ WHERE id = $4 AND estado = 'procesando' AND tomado_hasta = $5::timestamptz
 `
 
 type TrabajoFalloParams struct {
-	Estado         EstadoTrabajo `json:"estado"`
-	Error          *string       `json:"error"`
-	EsperaSegundos float64       `json:"esperaSegundos"`
-	ID             string        `json:"id"`
+	Estado         EstadoTrabajo      `json:"estado"`
+	Error          *string            `json:"error"`
+	EsperaSegundos float64            `json:"esperaSegundos"`
+	ID             string             `json:"id"`
+	Toma           pgtype.Timestamptz `json:"toma"`
 }
 
 func (q *Queries) TrabajoFallo(ctx context.Context, arg TrabajoFalloParams) error {
@@ -148,17 +151,28 @@ func (q *Queries) TrabajoFallo(ctx context.Context, arg TrabajoFalloParams) erro
 		arg.Error,
 		arg.EsperaSegundos,
 		arg.ID,
+		arg.Toma,
 	)
 	return err
 }
 
-const trabajoHecho = `-- name: TrabajoHecho :exec
+const trabajoHecho = `-- name: TrabajoHecho :execrows
 UPDATE trabajos
    SET estado = 'hecho', terminado_at = now(), tomado_hasta = null, ultimo_error = null
- WHERE id = $1
+ WHERE id = $1 AND estado = 'procesando' AND tomado_hasta = $2::timestamptz
 `
 
-func (q *Queries) TrabajoHecho(ctx context.Context, id string) error {
-	_, err := q.db.Exec(ctx, trabajoHecho, id)
-	return err
+type TrabajoHechoParams struct {
+	ID   string             `json:"id"`
+	Toma pgtype.Timestamptz `json:"toma"`
+}
+
+// Solo quien lo tomó lo cierra: si se le venció el plazo y otro proceso lo
+// retomó, `tomado_hasta` ya es otro y esto no toca nada.
+func (q *Queries) TrabajoHecho(ctx context.Context, arg TrabajoHechoParams) (int64, error) {
+	result, err := q.db.Exec(ctx, trabajoHecho, arg.ID, arg.Toma)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

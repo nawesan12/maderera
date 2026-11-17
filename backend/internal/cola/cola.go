@@ -88,6 +88,10 @@ type Resultado struct {
 }
 
 // Procesar toma y hace hasta `limite` trabajos.
+// PlazoPorTrabajo es cuánto puede tardar un trabajo: menos que la toma de
+// 5 minutos, así nadie lo retoma mientras todavía corre.
+const PlazoPorTrabajo = 4 * time.Minute
+
 func (c *Cola) Procesar(ctx context.Context, limite int) (Resultado, error) {
 	var r Resultado
 	tipos := c.tipos()
@@ -102,10 +106,22 @@ func (c *Cola) Procesar(ctx context.Context, limite int) (Resultado, error) {
 		if err != nil {
 			return r, fmt.Errorf("tomando un trabajo: %w", err)
 		}
-		err = c.hacer(ctx, t)
+		// Cada trabajo con su propio plazo, más corto que la toma (5 min):
+		// antes uno solo cubría los 100 de la pasada y los últimos fallaban
+		// por un plazo que no era suyo. Cerrarlo va con otro contexto, para
+		// que un trabajo vencido igual se anote.
+		hecho, cortar := context.WithTimeout(ctx, PlazoPorTrabajo)
+		err = c.hacer(hecho, t)
+		cortar()
+		anotar, listo := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		if err == nil {
-			if err := c.q.TrabajoHecho(ctx, t.ID); err != nil {
+			n, err := c.q.TrabajoHecho(anotar, sqlc.TrabajoHechoParams{ID: t.ID, Toma: t.Toma})
+			listo()
+			if err != nil {
 				return r, err
+			}
+			if n == 0 {
+				c.log.Warn("trabajo_retomado", "tipo", t.Tipo, "id", t.ID)
 			}
 			r.Hechos++
 			continue
@@ -119,9 +135,11 @@ func (c *Cola) Procesar(ctx context.Context, limite int) (Resultado, error) {
 		if agotado {
 			estado = sqlc.EstadoTrabajoFallido
 		}
-		if err := c.q.TrabajoFallo(ctx, sqlc.TrabajoFalloParams{
-			ID: t.ID, Estado: estado, Error: &mensaje, EsperaSegundos: EsperaParaElIntento(t.Intentos).Seconds(),
-		}); err != nil {
+		err = c.q.TrabajoFallo(anotar, sqlc.TrabajoFalloParams{
+			ID: t.ID, Toma: t.Toma, Estado: estado, Error: &mensaje, EsperaSegundos: EsperaParaElIntento(t.Intentos).Seconds(),
+		})
+		listo()
+		if err != nil {
 			return r, err
 		}
 		evento := "trabajo_reintento"

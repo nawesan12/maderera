@@ -27,12 +27,14 @@ UPDATE trabajos
     LIMIT 1
     FOR UPDATE SKIP LOCKED
  )
-RETURNING id, tipo, carga, intentos, max_intentos;
+RETURNING id, tipo, carga, intentos, max_intentos, tomado_hasta::timestamptz AS toma;
 
--- name: TrabajoHecho :exec
+-- name: TrabajoHecho :execrows
+-- Solo quien lo tomó lo cierra: si se le venció el plazo y otro proceso lo
+-- retomó, `tomado_hasta` ya es otro y esto no toca nada.
 UPDATE trabajos
    SET estado = 'hecho', terminado_at = now(), tomado_hasta = null, ultimo_error = null
- WHERE id = $1;
+ WHERE id = $1 AND estado = 'procesando' AND tomado_hasta = sqlc.arg(toma)::timestamptz;
 
 -- name: TrabajoFallo :exec
 UPDATE trabajos
@@ -41,7 +43,7 @@ UPDATE trabajos
        tomado_hasta = null,
        proximo_intento_at = now() + make_interval(secs => sqlc.arg(espera_segundos)::float8),
        terminado_at = CASE WHEN sqlc.arg(estado)::estado_trabajo = 'fallido' THEN now() END
- WHERE id = sqlc.arg(id);
+ WHERE id = sqlc.arg(id) AND estado = 'procesando' AND tomado_hasta = sqlc.arg(toma)::timestamptz;
 
 -- name: EmpezarCorrida :one
 -- Una tarea corre una vez por período. Si la corrida anterior falló, o quedó

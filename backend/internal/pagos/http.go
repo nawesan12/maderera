@@ -348,7 +348,9 @@ func (a *API) webhook(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}
-	crudo, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	// El aviso de Mercado Pago es chico (un id y el tipo): 64 KB sobra, y
+	// el mega de antes dejaba llenar la cola con cualquier cosa.
+	crudo, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
 	if err != nil {
 		listo()
 		return
@@ -369,6 +371,15 @@ func (a *API) webhook(w http.ResponseWriter, r *http.Request) {
 			req = &v
 		}
 		verificada = FirmaValida(DataIDDelAviso(r.URL.Query(), cuerpo), req, c.Ts, c.V1, a.s.cfg.WebhookSecret, a.ahora())
+	}
+	// Sin firma válida el worker lo descarta igual (ProcesarAviso): no se
+	// encola. Es la ruta pública que escribe en la base sin sesión, y una
+	// ráfaga llenaba `trabajos` y atrasaba las acreditaciones de verdad. El
+	// demo no pasa por acá: entra directo a ProcesarAviso.
+	if !verificada {
+		a.s.log.Warn("aviso de pago con firma inválida, descartado en la puerta")
+		listo()
+		return
 	}
 	u := url.URL{Scheme: "https", Host: r.Host, Path: r.URL.Path, RawQuery: r.URL.RawQuery}
 	if _, err := cola.Encolar(r.Context(), sqlc.New(a.s.pool), TipoAviso, CargaAviso{

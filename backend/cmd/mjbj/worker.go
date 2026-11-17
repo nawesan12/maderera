@@ -290,9 +290,11 @@ func correrWorker() error {
 		}
 		seguir = false
 		// Lo que está a mitad de hacerse termina aunque llegue el SIGTERM:
-		// el contexto de la pasada no es el de la señal.
-		pasada, cancelar := context.WithTimeout(context.Background(), 5*time.Minute)
-		if r, err := c.Procesar(pasada, 100); err != nil {
+		// el contexto de la pasada no es el de la señal. Cada trabajo tiene
+		// su plazo (cola.PlazoPorTrabajo) y las tareas el suyo: antes los
+		// cinco minutos eran de toda la pasada, y las tareas corrían con lo
+		// que dejara la cola.
+		if r, err := c.Procesar(context.Background(), 100); err != nil {
 			log.Error("cola", "error", err)
 		} else if n := r.Hechos + r.Reintentos + r.Fallidos; n > 0 {
 			log.Info("cola", "hechos", r.Hechos, "reintentos", r.Reintentos, "fallidos", r.Fallidos)
@@ -302,9 +304,12 @@ func correrWorker() error {
 		if time.Since(ultimaRevision) >= time.Minute {
 			ultimaRevision = time.Now()
 			for _, t := range lista {
-				_, _ = tareas.Correr(pasada, q, log, t, time.Now())
+				tarea, cancelar := context.WithTimeout(context.Background(), 5*time.Minute)
+				if _, err := tareas.Correr(tarea, q, log, t, time.Now()); err != nil {
+					log.Error("tarea", "nombre", t.Nombre, "error", err)
+				}
+				cancelar()
 			}
 		}
-		cancelar()
 	}
 }

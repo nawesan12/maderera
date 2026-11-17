@@ -17,6 +17,9 @@ type FilaDeLista struct {
 	Precio    *string `json:"precio"`
 }
 
+// Dos medidas con el mismo orden salían en cualquier orden (y la prueba
+// fallaba de a ratos): se desempata por cuál se cargó primero.
+//
 // A mano y no con sqlc: sqlc pierde que el precio puede faltar (una variante
 // sin precio cargado) en cuanto la columna tiene un cast.
 const filasDeMiLista = `
@@ -28,7 +31,7 @@ JOIN categories c ON c.id = p.category_id
 LEFT JOIN price_list_items pr ON pr.variant_id = v.id AND pr.price_list_id = $2::uuid
 LEFT JOIN price_list_items g ON g.variant_id = v.id AND g.price_list_id = $3::uuid
 WHERE p.active AND v.active
-ORDER BY c.sort_order, p.name, v.sort_order`
+ORDER BY c.sort_order, p.name, v.sort_order, v.created_at, v.id`
 
 // FilasDeMiLista son las variantes activas con el precio de la lista dada,
 // calculado como en el catálogo: el propio, o el general por el factor de

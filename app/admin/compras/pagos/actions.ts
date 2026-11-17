@@ -15,14 +15,22 @@ import { chequesEnCartera } from "@/lib/dal/admin/cheques";
 export interface EstadoPago {
   error?: string;
   ok?: string;
+  /** El pago registrado: para ir a su ficha y a la orden de pago. */
+  id?: string;
+  /** Si el efectivo no pudo salir de una caja. */
+  aviso?: string;
   /** Los certificados emitidos, para poder imprimirlos en el acto. */
   certificados?: { numero: string; impuesto: string; importe: number }[];
 }
 
 export interface DatosPago {
   supplierId: string;
-  /** Lo que se le imputa a la deuda, retenciones incluidas. */
+  /** Lo que baja la deuda, retenciones incluidas. */
   total: number;
+  /** aaaa-mm-dd; sin ella, hoy. */
+  fecha?: string;
+  /** La sucursal de cuya caja sale el efectivo. */
+  branchId?: string;
   medio: "transferencia" | "efectivo" | "cheque" | "echeq";
   circuito?: "blanco" | "negro";
   referencia?: string;
@@ -46,8 +54,9 @@ export async function pagarAProveedor(datos: DatosPago): Promise<EstadoPago> {
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo registrar el pago.") };
   revalidatePath("/admin/compras/pagos");
+  revalidatePath("/admin/compras/facturas");
   revalidatePath(`/admin/proveedores/${datos.supplierId}`);
-  return { ok: r.data.ok, certificados: r.data.certificados };
+  return { ok: r.data.ok, id: r.data.id, aviso: r.data.aviso, certificados: r.data.certificados };
 }
 
 /** Lo ya retenido este mes, para mostrarlo antes de pagar. */
@@ -55,7 +64,7 @@ export async function verAcumulado(supplierId: string) {
   return acumuladoDelMes(supplierId);
 }
 
-/** Las facturas con saldo del proveedor, para imputar el pago. */
+/** Las facturas con saldo del proveedor, por vencimiento, para elegir qué se paga. */
 export async function verFacturasConSaldo(supplierId: string) {
   return facturasConSaldo(supplierId);
 }
@@ -68,9 +77,10 @@ export async function verChequesEnCartera() {
 /**
  * Anula un pago cargado por error. Solo el admin, con motivo, y queda en la
  * bitácora. La API de Go (backend/internal/compras) devuelve la deuda con el
- * proveedor, borra las imputaciones, anula los certificados de retención y
- * deshace los cheques (los endosados vuelven a cartera, los propios se
- * anulan). Un cheque ya cobrado o rechazado no se puede deshacer: se avisa.
+ * proveedor, saca lo aplicado a las facturas, anula los certificados de
+ * retención, deshace los cheques (los endosados vuelven a cartera, los
+ * propios se anulan) y devuelve el efectivo a la caja. Un cheque ya cobrado o
+ * rechazado no se puede deshacer: se avisa.
  */
 export async function anularPago(
   id: string,
@@ -83,7 +93,10 @@ export async function anularPago(
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo anular el pago.") };
   revalidatePath("/admin/compras/pagos");
+  revalidatePath(`/admin/compras/pagos/${id}`);
+  revalidatePath("/admin/compras/facturas");
   revalidatePath(`/admin/proveedores/${supplierId}`);
   revalidatePath("/admin/cheques");
+  revalidatePath("/admin/caja");
   return { ok: r.data.ok };
 }

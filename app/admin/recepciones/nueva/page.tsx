@@ -8,6 +8,11 @@ import { FormularioRecepcion } from "./formulario";
 
 export const metadata: Metadata = { title: "Nueva recepción" };
 
+/*
+ * Los costos van netos, como los factura el proveedor. Se guarda en borrador:
+ * el stock y el costo se mueven al confirmar. (Lo decía una bajada en la
+ * pantalla; el porqué va acá, no ahí.)
+ */
 export default async function NuevaRecepcionPage() {
   await requireStaffRole("admin");
 
@@ -29,10 +34,6 @@ export default async function NuevaRecepcionPage() {
         <h1 className="mt-2 text-[26px] font-bold tracking-tight">
           Nueva recepción
         </h1>
-        <p className="mt-1 text-base text-muted-foreground">
-          Los costos van <strong>netos</strong>, como los factura el proveedor.
-          Se guarda en borrador: el stock y el costo se mueven al confirmar.
-        </p>
       </div>
 
       <FormularioRecepcion

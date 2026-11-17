@@ -7,6 +7,7 @@ import {
   Building2,
   CircleSlash,
   Loader2,
+  Pencil,
   Phone,
   Plus,
   ShieldCheck,
@@ -63,10 +64,30 @@ const RUBROS = Object.fromEntries(
   RUBROS_CLIENTE.map((r) => [r.valor, r.etiqueta]),
 );
 
+/** Lo que ya tiene cargado el cliente, para editarlo. */
+export interface ClienteParaEditar {
+  id: string;
+  nombre: string;
+  razonSocial: string | null;
+  cuit: string | null;
+  condicionIva: string;
+  email: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  rubro: string | null;
+  tipo: string;
+  priceListId: string | null;
+  sellerId: string | null;
+  limiteCredito: string;
+  asesor: string | null;
+  notas: string | null;
+}
+
 export function DialogoCliente({
   listas,
   vendedores = [],
   abrirDeEntrada = false,
+  cliente,
 }: {
   listas: { id: string; name: string; isDefault: boolean }[];
   vendedores?: { id: string; nombre: string; tipo: "salon" | "calle" }[];
@@ -77,6 +98,11 @@ export function DialogoCliente({
    * lista, el botón prometería un alta y entregaría una búsqueda.
    */
   abrirDeEntrada?: boolean;
+  /**
+   * Con un cliente, el mismo diálogo corrige sus datos. Antes no había cómo:
+   * un CUIT o un teléfono mal cargado quedaba así para siempre.
+   */
+  cliente?: ClienteParaEditar;
 }) {
   const [abierto, setAbierto] = useState(abrirDeEntrada);
   const [, accion, pendiente] = useAccionDeDialogo(
@@ -85,11 +111,11 @@ export function DialogoCliente({
     () => setAbierto(false),
   );
 
-  const [tipo, setTipo] = useState("particular");
-  const [rubro, setRubro] = useState("particular");
-  const [condicion, setCondicion] = useState("consumidor_final");
-  const [lista, setLista] = useState("");
-  const [vendedor, setVendedor] = useState("");
+  const [tipo, setTipo] = useState(cliente?.tipo ?? "particular");
+  const [rubro, setRubro] = useState(cliente?.rubro ?? "particular");
+  const [condicion, setCondicion] = useState(cliente?.condicionIva ?? "consumidor_final");
+  const [lista, setLista] = useState(cliente?.priceListId ?? "");
+  const [vendedor, setVendedor] = useState(cliente?.sellerId ?? "");
 
   // El vendedor asignado dejó de ser texto libre: "Gabriela" y "GABRIELA" eran
   // dos personas para el reporte. La opción vacía es "sin asignar".
@@ -140,16 +166,26 @@ export function DialogoCliente({
 
   return (
     <Dialog open={abierto} onOpenChange={setAbierto}>
-      <DialogTrigger className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors">
-        <Plus className="h-5 w-5" />
-        Nuevo cliente
-      </DialogTrigger>
+      {cliente ? (
+        <DialogTrigger className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted">
+          <Pencil className="h-5 w-5" />
+          Editar datos
+        </DialogTrigger>
+      ) : (
+        <DialogTrigger className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors">
+          <Plus className="h-5 w-5" />
+          Nuevo cliente
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-2xl max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nuevo cliente</DialogTitle>
+          <DialogTitle>{cliente ? cliente.nombre : "Nuevo cliente"}</DialogTitle>
         </DialogHeader>
 
         <form {...sinReiniciar(accion)} className="space-y-4">
+          {cliente && <input type="hidden" name="id" value={cliente.id} />}
+          {/* El asesor del sistema viejo no se edita acá, pero guardar sin él lo borraba. */}
+          {cliente?.asesor && <input type="hidden" name="asesor" value={cliente.asesor} />}
           <input type="hidden" name="tipo" value={tipo} />
           <input type="hidden" name="condicionIva" value={condicion} />
           <input type="hidden" name="priceListId" value={lista} />
@@ -159,11 +195,11 @@ export function DialogoCliente({
             <Seccion titulo="Quién es" icono={UserRound}>
               <div className="space-y-2">
                 <Label htmlFor="nombre">Nombre y apellido</Label>
-                <Input id="nombre" name="nombre" required autoFocus />
+                <Input id="nombre" name="nombre" required autoFocus defaultValue={cliente?.nombre} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="razonSocial">Empresa</Label>
-                <Input id="razonSocial" name="razonSocial" />
+                <Input id="razonSocial" name="razonSocial" defaultValue={cliente?.razonSocial ?? ""} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="cliente-rubro">A qué se dedica</Label>
@@ -192,6 +228,7 @@ export function DialogoCliente({
                   name="cuit"
                   placeholder="20-12345678-9"
                   inputMode="numeric"
+                  defaultValue={cliente?.cuit ?? ""}
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
@@ -209,15 +246,15 @@ export function DialogoCliente({
             <Seccion titulo="Contacto" icono={Phone}>
               <div className="space-y-2">
                 <Label htmlFor="email">Correo</Label>
-                <Input id="email" name="email" type="email" />
+                <Input id="email" name="email" type="email" defaultValue={cliente?.email ?? ""} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="telefono">Teléfono</Label>
-                <Input id="telefono" name="telefono" inputMode="tel" />
+                <Input id="telefono" name="telefono" inputMode="tel" defaultValue={cliente?.telefono ?? ""} />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="direccion">Domicilio</Label>
-                <Input id="direccion" name="direccion" />
+                <Input id="direccion" name="direccion" defaultValue={cliente?.direccion ?? ""} />
               </div>
             </Seccion>
 
@@ -287,14 +324,14 @@ export function DialogoCliente({
                 <Input
                   id="limiteCredito"
                   name="limiteCredito"
-                  defaultValue="0"
+                  defaultValue={cliente ? String(Number(cliente.limiteCredito)) : "0"}
                   inputMode="decimal"
                 />
               </div>
             </Seccion>
 
             <Seccion titulo="Notas" icono={StickyNote} columnas={1}>
-              <Textarea id="notas" name="notas" rows={2} aria-label="Notas" />
+              <Textarea id="notas" name="notas" rows={2} aria-label="Notas" defaultValue={cliente?.notas ?? ""} />
             </Seccion>
           </div>
 
@@ -309,7 +346,7 @@ export function DialogoCliente({
                 Guardando…
               </>
             ) : (
-              "Guardar cliente"
+              cliente ? "Guardar los cambios" : "Guardar cliente"
             )}
           </Button>
         </form>

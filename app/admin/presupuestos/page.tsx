@@ -19,7 +19,8 @@ import {
   listarPresupuestos,
   type PresupuestoListado,
 } from "@/lib/dal/admin/ventas";
-import { AccionesPresupuesto } from "./acciones";
+import { AccionesPresupuesto, type ZonaParaPedido } from "./acciones";
+import { zonasParaPedido } from "./zonas";
 
 const ESTADOS = {
   todos: "Todos",
@@ -54,11 +55,14 @@ export default async function PresupuestosPage({
   searchParams: Promise<{ buscar?: string; estado?: string; sucursal?: string }>;
 }) {
   const params = await searchParams;
-  const presupuestos = await listarPresupuestos({
-    busqueda: params.buscar,
-    estado: params.estado,
-    sucursal: params.sucursal,
-  });
+  const [presupuestos, zonas] = await Promise.all([
+    listarPresupuestos({
+      busqueda: params.buscar,
+      estado: params.estado,
+      sucursal: params.sucursal,
+    }),
+    zonasParaPedido(),
+  ]);
 
   // Lo que espera una respuesta va arriba y separado: es lo que hay que atender.
   const abiertos = presupuestos.filter((p) => estiloDeEstado(p.estado).abierto);
@@ -116,7 +120,7 @@ export default async function PresupuestosPage({
             destacado
           >
             {abiertos.map((p) => (
-              <Tarjeta key={p.id} presupuesto={p} />
+              <Tarjeta key={p.id} presupuesto={p} zonas={zonas} />
             ))}
           </GrupoListado>
 
@@ -130,7 +134,7 @@ export default async function PresupuestosPage({
             }
           >
             {cerrados.map((p) => (
-              <Tarjeta key={p.id} presupuesto={p} apagado />
+              <Tarjeta key={p.id} presupuesto={p} zonas={zonas} apagado />
             ))}
           </GrupoListado>
         </>
@@ -141,9 +145,11 @@ export default async function PresupuestosPage({
 
 function Tarjeta({
   presupuesto: p,
+  zonas,
   apagado = false,
 }: {
   presupuesto: PresupuestoListado;
+  zonas: ZonaParaPedido[];
   apagado?: boolean;
 }) {
   return (
@@ -237,7 +243,15 @@ function Tarjeta({
           <p className="tabular text-xl font-semibold">
             {moneda.format(p.total)}
           </p>
-          <AccionesPresupuesto id={p.id} estado={p.estado} />
+          <AccionesPresupuesto
+            id={p.id}
+            numero={p.numero}
+            estado={p.estado}
+            total={p.total}
+            pedido={p.pedidoId && p.numeroPedido ? { id: p.pedidoId, numero: p.numeroPedido } : null}
+            zonas={zonas}
+            conCliente={!!p.customerId}
+          />
         </div>
       </div>
     </article>

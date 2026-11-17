@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { Confirmar } from "@/components/admin/confirmar";
 import {
   AlertCircle,
   BadgeCheck,
@@ -100,6 +101,10 @@ export function FormularioFacturaManual({
   });
 
   const letra = letraQueCorresponde(condicionEmisor, condicion);
+  // Un comprobante fiscal no se borra: se corrige con nota de crédito. Antes
+  // salía al primer clic, sin ver a quién ni por cuánto.
+  const formulario = useRef<HTMLFormElement>(null);
+  const [confirmando, setConfirmando] = useState(false);
 
   const totales = calcularTotales(
     lineas
@@ -121,7 +126,7 @@ export function FormularioFacturaManual({
   }
 
   return (
-    <form {...sinReiniciar(accion)} className="space-y-4">
+    <form ref={formulario} {...sinReiniciar(accion)} className="space-y-4">
       <Hoja>
         <Seccion titulo="Receptor" icono={UserRound}>
           <div className="md:col-span-2">
@@ -382,8 +387,24 @@ export function FormularioFacturaManual({
       )}
 
       <BarraGuardar>
+        <Confirmar
+          abierto={confirmando}
+          alCerrar={() => setConfirmando(false)}
+          titulo={`Factura ${letra} por ${moneda.format(totales.total)} a ${receptor.nombre.trim() || "consumidor final"}`}
+          detalle={
+            cliente
+              ? "Se carga a su cuenta corriente. Una vez emitida no se borra: se corrige con nota de crédito."
+              : "Una vez emitida no se borra: se corrige con nota de crédito."
+          }
+          confirmar="Emitir"
+          alConfirmar={() => {
+            setConfirmando(false);
+            formulario.current?.requestSubmit();
+          }}
+        />
         <button
-          type="submit"
+          type="button"
+          onClick={() => formulario.current?.reportValidity() && setConfirmando(true)}
           disabled={pendiente || totales.total <= 0}
           className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
         >

@@ -79,6 +79,15 @@ paths:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
     post:
       operationId: MarcarPedidoCobrado
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                medioPago: { $ref: "#/components/schemas/MedioPago" }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
@@ -160,6 +169,20 @@ paths:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
     post:
       operationId: ConvertirPresupuestoEnPedido
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              description: Cómo se entrega y cómo paga. Sin cuerpo, retiro en el local y sin medio.
+              properties:
+                tipoEntrega: { type: string, enum: [retiro, envio] }
+                direccion: { type: string, maxLength: 300 }
+                zona: { type: string, maxLength: 120 }
+                costoEnvio: { type: number, format: double, minimum: 0 }
+                medioPago: { $ref: "#/components/schemas/MedioPago" }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
@@ -193,6 +216,9 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problema" }
   schemas:
+    MedioPago:
+      type: string
+      enum: [efectivo, transferencia, debito, credito, mercado_pago, cuenta_corriente]
     Problema:
       type: object
       required: [title, status]
@@ -219,7 +245,7 @@ components:
     PresupuestoListado:
       type: object
       required: [id, numero, cliente, empresa, customerId, sucursal, estado, origen, total, items, asesor, createdAt, validoHasta,
-        vencido, respondeHasta, necesitaPara, plazo]
+        vencido, respondeHasta, necesitaPara, plazo, pedidoId, numeroPedido]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -240,6 +266,8 @@ components:
         plazo:
           nullable: true
           allOf: [{ $ref: "#/components/schemas/PlazoDelPresupuesto" }]
+        pedidoId: { type: string, nullable: true }
+        numeroPedido: { type: string, nullable: true }
     ItemDePresupuesto:
       type: object
       required: [id, variantId, descripcion, unidad, cantidad, precioUnitario, subtotal, orden, alicuotaIva]
@@ -256,7 +284,8 @@ components:
     FichaDePresupuesto:
       type: object
       required: [id, numero, cliente, email, telefono, empresa, customerId, clienteCodigo, clienteCuit, clienteCondicionIva,
-        clienteDireccion, sucursal, sucursalSlug, vendedor, estado, origen, subtotal, total, notas, asesor, validoHasta, createdAt, items]
+        clienteDireccion, sucursal, sucursalSlug, vendedor, estado, origen, subtotal, total, notas, asesor, validoHasta, createdAt, items,
+        pedidoId, numeroPedido]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -281,6 +310,8 @@ components:
         validoHasta: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         items: { type: array, items: { $ref: "#/components/schemas/ItemDePresupuesto" } }
+        pedidoId: { type: string, nullable: true, description: El pedido en que se convirtió }
+        numeroPedido: { type: string, nullable: true }
     PedidoListado:
       type: object
       required: [id, numero, cliente, empresa, sucursal, sucursalSlug, estado, tipoEntrega, direccionEntrega, medioPago, estadoPago,
@@ -321,13 +352,14 @@ components:
         orden: { type: integer }
     PasoDelPedido:
       type: object
-      required: [id, orderId, estado, nota, createdByUserId, createdAt]
+      required: [id, orderId, estado, nota, createdByUserId, quien, createdAt]
       properties:
         id: { type: string }
         orderId: { type: string }
         estado: { type: string }
         nota: { type: string, nullable: true }
         createdByUserId: { type: string, nullable: true }
+        quien: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
     PagoDelPedido:
       type: object
@@ -351,7 +383,7 @@ components:
       type: object
       required: [id, numero, numeroProvisorio, cliente, email, telefono, empresa, branchId, customerId, sucursal, estado, origen,
         tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, descuento, descuentoMotivo, total, medioPago, estadoPago,
-        notas, createdAt, items, historial, pagos, margen]
+        notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -384,3 +416,6 @@ components:
           nullable: true
           description: Solo para el admin, y solo si alguna línea tiene costo congelado
           allOf: [{ $ref: "#/components/schemas/MargenDelPedido" }]
+        quoteId: { type: string, nullable: true }
+        numeroPresupuesto: { type: string, nullable: true }
+        saldoCliente: { type: number, format: double, nullable: true, description: Positivo, debe }

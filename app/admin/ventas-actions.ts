@@ -82,13 +82,26 @@ export async function cambiarEstadoPresupuesto(id: string, estado: string): Prom
  * Convierte un presupuesto en pedido, con el precio que tenían las líneas
  * (el cliente aceptó ese número), y reserva la mercadería.
  */
-export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
-  const r = await (await api()).POST("/api/v1/admin/presupuestos/{id}/pedido", { params: { path: { id: quoteId } } });
+export type MedioDelPedido = "efectivo" | "transferencia" | "debito" | "credito" | "mercado_pago" | "cuenta_corriente";
+
+export interface EntregaDelPedido {
+  tipoEntrega: "retiro" | "envio";
+  direccion?: string;
+  zona?: string;
+  costoEnvio?: number;
+  medioPago?: MedioDelPedido;
+}
+
+export async function convertirEnPedido(quoteId: string, entrega?: EntregaDelPedido): Promise<EstadoVenta & { id?: string }> {
+  const r = await (await api()).POST("/api/v1/admin/presupuestos/{id}/pedido", {
+    params: { path: { id: quoteId } },
+    body: entrega,
+  });
   if (!r.data) return fallo(r);
   refrescar();
   revalidatePath("/admin/stock");
   if (r.data.numero) avisarPedidoNuevo(r.data.numero);
-  return { ok: r.data.ok };
+  return { ok: r.data.ok, id: r.data.id };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -99,8 +112,11 @@ export async function convertirEnPedido(quoteId: string): Promise<EstadoVenta> {
  * Marca un pedido como cobrado: lo que ya se cobró por otro lado. Un pedido a
  * cuenta corriente no pasa por acá (su cobro va con recibo).
  */
-export async function marcarPagado(id: string): Promise<EstadoVenta> {
-  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/cobrado", { params: { path: { id } } });
+export async function marcarPagado(id: string, medioPago?: Exclude<MedioDelPedido, "cuenta_corriente">): Promise<EstadoVenta> {
+  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/cobrado", {
+    params: { path: { id } },
+    body: medioPago ? { medioPago } : {},
+  });
   if (!r.data) return fallo(r);
   refrescar();
   return { ok: r.data.ok };

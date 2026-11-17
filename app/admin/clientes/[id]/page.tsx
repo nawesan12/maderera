@@ -21,6 +21,9 @@ import { LineaDeTiempo } from "@/components/cuenta/linea-de-tiempo";
 import { FiltrosDeMovimientos, esFiltro } from "@/components/cuenta/filtros-de-movimientos";
 import { historialDelCliente } from "@/lib/dal/historial-cliente";
 import { requireStaff } from "@/lib/dal/session";
+import { DialogoCliente } from "../dialogo-cliente";
+import { listarListasParaClientes } from "@/lib/dal/admin/clientes";
+import { vendedoresActivos } from "@/lib/dal/admin/vendedores";
 
 const CONDICIONES: Record<string, string> = {
   consumidor_final: "Consumidor final",
@@ -42,10 +45,12 @@ export default async function FichaClientePage({
   const { periodo = "12m", ver } = await searchParams;
   const filtro = esFiltro(ver) ? ver : "todo";
 
-  const [cliente, historial, usuario] = await Promise.all([
+  const [cliente, historial, usuario, listas, vendedores] = await Promise.all([
     obtenerCliente(id),
     historialDelCliente(id, { periodo, filtro }),
     requireStaff(),
+    listarListasParaClientes(),
+    vendedoresActivos(),
   ]);
 
   if (!cliente) notFound();
@@ -98,7 +103,8 @@ export default async function FichaClientePage({
               "Cliente particular"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <DialogoCliente listas={listas} vendedores={vendedores} cliente={cliente} />
           {whatsapp && (
             <a
               href={whatsapp}

@@ -193,6 +193,8 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        MedioPago: "efectivo" | "transferencia" | "debito" | "credito" | "mercado_pago" | "cuenta_corriente";
         Problema: {
             title: string;
             status: number;
@@ -237,6 +239,8 @@ export interface components {
             /** Format: date-time */
             necesitaPara: string | null;
             plazo: components["schemas"]["PlazoDelPresupuesto"] | null;
+            pedidoId: string | null;
+            numeroPedido: string | null;
         };
         ItemDePresupuesto: {
             id: string;
@@ -275,6 +279,9 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             items: components["schemas"]["ItemDePresupuesto"][];
+            /** @description El pedido en que se convirtió */
+            pedidoId: string | null;
+            numeroPedido: string | null;
         };
         PedidoListado: {
             id: string;
@@ -317,6 +324,7 @@ export interface components {
             estado: string;
             nota: string | null;
             createdByUserId: string | null;
+            quien: string | null;
             /** Format: date-time */
             createdAt: string;
         };
@@ -368,6 +376,13 @@ export interface components {
             pagos: components["schemas"]["PagoDelPedido"][];
             /** @description Solo para el admin, y solo si alguna línea tiene costo congelado */
             margen: components["schemas"]["MargenDelPedido"] | null;
+            quoteId: string | null;
+            numeroPresupuesto: string | null;
+            /**
+             * Format: double
+             * @description Positivo
+             */
+            saldoCliente: number | null;
         };
     };
     responses: {
@@ -499,7 +514,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    medioPago?: components["schemas"]["MedioPago"];
+                };
+            };
+        };
         responses: {
             200: components["responses"]["Hecho"];
             401: components["responses"]["Problema"];
@@ -617,7 +638,19 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    tipoEntrega?: "retiro" | "envio";
+                    direccion?: string;
+                    zona?: string;
+                    /** Format: double */
+                    costoEnvio?: number;
+                    medioPago?: components["schemas"]["MedioPago"];
+                };
+            };
+        };
         responses: {
             200: components["responses"]["Hecho"];
             401: components["responses"]["Problema"];

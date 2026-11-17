@@ -79,6 +79,8 @@ type PresupuestoListado struct {
 	RespondeHasta *time.Time `json:"respondeHasta"`
 	NecesitaPara  *time.Time `json:"necesitaPara"`
 	Plazo         *Plazo     `json:"plazo"`
+	PedidoID     *string `json:"pedidoId"`
+	NumeroPedido *string `json:"numeroPedido"`
 }
 
 // ListarPresupuestos es listarPresupuestos: primero lo que tiene compromiso
@@ -102,7 +104,9 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros) ([]Presupu
 	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT q.id, q.numero, q.contacto_nombre, c.razon_social, q.customer_id, b.name, q.estado::text, q.origen::text,
-		       q.total::text, q.asesor, q.created_at, q.valido_hasta, q.responde_hasta, q.necesita_para, coalesce(conteo.items, 0)
+		       q.total::text, q.asesor, q.created_at, q.valido_hasta, q.responde_hasta, q.necesita_para, coalesce(conteo.items, 0),
+		       (SELECT o.id FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at LIMIT 1),
+		       (SELECT o.numero FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at LIMIT 1)
 		FROM quotes q
 		LEFT JOIN customers c ON c.id = q.customer_id
 		LEFT JOIN branches b ON b.id = q.branch_id
@@ -120,7 +124,7 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros) ([]Presupu
 		var p PresupuestoListado
 		var total string
 		if err := filas.Scan(&p.ID, &p.Numero, &p.Cliente, &p.Empresa, &p.CustomerID, &p.Sucursal, &p.Estado, &p.Origen, &total,
-			&p.Asesor, &p.CreatedAt, &p.ValidoHasta, &p.RespondeHasta, &p.NecesitaPara, &p.Items); err != nil {
+			&p.Asesor, &p.CreatedAt, &p.ValidoHasta, &p.RespondeHasta, &p.NecesitaPara, &p.Items, &p.PedidoID, &p.NumeroPedido); err != nil {
 			return nil, err
 		}
 		p.Total = jsmath.Numero(total)
@@ -174,6 +178,8 @@ type FichaDePresupuesto struct {
 	ValidoHasta         *time.Time          `json:"validoHasta"`
 	CreatedAt           time.Time           `json:"createdAt"`
 	Items               []ItemDePresupuesto `json:"items"`
+	PedidoID            *string             `json:"pedidoId"`
+	NumeroPedido        *string             `json:"numeroPedido"`
 }
 
 // Presupuesto es la ficha, o nil si no existe.
@@ -182,14 +188,16 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 	err := s.pool.QueryRow(ctx, `
 		SELECT q.id, q.numero, q.contacto_nombre, q.contacto_email, q.contacto_telefono, c.razon_social, q.customer_id,
 		       c.codigo_legacy, c.cuit, c.condicion_iva::text, c.direccion, b.name, b.slug, v.nombre,
-		       q.estado::text, q.origen::text, q.subtotal::text, q.total::text, q.notas, q.asesor, q.valido_hasta, q.created_at
+		       q.estado::text, q.origen::text, q.subtotal::text, q.total::text, q.notas, q.asesor, q.valido_hasta, q.created_at,
+		       (SELECT o.id FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at LIMIT 1),
+		       (SELECT o.numero FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at LIMIT 1)
 		FROM quotes q
 		LEFT JOIN customers c ON c.id = q.customer_id
 		LEFT JOIN branches b ON b.id = q.branch_id
 		LEFT JOIN sellers v ON v.id = q.seller_id
 		WHERE q.id = $1`, id).Scan(&p.ID, &p.Numero, &p.Cliente, &p.Email, &p.Telefono, &p.Empresa, &p.CustomerID,
 		&p.ClienteCodigo, &p.ClienteCuit, &p.ClienteCondicionIva, &p.ClienteDireccion, &p.Sucursal, &p.SucursalSlug, &p.Vendedor,
-		&p.Estado, &p.Origen, &p.Subtotal, &p.Total, &p.Notas, &p.Asesor, &p.ValidoHasta, &p.CreatedAt)
+		&p.Estado, &p.Origen, &p.Subtotal, &p.Total, &p.Notas, &p.Asesor, &p.ValidoHasta, &p.CreatedAt, &p.PedidoID, &p.NumeroPedido)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -308,6 +316,7 @@ type PasoDelPedido struct {
 	Estado          string    `json:"estado"`
 	Nota            *string   `json:"nota"`
 	CreatedByUserID *string   `json:"createdByUserId"`
+	Quien           *string   `json:"quien"`
 	CreatedAt       time.Time `json:"createdAt"`
 }
 
@@ -351,6 +360,12 @@ type FichaDePedido struct {
 	Historial        []PasoDelPedido `json:"historial"`
 	Pagos            []PagoDelPedido `json:"pagos"`
 	Margen           *Margen         `json:"margen"`
+	// El presupuesto del que nació, para ir y volver entre las dos fichas.
+	QuoteID           *string `json:"quoteId"`
+	NumeroPresupuesto *string `json:"numeroPresupuesto"`
+	// Lo que debe el cliente en su cuenta corriente, para cobrarle o no
+	// entregarle sin preguntar. Nil si el pedido no tiene cliente.
+	SaldoCliente *float64 `json:"saldoCliente"`
 }
 
 // Pedido es la ficha, o nil si no existe. Con `conMargen`, el margen de la
@@ -361,14 +376,17 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		SELECT o.id, o.numero, o.numero_provisorio, o.contacto_nombre, o.contacto_email, o.contacto_telefono, c.razon_social,
 		       o.branch_id, o.customer_id, b.name, o.estado::text, o.origen::text, o.tipo_entrega::text, o.direccion_entrega,
 		       o.zona_envio, o.costo_envio::text, o.subtotal::text, o.descuento::text, o.descuento_motivo, o.total::text,
-		       o.medio_pago::text, o.estado_pago::text, o.notas, o.created_at
+		       o.medio_pago::text, o.estado_pago::text, o.notas, o.created_at, o.quote_id, q.numero,
+		       CASE WHEN o.customer_id IS NULL THEN NULL
+		            ELSE (SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = o.customer_id) END
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
+		LEFT JOIN quotes q ON q.id = o.quote_id
 		WHERE o.id = $1`, id).Scan(&p.ID, &p.Numero, &p.NumeroProvisorio, &p.Cliente, &p.Email, &p.Telefono, &p.Empresa,
 		&p.BranchID, &p.CustomerID, &p.Sucursal, &p.Estado, &p.Origen, &p.TipoEntrega, &p.DireccionEntrega,
 		&p.ZonaEnvio, &p.CostoEnvio, &p.Subtotal, &p.Descuento, &p.DescuentoMotivo, &p.Total,
-		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt)
+		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt, &p.QuoteID, &p.NumeroPresupuesto, &p.SaldoCliente)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -401,15 +419,17 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 	}
 
 	filas, err = s.pool.Query(ctx, `
-		SELECT id, order_id, estado::text, nota, created_by_user_id, created_at
-		FROM order_status_history WHERE order_id = $1 ORDER BY created_at DESC, id`, id)
+		SELECT h.id, h.order_id, h.estado::text, h.nota, h.created_by_user_id, u.name, h.created_at
+		FROM order_status_history h
+		LEFT JOIN "user" u ON u.id = h.created_by_user_id
+		WHERE h.order_id = $1 ORDER BY h.created_at DESC, h.id`, id)
 	if err != nil {
 		return nil, err
 	}
 	p.Historial = []PasoDelPedido{}
 	for filas.Next() {
 		var h PasoDelPedido
-		if err := filas.Scan(&h.ID, &h.OrderID, &h.Estado, &h.Nota, &h.CreatedByUserID, &h.CreatedAt); err != nil {
+		if err := filas.Scan(&h.ID, &h.OrderID, &h.Estado, &h.Nota, &h.CreatedByUserID, &h.Quien, &h.CreatedAt); err != nil {
 			filas.Close()
 			return nil, err
 		}

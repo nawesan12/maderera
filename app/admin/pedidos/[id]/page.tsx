@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
-import { MapPin, Scissors, Store, Truck } from "lucide-react";
+import { MapPin, Printer, MessageCircle, Phone, Scissors, Store, Truck } from "lucide-react";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import {
@@ -11,7 +11,7 @@ import {
 } from "@/components/admin/pasos";
 import { fechaHora, moneda } from "@/components/admin/formato";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
-import { AccionesPedido } from "../acciones";
+import { AccionesPedido, CancelarPedido } from "../acciones";
 import { pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
 import { BotonFacturar } from "./facturar";
 import { Entregas } from "./entregas";
@@ -28,9 +28,17 @@ const MEDIOS: Record<string, string> = {
   mercado_pago: "Mercado Pago",
   transferencia: "Transferencia",
   efectivo: "Efectivo",
+  debito: "Débito",
+  credito: "Crédito",
   cuenta_corriente: "Cuenta corriente",
   cheque: "Cheque",
 };
+
+/** El teléfono como lo marca WhatsApp: solo dígitos, con el 54 adelante. */
+function paraWhatsapp(telefono: string): string {
+  const d = telefono.replace(/\D/g, "");
+  return d.startsWith("54") ? d : `54${d.replace(/^0/, "")}`;
+}
 
 export default async function FichaPedidoPage({
   params,
@@ -58,8 +66,16 @@ export default async function FichaPedidoPage({
 
   // Si el pedido ya se facturó, el botón se reemplaza por el enlace al
   // comprobante: dos facturas del mismo pedido obligan a anular una.
-  const datosFactura = await pedidoParaFacturar(id);
+  // Facturar es del admin: a los demás el botón los mandaba a una pantalla
+  // que los rebotaba al inicio.
+  const factura = puedeEntrar("/admin/facturacion", usuario.staffRole);
+  const datosFactura = factura ? await pedidoParaFacturar(id) : null;
   const facturado = datosFactura?.yaFacturado ?? null;
+  const verCliente = puedeEntrar("/admin/clientes", usuario.staffRole);
+  const cancelable =
+    puedeEntrar("/admin/presupuestos", usuario.staffRole) &&
+    pedido.origen !== "mostrador" &&
+    !["cancelado", "entregado"].includes(pedido.estado);
 
   // El aviso que corresponde al estado: lo que el cliente tiene que saber ahora.
   // Solo para quien atiende el WhatsApp de la maderera (no depósito).
@@ -105,22 +121,42 @@ export default async function FichaPedidoPage({
             <span className="tabular">{pedido.numero}</span>
             {pedido.empresa && ` · ${pedido.empresa}`}
             {` · ${fechaHora.format(pedido.createdAt)}`}
+            {pedido.quoteId && pedido.numeroPresupuesto && puedeEntrar("/admin/presupuestos", usuario.staffRole) && (
+              <>
+                {" · del presupuesto "}
+                <Link href={`/admin/presupuestos/${pedido.quoteId}`} className="tabular text-brand-orange hover:underline">
+                  {pedido.numeroPresupuesto}
+                </Link>
+              </>
+            )}
           </>
         }
         acciones={
           <>
-            <BotonFacturar
-              orderId={pedido.id}
-              comprobante={
-                facturado
-                  ? {
-                      id: facturado.id,
-                      numero: facturado.numero,
-                      tipo: facturado.tipo,
-                    }
-                  : null
-              }
-            />
+            {cancelable && <CancelarPedido id={pedido.id} numero={pedido.numero} cobrado={pedido.estadoPago === "pagado"} />}
+            <a
+              href={`/ticket/${pedido.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+            >
+              <Printer className="h-5 w-5" aria-hidden="true" />
+              Imprimir
+            </a>
+            {factura && (
+              <BotonFacturar
+                orderId={pedido.id}
+                comprobante={
+                  facturado
+                    ? {
+                        id: facturado.id,
+                        numero: facturado.numero,
+                        tipo: facturado.tipo,
+                      }
+                    : null
+                }
+              />
+            )}
             <AccionesPedido
               id={pedido.id}
               estado={pedido.estado}
@@ -131,6 +167,7 @@ export default async function FichaPedidoPage({
                   ? { customerId: pedido.customerId, nombre: pedido.cliente, numero: pedido.numero, total: Number(pedido.total) }
                   : null
               }
+              cobro={{ numero: pedido.numero, total: Number(pedido.total), medioPago: pedido.medioPago }}
             />
           </>
         }
@@ -375,6 +412,22 @@ export default async function FichaPedidoPage({
                   <EtiquetaEstado estado={pedido.estadoPago} />
                 </dd>
               </div>
+              {pedido.saldoCliente != null && verCliente && (
+                <div className="flex justify-between gap-3 border-t pt-2">
+                  <dt className="text-muted-foreground">Cuenta del cliente</dt>
+                  <dd
+                    className={`tabular font-medium ${
+                      pedido.saldoCliente > 0.004 ? "text-saldo-debe" : pedido.saldoCliente < -0.004 ? "text-saldo-favor" : ""
+                    }`}
+                  >
+                    {pedido.saldoCliente > 0.004
+                      ? `Debe ${moneda.format(pedido.saldoCliente)}`
+                      : pedido.saldoCliente < -0.004
+                        ? `A favor ${moneda.format(-pedido.saldoCliente)}`
+                        : "Al día"}
+                  </dd>
+                </div>
+              )}
             </dl>
           </section>
 
@@ -382,7 +435,7 @@ export default async function FichaPedidoPage({
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Contacto
             </h2>
-            {pedido.customerId ? (
+            {pedido.customerId && verCliente ? (
               <Link
                 href={`/admin/clientes/${pedido.customerId}`}
                 className="text-base font-medium hover:text-brand-orange"
@@ -393,9 +446,24 @@ export default async function FichaPedidoPage({
               <p className="text-base font-medium">{pedido.cliente}</p>
             )}
             {pedido.telefono && (
-              <p className="tabular mt-1 text-base text-muted-foreground">
-                {pedido.telefono}
-              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <a
+                  href={`tel:${pedido.telefono.replace(/[^\d+]/g, "")}`}
+                  className="tabular inline-flex h-10 items-center gap-1.5 rounded-lg bg-hundida px-3 text-base hover:bg-muted"
+                >
+                  <Phone className="h-4 w-4" aria-hidden="true" />
+                  {pedido.telefono}
+                </a>
+                <a
+                  href={`https://wa.me/${paraWhatsapp(pedido.telefono)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Escribirle por WhatsApp"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-hundida hover:bg-muted"
+                >
+                  <MessageCircle className="h-5 w-5" aria-hidden="true" />
+                </a>
+              </div>
             )}
             {pedido.email && (
               <p className="truncate text-base text-muted-foreground">
@@ -424,6 +492,7 @@ export default async function FichaPedidoPage({
                     )}
                     <p className="text-sm text-muted-foreground">
                       {fechaHora.format(h.createdAt)}
+                      {h.quien && ` · ${h.quien}`}
                     </p>
                   </div>
                 </li>

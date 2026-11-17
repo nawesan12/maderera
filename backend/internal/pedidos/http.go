@@ -143,7 +143,12 @@ func (a *API) MarcarPedidoCobrado(ctx context.Context, r ventasapi.MarcarPedidoC
 	if err != nil {
 		return nil, err
 	}
-	v, err := a.s.MarcarPagado(ctx, ses, r.Id.String())
+	var medio *string
+	if r.Body != nil && r.Body.MedioPago != nil {
+		m := string(*r.Body.MedioPago)
+		medio = &m
+	}
+	v, err := a.s.MarcarPagado(ctx, ses, r.Id.String(), medio)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +213,20 @@ func (a *API) ConvertirPresupuestoEnPedido(ctx context.Context, r ventasapi.Conv
 	if err != nil {
 		return nil, err
 	}
-	v, err := a.s.ConvertirEnPedido(ctx, ses, r.Id.String())
+	var ent Entrega
+	if b := r.Body; b != nil {
+		ent.Envio = b.TipoEntrega != nil && *b.TipoEntrega == ventasapi.Envio
+		ent.Direccion = texto(b.Direccion)
+		ent.Zona = texto(b.Zona)
+		if b.CostoEnvio != nil {
+			ent.CostoEnvio = *b.CostoEnvio
+		}
+		if b.MedioPago != nil {
+			m := string(*b.MedioPago)
+			ent.MedioPago = &m
+		}
+	}
+	v, err := a.s.ConvertirConEntrega(ctx, ses, r.Id.String(), ent)
 	if err != nil {
 		return nil, err
 	}

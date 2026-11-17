@@ -1,6 +1,7 @@
 package pedidos
 
 import (
+	"math"
 	"context"
 	"errors"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
 	"mjbj/internal/entregas"
 	"mjbj/internal/jsmath"
@@ -266,8 +268,15 @@ func devolverDeuda(ctx context.Context, tx pgx.Tx, cliente, numero string, motiv
 
 // MarcarPagado anota como cobrado lo que ya se cobró por otro lado. Un
 // pedido a cuenta corriente no pasa por acá: su cobro baja la deuda, y eso
-// va con recibo.
-func (s *Servicio) MarcarPagado(ctx context.Context, ses *auth.Sesion, id string) (*Resultado, error) {
+// va con recibo. Con medio, queda anotado con qué pagó: el botón marcaba
+// pagado sin preguntar, y el pedido seguía sin saber cómo entró la plata.
+func (s *Servicio) MarcarPagado(ctx context.Context, ses *auth.Sesion, id string, elegido *string) (*Resultado, error) {
+	if elegido != nil && !medioValido(*elegido) {
+		return nil, fallo("Ese medio de pago no existe.")
+	}
+	if elegido != nil && *elegido == "cuenta_corriente" {
+		return nil, fallo("A cuenta corriente no es un cobro: queda como deuda del cliente.")
+	}
 	var p *filaDePedido
 	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
 		var err error
@@ -280,7 +289,10 @@ func (s *Servicio) MarcarPagado(ctx context.Context, ses *auth.Sesion, id string
 		if p.medioPago != nil && *p.medioPago == "cuenta_corriente" && p.customerID != nil {
 			return fallo("Es a cuenta corriente: registrá el cobro con el medio con que pagó, así sale el recibo y baja la deuda.")
 		}
-		_, err = tx.Exec(ctx, `UPDATE orders SET estado_pago = 'pagado', updated_at = now() WHERE id = $1`, id)
+		if elegido != nil {
+			p.medioPago = elegido
+		}
+		_, err = tx.Exec(ctx, `UPDATE orders SET estado_pago = 'pagado', medio_pago = coalesce($2::medio_pago, medio_pago), updated_at = now() WHERE id = $1`, id, elegido)
 		return err
 	})
 	if err != nil {
@@ -346,6 +358,61 @@ func (s *Servicio) CambiarEstadoPresupuesto(ctx context.Context, ses *auth.Sesio
 // misma conversión dos veces a la vez da un solo pedido (en el TS daba dos,
 // con la mercadería reservada dos veces).
 func (s *Servicio) ConvertirEnPedido(ctx context.Context, ses *auth.Sesion, quoteID string) (*Resultado, error) {
+	return s.ConvertirConEntrega(ctx, ses, quoteID, Entrega{})
+}
+
+// Entrega es cómo sale el pedido que nace de un presupuesto. Vacía es retiro
+// en el local sin medio de pago, como era antes: el pedido telefónico
+// quedaba como «retiro» aunque fuera con envío, y sin dirección.
+type Entrega struct {
+	Envio      bool
+	Direccion  string
+	Zona       string
+	CostoEnvio float64
+	MedioPago  *string
+}
+
+func (e Entrega) revisar() error {
+	if e.MedioPago != nil && !medioValido(*e.MedioPago) {
+		return fallo("Ese medio de pago no existe.")
+	}
+	if !e.Envio {
+		return nil
+	}
+	if strings.TrimSpace(e.Direccion) == "" {
+		return fallo("Falta la dirección de entrega.")
+	}
+	if e.CostoEnvio < 0 || math.IsNaN(e.CostoEnvio) || math.IsInf(e.CostoEnvio, 0) {
+		return fallo("El costo del envío no puede ser negativo.")
+	}
+	return nil
+}
+
+func medioValido(m string) bool {
+	switch m {
+	case "efectivo", "transferencia", "debito", "credito", "mercado_pago", "cuenta_corriente":
+		return true
+	}
+	return false
+}
+
+// ConvertirConEntrega es ConvertirEnPedido diciendo cómo se entrega y cómo
+// paga. El costo del envío se suma al total del pedido, como en el checkout.
+func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, quoteID string, ent Entrega) (*Resultado, error) {
+	if err := ent.revisar(); err != nil {
+		return nil, err
+	}
+	tipo, costo := "retiro", "0"
+	var direccion, zona *string
+	if ent.Envio {
+		tipo = "envio"
+		d := strings.TrimSpace(ent.Direccion)
+		direccion = &d
+		if z := strings.TrimSpace(ent.Zona); z != "" {
+			zona = &z
+		}
+		costo = jsmath.Fijo2(ent.CostoEnvio)
+	}
 	var numero, pedidoID, numeroPresupuesto string
 	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
 		var q struct {
@@ -400,15 +467,32 @@ func (s *Servicio) ConvertirEnPedido(ctx context.Context, ses *auth.Sesion, quot
 			return fallo("El presupuesto está vacío: no tiene ningún producto.")
 		}
 
+		aCuenta := ent.MedioPago != nil && *ent.MedioPago == "cuenta_corriente"
+		totalPedido := jsmath.Numero(q.total) + jsmath.Numero(costo)
+		if aCuenta {
+			if q.customerID == nil {
+				return fallo("A cuenta corriente solo con un cliente cargado: elegilo en el presupuesto.")
+			}
+			motivo, err := cobros.LimiteEnLaTransaccion(ctx, tx, *q.customerID, totalPedido)
+			if err != nil {
+				return err
+			}
+			if motivo != "" {
+				return fallo(motivo)
+			}
+		}
+
 		if numero, err = numeracion.Pedido(ctx, tx); err != nil {
 			return err
 		}
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO orders (numero, customer_id, quote_id, contacto_nombre, contacto_email, contacto_telefono, branch_id,
-			                    estado, origen, subtotal, total, notas, seller_id, created_by_user_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'presupuesto', $8::numeric, $9::numeric, $10, $11, $12)
+			                    estado, origen, subtotal, total, notas, seller_id, created_by_user_id,
+			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, medio_pago)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric, $10, $11, $12,
+			        $13::tipo_entrega, $15, $16, $14::numeric, $17::medio_pago)
 			RETURNING id`, numero, q.customerID, quoteID, q.nombre, q.email, q.telefono, q.branchID, q.subtotal, q.total, q.notas,
-			q.sellerID, ses.UserID).Scan(&pedidoID); err != nil {
+			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago).Scan(&pedidoID); err != nil {
 			return err
 		}
 
@@ -457,6 +541,16 @@ func (s *Servicio) ConvertirEnPedido(ctx context.Context, ses *auth.Sesion, quot
 		}
 		if _, err := tx.Exec(ctx, `UPDATE quotes SET estado = 'aceptado', updated_at = now() WHERE id = $1`, quoteID); err != nil {
 			return err
+		}
+		// La deuda, como la asienta el checkout: con el número del pedido
+		// de referencia, que es lo que la cancelación busca para devolverla.
+		if aCuenta {
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO account_movements (customer_id, tipo, monto, detalle, referencia, created_by_user_id)
+				VALUES ($1, 'compra', $2::numeric, $3, $4, $5)`,
+				*q.customerID, jsmath.Fijo2(totalPedido), "Pedido "+numero, numero, ses.UserID); err != nil {
+				return err
+			}
 		}
 		// Desde acá la mercadería tiene dueño y deja de estar disponible
 		// para el resto, aunque siga en el galpón hasta que la retiren.

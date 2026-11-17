@@ -41,7 +41,7 @@ export async function guardarCliente(_previo: EstadoCliente, formData: FormData)
       notas: campo(formData, "notas"),
     },
   });
-  if (r.data) revalidatePath("/admin/clientes");
+  if (r.data) revalidatePath("/admin/clientes", "layout");
   return resultado(r, "Revisá los datos.");
 }
 

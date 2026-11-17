@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
+import { Confirmar } from "@/components/admin/confirmar";
 import Link from "next/link";
 import {
   Check,
@@ -281,6 +282,15 @@ function FilaRemito({
   dejaAcopio: boolean;
 }) {
   const [estado, anular, anulando] = useActionState(anularRemito, inicial);
+  const [confirmando, setConfirmando] = useState(false);
+
+  function anularYa() {
+    const datos = new FormData();
+    datos.set("deliveryId", remito.id);
+    datos.set("orderId", orderId);
+    setConfirmando(false);
+    startTransition(() => anular(datos));
+  }
 
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
@@ -345,21 +355,25 @@ function FilaRemito({
         )}
 
         {remito.estado !== "anulada" && (
-          <form action={anular}>
-            <input type="hidden" name="deliveryId" value={remito.id} />
-            <input type="hidden" name="orderId" value={orderId} />
+          <>
             <button
-              type="submit"
+              type="button"
+              onClick={() => setConfirmando(true)}
               disabled={anulando}
               className="inline-flex h-9 items-center rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted disabled:opacity-60"
             >
-              {anulando ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                "Anular"
-              )}
+              {anulando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Anular"}
             </button>
-          </form>
+            <Confirmar
+              abierto={confirmando}
+              alCerrar={() => setConfirmando(false)}
+              titulo={`Anular el remito ${remito.numero}`}
+              detalle="La mercadería vuelve al depósito y el pedido la vuelve a esperar. El remito queda anulado."
+              confirmar="Anular el remito"
+              peligro
+              alConfirmar={anularYa}
+            />
+          </>
         )}
       </div>
 

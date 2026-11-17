@@ -10,6 +10,7 @@ import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, moneda } from "@/components/admin/formato";
 import { obtenerPresupuesto } from "@/lib/dal/admin/ventas";
 import { AccionesPresupuesto } from "../acciones";
+import { zonasParaPedido } from "../zonas";
 
 export default async function FichaPresupuestoPage({
   params,
@@ -18,9 +19,10 @@ export default async function FichaPresupuestoPage({
 }) {
   const { id } = await params;
   if (!esUuid(id)) notFound();
-  const [p, aviso] = await Promise.all([
+  const [p, aviso, zonas] = await Promise.all([
     obtenerPresupuesto(id),
     avisoManual("presupuesto_listo", { tipo: "quote", id }),
+    zonasParaPedido(),
   ]);
 
   if (!p) notFound();
@@ -51,7 +53,16 @@ export default async function FichaPresupuestoPage({
               Descargar PDF
             </a>
             <MandarPorWhatsapp tipo="presupuesto" id={p.id} />
-            <AccionesPresupuesto id={p.id} estado={p.estado} />
+            <AccionesPresupuesto
+              id={p.id}
+              numero={p.numero}
+              estado={p.estado}
+              total={Number(p.total)}
+              pedido={p.pedidoId && p.numeroPedido ? { id: p.pedidoId, numero: p.numeroPedido } : null}
+              zonas={zonas}
+              conCliente={!!p.customerId}
+              direccion={p.clienteDireccion}
+            />
           </>
         }
       />

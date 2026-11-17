@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
+import { Confirmar } from "@/components/admin/confirmar";
 import {
   Download,
   Eye,
@@ -163,6 +164,7 @@ export function EditorDeResenas({
 function Fila({ resena }: { resena: ResenaEditable }) {
   const [trabajando, empezar] = useTransition();
   const [aviso, setAviso] = useState<string | null>(null);
+  const [confirmarBorrado, setConfirmarBorrado] = useState(false);
 
   return (
     <li className="tarjeta p-4">
@@ -208,17 +210,27 @@ function Fila({ resena }: { resena: ResenaEditable }) {
           <button
             type="button"
             disabled={trabajando}
-            onClick={() =>
-              empezar(async () => {
-                const r = await borrarResenaDelNegocio(resena.id);
-                setAviso(r.error ?? null);
-              })
-            }
+            onClick={() => setConfirmarBorrado(true)}
             aria-label={`Borrar la reseña de ${resena.autor}`}
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-linea text-muted-foreground transition-colors hover:text-destructive"
           >
             <Trash2 className="h-4 w-4" />
           </button>
+          <Confirmar
+            abierto={confirmarBorrado}
+            alCerrar={() => setConfirmarBorrado(false)}
+            titulo={`Borrar la reseña de ${resena.autor}`}
+            detalle="Sale del sitio y no se puede recuperar."
+            confirmar="Borrar la reseña"
+            peligro
+            alConfirmar={() => {
+              setConfirmarBorrado(false);
+              empezar(async () => {
+                const r = await borrarResenaDelNegocio(resena.id);
+                setAviso(r.error ?? null);
+              });
+            }}
+          />
         </div>
       </div>
 

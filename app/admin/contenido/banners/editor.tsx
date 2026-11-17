@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { borrarBanner, guardarBanner, type EstadoBanner } from "./actions";
+import { Confirmar } from "@/components/admin/confirmar";
 import { UBICACIONES } from "./ubicaciones";
 import {
   Hoja,
@@ -54,6 +55,7 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
   const [ubicacion, setUbicacion] = useState(banner?.ubicacion ?? "portada");
   const [borrando, empezarBorrado] = useTransition();
   const [avisoBorrado, setAvisoBorrado] = useState<string | null>(null);
+  const [confirmarBorrado, setConfirmarBorrado] = useState(false);
   const id = useId();
 
   // El aviso de bienvenida era una franja de una línea y no admitía ni bajada
@@ -190,12 +192,7 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
           <button
             type="button"
             disabled={borrando}
-            onClick={() =>
-              empezarBorrado(async () => {
-                const r = await borrarBanner(banner.id);
-                setAvisoBorrado(r.error ?? r.ok ?? null);
-              })
-            }
+            onClick={() => setConfirmarBorrado(true)}
             className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium text-destructive transition-colors hover:bg-muted disabled:opacity-60"
           >
             {borrando ? (
@@ -205,6 +202,23 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
             )}
             Borrar
           </button>
+        )}
+        {banner && confirmarBorrado && (
+          <Confirmar
+            abierto
+            alCerrar={() => setConfirmarBorrado(false)}
+            titulo="Borrar este banner"
+            detalle="Sale de la portada. No se puede recuperar."
+            confirmar="Borrar el banner"
+            peligro
+            alConfirmar={() => {
+              setConfirmarBorrado(false);
+              empezarBorrado(async () => {
+                const r = await borrarBanner(banner.id);
+                setAvisoBorrado(r.error ?? r.ok ?? null);
+              });
+            }}
+          />
         )}
 
         {estado.error && (

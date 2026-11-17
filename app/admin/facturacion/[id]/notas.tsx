@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Loader2, MinusCircle, PlusCircle } from "lucide-react";
 import { formatearMonto } from "@/lib/formato";
 import { acreditarParcial, debitar, type EstadoFactura } from "../actions";
+import { Confirmar } from "@/components/admin/confirmar";
 
 interface Renglon {
   id: string;
@@ -49,6 +50,12 @@ export function NotasSobreElComprobante({
   const [alicuota, setAlicuota] = useState("21");
 
   const disponible = total - acreditado;
+  const [confirmando, setConfirmando] = useState(false);
+  // Lo que va a salir, para decirlo antes de emitir: es un comprobante fiscal.
+  const importeDeLaNota =
+    modo === "credito"
+      ? items.reduce((s, i) => s + (i.cantidad > 0 ? (Number(cantidades[i.id] ?? 0) / i.cantidad) * i.subtotal : 0), 0)
+      : Number(importe || 0);
 
   if (modo === null) {
     return (
@@ -178,9 +185,14 @@ export function NotasSobreElComprobante({
       {estado.error && <p className="text-base text-saldo-debe">{estado.error}</p>}
 
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() =>
+        <Confirmar
+          abierto={confirmando}
+          alCerrar={() => setConfirmando(false)}
+          titulo={`${modo === "credito" ? reverso : "Nota de débito"} por ${formatearMonto(importeDeLaNota)}`}
+          detalle="Va a ARCA y no se borra. Para revertirla hay que emitir la nota contraria."
+          confirmar="Emitir"
+          alConfirmar={() => {
+            setConfirmando(false);
             empezar(async () => {
               const r =
                 modo === "credito"
@@ -201,9 +213,13 @@ export function NotasSobreElComprobante({
                     );
               // Si sale bien, la acción redirige a la nota emitida.
               setEstado(r ?? {});
-            })
-          }
-          disabled={enCurso || motivo.trim().length < 4}
+            });
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => setConfirmando(true)}
+          disabled={enCurso || motivo.trim().length < 4 || importeDeLaNota <= 0}
           className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-4 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}

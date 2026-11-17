@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Confirmar } from "@/components/admin/confirmar";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -214,6 +215,7 @@ export function FormularioProducto({
   const [variantes, setVariantes] = useState<VarianteForm[]>(
     inicial.variantes.length > 0 ? inicial.variantes : [varianteVacia()],
   );
+  const [medidaAQuitar, setMedidaAQuitar] = useState<number | null>(null);
 
   // En el alta el slug sigue al nombre; al editar no se toca.
   function cambiarNombre(valor: string) {
@@ -570,6 +572,20 @@ export function FormularioProducto({
             </Button>
           </div>
 
+          <Confirmar
+            abierto={medidaAQuitar !== null}
+            alCerrar={() => setMedidaAQuitar(null)}
+            titulo={`Quitar la medida ${medidaAQuitar !== null ? variantes[medidaAQuitar]?.label || medidaAQuitar + 1 : ""}`}
+            detalle="Al guardar, la medida sale del catálogo con su precio y su stock."
+            confirmar="Quitar la medida"
+            peligro
+            alConfirmar={() => {
+              const i = medidaAQuitar;
+              setMedidaAQuitar(null);
+              if (i !== null) setVariantes((p) => p.filter((_, idx) => idx !== i));
+            }}
+          />
+
           {variantes.map((variante, i) => (
             <div
               key={variante.id ?? `nueva-${i}`}
@@ -584,8 +600,11 @@ export function FormularioProducto({
                     type="button"
                     variant="ghost"
                     size="sm"
+                    aria-label={`Quitar la medida ${i + 1}`}
                     onClick={() =>
-                      setVariantes((p) => p.filter((_, idx) => idx !== i))
+                      // Una medida ya guardada tiene stock, precios e historial:
+                      // se pregunta. Una recién agregada y vacía se quita sin más.
+                      variante.id ? setMedidaAQuitar(i) : setVariantes((p) => p.filter((_, idx) => idx !== i))
                     }
                   >
                     <Trash2 className="h-4 w-4" />

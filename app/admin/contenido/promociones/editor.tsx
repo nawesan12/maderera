@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { borrarPromo, guardarPromo, type EstadoPromo } from "./actions";
+import { Confirmar } from "@/components/admin/confirmar";
 import {
   Hoja,
   Interruptor,
@@ -45,6 +46,7 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
   const [estado, guardar, guardando] = useActionState(guardarPromo, inicial);
   const [borrando, empezarBorrado] = useTransition();
   const [avisoBorrado, setAvisoBorrado] = useState<string | null>(null);
+  const [confirmarBorrado, setConfirmarBorrado] = useState(false);
   const id = useId();
   const [quienPaga, setQuienPaga] = useState<PromoEditable["quienPaga"]>(
     promo?.quienPaga ?? "banco",
@@ -217,12 +219,7 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
           <button
             type="button"
             disabled={borrando}
-            onClick={() =>
-              empezarBorrado(async () => {
-                const r = await borrarPromo(promo.id);
-                setAvisoBorrado(r.error ?? r.ok ?? null);
-              })
-            }
+            onClick={() => setConfirmarBorrado(true)}
             className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium text-destructive transition-colors hover:bg-muted disabled:opacity-60"
           >
             {borrando ? (
@@ -232,6 +229,23 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
             )}
             Borrar
           </button>
+        )}
+        {promo && confirmarBorrado && (
+          <Confirmar
+            abierto
+            alCerrar={() => setConfirmarBorrado(false)}
+            titulo="Borrar esta promoción"
+            detalle="Deja de aplicarse en el mostrador y sale del sitio. No se puede recuperar."
+            confirmar="Borrar la promoción"
+            peligro
+            alConfirmar={() => {
+              setConfirmarBorrado(false);
+              empezarBorrado(async () => {
+                const r = await borrarPromo(promo.id);
+                setAvisoBorrado(r.error ?? r.ok ?? null);
+              });
+            }}
+          />
         )}
 
         {estado.error && (

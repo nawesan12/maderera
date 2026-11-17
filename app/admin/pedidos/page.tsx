@@ -215,6 +215,7 @@ function TarjetaPedido({ pedido, aviso }: { pedido: PedidoListado; aviso: AvisoM
               ? { customerId: pedido.customerId, nombre: pedido.cliente, numero: pedido.numero, total: Number(pedido.total) }
               : null
           }
+          cobro={{ numero: pedido.numero, total: Number(pedido.total), medioPago: pedido.medioPago }}
           compacto
         />
       </div>

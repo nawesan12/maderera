@@ -22,8 +22,10 @@ test("el listado de facturación y la pantalla de ARCA cargan desde la API", asy
   await page.goto("/admin/facturacion");
   await expect(page.getByRole("heading", { name: "Facturación", level: 1 })).toBeVisible();
   await page.goto("/admin/arca");
-  await expect(page.getByRole("heading", { name: "ARCA", level: 1 })).toBeVisible();
-  // Sin certificado, el proveedor interno; con él, ARCA (homologación o producción).
+  await expect(page.getByRole("heading", { name: "Impuestos del mes", level: 1 })).toBeVisible();
+  await page.goto("/admin/arca/configuracion");
+  await expect(page.getByRole("heading", { name: "Configuración de ARCA", level: 1 })).toBeVisible();
+  // Sin certificado, el proveedor interno; con él, ARCA (de prueba o en producción).
   await expect(page.getByText(/Sin conexión con ARCA|Conectado a ARCA/)).toBeVisible();
 });
 

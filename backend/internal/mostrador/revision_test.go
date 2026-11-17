@@ -78,14 +78,14 @@ func TestCantidadConTresDecimales(t *testing.T) {
 	}
 }
 
-func TestCorteSinSuPlaca(t *testing.T) {
+func TestCorteDemasiadoGrande(t *testing.T) {
 	e := armar(t)
 	ven := e.staff(t, "v@prueba.test", sqlc.StaffRoleVendedor)
-	v := e.venta("transferencia", map[string]any{"variantId": e.tornillo, "descripcion": "Tornillo", "unidad": "unidad", "cantidad": 1, "precioUnitario": 150})
+	v := e.venta("transferencia", e.lineaPlaca(1))
 	v["corte"] = map[string]any{"variantId": e.placa, "materialDescripcion": "Placa", "placas": 1, "pasadas": 2,
-		"piezas": []map[string]any{{"largoMm": 600, "anchoMm": 400, "cantidad": 2, "respetaVeta": 0, "cantoLargo": 0, "cantoAncho": 0}}}
+		"piezas": []map[string]any{{"largoMm": 100, "anchoMm": 100, "cantidad": 6000, "respetaVeta": 0, "cantoLargo": 0, "cantoAncho": 0}}}
 	if _, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v); m["ok"] == true {
-		t.Fatalf("un corte sin su placa en la venta llegó al taller: %s", b)
+		t.Fatalf("un corte de 6000 piezas llegó al taller: %s", b)
 	}
 }
 

@@ -144,10 +144,11 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario st
 		}
 	}
 
-	// El corte viaja aparte de los renglones: tiene que ser de una placa que
-	// se está vendiendo, o la orden llega al taller sin el material cobrado.
+	// El corte viaja aparte de los renglones: el despiece tiene que entrar en
+	// lo que el plano acomoda. (Su placa puede no estar entre las líneas: por
+	// debajo de media placa se cobra solo el corte.)
 	if v.Corte != nil && len(v.Corte.Piezas) > 0 {
-		if p := revisarCorte(*v.Corte, v.Lineas); p != "" {
+		if p := revisarCorte(*v.Corte); p != "" {
 			return fallo(p), nil
 		}
 	}
@@ -565,21 +566,9 @@ func descontarStock(ctx context.Context, tx pgx.Tx, sucursal, numero, usuario st
 	return nil
 }
 
-// revisarCorte: la placa del corte está entre las líneas y el despiece entra
-// en lo que el plano puede acomodar.
-func revisarCorte(k CorteDeMostrador, lineas []ventas.LineaDeVenta) string {
-	if k.VariantID != nil {
-		esta := false
-		for _, l := range lineas {
-			if l.VariantID != nil && *l.VariantID == *k.VariantID {
-				esta = true
-				break
-			}
-		}
-		if !esta {
-			return "El corte es de una placa que no está en la venta. Volvé a cargar la placa o sacá el corte."
-		}
-	}
+// revisarCorte: cada pieza tiene medidas y el despiece entra en lo que el
+// plano puede acomodar.
+func revisarCorte(k CorteDeMostrador) string {
 	unidades := 0
 	for _, p := range k.Piezas {
 		if p.Cantidad <= 0 || p.LargoMm <= 0 || p.AnchoMm <= 0 {

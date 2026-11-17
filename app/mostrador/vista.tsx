@@ -438,6 +438,9 @@ export function VistaMostrador({
    * del taller. Ver `CorteDeMostrador` en `lib/mostrador/venta.ts`.
    */
   const [corte, setCorte] = useState<CorteDeMostrador | null>(null);
+  // Los renglones que agregó el corte, por descripción: cambiarles la
+  // cantidad no los cambia, y sacarlos todos saca el corte.
+  const [renglonesDelCorte, setRenglonesDelCorte] = useState<string[]>([]);
   /** La placa elegida para cortar, mientras el diálogo está abierto. */
   const [cortando, setCortando] = useState<ResultadoDeMostrador | null>(null);
 
@@ -736,6 +739,7 @@ export function VistaMostrador({
     setCheque(CHEQUE_VACIO);
     setPartes(null);
     setCorte(null);
+    setRenglonesDelCorte([]);
     // Terminada la venta, el foco vuelve al buscador: lo que sigue siempre es
     // el primer producto del que viene atrás en la fila.
     enfocar("buscador");
@@ -900,11 +904,10 @@ export function VistaMostrador({
         medioPago: medio,
         pagos: pagosDeLaVenta(),
         acopio,
-        // Si se sacó la placa, el corte no viaja: el servidor lo rechazaría
-        // y el taller cortaría material que no se cobró.
-        ...(corte && (corte.variantId == null || lineas.some((l) => l.variantId === corte.variantId))
-          ? { corte }
-          : {}),
+        // El corte viaja mientras sigan en la venta los renglones que lo
+        // trajeron (la placa, las pasadas, el canto): si se sacaron todos,
+        // el taller cortaría algo que no se cobró.
+        ...(corte && lineas.some((l) => renglonesDelCorte.includes(l.descripcion)) ? { corte } : {}),
         comprobante,
         cuit: cuit || null,
         descuento: descuentoManual,
@@ -1151,6 +1154,7 @@ export function VistaMostrador({
           onAgregar={(nuevas, elCorte) => {
             setLineas((prev) => [...prev, ...nuevas]);
             setCorte(elCorte);
+            setRenglonesDelCorte(nuevas.map((l) => l.descripcion));
             setCortando(null);
           }}
         />

@@ -296,6 +296,12 @@ func tomarConsulta(ctx context.Context, tx pgx.Tx, token string) error {
 		return err
 	}
 	if corte != nil {
+		// Si la convirtió otro mientras se esperaba el candado, el corte
+		// nuevo no se ve en esta misma sentencia (el JOIN usa la foto de
+		// cuando empezó): se lee aparte.
+		if numero == nil {
+			_ = tx.QueryRow(ctx, `SELECT numero FROM cutting_orders WHERE id = $1`, *corte).Scan(&numero)
+		}
 		if numero != nil {
 			return error422("Esa consulta ya se pasó a corte: es el " + *numero + ".")
 		}

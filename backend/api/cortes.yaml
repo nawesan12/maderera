@@ -473,6 +473,8 @@ components:
         customerId: { type: string }
         orderId: { type: string }
         contactoNombre: { type: string }
+        contactoTelefono: { type: string, maxLength: 40 }
+        retiraEl: { type: string, description: AAAA-MM-DD }
         branchId: { type: string }
         variantId: { type: string }
         materialDescripcion: { type: string }
@@ -515,8 +517,10 @@ components:
       required: [id, numero, cliente, customerId, orderId, pedidoNumero, empresa, priceListId, material, variantId,
         varianteLargoMm, varianteAnchoMm, propiaLargoMm, propiaAnchoMm, mitad, color, categoria, precioMediaPct, placas,
         pasadas, cantoDescripcion, acomodoManual, anchoSierraMm, motorPlano, estado, urgente, notas, sucursal, createdAt,
-        piezas, precioPlaca, medida]
+        piezas, precioPlaca, medida, telefono, retiraEl]
       properties:
+        telefono: { type: string, nullable: true, description: El que se anotó, el del pedido o el de la ficha }
+        retiraEl: { type: string, nullable: true, description: AAAA-MM-DD }
         id: { type: string }
         numero: { type: string }
         cliente: { type: string }

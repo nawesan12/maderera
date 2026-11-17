@@ -5,6 +5,8 @@ import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { obtenerCorte } from "@/lib/dal/admin/cortes";
 import { requireStaff } from "@/lib/dal/session";
+import { obtenerCliente } from "@/lib/dal/admin/clientes";
+import { esUuid } from "@/lib/uuid";
 import { anchoDeSierra } from "@/lib/dal/sierra";
 import { FormularioCorte } from "./formulario";
 import { consultaDeCorte } from "@/lib/dal/consultas-corte";
@@ -27,17 +29,18 @@ export const metadata = { title: "Nuevo corte" };
 export default async function NuevoCortePage({
   searchParams,
 }: {
-  searchParams: Promise<{ pedido?: string; consulta?: string }>;
+  searchParams: Promise<{ pedido?: string; consulta?: string; cliente?: string }>;
 }) {
-  await requireStaff();
+  const usuario = await requireStaff();
 
-  const { pedido: pedidoId, consulta: token } = await searchParams;
-  const [sucursales, pedido, sierra, consulta, placas] = await Promise.all([
+  const { pedido: pedidoId, consulta: token, cliente: clienteId } = await searchParams;
+  const [sucursales, pedido, sierra, consulta, placas, cliente] = await Promise.all([
     listarSucursalesPublicas(),
     pedidoId ? obtenerPedido(pedidoId) : Promise.resolve(null),
     anchoDeSierra(),
     token ? consultaDeCorte(token) : Promise.resolve(null),
     token ? placasCortablesPublicas() : Promise.resolve([]),
+    clienteId && esUuid(clienteId) ? obtenerCliente(clienteId) : Promise.resolve(null),
   ]);
   if (token && !consulta) notFound();
   // Una consulta que ya se pasó a corte no se ofrece otra vez: el alta la
@@ -132,6 +135,12 @@ export default async function NuevoCortePage({
             : undefined
         }
         anchoSierra={sierra}
+        sierraEditable={usuario.staffRole === "admin"}
+        clienteInicial={
+          cliente
+            ? { id: cliente.id, nombre: cliente.nombre, razonSocial: cliente.razonSocial, telefono: cliente.telefono }
+            : undefined
+        }
         desdePedido={
           pedido
             ? {

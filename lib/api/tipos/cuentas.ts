@@ -574,6 +574,9 @@ export interface components {
             saldo: number;
             pedidos: components["schemas"]["Comprobante"][];
             presupuestos: components["schemas"]["Comprobante"][];
+            /** @description En total van las placas */
+            cortes: components["schemas"]["Comprobante"][];
+            facturas: components["schemas"]["Comprobante"][];
             anterior: components["schemas"]["HistorialAnterior"];
         };
         /** @description Lo que la migración trajo del sistema anterior (ISIS) para este cliente: las últimas 20 ventas y los últimos 20 comprobantes, con los totales de todo. */

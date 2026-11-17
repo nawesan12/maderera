@@ -100,6 +100,10 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string) ([]Corte
 	}
 	if c := condicionBusqueda(busqueda, []string{"co.numero", "co.contacto_nombre", "co.material_descripcion"}, &args); c != "" {
 		cond = append(cond, c)
+	} else if estado == "" || estado == "todos" {
+		// En el tablero, de lo retirado solo lo de hoy: la columna juntaba
+		// todo desde el primer día. Lo anterior se encuentra buscando.
+		cond = append(cond, `(co.estado <> 'retirado' OR co.updated_at >= (date_trunc('day', now() AT TIME ZONE 'America/Argentina/Buenos_Aires') AT TIME ZONE 'America/Argentina/Buenos_Aires'))`)
 	}
 	where := ""
 	if len(cond) > 0 {
@@ -191,6 +195,8 @@ type Corte struct {
 	CustomerID       *string         `json:"customerId"`
 	OrderID          *string         `json:"orderId"`
 	PedidoNumero     *string         `json:"pedidoNumero"`
+	Telefono         *string         `json:"telefono"`
+	RetiraEl         *string         `json:"retiraEl"`
 	Empresa          *string         `json:"empresa"`
 	PriceListID      *string         `json:"priceListId"`
 	Material         string          `json:"material"`
@@ -242,7 +248,8 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Corte, error) {
 		       cu.razon_social, cu.price_list_id::text, co.material_descripcion, co.variant_id::text,
 		       pv.largo_mm, pv.ancho_mm, co.placa_largo_mm, co.placa_ancho_mm, co.mitad::text, pv.color,
 		       cat.name, p.precio_media_pct, co.placas, co.pasadas, co.canto_descripcion, co.acomodo_manual,
-		       co.ancho_sierra_mm, co.motor_plano, co.estado::text, co.urgente, co.notas, b.name, co.created_at
+		       co.ancho_sierra_mm, co.motor_plano, co.estado::text, co.urgente, co.notas, b.name, co.created_at,
+		       coalesce(co.contacto_telefono, o.contacto_telefono, cu.telefono), to_char(co.retira_el, 'YYYY-MM-DD')
 		FROM cutting_orders co
 		LEFT JOIN product_variants pv ON pv.id = co.variant_id
 		LEFT JOIN products p ON p.id = pv.product_id
@@ -254,7 +261,7 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Corte, error) {
 		&c.ID, &c.Numero, &c.Cliente, &c.CustomerID, &c.OrderID, &c.PedidoNumero, &c.Empresa, &c.PriceListID,
 		&c.Material, &c.VariantID, &vl, &va, &pl, &pa, &c.Mitad, &c.Color, &c.Categoria, &pct, &c.Placas,
 		&c.Pasadas, &c.CantoDescripcion, &c.AcomodoManual, &sierra, &c.MotorPlano, &c.Estado, &urgente,
-		&c.Notas, &c.Sucursal, &c.CreatedAt)
+		&c.Notas, &c.Sucursal, &c.CreatedAt, &c.Telefono, &c.RetiraEl)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

@@ -602,7 +602,7 @@ components:
       type: object
       required: [id, userId, nombre, razonSocial, cuit, condicionIva, email, telefono, direccion, rubro, tipo, estado, priceListId,
         limiteCredito, asesor, notas, active, createdAt, updatedAt, codigoLegacy, sellerId, diasCredito, cuentaBloqueada,
-        motivoBloqueo, vendedor, cuentaWebSinVincular, saldo, pedidos, presupuestos, anterior]
+        motivoBloqueo, vendedor, cuentaWebSinVincular, saldo, pedidos, presupuestos, cortes, facturas, anterior]
       properties:
         id: { type: string }
         userId: { type: string, nullable: true }
@@ -640,6 +640,8 @@ components:
         saldo: { type: number, format: double }
         pedidos: { type: array, items: { $ref: "#/components/schemas/Comprobante" } }
         presupuestos: { type: array, items: { $ref: "#/components/schemas/Comprobante" } }
+        cortes: { type: array, items: { $ref: "#/components/schemas/Comprobante" }, description: En total van las placas }
+        facturas: { type: array, items: { $ref: "#/components/schemas/Comprobante" } }
         anterior: { $ref: "#/components/schemas/HistorialAnterior" }
     HistorialAnterior:
       description: >-

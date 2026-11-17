@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -26,9 +27,12 @@ import (
 // navegador (texto; vacío es «no vino»). Cada pieza es el JSON que arma la
 // pantalla.
 type FormCorte struct {
-	CustomerID          string `json:"customerId"`
-	OrderID             string `json:"orderId"`
-	ContactoNombre      string `json:"contactoNombre"`
+	CustomerID       string `json:"customerId"`
+	OrderID          string `json:"orderId"`
+	ContactoNombre   string `json:"contactoNombre"`
+	ContactoTelefono string `json:"contactoTelefono"`
+	// RetiraEl es el día que pasa a buscarlo (AAAA-MM-DD), si se sabe.
+	RetiraEl            string `json:"retiraEl"`
 	BranchID            string `json:"branchId"`
 	VariantID           string `json:"variantId"`
 	MaterialDescripcion string `json:"materialDescripcion"`
@@ -152,6 +156,21 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 		return &x, ""
 	}
 	contacto, msgContacto := validarTexto(f.ContactoNombre, 2, "Poné para quién es.", 160)
+	var telefono *string
+	if t := strings.TrimSpace(f.ContactoTelefono); t != "" {
+		if len(t) > 40 {
+			return "", plataforma.Invalido(map[string]string{"contactoTelefono": "El teléfono es muy largo."})
+		}
+		telefono = &t
+	}
+	var retiraEl *time.Time
+	if f.RetiraEl != "" {
+		d, err := time.Parse("2006-01-02", f.RetiraEl)
+		if err != nil {
+			return "", plataforma.Invalido(map[string]string{"retiraEl": "Revisá el día de retiro."})
+		}
+		retiraEl = &d
+	}
 	material, msgMaterial := validarTexto(f.MaterialDescripcion, 2, "Falta decir qué placa se corta.", 200)
 	largo, msgLargo := medida(f.PlacaLargoMm)
 	ancho, msgAncho := medida(f.PlacaAnchoMm)
@@ -244,12 +263,12 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO cutting_orders (numero, customer_id, order_id, contacto_nombre, branch_id, variant_id,
 				material_descripcion, placa_largo_mm, placa_ancho_mm, mitad, placas, canto_descripcion,
-				acomodo_manual, ancho_sierra_mm, estado, urgente, notas, created_by_user_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::mitad_placa, $11, $12, $13, $14, 'en-cola', $15, $16, $17)
+				acomodo_manual, ancho_sierra_mm, estado, urgente, notas, created_by_user_id, contacto_telefono, retira_el)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::mitad_placa, $11, $12, $13, $14, 'en-cola', $15, $16, $17, $18, $19)
 			RETURNING id::text`,
 			numero, opcional(f.CustomerID), opcional(f.OrderID), contacto, branch, opcional(f.VariantID), material,
 			largo, ancho, opcional(f.Mitad), int32(placasN), canto, opcional(f.AcomodoManual), jsmath.Num(*sierra),
-			urgente, notas, ses.UserID).Scan(&id); err != nil {
+			urgente, notas, ses.UserID, telefono, retiraEl).Scan(&id); err != nil {
 			return err
 		}
 		for orden, p := range piezas {

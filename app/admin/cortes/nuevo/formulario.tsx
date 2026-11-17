@@ -88,7 +88,16 @@ export function FormularioCorte({
   desdePedido,
   desdeConsulta,
   anchoSierra: anchoSierraGeneral,
+  clienteInicial,
+  sierraEditable = false,
 }: {
+  /** Desde la ficha del cliente: llega con el cliente ya elegido. */
+  clienteInicial?: { id: string; nombre: string; razonSocial: string | null; telefono: string | null };
+  /**
+   * La sierra es un dato del taller: la cambia el admin. A quien vende le
+   * sobraba un campo técnico que no sabe completar.
+   */
+  sierraEditable?: boolean;
   sucursales: { id: string; nombre: string }[];
   /**
    * Lo que se lleva el disco en cada pasada, de /admin/cortes/tarifas.
@@ -142,8 +151,11 @@ export function FormularioCorte({
     id: string;
     nombre: string;
     razonSocial: string | null;
-  } | null>(desdePedido?.cliente ?? null);
-  const [nombre, setNombre] = useState(desdePedido?.contactoNombre ?? "");
+  } | null>(desdePedido?.cliente ?? clienteInicial ?? null);
+  const [nombre, setNombre] = useState(
+    desdePedido?.contactoNombre ?? (clienteInicial ? (clienteInicial.razonSocial ?? clienteInicial.nombre) : ""),
+  );
+  const [telefono, setTelefono] = useState(clienteInicial?.telefono ?? "");
   const [placa, setPlaca] = useState<PlacaElegida | null>(
     desdeConsulta?.placa ?? null,
   );
@@ -311,6 +323,23 @@ export function FormularioCorte({
               required
             />
           </div>
+          {/* Sin ficha de cliente, es el único lugar del que sale a quién
+              avisarle que el corte está listo. */}
+          <div className="space-y-2">
+            <Label htmlFor="contactoTelefono">Teléfono</Label>
+            <Input
+              id="contactoTelefono"
+              name="contactoTelefono"
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+              inputMode="tel"
+              maxLength={40}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="retiraEl">Lo retira el</Label>
+            <Input id="retiraEl" name="retiraEl" type="date" />
+          </div>
         </Seccion>
 
         <Seccion titulo="La placa" icono={Layers}>
@@ -456,6 +485,7 @@ export function FormularioCorte({
             />
           </div>
 
+          {sierraEditable ? (
           <div className="space-y-2">
             <Label htmlFor="anchoSierraMm">Sierra (mm por corte)</Label>
             <Input
@@ -474,6 +504,9 @@ export function FormularioCorte({
               </p>
             )}
           </div>
+          ) : (
+            <input type="hidden" name="anchoSierraMm" value={sierraTexto} />
+          )}
         </Seccion>
       </Hoja>
 

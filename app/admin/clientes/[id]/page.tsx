@@ -4,7 +4,8 @@ import { esUuid } from "@/lib/uuid";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoDelUltimoRecibo, avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
-import { ArrowLeft, Download, MessageCircle, Printer } from "lucide-react";
+import { ArrowLeft, ClipboardList, Download, MessageCircle, Printer, Scissors } from "lucide-react";
+import { puedeEntrar } from "@/lib/roles";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { enlaceDeWhatsapp, fechaSolaCorta } from "@/lib/formato";
 import {
@@ -127,6 +128,29 @@ export default async function FichaClientePage({
           />
         </div>
       </div>
+
+      {/* Lo que se hace con un cliente, ya con el cliente puesto: armarle un
+          presupuesto o tomarle un corte sin volver a buscarlo. */}
+      <nav aria-label="Hacer para este cliente" className="flex flex-wrap gap-2">
+        {puedeEntrar("/admin/presupuestos", usuario.staffRole) && (
+          <Link
+            href={`/admin/presupuestos/nuevo?cliente=${cliente.id}`}
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-hundida px-4 text-base font-medium hover:bg-muted"
+          >
+            <ClipboardList className="h-5 w-5" aria-hidden="true" />
+            Presupuesto
+          </Link>
+        )}
+        {puedeEntrar("/admin/cortes", usuario.staffRole) && (
+          <Link
+            href={`/admin/cortes/nuevo?cliente=${cliente.id}`}
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-hundida px-4 text-base font-medium hover:bg-muted"
+          >
+            <Scissors className="h-5 w-5" aria-hidden="true" />
+            Corte
+          </Link>
+        )}
+      </nav>
 
       {cliente.cuentaWebSinVincular && (
         <AvisoCuentaWeb
@@ -329,6 +353,32 @@ export default async function FichaClientePage({
                 href: `/admin/presupuestos/${p.id}`,
               }))}
             />
+            <Listado
+              titulo="Cortes"
+              vacio="Sin cortes todavía."
+              filas={cliente.cortes.map((c) => ({
+                id: c.id,
+                numero: c.numero,
+                estado: c.estado,
+                fecha: c.createdAt,
+                href: `/admin/cortes/${c.id}`,
+                detalle: `${Number(c.total)} ${Number(c.total) === 1 ? "placa" : "placas"}`,
+              }))}
+            />
+            {puedeEntrar("/admin/facturacion", usuario.staffRole) && (
+              <Listado
+                titulo="Facturas"
+                vacio="Sin facturas todavía."
+                filas={cliente.facturas.map((f) => ({
+                  id: f.id,
+                  numero: f.numero,
+                  estado: f.estado,
+                  total: f.total,
+                  fecha: f.createdAt,
+                  href: `/admin/facturacion/${f.id}`,
+                }))}
+              />
+            )}
           </div>
 
           <DelSistemaAnterior anterior={cliente.anterior} />
@@ -464,7 +514,9 @@ function Listado({
     id: string;
     numero: string;
     estado: string;
-    total: string;
+    total?: string;
+    /** En vez del importe, cuando la fila no es plata (las placas del corte). */
+    detalle?: string;
     fecha: Date;
     href: string;
   }[];
@@ -491,7 +543,7 @@ function Listado({
                   </span>
                 </span>
                 <span className="tabular text-base">
-                  {moneda.format(Number(fila.total))}
+                  {fila.total !== undefined ? moneda.format(Number(fila.total)) : fila.detalle}
                 </span>
                 <EtiquetaEstado estado={fila.estado} />
               </Link>

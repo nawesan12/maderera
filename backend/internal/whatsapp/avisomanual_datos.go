@@ -85,7 +85,9 @@ func (s *Servicio) cargarAviso(ctx context.Context, evento, tipo, id string) (*b
 	case "cutting_order":
 		var numero string
 		var cNombre, clNombre, clTel, pTel, suc, slug *string
-		ok, err := fila(`select co.numero, co.contacto_nombre, c.nombre, c.telefono, o.contacto_telefono, b.name, b.slug
+		// El teléfono: el de la ficha, si no el del pedido, si no el que se
+		// anotó al tomar el corte.
+		ok, err := fila(`select co.numero, co.contacto_nombre, c.nombre, c.telefono, coalesce(o.contacto_telefono, co.contacto_telefono), b.name, b.slug
 			from cutting_orders co left join customers c on c.id = co.customer_id left join orders o on o.id = co.order_id
 			left join branches b on b.id = co.branch_id where co.id = $1`, &numero, &cNombre, &clNombre, &clTel, &pTel, &suc, &slug)
 		if !ok {

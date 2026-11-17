@@ -505,19 +505,35 @@ export default async function FichaCortePage({
             </section>
           )}
 
-          {corte.customerId && (
-            <section className="tarjeta p-5">
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Cliente
-              </h2>
+          <section className="tarjeta p-5">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Cliente
+            </h2>
+            {corte.customerId ? (
               <Link
                 href={`/admin/clientes/${corte.customerId}`}
                 className="text-base font-medium hover:text-brand-orange"
               >
                 {corte.cliente}
               </Link>
-            </section>
-          )}
+            ) : (
+              <p className="text-base font-medium">{corte.cliente}</p>
+            )}
+            {corte.telefono && (
+              <a
+                href={`tel:${corte.telefono.replace(/[^\d+]/g, "")}`}
+                className="tabular mt-1 block text-base text-muted-foreground hover:text-foreground"
+              >
+                {corte.telefono}
+              </a>
+            )}
+            {corte.retiraEl && (
+              <p className="mt-2 text-base">
+                Lo retira el{" "}
+                <strong className="tabular">{corte.retiraEl.split("-").reverse().join("/")}</strong>
+              </p>
+            )}
+          </section>
 
           {/* De qué venta salió. Sin esto, quien está parado frente a la
               seccionadora no puede saber si el pedido ya se cobró ni qué más
@@ -536,10 +552,6 @@ export default async function FichaCortePage({
             </section>
           )}
 
-          <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
-            Las medidas están en milímetros y listas para exportar al optimizador
-            cuando se conecte la máquina.
-          </p>
         </aside>
       </div>
     </div>

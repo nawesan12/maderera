@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"mjbj/internal/busqueda"
 	"net/http"
 	"strings"
 	"time"
@@ -49,6 +50,22 @@ func fecha(t time.Time) string {
 // coincide es coincideBusqueda: cada palabra (hasta seis) tiene que estar en
 // alguna de las columnas, sin tildes.
 func coincide(texto string, args *[]any, columnas ...string) string {
+	return coincideONumero(texto, args, nil, columnas...)
+}
+
+// coincideONumero es coincide, salvo que lo buscado sea un teléfono o un CUIT:
+// entonces compara solo los dígitos de esas columnas (las de `numericas`).
+// «2235551234» no encontraba «223 555-1234».
+func coincideONumero(texto string, args *[]any, numericas []string, columnas ...string) string {
+	if d, ok := busqueda.Numero(texto); ok && len(numericas) > 0 {
+		*args = append(*args, "%"+busqueda.SinPrefijos(d)+"%")
+		p := fmt.Sprintf("$%d", len(*args))
+		var col []string
+		for _, c := range numericas {
+			col = append(col, busqueda.Digitos(c)+" LIKE "+p)
+		}
+		return "(" + strings.Join(col, " OR ") + ")"
+	}
 	t := strings.Fields(texto)
 	if len(t) > 6 {
 		t = t[:6]
@@ -108,7 +125,7 @@ func Buscar(ctx context.Context, pool *pgxpool.Pool, rol *sqlc.StaffRole, texto 
 		{"/admin/clientes", func() ([]Resultado, error) {
 			var a []any
 			filas, err := pool.Query(ctx, `SELECT id, nombre, razon_social, cuit, telefono FROM customers WHERE `+
-				coincide(texto, &a, "nombre", "razon_social", "cuit", "telefono")+` ORDER BY nombre LIMIT 4`, a...)
+				coincideONumero(texto, &a, []string{"cuit", "telefono"}, "nombre", "razon_social", "cuit", "telefono")+` ORDER BY nombre LIMIT 4`, a...)
 			if err != nil {
 				return nil, err
 			}
@@ -122,7 +139,7 @@ func Buscar(ctx context.Context, pool *pgxpool.Pool, rol *sqlc.StaffRole, texto 
 		{"/admin/pedidos", func() ([]Resultado, error) {
 			var a []any
 			filas, err := pool.Query(ctx, `SELECT id, numero, contacto_nombre, estado::text, created_at FROM orders WHERE `+
-				coincide(texto, &a, "numero", "contacto_nombre")+` ORDER BY created_at DESC LIMIT 4`, a...)
+				coincideONumero(texto, &a, []string{"contacto_telefono"}, "numero", "contacto_nombre")+` ORDER BY created_at DESC LIMIT 4`, a...)
 			if err != nil {
 				return nil, err
 			}
@@ -136,7 +153,7 @@ func Buscar(ctx context.Context, pool *pgxpool.Pool, rol *sqlc.StaffRole, texto 
 		{"/admin/presupuestos", func() ([]Resultado, error) {
 			var a []any
 			filas, err := pool.Query(ctx, `SELECT id, numero, contacto_nombre, estado::text, created_at FROM quotes WHERE `+
-				coincide(texto, &a, "numero", "contacto_nombre")+` ORDER BY created_at DESC LIMIT 4`, a...)
+				coincideONumero(texto, &a, []string{"contacto_telefono"}, "numero", "contacto_nombre")+` ORDER BY created_at DESC LIMIT 4`, a...)
 			if err != nil {
 				return nil, err
 			}
@@ -180,7 +197,7 @@ func Buscar(ctx context.Context, pool *pgxpool.Pool, rol *sqlc.StaffRole, texto 
 		{"/admin/proveedores", func() ([]Resultado, error) {
 			var a []any
 			filas, err := pool.Query(ctx, `SELECT id, nombre, razon_social, cuit, rubro FROM suppliers WHERE `+
-				coincide(texto, &a, "nombre", "razon_social", "cuit", "rubro")+` ORDER BY nombre LIMIT 4`, a...)
+				coincideONumero(texto, &a, []string{"cuit", "telefono"}, "nombre", "razon_social", "cuit", "rubro")+` ORDER BY nombre LIMIT 4`, a...)
 			if err != nil {
 				return nil, err
 			}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"mjbj/internal/busqueda"
 	"strings"
 	"time"
 
@@ -72,13 +73,20 @@ func (s *Servicio) Listar(ctx context.Context, f FiltrosDeClientes, hoy time.Tim
 	if f.Vendedor != "" {
 		cond = append(cond, "c.seller_id::text = "+arg(f.Vendedor))
 	}
-	for _, t := range terminos(f.Busqueda) {
-		p := arg("%" + t + "%")
-		var col []string
-		for _, c := range []string{"c.nombre", "c.razon_social", "c.cuit", "c.rubro", "c.email"} {
-			col = append(col, "f_unaccent("+c+") ILIKE f_unaccent("+p+")")
+	// Un teléfono o un CUIT se compara por sus dígitos: «2235551234» no
+	// encontraba «223 555-1234», y el teléfono ni se miraba.
+	if d, ok := busqueda.Numero(f.Busqueda); ok {
+		p := arg("%" + busqueda.SinPrefijos(d) + "%")
+		cond = append(cond, "("+busqueda.Digitos("c.telefono")+" LIKE "+p+" OR "+busqueda.Digitos("c.cuit")+" LIKE "+p+")")
+	} else {
+		for _, t := range terminos(f.Busqueda) {
+			p := arg("%" + t + "%")
+			var col []string
+			for _, c := range []string{"c.nombre", "c.razon_social", "c.cuit", "c.rubro", "c.email", "c.telefono"} {
+				col = append(col, "f_unaccent("+c+") ILIKE f_unaccent("+p+")")
+			}
+			cond = append(cond, "("+strings.Join(col, " OR ")+")")
 		}
-		cond = append(cond, "("+strings.Join(col, " OR ")+")")
 	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT c.id, c.nombre, c.razon_social, c.cuit, c.rubro, c.tipo::text, c.estado::text, c.asesor, c.telefono, c.email,
@@ -177,6 +185,10 @@ type Ficha struct {
 	Saldo                float64       `json:"saldo"`
 	Pedidos              []Comprobante `json:"pedidos"`
 	Presupuestos         []Comprobante `json:"presupuestos"`
+	// Sus cortes y sus facturas, para no tener que buscarlos en otra
+	// pantalla cuando el cliente pregunta por el suyo.
+	Cortes   []Comprobante `json:"cortes"`
+	Facturas []Comprobante `json:"facturas"`
 	Anterior             Anterior      `json:"anterior"`
 }
 
@@ -302,6 +314,19 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Ficha, error) {
 	}
 	if c.Presupuestos, err = comprobantes(ctx, s, `SELECT id, numero, estado::text, total::text, created_at FROM quotes
 		WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 10`, id); err != nil {
+		return nil, err
+	}
+	if c.Cortes, err = comprobantes(ctx, s, `SELECT id, numero, estado::text, placas::text, created_at FROM cutting_orders
+		WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 10`, id); err != nil {
+		return nil, err
+	}
+	if c.Facturas, err = comprobantes(ctx, s, `
+		SELECT id,
+		  CASE split_part(tipo::text, '_', 1) WHEN 'factura' THEN 'Factura ' WHEN 'nota' THEN
+		    CASE WHEN tipo::text LIKE 'nota_credito%' THEN 'N. crédito ' ELSE 'N. débito ' END END
+		  || upper(right(tipo::text, 1)) || ' ' || lpad(punto_venta::text, 4, '0') || '-' || lpad(numero::text, 8, '0'),
+		  estado::text, total::text, fecha_emision
+		FROM invoices WHERE customer_id = $1 ORDER BY fecha_emision DESC LIMIT 10`, id); err != nil {
 		return nil, err
 	}
 	if c.Anterior, err = s.anterior(ctx, id); err != nil {

@@ -58,6 +58,8 @@ export async function crearCorte(_previo: EstadoCorte, formData: FormData): Prom
       customerId: campo("customerId"),
       orderId: campo("orderId"),
       contactoNombre: String(formData.get("contactoNombre") ?? ""),
+      contactoTelefono: String(formData.get("contactoTelefono") ?? ""),
+      retiraEl: String(formData.get("retiraEl") ?? ""),
       branchId: campo("branchId"),
       variantId: campo("variantId"),
       materialDescripcion: String(formData.get("materialDescripcion") ?? ""),

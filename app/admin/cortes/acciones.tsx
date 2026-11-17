@@ -17,11 +17,17 @@ export function AccionesCorte({
   estado,
   urgente,
   compacto = false,
+  soloMaquina = false,
 }: {
   id: string;
   estado: string;
   urgente: boolean;
   compacto?: boolean;
+  /**
+   * En el taller, el aserradero empieza y termina. Marcar urgente y entregar
+   * son decisiones del mostrador.
+   */
+  soloMaquina?: boolean;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -37,11 +43,11 @@ export function AccionesCorte({
     });
   }
 
-  const etiqueta = SIGUIENTE[estado];
+  const etiqueta = soloMaquina && estado === "terminado" ? undefined : SIGUIENTE[estado];
 
   return (
     <div className={`flex items-center gap-2 ${compacto ? "w-full" : ""}`}>
-      {estado !== "retirado" && (
+      {estado !== "retirado" && !soloMaquina && (
         <button
           onClick={() => accion(() => alternarUrgente(id))}
           disabled={pendiente}

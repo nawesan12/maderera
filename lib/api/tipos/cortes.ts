@@ -399,6 +399,9 @@ export interface components {
             customerId?: string;
             orderId?: string;
             contactoNombre: string;
+            contactoTelefono?: string;
+            /** @description AAAA-MM-DD */
+            retiraEl?: string;
             branchId?: string;
             variantId?: string;
             materialDescripcion: string;
@@ -444,6 +447,10 @@ export interface components {
             mitad: string | null;
         };
         Corte: {
+            /** @description El que se anotó */
+            telefono: string | null;
+            /** @description AAAA-MM-DD */
+            retiraEl: string | null;
             id: string;
             numero: string;
             cliente: string;

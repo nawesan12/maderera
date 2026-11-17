@@ -33,12 +33,14 @@ type FichaCruda = Esquemas["FichaDeCliente"];
 type ComprobanteCrudo = FichaCruda["pedidos"][number];
 
 export interface FichaDeCliente
-  extends Omit<FichaCruda, "createdAt" | "updatedAt" | "cuentaWebSinVincular" | "pedidos" | "presupuestos"> {
+  extends Omit<FichaCruda, "createdAt" | "updatedAt" | "cuentaWebSinVincular" | "pedidos" | "presupuestos" | "cortes" | "facturas"> {
   createdAt: Date;
   updatedAt: Date;
   cuentaWebSinVincular: { id: string; nombre: string; createdAt: Date } | null;
   pedidos: (Omit<ComprobanteCrudo, "createdAt"> & { createdAt: Date })[];
   presupuestos: (Omit<ComprobanteCrudo, "createdAt"> & { createdAt: Date })[];
+  cortes: (Omit<ComprobanteCrudo, "createdAt"> & { createdAt: Date })[];
+  facturas: (Omit<ComprobanteCrudo, "createdAt"> & { createdAt: Date })[];
 }
 
 /** La ficha, o null si no existe. */
@@ -54,6 +56,8 @@ export async function obtenerCliente(id: string): Promise<FichaDeCliente | null>
     cuentaWebSinVincular: c.cuentaWebSinVincular ? conFecha(c.cuentaWebSinVincular) : null,
     pedidos: c.pedidos.map(conFecha),
     presupuestos: c.presupuestos.map(conFecha),
+    cortes: c.cortes.map(conFecha),
+    facturas: c.facturas.map(conFecha),
   };
 }
 

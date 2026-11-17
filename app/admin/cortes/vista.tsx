@@ -30,8 +30,11 @@ const COLUMNAS = [
 export function TableroDeCortes({
   cortes,
   avisos = {},
+  soloMaquina = false,
 }: {
   cortes: CorteListado[];
+  /** El tablero del aserradero: solo empezar y terminar. */
+  soloMaquina?: boolean;
   /** El aviso gratis de «corte terminado», por id de corte. */
   avisos?: Record<string, AvisoManualListo>;
 }) {
@@ -68,6 +71,7 @@ export function TableroDeCortes({
                   corte={corte}
                   posicion={columna.estado === "en-cola" ? i + 1 : undefined}
                   aviso={avisos[corte.id] ?? null}
+                  soloMaquina={soloMaquina}
                 />
               ))}
             </ColumnaTablero>
@@ -83,10 +87,12 @@ function TarjetaCorte({
   corte,
   posicion,
   aviso,
+  soloMaquina = false,
 }: {
   corte: CorteListado;
   posicion?: number;
   aviso: AvisoManualListo | null;
+  soloMaquina?: boolean;
 }) {
   return (
     <TarjetaTablero destacada={corte.urgente}>
@@ -161,6 +167,7 @@ function TarjetaCorte({
           estado={corte.estado}
           urgente={corte.urgente}
           compacto
+          soloMaquina={soloMaquina}
         />
       </div>
     </TarjetaTablero>

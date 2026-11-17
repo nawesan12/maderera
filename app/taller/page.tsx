@@ -115,7 +115,7 @@ export default async function TallerPage({
             Antes esta pantalla no se actualizaba nunca: quien cortaba tenía que
             recargarla para enterarse. */}
         <RefrescarEnVivo canales={["taller"]} sinConexionCadaMs={60_000} />
-        <TableroDeCortes cortes={cortes} />
+        <TableroDeCortes cortes={cortes} soloMaquina={usuario.staffRole === "aserradero"} />
       </main>
     </div>
   );

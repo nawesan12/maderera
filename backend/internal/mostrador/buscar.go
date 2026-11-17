@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"mjbj/internal/busqueda"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -232,7 +233,11 @@ func (s *Servicio) BuscarClientes(ctx context.Context, texto string) ([]ClienteD
 	}
 	var a args
 	cond := "active = true"
-	if t := a.coincide(consulta, "nombre", "razon_social", "cuit"); t != "" {
+	if d, ok := busqueda.Numero(consulta); ok {
+		// Por teléfono o CUIT, escrito como sea: se comparan los dígitos.
+		p := a.poner("%" + busqueda.SinPrefijos(d) + "%")
+		cond += " AND (" + busqueda.Digitos("telefono") + " LIKE " + p + " OR " + busqueda.Digitos("cuit") + " LIKE " + p + ")"
+	} else if t := a.coincide(consulta, "nombre", "razon_social", "cuit", "telefono"); t != "" {
 		cond += " AND " + t
 	}
 	filas, err := s.pool.Query(ctx, `SELECT `+columnasCliente+` FROM customers WHERE `+cond+` ORDER BY nombre LIMIT 30`,

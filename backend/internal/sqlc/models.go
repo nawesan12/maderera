@@ -5795,21 +5795,22 @@ type ProductReview struct {
 }
 
 type ProductVariant struct {
-	ID          string    `json:"id"`
-	ProductID   string    `json:"productId"`
-	Sku         string    `json:"sku"`
-	Label       string    `json:"label"`
-	LargoMm     *int32    `json:"largoMm"`
-	AnchoMm     *int32    `json:"anchoMm"`
-	EspesorMm   *int32    `json:"espesorMm"`
-	Material    *string   `json:"material"`
-	Color       *string   `json:"color"`
-	SortOrder   int32     `json:"sortOrder"`
-	Active      bool      `json:"active"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-	Terminacion *string   `json:"terminacion"`
-	Calidad     *string   `json:"calidad"`
+	ID           string    `json:"id"`
+	ProductID    string    `json:"productId"`
+	Sku          string    `json:"sku"`
+	Label        string    `json:"label"`
+	LargoMm      *int32    `json:"largoMm"`
+	AnchoMm      *int32    `json:"anchoMm"`
+	EspesorMm    *int32    `json:"espesorMm"`
+	Material     *string   `json:"material"`
+	Color        *string   `json:"color"`
+	SortOrder    int32     `json:"sortOrder"`
+	Active       bool      `json:"active"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	Terminacion  *string   `json:"terminacion"`
+	Calidad      *string   `json:"calidad"`
+	CodigoBarras *string   `json:"codigoBarras"`
 }
 
 type ProfessionalApplication struct {

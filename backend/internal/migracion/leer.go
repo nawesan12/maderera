@@ -459,7 +459,11 @@ func describir(entidad string, d map[string]string) (identificador, resumen stri
 	case "productos":
 		return d["sku"], unir(d["nombre"], d["medida"], d["categoria"])
 	case "stock":
-		return d["sku"], d["cantidad"] + " en " + d["sucursal"]
+		cantidad := d["cantidad"]
+		if cantidad != "" {
+			cantidad = jsmath.Texto(numeroJS(cantidad))
+		}
+		return d["sku"], cantidad + " en " + d["sucursal"]
 	}
 	return primero(d["codigo"], d["cuit"], d["email"], "—"), unir(d["nombre"], d["saldo"])
 }

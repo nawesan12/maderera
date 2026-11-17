@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ImageOff, Package, PackageX, Plus, Star, Tags } from "lucide-react";
+import { FileSpreadsheet, ImageOff, Package, PackageX, Plus, Star, Tags } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
 import { recortar, VerTodo } from "@/components/admin/ver-mas";
@@ -38,22 +38,29 @@ export default async function AdminProductosPage({
             : plural(productos.length, "producto")
         }
       >
-        <Link href="/admin/productos/candidatos">
+        <Link href="/admin/migracion?que=productos">
           <button className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted">
-            <PackageX className="h-5 w-5" />
-            Candidatos a baja
+            <FileSpreadsheet className="h-5 w-5" />
+            Cargar desde Excel
           </button>
         </Link>
         <Link href="/admin/productos/rubros">
           <button className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted">
             <Tags className="h-5 w-5" />
-            Rubros
+            Categorías
           </button>
         </Link>
         <Link href="/admin/productos/nuevo">
           <button className="boton-accion inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-base font-medium">
             <Plus className="h-5 w-5" />
             Nuevo producto
+          </button>
+        </Link>
+        {/* Dar de baja es lo de menos mientras se carga el catálogo: va al final. */}
+        <Link href="/admin/productos/candidatos">
+          <button className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <PackageX className="h-5 w-5" />
+            Candidatos a baja
           </button>
         </Link>
       </EncabezadoPanel>

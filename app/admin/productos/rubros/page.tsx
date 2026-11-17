@@ -4,7 +4,7 @@ import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { rubrosPorCategoria } from "@/lib/dal/admin/products";
 import { ListaDeRubros } from "./lista";
 
-export const metadata = { title: "Rubros" };
+export const metadata = { title: "Categorías y rubros" };
 
 /**
  * Los rubros del catálogo.
@@ -28,7 +28,7 @@ export default async function RubrosPage() {
       </Link>
 
       <EncabezadoPanel
-        titulo="Rubros"
+        titulo="Categorías y rubros"
       />
 
       <ListaDeRubros categorias={categorias} />

@@ -103,16 +103,23 @@ function descargarRechazos(entidad: ClaveEntidad, rechazos: RechazoMigracion[]) 
 
 export function AsistenteMigracion({
   definiciones,
+  entidadInicial,
 }: {
   /** Las entidades con sus campos y el tamaño del lote, de la API de Go. */
   definiciones: DefinicionesDeMigracion;
+  /**
+   * Llegar ya con la entidad elegida: «Cargar desde Excel» en Productos o en
+   * Stock abre directo el paso del archivo.
+   */
+  entidadInicial?: ClaveEntidad;
 }) {
   const { entidades: ENTIDADES, lote: LOTE } = definiciones;
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [paso, setPaso] = useState<Paso>("entidad");
-  const [entidad, setEntidad] = useState<ClaveEntidad>("clientes");
+  const [paso, setPaso] = useState<Paso>(entidadInicial ? "archivo" : "entidad");
+  const [entidad, setEntidad] = useState<ClaveEntidad>(entidadInicial ?? "clientes");
+  const [arrastrando, setArrastrando] = useState(false);
   const [analisis, setAnalisis] = useState<ArchivoAnalizado | null>(null);
   const [mapeo, setMapeo] = useState<Mapeo>({});
   const [previa, setPrevia] = useState<VistaPrevia | null>(null);
@@ -289,7 +296,22 @@ export function AsistenteMigracion({
           {INSTRUCCIONES[entidad]}
         </p>
 
-        <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center transition-colors hover:border-brand-orange/50 hover:bg-muted/40">
+        <label
+          onDragOver={(e) => {
+            e.preventDefault();
+            setArrastrando(true);
+          }}
+          onDragLeave={() => setArrastrando(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setArrastrando(false);
+            const archivo = e.dataTransfer.files?.[0];
+            if (archivo && !leyendo) elegirArchivo(archivo);
+          }}
+          className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
+            arrastrando ? "border-brand-orange bg-brand-orange/5" : "hover:border-brand-orange/50 hover:bg-muted/40"
+          }`}
+        >
           {leyendo ? (
             <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
           ) : (
@@ -299,7 +321,7 @@ export function AsistenteMigracion({
             {leyendo ? "Leyendo el archivo…" : "Elegí el archivo o arrastralo acá"}
           </span>
           <span className="text-sm text-muted-foreground">
-            Planilla exportada del sistema anterior (.xlsx o .csv) · hasta 8 MB
+            Excel (.xlsx) o .csv · hasta 8 MB
           </span>
           <input
             ref={inputRef}
@@ -314,10 +336,6 @@ export function AsistenteMigracion({
           />
         </label>
 
-        <p className="mt-4 text-sm text-muted-foreground">
-          No hace falta que las columnas se llamen de ninguna forma en
-          particular: en el paso siguiente se indica qué es cada una.
-        </p>
       </div>
     );
   }

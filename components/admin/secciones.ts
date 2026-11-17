@@ -181,7 +181,7 @@ export const secciones: { titulo: string; items: ItemNav[] }[] = [
       { href: "/admin/reportes", icon: BarChart3, label: "Reportes" },
       { href: "/admin/sucursales", icon: Building2, label: "Sucursales" },
       { href: "/admin/envios", icon: MapPin, label: "Envíos" },
-      { href: "/admin/migracion", icon: DatabaseZap, label: "Migración" },
+      { href: "/admin/migracion", icon: DatabaseZap, label: "Importar planillas" },
       { href: "/admin/bitacora", icon: History, label: "Bitácora" },
     ],
   },

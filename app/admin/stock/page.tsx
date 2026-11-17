@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ImageOff, Package } from "lucide-react";
+import { FileSpreadsheet, ImageOff, Package } from "lucide-react";
+import { requireStaff } from "@/lib/dal/session";
+import { puedeEntrar } from "@/lib/roles";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
 import { recortar, VerTodo } from "@/components/admin/ver-mas";
@@ -36,8 +38,9 @@ export default async function AdminStockPage({
 }) {
   const params = await searchParams;
 
-  const [filas, categorias, sucursales, movimientos, enCamino] =
+  const [usuario, filas, categorias, sucursales, movimientos, enCamino] =
     await Promise.all([
+      requireStaff(),
       listarStock({ busqueda: params.buscar, categoria: params.cat }),
       listarCategoriasAdmin(),
       listarSucursales(),
@@ -96,10 +99,19 @@ export default async function AdminStockPage({
         >
           Qué reponer
         </Link>
+        {puedeEntrar("/admin/migracion", usuario.staffRole) && (
+          <Link
+            href="/admin/migracion?que=stock"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+          >
+            <FileSpreadsheet className="h-5 w-5" aria-hidden="true" />
+            Cargar desde Excel
+          </Link>
+        )}
         <DialogoTransferencia
           variantes={filas.map((f) => ({
             id: f.variantId,
-            texto: `${f.productName} — ${f.label}`,
+            texto: `${f.productName} — ${f.label} · ${f.sku}`,
           }))}
           sucursales={sucursales.map((s) => ({ id: s.id, name: s.name }))}
         />
@@ -303,6 +315,7 @@ function TarjetaStock({
               <AjusteRapido
                 variantId={fila.variantId}
                 branchSlug="casa-central"
+                actual={fila.qtyCentral}
                 unidad={fila.unidad}
                 largoMm={fila.largoMm}
                 sucursal="Casa Central"
@@ -324,6 +337,7 @@ function TarjetaStock({
               <AjusteRapido
                 variantId={fila.variantId}
                 branchSlug="aserradero"
+                actual={fila.qtyAserradero}
                 unidad={fila.unidad}
                 largoMm={fila.largoMm}
                 sucursal="Aserradero"

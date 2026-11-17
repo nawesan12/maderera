@@ -314,19 +314,64 @@ func aplicarProductos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resulta
 		if etiqueta == "" {
 			etiqueta = d["sku"]
 		}
-		medida := []any{producto, d["sku"], etiqueta, enteroONulo(d["largoMm"]), enteroONulo(d["anchoMm"]), enteroONulo(d["espesorMm"])}
+		// El código de barras no se repite: si ya es de otra medida, el
+		// renglón se rechaza en vez de robárselo.
+		if cb := d["codigoBarras"]; cb != "" {
+			duenio, err := unID(ctx, tx, `SELECT id FROM product_variants WHERE codigo_barras = $1 LIMIT 1`, cb)
+			if err != nil {
+				return err
+			}
+			if duenio != "" && duenio != variante {
+				res.rechazar(f.Linea, d["sku"], "El código de barras "+cb+" ya es de otra medida.")
+				continue
+			}
+		}
+
+		// Los atributos y el código de barras, si vienen: una columna vacía
+		// no borra lo que ya estaba cargado.
+		medida := []any{producto, d["sku"], etiqueta, enteroONulo(d["largoMm"]), enteroONulo(d["anchoMm"]), enteroONulo(d["espesorMm"]),
+			nulo(d["color"]), nulo(d["material"]), nulo(d["terminacion"]), nulo(d["calidad"]), nulo(d["codigoBarras"])}
 		if variante != "" {
 			if _, err := tx.Exec(ctx, `UPDATE product_variants SET product_id = $1, sku = $2, label = $3, largo_mm = $4::integer,
-				ancho_mm = $5::integer, espesor_mm = $6::integer, updated_at = now() WHERE id = $7`, append(medida, variante)...); err != nil {
+				ancho_mm = $5::integer, espesor_mm = $6::integer, color = coalesce($7, color), material = coalesce($8, material),
+				terminacion = coalesce($9, terminacion), calidad = coalesce($10, calidad), codigo_barras = coalesce($11, codigo_barras),
+				updated_at = now() WHERE id = $12`, append(medida, variante)...); err != nil {
 				return err
 			}
 			res.Actualizados++
 		} else {
-			if err := tx.QueryRow(ctx, `INSERT INTO product_variants (product_id, sku, label, largo_mm, ancho_mm, espesor_mm, updated_at)
-				VALUES ($1, $2, $3, $4::integer, $5::integer, $6::integer, now()) RETURNING id`, medida...).Scan(&variante); err != nil {
+			if err := tx.QueryRow(ctx, `INSERT INTO product_variants (product_id, sku, label, largo_mm, ancho_mm, espesor_mm,
+				color, material, terminacion, calidad, codigo_barras, updated_at)
+				VALUES ($1, $2, $3, $4::integer, $5::integer, $6::integer, $7, $8, $9, $10, $11, now()) RETURNING id`, medida...).Scan(&variante); err != nil {
 				return err
 			}
 			res.Creados++
+		}
+
+		// El costo de partida. Si la medida ya tiene compras promediadas, no
+		// se pisa: el promedio de las compras sabe más que la planilla.
+		if c := d["costo"]; c != "" && numeroJS(c) > 0 {
+			if _, err := tx.Exec(ctx, `INSERT INTO variant_costs (variant_id, cantidad_base, costo_promedio) VALUES ($1, 0, $2::numeric)
+				ON CONFLICT (variant_id) DO UPDATE SET costo_promedio = excluded.costo_promedio, updated_at = now()
+				WHERE variant_costs.cantidad_base = 0`, variante, c); err != nil {
+				return err
+			}
+		}
+
+		// El proveedor, con su código: así la orden de compra y la recepción
+		// reconocen la medida por el código que usa el proveedor.
+		if d["proveedor"] != "" && d["codigoProveedor"] != "" {
+			proveedor, err := unID(ctx, tx, `SELECT id FROM suppliers WHERE f_unaccent(lower(nombre)) = f_unaccent(lower($1))
+				OR f_unaccent(lower(coalesce(razon_social, ''))) = f_unaccent(lower($1)) LIMIT 1`, d["proveedor"])
+			if err != nil {
+				return err
+			}
+			if proveedor != "" {
+				if _, err := tx.Exec(ctx, `INSERT INTO supplier_variant_codes (supplier_id, variant_id, codigo) VALUES ($1, $2, $3)
+					ON CONFLICT (supplier_id, codigo) DO NOTHING`, proveedor, variante, d["codigoProveedor"]); err != nil {
+					return err
+				}
+			}
 		}
 
 		// Los precios entran con su registro en el historial: el día que

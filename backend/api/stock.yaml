@@ -84,7 +84,13 @@ paths:
               properties:
                 variantId: { type: string }
                 branchSlug: { type: string }
-                cantidad: { type: number, format: double, description: lo que se suma (o resta) }
+                cantidad: { type: number, format: double, description: lo que se suma (o resta). Con contado, se ignora }
+                contado:
+                  type: number
+                  format: double
+                  minimum: 0
+                  description: Lo que se contó en el estante. El stock queda en este número, sea lo que sea que había
+                motivo: { type: string, enum: [ingreso, rotura, conteo, devolucion, otro] }
       responses:
         "200":
           description: El cambio («Casa Central 3 → 5»), o vacío si la cantidad era cero

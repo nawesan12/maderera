@@ -11,7 +11,7 @@ import { AsistenteMigracion } from "./asistente";
 
 import type { ClaveEntidad } from "@/lib/migracion/tipos";
 
-export const metadata = { title: "Migración de datos · Panel" };
+export const metadata = { title: "Importar planillas · Panel" };
 
 const ETIQUETA_ENTIDAD: Record<ClaveEntidad, string> = {
   clientes: "Clientes",
@@ -29,7 +29,12 @@ const ETIQUETA_ESTADO = {
   interrumpida: "Se interrumpió",
 } as const;
 
-export default async function MigracionPage() {
+export default async function MigracionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ que?: string }>;
+}) {
+  const { que } = await searchParams;
   // La migración reescribe cartera, catálogo y saldos: es de administración.
   // Se verifica acá y de nuevo en cada acción, porque el que escribe es el
   // servidor y no esta pantalla.
@@ -44,7 +49,7 @@ export default async function MigracionPage() {
   return (
     <div>
       <EncabezadoPanel
-        titulo="Migración de datos"
+        titulo="Importar planillas"
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -72,7 +77,10 @@ export default async function MigracionPage() {
 
       <div className="mt-6 grid gap-6 2xl:grid-cols-[1fr_360px]">
         <div className="tarjeta p-5">
-          <AsistenteMigracion definiciones={definiciones} />
+          <AsistenteMigracion
+            definiciones={definiciones}
+            entidadInicial={que && que in ETIQUETA_ENTIDAD ? (que as ClaveEntidad) : undefined}
+          />
         </div>
 
         <aside>

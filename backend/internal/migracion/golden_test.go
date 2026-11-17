@@ -235,3 +235,100 @@ func TestGoldenControles(t *testing.T) {
 	}
 	t.Logf("%d informes", len(casos))
 }
+
+// TestActualizarGolden reescribe los golden con lo que da Go, con las mismas
+// entradas. El TS de la migración ya no existe: desde el 17/11 el golden
+// cuida que Go no cambie sin querer, no que se parezca al TS.
+//
+//	MIGRACION_ACTUALIZAR=1 go test ./internal/migracion -run TestActualizarGolden
+//
+// Lo que cambió a propósito (17/11): la existencia y el mínimo del stock
+// aceptan decimales (28,8 m de zócalo quedaban en 29), y los productos
+// suman color, material, terminación, calidad, código de barras, costo y
+// proveedor; «proveedor» dejó de ser sinónimo de marca.
+func TestActualizarGolden(t *testing.T) {
+	if os.Getenv("MIGRACION_ACTUALIZAR") == "" {
+		t.Skip("solo con MIGRACION_ACTUALIZAR=1")
+	}
+	reescribir := func(nombre string, cambiar func(v any) any) {
+		var v any
+		leerGolden(t, nombre, &v)
+		b, err := json.Marshal(cambiar(v))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasSuffix(nombre, ".gz") {
+			var z bytes.Buffer
+			w := gzip.NewWriter(&z)
+			_, _ = w.Write(b)
+			_ = w.Close()
+			b = z.Bytes()
+		}
+		if err := os.WriteFile(filepath.Join(dirGolden, nombre), b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// a pasa por JSON lo que da Go, para guardarlo igual que se compara.
+	a := func(x any) any { return comoJSON(t, x) }
+	cadenas := func(v any) []string {
+		var out []string
+		for _, x := range v.([]any) {
+			out = append(out, x.(string))
+		}
+		return out
+	}
+	filas := func(v any) [][]string {
+		var out [][]string
+		for _, f := range v.([]any) {
+			out = append(out, cadenas(f))
+		}
+		return out
+	}
+	mapeo := func(v any) Mapeo {
+		m := Mapeo{}
+		for k, x := range v.(map[string]any) {
+			m[k] = int(x.(float64))
+		}
+		return m
+	}
+
+	reescribir("definiciones.json", func(v any) any {
+		v.(map[string]any)["entidades"] = a(Entidades)
+		return v
+	})
+	reescribir("automapeo.json.gz", func(v any) any {
+		for _, c := range v.([]any) {
+			c := c.(map[string]any)
+			e := definicion(t, c["entidad"].(string))
+			m := Automapear(e, cadenas(c["columnas"]))
+			c["mapeo"], c["faltantes"] = a(m), a(Faltantes(e, m))
+		}
+		return v
+	})
+	reescribir("filas.json.gz", func(v any) any {
+		for _, c := range v.([]any) {
+			c := c.(map[string]any)
+			e := definicion(t, c["entidad"].(string))
+			m, f := mapeo(c["mapeo"]), filas(c["filas"])
+			c["normalizadas"], c["previa"] = a(NormalizarFilas(e, m, f)), a(Previsualizar(e, m, f))
+		}
+		return v
+	})
+	reescribir("archivos.json", func(v any) any {
+		for _, c := range v.([]any) {
+			c := c.(map[string]any)
+			datos, err := os.ReadFile(filepath.Join(dirGolden, "archivos", c["archivo"].(string)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			e := definicion(t, c["entidad"].(string))
+			an := Analizar(e, c["archivo"].(string), datos)
+			c["analisis"] = map[string]any{"error": an.Error, "archivo": an.Archivo, "columnas": a(an.Columnas), "filas": a(an.Filas),
+				"codificacion": an.Codificacion, "mapeo": a(an.Mapeo)}
+			if an.Error == "" {
+				c["previa"], c["normalizadas"] = a(Previsualizar(e, an.Mapeo, an.Filas)), a(NormalizarFilas(e, an.Mapeo, an.Filas))
+			}
+		}
+		return v
+	})
+}

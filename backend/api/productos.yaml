@@ -201,6 +201,41 @@ paths:
                     id: { type: string }
                     slug: { type: string }
                     name: { type: string }
+    post:
+      operationId: CrearCategoria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name: { type: string }
+      responses:
+        "204": { description: Creada }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/categorias/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: RenombrarCategoria
+      description: Cambia el nombre que se ve. La dirección web (slug) queda igual, para no romper los enlaces publicados.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name: { type: string }
+      responses:
+        "204": { description: Renombrada }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/rubros:
     get:
       operationId: RubrosAdmin
@@ -333,6 +368,22 @@ paths:
           content:
             application/json:
               schema: { type: array, items: { type: string } }
+  /api/v1/admin/productos-atributos:
+    get:
+      operationId: AtributosUsados
+      responses:
+        "200":
+          description: Los materiales, colores, terminaciones y calidades ya cargados, para sugerirlos y que no aparezcan escritos de tres maneras
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [material, color, terminacion, calidad]
+                properties:
+                  material: { type: array, items: { type: string } }
+                  color: { type: array, items: { type: string } }
+                  terminacion: { type: array, items: { type: string } }
+                  calidad: { type: array, items: { type: string } }
 components:
   responses:
     Problema:
@@ -428,6 +479,7 @@ components:
               color: { type: string }
               terminacion: { type: string }
               calidad: { type: string }
+              codigoBarras: { type: string, maxLength: 60 }
               precioGeneral: { type: string }
               precioProfesional: { type: string }
               stockCentral: { type: string }
@@ -479,7 +531,7 @@ components:
           type: array
           items:
             type: object
-            required: [id, sku, label, largoMm, anchoMm, espesorMm, material, color, terminacion, calidad,
+            required: [id, sku, label, largoMm, anchoMm, espesorMm, material, color, terminacion, calidad, codigoBarras,
               precioGeneral, precioProfesional, stockCentral, stockAserradero, minCentral, minAserradero]
             properties:
               id: { type: string }
@@ -492,6 +544,7 @@ components:
               color: { type: string }
               terminacion: { type: string }
               calidad: { type: string }
+              codigoBarras: { type: string }
               precioGeneral: { type: string }
               precioProfesional: { type: string }
               stockCentral: { type: number, format: double }

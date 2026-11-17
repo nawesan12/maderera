@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mjbj/internal/auth"
@@ -167,6 +168,7 @@ type VarianteDeFicha struct {
 	Color             string  `json:"color"`
 	Terminacion       string  `json:"terminacion"`
 	Calidad           string  `json:"calidad"`
+	CodigoBarras      string  `json:"codigoBarras"`
 	PrecioGeneral     string  `json:"precioGeneral"`
 	PrecioProfesional string  `json:"precioProfesional"`
 	StockCentral      float64 `json:"stockCentral"`
@@ -294,7 +296,7 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 		f.Variantes = append(f.Variantes, VarianteDeFicha{
 			ID: v.ID, SKU: v.Sku, Label: v.Label, LargoMm: v.LargoMm, AnchoMm: v.AnchoMm, EspesorMm: v.EspesorMm,
 			Material: deref(v.Material), Color: deref(v.Color), Terminacion: deref(v.Terminacion), Calidad: deref(v.Calidad),
-			PrecioGeneral: precio(v.ID, ls.general), PrecioProfesional: precio(v.ID, ls.profesional),
+			CodigoBarras: deref(v.CodigoBarras), PrecioGeneral: precio(v.ID, ls.general), PrecioProfesional: precio(v.ID, ls.profesional),
 			StockCentral: cantidad(v.ID, ls.central, false), StockAserradero: cantidad(v.ID, ls.aserradero, false),
 			MinCentral: cantidad(v.ID, ls.central, true), MinAserradero: cantidad(v.ID, ls.aserradero, true),
 		})
@@ -472,6 +474,29 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 				})
 			}
 			if err != nil {
+				// El código ya es de una medida de otro producto: se dice de
+				// cuál, en vez de un error sin explicación.
+				var pgErr *pgconn.PgError
+				if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "product_variants_sku_idx" {
+					var duenio string
+					_ = s.pool.QueryRow(ctx, `SELECT p.name FROM product_variants v JOIN products p ON p.id = v.product_id
+						WHERE lower(v.sku) = lower($1) LIMIT 1`, v.SKU).Scan(&duenio)
+					msj := "El código " + v.SKU + " ya es de otra medida."
+					if duenio != "" {
+						msj = "El código " + v.SKU + " ya es de " + duenio + "."
+					}
+					return &ErrorDeCampo{msj, "variantes." + strconv.Itoa(orden) + ".sku"}
+				}
+				return err
+			}
+			// El código de barras, fuera de sqlc como usos y cuidados: lo
+			// escribe esta pantalla y el importador (migración 00100).
+			if _, err := tx.Exec(ctx, `UPDATE product_variants SET codigo_barras = $2 WHERE id = $1`, vid, nulo(v.CodigoBarras)); err != nil {
+				var pgErr *pgconn.PgError
+				if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+					return &ErrorDeCampo{"El código de barras " + v.CodigoBarras + " ya es de otra medida.",
+						"variantes." + strconv.Itoa(orden) + ".codigoBarras"}
+				}
 				return err
 			}
 			for _, lp := range []struct {
@@ -479,6 +504,15 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 				precio string
 			}{{ls.general, v.PrecioGeneral}, {ls.profesional, v.PrecioProfesional}} {
 				if lp.lista == nil {
+					continue
+				}
+				// Sin precio profesional propio, la medida sigue el porcentaje
+				// de la lista sobre la general. Guardar un 0 le ganaba al
+				// porcentaje y el profesional veía la medida a $0.
+				if lp.lista == ls.profesional && jsmath.Numero(lp.precio) <= 0 {
+					if err := q.QuitarPrecio(ctx, sqlc.QuitarPrecioParams{PriceListID: *lp.lista, VariantID: vid}); err != nil {
+						return err
+					}
 					continue
 				}
 				if err := q.GuardarPrecio(ctx, sqlc.GuardarPrecioParams{PriceListID: *lp.lista, VariantID: vid, Price: lp.precio}); err != nil {

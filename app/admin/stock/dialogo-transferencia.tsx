@@ -39,7 +39,9 @@ export function DialogoTransferencia({
     () => setAbierto(false),
   );
 
-  const [variante, setVariante] = useState(variantes[0]?.id ?? "");
+  // Sin elegir de entrada: con miles de medidas, la primera de la lista
+  // nunca es la que se quiere mover.
+  const [variante, setVariante] = useState("");
   const [origen, setOrigen] = useState(sucursales[0]?.id ?? "");
   const [destino, setDestino] = useState(sucursales[1]?.id ?? "");
 
@@ -60,27 +62,7 @@ export function DialogoTransferencia({
           <input type="hidden" name="origenId" value={origen} />
           <input type="hidden" name="destinoId" value={destino} />
 
-          <div className="space-y-2">
-            <Label htmlFor="transferencia-producto">Producto</Label>
-            <Select
-              value={variante}
-              onValueChange={(v) => v && setVariante(v)}
-              items={Object.fromEntries(
-                variantes.map((v) => [v.id, v.texto]),
-              )}
-            >
-              <SelectTrigger id="transferencia-producto" className="w-full">
-                <SelectValue placeholder="Elegí un producto" />
-              </SelectTrigger>
-              <SelectContent>
-                {variantes.map((v) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {v.texto}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <BuscadorDeMedida variantes={variantes} elegida={variante} alElegir={setVariante} />
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -163,5 +145,86 @@ export function DialogoTransferencia({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Elegir la medida escribiendo parte del nombre o del código. Era un
+ * desplegable con todo el catálogo, sin buscador: con miles de medidas no
+ * había forma de encontrar una.
+ */
+function BuscadorDeMedida({
+  variantes,
+  elegida,
+  alElegir,
+}: {
+  variantes: { id: string; texto: string }[];
+  elegida: string;
+  alElegir: (id: string) => void;
+}) {
+  const [texto, setTexto] = useState("");
+  const actual = variantes.find((v) => v.id === elegida);
+  const palabras = texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(Boolean);
+  const encontradas =
+    palabras.length === 0
+      ? []
+      : variantes
+          .filter((v) => {
+            const t = v.texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return palabras.every((p) => t.includes(p));
+          })
+          .slice(0, 8);
+
+  if (actual) {
+    return (
+      <div className="space-y-2">
+        <Label>Producto</Label>
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-hundida px-3 py-2.5">
+          <span className="text-base font-medium">{actual.texto}</span>
+          <button
+            type="button"
+            onClick={() => {
+              alElegir("");
+              setTexto("");
+            }}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Cambiar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="transferencia-buscar">Producto</Label>
+      <Input
+        id="transferencia-buscar"
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        placeholder="Nombre, medida o código"
+        autoComplete="off"
+        autoFocus
+      />
+      {encontradas.length > 0 && (
+        <ul className="max-h-64 overflow-y-auto rounded-lg bg-card shadow-sm">
+          {encontradas.map((v) => (
+            <li key={v.id}>
+              <button
+                type="button"
+                onClick={() => alElegir(v.id)}
+                className="w-full px-3 py-2.5 text-left text-base hover:bg-muted"
+              >
+                {v.texto}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {palabras.length > 0 && encontradas.length === 0 && (
+        <p className="text-sm text-muted-foreground">Nada con ese nombre.</p>
+      )}
+    </div>
   );
 }

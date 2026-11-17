@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { Confirmar } from "@/components/admin/confirmar";
+import { useActionState, useEffect, useState } from "react";
+import { GrillaDeMedidas, etiquetaSugerida, vacia, type Atributos } from "./medidas";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -17,12 +17,10 @@ import {
   Layers,
   Loader2,
   Package,
-  Plus,
   Receipt,
   RectangleHorizontal,
   Ruler,
   Star,
-  Trash2,
   Weight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,7 +40,6 @@ import {
   type ImagenProducto,
 } from "@/components/admin/galeria-imagenes";
 import { generarSlug } from "@/lib/validation/product";
-import { admiteDecimales } from "@/lib/unidades";
 import { guardarProducto, type EstadoFormulario } from "./actions";
 import {
   BarraGuardar,
@@ -65,6 +62,7 @@ export interface VarianteForm {
   color: string;
   terminacion: string;
   calidad: string;
+  codigoBarras: string;
   precioGeneral: string;
   precioProfesional: string;
   stockCentral: number;
@@ -145,23 +143,7 @@ function textoDeUnidad(valor: string): string {
   return UNIDADES.find((u) => u.valor === valor)?.nombre ?? "unidades";
 }
 
-const varianteVacia = (): VarianteForm => ({
-  sku: "",
-  label: "",
-  largoMm: null,
-  anchoMm: null,
-  espesorMm: null,
-  material: "",
-  color: "",
-  terminacion: "",
-  calidad: "",
-  precioGeneral: "0",
-  precioProfesional: "0",
-  stockCentral: 0,
-  stockAserradero: 0,
-  minCentral: 0,
-  minAserradero: 0,
-});
+const varianteVacia = vacia;
 
 const estadoInicial: EstadoFormulario = {};
 
@@ -171,8 +153,14 @@ export function FormularioProducto({
   categorias,
   rubros,
   galeria = [],
+  atributos = { material: [], color: [], terminacion: [], calidad: [] },
+  pestanaInicial = "datos",
 }: {
   inicial: ProductoForm;
+  /** Lo ya cargado en material, color, terminación y calidad. */
+  atributos?: Atributos;
+  /** Recién creado, se abre en Fotos: es lo que le falta. */
+  pestanaInicial?: "datos" | "fotos" | "medidas";
   categorias: { id: string; name: string }[];
   /** Las imputaciones ya cargadas, como sugerencia del campo. */
   imputaciones?: string[];
@@ -185,7 +173,26 @@ export function FormularioProducto({
     estadoInicial,
   );
   const [pestana, setPestana] =
-    useState<(typeof PESTANAS)[number]["id"]>("datos");
+    useState<(typeof PESTANAS)[number]["id"]>(pestanaInicial);
+
+  /*
+   * El error del servidor, en su campo: abre la pestaña donde está y lo
+   * enfoca. Antes llegaba solo el mensaje arriba, sin decir en qué medida ni
+   * en qué pestaña estaba el problema.
+   */
+  useEffect(() => {
+    const campo = estado.campo;
+    if (!campo) return;
+    const m = /^variantes\.(\d+)\.(\w+)$/.exec(campo);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- responde a la respuesta del servidor, no a un render
+    setPestana(m ? "medidas" : "datos");
+    const id = m ? `v-${m[1]}-${m[2]}` : campo;
+    requestAnimationFrame(() => {
+      const el = document.getElementById(id);
+      el?.scrollIntoView({ block: "center" });
+      el?.focus();
+    });
+  }, [estado]);
 
   const [nombre, setNombre] = useState(inicial.name);
   const [slug, setSlug] = useState(inicial.slug);
@@ -215,37 +222,11 @@ export function FormularioProducto({
   const [variantes, setVariantes] = useState<VarianteForm[]>(
     inicial.variantes.length > 0 ? inicial.variantes : [varianteVacia()],
   );
-  const [medidaAQuitar, setMedidaAQuitar] = useState<number | null>(null);
 
   // En el alta el slug sigue al nombre; al editar no se toca.
   function cambiarNombre(valor: string) {
     setNombre(valor);
     if (!slugFijo) setSlug(generarSlug(valor));
-  }
-
-  function actualizarVariante(
-    indice: number,
-    campo: keyof VarianteForm,
-    valor: string,
-  ) {
-    setVariantes((prev) =>
-      prev.map((v, i) => {
-        if (i !== indice) return v;
-        const numericos: (keyof VarianteForm)[] = [
-          "largoMm",
-          "anchoMm",
-          "espesorMm",
-          "stockCentral",
-          "stockAserradero",
-          "minCentral",
-          "minAserradero",
-        ];
-        if (numericos.includes(campo)) {
-          return { ...v, [campo]: valor === "" ? null : Number(valor) };
-        }
-        return { ...v, [campo]: valor };
-      }),
-    );
   }
 
   return (
@@ -264,6 +245,8 @@ export function FormularioProducto({
               : undefined;
             return {
               ...v,
+              // Sin texto propio, el que se arma con las medidas y el color.
+              label: v.label.trim() || etiquetaSugerida(v),
               largoMm: v.largoMm === null ? "" : String(v.largoMm),
               anchoMm: v.anchoMm === null ? "" : String(v.anchoMm),
               espesorMm: v.espesorMm === null ? "" : String(v.espesorMm),
@@ -546,254 +529,23 @@ export function FormularioProducto({
         <Card hidden={pestana !== "fotos"} className="tarjeta-hundida border-0">
           <CardContent className="p-6 text-center">
             <p className="text-base text-muted-foreground">
-              Guardá el producto y después le cargás las fotos.
+              Las fotos se cargan apenas se guarda el producto.
             </p>
           </CardContent>
         </Card>
       )}
 
-      {/* Variantes */}
-      <Card hidden={pestana !== "medidas"} className="border-border bg-card">
-        <CardContent className="space-y-4 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">
-                Medidas y presentaciones
-              </h2>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setVariantes((p) => [...p, varianteVacia()])}
-            >
-              <Plus className="h-5 w-5" />
-              Agregar medida
-            </Button>
-          </div>
-
-          <Confirmar
-            abierto={medidaAQuitar !== null}
-            alCerrar={() => setMedidaAQuitar(null)}
-            titulo={`Quitar la medida ${medidaAQuitar !== null ? variantes[medidaAQuitar]?.label || medidaAQuitar + 1 : ""}`}
-            detalle="Al guardar, la medida sale del catálogo con su precio y su stock."
-            confirmar="Quitar la medida"
-            peligro
-            alConfirmar={() => {
-              const i = medidaAQuitar;
-              setMedidaAQuitar(null);
-              if (i !== null) setVariantes((p) => p.filter((_, idx) => idx !== i));
-            }}
+      {/* Medidas */}
+      <Card hidden={pestana !== "medidas"} className="tarjeta border-0">
+        <CardContent className="p-5">
+          <GrillaDeMedidas
+            variantes={variantes}
+            setVariantes={setVariantes}
+            unidad={unidad}
+            nombreUnidad={textoDeUnidad(unidad)}
+            atributos={atributos}
+            campoConError={estado.campo}
           />
-
-          {variantes.map((variante, i) => (
-            <div
-              key={variante.id ?? `nueva-${i}`}
-              className="tarjeta space-y-3 p-4"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-muted-foreground">
-                  Medida {i + 1}
-                </span>
-                {variantes.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Quitar la medida ${i + 1}`}
-                    onClick={() =>
-                      // Una medida ya guardada tiene stock, precios e historial:
-                      // se pregunta. Una recién agregada y vacía se quita sin más.
-                      variante.id ? setMedidaAQuitar(i) : setVariantes((p) => p.filter((_, idx) => idx !== i))
-                    }
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor={`sku-${i}`}>Código del producto</Label>
-                  <Input
-                    id={`sku-${i}`}
-                    value={variante.sku}
-                    onChange={(e) =>
-                      actualizarVariante(i, "sku", e.target.value)
-                    }
-                    placeholder="PLA-MEL-BLA-18"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`label-${i}`}>Cómo se muestra</Label>
-                  <Input
-                    id={`label-${i}`}
-                    value={variante.label}
-                    onChange={(e) =>
-                      actualizarVariante(i, "label", e.target.value)
-                    }
-                    placeholder="1830 x 2600mm — 18mm"
-                  />
-                </div>
-              </div>
-
-              <p className="text-sm font-medium text-muted-foreground">
-                Medidas
-              </p>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {(
-                  [
-                    ["largoMm", "Largo (mm)"],
-                    ["anchoMm", "Ancho (mm)"],
-                    ["espesorMm", "Espesor (mm)"],
-                  ] as const
-                ).map(([campo, etiqueta]) => (
-                  <div key={campo} className="space-y-1.5">
-                    <Label htmlFor={`${campo}-${i}`}>
-                      {etiqueta}
-                      {/* En el metro lineal el largo es el de la pieza: con
-                          él, el stock se carga contando piezas. */}
-                      {campo === "largoMm" && unidad === "metro_lineal" && (
-                        <span className="ml-1 font-normal text-muted-foreground">
-                          de la pieza
-                        </span>
-                      )}
-                    </Label>
-                    <Input
-                      id={`${campo}-${i}`}
-                      type="number"
-                      min={0}
-                      value={variante[campo] ?? ""}
-                      onChange={(e) =>
-                        actualizarVariante(i, campo, e.target.value)
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor={`material-${i}`}>Material</Label>
-                  <Input
-                    id={`material-${i}`}
-                    value={variante.material}
-                    onChange={(e) =>
-                      actualizarVariante(i, "material", e.target.value)
-                    }
-                    placeholder="Pino Tratado"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`color-${i}`}>Color</Label>
-                  <Input
-                    id={`color-${i}`}
-                    value={variante.color}
-                    onChange={(e) =>
-                      actualizarVariante(i, "color", e.target.value)
-                    }
-                    placeholder="Blanco"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`terminacion-${i}`}>Terminación</Label>
-                  <Input
-                    id={`terminacion-${i}`}
-                    value={variante.terminacion}
-                    onChange={(e) =>
-                      actualizarVariante(i, "terminacion", e.target.value)
-                    }
-                    placeholder="Cepillada, laqueada, cruda…"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`calidad-${i}`}>Tipo o calidad</Label>
-                  <Input
-                    id={`calidad-${i}`}
-                    value={variante.calidad}
-                    onChange={(e) =>
-                      actualizarVariante(i, "calidad", e.target.value)
-                    }
-                    placeholder="Primera, segunda, premium…"
-                  />
-                </div>
-              </div>
-
-              <div className="border-t" />
-
-              <p className="text-sm font-medium text-muted-foreground">
-                Precios y stock
-              </p>
-
-              {/* Los dos precios se guardan finales, con IVA incluido: es la
-                  regla de `lib/precios/vista.ts` y no estaba dicha en ningún
-                  lado de la pantalla donde se los carga. */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor={`precio-lista-${i}`}>
-                    Precio de lista (con IVA)
-                  </Label>
-                  <Input
-                    id={`precio-lista-${i}`}
-                    value={variante.precioGeneral}
-                    onChange={(e) =>
-                      actualizarVariante(i, "precioGeneral", e.target.value)
-                    }
-                    inputMode="decimal"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`precio-prof-${i}`}>
-                    Precio profesional (con IVA)
-                  </Label>
-                  <Input
-                    id={`precio-prof-${i}`}
-                    value={variante.precioProfesional}
-                    onChange={(e) =>
-                      actualizarVariante(i, "precioProfesional", e.target.value)
-                    }
-                    inputMode="decimal"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-4">
-                {(
-                  [
-                    ["stockCentral", "Stock Central"],
-                    ["minCentral", "Mínimo Central"],
-                    ["stockAserradero", "Stock Aserradero"],
-                    ["minAserradero", "Mínimo Aserradero"],
-                  ] as const
-                ).map(([campo, etiqueta]) => (
-                  <div key={campo} className="space-y-1.5">
-                    <Label htmlFor={`${campo}-${i}`}>
-                      {etiqueta}
-                      {/* Sin la unidad, "Stock Central: 40" no dice si son
-                          chapas, metros o tablas. La unidad ya está elegida
-                          más arriba en la misma pantalla. */}
-                      <span className="ml-1 font-normal text-muted-foreground">
-                        (en {textoDeUnidad(unidad)})
-                      </span>
-                    </Label>
-                    <Input
-                      id={`${campo}-${i}`}
-                      type="number"
-                      min={0}
-                      step={admiteDecimales(unidad) ? "any" : 1}
-                      inputMode={
-                        admiteDecimales(unidad) ? "decimal" : "numeric"
-                      }
-                      value={variante[campo] ?? 0}
-                      onChange={(e) =>
-                        actualizarVariante(i, campo, e.target.value)
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
         </CardContent>
       </Card>
 
@@ -808,6 +560,12 @@ export function FormularioProducto({
             "Guardar producto"
           )}
         </Button>
+        {/* En la carga del catálogo se dan de alta muchos seguidos. */}
+        {!inicial.id && (
+          <Button type="submit" name="despues" value="otro" disabled={pendiente} variant="outline">
+            Guardar y cargar otro
+          </Button>
+        )}
         <Button render={<Link href="/admin/productos" />} variant="ghost">
           Cancelar
         </Button>

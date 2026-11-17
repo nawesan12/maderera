@@ -638,6 +638,7 @@ const guardarPrecio = `-- name: GuardarPrecio :exec
 INSERT INTO price_list_items (price_list_id, variant_id, price, updated_at)
 VALUES ($1, $2, $3::text::numeric, now())
 ON CONFLICT (price_list_id, variant_id) DO UPDATE SET price = excluded.price, updated_at = now()
+WHERE price_list_items.price IS DISTINCT FROM excluded.price
 `
 
 type GuardarPrecioParams struct {
@@ -646,6 +647,8 @@ type GuardarPrecioParams struct {
 	Price       string `json:"price"`
 }
 
+// Guardar la ficha sin tocar el precio no lo da por revisado: sin esto, cada
+// guardado sacaba todas las medidas de «Para revisar».
 func (q *Queries) GuardarPrecio(ctx context.Context, arg GuardarPrecioParams) error {
 	_, err := q.db.Exec(ctx, guardarPrecio, arg.PriceListID, arg.VariantID, arg.Price)
 	return err
@@ -913,6 +916,20 @@ func (q *Queries) ProductoPorID(ctx context.Context, id string) (ProductoPorIDRo
 		&i.PrecioMediaPct,
 	)
 	return i, err
+}
+
+const quitarPrecio = `-- name: QuitarPrecio :exec
+DELETE FROM price_list_items WHERE price_list_id = $1 AND variant_id = $2
+`
+
+type QuitarPrecioParams struct {
+	PriceListID string `json:"priceListId"`
+	VariantID   string `json:"variantId"`
+}
+
+func (q *Queries) QuitarPrecio(ctx context.Context, arg QuitarPrecioParams) error {
+	_, err := q.db.Exec(ctx, quitarPrecio, arg.PriceListID, arg.VariantID)
+	return err
 }
 
 const quitarSugerido = `-- name: QuitarSugerido :execrows
@@ -1394,7 +1411,7 @@ func (q *Queries) UnidadDeVariante(ctx context.Context, id string) (string, erro
 }
 
 const variantesDelProducto = `-- name: VariantesDelProducto :many
-SELECT id, product_id, sku, label, largo_mm, ancho_mm, espesor_mm, material, color, sort_order, active, created_at, updated_at, terminacion, calidad FROM product_variants WHERE product_id = $1 ORDER BY sort_order
+SELECT id, product_id, sku, label, largo_mm, ancho_mm, espesor_mm, material, color, sort_order, active, created_at, updated_at, terminacion, calidad, codigo_barras FROM product_variants WHERE product_id = $1 ORDER BY sort_order
 `
 
 func (q *Queries) VariantesDelProducto(ctx context.Context, productID string) ([]ProductVariant, error) {
@@ -1422,6 +1439,7 @@ func (q *Queries) VariantesDelProducto(ctx context.Context, productID string) ([
 			&i.UpdatedAt,
 			&i.Terminacion,
 			&i.Calidad,
+			&i.CodigoBarras,
 		); err != nil {
 			return nil, err
 		}

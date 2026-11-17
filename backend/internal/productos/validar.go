@@ -54,6 +54,7 @@ type FormVariante struct {
 	Color             string `json:"color"`
 	Terminacion       string `json:"terminacion"`
 	Calidad           string `json:"calidad"`
+	CodigoBarras      string `json:"codigoBarras"`
 	PrecioGeneral     string `json:"precioGeneral"`
 	PrecioProfesional string `json:"precioProfesional"`
 	StockCentral      string `json:"stockCentral"`
@@ -86,6 +87,7 @@ type Variante struct {
 	ID, SKU, Label                        string
 	LargoMm, AnchoMm, EspesorMm           *float64
 	Material, Color, Terminacion, Calidad string
+	CodigoBarras                          string
 	PrecioGeneral, PrecioProfesional      string
 	StockCentral, StockAserradero         *float64
 	MinCentral, MinAserradero             *float64
@@ -338,6 +340,11 @@ func Validar(f FormProducto) (Producto, *ErrorDeCampo) {
 			x.ID = fv.ID
 		}
 		x.SKU = v.texto(c+"sku", fv.SKU, 2, 60, "El código tiene que tener al menos 2 letras o números.")
+		for k, otra := range p.Variantes {
+			if x.SKU != "" && strings.EqualFold(otra.SKU, x.SKU) {
+				v.mal(c+"sku", "El código "+x.SKU+" ya está en la medida "+strconv.Itoa(k+1)+".")
+			}
+		}
 		x.Label = v.texto(c+"label", fv.Label, 1, 120, "Poné cómo se muestra la medida.")
 		x.LargoMm = v.entero(c+"largoMm", fv.LargoMm)
 		x.AnchoMm = v.entero(c+"anchoMm", fv.AnchoMm)
@@ -346,6 +353,7 @@ func Validar(f FormProducto) (Producto, *ErrorDeCampo) {
 		x.Color = v.texto(c+"color", fv.Color, 0, 80, "")
 		x.Terminacion = v.texto(c+"terminacion", fv.Terminacion, 0, 80, "")
 		x.Calidad = v.texto(c+"calidad", fv.Calidad, 0, 80, "")
+		x.CodigoBarras = v.texto(c+"codigoBarras", fv.CodigoBarras, 0, 60, "")
 		x.PrecioGeneral = v.precio(c+"precioGeneral", fv.PrecioGeneral)
 		x.PrecioProfesional = v.precio(c+"precioProfesional", fv.PrecioProfesional)
 		x.StockCentral = v.cantidad(c+"stockCentral", fv.StockCentral)

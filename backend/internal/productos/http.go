@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/jackc/pgx/v5"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -63,6 +64,8 @@ func (o respuesta) VisitHacerPrincipalResponse(w http.ResponseWriter) error     
 func (o respuesta) VisitCategoriasAdminResponse(w http.ResponseWriter) error    { return o.escribir(w) }
 func (o respuesta) VisitRubrosAdminResponse(w http.ResponseWriter) error        { return o.escribir(w) }
 func (o respuesta) VisitCrearRubroResponse(w http.ResponseWriter) error         { return o.escribir(w) }
+func (o respuesta) VisitCrearCategoriaResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitRenombrarCategoriaResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitRubrosPorCategoriaResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitActivarRubroResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o respuesta) VisitEngancharRubroResponse(w http.ResponseWriter) error     { return o.escribir(w) }
@@ -71,6 +74,7 @@ func (o respuesta) VisitGuardarMesesSinVenderResponse(w http.ResponseWriter) err
 	return o.escribir(w)
 }
 func (o respuesta) VisitImputacionesUsadasResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitAtributosUsadosResponse(w http.ResponseWriter) error    { return o.escribir(w) }
 
 // gestion es quien entra a /admin/productos (admin y vendedor).
 func gestion(ctx context.Context) (*auth.Sesion, error) {
@@ -289,6 +293,22 @@ func (a *API) CrearRubro(ctx context.Context, r productosapi.CrearRubroRequestOb
 	return listo(), a.s.CrearRubro(ctx, ses, r.Body.CategoryId, r.Body.Name)
 }
 
+func (a *API) CrearCategoria(ctx context.Context, r productosapi.CrearCategoriaRequestObject) (productosapi.CrearCategoriaResponseObject, error) {
+	ses, err := gestion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return listo(), a.s.CrearCategoria(ctx, ses, r.Body.Name)
+}
+
+func (a *API) RenombrarCategoria(ctx context.Context, r productosapi.RenombrarCategoriaRequestObject) (productosapi.RenombrarCategoriaResponseObject, error) {
+	ses, err := gestion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return listo(), a.s.RenombrarCategoria(ctx, ses, r.Id.String(), r.Body.Name)
+}
+
 func (a *API) RubrosPorCategoria(ctx context.Context, _ productosapi.RubrosPorCategoriaRequestObject) (productosapi.RubrosPorCategoriaResponseObject, error) {
 	if _, err := gestion(ctx); err != nil {
 		return nil, err
@@ -349,4 +369,29 @@ func (a *API) ImputacionesUsadas(ctx context.Context, _ productosapi.Imputacione
 	}
 	v, err := a.s.q.ImputacionesUsadas(ctx)
 	return ok(v), err
+}
+
+// AtributosUsados son los valores distintos de cada atributo de las medidas,
+// el más usado primero: «Blanco» y «blanco» se juntan en el que más aparece.
+func (a *API) AtributosUsados(ctx context.Context, _ productosapi.AtributosUsadosRequestObject) (productosapi.AtributosUsadosResponseObject, error) {
+	if _, err := gestion(ctx); err != nil {
+		return nil, err
+	}
+	out := map[string][]string{}
+	for _, col := range []string{"material", "color", "terminacion", "calidad"} {
+		filas, err := a.s.pool.Query(ctx, `
+			SELECT (array_agg(valor ORDER BY n DESC))[1] FROM (
+			  SELECT btrim(`+col+`) AS valor, count(*) AS n FROM product_variants
+			  WHERE active AND btrim(coalesce(`+col+`, '')) <> '' GROUP BY 1
+			) t GROUP BY lower(f_unaccent(valor)) ORDER BY sum(n) DESC LIMIT 200`)
+		if err != nil {
+			return nil, err
+		}
+		valores, err := pgx.CollectRows(filas, pgx.RowTo[string])
+		if err != nil {
+			return nil, err
+		}
+		out[col] = append([]string{}, valores...)
+	}
+	return ok(out), nil
 }

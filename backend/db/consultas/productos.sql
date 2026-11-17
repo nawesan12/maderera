@@ -82,7 +82,13 @@ WHERE id = $1;
 -- name: GuardarPrecio :exec
 INSERT INTO price_list_items (price_list_id, variant_id, price, updated_at)
 VALUES ($1, $2, sqlc.arg(price)::text::numeric, now())
-ON CONFLICT (price_list_id, variant_id) DO UPDATE SET price = excluded.price, updated_at = now();
+ON CONFLICT (price_list_id, variant_id) DO UPDATE SET price = excluded.price, updated_at = now()
+-- Guardar la ficha sin tocar el precio no lo da por revisado: sin esto, cada
+-- guardado sacaba todas las medidas de «Para revisar».
+WHERE price_list_items.price IS DISTINCT FROM excluded.price;
+
+-- name: QuitarPrecio :exec
+DELETE FROM price_list_items WHERE price_list_id = $1 AND variant_id = $2;
 
 -- name: BloquearStock :exec
 -- La misma clave que lib/inventario/locks.ts: hashtext(variantId || branchId).

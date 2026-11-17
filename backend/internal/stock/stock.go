@@ -139,9 +139,11 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, categoria string) ([]Fi
 	for _, termino := range t {
 		patron := arg("%" + termino + "%")
 		var col []string
-		for _, c := range []string{"p.name", "v.sku", "v.label", "v.material", "c.name"} {
+		for _, c := range []string{"p.name", "v.sku", "v.label", "v.material", "v.color", "c.name"} {
 			col = append(col, "f_unaccent("+c+") ILIKE f_unaccent("+patron+")")
 		}
+		// El lector de código de barras escribe el número entero.
+		col = append(col, "v.codigo_barras = "+arg(termino))
 		cond = append(cond, "("+strings.Join(col, " OR ")+")")
 	}
 	filas, err := s.pool.Query(ctx, `
@@ -265,14 +267,41 @@ func (s *Servicio) Movimientos(ctx context.Context, limite int) ([]Movimiento, e
 // rápido de la grilla. Devuelve el mensaje («Casa Central: 3 → 5»), o "" si
 // la cantidad es cero (no hace nada).
 func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, variante, sucursal string, delta float64) (string, error) {
+	return s.AjustarCon(ctx, ses, variante, sucursal, delta, nil, "")
+}
+
+// MotivosDeAjuste es por qué se tocó el stock a mano, para el libro de
+// movimientos: un faltante por rotura no es lo mismo que uno por conteo.
+var MotivosDeAjuste = map[string]string{
+	"ingreso": "Ingreso", "rotura": "Rotura", "conteo": "Conteo", "devolucion": "Devolución", "otro": "Ajuste",
+}
+
+// AjustarCon es Ajustar con el motivo y, si viene `contado`, fijando el stock
+// en lo que se contó. La diferencia se calcula adentro, con el candado: si
+// se vendió algo mientras se contaba, el conteo no lo pisa con un número
+// viejo de la pantalla.
+func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, variante, sucursal string, delta float64, contado *float64, motivo string) (string, error) {
 	cantidad := Cantidad(delta)
-	if !plataforma.UUIDValido(variante) || (sucursal != "casa-central" && sucursal != "aserradero") || math.IsNaN(cantidad) || math.IsInf(cantidad, 0) {
+	if contado != nil {
+		c := Cantidad(*contado)
+		contado = &c
+		cantidad = 0
+	}
+	if !plataforma.UUIDValido(variante) || (sucursal != "casa-central" && sucursal != "aserradero") || math.IsNaN(cantidad) || math.IsInf(cantidad, 0) ||
+		contado != nil && (math.IsNaN(*contado) || math.IsInf(*contado, 0) || *contado < 0) {
 		return "", plataforma.Invalido(map[string]string{"cantidad": "La cantidad tiene que ser un número, sin letras."})
 	}
-	if cantidad == 0 {
+	if _, ok := MotivosDeAjuste[motivo]; motivo != "" && !ok {
+		return "", plataforma.Invalido(map[string]string{"motivo": "Ese motivo no existe."})
+	}
+	if cantidad == 0 && contado == nil {
 		return "", nil
 	}
-	if err := s.revisarCantidad(ctx, variante, cantidad); err != nil {
+	revisar := cantidad
+	if contado != nil {
+		revisar = *contado
+	}
+	if err := s.revisarCantidad(ctx, variante, revisar); err != nil {
 		return "", err
 	}
 	suc, err := s.q.SucursalPorSlug(ctx, sucursal)
@@ -293,6 +322,13 @@ func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, variante, sucu
 			previo, reservado = float64(a.Qty), float64(a.Reservado)
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return err
+		}
+		if contado != nil {
+			cantidad = Cantidad(*contado - previo)
+			if cantidad == 0 {
+				ok = suc.Name + ": el conteo coincide, " + formato.Cantidad(previo)
+				return nil
+			}
 		}
 		nuevo := Cantidad(previo + cantidad)
 		if nuevo < 0 {
@@ -319,7 +355,11 @@ func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, variante, sucu
 		if cantidad > 0 {
 			tipo = sqlc.MovementTypeIngreso
 		}
-		nota := "Ajuste rápido desde Stock (" + formato.Cantidad(previo) + " → " + formato.Cantidad(nuevo) + ")"
+		que := "Ajuste rápido desde Stock"
+		if m, ok := MotivosDeAjuste[motivo]; ok && motivo != "otro" {
+			que = m + " desde Stock"
+		}
+		nota := que + " (" + formato.Cantidad(previo) + " → " + formato.Cantidad(nuevo) + ")"
 		ok = suc.Name + ": " + formato.Cantidad(previo) + " → " + formato.Cantidad(nuevo)
 		return q.RegistrarMovimiento(ctx, sqlc.RegistrarMovimientoParams{VariantID: variante, BranchID: suc.ID, Type: tipo,
 			Qty: jsmath.Num(cantidad), Note: &nota, CreatedByUserID: &ses.UserID})

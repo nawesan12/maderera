@@ -47,3 +47,20 @@ export async function engancharPorTexto(_previo: EstadoRubros, formData: FormDat
   refrescar();
   return { ok: r.data.ok };
 }
+
+export async function crearCategoria(_previo: EstadoRubros, formData: FormData): Promise<EstadoRubros> {
+  const r = await (await api()).POST("/api/v1/admin/categorias", { body: { name: String(formData.get("name") ?? "") } });
+  if (r.error) return { error: mensajeDe(r.error as Problema, "Revisá el nombre.") };
+  refrescar();
+  return { ok: "Categoría agregada." };
+}
+
+export async function renombrarCategoria(_previo: EstadoRubros, formData: FormData): Promise<EstadoRubros> {
+  const r = await (await api()).PUT("/api/v1/admin/categorias/{id}", {
+    params: { path: { id: String(formData.get("id") ?? "") } },
+    body: { name: String(formData.get("name") ?? "") },
+  });
+  if (r.error) return { error: mensajeDe(r.error as Problema, "Revisá el nombre.") };
+  refrescar();
+  return { ok: "Nombre cambiado." };
+}

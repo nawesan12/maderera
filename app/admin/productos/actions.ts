@@ -62,7 +62,13 @@ export async function guardarProducto(_previo: EstadoFormulario, formData: FormD
   revalidatePath("/catalogo");
   revalidatePath("/stock");
   revalidatePath("/admin/productos");
-  redirect("/admin/productos?guardado=1");
+  // Después de guardar se queda con el producto: volver a la lista obligaba a
+  // buscarlo de nuevo entre miles para cargarle las fotos.
+  // El número distinto en cada alta hace que la ficha vuelva a empezar vacía.
+  if (formData.get("despues") === "otro") redirect(`/admin/productos/nuevo?guardado=${Date.now()}`);
+  const guardado = id || (r.data as { id?: string } | undefined)?.id;
+  if (!guardado) redirect("/admin/productos?guardado=1");
+  redirect(`/admin/productos/${guardado}?guardado=1${id ? "" : "&pestana=fotos"}`);
 }
 
 export async function alternarActivo(id: string, activo: boolean) {

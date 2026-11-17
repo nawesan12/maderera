@@ -297,9 +297,16 @@ export interface operations {
                     branchSlug: string;
                     /**
                      * Format: double
-                     * @description lo que se suma (o resta)
+                     * @description lo que se suma (o resta). Con contado
                      */
                     cantidad: number;
+                    /**
+                     * Format: double
+                     * @description Lo que se contó en el estante. El stock queda en este número, sea lo que sea que había
+                     */
+                    contado?: number;
+                    /** @enum {string} */
+                    motivo?: "ingreso" | "rotura" | "conteo" | "devolucion" | "otro";
                 };
             };
         };

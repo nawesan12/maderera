@@ -1,11 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
-import { AlertCircle, Check, Link2, Loader2, Plus } from "lucide-react";
+import { useActionState, useState } from "react";
+import { AlertCircle, Check, Link2, Loader2, Pencil, Plus } from "lucide-react";
 import {
   alternarRubro,
+  crearCategoria,
   engancharPorTexto,
   guardarRubro,
+  renombrarCategoria,
   type EstadoRubros,
 } from "./actions";
 
@@ -47,9 +49,12 @@ export function ListaDeRubros({
   const [estado, crear, creando] = useActionState(guardarRubro, inicial);
   const [estadoAlternar, alternar] = useActionState(alternarRubro, inicial);
   const [estadoEnganche, enganchar] = useActionState(engancharPorTexto, inicial);
+  const [estadoCategoria, nuevaCategoria, creandoCategoria] = useActionState(crearCategoria, inicial);
+  const [estadoNombre, renombrar] = useActionState(renombrarCategoria, inicial);
+  const [editando, setEditando] = useState<string | null>(null);
 
-  const aviso = estado.error ?? estadoAlternar.error ?? estadoEnganche.error;
-  const listo = estado.ok ?? estadoAlternar.ok ?? estadoEnganche.ok;
+  const aviso = estado.error ?? estadoAlternar.error ?? estadoEnganche.error ?? estadoCategoria.error ?? estadoNombre.error;
+  const listo = estado.ok ?? estadoAlternar.ok ?? estadoEnganche.ok ?? estadoCategoria.ok ?? estadoNombre.ok;
 
   return (
     <div className="space-y-5">
@@ -65,6 +70,29 @@ export function ListaDeRubros({
           {listo}
         </p>
       )}
+
+      <form action={nuevaCategoria} className="tarjeta flex flex-wrap items-end gap-3 px-5 py-4">
+        <div className="min-w-[12rem] flex-[2]">
+          <label htmlFor="categoria-nueva" className="block text-base font-medium">
+            Categoría nueva
+          </label>
+          <input
+            id="categoria-nueva"
+            name="name"
+            required
+            placeholder="Herrajes, Pinturas…"
+            className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={creandoCategoria}
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-base font-medium transition-colors hover:bg-muted disabled:opacity-60"
+        >
+          {creandoCategoria ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          Agregar categoría
+        </button>
+      </form>
 
       <form
         action={crear}
@@ -117,7 +145,43 @@ export function ListaDeRubros({
       {categorias.map((categoria) => (
         <section key={categoria.id} className="tarjeta">
           <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-4">
-            <h2 className="text-base font-medium">{categoria.name}</h2>
+            {editando === categoria.id ? (
+              <form
+                action={(datos) => {
+                  renombrar(datos);
+                  setEditando(null);
+                }}
+                className="flex flex-1 flex-wrap items-center gap-2"
+              >
+                <input type="hidden" name="id" value={categoria.id} />
+                <input
+                  name="name"
+                  defaultValue={categoria.name}
+                  aria-label={`Nombre de ${categoria.name}`}
+                  autoFocus
+                  required
+                  className="h-10 min-w-[12rem] flex-1 rounded-lg border bg-background px-3 text-base"
+                />
+                <button type="submit" className="h-10 rounded-lg bg-accion px-4 text-base font-medium text-white">
+                  Guardar
+                </button>
+                <button type="button" onClick={() => setEditando(null)} className="h-10 rounded-lg px-3 text-base">
+                  Mejor no
+                </button>
+              </form>
+            ) : (
+              <h2 className="flex items-center gap-2 text-base font-medium">
+                {categoria.name}
+                <button
+                  type="button"
+                  onClick={() => setEditando(categoria.id)}
+                  aria-label={`Cambiar el nombre de ${categoria.name}`}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              </h2>
+            )}
             <p className="text-base text-muted-foreground">
               {categoria.rubros.length === 0
                 ? "Sin rubros"

@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
 import {
   ArrowLeft,
+  CheckCircle2,
+  Copy,
   ExternalLink,
   ImageOff,
   Package,
@@ -18,18 +20,22 @@ import {
   obtenerProductoAdmin,
   sugeridosDelProducto,
   imputacionesUsadas,
+  atributosUsados,
 } from "@/lib/dal/admin/products";
 import { FormularioProducto } from "../formulario";
 import { ProductosSugeridos } from "../sugeridos";
 
 export default async function EditarProductoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ guardado?: string; pestana?: string }>;
 }) {
   const { id } = await params;
   if (!esUuid(id)) notFound();
-  const [producto, categorias, rubros, sugeridos, candidatos, imputaciones] =
+  const { guardado, pestana } = await searchParams;
+  const [producto, categorias, rubros, sugeridos, candidatos, imputaciones, atributos] =
     await Promise.all([
       obtenerProductoAdmin(id),
       listarCategoriasAdmin(),
@@ -37,6 +43,7 @@ export default async function EditarProductoPage({
       sugeridosDelProducto(id),
       candidatosParaSugerir(id),
       imputacionesUsadas(),
+      atributosUsados(),
     ]);
 
   if (!producto) notFound();
@@ -61,6 +68,16 @@ export default async function EditarProductoPage({
         <ArrowLeft className="h-5 w-5" />
         Volver a productos
       </Link>
+
+      {guardado && (
+        <p
+          role="status"
+          className="estado-ok flex items-center gap-2 rounded-lg bg-[var(--estado-fondo)] px-4 py-3 text-base text-[var(--estado-tinta)]"
+        >
+          <CheckCircle2 className="h-5 w-5 shrink-0" />
+          {pestana === "fotos" ? "Producto creado. Ahora sus fotos." : "Guardado."}
+        </p>
+      )}
 
       {/* Encabezado con contexto */}
       <div className="tarjeta flex flex-wrap items-start gap-5 p-5">
@@ -153,6 +170,13 @@ export default async function EditarProductoPage({
             </a>
           )}
           <Link
+            href={`/admin/productos/nuevo?copiar=${producto.id}`}
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+          >
+            <Copy className="h-4 w-4" />
+            Duplicar
+          </Link>
+          <Link
             href={`/admin/stock?buscar=${encodeURIComponent(producto.name)}`}
             className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
           >
@@ -173,6 +197,8 @@ export default async function EditarProductoPage({
         categorias={categorias}
         rubros={rubros}
         imputaciones={imputaciones}
+        atributos={atributos}
+        pestanaInicial={pestana === "fotos" || pestana === "medidas" ? pestana : "datos"}
         galeria={producto.galeria}
         inicial={{
           id: producto.id,

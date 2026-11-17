@@ -101,7 +101,8 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 	var a args
 	prefijo := a.poner(consulta + "%")
 	exacto := a.poner(consulta)
-	cond := "(v.sku = " + exacto + " OR v.sku ILIKE " + prefijo + ")"
+	// El lector de código de barras escribe el número entero y un Enter.
+	cond := "(v.sku = " + exacto + " OR v.codigo_barras = " + exacto + " OR v.sku ILIKE " + prefijo + ")"
 	if t := a.coincide(consulta, "p.name", "v.label", "p.brand", "c.name"); t != "" {
 		cond = "(" + cond + " OR " + t + ")"
 	}
@@ -117,7 +118,7 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 		` + joins + `
 		LEFT JOIN inventory i ON i.variant_id = v.id AND i.branch_id = ` + suc + `::uuid
 		WHERE v.active = true AND p.active = true AND ` + cond + `
-		ORDER BY CASE WHEN v.sku ILIKE ` + prefijo + ` THEN 0 ELSE 1 END, p.name, v.sort_order
+		ORDER BY CASE WHEN v.codigo_barras = ` + exacto + ` THEN 0 WHEN v.sku ILIKE ` + prefijo + ` THEN 1 ELSE 2 END, p.name, v.sort_order
 		LIMIT ` + fmt.Sprint(tope)
 	// Plan a medida en cada búsqueda (QueryExecModeExec): con el plan genérico
 	// que Postgres arma después de cinco ejecuciones de la misma sentencia,

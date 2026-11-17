@@ -106,6 +106,11 @@ export async function candidatosParaSugerir(productId: string) {
   return datos(await (await api()).GET("/api/v1/admin/productos/{id}/para-sugerir", { params: { path: { id: productId } } }));
 }
 
+/** Material, color, terminación y calidad ya cargados, para sugerirlos. */
+export async function atributosUsados() {
+  return datos(await (await api()).GET("/api/v1/admin/productos-atributos"));
+}
+
 /** Las imputaciones contables ya usadas, para sugerirlas en la ficha. */
 export async function imputacionesUsadas(): Promise<string[]> {
   return datos(await (await api()).GET("/api/v1/admin/productos-imputaciones"));

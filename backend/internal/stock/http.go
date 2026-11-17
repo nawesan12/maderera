@@ -92,7 +92,11 @@ func (a *API) AjustarStock(ctx context.Context, r stockapi.AjustarStockRequestOb
 	if err != nil {
 		return nil, err
 	}
-	m, err := a.s.Ajustar(ctx, ses, r.Body.VariantId, r.Body.BranchSlug, float64(r.Body.Cantidad))
+	motivo := ""
+	if r.Body.Motivo != nil {
+		motivo = string(*r.Body.Motivo)
+	}
+	m, err := a.s.AjustarCon(ctx, ses, r.Body.VariantId, r.Body.BranchSlug, float64(r.Body.Cantidad), r.Body.Contado, motivo)
 	if err != nil {
 		return nil, err
 	}

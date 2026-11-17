@@ -3,6 +3,7 @@ package productos
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -303,4 +304,60 @@ func (s *Servicio) HacerPrincipal(ctx context.Context, id string) (string, error
 		}
 		return nil
 	})
+}
+
+// nombreDeCategoria valida el nombre como el de un rubro.
+func nombreDeCategoria(nombre string) (string, error) {
+	nombre = strings.TrimSpace(nombre)
+	switch {
+	case plataforma.LargoJS(nombre) < 2:
+		return "", plataforma.Invalido(map[string]string{"name": "El nombre es muy corto."})
+	case plataforma.LargoJS(nombre) > 80:
+		return "", plataforma.Invalido(map[string]string{"name": demasiadoLargo(80)})
+	}
+	return nombre, nil
+}
+
+// CrearCategoria da de alta una categoría del catálogo. Antes solo las creaba
+// la migración: si faltaba «Herrajes», no había cómo agregarla a mano.
+func (s *Servicio) CrearCategoria(ctx context.Context, ses *auth.Sesion, nombre string) error {
+	nombre, err := nombreDeCategoria(nombre)
+	if err != nil {
+		return err
+	}
+	slug := GenerarSlug(nombre)
+	if slug == "" {
+		return plataforma.Invalido(map[string]string{"name": "Ese nombre no deja armar una dirección web."})
+	}
+	var id string
+	err = s.pool.QueryRow(ctx, `INSERT INTO categories (slug, name, sort_order)
+		VALUES ($1, $2, (SELECT coalesce(max(sort_order), 0) + 1 FROM categories))
+		ON CONFLICT (slug) DO NOTHING RETURNING id`, slug, nombre).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return plataforma.Invalido(map[string]string{"name": "Ya hay una categoría con ese nombre."})
+	}
+	if err != nil {
+		return err
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "producto", id, `Creó la categoría "`+nombre+`"`, nil)
+	return nil
+}
+
+// RenombrarCategoria cambia el nombre que se ve, no la dirección web.
+func (s *Servicio) RenombrarCategoria(ctx context.Context, ses *auth.Sesion, id, nombre string) error {
+	nombre, err := nombreDeCategoria(nombre)
+	if err != nil {
+		return err
+	}
+	var anterior string
+	err = s.pool.QueryRow(ctx, `UPDATE categories c SET name = $2, updated_at = now()
+		FROM (SELECT name FROM categories WHERE id = $1) a WHERE c.id = $1 RETURNING a.name`, id, nombre).Scan(&anterior)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return plataforma.NuevoProblema(http.StatusNotFound, "No se encontró la categoría.")
+	}
+	if err != nil {
+		return err
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "producto", id, `Renombró la categoría "`+anterior+`" a "`+nombre+`"`, nil)
+	return nil
 }

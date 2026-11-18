@@ -1817,3 +1817,36 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
     display: none;
   }
 }
+
+/* --- La firma del panel (18/11/2026) --------------------------------------
+   «Hacé las interfaces del admin menos genéricas.» Un solo título para todas
+   las pantallas, fuerte y con la raya naranja que ya marca las secciones del
+   Resumen y de la portada pública: el mismo gesto en todo el sistema. Había
+   cinco tamaños de título distintos. Fuera de capa a propósito: le gana a los
+   `text-2xl` / `text-[26px]` sueltos de cada página. */
+.panel main h1:not(.sr-only) {
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.panel main h1:not(.sr-only)::before {
+  content: "";
+  display: block;
+  width: 28px;
+  height: 4px;
+  margin-bottom: 10px;
+  border-radius: 2px;
+  background: var(--color-brand-orange, #e8590c);
+}
+@media (min-width: 640px) {
+  .panel main h1:not(.sr-only) {
+    font-size: 32px;
+  }
+}
+/* La línea de datos debajo del título es una frase, no una columna: en
+   monoespaciada parecía una terminal. Las cifras siguen alineadas. */
+.panel main h1 + p.tabular {
+  font-family: inherit;
+  font-weight: 500;
+}

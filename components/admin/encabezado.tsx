@@ -22,7 +22,7 @@ export function EncabezadoPanel({
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{titulo}</h1>
+        <h1>{titulo}</h1>
         {resumen && <p className="tabular mt-0.5 text-base text-muted-foreground">{resumen}</p>}
       </div>
       {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}

@@ -13,6 +13,7 @@ import { fichaDeCorte } from "@/lib/dal/admin/cortes";
 import { AcomodoDelCorte } from "../acomodo";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
 import { formatearMonto } from "@/lib/formato";
+import { formatearDecimal } from "@/lib/unidades";
 import { AccionesCorte } from "../acciones";
 import { CargarPasadas } from "../pasadas";
 import { SierraDelTrabajo } from "./sierra";
@@ -235,7 +236,7 @@ export default async function FichaCortePage({
               )}
               {cuenta.subtotalCanto > 0 && (
                 <Renglon
-                  que={`${cuenta.metrosCanto.toFixed(2).replace(".", ",")} m de tapacanto`}
+                  que={`${formatearDecimal(cuenta.metrosCanto)} m de tapacanto`}
                   cuanto={cuenta.subtotalCanto}
                 />
               )}
@@ -379,10 +380,12 @@ export default async function FichaCortePage({
                     {pieza.cantidad}
                   </td>
                   <td className="tabular hidden px-4 py-3.5 text-right text-base text-muted-foreground sm:table-cell">
-                    {(
+                    {formatearDecimal(
                       (pieza.largoMm * pieza.anchoMm * pieza.cantidad) /
-                      1_000_000
-                    ).toFixed(2)}{" "}
+                        1_000_000,
+                      2,
+                      { fijo: true },
+                    )}{" "}
                     m²
                   </td>
                   <td className="px-5 py-3.5 text-base text-muted-foreground">
@@ -410,7 +413,7 @@ export default async function FichaCortePage({
                   {totalPiezas}
                 </td>
                 <td className="tabular px-4 py-4 text-right text-base font-medium">
-                  {superficie.toFixed(2)} m²
+                  {formatearDecimal(superficie, 2, { fijo: true })} m²
                 </td>
                 <td />
               </tr>
@@ -450,7 +453,7 @@ export default async function FichaCortePage({
               <div className="mt-3 border-t pt-3">
                 <p className="text-base">
                   <span className="tabular font-medium">
-                    {metrosCanto.toFixed(2)} m
+                    {formatearDecimal(metrosCanto)} m
                   </span>{" "}
                   de tapacanto a pegar
                 </p>

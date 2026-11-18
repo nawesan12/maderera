@@ -20,10 +20,10 @@ import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 
 /** Las etapas por las que pasa un pedido, en orden. */
 const COLUMNAS = [
-  { estado: "pendiente", titulo: "Sin preparar", vacio: "Nada esperando." },
-  { estado: "preparando", titulo: "Preparando", vacio: "Nada en preparación." },
-  { estado: "listo", titulo: "Listos", vacio: "Nada listo todavía." },
-  { estado: "en-camino", titulo: "En camino", vacio: "Ningún envío en la calle." },
+  { estado: "pendiente", titulo: "Sin preparar" },
+  { estado: "preparando", titulo: "Preparando" },
+  { estado: "listo", titulo: "Listos" },
+  { estado: "en-camino", titulo: "En camino" },
 ] as const;
 
 export default async function PedidosPage({
@@ -103,7 +103,6 @@ export default async function PedidosPage({
                     enColumna.length > 0 ? moneda.format(monto) : undefined
                   }
                   estado={columna.estado}
-                  vacio={columna.vacio}
                 >
                   {enColumna.map((pedido) => (
                     <TarjetaPedido key={pedido.id} pedido={pedido} aviso={avisos[pedido.id] ?? null} />

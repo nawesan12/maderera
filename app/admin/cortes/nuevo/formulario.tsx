@@ -31,6 +31,7 @@ import type { PiezaFijada } from "@/lib/cortes/tipos";
 import { usePlano } from "@/lib/cortes/en-vivo";
 import { PlanoEnVivo } from "@/components/cortes/plano-en-vivo";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
+import { formatearDecimal } from "@/lib/unidades";
 import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";
 import {
   BarraGuardar,
@@ -519,8 +520,8 @@ export function FormularioCorte({
           {totalPiezas > 0 && (
             <p className="text-sm text-muted-foreground">
               {totalPiezas} {totalPiezas === 1 ? "pieza" : "piezas"} ·{" "}
-              {m2.toFixed(2)} m²
-              {metrosCanto > 0 && ` · ${metrosCanto.toFixed(2)} m de tapacanto`}
+              {formatearDecimal(m2)} m²
+              {metrosCanto > 0 && ` · ${formatearDecimal(metrosCanto)} m de tapacanto`}
             </p>
           )}
 

@@ -3,6 +3,7 @@ import {
   admiteDecimales,
   cantidadDeStock,
   formatearCantidad,
+  formatearDecimal,
   leerCantidad,
   metrosDePiezas,
   pasoDeCantidad,
@@ -68,5 +69,29 @@ describe("el formulario de producto ofrece todas las unidades de la base", () =>
   /** Faltaba `tabla` y un deck no se podía guardar desde el panel. */
   it("la lista de la validación es la del enum", () => {
     expect([...UNIDADES_DE_PRODUCTO].sort()).toEqual([...unitOfSale.enumValues].sort());
+  });
+});
+
+// Hallazgo 32 (T7): los m² de Cortes salían «4.32».
+describe("formatearDecimal", () => {
+  it("escribe con coma y sin ceros de más en el texto", () => {
+    expect(formatearDecimal(4.32)).toBe("4,32");
+    expect(formatearDecimal(0.5)).toBe("0,5");
+    expect(formatearDecimal(12)).toBe("12");
+    expect(formatearDecimal(1234.5)).toBe("1.234,5");
+    expect(formatearDecimal(0)).toBe("0");
+    expect(formatearDecimal(4.325)).toBe("4,33");
+  });
+
+  it("en tablas y tarjetas lleva siempre los mismos decimales", () => {
+    expect(formatearDecimal(4.3, 2, { fijo: true })).toBe("4,30");
+    expect(formatearDecimal(12, 2, { fijo: true })).toBe("12,00");
+    expect(formatearDecimal(1234.5, 2, { fijo: true })).toBe("1.234,50");
+  });
+
+  it("lo que redondea a cero no lleva signo", () => {
+    expect(formatearDecimal(-0.004)).toBe("0");
+    expect(formatearDecimal(-0.004, 2, { fijo: true })).toBe("0,00");
+    expect(formatearDecimal(-2.5)).toBe("-2,5");
   });
 });

@@ -1,3 +1,4 @@
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
 /**
  * El guion del asistente del sitio.
  *
@@ -131,7 +132,7 @@ const PASOS: PasoDelGuion[] = [
   {
     id: "cortes",
     mensaje:
-      "Sí. Cortamos placas a medida en el aserradero: pasanos el despiece con las medidas en milímetros y te lo preparamos. Si son muchas piezas, lo más cómodo es mandarlo por WhatsApp y te cotizamos el corte junto con el material.",
+      `Sí. Cortamos placas a medida ${DONDE_SE_CORTA.frase}: pasanos el despiece con las medidas en milímetros y te lo preparamos. Si son muchas piezas, lo más cómodo es mandarlo por WhatsApp y te cotizamos el corte junto con el material.`,
     opciones: [
       { texto: "Mandar el despiece", va: "persona" },
       { texto: "Calcular cuántas placas necesito", va: "calc-placas" },

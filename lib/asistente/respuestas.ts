@@ -1,3 +1,4 @@
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
 import type { components } from "@/lib/api/tipos/catalogo";
 
 /** Lo que entendió el motor de Go (internal/asistente), el mismo del bot de WhatsApp. */
@@ -105,7 +106,7 @@ export function responderLocal(
     case "cortes":
       return {
         texto:
-          "Sí, cortamos placas a medida en el aserradero. Escribime el despiece acá —«4 de 600x400 en melamina blanca con canto»— o armalo en el cortador.",
+          `Sí, cortamos placas a medida ${DONDE_SE_CORTA.frase}. Escribime el despiece acá —«4 de 600x400 en melamina blanca con canto»— o armalo en el cortador.`,
         enlace: { texto: "Abrir el cortador", href: "/corte" },
       };
 

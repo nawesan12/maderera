@@ -10,7 +10,6 @@ import {
   Check,
   Clock,
   FileText,
-  MessageCircle,
   Download,
   Package,
   Percent,
@@ -28,22 +27,34 @@ import {
 } from "@/lib/dal/profesionales";
 import { fechaLarga, formatearMonto, telefonoParaMarcar } from "@/lib/formato";
 import { FormularioProfesional } from "./formulario";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
+import {
+  TEXTO_PRESUPUESTO_PROFESIONAL,
+  bajadaDelProfesional,
+  beneficiosDelProfesional,
+  type Beneficio,
+} from "@/lib/profesionales/beneficios";
 
 export const metadata: Metadata = {
   ...metadatosDePagina({
-    titulo: "Portal de profesionales: precios de gremio y cuenta corriente",
+    // Neutra a propósito: la metadata es una sola y la tienda se prende y se
+    // apaga. Con la tienda apagada, «precios de gremio» en Google era una
+    // promesa que la página no cumplía (hallazgo 28).
+    titulo: "Portal de profesionales: cuenta corriente y documentación técnica",
     descripcion:
-      "Lista de precios propia, cuenta corriente, presupuestos express en 24 horas y documentación técnica para arquitectos, constructoras y carpinteros de Mar del Plata.",
+      "Cuenta corriente, presupuestos para la obra y documentación técnica para arquitectos, constructoras y carpinteros de Mar del Plata.",
     ruta: "/profesionales",
   }),
 };
 
-const BENEFICIOS = [
-  { icono: Percent, titulo: "Precios de gremio", detalle: "Tu propia lista de precios." },
-  { icono: Wallet, titulo: "Cuenta corriente", detalle: "Comprás ahora y pagás después." },
-  { icono: Clock, titulo: "Presupuesto en 24 h", detalle: "Mandás la lista de la obra y te contestamos." },
-  { icono: FileText, titulo: "Documentación técnica", detalle: "Fichas y tablas de carga para el pliego." },
-];
+/** El ícono de cada beneficio. Cuáles van lo decide `beneficiosDelProfesional`. */
+const ICONO_DEL_BENEFICIO: Record<Beneficio["clave"], typeof Percent> = {
+  precios: Percent,
+  cuenta: Wallet,
+  presupuesto: Clock,
+  documentacion: FileText,
+};
 
 const PASOS = [
   { titulo: "Pedís la cuenta", detalle: "Tres pasos, dos minutos." },
@@ -79,7 +90,10 @@ const PREGUNTAS = [
  * trae a alguien acá es siempre la misma: "¿esto para mí qué es?".
  */
 export default async function ProfesionalesPage() {
-  const whatsapp = await enlaceWhatsapp();
+  const [whatsapp, whatsappPresupuesto] = await Promise.all([
+    enlaceWhatsapp(),
+    enlaceWhatsapp(TEXTO_PRESUPUESTO_PROFESIONAL),
+  ]);
   /* El teléfono estaba escrito a mano —"(0223) 474-3328"— y no era el de
      ninguna de las dos sucursales. Sale de `branches` como el resto del sitio. */
   const [casaCentral] = await listarSucursalesPublicas();
@@ -102,7 +116,7 @@ export default async function ProfesionalesPage() {
         bajada={
           estado.aprobado
             ? `Hola ${(estado.nombre ?? "").split(" ")[0]}, tu cuenta está activa.`
-            : "Precios de gremio, cuenta corriente y documentación técnica."
+            : bajadaDelProfesional(laTienda.activa)
         }
       />
 
@@ -117,16 +131,40 @@ export default async function ProfesionalesPage() {
         ) : (
           <div className="grid items-start gap-12 lg:grid-cols-[1fr_27rem]">
             <div className="space-y-14">
+              {/* Si quedan tres, la última ocupa el renglón entero: una
+                  tarjeta sola con un hueco al lado parece que falta algo. */}
               <div className="grid gap-4 sm:grid-cols-2">
-                {BENEFICIOS.map((b) => (
-                  <article key={b.titulo} className="rounded-2xl superficie p-6">
-                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto">
-                      <b.icono className="h-6 w-6" />
-                    </span>
-                    <h2 className="mt-4 text-[22px] font-bold tracking-[-0.02em]">{b.titulo}</h2>
-                    <p className="mt-1 text-base text-texto-2">{b.detalle}</p>
-                  </article>
-                ))}
+                {beneficiosDelProfesional(laTienda.activa).map((b, i, todos) => {
+                  const Icono = ICONO_DEL_BENEFICIO[b.clave];
+                  const contenido = (
+                    <>
+                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto">
+                        <Icono className="h-6 w-6" />
+                      </span>
+                      <h2 className="mt-4 flex items-center gap-2 text-[22px] font-bold tracking-[-0.02em]">
+                        {b.titulo}
+                        {b.aWhatsapp && <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />}
+                      </h2>
+                      <p className="mt-1 text-base text-texto-2">{b.detalle}</p>
+                    </>
+                  );
+                  const ancho = todos.length % 2 === 1 && i === todos.length - 1 ? "sm:col-span-2" : "";
+                  return b.aWhatsapp ? (
+                    <a
+                      key={b.clave}
+                      href={whatsappPresupuesto}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`group block rounded-2xl superficie p-6 transition-colors hover:border-accion/50 ${ancho}`}
+                    >
+                      {contenido}
+                    </a>
+                  ) : (
+                    <article key={b.clave} className={`rounded-2xl superficie p-6 ${ancho}`}>
+                      {contenido}
+                    </article>
+                  );
+                })}
               </div>
 
               <section>
@@ -166,7 +204,7 @@ export default async function ProfesionalesPage() {
                 lo encontraba. */}
             <aside id="pedir" className="order-first lg:sticky lg:top-[96px] lg:order-none">
               {estado.solicitud?.estado === "pendiente" ? (
-                <EstadoDeSolicitud fecha={estado.solicitud.createdAt} />
+                <EstadoDeSolicitud fecha={estado.solicitud.createdAt} tiendaActiva={laTienda.activa} />
               ) : estado.solicitud?.estado === "rechazada" ? (
                 <SolicitudRechazada motivo={estado.solicitud.motivoRechazo} />
               ) : (
@@ -248,19 +286,11 @@ export default async function ProfesionalesPage() {
             Contanos qué obra tenés entre manos y te asignamos un asesor.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <a
-              href={whatsapp}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
-            >
-              <MessageCircle className="h-4 w-4" />
-              Escribir por WhatsApp
-            </a>
+            <BotonWhatsapp enlace={whatsapp}>Escribir por WhatsApp</BotonWhatsapp>
             {casaCentral?.telefono && (
               <a
                 href={`tel:${telefonoParaMarcar(casaCentral.telefono)}`}
-                className="inline-flex h-11 items-center rounded-lg border bg-card px-5 font-medium transition-colors hover:bg-muted"
+                className="inline-flex h-11 items-center rounded-[10px] border bg-card px-5 text-[15px] font-semibold transition-colors hover:bg-muted"
               >
                 {casaCentral.telefono}
               </a>
@@ -314,7 +344,7 @@ function PanelDelProfesional({
       titulo: "Documentación técnica",
       detalle: `${documentos} documento${documentos === 1 ? "" : "s"} disponible${documentos === 1 ? "" : "s"}.`,
     },
-    { href: "/corte", icono: Scissors, titulo: "Corte a medida", detalle: "Armá el despiece y mandalo al aserradero." },
+    { href: "/corte", icono: Scissors, titulo: "Corte a medida", detalle: `Armá el despiece y lo cortamos ${DONDE_SE_CORTA.frase}.` },
     { href: "/mi-cuenta/pedidos", icono: Package, titulo: "Tus pedidos", detalle: "En qué está cada uno." },
     { href: "/mi-cuenta/presupuestos", icono: ScrollText, titulo: "Tus presupuestos", detalle: "Los que pediste y los que te pasamos." },
     { href: "/eventos", icono: CalendarDays, titulo: "Capacitaciones", detalle: "Las próximas fechas." },
@@ -353,7 +383,7 @@ function PanelDelProfesional({
   );
 }
 
-function EstadoDeSolicitud({ fecha }: { fecha: Date }) {
+function EstadoDeSolicitud({ fecha, tiendaActiva }: { fecha: Date; tiendaActiva: boolean }) {
   return (
     <div className="rounded-xl border bg-card p-6">
       <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-orange/10">
@@ -364,11 +394,14 @@ function EstadoDeSolicitud({ fecha }: { fecha: Date }) {
         La recibimos el {fechaLarga.format(fecha)}. Un asesor la está mirando y
         te contestamos dentro de las 24 horas hábiles.
       </p>
-      <p className="mt-4 flex items-start gap-2 text-sm text-muted-foreground">
-        <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-green" />
-        Mientras tanto podés comprar normalmente: al habilitarte, los precios
-        cambian solos.
-      </p>
+      {/* «Mientras tanto podés comprar normalmente» salió: con la tienda
+          apagada no se compra por la web (hallazgo 28). */}
+      {tiendaActiva && (
+        <p className="mt-4 flex items-start gap-2 text-sm text-muted-foreground">
+          <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-green" />
+          Al habilitarte, los precios cambian solos.
+        </p>
+      )}
     </div>
   );
 }
@@ -386,15 +419,9 @@ async function SolicitudRechazada({ motivo }: { motivo: string | null }) {
         Si creés que hay un error, escribinos: la mayoría de los casos se
         resuelven hablando.
       </p>
-      <a
-        href={whatsapp}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
-      >
-        <MessageCircle className="h-4 w-4" />
+      <BotonWhatsapp enlace={whatsapp} className="mt-5">
         Hablar con un asesor
-      </a>
+      </BotonWhatsapp>
     </div>
   );
 }

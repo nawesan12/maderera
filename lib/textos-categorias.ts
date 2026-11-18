@@ -1,3 +1,4 @@
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
 /**
  * El texto propio de cada categoría del catálogo.
  *
@@ -53,7 +54,7 @@ export const TEXTOS_DE_CATEGORIA: Record<string, TextoDeCategoria> = {
     titulo: "Placas de melamina, MDF, fenólicos y terciados",
     parrafos: [
       "Placas para muebles y para obra, con servicio de corte a medida: la melamina —un tablero de MDF o aglomerado revestido en las dos caras, cerrado, sin poros y resistente al desgaste— para cocinas, placares y oficinas; el MDF crudo para mecanizar, lacar o pintar; los terciados y fenólicos para obra y encofrado.",
-      "Pasá las medidas en el armador de cortes y ves cómo entra en la placa y cuánto sale antes de comprar; el corte y el pegado de tapacantos se hacen en el aserradero.",
+      `Pasá las medidas en el armador de cortes y ves cómo entra en la placa y cuánto sale antes de comprar; el corte y el pegado de tapacantos se hacen ${DONDE_SE_CORTA.frase}.`,
     ],
     incluye: [
       "Melaminas en distintos colores y espesores",

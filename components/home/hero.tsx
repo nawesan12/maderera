@@ -17,18 +17,18 @@ import { AnimatedCounter } from "@/components/animated-counter";
  * que hubiera detrás. Partida en dos, cada mitad hace una sola cosa.
  */
 export function Hero({
-  productos,
   sucursales,
   anios,
 }: {
-  productos: number;
   sucursales: number;
   anios: number;
 }) {
+  // Sin «29+ productos» (hallazgo 47, 18/11/2026): mientras el catálogo no
+  // esté completo, el número juega en contra —una maderera con veintinueve
+  // productos parece un kiosco—. Vuelve cuando el número diga lo que hay.
   const contadores = [
     { target: anios, suffix: "+", label: "Años" },
     { target: sucursales, suffix: "", label: "Sucursales" },
-    { target: productos, suffix: "+", label: "Productos" },
   ];
 
   return (

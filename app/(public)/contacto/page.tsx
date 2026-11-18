@@ -16,6 +16,7 @@ import { ajuste, tienda } from "@/lib/dal/contenido";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd, metadatosDePagina } from "@/lib/seo";
 import { FormularioContacto } from "./formulario";
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
 
 /**
  * Contacto.
@@ -54,7 +55,7 @@ const ATAJOS = [
     href: "/corte",
     icono: Scissors,
     titulo: "Pedir un corte a medida",
-    detalle: "Cargá el despiece, mirá el plano y lo cortamos en el aserradero.",
+    detalle: `Cargá el despiece, mirá el plano y lo cortamos ${DONDE_SE_CORTA.frase}.`,
   },
   {
     href: "/stock",

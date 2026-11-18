@@ -7,12 +7,13 @@ import { anchoDeSierra } from "@/lib/dal/sierra";
 import { VistaDeCorteDeQuienMira } from "./vista";
 import { preciosDePlacas } from "@/lib/dal/visitante";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
 
 export const metadata: Metadata = {
   ...metadatosDePagina({
     titulo: "Corte de placas a medida en Mar del Plata",
     descripcion:
-      "Armá tu despiece en milímetros, elegí el canto de cada pieza y mirá cómo entra en la placa. Melamina, MDF, fenólicos y tableros cortados en el aserradero.",
+      `Armá tu despiece en milímetros, elegí el canto de cada pieza y mirá cómo entra en la placa. Melamina, MDF, fenólicos y tableros cortados ${DONDE_SE_CORTA.frase}.`,
     ruta: "/corte",
   }),
   keywords: [

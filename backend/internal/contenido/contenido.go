@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -260,6 +261,13 @@ var reglas = map[string][]string{
 	"anular_compra_con_pagos": {"a_cuenta", "bloquear"},
 }
 
+// numericos son los ajustes que son una cantidad y tienen su pantalla: el
+// tope de mensajes de WhatsApp (migración 00106) se cambia en la
+// configuración de WhatsApp. Un texto ahí haría que Go use el de siempre.
+var numericos = map[string]bool{
+	"whatsapp_tope_mensajes": true,
+}
+
 // GuardarAjuste cambia un texto del sitio.
 func (s *Servicio) GuardarAjuste(ctx context.Context, clave, valor string) error {
 	if clave == "" || utf8.RuneCountInString(clave) > 60 || utf8.RuneCountInString(valor) > 500 {
@@ -267,6 +275,11 @@ func (s *Servicio) GuardarAjuste(ctx context.Context, clave, valor string) error
 	}
 	if _, ok := interruptores[clave]; ok && valor != "si" && valor != "no" {
 		return plataforma.Invalido(map[string]string{"valor": "Este ajuste solo puede estar encendido o apagado."})
+	}
+	if numericos[clave] {
+		if n, err := strconv.Atoi(valor); err != nil || n < 0 {
+			return plataforma.Invalido(map[string]string{"valor": "Tiene que ser un número entero."})
+		}
 	}
 	if posibles, ok := reglas[clave]; ok && !slices.Contains(posibles, valor) {
 		return plataforma.Invalido(map[string]string{"valor": "Ese valor no es una de las opciones."})

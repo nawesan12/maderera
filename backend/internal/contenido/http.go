@@ -193,11 +193,12 @@ func (a *API) AdminAjustes(ctx context.Context, _ contenidoapi.AdminAjustesReque
 	if err != nil {
 		return nil, err
 	}
-	// Las reglas del negocio tienen su pantalla (Reglas del negocio): en
-	// Contenido saldrían como un texto del sitio para escribir a mano.
+	// Las reglas del negocio tienen su pantalla (Reglas del negocio), y el
+	// tope de mensajes la de WhatsApp: en Contenido saldrían como un texto
+	// del sitio para escribir a mano.
 	v := todos[:0]
 	for _, f := range todos {
-		if _, esRegla := reglas[f.Clave]; !esRegla {
+		if _, esRegla := reglas[f.Clave]; !esRegla && !numericos[f.Clave] {
 			v = append(v, f)
 		}
 	}

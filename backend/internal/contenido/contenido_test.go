@@ -259,6 +259,16 @@ func TestAjustesYResenas(t *testing.T) {
 	if c, _ := pedir(t, adm, "PUT", u+"admin/contenido/ajustes/no-existe", map[string]string{"valor": "x"}); c != 404 {
 		t.Errorf("ajuste inexistente: %d", c)
 	}
+	// El tope de mensajes de WhatsApp es un número, y no sale entre los textos.
+	if c, _ := pedir(t, adm, "PUT", u+"admin/contenido/ajustes/whatsapp_tope_mensajes", map[string]string{"valor": "mil"}); c != 422 {
+		t.Errorf("tope de mensajes con letras: %d", c)
+	}
+	if c, _ := pedir(t, adm, "PUT", u+"admin/contenido/ajustes/whatsapp_tope_mensajes", map[string]string{"valor": "800"}); c != 204 {
+		t.Errorf("tope de mensajes: %d", c)
+	}
+	if _, b := pedir(t, adm, "GET", u+"admin/contenido/ajustes", nil); strings.Contains(string(b), "whatsapp_tope_mensajes") {
+		t.Errorf("el tope de mensajes tiene su pantalla: %s", b)
+	}
 
 	// Juan compró un fenólico y el pedido se entregó.
 	var producto, variante, categoria, orderID, clienteID string

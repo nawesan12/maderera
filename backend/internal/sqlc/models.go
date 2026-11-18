@@ -5609,6 +5609,7 @@ type Order struct {
 	CobradaAt        *time.Time   `json:"cobradaAt"`
 	SincronizadaAt   *time.Time   `json:"sincronizadaAt"`
 	SellerID         *string      `json:"sellerId"`
+	EntregarEl       pgtype.Date  `json:"entregarEl"`
 }
 
 type OrderItem struct {
@@ -6367,6 +6368,7 @@ type WhatsappConversacione struct {
 	BotConsulta          *string            `json:"botConsulta"`
 	BotDerivadaAt        pgtype.Timestamptz `json:"botDerivadaAt"`
 	BotPendiente         json.RawMessage    `json:"botPendiente"`
+	BotCerradoHasta      pgtype.Timestamptz `json:"botCerradoHasta"`
 }
 
 type WhatsappMensaje struct {
@@ -6415,20 +6417,22 @@ type WhatsappPlantilla struct {
 }
 
 type WhatsappSesion struct {
-	ID              string          `json:"id"`
-	Proveedor       string          `json:"proveedor"`
-	Conectado       bool            `json:"conectado"`
-	Telefono        *string         `json:"telefono"`
-	UltimaSenal     *time.Time      `json:"ultimaSenal"`
-	Detalle         *string         `json:"detalle"`
-	UpdatedAt       time.Time       `json:"updatedAt"`
-	UltimoWebhookAt *time.Time      `json:"ultimoWebhookAt"`
-	Calidad         *string         `json:"calidad"`
-	LimiteMensajes  *string         `json:"limiteMensajes"`
-	Diagnostico     json.RawMessage `json:"diagnostico"`
-	DiagnosticoAt   *time.Time      `json:"diagnosticoAt"`
-	TopeMensualUsd  jsmath.Num      `json:"topeMensualUsd"`
-	Tarifas         json.RawMessage `json:"tarifas"`
-	TopeAviso80     *string         `json:"topeAviso80"`
-	TopeAviso100    *string         `json:"topeAviso100"`
+	ID               string          `json:"id"`
+	Proveedor        string          `json:"proveedor"`
+	Conectado        bool            `json:"conectado"`
+	Telefono         *string         `json:"telefono"`
+	UltimaSenal      *time.Time      `json:"ultimaSenal"`
+	Detalle          *string         `json:"detalle"`
+	UpdatedAt        time.Time       `json:"updatedAt"`
+	UltimoWebhookAt  *time.Time      `json:"ultimoWebhookAt"`
+	Calidad          *string         `json:"calidad"`
+	LimiteMensajes   *string         `json:"limiteMensajes"`
+	Diagnostico      json.RawMessage `json:"diagnostico"`
+	DiagnosticoAt    *time.Time      `json:"diagnosticoAt"`
+	TopeMensualUsd   jsmath.Num      `json:"topeMensualUsd"`
+	Tarifas          json.RawMessage `json:"tarifas"`
+	TopeAviso80      *string         `json:"topeAviso80"`
+	TopeAviso100     *string         `json:"topeAviso100"`
+	MensajesAviso80  *string         `json:"mensajesAviso80"`
+	MensajesAviso100 *string         `json:"mensajesAviso100"`
 }

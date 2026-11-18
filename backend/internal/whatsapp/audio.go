@@ -21,7 +21,8 @@ import (
 // transcribe whisper.cpp en la misma VPS —el servicio `whisper` del compose,
 // con el modelo small cuantizado—: gratis, y el audio no sale del servidor.
 // La transcripción queda en el mensaje (datos.transcripcion), se ve en la
-// bandeja, y el bot la contesta como si la hubieran escrito.
+// bandeja, y el bot la contesta como si la hubieran escrito, en el mismo
+// turno que lo demás que haya mandado (turno.go).
 //
 // Va en su propio trabajo de la cola y no adentro del payload: una nota de
 // voz tarda más o menos lo que dura, y el resto de los mensajes no tiene por
@@ -41,7 +42,7 @@ const textoSinAudio = "Por ahora no puedo escuchar audios. ¿Me lo escribís?"
 // encolarAudio deja el audio para transcribir, o contesta que no se puede.
 func (s *Servicio) encolarAudio(ctx context.Context, g *EntranteGuardado, waJid string) error {
 	if s.cfg.WhisperURL == "" {
-		return s.contestarSinTexto(ctx, g.MensajeID, g.ConversacionID, waJid)
+		return s.marcarAudioSinTexto(ctx, g.MensajeID, g.ConversacionID, waJid)
 	}
 	_, err := cola.Encolar(ctx, s.q, TrabajoAudio, cargaAudio{g.MensajeID, g.ConversacionID, waJid}, time.Time{})
 	return err
@@ -60,20 +61,6 @@ func (s *Servicio) encolarAudioReintentado(ctx context.Context, mensajeID string
 		return err
 	}
 	return s.encolarAudio(ctx, &EntranteGuardado{MensajeID: mensajeID, ConversacionID: convID}, jid)
-}
-
-// contestarSinTexto: si al bot le toca, pide que lo escriban.
-func (s *Servicio) contestarSinTexto(ctx context.Context, mensajeID, convID, waJid string) error {
-	est, err := s.botPuedeHablar(ctx, convID)
-	if err != nil || est == nil {
-		return err
-	}
-	if ok, err := s.tomarMensaje(ctx, mensajeID); err != nil || !ok {
-		return err
-	}
-	_, err = s.EnviarYRegistrar(ctx, Envio{ConversacionID: convID, WaJid: waJid, Mensaje: Saliente{Tipo: "texto", Cuerpo: textoSinAudio},
-		Registro: Registro{Cuerpo: textoSinAudio}, Origen: "bot"})
-	return err
 }
 
 // transcripciones es de a una: la VPS tiene dos núcleos y whisper ya usa los
@@ -104,19 +91,19 @@ func (s *Servicio) atenderAudio(ctx context.Context, c cargaAudio) error {
 		return err
 	}
 	if ref == nil || *ref == "" {
-		return s.contestarSinTexto(ctx, c.MensajeID, c.ConversacionID, c.WaJid)
+		return s.marcarAudioSinTexto(ctx, c.MensajeID, c.ConversacionID, c.WaJid)
 	}
 	contenido, mime := s.LeerPrivado(*ref)
 	if len(contenido) == 0 {
-		return s.contestarSinTexto(ctx, c.MensajeID, c.ConversacionID, c.WaJid)
+		return s.marcarAudioSinTexto(ctx, c.MensajeID, c.ConversacionID, c.WaJid)
 	}
 	texto, err := s.transcribir(ctx, contenido, mime)
 	if err != nil {
 		s.log.Warn("whatsapp: no se pudo transcribir el audio", "mensaje", c.MensajeID, "error", err)
-		return s.contestarSinTexto(ctx, c.MensajeID, c.ConversacionID, c.WaJid)
+		return s.marcarAudioSinTexto(ctx, c.MensajeID, c.ConversacionID, c.WaJid)
 	}
 	if texto == "" {
-		return s.contestarSinTexto(ctx, c.MensajeID, c.ConversacionID, c.WaJid)
+		return s.marcarAudioSinTexto(ctx, c.MensajeID, c.ConversacionID, c.WaJid)
 	}
 	if _, err := s.pool.Exec(ctx, `update whatsapp_mensajes set datos = coalesce(datos, '{}'::jsonb) || jsonb_build_object('transcripcion', $2::text) where id = $1`,
 		c.MensajeID, texto); err != nil {
@@ -126,7 +113,7 @@ func (s *Servicio) atenderAudio(ctx context.Context, c cargaAudio) error {
 	if err := s.atenderBajaOAlta(ctx, c.ConversacionID, c.WaJid, texto); err != nil {
 		s.log.Error("whatsapp: baja por audio", "error", err)
 	}
-	if err := s.atenderConBot(ctx, c.MensajeID, c.ConversacionID, c.WaJid, texto); err != nil {
+	if err := s.pedirTurno(ctx, c.ConversacionID, c.WaJid); err != nil {
 		s.log.Error("el bot no pudo contestar el audio", "error", err, "mensaje", c.MensajeID)
 	}
 	return nil

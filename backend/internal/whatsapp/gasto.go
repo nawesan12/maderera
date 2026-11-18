@@ -109,17 +109,23 @@ func (s *Servicio) GastoDelMes(ctx context.Context, ahora time.Time) (GastoDelMe
 		Reinicio: InicioDelMesSiguienteArgentino(ahora), Tarifas: cfg.Tarifas}, nil
 }
 
-// TopeAlcanzado dice si ya se llegó al tope del mes. Ante la duda (la base
-// no contesta), no.
+// TopeAlcanzado dice si ya se llegó a alguno de los dos topes del mes: el de
+// dólares o el de cantidad de mensajes (uso.go). Ante la duda (la base no
+// contesta), no.
 func (s *Servicio) TopeAlcanzado(ctx context.Context) bool {
+	if u, err := s.UsoDelMes(ctx, s.ahora()); err == nil && u.Alcanzado {
+		return true
+	}
 	g, err := s.GastoDelMes(ctx, s.ahora())
 	return err == nil && g.Alcanzado
 }
 
 // RevisarUmbrales avisa al teléfono del admin al pasar el 80 % y el 100 %:
 // una vez por umbral y por mes. La marca va con un `update … where` que
-// devuelve la fila solo a quien la cambió. No falla: es un extra.
+// devuelve la fila solo a quien la cambió. No falla: es un extra. Revisa
+// también los umbrales de la cantidad de mensajes.
 func (s *Servicio) RevisarUmbrales(ctx context.Context) {
+	s.revisarUmbralesDeMensajes(ctx)
 	g, err := s.GastoDelMes(ctx, s.ahora())
 	if err != nil {
 		s.log.Error("whatsapp: gasto", "error", err)

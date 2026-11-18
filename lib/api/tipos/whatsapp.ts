@@ -720,6 +720,19 @@ export interface components {
             proporcion: number;
             alcanzado: boolean;
         };
+        /** @description Los mensajes que salieron por la API en el mes (bot y personas) contra el tope de site_settings.whatsapp_tope_mensajes. */
+        UsoMensajes: {
+            usados: number;
+            tope: number;
+            /** Format: double */
+            proporcion: number;
+            /** @description Desde el 80 %: el bot contesta lo justo */
+            ahorro: boolean;
+            /** @description El bot y los avisos automáticos no mandan */
+            alcanzado: boolean;
+            /** Format: date-time */
+            reinicio: string;
+        };
         Bandeja: {
             /** @enum {string} */
             filtro: "todas" | "sin-leer" | "mias" | "sin-asignar" | "resueltas";
@@ -736,6 +749,7 @@ export interface components {
                 nombre: string;
             }[];
             gasto: components["schemas"]["GastoChico"];
+            mensajes: components["schemas"]["UsoMensajes"];
             detalle: components["schemas"]["DetalleConversacion"] | null;
         };
         DetalleCategoria: {
@@ -836,6 +850,7 @@ export interface components {
                 ultimoWebhookAt: string | null;
             } | null;
             gasto: components["schemas"]["GastoDelMes"];
+            mensajes: components["schemas"]["UsoMensajes"];
             bajas: {
                 id: string;
                 waJid: string;

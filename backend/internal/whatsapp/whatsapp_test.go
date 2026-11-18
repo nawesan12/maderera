@@ -58,6 +58,8 @@ func armar(t *testing.T, conSimulador bool) *entorno {
 	}
 	wa := Nuevo(pool, cfg, nil, silencio)
 	wa.espera = 10 * time.Millisecond
+	// El bot contesta en el momento: las ráfagas se prueban aparte.
+	wa.rafaga = 0
 	m := http.NewServeMux()
 	wa.Rutas(m)
 	whatsappapi.HandlerWithOptions(

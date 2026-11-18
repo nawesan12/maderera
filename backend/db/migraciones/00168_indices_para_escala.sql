@@ -58,12 +58,14 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS account_movements_cliente_fecha_idx ON a
 CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_abiertos_idx ON orders (customer_id) WHERE estado NOT IN ('entregado', 'cancelado');
 
 -- La copia del mostrador pide «lo que cambió desde la última vez»: sin índice
--- sobre updated_at, cada caja recorría las cuatro tablas enteras cada diez
--- minutos aunque no hubiera cambiado nada.
+-- sobre updated_at, cada caja recorría las tablas enteras cada diez minutos
+-- aunque no hubiera cambiado nada.
 CREATE INDEX CONCURRENTLY IF NOT EXISTS products_updated_idx ON products (updated_at);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS product_variants_updated_idx ON product_variants (updated_at);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS price_list_items_updated_idx ON price_list_items (updated_at);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS inventory_updated_idx ON inventory (updated_at);
+-- Y el padrón de clientes de la caja, con el de ISIS adentro.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS customers_updated_idx ON customers (updated_at);
 
 -- +goose Down
 DROP INDEX CONCURRENTLY IF EXISTS customers_telefono_busqueda_idx;
@@ -90,3 +92,4 @@ DROP INDEX CONCURRENTLY IF EXISTS products_updated_idx;
 DROP INDEX CONCURRENTLY IF EXISTS product_variants_updated_idx;
 DROP INDEX CONCURRENTLY IF EXISTS price_list_items_updated_idx;
 DROP INDEX CONCURRENTLY IF EXISTS inventory_updated_idx;
+DROP INDEX CONCURRENTLY IF EXISTS customers_updated_idx;

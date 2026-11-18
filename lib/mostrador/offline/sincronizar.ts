@@ -48,6 +48,25 @@ const FORMA_DE_LA_COPIA = 3;
 /** Cada cuánto se pregunta si cambió algo, con conexión. */
 export const CADA_CUANTO_MS = 10 * 60 * 1000;
 
+/** Lo más que se espera para sincronizar después de un aviso en vivo. */
+export const RETARDO_MAXIMO_MS = 30_000;
+
+/**
+ * Cuánto esperar antes de sincronizar cuando llega el aviso de que cambiaron
+ * los precios: entre cero y treinta segundos, al azar.
+ *
+ * El aviso les llega a todas las cajas en el mismo instante. Si salen todas
+ * juntas, la base recibe las mismas consultas a la vez, justo después de un
+ * cambio masivo de precios que ya la tuvo ocupada. Repartidas en medio
+ * minuto, cada una llega sola; y medio minuto con el precio viejo es lo que
+ * ya pasaba con la sincronización cada diez minutos, pero mucho menos.
+ */
+export function retardoDeAviso(azar: () => number = Math.random): number {
+  const r = azar();
+  const acotado = Number.isFinite(r) ? Math.min(Math.max(r, 0), 0.999_999) : 0;
+  return Math.floor(acotado * RETARDO_MAXIMO_MS);
+}
+
 /** Cada tanto se pide todo de nuevo, por si un `updatedAt` se perdió. */
 const RESINCRONIZAR_CADA_MS = 24 * 60 * 60 * 1000;
 

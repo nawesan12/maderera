@@ -106,12 +106,25 @@ func (s *Servicio) Copia(ctx context.Context, desde *time.Time) (CopiaDelMostrad
 	generado := s.ahora().Add(-margen)
 	c := CopiaDelMostrador{Variantes: []VarianteDeLaCopia{}, Precios: []PrecioDeLaCopia{}, Stock: []StockDeLaCopia{}, Listas: []ListaDeLaCopia{}, Bajas: []string{}, GeneradoAt: FechaJS(generado)}
 
+	// Con `desde`, «lo que cambió» se busca por los índices de updated_at
+	// (00168) de cada tabla por separado y se junta: un OR entre las dos
+	// tablas del JOIN no puede usar ninguno y recorría las variantes enteras
+	// en cada caja, cada diez minutos, aunque no hubiera cambiado nada. Y son
+	// dos consultas y no una con «$1 IS NULL OR …»: el plan genérico de una
+	// sentencia preparada no sabe si $1 es nulo y no usa el índice.
+	cambiadas := "true"
+	var args []any
+	if desde != nil {
+		cambiadas = `v.id IN (SELECT id FROM product_variants WHERE updated_at > $1
+		  UNION SELECT pv.id FROM product_variants pv JOIN products pp ON pp.id = pv.product_id WHERE pp.updated_at > $1)`
+		args = append(args, *desde)
+	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT v.id, v.sku, p.name, v.label, p.unit::text, p.brand, c.name, v.sort_order, v.largo_mm, v.ancho_mm,
 		       p.forma_de_venta::text, p.precio_media_pct
 		FROM product_variants v JOIN products p ON p.id = v.product_id JOIN categories c ON c.id = p.category_id
-		WHERE v.active = true AND p.active = true AND ($1::timestamptz IS NULL OR v.updated_at > $1 OR p.updated_at > $1)
-		ORDER BY v.sort_order`, desde)
+		WHERE v.active = true AND p.active = true AND `+cambiadas+`
+		ORDER BY v.sort_order`, args...)
 	if err != nil {
 		return c, err
 	}
@@ -135,7 +148,7 @@ func (s *Servicio) Copia(ctx context.Context, desde *time.Time) (CopiaDelMostrad
 	if desde != nil {
 		filas, err := s.pool.Query(ctx, `
 			SELECT v.id FROM product_variants v JOIN products p ON p.id = v.product_id
-			WHERE (v.active = false OR p.active = false) AND (v.updated_at > $1 OR p.updated_at > $1)`, *desde)
+			WHERE (v.active = false OR p.active = false) AND `+cambiadas, args...)
 		if err != nil {
 			return c, err
 		}
@@ -175,9 +188,15 @@ func (s *Servicio) Copia(ctx context.Context, desde *time.Time) (CopiaDelMostrad
 	}
 
 	if len(ids) > 0 {
+		cambiados := ""
+		args := []any{ids}
+		if desde != nil {
+			cambiados = " AND updated_at > $2"
+			args = append(args, *desde)
+		}
 		filas, err := s.pool.Query(ctx, `
 			SELECT price_list_id, variant_id, price FROM price_list_items
-			WHERE price_list_id = ANY($1::uuid[]) AND ($2::timestamptz IS NULL OR updated_at > $2)`, ids, desde)
+			WHERE price_list_id = ANY($1::uuid[])`+cambiados, args...)
 		if err != nil {
 			return c, err
 		}
@@ -197,9 +216,13 @@ func (s *Servicio) Copia(ctx context.Context, desde *time.Time) (CopiaDelMostrad
 		}
 	}
 
+	stockCambiado := ""
+	if desde != nil {
+		stockCambiado = " AND i.updated_at > $1"
+	}
 	filas, err = s.pool.Query(ctx, `
 		SELECT i.branch_id, i.variant_id, i.qty FROM inventory i JOIN branches b ON b.id = i.branch_id
-		WHERE b.active = true AND ($1::timestamptz IS NULL OR i.updated_at > $1)`, desde)
+		WHERE b.active = true`+stockCambiado, args...)
 	if err != nil {
 		return c, err
 	}
@@ -238,10 +261,16 @@ type PadronDelMostrador struct {
 // Padron es clientesDelMostrador.
 func (s *Servicio) Padron(ctx context.Context, desde *time.Time) (PadronDelMostrador, error) {
 	p := PadronDelMostrador{Clientes: []ClienteDeLaCopia{}, GeneradoAt: FechaJS(s.ahora().Add(-margen))}
+	cambiados := ""
+	var args []any
+	if desde != nil {
+		cambiados = " AND updated_at > $1"
+		args = append(args, *desde)
+	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT id, nombre, razon_social, cuit, condicion_iva::text, price_list_id, estado::text, limite_credito
-		FROM customers WHERE active = true AND ($1::timestamptz IS NULL OR updated_at > $1)
-		ORDER BY nombre`, desde)
+		FROM customers WHERE active = true`+cambiados+`
+		ORDER BY nombre`, args...)
 	if err != nil {
 		return p, err
 	}

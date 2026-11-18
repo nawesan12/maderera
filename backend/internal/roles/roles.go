@@ -58,6 +58,7 @@ var Acceso = map[string][]sqlc.StaffRole{
 	"/admin/sucursales":             {sqlc.StaffRoleAdmin},
 	"/admin/envios":                 {sqlc.StaffRoleAdmin},
 	"/admin/reparto":                {sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor, sqlc.StaffRoleDeposito},
+	"/admin/reglas":                 {sqlc.StaffRoleAdmin},
 	"/admin/cortes/tarifas":         {sqlc.StaffRoleAdmin},
 	"/admin/precios/formas-de-pago": {sqlc.StaffRoleAdmin},
 	"/admin/migracion":              {sqlc.StaffRoleAdmin},

@@ -1,6 +1,7 @@
 package pedidos
 
 import (
+	"strings"
 	"testing"
 
 	"mjbj/internal/sqlc"
@@ -93,4 +94,35 @@ func (e *entorno) texto(t *testing.T, sql string, args ...any) string {
 		t.Fatal(err)
 	}
 	return v
+}
+
+// El día comprometido de entrega: se fija al pasar a pedido y se corrige
+// desde la ficha. Es lo que dice si el pedido está atrasado.
+func TestDiaDeEntregaDelPedido(t *testing.T) {
+	e := armar(t)
+	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	dep, _ := e.staff(t, "deposito@prueba.test", sqlc.StaffRoleDeposito)
+	u := e.srv.URL + "/api/v1/admin/"
+	c, b := pedir(t, ven, "POST", u+"presupuestos", e.alta("Obra Gómez", 1, nil))
+	if c != 200 {
+		t.Fatalf("alta: %d %s", c, b)
+	}
+	c, b = pedir(t, ven, "POST", u+"presupuestos/"+leer[Resultado](t, b).ID+"/pedido", map[string]any{"entregarEl": "2026-12-03"})
+	if c != 200 {
+		t.Fatalf("convertir: %d %s", c, b)
+	}
+	id := leer[Resultado](t, b).ID
+	if d := e.texto(t, `select to_char(entregar_el, 'YYYY-MM-DD') from orders where id = $1`, id); d != "2026-12-03" {
+		t.Fatalf("al convertir: %s", d)
+	}
+	if c, _ := pedir(t, dep, "PUT", u+"pedidos/"+id+"/entrega", map[string]any{"entregarEl": "2026-12-05"}); c != 403 {
+		t.Errorf("el depósito no compromete fechas: %d", c)
+	}
+	if c, b := pedir(t, ven, "PUT", u+"pedidos/"+id+"/entrega", map[string]any{"entregarEl": "2026-12-05"}); c != 200 {
+		t.Fatalf("cambiar: %d %s", c, b)
+	}
+	_, b = pedir(t, ven, "GET", u+"pedidos/"+id, nil)
+	if !strings.Contains(b, `"entregarEl":"2026-12-05"`) {
+		t.Fatalf("la ficha: %s", b)
+	}
 }

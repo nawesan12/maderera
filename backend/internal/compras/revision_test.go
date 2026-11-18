@@ -212,6 +212,15 @@ func TestAnularUnaFacturaDeCompra(t *testing.T) {
 	if c, b := pedir(t, adm, "POST", e.u+"compras/facturas/"+factura+"/anular", map[string]string{"motivo": " "}); c != 422 || !strings.Contains(b, "Poné el motivo") {
 		t.Errorf("sin motivo: %d %s", c, b)
 	}
+	// Con la regla «bloquear», una factura con pagos no se anula.
+	if _, err := e.pool.Exec(context.Background(), `update site_settings set valor = 'bloquear' where clave = 'anular_compra_con_pagos'`); err != nil {
+		t.Fatal(err)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/facturas/"+factura+"/anular", map[string]string{"motivo": "Era de otro proveedor"}); c != 422 ||
+		!strings.Contains(sinNBSP(b), "tiene $ 500 pagados") {
+		t.Fatalf("con la regla de bloquear: %d %s", c, b)
+	}
+	_, _ = e.pool.Exec(context.Background(), `update site_settings set valor = 'a_cuenta' where clave = 'anular_compra_con_pagos'`)
 	c, b = pedir(t, adm, "POST", e.u+"compras/facturas/"+factura+"/anular", map[string]string{"motivo": "Era de otro proveedor"})
 	if c != 200 || !strings.Contains(sinNBSP(b), "bajó $ 1.210") || !strings.Contains(sinNBSP(b), "$ 500 que se le habían pagado quedaron a cuenta") {
 		t.Fatalf("anular: %d %s", c, b)

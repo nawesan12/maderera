@@ -189,8 +189,19 @@ func (a *API) AdminAjustes(ctx context.Context, _ contenidoapi.AdminAjustesReque
 	if _, err := admin(ctx); err != nil {
 		return nil, err
 	}
-	v, err := a.s.q.Ajustes(ctx)
-	return ok(v), err
+	todos, err := a.s.q.Ajustes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Las reglas del negocio tienen su pantalla (Reglas del negocio): en
+	// Contenido saldrían como un texto del sitio para escribir a mano.
+	v := todos[:0]
+	for _, f := range todos {
+		if _, esRegla := reglas[f.Clave]; !esRegla {
+			v = append(v, f)
+		}
+	}
+	return ok(v), nil
 }
 
 func (a *API) GuardarAjuste(ctx context.Context, r contenidoapi.GuardarAjusteRequestObject) (contenidoapi.GuardarAjusteResponseObject, error) {

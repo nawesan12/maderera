@@ -89,7 +89,7 @@ export async function NumerosDelNegocio({
               : ["Sin cajas abiertas"]),
             `Banco ${moneda.format(plata.banco)} · Mercado Pago ${moneda.format(plata.mercadoPago)}`,
             ...(plata.tarjetas > 0
-              ? [`Tarjetas ${moneda.format(plata.tarjetas)}`]
+              ? [`Tarjetas a acreditar ${moneda.format(plata.tarjetas)}`]
               : []),
             `Cheques en cartera ${moneda.format(plata.cheques.total)}`,
           ]}

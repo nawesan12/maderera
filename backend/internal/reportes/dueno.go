@@ -301,7 +301,9 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 	}
 	p.Banco, p.MercadoPago, p.Tarjetas, p.Cheques.Total = banco.F(), mp.F(), tarjetas.F(), cheques.F()
 	p.Efectivo = jsmath.Redondear2(p.Efectivo)
-	p.Total = jsmath.Redondear2(float64(float64(float64(p.Efectivo+p.Banco)+p.MercadoPago)+p.Tarjetas) + p.Cheques.Total)
+	// Las tarjetas se liquidan días después: no son plata de hoy. Se muestran
+	// aparte, como lo que está por acreditarse, y no suman al total.
+	p.Total = jsmath.Redondear2(float64(float64(p.Efectivo+p.Banco)+p.MercadoPago) + p.Cheques.Total)
 	return p, nil
 }
 
@@ -313,19 +315,35 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 // Las ventas netas y el costo son los del reporte de ventas (margenes): cada
 // renglón sin su IVA y su costo al momento de vender. Así el número del
 // inicio, el del cierre y el de Reportes son el mismo.
+//
+// Dos reglas las decide el dueño en Reglas del negocio: si los gastos entran
+// con su IVA o sin él (el neto de la factura de compra a la que están atados;
+// un gasto suelto no tiene el IVA aparte y entra entero), y si a las ventas
+// se les resta el descuento del pedido (prorrateado en sus renglones).
 func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, dhasta time.Time) (Resultado, error) {
 	var r Resultado
 	var neto, costo, gastos jsmath.Num
+	sinIva := s.ajuste(ctx, "ganancia_gastos", "con_iva") == "sin_iva"
+	conDescuento := s.ajuste(ctx, "ganancia_descuento", "no") == "si"
+	ventas := "coalesce(sum(margenes.neto), 0)"
+	if conDescuento {
+		ventas = "coalesce(sum(margenes.neto * CASE WHEN o.subtotal > 0 THEN (o.total - o.costo_envio) / o.subtotal ELSE 1 END), 0)"
+	}
+	gasto := "e.importe"
+	if sinIva {
+		gasto = "CASE WHEN f.total > 0 THEN e.importe * (f.neto + f.exento) / f.total ELSE e.importe END"
+	}
 	err := s.pool.QueryRow(ctx, `
-		SELECT coalesce(sum(margenes.neto), 0), coalesce(sum(margenes.costo), 0), coalesce(sum(margenes.sin_costo), 0)::int,
-		  (SELECT coalesce(sum(importe), 0) FROM expenses WHERE fecha >= $3 AND fecha < $4)
+		SELECT `+ventas+`, coalesce(sum(margenes.costo), 0), coalesce(sum(margenes.sin_costo), 0)::int,
+		  (SELECT coalesce(sum(`+gasto+`), 0) FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
+		   WHERE e.fecha >= $3 AND e.fecha < $4)
 		FROM orders o `+margenes+`
 		WHERE o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2`, idesde, ihasta, ddesde, dhasta).
 		Scan(&neto, &costo, &r.LineasSinCosto, &gastos)
 	if err != nil {
 		return r, err
 	}
-	r.VentasNetas, r.Costo, r.Gastos = jsmath.Redondear2(neto.F()), jsmath.Redondear2(costo.F()), gastos.F()
+	r.VentasNetas, r.Costo, r.Gastos = jsmath.Redondear2(neto.F()), jsmath.Redondear2(costo.F()), jsmath.Redondear2(gastos.F())
 	r.Resultado = jsmath.Redondear2(float64(r.VentasNetas-r.Costo) - r.Gastos)
 	return r, nil
 }
@@ -393,4 +411,14 @@ func VariacionConSigno(actual, previo float64) *float64 {
 	}
 	v := jsmath.Round(float64((actual-previo)/base)*1000) / 10
 	return &v
+}
+
+// ajuste lee una regla del negocio de site_settings, o la de siempre si no
+// está cargada.
+func (s *Servicio) ajuste(ctx context.Context, clave, porDefecto string) string {
+	var v string
+	if err := s.pool.QueryRow(ctx, `SELECT valor FROM site_settings WHERE clave = $1`, clave).Scan(&v); err != nil || v == "" {
+		return porDefecto
+	}
+	return v
 }

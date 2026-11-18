@@ -370,6 +370,9 @@ type Entrega struct {
 	Zona       string
 	CostoEnvio float64
 	MedioPago  *string
+	// EntregarEl es el día comprometido (AAAA-MM-DD). Vacío: el «para
+	// cuándo» del presupuesto, si lo tenía.
+	EntregarEl string
 }
 
 func (e Entrega) revisar() error {
@@ -412,6 +415,14 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			zona = &z
 		}
 		costo = jsmath.Fijo2(ent.CostoEnvio)
+	}
+	var entregarEl *time.Time
+	if ent.EntregarEl != "" {
+		d, err := time.Parse("2006-01-02", ent.EntregarEl)
+		if err != nil {
+			return nil, fallo("Revisá el día de entrega.")
+		}
+		entregarEl = &d
 	}
 	var numero, pedidoID, numeroPresupuesto string
 	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
@@ -488,11 +499,12 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO orders (numero, customer_id, quote_id, contacto_nombre, contacto_email, contacto_telefono, branch_id,
 			                    estado, origen, subtotal, total, notas, seller_id, created_by_user_id,
-			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, medio_pago)
+			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, medio_pago, entregar_el)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric, $10, $11, $12,
-			        $13::tipo_entrega, $15, $16, $14::numeric, $17::medio_pago)
+			        $13::tipo_entrega, $15, $16, $14::numeric, $17::medio_pago,
+			        coalesce($18::date, (SELECT (necesita_para AT TIME ZONE 'America/Argentina/Buenos_Aires')::date FROM quotes WHERE id = $3)))
 			RETURNING id`, numero, q.customerID, quoteID, q.nombre, q.email, q.telefono, q.branchID, q.subtotal, q.total, q.notas,
-			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago).Scan(&pedidoID); err != nil {
+			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl).Scan(&pedidoID); err != nil {
 			return err
 		}
 
@@ -562,4 +574,31 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 	s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", quoteID,
 		"Convirtió el presupuesto "+numeroPresupuesto+" en el pedido "+numero, nil)
 	return &Resultado{Ok: "Se creó el pedido " + numero + ".", ID: pedidoID, Numero: numero}, nil
+}
+
+// CambiarEntrega corrige el día comprometido de entrega (nil lo borra). Es
+// lo que dice si el pedido está atrasado.
+func (s *Servicio) CambiarEntrega(ctx context.Context, ses *auth.Sesion, id string, dia *string) (*Resultado, error) {
+	var fecha *time.Time
+	if dia != nil && *dia != "" {
+		d, err := time.Parse("2006-01-02", *dia)
+		if err != nil {
+			return nil, fallo("Revisá el día de entrega.")
+		}
+		fecha = &d
+	}
+	var numero string
+	err := s.pool.QueryRow(ctx, `UPDATE orders SET entregar_el = $2, updated_at = now() WHERE id = $1 RETURNING numero`, id, fecha).Scan(&numero)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, noEsta("No se encontró el pedido.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	texto := "Sacó el día de entrega de " + numero
+	if fecha != nil {
+		texto = "Comprometió la entrega de " + numero + " para el " + fecha.Format("02/01/2006")
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaEditar, "pedido", id, texto, nil)
+	return &Resultado{Ok: "Día de entrega guardado."}, nil
 }

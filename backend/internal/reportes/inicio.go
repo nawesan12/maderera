@@ -359,7 +359,8 @@ type otros struct {
 //   - Presupuesto sin responder: pendiente o en revisión con el plazo de
 //     respuesta (responde_hasta, el compromiso de lib/plazos.ts) cumplido.
 //   - Pedido atrasado: sin entregar, y el presupuesto del que salió decía
-//     para cuándo lo necesitaba el cliente (necesita_para) y ese día pasó.
+//     el día en que se comprometió entregarlo (entregar_el, o si no el
+//     necesita_para de su presupuesto) y ese día pasó.
 //     Un pedido no guarda una fecha comprometida propia: el que no salió de
 //     un presupuesto con fecha no puede estar atrasado.
 //   - Corte sin retirar: terminado (retirado es otro estado).
@@ -378,8 +379,9 @@ func (s *Servicio) otrosPendientes(ctx context.Context, ve func(string) bool, ah
 		SELECT
 		  CASE WHEN $1 THEN (SELECT count(*)::int FROM whatsapp_conversaciones WHERE estado = 'abierta' AND no_leidos > 0) ELSE 0 END,
 		  CASE WHEN $2 THEN (SELECT count(*)::int FROM quotes WHERE estado IN ('pendiente', 'revision') AND responde_hasta < $5) ELSE 0 END,
-		  CASE WHEN $3 THEN (SELECT count(*)::int FROM orders o JOIN quotes q ON q.id = o.quote_id
-		                     WHERE o.estado NOT IN ('entregado', 'cancelado') AND q.necesita_para < $6) ELSE 0 END,
+		  CASE WHEN $3 THEN (SELECT count(*)::int FROM orders o LEFT JOIN quotes q ON q.id = o.quote_id
+		                     WHERE o.estado NOT IN ('entregado', 'cancelado')
+		                       AND coalesce(o.entregar_el::timestamptz, q.necesita_para) < $6) ELSE 0 END,
 		  CASE WHEN $4 THEN (SELECT count(*)::int FROM cutting_orders WHERE estado = 'terminado') ELSE 0 END,
 		  coalesce((SELECT valor FROM site_settings WHERE clave = 'tienda_activa'), 'si')`,
 		ve("/admin/whatsapp"), ve("/admin/presupuestos"), ve("/admin/pedidos"), ve("/admin/cortes"), ahora, hoy).

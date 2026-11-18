@@ -74,6 +74,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/pedidos/{id}/entrega": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description El día comprometido de entrega; vacío o null lo saca. */
+        put: operations["CambiarEntregaDelPedido"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/pedidos/{id}/cobrado": {
         parameters: {
             query?: never;
@@ -384,6 +403,8 @@ export interface components {
              * @description Positivo
              */
             saldoCliente: number | null;
+            /** @description AAAA-MM-DD */
+            entregarEl: string | null;
         };
     };
     responses: {
@@ -500,6 +521,30 @@ export interface operations {
             content: {
                 "application/json": {
                     motivo?: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Hecho"];
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    CambiarEntregaDelPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    entregarEl?: string | null;
                 };
             };
         };
@@ -654,6 +699,8 @@ export interface operations {
                     /** Format: double */
                     costoEnvio?: number;
                     medioPago?: components["schemas"]["MedioPago"];
+                    /** @description AAAA-MM-DD */
+                    entregarEl?: string;
                 };
             };
         };

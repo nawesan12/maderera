@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"math"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -250,6 +251,15 @@ var interruptores = map[string]string{
 	"whatsapp_bot":  "las respuestas automáticas de WhatsApp",
 }
 
+// reglas son las reglas del negocio (migración 00104), con sus valores
+// posibles: una regla con un valor cualquiera haría que el cálculo caiga en
+// el de siempre sin que nadie se entere.
+var reglas = map[string][]string{
+	"ganancia_gastos":         {"con_iva", "sin_iva"},
+	"ganancia_descuento":      {"si", "no"},
+	"anular_compra_con_pagos": {"a_cuenta", "bloquear"},
+}
+
 // GuardarAjuste cambia un texto del sitio.
 func (s *Servicio) GuardarAjuste(ctx context.Context, clave, valor string) error {
 	if clave == "" || utf8.RuneCountInString(clave) > 60 || utf8.RuneCountInString(valor) > 500 {
@@ -257,6 +267,9 @@ func (s *Servicio) GuardarAjuste(ctx context.Context, clave, valor string) error
 	}
 	if _, ok := interruptores[clave]; ok && valor != "si" && valor != "no" {
 		return plataforma.Invalido(map[string]string{"valor": "Este ajuste solo puede estar encendido o apagado."})
+	}
+	if posibles, ok := reglas[clave]; ok && !slices.Contains(posibles, valor) {
+		return plataforma.Invalido(map[string]string{"valor": "Ese valor no es una de las opciones."})
 	}
 	n, err := s.q.GuardarAjuste(ctx, sqlc.GuardarAjusteParams{Clave: clave, Valor: valor})
 	if err != nil {

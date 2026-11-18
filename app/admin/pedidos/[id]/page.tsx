@@ -12,6 +12,7 @@ import {
 import { fechaHora, moneda } from "@/components/admin/formato";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { AccionesPedido, CancelarPedido } from "../acciones";
+import { DiaDeEntrega } from "./dia-de-entrega";
 import { pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
 import { BotonFacturar } from "./facturar";
 import { Entregas } from "./entregas";
@@ -394,6 +395,14 @@ export default async function FichaPedidoPage({
                 <Store className="h-5 w-5 shrink-0 text-muted-foreground" />
                 Retira en {pedido.sucursal}
               </p>
+            )}
+            {!["entregado", "cancelado"].includes(pedido.estado) && (
+              <DiaDeEntrega
+                id={pedido.id}
+                dia={pedido.entregarEl}
+                retiro={pedido.tipoEntrega === "retiro"}
+                editable={puedeEntrar("/admin/presupuestos", usuario.staffRole)}
+              />
             )}
           </section>
 

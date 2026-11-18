@@ -625,6 +625,21 @@ func (s *Servicio) AnularFactura(ctx context.Context, ses *auth.Sesion, id, moti
 		if err != nil {
 			return err
 		}
+		// Con pagos aplicados, lo que dice Reglas del negocio: quedan a cuenta
+		// del proveedor (lo de siempre) o la anulación se frena hasta anular
+		// esos pagos.
+		var aplicado jsmath.Num
+		if err := tx.QueryRow(ctx, `SELECT coalesce(sum(importe), 0) FROM supplier_payment_allocations WHERE purchase_invoice_id = $1`,
+			id).Scan(&aplicado); err != nil {
+			return err
+		}
+		if aplicado.F() > 0.005 {
+			var regla string
+			_ = tx.QueryRow(ctx, `SELECT valor FROM site_settings WHERE clave = 'anular_compra_con_pagos'`).Scan(&regla)
+			if regla == "bloquear" {
+				return fallo("Esta factura tiene " + Monto(aplicado.F()) + " pagados: anulá primero esos pagos.")
+			}
+		}
 		if _, err := tx.Exec(ctx, `DELETE FROM supplier_payment_allocations WHERE purchase_invoice_id = $1`, id); err != nil {
 			return err
 		}

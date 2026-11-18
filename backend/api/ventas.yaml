@@ -84,6 +84,26 @@ paths:
         "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pedidos/{id}/entrega:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    put:
+      operationId: CambiarEntregaDelPedido
+      description: El día comprometido de entrega; vacío o null lo saca.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                entregarEl: { type: string, nullable: true }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/pedidos/{id}/cobrado:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
     post:
@@ -192,6 +212,7 @@ paths:
                 zona: { type: string, maxLength: 120 }
                 costoEnvio: { type: number, format: double, minimum: 0 }
                 medioPago: { $ref: "#/components/schemas/MedioPago" }
+                entregarEl: { type: string, description: AAAA-MM-DD }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
@@ -393,7 +414,7 @@ components:
       type: object
       required: [id, numero, numeroProvisorio, cliente, email, telefono, empresa, branchId, customerId, sucursal, estado, origen,
         tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, descuento, descuentoMotivo, total, medioPago, estadoPago,
-        notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente]
+        notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente, entregarEl]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -429,3 +450,4 @@ components:
         quoteId: { type: string, nullable: true }
         numeroPresupuesto: { type: string, nullable: true }
         saldoCliente: { type: number, format: double, nullable: true, description: Positivo, debe }
+        entregarEl: { type: string, nullable: true, description: AAAA-MM-DD }

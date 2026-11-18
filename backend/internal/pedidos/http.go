@@ -49,7 +49,10 @@ func (o respuesta) escribir(w http.ResponseWriter) error {
 
 func ok(v any) respuesta { return respuesta{codigo: http.StatusOK, v: v} }
 
-func (o respuesta) VisitListarPedidosResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitListarPedidosResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCambiarEntregaDelPedidoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitFichaDePedidoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 func (o respuesta) VisitAvanzarPedidoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 func (o respuesta) VisitCancelarPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
@@ -238,6 +241,7 @@ func (a *API) ConvertirPresupuestoEnPedido(ctx context.Context, r ventasapi.Conv
 			m := string(*b.MedioPago)
 			ent.MedioPago = &m
 		}
+		ent.EntregarEl = texto(b.EntregarEl)
 	}
 	v, err := a.s.ConvertirConEntrega(ctx, ses, r.Id.String(), ent)
 	if err != nil {
@@ -286,4 +290,16 @@ func (a *API) PresupuestoPdf(ctx context.Context, r ventasapi.PresupuestoPdfRequ
 		return nil, err
 	}
 	return respuesta{pdf: b, nombre: p.Numero + ".pdf"}, nil
+}
+
+func (a *API) CambiarEntregaDelPedido(ctx context.Context, r ventasapi.CambiarEntregaDelPedidoRequestObject) (ventasapi.CambiarEntregaDelPedidoResponseObject, error) {
+	ses, err := presupuestos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	v, err := a.s.CambiarEntrega(ctx, ses, r.Id.String(), r.Body.EntregarEl)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
 }

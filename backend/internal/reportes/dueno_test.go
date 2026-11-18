@@ -107,7 +107,7 @@ func TestNumerosDelDueno(t *testing.T) {
 	}
 	p := n.PlataHoy
 	if len(p.Cajas) != 1 || p.Cajas[0].Sucursal != "Casa Central" || p.Cajas[0].Esperado != 1300 || p.Efectivo != 1300 ||
-		p.Banco != 120 || p.MercadoPago != 80 || p.Tarjetas != 80 || p.Cheques != (Monto{500, 2}) || p.Total != 2080 {
+		p.Banco != 120 || p.MercadoPago != 80 || p.Tarjetas != 80 || p.Cheques != (Monto{500, 2}) || p.Total != 2000 {
 		t.Errorf("plata hoy: %+v", p)
 	}
 	g := n.Ganancia

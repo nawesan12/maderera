@@ -173,6 +173,7 @@ function PasarAPedido({
   const [zona, setZona] = useState("");
   const [costo, setCosto] = useState("");
   const [medio, setMedio] = useState<Medio | null>(null);
+  const [entregarEl, setEntregarEl] = useState("");
 
   const medios: { valor: Medio; texto: string }[] = [
     ...MEDIOS_DEL_PEDIDO,
@@ -196,6 +197,7 @@ function PasarAPedido({
         tipoEntrega: tipo,
         ...(tipo === "envio" ? { direccion, zona: zona || undefined, costoEnvio } : {}),
         medioPago: medio ?? undefined,
+        entregarEl: entregarEl || undefined,
       });
       if (r.error) {
         toast.error(r.error);
@@ -282,6 +284,19 @@ function PasarAPedido({
                 </div>
               </div>
             )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="pedido-entregar-el">
+                {tipo === "envio" ? "Se entrega el" : "Lo retira el"}
+              </Label>
+              <Input
+                id="pedido-entregar-el"
+                type="date"
+                value={entregarEl}
+                onChange={(e) => setEntregarEl(e.target.value)}
+                className="w-48"
+              />
+            </div>
 
             <div className="space-y-2">
               <p className="text-base font-medium">Cómo paga</p>

@@ -91,6 +91,8 @@ export interface EntregaDelPedido {
   zona?: string;
   costoEnvio?: number;
   medioPago?: MedioDelPedido;
+  /** AAAA-MM-DD: el día que se compromete la entrega. */
+  entregarEl?: string;
 }
 
 export async function convertirEnPedido(quoteId: string, entrega?: EntregaDelPedido): Promise<EstadoVenta & { id?: string }> {
@@ -162,5 +164,17 @@ export async function crearPresupuesto(_previo: EstadoVenta, formData: FormData)
   // Al guardar, a la ficha: quedarse en el formulario lleno invitaba a
   // guardarlo dos veces, y el PDF y el WhatsApp están en la ficha.
   if (r.data.id) redirect(`/admin/presupuestos/${r.data.id}${pasar ? "?pasar=1" : ""}`);
+  return { ok: r.data.ok };
+}
+
+/** Corrige el día comprometido de entrega; vacío lo saca. */
+export async function cambiarEntrega(id: string, entregarEl: string): Promise<EstadoVenta> {
+  const r = await (await api()).PUT("/api/v1/admin/pedidos/{id}/entrega", {
+    params: { path: { id } },
+    body: { entregarEl: entregarEl || null },
+  });
+  if (!r.data) return fallo(r);
+  refrescar();
+  revalidatePath(`/admin/pedidos/${id}`);
   return { ok: r.data.ok };
 }

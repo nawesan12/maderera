@@ -47,9 +47,11 @@ export function EncabezadoPublico({
       )}
       {foto ? (
         <>
-          <Image src={foto} alt="" fill priority className="object-cover" sizes="100vw" />
+          <Image src={foto} alt="" fill preload className="object-cover" sizes="100vw" />
+          {/* En el teléfono el texto ocupa todo el ancho: oscuro parejo, para
+              que las migas y la bajada se lean sobre cualquier parte de la foto. */}
           <div
-            className="absolute inset-0 bg-[linear-gradient(to_right,rgb(38_35_31_/_0.92),rgb(38_35_31_/_0.7)_55%,rgb(38_35_31_/_0.45))]"
+            className="absolute inset-0 bg-oscuro-marca/85 sm:bg-transparent sm:bg-[linear-gradient(to_right,rgb(38_35_31_/_0.92),rgb(38_35_31_/_0.7)_55%,rgb(38_35_31_/_0.45))]"
             aria-hidden="true"
           />
         </>

@@ -292,11 +292,15 @@ export function CorteAMedida({
       });
       if (!r.ok) throw new Error();
       const url = URL.createObjectURL(await r.blob());
+      // En el documento y revocado después: Firefox y Safari cortan la
+      // descarga si el enlace no está en la página o la URL ya no existe.
       const a = document.createElement("a");
       a.href = url;
       a.download = "plano-de-corte.pdf";
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch {
       setErrorPdf("No se pudo armar el PDF.");
     } finally {
@@ -378,6 +382,9 @@ export function CorteAMedida({
             className="flex min-h-0 flex-col border-linea lg:border-r"
             onKeyDown={(e) => {
               if (e.key !== "Enter") return;
+              // Enter sobre un botón (Veta, un lado del canto, Quitar) hace lo
+              // del botón: solo desde un campo agrega otra medida.
+              if (!e.ctrlKey && !e.metaKey && (e.target as HTMLElement).tagName !== "INPUT") return;
               e.preventDefault();
               // Y no sigue viaje: los atajos de la venta de atrás no tienen
               // nada que hacer mientras se carga un despiece.

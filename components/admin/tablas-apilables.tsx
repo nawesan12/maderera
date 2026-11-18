@@ -18,8 +18,18 @@ import { useEffect } from "react";
 export function TablasApilables() {
   useEffect(() => {
     const rotular = () => {
-      for (const tabla of document.querySelectorAll<HTMLTableElement>(".panel table, [data-slot=dialog-content] table")) {
-        if (tabla.dataset.tabla === "fija") continue;
+      const tablas = [
+        ...document.querySelectorAll<HTMLTableElement>(".panel table, [data-slot=dialog-content] table"),
+      ].filter((t) => t.dataset.tabla !== "fija");
+      // Primero todas las medidas y después todas las escrituras: leer el
+      // ancho después de escribir un atributo obliga al navegador a
+      // recalcular el diseño, una vez por tabla.
+      const medidas = tablas.map((tabla) => ({
+        tabla,
+        natural: tabla.dataset.apilada ? Number(tabla.dataset.anchoNatural) : tabla.scrollWidth,
+        lugar: tabla.parentElement?.clientWidth ?? 0,
+      }));
+      for (const { tabla, natural, lugar } of medidas) {
         const encabezados: string[] = [];
         for (const th of tabla.querySelectorAll<HTMLTableCellElement>("thead tr:last-child th")) {
           const texto = (th.textContent ?? "").trim();
@@ -28,17 +38,18 @@ export function TablasApilables() {
         if (encabezados.length === 0) continue;
         // Si no entra en su lugar, en cualquier ancho, también se apila: en
         // una tablet o con el menú abierto, una tabla de diez columnas se
-        // corría de costado. Se mide el ancho que tendría sin apilar (guardado
-        // la primera vez) contra el lugar que tiene.
-        const lugar = tabla.parentElement?.clientWidth ?? 0;
-        if (!tabla.dataset.apilada) tabla.dataset.anchoNatural = String(tabla.scrollWidth);
-        const apilar = lugar > 0 && Number(tabla.dataset.anchoNatural) > lugar + 2;
+        // corría de costado. Se compara el ancho que tendría sin apilar
+        // (guardado la primera vez) con el lugar que tiene.
+        if (!tabla.dataset.apilada) tabla.dataset.anchoNatural = String(natural);
+        const apilar = lugar > 0 && natural > lugar + 2;
         if (apilar && !tabla.dataset.apilada) tabla.dataset.apilada = "si";
         if (!apilar && tabla.dataset.apilada) delete tabla.dataset.apilada;
         for (const fila of tabla.querySelectorAll<HTMLTableRowElement>("tbody tr, tfoot tr")) {
           let col = 0;
           for (const celda of fila.cells) {
-            const nombre = encabezados[col] ?? "";
+            // La que abarca varias columnas va entera y sin etiqueta: el
+            // nombre de la primera no la describe.
+            const nombre = (celda.colSpan || 1) > 1 ? "" : (encabezados[col] ?? "");
             if (celda.dataset.label !== nombre) celda.dataset.label = nombre;
             col += celda.colSpan || 1;
           }

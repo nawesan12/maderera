@@ -48,7 +48,8 @@ export function Hero({
           className="object-cover object-center"
           preload
           fetchPriority="high"
-          sizes="(min-width: 1024px) 46vw, 100vw"
+          // En el teléfono va atenuada al 80 %: no hace falta la de ancho completo.
+          sizes="(min-width: 1024px) 46vw, 60vw"
         />
         {/* El degradado solo funde el borde contra el fondo del texto. Antes
             cubría el 38% del panel y se comía justo la sierra, que es lo que

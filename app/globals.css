@@ -1618,16 +1618,19 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
 /* Un botón no parte su texto en renglones: «Nuevo / cliente» en dos líneas
    era lo primero que se veía roto. Si no entra, baja entero a la fila de
    abajo (los contenedores de acciones son `flex-wrap`). */
-.panel :is(button, a):is([data-slot="button"], .inline-flex[class*="h-1"], .inline-flex[class*="h-["]) {
+.panel :is(button, a):is([data-slot="button"], .inline-flex[class*="h-1"], .inline-flex[class*="h-["]):not([class*="min-h-"]) {
   white-space: nowrap;
 }
 
 /* Nada estira la pantalla de costado: lo que es más ancho que la columna
    se achica (los hijos de flex y grid no bajan de su contenido sin esto). */
-/* Con `:where()` no pesa nada: un `min-w-64` puesto a propósito (el
-   buscador de una lista) sigue mandando. */
-:where(.panel main) :where(div, section, article, form, header) {
-  min-width: 0;
+/* En `@layer base`: fuera de capa, Tailwind v4 la ponía por encima de sus
+   utilidades y un `min-w-64` puesto a propósito (el buscador de una lista)
+   dejaba de mandar. */
+@layer base {
+  :where(.panel main) :where(div, section, article, form, header) {
+    min-width: 0;
+  }
 }
 
 /* Ninguna tabla del panel trae un ancho mínimo para pantalla grande que la
@@ -1636,8 +1639,10 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
 .panel main table:not([data-tabla="fija"]) {
   min-width: 0 !important;
 }
-.panel main table:not([data-tabla="fija"]) :is(td, th),
-.panel main table:not([data-tabla="fija"]) :is(td, th) :not(.tabular, code, kbd, button, a[class*="h-"]) {
+/* Salvo lo que pidió quedarse en una línea: importes, códigos, la píldora
+   de estado y lo que se corta con puntos suspensivos. */
+.panel main table:not([data-tabla="fija"]) :is(td, th):not(.whitespace-nowrap, .truncate, .tabular),
+.panel main table:not([data-tabla="fija"]) :is(td, th) :not(.tabular, .whitespace-nowrap, .truncate, [class*="rounded-full"], code, kbd, button, a[class*="h-"]) {
   white-space: normal !important;
 }
 
@@ -1666,7 +1671,7 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
     padding: 10px 14px;
     border-bottom: 1px solid var(--linea, rgb(0 0 0 / 0.08));
   }
-  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td, th) {
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td, th):not(.hidden) {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -1789,5 +1794,26 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
   table.tabla-apilable td:first-child {
     font-weight: 600;
     text-align: left;
+  }
+}
+
+/* Una celda que abarca varias columnas (una fila desplegada con su propia
+   grilla) va entera, sin etiqueta. */
+@media (max-width: 639px) {
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) td[colspan]:not([colspan="1"]) {
+    display: block;
+    text-align: left;
+  }
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] td[colspan]:not([colspan="1"]) {
+  display: block;
+  text-align: left;
+}
+
+/* En /corte, hasta que hay tres columnas, la barra fija de abajo lleva el
+   WhatsApp: el asistente flotante la tapaba. */
+@media (max-width: 1023px) {
+  body:has([data-sin-flotantes]) .flotante-asistente {
+    display: none;
   }
 }

@@ -542,6 +542,19 @@ function VistaDeCorte({
             ? formatearMonto(totales.total)
             : `${totales.pasadas} ${totales.pasadas === 1 ? "pasada" : "pasadas"}`}
         </p>
+        {/* Con la tienda encendida, el carrito también acá: arriba vive en
+            la barra de pantalla ancha y en el teléfono desaparecía. */}
+        {activa && (
+          <button
+            type="button"
+            onClick={comprar}
+            disabled={!sePuede || guardando}
+            aria-label="Agregarlo al carrito"
+            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] bg-accion text-white transition-colors hover:bg-accion-hover disabled:opacity-50"
+          >
+            <ShoppingCart className="h-5 w-5" />
+          </button>
+        )}
         {botonWhatsapp}
       </div>
     </div>
@@ -671,6 +684,8 @@ function EditorDeGrupo({
                 onPaste={(e) => pegarLista(i, e)}
                 onKeyDown={(e) => {
                   if (e.key !== "Enter") return;
+                  // Enter sobre un botón (Veta, un lado del canto) hace lo del botón.
+                  if ((e.target as HTMLElement).tagName !== "INPUT") return;
                   e.preventDefault();
                   if (i === filas.length - 1) agregarFila();
                 }}

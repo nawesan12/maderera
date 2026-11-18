@@ -106,7 +106,12 @@ export function TarjetaDeProducto({
         <span className="hidden sm:contents">{etiqueta}</span>
       </Link>
 
-      <div className="flex flex-1 flex-col gap-2 px-4 pb-4 pt-3 sm:gap-[13px] sm:pt-[15px]">
+      <div
+        className={`flex flex-1 flex-col gap-2 px-4 pb-4 pt-3 sm:gap-[13px] sm:pt-[15px] ${
+          // Lugar para el WhatsApp, que en el teléfono va a la altura del precio.
+          variasMedidas || sinPrecio ? "max-sm:pr-16" : ""
+        }`}
+      >
         <div className="flex flex-col gap-[3px]">
           <p className="text-[10.5px] font-bold uppercase tracking-[0.11em] text-acento-texto">
             {product.subcategory || product.categoryName}

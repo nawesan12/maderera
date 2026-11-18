@@ -25,7 +25,7 @@ func TestBuscarPorTelefonoYCuit(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(cs) != 1 || cs[0].Nombre != "Juan Pérez" {
+		if len(cs.AlDia) != 1 || cs.AlDia[0].Nombre != "Juan Pérez" || cs.TotalAlDia != 1 {
 			t.Errorf("%q: %+v", busco, cs)
 		}
 	}

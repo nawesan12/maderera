@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import { formatearMonto, hoyEnArgentina } from "@/lib/formato";
 import { Hoja, Opciones, Seccion } from "@/components/admin/formulario";
+import {
+  ElegirCliente,
+  type ClienteElegido,
+} from "@/components/admin/elegir-cliente";
 import { cargarSufrida, type EstadoSufrida } from "./actions";
 
 const IMPUESTOS = {
@@ -37,16 +41,14 @@ const OPCIONES_IMPUESTO = [
  * papel**. Si la cuenta del cliente no cierra con su certificado, el problema
  * es de él con el fisco, no nuestro.
  */
-export function CargarSufrida({
-  clientes,
-}: {
-  clientes: { id: string; nombre: string; cuit: string | null }[];
-}) {
+export function CargarSufrida() {
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoSufrida>({});
   const [enCurso, empezar] = useTransition();
 
-  const [customerId, setCustomerId] = useState(clientes[0]?.id ?? "");
+  // Se busca escribiendo: antes el desplegable traía la cartera entera y
+  // arrancaba con el primero elegido, que es justo el que nadie quería.
+  const [cliente, setCliente] = useState<ClienteElegido | null>(null);
   const [numero, setNumero] = useState("");
   const [impuesto, setImpuesto] = useState<keyof typeof IMPUESTOS>("ganancias");
   const [codigoRegimen, setCodigo] = useState("");
@@ -64,20 +66,9 @@ export function CargarSufrida({
   return (
     <Hoja>
       <Seccion titulo="Certificado" icono={BadgeCheck}>
-        <label className="block md:col-span-2">
-          <span className="text-sm font-medium">Cliente</span>
-          <select
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="md:col-span-2">
+          <ElegirCliente elegido={cliente} onElegir={setCliente} chico />
+        </div>
 
         <label className="block">
           <span className="text-sm font-medium">Certificado n.º</span>
@@ -179,8 +170,9 @@ export function CargarSufrida({
             type="button"
             onClick={() =>
               empezar(async () => {
+                if (!cliente) return;
                 const r = await cargarSufrida({
-                  customerId,
+                  customerId: cliente.id,
                   numero,
                   impuesto,
                   codigoRegimen,
@@ -200,7 +192,7 @@ export function CargarSufrida({
                 }
               })
             }
-            disabled={enCurso || !numero.trim() || n(importe) <= 0}
+            disabled={enCurso || !cliente || !numero.trim() || n(importe) <= 0}
             className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}

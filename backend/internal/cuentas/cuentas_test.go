@@ -142,9 +142,10 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 	}
 
 	_, b := pedir(t, ven, "GET", u+"clientes?busqueda=carpinteria", nil)
-	var lista []clientes.ClienteListado
-	_ = json.Unmarshal([]byte(b), &lista)
-	if len(lista) != 1 || lista[0].Saldo != 300000 || lista[0].LimiteCredito != 1500000 || lista[0].Deuda == nil {
+	var cartera clientes.CarteraDeClientes
+	_ = json.Unmarshal([]byte(b), &cartera)
+	lista := cartera.PorCobrar
+	if len(lista) != 1 || cartera.CantidadDeudores != 1 || lista[0].Saldo != 300000 || lista[0].LimiteCredito != 1500000 || lista[0].Deuda == nil {
 		t.Fatalf("listado: %s", b)
 	}
 

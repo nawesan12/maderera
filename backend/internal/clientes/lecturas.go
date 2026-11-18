@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"mjbj/internal/busqueda"
+	"sort"
 	"strings"
 	"time"
 
@@ -44,8 +45,33 @@ type DeudaDeCliente struct {
 	Prioridad        cobros.Prioridad `json:"prioridad"`
 }
 
-// FiltrosDeClientes son los de la cartera.
-type FiltrosDeClientes struct{ Busqueda, Tipo, Rubro, Vendedor string }
+// FiltrosDeClientes son los de la cartera. Pagina es la de «Al día» (desde
+// 1); TodosLosDeudores trae «Por cobrar» entero en vez de los primeros.
+type FiltrosDeClientes struct {
+	Busqueda, Tipo, Rubro, Vendedor string
+	Pagina                          int
+	TodosLosDeudores                bool
+}
+
+// Cuántos se muestran de cada grupo. «Por cobrar» va entero hasta 60 —es la
+// razón por la que se abre la pantalla, y ordenado por urgencia los de abajo
+// son los que menos apuran—; «Al día» se pagina de a 30 por nombre.
+const (
+	DeudoresVisibles = 60
+	AlDiaPorPagina   = 30
+)
+
+// CarteraDeClientes es la cartera en sus dos grupos. Las cantidades y los
+// totales son de todos los que pasan el filtro, no solo de los que viajan:
+// el encabezado dice la magnitud real.
+type CarteraDeClientes struct {
+	PorCobrar        []ClienteListado `json:"porCobrar"`
+	AlDia            []ClienteListado `json:"alDia"`
+	TotalAlDia       int              `json:"totalAlDia"`
+	CantidadDeudores int              `json:"cantidadDeudores"`
+	DeudaTotal       float64          `json:"deudaTotal"`
+	VencidoTotal     float64          `json:"vencidoTotal"`
+}
 
 func terminos(texto string) []string {
 	t := strings.Fields(texto)
@@ -55,9 +81,11 @@ func terminos(texto string) []string {
 	return t
 }
 
-// Listar es listarClientes: los activos por nombre, con su saldo, lo que
-// compraron y la deuda vencida de quien debe.
-func (s *Servicio) Listar(ctx context.Context, f FiltrosDeClientes, hoy time.Time) ([]ClienteListado, error) {
+// carteraFiltrada son los CTE que comparten las consultas de la cartera:
+// los clientes que pasan el filtro y el saldo de cada uno, sumado una sola
+// vez y solo para ellos (el índice por cliente de la 00168 lo lee sin tocar
+// la tabla).
+func carteraFiltrada(f FiltrosDeClientes) (string, []any) {
 	cond := []string{"c.active"}
 	var args []any
 	arg := func(v any) string { args = append(args, v); return fmt.Sprintf("$%d", len(args)) }
@@ -88,56 +116,157 @@ func (s *Servicio) Listar(ctx context.Context, f FiltrosDeClientes, hoy time.Tim
 			cond = append(cond, "("+strings.Join(col, " OR ")+")")
 		}
 	}
-	filas, err := s.pool.Query(ctx, `
-		SELECT c.id, c.nombre, c.razon_social, c.cuit, c.rubro, c.tipo::text, c.estado::text, c.asesor, c.telefono, c.email,
-		  coalesce(sa.saldo, 0)::float8, c.limite_credito::float8, c.dias_credito, c.cuenta_bloqueada, c.motivo_bloqueo,
-		  coalesce(co.total, 0)::float8, co.ultima
-		FROM customers c
-		LEFT JOIN (SELECT customer_id, sum(monto) AS saldo FROM account_movements GROUP BY customer_id) sa ON sa.customer_id = c.id
-		LEFT JOIN (SELECT customer_id, sum(total) AS total, max(created_at) AS ultima FROM orders WHERE estado <> 'cancelado' GROUP BY customer_id) co
-		  ON co.customer_id = c.id
-		WHERE `+strings.Join(cond, " AND ")+`
-		ORDER BY c.nombre`, args...)
+	return `WITH base AS (
+		  SELECT c.id, c.nombre, c.razon_social, c.cuit, c.rubro, c.tipo::text AS tipo, c.estado::text AS estado, c.asesor,
+		         c.telefono, c.email, c.limite_credito, c.dias_credito, c.cuenta_bloqueada, c.motivo_bloqueo
+		  FROM customers c WHERE ` + strings.Join(cond, " AND ") + `
+		), saldos AS (
+		  SELECT m.customer_id, sum(m.monto) AS saldo FROM account_movements m
+		  WHERE m.customer_id IN (SELECT id FROM base) GROUP BY m.customer_id
+		)`, args
+}
+
+const columnasDeCartera = `b.id, b.nombre, b.razon_social, b.cuit, b.rubro, b.tipo, b.estado, b.asesor, b.telefono, b.email,
+		  coalesce(s.saldo, 0)::float8, b.limite_credito::float8, b.dias_credito, b.cuenta_bloqueada, b.motivo_bloqueo`
+
+func leerCliente(r pgx.CollectableRow, extra ...any) (ClienteListado, error) {
+	var c ClienteListado
+	err := r.Scan(append([]any{&c.ID, &c.Nombre, &c.RazonSocial, &c.Cuit, &c.Rubro, &c.Tipo, &c.Estado, &c.Asesor, &c.Telefono, &c.Email,
+		&c.Saldo, &c.LimiteCredito, &c.DiasCredito, &c.CuentaBloqueada, &c.MotivoBloqueo}, extra...)...)
+	return c, err
+}
+
+// Listar es la cartera: «Por cobrar» del más atrasado al menos y «Al día»
+// por nombre, de a páginas.
+//
+// Antes traía a todos los clientes con todo lo que compraron, y de cada
+// deudor todos sus movimientos: con el padrón de ISIS eran miles de tarjetas
+// por carga y años de cuenta corriente. Ahora:
+//
+//   - los deudores van todos a Go, porque el orden por urgencia sale de la
+//     deuda vencida de cada uno, pero de cada uno viajan solo los movimientos
+//     desde la última vez que quedó en cero (ver movimientosAbiertos);
+//   - de «Al día» viaja una página, con su total;
+//   - lo comprado y la última compra se buscan solo para lo que se muestra.
+func (s *Servicio) Listar(ctx context.Context, f FiltrosDeClientes, hoy time.Time) (CarteraDeClientes, error) {
+	cartera := CarteraDeClientes{PorCobrar: []ClienteListado{}, AlDia: []ClienteListado{}}
+	cte, args := carteraFiltrada(f)
+
+	// Los deudores, por nombre: es el orden en que se suman los totales
+	// (como el reduce de la pantalla de antes) y el desempate de la urgencia.
+	filas, err := s.pool.Query(ctx, cte+`
+		SELECT `+columnasDeCartera+`
+		FROM base b JOIN saldos s ON s.customer_id = b.id
+		WHERE s.saldo > 0
+		ORDER BY b.nombre, b.id`, args...)
 	if err != nil {
-		return nil, err
+		return cartera, err
 	}
-	out, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (ClienteListado, error) {
-		var c ClienteListado
-		err := r.Scan(&c.ID, &c.Nombre, &c.RazonSocial, &c.Cuit, &c.Rubro, &c.Tipo, &c.Estado, &c.Asesor, &c.Telefono, &c.Email,
-			&c.Saldo, &c.LimiteCredito, &c.DiasCredito, &c.CuentaBloqueada, &c.MotivoBloqueo, &c.TotalComprado, &c.UltimaCompra)
+	deudores, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (ClienteListado, error) { return leerCliente(r) })
+	if err != nil {
+		return cartera, err
+	}
+	if err := s.deudaVencida(ctx, deudores, hoy); err != nil {
+		return cartera, err
+	}
+	cartera.CantidadDeudores = len(deudores)
+	for _, c := range deudores {
+		cartera.DeudaTotal += c.Saldo
+		cartera.VencidoTotal += c.Deuda.Vencido
+	}
+	// Quien debe va primero, y entre ellos manda el atraso (la clienta: «que
+	// el sistema indique a quién darle prioridad»). Estable: a igual puntaje,
+	// queda el orden por nombre.
+	sort.SliceStable(deudores, func(i, j int) bool {
+		return deudores[i].Deuda.Prioridad.Puntaje > deudores[j].Deuda.Prioridad.Puntaje
+	})
+	if !f.TodosLosDeudores && len(deudores) > DeudoresVisibles {
+		deudores = deudores[:DeudoresVisibles]
+	}
+	if err := s.compras(ctx, deudores); err != nil {
+		return cartera, err
+	}
+	cartera.PorCobrar = deudores
+
+	// Al día: una página por nombre, con lo comprado de esas filas nada más.
+	pagina := max(f.Pagina, 1)
+	n := len(args)
+	filas, err = s.pool.Query(ctx, cte+`
+		SELECT `+columnasDeCartera+`, coalesce(co.total, 0)::float8, co.ultima, count(*) OVER ()
+		FROM base b LEFT JOIN saldos s ON s.customer_id = b.id
+		LEFT JOIN LATERAL (
+		  SELECT sum(o.total) AS total, max(o.created_at) AS ultima FROM orders o
+		  WHERE o.customer_id = b.id AND o.estado <> 'cancelado'
+		) co ON true
+		WHERE coalesce(s.saldo, 0) <= 0
+		ORDER BY b.nombre, b.id
+		LIMIT $`+fmt.Sprint(n+1)+` OFFSET $`+fmt.Sprint(n+2), append(args, AlDiaPorPagina, (pagina-1)*AlDiaPorPagina)...)
+	if err != nil {
+		return cartera, err
+	}
+	cartera.AlDia, err = pgx.CollectRows(filas, func(r pgx.CollectableRow) (ClienteListado, error) {
+		var total float64
+		var ultima *time.Time
+		c, err := leerCliente(r, &total, &ultima, &cartera.TotalAlDia)
+		c.TotalComprado, c.UltimaCompra = total, ultima
 		return c, err
 	})
 	if err != nil {
-		return nil, err
+		return cartera, err
 	}
-	// La deuda vencida, de los que deben.
-	var deudores []string
-	for _, c := range out {
-		if c.Saldo > 0 {
-			deudores = append(deudores, c.ID)
-		}
+	// Una página que se pasó del final vuelve vacía, pero con el total: el
+	// paginador necesita saber a dónde volver.
+	if len(cartera.AlDia) == 0 && pagina > 1 {
+		err = s.pool.QueryRow(ctx, cte+`SELECT count(*)::int FROM base b LEFT JOIN saldos s ON s.customer_id = b.id
+			WHERE coalesce(s.saldo, 0) <= 0`, args...).Scan(&cartera.TotalAlDia)
 	}
-	if len(deudores) == 0 {
-		return out, nil
-	}
-	movs, err := s.pool.Query(ctx, `SELECT customer_id::text, monto::float8, created_at FROM account_movements WHERE customer_id = ANY($1::uuid[])`, deudores)
-	if err != nil {
-		return nil, err
-	}
-	porCliente := map[string][]cobros.Movimiento{}
-	var id string
-	var m cobros.Movimiento
-	if _, err := pgx.ForEachRow(movs, []any{&id, &m.Monto, &m.Fecha}, func() error {
-		porCliente[id] = append(porCliente[id], m)
+	return cartera, err
+}
+
+// compras completa lo comprado y la última compra de unos pocos clientes.
+func (s *Servicio) compras(ctx context.Context, cs []ClienteListado) error {
+	if len(cs) == 0 {
 		return nil
-	}); err != nil {
-		return nil, err
 	}
-	for i := range out {
-		c := &out[i]
-		if c.Saldo <= 0 {
-			continue
-		}
+	ids := make([]string, len(cs))
+	indice := map[string]int{}
+	for i, c := range cs {
+		ids[i] = c.ID
+		indice[c.ID] = i
+	}
+	filas, err := s.pool.Query(ctx, `SELECT customer_id::text, sum(total)::float8, max(created_at) FROM orders
+		WHERE customer_id = ANY($1::uuid[]) AND estado <> 'cancelado' GROUP BY customer_id`, ids)
+	if err != nil {
+		return err
+	}
+	var id string
+	var total float64
+	var ultima time.Time
+	_, err = pgx.ForEachRow(filas, []any{&id, &total, &ultima}, func() error {
+		c := &cs[indice[id]]
+		c.TotalComprado = total
+		u := ultima
+		c.UltimaCompra = &u
+		return nil
+	})
+	return err
+}
+
+// deudaVencida calcula lo vencido y la prioridad de cobranza de cada deudor.
+func (s *Servicio) deudaVencida(ctx context.Context, deudores []ClienteListado, hoy time.Time) error {
+	if len(deudores) == 0 {
+		return nil
+	}
+	ids := make([]string, len(deudores))
+	for i, c := range deudores {
+		ids[i] = c.ID
+	}
+	porCliente, err := s.movimientosAbiertos(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for i := range deudores {
+		c := &deudores[i]
 		a := cobros.CalcularAging(porCliente[c.ID], hoy)
 		vencido := 0.0
 		for _, t := range a.Tramos {
@@ -149,7 +278,46 @@ func (s *Servicio) Listar(ctx context.Context, f FiltrosDeClientes, hoy time.Tim
 			Prioridad: cobros.PrioridadDeCobranza(cobros.Deuda{Vencido: vencido, DiasDeLaMasVieja: a.DiasDeLaMasVieja,
 				DiasCredito: int(c.DiasCredito), Bloqueada: c.CuentaBloqueada})}
 	}
-	return out, nil
+	return nil
+}
+
+// movimientosAbiertos son, de cada cliente, los movimientos posteriores a la
+// última vez que su saldo quedó exactamente en cero, en orden.
+//
+// Lo de antes de ese cero no cambia el aging: en ese punto cada pago ya
+// canceló sus deudas (FIFO) y no queda nada a favor, así que CalcularAging
+// llega al mismo resultado empezando desde ahí. Un cliente con diez años de
+// cuenta al día y una factura de este mes manda una fila, no diez años. El
+// saldo corrido se suma en la base, con numeric: exacto, sin el resto de la
+// coma flotante. El orden es el mismo de CalcularAging (fecha, y el id para
+// que dos movimientos del mismo instante salgan siempre igual).
+func (s *Servicio) movimientosAbiertos(ctx context.Context, ids []string) (map[string][]cobros.Movimiento, error) {
+	filas, err := s.pool.Query(ctx, `
+		SELECT customer_id::text, monto::float8, created_at FROM (
+		  SELECT customer_id, monto, created_at, orden,
+		         max(orden) FILTER (WHERE acumulado = 0) OVER (PARTITION BY customer_id) AS ultimo_cero
+		  FROM (
+		    SELECT customer_id, monto, created_at,
+		           row_number() OVER w AS orden, sum(monto) OVER w AS acumulado
+		    FROM account_movements WHERE customer_id = ANY($1::uuid[])
+		    WINDOW w AS (PARTITION BY customer_id ORDER BY created_at, id)
+		  ) m
+		) x
+		WHERE ultimo_cero IS NULL OR orden > ultimo_cero
+		ORDER BY customer_id, orden`, ids)
+	if err != nil {
+		return nil, err
+	}
+	porCliente := map[string][]cobros.Movimiento{}
+	var id string
+	var m cobros.Movimiento
+	if _, err := pgx.ForEachRow(filas, []any{&id, &m.Monto, &m.Fecha}, func() error {
+		porCliente[id] = append(porCliente[id], m)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return porCliente, nil
 }
 
 // Ficha es obtenerCliente: la fila entera de customers (como la daba

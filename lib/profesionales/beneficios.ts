@@ -51,3 +51,27 @@ export function bajadaDelProfesional(tiendaActiva: boolean): string {
     ? "Precios de gremio, cuenta corriente y documentación técnica."
     : "Cuenta corriente, presupuestos y documentación técnica.";
 }
+
+/**
+ * El bloque de profesionales de la portada, con la misma regla (corrección
+ * de T5). La portada es la página más vista: si ahí seguía «Precios de
+ * gremio», el profesional se anotaba por una promesa que /profesionales ya no
+ * hacía.
+ */
+export function bannerDelProfesional(tiendaActiva: boolean): { titulo: string; bajada: string } {
+  return tiendaActiva
+    ? { titulo: "Tu propia lista de precios", bajada: "Precios de gremio y cuenta corriente." }
+    : { titulo: "Cuenta corriente para tu obra", bajada: bajadaDelProfesional(false) };
+}
+
+/**
+ * Lo que dice el asistente de la cuenta profesional, en el guion y en la
+ * respuesta escrita a mano.
+ *
+ * Neutro a propósito: el guion es una constante y no sabe si la tienda está
+ * prendida, así que dice solo lo que vale en los dos casos. Los «descuentos por
+ * cantidad» salieron porque la maderera no trabaja así (ver BannerProfesionales
+ * en la portada).
+ */
+export const CUENTA_PROFESIONAL_EN_EL_ASISTENTE =
+  "Si trabajás del rubro —carpintería, construcción, arquitectura— podés pedir la cuenta profesional: cuenta corriente, presupuestos para la obra y documentación técnica. Se pide desde el portal y lo aprobamos nosotros.";

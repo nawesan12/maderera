@@ -1,4 +1,5 @@
 import { DONDE_SE_CORTA } from "@/lib/sucursales";
+import { CUENTA_PROFESIONAL_EN_EL_ASISTENTE } from "@/lib/profesionales/beneficios";
 /**
  * El guion del asistente del sitio.
  *
@@ -158,8 +159,7 @@ const PASOS: PasoDelGuion[] = [
   },
   {
     id: "profesionales",
-    mensaje:
-      "Si sos carpintero, constructor, arquitecto o tenés una empresa, podés pedir la cuenta profesional: tenés precios de lista propia, cuenta corriente y descuentos por cantidad. Se pide desde el portal y lo aprobamos nosotros.",
+    mensaje: CUENTA_PROFESIONAL_EN_EL_ASISTENTE,
     accion: { tipo: "ir", ruta: "/profesionales" },
     opciones: [],
   },

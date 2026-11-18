@@ -1,4 +1,5 @@
 import { DONDE_SE_CORTA } from "@/lib/sucursales";
+import { CUENTA_PROFESIONAL_EN_EL_ASISTENTE } from "@/lib/profesionales/beneficios";
 import type { components } from "@/lib/api/tipos/catalogo";
 
 /** Lo que entendió el motor de Go (internal/asistente), el mismo del bot de WhatsApp. */
@@ -112,8 +113,7 @@ export function responderLocal(
 
     case "cuenta":
       return {
-        texto:
-          "Si trabajás del rubro —carpintería, construcción, arquitectura— podés pedir la cuenta profesional: lista de precios propia, cuenta corriente y descuentos por cantidad. Se pide desde el portal y lo aprobamos nosotros.",
+        texto: CUENTA_PROFESIONAL_EN_EL_ASISTENTE,
         sugerencias: [{ texto: "Ir al portal", va: "profesionales" }],
       };
 

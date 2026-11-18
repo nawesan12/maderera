@@ -28,6 +28,7 @@ import { escalasDePagoPublicas } from "@/lib/dal/descuentos-pago";
 import { ALCANCE_MOLDAVA } from "@/lib/empresa";
 import { SliderDePromos } from "@/components/home/slider-promos";
 import { FranjaBeneficios } from "@/components/franja-beneficios";
+import { bannerDelProfesional } from "@/lib/profesionales/beneficios";
 import { BotonCrearCuenta } from "@/components/boton-crear-cuenta";
 import { MARCAS_DE_PAGO, marcaDelMedio, type MarcaDePago } from "@/lib/medios-de-pago";
 import { metadatosDePagina } from "@/lib/seo";
@@ -129,7 +130,7 @@ export default async function HomePage() {
 
       <ResenasDelNegocio resenas={resenas} resumen={resumenResenas} />
 
-      <BannerProfesionales />
+      <BannerProfesionales tiendaActiva={laTienda.activa} />
 
       <Historia anios={numeros.anios} />
 
@@ -598,7 +599,8 @@ function LogoDeMarca({
  * Si algún día existe de verdad, se anuncia con los números de la base y no
  * con ejemplos escritos acá.
  */
-function BannerProfesionales() {
+function BannerProfesionales({ tiendaActiva }: { tiendaActiva: boolean }) {
+  const { titulo, bajada } = bannerDelProfesional(tiendaActiva);
   return (
     <section className="bg-sitio-fondo py-[48px]">
       <div className="contenedor">
@@ -623,10 +625,10 @@ function BannerProfesionales() {
                 Portal profesionales
               </span>
               <h3 className="mt-3.5 text-[26px] font-bold tracking-[-0.025em]">
-                Tu propia lista de precios
+                {titulo}
               </h3>
               <p className="mt-2 text-[15.5px] leading-relaxed text-texto-2">
-                Precios de gremio y cuenta corriente.
+                {bajada}
               </p>
 
               <Link

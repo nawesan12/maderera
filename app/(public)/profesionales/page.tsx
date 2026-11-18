@@ -11,6 +11,7 @@ import {
   Clock,
   FileText,
   Download,
+  MessageCircle,
   Package,
   Percent,
   Scissors,
@@ -56,9 +57,11 @@ const ICONO_DEL_BENEFICIO: Record<Beneficio["clave"], typeof Percent> = {
   documentacion: FileText,
 };
 
+// «La revisamos» va sin plazo, por la misma razón que el presupuesto en
+// `beneficiosDelProfesional`: el plazo nadie lo confirmó.
 const PASOS = [
   { titulo: "Pedís la cuenta", detalle: "Tres pasos, dos minutos." },
-  { titulo: "La revisamos", detalle: "Te contestamos en 24 horas hábiles." },
+  { titulo: "La revisamos", detalle: "Un asesor mira cada pedido." },
   { titulo: "Entrás", detalle: "Te llega un link para activar la cuenta." },
 ];
 
@@ -138,9 +141,17 @@ export default async function ProfesionalesPage() {
                   const Icono = ICONO_DEL_BENEFICIO[b.clave];
                   const contenido = (
                     <>
-                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto">
-                        <Icono className="h-6 w-6" />
-                      </span>
+                      {/* La que abre WhatsApp lleva la señal de WhatsApp
+                          (hallazgo 27): el verde y el globo, no un reloj. */}
+                      {b.aWhatsapp ? (
+                        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-whatsapp-boton text-white">
+                          <MessageCircle className="h-6 w-6" />
+                        </span>
+                      ) : (
+                        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto">
+                          <Icono className="h-6 w-6" />
+                        </span>
+                      )}
                       <h2 className="mt-4 flex items-center gap-2 text-[22px] font-bold tracking-[-0.02em]">
                         {b.titulo}
                         {b.aWhatsapp && <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />}
@@ -155,7 +166,7 @@ export default async function ProfesionalesPage() {
                       href={whatsappPresupuesto}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`group block rounded-2xl superficie p-6 transition-colors hover:border-accion/50 ${ancho}`}
+                      className={`group block rounded-2xl superficie p-6 transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md ${ancho}`}
                     >
                       {contenido}
                     </a>
@@ -367,7 +378,7 @@ function PanelDelProfesional({
         <Link
           key={a.href}
           href={a.href}
-          className="group flex flex-col rounded-2xl superficie p-6 transition-colors hover:border-accion/50"
+          className="group flex flex-col rounded-2xl superficie p-6 transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md"
         >
           <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto">
             <a.icono className="h-6 w-6" />
@@ -391,8 +402,9 @@ function EstadoDeSolicitud({ fecha, tiendaActiva }: { fecha: Date; tiendaActiva:
       </span>
       <h2 className="mt-4 text-xl font-semibold">Estamos revisando tu pedido</h2>
       <p className="mt-1 text-muted-foreground">
-        La recibimos el {fechaLarga.format(fecha)}. Un asesor la está mirando y
-        te contestamos dentro de las 24 horas hábiles.
+        {/* Sin plazo: «24 horas hábiles» era una promesa a nombre de la clienta
+            que nadie confirmó, la misma que salió de los beneficios. */}
+        La recibimos el {fechaLarga.format(fecha)}. Un asesor la está mirando.
       </p>
       {/* «Mientras tanto podés comprar normalmente» salió: con la tienda
           apagada no se compra por la web (hallazgo 28). */}

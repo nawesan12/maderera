@@ -441,7 +441,7 @@ function FichaTecnica({
   return (
     <section className={`mt-11 grid gap-8 ${hayLado && medidas.length > 0 ? "lg:grid-cols-[1.4fr_1fr]" : ""}`}>
       {medidas.length > 0 && (
-        <div>
+        <div className="min-w-0">
           <h2 className="mb-3.5 text-2xl font-bold tracking-[-0.025em]">Ficha técnica</h2>
           <div
             tabIndex={0}
@@ -449,7 +449,9 @@ function FichaTecnica({
             aria-label="Ficha técnica"
             className="overflow-x-auto rounded-2xl superficie focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento-texto"
           >
-            <table className="w-full min-w-[420px] text-sm">
+            {/* En el teléfono cada medida es una tarjeta (`.tabla-apilable` en
+                globals.css): con seis columnas, la tabla se corría de costado. */}
+            <table className="tabla-apilable w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/40 text-left">
                   <th className="px-5 py-3 font-semibold">Medida</th>
@@ -467,6 +469,7 @@ function FichaTecnica({
                     {columnas.map(([nombre, valor, numero]) => (
                       <td
                         key={nombre}
+                        data-label={nombre}
                         className={`px-4 py-3 text-muted-foreground ${numero ? "tabular text-right" : ""}`}
                       >
                         {valor(v) ?? "—"}

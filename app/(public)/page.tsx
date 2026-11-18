@@ -455,9 +455,9 @@ function MediosDePago({
         <MarcasQueAceptamos />
 
         {promos.length > 0 && (
-          // Una fila que se desliza: apiladas, seis promos ocupaban 1.500 px
-          // del celular.
-          <div className="-mx-4 mt-[18px] flex snap-x gap-[18px] overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+          // Compactas y de a dos en el celular: apiladas, seis promos ocupaban
+          // 1.500 px; en una fila deslizable, había que correrlas de costado.
+          <div className="mt-[18px] grid grid-cols-2 gap-3 sm:gap-[18px] lg:grid-cols-4">
             {promos.map((p) => {
               // Sin imagen cargada, el logo fijo de la marca si es una de
               // las conocidas; si tampoco, el nombre escrito.
@@ -466,7 +466,7 @@ function MediosDePago({
               <article
                 key={p.id}
                 title={p.detalle ?? undefined}
-                className="flex w-[260px] shrink-0 snap-start flex-col rounded-2xl superficie px-5 py-[18px]"
+                className="flex min-w-0 flex-col rounded-2xl superficie px-4 py-4 sm:px-5 sm:py-[18px]"
               >
                 {/* El logo del banco, si lo cargaron. Se reconoce antes que
                     el nombre escrito, que es para lo que la clienta lo pidió.

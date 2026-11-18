@@ -26,7 +26,7 @@ const TAMANOS = {
   },
   pie: { icono: 60, nombre: "text-[23px]", arriba: "text-[11.5px]", radio: "rounded-[15px]" },
   panel: { icono: 38, nombre: "text-[16px]", arriba: "text-[9.5px]", radio: "rounded-[10px]" },
-  grande: { icono: 84, nombre: "text-[34px]", arriba: "text-[14px]", radio: "rounded-[20px]" },
+  grande: { icono: 84, nombre: "text-[28px] sm:text-[34px]", arriba: "text-[14px]", radio: "rounded-[20px]" },
 } as const;
 
 export function Marca({

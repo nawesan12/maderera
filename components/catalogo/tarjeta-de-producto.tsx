@@ -71,7 +71,14 @@ export function TarjetaDeProducto({
   )}`;
 
   return (
-    <article className="group relative flex h-full flex-col overflow-hidden rounded-[14px] superficie shadow-[0_1px_2px_rgb(60_50_40_/_0.05)] transition-[box-shadow,transform,border-color] duration-200 hover:-translate-y-[3px] hover:border-linea-hover hover:shadow-[0_14px_30px_-16px_rgb(60_50_40_/_0.34)] motion-reduce:transform-none motion-reduce:transition-none">
+    /*
+     * En el teléfono la foto manda (Nahuel, 18/11: «tienen que ocupar lo
+     * máximo posible la foto del producto, si al fin y al cabo es lo que está
+     * comprando»): de borde a borde de la pantalla, cuadrada, sin esquinas
+     * redondeadas ni nada encima, y abajo solo el nombre, el precio y el
+     * WhatsApp. Desde `sm` vuelve a ser la tarjeta de la grilla.
+     */
+    <article className="group relative flex h-full flex-col overflow-hidden bg-card max-sm:ml-[calc(50%-50vw)] max-sm:w-screen sm:rounded-[14px] sm:superficie sm:shadow-[0_1px_2px_rgb(60_50_40_/_0.05)] sm:transition-[box-shadow,transform,border-color] sm:duration-200 sm:hover:-translate-y-[3px] sm:hover:border-linea-hover sm:hover:shadow-[0_14px_30px_-16px_rgb(60_50_40_/_0.34)] motion-reduce:transform-none motion-reduce:transition-none">
       {/* La foto lleva a la misma ficha que el nombre de abajo: fuera del Tab
           y de los lectores, que si no la anunciaban dos veces (y sin foto,
           como un enlace sin nombre). */}
@@ -79,7 +86,7 @@ export function TarjetaDeProducto({
         href={`/catalogo/${product.slug}`}
         tabIndex={-1}
         aria-hidden="true"
-        className="relative block aspect-[4/3] overflow-hidden bg-brand-wood-light/25"
+        className="relative block aspect-square overflow-hidden bg-brand-wood-light/25 sm:aspect-[4/3]"
       >
         {product.image ? (
           <Image
@@ -95,10 +102,11 @@ export function TarjetaDeProducto({
           </span>
         )}
 
-        {etiqueta}
+        {/* El cartel tapaba la foto en el teléfono; el descuento igual se ve en el precio. */}
+        <span className="hidden sm:contents">{etiqueta}</span>
       </Link>
 
-      <div className="flex flex-1 flex-col gap-[13px] px-4 pb-4 pt-[15px]">
+      <div className="flex flex-1 flex-col gap-2 px-4 pb-4 pt-3 sm:gap-[13px] sm:pt-[15px]">
         <div className="flex flex-col gap-[3px]">
           <p className="text-[10.5px] font-bold uppercase tracking-[0.11em] text-acento-texto">
             {product.subcategory || product.categoryName}
@@ -113,7 +121,7 @@ export function TarjetaDeProducto({
 
         {precio}
 
-        <div className="flex flex-wrap gap-[5px]">
+        <div className="hidden flex-wrap gap-[5px] sm:flex">
           <span className="inline-flex h-[23px] items-center rounded-md bg-chip px-2 text-[11.5px] text-texto-2">
             por {formatearUnidad(product.unit)}
           </span>
@@ -124,14 +132,20 @@ export function TarjetaDeProducto({
           )}
         </div>
 
-        <div className="mt-auto flex gap-2 border-t border-linea-tenue pt-3.5">
+        {/* Sin «Agregar», en el teléfono el WhatsApp sube a la altura del
+            precio: solo, ocupaba un renglón entero. */}
+        <div
+          className={`mt-auto flex justify-end gap-2 sm:border-t sm:border-linea-tenue sm:pt-3.5 ${
+            variasMedidas || sinPrecio ? "max-sm:absolute max-sm:bottom-4 max-sm:right-4" : ""
+          }`}
+        >
           {variasMedidas || sinPrecio ? (
             <Link
               href={`/catalogo/${product.slug}`}
                     className={buttonVariants({
                 variant: "outline",
                 className:
-                  "h-[42px] min-w-0 flex-1 rounded-[9px] border-linea text-[14.5px] font-semibold",
+                  "h-[42px] min-w-0 flex-1 rounded-[9px] border-linea text-[14.5px] font-semibold max-sm:!hidden",
               })}
             >
               {/* Con la tienda apagada ningún producto trae precio: la tarjeta

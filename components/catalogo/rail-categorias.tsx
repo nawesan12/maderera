@@ -43,14 +43,16 @@ export function RailDeCategorias({
   return (
     <nav
       aria-label="Categorías"
-      className="-mx-4 mb-5 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] lg:mx-0 lg:px-0 [&::-webkit-scrollbar]:hidden"
+      className="mb-5"
     >
-      <ul className="flex snap-x gap-2 lg:flex-wrap">
+      {/* Bajan de fila en vez de correrse de costado (Nahuel, 18/11: «que no
+          haya que hacer scroll horizontal»). */}
+      <ul className="flex flex-wrap gap-2">
         {todas.map((categoria) => {
           const esActiva = categoria.slug === activa;
 
           return (
-            <li key={categoria.slug} className="snap-start">
+            <li key={categoria.slug}>
               <Link
                 href={
                   categoria.href ??

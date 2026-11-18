@@ -8,6 +8,7 @@ import { headers } from "next/headers";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/sidebar";
 import { BuscadorGlobal } from "@/components/admin/buscador-global";
+import { TablasApilables } from "@/components/admin/tablas-apilables";
 import { MenuUsuario } from "@/components/admin/menu-usuario";
 import {
   ActivityBell,
@@ -154,6 +155,7 @@ async function PanelConSesion({
           las veinte pantallas y repetirla garantizaba que tres quedaran
           distintas. Ver `lib/teclado/avance.ts`. */}
       <EnterAvanza />
+      <TablasApilables />
       <AvisoDePedidosEnVivo />
       <AdminSidebar whatsappSinLeer={sinLeer} rol={usuario.staffRole} />
       {/* `min-w-0` no es decorativo: sin él este hijo de flex no baja del ancho
@@ -161,15 +163,19 @@ async function PanelConSesion({
           el documento entero se estira. Con el menú lateral fijo y la barra
           superior pegajosa, eso se ve como que el panel se desarma. */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="textura sticky top-0 z-30 flex h-[60px] items-center gap-4 border-b border-linea bg-background/90 px-4 backdrop-blur-lg lg:px-7">
-          <div className="flex max-w-[420px] flex-1 items-center gap-3 pl-12 lg:pl-0">
+        <header className="textura sticky top-0 z-30 flex h-[60px] items-center gap-2 border-b border-linea bg-background/90 px-4 backdrop-blur-lg sm:gap-4 lg:px-7">
+          <div className="flex min-w-0 max-w-[420px] flex-1 items-center gap-3 pl-12 lg:pl-0">
             <BuscadorGlobal />
           </div>
-          <div className="ml-auto flex items-center gap-3.5">
+          <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3.5">
             {/* El interruptor de tema también acá: el único que había estaba en
                 el navbar público, así que quien entraba al panel en modo oscuro
                 no tenía desde dónde volver. */}
-            <ThemeToggle />
+            {/* En el teléfono el buscador necesita ese lugar: el tema se cambia
+                desde una pantalla ancha y queda guardado. */}
+            <div className="hidden sm:block">
+              <ThemeToggle />
+            </div>
             {/* La actividad sale de la bitácora, que es del admin: para los
                 otros roles la API da 403, y como el encabezado está en todas
                 las pantallas, ese 403 tiraba abajo el panel entero. */}
@@ -178,7 +184,7 @@ async function PanelConSesion({
                 <ActivityBell />
               </Suspense>
             )}
-            <div className="border-l border-linea pl-3.5">
+            <div className="border-l border-linea pl-2 sm:pl-3.5">
               <MenuUsuario
                 nombre={usuario.name}
                 iniciales={iniciales(usuario.name)}

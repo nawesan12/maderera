@@ -237,7 +237,9 @@ export function Pestanas<T extends string>({
   return (
     <div
       role="tablist"
-      className="flex gap-1 overflow-x-auto border-b border-linea"
+      // Bajan a otra fila si no entran: corridas de costado, en el teléfono
+      // la última pestaña quedaba escondida.
+      className="flex flex-wrap gap-x-1 border-b border-linea"
     >
       {pestanas.map((p) => (
         <button
@@ -246,7 +248,7 @@ export function Pestanas<T extends string>({
           role="tab"
           aria-selected={activa === p.id}
           onClick={() => alCambiar(p.id)}
-          className={`relative h-12 shrink-0 px-4 text-base font-medium transition-colors ${
+          className={`relative h-12 shrink-0 px-3 text-base font-medium transition-colors sm:px-4 ${
             activa === p.id
               ? "text-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-[3px] after:rounded-full after:bg-accion"
               : "text-muted-foreground hover:text-foreground"

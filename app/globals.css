@@ -1610,3 +1610,184 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
     display: none;
   }
 }
+
+/* --- El panel en el teléfono (18/11/2026) ---------------------------------
+   «Está horrible la UI en celular de todo el admin.» Tres reglas para todas
+   las pantallas a la vez, en lugar de arreglar cuarenta por separado. */
+
+/* Un botón no parte su texto en renglones: «Nuevo / cliente» en dos líneas
+   era lo primero que se veía roto. Si no entra, baja entero a la fila de
+   abajo (los contenedores de acciones son `flex-wrap`). */
+.panel :is(button, a):is([data-slot="button"], .inline-flex[class*="h-1"], .inline-flex[class*="h-["]) {
+  white-space: nowrap;
+}
+
+/* Nada estira la pantalla de costado: lo que es más ancho que la columna
+   se achica (los hijos de flex y grid no bajan de su contenido sin esto). */
+/* Con `:where()` no pesa nada: un `min-w-64` puesto a propósito (el
+   buscador de una lista) sigue mandando. */
+:where(.panel main) :where(div, section, article, form, header) {
+  min-width: 0;
+}
+
+/* Ninguna tabla del panel trae un ancho mínimo para pantalla grande que la
+   haga correrse en una tablet o con el menú abierto: las columnas se
+   reparten lo que hay y el texto baja de renglón. */
+.panel main table:not([data-tabla="fija"]) {
+  min-width: 0 !important;
+}
+.panel main table:not([data-tabla="fija"]) :is(td, th),
+.panel main table:not([data-tabla="fija"]) :is(td, th) :not(.tabular, code, kbd, button, a[class*="h-"]) {
+  white-space: normal !important;
+}
+
+/* Las tablas, apiladas debajo de 640 px: cada fila es una tarjeta y cada
+   celda un renglón «Columna: valor». Los nombres los pone
+   `components/admin/tablas-apilables.tsx` en `data-label`. */
+@media (max-width: 639px) {
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) {
+    display: block;
+    width: 100%;
+    /* Las tablas anchas traen `min-w-[820px]` para pantalla grande. */
+    min-width: 0 !important;
+  }
+  /* El contenedor que las dejaba correr de costado ya no hace falta. */
+  :is(.panel, [data-slot="dialog-content"]) :has(> table:not([data-tabla="fija"])) {
+    overflow-x: visible;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) thead {
+    display: none;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(tbody, tfoot) {
+    display: block;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) tr {
+    display: block;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--linea, rgb(0 0 0 / 0.08));
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td, th) {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    width: auto !important;
+    max-width: none !important;
+    padding: 3px 0 !important;
+    border: 0;
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) td[data-label]:not([data-label=""])::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    max-width: 45%;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--texto-3, #8a8178);
+  }
+  /* La primera celda suele ser el nombre de la fila: va arriba y entera. */
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) tr > td:first-child {
+    justify-content: flex-start;
+    text-align: left;
+    font-weight: 600;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) tr > td:first-child::before {
+    display: none;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) td:empty {
+    display: none;
+  }
+}
+
+/* Y en cualquier ancho, la que `tablas-apilables.tsx` marcó porque no
+   entraba en su lugar. */
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] {
+  display: block;
+  width: 100%;
+  /* Las tablas anchas traen `min-w-[820px]` para pantalla grande. */
+  min-width: 0 !important;
+}
+/* El contenedor que las dejaba correr de costado ya no hace falta. */
+:is(.panel, [data-slot="dialog-content"]) :has(> table[data-apilada]) {
+  overflow-x: visible;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] thead {
+  display: none;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(tbody, tfoot) {
+  display: block;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] tr {
+  display: block;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--linea, rgb(0 0 0 / 0.08));
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(td, th) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: auto !important;
+  max-width: none !important;
+  padding: 3px 0 !important;
+  border: 0;
+  text-align: right;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] td[data-label]:not([data-label=""])::before {
+  content: attr(data-label);
+  flex-shrink: 0;
+  max-width: 45%;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--texto-3, #8a8178);
+}
+/* La primera celda suele ser el nombre de la fila: va arriba y entera. */
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] tr > td:first-child {
+  justify-content: flex-start;
+  text-align: left;
+  font-weight: 600;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] tr > td:first-child::before {
+  display: none;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] td:empty {
+  display: none;
+}
+
+
+/* Una tabla del sitio público que se apila en el teléfono, con las etiquetas
+   puestas en el código (`data-label`). */
+@media (max-width: 639px) {
+  table.tabla-apilable,
+  table.tabla-apilable :is(tbody, tr) {
+    display: block;
+  }
+  table.tabla-apilable thead {
+    display: none;
+  }
+  table.tabla-apilable tr {
+    padding: 10px 16px;
+  }
+  table.tabla-apilable td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0 !important;
+    text-align: right;
+  }
+  table.tabla-apilable td[data-label]::before {
+    content: attr(data-label);
+    text-align: left;
+    color: var(--texto-3, #8a8178);
+  }
+  table.tabla-apilable td:first-child {
+    font-weight: 600;
+    text-align: left;
+  }
+}

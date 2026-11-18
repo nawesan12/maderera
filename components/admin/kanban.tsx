@@ -14,12 +14,13 @@ import { claseDeFamilia } from "@/components/admin/etiqueta-estado";
  */
 export function Tablero({ children }: { children: React.ReactNode }) {
   return (
-    <div className="-mx-4 mt-[18px] overflow-x-auto px-4 pb-1.5 pt-0.5 lg:-mx-7 lg:px-7">
+    <div className="mt-[18px] pb-1.5 pt-0.5">
       {/*
-        En pantalla ancha las columnas se reparten el espacio; cuando no entran,
-        toman un ancho mínimo cómodo y el tablero scrollea en horizontal.
+        Las columnas se reparten el ancho y, cuando no entran, bajan a la fila
+        siguiente; en el teléfono quedan una abajo de la otra. Antes el tablero
+        se corría de costado, y en el celular eso era ver una columna y media.
       */}
-      <div className="grid auto-cols-[minmax(268px,1fr)] grid-flow-col items-start gap-3">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,268px),1fr))] items-start gap-3">
         {children}
       </div>
     </div>

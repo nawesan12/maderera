@@ -303,8 +303,11 @@ function TarjetaStock({
               </Link>
             </p>
           </div>
-          <p className="tabular shrink-0 text-right">
-            <span className="block text-xl font-semibold">{formatearCantidad(fila.total)}</span>
+          {/* Mono solo en el número: «total», «en camino» y la fecha van en la
+              letra del texto. En mono y sin encogerse le comían el ancho al
+              nombre, y la tarjeta de la bisagra se desarmaba. */}
+          <p className="shrink-0 text-right [font-variant-numeric:tabular-nums]">
+            <span className="tabular block text-xl font-semibold">{formatearCantidad(fila.total)}</span>
             <span className="block text-sm text-muted-foreground">total</span>
             {/* Lo pedido va acá arriba, al lado del número que se mira para
                 decidir si hay que reponer. Puesto en cualquier otro lado sería

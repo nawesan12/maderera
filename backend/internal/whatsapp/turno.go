@@ -48,6 +48,9 @@ const (
 	textoNoVisible    = "No pude ver ese mensaje. ¿Me lo escribís?"
 	textoCerrado      = "Ahora estamos cerrados: te contestamos %s."
 	ventanaRepeticion = 12 * time.Hour
+	// esperaAudio es cuánto se espera a que un audio tenga texto: el plazo
+	// de su transcripción (lanzarAudio). Pasado eso, se da por perdido.
+	esperaAudio = 6 * time.Minute
 )
 
 type cargaTurno struct {
@@ -173,19 +176,23 @@ func (s *Servicio) atenderTurno(ctx context.Context, convID, waJid string) error
 	if s.rafaga > 0 {
 		// ¿Sigue escribiendo? Lo último que llegó todavía no cumplió la
 		// espera: el turno se corre. ¿Hay un audio transcribiéndose? Lo
-		// contesta su turno, cuando termine.
-		var falta float64
-		var audioPendiente bool
+		// contesta su turno, cuando termine; y si no termina nunca (la
+		// descarga o whisper fallaron sin avisar, el proceso se reinició a
+		// mitad), este mismo turno vuelve cuando el audio se da por perdido:
+		// lo demás que mandó no puede quedar sin respuesta.
+		var falta, faltaAudio float64
 		if err := s.pool.QueryRow(ctx, `
 			select coalesce(extract(epoch from max(created_at) + make_interval(secs => $2) - now()), 0)::float8,
-				coalesce(bool_or(tipo = 'audio' and datos->>'transcripcion' is null and coalesce(datos->>'audio', '') <> 'fallido'
-					and created_at > now() - interval '6 minutes'), false)
+				coalesce(extract(epoch from max(created_at) filter (where tipo = 'audio' and datos->>'transcripcion' is null
+					and coalesce(datos->>'audio', '') <> 'fallido') + make_interval(secs => $3) - now()), 0)::float8
 			  from whatsapp_mensajes where conversacion_id = $1 and direccion = 'entrante' and coalesce(datos->>'bot', '') = ''`,
-			convID, s.rafaga.Seconds()).Scan(&falta, &audioPendiente); err != nil {
+			convID, s.rafaga.Seconds(), esperaAudio.Seconds()).Scan(&falta, &faltaAudio); err != nil {
 			return err
 		}
-		if audioPendiente {
-			return nil
+		if faltaAudio > 0 {
+			_, err := cola.Encolar(ctx, s.q, TrabajoTurno, cargaTurno{convID, waJid},
+				s.ahora().Add(time.Duration(faltaAudio*float64(time.Second))+time.Second))
+			return err
 		}
 		if falta > 0 {
 			_, err := cola.Encolar(ctx, s.q, TrabajoTurno, cargaTurno{convID, waJid},
@@ -208,7 +215,35 @@ func (s *Servicio) atenderTurno(ctx context.Context, convID, waJid string) error
 	if err != nil || len(entrantes) == 0 {
 		return err
 	}
+	intentado, err := s.contestarTurno(ctx, convID, waJid, est, entrantes)
+	if err != nil && !intentado {
+		// No salió nada: los mensajes vuelven a quedar sin ver, y el reintento
+		// de la cola los contesta. Si ni eso se puede (la base no anda), que
+		// lo sepa una persona; si la cola agota los intentos, también avisa.
+		if e := s.devolverEntrantes(ctx, entrantes); e != nil {
+			s.log.Error("whatsapp: no se pudieron devolver los mensajes al bot", "error", e, "conversacion", convID)
+			s.avisar(ctx, push.Aviso{Titulo: "WhatsApp: el bot no pudo contestar", Cuerpo: "Falló la base al armar la respuesta. Contestale vos.",
+				URL: "/admin/whatsapp?chat=" + convID, Etiqueta: "whatsapp-" + convID, Pantalla: "/admin/whatsapp"})
+		}
+	}
+	return err
+}
 
+// devolverEntrantes les saca la marca del bot a los mensajes de un turno que
+// no llegó a mandar nada.
+func (s *Servicio) devolverEntrantes(ctx context.Context, entrantes []entranteDelTurno) error {
+	ids := make([]string, len(entrantes))
+	for i, e := range entrantes {
+		ids[i] = e.id
+	}
+	_, err := s.pool.Exec(context.WithoutCancel(ctx), `update whatsapp_mensajes set datos = datos - 'bot' where id = any($1::uuid[])`, ids)
+	return err
+}
+
+// contestarTurno arma la respuesta a los entrantes tomados y la manda.
+// intentado: ya se le pidió a Meta; desde ahí, un error no devuelve los
+// mensajes (el reintento podría mandar la respuesta dos veces).
+func (s *Servicio) contestarTurno(ctx context.Context, convID, waJid string, est *estadoParaElBot, entrantes []entranteDelTurno) (intentado bool, err error) {
 	uso, err := s.UsoDelMes(ctx, s.ahora())
 	if err != nil {
 		s.log.Warn("whatsapp: no se pudo contar el uso del mes", "error", err)
@@ -216,7 +251,7 @@ func (s *Servicio) atenderTurno(ctx context.Context, convID, waJid string) error
 	d := DatosBot{Ahora: s.ahora(), Sitio: s.cfg.URLBase, NumeroHumano: est.ajustes.numeroHumano, StockVisible: est.ajustes.stockVisible, Ahorro: uso.Ahorro}
 	recientes, err := s.textosRecientesDelBot(ctx, convID)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	estado := est.EstadoBot
@@ -238,9 +273,9 @@ func (s *Servicio) atenderTurno(ctx context.Context, convID, waJid string) error
 			if EsPedidoDeBaja(texto) || EsPedidoDeAlta(texto) || esEco(texto, recientes) {
 				continue
 			}
-			p, err := s.resolverTexto(ctx, convID, waJid, texto, estado, d)
+			p, err := s.resolverTexto(ctx, convID, waJid, m.id, texto, estado, d)
 			if err != nil {
-				return err
+				return false, err
 			}
 			if p.aviso != nil {
 				avisos = append(avisos, *p.aviso)
@@ -284,24 +319,34 @@ func (s *Servicio) atenderTurno(ctx context.Context, convID, waJid string) error
 	texto := cortarJS(strings.Join(partes, "\n\n"), 4000)
 	derivada := t.Derivar || pasaAPersona
 
+	// noSalio: la respuesta no llegó y no se va a reintentar sola.
+	var noSalio *ErrorDeEnvio
 	if texto != "" {
 		// Primero se manda; el estado se guarda solo si salió (o si sale en
-		// un reintento). Si Meta lo rechaza del todo, la conversación no queda
-		// derivada sin que el cliente lo sepa.
+		// un reintento).
 		envio, err := s.EnviarYRegistrar(ctx, Envio{ConversacionID: convID, WaJid: waJid, Mensaje: Saliente{Tipo: "texto", Cuerpo: texto},
 			Registro: Registro{Cuerpo: texto}, Origen: "bot"})
 		if err != nil {
-			return err
+			return envio.Intentado, err
 		}
+		intentado = true
 		if envio.Error != nil {
 			s.log.Warn("la respuesta del bot no salió", "conversacion", convID, "error", envio.Error.Texto)
-			if envio.Error.Accion != AccionReintentar || envio.MensajeID == "" {
-				return nil
-			}
-			if err := s.encolarReenvio(ctx, envio.MensajeID, 1); err != nil {
-				return err
+			noSalio = envio.Error
+			if reintentable(envio.Error) && envio.MensajeID != "" {
+				if err := s.encolarReenvio(ctx, envio.MensajeID, 1); err != nil {
+					s.log.Error("whatsapp: no se pudo encolar el reintento", "error", err, "conversacion", convID)
+				} else {
+					noSalio = nil
+				}
 			}
 		}
+	}
+	if noSalio != nil {
+		// Meta lo rechazó del todo, se llegó al tope o no se sabe si salió:
+		// el cliente no tiene respuesta del bot, y la conversación pasa a una
+		// persona, que se entera por el aviso.
+		derivada = true
 	}
 	if derivada {
 		_, err = s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_fallos = 0, bot_pendiente = null where id = $1`, convID)
@@ -319,20 +364,23 @@ func (s *Servicio) atenderTurno(ctx context.Context, convID, waJid string) error
 		_, err = s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_fallos = $2, bot_consulta = $3, bot_pendiente = $4::jsonb where id = $1`, convID, t.Estado.Fallos, c, p)
 	}
 	if err != nil {
-		return err
+		return intentado, err
 	}
-	if cerrado && derivada && texto != "" {
+	if cerrado && derivada && texto != "" && noSalio == nil {
 		// Ya sabe que estamos cerrados: el aviso de cerrado no se repite.
 		if a, _ := aperturaSiguiente(d.Ahora); !a.IsZero() {
 			if _, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_cerrado_hasta = $2 where id = $1`, convID, a); err != nil {
-				return err
+				return intentado, err
 			}
 		}
 	}
 	for _, a := range avisos {
 		s.avisar(ctx, a)
 	}
-	if derivada {
+	switch {
+	case noSalio != nil:
+		s.avisar(ctx, avisoNoSalio(convID, noSalio))
+	case derivada:
 		cuerpo := cortarJS(strings.Join(textos, " · "), 140)
 		if cuerpo == "" {
 			cuerpo = "Mandó un archivo para que lo mire alguien."
@@ -340,22 +388,50 @@ func (s *Servicio) atenderTurno(ctx context.Context, convID, waJid string) error
 		s.avisar(ctx, push.Aviso{Titulo: "WhatsApp: pasa a una persona", Cuerpo: cuerpo,
 			URL: "/admin/whatsapp?chat=" + convID, Etiqueta: "whatsapp-" + convID, Pantalla: "/admin/whatsapp"})
 	}
+	return intentado, nil
+}
+
+// reintentable: un problema pasajero de Meta, con la seguridad de que no
+// salió. Lo que quedó en duda (Incierto) no se reintenta solo.
+func reintentable(e *ErrorDeEnvio) bool {
+	return e.Accion == AccionReintentar && !e.Incierto
+}
+
+// avisoNoSalio es el aviso al personal de una respuesta del bot que no
+// llegó: el cliente escribió y nadie le contestó.
+func avisoNoSalio(convID string, e *ErrorDeEnvio) push.Aviso {
+	return push.Aviso{Titulo: "WhatsApp: el bot no pudo contestar", Cuerpo: cortarJS("Pasa a una persona. "+e.Texto, 200),
+		URL: "/admin/whatsapp?chat=" + convID, Etiqueta: "whatsapp-" + convID, Pantalla: "/admin/whatsapp"}
+}
+
+// botNoPudoContestar deriva la conversación y avisa: una respuesta del bot
+// que no salió y ya no se reintenta (rechazo, reintentos agotados, tope).
+func (s *Servicio) botNoPudoContestar(ctx context.Context, convID string, e *ErrorDeEnvio) error {
+	if _, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_fallos = 0, bot_pendiente = null where id = $1`, convID); err != nil {
+		return err
+	}
+	s.avisar(ctx, avisoNoSalio(convID, e))
 	return nil
 }
 
 // tomarEntrantes marca y devuelve lo que el bot no vio: de la última hora
 // (un mensaje viejo es Meta reintentando tarde), posterior a lo último que
 // escribió una persona (lo anterior ya lo atendió ella) y sin los audios que
-// todavía se están transcribiendo.
+// todavía se están transcribiendo o bajando. Un audio que pasó esperaAudio
+// sin texto y sin descarga en curso se da por perdido: entra como «no pude
+// escucharlo», y no queda afuera para siempre.
 func (s *Servicio) tomarEntrantes(ctx context.Context, convID string) ([]entranteDelTurno, error) {
 	filas, err := s.pool.Query(ctx, `
 		update whatsapp_mensajes m set datos = coalesce(m.datos, '{}'::jsonb) || '{"bot": true}'::jsonb
+		       || case when m.tipo = 'audio' and m.datos->>'transcripcion' is null then '{"audio": "fallido"}'::jsonb else '{}'::jsonb end
 		 where m.conversacion_id = $1 and m.direccion = 'entrante' and coalesce(m.datos->>'bot', '') = ''
 		   and m.ocurrido_at > now() - interval '1 hour'
 		   and m.ocurrido_at > coalesce((select max(o.ocurrido_at) from whatsapp_mensajes o where o.conversacion_id = $1
 		       and o.direccion = 'saliente' and coalesce(o.origen, '') in ('panel', 'telefono', 'aviso')), '-infinity'::timestamptz)
-		   and not (m.tipo = 'audio' and m.datos->>'transcripcion' is null and coalesce(m.datos->>'audio', '') <> 'fallido')
-		returning m.id, m.tipo, coalesce(m.cuerpo, ''), m.datos->>'transcripcion', coalesce(m.datos->>'audio', '') = 'fallido', m.ocurrido_at`, convID)
+		   and not (m.tipo = 'audio' and m.datos->>'transcripcion' is null and coalesce(m.datos->>'audio', '') <> 'fallido'
+		       and (m.created_at > now() - make_interval(secs => $2) or coalesce(m.media_estado, '') = 'pendiente'))
+		returning m.id, m.tipo, coalesce(m.cuerpo, ''), m.datos->>'transcripcion', coalesce(m.datos->>'audio', '') = 'fallido', m.ocurrido_at`,
+		convID, esperaAudio.Seconds())
 	if err != nil {
 		return nil, err
 	}
@@ -439,6 +515,10 @@ func (s *Servicio) avisarCerrado(ctx context.Context, convID, waJid string) erro
 	if u, err := s.UsoDelMes(ctx, ahora); err != nil || u.Ahorro {
 		return err
 	}
+	// El tope en dólares también: el aviso es una cortesía, no se paga de más.
+	if s.TopeAlcanzado(ctx) {
+		return nil
+	}
 	var textos []string
 	var personaHablando bool
 	if err := s.pool.QueryRow(ctx, `
@@ -486,8 +566,11 @@ func (s *Servicio) encolarReenvio(ctx context.Context, mensajeID string, intento
 }
 
 // reenviar vuelve a mandar una respuesta del bot sobre la misma fila (nunca
-// otra burbuja): solo si sigue fallida, es de la última hora y no se llegó al
-// tope. Si ya salió —la reintentó alguien desde la bandeja—, no hace nada.
+// otra burbuja): solo si sigue fallida y es de la última hora. Si ya salió
+// —la reintentó alguien desde la bandeja—, o la está reintentando, no hace
+// nada. Si no sale y no se va a volver a intentar (el tope, un rechazo, los
+// reintentos agotados, la duda de si salió), la conversación pasa a una
+// persona y se avisa: el cliente escribió y nadie le contestó.
 func (s *Servicio) reenviar(ctx context.Context, c cargaReenvio) error {
 	var convID, jid, cuerpo string
 	var datos []byte
@@ -501,9 +584,6 @@ func (s *Servicio) reenviar(ctx context.Context, c cargaReenvio) error {
 	if err != nil {
 		return err
 	}
-	if s.TopeAlcanzado(ctx) {
-		return nil
-	}
 	var d struct {
 		Envio *Saliente `json:"envio"`
 	}
@@ -512,15 +592,16 @@ func (s *Servicio) reenviar(ctx context.Context, c cargaReenvio) error {
 	if d.Envio != nil && d.Envio.Tipo != "" {
 		mensaje = *d.Envio
 	}
+	// El tope lo mira EnviarYRegistrar, con la fila reservada.
 	r, err := s.EnviarYRegistrar(ctx, Envio{ConversacionID: convID, WaJid: jid, Mensaje: mensaje, Registro: Registro{Cuerpo: cuerpo},
 		Origen: "bot", ReintentoDe: &c.MensajeID})
-	if err != nil {
+	if err != nil || r.YaTomado || r.Error == nil {
 		return err
 	}
-	if r.Error != nil && r.Error.Accion == AccionReintentar && c.Intento < MaxReenvios {
+	if reintentable(r.Error) && c.Intento < MaxReenvios {
 		return s.encolarReenvio(ctx, c.MensajeID, c.Intento+1)
 	}
-	return nil
+	return s.botNoPudoContestar(ctx, convID, r.Error)
 }
 
 // marcarAudioSinTexto deja el audio como «no se pudo escuchar» y pide turno:

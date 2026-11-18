@@ -113,7 +113,14 @@ func (s *Servicio) GastoDelMes(ctx context.Context, ahora time.Time) (GastoDelMe
 // dólares o el de cantidad de mensajes (uso.go). Ante la duda (la base no
 // contesta), no.
 func (s *Servicio) TopeAlcanzado(ctx context.Context) bool {
-	if u, err := s.UsoDelMes(ctx, s.ahora()); err == nil && u.Alcanzado {
+	return s.topeAlcanzadoCon(ctx, s.pool)
+}
+
+// topeAlcanzadoCon cuenta los mensajes con `q` (la transacción que reserva
+// el envío). El gasto en dólares sale de lo que Meta ya cobró o de lo que
+// salió: lo pendiente no suma, y no hace falta contarlo adentro.
+func (s *Servicio) topeAlcanzadoCon(ctx context.Context, q consultor) bool {
+	if u, err := s.usoDelMesCon(ctx, q, s.ahora()); err == nil && u.Alcanzado {
 		return true
 	}
 	g, err := s.GastoDelMes(ctx, s.ahora())

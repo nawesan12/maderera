@@ -63,6 +63,21 @@ func (s *Servicio) encolarAudioReintentado(ctx context.Context, mensajeID string
 	return s.encolarAudio(ctx, &EntranteGuardado{MensajeID: mensajeID, ConversacionID: convID}, jid)
 }
 
+// audioNoBajado: un audio cuya descarga se dio por perdida. Lo deja como «no
+// se pudo escuchar» y pide turno.
+func (s *Servicio) audioNoBajado(ctx context.Context, mensajeID string) error {
+	var tipo, convID, jid string
+	err := s.pool.QueryRow(ctx, `select coalesce(m.media_tipo::text, m.tipo), c.id, c.wa_jid from whatsapp_mensajes m
+		join whatsapp_conversaciones c on c.id = m.conversacion_id where m.id = $1 and m.direccion = 'entrante'`, mensajeID).Scan(&tipo, &convID, &jid)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && tipo != "audio") {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return s.marcarAudioSinTexto(ctx, mensajeID, convID, jid)
+}
+
 // transcripciones es de a una: la VPS tiene dos núcleos y whisper ya usa los
 // dos. La segunda nota de voz espera a la primera.
 var transcripciones = make(chan struct{}, 1)
@@ -70,12 +85,13 @@ var transcripciones = make(chan struct{}, 1)
 // lanzarAudio es el trabajo de la cola: la transcripción corre aparte, con
 // su propio plazo, así un audio largo no frena los demás trabajos de la
 // pasada (las respuestas del bot, los avisos, los correos). Si el worker se
-// reinicia en medio, ese audio queda sin contestar y lo ve una persona.
+// reinicia en medio, el turno que espera al audio lo da por perdido a los
+// esperaAudio y contesta lo demás con el «no pude escucharlo».
 func (s *Servicio) lanzarAudio(c cargaAudio) {
 	go func() {
 		transcripciones <- struct{}{}
 		defer func() { <-transcripciones }()
-		ctx, cancelar := context.WithTimeout(context.Background(), 6*time.Minute)
+		ctx, cancelar := context.WithTimeout(context.Background(), esperaAudio)
 		defer cancelar()
 		if err := s.atenderAudio(ctx, c); err != nil {
 			s.log.Error("el audio de WhatsApp no se pudo atender", "error", err, "mensaje", c.MensajeID)

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -37,6 +38,11 @@ type ErrorDeEnvio struct {
 	Texto   string   `json:"texto"`
 	Accion  string   `json:"accion"`
 	Detalle *string  `json:"detalle"`
+	// Incierto: el pedido salió y Meta no contestó (se cortó o venció el
+	// plazo). Puede haberlo mandado igual, y no hay wamid para conciliarlo
+	// con el estado del webhook: reintentarlo solo es arriesgar mandarlo dos
+	// veces, y cada mensaje se paga. Lo decide una persona.
+	Incierto bool `json:"-"`
 }
 
 // PlantillaRemota es una plantilla como la devuelve Meta.
@@ -160,6 +166,20 @@ type errorGraph struct {
 	codigo  *float64
 	mensaje string
 	detalle *string
+	// incierto: el pedido pudo haber llegado a Meta (ver ErrorDeEnvio).
+	incierto bool
+}
+
+// noLlegoAMeta: el error es de antes de mandar el pedido (no se pudo
+// resolver el nombre o abrir la conexión). Cualquier otro —un plazo vencido,
+// una conexión cortada a mitad— deja la duda de si Meta lo recibió.
+func noLlegoAMeta(err error) bool {
+	var op *net.OpError
+	if errors.As(err, &op) && op.Op == "dial" {
+		return true
+	}
+	var dns *net.DNSError
+	return errors.As(err, &dns)
 }
 
 // graph es un pedido a la Graph API. Nunca falla para afuera: el error vuelve
@@ -181,7 +201,7 @@ func (c *Cloud) graph(ctx context.Context, metodo, ruta string, cuerpo io.Reader
 		if errors.Is(err, context.DeadlineExceeded) {
 			m = "Meta no respondió a tiempo."
 		}
-		return &errorGraph{mensaje: m, detalle: ptr(err.Error())}
+		return &errorGraph{mensaje: m, detalle: ptr(err.Error()), incierto: !noLlegoAMeta(err)}
 	}
 	defer res.Body.Close()
 	crudo, _ := io.ReadAll(io.LimitReader(res.Body, 8<<20))
@@ -223,6 +243,16 @@ var reSinRespuesta = regexp.MustCompile(`responder|conectar`)
 func errorDeEnvio(e *errorGraph) *ErrorDeEnvio {
 	if e == nil {
 		return &ErrorDeEnvio{Texto: "No se pudo enviar.", Accion: AccionReintentar}
+	}
+	if e.codigo == nil && e.incierto {
+		// «Meta no respondió a tiempo» o una conexión cortada: sin código, y
+		// sin saber si salió.
+		d := e.mensaje
+		if e.detalle != nil {
+			d = *e.detalle
+		}
+		return &ErrorDeEnvio{Texto: "WhatsApp no respondió y puede que el mensaje haya salido igual: fijate en el teléfono antes de volver a probar.",
+			Accion: AccionReintentar, Detalle: &d, Incierto: true}
 	}
 	if e.codigo == nil && reSinRespuesta.MatchString(e.mensaje) {
 		d := e.mensaje
@@ -300,6 +330,10 @@ func (c *Cloud) SubirMedia(ctx context.Context, contenido []byte, mime, nombre s
 	}
 	e := c.graph(ctx, http.MethodPost, c.cfg.PhoneNumberID+"/media", &b, w.FormDataContentType(), timeoutMedia, &r)
 	if e != nil || r.ID == "" {
+		if e != nil {
+			// Subir de nuevo un archivo no le manda nada a nadie: no hay duda.
+			e.incierto = false
+		}
 		return "", errorDeEnvio(e)
 	}
 	return r.ID, nil

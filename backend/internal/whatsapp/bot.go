@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"mjbj/internal/asistente"
 	"mjbj/internal/numeracion"
@@ -687,8 +688,10 @@ type parteDelTurno struct {
 
 // resolverTexto decide la respuesta a un texto con todo lo que hace falta: el
 // catálogo, las zonas de envío, el corte guardado y el presupuesto armado.
-// No manda nada.
-func (s *Servicio) resolverTexto(ctx context.Context, convID, waJid, texto string, est EstadoBot, d DatosBot) (parteDelTurno, error) {
+// No manda nada. entranteID es el mensaje que lo pidió: lo que se crea (el
+// corte, el presupuesto) queda anotado ahí, y si el turno se reintenta no se
+// crea otra vez.
+func (s *Servicio) resolverTexto(ctx context.Context, convID, waJid, entranteID, texto string, est EstadoBot, d DatosBot) (parteDelTurno, error) {
 	var p parteDelTurno
 	r := Responder(texto, est, d, false)
 	if r.Entendio == asistente.Envios {
@@ -706,16 +709,30 @@ func (s *Servicio) resolverTexto(ctx context.Context, convID, waJid, texto strin
 		r = Responder(texto, est, d, true)
 	}
 	if r.Cortar != nil && s.cortar != nil {
-		texto, aviso, err := s.consultaDeCorte(ctx, convID, *r.Cortar, d.Sitio, r.Texto)
+		hecho, err := s.yaCreado(ctx, entranteID, "botCorte")
 		if err != nil {
-			s.log.Warn("el bot no pudo guardar el corte", "error", err)
-		} else {
-			r.Texto, p.aviso = texto, aviso
-			p.pasaAPersona = aviso != nil
+			return p, err
+		}
+		if hecho == nil {
+			texto, aviso, err := s.consultaDeCorte(ctx, convID, *r.Cortar, d.Sitio, r.Texto)
+			if err != nil {
+				s.log.Warn("el bot no pudo guardar el corte", "error", err)
+			} else {
+				hecho = &creadoPorElBot{Texto: texto, Aviso: aviso}
+				if aviso != nil {
+					if err := s.anotarCreado(ctx, s.pool, entranteID, "botCorte", *hecho); err != nil {
+						s.log.Warn("el bot no pudo anotar el corte", "error", err)
+					}
+				}
+			}
+		}
+		if hecho != nil {
+			r.Texto, p.aviso = hecho.Texto, hecho.Aviso
+			p.pasaAPersona = hecho.Aviso != nil
 		}
 	}
 	if r.Presupuestar != nil {
-		texto, consulta, aviso, err := s.presupuestar(ctx, convID, waJid, *r.Presupuestar)
+		texto, consulta, aviso, err := s.presupuestar(ctx, convID, waJid, entranteID, *r.Presupuestar)
 		if err != nil {
 			return p, err
 		}
@@ -740,13 +757,61 @@ func (s *Servicio) ReactivarBot(ctx context.Context, convID string) error {
 	return err
 }
 
+// creadoPorElBot es lo que el bot creó a partir de un mensaje (un corte, un
+// presupuesto), anotado en ese mensaje: si el turno falla antes de contestar
+// y se reintenta, se contesta lo mismo sin crearlo de nuevo.
+type creadoPorElBot struct {
+	Texto string      `json:"texto"`
+	Aviso *push.Aviso `json:"aviso"`
+}
+
+// yaCreado lee lo anotado en el entrante bajo `clave`, si hay.
+func (s *Servicio) yaCreado(ctx context.Context, entranteID, clave string) (*creadoPorElBot, error) {
+	if entranteID == "" {
+		return nil, nil
+	}
+	var crudo []byte
+	err := s.pool.QueryRow(ctx, `select datos->$2 from whatsapp_mensajes where id = $1`, entranteID, clave).Scan(&crudo)
+	if errors.Is(err, pgx.ErrNoRows) || len(crudo) == 0 || string(crudo) == "null" {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var c creadoPorElBot
+	if err := json.Unmarshal(crudo, &c); err != nil || c.Texto == "" {
+		return nil, nil
+	}
+	return &c, nil
+}
+
+// anotarCreado guarda en el entrante lo que se creó por él.
+func (s *Servicio) anotarCreado(ctx context.Context, q interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}, entranteID, clave string, c creadoPorElBot) error {
+	if entranteID == "" {
+		return nil
+	}
+	b, _ := json.Marshal(c)
+	_, err := q.Exec(ctx, `update whatsapp_mensajes set datos = coalesce(datos, '{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb) where id = $1`,
+		entranteID, clave, string(b))
+	return err
+}
+
 // presupuestar elige la medida y arma el presupuesto en revisión. Devuelve:
-//   - el texto y el aviso, si lo armó;
+//   - el texto y el aviso, si lo armó (o si ya lo había armado por este
+//     mismo mensaje, en un turno que no llegó a contestar);
 //   - solo el texto (y la consulta para seguir) si falta saber la medida;
 //   - nada, si no se puede: sin ficha o sin precio, lo ve una persona.
-func (s *Servicio) presupuestar(ctx context.Context, convID, waJid string, p Presupuestar) (string, string, *push.Aviso, error) {
+func (s *Servicio) presupuestar(ctx context.Context, convID, waJid, entranteID string, p Presupuestar) (string, string, *push.Aviso, error) {
 	if s.ficha == nil {
 		return "", "", nil, nil
+	}
+	if hecho, err := s.yaCreado(ctx, entranteID, "botPresupuesto"); err != nil || hecho != nil {
+		if err != nil {
+			return "", "", nil, err
+		}
+		return hecho.Texto, "", hecho.Aviso, nil
 	}
 	f, err := s.ficha(ctx, p.Slug)
 	if err != nil || f == nil {
@@ -819,13 +884,18 @@ func (s *Servicio) presupuestar(ctx context.Context, convID, waJid string, p Pre
 		id, variante, descripcion, f.Unidad, p.Cantidad, v.Precio); err != nil {
 		return "", "", nil, err
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return "", "", nil, err
-	}
 	cant := strconv.FormatFloat(p.Cantidad, 'f', -1, 64)
 	texto := fmt.Sprintf("Listo: te armo el presupuesto de *%s × %s*. Una persona lo revisa y te lo manda por acá en un rato.", cant, descripcion)
 	aviso := &push.Aviso{Titulo: "Presupuesto " + numero + " por WhatsApp", Cuerpo: nombre + ": " + cant + " × " + descripcion + ". Revisalo y mandalo.",
 		URL: "/admin/presupuestos/" + id, Etiqueta: "presupuesto-" + id, Pantalla: "/admin/presupuestos"}
+	// En la misma transacción: o queda el presupuesto y la anotación, o
+	// ninguno de los dos.
+	if err := s.anotarCreado(ctx, tx, entranteID, "botPresupuesto", creadoPorElBot{Texto: texto, Aviso: aviso}); err != nil {
+		return "", "", nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", "", nil, err
+	}
 	return texto, "", aviso, nil
 }
 

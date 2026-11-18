@@ -248,7 +248,8 @@ func (s *Servicio) avisarPorWhatsapp(ctx context.Context, o OpcionesAviso) (Resu
 		media = &MediaRegistro{Referencia: ref, Tipo: "document", Mime: "application/pdf", Nombre: ptr(o.Documento.Nombre), Bytes: &n, MediaID: &id}
 	}
 
-	envio := Envio{ConversacionID: conv.ID, WaJid: waJid, Origen: "aviso", EnviadoPor: o.UsuarioID}
+	// Forzado, sale aunque se haya llegado al tope (como el chequeo de arriba).
+	envio := Envio{ConversacionID: conv.ID, WaJid: waJid, Origen: "aviso", EnviadoPor: o.UsuarioID, ConfirmarTope: o.Forzar}
 	if d.Como == "texto" {
 		cuerpo := Completar(*aviso.textoLibre, valores)
 		if media != nil {
@@ -269,6 +270,10 @@ func (s *Servicio) avisarPorWhatsapp(ctx context.Context, o OpcionesAviso) (Resu
 	res, err := s.EnviarYRegistrar(ctx, envio)
 	if err != nil {
 		return ResultadoAviso{}, err
+	}
+	if res.Error != nil && res.Error.Accion == AccionTope {
+		// Otro envío llegó al tope entre el chequeo de arriba y este.
+		return registrar("omitida", MotivoTope, waJid, "")
 	}
 	if res.Error != nil {
 		return registrar("fallida", res.Error.Texto, waJid, res.WaMessageID)

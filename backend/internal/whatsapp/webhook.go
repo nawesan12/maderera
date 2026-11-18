@@ -342,6 +342,15 @@ func (s *Servicio) DescargarMedio(ctx context.Context, mensajeID string, intento
 			}
 			return "pendiente", nil
 		}
+		// La descarga de un audio se dio por perdida en un reintento de la
+		// cola: nadie más lo va a marcar, y el bot tiene que pedir que lo
+		// escriban. (En el primer intento lo marca AtenderEntrante; el botón
+		// de la bandeja, intento 99, no le habla al cliente.)
+		if intento > 0 && intento < 99 {
+			if err := s.audioNoBajado(ctx, mensajeID); err != nil {
+				return "", err
+			}
+		}
 		return "fallido", nil
 	}
 	m := mimeBajado

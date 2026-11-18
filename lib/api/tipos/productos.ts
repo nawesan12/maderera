@@ -285,6 +285,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/productos-marcas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MarcasDeProductos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/etiquetas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DatosDeEtiquetas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/productos-atributos": {
         parameters: {
             query?: never;
@@ -384,6 +416,14 @@ export interface components {
                 /** @description El stock que mostraba la ficha al abrirse. Si viene, el cambio se aplica por diferencia; si no cambió, el físico no se toca. */
                 stockCentralVisto?: string;
                 stockAserraderoVisto?: string;
+                /** @description El stock de cada sucursal, por id de la base. Si viene, manda sobre stockCentral y compañía (el formato viejo). */
+                stocks?: {
+                    sucursal: string;
+                    stock?: string;
+                    minimo?: string;
+                    /** @description El stock que mostraba la ficha al abrirse */
+                    visto?: string;
+                }[];
             }[];
         };
         Ficha: {
@@ -432,15 +472,40 @@ export interface components {
                 codigoBarras: string;
                 precioGeneral: string;
                 precioProfesional: string;
-                /** Format: double */
-                stockCentral: number;
-                /** Format: double */
-                stockAserradero: number;
-                /** Format: double */
-                minCentral: number;
-                /** Format: double */
-                minAserradero: number;
+                /** @description Una por cada sucursal activa, en el orden de sucursales */
+                stocks: {
+                    sucursal: string;
+                    /** Format: double */
+                    stock: number;
+                    /** Format: double */
+                    minimo: number;
+                }[];
             }[];
+            sucursales: components["schemas"]["SucursalDeFicha"][];
+        };
+        Etiqueta: {
+            variantId: string;
+            productId: string;
+            nombre: string;
+            nombreCorto: string;
+            medida: string;
+            sku: string;
+            /** @description El código de barras de la medida o */
+            codigo: string;
+            /** @description El de la lista general; solo si se pidió y es mayor que cero */
+            precio: string | null;
+            /** @description Null si el código no se puede dibujar (letras fuera de ASCII) */
+            barras: {
+                /** @enum {string} */
+                tipo: "ean13" | "code128";
+                /** @description Un carácter por módulo */
+                modulos: string;
+            } | null;
+        };
+        SucursalDeFicha: {
+            id: string;
+            slug: string;
+            nombre: string;
         };
         Sugerido: {
             id: string;
@@ -489,6 +554,11 @@ export interface operations {
             query?: {
                 busqueda?: string;
                 categoria?: string;
+                estado?: "todos" | "sin-foto" | "sin-precio" | "sin-stock" | "ocultos";
+                marca?: string;
+                proveedor?: string;
+                limite?: number;
+                desplazamiento?: number;
             };
             header?: never;
             path?: never;
@@ -496,13 +566,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Todos, los últimos tocados primero */
+            /** @description Una página, los últimos tocados primero, con el total del filtro y los conteos de cada estado */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductoAdmin"][];
+                    "application/json": {
+                        filas: components["schemas"]["ProductoAdmin"][];
+                        total: number;
+                        conteos: {
+                            todos: number;
+                            sinFoto: number;
+                            sinPrecio: number;
+                            sinStock: number;
+                            ocultos: number;
+                        };
+                    };
                 };
             };
         };
@@ -1059,6 +1139,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+        };
+    };
+    MarcasDeProductos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las marcas cargadas, una vez cada una, para filtrar los listados */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+        };
+    };
+    DatosDeEtiquetas: {
+        parameters: {
+            query?: {
+                /** @description Ids de medidas separados por coma */
+                medidas?: string;
+                /** @description Ids de productos separados por coma; suma todas sus medidas activas */
+                productos?: string;
+                precio?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lo que va en cada etiqueta, en el orden pedido, con el código de barras ya armado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Etiqueta"][];
                 };
             };
         };

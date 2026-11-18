@@ -12,6 +12,7 @@ import (
 
 	"mjbj/internal/api/productosapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/listado"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 )
@@ -75,6 +76,8 @@ func (o respuesta) VisitGuardarMesesSinVenderResponse(w http.ResponseWriter) err
 }
 func (o respuesta) VisitImputacionesUsadasResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitAtributosUsadosResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitMarcasDeProductosResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitDatosDeEtiquetasResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 
 // gestion es quien entra a /admin/productos (admin y vendedor).
 func gestion(ctx context.Context) (*auth.Sesion, error) {
@@ -112,7 +115,40 @@ func (a *API) ListarProductos(ctx context.Context, r productosapi.ListarProducto
 	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
-	v, err := a.s.Listar(ctx, texto(r.Params.Busqueda), texto(r.Params.Categoria))
+	f := listado.Filtros{Busqueda: texto(r.Params.Busqueda), Categoria: texto(r.Params.Categoria),
+		Marca: texto(r.Params.Marca), Proveedor: texto(r.Params.Proveedor),
+		Limite: entero(r.Params.Limite), Desde: entero(r.Params.Desplazamiento)}
+	if r.Params.Estado != nil {
+		f.Estado = string(*r.Params.Estado)
+	}
+	v, err := a.s.Listar(ctx, f)
+	return ok(v), err
+}
+
+func entero(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+// MarcasDeProductos las lee cualquiera que entre a Stock, como las categorías:
+// el filtro está en las tres pantallas.
+func (a *API) MarcasDeProductos(ctx context.Context, _ productosapi.MarcasDeProductosRequestObject) (productosapi.MarcasDeProductosResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/stock")...); err != nil {
+		return nil, err
+	}
+	v, err := a.s.Marcas(ctx)
+	return ok(v), err
+}
+
+// DatosDeEtiquetas es de quien entra a Stock (el depósito pega las
+// etiquetas), que incluye a quien entra a Productos.
+func (a *API) DatosDeEtiquetas(ctx context.Context, r productosapi.DatosDeEtiquetasRequestObject) (productosapi.DatosDeEtiquetasResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/stock")...); err != nil {
+		return nil, err
+	}
+	v, err := a.s.Etiquetas(ctx, texto(r.Params.Medidas), texto(r.Params.Productos), r.Params.Precio != nil && *r.Params.Precio)
 	return ok(v), err
 }
 

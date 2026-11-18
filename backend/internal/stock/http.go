@@ -9,6 +9,7 @@ import (
 
 	"mjbj/internal/api/stockapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/listado"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 )
@@ -67,7 +68,13 @@ func (a *API) GrillaDeStock(ctx context.Context, r stockapi.GrillaDeStockRequest
 	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
-	v, err := a.s.Listar(ctx, texto(r.Params.Busqueda), texto(r.Params.Categoria))
+	f := listado.Filtros{Busqueda: texto(r.Params.Busqueda), Categoria: texto(r.Params.Categoria),
+		Marca: texto(r.Params.Marca), Proveedor: texto(r.Params.Proveedor),
+		Limite: entero(r.Params.Limite, 0), Desde: entero(r.Params.Desplazamiento, 0)}
+	if r.Params.Estado != nil {
+		f.Estado = string(*r.Params.Estado)
+	}
+	v, err := a.s.Listar(ctx, f)
 	return ok(v), err
 }
 

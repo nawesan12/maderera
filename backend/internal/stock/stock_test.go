@@ -190,10 +190,12 @@ func TestGrillaYAjuste(t *testing.T) {
 	u := e.srv.URL + "/api/v1/admin/"
 
 	_, b := pedir(t, dep, "GET", u+"stock?busqueda=fenol", nil)
-	var g []FilaStock
-	_ = json.Unmarshal([]byte(b), &g)
+	var grilla GrillaDeStock
+	_ = json.Unmarshal([]byte(b), &grilla)
+	g := grilla.Filas
 	// En Casa Central hay 10 pero 7 reservados: disponible 3, mínimo 4 → bajo.
-	if len(g) != 1 || g[0].QtyCentral != 10 || g[0].ReservadoCentral != 7 || g[0].NivelCentral != "bajo" || g[0].NivelAserradero != "alto" || g[0].Total != 12 {
+	if len(g) != 1 || len(g[0].Sucursales) != 2 || g[0].Sucursales[0].Slug != "casa-central" || g[0].Sucursales[0].Qty != 10 ||
+		g[0].Sucursales[0].Reservado != 7 || g[0].Sucursales[0].Nivel != "bajo" || g[0].Sucursales[1].Nivel != "alto" || g[0].Total != 12 {
 		t.Fatalf("grilla: %s", b)
 	}
 	if _, b := pedir(t, dep, "GET", u+"stock/alertas", nil); !strings.Contains(b, `"branchName":"Casa Central"`) {
@@ -314,5 +316,82 @@ func TestMetricasDeSucursales(t *testing.T) {
 	// 22:30 del 10 en Argentina es el 11 en UTC: el día es el 10.
 	if d := InicioDelDia(time.Date(2026, 11, 11, 1, 30, 0, 0, time.UTC)); !d.Equal(time.Date(2026, 11, 10, 3, 0, 0, 0, time.UTC)) {
 		t.Errorf("inicio del día: %v", d.UTC())
+	}
+}
+
+// La grilla de a páginas: los conteos de cada grupo con el filtro puesto, el
+// grupo elegido en la consulta y una columna por sucursal activa de la base
+// (una tercera aparece sola; una dada de baja, no).
+func TestGrillaPaginadaYSucursalesDeLaBase(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	dep := e.staff(t, "deposito@prueba.test", "deposito")
+	u := e.srv.URL + "/api/v1/admin/stock"
+	var prod string
+	_ = e.pool.QueryRow(ctx, `select product_id from product_variants where id = $1`, e.placa).Scan(&prod)
+	// Doce medidas más del fenólico, sin stock.
+	for i := range 12 {
+		_, _ = e.pool.Exec(ctx, `insert into product_variants (product_id, sku, label, sort_order) values ($1, $2, $3, $4)`,
+			prod, "FENX"+string(rune('A'+i)), "x", i+1)
+	}
+	puerto := ""
+	_ = e.pool.QueryRow(ctx, `insert into branches (slug, name, sort_order) values ('puerto', 'Puerto', 3) returning id`).Scan(&puerto)
+	_, _ = e.pool.Exec(ctx, `insert into branches (slug, name, sort_order, active) values ('cerrada', 'Cerrada', 4, false)`)
+	// El tornillo tiene stock solo en la sucursal nueva.
+	_, _ = e.pool.Exec(ctx, `insert into inventory (variant_id, branch_id, qty) values ($1, $2, 5)`, e.tornillo, puerto)
+
+	leer := func(q string) GrillaDeStock {
+		t.Helper()
+		c, b := pedir(t, dep, "GET", u+q, nil)
+		if c != 200 {
+			t.Fatalf("%s: %d %s", q, c, b)
+		}
+		var g GrillaDeStock
+		_ = json.Unmarshal([]byte(b), &g)
+		return g
+	}
+	g := leer("?limite=5")
+	if g.Total != 14 || len(g.Filas) != 5 || g.Conteos != (ConteosDeStock{Todas: 14, SinStock: 12, Reponer: 1, ConStock: 1}) {
+		t.Fatalf("primera página: total %d, %d filas, %+v", g.Total, len(g.Filas), g.Conteos)
+	}
+	if len(g.Sucursales) != 3 || g.Sucursales[2].Slug != "puerto" || len(g.Filas[0].Sucursales) != 3 {
+		t.Errorf("sucursales: %+v", g.Sucursales)
+	}
+	// La última página trae lo que queda y no repite.
+	ultima := leer("?limite=5&desplazamiento=10")
+	if len(ultima.Filas) != 4 || ultima.Filas[0].VariantID == g.Filas[0].VariantID {
+		t.Errorf("última página: %d filas", len(ultima.Filas))
+	}
+	// Los grupos.
+	if r := leer("?estado=reponer"); r.Total != 1 || len(r.Filas) != 1 || r.Filas[0].VariantID != e.placa {
+		t.Errorf("reponer: %+v", r)
+	}
+	if r := leer("?estado=con-stock"); r.Total != 1 || r.Filas[0].VariantID != e.tornillo || r.Filas[0].Total != 5 || r.Filas[0].Sucursales[2].Qty != 5 {
+		t.Errorf("con stock: %+v", r)
+	}
+	if r := leer("?estado=sin-stock&busqueda=fenol"); r.Total != 12 || r.Conteos.Todas != 13 {
+		t.Errorf("sin stock con búsqueda: %d de %d", r.Total, r.Conteos.Todas)
+	}
+	// Marca y proveedor.
+	_, _ = e.pool.Exec(ctx, `update products set brand = 'Faplac' where id = $1`, prod)
+	if r := leer("?marca=faplac"); r.Total != 13 {
+		t.Errorf("por marca: %d", r.Total)
+	}
+	var prov string
+	_ = e.pool.QueryRow(ctx, `insert into suppliers (nombre) values ('Maderas Sur') returning id`).Scan(&prov)
+	_, _ = e.pool.Exec(ctx, `insert into supplier_variant_codes (supplier_id, variant_id, codigo) values ($1, $2, 'X1')`, prov, e.tornillo)
+	if r := leer("?proveedor=" + prov); r.Total != 1 || r.Filas[0].VariantID != e.tornillo {
+		t.Errorf("por proveedor: %+v", r)
+	}
+	if r := leer("?proveedor=no-es-un-id"); r.Total != 0 {
+		t.Errorf("proveedor inválido: %d", r.Total)
+	}
+	// El ajuste rápido anda en la sucursal nueva: antes solo aceptaba las dos
+	// escritas en el código.
+	if c, b := pedir(t, dep, "POST", e.srv.URL+"/api/v1/admin/stock/ajuste", map[string]any{"variantId": e.tornillo, "branchSlug": "puerto", "cantidad": 2}); c != 200 || !strings.Contains(b, "Puerto: 5 → 7") {
+		t.Errorf("ajuste en la sucursal nueva: %d %s", c, b)
+	}
+	if c, _ := pedir(t, dep, "POST", e.srv.URL+"/api/v1/admin/stock/ajuste", map[string]any{"variantId": e.tornillo, "branchSlug": "no-existe", "cantidad": 2}); c != 422 {
+		t.Errorf("ajuste en una sucursal que no existe: %d", c)
 	}
 }

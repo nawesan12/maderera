@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeftRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAccionDeDialogo } from "@/components/admin/usar-accion";
@@ -21,15 +21,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { transferirStock, type EstadoTransferencia } from "./actions";
+import { buscarMedidas, transferirStock, type EstadoTransferencia, type MedidaEncontrada } from "./actions";
 
 const estadoInicial: EstadoTransferencia = {};
 
 export function DialogoTransferencia({
-  variantes,
   sucursales,
 }: {
-  variantes: { id: string; texto: string }[];
   sucursales: { id: string; name: string }[];
 }) {
   const [abierto, setAbierto] = useState(false);
@@ -62,7 +60,7 @@ export function DialogoTransferencia({
           <input type="hidden" name="origenId" value={origen} />
           <input type="hidden" name="destinoId" value={destino} />
 
-          <BuscadorDeMedida variantes={variantes} elegida={variante} alElegir={setVariante} />
+          <BuscadorDeMedida elegida={variante} alElegir={setVariante} />
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -151,40 +149,58 @@ export function DialogoTransferencia({
 /**
  * Elegir la medida escribiendo parte del nombre o del código. Era un
  * desplegable con todo el catálogo, sin buscador: con miles de medidas no
- * había forma de encontrar una.
+ * había forma de encontrar una. Después fue un filtro sobre la lista entera
+ * que mandaba la página; ahora busca Go y vuelven las que coinciden.
  */
-function BuscadorDeMedida({
-  variantes,
+export function BuscadorDeMedida({
   elegida,
   alElegir,
+  id = "transferencia-buscar",
 }: {
-  variantes: { id: string; texto: string }[];
   elegida: string;
-  alElegir: (id: string) => void;
+  alElegir: (id: string, medida?: MedidaEncontrada) => void;
+  id?: string;
 }) {
   const [texto, setTexto] = useState("");
-  const actual = variantes.find((v) => v.id === elegida);
-  const palabras = texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(Boolean);
-  const encontradas =
-    palabras.length === 0
-      ? []
-      : variantes
-          .filter((v) => {
-            const t = v.texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            return palabras.every((p) => t.includes(p));
-          })
-          .slice(0, 8);
+  const [encontradas, setEncontradas] = useState<MedidaEncontrada[]>([]);
+  const [actual, setActual] = useState<MedidaEncontrada | null>(null);
+  const [buscado, setBuscado] = useState("");
 
-  if (actual) {
+  // El mismo retardo que los buscadores de las listas: una consulta por pausa,
+  // no por tecla. La respuesta vieja que llega tarde no pisa a la nueva.
+  useEffect(() => {
+    const t = texto.trim();
+    if (t.length < 2) return;
+    let vigente = true;
+    const reloj = setTimeout(() => {
+      buscarMedidas(t).then((r) => {
+        if (!vigente) return;
+        setEncontradas(r.slice(0, 8));
+        setBuscado(t);
+      });
+    }, 300);
+    return () => {
+      vigente = false;
+      clearTimeout(reloj);
+    };
+  }, [texto]);
+
+  const largo = texto.trim().length >= 2;
+  const visibles = largo ? encontradas : [];
+
+  if (elegida && actual) {
     return (
       <div className="space-y-2">
         <Label>Producto</Label>
         <div className="flex items-center justify-between gap-2 rounded-lg bg-hundida px-3 py-2.5">
-          <span className="text-base font-medium">{actual.texto}</span>
+          <span className="text-base font-medium">
+            {actual.producto} — {actual.medida} · {actual.sku}
+          </span>
           <button
             type="button"
             onClick={() => {
               alElegir("");
+              setActual(null);
               setTexto("");
             }}
             className="text-sm text-muted-foreground hover:text-foreground"
@@ -198,31 +214,34 @@ function BuscadorDeMedida({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor="transferencia-buscar">Producto</Label>
+      <Label htmlFor={id}>Producto</Label>
       <Input
-        id="transferencia-buscar"
+        id={id}
         value={texto}
         onChange={(e) => setTexto(e.target.value)}
         placeholder="Nombre, medida o código"
         autoComplete="off"
         autoFocus
       />
-      {encontradas.length > 0 && (
+      {visibles.length > 0 && (
         <ul className="max-h-64 overflow-y-auto rounded-lg bg-card shadow-sm">
-          {encontradas.map((v) => (
+          {visibles.map((v) => (
             <li key={v.id}>
               <button
                 type="button"
-                onClick={() => alElegir(v.id)}
+                onClick={() => {
+                  setActual(v);
+                  alElegir(v.id, v);
+                }}
                 className="w-full px-3 py-2.5 text-left text-base hover:bg-muted"
               >
-                {v.texto}
+                {v.producto} — {v.medida} · {v.sku}
               </button>
             </li>
           ))}
         </ul>
       )}
-      {palabras.length > 0 && encontradas.length === 0 && (
+      {largo && buscado === texto.trim() && visibles.length === 0 && (
         <p className="text-sm text-muted-foreground">Nada con ese nombre.</p>
       )}
     </div>

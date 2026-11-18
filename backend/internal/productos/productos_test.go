@@ -154,7 +154,8 @@ func TestLaFichaDeProducto(t *testing.T) {
 	var f Ficha
 	_ = json.Unmarshal([]byte(b), &f)
 	if f.AlicuotaIva != "21.00" || f.PrecioMediaPct != 50 || len(f.Variantes) != 2 || f.Variantes[0].PrecioGeneral != "84500.00" ||
-		f.Variantes[0].PrecioProfesional != "70000.00" || f.Variantes[0].StockCentral != 3 || f.Variantes[1].StockAserradero != 2.5 {
+		f.Variantes[0].PrecioProfesional != "70000.00" || len(f.Sucursales) != 2 ||
+		f.Variantes[0].StockEn(f.Sucursales[0].ID).Stock != 3 || f.Variantes[1].StockEn(f.Sucursales[1].ID).Stock != 2.5 {
 		t.Fatalf("la ficha: %s", b)
 	}
 	// Cada cantidad que cambió dejó su movimiento.
@@ -204,9 +205,10 @@ func TestLaFichaDeProducto(t *testing.T) {
 		t.Errorf("el depósito leyó el listado: %d", c)
 	}
 	_, b = pedir(t, adm, "GET", u+"productos?busqueda=fenol", nil)
-	var lista []ProductoAdmin
-	_ = json.Unmarshal([]byte(b), &lista)
-	if len(lista) != 2 {
+	var pagina ListaDeProductos
+	_ = json.Unmarshal([]byte(b), &pagina)
+	lista := pagina.Filas
+	if len(lista) != 2 || pagina.Total != 2 {
 		t.Fatalf("listado: %s", b)
 	}
 	for _, p := range lista {

@@ -3,8 +3,9 @@ info:
   title: MJBJ · Productos
   version: "1"
   description: |
-    La gestión de productos del panel: el listado, la ficha (medidas, precios
-    de las dos listas y stock de las dos sucursales), las imágenes, los
+    La gestión de productos del panel: el listado (de a páginas), la ficha
+    (medidas, precios de las dos listas y stock de cada sucursal activa), las
+    etiquetas con código de barras, las imágenes, los
     sugeridos, los rubros y los candidatos a dar de baja. Las formas son las de
     lib/dal/admin/products.ts, para que las pantallas no cambien.
 
@@ -18,12 +19,31 @@ paths:
       parameters:
         - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
         - { name: categoria, in: query, schema: { type: string } }
+        - { name: estado, in: query, schema: { type: string, enum: [todos, sin-foto, sin-precio, sin-stock, ocultos] } }
+        - { name: marca, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: proveedor, in: query, schema: { type: string } }
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 36 } }
+        - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
         "200":
-          description: Todos, los últimos tocados primero
+          description: Una página, los últimos tocados primero, con el total del filtro y los conteos de cada estado
           content:
             application/json:
-              schema: { type: array, items: { $ref: "#/components/schemas/ProductoAdmin" } }
+              schema:
+                type: object
+                required: [filas, total, conteos]
+                properties:
+                  filas: { type: array, items: { $ref: "#/components/schemas/ProductoAdmin" } }
+                  total: { type: integer }
+                  conteos:
+                    type: object
+                    required: [todos, sinFoto, sinPrecio, sinStock, ocultos]
+                    properties:
+                      todos: { type: integer }
+                      sinFoto: { type: integer }
+                      sinPrecio: { type: integer }
+                      sinStock: { type: integer }
+                      ocultos: { type: integer }
     post:
       operationId: CrearProducto
       requestBody:
@@ -368,6 +388,34 @@ paths:
           content:
             application/json:
               schema: { type: array, items: { type: string } }
+  /api/v1/admin/productos-marcas:
+    get:
+      operationId: MarcasDeProductos
+      responses:
+        "200":
+          description: Las marcas cargadas, una vez cada una, para filtrar los listados
+          content:
+            application/json:
+              schema: { type: array, items: { type: string } }
+  /api/v1/admin/etiquetas:
+    get:
+      operationId: DatosDeEtiquetas
+      parameters:
+        - name: medidas
+          in: query
+          description: Ids de medidas separados por coma
+          schema: { type: string, maxLength: 8000 }
+        - name: productos
+          in: query
+          description: Ids de productos separados por coma; suma todas sus medidas activas
+          schema: { type: string, maxLength: 4000 }
+        - { name: precio, in: query, schema: { type: boolean, default: false } }
+      responses:
+        "200":
+          description: Lo que va en cada etiqueta, en el orden pedido, con el código de barras ya armado
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Etiqueta" } }
   /api/v1/admin/productos-atributos:
     get:
       operationId: AtributosUsados
@@ -490,11 +538,22 @@ components:
                 type: string
                 description: El stock que mostraba la ficha al abrirse. Si viene, el cambio se aplica por diferencia; si no cambió, el físico no se toca.
               stockAserraderoVisto: { type: string }
+              stocks:
+                type: array
+                description: El stock de cada sucursal, por id de la base. Si viene, manda sobre stockCentral y compañía (el formato viejo).
+                items:
+                  type: object
+                  required: [sucursal]
+                  properties:
+                    sucursal: { type: string }
+                    stock: { type: string }
+                    minimo: { type: string }
+                    visto: { type: string, description: El stock que mostraba la ficha al abrirse }
     Ficha:
       type: object
       required: [id, slug, name, categoryId, subcategory, description, brand, unit, featured, active, createdAt, updatedAt,
         alicuotaIva, aPedido, subcategoryId, recargoElaboracionPct, imputacion, formaDeVenta, precioMediaPct, imagen, galeria, variantes,
-        usos, cuidados]
+        usos, cuidados, sucursales]
       properties:
         id: { type: string }
         slug: { type: string }
@@ -532,7 +591,7 @@ components:
           items:
             type: object
             required: [id, sku, label, largoMm, anchoMm, espesorMm, material, color, terminacion, calidad, codigoBarras,
-              precioGeneral, precioProfesional, stockCentral, stockAserradero, minCentral, minAserradero]
+              precioGeneral, precioProfesional, stocks]
             properties:
               id: { type: string }
               sku: { type: string }
@@ -547,10 +606,44 @@ components:
               codigoBarras: { type: string }
               precioGeneral: { type: string }
               precioProfesional: { type: string }
-              stockCentral: { type: number, format: double }
-              stockAserradero: { type: number, format: double }
-              minCentral: { type: number, format: double }
-              minAserradero: { type: number, format: double }
+              stocks:
+                type: array
+                description: Una por cada sucursal activa, en el orden de sucursales
+                items:
+                  type: object
+                  required: [sucursal, stock, minimo]
+                  properties:
+                    sucursal: { type: string }
+                    stock: { type: number, format: double }
+                    minimo: { type: number, format: double }
+        sucursales: { type: array, items: { $ref: "#/components/schemas/SucursalDeFicha" } }
+    Etiqueta:
+      type: object
+      required: [variantId, productId, nombre, nombreCorto, medida, sku, codigo, precio, barras]
+      properties:
+        variantId: { type: string }
+        productId: { type: string }
+        nombre: { type: string }
+        nombreCorto: { type: string }
+        medida: { type: string }
+        sku: { type: string }
+        codigo: { type: string, description: El código de barras de la medida o, si no tiene, su SKU }
+        precio: { type: string, nullable: true, description: El de la lista general; solo si se pidió y es mayor que cero }
+        barras:
+          type: object
+          nullable: true
+          description: Null si el código no se puede dibujar (letras fuera de ASCII)
+          required: [tipo, modulos]
+          properties:
+            tipo: { type: string, enum: [ean13, code128] }
+            modulos: { type: string, description: Un carácter por módulo, 1 barra y 0 espacio, sin zona de silencio }
+    SucursalDeFicha:
+      type: object
+      required: [id, slug, nombre]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        nombre: { type: string }
     Sugerido:
       type: object
       required: [id, relatedProductId, nombre, categoria, imagen, activo, tipo, orden]

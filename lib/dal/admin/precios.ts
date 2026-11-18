@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { api, datos } from "@/lib/api/servidor";
+import { consultaDeCatalogo, type FiltrosDeCatalogo } from "./products";
 
 /**
  * Lo que lee el panel de precios. Lo sirve la API de Go
@@ -30,13 +31,25 @@ export interface FilaPrecio {
 
 export const DIAS_PARA_REVISAR = 60;
 
-export async function listarPrecios(filtros: { busqueda?: string; categoria?: string } = {}): Promise<FilaPrecio[]> {
-  const query = {
-    ...(filtros.busqueda ? { busqueda: filtros.busqueda.slice(0, 200) } : {}),
-    ...(filtros.categoria ? { categoria: filtros.categoria } : {}),
+/** Las filas de cada página de la grilla: es una tabla, entran más que en tarjetas. */
+export const PRECIOS_POR_PAGINA = 50;
+
+const ESTADOS_DE_PRECIO = ["sin-precio", "para-revisar", "al-dia"] as const;
+export type EstadoDePrecio = (typeof ESTADOS_DE_PRECIO)[number];
+
+export function estadoDePrecio(v: string | undefined): EstadoDePrecio | undefined {
+  return ESTADOS_DE_PRECIO.find((e) => e === v);
+}
+
+/** Una página de la grilla, con el total del filtro y los conteos de cada grupo. */
+export async function listarPrecios(filtros: FiltrosDeCatalogo = {}) {
+  const estado = estadoDePrecio(filtros.estado);
+  const query = { ...consultaDeCatalogo(filtros, PRECIOS_POR_PAGINA), ...(estado ? { estado } : {}) };
+  const r = datos(await (await api()).GET("/api/v1/admin/precios", { params: { query } }));
+  return {
+    ...r,
+    filas: r.filas.map((f): FilaPrecio => ({ ...f, actualizado: f.actualizado ? new Date(f.actualizado) : null })),
   };
-  const filas = datos(await (await api()).GET("/api/v1/admin/precios", { params: { query } }));
-  return filas.map((f) => ({ ...f, actualizado: f.actualizado ? new Date(f.actualizado) : null }));
 }
 
 export async function historialDePrecios(limite = 40) {

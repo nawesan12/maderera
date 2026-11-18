@@ -25,22 +25,46 @@ import (
 
 // Defines values for Nivel.
 const (
-	Alto     Nivel = "alto"
-	Bajo     Nivel = "bajo"
-	Medio    Nivel = "medio"
-	SinStock Nivel = "sin-stock"
+	NivelAlto     Nivel = "alto"
+	NivelBajo     Nivel = "bajo"
+	NivelMedio    Nivel = "medio"
+	NivelSinStock Nivel = "sin-stock"
 )
 
 // Valid indicates whether the value is a known member of the Nivel enum.
 func (e Nivel) Valid() bool {
 	switch e {
-	case Alto:
+	case NivelAlto:
 		return true
-	case Bajo:
+	case NivelBajo:
 		return true
-	case Medio:
+	case NivelMedio:
 		return true
-	case SinStock:
+	case NivelSinStock:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GrillaDeStockParamsEstado.
+const (
+	GrillaDeStockParamsEstadoConStock GrillaDeStockParamsEstado = "con-stock"
+	GrillaDeStockParamsEstadoReponer  GrillaDeStockParamsEstado = "reponer"
+	GrillaDeStockParamsEstadoSinStock GrillaDeStockParamsEstado = "sin-stock"
+	GrillaDeStockParamsEstadoTodas    GrillaDeStockParamsEstado = "todas"
+)
+
+// Valid indicates whether the value is a known member of the GrillaDeStockParamsEstado enum.
+func (e GrillaDeStockParamsEstado) Valid() bool {
+	switch e {
+	case GrillaDeStockParamsEstadoConStock:
+		return true
+	case GrillaDeStockParamsEstadoReponer:
+		return true
+	case GrillaDeStockParamsEstadoSinStock:
+		return true
+	case GrillaDeStockParamsEstadoTodas:
 		return true
 	default:
 		return false
@@ -76,25 +100,19 @@ func (e AjustarStockJSONBodyMotivo) Valid() bool {
 
 // FilaStock defines model for FilaStock.
 type FilaStock struct {
-	CategoryName        string  `json:"categoryName"`
-	Imagen              *string `json:"imagen"`
-	Label               string  `json:"label"`
-	LargoMm             *int    `json:"largoMm"`
-	MinAserradero       float64 `json:"minAserradero"`
-	MinCentral          float64 `json:"minCentral"`
-	NivelAserradero     Nivel   `json:"nivelAserradero"`
-	NivelCentral        Nivel   `json:"nivelCentral"`
-	ProductId           string  `json:"productId"`
-	ProductName         string  `json:"productName"`
-	ProductSlug         string  `json:"productSlug"`
-	QtyAserradero       float64 `json:"qtyAserradero"`
-	QtyCentral          float64 `json:"qtyCentral"`
-	ReservadoAserradero float64 `json:"reservadoAserradero"`
-	ReservadoCentral    float64 `json:"reservadoCentral"`
-	Sku                 string  `json:"sku"`
-	Total               float64 `json:"total"`
-	Unidad              string  `json:"unidad"`
-	VariantId           string  `json:"variantId"`
+	CategoryName string            `json:"categoryName"`
+	CodigoBarras *string           `json:"codigoBarras"`
+	Imagen       *string           `json:"imagen"`
+	Label        string            `json:"label"`
+	LargoMm      *int              `json:"largoMm"`
+	ProductId    string            `json:"productId"`
+	ProductName  string            `json:"productName"`
+	ProductSlug  string            `json:"productSlug"`
+	Sku          string            `json:"sku"`
+	Sucursales   []StockEnSucursal `json:"sucursales"`
+	Total        float64           `json:"total"`
+	Unidad       string            `json:"unidad"`
+	VariantId    string            `json:"variantId"`
 }
 
 // Nivel defines model for Nivel.
@@ -108,11 +126,37 @@ type Problema struct {
 	Title   string             `json:"title"`
 }
 
+// StockEnSucursal defines model for StockEnSucursal.
+type StockEnSucursal struct {
+	Id        string  `json:"id"`
+	Min       float64 `json:"min"`
+	Nivel     Nivel   `json:"nivel"`
+	Nombre    string  `json:"nombre"`
+	Qty       float64 `json:"qty"`
+	Reservado float64 `json:"reservado"`
+	Slug      string  `json:"slug"`
+}
+
+// Sucursal defines model for Sucursal.
+type Sucursal struct {
+	Id     string `json:"id"`
+	Nombre string `json:"nombre"`
+	Slug   string `json:"slug"`
+}
+
 // GrillaDeStockParams defines parameters for GrillaDeStock.
 type GrillaDeStockParams struct {
-	Busqueda  *string `form:"busqueda,omitempty" json:"busqueda,omitempty"`
-	Categoria *string `form:"categoria,omitempty" json:"categoria,omitempty"`
+	Busqueda       *string                    `form:"busqueda,omitempty" json:"busqueda,omitempty"`
+	Categoria      *string                    `form:"categoria,omitempty" json:"categoria,omitempty"`
+	Estado         *GrillaDeStockParamsEstado `form:"estado,omitempty" json:"estado,omitempty"`
+	Marca          *string                    `form:"marca,omitempty" json:"marca,omitempty"`
+	Proveedor      *string                    `form:"proveedor,omitempty" json:"proveedor,omitempty"`
+	Limite         *int                       `form:"limite,omitempty" json:"limite,omitempty"`
+	Desplazamiento *int                       `form:"desplazamiento,omitempty" json:"desplazamiento,omitempty"`
 }
+
+// GrillaDeStockParamsEstado defines parameters for GrillaDeStock.
+type GrillaDeStockParamsEstado string
 
 // AjustarStockJSONBody defines parameters for AjustarStock.
 type AjustarStockJSONBody struct {
@@ -223,6 +267,71 @@ func (siw *ServerInterfaceWrapper) GrillaDeStock(w http.ResponseWriter, r *http.
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "categoria"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "categoria", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "estado" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "estado", r.URL.Query(), &params.Estado, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "estado"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "estado", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "marca" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "marca", r.URL.Query(), &params.Marca, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "marca"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "marca", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "proveedor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "proveedor", r.URL.Query(), &params.Proveedor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "proveedor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "proveedor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limite" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limite", r.URL.Query(), &params.Limite, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limite"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limite", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "desplazamiento" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "desplazamiento", r.URL.Query(), &params.Desplazamiento, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "desplazamiento"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "desplazamiento", Err: err})
 		}
 		return
 	}
@@ -516,7 +625,17 @@ type GrillaDeStockResponseObject interface {
 	VisitGrillaDeStockResponse(w http.ResponseWriter) error
 }
 
-type GrillaDeStock200JSONResponse []FilaStock
+type GrillaDeStock200JSONResponse struct {
+	Conteos struct {
+		ConStock int `json:"conStock"`
+		Reponer  int `json:"reponer"`
+		SinStock int `json:"sinStock"`
+		Todas    int `json:"todas"`
+	} `json:"conteos"`
+	Filas      []FilaStock `json:"filas"`
+	Sucursales []Sucursal  `json:"sucursales"`
+	Total      int         `json:"total"`
+}
 
 func (response GrillaDeStock200JSONResponse) VisitGrillaDeStockResponse(w http.ResponseWriter) error {
 
@@ -1035,35 +1154,38 @@ func (sh *strictHandler) SinSucursalAsignada(w http.ResponseWriter, r *http.Requ
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"1FjNciO3EX4VFJKDVBmL2h9XEuak1dqJXbvOxuvkYu2hOWiNoMWgRw0MK6wtXvMAeQMfUymdfEiVc1u+",
-	"SZ4kBcxwOENiREraJJUTf9DdaHR//XUDH2ROZUUWrXdy+kEyuoqsw/jjDdPMYAnhe07Wo/XhK1SV0Tl4",
-	"TXZSNSK/uHZkw5rLr1qFnzNeyqn82WSzwaRZdZPO8HK5zKRCl7Ougj05lV8wE4ujb788F79+/vkvj2UQ",
-	"aRWD3S+1gbee8vfhR8VUIXvd+JuDx4J48Q2UGH77RYVyKp1nbQu5zKQuocDop62NgZlBOfVcY7YramCG",
-	"JmnEABf0urzDirYeC+QgXGp75pAZFDIFlUviErycSkV10OyUbF3OOp1ztJ7BHKhg9RzNcJu7ov9NEO/0",
-	"elsdpFQxqTr3X6lkcNrV0Qy0629NXSTXb/zi3vG68Yv7xYvRIc9B0b236jTvt6F7XydP68kfbKO2WkE6",
-	"6HNgDTadkuj0Ta0ZlZx+3xPtZ3KYl2EW16XQnCIbFlnn1qYsuiobJGY7s4lQpvMyKIftetqC8G4lrEP8",
-	"rgsoza4x9yFqDaKnHyTaugyxAePjfqh0+JzBdfhw2n7mIt+8S9BEnyKHZKTQg04zCDITN1KglA7EB+bN",
-	"QHtHZ8d958HXfdke63jtDe4HQyPWmdoNUlDQ9pKa8wxY2ogYFKHQiAosmqkwIArWxoCoiIWr85odmEwY",
-	"cAIMsgeXCUNOrH4yXpfkLmxJc11qtJ5cJtAIuK6dR8GrHyqtSCyCTc9g3SUy2lyDCKnGzji6E3EOCi5s",
-	"DuVMk/BUQjCUg1WgKLrXOHqERiiMzrQ4c8diIRReg3B135UT8QqRxUJEm8BTcVNrtHFrECAmoEptJ63Z",
-	"+CMTc7QKFfGFDTar1Y9Oezr+TdyvXP3Ns87BrR3YuJ8NbV/YtfFOIjoe/zw+uQhV1SZXvv76xdfi4z9E",
-	"0wwzOUd2TXKeBAxQhRYqLafy2cnpybNQ1eCvImAmUOnJ/En/HOHvAmN7DzCMzT3wifxtzOhLXO9SAUOJ",
-	"HtnJ6fcfpA773dTIi1B9kfXlrHY3NSqQWW8cKOHPr9AW/kpOn56eZrvITNtq2UYPjW0rv8uGg8vT09M7",
-	"ZpbdWUV7LN2+DrgZPDblCMywSE0xr0LaUWkVsJ97PQcncrLC1S0c0UYkKOqjIVhaZqn8TJrKiDRDLpGn",
-	"s7AOvE5TKHN0/gWpxb0ikeajSzAOsy2CmzHY/Gq0k+dg/bpjDWNjSNzUKFwo4xLEEYWC9HB8Is7Jhih5",
-	"UCSzRFN0KHRhiUFOw+iV6JJr7Z1NX3WbBpHVjyEBaETY2Ho8ER2hRejG1cBEdvVTiUyZcAiicxzi5xXM",
-	"VreQdLTUVpehq5ym5jvyek79zqNtwehiVyRfc7AZMxb+UTgnU+fhFJkkz5TsQw8cAXo57GUs3Qg2NsKw",
-	"u3xkyQ2xRO/Tfifc2OlDLfMfffz7OTgQ7TAgnol//eWv4vOP/zzOBIk55KtbEk6HjrI+qEAGkSNTiODz",
-	"p0/HGKA76ODiMlaoTacbJdSzZv1ejGp0qT0OKFDhJdTGy+mvssCtDdois3bYe7J7Ifl0TJnigtGpf/wy",
-	"VWr7B784cATed7m4OdhSN2keKP+4CXtrju4Fq/G5708XktTIekjXCcxkDBbAZEUYbUS5urW6pKydRX5w",
-	"IvYKJyrWZUT/KJh789kooP/YDHOve6KPBvWT0/8DVOeM4FGd+SGIwONnXpc9HG1UtLpnfVhqmv7e94rH",
-	"XcsPr5zmj31FoEful3dVQrS4Loh47n6IH1QOvbuG6EN5HPCDy8b4tPVdK6b/mwNXf6LayaBC57Wlkfxb",
-	"8pBcINYF2q8+6btCZ7Pv1aPHi+e7M923WGjnGRR8oga+GcTHyO5tJ/ISzZtw75X/Ge6Jl4Z+pc2IDIJ9",
-	"IPFcklX0AtzIu+gIasbowo0N/Y7Y/54VcupdIsURrhk9bUMBG/VsHYD+afvHeAgffEcqPEGE1wlihXYP",
-	"CCYlNtf2UTS8bgVe4gYX/ws8mMBr6M48WqUVjbwK5cQe3Rf2nAykJcZwQOWMR95zMW54NtPIfmzjVuh3",
-	"tBhZb5oDuUimL8K7W1LuYbDLZKT2P4EhPnTcQ+th7e9e+btw3URuBNmbbQYxSiV0N9Jb+RycMhnSh3bQ",
-	"9gocH69yUNC9V4ijK1oIdOEerVa3IIALtIHvj/dVVnhUBacLCzxOtdquq+osiip4bG1t9dMYvzshewCN",
-	"rSXX+Rhpb8O4vmmUBLTZDI+NUTs8PORkQDhtu0DHaC6X/x4A",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

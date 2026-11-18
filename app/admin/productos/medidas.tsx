@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import { ChevronDown, Copy, Plus, Trash2 } from "lucide-react";
 import { Confirmar } from "@/components/admin/confirmar";
 import { admiteDecimales } from "@/lib/unidades";
-import type { VarianteForm } from "./formulario";
+import type { SucursalDeFicha, VarianteForm } from "./formulario";
 
 export interface Atributos {
   material: string[];
@@ -30,9 +30,12 @@ export function GrillaDeMedidas({
   unidad,
   nombreUnidad,
   atributos,
+  sucursales,
   campoConError,
 }: {
   variantes: VarianteForm[];
+  /** Las sucursales activas de la base: una columna de stock por cada una. */
+  sucursales: SucursalDeFicha[];
   setVariantes: (f: (prev: VarianteForm[]) => VarianteForm[]) => void;
   unidad: string;
   nombreUnidad: string;
@@ -45,19 +48,29 @@ export function GrillaDeMedidas({
   const decimales = admiteDecimales(unidad);
 
   function cambiar(i: number, campo: keyof VarianteForm, valor: string) {
-    const numericos: (keyof VarianteForm)[] = [
-      "largoMm",
-      "anchoMm",
-      "espesorMm",
-      "stockCentral",
-      "stockAserradero",
-      "minCentral",
-      "minAserradero",
-    ];
+    const numericos: (keyof VarianteForm)[] = ["largoMm", "anchoMm", "espesorMm"];
     setVariantes((prev) =>
       prev.map((v, k) =>
         k !== i ? v : { ...v, [campo]: numericos.includes(campo) ? (valor === "" ? null : Number(valor)) : valor },
       ),
+    );
+  }
+
+  /** El stock o el mínimo de una sucursal. Vacío es «no tocar» (stock) o 0 (mínimo). */
+  function cambiarStock(i: number, sucursal: string, campo: "stock" | "minimo", valor: string) {
+    setVariantes((prev) =>
+      prev.map((v, k) => {
+        if (k !== i) return v;
+        const actual = v.stocks[sucursal] ?? { stock: 0, minimo: 0 };
+        const numero = valor === "" ? null : Number(valor);
+        return {
+          ...v,
+          stocks: {
+            ...v.stocks,
+            [sucursal]: campo === "stock" ? { ...actual, stock: numero } : { ...actual, minimo: numero ?? 0 },
+          },
+        };
+      }),
     );
   }
 
@@ -66,7 +79,16 @@ export function GrillaDeMedidas({
     setVariantes((prev) => {
       const base = prev[desde ?? prev.length - 1];
       const nueva: VarianteForm = base
-        ? { ...base, id: undefined, clave: nuevaClave(), sku: "", label: "", codigoBarras: "", stockCentral: 0, stockAserradero: 0 }
+        ? {
+            ...base,
+            id: undefined,
+            clave: nuevaClave(),
+            sku: "",
+            label: "",
+            codigoBarras: "",
+            // El stock arranca en cero; los mínimos se copian.
+            stocks: Object.fromEntries(Object.entries(base.stocks).map(([s, st]) => [s, { stock: 0, minimo: st.minimo }])),
+          }
         : vacia();
       const lista = [...prev];
       lista.splice(desde === undefined ? prev.length : desde + 1, 0, nueva);
@@ -85,11 +107,10 @@ export function GrillaDeMedidas({
   const error = (i: number, campo: string) => campoConError === `variantes.${i}.${campo}`;
   // Los números en cifras tabulares; el texto, en la letra de siempre, que
   // ocupa menos y entra en la celda.
-  const NUMEROS = ["largoMm", "anchoMm", "espesorMm", "precioGeneral", "precioProfesional", "stockCentral", "stockAserradero",
-    "minCentral", "minAserradero", "codigoBarras"];
+  const NUMEROS = ["largoMm", "anchoMm", "espesorMm", "precioGeneral", "precioProfesional", "codigoBarras"];
   const celda = (i: number, campo: string, fondo = "bg-hundida") =>
     `h-10 w-full min-w-0 rounded-lg ${fondo} px-2.5 text-base outline-none focus:ring-2 focus:ring-brand-orange ${
-      NUMEROS.includes(campo) ? "tabular" : ""
+      NUMEROS.includes(campo) || campo.startsWith("stocks.") ? "tabular" : ""
     } ${error(i, campo) ? "ring-2 ring-destructive" : ""}`;
 
   const textos: [keyof Atributos, string][] = [
@@ -109,7 +130,10 @@ export function GrillaDeMedidas({
       ))}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[960px] table-fixed border-separate border-spacing-x-1.5 border-spacing-y-1">
+        <table
+          className="w-full table-fixed border-separate border-spacing-x-1.5 border-spacing-y-1"
+          style={{ minWidth: `${800 + sucursales.length * 80}px` }}
+        >
           <colgroup>
             <col className="w-8" />
             <col className="w-36" />
@@ -119,8 +143,9 @@ export function GrillaDeMedidas({
             <col className="w-[3.75rem]" />
             <col className="w-28" />
             <col className="w-28" />
-            <col className="w-[4.75rem]" />
-            <col className="w-[4.75rem]" />
+            {sucursales.map((s) => (
+              <col key={s.id} className="w-[4.75rem]" />
+            ))}
             <col className="w-[5.25rem]" />
           </colgroup>
           <thead>
@@ -133,8 +158,11 @@ export function GrillaDeMedidas({
               <th className="font-medium">Esp.</th>
               <th className="font-medium">Color</th>
               <th className="font-medium">Precio lista</th>
-              <th className="font-medium leading-tight">Stock Central</th>
-              <th className="font-medium leading-tight">Stock Aserr.</th>
+              {sucursales.map((s) => (
+                <th key={s.id} className="truncate font-medium leading-tight" title={`Stock en ${s.nombre}`}>
+                  {s.nombre}
+                </th>
+              ))}
               <th />
             </tr>
           </thead>
@@ -222,18 +250,19 @@ export function GrillaDeMedidas({
                         className={`${celda(i, "precioGeneral")} text-right`}
                       />
                     </td>
-                    {(["stockCentral", "stockAserradero"] as const).map((c) => (
-                      <td key={c}>
+                    {sucursales.map((s, k) => (
+                      <td key={s.id}>
                         <input
-                          id={`v-${i}-${c}`}
-                          aria-label={`${c === "stockCentral" ? "Stock en Central" : "Stock en Aserradero"}, en ${nombreUnidad}, medida ${i + 1}`}
+                          id={`v-${i}-stock-${s.slug}`}
+                          aria-label={`Stock en ${s.nombre}, en ${nombreUnidad}, medida ${i + 1}`}
+                          aria-invalid={error(i, `stocks.${k}.stock`)}
                           type="number"
                           min={0}
                           step={decimales ? "any" : 1}
                           inputMode={decimales ? "decimal" : "numeric"}
-                          value={v[c] ?? 0}
-                          onChange={(e) => cambiar(i, c, e.target.value)}
-                          className={`${celda(i, c)} text-right`}
+                          value={v.stocks[s.id]?.stock ?? (v.stocks[s.id] ? "" : 0)}
+                          onChange={(e) => cambiarStock(i, s.id, "stock", e.target.value)}
+                          className={`${celda(i, `stocks.${k}.stock`)} text-right`}
                         />
                       </td>
                     ))}
@@ -264,7 +293,7 @@ export function GrillaDeMedidas({
                   {abierta && (
                     <tr>
                       <td />
-                      <td colSpan={10} className="pb-3">
+                      <td colSpan={8 + sucursales.length} className="pb-3">
                         <div className="tarjeta-hundida grid gap-3 rounded-xl p-3 sm:grid-cols-4 xl:grid-cols-7">
                           {textos.map(([c, etiqueta]) => (
                             <label key={c} className="space-y-1 text-sm text-muted-foreground">
@@ -299,17 +328,17 @@ export function GrillaDeMedidas({
                               className={`${celda(i, "codigoBarras", "bg-card shadow-sm")} text-foreground`}
                             />
                           </label>
-                          {(["minCentral", "minAserradero"] as const).map((c) => (
-                            <label key={c} className="space-y-1 text-sm text-muted-foreground">
-                              {c === "minCentral" ? "Mínimo Central" : "Mínimo Aserradero"}
+                          {sucursales.map((s, k) => (
+                            <label key={s.id} className="space-y-1 text-sm text-muted-foreground">
+                              Mínimo {s.nombre}
                               <input
-                                id={`v-${i}-${c}`}
+                                id={`v-${i}-min-${s.slug}`}
                                 type="number"
                                 min={0}
                                 step={decimales ? "any" : 1}
-                                value={v[c] ?? 0}
-                                onChange={(e) => cambiar(i, c, e.target.value)}
-                                className={`${celda(i, c, "bg-card shadow-sm")} text-right text-foreground`}
+                                value={v.stocks[s.id]?.minimo ?? 0}
+                                onChange={(e) => cambiarStock(i, s.id, "minimo", e.target.value)}
+                                className={`${celda(i, `stocks.${k}.minimo`, "bg-card shadow-sm")} text-right text-foreground`}
                               />
                             </label>
                           ))}
@@ -370,10 +399,7 @@ export function vacia(): VarianteForm {
     codigoBarras: "",
     precioGeneral: "0",
     precioProfesional: "",
-    stockCentral: 0,
-    stockAserradero: 0,
-    minCentral: 0,
-    minAserradero: 0,
+    stocks: {},
   };
 }
 

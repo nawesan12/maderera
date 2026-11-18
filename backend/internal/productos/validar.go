@@ -65,6 +65,19 @@ type FormVariante struct {
 	// diferencia contra esto, no se pisa con un valor viejo.
 	StockCentralVisto    string `json:"stockCentralVisto"`
 	StockAserraderoVisto string `json:"stockAserraderoVisto"`
+	// Stocks es el stock por sucursal, con el id de la fila de `branches`.
+	// Si viene, manda: los cuatro campos de arriba son el formato de cuando
+	// había dos sucursales escritas en el código, y quedan para quien todavía
+	// lo mande (y para el golden de zod).
+	Stocks []FormStock `json:"stocks"`
+}
+
+// FormStock es el stock de una medida en una sucursal, como texto.
+type FormStock struct {
+	Sucursal string `json:"sucursal"`
+	Stock    string `json:"stock"`
+	Minimo   string `json:"minimo"`
+	Visto    string `json:"visto"`
 }
 
 // Producto es la ficha ya validada (lo que daba productoSchema).
@@ -89,10 +102,29 @@ type Variante struct {
 	Material, Color, Terminacion, Calidad string
 	CodigoBarras                          string
 	PrecioGeneral, PrecioProfesional      string
-	StockCentral, StockAserradero         *float64
-	MinCentral, MinAserradero             *float64
-	// nil: no vino (un alta, o quien no lo manda).
-	StockCentralVisto, StockAserraderoVisto *float64
+	Stocks                                []StockDeSucursal
+}
+
+// StockDeSucursal es el stock validado de una sucursal. La sucursal va por id
+// (Sucursal) o, en el formato viejo, por slug.
+type StockDeSucursal struct {
+	Sucursal, Slug string
+	// Los nombres de los campos, para señalar el error en la pantalla.
+	CampoSucursal, CampoStock, CampoMinimo string
+	// Stock nil: no vino, el físico no se toca. Mínimo nil: queda en 0.
+	Stock, Minimo *float64
+	// Visto nil: no vino (un alta, o quien no lo manda).
+	Visto *float64
+}
+
+// StockDe es el de la sucursal con ese slug (formato viejo), o nil.
+func (v Variante) StockDe(slug string) *StockDeSucursal {
+	for i := range v.Stocks {
+		if v.Stocks[i].Slug == slug {
+			return &v.Stocks[i]
+		}
+	}
+	return nil
 }
 
 // visto lee lo que la pantalla vio al abrir la ficha. No es un dato del
@@ -356,13 +388,39 @@ func Validar(f FormProducto) (Producto, *ErrorDeCampo) {
 		x.CodigoBarras = v.texto(c+"codigoBarras", fv.CodigoBarras, 0, 60, "")
 		x.PrecioGeneral = v.precio(c+"precioGeneral", fv.PrecioGeneral)
 		x.PrecioProfesional = v.precio(c+"precioProfesional", fv.PrecioProfesional)
-		x.StockCentral = v.cantidad(c+"stockCentral", fv.StockCentral)
-		x.StockAserradero = v.cantidad(c+"stockAserradero", fv.StockAserradero)
-		x.MinCentral = v.cantidad(c+"minCentral", fv.MinCentral)
-		x.MinAserradero = v.cantidad(c+"minAserradero", fv.MinAserradero)
-		if x.ID != "" {
-			x.StockCentralVisto = visto(fv.StockCentralVisto)
-			x.StockAserraderoVisto = visto(fv.StockAserraderoVisto)
+		if len(fv.Stocks) > 0 {
+			repetida := map[string]bool{}
+			for k, st := range fv.Stocks {
+				cs := c + "stocks." + strconv.Itoa(k) + "."
+				if !plataforma.UUIDValido(st.Sucursal) {
+					v.mal(cs+"sucursal", "No se encontró la sucursal.")
+					continue
+				}
+				if repetida[st.Sucursal] {
+					v.mal(cs+"sucursal", "La sucursal está dos veces.")
+					continue
+				}
+				repetida[st.Sucursal] = true
+				x.Stocks = append(x.Stocks, StockDeSucursal{Sucursal: st.Sucursal, CampoSucursal: cs + "sucursal",
+					CampoStock: cs + "stock", CampoMinimo: cs + "minimo",
+					Stock: v.cantidad(cs+"stock", st.Stock), Minimo: v.cantidad(cs+"minimo", st.Minimo)})
+				if x.ID != "" {
+					x.Stocks[len(x.Stocks)-1].Visto = visto(st.Visto)
+				}
+			}
+		} else {
+			// El formato viejo, en el orden en que lo validaba zod.
+			central := StockDeSucursal{Slug: "casa-central", CampoStock: c + "stockCentral", CampoMinimo: c + "minCentral"}
+			aserradero := StockDeSucursal{Slug: "aserradero", CampoStock: c + "stockAserradero", CampoMinimo: c + "minAserradero"}
+			central.Stock = v.cantidad(central.CampoStock, fv.StockCentral)
+			aserradero.Stock = v.cantidad(aserradero.CampoStock, fv.StockAserradero)
+			central.Minimo = v.cantidad(central.CampoMinimo, fv.MinCentral)
+			aserradero.Minimo = v.cantidad(aserradero.CampoMinimo, fv.MinAserradero)
+			if x.ID != "" {
+				central.Visto = visto(fv.StockCentralVisto)
+				aserradero.Visto = visto(fv.StockAserraderoVisto)
+			}
+			x.Stocks = []StockDeSucursal{central, aserradero}
 		}
 		p.Variantes = append(p.Variantes, x)
 	}
@@ -383,13 +441,22 @@ func Validar(f FormProducto) (Producto, *ErrorDeCampo) {
 		}
 	}
 	if !AdmiteDecimales(p.Unit) {
-		for i, x := range p.Variantes {
-			for _, c := range []struct {
+		for _, x := range p.Variantes {
+			// Primero los stocks y después los mínimos, como lo revisaba zod.
+			type campo struct {
 				nombre string
 				valor  *float64
-			}{{"stockCentral", x.StockCentral}, {"stockAserradero", x.StockAserradero}, {"minCentral", x.MinCentral}, {"minAserradero", x.MinAserradero}} {
+			}
+			var campos []campo
+			for _, st := range x.Stocks {
+				campos = append(campos, campo{st.CampoStock, st.Stock})
+			}
+			for _, st := range x.Stocks {
+				campos = append(campos, campo{st.CampoMinimo, st.Minimo})
+			}
+			for _, c := range campos {
 				if c.valor != nil && *c.valor != math.Trunc(*c.valor) {
-					v.mal("variantes."+strconv.Itoa(i)+"."+c.nombre, "Este producto se cuenta en unidades enteras: el stock va sin decimales.")
+					v.mal(c.nombre, "Este producto se cuenta en unidades enteras: el stock va sin decimales.")
 				}
 			}
 		}

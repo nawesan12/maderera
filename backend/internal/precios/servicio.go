@@ -17,6 +17,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/listado"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
 )
@@ -85,49 +86,111 @@ type FilaPrecio struct {
 	Desactualizado    bool       `json:"desactualizado"`
 }
 
-// Listar es listarPrecios: las medidas activas, con los precios de las dos
-// listas, la brecha entre ellas y si hace mucho que nadie las toca.
-func (s *Servicio) Listar(ctx context.Context, busqueda, categoria string, ahora time.Time) ([]FilaPrecio, error) {
+// ConteosDePrecios son los totales de cada estado con los mismos filtros.
+type ConteosDePrecios struct {
+	Todas       int `json:"todas"`
+	SinPrecio   int `json:"sinPrecio"`
+	ParaRevisar int `json:"paraRevisar"`
+	AlDia       int `json:"alDia"`
+}
+
+// GrillaDePrecios es una página de la grilla, con el total del filtro.
+type GrillaDePrecios struct {
+	Filas   []FilaPrecio     `json:"filas"`
+	Total   int              `json:"total"`
+	Conteos ConteosDePrecios `json:"conteos"`
+}
+
+// PorPaginaPrecios: la grilla es una tabla, entran más que en tarjetas.
+const PorPaginaPrecios = 50
+
+// Listar es listarPrecios, de a páginas: las medidas activas, con los
+// precios de las dos listas, la brecha entre ellas y si hace mucho que nadie
+// las toca. El estado («sin-precio», «para-revisar», «al-dia») se decide en
+// la consulta, con el mismo criterio que antes se aplicaba en Next.
+func (s *Servicio) Listar(ctx context.Context, f listado.Filtros, ahora time.Time) (GrillaDePrecios, error) {
+	out := GrillaDePrecios{Filas: []FilaPrecio{}}
 	ls, _, err := s.listas(ctx, s.q)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
-	cond := []string{"p.active", "v.active"}
-	var args []any
-	arg := func(v any) string { args = append(args, v); return fmt.Sprintf("$%d", len(args)) }
-	if categoria != "" && categoria != "todos" {
-		cond = append(cond, "c.slug = "+arg(categoria))
+	var c listado.Consulta
+	c.Y("p.active")
+	c.Y("v.active")
+	c.Comunes(f, "v.id")
+	c.Busqueda(f.Busqueda, []string{"p.name", "v.sku", "v.label", "p.brand", "c.name"})
+	var general *string
+	if ls.general != nil {
+		general = &ls.general.ID
 	}
-	t := strings.Fields(busqueda)
-	if len(t) > 6 {
-		t = t[:6]
+	precio := `coalesce((SELECT pli.price FROM price_list_items pli WHERE pli.variant_id = v.id AND pli.price_list_id = ` + c.Arg(general) + `::uuid), 0)`
+	tocado := `(SELECT max(pli.updated_at) FROM price_list_items pli WHERE pli.variant_id = v.id)`
+	viejo := precio + ` > 0 AND (` + tocado + ` IS NULL OR ` + tocado + ` < ` + c.Arg(ahora.Add(-DiasParaRevisar*24*time.Hour)) + `::timestamptz)`
+	estados := map[string]string{
+		"sin-precio":   precio + ` <= 0`,
+		"para-revisar": viejo,
+		"al-dia":       precio + ` > 0 AND NOT (` + viejo + `)`,
 	}
-	for _, termino := range t {
-		patron := arg("%" + termino + "%")
-		var col []string
-		for _, c := range []string{"p.name", "v.sku", "v.label", "p.brand", "c.name"} {
-			col = append(col, "f_unaccent("+c+") ILIKE f_unaccent("+patron+")")
-		}
-		cond = append(cond, "("+strings.Join(col, " OR ")+")")
-	}
-	filas, err := s.pool.Query(ctx, `
-		SELECT v.id, p.id, v.sku, p.name, v.label, c.name, c.slug, p.unit::text
-		FROM product_variants v
+	desde := ` FROM product_variants v
 		JOIN products p ON p.id = v.product_id
-		JOIN categories c ON c.id = p.category_id
-		WHERE `+strings.Join(cond, " AND ")+`
-		ORDER BY c.sort_order, p.name, v.sort_order`, args...)
-	if err != nil {
-		return nil, err
+		JOIN categories c ON c.id = p.category_id `
+	k := &out.Conteos
+	if err := s.pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE `+estados["sin-precio"]+`),
+		count(*) FILTER (WHERE `+estados["para-revisar"]+`), count(*) FILTER (WHERE `+estados["al-dia"]+`)`+desde+c.Donde(),
+		c.Args()...).Scan(&k.Todas, &k.SinPrecio, &k.ParaRevisar, &k.AlDia); err != nil {
+		return out, err
 	}
-	out, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (FilaPrecio, error) {
+	out.Total = map[string]int{"sin-precio": k.SinPrecio, "para-revisar": k.ParaRevisar, "al-dia": k.AlDia}[f.Estado]
+	if cond, ok := estados[f.Estado]; ok {
+		c.Y(cond)
+	} else {
+		out.Total = k.Todas
+	}
+	limite, salto := f.Pagina(PorPaginaPrecios)
+	// «viejo» va también en la lista de columnas: así la consulta usa todos
+	// los argumentos aunque no haya estado elegido.
+	filas, err := s.pool.Query(ctx, `
+		SELECT v.id, p.id, v.sku, p.name, v.label, c.name, c.slug, p.unit::text, coalesce(`+viejo+`, false)
+		`+desde+c.Donde()+`
+		ORDER BY c.sort_order, p.name, v.sort_order, v.id
+		LIMIT `+c.Arg(limite)+` OFFSET `+c.Arg(salto), c.Args()...)
+	if err != nil {
+		return out, err
+	}
+	pagina, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (FilaPrecio, error) {
 		var f FilaPrecio
-		err := r.Scan(&f.VariantID, &f.ProductID, &f.SKU, &f.Producto, &f.Medida, &f.Categoria, &f.CategoriaSlug, &f.Unidad)
+		err := r.Scan(&f.VariantID, &f.ProductID, &f.SKU, &f.Producto, &f.Medida, &f.Categoria, &f.CategoriaSlug, &f.Unidad, &f.Desactualizado)
 		return f, err
 	})
-	if err != nil || len(out) == 0 {
-		return []FilaPrecio{}, err
+	if err != nil || len(pagina) == 0 {
+		return out, err
 	}
+	out.Filas, err = s.completar(ctx, ls, pagina)
+	return out, err
+}
+
+// ListarTodo es la grilla entera, sin páginas, para exportarla: la planilla y
+// el PDF de la lista llevan todo lo que coincide con el filtro.
+func (s *Servicio) ListarTodo(ctx context.Context, busqueda, categoria string, ahora time.Time) ([]FilaPrecio, error) {
+	var out []FilaPrecio
+	for desde := 0; ; desde += 200 {
+		g, err := s.Listar(ctx, listado.Filtros{Busqueda: busqueda, Categoria: categoria, Limite: 200, Desde: desde}, ahora)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, g.Filas...)
+		if len(g.Filas) < 200 || len(out) >= g.Total {
+			if out == nil {
+				out = []FilaPrecio{}
+			}
+			return out, nil
+		}
+	}
+}
+
+// completar suma a las filas de la página la foto, los precios de las dos
+// listas, la brecha y cuándo se tocó por última vez.
+func (s *Servicio) completar(ctx context.Context, ls listas, out []FilaPrecio) ([]FilaPrecio, error) {
 	var variantes, productos []string
 	visto := map[string]bool{}
 	for _, f := range out {
@@ -166,7 +229,6 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, categoria string, ahora
 		}
 		return "0"
 	}
-	limite := ahora.Add(-DiasParaRevisar * 24 * time.Hour)
 	for i := range out {
 		f := &out[i]
 		if u, ok := portada[f.ProductID]; ok {
@@ -178,7 +240,6 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, categoria string, ahora
 		if u, ok := ultima[f.VariantID]; ok {
 			f.Actualizado = &u
 		}
-		f.Desactualizado = g > 0 && (f.Actualizado == nil || f.Actualizado.Before(limite))
 	}
 	return out, nil
 }

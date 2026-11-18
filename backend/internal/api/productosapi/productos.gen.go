@@ -25,6 +25,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for EtiquetaBarrasTipo.
+const (
+	Code128 EtiquetaBarrasTipo = "code128"
+	Ean13   EtiquetaBarrasTipo = "ean13"
+)
+
+// Valid indicates whether the value is a known member of the EtiquetaBarrasTipo enum.
+func (e EtiquetaBarrasTipo) Valid() bool {
+	switch e {
+	case Code128:
+		return true
+	case Ean13:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FichaFormaDeVenta.
 const (
 	Entera        FichaFormaDeVenta = "entera"
@@ -64,6 +82,33 @@ func (e SugeridoTipo) Valid() bool {
 	}
 }
 
+// Defines values for ListarProductosParamsEstado.
+const (
+	Ocultos   ListarProductosParamsEstado = "ocultos"
+	SinFoto   ListarProductosParamsEstado = "sin-foto"
+	SinPrecio ListarProductosParamsEstado = "sin-precio"
+	SinStock  ListarProductosParamsEstado = "sin-stock"
+	Todos     ListarProductosParamsEstado = "todos"
+)
+
+// Valid indicates whether the value is a known member of the ListarProductosParamsEstado enum.
+func (e ListarProductosParamsEstado) Valid() bool {
+	switch e {
+	case Ocultos:
+		return true
+	case SinFoto:
+		return true
+	case SinPrecio:
+		return true
+	case SinStock:
+		return true
+	case Todos:
+		return true
+	default:
+		return false
+	}
+}
+
 // Activo defines model for Activo.
 type Activo struct {
 	Activo bool `json:"activo"`
@@ -92,6 +137,31 @@ type ConProducto struct {
 	ProductId string `json:"productId"`
 }
 
+// Etiqueta defines model for Etiqueta.
+type Etiqueta struct {
+	// Barras Null si el código no se puede dibujar (letras fuera de ASCII)
+	Barras *struct {
+		// Modulos Un carácter por módulo
+		Modulos string             `json:"modulos"`
+		Tipo    EtiquetaBarrasTipo `json:"tipo"`
+	} `json:"barras"`
+
+	// Codigo El código de barras de la medida o
+	Codigo      string `json:"codigo"`
+	Medida      string `json:"medida"`
+	Nombre      string `json:"nombre"`
+	NombreCorto string `json:"nombreCorto"`
+
+	// Precio El de la lista general; solo si se pidió y es mayor que cero
+	Precio    *string `json:"precio"`
+	ProductId string  `json:"productId"`
+	Sku       string  `json:"sku"`
+	VariantId string  `json:"variantId"`
+}
+
+// EtiquetaBarrasTipo defines model for Etiqueta.Barras.Tipo.
+type EtiquetaBarrasTipo string
+
 // Ficha defines model for Ficha.
 type Ficha struct {
 	APedido      bool              `json:"aPedido"`
@@ -109,36 +179,40 @@ type Ficha struct {
 		Id  string  `json:"id"`
 		Url string  `json:"url"`
 	} `json:"galeria"`
-	Id                    string    `json:"id"`
-	Imagen                string    `json:"imagen"`
-	Imputacion            *string   `json:"imputacion"`
-	Name                  string    `json:"name"`
-	PrecioMediaPct        float64   `json:"precioMediaPct"`
-	RecargoElaboracionPct *string   `json:"recargoElaboracionPct"`
-	Slug                  string    `json:"slug"`
-	Subcategory           *string   `json:"subcategory"`
-	SubcategoryId         *string   `json:"subcategoryId"`
-	Unit                  string    `json:"unit"`
-	UpdatedAt             time.Time `json:"updatedAt"`
-	Usos                  *string   `json:"usos"`
+	Id                    string            `json:"id"`
+	Imagen                string            `json:"imagen"`
+	Imputacion            *string           `json:"imputacion"`
+	Name                  string            `json:"name"`
+	PrecioMediaPct        float64           `json:"precioMediaPct"`
+	RecargoElaboracionPct *string           `json:"recargoElaboracionPct"`
+	Slug                  string            `json:"slug"`
+	Subcategory           *string           `json:"subcategory"`
+	SubcategoryId         *string           `json:"subcategoryId"`
+	Sucursales            []SucursalDeFicha `json:"sucursales"`
+	Unit                  string            `json:"unit"`
+	UpdatedAt             time.Time         `json:"updatedAt"`
+	Usos                  *string           `json:"usos"`
 	Variantes             []struct {
-		AnchoMm           *int    `json:"anchoMm"`
-		Calidad           string  `json:"calidad"`
-		CodigoBarras      string  `json:"codigoBarras"`
-		Color             string  `json:"color"`
-		EspesorMm         *int    `json:"espesorMm"`
-		Id                string  `json:"id"`
-		Label             string  `json:"label"`
-		LargoMm           *int    `json:"largoMm"`
-		Material          string  `json:"material"`
-		MinAserradero     float64 `json:"minAserradero"`
-		MinCentral        float64 `json:"minCentral"`
-		PrecioGeneral     string  `json:"precioGeneral"`
-		PrecioProfesional string  `json:"precioProfesional"`
-		Sku               string  `json:"sku"`
-		StockAserradero   float64 `json:"stockAserradero"`
-		StockCentral      float64 `json:"stockCentral"`
-		Terminacion       string  `json:"terminacion"`
+		AnchoMm           *int   `json:"anchoMm"`
+		Calidad           string `json:"calidad"`
+		CodigoBarras      string `json:"codigoBarras"`
+		Color             string `json:"color"`
+		EspesorMm         *int   `json:"espesorMm"`
+		Id                string `json:"id"`
+		Label             string `json:"label"`
+		LargoMm           *int   `json:"largoMm"`
+		Material          string `json:"material"`
+		PrecioGeneral     string `json:"precioGeneral"`
+		PrecioProfesional string `json:"precioProfesional"`
+		Sku               string `json:"sku"`
+
+		// Stocks Una por cada sucursal activa, en el orden de sucursales
+		Stocks []struct {
+			Minimo   float64 `json:"minimo"`
+			Stock    float64 `json:"stock"`
+			Sucursal string  `json:"sucursal"`
+		} `json:"stocks"`
+		Terminacion string `json:"terminacion"`
 	} `json:"variantes"`
 }
 
@@ -188,7 +262,17 @@ type FormProducto struct {
 
 		// StockCentralVisto El stock que mostraba la ficha al abrirse. Si viene, el cambio se aplica por diferencia; si no cambió, el físico no se toca.
 		StockCentralVisto *string `json:"stockCentralVisto,omitempty"`
-		Terminacion       *string `json:"terminacion,omitempty"`
+
+		// Stocks El stock de cada sucursal, por id de la base. Si viene, manda sobre stockCentral y compañía (el formato viejo).
+		Stocks *[]struct {
+			Minimo   *string `json:"minimo,omitempty"`
+			Stock    *string `json:"stock,omitempty"`
+			Sucursal string  `json:"sucursal"`
+
+			// Visto El stock que mostraba la ficha al abrirse
+			Visto *string `json:"visto,omitempty"`
+		} `json:"stocks,omitempty"`
+		Terminacion *string `json:"terminacion,omitempty"`
 	} `json:"variantes"`
 }
 
@@ -222,6 +306,13 @@ type ProductoAdmin struct {
 	Variantes    int     `json:"variantes"`
 }
 
+// SucursalDeFicha defines model for SucursalDeFicha.
+type SucursalDeFicha struct {
+	Id     string `json:"id"`
+	Nombre string `json:"nombre"`
+	Slug   string `json:"slug"`
+}
+
 // Sugerido defines model for Sugerido.
 type Sugerido struct {
 	Activo           bool         `json:"activo"`
@@ -247,11 +338,29 @@ type RenombrarCategoriaJSONBody struct {
 	Name string `json:"name"`
 }
 
+// DatosDeEtiquetasParams defines parameters for DatosDeEtiquetas.
+type DatosDeEtiquetasParams struct {
+	// Medidas Ids de medidas separados por coma
+	Medidas *string `form:"medidas,omitempty" json:"medidas,omitempty"`
+
+	// Productos Ids de productos separados por coma; suma todas sus medidas activas
+	Productos *string `form:"productos,omitempty" json:"productos,omitempty"`
+	Precio    *bool   `form:"precio,omitempty" json:"precio,omitempty"`
+}
+
 // ListarProductosParams defines parameters for ListarProductos.
 type ListarProductosParams struct {
-	Busqueda  *string `form:"busqueda,omitempty" json:"busqueda,omitempty"`
-	Categoria *string `form:"categoria,omitempty" json:"categoria,omitempty"`
+	Busqueda       *string                      `form:"busqueda,omitempty" json:"busqueda,omitempty"`
+	Categoria      *string                      `form:"categoria,omitempty" json:"categoria,omitempty"`
+	Estado         *ListarProductosParamsEstado `form:"estado,omitempty" json:"estado,omitempty"`
+	Marca          *string                      `form:"marca,omitempty" json:"marca,omitempty"`
+	Proveedor      *string                      `form:"proveedor,omitempty" json:"proveedor,omitempty"`
+	Limite         *int                         `form:"limite,omitempty" json:"limite,omitempty"`
+	Desplazamiento *int                         `form:"desplazamiento,omitempty" json:"desplazamiento,omitempty"`
 }
+
+// ListarProductosParamsEstado defines parameters for ListarProductos.
+type ListarProductosParamsEstado string
 
 // GuardarMesesSinVenderJSONBody defines parameters for GuardarMesesSinVender.
 type GuardarMesesSinVenderJSONBody struct {
@@ -317,6 +426,9 @@ type ServerInterface interface {
 	// (PUT /api/v1/admin/categorias/{id})
 	RenombrarCategoria(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 
+	// (GET /api/v1/admin/etiquetas)
+	DatosDeEtiquetas(w http.ResponseWriter, r *http.Request, params DatosDeEtiquetasParams)
+
 	// (DELETE /api/v1/admin/imagenes/{id})
 	BorrarImagen(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 
@@ -340,6 +452,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/admin/productos-imputaciones)
 	ImputacionesUsadas(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/admin/productos-marcas)
+	MarcasDeProductos(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/admin/productos/{id})
 	FichaDeProducto(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -444,6 +559,65 @@ func (siw *ServerInterfaceWrapper) RenombrarCategoria(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// DatosDeEtiquetas operation middleware
+func (siw *ServerInterfaceWrapper) DatosDeEtiquetas(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DatosDeEtiquetasParams
+
+	// ------------- Optional query parameter "medidas" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "medidas", r.URL.Query(), &params.Medidas, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "medidas"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "medidas", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "productos" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "productos", r.URL.Query(), &params.Productos, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "productos"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "productos", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "precio" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "precio", r.URL.Query(), &params.Precio, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "precio"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "precio", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DatosDeEtiquetas(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // BorrarImagen operation middleware
 func (siw *ServerInterfaceWrapper) BorrarImagen(w http.ResponseWriter, r *http.Request) {
 
@@ -531,6 +705,71 @@ func (siw *ServerInterfaceWrapper) ListarProductos(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// ------------- Optional query parameter "estado" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "estado", r.URL.Query(), &params.Estado, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "estado"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "estado", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "marca" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "marca", r.URL.Query(), &params.Marca, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "marca"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "marca", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "proveedor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "proveedor", r.URL.Query(), &params.Proveedor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "proveedor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "proveedor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limite" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limite", r.URL.Query(), &params.Limite, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limite"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limite", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "desplazamiento" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "desplazamiento", r.URL.Query(), &params.Desplazamiento, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "desplazamiento"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "desplazamiento", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListarProductos(w, r, params)
 	}))
@@ -603,6 +842,20 @@ func (siw *ServerInterfaceWrapper) ImputacionesUsadas(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ImputacionesUsadas(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MarcasDeProductos operation middleware
+func (siw *ServerInterfaceWrapper) MarcasDeProductos(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MarcasDeProductos(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1066,6 +1319,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/productos-candidatos", wrapper.CandidatosDeBaja)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/productos-candidatos", wrapper.GuardarMesesSinVender)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/productos-imputaciones", wrapper.ImputacionesUsadas)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/productos-marcas", wrapper.MarcasDeProductos)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/etiquetas", wrapper.DatosDeEtiquetas)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/productos-atributos", wrapper.AtributosUsados)
 
 	return m
@@ -1177,6 +1432,28 @@ func (response RenombrarCategoria422ApplicationProblemPlusJSONResponse) VisitRen
 	return err
 }
 
+type DatosDeEtiquetasRequestObject struct {
+	Params DatosDeEtiquetasParams
+}
+
+type DatosDeEtiquetasResponseObject interface {
+	VisitDatosDeEtiquetasResponse(w http.ResponseWriter) error
+}
+
+type DatosDeEtiquetas200JSONResponse []Etiqueta
+
+func (response DatosDeEtiquetas200JSONResponse) VisitDatosDeEtiquetasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type BorrarImagenRequestObject struct {
 	Id openapi_types.UUID `json:"id"`
 }
@@ -1261,7 +1538,17 @@ type ListarProductosResponseObject interface {
 	VisitListarProductosResponse(w http.ResponseWriter) error
 }
 
-type ListarProductos200JSONResponse []ProductoAdmin
+type ListarProductos200JSONResponse struct {
+	Conteos struct {
+		Ocultos   int `json:"ocultos"`
+		SinFoto   int `json:"sinFoto"`
+		SinPrecio int `json:"sinPrecio"`
+		SinStock  int `json:"sinStock"`
+		Todos     int `json:"todos"`
+	} `json:"conteos"`
+	Filas []ProductoAdmin `json:"filas"`
+	Total int             `json:"total"`
+}
 
 func (response ListarProductos200JSONResponse) VisitListarProductosResponse(w http.ResponseWriter) error {
 
@@ -1411,6 +1698,27 @@ type ImputacionesUsadasResponseObject interface {
 type ImputacionesUsadas200JSONResponse []string
 
 func (response ImputacionesUsadas200JSONResponse) VisitImputacionesUsadasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarcasDeProductosRequestObject struct {
+}
+
+type MarcasDeProductosResponseObject interface {
+	VisitMarcasDeProductosResponse(w http.ResponseWriter) error
+}
+
+type MarcasDeProductos200JSONResponse []string
+
+func (response MarcasDeProductos200JSONResponse) VisitMarcasDeProductosResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -1852,6 +2160,9 @@ type StrictServerInterface interface {
 	// (PUT /api/v1/admin/categorias/{id})
 	RenombrarCategoria(ctx context.Context, request RenombrarCategoriaRequestObject) (RenombrarCategoriaResponseObject, error)
 
+	// (GET /api/v1/admin/etiquetas)
+	DatosDeEtiquetas(ctx context.Context, request DatosDeEtiquetasRequestObject) (DatosDeEtiquetasResponseObject, error)
+
 	// (DELETE /api/v1/admin/imagenes/{id})
 	BorrarImagen(ctx context.Context, request BorrarImagenRequestObject) (BorrarImagenResponseObject, error)
 
@@ -1875,6 +2186,9 @@ type StrictServerInterface interface {
 
 	// (GET /api/v1/admin/productos-imputaciones)
 	ImputacionesUsadas(ctx context.Context, request ImputacionesUsadasRequestObject) (ImputacionesUsadasResponseObject, error)
+
+	// (GET /api/v1/admin/productos-marcas)
+	MarcasDeProductos(ctx context.Context, request MarcasDeProductosRequestObject) (MarcasDeProductosResponseObject, error)
 
 	// (GET /api/v1/admin/productos/{id})
 	FichaDeProducto(ctx context.Context, request FichaDeProductoRequestObject) (FichaDeProductoResponseObject, error)
@@ -2036,6 +2350,32 @@ func (sh *strictHandler) RenombrarCategoria(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RenombrarCategoriaResponseObject); ok {
 		if err := validResponse.VisitRenombrarCategoriaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DatosDeEtiquetas operation middleware
+func (sh *strictHandler) DatosDeEtiquetas(w http.ResponseWriter, r *http.Request, params DatosDeEtiquetasParams) {
+	var request DatosDeEtiquetasRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DatosDeEtiquetas(ctx, request.(DatosDeEtiquetasRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DatosDeEtiquetas")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DatosDeEtiquetasResponseObject); ok {
+		if err := validResponse.VisitDatosDeEtiquetasResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2248,6 +2588,30 @@ func (sh *strictHandler) ImputacionesUsadas(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ImputacionesUsadasResponseObject); ok {
 		if err := validResponse.VisitImputacionesUsadasResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MarcasDeProductos operation middleware
+func (sh *strictHandler) MarcasDeProductos(w http.ResponseWriter, r *http.Request) {
+	var request MarcasDeProductosRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MarcasDeProductos(ctx, request.(MarcasDeProductosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MarcasDeProductos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MarcasDeProductosResponseObject); ok {
+		if err := validResponse.VisitMarcasDeProductosResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2635,55 +2999,68 @@ func (sh *strictHandler) EngancharRubro(w http.ResponseWriter, r *http.Request, 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

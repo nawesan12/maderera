@@ -46,7 +46,7 @@ func (s *Servicio) Presupuesto(ctx context.Context, ses *auth.Sesion, p Presupue
 	a := ahora.In(caja.Argentina)
 	valido := time.Date(a.Year(), a.Month(), a.Day()+diasDeValidez, a.Hour(), a.Minute(), a.Second(), a.Nanosecond(), caja.Argentina)
 	var id, numero string
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
 		if numero, err = numeracion.Presupuesto(ctx, tx, ahora.In(caja.Argentina)); err != nil {
 			return err
@@ -189,7 +189,7 @@ func (s *Servicio) CobrarCuenta(ctx context.Context, ses *auth.Sesion, cliente, 
 		return CobroDeCuenta{}, rechazo("Una retención se carga en el panel con su certificado, no desde el mostrador.")
 	}
 	var r cobros.ReciboEmitido
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		hayEfectivo := false
 		for _, p := range partes {
 			if p.Medio == "efectivo" {

@@ -14,6 +14,7 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/caja"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
 	"mjbj/internal/zodjs"
@@ -48,7 +49,7 @@ func (s *Servicio) AbrirCaja(ctx context.Context, ses *auth.Sesion, sucursal str
 		return "", err
 	}
 	faltaCambio := base > 0 && fondo < base
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		var sesion string
 		if err := tx.QueryRow(ctx, `INSERT INTO cash_sessions (branch_id, abierta_por) VALUES ($1, $2) RETURNING id`, sucursal, ses.UserID).Scan(&sesion); err != nil {
 			return err
@@ -88,7 +89,7 @@ func (s *Servicio) MovimientoDeCaja(ctx context.Context, ses *auth.Sesion, sesio
 	if tipo == "retiro" {
 		firmado = -monto
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		var estado string
 		var base jsmath.Num
 		err := tx.QueryRow(ctx, `
@@ -169,7 +170,7 @@ func (s *Servicio) CerrarCaja(ctx context.Context, ses *auth.Sesion, sesion stri
 	var esperado jsmath.Num
 	var diferencia float64
 	var nombre string
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		var estado string
 		if err := tx.QueryRow(ctx, `SELECT estado FROM cash_sessions WHERE id::text = $1 FOR UPDATE`, sesion).Scan(&estado); err != nil {
 			return err

@@ -16,6 +16,7 @@ import (
 	"mjbj/internal/entregas"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
@@ -60,15 +61,7 @@ var textoDelEstado = map[string]string{
 }
 
 func (s *Servicio) enTransaccion(ctx context.Context, f func(pgx.Tx) error) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if err := f(tx); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return plataforma.EnTransaccion(ctx, s.pool, f)
 }
 
 func (s *Servicio) anotar(ctx context.Context, ses *auth.Sesion, accion bitacora.Accion, entidad, id, descripcion string, detalle any) {

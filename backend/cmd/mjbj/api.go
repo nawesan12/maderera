@@ -97,8 +97,12 @@ type configAPI struct {
 var (
 	// El principal: 30 s por consulta alcanzan de sobra para lo de todos los
 	// días (una venta, un cierre de caja, un PDF son milisegundos). Un
-	// candado se espera 10 s como mucho: dos cajas que se cruzan reciben un
-	// error y reintentan, en vez de quedar las dos colgadas. Los candados de
+	// candado se espera 10 s como mucho, en vez de quedar colgados. Lo que
+	// pasa después lo decide plataforma.EnTransaccion: la venta, los cobros,
+	// la caja y los pedidos vuelven a correr la transacción dos veces más; si
+	// tampoco, o en cualquier otra escritura, la respuesta es un 503 «hay
+	// otra operación en curso» (ErrorDeRespuesta) que la cola del mostrador
+	// reintenta sola. Los candados de
 	// sesión que duran una llamada a ARCA o un turno del bot se esperan sin
 	// tope (plataforma.SinTopes): ahí manda el contexto del pedido.
 	topesDeLaAPI = plataforma.Topes{Sentencia: 30 * time.Second, Candado: 10 * time.Second, Ociosa: time.Minute}

@@ -72,7 +72,7 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 	}
 	var r ReciboEmitido
 	var numeroPedido string
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		var p *sqlc.PedidoParaCobrarRow
 		if pedido != "" {
@@ -129,7 +129,7 @@ func (s *Servicio) Anular(ctx context.Context, ses *auth.Sesion, recibo, motivo 
 		return "", plataforma.Invalido(map[string]string{"motivo": "Poné el motivo de la anulación."})
 	}
 	var numero string
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
 		numero, _, err = AnularRecibo(ctx, tx, recibo, limpio, &ses.UserID)
 		return err
@@ -262,7 +262,7 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 	var cheque sqlc.Cheque
 	var recibo ReciboEmitido
 	debitado := false
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		if err := q.BloquearCheque(ctx, id); err != nil {
 			return err

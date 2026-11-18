@@ -387,7 +387,14 @@ func (s *Servicio) Descargar(ctx context.Context, ses *auth.Sesion, lote []Venta
 		// movimiento de caja, con su clave foránea) fallaban y la venta
 		// quedaba en «reintentar» para siempre.
 		usuario := ses.UserID
-		if v.UsuarioID != nil && *v.UsuarioID != ses.UserID {
+		// Y solo con la firma de la sesión que la encoló: sin ella, cualquiera
+		// que drenara la cola firmaba a nombre de otro vendedor real.
+		firmada := v.UsuarioID != nil && v.FirmaUsuario != nil && s.FirmaValida(*v.FirmaUsuario, *v.UsuarioID, v.CobradaAt)
+		if v.UsuarioID != nil && *v.UsuarioID != ses.UserID && !firmada {
+			s.log.Warn("mostrador.drenaje: venta de otro usuario sin firma válida; queda a nombre de quien la sube",
+				"clave", v.Clave, "dice", *v.UsuarioID, "sube", ses.UserID)
+		}
+		if v.UsuarioID != nil && *v.UsuarioID != ses.UserID && firmada {
 			var existe bool
 			// Y que sea alguien que atiende el mostrador: si no, cualquier
 			// vendedor firmaba ventas a nombre del administrador.

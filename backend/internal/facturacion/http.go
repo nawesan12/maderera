@@ -87,6 +87,7 @@ func (o respuesta) VisitGuardarEmisorFiscalResponse(w http.ResponseWriter) error
 }
 func (o respuesta) VisitLibroIvaVentasResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitLibroIvaVentasCsvResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitLibroIvaDigitalResponse(w http.ResponseWriter) error    { return o.escribir(w) }
 func (o respuesta) VisitPedidoParaFacturarResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitFacturarPedidoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitListarPuntosDeVentaResponse(w http.ResponseWriter) error {
@@ -369,6 +370,28 @@ func (a *API) LibroIvaVentasCsv(ctx context.Context, r facturacionapi.LibroIvaVe
 	nombre := "libro-iva-ventas-" + p.Clave + ".csv"
 	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaExportar, "libro_iva", "", "Exportó el libro IVA ventas de "+p.Clave, nil)
 	return respuesta{datos: []byte(CsvLibroIva(l)), tipo: "application/octet-stream", disposicion: `attachment; filename="` + nombre + `"`}, nil
+}
+
+// LibroIvaDigital es el .zip con los archivos de la RG 4597 del mes, para que
+// el contador los importe en el aplicativo de ARCA. El mismo permiso que los
+// dos libros.
+func (a *API) LibroIvaDigital(ctx context.Context, r facturacionapi.LibroIvaDigitalRequestObject) (facturacionapi.LibroIvaDigitalResponseObject, error) {
+	ses, err := libroIva(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p := LeerPeriodo(texto2(r.Params.Periodo), a.s.ahora())
+	ventas, compras, omitidos, err := a.s.LibroIvaDigital(ctx, p.Desde, p.Hasta)
+	if err != nil {
+		return nil, err
+	}
+	zip, err := fiscal.ZipLibroIva(p.Clave, fiscal.EscribirLibroIva(ventas, compras), omitidos)
+	if err != nil {
+		return nil, err
+	}
+	nombre := "libro-iva-digital-" + p.Clave + ".zip"
+	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaExportar, "libro_iva", "", "Exportó el Libro IVA Digital de "+p.Clave, nil)
+	return respuesta{datos: zip, tipo: "application/zip", disposicion: `attachment; filename="` + nombre + `"`}, nil
 }
 
 func (a *API) PedidoParaFacturar(ctx context.Context, r facturacionapi.PedidoParaFacturarRequestObject) (facturacionapi.PedidoParaFacturarResponseObject, error) {

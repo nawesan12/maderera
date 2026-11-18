@@ -276,6 +276,17 @@ paths:
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
+  /api/v1/admin/facturacion/libro-iva/digital:
+    get:
+      operationId: LibroIvaDigital
+      parameters:
+        - { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso), schema: { type: string } }
+      responses:
+        "200":
+          description: Los cuatro archivos del Libro IVA Digital (RG 4597) del mes, en un .zip
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
   /api/v1/admin/facturacion/pedidos/{id}:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }

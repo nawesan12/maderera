@@ -63,6 +63,8 @@ type VentaPedida struct {
 	NumeroProvisorio *string
 	CobradaAt        *time.Time
 	UsuarioID        *string
+	// FirmaUsuario es la firma de la sesión que la encoló (firma.go).
+	FirmaUsuario *string
 }
 
 var reFechaCheque = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
@@ -226,6 +228,7 @@ func LeerLoteDeLaCola(crudo any) ([]VentaPedida, *zodjs.Lector) {
 			}
 		}
 		v.UsuarioID = e.Cadena("usuarioId", zodjs.Texto{Opcional: true})
+		v.FirmaUsuario = e.Cadena("firmaUsuario", zodjs.Texto{Opcional: true, Nulo: true})
 		lote = append(lote, v)
 	})
 	return lote, l

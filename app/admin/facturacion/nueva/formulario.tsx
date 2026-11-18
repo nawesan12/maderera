@@ -16,6 +16,7 @@ import {
   Trash2,
   UserPlus,
   UserRound,
+  Wallet,
   X,
 } from "lucide-react";
 import { emitirManual, type EstadoFactura } from "../actions";
@@ -34,6 +35,7 @@ import {
   Seccion,
   sinReiniciar,
 } from "@/components/admin/formulario";
+import { Opciones as Elegir } from "@/components/admin/opciones";
 
 const inicial: EstadoFactura = {};
 
@@ -48,6 +50,27 @@ const CONDICIONES = [
   { valor: "exento", texto: "Exento", icono: ShieldCheck },
   { valor: "no_categorizado", texto: "No categorizado", icono: CircleSlash },
 ];
+
+/*
+ * Cómo paga. De contado, la factura sale con su recibo y el efectivo entra a
+ * la caja abierta (Go, cobros.EmitirRecibo); a cuenta corriente queda la
+ * deuda en la ficha. Los valores son los medios del recibo.
+ */
+const COMO_PAGA = [
+  { valor: "contado", texto: "Contado" },
+  { valor: "cuenta_corriente", texto: "Cuenta corriente" },
+] as const;
+
+const MEDIOS = [
+  { valor: "efectivo", texto: "Efectivo" },
+  { valor: "transferencia", texto: "Transferencia" },
+  { valor: "tarjeta_debito", texto: "Débito" },
+  { valor: "tarjeta_credito", texto: "Crédito" },
+  { valor: "mercado_pago", texto: "Mercado Pago" },
+] as const;
+
+type ComoPaga = (typeof COMO_PAGA)[number]["valor"];
+type Medio = (typeof MEDIOS)[number]["valor"];
 
 interface Linea {
   descripcion: string;
@@ -84,6 +107,8 @@ export function FormularioFacturaManual({
 
   const [condicion, setCondicion] = useState<CondicionIva>("consumidor_final");
   const [lineas, setLineas] = useState<Linea[]>([{ ...LINEA_VACIA }]);
+  const [comoPaga, setComoPaga] = useState<ComoPaga>("contado");
+  const [medio, setMedio] = useState<Medio>("efectivo");
 
   /*
    * A quién se le factura.
@@ -364,6 +389,29 @@ export function FormularioFacturaManual({
           )}
         </Seccion>
 
+        <Seccion titulo="Cómo paga" icono={Wallet} columnas={1}>
+          <input type="hidden" name="comoPaga" value={comoPaga} />
+          {comoPaga === "contado" && (
+            <input type="hidden" name="medio" value={medio} />
+          )}
+          <div className="space-y-3">
+            <Elegir
+              etiqueta="Cómo paga"
+              opciones={[...COMO_PAGA]}
+              valor={comoPaga}
+              alCambiar={setComoPaga}
+            />
+            {comoPaga === "contado" && (
+              <Elegir
+                etiqueta="Medio de pago"
+                opciones={[...MEDIOS]}
+                valor={medio}
+                alCambiar={setMedio}
+              />
+            )}
+          </div>
+        </Seccion>
+
         <Seccion titulo="Observaciones" icono={StickyNote} columnas={1}>
           <textarea
             id="observaciones"
@@ -391,11 +439,11 @@ export function FormularioFacturaManual({
           abierto={confirmando}
           alCerrar={() => setConfirmando(false)}
           titulo={`Factura ${letra} por ${moneda.format(totales.total)} a ${receptor.nombre.trim() || "consumidor final"}`}
-          detalle={
-            cliente
-              ? "Se carga a su cuenta corriente. Una vez emitida no se borra: se corrige con nota de crédito."
-              : "Una vez emitida no se borra: se corrige con nota de crédito."
-          }
+          detalle={`${
+            comoPaga === "cuenta_corriente"
+              ? "Se carga a su cuenta corriente."
+              : `Se cobra de contado: ${MEDIOS.find((m) => m.valor === medio)?.texto}.`
+          } Una vez emitida no se borra: se corrige con nota de crédito.`}
           confirmar="Emitir"
           alConfirmar={() => {
             setConfirmando(false);
@@ -495,9 +543,6 @@ function BuscadorDeCliente({
               {elegido.cuit}
             </span>
           )}
-        </span>
-        <span className="text-sm text-muted-foreground">
-          La factura se carga a su cuenta corriente
         </span>
         <button
           type="button"

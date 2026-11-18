@@ -87,29 +87,8 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 	}
 	var r cobros.ReciboEmitido
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		concepto := "Cobro de " + et
 		var err error
-		r, err = cobros.EmitirRecibo(ctx, tx, cobros.Cobro{CustomerID: c.cliente, RecibidoDe: c.receptor, BranchID: c.sucursal,
-			Origen: "factura", Concepto: &concepto, Partes: partes, Caja: &cobros.Caja{Buscar: true}, UsuarioID: &ses.UserID})
-		if err != nil {
-			return err
-		}
-		lote := &pgx.Batch{}
-		for _, p := range partes {
-			ref := p.Referencia
-			if p.Cheque != nil {
-				x := p.Cheque.Banco + " N° " + p.Cheque.Numero
-				ref = &x
-			}
-			lote.Queue(`INSERT INTO invoice_payments (invoice_id, medio, monto, referencia, receipt_id, created_by_user_id)
-				VALUES ($1, $2::medio_cobro, $3::numeric, $4, $5, $6)`, c.id, medioDeFactura[p.Medio], jsmath.Fijo2(p.Importe), ref,
-				r.ReceiptID, ses.UserID)
-		}
-		if err := tx.SendBatch(ctx, lote).Close(); err != nil {
-			return err
-		}
-		// El aviso al cliente sale solo si el cobro se confirma.
-		_, err = cola.Encolar(ctx, s.q.WithTx(tx), cobros.TrabajoAvisoDeRecibo, map[string]string{"receiptId": r.ReceiptID}, time.Time{})
+		r, err = cobrarConRecibo(ctx, tx, ses, c.id, c.cliente, c.receptor, c.sucursal, et, partes)
 		return err
 	})
 	if err != nil {
@@ -126,4 +105,36 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 		ok += " " + *r.Aviso
 	}
 	return ResultadoDeCobro{Ok: ok, ReceiptID: &r.ReceiptID}, nil
+}
+
+// cobrarConRecibo es el cobro de una factura con recibo, en la transacción de
+// quien llama: cobros.EmitirRecibo (la única puerta de la plata de un
+// cliente, con el efectivo a la caja abierta), los cobros de la factura y el
+// aviso al cliente. Lo usan el cobro desde la ficha y la factura manual de
+// contado.
+func cobrarConRecibo(ctx context.Context, tx pgx.Tx, ses *auth.Sesion, factura string, cliente *string, receptor string,
+	sucursal *string, et string, partes []cobros.Parte) (cobros.ReciboEmitido, error) {
+	concepto := "Cobro de " + et
+	r, err := cobros.EmitirRecibo(ctx, tx, cobros.Cobro{CustomerID: cliente, RecibidoDe: receptor, BranchID: sucursal,
+		Origen: "factura", Concepto: &concepto, Partes: partes, Caja: &cobros.Caja{Buscar: true}, UsuarioID: &ses.UserID})
+	if err != nil {
+		return r, err
+	}
+	lote := &pgx.Batch{}
+	for _, p := range partes {
+		ref := p.Referencia
+		if p.Cheque != nil {
+			x := p.Cheque.Banco + " N° " + p.Cheque.Numero
+			ref = &x
+		}
+		lote.Queue(`INSERT INTO invoice_payments (invoice_id, medio, monto, referencia, receipt_id, created_by_user_id)
+			VALUES ($1, $2::medio_cobro, $3::numeric, $4, $5, $6)`, factura, medioDeFactura[p.Medio], jsmath.Fijo2(p.Importe), ref,
+			r.ReceiptID, ses.UserID)
+	}
+	if err := tx.SendBatch(ctx, lote).Close(); err != nil {
+		return r, err
+	}
+	// El aviso al cliente sale solo si el cobro se confirma.
+	_, err = cola.Encolar(ctx, sqlc.New(tx), cobros.TrabajoAvisoDeRecibo, map[string]string{"receiptId": r.ReceiptID}, time.Time{})
+	return r, err
 }

@@ -84,6 +84,14 @@ export default async function LibroIvaComprasPage({
               <Download className="h-4 w-4" />
               CSV
             </a>
+            {/* El mismo .zip que el libro de ventas: la RG 4597 lleva los dos. */}
+            <a
+              href={`/admin/arca/libro-iva/digital?periodo=${periodo.clave}`}
+              className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-linea px-4 text-base font-medium hover:bg-hundida"
+            >
+              <Download className="h-4 w-4" />
+              Libro IVA Digital
+            </a>
           </div>
         </header>
       </div>

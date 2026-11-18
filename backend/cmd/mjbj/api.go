@@ -368,7 +368,7 @@ func correrAPI() error {
 	// El mostrador (tanda 5): las acciones de app/mostrador por el contrato, y
 	// las rutas de siempre de la copia local (/api/mostrador/latido, catalogo,
 	// clientes, caja/movimientos, caja/vincular) con su forma de siempre.
-	servicioMostrador := mostrador.Nuevo(pool, log)
+	servicioMostrador := mostrador.Nuevo(pool, log).ConClaveDeCola(cfg.Auth.Secreto)
 	servicioMostrador.Rutas(m)
 	mostradorapi.HandlerWithOptions(
 		mostradorapi.NewStrictHandlerWithOptions(mostrador.NuevaAPI(servicioMostrador),

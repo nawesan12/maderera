@@ -65,6 +65,15 @@ export default async function LibroIvaPage({
           <Download className="h-5 w-5" />
           Exportar
         </a>
+        {/* Los archivos de la RG 4597 (ventas y compras juntos) que el
+            contador importa en el aplicativo de ARCA. */}
+        <a
+          href={`/admin/arca/libro-iva/digital?periodo=${actual}`}
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <Download className="h-5 w-5" />
+          Libro IVA Digital
+        </a>
       </EncabezadoPanel>
 
       {libro.filas.length === 0 ? (

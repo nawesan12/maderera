@@ -305,6 +305,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/facturacion/libro-iva/digital": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LibroIvaDigital"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/facturacion/pedidos/{id}": {
         parameters: {
             query?: never;
@@ -1207,6 +1223,29 @@ export interface operations {
                 };
                 content: {
                     "application/octet-stream": string;
+                };
+            };
+        };
+    };
+    LibroIvaDigital: {
+        parameters: {
+            query?: {
+                /** @description aaaa-mm (si falta */
+                periodo?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los cuatro archivos del Libro IVA Digital (RG 4597) del mes, en un .zip */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
                 };
             };
         };

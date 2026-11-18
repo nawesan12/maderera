@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { guardarFirma } from "./firma";
 
 /**
  * ¿Hay servidor de verdad?
@@ -88,6 +89,8 @@ export function useConexion(
 
       setEnLinea(true);
       setUltimoContacto(ahora);
+      // La firma de esta sesión para las ventas que se encolen sin conexión.
+      guardarFirma(datos?.firmaCola);
 
       if (datos?.servidorAt) {
         const diferencia = Math.abs(

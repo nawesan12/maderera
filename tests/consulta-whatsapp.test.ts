@@ -3,6 +3,7 @@ import {
   TOPE_DE_CANTIDAD,
   cantidadConUnidad,
   cantidadDeConsulta,
+  cantidadInvalida,
   enlaceDeConsulta,
   textoDeConsulta,
 } from "@/lib/catalogo/consulta";
@@ -19,9 +20,24 @@ describe("cantidad de la consulta", () => {
     expect(cantidadDeConsulta("3.75", "metro_lineal")).toBe(3.75);
   });
 
-  it("redondea lo que se cuenta, la placa incluida", () => {
-    expect(cantidadDeConsulta("2,6", "unidad")).toBe(3);
-    expect(cantidadDeConsulta("12,4", "placa")).toBe(12);
+  it("lo que se cuenta no se redondea en silencio: sale sin cantidad y el campo se marca", () => {
+    expect(cantidadDeConsulta("2,5", "placa")).toBeNull();
+    expect(cantidadDeConsulta("0,5", "placa")).toBeNull();
+    expect(cantidadDeConsulta("2,6", "unidad")).toBeNull();
+    expect(cantidadInvalida("2,5", "placa")).toBe(true);
+    expect(cantidadInvalida("", "placa")).toBe(false);
+    expect(cantidadInvalida("12", "placa")).toBe(false);
+  });
+
+  it("el punto de miles es miles, no decimales", () => {
+    expect(cantidadDeConsulta("1.500", "metro_cuadrado")).toBe(1500);
+    expect(cantidadDeConsulta("1.500", "placa")).toBe(1500);
+    expect(cantidadDeConsulta("1.500,5", "metro_lineal")).toBe(1500.5);
+  });
+
+  it("la unidad escrita al final no borra la cantidad", () => {
+    expect(cantidadDeConsulta("10 placas", "placa")).toBe(10);
+    expect(cantidadDeConsulta("20 m²", "metro_cuadrado")).toBe(20);
   });
 
   it("topea en 9999", () => {
@@ -41,10 +57,15 @@ describe("texto de la consulta", () => {
     expect(textoDeConsulta(base)).toBe("Hola! Quería el precio de Fenólico — 1220 × 2440 mm — 18 mm. ¿Tienen disponible?");
   });
 
-  it("con cantidad, código y media placa", () => {
+  it("con media placa, la cantidad cuenta medias y lo dice", () => {
     expect(
       textoDeConsulta({ ...base, cantidad: 12, como: "media placa, al largo", codigo: "FEN-18" }),
-    ).toBe("Hola! Quería el precio de 12 placas de Fenólico — 1220 × 2440 mm — 18 mm (media placa, al largo) [FEN-18]. ¿Tienen disponible?");
+    ).toBe("Hola! Quería el precio de 12 medias placas de Fenólico — 1220 × 2440 mm — 18 mm (al largo) [FEN-18]. ¿Tienen disponible?");
+    expect(textoDeConsulta({ ...base, cantidad: 1, como: "media placa, al ancho" })).toContain("de 1 media placa de Fenólico");
+  });
+
+  it("media placa sin cantidad queda como estaba", () => {
+    expect(textoDeConsulta({ ...base, como: "media placa, al largo" })).toContain("18 mm (media placa, al largo).");
   });
 
   it("una sola", () => {

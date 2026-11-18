@@ -10,7 +10,7 @@ import { useTienda } from "@/lib/tienda-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
-import { cantidadDeConsulta, enlaceDeConsulta, textoDeConsulta } from "@/lib/catalogo/consulta";
+import { cantidadDeConsulta, cantidadInvalida, enlaceDeConsulta, textoDeConsulta } from "@/lib/catalogo/consulta";
 import { presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
 import type { PreciosDeFicha } from "@/lib/dal/visitante";
 import type { VarianteDetalle } from "@/lib/dal/catalog";
@@ -477,7 +477,10 @@ function ConsultaDeLaMedida({
     unidad,
     codigo: medida.sku,
   });
-  const sufijo = formatearUnidad(unidad);
+  // Con media placa se cuentan medias: el sufijo lo dice, para que «12» no
+  // se lea como doce placas enteras.
+  const sufijo = presentacion ? "medias" : formatearUnidad(unidad);
+  const invalida = cantidadInvalida(cantidadTexto, unidad);
 
   return (
     <>
@@ -505,14 +508,19 @@ function ConsultaDeLaMedida({
       </div>
 
       <div className="flex items-stretch gap-2.5">
-        <label className="flex h-[50px] w-[124px] flex-none items-center rounded-[10px] border border-linea bg-card pr-3 focus-within:border-accion">
+        <label
+          className={`flex h-[50px] w-[124px] flex-none items-center rounded-[10px] border bg-card pr-3 ${
+            invalida ? "border-acento-texto" : "border-linea focus-within:border-accion"
+          }`}
+        >
           <input
             value={cantidadTexto}
             onChange={(e) => setCantidadTexto(e.target.value)}
             inputMode="decimal"
             autoComplete="off"
             placeholder="Cant."
-            aria-label={`Cantidad, en ${formatearUnidadPlural(unidad)}`}
+            aria-label={`Cantidad, en ${presentacion ? "medias placas" : formatearUnidadPlural(unidad)}`}
+            aria-invalid={invalida || undefined}
             className="tabular h-full w-full min-w-0 bg-transparent pl-3.5 text-[17px] font-semibold outline-none placeholder:text-[15px] placeholder:font-normal placeholder:text-texto-3"
           />
           <span aria-hidden className="text-[14.5px] text-texto-2">

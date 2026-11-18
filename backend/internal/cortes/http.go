@@ -450,6 +450,20 @@ func (a *API) CalcularPlano(ctx context.Context, r cortesapi.CalcularPlanoReques
 	}
 	plano := CalcularPlano(d)
 	out := map[string]any{"plano": plano}
+	// La hoja de la máquina, para el PDF que baja el mostrador antes de cobrar
+	// (18/11/2026). Solo el staff: al público no le sirve y cuesta armarla. Un
+	// plano que no se puede cortar en guillotina sale sin hoja, como en la
+	// ficha del corte.
+	if b.Hoja != nil && *b.Hoja && auth.DeContexto(ctx).EsStaff() && len(plano.Placas) > 0 {
+		if hoja, err := ArmarHojaDeCorte(plano); err == nil {
+			sup := make([]float64, len(plano.Placas))
+			for i, p := range plano.Placas {
+				sup[i] = SuperficieDeSierra(p.Cortes, plano.AnchoSierra)
+			}
+			out["hoja"] = hoja
+			out["superficies"] = sup
+		}
+	}
 	if pr := b.Presupuesto; pr != nil {
 		var tarifa *TarifaDeCorte
 		if pr.Tarifa != nil {

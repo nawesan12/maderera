@@ -802,6 +802,7 @@ export function VistaMostrador({
             precioMediaPct: cortando.precioMediaPct,
           }}
           anchoSierra={anchoSierra}
+          cliente={cliente?.nombre ?? null}
           precioPorPasada={tarifaDeLaPlaca?.precioPorPasada ?? 0}
           precioPorMetroCanto={tarifaDeLaPlaca?.precioPorMetroCanto ?? 0}
           onCerrar={() => setCortando(null)}

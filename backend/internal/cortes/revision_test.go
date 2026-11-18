@@ -327,3 +327,24 @@ func TestListaConIdRaro(t *testing.T) {
 		}
 	}
 }
+
+// La hoja de la máquina sale con el plano solo para el staff: es lo que baja
+// el mostrador en PDF antes de cobrar.
+func TestPlanoConHojaSoloParaElStaff(t *testing.T) {
+	e := armar(t)
+	u := e.srv.URL + "/api/v1/cortes/plano"
+	cuerpo := planoPedido(3, map[string]any{"hoja": true})
+
+	code, b := pedir(t, http.DefaultClient, "POST", u, cuerpo, "X-Forwarded-For", "10.0.9.1")
+	if code != 200 || strings.Contains(b, `"hoja"`) {
+		t.Errorf("sin sesión no va la hoja: %d %s", code, b)
+	}
+	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
+	code, b = pedir(t, ven, "POST", u, cuerpo)
+	if code != 200 || !strings.Contains(b, `"hoja"`) || !strings.Contains(b, `"superficies"`) {
+		t.Errorf("el mostrador recibe la hoja: %d %s", code, b)
+	}
+	if code, b := pedir(t, ven, "POST", u, planoPedido(3, nil)); code != 200 || strings.Contains(b, `"hoja"`) {
+		t.Errorf("sin pedirla no va: %d %s", code, b)
+	}
+}

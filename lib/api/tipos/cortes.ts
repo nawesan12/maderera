@@ -1500,6 +1500,8 @@ export interface operations {
                     anchoSierra?: number;
                     fijadas?: components["schemas"]["PiezaFijada"][];
                     busqueda?: boolean;
+                    /** @description Solo para el staff */
+                    hoja?: boolean;
                     presupuesto?: {
                         tarifa?: components["schemas"]["TarifaDeCorte"];
                         /** Format: double */
@@ -1520,6 +1522,8 @@ export interface operations {
                     "application/json": {
                         plano: components["schemas"]["Plano"];
                         cuenta?: components["schemas"]["Presupuesto"];
+                        hoja?: components["schemas"]["HojaDeCorte"];
+                        superficies?: number[];
                     };
                 };
             };

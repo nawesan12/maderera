@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Scissors, Trash2 } from "lucide-react";
+import { Download, Loader2, Plus, Scissors, Trash2 } from "lucide-react";
+import { contarCanto, SelectorDeCanto } from "@/components/cortes/selector-canto";
 import {
   Dialog,
   DialogContent,
@@ -65,6 +66,7 @@ export function CorteAMedida({
   precioPorPasada,
   precioPorMetroCanto,
   anchoSierra: anchoSierraGeneral,
+  cliente,
   onCerrar,
   onAgregar,
 }: {
@@ -86,6 +88,8 @@ export function CorteAMedida({
   anchoSierra: number;
   precioPorPasada: number;
   precioPorMetroCanto: number;
+  /** El nombre del cliente de la venta, para encabezar el PDF del plano. */
+  cliente?: string | null;
   onCerrar: () => void;
   onAgregar: (lineas: LineaDeVenta[], corte: CorteDeMostrador) => void;
 }) {
@@ -259,363 +263,339 @@ export function CorteAMedida({
     });
   }
 
+  /*
+   * El plano en PDF, en el momento y sin cobrar (pedido de Nahuel, 18/11):
+   * para dárselo al cliente que lo está pensando o mandarlo al taller.
+   */
+  const [bajando, setBajando] = useState(false);
+  const [errorPdf, setErrorPdf] = useState<string | null>(null);
+  async function descargarPlano() {
+    if (plano.placas.length === 0) return;
+    setBajando(true);
+    setErrorPdf(null);
+    try {
+      const r = await fetch("/api/mostrador/plano", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          material: placa.descripcion,
+          canto: canto.trim() || null,
+          deQueSale: nombreDeLaMitad(mitad),
+          metrosCanto,
+          cliente: cliente ?? null,
+          placaLargo,
+          placaAncho,
+          anchoSierra,
+          piezas: validas,
+          fijadas,
+        }),
+      });
+      if (!r.ok) throw new Error();
+      const url = URL.createObjectURL(await r.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "plano-de-corte.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setErrorPdf("No se pudo armar el PDF.");
+    } finally {
+      setBajando(false);
+    }
+  }
+
+  // Según el ancho de la columna (`@container`), no el de la pantalla.
+  const columnas = "@2xl:grid @2xl:grid-cols-[minmax(110px,1fr)_84px_84px_64px_92px_64px_36px] @2xl:items-center @2xl:gap-2";
+
   return (
     <Dialog open onOpenChange={(abierto) => !abierto && onCerrar()}>
-      {/* `sm:max-w-*` y no `max-w-*`: el diálogo base trae `sm:max-w-md` y, al ser
-          de otro breakpoint, no lo pisa una clase sin prefijo — el modal quedaba
-          en 448 px con los campos apilándose de a uno. */}
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[min(1100px,95vw)]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight">
-            <Scissors className="h-5 w-5" />
-            Corte a medida
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <p className="text-base text-muted-foreground">
-            {placa.descripcion} · {nombreDeLaMitad(mitad).toLowerCase()} de{" "}
-            <span className="tabular">
-              {placaLargo} × {placaAncho} mm
+      {/* A pantalla casi completa: es una mesa de trabajo, no un aviso. La
+          placa y sus ajustes arriba, la planilla a la izquierda y el plano a
+          la derecha, todo a la vista a la vez (antes, en un modal de 1100 px,
+          el plano quedaba abajo de las medidas). `sm:max-w-*` porque el
+          diálogo base trae `sm:max-w-md` y una clase sin prefijo no lo pisa. */}
+      <DialogContent className="flex h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1600px,96vw)]">
+        <DialogHeader className="m-0 border-b border-linea px-6 pb-4 pt-5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pr-12">
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight">
+              <Scissors className="h-5 w-5" />
+              Corte a medida
+            </DialogTitle>
+            <span className="text-base">
+              {placa.descripcion}
+              <span className="tabular ml-2 text-muted-foreground">
+                {placaLargo} × {placaAncho} mm{medidaSupuesta && " (supuesta)"}
+              </span>
             </span>
-            {medidaSupuesta && " (medida supuesta: la placa no la tiene cargada)"}
-          </p>
 
-          {/* Los milímetros del disco, dichos y editables. Estaban descontados
-              desde siempre y en ninguna pantalla se veían, así que en el
-              mostrador no se podía explicar por qué dos piezas de 900 no
-              entran en una placa de 1830. */}
-          <label className="flex flex-wrap items-center gap-2 text-base">
-            <span className="text-muted-foreground">La sierra se lleva</span>
-            <input
-              value={sierraTexto}
-              onChange={(e) => setSierraTexto(e.target.value)}
-              inputMode="decimal"
-              aria-label="Ancho de la sierra, en milímetros"
-              aria-invalid={leerAnchoDeSierra(sierraTexto) === null}
-              className="tabular h-10 w-20 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
-            />
-            <span className="text-muted-foreground">mm por corte</span>
+            {sePuedePartir && (
+              <div className="flex gap-1.5" role="group" aria-label="De qué sale">
+                {([null, "largo", "ancho"] as const).map((m) => (
+                  <button
+                    key={m ?? "entera"}
+                    type="button"
+                    onClick={() => setMitad(m)}
+                    aria-pressed={mitad === m}
+                    className={`h-10 rounded-lg px-3 text-base font-medium transition-colors ${
+                      mitad === m ? "boton-accion" : "border border-linea text-muted-foreground hover:bg-hundida"
+                    }`}
+                  >
+                    {m === null ? "Placa entera" : m === "largo" ? "Media a lo largo" : "Media al ancho"}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Los milímetros del disco, dichos y editables: el plano, el
+                precio y la hoja del taller salen con este número. */}
+            <label className="flex items-center gap-2 text-base">
+              <span className="text-muted-foreground">Sierra</span>
+              <input
+                value={sierraTexto}
+                onChange={(e) => setSierraTexto(e.target.value)}
+                inputMode="decimal"
+                aria-label="Ancho de la sierra, en milímetros"
+                aria-invalid={leerAnchoDeSierra(sierraTexto) === null}
+                className="tabular h-10 w-16 rounded-lg border border-linea bg-background px-2 text-right text-base"
+              />
+              <span className="text-muted-foreground">mm</span>
+            </label>
             {leerAnchoDeSierra(sierraTexto) === null && (
               <span className="estado-espera text-sm font-medium">
-                Entre 0,5 y 10 mm: mientras tanto se usa {formatearSierra(anchoSierraGeneral)}.
+                Entre 0,5 y 10 mm: se usa {formatearSierra(anchoSierraGeneral)}.
               </span>
             )}
-          </label>
-
-          {/* Media placa. Se vende, y no es lo mismo partirla a lo largo que
-              al ancho: cambia qué piezas entran. Solo aparece si el producto
-              se vende partido. */}
-          {sePuedePartir && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-base font-medium">De qué sale:</span>
-              {([null, "largo", "ancho"] as const).map((m) => (
-                <button
-                  key={m ?? "entera"}
-                  type="button"
-                  onClick={() => setMitad(m)}
-                  aria-pressed={mitad === m}
-                  className={`h-10 rounded-lg px-3 text-base font-medium transition-colors ${
-                    mitad === m
-                      ? "boton-accion"
-                      : "border border-linea text-muted-foreground hover:bg-hundida"
-                  }`}
-                >
-                  {m === null
-                    ? "Placa entera"
-                    : m === "largo"
-                      ? "Media a lo largo"
-                      : "Media al ancho"}
-                </button>
-              ))}
-            </div>
-          )}
-
+          </div>
           {mitad && placa.color && (
-            <p className="tarjeta-atencion px-4 py-2.5 text-base">
-              La placa es <strong>{placa.color}</strong>: fijate cómo corre el
-              dibujo antes de partirla.
+            <p className="tarjeta-atencion mt-2 px-4 py-2 text-base">
+              La placa es <strong>{placa.color}</strong>: fijate cómo corre el dibujo antes de partirla.
             </p>
           )}
+        </DialogHeader>
 
-          {/* Dos columnas en pantalla ancha: a la izquierda se carga, a la
-              derecha se ve cómo va quedando. En el mostrador se tipea mirando
-              el plano, no después. */}
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <div
-              className="space-y-2"
-              onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
-                e.preventDefault();
-                // Y no sigue viaje: los atajos de la venta de atrás no tienen
-                // nada que hacer mientras se carga un despiece.
-                e.stopPropagation();
-                /*
-                 * Enter es "otra medida" y Ctrl+Enter es "listo". Se tipea
-                 * largo, ancho, cantidad y Enter, sin soltar el teclado en todo
-                 * el despiece.
-                 */
-                if (e.ctrlKey || e.metaKey) {
-                  if (sePuede) aceptar();
-                  return;
-                }
-                sumarPieza();
-              }}
-            >
-              {/* Encabezado de la grilla: una sola vez, no repetido por fila. */}
-              <div className="hidden gap-2 px-3 text-sm text-muted-foreground sm:grid sm:grid-cols-[5.5rem_5.5rem_4.5rem_1fr]">
-                <span>Largo (mm)</span>
-                <span>Ancho (mm)</span>
-                <span>Cantidad</span>
-                <span>Etiqueta</span>
-              </div>
-
-              {piezas.map((p, i) => (
-                <div
-                  key={i}
-                  className="space-y-2 rounded-lg border border-linea p-3"
-                >
-                  <div className="grid gap-2 sm:grid-cols-[5.5rem_5.5rem_4.5rem_1fr]">
-                    <label className="contents sm:block">
-                      <span className="text-sm text-muted-foreground sm:hidden">
-                        Largo (mm)
-                      </span>
-                      <input
-                        autoFocus={i === 0}
-                        data-pieza="largo"
-                        inputMode="numeric"
-                        value={p.largo}
-                        onChange={(e) => cambiar(i, "largo", e.target.value)}
-                        aria-label={`Largo de la pieza ${i + 1}, en mm`}
-                        className="tabular h-12 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
-                      />
-                    </label>
-                    <label className="contents sm:block">
-                      <span className="text-sm text-muted-foreground sm:hidden">
-                        Ancho (mm)
-                      </span>
-                      <input
-                        inputMode="numeric"
-                        value={p.ancho}
-                        onChange={(e) => cambiar(i, "ancho", e.target.value)}
-                        aria-label={`Ancho de la pieza ${i + 1}, en mm`}
-                        className="tabular h-12 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
-                      />
-                    </label>
-                    <label className="contents sm:block">
-                      <span className="text-sm text-muted-foreground sm:hidden">
-                        Cantidad
-                      </span>
-                      <input
-                        inputMode="numeric"
-                        value={p.cantidad}
-                        onChange={(e) => cambiar(i, "cantidad", e.target.value)}
-                        aria-label={`Cantidad de la pieza ${i + 1}`}
-                        className="tabular h-12 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
-                      />
-                    </label>
-                    <label className="contents sm:block">
-                      <span className="text-sm text-muted-foreground sm:hidden">
-                        Etiqueta
-                      </span>
-                      <input
-                        value={p.etiqueta}
-                        onChange={(e) => cambiar(i, "etiqueta", e.target.value)}
-                        aria-label={`Etiqueta de la pieza ${i + 1}`}
-                        placeholder="Puerta, estante…"
-                        className="h-12 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <label className="flex items-center gap-2 text-base">
-                      <input
-                        type="checkbox"
-                        checked={p.veta}
-                        onChange={(e) => cambiar(i, "veta", e.target.checked)}
-                        className="h-5 w-5"
-                      />
-                      Respeta la veta
-                    </label>
-
-                    {/* Los dos cantos juntos bajo un rótulo: como dos
-                        etiquetas sueltas —"Canto largo", "Canto ancho"— la
-                        fila se partía en dos y quedaba el doble de alta. */}
-                    <span className="flex items-center gap-2 text-base">
-                      <span className="text-muted-foreground">Canto</span>
-                      <select
-                        aria-label="Lados con canto en el largo"
-                        value={p.cantoLargo}
-                        onChange={(e) =>
-                          cambiar(i, "cantoLargo", Number(e.target.value))
-                        }
-                        className="h-11 rounded-lg border border-linea bg-background px-2 text-base"
-                      >
-                        <option value={0}>largo: no</option>
-                        <option value={1}>largo: 1</option>
-                        <option value={2}>largo: 2</option>
-                      </select>
-                      <select
-                        aria-label="Lados con canto en el ancho"
-                        value={p.cantoAncho}
-                        onChange={(e) =>
-                          cambiar(i, "cantoAncho", Number(e.target.value))
-                        }
-                        className="h-11 rounded-lg border border-linea bg-background px-2 text-base"
-                      >
-                        <option value={0}>ancho: no</option>
-                        <option value={1}>ancho: 1</option>
-                        <option value={2}>ancho: 2</option>
-                      </select>
-                    </span>
-
-                    {piezas.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPiezas((previas) =>
-                            previas.filter((_, j) => j !== i),
-                          )
-                        }
-                        className="ml-auto inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-base text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Quitar
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              <button
-                type="button"
-                onClick={sumarPieza}
-                className="inline-flex h-12 items-center gap-1.5 rounded-lg border border-linea px-3.5 text-base font-medium hover:bg-hundida"
-              >
-                <Plus className="h-4 w-4" />
-                Agregar medida
-                <kbd className="rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">
-                  Enter
-                </kbd>
-              </button>
-
-              <label className="block pt-1">
-                <span className="text-sm text-muted-foreground">
-                  Tapacanto del trabajo
-                </span>
+        <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <div
+            className="flex min-h-0 flex-col border-linea lg:border-r"
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              // Y no sigue viaje: los atajos de la venta de atrás no tienen
+              // nada que hacer mientras se carga un despiece.
+              e.stopPropagation();
+              // Enter es «otra medida» y Ctrl+Enter es «listo»: se carga el
+              // despiece entero sin soltar el teclado.
+              if (e.ctrlKey || e.metaKey) {
+                if (sePuede) aceptar();
+                return;
+              }
+              sumarPieza();
+            }}
+          >
+            <div className="px-6 pt-5">
+              <label className="block">
+                <span className="sr-only">Tapacanto del trabajo</span>
                 <input
                   value={canto}
                   onChange={(e) => setCanto(e.target.value)}
-                  placeholder="Blanco 0,45 mm — vacío si no lleva"
-                  className="mt-1 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
+                  placeholder="Tapacanto: blanco 0,45 mm — vacío si no lleva"
+                  className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
                 />
               </label>
             </div>
 
-            <div className="space-y-4">
-          {validas.length > 0 && (
-            <PlanoEditable
-              plano={plano}
-              fijadas={fijadas}
-              onFijadas={setFijadas}
-            />
-          )}
-
-          {plano.noEntran.length > 0 && (
-            <p className="estado-problema rounded-lg bg-[var(--estado-fondo)] px-4 py-3 text-base font-medium">
-              {plano.noEntran.length === 1
-                ? "Una pieza no entra en la placa"
-                : `${plano.noEntran.length} piezas no entran en la placa`}
-              . Revisá las medidas antes de cobrar.
-            </p>
-          )}
-
-          {validas.length > 0 && plano.noEntran.length === 0 && (
-            <div className="space-y-1.5 rounded-lg border border-linea bg-hundida p-4">
-              {plano.placasEnteras > 0 && (
-                <Renglon
-                  que={`${plano.placasEnteras} ${
-                    plano.placasEnteras === 1 ? "placa entera" : "placas enteras"
-                  } × ${moneda.format(placa.precio)}`}
-                  cuanto={subtotalPlacas}
-                />
-              )}
-              {plano.pasadasCobrables > 0 && precioPorPasada > 0 && (
-                <Renglon
-                  que={`${plano.pasadasCobrables} ${
-                    plano.pasadasCobrables === 1 ? "pasada" : "pasadas"
-                  } × ${moneda.format(precioPorPasada)}`}
-                  cuanto={subtotalCorte}
-                />
-              )}
-              {subtotalCanto > 0 && (
-                <Renglon
-                  que={`${metrosCanto.toFixed(2).replace(".", ",")} m de tapacanto`}
-                  cuanto={subtotalCanto}
-                />
-              )}
-              <div className="flex items-baseline justify-between gap-4 border-t border-linea pt-2">
-                <span className="text-base font-semibold">Total del corte</span>
-                <span className="tabular text-2xl font-bold">
-                  {moneda.format(total)}
-                </span>
+            <div className="@container min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-5 pt-1">
+              {/* Encabezado de la planilla: una sola vez, no repetido por fila. */}
+              <div className={`sticky top-0 z-10 hidden bg-background py-2 text-sm font-semibold text-muted-foreground ${columnas}`}>
+                <span>Pieza</span>
+                <span>Largo</span>
+                <span>Ancho</span>
+                <span>Cant.</span>
+                <span className="text-center">Canto</span>
+                <span className="text-center">Veta</span>
+                <span />
               </div>
 
-              {plano.pasadasCobrables > 0 && precioPorPasada === 0 && (
-                <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base">
-                  No hay tarifa de corte cargada para esta placa, así que las
-                  pasadas no se cobran. Se configura en Cortes → Tarifas.
-                </p>
-              )}
-            </div>
-          )}
+              <div className="divide-y divide-linea">
+                {piezas.map((p, i) => (
+                  <div key={i} className={`flex flex-wrap items-center gap-2 py-2 ${columnas}`}>
+                    <input
+                      value={p.etiqueta}
+                      onChange={(e) => cambiar(i, "etiqueta", e.target.value)}
+                      aria-label={`Nombre de la pieza ${i + 1}`}
+                      placeholder="Puerta, estante…"
+                      className="h-11 w-full rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
+                    />
+                    <input
+                      autoFocus={i === 0}
+                      data-pieza="largo"
+                      inputMode="numeric"
+                      value={p.largo}
+                      onChange={(e) => cambiar(i, "largo", e.target.value)}
+                      aria-label={`Largo de la pieza ${i + 1}, en mm`}
+                      placeholder="Largo"
+                      className="tabular h-11 w-[calc(33%-6px)] rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
+                    />
+                    <input
+                      inputMode="numeric"
+                      value={p.ancho}
+                      onChange={(e) => cambiar(i, "ancho", e.target.value)}
+                      aria-label={`Ancho de la pieza ${i + 1}, en mm`}
+                      placeholder="Ancho"
+                      className="tabular h-11 w-[calc(33%-6px)] rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
+                    />
+                    <input
+                      inputMode="numeric"
+                      value={p.cantidad}
+                      onChange={(e) => cambiar(i, "cantidad", e.target.value)}
+                      aria-label={`Cantidad de la pieza ${i + 1}`}
+                      className="tabular h-11 w-[calc(33%-6px)] rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
+                    />
+                    {/* El canto se toca en el dibujo de la pieza, lado por
+                        lado, como en el sitio: dos desplegables «largo: 1»
+                        no se leían de un vistazo. */}
+                    <div className="flex justify-center">
+                      <SelectorDeCanto
+                        chico
+                        largo={Number(p.largo) || 0}
+                        ancho={Number(p.ancho) || 0}
+                        lados={{
+                          arriba: p.cantoLargo >= 1,
+                          abajo: p.cantoLargo >= 2,
+                          izquierda: p.cantoAncho >= 1,
+                          derecha: p.cantoAncho >= 2,
+                        }}
+                        alCambiar={(lados) => {
+                          const { cantoLargo, cantoAncho } = contarCanto(lados);
+                          setPiezas((previas) =>
+                            previas.map((x, j) => (j === i ? { ...x, cantoLargo, cantoAncho } : x)),
+                          );
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => cambiar(i, "veta", !p.veta)}
+                        aria-pressed={p.veta}
+                        aria-label={`Respeta la veta, pieza ${i + 1}`}
+                        className={`h-10 rounded-lg px-3 text-[14.5px] font-medium ${
+                          p.veta ? "boton-accion" : "border border-linea text-muted-foreground hover:bg-hundida"
+                        }`}
+                      >
+                        Veta
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPiezas((previas) => (previas.length === 1 ? [vacia()] : previas.filter((_, j) => j !== i)))
+                      }
+                      aria-label={`Quitar la pieza ${i + 1}`}
+                      className="ml-auto flex h-10 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive @2xl:ml-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
 
-              {validas.length === 0 && (
-                <div className="rounded-xl border border-dashed px-5 py-10 text-center">
-                  <p className="text-base font-medium">
-                    El plano aparece al cargar la primera medida
-                  </p>
-                  <p className="mt-1 text-base text-muted-foreground">
-                    Vas a ver cuántas placas hacen falta, si alguna conviene
-                    venderla entera y cuánto sale.
-                  </p>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={sumarPieza}
+                className="mt-2 inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-base font-medium text-acento-texto hover:bg-hundida"
+              >
+                <Plus className="h-4 w-4" />
+                Agregar medida
+                <kbd className="rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">Enter</kbd>
+              </button>
             </div>
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2 border-t border-linea pt-4">
-            <button
-              type="button"
-              onClick={onCerrar}
-              className="h-12 rounded-lg border border-linea px-4 text-base font-medium hover:bg-hundida"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              disabled={!sePuede}
-              onClick={aceptar}
-              className="inline-flex h-12 items-center gap-2 rounded-lg boton-accion px-5 text-base font-semibold disabled:opacity-50"
-            >
-              Agregar a la venta
-              <kbd className="rounded border border-current px-1.5 py-0.5 text-xs font-medium opacity-70">
-                Ctrl + Enter
-              </kbd>
-            </button>
+          <div className="min-h-0 overflow-y-auto bg-hundida/40 px-6 py-5">
+            {validas.length > 0 ? (
+              <PlanoEditable plano={plano} fijadas={fijadas} onFijadas={setFijadas} />
+            ) : (
+              <div className="flex h-full min-h-[240px] items-center justify-center rounded-xl border border-dashed">
+                <span className="tabular text-base text-muted-foreground">
+                  {placaLargo} × {placaAncho} mm
+                </span>
+              </div>
+            )}
+
+            {plano.noEntran.length > 0 && (
+              <p className="estado-problema mt-3 rounded-lg bg-[var(--estado-fondo)] px-4 py-3 text-base font-medium">
+                {plano.noEntran.length === 1
+                  ? "Una pieza no entra en la placa"
+                  : `${plano.noEntran.length} piezas no entran en la placa`}
+                : {plano.noEntran.map((x) => `${x.largoMm} × ${x.anchoMm}`).join(", ")}.
+              </p>
+            )}
+
+            {plano.pasadasCobrables > 0 && precioPorPasada === 0 && (
+              <p className="estado-espera mt-3 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base">
+                Esta placa no tiene tarifa de corte: las pasadas no se cobran (Cortes → Tarifas).
+              </p>
+            )}
           </div>
+        </div>
+
+        {/* La cuenta y las salidas abajo y fijas: el total se ve mientras se
+            tipea, y no hay que bajar para encontrar el botón. */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-linea bg-background px-6 py-4">
+          <dl className="tabular mr-auto flex flex-wrap gap-x-5 gap-y-1 text-base">
+            <div>
+              <dt className="inline text-muted-foreground">Placas </dt>
+              <dd className="inline font-semibold">{plano.placas.length}</dd>
+            </div>
+            <div>
+              <dt className="inline text-muted-foreground">Pasadas </dt>
+              <dd className="inline font-semibold">{plano.pasadasCobrables}</dd>
+            </div>
+            <div>
+              <dt className="inline text-muted-foreground">Canto </dt>
+              <dd className="inline font-semibold">{metrosCanto.toFixed(2).replace(".", ",")} m</dd>
+            </div>
+            {validas.length > 0 && plano.noEntran.length === 0 && (
+              <div title={[
+                plano.placasEnteras > 0 ? `Placas: ${moneda.format(subtotalPlacas)}` : "",
+                subtotalCorte > 0 ? `Corte: ${moneda.format(subtotalCorte)}` : "",
+                subtotalCanto > 0 ? `Tapacanto: ${moneda.format(subtotalCanto)}` : "",
+              ].filter(Boolean).join(" · ")}>
+                <dt className="inline text-muted-foreground">Total </dt>
+                <dd className="inline text-xl font-bold">{moneda.format(total)}</dd>
+              </div>
+            )}
+          </dl>
+
+          {errorPdf && <span className="estado-problema text-sm font-medium">{errorPdf}</span>}
+
+          <button
+            type="button"
+            onClick={descargarPlano}
+            disabled={plano.placas.length === 0 || plano.noEntran.length > 0 || calculando || bajando}
+            className="inline-flex h-12 items-center gap-2 rounded-lg border border-linea px-4 text-base font-medium hover:bg-hundida disabled:opacity-50"
+          >
+            {bajando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Descargar plano
+          </button>
+          <button
+            type="button"
+            onClick={onCerrar}
+            className="h-12 rounded-lg border border-linea px-4 text-base font-medium hover:bg-hundida"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={!sePuede}
+            onClick={aceptar}
+            className="inline-flex h-12 items-center gap-2 rounded-lg boton-accion px-5 text-base font-semibold disabled:opacity-50"
+          >
+            Agregar a la venta
+            <kbd className="rounded border border-current px-1.5 py-0.5 text-xs font-medium opacity-70">Ctrl + Enter</kbd>
+          </button>
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Renglon({ que, cuanto }: { que: string; cuanto: number }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <span className="text-base text-muted-foreground">{que}</span>
-      <span className="tabular text-base">{moneda.format(cuanto)}</span>
-    </div>
   );
 }

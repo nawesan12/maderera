@@ -113,7 +113,7 @@ test("una venta sin conexión subida dos veces queda una sola", async ({ page })
   // Las rutas de la copia local, de Go con su forma de siempre.
   const latido = await request.post("/api/mostrador/latido", { data: { branchId } });
   expect(latido.status()).toBe(200);
-  expect(Object.keys(await latido.json()).sort()).toEqual(["servidorAt", "sesion", "turno"]);
+  expect(Object.keys(await latido.json()).sort()).toEqual(["firmaCola", "servidorAt", "sesion", "turno"]);
   const copia = await request.get("/api/mostrador/catalogo");
   expect(Object.keys(await copia.json()).sort()).toEqual(["bajas", "generadoAt", "listas", "precios", "stock", "variantes"]);
 

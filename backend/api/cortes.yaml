@@ -355,6 +355,7 @@ paths:
                 anchoSierra: { type: number, format: double, minimum: 0, maximum: 50 }
                 fijadas: { type: array, maxItems: 5000, items: { $ref: "#/components/schemas/PiezaFijada" } }
                 busqueda: { type: boolean }
+                hoja: { type: boolean, description: Solo para el staff, la hoja de la máquina y lo que se lleva la sierra por placa }
                 presupuesto:
                   type: object
                   required: [precioPorPlaca, fraccion]
@@ -374,6 +375,8 @@ paths:
                 properties:
                   plano: { $ref: "#/components/schemas/Plano" }
                   cuenta: { $ref: "#/components/schemas/Presupuesto" }
+                  hoja: { $ref: "#/components/schemas/HojaDeCorte" }
+                  superficies: { type: array, items: { type: number, format: double } }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/cortes/cotizar:
     post:

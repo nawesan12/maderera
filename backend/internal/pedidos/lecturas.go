@@ -90,10 +90,12 @@ const PresupuestosPorPagina = 30
 // estadosAbiertos son los tres que todavía esperan algo.
 var estadosAbiertos = []string{"pendiente", "revision", "enviado"}
 
-// PaginaDePresupuestos es una página del listado con el total del filtro.
+// PaginaDePresupuestos es una página del listado con el total del filtro y
+// la plata de todos los que pasan el filtro, no solo de los de la página.
 type PaginaDePresupuestos struct {
 	Filas []PresupuestoListado `json:"filas"`
 	Total int                  `json:"total"`
+	Monto float64              `json:"monto"`
 }
 
 // ListarPresupuestos es listarPresupuestos: primero lo que tiene compromiso
@@ -102,9 +104,11 @@ type PaginaDePresupuestos struct {
 // todos los demás; los cerrados van por fecha, del más nuevo al más viejo.
 //
 // De a páginas (tanda T8): los presupuestos se acumulan sin tope y la
-// pantalla los traía todos. «abiertos» sin límite viene entero —son pocos
-// por naturaleza, y es lo que hay que atender—; cualquier otro filtro trae
-// como mucho una página. El id desempata, así dos páginas nunca se pisan.
+// pantalla los traía todos. Sin límite, cualquier filtro trae una página,
+// «abiertos» también: venía entero con el argumento de que son pocos por
+// naturaleza, y no lo eran —un enviado que el cliente nunca contestó quedaba
+// abierto para siempre (ver VencerPresupuestos)—. El monto del encabezado
+// sale de la base, de todos. El id desempata, así dos páginas nunca se pisan.
 func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, desplazamiento int) (PaginaDePresupuestos, error) {
 	out := PaginaDePresupuestos{Filas: []PresupuestoListado{}}
 	var a argumentos
@@ -133,12 +137,10 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, de
 		FROM quotes q
 		LEFT JOIN customers c ON c.id = q.customer_id
 		LEFT JOIN branches b ON b.id = q.branch_id` + donde(cond)
-	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int`+desde, a...).Scan(&out.Total); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int, coalesce(sum(q.total), 0)::float8`+desde, a...).Scan(&out.Total, &out.Monto); err != nil {
 		return out, err
 	}
 	switch {
-	case limite <= 0 && f.Estado == "abiertos":
-		limite = out.Total
 	case limite <= 0:
 		limite = PresupuestosPorPagina
 	case limite > 200:

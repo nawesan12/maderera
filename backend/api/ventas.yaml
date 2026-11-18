@@ -130,7 +130,7 @@ paths:
         - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
         - { name: estado, in: query, schema: { type: string } }
         - { name: sucursal, in: query, schema: { type: string } }
-        - { name: limite, in: query, description: sin límite, «abiertos» viene entero y lo demás de a 30, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: limite, in: query, description: sin límite, de a 30, schema: { type: integer, minimum: 1, maximum: 200 } }
         - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0 } }
       responses:
         "200":
@@ -139,10 +139,11 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [filas, total]
+                required: [filas, total, monto]
                 properties:
                   filas: { type: array, items: { $ref: "#/components/schemas/PresupuestoListado" } }
                   total: { type: integer }
+                  monto: { type: number, format: double, description: la suma de todos los que pasan el filtro }
         "401": { $ref: "#/components/responses/Problema" }
         "403": { $ref: "#/components/responses/Problema" }
     post:

@@ -41,13 +41,14 @@ export interface PresupuestoListado
 export async function listarPresupuestos(
   filtros: { busqueda?: string; estado?: string; sucursal?: string } = {},
   pagina?: { limite: number; desplazamiento: number },
-): Promise<{ filas: PresupuestoListado[]; total: number }> {
+): Promise<{ filas: PresupuestoListado[]; total: number; monto: number }> {
   const r = await (await api()).GET("/api/v1/admin/presupuestos", {
     params: { query: { ...filtros, ...(pagina ?? {}) } },
   });
-  const { filas, total } = datos(r);
+  const { filas, total, monto } = datos(r);
   return {
     total,
+    monto,
     filas: filas.map((p) => ({
       ...p,
       createdAt: fecha(p.createdAt),

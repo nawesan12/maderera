@@ -9,8 +9,8 @@ import (
 	"mjbj/internal/sqlc"
 )
 
-// Tanda T8: los presupuestos de a páginas. Los que esperan respuesta vienen
-// enteros; los cerrados, de a 30 por fecha, sin pisarse entre páginas.
+// Tanda T8: los presupuestos de a páginas, también los que esperan
+// respuesta; los cerrados, de a 30 por fecha, sin pisarse entre páginas.
 func TestPresupuestosDeAPaginas(t *testing.T) {
 	e := armar(t)
 	ctx := context.Background()
@@ -35,6 +35,16 @@ func TestPresupuestosDeAPaginas(t *testing.T) {
 	if err != nil || len(abiertos.Filas) != 3 || abiertos.Total != 3 {
 		t.Fatalf("abiertos: %d de %d, %v", len(abiertos.Filas), abiertos.Total, err)
 	}
+	// «Esperando respuesta» ya no viene entero: 40 abiertos más son una
+	// página de 30, y el monto es el de los 43.
+	for i := range 40 {
+		e.exec(t, `insert into quotes (numero, contacto_nombre, estado, total) values ($1, 'Cliente', 'enviado', 100.10)`, fmt.Sprintf("A-%03d", i))
+	}
+	abiertos, err = e.s.ListarPresupuestos(ctx, Filtros{Estado: "abiertos"}, 0, 0)
+	if err != nil || len(abiertos.Filas) != PresupuestosPorPagina || abiertos.Total != 43 || abiertos.Monto != 4004 {
+		t.Fatalf("43 abiertos: %d de %d por %v, %v", len(abiertos.Filas), abiertos.Total, abiertos.Monto, err)
+	}
+	e.exec(t, `delete from quotes where numero like 'A-%'`)
 	vistos := map[string]bool{}
 	var anterior time.Time
 	for pagina, quiero := range []int{30, 15} {
@@ -87,5 +97,54 @@ func TestPresupuestosDeAPaginas(t *testing.T) {
 		if r.StatusCode != 400 {
 			t.Errorf("%s: %d", q, r.StatusCode)
 		}
+	}
+}
+
+// Un enviado que el cliente no contestó pasa a vencido un mes después de su
+// validez; antes no, y los que esperan algo de la maderera nunca.
+func TestVencerPresupuestos(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	ahora := time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)
+	e.s.ahora = func() time.Time { return ahora }
+	casos := []struct {
+		numero, estado string
+		vencioHace     int // días; negativo es que todavía vale
+		quiero         string
+	}{
+		{"V-1", "enviado", 31, "vencido"},
+		{"V-2", "enviado", 29, "enviado"},
+		{"V-3", "enviado", -5, "enviado"},
+		{"V-4", "pendiente", 90, "pendiente"},
+		{"V-5", "revision", 90, "revision"},
+		{"V-6", "aceptado", 90, "aceptado"},
+	}
+	for _, c := range casos {
+		e.exec(t, `insert into quotes (numero, contacto_nombre, estado, valido_hasta) values ($1, 'Cliente', $2, $3)`,
+			c.numero, c.estado, ahora.AddDate(0, 0, -c.vencioHace))
+	}
+	e.exec(t, `insert into quotes (numero, contacto_nombre, estado) values ('V-7', 'Cliente', 'enviado')`)
+	n, err := e.s.VencerPresupuestos(ctx)
+	if err != nil || n != 1 {
+		t.Fatalf("vencidos: %d, %v", n, err)
+	}
+	casos = append(casos, struct {
+		numero, estado string
+		vencioHace     int
+		quiero         string
+	}{"V-7", "enviado", 0, "enviado"})
+	for _, c := range casos {
+		var estado string
+		if err := e.pool.QueryRow(ctx, `select estado::text from quotes where numero = $1`, c.numero).Scan(&estado); err != nil {
+			t.Fatal(err)
+		}
+		if estado != c.quiero {
+			t.Errorf("%s: %s, quería %s", c.numero, estado, c.quiero)
+		}
+	}
+	// Ya vencido, no sale en «Esperando respuesta».
+	p, err := e.s.ListarPresupuestos(ctx, Filtros{Estado: "abiertos"}, 0, 0)
+	if err != nil || p.Total != 5 {
+		t.Errorf("abiertos después de vencer: %d, %v", p.Total, err)
 	}
 }

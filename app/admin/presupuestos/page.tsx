@@ -59,10 +59,13 @@ const ORIGEN: Record<string, string> = {
  * Los presupuestos, de a páginas (tanda T8): se acumulan sin tope y la
  * pantalla los traía todos.
  *
- * Sin filtro de estado se piden dos cosas: lo que espera respuesta, entero
- * —son pocos por naturaleza y es lo que hay que atender—, y los cerrados de a
- * 30, del más nuevo al más viejo. Con un estado elegido, una sola lista
- * paginada.
+ * Sin filtro de estado se piden dos listas, cada una de a 30 y con su propio
+ * parámetro de página: lo que espera respuesta (`espera`), por urgencia, y
+ * los cerrados (`pagina`), del más nuevo al más viejo. «Esperando respuesta»
+ * venía entero con el argumento de que son pocos, y no lo eran: los enviados
+ * sin contestar se juntaban para siempre (ahora la tarea diaria los vence).
+ * Con un estado elegido, una sola lista paginada. Las cantidades y la plata
+ * del encabezado son de todos, no de la página: las suma Go.
  */
 export default async function PresupuestosPage({
   searchParams,
@@ -72,59 +75,60 @@ export default async function PresupuestosPage({
     estado?: string;
     sucursal?: string;
     pagina?: string;
+    espera?: string;
   }>;
 }) {
   const params = await searchParams;
   const pagina = leerPagina(params.pagina);
   const estado = params.estado && params.estado !== "todos" ? params.estado : undefined;
   const filtros = { busqueda: params.buscar, sucursal: params.sucursal };
-  const deLaPagina = {
-    limite: POR_PAGINA,
-    desplazamiento: (pagina - 1) * POR_PAGINA,
-  };
+  const dosListas = estado === undefined;
+  // Con las dos listas, la de «Esperando respuesta» va por `espera`.
+  const paginaAbiertos = dosListas ? leerPagina(params.espera) : pagina;
+  const de = (n: number) => ({ limite: POR_PAGINA, desplazamiento: (n - 1) * POR_PAGINA });
 
   const [abiertos, cerrados, zonas, sucursales] = await Promise.all([
-    // «abiertos» sin límite viene entero.
-    estado === undefined || estado === "abiertos"
-      ? listarPresupuestos({ ...filtros, estado: "abiertos" })
-      : ABIERTOS.has(estado)
-        ? listarPresupuestos({ ...filtros, estado }, deLaPagina)
-        : null,
-    estado === undefined || !ABIERTOS.has(estado)
-      ? listarPresupuestos({ ...filtros, estado: estado ?? "cerrados" }, deLaPagina)
+    dosListas || ABIERTOS.has(estado)
+      ? listarPresupuestos({ ...filtros, estado: estado ?? "abiertos" }, de(paginaAbiertos))
+      : null,
+    dosListas || !ABIERTOS.has(estado)
+      ? listarPresupuestos({ ...filtros, estado: estado ?? "cerrados" }, de(pagina))
       : null,
     zonasParaPedido(),
     listarSucursalesPublicas(),
   ]);
 
-  // La lista que va de a páginas: los cerrados, o el estado abierto elegido.
-  const paginada = cerrados ?? abiertos;
-  const ultima = Math.max(1, Math.ceil((paginada?.total ?? 0) / POR_PAGINA));
-  if (paginada && paginada.filas.length === 0 && paginada.total > 0 && pagina > ultima) {
+  // Una página que se pasó del final (un enlace viejo, un filtro que achicó
+  // la lista) lleva a la última que existe, en cada lista.
+  const ultima = (l: { total: number } | null) => Math.max(1, Math.ceil((l?.total ?? 0) / POR_PAGINA));
+  const deMas = (l: { total: number; filas: unknown[] } | null, n: number) =>
+    l !== null && l.filas.length === 0 && l.total > 0 && n > ultima(l);
+  const listaDePagina = cerrados ?? abiertos;
+  if (deMas(listaDePagina, pagina) || (dosListas && deMas(abiertos, paginaAbiertos))) {
     const q = new URLSearchParams(
       Object.entries({ buscar: params.buscar, estado: params.estado, sucursal: params.sucursal }).filter(
         (e): e is [string, string] => Boolean(e[1]),
       ),
     );
-    if (ultima > 1) q.set("pagina", String(ultima));
+    const p = Math.min(pagina, ultima(listaDePagina));
+    if (p > 1) q.set("pagina", String(p));
+    if (dosListas) {
+      const e = Math.min(paginaAbiertos, ultima(abiertos));
+      if (e > 1) q.set("espera", String(e));
+    }
     redirect(`/admin/presupuestos${q.size > 0 ? `?${q}` : ""}`);
   }
 
-  // El monto de lo que espera respuesta, solo con la lista entera: con un
-  // estado puntual la lista es una página y la suma sería de esa página.
-  const abiertosEnteros = estado === undefined || estado === "abiertos";
-  const montoAbierto = (abiertos?.filas ?? []).reduce((s, p) => s + p.total, 0);
   const total = (abiertos?.total ?? 0) + (cerrados?.total ?? 0);
+  const vigentes = {
+    buscar: params.buscar,
+    estado: params.estado,
+    sucursal: params.sucursal,
+    pagina: pagina > 1 ? String(pagina) : undefined,
+    espera: dosListas && paginaAbiertos > 1 ? String(paginaAbiertos) : undefined,
+  };
   const paginador = (
-    <Paginador
-      pagina={pagina}
-      total={paginada?.total ?? 0}
-      params={{
-        buscar: params.buscar,
-        estado: params.estado,
-        sucursal: params.sucursal,
-      }}
-    />
+    <Paginador pagina={pagina} total={listaDePagina?.total ?? 0} params={vigentes} />
   );
 
   return (
@@ -132,8 +136,8 @@ export default async function PresupuestosPage({
       <EncabezadoPanel
         titulo="Presupuestos"
         resumen={
-          abiertosEnteros && abiertos && abiertos.total > 0
-            ? `${plural(abiertos.total, "presupuesto")} esperando respuesta por ${moneda.format(montoAbierto)}`
+          abiertos && abiertos.total > 0
+            ? `${plural(abiertos.total, "presupuesto")} esperando respuesta por ${moneda.format(abiertos.monto)}`
             : `${plural(total, "presupuesto")} en total`
         }
       >
@@ -171,17 +175,22 @@ export default async function PresupuestosPage({
             <GrupoListado
               titulo="Esperando respuesta"
               cantidad={abiertos.total}
-              detalle={
-                abiertosEnteros && abiertos.total > 0
-                  ? moneda.format(montoAbierto)
-                  : undefined
-              }
+              detalle={abiertos.total > 0 ? moneda.format(abiertos.monto) : undefined}
               destacado
             >
               {abiertos.filas.map((p) => (
                 <Tarjeta key={p.id} presupuesto={p} zonas={zonas} />
               ))}
-              {!cerrados && paginador}
+              {cerrados ? (
+                <Paginador
+                  pagina={paginaAbiertos}
+                  total={abiertos.total}
+                  params={vigentes}
+                  nombre="espera"
+                />
+              ) : (
+                paginador
+              )}
             </GrupoListado>
           )}
 

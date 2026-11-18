@@ -47,8 +47,10 @@ export function FiltroEstado({
       if (!v || v === "todos") params.delete(k);
       else params.set(k, v);
     }
-    // Otro filtro es otra lista: vuelve a la primera página.
+    // Otro filtro es otra lista: vuelve a la primera página, también la de
+    // «Esperando respuesta» de presupuestos.
     params.delete("pagina");
+    params.delete("espera");
     startTransition(() =>
       router.replace(params.size > 0 ? `${ruta}?${params}` : ruta, {
         scroll: false,

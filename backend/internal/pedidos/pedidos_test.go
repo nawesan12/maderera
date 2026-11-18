@@ -330,7 +330,7 @@ func TestListasVacias(t *testing.T) {
 		}
 	}
 	for _, ruta := range []string{"presupuestos", "presupuestos?estado=abiertos", "presupuestos?estado=cerrados"} {
-		if c, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/admin/"+ruta, nil); c != 200 || strings.TrimSpace(b) != `{"filas":[],"total":0}` {
+		if c, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/admin/"+ruta, nil); c != 200 || strings.TrimSpace(b) != `{"filas":[],"total":0,"monto":0}` {
 			t.Errorf("%s: %d %s", ruta, c, b)
 		}
 	}

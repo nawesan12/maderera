@@ -20,6 +20,7 @@ import (
 	"mjbj/internal/limites"
 	"mjbj/internal/notificaciones"
 	"mjbj/internal/pagos"
+	"mjbj/internal/pedidos"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/productos"
 	"mjbj/internal/profesionales"
@@ -238,6 +239,14 @@ func correrWorker() error {
 		})
 	}
 	lista = append(lista, tareas.Tarea{
+		// Los presupuestos enviados que el cliente nunca contestó, un mes
+		// después de vencer (pedidos.GraciaDeVencidos).
+		Nombre: "vencer-presupuestos", Frecuencia: tareas.Dia, DesdeHora: 6,
+		Ejecutar: func(ctx context.Context) (map[string]any, error) {
+			n, err := pedidos.Nuevo(pool, log).VencerPresupuestos(ctx)
+			return map[string]any{"presupuestosVencidos": n}, err
+		},
+	}, tareas.Tarea{
 		Nombre: "recordatorios-eventos", Frecuencia: tareas.Dia, DesdeHora: 7,
 		Ejecutar: func(ctx context.Context) (map[string]any, error) {
 			n, err := eventos.EnviarRecordatorios(ctx)

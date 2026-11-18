@@ -605,6 +605,11 @@ export interface operations {
                     "application/json": {
                         filas: components["schemas"]["PresupuestoListado"][];
                         total: number;
+                        /**
+                         * Format: double
+                         * @description la suma de todos los que pasan el filtro
+                         */
+                        monto: number;
                     };
                 };
             };

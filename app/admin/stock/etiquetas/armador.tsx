@@ -6,6 +6,7 @@ import { BotonesDeFiltro, CampoDeBusqueda } from "@/components/admin/filtros-de-
 import {
   escribirPedidoDeEtiquetas,
   TOPE_DE_ETIQUETAS,
+  TOPE_DE_MEDIDAS,
   TOPE_POR_MEDIDA,
   type FormatoDeEtiqueta,
 } from "@/lib/etiquetas-de-medidas";
@@ -75,7 +76,16 @@ export function ArmadorDeEtiquetas({
     formato,
     ...(conPrecio ? { precio: "1" } : {}),
   });
-  const imprimible = total > 0 && total <= TOPE_DE_ETIQUETAS;
+  const medidas = elegidas.filter((e) => e.cantidad > 0).length;
+  // Los dos topes de la hoja: con más, la impresión saldría recortada o con
+  // error, así que se avisa acá y no se ofrece imprimir.
+  const demasiadas =
+    medidas > TOPE_DE_MEDIDAS
+      ? `Son más de ${TOPE_DE_MEDIDAS} medidas: imprimilas en dos tandas.`
+      : total > TOPE_DE_ETIQUETAS
+        ? `Son más de ${TOPE_DE_ETIQUETAS} etiquetas: imprimilas en dos tandas.`
+        : null;
+  const imprimible = total > 0 && !demasiadas;
 
   return (
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -175,6 +185,11 @@ export function ArmadorDeEtiquetas({
           />
           Con precio
         </label>
+        {demasiadas && (
+          <p role="alert" className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base">
+            {demasiadas}
+          </p>
+        )}
         {imprimible ? (
           <a
             href={`/etiquetas-de-medidas?${consulta}`}

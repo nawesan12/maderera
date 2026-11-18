@@ -62,6 +62,8 @@ func pdfDe(nombre string, b []byte) respuesta {
 
 func (o respuesta) VisitAsientosDelPeriodoResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitAsientosCsvResponse(w http.ResponseWriter) error        { return o.escribir(w) }
+func (o respuesta) VisitDeudoresCsvResponse(w http.ResponseWriter) error        { return o.escribir(w) }
+func (o respuesta) VisitCuentasAPagarCsvResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitPendientesDelCierreResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -351,4 +353,29 @@ func (a *API) PendientesDelRol(ctx context.Context, r reportesapi.PendientesDelR
 	}
 	v, err := a.s.PendientesDelRol(ctx, *ses.RolStaff)
 	return ok(v), err
+}
+
+// DeudoresCsv y CuentasAPagarCsv: los listados del contador. Solo el admin.
+func (a *API) DeudoresCsv(ctx context.Context, _ reportesapi.DeudoresCsvRequestObject) (reportesapi.DeudoresCsvResponseObject, error) {
+	if err := numerosDelNegocio(ctx); err != nil {
+		return nil, err
+	}
+	ahora := a.s.ahora()
+	v, err := a.s.CsvDeudores(ctx, ahora)
+	if err != nil {
+		return nil, err
+	}
+	return csv("deudores-"+ahora.Format("2006-01-02")+".csv", v), nil
+}
+
+func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarCsvRequestObject) (reportesapi.CuentasAPagarCsvResponseObject, error) {
+	if err := numerosDelNegocio(ctx); err != nil {
+		return nil, err
+	}
+	ahora := a.s.ahora()
+	v, err := a.s.CsvCuentasAPagar(ctx, ahora)
+	if err != nil {
+		return nil, err
+	}
+	return csv("cuentas-a-pagar-"+ahora.Format("2006-01-02")+".csv", v), nil
 }

@@ -182,6 +182,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"BorrarImagen":                   "/admin/productos",              // DELETE /api/v1/admin/imagenes/{id}
 	"ActividadReciente":              "/admin/reportes",               // GET /api/v1/admin/inicio/actividad
 	"MetricasDelResumen":             "/admin/reportes",               // GET /api/v1/admin/inicio/metricas
+	"DeudoresCsv":                    "/admin/reportes",               // GET /api/v1/admin/contador/deudores-csv
+	"CuentasAPagarCsv":               "/admin/reportes",               // GET /api/v1/admin/contador/cuentas-a-pagar-csv
 	"PendientesDelRol":               "/admin",                        // GET /api/v1/admin/inicio/pendientes
 	"StockParaReponer":               "/admin/reportes",               // GET /api/v1/admin/inicio/reponer
 	"InicioVentasPorSucursal":        "/admin/reportes",               // GET /api/v1/admin/inicio/ventas-por-sucursal

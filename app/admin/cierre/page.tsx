@@ -1,3 +1,4 @@
+import { Download } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
@@ -72,6 +73,22 @@ export default async function CierrePage({
           <SelectorDeMes actual={periodo.clave} etiqueta="Mes del cierre" />
 
           <ExportarAsientos periodo={periodo.clave} rotos={rotos.length} />
+          {/* Lo que pide el contador además de los asientos: quién debe y
+              desde cuándo, y a quién se le debe. Son de hoy, no del mes. */}
+          <a
+            href="/admin/cierre/deudores"
+            className="tarjeta-hundida inline-flex h-11 items-center gap-1.5 rounded-xl px-4 text-base font-medium"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            Deudores
+          </a>
+          <a
+            href="/admin/cierre/cuentas-a-pagar"
+            className="tarjeta-hundida inline-flex h-11 items-center gap-1.5 rounded-xl px-4 text-base font-medium"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            Cuentas a pagar
+          </a>
         </div>
       </header>
 

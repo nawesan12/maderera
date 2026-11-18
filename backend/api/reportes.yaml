@@ -116,6 +116,24 @@ paths:
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
+  /api/v1/admin/contador/deudores-csv:
+    get:
+      operationId: DeudoresCsv
+      responses:
+        "200":
+          description: La deuda de cada cliente por antigüedad, en CSV
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+  /api/v1/admin/contador/cuentas-a-pagar-csv:
+    get:
+      operationId: CuentasAPagarCsv
+      responses:
+        "200":
+          description: Las facturas de compra con saldo, por vencimiento, en CSV
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
   /api/v1/admin/cierre/pendientes:
     get:
       operationId: PendientesDelCierre

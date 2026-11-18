@@ -35,7 +35,8 @@ test("un producto cargado en el panel sale en el catálogo, y su stock se edita"
 
   await page.locator("#v-0-sku").fill(`E2E-${Date.now()}`);
   await page.locator("#v-0-precioGeneral").fill("12345");
-  await page.locator("#v-0-stockCentral").fill("7");
+  // Una celda de stock por sucursal de la base, con su slug en el id.
+  await page.locator("#v-0-stock-casa-central").fill("7");
   await page.getByRole("button", { name: "Guardar producto" }).click();
   // Guardado, se queda en la ficha y la abre en Fotos.
   await expect(page).toHaveURL(/\/admin\/productos\/[0-9a-f-]{36}\?guardado=\d+&pestana=fotos/);
@@ -46,14 +47,14 @@ test("un producto cargado en el panel sale en el catálogo, y su stock se edita"
   await expect(page.getByRole("link", { name: nombre }).first()).toBeVisible();
   await page.goto(`/admin/productos/${id}`);
   await page.getByRole("tab", { name: "Medidas y precios" }).click();
-  await expect(page.locator("#v-0-stockCentral")).toHaveValue("7");
+  await expect(page.locator("#v-0-stock-casa-central")).toHaveValue("7");
 
   // Editar el stock.
-  await page.locator("#v-0-stockCentral").fill("4");
+  await page.locator("#v-0-stock-casa-central").fill("4");
   await page.getByRole("button", { name: "Guardar producto" }).click();
   await expect(page).toHaveURL(/\/admin\/productos\/[0-9a-f-]{36}\?guardado=\d+$/);
   await page.getByRole("tab", { name: "Medidas y precios" }).click();
-  await expect(page.locator("#v-0-stockCentral")).toHaveValue("4");
+  await expect(page.locator("#v-0-stock-casa-central")).toHaveValue("4");
 
   // En el catálogo, con su precio.
   // La caché del catálogo se renueva al guardar, pero puede tardar un

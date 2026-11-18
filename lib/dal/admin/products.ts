@@ -28,12 +28,70 @@ export interface ProductoAdmin {
   sinFoto: boolean;
 }
 
-export async function listarProductosAdmin(filtros: { busqueda?: string; categoria?: string } = {}): Promise<ProductoAdmin[]> {
-  const query = {
-    ...(filtros.busqueda ? { busqueda: filtros.busqueda.slice(0, 200) } : {}),
-    ...(filtros.categoria ? { categoria: filtros.categoria } : {}),
+/**
+ * Los filtros de los tres listados largos (productos, precios y stock), como
+ * vienen de la URL. Los aplica Go: acá viaja una página y los totales.
+ */
+export interface FiltrosDeCatalogo {
+  busqueda?: string;
+  categoria?: string;
+  /** El grupo de cada pantalla («sin-precio», «sin-stock»…). */
+  estado?: string;
+  marca?: string;
+  proveedor?: string;
+  /** Desde 1. */
+  pagina?: number;
+}
+
+/** Los filtros como parámetros de la API, con la página pasada a desplazamiento. */
+export function consultaDeCatalogo(f: FiltrosDeCatalogo, porPagina: number) {
+  const pagina = f.pagina && f.pagina > 1 ? Math.floor(f.pagina) : 1;
+  return {
+    ...(f.busqueda ? { busqueda: f.busqueda.slice(0, 200) } : {}),
+    ...(f.categoria && f.categoria !== "todos" ? { categoria: f.categoria } : {}),
+    ...(f.marca && f.marca !== "todas" ? { marca: f.marca.slice(0, 120) } : {}),
+    ...(f.proveedor && f.proveedor !== "todos" ? { proveedor: f.proveedor } : {}),
+    limite: porPagina,
+    desplazamiento: (pagina - 1) * porPagina,
   };
-  return datos(await (await api()).GET("/api/v1/admin/productos", { params: { query } }));
+}
+
+/** Cuántos productos trae cada página: múltiplo de 2, 3 y 4, las columnas de la grilla. */
+export const PRODUCTOS_POR_PAGINA = 36;
+
+const ESTADOS_DE_PRODUCTO = ["sin-foto", "sin-precio", "sin-stock", "ocultos"] as const;
+export type EstadoDeProducto = (typeof ESTADOS_DE_PRODUCTO)[number];
+
+/** El estado de la URL, o undefined si no es uno de los que conoce Go. */
+export function estadoDeProducto(v: string | undefined): EstadoDeProducto | undefined {
+  return ESTADOS_DE_PRODUCTO.find((e) => e === v);
+}
+
+/** Una página del listado. `porPagina` lo achica quien busca para sugerir. */
+export async function listarProductosAdmin(filtros: FiltrosDeCatalogo = {}, porPagina = PRODUCTOS_POR_PAGINA) {
+  const estado = estadoDeProducto(filtros.estado);
+  const query = { ...consultaDeCatalogo(filtros, porPagina), ...(estado ? { estado } : {}) };
+  const r = datos(await (await api()).GET("/api/v1/admin/productos", { params: { query } }));
+  return { ...r, filas: r.filas as ProductoAdmin[] };
+}
+
+/** Las marcas cargadas, para el filtro de los listados. */
+export async function marcasDeProductos(): Promise<string[]> {
+  return datos(await (await api()).GET("/api/v1/admin/productos-marcas"));
+}
+
+/**
+ * Lo que va en cada etiqueta: nombre corto, medida, código y el código de
+ * barras ya armado por Go (EAN-13 o Code 128). Una por medida; las
+ * cantidades las pone la hoja.
+ */
+export async function datosDeEtiquetas(pedido: { medidas?: string[]; productos?: string[]; precio?: boolean }) {
+  const query = {
+    ...(pedido.medidas?.length ? { medidas: pedido.medidas.join(",") } : {}),
+    ...(pedido.productos?.length ? { productos: pedido.productos.join(",") } : {}),
+    precio: Boolean(pedido.precio),
+  };
+  return datos(await (await api()).GET("/api/v1/admin/etiquetas", { params: { query } }));
 }
 
 /** Producto completo para el formulario de edición, o null si no existe. */

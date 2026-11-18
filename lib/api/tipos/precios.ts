@@ -323,6 +323,11 @@ export interface operations {
             query?: {
                 busqueda?: string;
                 categoria?: string;
+                estado?: "todas" | "sin-precio" | "para-revisar" | "al-dia";
+                marca?: string;
+                proveedor?: string;
+                limite?: number;
+                desplazamiento?: number;
             };
             header?: never;
             path?: never;
@@ -330,13 +335,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Las medidas activas con sus precios */
+            /** @description Una página de las medidas activas con sus precios, el total del filtro y los conteos de cada grupo */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FilaPrecio"][];
+                    "application/json": {
+                        filas: components["schemas"]["FilaPrecio"][];
+                        total: number;
+                        conteos: {
+                            todas: number;
+                            sinPrecio: number;
+                            paraRevisar: number;
+                            alDia: number;
+                        };
+                    };
                 };
             };
         };

@@ -154,7 +154,7 @@ func (a *API) ExportarPrecios(ctx context.Context, r documentosapi.ExportarPreci
 		busqueda = string([]rune(busqueda)[:200]) // listarPrecios corta a 200
 	}
 	ahora := a.ahora()
-	filas, err := a.precios.Listar(ctx, busqueda, texto(r.Params.Cat), ahora)
+	filas, err := a.precios.ListarTodo(ctx, busqueda, texto(r.Params.Cat), ahora)
 	if err != nil {
 		return nil, err
 	}

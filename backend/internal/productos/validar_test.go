@@ -98,10 +98,15 @@ func TestValidarComoZod(t *testing.T) {
 			mismos("material", x.Material, dv["material"])
 			mismos("precioGeneral", x.PrecioGeneral, dv["precioGeneral"])
 			mismos("precioProfesional", x.PrecioProfesional, dv["precioProfesional"])
-			mismos("stockCentral", ptr(x.StockCentral), dv["stockCentral"])
-			mismos("stockAserradero", ptr(x.StockAserradero), dv["stockAserradero"])
-			mismos("minCentral", ptr(x.MinCentral), dv["minCentral"])
-			mismos("minAserradero", ptr(x.MinAserradero), dv["minAserradero"])
+			// El formato viejo queda como dos stocks por slug.
+			central, aserradero := x.StockDe("casa-central"), x.StockDe("aserradero")
+			if central == nil || aserradero == nil {
+				t.Fatalf("caso %d: sin los stocks del formato viejo", i)
+			}
+			mismos("stockCentral", ptr(central.Stock), dv["stockCentral"])
+			mismos("stockAserradero", ptr(aserradero.Stock), dv["stockAserradero"])
+			mismos("minCentral", ptr(central.Minimo), dv["minCentral"])
+			mismos("minAserradero", ptr(aserradero.Minimo), dv["minAserradero"])
 		}
 	}
 }

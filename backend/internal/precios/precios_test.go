@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -156,8 +157,9 @@ func TestGrillaYEdicion(t *testing.T) {
 		t.Errorf("el vendedor leyó la grilla: %d", c)
 	}
 	_, b := pedir(t, adm, "GET", u+"?busqueda=fen", nil)
-	var grilla []FilaPrecio
-	_ = json.Unmarshal([]byte(b), &grilla)
+	var pagina GrillaDePrecios
+	_ = json.Unmarshal([]byte(b), &pagina)
+	grilla := pagina.Filas
 	if len(grilla) != 2 || grilla[0].SKU != "FEN18" || grilla[0].PrecioGeneral != "84500.00" || grilla[0].PrecioProfesional != "70000.00" ||
 		grilla[0].Brecha == nil || *grilla[0].Brecha != 17.2 || grilla[1].PrecioProfesional != "0" || grilla[1].Brecha != nil || grilla[0].Desactualizado {
 		t.Fatalf("grilla: %s", b)
@@ -322,5 +324,46 @@ func TestImportacionConElLectorReal(t *testing.T) {
 	}
 	if _, e := LeerPlanilla([]byte("%PDF-1.4 algo")); e == "" {
 		t.Error("un PDF tenía que dar error")
+	}
+}
+
+// Los grupos de la grilla los decide la consulta, con el mismo criterio que
+// antes aplicaba Next: sin precio general, sin tocar hace más de 60 días, o
+// al día. Y la exportación sigue llevando todo, no una página.
+func TestGrillaPorEstadoYPaginas(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/admin/precios"
+	_, _ = e.pool.Exec(ctx, `update price_list_items set price = 0 where variant_id = $1 and price_list_id = $2`, e.mel, e.general)
+	_, _ = e.pool.Exec(ctx, `update price_list_items set updated_at = now() - interval '90 days' where variant_id = $1`, e.fen12)
+	leer := func(q string) GrillaDePrecios {
+		t.Helper()
+		c, b := pedir(t, adm, "GET", u+q, nil)
+		if c != 200 {
+			t.Fatalf("%s: %d %s", q, c, b)
+		}
+		var g GrillaDePrecios
+		_ = json.Unmarshal([]byte(b), &g)
+		return g
+	}
+	g := leer("")
+	if g.Total != 3 || g.Conteos != (ConteosDePrecios{Todas: 3, SinPrecio: 1, ParaRevisar: 1, AlDia: 1}) {
+		t.Fatalf("conteos: %+v", g)
+	}
+	for q, quiero := range map[string]string{"?estado=sin-precio": "MEL18", "?estado=para-revisar": "FEN12", "?estado=al-dia": "FEN18"} {
+		if r := leer(q); r.Total != 1 || len(r.Filas) != 1 || r.Filas[0].SKU != quiero {
+			t.Errorf("%s: %+v", q, r.Filas)
+		}
+	}
+	if r := leer("?estado=para-revisar"); !r.Filas[0].Desactualizado {
+		t.Error("la de 90 días no salió desactualizada")
+	}
+	if r := leer("?limite=2&desplazamiento=2"); len(r.Filas) != 1 || r.Total != 3 {
+		t.Errorf("segunda página: %+v", r)
+	}
+	todo, err := Nuevo(e.pool, silencio).ListarTodo(ctx, "", "", time.Now())
+	if err != nil || len(todo) != 3 {
+		t.Errorf("exportar: %d %v", len(todo), err)
 	}
 }

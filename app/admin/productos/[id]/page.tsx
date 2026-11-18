@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
 import {
   ArrowLeft,
+  Barcode,
   CheckCircle2,
   Copy,
   ExternalLink,
@@ -23,6 +24,7 @@ import {
   atributosUsados,
 } from "@/lib/dal/admin/products";
 import { FormularioProducto } from "../formulario";
+import { stocksDeFicha } from "../stocks";
 import { ProductosSugeridos } from "../sugeridos";
 
 export default async function EditarProductoPage({
@@ -51,7 +53,7 @@ export default async function EditarProductoPage({
   // El encabezado resume lo que hay que saber antes de editar: si se ve en el
   // sitio, cuánto stock queda y en qué rango está el precio.
   const stockTotal = producto.variantes.reduce(
-    (s, v) => s + v.stockCentral + v.stockAserradero,
+    (s, v) => s + v.stocks.reduce((t, st) => t + st.stock, 0),
     0,
   );
   const precios = producto.variantes
@@ -184,6 +186,13 @@ export default async function EditarProductoPage({
             Stock
           </Link>
           <Link
+            href={`/admin/stock/etiquetas?producto=${producto.id}`}
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+          >
+            <Barcode className="h-4 w-4" />
+            Etiquetas
+          </Link>
+          <Link
             href={`/admin/precios?buscar=${encodeURIComponent(producto.name)}`}
             className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
           >
@@ -224,8 +233,9 @@ export default async function EditarProductoPage({
           aPedido: producto.aPedido,
           active: producto.active,
           imagen: producto.imagen,
-          variantes: producto.variantes,
+          variantes: producto.variantes.map((v) => ({ ...v, stocks: stocksDeFicha(v.stocks) })),
         }}
+        sucursales={producto.sucursales}
       />
 
       <ProductosSugeridos

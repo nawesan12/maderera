@@ -5609,6 +5609,7 @@ type Order struct {
 	CobradaAt        *time.Time   `json:"cobradaAt"`
 	SincronizadaAt   *time.Time   `json:"sincronizadaAt"`
 	SellerID         *string      `json:"sellerId"`
+	EntregarEl       pgtype.Date  `json:"entregarEl"`
 }
 
 type OrderItem struct {

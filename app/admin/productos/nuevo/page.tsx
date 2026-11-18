@@ -8,6 +8,7 @@ import {
   obtenerProductoAdmin,
 } from "@/lib/dal/admin/products";
 import { esUuid } from "@/lib/uuid";
+import { listarSucursales } from "@/lib/dal/admin/inventory";
 import { FormularioProducto, type ProductoForm } from "../formulario";
 
 export default async function NuevoProductoPage({
@@ -16,13 +17,18 @@ export default async function NuevoProductoPage({
   searchParams: Promise<{ copiar?: string; guardado?: string }>;
 }) {
   const { copiar, guardado } = await searchParams;
-  const [categorias, rubros, imputaciones, atributos, original] = await Promise.all([
+  const [categorias, rubros, imputaciones, atributos, original, todas] = await Promise.all([
     listarCategoriasAdmin(),
     listarRubrosAdmin(),
     imputacionesUsadas(),
     atributosUsados(),
     copiar && esUuid(copiar) ? obtenerProductoAdmin(copiar) : null,
+    listarSucursales(),
   ]);
+  // Las columnas de stock: las sucursales activas de la base, en su orden.
+  const sucursales = todas
+    .filter((s) => s.active)
+    .map((s) => ({ id: s.id, slug: s.slug, nombre: s.name }));
 
   /*
    * Duplicar: el mismo producto con sus medidas y precios, para cargar el
@@ -55,8 +61,10 @@ export default async function NuevoProductoPage({
           id: undefined,
           sku: "",
           codigoBarras: "",
-          stockCentral: 0,
-          stockAserradero: 0,
+          // El stock arranca en cero; los mínimos se copian.
+          stocks: Object.fromEntries(
+            v.stocks.map((st) => [st.sucursal, { stock: 0, minimo: st.minimo }]),
+          ),
         })),
       }
     : null;
@@ -91,6 +99,7 @@ export default async function NuevoProductoPage({
         rubros={rubros}
         imputaciones={imputaciones}
         atributos={atributos}
+        sucursales={sucursales}
         inicial={copia ?? {
           name: "",
           slug: "",

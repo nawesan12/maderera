@@ -3,12 +3,10 @@ package productos
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"math"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -19,6 +17,7 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/listado"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/subidas"
@@ -57,53 +56,85 @@ type ProductoAdmin struct {
 	SinFoto     bool    `json:"sinFoto"`
 }
 
-// terminos es lo de coincideBusqueda: hasta seis palabras.
-func terminos(texto string) []string {
-	t := strings.Fields(texto)
-	if len(t) > 6 {
-		t = t[:6]
-	}
-	return t
+// ConteosDeProductos son los totales de cada estado con los mismos filtros,
+// para los botones de arriba de la lista.
+type ConteosDeProductos struct {
+	Todos     int `json:"todos"`
+	SinFoto   int `json:"sinFoto"`
+	SinPrecio int `json:"sinPrecio"`
+	SinStock  int `json:"sinStock"`
+	Ocultos   int `json:"ocultos"`
 }
 
-// Listar es listarProductosAdmin: todos (también los dados de baja), los
-// últimos tocados primero. La búsqueda es por palabra (todas tienen que
-// aparecer) en nombre, marca, rubro o categoría, sin tildes.
-func (s *Servicio) Listar(ctx context.Context, busqueda, categoria string) ([]ProductoAdmin, error) {
-	var cond []string
-	var args []any
-	arg := func(v any) string { args = append(args, v); return fmt.Sprintf("$%d", len(args)) }
-	if categoria != "" && categoria != "todos" {
-		cond = append(cond, "c.slug = "+arg(categoria))
+// ListaDeProductos es una página del listado, con el total del filtro.
+type ListaDeProductos struct {
+	Filas   []ProductoAdmin    `json:"filas"`
+	Total   int                `json:"total"`
+	Conteos ConteosDeProductos `json:"conteos"`
+}
+
+// PorPaginaProductos: múltiplo de 2, 3 y 4, las columnas de la grilla.
+const PorPaginaProductos = 36
+
+// Las expresiones de cada estado, sobre `p`. Sin foto, sin precio y sin
+// stock miran solo lo publicado: lo oculto ya tiene su propio botón y no
+// tiene sentido apurarse a completarlo.
+const (
+	conFoto   = `EXISTS (SELECT 1 FROM product_images i WHERE i.product_id = p.id)`
+	conPrecio = `EXISTS (SELECT 1 FROM product_variants v
+		JOIN price_list_items pli ON pli.variant_id = v.id
+		JOIN price_lists pl ON pl.id = pli.price_list_id AND pl.is_default
+		WHERE v.product_id = p.id AND pli.price > 0)`
+	stockDelProducto = `coalesce((SELECT sum(i.qty) FROM product_variants v JOIN inventory i ON i.variant_id = v.id WHERE v.product_id = p.id), 0)`
+)
+
+var estadosDeProducto = map[string]string{
+	"sin-foto":   "p.active AND NOT " + conFoto,
+	"sin-precio": "p.active AND NOT " + conPrecio,
+	"sin-stock":  "p.active AND " + stockDelProducto + " = 0",
+	"ocultos":    "NOT p.active",
+}
+
+// Listar es listarProductosAdmin, de a páginas: todos (también los dados de
+// baja), los últimos tocados primero. La búsqueda es por palabra (todas
+// tienen que aparecer) en nombre, marca, rubro o categoría, sin tildes.
+func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (ListaDeProductos, error) {
+	out := ListaDeProductos{Filas: []ProductoAdmin{}}
+	var c listado.Consulta
+	c.Comunes(f, "")
+	c.Busqueda(f.Busqueda, []string{"p.name", "p.brand", "p.subcategory", "c.name"})
+	desde := ` FROM products p JOIN categories c ON c.id = p.category_id `
+	conteo := `SELECT count(*)`
+	for _, e := range []string{"sin-foto", "sin-precio", "sin-stock", "ocultos"} {
+		conteo += `, count(*) FILTER (WHERE ` + estadosDeProducto[e] + `)`
 	}
-	for _, t := range terminos(busqueda) {
-		patron := arg("%" + t + "%")
-		var col []string
-		for _, c := range []string{"p.name", "p.brand", "p.subcategory", "c.name"} {
-			col = append(col, "f_unaccent("+c+") ILIKE f_unaccent("+patron+")")
-		}
-		cond = append(cond, "("+strings.Join(col, " OR ")+")")
+	k := &out.Conteos
+	if err := s.pool.QueryRow(ctx, conteo+desde+c.Donde(), c.Args()...).Scan(&k.Todos, &k.SinFoto, &k.SinPrecio, &k.SinStock, &k.Ocultos); err != nil {
+		return out, err
 	}
-	donde := ""
-	if len(cond) > 0 {
-		donde = "WHERE " + strings.Join(cond, " AND ")
+	out.Total = map[string]int{"sin-foto": k.SinFoto, "sin-precio": k.SinPrecio, "sin-stock": k.SinStock, "ocultos": k.Ocultos}[f.Estado]
+	if cond, ok := estadosDeProducto[f.Estado]; ok {
+		c.Y(cond)
+	} else {
+		out.Total = k.Todos
 	}
+	limite, salto := f.Pagina(PorPaginaProductos)
 	filas, err := s.pool.Query(ctx, `
 		SELECT p.id, p.slug, p.name, c.name, p.brand, p.unit::text, p.featured, p.active,
 		  (SELECT count(*) FROM product_variants v WHERE v.product_id = p.id)::int,
-		  coalesce((SELECT sum(i.qty) FROM product_variants v JOIN inventory i ON i.variant_id = v.id WHERE v.product_id = p.id), 0)::float8,
+		  `+stockDelProducto+`::float8,
 		  (SELECT i.url FROM product_images i WHERE i.product_id = p.id ORDER BY i.sort_order LIMIT 1),
 		  (SELECT min(pli.price) FROM product_variants v
 		     JOIN price_list_items pli ON pli.variant_id = v.id
 		     JOIN price_lists pl ON pl.id = pli.price_list_id AND pl.is_default
 		   WHERE v.product_id = p.id AND pli.price > 0)::float8
-		FROM products p JOIN categories c ON c.id = p.category_id
-		`+donde+`
-		ORDER BY p.updated_at DESC`, args...)
+		`+desde+c.Donde()+`
+		ORDER BY p.updated_at DESC, p.id
+		LIMIT `+c.Arg(limite)+` OFFSET `+c.Arg(salto), c.Args()...)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
-	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (ProductoAdmin, error) {
+	out.Filas, err = pgx.CollectRows(filas, func(r pgx.CollectableRow) (ProductoAdmin, error) {
 		var p ProductoAdmin
 		var precio *float64
 		err := r.Scan(&p.ID, &p.Slug, &p.Name, &p.CategoryName, &p.Brand, &p.Unit, &p.Featured, &p.Active,
@@ -115,6 +146,23 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, categoria string) ([]Pr
 		p.SinFoto = p.Imagen == nil
 		return p, err
 	})
+	if out.Filas == nil {
+		out.Filas = []ProductoAdmin{}
+	}
+	return out, err
+}
+
+// Marcas son las marcas cargadas, una vez cada una aunque cambie la
+// mayúscula, para el filtro de los listados.
+func (s *Servicio) Marcas(ctx context.Context) ([]string, error) {
+	filas, err := s.pool.Query(ctx, `
+		SELECT min(trim(brand)) FROM products
+		WHERE brand IS NOT NULL AND trim(brand) <> ''
+		GROUP BY lower(trim(brand)) ORDER BY lower(trim(brand))`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(filas, pgx.RowTo[string])
 }
 
 // --- la ficha ---
@@ -147,6 +195,7 @@ type Ficha struct {
 	Imagen                string            `json:"imagen"`
 	Galeria               []ImagenDeGaleria `json:"galeria"`
 	Variantes             []VarianteDeFicha `json:"variantes"`
+	Sucursales            []SucursalDeFicha `json:"sucursales"`
 }
 
 // ImagenDeGaleria es una foto del producto.
@@ -158,23 +207,38 @@ type ImagenDeGaleria struct {
 
 // VarianteDeFicha es una medida en la ficha.
 type VarianteDeFicha struct {
-	ID                string  `json:"id"`
-	SKU               string  `json:"sku"`
-	Label             string  `json:"label"`
-	LargoMm           *int32  `json:"largoMm"`
-	AnchoMm           *int32  `json:"anchoMm"`
-	EspesorMm         *int32  `json:"espesorMm"`
-	Material          string  `json:"material"`
-	Color             string  `json:"color"`
-	Terminacion       string  `json:"terminacion"`
-	Calidad           string  `json:"calidad"`
-	CodigoBarras      string  `json:"codigoBarras"`
-	PrecioGeneral     string  `json:"precioGeneral"`
-	PrecioProfesional string  `json:"precioProfesional"`
-	StockCentral      float64 `json:"stockCentral"`
-	StockAserradero   float64 `json:"stockAserradero"`
-	MinCentral        float64 `json:"minCentral"`
-	MinAserradero     float64 `json:"minAserradero"`
+	ID                string `json:"id"`
+	SKU               string `json:"sku"`
+	Label             string `json:"label"`
+	LargoMm           *int32 `json:"largoMm"`
+	AnchoMm           *int32 `json:"anchoMm"`
+	EspesorMm         *int32 `json:"espesorMm"`
+	Material          string `json:"material"`
+	Color             string `json:"color"`
+	Terminacion       string `json:"terminacion"`
+	Calidad           string `json:"calidad"`
+	CodigoBarras      string `json:"codigoBarras"`
+	PrecioGeneral     string `json:"precioGeneral"`
+	PrecioProfesional string `json:"precioProfesional"`
+	// Stocks: uno por sucursal activa, en el orden de Ficha.Sucursales.
+	Stocks []StockDeFicha `json:"stocks"`
+}
+
+// StockDeFicha es el stock de una medida en una sucursal.
+type StockDeFicha struct {
+	Sucursal string  `json:"sucursal"`
+	Stock    float64 `json:"stock"`
+	Minimo   float64 `json:"minimo"`
+}
+
+// StockEn es el de la sucursal con ese id, o cero.
+func (v VarianteDeFicha) StockEn(sucursal string) StockDeFicha {
+	for _, st := range v.Stocks {
+		if st.Sucursal == sucursal {
+			return st
+		}
+	}
+	return StockDeFicha{Sucursal: sucursal}
 }
 
 func deref(s *string) string {
@@ -184,9 +248,41 @@ func deref(s *string) string {
 	return *s
 }
 
-// listasYSucursales: la general, la profesional (por slug) y las dos
-// sucursales, que la ficha edita juntas.
-type listasYSucursales struct{ general, profesional, central, aserradero *string }
+// SucursalDeFicha es una sucursal activa: una columna de stock en la ficha.
+type SucursalDeFicha struct {
+	ID     string `json:"id"`
+	Slug   string `json:"slug"`
+	Nombre string `json:"nombre"`
+}
+
+// listasYSucursales: la general, la profesional (por slug) y las sucursales
+// de la base. Eran dos sucursales escritas acá; una tercera no aparecía en la
+// ficha y su stock no se podía cargar.
+type listasYSucursales struct {
+	general, profesional *string
+	sucursales           []sqlc.SucursalesDeLaFichaRow
+}
+
+// activas son las sucursales que muestra la ficha, por orden.
+func (l listasYSucursales) activas() []SucursalDeFicha {
+	out := []SucursalDeFicha{}
+	for _, b := range l.sucursales {
+		if b.Active {
+			out = append(out, SucursalDeFicha{b.ID, b.Slug, b.Name})
+		}
+	}
+	return out
+}
+
+// sucursal busca la de un stock: por id, o por slug en el formato viejo.
+func (l listasYSucursales) sucursal(st StockDeSucursal) *string {
+	for i, b := range l.sucursales {
+		if st.Sucursal != "" && b.ID == st.Sucursal || st.Sucursal == "" && b.Slug == st.Slug {
+			return &l.sucursales[i].ID
+		}
+	}
+	return nil
+}
 
 func (s *Servicio) listasYSucursales(ctx context.Context, q *sqlc.Queries) (listasYSucursales, error) {
 	var r listasYSucursales
@@ -202,19 +298,8 @@ func (s *Servicio) listasYSucursales(ctx context.Context, q *sqlc.Queries) (list
 			r.profesional = &l.ID
 		}
 	}
-	sucs, err := q.Sucursales(ctx)
-	if err != nil {
-		return r, err
-	}
-	for _, b := range sucs {
-		switch b.Slug {
-		case "casa-central":
-			r.central = &b.ID
-		case "aserradero":
-			r.aserradero = &b.ID
-		}
-	}
-	return r, nil
+	r.sucursales, err = q.SucursalesDeLaFicha(ctx)
+	return r, err
 }
 
 // ErrNoExiste es un producto que no está.
@@ -292,13 +377,20 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 		}
 		return 0
 	}
+	f.Sucursales = ls.activas()
+	stocks := func(v string) []StockDeFicha {
+		out := make([]StockDeFicha, len(f.Sucursales))
+		for i, b := range f.Sucursales {
+			out[i] = StockDeFicha{Sucursal: b.ID, Stock: cantidad(v, &b.ID, false), Minimo: cantidad(v, &b.ID, true)}
+		}
+		return out
+	}
 	for _, v := range vs {
 		f.Variantes = append(f.Variantes, VarianteDeFicha{
 			ID: v.ID, SKU: v.Sku, Label: v.Label, LargoMm: v.LargoMm, AnchoMm: v.AnchoMm, EspesorMm: v.EspesorMm,
 			Material: deref(v.Material), Color: deref(v.Color), Terminacion: deref(v.Terminacion), Calidad: deref(v.Calidad),
 			CodigoBarras: deref(v.CodigoBarras), PrecioGeneral: precio(v.ID, ls.general), PrecioProfesional: precio(v.ID, ls.profesional),
-			StockCentral: cantidad(v.ID, ls.central, false), StockAserradero: cantidad(v.ID, ls.aserradero, false),
-			MinCentral: cantidad(v.ID, ls.central, true), MinAserradero: cantidad(v.ID, ls.aserradero, true),
+			Stocks: stocks(v.ID),
 		})
 	}
 	return f, nil
@@ -519,13 +611,18 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 					return err
 				}
 			}
-			for _, st := range []struct {
-				suc             *string
-				cantidad, visto *float64
-				minimo          float64
-			}{{ls.central, v.StockCentral, v.StockCentralVisto, valor(v.MinCentral)},
-				{ls.aserradero, v.StockAserradero, v.StockAserraderoVisto, valor(v.MinAserradero)}} {
+			for _, x := range v.Stocks {
+				st := struct {
+					suc             *string
+					cantidad, visto *float64
+					minimo          float64
+				}{ls.sucursal(x), x.Stock, x.Visto, valor(x.Minimo)}
 				if st.suc == nil {
+					// Por id, una sucursal que no está es un error de quien
+					// manda; por slug (formato viejo), se saltea como antes.
+					if x.Sucursal != "" {
+						return &ErrorDeCampo{"No se encontró la sucursal.", x.CampoSucursal}
+					}
 					continue
 				}
 				if err := q.BloquearStock(ctx, sqlc.BloquearStockParams{Variante: vid, Sucursal: *st.suc}); err != nil {

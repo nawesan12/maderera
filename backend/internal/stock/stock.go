@@ -27,6 +27,7 @@ import (
 	"mjbj/internal/catalogo"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/listado"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/productos"
 	"mjbj/internal/sqlc"
@@ -101,114 +102,177 @@ func (s *Servicio) revisarCantidad(ctx context.Context, variante string, cantida
 
 // --- la grilla ---
 
-// FilaStock es una medida con su stock en las dos sucursales.
-type FilaStock struct {
-	VariantID           string              `json:"variantId"`
-	ProductID           string              `json:"productId"`
-	ProductSlug         string              `json:"productSlug"`
-	ProductName         string              `json:"productName"`
-	Label               string              `json:"label"`
-	SKU                 string              `json:"sku"`
-	CategoryName        string              `json:"categoryName"`
-	Unidad              string              `json:"unidad"`
-	LargoMm             *int32              `json:"largoMm"`
-	Imagen              *string             `json:"imagen"`
-	QtyCentral          float64             `json:"qtyCentral"`
-	QtyAserradero       float64             `json:"qtyAserradero"`
-	ReservadoCentral    float64             `json:"reservadoCentral"`
-	ReservadoAserradero float64             `json:"reservadoAserradero"`
-	MinCentral          float64             `json:"minCentral"`
-	MinAserradero       float64             `json:"minAserradero"`
-	NivelCentral        catalogo.NivelStock `json:"nivelCentral"`
-	NivelAserradero     catalogo.NivelStock `json:"nivelAserradero"`
-	Total               float64             `json:"total"`
+// Sucursal es una de las sucursales activas, en el orden de la base. La
+// grilla tiene una columna por cada una: salen de `branches`, no de una lista
+// escrita en el código.
+type Sucursal struct {
+	ID     string `json:"id"`
+	Slug   string `json:"slug"`
+	Nombre string `json:"nombre"`
 }
 
-// Listar es listarStock: las medidas activas, por nombre.
-func (s *Servicio) Listar(ctx context.Context, busqueda, categoria string) ([]FilaStock, error) {
-	cond := []string{"p.active", "v.active"}
-	var args []any
-	arg := func(v any) string { args = append(args, v); return fmt.Sprintf("$%d", len(args)) }
-	if categoria != "" && categoria != "todos" {
-		cond = append(cond, "c.slug = "+arg(categoria))
-	}
-	t := strings.Fields(busqueda)
-	if len(t) > 6 {
-		t = t[:6]
-	}
-	for _, termino := range t {
-		patron := arg("%" + termino + "%")
-		var col []string
-		for _, c := range []string{"p.name", "v.sku", "v.label", "v.material", "v.color", "c.name"} {
-			col = append(col, "f_unaccent("+c+") ILIKE f_unaccent("+patron+")")
-		}
-		// El lector de código de barras escribe el número entero.
-		col = append(col, "v.codigo_barras = "+arg(termino))
-		cond = append(cond, "("+strings.Join(col, " OR ")+")")
-	}
-	filas, err := s.pool.Query(ctx, `
-		SELECT v.id, p.id, p.slug, p.name, v.label, v.sku, c.name, p.unit::text, v.largo_mm,
-		  (SELECT i.url FROM product_images i WHERE i.product_id = p.id ORDER BY i.sort_order LIMIT 1),
-		  b.slug, inv.qty::float8, inv.reservado::float8, inv.min_qty::float8
-		FROM product_variants v
-		JOIN products p ON p.id = v.product_id
-		JOIN categories c ON c.id = p.category_id
-		LEFT JOIN inventory inv ON inv.variant_id = v.id
-		LEFT JOIN branches b ON b.id = inv.branch_id
-		WHERE `+strings.Join(cond, " AND ")+`
-		ORDER BY p.name, v.sort_order`, args...)
+// StockEnSucursal es el stock de una medida en una sucursal.
+type StockEnSucursal struct {
+	Sucursal
+	Qty       float64             `json:"qty"`
+	Reservado float64             `json:"reservado"`
+	Min       float64             `json:"min"`
+	Nivel     catalogo.NivelStock `json:"nivel"`
+}
+
+// FilaStock es una medida con su stock en cada sucursal activa.
+type FilaStock struct {
+	VariantID    string            `json:"variantId"`
+	ProductID    string            `json:"productId"`
+	ProductSlug  string            `json:"productSlug"`
+	ProductName  string            `json:"productName"`
+	Label        string            `json:"label"`
+	SKU          string            `json:"sku"`
+	CodigoBarras *string           `json:"codigoBarras"`
+	CategoryName string            `json:"categoryName"`
+	Unidad       string            `json:"unidad"`
+	LargoMm      *int32            `json:"largoMm"`
+	Imagen       *string           `json:"imagen"`
+	Sucursales   []StockEnSucursal `json:"sucursales"`
+	Total        float64           `json:"total"`
+}
+
+// ConteosDeStock son los totales de cada grupo con los mismos filtros.
+type ConteosDeStock struct {
+	Todas    int `json:"todas"`
+	SinStock int `json:"sinStock"`
+	Reponer  int `json:"reponer"`
+	ConStock int `json:"conStock"`
+}
+
+// GrillaDeStock es una página de la grilla, con el total del filtro y las
+// sucursales que forman las columnas.
+type GrillaDeStock struct {
+	Filas      []FilaStock    `json:"filas"`
+	Total      int            `json:"total"`
+	Conteos    ConteosDeStock `json:"conteos"`
+	Sucursales []Sucursal     `json:"sucursales"`
+}
+
+// PorPaginaStock: dos columnas de tarjetas.
+const PorPaginaStock = 30
+
+// Sucursales son las activas, por orden.
+func (s *Servicio) Sucursales(ctx context.Context) ([]Sucursal, error) {
+	filas, err := s.pool.Query(ctx, `SELECT id, slug, name FROM branches WHERE active ORDER BY sort_order, name`)
 	if err != nil {
 		return nil, err
 	}
-	defer filas.Close()
-	var orden []string
-	por := map[string]*FilaStock{}
-	for filas.Next() {
-		var f FilaStock
-		var suc *string
-		var qty, res, min *float64
-		if err := filas.Scan(&f.VariantID, &f.ProductID, &f.ProductSlug, &f.ProductName, &f.Label, &f.SKU, &f.CategoryName,
-			&f.Unidad, &f.LargoMm, &f.Imagen, &suc, &qty, &res, &min); err != nil {
-			return nil, err
-		}
-		x, ok := por[f.VariantID]
-		if !ok {
-			f.NivelCentral, f.NivelAserradero = catalogo.SinStock, catalogo.SinStock
-			x = &f
-			por[f.VariantID] = x
-			orden = append(orden, f.VariantID)
-		}
-		v := func(p *float64) float64 {
-			if p == nil {
-				return 0
-			}
-			return *p
-		}
-		switch deref(suc) {
-		case "casa-central":
-			x.QtyCentral, x.ReservadoCentral, x.MinCentral = v(qty), v(res), v(min)
-			x.NivelCentral = catalogo.Nivel(catalogo.Disponible(x.QtyCentral, x.ReservadoCentral), x.MinCentral)
-		case "aserradero":
-			x.QtyAserradero, x.ReservadoAserradero, x.MinAserradero = v(qty), v(res), v(min)
-			x.NivelAserradero = catalogo.Nivel(catalogo.Disponible(x.QtyAserradero, x.ReservadoAserradero), x.MinAserradero)
-		}
-		x.Total = Cantidad(x.QtyCentral + x.QtyAserradero)
-	}
-	if err := filas.Err(); err != nil {
-		return nil, err
-	}
-	out := make([]FilaStock, len(orden))
-	for i, id := range orden {
-		out[i] = *por[id]
-	}
-	return out, nil
+	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (Sucursal, error) {
+		var x Sucursal
+		return x, r.Scan(&x.ID, &x.Slug, &x.Nombre)
+	})
 }
 
-func deref(s *string) string {
-	if s == nil {
-		return ""
+// Los grupos de la pantalla, en SQL. «Total» es la suma del físico en las
+// sucursales activas; «bajo» es catalogo.Nivel == Bajo en alguna: hay
+// disponible, hay mínimo y el disponible no lo supera. Una sucursal en cero
+// con otra con stock no cuenta como «reponer», igual que antes.
+const (
+	totalDeLaMedida = `coalesce((SELECT sum(i.qty) FROM inventory i JOIN branches b ON b.id = i.branch_id AND b.active WHERE i.variant_id = v.id), 0)`
+	bajoEnAlguna    = `EXISTS (SELECT 1 FROM inventory i JOIN branches b ON b.id = i.branch_id AND b.active
+		WHERE i.variant_id = v.id AND i.min_qty > 0 AND greatest(i.qty - i.reservado, 0) > 0
+		  AND greatest(i.qty - i.reservado, 0) <= i.min_qty)`
+)
+
+var estadosDeStock = map[string]string{
+	"sin-stock": totalDeLaMedida + ` = 0`,
+	"reponer":   totalDeLaMedida + ` > 0 AND ` + bajoEnAlguna,
+	"con-stock": `NOT (` + totalDeLaMedida + ` = 0) AND NOT (` + totalDeLaMedida + ` > 0 AND ` + bajoEnAlguna + `)`,
+}
+
+// Listar es listarStock, de a páginas: las medidas activas, por nombre.
+func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock, error) {
+	out := GrillaDeStock{Filas: []FilaStock{}, Sucursales: []Sucursal{}}
+	sucs, err := s.Sucursales(ctx)
+	if err != nil {
+		return out, err
 	}
-	return *s
+	out.Sucursales = append(out.Sucursales, sucs...)
+	var c listado.Consulta
+	c.Y("p.active")
+	c.Y("v.active")
+	c.Comunes(f, "v.id")
+	// El lector de código de barras escribe el número entero.
+	c.Busqueda(f.Busqueda, []string{"p.name", "v.sku", "v.label", "v.material", "v.color", "c.name"}, "v.codigo_barras")
+	desde := ` FROM product_variants v
+		JOIN products p ON p.id = v.product_id
+		JOIN categories c ON c.id = p.category_id `
+	k := &out.Conteos
+	if err := s.pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE `+estadosDeStock["sin-stock"]+`),
+		count(*) FILTER (WHERE `+estadosDeStock["reponer"]+`), count(*) FILTER (WHERE `+estadosDeStock["con-stock"]+`)`+desde+c.Donde(),
+		c.Args()...).Scan(&k.Todas, &k.SinStock, &k.Reponer, &k.ConStock); err != nil {
+		return out, err
+	}
+	out.Total = map[string]int{"sin-stock": k.SinStock, "reponer": k.Reponer, "con-stock": k.ConStock}[f.Estado]
+	if cond, ok := estadosDeStock[f.Estado]; ok {
+		c.Y(cond)
+	} else {
+		out.Total = k.Todas
+	}
+	limite, salto := f.Pagina(PorPaginaStock)
+	filas, err := s.pool.Query(ctx, `
+		SELECT v.id, p.id, p.slug, p.name, v.label, v.sku, v.codigo_barras, c.name, p.unit::text, v.largo_mm,
+		  (SELECT i.url FROM product_images i WHERE i.product_id = p.id ORDER BY i.sort_order LIMIT 1)
+		`+desde+c.Donde()+`
+		ORDER BY p.name, v.sort_order, v.id
+		LIMIT `+c.Arg(limite)+` OFFSET `+c.Arg(salto), c.Args()...)
+	if err != nil {
+		return out, err
+	}
+	pagina, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (FilaStock, error) {
+		var x FilaStock
+		err := r.Scan(&x.VariantID, &x.ProductID, &x.ProductSlug, &x.ProductName, &x.Label, &x.SKU, &x.CodigoBarras,
+			&x.CategoryName, &x.Unidad, &x.LargoMm, &x.Imagen)
+		return x, err
+	})
+	if err != nil || len(pagina) == 0 {
+		return out, err
+	}
+	ids := make([]string, len(pagina))
+	for i, x := range pagina {
+		ids[i] = x.VariantID
+	}
+	type clave struct{ variante, sucursal string }
+	type cantidades struct{ qty, res, min float64 }
+	inv := map[clave]cantidades{}
+	rs, err := s.pool.Query(ctx, `SELECT variant_id, branch_id, qty::float8, reservado::float8, min_qty::float8
+		FROM inventory WHERE variant_id = ANY($1::uuid[])`, ids)
+	if err != nil {
+		return out, err
+	}
+	for rs.Next() {
+		var k clave
+		var c cantidades
+		if err := rs.Scan(&k.variante, &k.sucursal, &c.qty, &c.res, &c.min); err != nil {
+			rs.Close()
+			return out, err
+		}
+		inv[k] = c
+	}
+	rs.Close()
+	if err := rs.Err(); err != nil {
+		return out, err
+	}
+	for i := range pagina {
+		x := &pagina[i]
+		x.Sucursales = make([]StockEnSucursal, len(sucs))
+		suma := 0.0
+		for j, b := range sucs {
+			c := inv[clave{x.VariantID, b.ID}]
+			x.Sucursales[j] = StockEnSucursal{Sucursal: b, Qty: c.qty, Reservado: c.res, Min: c.min,
+				Nivel: catalogo.Nivel(catalogo.Disponible(c.qty, c.res), c.min)}
+			suma += c.qty
+		}
+		x.Total = Cantidad(suma)
+	}
+	out.Filas = pagina
+	return out, nil
 }
 
 // Alerta es una medida en o debajo de su mínimo.
@@ -287,7 +351,9 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, variante, s
 		contado = &c
 		cantidad = 0
 	}
-	if !plataforma.UUIDValido(variante) || (sucursal != "casa-central" && sucursal != "aserradero") || math.IsNaN(cantidad) || math.IsInf(cantidad, 0) ||
+	// La sucursal la busca SucursalPorSlug más abajo: estaban las dos escritas
+	// acá y una tercera no se podía ajustar desde la grilla.
+	if !plataforma.UUIDValido(variante) || strings.TrimSpace(sucursal) == "" || math.IsNaN(cantidad) || math.IsInf(cantidad, 0) ||
 		contado != nil && (math.IsNaN(*contado) || math.IsInf(*contado, 0) || *contado < 0) {
 		return "", plataforma.Invalido(map[string]string{"cantidad": "La cantidad tiene que ser un número, sin letras."})
 	}

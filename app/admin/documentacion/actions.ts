@@ -87,6 +87,6 @@ export async function guardarDestinos(
 export async function buscarProductosParaDocumento(consulta: string): Promise<{ id: string; nombre: string }[]> {
   const q = consulta.trim().slice(0, 80);
   if (q.length < 2) return [];
-  const r = await (await api()).GET("/api/v1/admin/productos", { params: { query: { busqueda: q } } });
-  return (r.data ?? []).slice(0, 12).map((p) => ({ id: p.id, nombre: p.name }));
+  const r = await (await api()).GET("/api/v1/admin/productos", { params: { query: { busqueda: q, limite: 12 } } });
+  return (r.data?.filas ?? []).map((p) => ({ id: p.id, nombre: p.name }));
 }

@@ -67,10 +67,18 @@ export interface VarianteForm {
   codigoBarras: string;
   precioGeneral: string;
   precioProfesional: string;
-  stockCentral: number;
-  stockAserradero: number;
-  minCentral: number;
-  minAserradero: number;
+  /**
+   * El stock y el mínimo de cada sucursal, por id de la fila de `branches`.
+   * Stock null: el campo quedó vacío y el físico no se toca.
+   */
+  stocks: Record<string, { stock: number | null; minimo: number }>;
+}
+
+/** Una sucursal activa de la base: una columna de stock en la grilla de medidas. */
+export interface SucursalDeFicha {
+  id: string;
+  slug: string;
+  nombre: string;
 }
 
 export interface ProductoForm {
@@ -157,8 +165,11 @@ export function FormularioProducto({
   galeria = [],
   atributos = { material: [], color: [], terminacion: [], calidad: [] },
   pestanaInicial = "datos",
+  sucursales,
 }: {
   inicial: ProductoForm;
+  /** Las sucursales activas, en orden: salen de la base, no de una lista fija. */
+  sucursales: SucursalDeFicha[];
   /** Lo ya cargado en material, color, terminación y calidad. */
   atributos?: Atributos;
   /** Recién creado, se abre en Fotos: es lo que le falta. */
@@ -186,15 +197,23 @@ export function FormularioProducto({
     const campo = estado.campo;
     if (!campo) return;
     const m = /^variantes\.(\d+)\.(\w+)$/.exec(campo);
+    // El stock de una sucursal llega como «variantes.0.stocks.1.stock»: la
+    // celda se llama por el slug de la sucursal.
+    const st = /^variantes\.(\d+)\.stocks\.(\d+)\.(stock|minimo|sucursal)$/.exec(campo);
+    const suc = st ? sucursales[Number(st[2])] : undefined;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- responde a la respuesta del servidor, no a un render
-    setPestana(m ? "medidas" : "datos");
-    const id = m ? `v-${m[1]}-${m[2]}` : campo;
+    setPestana(m || st ? "medidas" : "datos");
+    const id = st
+      ? `v-${st[1]}-${st[3] === "minimo" ? "min" : "stock"}-${suc?.slug ?? ""}`
+      : m
+        ? `v-${m[1]}-${m[2]}`
+        : campo;
     requestAnimationFrame(() => {
       const el = document.getElementById(id);
       el?.scrollIntoView({ block: "center" });
       el?.focus();
     });
-  }, [estado]);
+  }, [estado, sucursales]);
 
   const [nombre, setNombre] = useState(inicial.name);
   const [slug, setSlug] = useState(inicial.slug);
@@ -253,18 +272,18 @@ export function FormularioProducto({
               largoMm: v.largoMm === null ? "" : String(v.largoMm),
               anchoMm: v.anchoMm === null ? "" : String(v.anchoMm),
               espesorMm: v.espesorMm === null ? "" : String(v.espesorMm),
-              stockCentral:
-                v.stockCentral === null ? "" : String(v.stockCentral),
-              stockAserradero:
-                v.stockAserradero === null ? "" : String(v.stockAserradero),
-              minCentral: String(v.minCentral ?? 0),
-              minAserradero: String(v.minAserradero ?? 0),
-              ...(visto
-                ? {
-                    stockCentralVisto: String(visto.stockCentral),
-                    stockAserraderoVisto: String(visto.stockAserradero),
-                  }
-                : {}),
+              // Una entrada por sucursal activa, en el orden de la pantalla:
+              // Go señala el error por esa posición.
+              stocks: sucursales.map((s) => {
+                const st = v.stocks[s.id] ?? { stock: 0, minimo: 0 };
+                const vio = visto?.stocks[s.id];
+                return {
+                  sucursal: s.id,
+                  stock: st.stock === null ? "" : String(st.stock),
+                  minimo: String(st.minimo ?? 0),
+                  ...(visto ? { visto: String(vio?.stock ?? 0) } : {}),
+                };
+              }),
             };
           }),
         )}
@@ -547,6 +566,7 @@ export function FormularioProducto({
             unidad={unidad}
             nombreUnidad={textoDeUnidad(unidad)}
             atributos={atributos}
+            sucursales={sucursales}
             campoConError={estado.campo}
           />
         </CardContent>

@@ -17,12 +17,30 @@ paths:
       parameters:
         - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
         - { name: categoria, in: query, schema: { type: string } }
+        - { name: estado, in: query, schema: { type: string, enum: [todas, sin-precio, para-revisar, al-dia] } }
+        - { name: marca, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: proveedor, in: query, schema: { type: string } }
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
         "200":
-          description: Las medidas activas con sus precios
+          description: Una página de las medidas activas con sus precios, el total del filtro y los conteos de cada grupo
           content:
             application/json:
-              schema: { type: array, items: { $ref: "#/components/schemas/FilaPrecio" } }
+              schema:
+                type: object
+                required: [filas, total, conteos]
+                properties:
+                  filas: { type: array, items: { $ref: "#/components/schemas/FilaPrecio" } }
+                  total: { type: integer }
+                  conteos:
+                    type: object
+                    required: [todas, sinPrecio, paraRevisar, alDia]
+                    properties:
+                      todas: { type: integer }
+                      sinPrecio: { type: integer }
+                      paraRevisar: { type: integer }
+                      alDia: { type: integer }
   /api/v1/admin/precios/historial:
     get:
       operationId: HistorialDePrecios

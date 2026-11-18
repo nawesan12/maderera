@@ -1199,6 +1199,44 @@ func (q *Queries) Sucursales(ctx context.Context) ([]SucursalesRow, error) {
 	return items, nil
 }
 
+const sucursalesDeLaFicha = `-- name: SucursalesDeLaFicha :many
+SELECT id, slug, name, active FROM branches ORDER BY sort_order, name
+`
+
+type SucursalesDeLaFichaRow struct {
+	ID     string `json:"id"`
+	Slug   string `json:"slug"`
+	Name   string `json:"name"`
+	Active bool   `json:"active"`
+}
+
+// Todas, con su estado: la ficha muestra las activas y guarda en la que pidan
+// por id; el formato viejo (stockCentral…) las busca por slug.
+func (q *Queries) SucursalesDeLaFicha(ctx context.Context) ([]SucursalesDeLaFichaRow, error) {
+	rows, err := q.db.Query(ctx, sucursalesDeLaFicha)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SucursalesDeLaFichaRow{}
+	for rows.Next() {
+		var i SucursalesDeLaFichaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Name,
+			&i.Active,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const sucursalesTodas = `-- name: SucursalesTodas :many
 SELECT id, slug, name, sort_order, active, created_at, fondo_base FROM branches ORDER BY sort_order
 `

@@ -11,6 +11,7 @@ import (
 
 	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/listado"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 )
@@ -94,7 +95,18 @@ func (a *API) GrillaDePrecios(ctx context.Context, r preciosapi.GrillaDePreciosR
 	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
-	v, err := a.s.Listar(ctx, texto(r.Params.Busqueda), texto(r.Params.Categoria), time.Now())
+	f := listado.Filtros{Busqueda: texto(r.Params.Busqueda), Categoria: texto(r.Params.Categoria),
+		Marca: texto(r.Params.Marca), Proveedor: texto(r.Params.Proveedor)}
+	if r.Params.Limite != nil {
+		f.Limite = *r.Params.Limite
+	}
+	if r.Params.Desplazamiento != nil {
+		f.Desde = *r.Params.Desplazamiento
+	}
+	if r.Params.Estado != nil {
+		f.Estado = string(*r.Params.Estado)
+	}
+	v, err := a.s.Listar(ctx, f, time.Now())
 	return ok(v), err
 }
 

@@ -244,6 +244,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"FichaDeProducto":                "/admin/productos",              // GET /api/v1/admin/productos/{id}
 	"EditarProducto":                 "/admin/productos",              // PUT /api/v1/admin/productos/{id}
 	"ListarProductos":                "/admin/productos",              // GET /api/v1/admin/productos
+	"MarcasDeProductos":              "/admin/stock",                  // GET /api/v1/admin/productos-marcas
+	"DatosDeEtiquetas":               "/admin/stock",                  // GET /api/v1/admin/etiquetas
 	"CrearProducto":                  "/admin/productos",              // POST /api/v1/admin/productos
 	"AprobarSolicitud":               "/admin/profesionales",          // POST /api/v1/admin/profesionales/aprobacion
 	"EnlaceDeAcceso":                 "/admin/profesionales",          // POST /api/v1/admin/profesionales/{id}/enlace

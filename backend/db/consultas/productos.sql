@@ -20,6 +20,11 @@ SELECT id, slug, name, is_default FROM price_lists;
 -- name: Sucursales :many
 SELECT id, slug FROM branches ORDER BY sort_order;
 
+-- name: SucursalesDeLaFicha :many
+-- Todas, con su estado: la ficha muestra las activas y guarda en la que pidan
+-- por id; el formato viejo (stockCentral…) las busca por slug.
+SELECT id, slug, name, active FROM branches ORDER BY sort_order, name;
+
 -- name: PreciosDeVariantes :many
 SELECT price_list_id, variant_id, price::text AS price FROM price_list_items WHERE variant_id = ANY(sqlc.arg(ids)::uuid[]);
 

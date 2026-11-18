@@ -3,7 +3,8 @@ info:
   title: MJBJ · Stock
   version: "1"
   description: |
-    El stock del panel: la grilla por sucursal, las alertas, los últimos
+    El stock del panel: la grilla por sucursal (de a páginas, con una
+    columna por cada sucursal activa de la base), las alertas, los últimos
     movimientos, el ajuste rápido y la transferencia entre sucursales. Cada
     cambio toma el candado del stock (el de las reservas) y deja su
     movimiento. Leer y cambiar: quien entra a /admin/stock (admin, vendedor
@@ -16,12 +17,31 @@ paths:
       parameters:
         - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
         - { name: categoria, in: query, schema: { type: string } }
+        - { name: estado, in: query, schema: { type: string, enum: [todas, sin-stock, reponer, con-stock] } }
+        - { name: marca, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: proveedor, in: query, schema: { type: string } }
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 30 } }
+        - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
         "200":
-          description: Las medidas activas con su stock en las dos sucursales
+          description: Una página de las medidas activas con su stock en cada sucursal activa, el total del filtro y los conteos de cada grupo
           content:
             application/json:
-              schema: { type: array, items: { $ref: "#/components/schemas/FilaStock" } }
+              schema:
+                type: object
+                required: [filas, total, conteos, sucursales]
+                properties:
+                  filas: { type: array, items: { $ref: "#/components/schemas/FilaStock" } }
+                  total: { type: integer }
+                  conteos:
+                    type: object
+                    required: [todas, sinStock, reponer, conStock]
+                    properties:
+                      todas: { type: integer }
+                      sinStock: { type: integer }
+                      reponer: { type: integer }
+                      conStock: { type: integer }
+                  sucursales: { type: array, items: { $ref: "#/components/schemas/Sucursal" } }
   /api/v1/admin/stock/alertas:
     get:
       operationId: AlertasDeStock
@@ -200,10 +220,27 @@ components:
         detail: { type: string }
         errores: { type: object, additionalProperties: { type: string } }
     Nivel: { type: string, enum: [alto, medio, bajo, sin-stock] }
+    Sucursal:
+      type: object
+      required: [id, slug, nombre]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        nombre: { type: string }
+    StockEnSucursal:
+      type: object
+      required: [id, slug, nombre, qty, reservado, min, nivel]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        nombre: { type: string }
+        qty: { type: number, format: double }
+        reservado: { type: number, format: double }
+        min: { type: number, format: double }
+        nivel: { $ref: "#/components/schemas/Nivel" }
     FilaStock:
       type: object
-      required: [variantId, productId, productSlug, productName, label, sku, categoryName, unidad, largoMm, imagen, qtyCentral,
-        qtyAserradero, reservadoCentral, reservadoAserradero, minCentral, minAserradero, nivelCentral, nivelAserradero, total]
+      required: [variantId, productId, productSlug, productName, label, sku, codigoBarras, categoryName, unidad, largoMm, imagen, sucursales, total]
       properties:
         variantId: { type: string }
         productId: { type: string }
@@ -211,16 +248,10 @@ components:
         productName: { type: string }
         label: { type: string }
         sku: { type: string }
+        codigoBarras: { type: string, nullable: true }
         categoryName: { type: string }
         unidad: { type: string }
         largoMm: { type: integer, nullable: true }
         imagen: { type: string, nullable: true }
-        qtyCentral: { type: number, format: double }
-        qtyAserradero: { type: number, format: double }
-        reservadoCentral: { type: number, format: double }
-        reservadoAserradero: { type: number, format: double }
-        minCentral: { type: number, format: double }
-        minAserradero: { type: number, format: double }
-        nivelCentral: { $ref: "#/components/schemas/Nivel" }
-        nivelAserradero: { $ref: "#/components/schemas/Nivel" }
+        sucursales: { type: array, items: { $ref: "#/components/schemas/StockEnSucursal" } }
         total: { type: number, format: double }

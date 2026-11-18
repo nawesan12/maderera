@@ -1,41 +1,65 @@
 import Image from "next/image";
 import Link from "next/link";
-import { FileSpreadsheet, ImageOff, Package, PackageX, Plus, Star, Tags } from "lucide-react";
+import { Barcode, FileSpreadsheet, ImageOff, Package, PackageX, Plus, Star, Tags } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { GrupoListado } from "@/components/admin/grupo";
-import { recortar, VerTodo } from "@/components/admin/ver-mas";
+import { leerPagina, Paginador } from "@/components/admin/paginador";
 import { moneda, plural } from "@/components/admin/formato";
+import { requireStaff } from "@/lib/dal/session";
+import { puedeEntrar } from "@/lib/roles";
 import {
+  estadoDeProducto,
   listarCategoriasAdmin,
   listarProductosAdmin,
+  marcasDeProductos,
+  PRODUCTOS_POR_PAGINA,
   type ProductoAdmin,
 } from "@/lib/dal/admin/products";
+import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { BuscadorProductos } from "./buscador";
+
+type Params = {
+  buscar?: string;
+  cat?: string;
+  estado?: string;
+  marca?: string;
+  prov?: string;
+  pagina?: string;
+};
 
 export default async function AdminProductosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; cat?: string; ver?: string }>;
+  searchParams: Promise<Params>;
 }) {
   const params = await searchParams;
-  const [productos, categorias] = await Promise.all([
-    listarProductosAdmin({ busqueda: params.buscar, categoria: params.cat }),
+  const usuario = await requireStaff();
+  // Los proveedores son de Compras: quien no entra ahí no los ve ni filtra.
+  const conProveedores = puedeEntrar("/admin/compras", usuario.staffRole);
+  const pagina = leerPagina(params.pagina);
+  const [lista, categorias, marcas, proveedores] = await Promise.all([
+    listarProductosAdmin({
+      busqueda: params.buscar,
+      categoria: params.cat,
+      estado: params.estado,
+      marca: params.marca,
+      proveedor: params.prov,
+      pagina,
+    }),
     listarCategoriasAdmin(),
+    marcasDeProductos(),
+    conProveedores ? proveedoresParaElegir() : Promise.resolve(undefined),
   ]);
-
-  // Un producto sin foto en el catálogo se vende mucho menos, así que se
-  // separan arriba en lugar de quedar perdidos entre los demás.
-  const sinFoto = productos.filter((p) => p.sinFoto && p.active);
-  const resto = productos.filter((p) => !p.sinFoto || !p.active);
+  const { filas: productos, total, conteos } = lista;
+  const estado = estadoDeProducto(params.estado) ?? "todos";
 
   return (
     <div>
       <EncabezadoPanel
         titulo="Productos"
         resumen={
-          sinFoto.length > 0
-            ? `${plural(productos.length, "producto")} · ${sinFoto.length} sin foto`
-            : plural(productos.length, "producto")
+          conteos.sinFoto > 0
+            ? `${plural(conteos.todos, "producto")} · ${conteos.sinFoto} sin foto`
+            : plural(conteos.todos, "producto")
         }
       >
         <Link href="/admin/migracion?que=productos">
@@ -49,6 +73,13 @@ export default async function AdminProductosPage({
             <Tags className="h-5 w-5" />
             Categorías
           </button>
+        </Link>
+        <Link
+          href="/admin/stock/etiquetas"
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <Barcode className="h-5 w-5" />
+          Etiquetas
         </Link>
         <Link href="/admin/productos/nuevo">
           <button className="boton-accion inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-base font-medium">
@@ -65,10 +96,24 @@ export default async function AdminProductosPage({
         </Link>
       </EncabezadoPanel>
 
+      {/* Un producto sin foto en el catálogo se vende mucho menos: por eso
+          «Sin foto» es el primer grupo después de todos y pide atención. */}
       <BuscadorProductos
         categorias={categorias}
         busquedaActual={params.buscar ?? ""}
         categoriaActual={params.cat ?? "todos"}
+        marcas={marcas}
+        marcaActual={params.marca ?? "todas"}
+        proveedores={proveedores?.map((p) => ({ id: p.id, nombre: p.nombre }))}
+        proveedorActual={params.prov ?? "todos"}
+        estadoActual={estado}
+        estados={[
+          { valor: "todos", texto: "Todos", cantidad: conteos.todos },
+          { valor: "sin-foto", texto: "Sin foto", cantidad: conteos.sinFoto, atencion: true },
+          { valor: "sin-precio", texto: "Sin precio", cantidad: conteos.sinPrecio, atencion: true },
+          { valor: "sin-stock", texto: "Sin stock", cantidad: conteos.sinStock, atencion: true },
+          { valor: "ocultos", texto: "Ocultos", cantidad: conteos.ocultos },
+        ]}
       />
 
       {productos.length === 0 ? (
@@ -80,32 +125,15 @@ export default async function AdminProductosPage({
           </p>
         </div>
       ) : (
-        <>
-          <GrupoListado
-            titulo="Les falta la foto"
-            cantidad={sinFoto.length}
-            detalle="Se ven vacíos en el catálogo"
-            destacado
-            vacio={<p className="px-1 text-base text-texto-2">Todos tienen foto.</p>}
-          >
-            <Grilla productos={recortar(sinFoto, params.ver === "todo").visibles} />
-            <VerTodo
-              ocultas={recortar(sinFoto, params.ver === "todo").ocultas}
-              params={params}
-            />
-          </GrupoListado>
-
-          <GrupoListado
-            titulo={sinFoto.length > 0 ? "El resto del catálogo" : "Catálogo"}
-            cantidad={resto.length}
-          >
-            <Grilla productos={recortar(resto, params.ver === "todo").visibles} />
-            <VerTodo
-              ocultas={recortar(resto, params.ver === "todo").ocultas}
-              params={params}
-            />
-          </GrupoListado>
-        </>
+        <div className="mt-[22px]">
+          <Grilla productos={productos} />
+          <Paginador
+            pagina={pagina}
+            total={total}
+            porPagina={PRODUCTOS_POR_PAGINA}
+            params={params}
+          />
+        </div>
       )}
     </div>
   );

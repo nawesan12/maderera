@@ -1903,3 +1903,30 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
 - La lista para el optimizador pasa material, etiqueta y cliente por
   `SinFormula`.
 - El corte del mostrador sin disco toma el configurado.
+
+## Inventario grande (18/11): páginas, sucursales de la base y etiquetas
+
+- **Productos, precios y stock van de a páginas desde Go**
+  (`internal/listado`): `limite` + `desplazamiento`, búsqueda, categoría,
+  marca, proveedor (por `supplier_variant_codes`) y `estado`. Cada respuesta
+  trae `{filas, total, conteos}`: los grupos que antes armaba Next (sin foto,
+  sin stock, para revisar…) se cuentan en la misma consulta con
+  `count(*) FILTER` y el elegido va en el `WHERE`. Ojo: un argumento que no
+  aparece en la consulta hace fallar a Postgres («could not determine data
+  type»); por eso la grilla de precios lleva `viejo` también en el `SELECT`.
+  La exportación de precios usa `ListarTodo` (páginas de 200 hasta el total).
+- **Las sucursales salen de `branches`**: la grilla de stock trae
+  `sucursales` (activas, por `sort_order`) y cada fila una entrada por
+  sucursal; el ajuste rápido acepta cualquier slug que exista. La ficha de
+  producto manda `stocks: [{sucursal, stock, minimo, visto}]` por id; el
+  formato viejo (`stockCentral`…) se sigue aceptando —el golden de zod y quien
+  lo mande— y se resuelve por slug. Las celdas de la ficha se llaman
+  `v-<i>-stock-<slug>` (el E2E de productos cambió por eso).
+- **Etiquetas con código de barras** (`internal/codigobarras`): EAN-13 si
+  el código de barras de la medida es un EAN válido, Code 128 (juego C si son
+  dígitos pares) para el resto, sin dependencias; Go devuelve los módulos y
+  Next los dibuja en SVG. `GET /api/v1/admin/etiquetas`, de quien entra a
+  Stock. La hoja es `/etiquetas-de-medidas` (A4 de 3 × 7 o rollo de
+  50 × 25 mm con `@page`); se arma en `/admin/stock/etiquetas`.
+- Sin migraciones: los índices que hacen falta (trigramas de nombre, sku,
+  etiqueta y marca; `inventory` por variante) ya estaban.

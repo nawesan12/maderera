@@ -146,6 +146,23 @@ export interface components {
         };
         /** @enum {string} */
         Nivel: "alto" | "medio" | "bajo" | "sin-stock";
+        Sucursal: {
+            id: string;
+            slug: string;
+            nombre: string;
+        };
+        StockEnSucursal: {
+            id: string;
+            slug: string;
+            nombre: string;
+            /** Format: double */
+            qty: number;
+            /** Format: double */
+            reservado: number;
+            /** Format: double */
+            min: number;
+            nivel: components["schemas"]["Nivel"];
+        };
         FilaStock: {
             variantId: string;
             productId: string;
@@ -153,24 +170,12 @@ export interface components {
             productName: string;
             label: string;
             sku: string;
+            codigoBarras: string | null;
             categoryName: string;
             unidad: string;
             largoMm: number | null;
             imagen: string | null;
-            /** Format: double */
-            qtyCentral: number;
-            /** Format: double */
-            qtyAserradero: number;
-            /** Format: double */
-            reservadoCentral: number;
-            /** Format: double */
-            reservadoAserradero: number;
-            /** Format: double */
-            minCentral: number;
-            /** Format: double */
-            minAserradero: number;
-            nivelCentral: components["schemas"]["Nivel"];
-            nivelAserradero: components["schemas"]["Nivel"];
+            sucursales: components["schemas"]["StockEnSucursal"][];
             /** Format: double */
             total: number;
         };
@@ -198,6 +203,11 @@ export interface operations {
             query?: {
                 busqueda?: string;
                 categoria?: string;
+                estado?: "todas" | "sin-stock" | "reponer" | "con-stock";
+                marca?: string;
+                proveedor?: string;
+                limite?: number;
+                desplazamiento?: number;
             };
             header?: never;
             path?: never;
@@ -205,13 +215,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Las medidas activas con su stock en las dos sucursales */
+            /** @description Una página de las medidas activas con su stock en cada sucursal activa, el total del filtro y los conteos de cada grupo */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FilaStock"][];
+                    "application/json": {
+                        filas: components["schemas"]["FilaStock"][];
+                        total: number;
+                        conteos: {
+                            todas: number;
+                            sinStock: number;
+                            reponer: number;
+                            conStock: number;
+                        };
+                        sucursales: components["schemas"]["Sucursal"][];
+                    };
                 };
             };
         };

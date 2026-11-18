@@ -70,6 +70,30 @@ func (e VistaPreviaFilasEstado) Valid() bool {
 	}
 }
 
+// Defines values for GrillaDePreciosParamsEstado.
+const (
+	AlDia       GrillaDePreciosParamsEstado = "al-dia"
+	ParaRevisar GrillaDePreciosParamsEstado = "para-revisar"
+	SinPrecio   GrillaDePreciosParamsEstado = "sin-precio"
+	Todas       GrillaDePreciosParamsEstado = "todas"
+)
+
+// Valid indicates whether the value is a known member of the GrillaDePreciosParamsEstado enum.
+func (e GrillaDePreciosParamsEstado) Valid() bool {
+	switch e {
+	case AlDia:
+		return true
+	case ParaRevisar:
+		return true
+	case SinPrecio:
+		return true
+	case Todas:
+		return true
+	default:
+		return false
+	}
+}
+
 // CambioDePrecio defines model for CambioDePrecio.
 type CambioDePrecio struct {
 	CreatedAt      time.Time            `json:"createdAt"`
@@ -183,9 +207,17 @@ type VistaPreviaFilasEstado string
 
 // GrillaDePreciosParams defines parameters for GrillaDePrecios.
 type GrillaDePreciosParams struct {
-	Busqueda  *string `form:"busqueda,omitempty" json:"busqueda,omitempty"`
-	Categoria *string `form:"categoria,omitempty" json:"categoria,omitempty"`
+	Busqueda       *string                      `form:"busqueda,omitempty" json:"busqueda,omitempty"`
+	Categoria      *string                      `form:"categoria,omitempty" json:"categoria,omitempty"`
+	Estado         *GrillaDePreciosParamsEstado `form:"estado,omitempty" json:"estado,omitempty"`
+	Marca          *string                      `form:"marca,omitempty" json:"marca,omitempty"`
+	Proveedor      *string                      `form:"proveedor,omitempty" json:"proveedor,omitempty"`
+	Limite         *int                         `form:"limite,omitempty" json:"limite,omitempty"`
+	Desplazamiento *int                         `form:"desplazamiento,omitempty" json:"desplazamiento,omitempty"`
 }
+
+// GrillaDePreciosParamsEstado defines parameters for GrillaDePrecios.
+type GrillaDePreciosParamsEstado string
 
 // AjustarPreciosJSONBody defines parameters for AjustarPrecios.
 type AjustarPreciosJSONBody struct {
@@ -364,6 +396,71 @@ func (siw *ServerInterfaceWrapper) GrillaDePrecios(w http.ResponseWriter, r *htt
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "categoria"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "categoria", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "estado" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "estado", r.URL.Query(), &params.Estado, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "estado"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "estado", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "marca" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "marca", r.URL.Query(), &params.Marca, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "marca"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "marca", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "proveedor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "proveedor", r.URL.Query(), &params.Proveedor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "proveedor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "proveedor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limite" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limite", r.URL.Query(), &params.Limite, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limite"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limite", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "desplazamiento" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "desplazamiento", r.URL.Query(), &params.Desplazamiento, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "desplazamiento"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "desplazamiento", Err: err})
 		}
 		return
 	}
@@ -740,7 +837,16 @@ type GrillaDePreciosResponseObject interface {
 	VisitGrillaDePreciosResponse(w http.ResponseWriter) error
 }
 
-type GrillaDePrecios200JSONResponse []FilaPrecio
+type GrillaDePrecios200JSONResponse struct {
+	Conteos struct {
+		AlDia       int `json:"alDia"`
+		ParaRevisar int `json:"paraRevisar"`
+		SinPrecio   int `json:"sinPrecio"`
+		Todas       int `json:"todas"`
+	} `json:"conteos"`
+	Filas []FilaPrecio `json:"filas"`
+	Total int          `json:"total"`
+}
 
 func (response GrillaDePrecios200JSONResponse) VisitGrillaDePreciosResponse(w http.ResponseWriter) error {
 
@@ -1643,44 +1749,47 @@ func (sh *strictHandler) RubrosParaAjuste(w http.ResponseWriter, r *http.Request
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

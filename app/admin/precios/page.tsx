@@ -2,16 +2,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { Download, FileText, ImageOff, Percent, Tags } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { GrupoListado } from "@/components/admin/grupo";
-import { recortar, VerTodo } from "@/components/admin/ver-mas";
+import { leerPagina, Paginador } from "@/components/admin/paginador";
 import { fechaHora, haceCuanto, moneda, plural } from "@/components/admin/formato";
 import { BuscadorProductos } from "@/app/admin/productos/buscador";
-import { listarCategoriasAdmin } from "@/lib/dal/admin/products";
+import { listarCategoriasAdmin, marcasDeProductos } from "@/lib/dal/admin/products";
 import {
-  DIAS_PARA_REVISAR,
+  estadoDePrecio,
   historialDePrecios,
   listarListasDePrecios,
   listarPrecios,
+  PRECIOS_POR_PAGINA,
   rubrosParaAjuste,
   ultimoAjuste,
   type FilaPrecio,
@@ -28,35 +28,47 @@ const origenTexto: Record<string, string> = {
   importacion: "Importación",
 };
 
-/** Un precio que no se toca hace más de dos meses probablemente quedó viejo. */
+type Params = {
+  buscar?: string;
+  cat?: string;
+  estado?: string;
+  marca?: string;
+  prov?: string;
+  pagina?: string;
+};
 
 export default async function PreciosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; cat?: string; ver?: string }>;
+  searchParams: Promise<Params>;
 }) {
   const params = await searchParams;
+  const pagina = leerPagina(params.pagina);
 
-  const [filas, categorias, listas, historial, rubros, proveedores, ultimo] = await Promise.all([
-    listarPrecios({ busqueda: params.buscar, categoria: params.cat }),
+  // Precios es solo del admin, que también entra a Compras: el filtro por
+  // proveedor va siempre.
+  const [grilla, categorias, marcas, listas, historial, rubros, proveedores, ultimo] = await Promise.all([
+    listarPrecios({
+      busqueda: params.buscar,
+      categoria: params.cat,
+      estado: params.estado,
+      marca: params.marca,
+      proveedor: params.prov,
+      pagina,
+    }),
     listarCategoriasAdmin(),
+    marcasDeProductos(),
     listarListasDePrecios(),
     historialDePrecios(10),
     rubrosParaAjuste(),
     proveedoresParaElegir(),
     ultimoAjuste(),
   ]);
+  const { filas, total, conteos } = grilla;
+  const estado = estadoDePrecio(params.estado) ?? "todos";
 
   const general = listas.find((l) => l.isDefault);
   const profesional = listas.find((l) => l.slug === "profesional");
-
-  // El criterio de "quedó viejo" lo resuelve el DAL: depende de la hora actual,
-  // y leerla durante el render de un Server Component es una impureza.
-  const sinPrecio = filas.filter((f) => Number(f.precioGeneral) <= 0);
-  const desactualizados = filas.filter((f) => f.desactualizado);
-  const alDia = filas.filter(
-    (f) => !sinPrecio.includes(f) && !desactualizados.includes(f),
-  );
 
   const consulta = new URLSearchParams();
   if (params.buscar) consulta.set("buscar", params.buscar);
@@ -70,9 +82,9 @@ export default async function PreciosPage({
       <EncabezadoPanel
         titulo="Precios"
         resumen={
-          sinPrecio.length > 0
-            ? `${plural(filas.length, "medida")} · ${sinPrecio.length} sin precio`
-            : plural(filas.length, "medida con precio", "medidas con precio")
+          conteos.sinPrecio > 0
+            ? `${plural(conteos.todas, "medida")} · ${conteos.sinPrecio} sin precio`
+            : plural(conteos.todas, "medida con precio", "medidas con precio")
         }
       >
         <a
@@ -123,10 +135,24 @@ export default async function PreciosPage({
         />
       </EncabezadoPanel>
 
+      {/* «Para revisar» son los que no se tocan hace más de DIAS_PARA_REVISAR
+          días: lo decide Go, porque depende de la hora y Next no la lee
+          durante el render. */}
       <BuscadorProductos
         categorias={categorias}
         busquedaActual={params.buscar ?? ""}
         categoriaActual={params.cat ?? "todos"}
+        marcas={marcas}
+        marcaActual={params.marca ?? "todas"}
+        proveedores={proveedores.map((p) => ({ id: p.id, nombre: p.nombre }))}
+        proveedorActual={params.prov ?? "todos"}
+        estadoActual={estado}
+        estados={[
+          { valor: "todos", texto: "Todas", cantidad: conteos.todas },
+          { valor: "sin-precio", texto: "Sin precio", cantidad: conteos.sinPrecio, atencion: true },
+          { valor: "para-revisar", texto: "Para revisar", cantidad: conteos.paraRevisar, atencion: true },
+          { valor: "al-dia", texto: "Actualizados", cantidad: conteos.alDia },
+        ]}
       />
 
       {filas.length === 0 ? (
@@ -140,51 +166,13 @@ export default async function PreciosPage({
       ) : (
         <div className="mt-6 grid gap-6 2xl:grid-cols-[1fr_320px]">
           <div>
-            <GrupoListado
-              titulo="Sin precio cargado"
-              cantidad={sinPrecio.length}
-              detalle="No se pueden vender por la tienda"
-              destacado
-            >
-              <Grilla
-                filas={recortar(sinPrecio, params.ver === "todo").visibles}
-                generalId={general?.id}
-                profesionalId={profesional?.id}
-              />
-              <VerTodo
-                ocultas={recortar(sinPrecio, params.ver === "todo").ocultas}
-                params={params}
-              />
-            </GrupoListado>
-
-            <GrupoListado
-              titulo="Para revisar"
-              cantidad={desactualizados.length}
-              detalle={`Sin cambios hace más de ${DIAS_PARA_REVISAR} días`}
-              destacado
-            >
-              <Grilla
-                filas={recortar(desactualizados, params.ver === "todo").visibles}
-                generalId={general?.id}
-                profesionalId={profesional?.id}
-              />
-              <VerTodo
-                ocultas={recortar(desactualizados, params.ver === "todo").ocultas}
-                params={params}
-              />
-            </GrupoListado>
-
-            <GrupoListado titulo="Actualizados" cantidad={alDia.length}>
-              <Grilla
-                filas={recortar(alDia, params.ver === "todo").visibles}
-                generalId={general?.id}
-                profesionalId={profesional?.id}
-              />
-              <VerTodo
-                ocultas={recortar(alDia, params.ver === "todo").ocultas}
-                params={params}
-              />
-            </GrupoListado>
+            <Grilla filas={filas} generalId={general?.id} profesionalId={profesional?.id} />
+            <Paginador
+              pagina={pagina}
+              total={total}
+              porPagina={PRECIOS_POR_PAGINA}
+              params={params}
+            />
           </div>
 
           <aside className="2xl:sticky 2xl:top-24 2xl:self-start">

@@ -189,6 +189,7 @@ async function PanelConSesion({
                 nombre={usuario.name}
                 iniciales={iniciales(usuario.name)}
                 rol={ETIQUETA_ROL[usuario.staffRole!]}
+                esAdmin={usuario.staffRole === "admin"}
               />
             </div>
           </div>

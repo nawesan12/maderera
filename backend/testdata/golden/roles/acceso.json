@@ -153,6 +153,10 @@
    "aserradero"
   ]
  },
+ "manejanPlata": [
+  "admin",
+  "vendedor"
+ ],
  "quienEntra": {
   "/": null,
   "/admin": [

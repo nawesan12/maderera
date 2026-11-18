@@ -255,8 +255,10 @@ func (a *API) CambiarPlazo(ctx context.Context, r cuentasapi.CambiarPlazoRequest
 
 /* ----------------------------- cobros ----------------------------- */
 
+// CobrarACliente: quien mueve plata (roles.ManejanPlata). Pedía «quien
+// entra a Pedidos», y el depósito emitía recibos.
 func (a *API) CobrarACliente(ctx context.Context, r cuentasapi.CobrarAClienteRequestObject) (cuentasapi.CobrarAClienteResponseObject, error) {
-	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/pedidos")...)
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
 	if err != nil {
 		return nil, err
 	}

@@ -107,6 +107,27 @@ paths:
         "204": { description: Cambiada }
         "401": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/sesion/pin:
+    put:
+      operationId: CargarPin
+      summary: El PIN con que un administrador autoriza en el mostrador (pide la clave de la cuenta)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clave, pin]
+              additionalProperties: false
+              properties:
+                clave: { type: string, maxLength: 200 }
+                pin: { type: string, maxLength: 20 }
+      responses:
+        "204": { description: Guardado }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
   /api/v1/registro:
     post:
       operationId: Registrarse

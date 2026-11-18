@@ -10,6 +10,7 @@ import (
 	"mjbj/internal/api/sesionapi"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/sqlc"
 )
 
 // API son las rutas de sesión (api/sesion.yaml).
@@ -228,4 +229,36 @@ func (a *API) CambiarClave(ctx context.Context, req sesionapi.CambiarClaveReques
 		return nil, err
 	}
 	return sesionapi.CambiarClave204Response{}, nil
+}
+
+// CargarPin guarda el PIN de autorización de un administrador. Cuenta los
+// intentos como un ingreso: pide la clave de la cuenta, y sin tope sería una
+// puerta para probar claves con la sesión de otro abierta.
+func (a *API) CargarPin(ctx context.Context, req sesionapi.CargarPinRequestObject) (sesionapi.CargarPinResponseObject, error) {
+	ses, err := Exigir(ctx, sqlc.StaffRoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	if !PINValido(req.Body.Pin) {
+		return nil, plataforma.Invalido(map[string]string{"pin": "El PIN son de 6 a 8 números."})
+	}
+	sujeto := "usuario:" + ses.UserID
+	if v := a.lim.Permitido(ctx, limites.Ingresar, sujeto); !v.Permitido {
+		return nil, espera(v)
+	}
+	if err := a.s.CargarPIN(ctx, ses, req.Body.Clave, req.Body.Pin); errors.Is(err, ErrCredenciales) {
+		return nil, plataforma.Invalido(map[string]string{"clave": "La contraseña no es esa."})
+	} else if err != nil {
+		return nil, err
+	}
+	a.lim.Soltar(ctx, limites.Ingresar, sujeto)
+	// La bitácora no se puede importar desde acá (importa auth): se anota
+	// con la misma consulta.
+	correo, rol := ses.Correo, string(sqlc.StaffRoleAdmin)
+	_ = a.s.q.AnotarEnBitacora(ctx, sqlc.AnotarEnBitacoraParams{
+		UsuarioID: &ses.UserID, UsuarioNombre: ses.Nombre, UsuarioEmail: &correo, UsuarioRol: &rol,
+		Accion: sqlc.AccionAuditoriaEditar, Entidad: "usuario", EntidadID: &ses.UserID, Descripcion: "Cargó su PIN de autorización",
+	}) // si la bitácora falla, el PIN igual queda
+
+	return sesionapi.CargarPin204Response{}, nil
 }

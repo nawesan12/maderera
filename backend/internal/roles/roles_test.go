@@ -10,10 +10,11 @@ import (
 )
 
 type golden struct {
-	Acceso     map[string][]string `json:"acceso"`
-	QuienEntra map[string][]string `json:"quienEntra"`
-	Inicio     map[string]string   `json:"inicio"`
-	Matriz     []struct {
+	Acceso       map[string][]string `json:"acceso"`
+	ManejanPlata []string            `json:"manejanPlata"`
+	QuienEntra   map[string][]string `json:"quienEntra"`
+	Inicio       map[string]string   `json:"inicio"`
+	Matriz       []struct {
 		Ruta  string  `json:"ruta"`
 		Rol   *string `json:"rol"`
 		Puede bool    `json:"puede"`
@@ -38,6 +39,9 @@ func TestComoLibRoles(t *testing.T) {
 			out[i] = string(r)
 		}
 		return out
+	}
+	if got := aTexto(ManejanPlata); !slices.Equal(got, g.ManejanPlata) {
+		t.Errorf("ManejanPlata = %v, el TS da %v", got, g.ManejanPlata)
 	}
 	for ruta, want := range g.QuienEntra {
 		if got := aTexto(QuienEntra(ruta)); !slices.Equal(got, want) && !(len(got) == 0 && want == nil) {

@@ -1,0 +1,17 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+
+/**
+ * El PIN con que un administrador autoriza en el mostrador. Lo guarda Go
+ * (PUT /api/v1/sesion/pin), que pide la clave de la cuenta y cuenta los
+ * intentos.
+ */
+export async function cargarPin(clave: string, pin: string): Promise<{ ok?: string; error?: string }> {
+  const r = await (await api()).PUT("/api/v1/sesion/pin", { body: { clave, pin } });
+  if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo guardar el PIN.") };
+  // El aviso «Cargá tu PIN» del inicio se va.
+  revalidatePath("/admin");
+  return { ok: "PIN guardado." };
+}

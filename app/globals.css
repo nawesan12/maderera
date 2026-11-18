@@ -1604,13 +1604,17 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   background-color: var(--accion);
 }
 
-/* En /corte y en la ficha de producto (las páginas se marcan con
+/* En /corte (la página se marca con
    `data-sin-flotantes`) el WhatsApp flotante sobra: cada una tiene su propio
    botón de WhatsApp con el texto ya armado, y en el teléfono el flotante
    tapaba el canto de la pieza o «Consultar precio por WhatsApp». Va en CSS y
    no con `usePathname`: leer la ruta en el layout frena el prerender de
    /corte/c/[token]. */
-body:has([data-sin-flotantes]) .flotante-whatsapp {
+/* En la ficha, solo mientras el selector se ve: lo maneja `ZonaSinFlotante`,
+   porque ahí el botón de la ficha queda arriba y al bajar hace falta el
+   flotante. */
+body:has([data-sin-flotantes]) .flotante-whatsapp,
+html[data-zona-sin-flotante] .flotante-whatsapp {
   display: none;
 }
 

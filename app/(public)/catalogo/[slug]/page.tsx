@@ -12,6 +12,7 @@ import {
 import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { ZonaSinFlotante } from "@/components/whatsapp/zona-sin-flotante";
 import { SelectorVarianteDeQuienMira } from "@/components/catalogo/selector-variante";
 import { tienda } from "@/lib/dal/contenido";
 import { preciosDeFicha } from "@/lib/dal/visitante";
@@ -262,13 +263,13 @@ export default async function ProductoPage({
             dentro de una pista de 342 y empujaba el ancho del documento entero:
             en el teléfono la página quedaba corrida y se podía arrastrar de
             costado. Medido: 403 px de scroll en una pantalla de 390. */}
-        {/* `data-sin-flotantes`: el WhatsApp flotante tapaba «Consultar precio
-            por WhatsApp», que acá ya está con la medida escrita (hallazgo 27). */}
-        <div data-sin-flotantes className="grid gap-9 lg:grid-cols-2 lg:items-start [&>*]:min-w-0">
+        {/* El WhatsApp flotante tapaba «Consultar precio por WhatsApp», que
+            acá ya está con la medida escrita (hallazgo 27): se va mientras
+            esto se ve y vuelve al bajar a la ficha técnica. */}
+        <ZonaSinFlotante className="grid gap-9 lg:grid-cols-2 lg:items-start [&>*]:min-w-0">
           <GaleriaProducto
             imagenes={producto.imagenes}
             nombre={producto.name}
-            destacado={producto.featured}
             rubro={producto.subcategory ?? producto.categoryName}
             categoria={producto.categorySlug}
             marca={producto.brand}
@@ -348,7 +349,7 @@ export default async function ProductoPage({
               </BotonWhatsapp>
             )}
           </div>
-        </div>
+        </ZonaSinFlotante>
 
         <FichaTecnica producto={producto} medidas={conMedidas} />
 

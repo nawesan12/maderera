@@ -10,18 +10,20 @@ import { PlacaDeProducto } from "@/components/catalogo/placa-de-producto";
  * Para comprar madera hace falta ver el material: la veta, el color real, la
  * terminación. Una sola foto chica no alcanza, y en una maderera es lo que más
  * define si alguien se decide o llama para preguntar.
+ *
+ * Sin «Destacado» sobre la foto (hallazgo 26): salió de la tarjeta porque lo
+ * tenía un tercio del catálogo, y en la ficha quedaba una marca que la grilla
+ * ya no mostraba. `featured` solo ordena.
  */
 export function GaleriaProducto({
   imagenes,
   nombre,
-  destacado = false,
   rubro,
   categoria,
   marca,
 }: {
   imagenes: string[];
   nombre: string;
-  destacado?: boolean;
   /** Para la placa, cuando no hay foto: lo que se estampa y el tono. */
   rubro: string;
   categoria: string;
@@ -57,11 +59,6 @@ export function GaleriaProducto({
           className="object-cover"
           sizes="(max-width: 1024px) 100vw, 50vw"
         />
-        {destacado && (
-          <span className="absolute left-4 top-4 rounded-full bg-accion px-3 py-1 text-xs font-bold uppercase tracking-wider text-white">
-            Destacado
-          </span>
-        )}
       </div>
 
       {imagenes.length > 1 && (

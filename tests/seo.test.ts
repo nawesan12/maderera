@@ -189,6 +189,12 @@ describe("marcado de producto", () => {
 
     expect(marcado.image[0]).toMatch(/^https?:\/\/.+\/fotos\/fenolico\.jpg$/);
   });
+
+  it("sin foto propia usa la placa del rubro, que Google pide una imagen", () => {
+    const marcado = productoJsonLd({ ...producto, imagenes: [], variantes: [] }) as Record<string, string[]>;
+    expect(marcado.image).toHaveLength(1);
+    expect(marcado.image[0]).toMatch(new RegExp(`^https?://.+/og/producto/${producto.slug}$`));
+  });
 });
 
 describe("disponibilidad", () => {

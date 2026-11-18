@@ -26,6 +26,12 @@
 -- migración y hay que preguntarlo. Igual, nada se pierde: las filas quedan en
 -- product_images_rubro_00150 y el Down las devuelve.
 --
+-- **El feed de Merchant queda vacío.** lib/merchant.ts saltea el producto
+-- sin foto, porque Merchant no acepta una imagen de relleno. Con la tienda
+-- encendida, sin fotos reales no sale ningún producto: cargarlas es condición
+-- para prenderla (docs/go/progreso.md, T5). El JSON-LD usa la placa de
+-- /og/producto mientras tanto.
+--
 -- **Lo que se ve no cambia solo.** Las páginas del catálogo están armadas de
 -- antemano y cacheadas con la etiqueta «catalogo»: sin avisarle a Next,
 -- seguirían mostrando la foto borrada hasta que venza la caché. Por eso la

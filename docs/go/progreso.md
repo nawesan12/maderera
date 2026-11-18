@@ -1944,8 +1944,14 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   antemano seguirían con la foto vieja. Hace falta el worker corriendo con
   `REVALIDAR_SECRETO`; si no está, revalidar a mano por
   `/api/interno/revalidar`.
+- **Sin fotos, el feed de Merchant sale vacío.** `lib/merchant.ts` saltea
+  el producto sin foto (Merchant no acepta una imagen de relleno), y desde la
+  00150 casi ninguno tiene. **Condición para prender la tienda**: cargar las
+  fotos reales; el panel de productos ya cuenta los «sin foto». El JSON-LD sí
+  tiene respaldo: sin foto usa la placa de `/og/producto/<slug>`.
 - **Contacto**: `email` dejó de ser obligatorio en el contrato. Go pide
-  WhatsApp o correo (`contacto`), el teléfono con 8 dígitos o más, y el
+  WhatsApp o correo (`contacto`), el teléfono que `whatsapp.AWaId` entiende
+  (acepta «590-3118» y rechaza lo que no se puede contestar), y el
   limitador cuenta por IP y por correo o por el `wa_id` del teléfono.
 - **Pendiente de la clienta**: dónde se cortan las placas
   (`DONDE_SE_CORTA` en `lib/sucursales.ts`).

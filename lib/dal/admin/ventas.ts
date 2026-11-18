@@ -40,15 +40,22 @@ export interface PresupuestoListado
  */
 export async function listarPresupuestos(
   filtros: { busqueda?: string; estado?: string; sucursal?: string } = {},
-): Promise<PresupuestoListado[]> {
-  const r = await (await api()).GET("/api/v1/admin/presupuestos", { params: { query: filtros } });
-  return datos(r).map((p) => ({
-    ...p,
-    createdAt: fecha(p.createdAt),
-    validoHasta: fechaONula(p.validoHasta),
-    respondeHasta: fechaONula(p.respondeHasta),
-    necesitaPara: fechaONula(p.necesitaPara),
-  }));
+  pagina?: { limite: number; desplazamiento: number },
+): Promise<{ filas: PresupuestoListado[]; total: number }> {
+  const r = await (await api()).GET("/api/v1/admin/presupuestos", {
+    params: { query: { ...filtros, ...(pagina ?? {}) } },
+  });
+  const { filas, total } = datos(r);
+  return {
+    total,
+    filas: filas.map((p) => ({
+      ...p,
+      createdAt: fecha(p.createdAt),
+      validoHasta: fechaONula(p.validoHasta),
+      respondeHasta: fechaONula(p.respondeHasta),
+      necesitaPara: fechaONula(p.necesitaPara),
+    })),
+  };
 }
 
 export interface PresupuestoCompleto extends Omit<Esquemas["FichaDePresupuesto"], "validoHasta" | "createdAt"> {

@@ -333,12 +333,13 @@ func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, d
 	if sinIva {
 		gasto = "CASE WHEN f.total > 0 THEN e.importe * (f.neto + f.exento) / f.total ELSE e.importe END"
 	}
+	const delPeriodo = `o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2`
 	err := s.pool.QueryRow(ctx, `
 		SELECT `+ventas+`, coalesce(sum(margenes.costo), 0), coalesce(sum(margenes.sin_costo), 0)::int,
 		  (SELECT coalesce(sum(`+gasto+`), 0) FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
 		   WHERE e.fecha >= $3 AND e.fecha < $4)
-		FROM orders o `+margenes+`
-		WHERE o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2`, idesde, ihasta, ddesde, dhasta).
+		FROM orders o `+margenesDe(delPeriodo)+`
+		WHERE `+delPeriodo, idesde, ihasta, ddesde, dhasta).
 		Scan(&neto, &costo, &r.LineasSinCosto, &gastos)
 	if err != nil {
 		return r, err

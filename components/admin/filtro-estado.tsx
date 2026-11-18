@@ -47,6 +47,8 @@ export function FiltroEstado({
       if (!v || v === "todos") params.delete(k);
       else params.set(k, v);
     }
+    // Otro filtro es otra lista: vuelve a la primera página.
+    params.delete("pagina");
     startTransition(() =>
       router.replace(params.size > 0 ? `${ruta}?${params}` : ruta, {
         scroll: false,

@@ -1,14 +1,19 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { CalendarClock, ClipboardList, Plus, Timer } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { Button } from "@/components/ui/button";
 import {
   AcentoEstado,
   EtiquetaEstado,
-  estiloDeEstado,
 } from "@/components/admin/etiqueta-estado";
 import { FiltroEstado } from "@/components/admin/filtro-estado";
 import { GrupoListado } from "@/components/admin/grupo";
+import {
+  leerPagina,
+  Paginador,
+  POR_PAGINA,
+} from "@/components/admin/paginador";
 import {
   fechaCorta,
   haceCuanto,
@@ -33,7 +38,11 @@ const ESTADOS = {
   enviado: "Enviados",
   aceptado: "Aceptados",
   rechazado: "Rechazados",
+  cerrados: "Cerrados",
 };
+
+/** Los estados que todavía esperan algo (el «abiertos» de Go). */
+const ABIERTOS = new Set(["abiertos", "pendiente", "revision", "enviado"]);
 
 const ORIGEN: Record<string, string> = {
   sitio: "Pedido desde el sitio",
@@ -46,35 +55,86 @@ const ORIGEN: Record<string, string> = {
 
 
 
+/**
+ * Los presupuestos, de a páginas (tanda T8): se acumulan sin tope y la
+ * pantalla los traía todos.
+ *
+ * Sin filtro de estado se piden dos cosas: lo que espera respuesta, entero
+ * —son pocos por naturaleza y es lo que hay que atender—, y los cerrados de a
+ * 30, del más nuevo al más viejo. Con un estado elegido, una sola lista
+ * paginada.
+ */
 export default async function PresupuestosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; estado?: string; sucursal?: string }>;
+  searchParams: Promise<{
+    buscar?: string;
+    estado?: string;
+    sucursal?: string;
+    pagina?: string;
+  }>;
 }) {
   const params = await searchParams;
-  const [presupuestos, zonas, sucursales] = await Promise.all([
-    listarPresupuestos({
-      busqueda: params.buscar,
-      estado: params.estado,
-      sucursal: params.sucursal,
-    }),
+  const pagina = leerPagina(params.pagina);
+  const estado = params.estado && params.estado !== "todos" ? params.estado : undefined;
+  const filtros = { busqueda: params.buscar, sucursal: params.sucursal };
+  const deLaPagina = {
+    limite: POR_PAGINA,
+    desplazamiento: (pagina - 1) * POR_PAGINA,
+  };
+
+  const [abiertos, cerrados, zonas, sucursales] = await Promise.all([
+    // «abiertos» sin límite viene entero.
+    estado === undefined || estado === "abiertos"
+      ? listarPresupuestos({ ...filtros, estado: "abiertos" })
+      : ABIERTOS.has(estado)
+        ? listarPresupuestos({ ...filtros, estado }, deLaPagina)
+        : null,
+    estado === undefined || !ABIERTOS.has(estado)
+      ? listarPresupuestos({ ...filtros, estado: estado ?? "cerrados" }, deLaPagina)
+      : null,
     zonasParaPedido(),
     listarSucursalesPublicas(),
   ]);
 
-  // Lo que espera una respuesta va arriba y separado: es lo que hay que atender.
-  const abiertos = presupuestos.filter((p) => estiloDeEstado(p.estado).abierto);
-  const cerrados = presupuestos.filter((p) => !estiloDeEstado(p.estado).abierto);
-  const montoAbierto = abiertos.reduce((s, p) => s + p.total, 0);
+  // La lista que va de a páginas: los cerrados, o el estado abierto elegido.
+  const paginada = cerrados ?? abiertos;
+  const ultima = Math.max(1, Math.ceil((paginada?.total ?? 0) / POR_PAGINA));
+  if (paginada && paginada.filas.length === 0 && paginada.total > 0 && pagina > ultima) {
+    const q = new URLSearchParams(
+      Object.entries({ buscar: params.buscar, estado: params.estado, sucursal: params.sucursal }).filter(
+        (e): e is [string, string] => Boolean(e[1]),
+      ),
+    );
+    if (ultima > 1) q.set("pagina", String(ultima));
+    redirect(`/admin/presupuestos${q.size > 0 ? `?${q}` : ""}`);
+  }
+
+  // El monto de lo que espera respuesta, solo con la lista entera: con un
+  // estado puntual la lista es una página y la suma sería de esa página.
+  const abiertosEnteros = estado === undefined || estado === "abiertos";
+  const montoAbierto = (abiertos?.filas ?? []).reduce((s, p) => s + p.total, 0);
+  const total = (abiertos?.total ?? 0) + (cerrados?.total ?? 0);
+  const paginador = (
+    <Paginador
+      pagina={pagina}
+      total={paginada?.total ?? 0}
+      params={{
+        buscar: params.buscar,
+        estado: params.estado,
+        sucursal: params.sucursal,
+      }}
+    />
+  );
 
   return (
     <div>
       <EncabezadoPanel
         titulo="Presupuestos"
         resumen={
-          abiertos.length > 0
-            ? `${plural(abiertos.length, "presupuesto")} esperando respuesta por ${moneda.format(montoAbierto)}`
-            : `${plural(presupuestos.length, "presupuesto")} en total`
+          abiertosEnteros && abiertos && abiertos.total > 0
+            ? `${plural(abiertos.total, "presupuesto")} esperando respuesta por ${moneda.format(montoAbierto)}`
+            : `${plural(total, "presupuesto")} en total`
         }
       >
         {/* Lo que entra por teléfono se carga acá: hasta ahora un presupuesto
@@ -100,39 +160,47 @@ export default async function PresupuestosPage({
         }}
       />
 
-      {presupuestos.length === 0 ? (
+      {total === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
           <ClipboardList className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-base font-medium">No hay presupuestos que mostrar</p>
         </div>
       ) : (
         <>
-          <GrupoListado
-            titulo="Esperando respuesta"
-            cantidad={abiertos.length}
-            detalle={
-              abiertos.length > 0 ? moneda.format(montoAbierto) : undefined
-            }
-            destacado
-          >
-            {abiertos.map((p) => (
-              <Tarjeta key={p.id} presupuesto={p} zonas={zonas} />
-            ))}
-          </GrupoListado>
+          {abiertos && (
+            <GrupoListado
+              titulo="Esperando respuesta"
+              cantidad={abiertos.total}
+              detalle={
+                abiertosEnteros && abiertos.total > 0
+                  ? moneda.format(montoAbierto)
+                  : undefined
+              }
+              destacado
+            >
+              {abiertos.filas.map((p) => (
+                <Tarjeta key={p.id} presupuesto={p} zonas={zonas} />
+              ))}
+              {!cerrados && paginador}
+            </GrupoListado>
+          )}
 
-          <GrupoListado
-            titulo="Cerrados"
-            cantidad={cerrados.length}
-            vacio={
-              <p className="px-1 text-base text-texto-2">
-                Ninguno cerrado todavía.
-              </p>
-            }
-          >
-            {cerrados.map((p) => (
-              <Tarjeta key={p.id} presupuesto={p} zonas={zonas} apagado />
-            ))}
-          </GrupoListado>
+          {cerrados && (
+            <GrupoListado
+              titulo="Cerrados"
+              cantidad={cerrados.total}
+              vacio={
+                <p className="px-1 text-base text-texto-2">
+                  Ninguno cerrado todavía.
+                </p>
+              }
+            >
+              {cerrados.filas.map((p) => (
+                <Tarjeta key={p.id} presupuesto={p} zonas={zonas} apagado />
+              ))}
+              {paginador}
+            </GrupoListado>
+          )}
         </>
       )}
     </div>

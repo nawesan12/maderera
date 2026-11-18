@@ -76,13 +76,27 @@ const (
 		sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE oi.costo_unitario IS NOT NULL),
 		count(*) FILTER (WHERE oi.costo_unitario IS NULL)::int`
 	margenPorPedido = `sum(coalesce(margenes.neto, 0)), sum(margenes.costo), coalesce(sum(margenes.sin_costo), 0)::int`
-	margenes        = `LEFT JOIN (
+)
+
+// margenesDe es el neto sin IVA y el costo de cada pedido, para unirlo a
+// orders o. Agrupa los renglones **solo de los pedidos que entran en el
+// reporte** (los del mismo `where`, que usa el alias o): antes agrupaba
+// order_items entero en cada reporte, aunque se pidiera un mes.
+//
+// Medido con 60.000 pedidos y 180.000 renglones (T8): un mes pasó de 272 a
+// 55 ms y un año de 318 a 189; todo el historial queda igual (≈500 ms). Un
+// LATERAL por pedido daba 15 ms en un mes pero 494 en un año: con muchos
+// pedidos, buscar los renglones de a uno pierde contra agruparlos de una vez.
+func margenesDe(where string) string {
+	return `LEFT JOIN (
 		SELECT oi.order_id,
 		       sum(oi.subtotal / (1 + coalesce(oi.alicuota_iva, 21) / 100)) AS neto,
 		       sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE oi.costo_unitario IS NOT NULL) AS costo,
 		       count(*) FILTER (WHERE oi.costo_unitario IS NULL)::int AS sin_costo
-		FROM order_items oi GROUP BY oi.order_id) margenes ON margenes.order_id = o.id`
-)
+		FROM order_items oi
+		WHERE oi.order_id IN (SELECT o.id FROM orders o WHERE ` + where + `)
+		GROUP BY oi.order_id) margenes ON margenes.order_id = o.id`
+}
 
 func (s *Servicio) filas(ctx context.Context, sql string, args []any, detalleEnProductos bool) ([]FilaDeReporte, error) {
 	rs, err := s.lectura.Query(ctx, sql, args...)
@@ -157,7 +171,7 @@ func (s *Servicio) ReporteDeVentas(ctx context.Context, corte string, p Periodo,
 		return s.filas(ctx, `
 			SELECT coalesce(cu.id::text, o.contacto_nombre), coalesce(cu.razon_social, cu.nombre, o.contacto_nombre), cu.cuit,
 			       count(*), sum(o.total), `+margenPorPedido+`
-			FROM orders o `+margenes+`
+			FROM orders o `+margenesDe(where)+`
 			LEFT JOIN customers cu ON cu.id = o.customer_id
 			WHERE `+where+` GROUP BY 1, 2, cu.cuit ORDER BY sum(o.total) DESC LIMIT 50`, args, false)
 	case "vendedor":
@@ -165,7 +179,7 @@ func (s *Servicio) ReporteDeVentas(ctx context.Context, corte string, p Periodo,
 			SELECT coalesce(se.id::text, u.id), coalesce(se.nombre, u.name),
 			       CASE WHEN se.id IS NULL THEN 'Cargó la venta' ELSE NULL END,
 			       count(*), sum(o.total), `+margenPorPedido+`
-			FROM orders o `+margenes+`
+			FROM orders o `+margenesDe(where)+`
 			LEFT JOIN sellers se ON se.id = o.seller_id
 			LEFT JOIN "user" u ON u.id = o.created_by_user_id
 			WHERE `+where+` AND (se.id IS NOT NULL OR u.id IS NOT NULL)
@@ -174,13 +188,13 @@ func (s *Servicio) ReporteDeVentas(ctx context.Context, corte string, p Periodo,
 		return s.filas(ctx, `
 			SELECT coalesce(b.id::text, 'sin-sucursal'), coalesce(b.name, 'Sin sucursal'), NULL::text,
 			       count(*), sum(o.total), `+margenPorPedido+`
-			FROM orders o `+margenes+`
+			FROM orders o `+margenesDe(where)+`
 			LEFT JOIN branches b ON b.id = o.branch_id
 			WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(o.total) DESC`, args, false)
 	case "canal":
 		return s.filas(ctx, `
 			SELECT o.origen::text, o.origen::text, NULL::text, count(*), sum(o.total), `+margenPorPedido+`
-			FROM orders o `+margenes+`
+			FROM orders o `+margenesDe(where)+`
 			WHERE `+where+` GROUP BY o.origen ORDER BY sum(o.total) DESC`, args, false)
 	}
 	return s.filas(ctx, `

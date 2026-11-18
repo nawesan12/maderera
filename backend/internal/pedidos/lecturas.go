@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -83,16 +84,42 @@ type PresupuestoListado struct {
 	NumeroPedido  *string    `json:"numeroPedido"`
 }
 
+// PresupuestosPorPagina es el tope de una página de presupuestos.
+const PresupuestosPorPagina = 30
+
+// estadosAbiertos son los tres que todavía esperan algo.
+var estadosAbiertos = []string{"pendiente", "revision", "enviado"}
+
+// PaginaDePresupuestos es una página del listado con el total del filtro.
+type PaginaDePresupuestos struct {
+	Filas []PresupuestoListado `json:"filas"`
+	Total int                  `json:"total"`
+}
+
 // ListarPresupuestos es listarPresupuestos: primero lo que tiene compromiso
 // de respuesta más cerca, después la obra más cerca, después lo más nuevo.
-// «abiertos» son los tres estados que todavía esperan algo.
-func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros) ([]PresupuestoListado, error) {
+// «abiertos» son los tres estados que todavía esperan algo, y «cerrados»
+// todos los demás; los cerrados van por fecha, del más nuevo al más viejo.
+//
+// De a páginas (tanda T8): los presupuestos se acumulan sin tope y la
+// pantalla los traía todos. «abiertos» sin límite viene entero —son pocos
+// por naturaleza, y es lo que hay que atender—; cualquier otro filtro trae
+// como mucho una página. El id desempata, así dos páginas nunca se pisan.
+func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, desplazamiento int) (PaginaDePresupuestos, error) {
+	out := PaginaDePresupuestos{Filas: []PresupuestoListado{}}
 	var a argumentos
 	var cond []string
-	if f.Estado == "abiertos" {
-		cond = append(cond, "q.estado IN ('pendiente', 'revision', 'enviado')")
-	} else if f.Estado != "" && f.Estado != "todos" {
+	cerrados := false
+	switch f.Estado {
+	case "abiertos":
+		cond = append(cond, "q.estado::text = ANY("+a.poner(estadosAbiertos)+")")
+	case "cerrados":
+		cond = append(cond, "NOT (q.estado::text = ANY("+a.poner(estadosAbiertos)+"))")
+		cerrados = true
+	case "", "todos":
+	default:
 		cond = append(cond, "q.estado::text = "+a.poner(f.Estado))
+		cerrados = !slices.Contains(estadosAbiertos, f.Estado)
 	}
 	if f.Sucursal != "" && f.Sucursal != "todos" {
 		cond = append(cond, "b.slug = "+a.poner(f.Sucursal))
@@ -102,30 +129,52 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros) ([]Presupu
 			cond = append(cond, c)
 		}
 	}
-	filas, err := s.pool.Query(ctx, `
-		SELECT q.id, q.numero, q.contacto_nombre, c.razon_social, q.customer_id, b.name, q.estado::text, q.origen::text,
-		       q.total::text, q.asesor, q.created_at, q.valido_hasta, q.responde_hasta, q.necesita_para, coalesce(conteo.items, 0),
-		       (SELECT o.id FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at LIMIT 1),
-		       (SELECT o.numero FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at LIMIT 1)
+	desde := `
 		FROM quotes q
 		LEFT JOIN customers c ON c.id = q.customer_id
-		LEFT JOIN branches b ON b.id = q.branch_id
-		LEFT JOIN (SELECT quote_id, count(*)::int AS items FROM quote_items GROUP BY quote_id) conteo ON conteo.quote_id = q.id`+
-		donde(cond)+`
-		ORDER BY CASE WHEN q.responde_hasta IS NULL THEN 1 ELSE 0 END, q.responde_hasta ASC NULLS LAST,
-		         q.necesita_para ASC NULLS LAST, q.created_at DESC`, a...)
+		LEFT JOIN branches b ON b.id = q.branch_id` + donde(cond)
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int`+desde, a...).Scan(&out.Total); err != nil {
+		return out, err
+	}
+	switch {
+	case limite <= 0 && f.Estado == "abiertos":
+		limite = out.Total
+	case limite <= 0:
+		limite = PresupuestosPorPagina
+	case limite > 200:
+		limite = 200
+	}
+	desplazamiento = max(desplazamiento, 0)
+	if out.Total == 0 || desplazamiento >= out.Total {
+		return out, nil
+	}
+	orden := `CASE WHEN q.responde_hasta IS NULL THEN 1 ELSE 0 END, q.responde_hasta ASC NULLS LAST,
+		         q.necesita_para ASC NULLS LAST, q.created_at DESC, q.id DESC`
+	if cerrados {
+		orden = `q.created_at DESC, q.id DESC`
+	}
+	// Los renglones y el pedido se cuentan con subconsultas en la lista: se
+	// calculan solo para las filas de la página (antes se agrupaba
+	// quote_items entero en cada carga).
+	filas, err := s.pool.Query(ctx, `
+		SELECT q.id, q.numero, q.contacto_nombre, c.razon_social, q.customer_id, b.name, q.estado::text, q.origen::text,
+		       q.total::text, q.asesor, q.created_at, q.valido_hasta, q.responde_hasta, q.necesita_para,
+		       (SELECT count(*)::int FROM quote_items qi WHERE qi.quote_id = q.id),
+		       (SELECT o.id FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at LIMIT 1),
+		       (SELECT o.numero FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at LIMIT 1)`+desde+`
+		ORDER BY `+orden+`
+		LIMIT `+a.poner(limite)+` OFFSET `+a.poner(desplazamiento), a...)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 	defer filas.Close()
 	ahora := s.ahora()
-	out := []PresupuestoListado{}
 	for filas.Next() {
 		var p PresupuestoListado
 		var total string
 		if err := filas.Scan(&p.ID, &p.Numero, &p.Cliente, &p.Empresa, &p.CustomerID, &p.Sucursal, &p.Estado, &p.Origen, &total,
 			&p.Asesor, &p.CreatedAt, &p.ValidoHasta, &p.RespondeHasta, &p.NecesitaPara, &p.Items, &p.PedidoID, &p.NumeroPedido); err != nil {
-			return nil, err
+			return out, err
 		}
 		p.Total = jsmath.Numero(total)
 		p.Vencido = p.ValidoHasta != nil && p.ValidoHasta.UnixMilli() < ahora.UnixMilli() &&
@@ -134,7 +183,7 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros) ([]Presupu
 			pl := EstadoDelPlazo(*p.RespondeHasta, ahora)
 			p.Plazo = &pl
 		}
-		out = append(out, p)
+		out.Filas = append(out.Filas, p)
 	}
 	return out, filas.Err()
 }

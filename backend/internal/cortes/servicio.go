@@ -115,9 +115,13 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string) ([]Corte
 		FROM cutting_orders co
 		LEFT JOIN branches b ON b.id = co.branch_id
 		LEFT JOIN (
+			-- Las piezas solo de los cortes del tablero: antes se agrupaba
+			-- cutting_items entero, con todo lo cortado desde el primer día.
 			SELECT cutting_order_id, sum(cantidad)::int AS piezas,
 			       sum(largo_mm * ancho_mm * cantidad / 1000000.0) AS superficie
-			FROM cutting_items GROUP BY cutting_order_id
+			FROM cutting_items
+			WHERE cutting_order_id IN (SELECT co.id FROM cutting_orders co `+where+`)
+			GROUP BY cutting_order_id
 		) r ON r.cutting_order_id = co.id
 		`+where+`
 		ORDER BY co.urgente DESC, co.created_at ASC`, args...)

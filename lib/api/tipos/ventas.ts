@@ -586,6 +586,9 @@ export interface operations {
                 busqueda?: string;
                 estado?: string;
                 sucursal?: string;
+                /** @description sin límite */
+                limite?: number;
+                desplazamiento?: number;
             };
             header?: never;
             path?: never;
@@ -593,13 +596,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Primero el compromiso de respuesta más cercano, después la obra más cercana, después lo más nuevo */
+            /** @description Primero el compromiso de respuesta más cercano, después la obra más cercana, después lo más nuevo; los cerrados, del más nuevo al más viejo. Con el total del filtro para paginar. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PresupuestoListado"][];
+                    "application/json": {
+                        filas: components["schemas"]["PresupuestoListado"][];
+                        total: number;
+                    };
                 };
             };
             401: components["responses"]["Problema"];

@@ -1936,7 +1936,12 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
 - **Migraciones 00168 y 00169**, números fijos de este carril dentro del
   rango 00160–00169. La 00168 es `-- +goose NO TRANSACTION` con un
   `CREATE INDEX CONCURRENTLY IF NOT EXISTS` por sentencia: con datos reales,
-  un índice común frena las escrituras de la tabla mientras se arma.
+  un índice común frena las escrituras de la tabla mientras se arma. Si se
+  corta a mitad, el índice queda inválido y el IF NOT EXISTS lo saltearía
+  para siempre: la 00168 empieza borrando los suyos que estén inválidos, y
+  `mjbj migrar` termina con error si queda cualquier índice inválido.
+  **Al desplegar**, después de migrar, `SELECT indexrelid::regclass FROM
+  pg_index WHERE NOT indisvalid` tiene que volver vacío.
 - **La expresión de un índice tiene que ser letra por letra la de la
   consulta**: los de dígitos copian `busqueda.Digitos`. El test
   `buscador/indices_test.go` lo verifica con EXPLAIN (con `enable_seqscan` e

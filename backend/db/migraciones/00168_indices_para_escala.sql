@@ -9,10 +9,45 @@
 -- mostrador sin poder vender un rato. CONCURRENTLY no frena a nadie, pero no
 -- puede ir dentro de una transacción ni de a varios por sentencia: por eso
 -- esta migración no tiene transacción y cada índice es una sentencia suelta.
--- IF NOT EXISTS para poder volver a correrla si algo la corta a mitad.
+--
+-- **Si algo la corta a mitad** (un Ctrl-C, el ssh que se cae, un abrazo
+-- mortal con una venta), el índice que se estaba armando queda en el
+-- catálogo marcado inválido: existe, Postgres no lo usa y la tabla se sigue
+-- recorriendo entera. IF NOT EXISTS solo no alcanza, porque al volver a
+-- correrla vería el nombre y lo saltearía para siempre. Por eso lo primero
+-- es borrar los de esta migración que hayan quedado inválidos, y después
+-- IF NOT EXISTS arma los que faltan sin rehacer los que ya están bien. El
+-- DROP no puede ser CONCURRENTLY adentro de un DO; sobre un índice inválido
+-- es un instante. Y `mjbj migrar` termina con error si queda alguno
+-- inválido en la base (migrar.Correr), así no se entera nadie recién con
+-- el padrón de ISIS cargado.
 --
 -- Número fijo, 00168: el rango 00160–00169 lo comparten las ramas que se
 -- trabajan en paralelo, y «la primera libre» chocaba entre ellas.
+
+-- +goose StatementBegin
+DO $$
+DECLARE
+  roto regclass;
+BEGIN
+  FOR roto IN
+    SELECT i.indexrelid::regclass FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+    WHERE NOT i.indisvalid AND c.relname = ANY (ARRAY[
+      'customers_telefono_busqueda_idx', 'customers_email_busqueda_idx', 'customers_rubro_busqueda_idx',
+      'orders_numero_busqueda_idx', 'quotes_numero_busqueda_idx', 'cutting_orders_numero_busqueda_idx',
+      'suppliers_nombre_busqueda_idx', 'suppliers_razon_busqueda_idx', 'suppliers_cuit_busqueda_idx',
+      'suppliers_rubro_busqueda_idx', 'invoices_receptor_busqueda_idx', 'invoices_numero_busqueda_idx',
+      'customers_telefono_digitos_idx', 'customers_cuit_digitos_idx', 'suppliers_telefono_digitos_idx',
+      'suppliers_cuit_digitos_idx', 'orders_telefono_digitos_idx', 'quotes_telefono_digitos_idx',
+      'account_movements_cliente_fecha_idx', 'orders_abiertos_idx', 'products_updated_idx',
+      'product_variants_updated_idx', 'price_list_items_updated_idx', 'inventory_updated_idx',
+      'customers_updated_idx'])
+  LOOP
+    RAISE NOTICE 'índice inválido de una corrida cortada: %', roto;
+    EXECUTE format('DROP INDEX %s', roto);
+  END LOOP;
+END $$;
+-- +goose StatementEnd
 
 -- El buscador del panel y la cartera comparan con `f_unaccent(col) ILIKE
 -- '%…%'`: comodín adelante, así que solo sirve un GIN de trigramas (ver la

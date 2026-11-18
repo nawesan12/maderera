@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"strings"
 
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/database"
@@ -42,7 +43,41 @@ func Correr(ctx context.Context, base *sql.DB, migraciones fs.FS, log *slog.Logg
 	if err != nil {
 		return 0, err
 	}
+	if err := sinIndicesInvalidos(ctx, base); err != nil {
+		return 0, err
+	}
 	return p.GetDBVersion(ctx)
+}
+
+// sinIndicesInvalidos falla si quedó algún índice inválido en la base.
+//
+// Un CREATE INDEX CONCURRENTLY que se corta a mitad deja el índice en el
+// catálogo, marcado inválido: Postgres no lo usa, la tabla se recorre entera
+// y nada lo dice (goose ve la migración aplicada, o el IF NOT EXISTS lo
+// saltea al volver a correrla). Las pruebas con EXPLAIN miran la plantilla,
+// no producción: este es el único lugar donde se ve.
+func sinIndicesInvalidos(ctx context.Context, base *sql.DB) error {
+	filas, err := base.QueryContext(ctx, `SELECT indexrelid::regclass::text FROM pg_index WHERE NOT indisvalid ORDER BY 1`)
+	if err != nil {
+		return err
+	}
+	defer filas.Close()
+	var rotos []string
+	for filas.Next() {
+		var nombre string
+		if err := filas.Scan(&nombre); err != nil {
+			return err
+		}
+		rotos = append(rotos, nombre)
+	}
+	if err := filas.Err(); err != nil {
+		return err
+	}
+	if len(rotos) > 0 {
+		return fmt.Errorf("hay índices inválidos (un CREATE INDEX CONCURRENTLY cortado a mitad): %s; "+
+			"borralos con DROP INDEX CONCURRENTLY y volvé a correr la migración que los crea", strings.Join(rotos, ", "))
+	}
+	return nil
 }
 
 // adoptar pasa a goose una base que migraba drizzle-kit: anota en la tabla de

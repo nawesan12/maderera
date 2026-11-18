@@ -166,9 +166,14 @@ export default async function CierrePage({
         preguntas del dueño al cerrar —cuánto gané y cuánto tengo que pagar—.
         Ventas netas sin IVA y su costo salen de los pedidos (el mismo cálculo
         que Reportes y que el inicio), los gastos de lo anotado en Gastos;
-        se compara con el mes anterior entero. Con renglones vendidos sin
-        costo cargado, el costo está corto y el resultado inflado: se dice al
-        lado del número.
+        se compara con el mes anterior entero. Lo vendido sin costo cargado
+        queda afuera, en su propio renglón, igual que en el margen de
+        Reportes: los renglones suman el resultado.
+
+        Debajo de lo vendido, la misma cifra partida según su factura (con
+        factura, ticket interno y sin factura), de la misma base: suma exacto.
+        «Facturado neto», más abajo, es lo fiscal del mes: va por la fecha de
+        la factura y lleva el envío.
       */}
       <section className="grid gap-3 lg:grid-cols-2">
         <article className="tarjeta p-5">
@@ -193,7 +198,36 @@ export default async function CierrePage({
             {formatearMonto(resultado.actual.resultado)}
           </p>
           <dl className="mt-4 space-y-1.5 text-base">
-            <Linea titulo="Vendido sin IVA" valor={resultado.actual.ventasNetas} />
+            <Linea
+              titulo={resultado.actual.conDescuento ? "Vendido sin IVA ni descuentos" : "Vendido sin IVA"}
+              valor={resultado.actual.ventasNetas}
+            />
+            {resumen.vendido.total !== 0 && (
+              <div className="pl-3 text-sm text-muted-foreground">
+                <dt className="sr-only">Según su factura</dt>
+                <dd className="flex flex-wrap gap-x-3 [font-variant-numeric:tabular-nums]">
+                {resumen.vendido.facturado.cantidad > 0 && (
+                  <span>con factura {formatearMonto(resumen.vendido.facturado.total)}</span>
+                )}
+                {resumen.vendido.interno.cantidad > 0 && (
+                  <span>interno {formatearMonto(resumen.vendido.interno.total)}</span>
+                )}
+                {resumen.vendido.sinFactura.cantidad > 0 && (
+                  <span className="estado-problema font-medium">
+                    sin factura {formatearMonto(resumen.vendido.sinFactura.total)}
+                  </span>
+                )}
+                </dd>
+              </div>
+            )}
+            {resultado.actual.ventasSinCosto > 0 && (
+              <Linea
+                titulo={`Sin costo cargado · ${plural(resultado.actual.lineasSinCosto, "renglón", "renglones")}`}
+                valor={-resultado.actual.ventasSinCosto}
+                href="/admin/reportes?corte=producto#ventas"
+                problema
+              />
+            )}
             <Linea titulo="Costo de lo vendido" valor={-resultado.actual.costo} />
             <Linea titulo="Gastos" valor={-resultado.actual.gastos} />
             <Linea
@@ -202,13 +236,6 @@ export default async function CierrePage({
               apagado
             />
           </dl>
-          {resultado.actual.lineasSinCosto > 0 && (
-            <p className="estado-problema mt-3 text-base font-medium">
-              {resultado.actual.lineasSinCosto === 1
-                ? "1 renglón vendido sin costo"
-                : `${resultado.actual.lineasSinCosto} renglones vendidos sin costo`}
-            </p>
-          )}
         </article>
 
         <article className="tarjeta p-5">
@@ -229,17 +256,12 @@ export default async function CierrePage({
       <section className="grid gap-3 sm:grid-cols-3">
         {/* Lo facturado, no lo vendido: con el mismo nombre que el
             «Vendido sin IVA» de arriba, «Ventas netas $0» parecía un error.
-            Lo vendido sin factura va al lado, y queda en pantalla: no entra
-            en los asientos ni en ningún archivo del contador. */}
+            Lo vendido sin factura va arriba, partiendo lo vendido: acá se
+            sumaba con una cifra de otra base y no cerraba. */}
         <Tarjeta
           titulo="Facturado neto"
           valor={resumen.ventas.neto}
-          detalle={[
-            plural(resumen.ventas.cantidad, "comprobante"),
-            resumen.sinFactura.cantidad > 0 && `sin factura ${formatearMonto(resumen.sinFactura.total)}`,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
+          detalle={plural(resumen.ventas.cantidad, "comprobante")}
           href={`/admin/arca/libro-iva?periodo=${periodo.clave}`}
         />
         <Tarjeta
@@ -370,14 +392,28 @@ function Linea({
   titulo,
   valor,
   apagado = false,
+  problema = false,
+  href,
 }: {
   titulo: string;
   valor: number;
   apagado?: boolean;
+  problema?: boolean;
+  href?: string;
 }) {
   return (
-    <div className={`flex justify-between gap-3 ${apagado ? "text-muted-foreground" : ""}`}>
-      <dt>{titulo}</dt>
+    <div
+      className={`flex justify-between gap-3 ${apagado ? "text-muted-foreground" : ""} ${problema ? "estado-problema font-medium" : ""}`}
+    >
+      <dt>
+        {href ? (
+          <Link href={href} className="underline decoration-current/30 underline-offset-4 hover:decoration-current">
+            {titulo}
+          </Link>
+        ) : (
+          titulo
+        )}
+      </dt>
       <dd className="tabular font-medium">{formatearMonto(valor)}</dd>
     </div>
   );

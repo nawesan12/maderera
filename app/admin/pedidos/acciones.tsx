@@ -51,15 +51,19 @@ export function AccionesPedido({
   /**
    * Lo que falta cobrar fuera de la cuenta corriente (`sinCobrar` del
    * pedido, la misma regla que «Me deben»). Con algo, «Marcar entregado»
-   * pregunta antes: no se bloquea, porque existe el pago contra entrega,
-   * pero la mercadería no sale sin que nadie lo mire. El servidor deja la
-   * firma en el historial igual.
+   * pregunta antes, en el tablero y en el reparto por igual: lo fuerte es
+   * «Cobrar y entregar» (el pago contra entrega es lo normal, y anotarlo es
+   * un solo paso), y entregar sin cobrar queda al lado, sin bloquearse. El
+   * servidor deja la firma en el historial igual.
    */
   sinCobrar?: { numero: string; monto: number } | null;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
   const [confirmando, setConfirmando] = useState(false);
+  const [medio, setMedio] = useState<Medio | null>(
+    MEDIOS_DEL_PEDIDO.find((m) => m.valor === cobro?.medioPago)?.valor ?? null,
+  );
 
   // Un pedido de retiro no se despacha: el cliente lo busca.
   const etiqueta =
@@ -120,33 +124,43 @@ export function AccionesPedido({
 
       {preguntar && sinCobrar && (
         <Dialog open={confirmando} onOpenChange={(abierto) => !pendiente && setConfirmando(abierto)}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>
                 {sinCobrar.numero} sin cobrar · <span className="tabular">{moneda.format(sinCobrar.monto)}</span>
               </DialogTitle>
             </DialogHeader>
-            {/* «Mejor no» es el botón fuerte y el que tiene el foco: un Enter
-                apurado no entrega mercadería sin cobrar. */}
-            <div className="flex justify-end gap-2 pt-2">
+            {/* Cobrar ahí mismo: antes había que cerrar, buscar «Cobrar» en la
+                tarjeta y volver a entregar. Quien no cobra no ve el cobro. */}
+            {cobro && (
+              <Opciones etiqueta="Con qué pagó" valor={medio} alCambiar={setMedio} opciones={[...MEDIOS_DEL_PEDIDO]} />
+            )}
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
               <button
                 type="button"
                 disabled={pendiente}
                 onClick={() => accion(() => avanzarPedido(id))}
                 className="inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium hover:bg-hundida disabled:opacity-50"
               >
-                {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
-                Entregar igual
+                Entregar sin cobrar
               </button>
-              <button
-                type="button"
-                autoFocus
-                disabled={pendiente}
-                onClick={() => setConfirmando(false)}
-                className="boton-accion h-11 rounded-lg px-4 text-base font-medium disabled:opacity-50"
-              >
-                Mejor no
-              </button>
+              {cobro && (
+                <button
+                  type="button"
+                  disabled={!medio || pendiente}
+                  onClick={() =>
+                    medio &&
+                    accion(async () => {
+                      const r = await marcarPagado(id, medio);
+                      return r.error ? r : avanzarPedido(id);
+                    })
+                  }
+                  className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
+                >
+                  {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Cobrar <span className="tabular">{moneda.format(sinCobrar.monto)}</span> y entregar
+                </button>
+              )}
             </div>
           </DialogContent>
         </Dialog>

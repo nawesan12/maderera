@@ -78,23 +78,37 @@ export default async function RepartoPage() {
                     </div>
                     <span className="tabular text-base text-muted-foreground">{p.numero}</span>
                     <EtiquetaEstado estado={p.estado} contexto="pedido" />
-                    {/* Lo que hay que traer de vuelta, a la vista del que carga
-                        el camión: en el reparto el pago contra entrega es lo
-                        normal, y un diálogo en cada entrega se aceptaría sin
-                        leer. La firma la deja el servidor al entregar. */}
-                    {p.sinCobrar != null ? (
-                      <span className="estado-problema text-base font-semibold [font-variant-numeric:tabular-nums]">
-                        Cobrar {moneda.format(p.sinCobrar)}
-                      </span>
+                    {/* Un solo importe por fila: lo que hay que traer de vuelta
+                        si falta cobrar, y si no, el total. En el color del
+                        texto: el pago contra entrega es lo normal en el
+                        reparto, y el rojo en todas las filas dejaba de avisar.
+                        Una transferencia informada no se reclama otra vez. */}
+                    {p.pagoEnRevision ? (
+                      <EtiquetaEstado estado="en_revision" contexto="pago" />
                     ) : (
+                      p.sinCobrar == null &&
                       p.estadoPago !== "pagado" && <EtiquetaEstado estado={p.estadoPago} contexto="pago" />
                     )}
-                    <span className="tabular w-28 text-right text-base font-medium">{moneda.format(p.total)}</span>
+                    <span className="tabular w-36 text-right text-base font-medium">
+                      {p.sinCobrar != null ? (
+                        <>
+                          <span className="text-sm font-normal text-muted-foreground">A cobrar </span>
+                          {moneda.format(p.sinCobrar)}
+                        </>
+                      ) : (
+                        moneda.format(p.total)
+                      )}
+                    </span>
+                    {/* Con `cobro`, el botón «Cobrar» de verdad y el diálogo de
+                        la entrega con «Cobrar y entregar»: el chofer vuelve con
+                        la plata y se anota acá. Sin eso «Me deben» crecía solo. */}
                     <AccionesPedido
                       id={p.id}
                       estado={p.estado}
                       estadoPago={p.estadoPago}
                       tipoEntrega={p.tipoEntrega}
+                      cobro={p.sinCobrar != null ? { numero: p.numero, total: p.sinCobrar, medioPago: p.medioPago } : null}
+                      sinCobrar={p.sinCobrar != null ? { numero: p.numero, monto: p.sinCobrar } : null}
                     />
                   </li>
                 ))}

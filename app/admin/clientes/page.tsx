@@ -84,7 +84,10 @@ export default async function ClientesPage({
         titulo="Clientes"
         resumen={
           conDeuda.length > 0
-            ? `${plural(clientes.length, "cliente")} · ${moneda.format(deudaTotal)} por cobrar`
+            // «En cuenta corriente» y no «por cobrar»: «Me deben» del Resumen
+            // suma además los pedidos entregados sin cobrar, y con el mismo
+            // nombre las dos cifras parecían no cerrar.
+            ? `${plural(clientes.length, "cliente")} · ${moneda.format(deudaTotal)} en cuenta corriente`
             : plural(clientes.length, "cliente")
         }
       >

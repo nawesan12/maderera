@@ -4,6 +4,7 @@ import { Banknote, Store } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
 import { sucursalesConCaja, turnosCerrados } from "@/lib/dal/admin/caja";
 import {
+  anulacionesPorPersona,
   emitidoPorCaja,
   listarCajasFisicas,
   turnosParaAsignar,
@@ -39,6 +40,9 @@ export const metadata: Metadata = { title: "Caja" };
  */
 const ZONA = "America/Argentina/Buenos_Aires";
 
+/** El día argentino de un instante, para comparar dos. */
+const diaArgentino = (d: Date) => d.toLocaleDateString("es-AR", { timeZone: ZONA });
+
 /** Cómo se lee cada medio en el cierre. */
 const MEDIOS: Record<string, string> = {
   efectivo: "Efectivo",
@@ -61,26 +65,18 @@ export default async function CajaPage({
   const periodo = leerPeriodoMensual(crudo, new Date());
   const pagina = leerPagina(paginaCruda);
 
-  const [sucursales, turnosDelMes, cajas, sueltas, emitido] = await Promise.all([
+  // Las anulaciones del mes por quien las hizo, la que más anuló primero.
+  // Las cuenta Go por la fecha de la anulación: sumarlas acá sobre lo
+  // emitido, que llega cortado en 200 y por la fecha de la venta, perdía las
+  // de la primera quincena.
+  const [sucursales, turnosDelMes, cajas, sueltas, emitido, anulaciones] = await Promise.all([
     sucursalesConCaja(),
     turnosCerrados(periodo.clave, pagina, POR_PAGINA),
     listarCajasFisicas(),
     ventasSinCaja(),
     emitidoPorCaja(periodo.clave),
+    anulacionesPorPersona(periodo.clave),
   ]);
-
-  // Las anulaciones del mes por quien las hizo, la que más anuló primero.
-  const anulacionesPorPersona = [
-    ...emitido
-      .filter((v) => v.anulada)
-      .reduce((m, v) => {
-        const quien = v.anuladaPor ?? "Sin nombre";
-        const a = m.get(quien) ?? { quien, cantidad: 0, total: 0 };
-        m.set(quien, { quien, cantidad: a.cantidad + 1, total: a.total + Number(v.total) });
-        return m;
-      }, new Map<string, { quien: string; cantidad: number; total: number }>())
-      .values(),
-  ].sort((a, b) => b.cantidad - a.cantidad || b.total - a.total);
 
   /*
    * Los turnos a los que se puede mandar una venta suelta. Se piden solo para
@@ -298,11 +294,14 @@ export default async function CajaPage({
           </h2>
           {/* Quién anuló y cuánto, sin contar a ojo: cinco anulaciones por
               semana de la misma persona se ven acá antes que en la bitácora. */}
-          {anulacionesPorPersona.length > 0 && (
+          {anulaciones.length > 0 && (
             <ul className="flex flex-wrap gap-x-4 gap-y-1 text-base text-muted-foreground [font-variant-numeric:tabular-nums]">
-              {anulacionesPorPersona.map((a) => (
+              {anulaciones.map((a) => (
                 <li key={a.quien}>
                   {a.quien} · {plural(a.cantidad, "anulada")} · {formatearMonto(a.total)}
+                  {a.devuelto > 0 && (
+                    <span className="estado-problema font-medium"> · {formatearMonto(a.devuelto)} del cajón</span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -371,7 +370,18 @@ export default async function CajaPage({
                           <span className="estado-problema font-semibold">Anulada</span>
                           {[
                             v.anuladaPor,
-                            v.anuladaAt?.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: ZONA }),
+                            // Con fecha si no es del día de la venta: una del
+                            // lunes anulada el sábado parecía anulada en el acto.
+                            v.anuladaAt &&
+                              (diaArgentino(v.anuladaAt) === diaArgentino(v.createdAt)
+                                ? v.anuladaAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: ZONA })
+                                : v.anuladaAt.toLocaleString("es-AR", {
+                                    day: "numeric",
+                                    month: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    timeZone: ZONA,
+                                  })),
                             v.motivo,
                           ]
                             .filter(Boolean)

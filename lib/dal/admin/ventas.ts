@@ -84,8 +84,9 @@ export async function consultarPresupuesto(id: string): Promise<PresupuestoCompl
 /* Pedidos                                                                     */
 /* -------------------------------------------------------------------------- */
 
-export interface PedidoListado extends Omit<Esquemas["PedidoListado"], "createdAt"> {
+export interface PedidoListado extends Omit<Esquemas["PedidoListado"], "createdAt" | "entregadoAt"> {
   createdAt: Date;
+  entregadoAt: Date | null;
 }
 
 export async function listarPedidos(
@@ -100,7 +101,11 @@ export async function listarPedidos(
   } = {},
 ): Promise<PedidoListado[]> {
   const r = await (await api()).GET("/api/v1/admin/pedidos", { params: { query: filtros } });
-  return datos(r).map((p) => ({ ...p, createdAt: fecha(p.createdAt) }));
+  return datos(r).map((p) => ({
+    ...p,
+    createdAt: fecha(p.createdAt),
+    entregadoAt: p.entregadoAt ? fecha(p.entregadoAt) : null,
+  }));
 }
 
 export interface PedidoCompleto extends Omit<Esquemas["FichaDePedido"], "createdAt" | "historial"> {

@@ -14,6 +14,7 @@ import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
 import { avisosManuales, type AvisoManualListo } from "@/lib/whatsapp/aviso-manual-datos";
+import { numerosDelDueno } from "@/lib/dal/admin/resumen";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { AccionesPedido } from "./acciones";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
@@ -54,9 +55,10 @@ export default async function PedidosPage({
   const activos = pedidos.filter(
     (p) => !["entregado", "cancelado"].includes(p.estado),
   );
-  const porCobrar = pedidos
-    .filter((p) => p.estadoPago !== "pagado" && p.estado !== "cancelado")
-    .reduce((s, p) => s + p.total, 0);
+  // Lo que falta cobrar con la regla de «Me deben» (sinCobrar, de Go): sin
+  // los pedidos a cuenta corriente, que ya están en la cuenta, y descontando
+  // lo cobrado. Sumar el total de todo lo no pagado daba un tercer número.
+  const porCobrar = pedidos.reduce((s, p) => s + (p.sinCobrar ?? 0), 0);
 
   return (
     <div>
@@ -64,7 +66,7 @@ export default async function PedidosPage({
         titulo="Pedidos"
         resumen={
           activos.length > 0
-            ? `${plural(activos.length, "pedido")} en curso · ${moneda.format(porCobrar)} por cobrar`
+            ? `${plural(activos.length, "pedido")} en curso${porCobrar > 0 ? ` · ${moneda.format(porCobrar)} sin cobrar` : ""}`
             : `${plural(pedidos.length, "pedido")} en total`
         }
       />
@@ -204,20 +206,33 @@ async function Historial({
 }: {
   params: { buscar?: string; sucursal?: string; periodo?: string; estado?: string; pagina?: string };
 }) {
-  const periodo = params.periodo && params.periodo in PERIODOS ? params.periodo : "30";
   const estado = params.estado && params.estado in ESTADOS_HISTORIAL ? params.estado : "todos";
+  /*
+   * «Sin cobrar» es desde siempre y del más viejo al más nuevo, como «Me
+   * deben», que es de donde se llega: con el período de 30 días la lista
+   * mostraba menos de lo que sumaba la tarjeta. El período no se elige.
+   */
+  const sinCobrar = estado === "sin-cobrar";
+  const periodo = sinCobrar ? "todo" : params.periodo && params.periodo in PERIODOS ? params.periodo : "30";
   const pagina = Math.max(1, Number(params.pagina) || 1);
   const dias = PERIODOS[periodo].dias;
   const desde = dias ? haceDias(dias) : undefined;
 
-  const filas = await listarPedidos({
-    vista: "historial",
-    busqueda: params.buscar,
-    sucursal: params.sucursal,
-    estado: estado === "todos" ? undefined : estado,
-    desde,
-    pagina,
-  });
+  const { staffRole } = await requireStaff();
+  const [filas, dueno] = await Promise.all([
+    listarPedidos({
+      vista: "historial",
+      busqueda: params.buscar,
+      sucursal: params.sucursal,
+      estado: estado === "todos" ? undefined : estado,
+      desde,
+      pagina,
+    }),
+    // El total, el mismo número del renglón de «Me deben» (solo lo ve el
+    // admin, como la tarjeta).
+    sinCobrar && staffRole === "admin" ? numerosDelDueno() : null,
+  ]);
+  const totalSinCobrar = dueno?.meDeben.pedidosSinCobrar;
   const hayMas = filas.length > 50;
   const visibles = filas.slice(0, 50);
   const enlace = (cambios: Record<string, string | number | undefined>) => {
@@ -232,11 +247,18 @@ async function Historial({
 
   return (
     <div>
-      <EncabezadoPanel titulo="Pedidos" resumen="Historial" />
+      <EncabezadoPanel
+        titulo="Pedidos"
+        resumen={
+          totalSinCobrar && totalSinCobrar.cantidad > 0
+            ? `${moneda.format(totalSinCobrar.total)} en ${plural(totalSinCobrar.cantidad, "pedido sin cobrar", "pedidos sin cobrar")}`
+            : "Historial"
+        }
+      />
       <VistasDePedidos actual="historial" />
 
       <div className="mb-4 flex flex-wrap gap-x-5 gap-y-2">
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Período">
+        <div className={`flex flex-wrap gap-1.5 ${sinCobrar ? "hidden" : ""}`} role="group" aria-label="Período">
           {Object.entries(PERIODOS).map(([valor, p]) => (
             <Link
               key={valor}
@@ -279,9 +301,14 @@ async function Historial({
                 {p.empresa && <span className="text-muted-foreground"> · {p.empresa}</span>}
               </Link>
               <span className="codigo">{p.numero}</span>
-              <span className="text-base text-muted-foreground">
-                {p.createdAt.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}
-              </span>
+              {/* Sin cobrar, lo que importa es cuánto hace que se entregó. */}
+              {sinCobrar && p.entregadoAt ? (
+                <span className="estado-problema text-base">{haceCuanto(p.entregadoAt)}</span>
+              ) : (
+                <span className="text-base text-muted-foreground">
+                  {p.createdAt.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}
+                </span>
+              )}
               <EtiquetaEstado estado={p.estado} contexto="pedido" />
               {estado === "sin-cobrar" && p.sinCobrar != null ? (
                 <span className="tabular estado-problema w-32 text-right text-base font-semibold">{moneda.format(p.sinCobrar)}</span>
@@ -297,14 +324,15 @@ async function Historial({
         <div className="mt-4 flex justify-between">
           {pagina > 1 ? (
             <Link href={enlace({ pagina: pagina - 1 })} className="inline-flex h-11 items-center rounded-lg bg-hundida px-4 text-base">
-              Más nuevos
+              {/* «Sin cobrar» va del más viejo al más nuevo: al revés. */}
+              {sinCobrar ? "Más viejos" : "Más nuevos"}
             </Link>
           ) : (
             <span />
           )}
           {hayMas && (
             <Link href={enlace({ pagina: pagina + 1 })} className="inline-flex h-11 items-center rounded-lg bg-hundida px-4 text-base">
-              Más viejos
+              {sinCobrar ? "Más nuevos" : "Más viejos"}
             </Link>
           )}
         </div>
@@ -314,7 +342,9 @@ async function Historial({
 }
 
 function TarjetaPedido({ pedido, aviso }: { pedido: PedidoListado; aviso: AvisoManualListo | null }) {
-  const sinCobrar = pedido.estadoPago !== "pagado";
+  // La misma regla que «Me deben»: un pedido a cuenta corriente no se cobra
+  // en la puerta.
+  const sinCobrar = pedido.sinCobrar != null;
   // Un pedido que lleva más de dos días sin prepararse avisa solo.
   const demorado =
     ["pendiente", "preparando"].includes(pedido.estado) && diasDesde(pedido.createdAt) > 2;

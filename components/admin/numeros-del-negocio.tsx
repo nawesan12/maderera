@@ -48,6 +48,9 @@ export async function NumerosDelNegocio({
           valor={meDeben.total}
           href="/admin/clientes"
           renglones={[
+            // Partido en dos, para que la cuenta corriente sea la misma cifra
+            // que el encabezado de Clientes, a donde lleva la tarjeta.
+            sinCobrar.cantidad > 0 && `Cuenta corriente ${moneda.format(meDeben.total - sinCobrar.total)}`,
             meDeben.vencido > 0 && {
               texto: `${moneda.format(meDeben.vencido)} vencido · ${plural(meDeben.clientesConVencido, "cliente")}`,
               problema: true,
@@ -118,10 +121,12 @@ export async function NumerosDelNegocio({
               problema: anuladas.devuelto > 0,
               href: "/admin/bitacora?accion=anular&q=mostrador",
             },
+            // Lleva a la lista de esas facturas, cada una con su nota de
+            // crédito a un clic.
             anuladas.conFacturaViva > 0 && {
               texto: `${plural(anuladas.conFacturaViva, "anulada", "anuladas")} con factura viva`,
               problema: true,
-              href: "/admin/facturacion",
+              href: "/admin/facturacion?estado=anulada-viva",
             },
           ]}
         />
@@ -131,16 +136,19 @@ export async function NumerosDelNegocio({
           href="/admin/cierre"
           variacion={ganancia.variacion}
           renglones={[
-            // La fórmula en dos renglones: en uno solo se cortaba.
-            `Vendido sin IVA ${moneda.format(g.ventasNetas)}`,
-            `Costo ${moneda.format(g.costo)} · gastos ${moneda.format(g.gastos)}`,
-            // Sin costo cargado el renglón suma venta y no costo: la ganancia
-            // sale inflada, y eso hay que verlo junto al número.
-            g.lineasSinCosto > 0 && {
-              texto: `${plural(g.lineasSinCosto, "renglón vendido", "renglones vendidos")} sin costo`,
+            // La fórmula en renglones: en uno solo se cortaba. Con la regla
+            // del descuento la venta no es la de Reportes, y se llama
+            // distinto.
+            `${g.conDescuento ? "Vendido sin IVA ni descuentos" : "Vendido sin IVA"} ${moneda.format(g.ventasNetas)}`,
+            // Lo vendido sin costo cargado queda afuera de la ganancia, como
+            // del margen de Reportes, y se dice en plata: contado como
+            // ganancia entera la inflaba.
+            g.ventasSinCosto > 0 && {
+              texto: `${moneda.format(g.ventasSinCosto)} sin costo, afuera`,
               problema: true,
               href: "/admin/reportes?corte=producto#ventas",
             },
+            `Costo ${moneda.format(g.costo)} · gastos ${moneda.format(g.gastos)}`,
             ganancia.anterior.resultado !== 0 &&
               `Mismo día del mes pasado ${moneda.format(ganancia.anterior.resultado)}`,
           ]}

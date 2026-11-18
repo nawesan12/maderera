@@ -49,23 +49,27 @@ export default async function ReportesPage({
   // Cortar agrupa; filtrar se queda con una parte. Ver `FiltrosDelReporte`.
   const filtros = { rubro: params.rubro, sucursal: params.sucursal };
 
-  const [filas, meses, sucursales] = await Promise.all([
+  const [reporte, meses, sucursales] = await Promise.all([
     reporteDeVentas(corte, periodo, filtros),
     ventasPorMes(periodo, filtros),
     listarSucursalesPublicas(),
   ]);
+  const { filas, totales } = reporte;
 
-  const total = filas.reduce((suma, f) => suma + f.total, 0);
-  const operaciones = filas.reduce((suma, f) => suma + f.cantidad, 0);
+  // Del período entero, no de las filas: por producto llegan las 50 que más
+  // vendieron, y sumarlas daba otro total según el corte.
+  const total = totales.total;
+  const operaciones = totales.cantidad;
 
   /*
    * Lo vendido, el costo y el margen del período.
    *
-   * **Un solo «Vendido sin IVA».** Suma todas las filas: es el mismo número
-   * que el Cierre y la Ganancia del mes del Resumen. Antes descartaba las
-   * filas sin costo y daba otra cifra con el mismo nombre. Lo que no tiene
-   * costo se dice debajo, en el color de problema: el margen se ve sano y
-   * nadie carga los costos si eso no está a la vista.
+   * **Un solo «Vendido sin IVA».** Lo calcula Go sobre el período entero
+   * (`totales`), con la misma regla que el Cierre y la Ganancia del mes del
+   * Resumen, en cualquier corte. Antes sumaba las filas que se veían: por
+   * producto, las 50 primeras. Lo que no tiene costo se dice debajo, en el
+   * color de problema: el margen se ve sano y nadie carga los costos si eso
+   * no está a la vista.
    *
    * **El margen se mide contra lo que tiene costo** (`netoCosteado`, ver
    * backend/internal/reportes/ventas.go): restarle el costo de una parte a la
@@ -75,13 +79,13 @@ export default async function ReportesPage({
    * hay relleno hacia atrás: el único costo posible sería el de hoy, y eso
    * pintaría de margen inventado seis meses de ventas.
    */
-  const hayMargen = filas.some((f) => f.costo !== null);
-  const vendido = filas.reduce((s, f) => s + f.netoVenta, 0);
-  const conCosto = filas.reduce((s, f) => s + f.netoCosteado, 0);
-  const costoTotal = filas.reduce((s, f) => s + (f.costo ?? 0), 0);
+  const hayMargen = totales.costo !== null;
+  const vendido = totales.netoVenta;
+  const conCosto = totales.netoCosteado;
+  const costoTotal = totales.costo ?? 0;
   const margenTotal = conCosto - costoTotal;
   const vendidoSinCosto = vendido - conCosto;
-  const sinCosto = filas.reduce((s, f) => s + f.lineasSinCosto, 0);
+  const sinCosto = totales.lineasSinCosto;
 
   const etiquetaCorte =
     CORTES.find((c) => c.clave === corte)?.etiqueta ?? "Por producto";
@@ -314,6 +318,33 @@ export default async function ReportesPage({
                 );
               })}
             </tbody>
+            {/* El período entero: con el tope de filas, la suma de lo que se
+                ve no es el total, y se dice cuántas faltan. */}
+            <tfoot className="border-t-2 bg-muted/30 font-semibold">
+              <tr>
+                <td className="px-5 py-3">
+                  Total
+                  {totales.filas > filas.length && (
+                    <span className="tabular ml-2 text-sm font-normal text-muted-foreground">
+                      {filas.length} de {totales.filas}
+                    </span>
+                  )}
+                </td>
+                <td className="tabular px-5 py-3 text-right">{totales.cantidad.toLocaleString("es-AR")}</td>
+                <td className="tabular px-5 py-3 text-right">{formatearMonto(totales.total)}</td>
+                {hayMargen && (
+                  <>
+                    <td className="tabular px-5 py-3 text-right">{formatearMonto(costoTotal)}</td>
+                    <td
+                      className={`tabular px-5 py-3 text-right ${margenTotal < 0 ? "text-saldo-debe" : "text-saldo-favor"}`}
+                    >
+                      {formatearMonto(margenTotal)}
+                    </td>
+                  </>
+                )}
+                <td />
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}

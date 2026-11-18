@@ -360,6 +360,15 @@ func TestBotSabeCuandoCallarse(t *testing.T) {
 	c23 := conv("5492235550023")
 	_, _ = e.pool.Exec(ctx, `insert into whatsapp_mensajes (conversacion_id, direccion, tipo, cuerpo, estado, origen, ocurrido_at)
 		values ($1, 'saliente', 'text', 'Tu pedido está listo', 'enviado', 'aviso', now())`, c23)
+	// Fuera de horario, callar es el aviso de cerrado (otra prueba): ya avisado,
+	// así la prueba no depende de la hora a la que se corre.
+	sinCerrado := func(convID string) {
+		t.Helper()
+		if _, err := e.pool.Exec(ctx, `update whatsapp_conversaciones set bot_cerrado_hasta = now() + interval '7 days' where id = $1`, convID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sinCerrado(c23)
 	antes := delBot("5492235550023")
 	entra("5492235550023", "a qué hora abren?")
 	if delBot("5492235550023") != antes {
@@ -372,6 +381,7 @@ func TestBotSabeCuandoCallarse(t *testing.T) {
 	if _, err := e.pool.Exec(ctx, `update whatsapp_conversaciones set asignado_a_user_id = (select id from "user" where email = 'vera@prueba.test') where id = $1`, conv("5492235550024")); err != nil {
 		t.Fatal(err)
 	}
+	sinCerrado(conv("5492235550024"))
 	antes = delBot("5492235550024")
 	entra("5492235550024", "a qué hora abren?")
 	if delBot("5492235550024") != antes {

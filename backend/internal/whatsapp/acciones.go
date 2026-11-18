@@ -343,6 +343,10 @@ func (s *Servicio) ReintentarMensaje(ctx context.Context, ses *auth.Sesion, mens
 	if err != nil {
 		return Resultado{}, err
 	}
+	if r.YaTomado {
+		// Lo está reintentando la cola (o alguien más) en este momento.
+		return conError("Ese mensaje ya no está para reintentar."), nil
+	}
 	if r.Error != nil {
 		return deErrorDeEnvio(r.Error), nil
 	}

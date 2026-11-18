@@ -76,12 +76,22 @@ func (s *Servicio) topeMensajes(ctx context.Context) (int, error) {
 // UsoDelMes cuenta los salientes del mes argentino que salieron (o están
 // saliendo) por la API. Usa el mismo índice que el gasto (created_at).
 func (s *Servicio) UsoDelMes(ctx context.Context, ahora time.Time) (UsoDelMes, error) {
+	return s.usoDelMesCon(ctx, s.pool, ahora)
+}
+
+// consultor es el pool o una transacción: EnviarYRegistrar cuenta adentro de
+// la suya, con el candado del tope tomado.
+type consultor interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func (s *Servicio) usoDelMesCon(ctx context.Context, q consultor, ahora time.Time) (UsoDelMes, error) {
 	tope, err := s.topeMensajes(ctx)
 	if err != nil {
 		return UsoDelMes{}, err
 	}
 	var n int
-	if err := s.pool.QueryRow(ctx, `select count(*)::int from whatsapp_mensajes
+	if err := q.QueryRow(ctx, `select count(*)::int from whatsapp_mensajes
 		where direccion = 'saliente' and created_at >= $1 and importado = false
 		  and coalesce(origen, '') <> 'telefono' and estado <> 'fallido'`, InicioDelMesArgentino(ahora)).Scan(&n); err != nil {
 		return UsoDelMes{}, err

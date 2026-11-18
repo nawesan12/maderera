@@ -837,8 +837,8 @@ export interface operations {
                 vendedor?: string;
                 /** @description la de «Al día» */
                 pagina?: number;
-                /** @description «todos» trae «Por cobrar» entero; si no */
-                deudores?: "todos";
+                /** @description la de «Por cobrar» */
+                cobrar?: number;
             };
             header?: never;
             path?: never;

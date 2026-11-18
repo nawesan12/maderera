@@ -18,7 +18,7 @@ export interface ClienteListado extends Omit<Crudo, "ultimaCompra"> {
 
 export interface CarteraDeClientes
   extends Omit<Esquemas["CarteraDeClientes"], "porCobrar" | "alDia"> {
-  /** Los que deben, del más urgente al menos: los 60 primeros, o todos. */
+  /** Una página de los que deben, del más urgente al menos. */
   porCobrar: ClienteListado[];
   /** Una página de los que no deben, por nombre. */
   alDia: ClienteListado[];
@@ -35,7 +35,8 @@ export async function listarClientes(
     rubro?: string;
     vendedor?: string;
     pagina?: number;
-    todosLosDeudores?: boolean;
+    /** La página de «Por cobrar». */
+    paginaDeudores?: number;
   } = {},
 ): Promise<CarteraDeClientes> {
   const query = {
@@ -44,7 +45,9 @@ export async function listarClientes(
     ...(filtros.rubro ? { rubro: filtros.rubro } : {}),
     ...(filtros.vendedor ? { vendedor: filtros.vendedor } : {}),
     ...(filtros.pagina && filtros.pagina > 1 ? { pagina: Math.min(filtros.pagina, 100_000) } : {}),
-    ...(filtros.todosLosDeudores ? { deudores: "todos" as const } : {}),
+    ...(filtros.paginaDeudores && filtros.paginaDeudores > 1
+      ? { cobrar: Math.min(filtros.paginaDeudores, 100_000) }
+      : {}),
   };
   const c = datos(await (await api()).GET("/api/v1/admin/clientes", { params: { query } }));
   const conFecha = (f: Crudo): ClienteListado => ({

@@ -73,8 +73,13 @@ func TestCarteraPaginada(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c.AlDia) != 30 || c.TotalAlDia != 40 || len(c.PorCobrar) != 35 || c.CantidadDeudores != 35 {
+	if len(c.AlDia) != 30 || c.TotalAlDia != 40 || len(c.PorCobrar) != 30 || c.CantidadDeudores != 35 {
 		t.Fatalf("página 1: %d de %d al día, %d deudores", len(c.AlDia), c.TotalAlDia, len(c.PorCobrar))
+	}
+	// La segunda de «Por cobrar» trae el resto, y no mueve «Al día».
+	c, err = s.Listar(ctx, FiltrosDeClientes{PaginaDeudores: 2}, hoyDeLaCartera)
+	if err != nil || len(c.PorCobrar) != 5 || len(c.AlDia) != 30 {
+		t.Fatalf("segunda de «Por cobrar»: %d deudores, %d al día, %v", len(c.PorCobrar), len(c.AlDia), err)
 	}
 	// Las páginas no se pisan aunque los nombres se repitan: el id desempata.
 	vistos := map[string]bool{}
@@ -118,10 +123,51 @@ func TestCarteraPaginada(t *testing.T) {
 	}
 }
 
-// Con más de 60 deudores viajan los 60 más urgentes, y los totales son de
-// todos: se comparan contra la cuenta de antes —todos los movimientos de
-// todos, CalcularAging y la suma en el orden por nombre—, no contra la misma
-// consulta nueva.
+// «Al día» corta la página primero y después completa el saldo y lo
+// comprado de esas filas: lo que llega tiene que ser lo mismo que si se
+// sumara todo, también en la segunda página y con saldo a favor.
+func TestAlDiaCompletaLaPagina(t *testing.T) {
+	pool := pruebas.Base(t)
+	ctx := context.Background()
+	s := Nuevo(pool, silencio)
+	for i := range 35 {
+		id := cliente(t, pool, fmt.Sprintf("Cliente %02d", i), "", [2]float64{1000, 40}, [2]float64{-1000 - float64(i), 30})
+		for j := range 2 {
+			if _, err := pool.Exec(ctx, `insert into orders (numero, contacto_nombre, customer_id, total, created_at)
+				values ($1, 'x', $2, $3, $4)`, fmt.Sprintf("P-%02d-%d", i, j), id, 100*(i+1), hoyDeLaCartera.AddDate(0, 0, -i-j)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Uno cancelado no cuenta.
+		if _, err := pool.Exec(ctx, `insert into orders (numero, contacto_nombre, customer_id, total, estado)
+			values ($1, 'x', $2, 99999, 'cancelado')`, fmt.Sprintf("P-%02d-c", i), id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cliente(t, pool, "Debe", "", [2]float64{500, 10})
+	c, err := s.Listar(ctx, FiltrosDeClientes{Pagina: 2}, hoyDeLaCartera)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.TotalAlDia != 35 || len(c.AlDia) != 5 || c.CantidadDeudores != 1 {
+		t.Fatalf("página 2: %d de %d, %d deudores", len(c.AlDia), c.TotalAlDia, c.CantidadDeudores)
+	}
+	for k, x := range c.AlDia {
+		i := 30 + k
+		if x.Nombre != fmt.Sprintf("Cliente %02d", i) {
+			t.Fatalf("fila %d: %s", k, x.Nombre)
+		}
+		if x.Saldo != -float64(i) || x.TotalComprado != float64(200*(i+1)) ||
+			x.UltimaCompra == nil || !x.UltimaCompra.Equal(hoyDeLaCartera.AddDate(0, 0, -i)) {
+			t.Errorf("%s: saldo %v, comprado %v, última %v", x.Nombre, x.Saldo, x.TotalComprado, x.UltimaCompra)
+		}
+	}
+}
+
+// Con más de dos páginas de deudores viajan los 30 más urgentes de cada
+// una, y los totales son de todos: se comparan contra la cuenta de antes
+// —todos los movimientos de todos, CalcularAging y la suma en el orden por
+// nombre—, no contra la misma consulta nueva.
 func TestCarteraConMuchosDeudores(t *testing.T) {
 	pool := pruebas.Base(t)
 	ctx := context.Background()
@@ -162,14 +208,28 @@ func TestCarteraConMuchosDeudores(t *testing.T) {
 		t.Fatalf("totales: %d %v %v, antes %d %v %v", c.CantidadDeudores, c.DeudaTotal, c.VencidoTotal,
 			len(esperado.deudores), esperado.deuda, esperado.vencido)
 	}
-	if c.CantidadDeudores <= DeudoresVisibles || len(c.PorCobrar) != DeudoresVisibles {
-		t.Fatalf("hacen falta más de 60 deudores: %d (viajaron %d)", c.CantidadDeudores, len(c.PorCobrar))
+	if c.CantidadDeudores <= 2*DeudoresPorPagina || len(c.PorCobrar) != DeudoresPorPagina {
+		t.Fatalf("hacen falta más de dos páginas de deudores: %d (viajaron %d)", c.CantidadDeudores, len(c.PorCobrar))
 	}
-	todos, err := s.Listar(ctx, FiltrosDeClientes{TodosLosDeudores: true}, hoyDeLaCartera)
-	if err != nil || len(todos.PorCobrar) != c.CantidadDeudores {
-		t.Fatalf("todos los deudores: %d, %v", len(todos.PorCobrar), err)
+	// Las páginas de «Por cobrar», una detrás de otra, son el orden entero.
+	var todos []ClienteListado
+	for p := 1; ; p++ {
+		pag, err := s.Listar(ctx, FiltrosDeClientes{PaginaDeudores: p}, hoyDeLaCartera)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if pag.CantidadDeudores != c.CantidadDeudores || pag.DeudaTotal != c.DeudaTotal {
+			t.Fatalf("página %d: los totales cambian con la página", p)
+		}
+		if len(pag.PorCobrar) == 0 {
+			break
+		}
+		todos = append(todos, pag.PorCobrar...)
 	}
-	for i, x := range todos.PorCobrar {
+	if len(todos) != c.CantidadDeudores {
+		t.Fatalf("entre todas las páginas: %d de %d", len(todos), c.CantidadDeudores)
+	}
+	for i, x := range todos {
 		antes := esperado.deudores[x.ID]
 		if antes == nil {
 			t.Errorf("%s no debía", x.Nombre)
@@ -179,11 +239,11 @@ func TestCarteraConMuchosDeudores(t *testing.T) {
 			x.Deuda.Prioridad != antes.Prioridad {
 			t.Errorf("%s: %+v (%s días), antes %+v (%s días)", x.Nombre, *x.Deuda, dias(x.Deuda.DiasDeLaMasVieja), *antes, dias(antes.DiasDeLaMasVieja))
 		}
-		if i > 0 && todos.PorCobrar[i-1].Deuda.Prioridad.Puntaje < x.Deuda.Prioridad.Puntaje {
+		if i > 0 && todos[i-1].Deuda.Prioridad.Puntaje < x.Deuda.Prioridad.Puntaje {
 			t.Errorf("%s está debajo de uno menos urgente", x.Nombre)
 		}
-		if i < DeudoresVisibles && c.PorCobrar[i].ID != x.ID {
-			t.Errorf("el %d de los 60 no es el %d de todos", i, i)
+		if i < DeudoresPorPagina && c.PorCobrar[i].ID != x.ID {
+			t.Errorf("el %d de la primera página no es el %d de todos", i, i)
 		}
 	}
 	for _, x := range c.AlDia {

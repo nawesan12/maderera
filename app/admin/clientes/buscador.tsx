@@ -41,6 +41,7 @@ export function BuscadorClientes({
   const { texto, setTexto, actualizar } = useFiltrosDeLista({
     ruta: "/admin/clientes",
     busquedaActual,
+    paginas: ["pagina", "cobrar"],
   });
 
   return (

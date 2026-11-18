@@ -23,7 +23,7 @@ paths:
         - { name: rubro, in: query, schema: { type: string } }
         - { name: vendedor, in: query, schema: { type: string } }
         - { name: pagina, in: query, description: la de «Al día», desde 1, schema: { type: integer, minimum: 1, maximum: 100000 } }
-        - { name: deudores, in: query, description: «todos» trae «Por cobrar» entero; si no, los 60 más urgentes, schema: { type: string, enum: [todos] } }
+        - { name: cobrar, in: query, description: la de «Por cobrar», desde 1 (de a 30, del más urgente al menos), schema: { type: integer, minimum: 1, maximum: 100000 } }
       responses:
         "200":
           description: Los activos en dos grupos, con los totales de todos los que pasan el filtro

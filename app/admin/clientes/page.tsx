@@ -15,7 +15,6 @@ import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { GrupoListado } from "@/components/admin/grupo";
 import { leerPagina, Paginador } from "@/components/admin/paginador";
-import { VerTodo } from "@/components/admin/ver-mas";
 import {
   formatearCuit,
   haceCuanto,
@@ -36,8 +35,8 @@ import {
 import { BuscadorClientes } from "./buscador";
 import { DialogoCliente } from "./dialogo-cliente";
 
-/** Cuántos de «Al día» trae cada página (el de Go: AlDiaPorPagina). */
-const AL_DIA_POR_PAGINA = 30;
+/** Cuántos trae cada página de cada grupo (los de Go: DeudoresPorPagina y AlDiaPorPagina). */
+const POR_PAGINA = 30;
 
 export default async function ClientesPage({
   searchParams,
@@ -48,11 +47,12 @@ export default async function ClientesPage({
     vendedor?: string;
     nuevo?: string;
     pagina?: string;
-    ver?: string;
+    cobrar?: string;
   }>;
 }) {
   const params = await searchParams;
   const pagina = leerPagina(params.pagina);
+  const paginaDeudores = leerPagina(params.cobrar);
   const filtros = {
     buscar: params.buscar,
     rubro: params.rubro,
@@ -66,9 +66,9 @@ export default async function ClientesPage({
    * paga— y la deuda chica de hace cuatro meses quedaba enterrada. La clienta
    * lo pidió así: «que el sistema indique a quién darle prioridad».
    *
-   * Con el padrón de ISIS son miles: «Por cobrar» trae los 60 más urgentes
-   * (el resto, a un clic) y «Al día» va de a páginas. Los números del
-   * encabezado son siempre de todos.
+   * Con el padrón de ISIS son miles: los dos grupos van de a páginas, cada
+   * uno con su parámetro, así pasar de página en uno no mueve el otro. Los
+   * números del encabezado son siempre de todos.
    */
   const [cartera, listas, vendedores] = await Promise.all([
     listarClientes({
@@ -76,27 +76,36 @@ export default async function ClientesPage({
       rubro: params.rubro,
       vendedor: params.vendedor,
       pagina,
-      todosLosDeudores: params.ver === "todo",
+      paginaDeudores,
     }),
     listarListasParaClientes(),
     vendedoresActivos(),
   ]);
 
   // Una página que se pasó del final (un enlace viejo, un filtro que achicó
-  // la lista) lleva a la última que existe.
-  const paginas = Math.ceil(cartera.totalAlDia / AL_DIA_POR_PAGINA);
-  if (cartera.alDia.length === 0 && pagina > 1 && paginas > 0) {
+  // la lista) lleva a la última que existe, en cada grupo.
+  const paginas = Math.ceil(cartera.totalAlDia / POR_PAGINA);
+  const paginasDeudores = Math.ceil(cartera.cantidadDeudores / POR_PAGINA);
+  const alDiaDeMas = cartera.alDia.length === 0 && pagina > 1 && paginas > 0;
+  const deudoresDeMas =
+    cartera.porCobrar.length === 0 && paginaDeudores > 1 && paginasDeudores > 0;
+  if (alDiaDeMas || deudoresDeMas) {
     const q = new URLSearchParams(
-      Object.entries({ ...filtros, ver: params.ver }).filter(
-        (e): e is [string, string] => Boolean(e[1]),
-      ),
+      Object.entries(filtros).filter((e): e is [string, string] => Boolean(e[1])),
     );
-    if (paginas > 1) q.set("pagina", String(paginas));
+    const p = alDiaDeMas ? paginas : pagina;
+    const c = deudoresDeMas ? paginasDeudores : paginaDeudores;
+    if (c > 1) q.set("cobrar", String(c));
+    if (p > 1) q.set("pagina", String(p));
     redirect(`/admin/clientes${q.size > 0 ? `?${q}` : ""}`);
   }
 
   const total = cartera.cantidadDeudores + cartera.totalAlDia;
-  const ocultos = cartera.cantidadDeudores - cartera.porCobrar.length;
+  const enlaceDePaginas = {
+    ...filtros,
+    pagina: pagina > 1 ? String(pagina) : undefined,
+    cobrar: paginaDeudores > 1 ? String(paginaDeudores) : undefined,
+  };
 
   return (
     <div>
@@ -157,7 +166,13 @@ export default async function ClientesPage({
                 <TarjetaCliente key={c.id} cliente={c} />
               ))}
             </div>
-            <VerTodo ocultas={ocultos} params={filtros} />
+            <Paginador
+              pagina={paginaDeudores}
+              total={cartera.cantidadDeudores}
+              porPagina={POR_PAGINA}
+              params={enlaceDePaginas}
+              nombre="cobrar"
+            />
           </GrupoListado>
 
           <GrupoListado
@@ -177,8 +192,8 @@ export default async function ClientesPage({
             <Paginador
               pagina={pagina}
               total={cartera.totalAlDia}
-              porPagina={AL_DIA_POR_PAGINA}
-              params={{ ...filtros, ver: params.ver }}
+              porPagina={POR_PAGINA}
+              params={enlaceDePaginas}
             />
           </GrupoListado>
         </>

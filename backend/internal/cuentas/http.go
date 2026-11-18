@@ -129,9 +129,12 @@ func (a *API) ListarClientes(ctx context.Context, r cuentasapi.ListarClientesReq
 	}
 	p := r.Params
 	f := clientes.FiltrosDeClientes{Busqueda: texto(p.Busqueda), Tipo: texto(p.Tipo), Rubro: texto(p.Rubro),
-		Vendedor: texto(p.Vendedor), TodosLosDeudores: p.Deudores != nil}
+		Vendedor: texto(p.Vendedor)}
 	if p.Pagina != nil {
 		f.Pagina = *p.Pagina
+	}
+	if p.Cobrar != nil {
+		f.PaginaDeudores = *p.Cobrar
 	}
 	v, err := a.clientes.Listar(ctx, f, a.ahora())
 	return ok(v), err

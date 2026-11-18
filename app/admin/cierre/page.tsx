@@ -10,7 +10,7 @@ import {
   resumenDelMes,
 } from "@/lib/dal/admin/cierre-mensual";
 import { leerPeriodoMensual } from "@/lib/periodos";
-import { fechaCorta, formatearMonto } from "@/lib/formato";
+import { fechaCorta, formatearMonto, plural } from "@/lib/formato";
 import { ExportarAsientos } from "./exportar-asientos";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 
@@ -227,10 +227,19 @@ export default async function CierrePage({
       </section>
 
       <section className="grid gap-3 sm:grid-cols-3">
+        {/* Lo facturado, no lo vendido: con el mismo nombre que el
+            «Vendido sin IVA» de arriba, «Ventas netas $0» parecía un error.
+            Lo vendido sin factura va al lado, y queda en pantalla: no entra
+            en los asientos ni en ningún archivo del contador. */}
         <Tarjeta
-          titulo="Ventas netas"
+          titulo="Facturado neto"
           valor={resumen.ventas.neto}
-          detalle={`${resumen.ventas.cantidad} comprobantes`}
+          detalle={[
+            plural(resumen.ventas.cantidad, "comprobante"),
+            resumen.sinFactura.cantidad > 0 && `sin factura ${formatearMonto(resumen.sinFactura.total)}`,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
           href={`/admin/arca/libro-iva?periodo=${periodo.clave}`}
         />
         <Tarjeta

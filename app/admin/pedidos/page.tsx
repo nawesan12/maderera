@@ -186,7 +186,14 @@ function haceDias(dias: number): string {
   });
 }
 
-const ESTADOS_HISTORIAL: Record<string, string> = { todos: "Todos", entregado: "Entregados", cancelado: "Cancelados" };
+// «Sin cobrar» es a donde lleva el renglón de «Me deben»: lo entregado a lo
+// que le falta cobrar, el más viejo primero (lo ordena Go).
+const ESTADOS_HISTORIAL: Record<string, string> = {
+  todos: "Todos",
+  entregado: "Entregados",
+  "sin-cobrar": "Sin cobrar",
+  cancelado: "Cancelados",
+};
 
 /**
  * Lo cerrado, de a 50. El tablero mostraba solo los últimos seis entregados:
@@ -276,7 +283,11 @@ async function Historial({
                 {p.createdAt.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}
               </span>
               <EtiquetaEstado estado={p.estado} contexto="pedido" />
-              <span className="tabular w-32 text-right text-base font-medium">{moneda.format(p.total)}</span>
+              {estado === "sin-cobrar" && p.sinCobrar != null ? (
+                <span className="tabular estado-problema w-32 text-right text-base font-semibold">{moneda.format(p.sinCobrar)}</span>
+              ) : (
+                <span className="tabular w-32 text-right text-base font-medium">{moneda.format(p.total)}</span>
+              )}
             </li>
           ))}
         </ul>
@@ -372,7 +383,8 @@ function TarjetaPedido({ pedido, aviso }: { pedido: PedidoListado; aviso: AvisoM
               ? { customerId: pedido.customerId, nombre: pedido.cliente, numero: pedido.numero, total: Number(pedido.total) }
               : null
           }
-          cobro={{ numero: pedido.numero, total: Number(pedido.total), medioPago: pedido.medioPago }}
+          cobro={{ numero: pedido.numero, total: pedido.sinCobrar ?? Number(pedido.total), medioPago: pedido.medioPago }}
+          sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
           compacto
         />
       </div>

@@ -168,7 +168,8 @@ export default async function FichaPedidoPage({
                   ? { customerId: pedido.customerId, nombre: pedido.cliente, numero: pedido.numero, total: Number(pedido.total) }
                   : null
               }
-              cobro={{ numero: pedido.numero, total: Number(pedido.total), medioPago: pedido.medioPago }}
+              cobro={{ numero: pedido.numero, total: pedido.sinCobrar ?? Number(pedido.total), medioPago: pedido.medioPago }}
+              sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
             />
           </>
         }

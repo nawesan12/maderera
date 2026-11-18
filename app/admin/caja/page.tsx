@@ -9,7 +9,7 @@ import {
   turnosParaAsignar,
   ventasSinCaja,
 } from "@/lib/dal/admin/cajas-fisicas";
-import { formatearMonto, haceCuanto } from "@/lib/formato";
+import { formatearMonto, haceCuanto, plural } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { Vacio } from "@/components/admin/vacio";
@@ -68,6 +68,19 @@ export default async function CajaPage({
     ventasSinCaja(),
     emitidoPorCaja(periodo.clave),
   ]);
+
+  // Las anulaciones del mes por quien las hizo, la que más anuló primero.
+  const anulacionesPorPersona = [
+    ...emitido
+      .filter((v) => v.anulada)
+      .reduce((m, v) => {
+        const quien = v.anuladaPor ?? "Sin nombre";
+        const a = m.get(quien) ?? { quien, cantidad: 0, total: 0 };
+        m.set(quien, { quien, cantidad: a.cantidad + 1, total: a.total + Number(v.total) });
+        return m;
+      }, new Map<string, { quien: string; cantidad: number; total: number }>())
+      .values(),
+  ].sort((a, b) => b.cantidad - a.cantidad || b.total - a.total);
 
   /*
    * Los turnos a los que se puede mandar una venta suelta. Se piden solo para
@@ -283,6 +296,17 @@ export default async function CajaPage({
           <h2 className="text-base font-semibold">
             Emitido en el mostrador
           </h2>
+          {/* Quién anuló y cuánto, sin contar a ojo: cinco anulaciones por
+              semana de la misma persona se ven acá antes que en la bitácora. */}
+          {anulacionesPorPersona.length > 0 && (
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-base text-muted-foreground [font-variant-numeric:tabular-nums]">
+              {anulacionesPorPersona.map((a) => (
+                <li key={a.quien}>
+                  {a.quien} · {plural(a.cantidad, "anulada")} · {formatearMonto(a.total)}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {emitido.length === 0 ? (
@@ -306,7 +330,10 @@ export default async function CajaPage({
               </thead>
               <tbody className="divide-y divide-linea">
                 {emitido.map((v) => (
-                  <tr key={v.orderId}>
+                  // La anulada se apaga y se tacha, y no se confunde con una
+                  // venta válida; el rojo queda para la palabra «Anulada» y la
+                  // factura que sigue viva.
+                  <tr key={v.orderId} className={v.anulada ? "bg-hundida/60 text-muted-foreground" : ""}>
                     <td className="tabular px-5 py-3 text-muted-foreground">
                       {v.createdAt.toLocaleDateString("es-AR", { timeZone: ZONA })}
                       <span className="block text-sm">
@@ -335,8 +362,26 @@ export default async function CajaPage({
                       {v.operadora ?? "—"}
                       <span className="block text-sm">{v.sucursal ?? ""}</span>
                     </td>
-                    <td className="tabular px-5 py-3 text-right font-semibold">
-                      {formatearMonto(Number(v.total))}
+                    <td className="px-5 py-3 text-right">
+                      <span className={`tabular font-semibold ${v.anulada ? "line-through decoration-2" : ""}`}>
+                        {formatearMonto(Number(v.total))}
+                      </span>
+                      {v.anulada && (
+                        <span className="block text-sm">
+                          <span className="estado-problema font-semibold">Anulada</span>
+                          {[
+                            v.anuladaPor,
+                            v.anuladaAt?.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: ZONA }),
+                            v.motivo,
+                          ]
+                            .filter(Boolean)
+                            .map((t) => ` · ${t}`)
+                            .join("")}
+                          {v.facturaViva && (
+                            <span className="estado-problema block font-semibold">factura sin nota de crédito</span>
+                          )}
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-right">
                       <span className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-sm">

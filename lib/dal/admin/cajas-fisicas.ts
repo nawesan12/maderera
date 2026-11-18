@@ -55,5 +55,9 @@ export async function turnosParaAsignar(branchId: string) {
  */
 export async function emitidoPorCaja(periodo: string) {
   const filas = datos(await (await api()).GET("/api/v1/admin/caja/emitido", { params: { query: { periodo } } }));
-  return filas.map((v) => ({ ...v, createdAt: new Date(v.createdAt) }));
+  return filas.map((v) => ({
+    ...v,
+    createdAt: new Date(v.createdAt),
+    anuladaAt: v.anuladaAt ? new Date(v.anuladaAt) : null,
+  }));
 }

@@ -28,6 +28,7 @@ export function AccionesPedido({
   compacto = false,
   cobroACuenta,
   cobro,
+  sinCobrar,
 }: {
   id: string;
   estado: string;
@@ -47,9 +48,18 @@ export function AccionesPedido({
    * cobra), el botón no aparece.
    */
   cobro?: { numero: string; total: number; medioPago: string | null } | null;
+  /**
+   * Lo que falta cobrar fuera de la cuenta corriente (`sinCobrar` del
+   * pedido, la misma regla que «Me deben»). Con algo, «Marcar entregado»
+   * pregunta antes: no se bloquea, porque existe el pago contra entrega,
+   * pero la mercadería no sale sin que nadie lo mire. El servidor deja la
+   * firma en el historial igual.
+   */
+  sinCobrar?: { numero: string; monto: number } | null;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
+  const [confirmando, setConfirmando] = useState(false);
 
   // Un pedido de retiro no se despacha: el cliente lo busca.
   const etiqueta =
@@ -62,11 +72,14 @@ export function AccionesPedido({
       const resultado = await fn();
       if (resultado.error) toast.error(resultado.error);
       else {
+        setConfirmando(false);
         toast.success(resultado.ok ?? "Listo.");
         router.refresh();
       }
     });
   }
+
+  const preguntar = etiqueta === "Marcar entregado" && sinCobrar != null && sinCobrar.monto > 0;
 
   return (
     <div className={`flex items-center gap-2 ${compacto ? "w-full" : ""}`}>
@@ -92,7 +105,7 @@ export function AccionesPedido({
 
       {etiqueta && (
         <button
-          onClick={() => accion(() => avanzarPedido(id))}
+          onClick={() => (preguntar ? setConfirmando(true) : accion(() => avanzarPedido(id)))}
           disabled={pendiente}
           className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         >
@@ -103,6 +116,40 @@ export function AccionesPedido({
           )}
           {etiqueta}
         </button>
+      )}
+
+      {preguntar && sinCobrar && (
+        <Dialog open={confirmando} onOpenChange={(abierto) => !pendiente && setConfirmando(abierto)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {sinCobrar.numero} sin cobrar · <span className="tabular">{moneda.format(sinCobrar.monto)}</span>
+              </DialogTitle>
+            </DialogHeader>
+            {/* «Mejor no» es el botón fuerte y el que tiene el foco: un Enter
+                apurado no entrega mercadería sin cobrar. */}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={pendiente}
+                onClick={() => accion(() => avanzarPedido(id))}
+                className="inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium hover:bg-hundida disabled:opacity-50"
+              >
+                {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
+                Entregar igual
+              </button>
+              <button
+                type="button"
+                autoFocus
+                disabled={pendiente}
+                onClick={() => setConfirmando(false)}
+                className="boton-accion h-11 rounded-lg px-4 text-base font-medium disabled:opacity-50"
+              >
+                Mejor no
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

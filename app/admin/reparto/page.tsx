@@ -78,8 +78,16 @@ export default async function RepartoPage() {
                     </div>
                     <span className="tabular text-base text-muted-foreground">{p.numero}</span>
                     <EtiquetaEstado estado={p.estado} contexto="pedido" />
-                    {p.estadoPago !== "pagado" && (
-                      <EtiquetaEstado estado={p.estadoPago} contexto="pago" />
+                    {/* Lo que hay que traer de vuelta, a la vista del que carga
+                        el camión: en el reparto el pago contra entrega es lo
+                        normal, y un diálogo en cada entrega se aceptaría sin
+                        leer. La firma la deja el servidor al entregar. */}
+                    {p.sinCobrar != null ? (
+                      <span className="estado-problema text-base font-semibold [font-variant-numeric:tabular-nums]">
+                        Cobrar {moneda.format(p.sinCobrar)}
+                      </span>
+                    ) : (
+                      p.estadoPago !== "pagado" && <EtiquetaEstado estado={p.estadoPago} contexto="pago" />
                     )}
                     <span className="tabular w-28 text-right text-base font-medium">{moneda.format(p.total)}</span>
                     <AccionesPedido

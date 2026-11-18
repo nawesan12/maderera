@@ -36,7 +36,9 @@ export async function NumerosDelNegocio({
     ventasPorSucursal(),
   ]);
 
-  const { meDeben, debo, cheques, plataHoy: plata, ganancia } = n;
+  const { meDeben, debo, cheques, plataHoy: plata, ganancia, anuladas } = n;
+  const sinCobrar = meDeben.pedidosSinCobrar;
+  const g = ganancia.actual;
 
   return (
     <div className="space-y-4">
@@ -45,36 +47,49 @@ export async function NumerosDelNegocio({
           titulo="Me deben"
           valor={meDeben.total}
           href="/admin/clientes"
-          alerta={meDeben.vencido > 0}
           renglones={[
-            meDeben.vencido > 0
-              ? `${moneda.format(meDeben.vencido)} vencido · ${plural(meDeben.clientesConVencido, "cliente")}`
-              : "Nada vencido",
-            plural(meDeben.clientes, "cliente con deuda", "clientes con deuda"),
+            meDeben.vencido > 0 && {
+              texto: `${moneda.format(meDeben.vencido)} vencido · ${plural(meDeben.clientesConVencido, "cliente")}`,
+              problema: true,
+            },
+            // Mercadería entregada sin cobrar: es deuda desde que salió, y el
+            // renglón lleva a la lista para reclamarla, del más viejo al más
+            // nuevo.
+            sinCobrar.cantidad > 0 && {
+              texto: `${moneda.format(sinCobrar.total)} en ${plural(sinCobrar.cantidad, "pedido sin cobrar", "pedidos sin cobrar")}`,
+              problema: true,
+              href: "/admin/pedidos?ver=historial&estado=sin-cobrar&periodo=todo",
+            },
+            meDeben.vencido === 0 && sinCobrar.cantidad === 0 && "Nada vencido",
+            meDeben.clientes > 0 && plural(meDeben.clientes, "cliente con deuda", "clientes con deuda"),
           ]}
         />
         <Tarjeta
           titulo="Debo"
           valor={debo.total}
           href="/admin/compras/facturas"
-          alerta={debo.vencido > 0}
           renglones={[
             debo.vencido > 0
-              ? `${moneda.format(debo.vencido)} vencido · ${plural(debo.facturasVencidas, "factura")}`
+              ? {
+                  texto: `${moneda.format(debo.vencido)} vencido · ${plural(debo.facturasVencidas, "factura")}`,
+                  problema: true,
+                }
               : "Nada vencido",
-            debo.estaSemana > 0
-              ? `${moneda.format(debo.estaSemana)} vence esta semana`
-              : "Nada vence esta semana",
+            debo.estaSemana > 0 && `${moneda.format(debo.estaSemana)} vence esta semana`,
           ]}
         />
         <Tarjeta
           titulo="Cheques de la semana"
           valor={cheques.aCobrar.total - cheques.aCubrir.total}
           href="/admin/cheques"
-          alerta={cheques.aCubrir.total > 0}
           renglones={[
-            `A cobrar ${moneda.format(cheques.aCobrar.total)} · ${plural(cheques.aCobrar.cantidad, "cheque")}`,
-            `A cubrir ${moneda.format(cheques.aCubrir.total)} · ${plural(cheques.aCubrir.cantidad, "cheque")}`,
+            cheques.aCubrir.cantidad > 0 && {
+              texto: `A cubrir ${moneda.format(cheques.aCubrir.total)} · ${plural(cheques.aCubrir.cantidad, "cheque")}`,
+              problema: true,
+            },
+            cheques.aCobrar.cantidad > 0 &&
+              `A cobrar ${moneda.format(cheques.aCobrar.total)} · ${plural(cheques.aCobrar.cantidad, "cheque")}`,
+            cheques.aCobrar.cantidad === 0 && cheques.aCubrir.cantidad === 0 && "Nada esta semana",
           ]}
         />
         <Tarjeta
@@ -83,42 +98,63 @@ export async function NumerosDelNegocio({
           href="/admin/caja"
           renglones={[
             ...(plata.cajas.length > 0
-              ? plata.cajas.map(
-                  (c) => `Caja ${c.sucursal} ${moneda.format(c.esperado)}`,
-                )
+              ? plata.cajas.map((c) => `Caja ${c.sucursal} ${moneda.format(c.esperado)}`)
               : ["Sin cajas abiertas"]),
-            `Banco ${moneda.format(plata.banco)} · Mercado Pago ${moneda.format(plata.mercadoPago)}`,
-            ...(plata.tarjetas > 0
-              ? [`Tarjetas a acreditar ${moneda.format(plata.tarjetas)}`]
-              : []),
-            `Cheques en cartera ${moneda.format(plata.cheques.total)}`,
+            [
+              plata.banco !== 0 && `Banco ${moneda.format(plata.banco)}`,
+              plata.mercadoPago !== 0 && `Mercado Pago ${moneda.format(plata.mercadoPago)}`,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            plata.tarjetas > 0 && `Tarjetas a acreditar ${moneda.format(plata.tarjetas)}`,
+            plata.cheques.cantidad > 0 && `Cheques en cartera ${moneda.format(plata.cheques.total)}`,
+            // La plata que salió del cajón por anulaciones es la que importa;
+            // la de una venta con tarjeta anulada nunca entró.
+            anuladas.cantidad > 0 && {
+              texto:
+                anuladas.devuelto > 0
+                  ? `${plural(anuladas.cantidad, "anulada")} en 7 días · ${moneda.format(anuladas.devuelto)} devueltos`
+                  : `${plural(anuladas.cantidad, "anulada")} en 7 días`,
+              problema: anuladas.devuelto > 0,
+              href: "/admin/bitacora?accion=anular&q=mostrador",
+            },
+            anuladas.conFacturaViva > 0 && {
+              texto: `${plural(anuladas.conFacturaViva, "anulada", "anuladas")} con factura viva`,
+              problema: true,
+              href: "/admin/facturacion",
+            },
           ]}
         />
         <Tarjeta
           titulo="Ganancia del mes"
-          valor={ganancia.actual.resultado}
+          valor={g.resultado}
           href="/admin/cierre"
           variacion={ganancia.variacion}
-          alerta={ganancia.actual.resultado < 0}
           renglones={[
-            `Ventas ${moneda.format(ganancia.actual.ventasNetas)} − costo ${moneda.format(ganancia.actual.costo)} − gastos ${moneda.format(ganancia.actual.gastos)}`,
-            `Mismo día del mes pasado ${moneda.format(ganancia.anterior.resultado)}`,
+            // La fórmula en dos renglones: en uno solo se cortaba.
+            `Vendido sin IVA ${moneda.format(g.ventasNetas)}`,
+            `Costo ${moneda.format(g.costo)} · gastos ${moneda.format(g.gastos)}`,
             // Sin costo cargado el renglón suma venta y no costo: la ganancia
             // sale inflada, y eso hay que verlo junto al número.
-            ...(ganancia.actual.lineasSinCosto > 0
-              ? [
-                  `${plural(ganancia.actual.lineasSinCosto, "renglón vendido", "renglones vendidos")} sin costo`,
-                ]
-              : []),
+            g.lineasSinCosto > 0 && {
+              texto: `${plural(g.lineasSinCosto, "renglón vendido", "renglones vendidos")} sin costo`,
+              problema: true,
+              href: "/admin/reportes?corte=producto#ventas",
+            },
+            ganancia.anterior.resultado !== 0 &&
+              `Mismo día del mes pasado ${moneda.format(ganancia.anterior.resultado)}`,
           ]}
         />
         <Tarjeta
-          titulo={`Vendido · ${periodo.etiqueta.toLowerCase()}`}
+          // Con IVA, a diferencia del «Vendido sin IVA» de la Ganancia: con
+          // el mismo nombre, las dos cifras parecían no cerrar.
+          titulo={`Vendido con IVA · ${periodo.etiqueta.toLowerCase()}`}
           valor={metricas.ventasMes}
           href="/admin/reportes"
           variacion={metricas.variacionVentas}
           renglones={[
-            plural(metricas.pedidosSinEntregar, "pedido sin entregar", "pedidos sin entregar"),
+            metricas.pedidosSinEntregar > 0 &&
+              plural(metricas.pedidosSinEntregar, "pedido sin entregar", "pedidos sin entregar"),
           ]}
         />
       </div>
@@ -132,11 +168,23 @@ export async function NumerosDelNegocio({
 }
 
 /**
+ * Un renglón de la tarjeta: una frase, o una frase en el color de problema
+ * y, si hay dónde arreglarlo, con su propio enlace. `false`, `null` o `""` no
+ * se dibujan: un cero no se muestra, en ninguna tarjeta.
+ */
+type Renglon = string | { texto: string; problema?: boolean; href?: string } | false | null | undefined;
+
+/**
  * Una pregunta del dueño: el número grande y, abajo, el desglose que sigue.
  *
- * La tarjeta entera es el enlace a la pantalla que explica el número. El
- * número negativo se pinta, y con `alerta` el primer renglón (lo vencido, lo
- * que hay que cubrir): es lo que hay que mirar primero.
+ * La tarjeta entera lleva a la pantalla que explica el número: el enlace es
+ * el título y se estira sobre la tarjeta (un `<a>` dentro de otro no es
+ * HTML válido, y un renglón puede llevar a otro lado, como los pedidos sin
+ * cobrar). El número negativo se pinta.
+ *
+ * **Mono solo en las cifras.** El número grande va en la letra de las
+ * cifras; los renglones son frases y van en la letra del texto, con los
+ * dígitos de ancho fijo (`tabular-nums`) para que se alineen igual.
  */
 function Tarjeta({
   titulo,
@@ -144,14 +192,12 @@ function Tarjeta({
   href,
   renglones,
   variacion,
-  alerta = false,
 }: {
   titulo: string;
   valor: number;
   href: string;
-  renglones: string[];
+  renglones: Renglon[];
   variacion?: number | null;
-  alerta?: boolean;
 }) {
   const Flecha =
     variacion == null || variacion === 0
@@ -159,12 +205,14 @@ function Tarjeta({
       : variacion > 0
         ? ArrowUpRight
         : ArrowDownRight;
+  const visibles = renglones.flatMap((r) => (!r ? [] : typeof r === "string" ? [{ texto: r }] : [r]));
   return (
-    <Link
-      href={href}
-      className="tarjeta tarjeta-activa flex flex-col gap-3 p-5"
-    >
-      <h3 className="text-base font-semibold text-texto-2">{titulo}</h3>
+    <div className="tarjeta tarjeta-activa relative flex flex-col gap-3 p-5 has-[>h3>a:focus-visible]:ring-2 has-[>h3>a:focus-visible]:ring-ring">
+      <h3 className="text-base font-semibold text-texto-2">
+        <Link href={href} className="after:absolute after:inset-0 after:rounded-[inherit] focus-visible:outline-none">
+          {titulo}
+        </Link>
+      </h3>
       <p
         // Un cero se apaga: el ojo tiene que caer en lo que se movió, no en
         // «$ 0» al mismo tamaño que «$ 484.000».
@@ -186,16 +234,24 @@ function Tarjeta({
           </span>
         </p>
       )}
-      <ul className="mt-auto space-y-1 text-base text-texto-2">
-        {renglones.map((r, i) => (
-          <li
-            key={r}
-            className={`tabular ${i === 0 && alerta ? "estado-problema font-semibold" : ""}`}
-          >
-            {r}
-          </li>
-        ))}
-      </ul>
-    </Link>
+      {visibles.length > 0 && (
+        <ul className="mt-auto space-y-1 text-base text-texto-2 [font-variant-numeric:tabular-nums]">
+          {visibles.map((r) => (
+            <li key={r.texto} className={r.problema ? "estado-problema font-semibold" : ""}>
+              {r.href ? (
+                <Link
+                  href={r.href}
+                  className="relative z-10 underline decoration-current/30 underline-offset-4 hover:decoration-current"
+                >
+                  {r.texto}
+                </Link>
+              ) : (
+                r.texto
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

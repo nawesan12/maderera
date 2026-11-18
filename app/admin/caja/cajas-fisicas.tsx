@@ -131,10 +131,10 @@ export function CajasFisicas({
       )}
 
       {cajas.length === 0 ? (
+        // Sin caja, el mostrador puede leer sin internet pero no cobrar: la
+        // venta necesita un número que el cliente se pueda llevar escrito.
         <p className="px-5 py-10 text-center text-base text-muted-foreground">
-          Todavía no hay ninguna caja dada de alta. Sin caja, el mostrador puede
-          leer sin internet pero no cobrar: la venta necesita un número que el
-          cliente se pueda llevar escrito.
+          Todavía no hay ninguna caja. Sin caja, el mostrador no puede cobrar.
         </p>
       ) : (
         <ul className="divide-y divide-linea">

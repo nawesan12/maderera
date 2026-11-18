@@ -219,10 +219,7 @@ export default async function CajaPage({
                             turno. La diferencia de esa noche se calculó contra
                             otro número, y eso hay que poder verlo. */}
                         {t.tardios > 0 && (
-                          <span
-                            className="mt-0.5 block text-sm text-muted-foreground"
-                            title="Entraron movimientos después del cierre, de ventas hechas sin conexión."
-                          >
+                          <span className="mt-0.5 block text-sm text-muted-foreground">
                             +{t.tardios} después del cierre
                           </span>
                         )}
@@ -292,7 +289,6 @@ export default async function CajaPage({
           <Vacio
             icono={Store}
             titulo="No se emitió nada en el mes elegido"
-            detalle="Cambiá el mes de arriba para ver otro."
           />
         ) : (
           <div className="overflow-x-auto">

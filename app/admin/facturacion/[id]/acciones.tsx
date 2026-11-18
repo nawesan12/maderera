@@ -354,9 +354,9 @@ export function AnularComprobante({
       <input type="hidden" name="id" value={id} />
 
       <p className="text-base">
+        {/* Una factura emitida no se borra. */}
         Se emite una <strong>{nota} por el total</strong> que anula este
-        comprobante. Las dos quedan en el libro IVA: una factura emitida no se
-        borra.
+        comprobante. Las dos quedan en el libro IVA.
       </p>
 
       <input

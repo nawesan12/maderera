@@ -193,9 +193,6 @@ export default async function ReportesPage({
       {filas.length === 0 ? (
         <div className="rounded-xl border border-dashed py-16 text-center">
           <p className="text-base font-medium">No hay ventas en este período</p>
-          <p className="mt-1 text-base text-muted-foreground">
-            Probá con un período más largo.
-          </p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border">

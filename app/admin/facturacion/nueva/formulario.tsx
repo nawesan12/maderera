@@ -610,8 +610,8 @@ function BuscadorDeCliente({
           )}
           {!buscando && resultados.length === 0 && (
             <li className="px-3.5 py-2.5 text-base text-muted-foreground">
-              No hay ninguno con ese nombre. Tipeá los datos y marcá «Guardarlo
-              como cliente nuevo».
+              {/* Se tipean los datos y se marca «Guardarlo como cliente nuevo». */}
+              No hay ninguno con ese nombre.
             </li>
           )}
           {resultados.map((c) => (

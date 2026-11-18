@@ -200,7 +200,6 @@ export default async function ReposicionPage({
         <Vacio
           icono={ShoppingCart}
           titulo="No hay nada con ese filtro"
-          detalle="Probá con otra sucursal o con otra categoría."
           accion={{ texto: "Ver todo", href: "/admin/reportes/reposicion" }}
         />
       ) : (
@@ -236,8 +235,7 @@ export default async function ReposicionPage({
                   Generar orden de compra
                 </Link>
                 <span className="text-base text-muted-foreground">
-                  Con {Math.min(paraComprar.length, 40)} renglones y la cantidad
-                  sugerida. Nace en borrador.
+                  Con {Math.min(paraComprar.length, 40)} renglones
                 </span>
               </div>
             )}
@@ -262,9 +260,10 @@ export default async function ReposicionPage({
               <span className="tabular ml-2">{sinMovimiento.length}</span>
             </h2>
             <p className="mt-1 text-base text-muted-foreground">
+              {/* Son los candidatos a no recomprar; los que además llevan más de
+                  un año así aparecen en candidatos a baja. */}
               {plural(sinMovimiento.length, "medida")} sin movimiento en {dias}{" "}
-              días. Son los candidatos a no recomprar; los que además llevan más
-              de un año así aparecen en{" "}
+              días · más de un año, en{" "}
               <Link
                 href="/admin/productos/candidatos"
                 className="font-medium text-foreground underline-offset-2 hover:underline"

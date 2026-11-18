@@ -57,9 +57,9 @@ export function VentasSueltas({
             {ventas.length} venta{ventas.length > 1 ? "s" : ""} en efectivo sin
             turno
           </h2>
+          {/* Se cobraron sin conexión con la caja cerrada. */}
           <p className="text-sm">
-            Se cobraron sin conexión con la caja cerrada. La plata está en el
-            cajón; falta decir en cuál.
+            La plata está en el cajón: falta decir en qué turno.
           </p>
         </div>
       </header>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/clientes"
+	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/jsmath"
@@ -159,6 +161,16 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 	nombre, cuit, condicion, cliente := cab.nombre, cab.cuit, cab.condicion, cab.cliente
 	domicilio, obs := cab.domicilio, cab.obs
 	guardar := c["guardarComoCliente"] == "on"
+	// Cómo paga: de contado con un medio (sale con su recibo, como cualquier
+	// cobro) o a cuenta corriente. Sin el campo es cuenta corriente, que es
+	// lo que hacía siempre la factura manual.
+	comoPaga, medio, err := leerComoPaga(c)
+	if err != nil {
+		return "", err
+	}
+	if comoPaga == "cuenta_corriente" && c["comoPaga"] != "" && strings.TrimSpace(cliente) == "" && !guardar {
+		return "", errEmision("Para dejarlo en cuenta corriente elegí el cliente o guardalo como cliente nuevo.")
+	}
 	// El documento, con su dígito verificador: un CUIT mal tipeado no va a
 	// ARCA. Y una A sin CUIT salía con DocTipo 99 (consumidor final), que
 	// ARCA rechaza.
@@ -216,6 +228,7 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 		receptorCuit = &d
 	}
 	var id string
+	var recibo *cobros.ReciboEmitido
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
 		id, err = s.EmitirEnTransaccion(ctx, tx, DatosEmision{CustomerID: customerID, ReceptorNombre: nombre, ReceptorCuit: receptorCuit,
@@ -227,27 +240,64 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 		// La factura suelta a un cliente con ficha le genera la deuda (la de
 		// un pedido la maneja el pedido). En la misma transacción: el TS la
 		// anotaba después, y si fallaba quedaba la factura sin la deuda.
+		var tipo string
+		var pv, n int64
+		var total string
+		if err := tx.QueryRow(ctx, `SELECT tipo::text, punto_venta, numero, total::text FROM invoices WHERE id = $1`, id).
+			Scan(&tipo, &pv, &n, &total); err != nil {
+			return err
+		}
+		et := etiqueta(tipo, pv, n)
 		if customerID != nil {
-			var tipo string
-			var pv, n int64
-			var total string
-			if err := tx.QueryRow(ctx, `SELECT tipo::text, punto_venta, numero, total::text FROM invoices WHERE id = $1`, id).
-				Scan(&tipo, &pv, &n, &total); err != nil {
-				return err
-			}
-			et := etiqueta(tipo, pv, n)
 			if _, err := tx.Exec(ctx, `INSERT INTO account_movements (customer_id, tipo, monto, detalle, referencia, created_by_user_id)
 				VALUES ($1, 'compra', $2::numeric, $3, $3, $4)`, *customerID, jsmath.Fijo2(jsmath.Numero(total)), et, ses.UserID); err != nil {
 				return err
 			}
 		}
+		// De contado: el cobro por el total, con su recibo, en la misma
+		// transacción que la factura. Con ficha, el recibo deja el pago que
+		// cancela la compra de arriba; el efectivo entra a la caja abierta.
+		if comoPaga == "contado" {
+			r, err := cobrarConRecibo(ctx, tx, ses, id, customerID, nombre, nil, et,
+				[]cobros.Parte{{Medio: medio, Importe: jsmath.Numero(total)}})
+			if err != nil {
+				return err
+			}
+			recibo = &r
+		}
 		return s.encolarAviso(ctx, tx, id)
 	})
 	if err != nil {
+		var ec *cobros.ErrorDeCobro
+		if errors.As(err, &ec) {
+			return "", errEmision(ec.Mensaje)
+		}
 		return "", s.comoEmision(err, "fiscal.emitir", "No se pudo emitir el comprobante. Intentá de nuevo.")
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "factura", id, "Emitió un comprobante manual a "+nombre, nil)
+	if recibo != nil {
+		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCobrar, "factura", id,
+			"Cobró de contado con el recibo "+recibo.Numero+" por "+jsmath.Fijo2(recibo.Total), map[string]any{"receiptId": recibo.ReceiptID})
+	}
 	return id, nil
+}
+
+// mediosDeLaManual son los medios de la factura manual de contado, con los
+// nombres de cobros.Medio.
+var mediosDeLaManual = []cobros.Medio{"efectivo", "transferencia", "tarjeta_debito", "tarjeta_credito", "mercado_pago"}
+
+func leerComoPaga(c map[string]string) (string, cobros.Medio, error) {
+	switch c["comoPaga"] {
+	case "", "cuenta_corriente":
+		return "cuenta_corriente", "", nil
+	case "contado":
+		m := cobros.Medio(c["medio"])
+		if !slices.Contains(mediosDeLaManual, m) {
+			return "", "", errEmision("Elegí con qué paga.")
+		}
+		return "contado", m, nil
+	}
+	return "", "", errEmision("Elegí cómo paga.")
 }
 
 // cabecera es lo que dejaba el esquema de la factura manual.

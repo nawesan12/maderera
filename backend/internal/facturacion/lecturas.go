@@ -17,7 +17,10 @@ import (
 // Las lecturas de lib/dal/admin/facturacion.ts y de misComprobantes.
 
 // MediosDeContado son los que cuentan como contado para el filtro.
-var MediosDeContado = []string{"efectivo", "transferencia", "debito", "credito", "mercado_pago", "cheque"}
+// «tarjeta» es como queda en invoice_payments (medio_cobro) un cobro con
+// débito o crédito: sin ella, una factura cobrada con tarjeta no salía en el
+// filtro de contado. «debito» y «credito» no existen en el enum.
+var MediosDeContado = []string{"efectivo", "transferencia", "tarjeta", "debito", "credito", "mercado_pago", "cheque"}
 
 // Listado es ComprobanteListado.
 type Listado struct {

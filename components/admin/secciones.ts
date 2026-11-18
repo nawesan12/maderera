@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { quienEntra, type RolStaff } from "@/lib/roles";
+import { puedeEntrar, type RolStaff } from "@/lib/roles";
 import {
   Banknote,
   BarChart3,
@@ -197,10 +197,11 @@ export function seccionesPara(rol?: RolStaff | null) {
   return secciones
     .map((seccion) => ({
       ...seccion,
-      items: seccion.items.filter((item) => {
-        const permitidos = quienEntra(item.href);
-        return !permitidos || !rol || permitidos.includes(rol);
-      }),
+      // `puedeEntrar` y no la clave exacta: el menú tiene que preguntar lo
+      // mismo que pregunta la página. Vendedores y Seguimiento no tienen
+      // clave propia y heredan la de `/admin/clientes`; con la clave exacta
+      // le aparecían al depósito y al tocarlas rebotaba.
+      items: seccion.items.filter((item) => !rol || puedeEntrar(item.href, rol)),
     }))
     .filter((seccion) => seccion.items.length > 0);
 }

@@ -312,7 +312,17 @@ function FilaDePrecio({
       </td>
       <td className="px-3 py-1.5">
         <div className="flex items-center justify-end gap-1.5">
-          {fila.brecha !== null && <span className="tabular text-sm text-brand-orange">−{fila.brecha}%</span>}
+          {/* La brecha es cuánto más barato le sale al profesional. Negativa
+              es un precio profesional por encima del de lista: casi seguro un
+              error de carga, y se marca en rojo en vez de decir «−-107%». */}
+          {fila.brecha !== null &&
+            (fila.brecha >= 0 ? (
+              <span className="tabular text-sm text-brand-orange">−{fila.brecha.toString().replace(".", ",")}%</span>
+            ) : (
+              <span className="tabular estado-problema text-sm font-semibold" title="El precio profesional es más alto que el de lista">
+                +{Math.abs(fila.brecha).toString().replace(".", ",")}%
+              </span>
+            ))}
           {profesionalId && (
             <PrecioEditable variantId={fila.variantId} priceListId={profesionalId} valor={fila.precioProfesional} />
           )}

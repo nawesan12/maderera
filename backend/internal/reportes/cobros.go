@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
+	"mjbj/internal/cobros"
 	"mjbj/internal/jsmath"
 )
 
@@ -44,10 +47,54 @@ func mayorFecha(a time.Time, b *time.Time) time.Time {
 
 func entre(t, desde, hasta time.Time) bool { return !t.Before(desde) && !t.After(hasta) }
 
+// repartoHasta recorre las cuentas hasta `hasta` (cobros.RepartirCobros) y
+// fija el reparto de los recibos de antes que todavía no lo tenían: desde la
+// primera vez que se calcula, queda guardado y un cierre ya mandado no
+// cambia.
+func (s *Servicio) repartoHasta(ctx context.Context, hasta time.Time) (cobros.ResultadoDelReparto, error) {
+	ev, err := cobros.CargarEventos(ctx, s.pool, hasta, "")
+	if err != nil {
+		return cobros.ResultadoDelReparto{}, err
+	}
+	res := cobros.RepartirCobros(ev)
+	if len(res.Calculados) > 0 {
+		lote := &pgx.Batch{}
+		for _, id := range res.Calculados {
+			r := res.Recibos[id]
+			lote.Queue(`UPDATE receipts SET reparto_deudores = $2::numeric, reparto_anticipo = $3::numeric, reparto_b = $4::numeric
+				WHERE id = $1 AND reparto_deudores IS NULL`, id, jsmath.Fijo2(r.Deudores), jsmath.Fijo2(r.Anticipo), jsmath.Fijo2(r.B))
+		}
+		if err := s.pool.SendBatch(ctx, lote).Close(); err != nil {
+			return res, err
+		}
+	}
+	return res, nil
+}
+
 // asientosDeCobro son los cobros del período, con idesde/ihasta ya en el
 // mes argentino (son instantes).
+//
+// Los recibos se asientan con su reparto entre los circuitos
+// (cobros.Reparto): lo que cancela facturas con CAE contra Deudores, la seña
+// contra Anticipos de clientes y lo que paga ventas sin factura en el
+// circuito B. Cuando sale la factura de una seña, el anticipo se le aplica.
 func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
 	asientos := []Asiento{}
+	reparto, err := s.repartoHasta(ctx, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	for _, ap := range reparto.Aplicaciones {
+		if !entre(ap.Fecha, idesde, ihasta) {
+			continue
+		}
+		e := ap.Evento
+		concepto := "Aplica anticipo · " + NombreComprobante(e.TipoComprobante) + " " + NumeroFormateado(e.PuntoVenta, e.Numero) + " · " + e.Cliente
+		if ap.Importe < 0 {
+			concepto = "Desaplica anticipo · anulación del recibo " + e.Cliente
+		}
+		asientos = append(asientos, AsientoDeAplicacion(ap.Fecha, concepto, ap.Importe))
+	}
 
 	// 1. Los cobros de una factura de antes de los recibos.
 	rs, err := s.pool.Query(ctx, `
@@ -85,10 +132,10 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		return nil, err
 	}
 	type recibo struct {
-		numero, cliente string
-		emitido         time.Time
-		anulado         *time.Time
-		partes          []ParteDeRecibo
+		id, numero, cliente string
+		emitido             time.Time
+		anulado             *time.Time
+		partes              []ParteDeRecibo
 	}
 	var recibos []*recibo
 	porID := map[string]*recibo{}
@@ -103,7 +150,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		}
 		r, ok := porID[id]
 		if !ok {
-			r = &recibo{numero: numero, cliente: cliente, emitido: emitido, anulado: anulado}
+			r = &recibo{id: id, numero: numero, cliente: cliente, emitido: emitido, anulado: anulado}
 			porID[id] = r
 			recibos = append(recibos, r)
 		}
@@ -114,19 +161,26 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		return nil, err
 	}
 	for _, r := range recibos {
-		if entre(r.emitido, idesde, ihasta) {
-			asientos = append(asientos, AsientoDeRecibo(ReciboAAsentar{Fecha: r.emitido, Numero: r.numero, Cliente: r.cliente, Partes: r.partes}))
+		rep, ok := reparto.Recibos[r.id]
+		if !ok {
+			continue
 		}
+		if entre(r.emitido, idesde, ihasta) {
+			asientos = append(asientos, AsientosDeRecibo(ReciboAAsentar{Fecha: r.emitido, Numero: r.numero, Cliente: r.cliente,
+				Partes: r.partes, Reparto: &rep})...)
+		}
+		// La anulación, con el mismo reparto al revés.
 		if r.anulado != nil && entre(*r.anulado, idesde, ihasta) {
-			asientos = append(asientos, AsientoDeRecibo(ReciboAAsentar{Fecha: *r.anulado, Numero: r.numero, Cliente: r.cliente,
-				Partes: r.partes, Anulacion: true}))
+			asientos = append(asientos, AsientosDeRecibo(ReciboAAsentar{Fecha: *r.anulado, Numero: r.numero, Cliente: r.cliente,
+				Partes: r.partes, Anulacion: true, Reparto: &rep})...)
 		}
 	}
 
 	// 3. El tramo de un reintegro parcial de un pago con recibo: solo el que
-	// devolvió deuda a la cuenta (con movimiento), igual que la cuenta.
+	// devolvió deuda a la cuenta (con movimiento), igual que la cuenta. Vuelve
+	// a cada circuito en la proporción del reparto del recibo.
 	rs, err = s.pool.Query(ctx, `
-		SELECT f.created_at, f.importe, r.numero, r.recibido_de, x.medio::text
+		SELECT f.created_at, f.importe, r.numero, r.recibido_de, x.medio::text, r.id
 		FROM payment_refunds f
 		JOIN receipt_parts x ON x.payment_id = f.payment_id
 		JOIN receipts r ON r.id = x.receipt_id
@@ -138,13 +192,18 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	for rs.Next() {
 		var fecha time.Time
 		var importe jsmath.Num
-		var numero, cliente, medio string
-		if err := rs.Scan(&fecha, &importe, &numero, &cliente, &medio); err != nil {
+		var numero, cliente, medio, recibo string
+		if err := rs.Scan(&fecha, &importe, &numero, &cliente, &medio, &recibo); err != nil {
 			rs.Close()
 			return nil, err
 		}
-		asientos = append(asientos, AsientoDeReintegro(CobroAAsentar{Fecha: fecha, Comprobante: "parcial del recibo " + numero,
-			Cliente: cliente, Importe: importe.F(), Medio: medio}))
+		c := CobroAAsentar{Fecha: fecha, Comprobante: "parcial del recibo " + numero, Cliente: cliente, Importe: importe.F(), Medio: medio}
+		rep, ok := reparto.Recibos[recibo]
+		if !ok {
+			asientos = append(asientos, AsientoDeReintegro(c))
+			continue
+		}
+		asientos = append(asientos, AsientosDeTramo(c, cobros.TramoPorCircuito(rep, importe.F()))...)
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {

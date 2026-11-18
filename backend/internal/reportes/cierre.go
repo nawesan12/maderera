@@ -47,7 +47,10 @@ func numero(n jsmath.Num) float64 { return n.F() }
 
 // AsientosDelPeriodo es asientosDelPeriodo: las ventas (sin borradores), los
 // cobros (asientosDeCobro), las compras, los pagos a proveedores y los gastos, en orden de
-// fecha.
+// fecha. Vienen los dos circuitos, cada asiento con el suyo: el CSV del
+// estudio lleva solo el blanco (CsvAsientos). Antes los gastos y pagos «en
+// negro» y los cobros de ventas sin factura entraban a los asientos de este
+// CUIT.
 func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Time) ([]Asiento, error) {
 	asientos := []Asiento{}
 	idesde, ihasta := instantes(desde, hasta)
@@ -111,7 +114,7 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 	}
 
 	rs, err = s.pool.Query(ctx, `
-		SELECT p.fecha, s.nombre, p.referencia, p.total, p.neto, p.medio, p.anulado_at
+		SELECT p.fecha, s.nombre, p.referencia, p.total, p.neto, p.medio, p.anulado_at, p.circuito::text
 		FROM supplier_payments p JOIN suppliers s ON s.id = p.supplier_id
 		WHERE (p.fecha >= $1 AND p.fecha <= $2) OR (p.anulado_at >= $1 AND p.anulado_at <= $2)
 		ORDER BY p.fecha`, idesde, ihasta)
@@ -121,15 +124,20 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 	for rs.Next() {
 		var fecha time.Time
 		var anulado *time.Time
-		var proveedor, medio string
+		var proveedor, medio, circuito string
 		var referencia *string
 		var total, neto jsmath.Num
-		if err := rs.Scan(&fecha, &proveedor, &referencia, &total, &neto, &medio, &anulado); err != nil {
+		if err := rs.Scan(&fecha, &proveedor, &referencia, &total, &neto, &medio, &anulado, &circuito); err != nil {
 			rs.Close()
 			return nil, err
 		}
 		pago := AsientoDePagoAProveedor(PagoAAsentar{Fecha: fecha, Proveedor: proveedor, Referencia: referencia,
 			Total: total.F(), Retenido: total.F() - neto.F(), Medio: medio})
+		// El pago marcado «en negro» no es de este CUIT: va al CSV del
+		// circuito B, no al del estudio.
+		if circuito == CircuitoNegro {
+			pago.Circuito = CircuitoNegro
+		}
 		// Como el recibo anulado: el pago queda en su mes y la anulación va
 		// con su contraasiento en la fecha en que se anuló, así un mes ya
 		// cerrado no cambia.
@@ -137,7 +145,9 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 			asientos = append(asientos, pago)
 		}
 		if anulado != nil && entre(*anulado, idesde, ihasta) {
-			asientos = append(asientos, asiento(*anulado, "Anulación · "+pago.Concepto, invertir(pago.Renglones)))
+			anulacion := asiento(*anulado, "Anulación · "+pago.Concepto, invertir(pago.Renglones))
+			anulacion.Circuito = pago.Circuito
+			asientos = append(asientos, anulacion)
 		}
 	}
 	rs.Close()
@@ -146,7 +156,7 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 	}
 
 	rs, err = s.pool.Query(ctx, `
-		SELECT fecha, descripcion, categoria::text, importe, medio::text
+		SELECT fecha, descripcion, categoria::text, importe, medio::text, circuito::text
 		FROM expenses WHERE fecha >= $1 AND fecha <= $2 ORDER BY fecha`, desde, hasta)
 	if err != nil {
 		return nil, err
@@ -154,12 +164,17 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 	for rs.Next() {
 		var g GastoAAsentar
 		var importe jsmath.Num
-		if err := rs.Scan(&g.Fecha, &g.Descripcion, &g.Categoria, &importe, &g.Medio); err != nil {
+		var circuito string
+		if err := rs.Scan(&g.Fecha, &g.Descripcion, &g.Categoria, &importe, &g.Medio, &circuito); err != nil {
 			rs.Close()
 			return nil, err
 		}
 		g.Importe = importe.F()
-		asientos = append(asientos, AsientoDeGasto(g))
+		gasto := AsientoDeGasto(g)
+		if circuito == CircuitoNegro {
+			gasto.Circuito = CircuitoNegro
+		}
+		asientos = append(asientos, gasto)
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {
@@ -206,6 +221,62 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 	if sinFactura > 0 {
 		out = append(out, PendienteDelCierre{"facturas", "Recepciones sin factura de compra",
 			"Entró la mercadería pero falta el papel: ese IVA todavía no se computa como crédito.", sinFactura, "/admin/compras/facturas"})
+	}
+	mas, err := s.pendientesDeLosCircuitos(ctx, desde, hasta)
+	if err != nil {
+		return nil, err
+	}
+	return append(out, mas...), nil
+}
+
+// pendientesDeLosCircuitos son los que dejó la separación de los circuitos
+// y la fecha de hoy al pedir el CAE:
+//
+//   - **Autorizados fuera de su mes**: un comprobante emitido en un mes y
+//     autorizado en otro sale con la fecha del día (facturacion.alDia), y la
+//     venta pasa a este mes. Es informativo: que el contador lo vea.
+//   - **Pagos en negro de facturas en blanco**: el pago B no entra al CSV
+//     del estudio, y la factura de compra que cancela deja Proveedores
+//     abierto. Cómo se asienta lo decide el contador.
+//   - **Deudores en negativo**: clientes a los que el CSV les deja Deudores
+//     a favor (una nota de crédito sobre algo ya cobrado, una retención sin
+//     factura detrás). El saldo de Deudores tiene que ser el de la cuenta
+//     corriente facturada.
+func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta time.Time) ([]PendienteDelCierre, error) {
+	idesde, ihasta := instantes(desde, hasta)
+	var fueraDeMes, pagosB int
+	if err := s.pool.QueryRow(ctx, `
+		SELECT
+		  (SELECT count(*)::int FROM invoices WHERE `+conCae+` AND fecha_emision >= $1 AND fecha_emision <= $2
+		     AND fecha_emision_original < $1),
+		  (SELECT count(*)::int FROM supplier_payments p WHERE p.circuito = 'negro' AND p.anulado_at IS NULL
+		     AND p.fecha >= $1 AND p.fecha <= $2
+		     AND EXISTS (SELECT 1 FROM supplier_payment_allocations a WHERE a.payment_id = p.id))`, idesde, ihasta).
+		Scan(&fueraDeMes, &pagosB); err != nil {
+		return nil, err
+	}
+	reparto, err := s.repartoHasta(ctx, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	negativos := 0
+	for _, d := range reparto.Deudores {
+		if d < -0.01 {
+			negativos++
+		}
+	}
+	out := []PendienteDelCierre{}
+	if fueraDeMes > 0 {
+		out = append(out, PendienteDelCierre{"fuera-de-mes", "Autorizados fuera de su mes",
+			"Se emitieron en un mes anterior y ARCA los autorizó con fecha de este.", fueraDeMes, "/admin/facturacion"})
+	}
+	if pagosB > 0 {
+		out = append(out, PendienteDelCierre{"pagos-b", "Pagos en negro de facturas en blanco",
+			"No van al archivo del estudio y la factura de compra queda abierta en Proveedores.", pagosB, "/admin/compras/pagos"})
+	}
+	if negativos > 0 {
+		out = append(out, PendienteDelCierre{"deudores", "Clientes con Deudores en negativo",
+			"Cobros o notas de crédito sin factura con CAE detrás.", negativos, "/admin/clientes"})
 	}
 	return out, nil
 }

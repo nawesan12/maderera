@@ -99,7 +99,7 @@ paths:
   /api/v1/admin/cierre/asientos:
     get:
       operationId: AsientosDelPeriodo
-      parameters: [{ $ref: "#/components/parameters/Mes" }]
+      parameters: [{ $ref: "#/components/parameters/Mes" }, { $ref: "#/components/parameters/Circuito" }]
       responses:
         "200":
           description: Los asientos del mes en orden de fecha, cada uno con si balancea
@@ -109,7 +109,7 @@ paths:
   /api/v1/admin/cierre/asientos-csv:
     get:
       operationId: AsientosCsv
-      parameters: [{ $ref: "#/components/parameters/Mes" }]
+      parameters: [{ $ref: "#/components/parameters/Mes" }, { $ref: "#/components/parameters/Circuito" }]
       responses:
         "200":
           description: Los asientos del mes en CSV, un renglón por línea
@@ -239,6 +239,13 @@ components:
     RubroProducto: { name: rubro, in: query, description: El slug de la subcategoría, schema: { type: string } }
     SucursalSlug: { name: sucursal, in: query, description: casa-central, aserradero o todos, schema: { type: string } }
     Mes: { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso), schema: { type: string } }
+    Circuito:
+      name: circuito
+      in: query
+      description: >-
+        blanco (si falta) son los asientos del estudio; negro, los del circuito B: los gastos y pagos marcados así y la
+        parte de los recibos que paga ventas sin factura. El CSV del B se llama asientos-B-aaaa-mm.csv.
+      schema: { type: string, enum: [blanco, negro] }
   schemas:
     ReporteFila:
       type: object
@@ -300,6 +307,7 @@ components:
         fecha: { type: string, format: date-time }
         concepto: { type: string }
         balancea: { type: boolean }
+        circuito: { type: string, enum: [negro], description: "Solo en los del circuito B" }
         renglones:
           type: array
           items:

@@ -408,6 +408,11 @@ func TestCierreAsientaLosCobrosDesdeLosRecibos(t *testing.T) {
 		}
 		return id
 	}
+	// Lo que el cliente debe facturado: el cobro de la ficha lo cancela
+	// entero contra Deudores. Sin esto el recibo sería del circuito B
+	// (TestReciboPorCircuito).
+	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, customer_id)
+		values ('factura_a', 3, 199, 'Pérez SRL', 826.45, 173.55, 0, 0, 0, 1000, 'autorizada', '2026-10-01T15:00:00Z', '76123456789011', $1)`, cliente)
 	// Cobro de cuenta corriente desde la ficha, partido en cuatro medios.
 	recibo("REC-0001", "panel", 1000, "2026-10-10T15:00:00Z", nil,
 		[2]any{"efectivo", 300}, [2]any{"cheque", 500}, [2]any{"retencion", 50}, [2]any{"transferencia", 150})
@@ -419,8 +424,8 @@ func TestCierreAsientaLosCobrosDesdeLosRecibos(t *testing.T) {
 	// El 1.º de octubre a las 0:30 UTC es 30 de septiembre en Buenos Aires: no es de octubre.
 	recibo("REC-0004", "panel", 40, "2026-10-01T00:30:00Z", nil, [2]any{"efectivo", 40})
 	// El cobro de una factura con recibo: un asiento, no dos.
-	fac := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae)
-		values ('factura_a', 3, 200, 'Pérez SRL', 1000, 210, 0, 0, 0, 1210, 'autorizada', '2026-10-05T15:00:00Z', '76123456789012') returning id`)
+	fac := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, customer_id)
+		values ('factura_a', 3, 200, 'Pérez SRL', 1000, 210, 0, 0, 0, 1210, 'autorizada', '2026-10-05T15:00:00Z', '76123456789012', $1) returning id`, cliente)
 	rf := recibo("REC-0005", "factura", 1210, "2026-10-06T15:00:00Z", nil, [2]any{"efectivo", 1210})
 	e.exec(t, `insert into invoice_payments (invoice_id, medio, monto, receipt_id, fecha) values ($1, 'efectivo', 1210, $2, '2026-10-06T15:00:00Z')`, fac, rf)
 
@@ -470,7 +475,10 @@ func TestCierreAsientaLosCobrosDesdeLosRecibos(t *testing.T) {
 	if a := buscarAsiento(asientos, "Recibo REC-0002"); a != nil {
 		t.Errorf("el recibo de septiembre no es de octubre: %+v", a)
 	}
-	if a := buscarAsiento(asientos, "Anulación del recibo REC-0002"); a == nil || a.Renglones[1] != renglon(Cuentas.Deudores, 200, 0) {
+	// El de septiembre no tenía nada facturado detrás: fue al B, y su
+	// anulación también.
+	if a := buscarAsiento(asientos, "Anulación del recibo REC-0002"); a == nil || a.Circuito != CircuitoNegro ||
+		a.Renglones[1] != renglon(Cuentas.VentasSinFactura, 200, 0) {
 		t.Errorf("el contraasiento de la anulación: %+v", a)
 	}
 	if buscarAsiento(asientos, "Recibo REC-0003") == nil || buscarAsiento(asientos, "Recibo REC-0004") != nil {
@@ -486,12 +494,16 @@ func TestCierreAsientaLosCobrosDesdeLosRecibos(t *testing.T) {
 	if a := buscarAsiento(asientos, "Reintegro Factura B 0003-00000202"); a == nil || a.Renglones[1] != renglon(Cuentas.ValoresADepositar, 0, 400) {
 		t.Errorf("la venta anulada: %+v", a)
 	}
-	if a := buscarAsiento(asientos, "Reintegro parcial del recibo REC-0006"); a == nil || a.Renglones[0] != renglon(Cuentas.Deudores, 25, 0) {
+	// El recibo de Mercado Pago fue al B (no había nada facturado): su
+	// reintegro parcial vuelve al B.
+	if a := buscarAsiento(asientos, "Reintegro parcial del recibo REC-0006"); a == nil || a.Circuito != CircuitoNegro ||
+		a.Renglones[0] != renglon(Cuentas.VentasSinFactura, 25, 0) {
 		t.Errorf("el reintegro parcial: %+v", a)
 	}
-	// Los cobros bajan 2945 (recibos: 1000 + 70 + 1210 + 90 − 200 − 25;
-	// ventas: 800 + 400 − 400) y las tres facturas suben 2410.
-	if neto, n := deudores(asientos); neto != 535 {
+	// Deudores: las cuatro facturas suben 3410 (1000 + 1210 + 800 + 400) y
+	// los cobros blancos bajan 3010 (recibos: 1210 + 1000; ventas: 800 +
+	// 400 − 400). Los recibos sin nada facturado detrás no lo tocan.
+	if neto, n := deudores(asientos); neto != -400 {
 		t.Errorf("Deudores baja %v (en %d asientos de cobro)", neto, n)
 	}
 	for _, a := range asientos {

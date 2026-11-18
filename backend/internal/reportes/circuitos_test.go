@@ -1,0 +1,275 @@
+package reportes
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"mjbj/internal/cobros"
+)
+
+// recibir es un recibo como lo deja cobros.EmitirRecibo: con sus partes y el
+// reparto fijado en el momento (FijarReparto, con lo que había hasta ahí).
+func (e *entorno) recibir(t *testing.T, cliente *string, numero, cuando string, partes ...[2]any) string {
+	t.Helper()
+	total := 0.0
+	for _, p := range partes {
+		total += p[1].(float64)
+	}
+	id := e.id(t, `insert into receipts (numero, customer_id, recibido_de, total, origen, created_at) values ($1, $2, 'Cliente', $3, 'panel', $4) returning id`,
+		numero, cliente, total, cuando)
+	for i, p := range partes {
+		e.exec(t, `insert into receipt_parts (receipt_id, medio, importe, orden) values ($1, $2, $3, $4)`, id, p[0], p[1], i)
+	}
+	if err := pgx.BeginFunc(context.Background(), e.pool, func(tx pgx.Tx) error {
+		_, err := cobros.FijarReparto(context.Background(), tx, id)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func (e *entorno) facturaConCae(t *testing.T, cliente *string, numero int, total float64, cuando string, pedido *string) string {
+	t.Helper()
+	neto := redondear(total / 1.21)
+	return e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado,
+		fecha_emision, cae, customer_id, order_id) values ('factura_b', 3, $1, 'Cliente', $2, $3, 0, 0, 0, $4, 'autorizada', $5, '7612', $6, $7) returning id`,
+		numero, neto, redondear(total-neto), total, cuando, cliente, pedido)
+}
+
+func (e *entorno) asientosDe(t *testing.T, periodo string) []Asiento {
+	t.Helper()
+	p := PeriodoDelCierre(periodo, ahoraDePrueba)
+	a, err := e.s.AsientosDelPeriodo(context.Background(), p.Desde, p.Hasta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range a {
+		if !x.Balancea {
+			t.Errorf("no cierra: %+v", x)
+		}
+	}
+	return a
+}
+
+func cuenta(asientos []Asiento, cuenta string) float64 {
+	neto := 0.0
+	for _, a := range asientos {
+		for _, r := range a.Renglones {
+			if r.Cuenta == cuenta {
+				neto += r.Debe - r.Haber
+			}
+		}
+	}
+	return redondear(neto)
+}
+
+// **El CSV del estudio mezclaba el circuito B.** Los gastos y pagos «en
+// negro» entraban a los asientos de este CUIT, y los recibos que cobraban
+// ventas sin factura iban contra un Deudores que nunca se debitó. Ahora cada
+// recibo se reparte: lo facturado con CAE a Deudores, la seña a Anticipos de
+// clientes (y se aplica cuando sale la factura) y lo que paga ventas sin
+// factura al B. Las retenciones, siempre blancas.
+func TestReciboPorCircuito(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	cliente := func(nombre string) *string {
+		id := e.id(t, `insert into customers (nombre) values ($1) returning id`, nombre)
+		return &id
+	}
+	// Un gasto y un pago a proveedor en negro, y los mismos en blanco.
+	prov := e.id(t, `insert into suppliers (nombre) values ('Maderas del Sur') returning id`)
+	e.exec(t, `insert into expenses (fecha, categoria, descripcion, importe, medio, circuito) values
+		('2026-10-03T00:00:00Z', 'flete', 'en blanco', 100, 'efectivo', 'blanco'), ('2026-10-04T00:00:00Z', 'flete', 'en negro', 70, 'efectivo', 'negro')`)
+	e.exec(t, `insert into supplier_payments (supplier_id, total, neto, medio, referencia, fecha, circuito) values
+		($1, 300, 300, 'transferencia', 'TR blanco', '2026-10-08T15:00:00Z', 'blanco'), ($1, 200, 200, 'efectivo', 'en mano', '2026-10-09T15:00:00Z', 'negro')`, prov)
+
+	// Una venta sin factura: el recibo es todo B.
+	sinFactura := cliente("Sin factura")
+	e.pedido(t, "M-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 2, 12, 0, 0, 0, Argentina), sinFactura)
+	e.recibir(t, sinFactura, "R-B", "2026-10-05T15:00:00Z", [2]any{"efectivo", 500.0})
+
+	// Una factura de 1000 y una venta sin factura de 400 en el mismo
+	// recibo, con una retención de 50: 1000 a Deudores (la retención
+	// adentro) y 400 al B.
+	mixto := cliente("Mixto")
+	e.facturaConCae(t, mixto, 10, 1000, "2026-10-06T15:00:00Z", nil)
+	mixtoRecibo := e.recibir(t, mixto, "R-MIX", "2026-10-07T15:00:00Z", [2]any{"retencion", 50.0}, [2]any{"efectivo", 750.0}, [2]any{"transferencia", 600.0})
+
+	// La seña: un pedido abierto, la seña antes de la factura, la factura
+	// con CAE y el saldo. Todo termina en Deudores, nada en el B.
+	sena := cliente("Seña")
+	pedido := e.pedido(t, "P-1", e.central, "pendiente", "mostrador", time.Date(2026, 10, 10, 12, 0, 0, 0, Argentina), sena)
+	e.recibir(t, sena, "R-SEÑA", "2026-10-11T15:00:00Z", [2]any{"transferencia", 300.0})
+	e.facturaConCae(t, sena, 11, 1000, "2026-10-20T15:00:00Z", &pedido)
+	e.recibir(t, sena, "R-SALDO", "2026-10-25T15:00:00Z", [2]any{"transferencia", 700.0})
+
+	// La retención con excedente y sin nada facturado: la retención es
+	// blanca igual, el resto B.
+	ret := cliente("Retención")
+	e.recibir(t, ret, "R-RET", "2026-10-26T15:00:00Z", [2]any{"retencion", 30.0}, [2]any{"efectivo", 70.0})
+
+	// Se anula el mixto en octubre: el mismo reparto, al revés.
+	e.exec(t, `update receipts set estado = 'anulado', anulado_at = '2026-10-28T15:00:00Z' where id = $1`, mixtoRecibo)
+
+	octubre := e.asientosDe(t, "2026-10")
+	blanco, b := DelCircuito(octubre, "blanco"), DelCircuito(octubre, CircuitoNegro)
+	conceptos := func(as []Asiento) string {
+		var c []string
+		for _, a := range as {
+			c = append(c, a.Concepto)
+		}
+		return strings.Join(c, " | ")
+	}
+	for _, x := range []string{"en negro", "en mano", "Recibo R-B"} {
+		if strings.Contains(conceptos(blanco), x) {
+			t.Errorf("%q en el CSV del estudio: %s", x, conceptos(blanco))
+		}
+		if !strings.Contains(conceptos(b), x) {
+			t.Errorf("%q no está en el B: %s", x, conceptos(b))
+		}
+	}
+	mix := buscarAsiento(blanco, "Recibo R-MIX")
+	if mix == nil || mix.Renglones[0] != renglon(Cuentas.RetencionesSufridas, 50, 0) ||
+		mix.Renglones[len(mix.Renglones)-1] != renglon(Cuentas.Deudores, 0, 1000) {
+		t.Fatalf("el mixto en blanco: %+v", mix)
+	}
+	if mb := buscarAsiento(b, "Recibo R-MIX"); mb == nil || mb.Renglones[len(mb.Renglones)-1] != renglon(Cuentas.VentasSinFactura, 0, 400) {
+		t.Fatalf("el mixto en B: %+v", mb)
+	}
+	if an := buscarAsiento(b, "Anulación del recibo R-MIX"); an == nil || an.Renglones[len(an.Renglones)-1] != renglon(Cuentas.VentasSinFactura, 400, 0) {
+		t.Fatalf("la anulación en B: %+v", an)
+	}
+	if an := buscarAsiento(blanco, "Anulación del recibo R-MIX"); an == nil || an.Renglones[len(an.Renglones)-1] != renglon(Cuentas.Deudores, 1000, 0) {
+		t.Fatalf("la anulación en blanco: %+v", an)
+	}
+	if ap := buscarAsiento(blanco, "Aplica anticipo"); ap == nil || ap.Renglones[0] != renglon(Cuentas.AnticiposDeClientes, 300, 0) {
+		t.Fatalf("la seña aplicada: %+v", ap)
+	}
+	if r := buscarAsiento(blanco, "Recibo R-RET"); r == nil || len(r.Renglones) != 2 || r.Renglones[1] != renglon(Cuentas.Deudores, 0, 30) {
+		t.Fatalf("la retención: %+v", r)
+	}
+	// Anticipos cierra en cero; Deudores queda con lo que de verdad se debe
+	// facturado: la factura de Mixto (su recibo se anuló) menos la retención
+	// sin factura de Retención.
+	if a := cuenta(blanco, Cuentas.AnticiposDeClientes); a != 0 {
+		t.Errorf("Anticipos: %v", a)
+	}
+	if d := cuenta(blanco, Cuentas.Deudores); d != 970 {
+		t.Errorf("Deudores: %v", d)
+	}
+	if strings.Contains(conceptos(b), "Seña") || buscarAsiento(b, "Recibo R-SEÑA") != nil {
+		t.Errorf("la seña no es B: %s", conceptos(b))
+	}
+
+	// El CSV: el del estudio sin el B, y el B aparte, con la B en el nombre.
+	_, csv, h := pedir(t, adm, e.u+"cierre/asientos-csv?periodo=2026-10")
+	if strings.Contains(csv, "en negro") || !strings.Contains(h.Get("Content-Disposition"), "asientos-2026-10.csv") {
+		t.Errorf("csv del estudio: %s", csv)
+	}
+	_, csv, h = pedir(t, adm, e.u+"cierre/asientos-csv?periodo=2026-10&circuito=negro")
+	if !strings.Contains(csv, "en negro") || strings.Contains(csv, "en blanco") || !strings.Contains(h.Get("Content-Disposition"), "asientos-B-2026-10.csv") {
+		t.Errorf("csv del B: %s %v", csv, h)
+	}
+	_, lista, _ := pedir(t, adm, e.u+"cierre/asientos?periodo=2026-10")
+	if strings.Contains(lista, "en negro") {
+		t.Errorf("la lista del cierre muestra el B: %s", lista)
+	}
+
+	// La deuda de Retención queda a favor en Deudores: se avisa.
+	_, pend, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	if !strings.Contains(pend, `"clave":"deudores"`) {
+		t.Errorf("pendientes: %s", pend)
+	}
+}
+
+// **Lo que octubre le mandó al estudio no cambia en noviembre.** El reparto
+// de cada recibo se fija al emitirlo: una nota de crédito, una factura nueva
+// o una baja del mes siguiente no lo recalculan. Y un comprobante emitido en
+// octubre y autorizado en noviembre (con la fecha de hoy) no aparece en
+// octubre, aparece una sola vez en noviembre y se avisa en su cierre.
+func TestOctubreNoCambiaEnNoviembre(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	cli := e.id(t, `insert into customers (nombre) values ('Gómez') returning id`)
+	e.facturaConCae(t, &cli, 20, 1000, "2026-10-05T15:00:00Z", nil)
+	e.recibir(t, &cli, "R-1", "2026-10-06T15:00:00Z", [2]any{"efectivo", 600.0})
+	// Emitido en octubre, sin CAE.
+	tarde := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision,
+		customer_id, created_at) values ('factura_b', 3, 21, 'Gómez', 826.45, 173.55, 0, 0, 0, 1000, 'rechazada', '2026-10-20T15:00:00Z', $1,
+		'2026-10-20T15:00:00Z') returning id`, cli)
+	csv := func(periodo string) string {
+		_, b, _ := pedir(t, adm, e.u+"cierre/asientos-csv?periodo="+periodo)
+		return b
+	}
+	antes := csv("2026-10")
+	if strings.Contains(antes, "00000021") {
+		t.Fatalf("sin CAE no va: %s", antes)
+	}
+
+	// Noviembre: una nota de crédito, una factura nueva, un recibo y el de
+	// octubre que sale con la fecha del día.
+	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, customer_id)
+		values ('nota_credito_b', 3, 1, 'Gómez', 330.58, 69.42, 0, 0, 0, 400, 'autorizada', '2026-11-02T15:00:00Z', '7699', $1)`, cli)
+	e.facturaConCae(t, &cli, 22, 500, "2026-11-03T15:00:00Z", nil)
+	e.recibir(t, &cli, "R-2", "2026-11-04T15:00:00Z", [2]any{"efectivo", 900.0})
+	e.exec(t, `update invoices set cae = '7700', estado = 'autorizada', fecha_emision_original = fecha_emision, fecha_emision = '2026-11-05T15:00:00Z' where id = $1`, tarde)
+
+	if despues := csv("2026-10"); despues != antes {
+		t.Fatalf("octubre cambió:\n%s\n---\n%s", antes, despues)
+	}
+	nov := csv("2026-11")
+	if strings.Count(nov, `;"Factura B 0003-00000021 · Gómez";`) != 3 {
+		t.Errorf("el autorizado tarde en noviembre: %s", nov)
+	}
+	_, pend, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-11")
+	if !strings.Contains(pend, `"clave":"fuera-de-mes"`) {
+		t.Errorf("pendientes de noviembre: %s", pend)
+	}
+	// Deudores de punta a punta: lo de octubre más lo de noviembre es lo
+	// que queda facturado y sin cobrar (1000 − 600 − 400 + 500 + 1000 − 900).
+	// Los 400 del recibo de noviembre que pasaban lo facturado quedaron de
+	// anticipo (el de octubre esperaba el CAE) y se aplicaron al autorizarse.
+	oct, nv := e.asientosDe(t, "2026-10"), e.asientosDe(t, "2026-11")
+	if d := redondear(cuenta(oct, Cuentas.Deudores) + cuenta(nv, Cuentas.Deudores)); d != 600 {
+		t.Errorf("Deudores al 30/11: %v", d)
+	}
+}
+
+// Un pago en negro imputado a una factura de compra en blanco deja
+// Proveedores abierto en el CSV del estudio: se avisa en el cierre.
+func TestPagoBDeFacturaBlanca(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	prov := e.id(t, `insert into suppliers (nombre) values ('Aserradero Norte') returning id`)
+	f := e.id(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, neto, iva21, iva105, iva27, percepciones, total, fecha_emision)
+		values ($1, 'factura_a', 1, 1, 1000, 210, 0, 0, 0, 1210, '2026-10-02T00:00:00Z') returning id`, prov)
+	pago := e.id(t, `insert into supplier_payments (supplier_id, total, neto, medio, fecha, circuito) values ($1, 1210, 1210, 'efectivo', '2026-10-09T15:00:00Z', 'negro') returning id`, prov)
+	e.exec(t, `insert into supplier_payment_allocations (payment_id, purchase_invoice_id, importe) values ($1, $2, 1210)`, pago, f)
+	_, pend, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	if !strings.Contains(pend, `"clave":"pagos-b"`) {
+		t.Errorf("pendientes: %s", pend)
+	}
+}
+
+func TestPartesPorCircuito(t *testing.T) {
+	partes := []ParteDeRecibo{{"retencion", 50}, {"efectivo", 750}, {"transferencia", 600}}
+	bl, b := PartesPorCircuito(partes, cobros.Reparto{Deudores: 1000, B: 400})
+	suma := func(p []ParteDeRecibo) float64 {
+		s := 0.0
+		for _, x := range p {
+			s += x.Importe
+		}
+		return redondear(s)
+	}
+	if suma(bl) != 1000 || suma(b) != 400 || bl[0] != (ParteDeRecibo{"retencion", 50}) {
+		t.Fatalf("%+v %+v", bl, b)
+	}
+	if bl, b := PartesPorCircuito([]ParteDeRecibo{{"efectivo", 100}}, cobros.Reparto{B: 100}); len(bl) != 0 || suma(b) != 100 {
+		t.Fatalf("todo B: %+v %+v", bl, b)
+	}
+}

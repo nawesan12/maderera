@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"mjbj/internal/cobros"
 	"mjbj/internal/csvexcel"
 	"mjbj/internal/jsmath"
 )
@@ -20,7 +21,12 @@ var Cuentas = struct {
 	Caja, Banco, Deudores, IvaCredito, RetencionesSufridas, Mercaderias         string
 	Proveedores, IvaDebito, PercepcionesIibb, RetencionesAPagar, Ventas, Gastos string
 	ValoresADepositar                                                           string
-}{"1.1.01", "1.1.02", "1.1.03", "1.1.05", "1.1.06", "1.2.01", "2.1.01", "2.1.03", "2.1.04", "2.1.05", "4.1.01", "5.1.01", "1.1.04"}
+	// AnticiposDeClientes: lo cobrado antes de la factura (cobros.Reparto).
+	AnticiposDeClientes string
+	// VentasSinFactura: solo en el CSV del circuito B, contra lo que cobra.
+	VentasSinFactura string
+}{"1.1.01", "1.1.02", "1.1.03", "1.1.05", "1.1.06", "1.2.01", "2.1.01", "2.1.03", "2.1.04", "2.1.05", "4.1.01", "5.1.01", "1.1.04",
+	"2.1.06", "4.1.02"}
 
 // CuentaPorCategoria es CUENTA_POR_CATEGORIA.
 var CuentaPorCategoria = map[string]string{
@@ -31,7 +37,8 @@ var CuentaPorCategoria = map[string]string{
 var nombresDeCuenta = map[string]string{
 	"1.1.01": "Caja", "1.1.02": "Banco", "1.1.03": "Deudores por ventas", "1.1.04": "Valores a depositar", "1.1.05": "IVA crédito fiscal",
 	"1.1.06": "Retenciones sufridas", "1.2.01": "Mercaderías", "2.1.01": "Proveedores", "2.1.03": "IVA débito fiscal",
-	"2.1.04": "Percepciones IIBB a depositar", "2.1.05": "Retenciones a depositar", "4.1.01": "Ventas",
+	"2.1.04": "Percepciones IIBB a depositar", "2.1.05": "Retenciones a depositar", "2.1.06": "Anticipos de clientes", "4.1.01": "Ventas",
+	"4.1.02": "Ventas sin factura",
 	"5.1.01": "Gastos varios", "5.1.02": "Fletes", "5.1.03": "Combustible", "5.1.04": "Servicios", "5.1.05": "Alquileres",
 	"5.1.06": "Sueldos y cargas", "5.1.07": "Mantenimiento", "5.1.08": "Impuestos y tasas", "5.1.09": "Librería y oficina",
 	"5.1.10": "Publicidad",
@@ -51,6 +58,20 @@ type Asiento struct {
 	Concepto  string             `json:"concepto"`
 	Renglones []RenglonDeAsiento `json:"renglones"`
 	Balancea  bool               `json:"balancea"`
+	// Circuito: "" o "blanco" va al CSV del estudio; "negro" solo al del
+	// circuito B (los gastos y pagos marcados así, y la parte B de los
+	// recibos).
+	Circuito string `json:"circuito,omitempty"`
+}
+
+// CircuitoNegro es el circuito B.
+const CircuitoNegro = "negro"
+
+func (a Asiento) circuito() string {
+	if a.Circuito == "" {
+		return "blanco"
+	}
+	return a.Circuito
 }
 
 func redondear(v float64) float64 { return jsmath.Round(float64(v*100)) / 100 }
@@ -169,6 +190,127 @@ type ReciboAAsentar struct {
 	Numero, Cliente string
 	Partes          []ParteDeRecibo
 	Anulacion       bool
+	// Reparto entre los circuitos (cobros.Reparto). Nil: todo a Deudores.
+	Reparto *cobros.Reparto
+}
+
+// PartesPorCircuito separa las partes de un recibo en lo blanco y lo B. Las
+// retenciones son siempre blancas (son crédito fiscal con certificado); el
+// resto se reparte en proporción, y el último renglón se lleva el redondeo
+// para que cada lado sume justo.
+func PartesPorCircuito(partes []ParteDeRecibo, rep cobros.Reparto) (blanco, b []ParteDeRecibo) {
+	retenido, otros := 0.0, 0.0
+	ultimo := -1
+	for i, p := range partes {
+		if p.Medio == "retencion" {
+			retenido = float64(retenido + p.Importe)
+		} else {
+			otros = float64(otros + p.Importe)
+			ultimo = i
+		}
+	}
+	blancoOtros := max(redondear(rep.Blanco()-retenido), 0)
+	puesto := 0.0
+	for i, p := range partes {
+		bl := p.Importe
+		switch {
+		case p.Medio == "retencion":
+		case i == ultimo:
+			bl = redondear(blancoOtros - puesto)
+		case otros > 0:
+			bl = redondear(float64(p.Importe*blancoOtros) / otros)
+			puesto = float64(puesto + bl)
+		default:
+			bl = 0
+		}
+		if bl > toleranciaAsiento {
+			blanco = append(blanco, ParteDeRecibo{Medio: p.Medio, Importe: bl})
+		}
+		if resto := redondear(p.Importe - bl); resto > toleranciaAsiento {
+			b = append(b, ParteDeRecibo{Medio: p.Medio, Importe: resto})
+		}
+	}
+	return blanco, b
+}
+
+// AsientosDeRecibo son los del recibo con su reparto: el blanco (las partes
+// contra Deudores y Anticipos de clientes) y el B (contra Ventas sin
+// factura), cada uno solo si tiene algo.
+func AsientosDeRecibo(r ReciboAAsentar) []Asiento {
+	if r.Reparto == nil {
+		return []Asiento{AsientoDeRecibo(r)}
+	}
+	rep := *r.Reparto
+	blanco, b := PartesPorCircuito(r.Partes, rep)
+	concepto := "Recibo " + r.Numero + " · " + r.Cliente
+	if r.Anulacion {
+		concepto = "Anulación del recibo " + r.Numero + " · " + r.Cliente
+	}
+	var out []Asiento
+	if rep.Blanco() > toleranciaAsiento {
+		renglones := []RenglonDeAsiento{}
+		for _, p := range blanco {
+			renglones = append(renglones, renglon(cuentaDeCobro(p.Medio), p.Importe, 0))
+		}
+		if rep.Deudores > toleranciaAsiento {
+			renglones = append(renglones, renglon(Cuentas.Deudores, 0, rep.Deudores))
+		}
+		if rep.Anticipo > toleranciaAsiento {
+			renglones = append(renglones, renglon(Cuentas.AnticiposDeClientes, 0, rep.Anticipo))
+		}
+		if r.Anulacion {
+			renglones = invertir(renglones)
+		}
+		out = append(out, asiento(r.Fecha, concepto, renglones))
+	}
+	if rep.B > toleranciaAsiento {
+		renglones := []RenglonDeAsiento{}
+		for _, p := range b {
+			renglones = append(renglones, renglon(cuentaDeCobro(p.Medio), p.Importe, 0))
+		}
+		renglones = append(renglones, renglon(Cuentas.VentasSinFactura, 0, rep.B))
+		if r.Anulacion {
+			renglones = invertir(renglones)
+		}
+		a := asiento(r.Fecha, concepto, renglones)
+		a.Circuito = CircuitoNegro
+		out = append(out, a)
+	}
+	return out
+}
+
+// AsientosDeTramo es el reintegro parcial de un recibo repartido: lo que
+// vuelve a Deudores y a Anticipos en el blanco, y lo del B en el suyo.
+func AsientosDeTramo(c CobroAAsentar, t cobros.Reparto) []Asiento {
+	var out []Asiento
+	concepto := "Reintegro " + c.Comprobante + " · " + c.Cliente
+	if blanco := t.Blanco(); blanco > toleranciaAsiento {
+		r := []RenglonDeAsiento{}
+		if t.Deudores > toleranciaAsiento {
+			r = append(r, renglon(Cuentas.Deudores, t.Deudores, 0))
+		}
+		if t.Anticipo > toleranciaAsiento {
+			r = append(r, renglon(Cuentas.AnticiposDeClientes, t.Anticipo, 0))
+		}
+		out = append(out, asiento(c.Fecha, concepto, append(r, renglon(cuentaDeCobro(c.Medio), 0, blanco))))
+	}
+	if t.B > toleranciaAsiento {
+		a := asiento(c.Fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.VentasSinFactura, t.B, 0), renglon(cuentaDeCobro(c.Medio), 0, t.B)})
+		a.Circuito = CircuitoNegro
+		out = append(out, a)
+	}
+	return out
+}
+
+// AsientoDeAplicacion pasa un anticipo a cancelar la factura que salió con
+// CAE (o lo devuelve a Anticipos, en negativo, si se anuló el recibo que lo
+// había dejado).
+func AsientoDeAplicacion(fecha time.Time, concepto string, importe float64) Asiento {
+	r := []RenglonDeAsiento{renglon(Cuentas.AnticiposDeClientes, importe, 0), renglon(Cuentas.Deudores, 0, importe)}
+	if importe < 0 {
+		r = []RenglonDeAsiento{renglon(Cuentas.Deudores, -importe, 0), renglon(Cuentas.AnticiposDeClientes, 0, -importe)}
+	}
+	return asiento(fecha, concepto, r)
 }
 
 // AsientoDeRecibo es el cobro de un recibo: un renglón por parte, cada medio
@@ -295,7 +437,11 @@ func fechaCsvUTC(t time.Time) string {
 // La fecha va en UTC, como el mes del cierre (ver CierreDelMes): los gastos y
 // las facturas de compra guardan el día a las 0 UTC, y en hora argentina
 // saldrían un día antes.
-func CsvAsientos(asientos []Asiento) string {
+//
+// Uno por circuito: el del estudio lleva solo el blanco, y el del circuito B
+// (`circuito` = "negro") es otro archivo, con su propia numeración.
+func CsvAsientos(todos []Asiento, circuito string) string {
+	asientos := DelCircuito(todos, circuito)
 	filas := [][]string{}
 	var totalDebe, totalHaber float64
 	for i, a := range asientos {
@@ -324,4 +470,18 @@ func CsvAsientos(asientos []Asiento) string {
 	}
 	return csvexcel.ArmarCsv([]string{"Asiento", "Fecha", "Concepto", "Cuenta", "Nombre de cuenta", "Debe", "Haber", "Observación"},
 		filas, []string{csvexcel.Texto("Totales"), "", "", "", "", csvexcel.NumeroCsv(totalDebe, 2), csvexcel.NumeroCsv(totalHaber, 2), csvexcel.Texto(cierra)})
+}
+
+// DelCircuito son los asientos de un circuito ("" es el blanco).
+func DelCircuito(asientos []Asiento, circuito string) []Asiento {
+	if circuito == "" {
+		circuito = "blanco"
+	}
+	out := []Asiento{}
+	for _, a := range asientos {
+		if a.circuito() == circuito {
+			out = append(out, a)
+		}
+	}
+	return out
 }

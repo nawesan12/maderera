@@ -139,7 +139,7 @@ func TestGoldenAsientos(t *testing.T) {
 				t.Fatalf("%d balancea: %+v", i, a)
 			}
 		}
-		if csv := CsvAsientos(c.Asientos); csv != c.Csv {
+		if csv := CsvAsientos(c.Asientos, "blanco"); csv != c.Csv {
 			t.Fatalf("%d csv:\n go %q\n ts %q", i, csv, c.Csv)
 		}
 	}

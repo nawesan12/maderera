@@ -246,7 +246,7 @@ func (a *API) AsientosDelPeriodo(ctx context.Context, r reportesapi.AsientosDelP
 	}
 	p := a.mes(r.Params.Periodo)
 	v, err := a.s.AsientosDelPeriodo(ctx, p.Desde, p.Hasta)
-	return ok(v), err
+	return ok(DelCircuito(v, texto(r.Params.Circuito))), err
 }
 
 func (a *API) AsientosCsv(ctx context.Context, r reportesapi.AsientosCsvRequestObject) (reportesapi.AsientosCsvResponseObject, error) {
@@ -258,7 +258,12 @@ func (a *API) AsientosCsv(ctx context.Context, r reportesapi.AsientosCsvRequestO
 	if err != nil {
 		return nil, err
 	}
-	return csv("asientos-"+p.Clave+".csv", CsvAsientos(v)), nil
+	// El del circuito B es otro archivo, con la B en el nombre: que nadie
+	// le mande al estudio el equivocado.
+	if circuito := texto(r.Params.Circuito); circuito == CircuitoNegro {
+		return csv("asientos-B-"+p.Clave+".csv", CsvAsientos(v, CircuitoNegro)), nil
+	}
+	return csv("asientos-"+p.Clave+".csv", CsvAsientos(v, "blanco")), nil
 }
 
 func (a *API) PendientesDelCierre(ctx context.Context, r reportesapi.PendientesDelCierreRequestObject) (reportesapi.PendientesDelCierreResponseObject, error) {

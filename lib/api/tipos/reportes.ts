@@ -363,6 +363,11 @@ export interface components {
             fecha: string;
             concepto: string;
             balancea: boolean;
+            /**
+             * @description Solo en los del circuito B
+             * @enum {string}
+             */
+            circuito?: "negro";
             renglones: {
                 cuenta: string;
                 nombre: string;
@@ -604,6 +609,8 @@ export interface components {
         SucursalSlug: string;
         /** @description aaaa-mm (si falta */
         Mes: string;
+        /** @description blanco (si falta) son los asientos del estudio; negro, los del circuito B: los gastos y pagos marcados así y la parte de los recibos que paga ventas sin factura. El CSV del B se llama asientos-B-aaaa-mm.csv. */
+        Circuito: "blanco" | "negro";
     };
     requestBodies: never;
     headers: never;
@@ -760,6 +767,8 @@ export interface operations {
             query?: {
                 /** @description aaaa-mm (si falta */
                 periodo?: components["parameters"]["Mes"];
+                /** @description blanco (si falta) son los asientos del estudio; negro, los del circuito B: los gastos y pagos marcados así y la parte de los recibos que paga ventas sin factura. El CSV del B se llama asientos-B-aaaa-mm.csv. */
+                circuito?: components["parameters"]["Circuito"];
             };
             header?: never;
             path?: never;
@@ -783,6 +792,8 @@ export interface operations {
             query?: {
                 /** @description aaaa-mm (si falta */
                 periodo?: components["parameters"]["Mes"];
+                /** @description blanco (si falta) son los asientos del estudio; negro, los del circuito B: los gastos y pagos marcados así y la parte de los recibos que paga ventas sin factura. El CSV del B se llama asientos-B-aaaa-mm.csv. */
+                circuito?: components["parameters"]["Circuito"];
             };
             header?: never;
             path?: never;

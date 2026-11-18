@@ -12,13 +12,19 @@ import { leerPeriodoMensual } from "@/lib/periodos";
  */
 export async function GET(request: NextRequest) {
   const crudo = request.nextUrl.searchParams.get("periodo");
+  // El del circuito B es otro archivo y lleva la B en el nombre: que nunca
+  // se confunda con el del estudio.
+  const negro = request.nextUrl.searchParams.get("circuito") === "negro";
   const r = await (await api()).GET("/api/v1/admin/cierre/asientos-csv", {
-    params: { query: crudo ? { periodo: crudo } : {} },
+    params: {
+      query: { ...(crudo ? { periodo: crudo } : {}), ...(negro ? { circuito: "negro" as const } : {}) },
+    },
     parseAs: "arrayBuffer",
   });
   if (!r.response.ok || !r.data) {
     return new NextResponse("No se pudo armar el archivo.", { status: r.response.status === 403 ? 403 : 500 });
   }
   const periodo = leerPeriodoMensual(crudo, new Date());
-  return new NextResponse(r.data, { headers: cabecerasCsv(`asientos-${periodo.clave}.csv`) });
+  const nombre = negro ? `asientos-B-${periodo.clave}.csv` : `asientos-${periodo.clave}.csv`;
+  return new NextResponse(r.data, { headers: cabecerasCsv(nombre) });
 }

@@ -447,3 +447,43 @@ func TestBajaYAutorizarALaVez(t *testing.T) {
 		t.Fatalf("serie %s, %d con CAE, ARCA en %d", numeros, conCae, e.sim.Ultimo(3, 6))
 	}
 }
+
+// **El recibo fija su reparto al emitirse** (cobros.FijarReparto): la
+// factura de contado sin CAE todavía es una seña para el CSV (Anticipos de
+// clientes), sin cliente también —la cuenta sale de la factura que cobra—.
+// Con CAE, el cobro de su factura va a Deudores.
+func TestElReciboFijaSuReparto(t *testing.T) {
+	e := armar(t, true)
+	admin := e.staff(t, "admin@mjbj.test", sqlc.StaffRoleAdmin)
+	campos := consumidor()
+	campos["comoPaga"], campos["medio"] = "contado", "transferencia"
+	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(campos, [4]string{"Fenólico", "1", "12100", "21"}))
+	if st != 200 {
+		t.Fatalf("emitir de contado: %d %s", st, b)
+	}
+	var d, a, bb float64
+	if err := e.pool.QueryRow(context.Background(), `SELECT reparto_deudores::float8, reparto_anticipo::float8, reparto_b::float8 FROM receipts`).
+		Scan(&d, &a, &bb); err != nil {
+		t.Fatal(err)
+	}
+	if d != 0 || a != 12100 || bb != 0 {
+		t.Fatalf("contado sin CAE: deudores %v, anticipo %v, B %v", d, a, bb)
+	}
+	// Con CAE, el cobro de la factura cancela Deudores.
+	conFichaDeGomez(t, e)
+	id := emitirA(t, e, admin, "1000")
+	autorizarPorAPI(t, e, admin, id)
+	st, b = pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/cobros",
+		map[string]string{"partes": `[{"medio":"transferencia","importe":"1000"}]`})
+	if st != 200 {
+		t.Fatalf("cobrar: %d %s", st, b)
+	}
+	recibo := leerJSON[ResultadoDeCobro](t, b).ReceiptID
+	if err := e.pool.QueryRow(context.Background(), `SELECT reparto_deudores::float8, reparto_anticipo::float8, reparto_b::float8 FROM receipts WHERE id = $1`, *recibo).
+		Scan(&d, &a, &bb); err != nil {
+		t.Fatal(err)
+	}
+	if d != 1000 || a != 0 || bb != 0 {
+		t.Fatalf("con CAE: deudores %v, anticipo %v, B %v", d, a, bb)
+	}
+}

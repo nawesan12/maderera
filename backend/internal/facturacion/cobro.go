@@ -134,6 +134,13 @@ func cobrarConRecibo(ctx context.Context, tx pgx.Tx, ses *auth.Sesion, factura s
 	if err := tx.SendBatch(ctx, lote).Close(); err != nil {
 		return r, err
 	}
+	// Sin cliente, el reparto entre los circuitos sale de la factura que
+	// cobra: recién ahora el recibo está atado a ella.
+	if cliente == nil {
+		if _, err := cobros.FijarReparto(ctx, tx, r.ReceiptID); err != nil {
+			return r, err
+		}
+	}
 	// El aviso al cliente sale solo si el cobro se confirma.
 	_, err = cola.Encolar(ctx, sqlc.New(tx), cobros.TrabajoAvisoDeRecibo, map[string]string{"receiptId": r.ReceiptID}, time.Time{})
 	return r, err

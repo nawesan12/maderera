@@ -20,7 +20,7 @@ import (
 
 // ErrorTope es lo que vuelve cuando el tope frena un envío de la bandeja.
 var ErrorTope = ErrorDeEnvio{
-	Texto:  "Este mes ya se llegó al tope de gasto de WhatsApp. Si lo mandás por acá, Meta lo cobra igual. Gratis: contestá desde la app del teléfono.",
+	Texto:  "Este mes ya se llegó al tope de WhatsApp. Si lo mandás por acá, Meta lo cobra igual. Gratis: contestá desde la app del teléfono.",
 	Accion: AccionTope,
 }
 

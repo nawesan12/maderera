@@ -29,8 +29,8 @@ import (
 // **No da precios.** Ningún precio sale sin que alguien lo mire: la pregunta
 // de precio se deriva con el producto en el resumen.
 //
-// Responder es puro (se prueba sin base); atenderConBot es lo que lee y
-// escribe.
+// Responder es puro (se prueba sin base); atenderTurno (turno.go) es lo que
+// lee y escribe, y contesta una vez por ráfaga de mensajes.
 
 // ProductoBot es lo que el bot necesita de un producto del catálogo.
 type ProductoBot struct {
@@ -107,6 +107,9 @@ type DatosBot struct {
 	StockVisible bool
 	Envios       []string
 	Productos    []ProductoBot // lo que trajo la búsqueda, si se buscó
+	// Ahorro: se pasó el 80 % de los mensajes del mes (uso.go). No saluda y
+	// deriva a la primera que no entiende: cada mensaje cuenta.
+	Ahorro bool
 }
 
 // RespuestaBot es lo que decidió.
@@ -120,22 +123,36 @@ type RespuestaBot struct {
 	Estado   EstadoBot
 	Entendio asistente.Intencion
 	// Presupuestar: hay un producto elegido y pidieron precio. Lo arma
-	// atenderConBot con la ficha, en revisión.
+	// atenderTurno con la ficha, en revisión.
 	Presupuestar *Presupuestar
-	// Cortar: escribieron un despiece; atenderConBot intenta guardarlo como
+	// Cortar: escribieron un despiece; atenderTurno intenta guardarlo como
 	// consulta de corte. Texto ya trae el link al cortador por si no se puede.
 	Cortar *asistente.Despiece
+	// NoEntendio: el «no lo encontré» de la primera vez. En una ráfaga con
+	// algo que sí se entendió, se descarta.
+	NoEntendio bool
 }
 
 // TopeBotPorHora es cuántas respuestas da el bot en una conversación en una
 // hora antes de frenarse. Una charla de verdad no llega: son 15 mensajes.
 const TopeBotPorHora = 15
 
+// TopeBotDiezMinutos es el freno rápido: con las ráfagas juntadas, una
+// persona no recibe cinco respuestas en diez minutos; otro contestador
+// automático, sí.
+const TopeBotDiezMinutos = 5
+
 const pieDerivar = "Escribile acá y seguís con una persona del mostrador:"
 
 // Responder decide la respuesta a un texto. Si hace falta el catálogo,
 // devuelve Buscar y hay que llamarla de nuevo con DatosBot.Productos lleno.
 func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) RespuestaBot {
+	// La respuesta automática de otro negocio («Gracias por comunicarte, te
+	// responderemos a la brevedad»): contestarla es empezar un ida y vuelta
+	// entre dos bots que Meta cobra de un solo lado.
+	if esAutorespuesta(texto) {
+		return RespuestaBot{Entendio: asistente.Gracias, Estado: est}
+	}
 	// Si estaba esperando la medida de un presupuesto y la medida llegó, se
 	// completa; si escribieron otra cosa, el pendiente se olvida.
 	if p := est.Pendiente; p != nil && !nombraAlgo(texto) {
@@ -155,6 +172,10 @@ func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) Respue
 
 	switch e.Intencion {
 	case asistente.Saludo:
+		if d.Ahorro {
+			// Un «hola» solo no necesita respuesta: la pregunta viene atrás.
+			return r
+		}
 		r.Texto = "¡Hola! Soy el asistente de la Maderera Juan B. Justo. Contame qué buscás —«melamina blanca de 18», «4 de 600x400 en MDF con canto»— o preguntame horarios, envíos o formas de pago."
 	case asistente.Gracias:
 		// Sin respuesta: un «gracias» no necesita otro mensaje (que Meta
@@ -260,14 +281,22 @@ var reConectoresBot = regexp.MustCompile(`\b(la|el|y|en|de|con|esa|ese|medida|es
 // consulta: «dale», «listo», «ya transferí», «te mando el comprobante».
 var (
 	// Solas, son todo el mensaje: «si tienen mdf?» no es un acuse.
-	reAcuseCorto = regexp.MustCompile(`^(ok|oka|okey|okis|dale|listo|joya|genial|perfecto|bueno|buenisimo|barbaro|si|no|claro|de una|vale|entendido|ahi va|ya esta)( (gracias|muchas gracias|che|genial|perfecto|dale))?$`)
+	reAcuseCorto = regexp.MustCompile(`^(ok|oka|okey|okis|oki|okas|okk|dale|listo|joya|genial|perfecto|bueno|buenisimo|barbaro|si|no|claro|de una|vale|entendido|ahi va|ya esta|re bien|todo bien|de nada|saludos|abrazo|ja(ja)+|je(je)+)( (gracias|muchas gracias|mil gracias|che|genial|perfecto|dale|ja(ja)+))?$`)
 	// En cualquier parte: la charla de un pago o un envío.
 	reAcusePago = regexp.MustCompile(`\b(transferi|transferencia hecha|comprobante|ya pague|pague|deposite|te mande|te mando|aguardo|quedo atento|cuando llega|cuando me llega|cuando sale)\b`)
 )
 
 func esAcuse(texto string) bool {
-	t := strings.Trim(asistente.Normalizar(texto), " .,")
+	t := strings.Trim(asistente.Corregir(asistente.Normalizar(texto)), " .,")
 	return reAcuseCorto.MatchString(t) || reAcusePago.MatchString(t)
+}
+
+// reAutorespuesta son las respuestas automáticas de WhatsApp Business y de
+// los contestadores: lo que manda una máquina, no una persona.
+var reAutorespuesta = regexp.MustCompile(`\b(mensaje automatico|respuesta automatica|auto ?respuesta|te responderemos|le responderemos|responderemos a la brevedad|respondemos a la brevedad|nos comunicaremos|en breve (te|le|nos)|a la brevedad posible|fuera (del|de nuestro) horario|no (estoy|estamos) disponibles?|gracias por (comunicarte|comunicarse|contactarte|contactarnos|escribirnos|tu mensaje|su mensaje)|este numero (ya )?no|no recibe mensajes)\b`)
+
+func esAutorespuesta(texto string) bool {
+	return reAutorespuesta.MatchString(asistente.Normalizar(texto))
 }
 
 var reNumeroSolo = regexp.MustCompile(`^(\d{1,2})\s*(mm)?$`)
@@ -305,9 +334,10 @@ func cantidadPedida(texto string, e asistente.Entendido) float64 {
 func preguntaPrecio(texto string) bool { return rePrecio.MatchString(asistente.Normalizar(texto)) }
 
 func noEntendio(r RespuestaBot, est EstadoBot, d DatosBot, texto string) RespuestaBot {
-	if est.Fallos >= 1 {
+	if est.Fallos >= 1 || d.Ahorro {
 		return derivar(r, d, texto)
 	}
+	r.NoEntendio = true
 	r.Estado = EstadoBot{Fallos: est.Fallos + 1, Consulta: est.Consulta}
 	r.Texto = "No lo encontré. Probá con el nombre del producto y la medida —«fenólico de 18», «machimbre de pino»— o escribí *persona* y te paso con el mostrador."
 	return r
@@ -346,9 +376,25 @@ func abierto(t time.Time) bool {
 // proximaApertura dice cuándo abre, si ahora está cerrado: «hoy a las 8»,
 // «mañana a las 8», «el lunes a las 8». Vacío si está abierto.
 func proximaApertura(t time.Time) string {
+	a, d := aperturaSiguiente(t)
+	if a.IsZero() {
+		return ""
+	}
+	switch d {
+	case 0:
+		return "hoy a las 8"
+	case 1:
+		return "mañana a las 8"
+	}
+	return "el " + [...]string{"domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"}[a.Weekday()] + " a las 8"
+}
+
+// aperturaSiguiente es el instante en que vuelve a abrir y en cuántos días;
+// cero si está abierto.
+func aperturaSiguiente(t time.Time) (time.Time, int) {
 	t = t.In(argentina)
 	if abierto(t) {
-		return ""
+		return time.Time{}, 0
 	}
 	for d := 0; d < 3; d++ {
 		dia := t.AddDate(0, 0, d)
@@ -356,15 +402,9 @@ func proximaApertura(t time.Time) string {
 		if dia.Weekday() == time.Sunday || !apertura.After(t) {
 			continue
 		}
-		switch d {
-		case 0:
-			return "hoy a las 8"
-		case 1:
-			return "mañana a las 8"
-		}
-		return "el " + [...]string{"domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"}[dia.Weekday()] + " a las 8"
+		return apertura, d
 	}
-	return ""
+	return time.Time{}, 0
 }
 
 // enlaceHumano es el wa.me al número humano con la consulta ya escrita, así el
@@ -434,6 +474,69 @@ func plural(n int, uno, varios string) string {
 	return varios
 }
 
+// Turno es lo que se contesta a una ráfaga de mensajes: las partes van en un
+// solo mensaje, que es lo que Meta cobra.
+type Turno struct {
+	Partes  []string
+	Derivar bool
+	Estado  EstadoBot
+}
+
+// JuntarRespuestas arma una sola respuesta para varios mensajes seguidos
+// («hola» / «tenés fenólico?» / «y hacen envíos?»): cada respuesta una vez,
+// sin el saludo si hay algo más que decir, sin el «no lo encontré» si otra
+// cosa se entendió, y con el pase a una persona al final, con todo lo que
+// escribió en el enlace. `textos` son los mensajes que dieron cada
+// respuesta; `extra`, lo que se dice de lo que no es texto (una foto, un
+// audio que no se pudo escuchar); `dichos`, lo que el bot ya le contestó
+// en las últimas horas, que no se repite.
+func JuntarRespuestas(rs []RespuestaBot, textos, extra []string, est EstadoBot, d DatosBot, dichos []string) Turno {
+	t := Turno{Estado: est}
+	saludo := ""
+	noEntendio := ""
+	var utiles []string
+	for _, r := range rs {
+		t.Estado = r.Estado
+		switch {
+		case r.Derivar:
+			t.Derivar = true
+		case r.Texto == "":
+		case r.Entendio == asistente.Saludo:
+			saludo = r.Texto
+		case r.NoEntendio:
+			noEntendio = r.Texto
+		default:
+			utiles = append(utiles, r.Texto)
+		}
+	}
+	utiles = append(utiles, extra...)
+	if len(utiles) > 0 {
+		// Algo se entendió: el «no lo encontré» de otro mensaje no suma un
+		// fallo ni se dice.
+		t.Estado.Fallos = 0
+	}
+	vistas := map[string]bool{}
+	for _, u := range utiles {
+		if u != "" && !vistas[u] && !yaDicho(u, dichos) {
+			vistas[u] = true
+			t.Partes = append(t.Partes, u)
+		}
+	}
+	if t.Derivar {
+		t.Partes = append(t.Partes, derivar(RespuestaBot{}, d, strings.Join(textos, "\n")).Texto)
+		t.Estado = EstadoBot{}
+	}
+	switch {
+	case len(t.Partes) == 0 && noEntendio != "" && !yaDicho(noEntendio, dichos):
+		t.Partes = []string{noEntendio}
+	case len(t.Partes) == 0 && saludo != "" && !yaDicho(saludo, dichos):
+		t.Partes = []string{saludo}
+	case len(t.Partes) > 0 && saludo != "" && !yaDicho(saludo, dichos):
+		t.Partes[0] = "¡Hola! " + t.Partes[0]
+	}
+	return t
+}
+
 // --- lo que lee y escribe ---
 
 type ajustesBot struct {
@@ -498,19 +601,31 @@ type estadoParaElBot struct {
 	ajustes ajustesBot
 }
 
+// Por qué el bot no habla.
+const (
+	callaApagado = "apagado"
+	// callaPersona: la conversación es de una persona (derivada, asignada o
+	// con alguien que escribió hace poco). Fuera de horario puede salir el
+	// aviso de cerrado (turno.go).
+	callaPersona = "persona"
+	callaTope    = "tope"
+	callaFrenado = "frenado"
+)
+
 // botPuedeHablar dice si al bot le toca contestar en esta conversación, y con
-// qué memoria. No le toca si está apagado, si la conversación está derivada o
-// asignada a alguien, si una persona escribió o salió un aviso automático en
-// las últimas 12 horas (es la charla de un pedido), si se llegó al tope de
-// gasto del mes, o si ya contestó demasiado en la última hora (el freno
-// contra otro contestador automático).
-func (s *Servicio) botPuedeHablar(ctx context.Context, convID string) (*estadoParaElBot, error) {
+// qué memoria; si no, por qué. No le toca si está apagado, si la
+// conversación está derivada o asignada a alguien, si una persona escribió o
+// salió un aviso automático en las últimas 12 horas (es la charla de un
+// pedido), si se llegó a un tope del mes, o si ya contestó demasiado en la
+// última hora o en los últimos diez minutos (el freno contra otro
+// contestador automático).
+func (s *Servicio) botPuedeHablar(ctx context.Context, convID string) (*estadoParaElBot, string, error) {
 	aj, err := s.ajustesBot(ctx)
 	if err != nil || !aj.encendido {
-		return nil, err
+		return nil, callaApagado, err
 	}
 	var estado string
-	var fallos, deLaHora int
+	var fallos, deLaHora, deDiezMinutos int
 	var consulta, pendiente, asignado *string
 	var personaReciente bool
 	err = s.pool.QueryRow(ctx, `
@@ -518,24 +633,33 @@ func (s *Servicio) botPuedeHablar(ctx context.Context, convID string) (*estadoPa
 			exists (select 1 from whatsapp_mensajes m where m.conversacion_id = c.id and m.direccion = 'saliente'
 				and coalesce(m.origen, '') in ('panel', 'telefono', 'aviso') and m.ocurrido_at > now() - interval '12 hours'),
 			(select count(*) from whatsapp_mensajes m where m.conversacion_id = c.id and m.origen = 'bot'
-				and m.ocurrido_at > now() - interval '1 hour')
-		  from whatsapp_conversaciones c where c.id = $1`, convID).Scan(&estado, &fallos, &consulta, &pendiente, &asignado, &personaReciente, &deLaHora)
+				and m.ocurrido_at > now() - interval '1 hour'),
+			(select count(*) from whatsapp_mensajes m where m.conversacion_id = c.id and m.origen = 'bot'
+				and m.ocurrido_at > now() - interval '10 minutes')
+		  from whatsapp_conversaciones c where c.id = $1`, convID).Scan(&estado, &fallos, &consulta, &pendiente, &asignado, &personaReciente, &deLaHora, &deDiezMinutos)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
+		return nil, callaApagado, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	if estado != "activo" || asignado != nil || personaReciente || s.TopeAlcanzado(ctx) {
-		return nil, nil
+	if estado != "activo" || asignado != nil || personaReciente {
+		return nil, callaPersona, nil
 	}
-	if deLaHora >= TopeBotPorHora {
+	if s.TopeAlcanzado(ctx) {
+		return nil, callaTope, nil
+	}
+	if deLaHora >= TopeBotPorHora || deDiezMinutos >= TopeBotDiezMinutos {
 		if _, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_pendiente = null where id = $1`, convID); err != nil {
-			return nil, err
+			return nil, "", err
 		}
-		s.avisar(ctx, push.Aviso{Titulo: "WhatsApp: el bot se frenó", Cuerpo: fmt.Sprintf("Contestó %d veces en una hora en la misma conversación. Sigue una persona.", deLaHora),
+		cuerpo := fmt.Sprintf("Contestó %d veces en una hora en la misma conversación. Sigue una persona.", deLaHora)
+		if deLaHora < TopeBotPorHora {
+			cuerpo = fmt.Sprintf("Contestó %d veces en diez minutos: puede ser otro contestador automático. Sigue una persona.", deDiezMinutos)
+		}
+		s.avisar(ctx, push.Aviso{Titulo: "WhatsApp: el bot se frenó", Cuerpo: cuerpo,
 			URL: "/admin/whatsapp?chat=" + convID, Etiqueta: "whatsapp-" + convID, Pantalla: "/admin/whatsapp"})
-		return nil, nil
+		return nil, callaFrenado, nil
 	}
 	e := &estadoParaElBot{EstadoBot: EstadoBot{Fallos: fallos}, ajustes: aj}
 	if consulta != nil {
@@ -547,46 +671,29 @@ func (s *Servicio) botPuedeHablar(ctx context.Context, convID string) (*estadoPa
 			e.Pendiente = &p
 		}
 	}
-	return e, nil
+	return e, "", nil
 }
 
-// tomarMensaje marca el entrante como atendido por el bot, y dice si le toca:
-// un reintento de la cola (el del audio, sobre todo) no contesta dos veces, y
-// un mensaje de hace más de una hora —Meta reintentando tarde— no se
-// contesta.
-func (s *Servicio) tomarMensaje(ctx context.Context, mensajeID string) (bool, error) {
-	if mensajeID == "" {
-		return true, nil
-	}
-	var id string
-	err := s.pool.QueryRow(ctx, `
-		update whatsapp_mensajes set datos = coalesce(datos, '{}'::jsonb) || '{"bot": true}'::jsonb
-		 where id = $1 and coalesce(datos->>'bot', '') = '' and ocurrido_at > now() - interval '1 hour'
-		returning id`, mensajeID).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil, err
+// parteDelTurno es lo que el bot contestó a uno de los mensajes de una
+// ráfaga, con lo que hay que hacer después de mandarlo.
+type parteDelTurno struct {
+	r     RespuestaBot
+	aviso *push.Aviso
+	// pasaAPersona: la persona sigue en la bandeja, por este mismo número:
+	// el corte y el presupuesto prometen «te confirmamos por acá», y alguien
+	// lo tiene que hacer. No es derivar a otro número.
+	pasaAPersona bool
 }
 
-// atenderConBot contesta un entrante, si al bot le toca.
-func (s *Servicio) atenderConBot(ctx context.Context, mensajeID, convID, waJid, texto string) error {
-	texto = trimJS(texto)
-	if texto == "" || EsPedidoDeBaja(texto) || EsPedidoDeAlta(texto) {
-		return nil
-	}
-	est, err := s.botPuedeHablar(ctx, convID)
-	if err != nil || est == nil {
-		return err
-	}
-	if ok, err := s.tomarMensaje(ctx, mensajeID); err != nil || !ok {
-		return err
-	}
-	d := DatosBot{Ahora: s.ahora(), Sitio: s.cfg.URLBase, NumeroHumano: est.ajustes.numeroHumano, StockVisible: est.ajustes.stockVisible}
-	r := Responder(texto, est.EstadoBot, d, false)
+// resolverTexto decide la respuesta a un texto con todo lo que hace falta: el
+// catálogo, las zonas de envío, el corte guardado y el presupuesto armado.
+// No manda nada.
+func (s *Servicio) resolverTexto(ctx context.Context, convID, waJid, texto string, est EstadoBot, d DatosBot) (parteDelTurno, error) {
+	var p parteDelTurno
+	r := Responder(texto, est, d, false)
 	if r.Entendio == asistente.Envios {
 		d.Envios = s.enviosParaBot(ctx)
-		r = Responder(texto, est.EstadoBot, d, false)
+		r = Responder(texto, est, d, false)
 	}
 	if r.Buscar != "" || r.Rubro != "" {
 		if s.buscar != nil {
@@ -596,31 +703,25 @@ func (s *Servicio) atenderConBot(ctx context.Context, mensajeID, convID, waJid, 
 			}
 			d.Productos = ps
 		}
-		r = Responder(texto, est.EstadoBot, d, true)
+		r = Responder(texto, est, d, true)
 	}
-
-	var avisoPresupuesto *push.Aviso
-	// La persona sigue en la bandeja, por este mismo número: el corte y el
-	// presupuesto prometen «te confirmamos por acá», y alguien lo tiene que
-	// hacer. No es derivar a otro número.
-	pasaAPersona := false
 	if r.Cortar != nil && s.cortar != nil {
 		texto, aviso, err := s.consultaDeCorte(ctx, convID, *r.Cortar, d.Sitio, r.Texto)
 		if err != nil {
 			s.log.Warn("el bot no pudo guardar el corte", "error", err)
 		} else {
-			r.Texto, avisoPresupuesto = texto, aviso
-			pasaAPersona = aviso != nil
+			r.Texto, p.aviso = texto, aviso
+			p.pasaAPersona = aviso != nil
 		}
 	}
 	if r.Presupuestar != nil {
 		texto, consulta, aviso, err := s.presupuestar(ctx, convID, waJid, *r.Presupuestar)
 		if err != nil {
-			return err
+			return p, err
 		}
 		switch {
 		case aviso != nil:
-			r.Texto, avisoPresupuesto = texto, aviso
+			r.Texto, p.aviso = texto, aviso
 		case texto != "":
 			// Falta la medida: queda pendiente hasta la respuesta.
 			r.Texto, r.Estado.Consulta, r.Estado.Pendiente = texto, consulta, r.Presupuestar
@@ -629,48 +730,8 @@ func (s *Servicio) atenderConBot(ctx context.Context, mensajeID, convID, waJid, 
 			r = derivar(r, d, r.Presupuestar.Texto)
 		}
 	}
-	if r.Texto == "" {
-		// Un acuse o un «gracias»: no hay nada que decir.
-		return nil
-	}
-
-	// Primero se manda; el estado se guarda solo si salió. Si Meta lo rechaza,
-	// la conversación no queda derivada sin que el cliente lo sepa.
-	envio, err := s.EnviarYRegistrar(ctx, Envio{ConversacionID: convID, WaJid: waJid, Mensaje: Saliente{Tipo: "texto", Cuerpo: r.Texto},
-		Registro: Registro{Cuerpo: r.Texto}, Origen: "bot"})
-	if err != nil {
-		return err
-	}
-	if envio.Error != nil {
-		s.log.Warn("la respuesta del bot no salió", "conversacion", convID, "error", envio.Error.Texto)
-		return nil
-	}
-	if r.Derivar || pasaAPersona {
-		_, err = s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_fallos = 0, bot_pendiente = null where id = $1`, convID)
-	} else {
-		var c *string
-		if r.Estado.Consulta != "" {
-			c = &r.Estado.Consulta
-		}
-		var p *string
-		if r.Estado.Pendiente != nil {
-			b, _ := json.Marshal(r.Estado.Pendiente)
-			j := string(b)
-			p = &j
-		}
-		_, err = s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_fallos = $2, bot_consulta = $3, bot_pendiente = $4::jsonb where id = $1`, convID, r.Estado.Fallos, c, p)
-	}
-	if err != nil {
-		return err
-	}
-	if avisoPresupuesto != nil {
-		s.avisar(ctx, *avisoPresupuesto)
-	}
-	if r.Derivar {
-		s.avisar(ctx, push.Aviso{Titulo: "WhatsApp: pasa a una persona", Cuerpo: cortarJS(texto, 140),
-			URL: "/admin/whatsapp?chat=" + convID, Etiqueta: "whatsapp-" + convID, Pantalla: "/admin/whatsapp"})
-	}
-	return nil
+	p.r = r
+	return p, nil
 }
 
 // ReactivarBot le devuelve la conversación al bot.

@@ -48,6 +48,19 @@ Desde el 10/11/2026 la plataforma puede contestar sola, sin IA, con el mismo mot
 - **Deriva a una persona:** si se lo piden, en temas de acopio, si no entiende dos veces o si el producto no tiene precio cargado. Le manda al cliente un `wa.me` al número de la persona con la consulta ya escrita. A partir de ahí no contesta más en esa conversación, hasta que alguien toque **Devolver al bot** en la bandeja. Si en las últimas 12 horas contestó una persona, tampoco se mete.
 - **Costo:** cada respuesta es un mensaje que Meta cobra y entra en el tope de gasto del mes.
 
+### Cómo ahorra mensajes (18/11/2026)
+
+El tope es de **1000 mensajes por mes** entre el bot y las personas (lo que sale de la app del teléfono no cuenta). Se cambia en **WhatsApp → Configuración → Mensajes del mes** (ajuste `whatsapp_tope_mensajes`).
+
+- **Una respuesta por ráfaga:** espera 8 segundos sin mensajes nuevos y contesta todo junto («hola» / «tenés fenólico?» / «hacen envíos?» es un solo mensaje).
+- **No contesta** acuses («ok», «gracias», «👍», «jaja»), stickers, reacciones ni las respuestas automáticas de otros negocios.
+- **No repite:** lo que ya le dijo a esa persona en las últimas 12 horas no sale de nuevo.
+- **Fotos, ubicaciones y contactos:** avisa que lo mira una persona y pasa la conversación a la bandeja.
+- **Fuera de horario**, en una conversación que atiende una persona: un aviso de cerrado por noche, nunca por un «ok».
+- **Al 80 %** pasa a modo ahorro: no saluda, deriva a la primera que no entiende y no manda el aviso de cerrado. **Al 100 %** ni el bot ni los avisos automáticos mandan nada; la bandeja pide confirmación. Al admin le llega un aviso en cada umbral.
+- **Contra bucles:** si contesta 5 veces en 10 minutos o 15 en una hora, se frena y pasa a una persona. Si el cliente le repite su propio mensaje, no contesta.
+- **Si Meta no lo toma** por un problema pasajero, lo reintenta hasta 3 veces sobre el mismo mensaje.
+
 ## Antes de empezar: ¿el mismo número o uno nuevo?
 
 Es la decisión que más importa, y la tiene que tomar la clienta.

@@ -687,9 +687,20 @@ components:
         tope: { type: number, format: double }
         proporcion: { type: number, format: double }
         alcanzado: { type: boolean }
+    UsoMensajes:
+      type: object
+      description: Los mensajes que salieron por la API en el mes (bot y personas) contra el tope de site_settings.whatsapp_tope_mensajes.
+      required: [usados, tope, proporcion, ahorro, alcanzado, reinicio]
+      properties:
+        usados: { type: integer }
+        tope: { type: integer }
+        proporcion: { type: number, format: double }
+        ahorro: { type: boolean, description: "Desde el 80 %: el bot contesta lo justo" }
+        alcanzado: { type: boolean, description: "El bot y los avisos automáticos no mandan" }
+        reinicio: { type: string, format: date-time }
     Bandeja:
       type: object
-      required: [filtro, conversaciones, contadores, estado, plantillas, personal, gasto, detalle]
+      required: [filtro, conversaciones, contadores, estado, plantillas, personal, gasto, mensajes, detalle]
       properties:
         filtro: { type: string, enum: [todas, sin-leer, mias, sin-asignar, resueltas] }
         conversaciones: { type: array, items: { $ref: "#/components/schemas/ConversacionListada" } }
@@ -706,6 +717,7 @@ components:
           type: array
           items: { type: object, required: [id, nombre], properties: { id: { type: string }, nombre: { type: string } } }
         gasto: { $ref: "#/components/schemas/GastoChico" }
+        mensajes: { $ref: "#/components/schemas/UsoMensajes" }
         detalle:
           allOf: [{ $ref: "#/components/schemas/DetalleConversacion" }]
           nullable: true
@@ -749,7 +761,7 @@ components:
         tarifas: { $ref: "#/components/schemas/Tarifas" }
     Configuracion:
       type: object
-      required: [estado, avisos, eventos, guardadas, diagnostico, gasto, bajas, cortados, webhookSecreto, firmaSecreto]
+      required: [estado, avisos, eventos, guardadas, diagnostico, gasto, mensajes, bajas, cortados, webhookSecreto, firmaSecreto]
       properties:
         estado: { $ref: "#/components/schemas/EstadoConexion" }
         avisos:
@@ -826,6 +838,7 @@ components:
             limite: { type: string, nullable: true }
             ultimoWebhookAt: { type: string, format: date-time, nullable: true }
         gasto: { $ref: "#/components/schemas/GastoDelMes" }
+        mensajes: { $ref: "#/components/schemas/UsoMensajes" }
         bajas:
           type: array
           items:

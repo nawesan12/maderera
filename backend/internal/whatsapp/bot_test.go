@@ -305,7 +305,7 @@ func TestProximaApertura(t *testing.T) {
 
 func mustTime(s string) time.Time { t, _ := time.Parse(time.RFC3339, s); return t }
 
-// Las protecciones de atenderConBot, contra la base.
+// Las protecciones de atenderTurno, contra la base.
 func TestBotSabeCuandoCallarse(t *testing.T) {
 	e := armar(t, false)
 	ctx := e.ctx
@@ -336,7 +336,8 @@ func TestBotSabeCuandoCallarse(t *testing.T) {
 
 	// El mismo mensaje no se contesta dos veces (el reintento de la cola).
 	id := entra("5492235550021", "a qué hora abren?")
-	if err := e.wa.atenderConBot(ctx, id, conv("5492235550021"), "5492235550021", "a qué hora abren?"); err != nil {
+	_ = id
+	if err := e.wa.atenderTurno(ctx, conv("5492235550021"), "5492235550021"); err != nil {
 		t.Fatal(err)
 	}
 	if c := delBot("5492235550021"); c != 1 {
@@ -347,7 +348,7 @@ func TestBotSabeCuandoCallarse(t *testing.T) {
 	viejo := entra("5492235550022", "hola")
 	_, _ = e.pool.Exec(ctx, `delete from whatsapp_mensajes where conversacion_id = $1 and origen = 'bot'`, conv("5492235550022"))
 	_, _ = e.pool.Exec(ctx, `update whatsapp_mensajes set ocurrido_at = now() - interval '3 hours', datos = null where id = $1`, viejo)
-	if err := e.wa.atenderConBot(ctx, viejo, conv("5492235550022"), "5492235550022", "hola"); err != nil {
+	if err := e.wa.atenderTurno(ctx, conv("5492235550022"), "5492235550022"); err != nil {
 		t.Fatal(err)
 	}
 	if c := delBot("5492235550022"); c != 0 {
@@ -377,14 +378,34 @@ func TestBotSabeCuandoCallarse(t *testing.T) {
 		t.Error("contestó una conversación asignada")
 	}
 
-	// El tope por hora: pasado, se frena y pasa a una persona.
+	// El tope por hora: pasado, se frena y pasa a una persona. (Las
+	// respuestas se cargan a mano: la misma pregunta ya no se contesta dos
+	// veces.)
 	jid := "5492235550025"
-	for i := 0; i < TopeBotPorHora+3; i++ {
-		entra(jid, "a qué hora abren?")
+	entra(jid, "hola")
+	if _, err := e.pool.Exec(ctx, `insert into whatsapp_mensajes (conversacion_id, direccion, tipo, cuerpo, estado, origen, ocurrido_at)
+		select $1, 'saliente', 'text', 'respuesta ' || g, 'enviado', 'bot', now() - interval '30 minutes'
+		  from generate_series(2, $2::int) g`, conv(jid), TopeBotPorHora); err != nil {
+		t.Fatal(err)
 	}
+	entra(jid, "a qué hora abren?")
 	var estado string
 	_ = e.pool.QueryRow(ctx, `select bot_estado from whatsapp_conversaciones where wa_jid = $1`, jid).Scan(&estado)
 	if c := delBot(jid); c != TopeBotPorHora || estado != "derivada" {
 		t.Errorf("tope: contestó %d (tope %d), estado %s", c, TopeBotPorHora, estado)
+	}
+
+	// El freno rápido: cinco respuestas en diez minutos es otro bot.
+	jid = "5492235550026"
+	entra(jid, "hola")
+	if _, err := e.pool.Exec(ctx, `insert into whatsapp_mensajes (conversacion_id, direccion, tipo, cuerpo, estado, origen, ocurrido_at)
+		select $1, 'saliente', 'text', 'respuesta ' || g, 'enviado', 'bot', now() - interval '2 minutes'
+		  from generate_series(2, $2::int) g`, conv(jid), TopeBotDiezMinutos); err != nil {
+		t.Fatal(err)
+	}
+	entra(jid, "a qué hora abren?")
+	_ = e.pool.QueryRow(ctx, `select bot_estado from whatsapp_conversaciones where wa_jid = $1`, jid).Scan(&estado)
+	if c := delBot(jid); c != TopeBotDiezMinutos || estado != "derivada" {
+		t.Errorf("freno rápido: contestó %d, estado %s", c, estado)
 	}
 }

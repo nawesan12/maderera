@@ -138,6 +138,7 @@ type Bandeja struct {
 	Plantillas     []PlantillaDisponible `json:"plantillas"`
 	Personal       []Persona             `json:"personal"`
 	Gasto          GastoChico            `json:"gasto"`
+	Mensajes       UsoDelMes             `json:"mensajes"`
 	Detalle        *DetalleConversacion  `json:"detalle"`
 }
 
@@ -157,6 +158,7 @@ func (s *Servicio) AbrirBandeja(ctx context.Context, ses *auth.Sesion, filtro, c
 		b.Gasto = GastoChico{gasto.USD, gasto.Tope, gasto.Proporcion, gasto.Alcanzado}
 		return err
 	})
+	g.Go(func() (err error) { b.Mensajes, err = s.UsoDelMes(gctx, s.ahora()); return })
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}

@@ -51,6 +51,7 @@ type Configuracion struct {
 	Guardadas      []PlantillaGuardada  `json:"guardadas"`
 	Diagnostico    *DiagnosticoGuardado `json:"diagnostico"`
 	Gasto          GastoDelMes          `json:"gasto"`
+	Mensajes       UsoDelMes            `json:"mensajes"`
 	Bajas          []Baja               `json:"bajas"`
 	Cortados       []AvisoCortado       `json:"cortados"`
 	WebhookSecreto bool                 `json:"webhookSecreto"`
@@ -88,6 +89,9 @@ func (s *Servicio) LeerConfiguracion(ctx context.Context) (*Configuracion, error
 		c.Diagnostico = &d
 	}
 	if c.Gasto, err = s.GastoDelMes(ctx, s.ahora()); err != nil {
+		return nil, err
+	}
+	if c.Mensajes, err = s.UsoDelMes(ctx, s.ahora()); err != nil {
 		return nil, err
 	}
 	if c.Bajas, err = s.bajasRegistradas(ctx); err != nil {

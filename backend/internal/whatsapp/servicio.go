@@ -98,12 +98,15 @@ type Servicio struct {
 	buscar Buscador
 	ficha  Ficheador
 	cortar Corteador
+	// rafaga es cuánto espera el bot sin mensajes nuevos para contestar
+	// (turno.go). Cero: contesta en el momento (las pruebas).
+	rafaga time.Duration
 }
 
 // Nuevo arma el servicio. `avisos` puede ser nil (sin avisos al teléfono).
 func Nuevo(pool *pgxpool.Pool, cfg Config, avisos *push.Avisador, log *slog.Logger) *Servicio {
 	cfg = cfg.limpia()
-	s := &Servicio{pool: pool, q: sqlc.New(pool), log: log, cfg: cfg, push: avisos, ahora: time.Now, espera: 700 * time.Millisecond}
+	s := &Servicio{pool: pool, q: sqlc.New(pool), log: log, cfg: cfg, push: avisos, ahora: time.Now, espera: 700 * time.Millisecond, rafaga: EsperaRafaga}
 	s.prov = elegirProveedor(cfg)
 	return s
 }

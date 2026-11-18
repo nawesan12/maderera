@@ -72,6 +72,20 @@ func (s *Servicio) Registrar(c *cola.Cola) {
 		s.lanzarAudio(c)
 		return nil
 	})
+	c.Registrar(TrabajoTurno, func(ctx context.Context, crudo json.RawMessage) error {
+		var c cargaTurno
+		if err := json.Unmarshal(crudo, &c); err != nil {
+			return err
+		}
+		return s.atenderTurno(ctx, c.ConversacionID, c.WaJid)
+	})
+	c.Registrar(TrabajoReenvio, func(ctx context.Context, crudo json.RawMessage) error {
+		var c cargaReenvio
+		if err := json.Unmarshal(crudo, &c); err != nil {
+			return err
+		}
+		return s.reenviar(ctx, c)
+	})
 	c.Registrar(TrabajoMedio, func(ctx context.Context, crudo json.RawMessage) error {
 		var c cargaMedio
 		if err := json.Unmarshal(crudo, &c); err != nil {
@@ -194,13 +208,6 @@ func (s *Servicio) ProcesarPayload(ctx context.Context, payload any) error {
 	return nil
 }
 
-// botLee son los tipos de mensaje que el bot contesta: lo escrito, el
-// epígrafe de una foto, un video o un archivo, y el botón de una plantilla.
-// Una ubicación, un contacto, un formulario o un mensaje que WhatsApp no deja
-// ver llegan con un texto armado por nosotros («Ubicación: …», «Aviso de
-// WhatsApp…») que no es una consulta: los ve una persona.
-var botLee = map[string]bool{"text": true, "image": true, "video": true, "document": true, "button": true}
-
 // AtenderEntrante es lo que pasa cuando escribe un cliente: se guarda, se
 // baja el adjunto, se atiende el «BAJA» y se avisa al personal. Lo usan el
 // webhook y el simulador de la demostración.
@@ -218,8 +225,9 @@ func (s *Servicio) AtenderEntrante(ctx context.Context, m MensajeMeta, waJid str
 	if err := s.atenderBajaOAlta(ctx, g.ConversacionID, waJid, g.Cuerpo); err != nil {
 		return "", err
 	}
-	// El bot contesta después de guardar; si falla, el mensaje igual quedó en
-	// la bandeja y la persona lo ve.
+	// El bot contesta después de guardar, y no en el momento: pide un turno
+	// (turno.go) que junta la ráfaga. Si falla, el mensaje igual quedó en la
+	// bandeja y la persona lo ve.
 	switch {
 	case m.Tipo == "audio":
 		// Si la descarga quedó para reintentar, el audio se encola cuando
@@ -230,13 +238,13 @@ func (s *Servicio) AtenderEntrante(ctx context.Context, m MensajeMeta, waJid str
 		case "listo":
 			err = s.encolarAudio(ctx, g, waJid)
 		case "fallido":
-			err = s.contestarSinTexto(ctx, g.MensajeID, g.ConversacionID, waJid)
+			err = s.marcarAudioSinTexto(ctx, g.MensajeID, g.ConversacionID, waJid)
 		}
 		if err != nil {
 			s.log.Error("el audio de WhatsApp no se pudo atender", "error", err, "conversacion", g.ConversacionID)
 		}
-	case botLee[m.Tipo]:
-		if err := s.atenderConBot(ctx, g.MensajeID, g.ConversacionID, waJid, g.Cuerpo); err != nil {
+	case botAtiende(m.Tipo):
+		if err := s.pedirTurno(ctx, g.ConversacionID, waJid); err != nil {
 			s.log.Error("el bot de WhatsApp falló", "error", err, "conversacion", g.ConversacionID)
 		}
 	}

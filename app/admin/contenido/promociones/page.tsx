@@ -55,16 +55,14 @@ export default async function PromocionesPage() {
         <p className="flex items-start gap-2.5 text-base text-muted-foreground">
           <Landmark className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
           <span>
+            {/* Cuando el banco manda la lista del mes, se carga acá y aparece en
+                el inicio. Las que tienen fecha se apagan solas al vencer. */}
             {enVivo === 0 ? (
-              <>
-                No hay ninguna promoción publicada. Cuando el banco mande la
-                lista del mes, se carga acá y aparece en el inicio.
-              </>
+              <>No hay ninguna promoción publicada.</>
             ) : (
               <>
                 Hay <strong className="text-foreground">{enVivo}</strong>{" "}
                 {enVivo === 1 ? "promoción publicada" : "promociones publicadas"}
-                . Las que tienen fecha se apagan solas al vencer
                 {vencidas > 0 && (
                   <>
                     {" "}

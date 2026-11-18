@@ -37,8 +37,8 @@ export default async function CampanasPage() {
 
       {!estado.real && (
         <p className="estado-espera rounded-xl bg-[var(--estado-fondo)] px-4 py-3 text-base">
-          El envío de correos todavía no está conectado. Se pueden armar campañas y ver cómo
-          quedan, pero no salen hasta que se conecte el servidor de correo.
+          {/* Se pueden armar y ver cómo quedan; salen cuando se conecte el servidor de correo. */}
+          El envío de correos todavía no está conectado: las campañas no salen.
         </p>
       )}
 
@@ -46,7 +46,7 @@ export default async function CampanasPage() {
         <Vacio
           icono={Megaphone}
           titulo="Todavía no hay campañas"
-          detalle="Una lista de precios nueva, un evento, las cuotas del mes: a quién y con qué palabras, y sale en tandas."
+          // Una lista de precios nueva, un evento, las cuotas del mes: a quién y con qué palabras, y sale en tandas.
           accion={{ texto: "Armar la primera", href: "/admin/campanas/nueva" }}
         />
       ) : (

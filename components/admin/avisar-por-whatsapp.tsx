@@ -95,7 +95,8 @@ export function AvisarPorWhatsapp({
           rel="noopener noreferrer"
           onClick={registrar}
           aria-keyshortcuts={atajo ? "Alt+W" : undefined}
-          title={`Abre WhatsApp Business con el mensaje escrito para ${aviso.para ?? "el cliente"}. Solo tocás enviar.${atajo ? " (Alt + W)" : ""}`}
+          // Abre WhatsApp Business con el mensaje escrito: solo hay que tocar enviar.
+          title={atajo ? "Alt + W" : undefined}
           className={`inline-flex ${alto} items-center gap-2 rounded-lg px-3.5 text-base font-medium transition-colors ${
             avisado
               ? "border text-foreground hover:bg-muted"
@@ -126,8 +127,8 @@ export function AvisarPorWhatsapp({
 
       {!compacto && (
         <p className="text-sm text-muted-foreground">
-          A {aviso.para ?? "el cliente"} ({aviso.telefono}). Se abre WhatsApp con el mensaje escrito: solo tocás enviar.
-          {aviso.pdf && " El enlace lleva solo el texto: adjuntá el PDF en el chat."}
+          A {aviso.para ?? "el cliente"} ({aviso.telefono}).
+          {aviso.pdf && " Adjuntá el PDF en el chat."}
         </p>
       )}
 
@@ -149,8 +150,7 @@ export function AvisarPorWhatsapp({
         ))}
         {aviso.automaticoPrendido && (
           <li className="text-muted-foreground">
-            El aviso automático por la API también está prendido: ese cuesta {aviso.costoAutomatico} por mensaje; este
-            botón no cuesta nada.
+            El aviso automático por la API también está prendido ({aviso.costoAutomatico} por mensaje).
           </li>
         )}
         {error && (

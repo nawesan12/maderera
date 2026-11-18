@@ -49,8 +49,8 @@ export function Resenas({ resenas }: { resenas: ResenaParaModerar[] }) {
 
       {resenas.length === 0 ? (
         <p className="px-5 py-8 text-base text-muted-foreground">
-          Todavía no hay reseñas. Solo puede dejar una quien compró el producto
-          y ya lo recibió.
+          {/* Solo puede dejar una quien compró el producto y ya lo recibió. */}
+          Todavía no hay reseñas.
         </p>
       ) : (
         <ul className="divide-y">

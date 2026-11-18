@@ -123,8 +123,7 @@ export function AvisosPush() {
     return (
       <p className="text-base text-muted-foreground">
         Este navegador no admite avisos. En el teléfono, instalá el panel desde
-        el menú del navegador («Agregar a la pantalla de inicio») y activalos
-        desde ahí.
+        el menú del navegador.
       </p>
     );
   }
@@ -132,10 +131,10 @@ export function AvisosPush() {
   if (estado === "sin-claves") {
     return (
       <p className="text-base text-muted-foreground">
-        Los avisos del panel todavía no están habilitados en el servidor: faltan
-        las claves <code className="tabular">VAPID_PUBLIC_KEY</code> y{" "}
-        <code className="tabular">VAPID_PRIVATE_KEY</code>. Se generan una vez y
-        no vencen.
+        {/* Se generan una vez y no vencen. */}
+        Faltan en el servidor las claves{" "}
+        <code className="tabular">VAPID_PUBLIC_KEY</code> y{" "}
+        <code className="tabular">VAPID_PRIVATE_KEY</code>.
       </p>
     );
   }

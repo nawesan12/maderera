@@ -249,6 +249,22 @@ func TestExportarPrecios(t *testing.T) {
 		t.Errorf("el filtro no se aplicó: %q", csv)
 	}
 
+	// Los filtros nuevos de la pantalla también: estado, marca y proveedor.
+	_, _ = e.pool.Exec(context.Background(), `update products set brand = 'Faplac' where slug = 'melamina'`)
+	if csv := string(pedir(t, adm, u+"?marca=faplac").cuerpo); !strings.Contains(csv, "MEL18") || strings.Contains(csv, "FEN18") {
+		t.Errorf("marca: %q", csv)
+	}
+	if csv := string(pedir(t, adm, u+"?estado=sin-precio").cuerpo); !strings.Contains(csv, "FEN12") || strings.Contains(csv, "FEN18") {
+		t.Errorf("estado: %q", csv)
+	}
+	var prov string
+	_ = e.pool.QueryRow(context.Background(), `insert into suppliers (nombre) values ('Faplac SA') returning id`).Scan(&prov)
+	_, _ = e.pool.Exec(context.Background(), `insert into supplier_variant_codes (supplier_id, variant_id, codigo)
+		select $1, id, 'X-1' from product_variants where sku = 'FEN18'`, prov)
+	if csv := string(pedir(t, adm, u+"?prov="+prov).cuerpo); !strings.Contains(csv, "FEN18") || strings.Contains(csv, "MEL18") {
+		t.Errorf("proveedor: %q", csv)
+	}
+
 	r = pedir(t, adm, u+"?formato=pdf&lista=profesional")
 	if r.estado != 200 || r.tipo != "application/pdf" || r.disp != `inline; filename="precios-mjbj-2026-03-05.pdf"` {
 		t.Fatalf("pdf: %d %q %q", r.estado, r.tipo, r.disp)

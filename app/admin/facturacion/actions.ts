@@ -80,7 +80,10 @@ export async function emitirManual(
 
   refrescar();
   revalidatePath("/admin/clientes");
-  redirect(`/admin/facturacion/${r.data.invoiceId}`);
+  // El aviso del cobro de contado (el efectivo no entró a ningún arqueo)
+  // viaja a la ficha del comprobante, que es adonde se va después de emitir.
+  const aviso = r.data.aviso ? `?aviso=caja` : "";
+  redirect(`/admin/facturacion/${r.data.invoiceId}${aviso}`);
 }
 
 /* -------------------------------------------------------------------------- */

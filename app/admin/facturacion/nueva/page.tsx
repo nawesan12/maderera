@@ -3,13 +3,22 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { configuracionFiscalActual } from "@/lib/dal/admin/facturacion";
+import { sucursalesConCaja } from "@/lib/dal/admin/caja";
 import type { CondicionIva } from "@/lib/fiscal/comprobantes";
 import { FormularioFacturaManual } from "./formulario";
 
 export const metadata: Metadata = { title: "Nueva factura" };
 
 export default async function NuevaFacturaPage() {
-  const emisor = await configuracionFiscalActual();
+  const [emisor, sucursales] = await Promise.all([
+    configuracionFiscalActual(),
+    sucursalesConCaja(),
+  ]);
+  // Las cajas abiertas: con más de una, el efectivo de contado no sabe a cuál
+  // entrar y el formulario pide elegirla.
+  const cajas = sucursales
+    .filter((s) => s.turnoId)
+    .map((s) => ({ valor: s.id, texto: s.nombre }));
 
   return (
     <div className="space-y-5">
@@ -42,6 +51,7 @@ export default async function NuevaFacturaPage() {
       ) : (
         <FormularioFacturaManual
           condicionEmisor={emisor.condicionIva as CondicionIva}
+          cajas={cajas}
         />
       )}
     </div>

@@ -19,6 +19,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/catalogo"
 	"mjbj/internal/limites"
+	"mjbj/internal/listado"
 	"mjbj/internal/pdf"
 	"mjbj/internal/planilla"
 	"mjbj/internal/plataforma"
@@ -146,15 +147,20 @@ func (a *API) MiListaDePreciosPdf(ctx context.Context, _ documentosapi.MiListaDe
 // ExportarPrecios es app/admin/precios/exportar/route.ts: la grilla con los
 // filtros de la pantalla, en CSV para trabajarla o en PDF para mandarla.
 func (a *API) ExportarPrecios(ctx context.Context, r documentosapi.ExportarPreciosRequestObject) (documentosapi.ExportarPreciosResponseObject, error) {
-	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/precios")...); err != nil {
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/precios")...)
+	if err != nil {
 		return nil, err
 	}
 	busqueda := texto(r.Params.Buscar)
 	if len([]rune(busqueda)) > 200 {
 		busqueda = string([]rune(busqueda)[:200]) // listarPrecios corta a 200
 	}
+	// Los mismos filtros que la grilla: lo que se ve es lo que se baja.
+	f := listado.Filtros{Busqueda: busqueda, Categoria: texto(r.Params.Cat), Estado: texto(r.Params.Estado),
+		Marca: texto(r.Params.Marca), Proveedor: texto(r.Params.Prov)}
+	listado.SoloQuienCompra(ses, &f)
 	ahora := a.ahora()
-	filas, err := a.precios.ListarTodo(ctx, busqueda, texto(r.Params.Cat), ahora)
+	filas, err := a.precios.ListarTodo(ctx, f, ahora)
 	if err != nil {
 		return nil, err
 	}

@@ -425,9 +425,12 @@ func (a *API) EmitirComprobanteManual(ctx context.Context, r facturacionapi.Emit
 		return nil, err
 	}
 	l := r.Body.Lineas
-	id, err := a.s.EmitirManual(ctx, ses, r.Body.Campos, LineasManuales{Descripcion: l.Descripcion, Cantidad: l.Cantidad, Precio: l.Precio, Alicuota: l.Alicuota})
+	id, aviso, err := a.s.EmitirManual(ctx, ses, r.Body.Campos, LineasManuales{Descripcion: l.Descripcion, Cantidad: l.Cantidad, Precio: l.Precio, Alicuota: l.Alicuota})
 	if err != nil {
 		return nil, comoProblema(err)
+	}
+	if aviso != nil {
+		return ok(map[string]string{"invoiceId": id, "aviso": *aviso}), nil
 	}
 	return emitido(id), nil
 }

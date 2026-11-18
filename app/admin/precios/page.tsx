@@ -73,6 +73,9 @@ export default async function PreciosPage({
   const consulta = new URLSearchParams();
   if (params.buscar) consulta.set("buscar", params.buscar);
   if (params.cat) consulta.set("cat", params.cat);
+  if (params.estado) consulta.set("estado", params.estado);
+  if (params.marca) consulta.set("marca", params.marca);
+  if (params.prov) consulta.set("prov", params.prov);
   const urlExportar = `/admin/precios/exportar${
     consulta.size > 0 ? `?${consulta}` : ""
   }`;

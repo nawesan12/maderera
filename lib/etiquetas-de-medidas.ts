@@ -20,6 +20,13 @@ export const TOPE_POR_MEDIDA = 200;
 export const TOPE_DE_ETIQUETAS = 1000;
 
 /**
+ * Medidas distintas por impresión: el tope de Go (TopeDeEtiquetas en
+ * backend/internal/productos/etiquetas.go). Con más, Go rechazaba el pedido y
+ * la hoja daba error.
+ */
+export const TOPE_DE_MEDIDAS = 300;
+
+/**
  * Los formatos. El A4 es la plancha autoadhesiva de 3 × 7 (63,5 × 38,1 mm,
  * la más común en librerías); el rollo, el de la impresora térmica de
  * etiquetas de 50 × 25 mm, una etiqueta por página.
@@ -36,7 +43,8 @@ export function formatoDeEtiqueta(v: string | undefined): FormatoDeEtiqueta {
 
 /**
  * Lee `id*3,id`: ids válidos, cantidades enteras de 1 a TOPE_POR_MEDIDA (sin
- * cantidad, una), una medida repetida suma, y el total no pasa del tope.
+ * cantidad, una), una medida repetida suma, y ni el total ni las medidas
+ * distintas pasan de sus topes.
  */
 export function leerPedidoDeEtiquetas(m: string | string[] | undefined): PedidoDeEtiqueta[] {
   const texto = Array.isArray(m) ? m.join(",") : (m ?? "");
@@ -52,7 +60,7 @@ export function leerPedidoDeEtiquetas(m: string | string[] | undefined): PedidoD
   let total = 0;
   for (const [id, cantidad] of por) {
     const entra = Math.min(cantidad, TOPE_DE_ETIQUETAS - total);
-    if (entra <= 0) break;
+    if (entra <= 0 || out.length >= TOPE_DE_MEDIDAS) break;
     out.push({ id, cantidad: entra });
     total += entra;
   }

@@ -109,6 +109,10 @@ export interface operations {
                 formato?: "csv" | "pdf";
                 buscar?: string;
                 cat?: string;
+                estado?: string;
+                marca?: string;
+                /** @description Solo cuenta para quien entra a Compras */
+                prov?: string;
                 lista?: string;
             };
             header?: never;

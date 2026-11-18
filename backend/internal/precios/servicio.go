@@ -109,6 +109,12 @@ const PorPaginaPrecios = 50
 // las toca. El estado («sin-precio», «para-revisar», «al-dia») se decide en
 // la consulta, con el mismo criterio que antes se aplicaba en Next.
 func (s *Servicio) Listar(ctx context.Context, f listado.Filtros, ahora time.Time) (GrillaDePrecios, error) {
+	return s.grilla(ctx, f, ahora, true)
+}
+
+// grilla es Listar; sin paginar trae todas las filas del filtro en una sola
+// consulta (lo que usa la exportación).
+func (s *Servicio) grilla(ctx context.Context, f listado.Filtros, ahora time.Time, paginar bool) (GrillaDePrecios, error) {
 	out := GrillaDePrecios{Filas: []FilaPrecio{}}
 	ls, _, err := s.listas(ctx, s.q)
 	if err != nil {
@@ -146,46 +152,43 @@ func (s *Servicio) Listar(ctx context.Context, f listado.Filtros, ahora time.Tim
 	} else {
 		out.Total = k.Todas
 	}
-	limite, salto := f.Pagina(PorPaginaPrecios)
+	pagina := ""
+	if paginar {
+		limite, salto := f.Pagina(PorPaginaPrecios)
+		pagina = ` LIMIT ` + c.Arg(limite) + ` OFFSET ` + c.Arg(salto)
+	}
 	// «viejo» va también en la lista de columnas: así la consulta usa todos
 	// los argumentos aunque no haya estado elegido.
 	filas, err := s.pool.Query(ctx, `
 		SELECT v.id, p.id, v.sku, p.name, v.label, c.name, c.slug, p.unit::text, coalesce(`+viejo+`, false)
 		`+desde+c.Donde()+`
-		ORDER BY c.sort_order, p.name, v.sort_order, v.id
-		LIMIT `+c.Arg(limite)+` OFFSET `+c.Arg(salto), c.Args()...)
+		ORDER BY c.sort_order, p.name, v.sort_order, v.id`+pagina, c.Args()...)
 	if err != nil {
 		return out, err
 	}
-	pagina, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (FilaPrecio, error) {
+	leidas, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (FilaPrecio, error) {
 		var f FilaPrecio
 		err := r.Scan(&f.VariantID, &f.ProductID, &f.SKU, &f.Producto, &f.Medida, &f.Categoria, &f.CategoriaSlug, &f.Unidad, &f.Desactualizado)
 		return f, err
 	})
-	if err != nil || len(pagina) == 0 {
+	if err != nil || len(leidas) == 0 {
 		return out, err
 	}
-	out.Filas, err = s.completar(ctx, ls, pagina)
+	out.Filas, err = s.completar(ctx, ls, leidas)
 	return out, err
 }
 
 // ListarTodo es la grilla entera, sin páginas, para exportarla: la planilla y
-// el PDF de la lista llevan todo lo que coincide con el filtro.
-func (s *Servicio) ListarTodo(ctx context.Context, busqueda, categoria string, ahora time.Time) ([]FilaPrecio, error) {
-	var out []FilaPrecio
-	for desde := 0; ; desde += 200 {
-		g, err := s.Listar(ctx, listado.Filtros{Busqueda: busqueda, Categoria: categoria, Limite: 200, Desde: desde}, ahora)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, g.Filas...)
-		if len(g.Filas) < 200 || len(out) >= g.Total {
-			if out == nil {
-				out = []FilaPrecio{}
-			}
-			return out, nil
-		}
+// el PDF de la lista llevan todo lo que coincide con los filtros de la
+// pantalla. Va en una sola consulta: de a páginas con OFFSET, una medida
+// cargada en medio de la exportación corría las filas y una salía dos veces o
+// faltaba.
+func (s *Servicio) ListarTodo(ctx context.Context, f listado.Filtros, ahora time.Time) ([]FilaPrecio, error) {
+	g, err := s.grilla(ctx, f, ahora, false)
+	if err != nil {
+		return nil, err
 	}
+	return g.Filas, nil
 }
 
 // completar suma a las filas de la página la foto, los precios de las dos

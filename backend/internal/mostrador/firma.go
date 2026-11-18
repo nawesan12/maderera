@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"mjbj/internal/ventas"
 )
 
 // La firma de las ventas encoladas sin conexión.
@@ -76,11 +78,20 @@ func (s *Servicio) FirmaValida(firma, usuario string, cobrada *time.Time) bool {
 	if !hmac.Equal([]byte(partes[2]), []byte(s.mac(usuario, vence))) {
 		return false
 	}
-	cuando := s.ahora()
-	if cobrada != nil {
-		cuando = *cobrada
-	}
+	ahora := s.ahora()
 	hasta := time.Unix(vence, 0)
+	// La hora de cobro la manda el cliente: se acota igual que al guardar la
+	// venta (nunca futura, nunca más de una semana atrás). Sin acotarla, una
+	// firma vencida hace meses servía con un `cobradaAt` de esa época.
+	cuando := ahora
+	if cobrada != nil {
+		cuando = ventas.FechaAcotada(*cobrada, ahora)
+	}
+	// Y la firma no puede haber vencido hace más que una vigencia: una cola
+	// puede drenar tarde tras un corte, pero no una firma de hace meses.
+	if ahora.After(hasta.Add(vigenciaDeFirma)) {
+		return false
+	}
 	// Ni después de vencida ni antes de que se entregara.
 	return !cuando.After(hasta) && !cuando.Before(hasta.Add(-vigenciaDeFirma-time.Hour))
 }

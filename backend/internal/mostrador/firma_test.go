@@ -71,17 +71,49 @@ func TestFirmaDeLaColaSinConexion(t *testing.T) {
 // La firma vence: una venta cobrada después del vencimiento, o mucho antes de
 // que se entregara, no la puede usar.
 func TestVigenciaDeLaFirma(t *testing.T) {
-	s := (&Servicio{ahora: time.Now}).ConClaveDeCola("clave")
 	ahora := time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)
+	reloj := ahora
+	s := (&Servicio{ahora: func() time.Time { return reloj }}).ConClaveDeCola("clave")
 	f, vence := s.FirmaDeCola("u1", ahora)
 	en := func(d time.Duration) *time.Time { x := ahora.Add(d); return &x }
-	if !s.FirmaValida(f, "u1", en(time.Hour)) || !s.FirmaValida(f, "u1", &vence) {
+	if !s.FirmaValida(f, "u1", en(time.Hour)) || !s.FirmaValida(f, "u1", nil) {
 		t.Fatal("vigente")
 	}
-	if s.FirmaValida(f, "u1", en(8*24*time.Hour)) || s.FirmaValida(f, "u1", en(-48*time.Hour)) || s.FirmaValida(f, "u2", en(0)) {
-		t.Fatal("vencida, anterior o de otro")
+	if s.FirmaValida(f, "u1", en(-48*time.Hour)) || s.FirmaValida(f, "u2", en(0)) {
+		t.Fatal("anterior o de otro")
+	}
+	// Se drena tarde, tras el vencimiento: la venta cobrada justo al vencer
+	// todavía vale; la cobrada después, no.
+	reloj = vence.Add(24 * time.Hour)
+	if !s.FirmaValida(f, "u1", &vence) {
+		t.Fatal("cobrada al vencer, drenada al día siguiente")
+	}
+	if s.FirmaValida(f, "u1", en(8*24*time.Hour)) {
+		t.Fatal("cobrada después de vencida")
 	}
 	if sin := (&Servicio{}).ConClaveDeCola(""); sin.FirmaValida(f, "u1", en(0)) {
 		t.Fatal("sin clave no hay firma válida")
+	}
+}
+
+// Una firma vencida hace meses no sirve aunque el cliente mande un
+// `cobradaAt` de cuando estaba vigente: la hora se acota a la última semana.
+func TestFirmaViejaConCobradaVieja(t *testing.T) {
+	entregada := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	reloj := entregada
+	s := (&Servicio{ahora: func() time.Time { return reloj }}).ConClaveDeCola("clave")
+	f, _ := s.FirmaDeCola("u1", entregada)
+	cobrada := entregada.Add(time.Hour)
+	if !s.FirmaValida(f, "u1", &cobrada) {
+		t.Fatal("en su momento era válida")
+	}
+	reloj = time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)
+	if s.FirmaValida(f, "u1", &cobrada) {
+		t.Fatal("una firma de junio firmó una venta subida en noviembre")
+	}
+	// Ni siquiera justo después de la semana de gracia.
+	reloj = entregada.Add(2*vigenciaDeFirma + time.Minute)
+	if s.FirmaValida(f, "u1", &cobrada) {
+		t.Fatal("firma vencida hace más de una vigencia")
 	}
 }

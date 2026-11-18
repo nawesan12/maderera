@@ -79,6 +79,9 @@ func TestNotasSobreNotas(t *testing.T) {
 	ctx := context.Background()
 	campos := map[string]string{"receptorNombre": "Gómez SRL", "receptorCuit": "30-71234567-1", "receptorCondicionIva": "responsable_inscripto",
 		"guardarComoCliente": "on"}
+	// A cuenta corriente pasa por cobros.Credito: la ficha ya existe con límite.
+	var conLimite string
+	e.uno(t, `INSERT INTO customers (nombre, cuit, condicion_iva, limite_credito) VALUES ('Gómez SRL', '30712345671', 'responsable_inscripto', 1000000) RETURNING id`, &conLimite)
 	_, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(campos, [4]string{"Fenólico", "10", "12100", "21"}))
 	fa := leerJSON[map[string]string](t, b)["invoiceId"]
 	autorizarPorAPI(t, e, admin, fa)

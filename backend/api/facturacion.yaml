@@ -419,6 +419,7 @@ components:
             required: [invoiceId]
             properties:
               invoiceId: { type: string }
+              aviso: { type: string, description: "Solo la factura manual de contado: el efectivo no entró a ningún arqueo" }
   schemas:
     Problema:
       type: object

@@ -40,6 +40,9 @@ paths:
         - { name: formato, in: query, schema: { type: string, enum: [csv, pdf], default: csv } }
         - { name: buscar, in: query, schema: { type: string } }
         - { name: cat, in: query, schema: { type: string } }
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: marca, in: query, schema: { type: string } }
+        - { name: prov, in: query, description: Solo cuenta para quien entra a Compras, schema: { type: string } }
         - { name: lista, in: query, schema: { type: string } }
       responses:
         "200":

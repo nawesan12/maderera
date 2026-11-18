@@ -19,12 +19,13 @@ import (
 
 // CsvDeudores es la deuda de cada cliente por antigüedad, con la misma
 // cuenta que la cobranza (los pagos cancelan lo más viejo primero). El que
-// debe más y hace más tiempo va arriba.
+// debe más y hace más tiempo va arriba. Van también los clientes dados de
+// baja: la baja no cancela la deuda, y el contador la necesita igual (ya
+// quedan afuera los que no deben, por el saldo).
 func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, error) {
 	rs, err := s.pool.Query(ctx, `
 		SELECT c.id, coalesce(c.codigo_legacy, ''), c.nombre, coalesce(c.cuit, ''), coalesce(c.telefono, ''), m.monto, m.created_at
 		FROM customers c JOIN account_movements m ON m.customer_id = c.id
-		WHERE c.active
 		ORDER BY c.id, m.created_at`)
 	if err != nil {
 		return "", err

@@ -5,6 +5,7 @@ import {
   leerPedidoDeEtiquetas,
   repartirEnHojas,
   TOPE_DE_ETIQUETAS,
+  TOPE_DE_MEDIDAS,
   TOPE_POR_MEDIDA,
   tramos,
 } from "@/lib/etiquetas-de-medidas";
@@ -42,6 +43,15 @@ describe("leerPedidoDeEtiquetas", () => {
     const muchas = Array.from({ length: 8 }, (_, i) => `${String(i).repeat(8)}-1111-4111-8111-111111111111*200`).join(",");
     const total = leerPedidoDeEtiquetas(muchas).reduce((s, p) => s + p.cantidad, 0);
     expect(total).toBe(TOPE_DE_ETIQUETAS);
+  });
+
+  it("no pide a Go más medidas de las que acepta", () => {
+    const ids = Array.from(
+      { length: TOPE_DE_MEDIDAS + 50 },
+      (_, i) => `${i.toString(16).padStart(8, "0")}-1111-4111-8111-111111111111`,
+    ).join(",");
+    expect(leerPedidoDeEtiquetas(ids)).toHaveLength(TOPE_DE_MEDIDAS);
+    expect(TOPE_DE_MEDIDAS).toBe(300);
   });
 
   it("ida y vuelta con escribirPedidoDeEtiquetas", () => {

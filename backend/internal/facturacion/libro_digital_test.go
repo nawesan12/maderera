@@ -2,6 +2,7 @@ package facturacion
 
 import (
 	"archive/zip"
+	"strconv"
 	"bytes"
 	"context"
 	"io"
@@ -73,5 +74,61 @@ func TestLibroIvaDigitalDelMes(t *testing.T) {
 	}
 	if o := archivos["OMITIDOS.txt"]; !strings.Contains(o, "Faplac") || !strings.Contains(o, "300.00") {
 		t.Fatalf("OMITIDOS: %q", o)
+	}
+}
+
+// Una compra A con neto y sin ningún IVA: el neto va a «no integra el neto
+// gravado» y el registro cierra contra el total (antes informaba la alícuota
+// 0 % en cero y el neto no iba a ningún campo).
+func TestCompraASinIvaCierraContraElTotal(t *testing.T) {
+	e := armar(t, false)
+	var prov string
+	e.uno(t, `INSERT INTO suppliers (nombre, cuit) VALUES ('Fletes Sur', '30-50000000-7') RETURNING id`, &prov)
+	e.exec(t, `INSERT INTO purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, neto, iva21, total)
+		VALUES ($1, 'factura_a', 3, 77, '2026-10-07T12:00:00Z', 2500, 0, 2500)`, prov)
+	admin := e.staff(t, "a@mjbj.test", sqlc.StaffRoleAdmin)
+	st, b := pedir(t, admin, "GET", e.srv.URL+"/api/v1/admin/facturacion/libro-iva/digital?periodo=2026-10", nil)
+	if st != 200 {
+		t.Fatalf("admin: %d %s", st, b)
+	}
+	z, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	archivos := map[string]string{}
+	for _, f := range z.File {
+		r, _ := f.Open()
+		x, _ := io.ReadAll(r)
+		archivos[f.Name] = string(x)
+	}
+	importe := func(s string) int64 {
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			t.Fatalf("importe %q", s)
+		}
+		return n
+	}
+	cc := strings.TrimSuffix(archivos["COMPRAS_CBTE_202610.txt"], "\r\n")
+	if len(cc) != fiscal.LargoComprasCbte {
+		t.Fatalf("COMPRAS_CBTE: %q", cc)
+	}
+	total := importe(cc[104:119])
+	// Del campo 10 (no gravado) al 16 (internos), más otros tributos (22).
+	suma := importe(cc[254:269])
+	for i := 119; i < 224; i += 15 {
+		suma += importe(cc[i : i+15])
+	}
+	if importe(cc[119:134]) != 250000 || cc[238] != 'N' {
+		t.Fatalf("el neto no está en no gravado (o la operación no es N): %q", cc)
+	}
+	for _, a := range strings.Split(strings.TrimSuffix(archivos["COMPRAS_ALICUOTAS_202610.txt"], "\r\n"), "\r\n") {
+		if a == "" {
+			continue
+		}
+		// La base y el IVA de cada alícuota (después del documento del vendedor).
+		suma += importe(a[50:65]) + importe(a[69:84])
+	}
+	if total != 250000 || suma != total {
+		t.Fatalf("no cierra: total %d, suma de campos %d", total, suma)
 	}
 }

@@ -30,6 +30,15 @@ type Filtros struct {
 	Desde     int
 }
 
+// SoloQuienCompra borra el filtro por proveedor si la sesión no entra a
+// Compras: qué medida trae cada proveedor es información de compras, y filtrar
+// por él dejaría deducirla desde otra pantalla.
+func SoloQuienCompra(ses *auth.Sesion, f *Filtros) {
+	if ses == nil || !roles.PuedeEntrar("/admin/compras", ses.RolStaff) {
+		f.Proveedor = ""
+	}
+}
+
 // Pagina normaliza el límite y el desplazamiento: sin límite, el de la
 // pantalla; nunca más de 200 ni un desplazamiento negativo.
 func (f Filtros) Pagina(porOmision int) (limite, desde int) {

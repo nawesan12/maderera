@@ -54,7 +54,12 @@ type ExportarPreciosParams struct {
 	Formato *ExportarPreciosParamsFormato `form:"formato,omitempty" json:"formato,omitempty"`
 	Buscar  *string                       `form:"buscar,omitempty" json:"buscar,omitempty"`
 	Cat     *string                       `form:"cat,omitempty" json:"cat,omitempty"`
-	Lista   *string                       `form:"lista,omitempty" json:"lista,omitempty"`
+	Estado  *string                       `form:"estado,omitempty" json:"estado,omitempty"`
+	Marca   *string                       `form:"marca,omitempty" json:"marca,omitempty"`
+
+	// Prov Solo cuenta para quien entra a Compras
+	Prov  *string `form:"prov,omitempty" json:"prov,omitempty"`
+	Lista *string `form:"lista,omitempty" json:"lista,omitempty"`
 }
 
 // ExportarPreciosParamsFormato defines parameters for ExportarPrecios.
@@ -137,6 +142,45 @@ func (siw *ServerInterfaceWrapper) ExportarPrecios(w http.ResponseWriter, r *htt
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cat"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cat", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "estado" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "estado", r.URL.Query(), &params.Estado, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "estado"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "estado", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "marca" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "marca", r.URL.Query(), &params.Marca, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "marca"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "marca", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "prov" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "prov", r.URL.Query(), &params.Prov, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "prov"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "prov", Err: err})
 		}
 		return
 	}
@@ -552,22 +596,23 @@ func (sh *strictHandler) ExportarPrecios(w http.ResponseWriter, r *http.Request,
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"xFVNbxtHDP0rxLQHG11L8kdRRLnFdtoGDmq0RS+RgVA7lDzGDDmemRUsGPoxPveYQw+92X+s4K4sy5Ga",
-	"fqMXYXaX5JCP7z3dmlpCFCYu2QxvTaIchTO1D+dJxp4C6rkWLsRFjxijdzUWJ9yPXcgXV1lYv+X6cpnw",
-	"eaKJGZrP+k8X9Luvub8qvFgsKmMp18lFrWeG5jQlSbDz/etjeHH05Ve7RkOWiR83FZNESsV17Voq6Lye",
-	"yjySGZpckuOpWVSGtGgXhdY6vQr9+bPsjZzlCxlfUV30RS5YmvVYx4WmlNpgVzxtKbOoTKLrxiWyZvhu",
-	"GbYqdbFxiyY4nkg3zzouZ5Lh/OQ1zMFjhuiRndfTdUNAHrLLhQICpoAQMSFoOqYpJtgpyBZh/2C3N+Jv",
-	"ZF6Bly6xOGJiyE0Gi0UyEMPXMgSP4F0uWgRiotpJBkseau+IC8F8xB6BbqKkgrV7+MAfR0Zk8j04ax/D",
-	"w10GK3UTiPWWOQLl8nDHQDxihTEx+n60E5hDpraw9lU3yFYgNxAePtjGi34MjSXYmVEasZU696eiLJwm",
-	"ytILtoL7n39cjnv/qw5sVtsxb9+8egP3v8DJqhVTmRml3EG8r5uUSIzRmaE57A16h6YyEctlu/Y+Rtef",
-	"7fefJukHt9cCtWdpbzm+Rk6pbG7w9MZNCTJlxauCOUwSMQLC/gCiJLiUhO2hyQ0mJ7BDHoLLQdpI0Y0p",
-	"7hkmTn8twWNHNRb0MpVVP7sd9I8bycLtzi2BxxGvduvxsZ8hcMN1+7JhJdDDXaCSpANQhdIK/lurMLoz",
-	"LXBC5135czsx1XPrOBgMPuUadvLcLCaSAhYzNGPHmOam2tDRpk94lYOpzCWhpdTeetxdt3ficpTsusj1",
-	"ezaqLipzNNj/Pb9ajbTmWJU5OnjxVxLUOZoQdKyhOdsqLLhuHDFEZ6lSCepgmreFcH9EsuPlplvetEwp",
-	"aSl2r8bABb3HHpx6OP7hJ9ipheHVd28reP/yPcyhloAjtlS7gH4XKHdeUhKO8QqTF5jDTPyMEiDkZuyS",
-	"l5fqP2pN3tMMRxwojBOpS8DMTYlrhxXUy77Whl6ZTCTrLPbguEGvSKQRR0pZGNesZAsPTzv/SUsatlJN",
-	"GKi0dHh3a5wict1QyyjGoLvvqCamWqOFpQk2vpihqfPMVIa4CWrX3ZOy9WKTkdX2+uNGbfdZ+T+ZWWP5",
-	"O2kthp9MvPivxVmZQjelr3D9C7LGVF+6mfwv0h4c/hNpT5P+J2/9K2x1rYqTJ4EvFr8NAA==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

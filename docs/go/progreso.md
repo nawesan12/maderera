@@ -1930,3 +1930,24 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   50 × 25 mm con `@page`); se arma en `/admin/stock/etiquetas`.
 - Sin migraciones: los índices que hacen falta (trigramas de nombre, sku,
   etiqueta y marca; `inventory` por variante) ya estaban.
+
+## T1 del comité: lo que no podía esperar (18/11, rama `carril-a`)
+
+- **Facturación con salida** (`internal/facturacion/baja.go`): sin CAE no se
+  anula ni se hacen notas; un comprobante sin CAE se da de baja y los
+  pendientes de su serie bajan un número. Toma `CandadoCAE` y después el de
+  la serie (`fiscal.ClaveDeLock`), siempre en ese orden: Autorizar nunca toma
+  el de la serie y la emisión nunca el del CAE. La fila se borra (no se le
+  vacía el número) y la foto entera queda en `invoices_dadas_de_baja` (00130).
+- **Al reintentar, la fecha de hoy** (`arca.alDia`), con el reloj del
+  servicio (`s.ahora`), no `now()` de la base. La original queda en
+  `invoices.fecha_emision_original`.
+- **Umbral de la B** en `fiscal/umbral.go`, con vigencia; espejo en
+  `lib/fiscal/umbral.ts` para el mostrador (una prueba los compara).
+- **«Debo»** sale del libro de cada proveedor (`supplier_movements`), como
+  Pagos.
+- **Circuitos en el CSV** (`cobros/reparto.go`): cada recibo se reparte al
+  emitirse (00131) entre Deudores, Anticipos de clientes y B, y no se
+  recalcula. Lo aprendido: recalcular con toda la historia cambiaba meses ya
+  mandados al estudio; recorrer en orden de fecha y guardar el reparto los
+  deja quietos.

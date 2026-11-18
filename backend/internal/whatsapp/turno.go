@@ -381,7 +381,15 @@ func (s *Servicio) contestarTurno(ctx context.Context, convID, waJid string, est
 	case noSalio != nil:
 		s.avisar(ctx, avisoNoSalio(convID, noSalio))
 	case derivada:
-		cuerpo := cortarJS(strings.Join(textos, " · "), 140)
+		// El porqué va primero: quien atiende sabe qué pidió y por qué no
+		// se cotizó solo, sin abrir la charla.
+		var motivos []string
+		for _, r := range rs {
+			if r.Motivo != "" {
+				motivos = append(motivos, r.Motivo)
+			}
+		}
+		cuerpo := cortarJS(strings.Join(append(motivos, textos...), " · "), 200)
 		if cuerpo == "" {
 			cuerpo = "Mandó un archivo para que lo mire alguien."
 		}

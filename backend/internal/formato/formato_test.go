@@ -30,3 +30,13 @@ func TestNumerosComoIntl(t *testing.T) {
 		}
 	}
 }
+
+// Decimal es formatearDecimal en modo texto: lo que escribe el bot.
+func TestDecimal(t *testing.T) {
+	casos := map[float64]string{4.32: "4,32", 0.5: "0,5", 12: "12", 1234.5: "1.234,5", 0: "0", 4.325: "4,33", -0.004: "0", -2.5: "-2,5", 9.5160000001: "9,52"}
+	for v, quiere := range casos {
+		if got := Decimal(v, 2); got != quiere {
+			t.Errorf("Decimal(%v) = %q, quería %q", v, got, quiere)
+		}
+	}
+}

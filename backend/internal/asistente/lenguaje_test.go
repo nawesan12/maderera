@@ -241,3 +241,36 @@ func TestCorregir(t *testing.T) {
 		}
 	}
 }
+
+// Hallazgo 24 (T7): los miles con punto, la coma y el «²». Quien pide
+// machimbre escribe «1.500»; el teclado del celular, «3.75».
+func TestCantidadConMilesYDecimales(t *testing.T) {
+	casos := []struct {
+		frase  string
+		quiere *Cantidad
+	}{
+		{"6 m² de fenólico", &Cantidad{6, "m2"}},
+		{"2,5 m2 de deck", &Cantidad{2.5, "m2"}},
+		{"3.75 m de zócalo", &Cantidad{3.75, "m"}},
+		{"1.000 metros de zócalo", &Cantidad{1000, "m"}},
+		{"necesito 1.500 m2 de machimbre", &Cantidad{1500, "m2"}},
+		{"1.234,5 metros cuadrados", &Cantidad{1234.5, "m2"}},
+		// La medida no es una cantidad.
+		{"fenólico 18 mm 1.830x2.600", nil},
+		{"machimbre de 3 metros", nil},
+	}
+	for _, c := range casos {
+		got := Entender(c.frase).Cantidad
+		if (got == nil) != (c.quiere == nil) || (got != nil && *got != *c.quiere) {
+			t.Errorf("%q: %+v, quería %+v", c.frase, got, c.quiere)
+		}
+	}
+	if m := Entender("fenólico 1.830x2.600").Medida; m.LargoMm != 1830 || m.AnchoMm != 2600 {
+		t.Errorf("la medida con punto de miles: %+v", m)
+	}
+	for s, quiere := range map[string]float64{"1.000": 1000, "1.500,5": 1500.5, "3.75": 3.75, "2,5": 2.5, "12": 12, "abc": 0} {
+		if got := Numero(s); got != quiere {
+			t.Errorf("Numero(%q) = %v, quería %v", s, got, quiere)
+		}
+	}
+}

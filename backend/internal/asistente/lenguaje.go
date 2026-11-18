@@ -222,7 +222,9 @@ func init() {
 }
 
 var (
-	reMedidaPorPor = regexp.MustCompile(`(\d{2,4})\s*[x×]\s*(\d{2,4})`)
+	// «1830x2600» o «1.830x2.600»: la medida también se escribe con punto
+	// de miles.
+	reMedidaPorPor = regexp.MustCompile(`(\d\.\d{3}|\d{2,4})\s*[x×]\s*(\d\.\d{3}|\d{2,4})`)
 	reEspesorMm    = regexp.MustCompile(`(\d{1,3})\s*mm\b`)
 	// La segunda parte atrapa la unidad de largo que sigue: «machimbre de 3
 	// metros» es el largo de la pieza, no un espesor de 3 mm.
@@ -234,15 +236,19 @@ var (
 	// número suelto atrás de una palabra, al final o antes de la pregunta.
 	// «necesito 10 tirantes» no: atrás del número viene el producto.
 	reEspesorSuelto = regexp.MustCompile(`\b[a-z]{3,}\s+(\d{1,2})(?:\s*[?!.]*$|\s+(?:cuanto|que|precio|hay|tenes|tienen|sale|salen|vale|por favor)\b)`)
-	reM2            = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*(?:m2|m²|metros? cuadrados?)`)
-	reMetros        = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*(?:m|metros?|ml)\b`)
+	// Los metros admiten miles con punto: quien pide machimbre o zócalo
+	// escribe «1.500». La alternativa de los miles va primero para que
+	// «1.500 m» no se lea como «500 m».
+	reM2     = regexp.MustCompile(`(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)\s*(?:m2|m²|metros? cuadrados?)`)
+	reMetros = regexp.MustCompile(`(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)\s*(?:m|metros?|ml)\b`)
+	reMiles  = regexp.MustCompile(`^\d{1,3}(?:\.\d{3})+(?:,\d+)?$`)
 )
 
 func leerMedida(texto string) Medida {
 	var m Medida
 	if g := reMedidaPorPor.FindStringSubmatch(texto); g != nil {
-		m.LargoMm, _ = strconv.Atoi(g[1])
-		m.AnchoMm, _ = strconv.Atoi(g[2])
+		m.LargoMm, _ = strconv.Atoi(strings.ReplaceAll(g[1], ".", ""))
+		m.AnchoMm, _ = strconv.Atoi(strings.ReplaceAll(g[2], ".", ""))
 	}
 	// Se acota a lo que es un espesor creíble para no confundir el «2600» de
 	// una medida con un grosor de placa.
@@ -268,22 +274,54 @@ func leerMedida(texto string) Medida {
 	return m
 }
 
-func numero(s string) float64 {
-	v, _ := strconv.ParseFloat(strings.Replace(s, ",", ".", 1), 64)
+// Numero lee un número escrito por un cliente, como leerCantidadDeConsulta
+// (lib/catalogo/consulta.ts): punto seguido de grupos de tres dígitos es
+// separador de miles («1.500» es mil quinientos), la coma es decimal, y un
+// punto con otra cantidad de dígitos («3.75») es decimal, porque así lo
+// escribe el teclado del celular. Lo que no es número da 0.
+func Numero(s string) float64 {
+	if reMiles.MatchString(s) {
+		s = strings.ReplaceAll(s, ".", "")
+	}
+	v, err := strconv.ParseFloat(strings.Replace(s, ",", ".", 1), 64)
+	if err != nil {
+		return 0
+	}
 	return v
 }
 
+func numero(s string) float64 { return Numero(s) }
+
+// reMedidaEscrita es lo que en un pedido es una medida y no una cantidad:
+// «1.830x2.600», «18 mm», «60 cm».
+var reMedidaEscrita = regexp.MustCompile(`\d[\d.,]*\s*[x×]\s*\d[\d.,]*|\d[\d.,]*\s*(?:mm|cm)\b`)
+
+// SinMedidas borra las medidas de un texto normalizado antes de buscar la
+// cantidad: con los miles leídos, en «fenólico 1.830x2.600» el «1.830» se
+// tomaba por mil ochocientas treinta placas.
+func SinMedidas(texto string) string {
+	return reMedidaEscrita.ReplaceAllString(texto, " ")
+}
+
 func leerCantidad(texto string) *Cantidad {
+	texto = SinMedidas(texto)
 	if g := reM2.FindStringSubmatch(texto); g != nil {
 		return &Cantidad{Valor: numero(g[1]), Unidad: "m2"}
 	}
 	// «12 metros de zócalo» es una cantidad; «machimbre de 3 metros», el
-	// largo de cada pieza.
-	if i := reMetros.FindStringSubmatchIndex(texto); i != nil && !strings.HasSuffix(strings.TrimRight(texto[:i[0]], " "), " de") {
+	// largo de cada pieza. Pero «precio de 12 metros» vuelve a ser cantidad:
+	// el «de» es del precio, no del producto.
+	if i := reMetros.FindStringSubmatchIndex(texto); i != nil {
+		antes := strings.TrimRight(texto[:i[0]], " ")
+		if strings.HasSuffix(antes, " de") && !reDelPrecio.MatchString(antes) {
+			return nil
+		}
 		return &Cantidad{Valor: numero(texto[i[2]:i[3]]), Unidad: "m"}
 	}
 	return nil
 }
+
+var reDelPrecio = regexp.MustCompile(`\b(?:precio|precios|presupuesto|cotizacion|valor|costo)\s+de$`)
 
 // leerRubro: gana el que aparece primero en la frase. En «busco chapa para el
 // techo» se viene a comprar una chapa; el techo es para qué. Si empatan, la
@@ -334,7 +372,9 @@ var servicios = []Intencion{Envios, Horarios, Pagos, Cortes, Cuenta, Persona, Ca
 
 // Entender lee la intención y los datos de un texto.
 func Entender(original string) Entendido {
-	texto := Corregir(Normalizar(original))
+	// «m²» se escribe «m2» antes de normalizar: Normalizar borra el «²» y
+	// «6 m²» quedaba como «6 m», seis metros lineales.
+	texto := Corregir(Normalizar(strings.ReplaceAll(original, "²", "2")))
 
 	// Un despiece le gana a todo: si escribieron piezas, quieren el corte.
 	if d := LeerDespiece(texto); d != nil {

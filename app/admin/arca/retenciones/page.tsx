@@ -71,10 +71,7 @@ export default async function RetencionesSufridasPage({
             <h1 className="text-[26px] font-bold tracking-tight">
               Retenciones
             </h1>
-            <p className="mt-1 text-base text-muted-foreground">
-              Los certificados que nos entregan los clientes. Bajan lo que deben
-              y se computan como crédito contra el impuesto.
-            </p>
+            {/* Los certificados que entregan los clientes: bajan lo que deben y se computan como crédito contra el impuesto. */}
           </div>
           {/* El mes se leía del URL y se escribía en las tarjetas de crédito,
               pero no había con qué cambiarlo: para ver el mes anterior había

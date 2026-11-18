@@ -45,11 +45,7 @@ export function Regimenes({ regimenes }: { regimenes: RegimenEditable[] }) {
     <section className="tarjeta overflow-hidden">
       <header className="border-b border-linea px-5 py-4">
         <h2 className="text-base font-medium">Con qué se retiene</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Las alícuotas y los mínimos de cada régimen. Las actualiza ARCA por
-          resolución: acá se cambian sin tocar el sistema. Una alícuota en cero
-          deja el régimen cargado pero sin retener.
-        </p>
+        {/* Las alícuotas y mínimos los actualiza ARCA por resolución: se cambian acá sin tocar el sistema. Una alícuota en cero deja el régimen cargado sin retener. */}
       </header>
 
       <ul className="divide-y divide-linea">

@@ -154,11 +154,10 @@ export default async function ConfiguracionWhatsappPage() {
       <section className="space-y-4">
         <div>
           <h2 className="text-lg font-medium">Lo que va del mes</h2>
-          <p className="mt-1 max-w-2xl text-base text-muted-foreground">
-            Desde el 1/10/2026 Meta cobra cada mensaje que sale por la API, también las respuestas dentro de las 24 h.
-            Lo que se manda desde la app WhatsApp Business del teléfono no se cobra. Esto se cuenta con lo que Meta
-            informa en cada estado (y estima lo que acaba de salir); la factura de Meta es la que vale.
-          </p>
+          {/* Desde el 1/10/2026 Meta cobra cada mensaje que sale por la API, también
+              las respuestas dentro de las 24 h. Se cuenta con lo que Meta informa en
+              cada estado; la factura de Meta es la que vale. */}
+          <p className="mt-1 text-base text-muted-foreground">Lo que sale desde el teléfono no se cobra.</p>
         </div>
 
         <div className={gasto.alcanzado ? "tarjeta-atencion space-y-3 p-5" : "tarjeta space-y-3 p-5"}>
@@ -289,12 +288,13 @@ export default async function ConfiguracionWhatsappPage() {
       {/* 3. Avisos automáticos */}
       <section>
         <h2 className="text-lg font-medium">Avisos automáticos</h2>
-        <p className="mt-1 max-w-2xl text-base text-muted-foreground">
-          Cuando pasa algo —un pedido queda listo, se registra un pago— el cliente recibe el mensaje sin que nadie lo
-          escriba. Empiezan todos apagados a propósito: cada uno que sale se cobra ({tarifaLegible(gasto.tarifas.utility)} a
-          un número argentino). Lo recomendado es dejarlos apagados y usar el botón «Avisar por WhatsApp» de cada
-          pedido, corte o cheque, que lo manda una persona desde el teléfono y no cuesta nada. Si el cliente escribió
-          hace menos de 24 h sale el texto de abajo; si no, la plantilla aprobada.
+        {/* Cuando pasa algo —un pedido queda listo, se registra un pago— el cliente
+            recibe el mensaje sin que nadie lo escriba. Empiezan apagados a propósito:
+            cada uno se cobra, y el botón «Avisar por WhatsApp» de cada pedido, corte o
+            cheque lo manda una persona desde el teléfono sin costo. Si el cliente
+            escribió hace menos de 24 h sale el texto de abajo; si no, la plantilla. */}
+        <p className="mt-1 text-base text-muted-foreground">
+          Cada uno se cobra ({tarifaLegible(gasto.tarifas.utility)}). Desde el teléfono, con «Avisar por WhatsApp», es gratis.
         </p>
 
         <ul className="mt-4 space-y-3">

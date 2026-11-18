@@ -90,10 +90,7 @@ export default async function MigracionPage({
             <div className="rounded-xl border border-dashed py-10 text-center">
               <DatabaseZap className="mx-auto mb-2 h-7 w-7 text-muted-foreground" />
               <p className="text-base font-medium">Todavía no se migró nada</p>
-              <p className="mt-1 px-6 text-base text-muted-foreground">
-                Cada corrida queda registrada acá con lo que entró y lo que
-                quedó afuera.
-              </p>
+
             </div>
           ) : (
             <div className="space-y-2">

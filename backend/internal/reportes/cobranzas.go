@@ -87,7 +87,7 @@ const cobranzasDelPeriodo = `
 func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamiento int) (Cobranzas, error) {
 	out := Cobranzas{Filas: []Cobranza{}, PorMedio: []TotalPorMedio{}}
 	var cobrado jsmath.Num
-	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int, coalesce(sum(total) FILTER (WHERE NOT anulado), 0) FROM (`+cobranzasDelPeriodo+`) c`,
+	if err := s.lectura.QueryRow(ctx, `SELECT count(*)::int, coalesce(sum(total) FILTER (WHERE NOT anulado), 0) FROM (`+cobranzasDelPeriodo+`) c`,
 		p.Desde, p.Hasta).Scan(&out.Total, &cobrado); err != nil {
 		return out, err
 	}
@@ -95,7 +95,7 @@ func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamie
 
 	// Por medio: las partes de los recibos emitidos y, de los cobros en
 	// línea, el proveedor (mercado_pago o transferencia).
-	rs, err := s.pool.Query(ctx, `
+	rs, err := s.lectura.Query(ctx, `
 		SELECT medio, sum(importe), count(*)::int FROM (
 		  SELECT rp.medio::text AS medio, rp.importe FROM receipt_parts rp JOIN receipts r ON r.id = rp.receipt_id
 		  WHERE r.estado = 'emitido' AND ($1::timestamptz IS NULL OR r.created_at >= $1) AND ($2::timestamptz IS NULL OR r.created_at < $2)
@@ -115,7 +115,7 @@ func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamie
 		return out, err
 	}
 
-	rs, err = s.pool.Query(ctx, `SELECT tipo, id, numero, fecha, cliente, customer_id, order_id, origen, anulado, total FROM (`+cobranzasDelPeriodo+`) c
+	rs, err = s.lectura.Query(ctx, `SELECT tipo, id, numero, fecha, cliente, customer_id, order_id, origen, anulado, total FROM (`+cobranzasDelPeriodo+`) c
 		ORDER BY fecha DESC, id LIMIT $3 OFFSET $4`, p.Desde, p.Hasta, limite, desplazamiento)
 	if err != nil {
 		return out, err
@@ -141,7 +141,7 @@ func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamie
 	if len(recibos) == 0 {
 		return out, nil
 	}
-	rs, err = s.pool.Query(ctx, `SELECT receipt_id, medio::text, importe, cheque_id FROM receipt_parts WHERE receipt_id = ANY($1::uuid[]) ORDER BY receipt_id, orden`, recibos)
+	rs, err = s.lectura.Query(ctx, `SELECT receipt_id, medio::text, importe, cheque_id FROM receipt_parts WHERE receipt_id = ANY($1::uuid[]) ORDER BY receipt_id, orden`, recibos)
 	if err != nil {
 		return out, err
 	}

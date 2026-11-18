@@ -12,6 +12,7 @@ import (
 
 	"mjbj/internal/asistente"
 	"mjbj/internal/cola"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/push"
 )
 
@@ -146,12 +147,19 @@ func (s *Servicio) candadoDelBot(ctx context.Context, convID string) (func(), er
 	if err != nil {
 		return nil, err
 	}
+	restaurar, err := plataforma.SinTopes(ctx, c)
+	if err != nil {
+		c.Release()
+		return nil, err
+	}
 	if _, err := c.Exec(ctx, `select pg_advisory_lock(hashtextextended('whatsapp-bot:' || $1, 0))`, convID); err != nil {
+		restaurar()
 		c.Release()
 		return nil, err
 	}
 	return func() {
 		_, _ = c.Exec(context.WithoutCancel(ctx), `select pg_advisory_unlock(hashtextextended('whatsapp-bot:' || $1, 0))`, convID)
+		restaurar()
 		c.Release()
 	}, nil
 }

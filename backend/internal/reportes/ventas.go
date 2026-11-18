@@ -14,14 +14,27 @@ import (
 
 // Servicio son las lecturas de los reportes.
 type Servicio struct {
-	pool  *pgxpool.Pool
-	log   *slog.Logger
-	ahora func() time.Time
+	pool *pgxpool.Pool
+	// lectura es el pool de los reportes pesados —ventas, cobranzas,
+	// reposición, el cierre y los CSV del contador—: pocas conexiones, de
+	// solo lectura y con más tiempo por consulta. Un reporte de un año no
+	// le saca conexiones al mostrador, y por ahí no puede pasar una
+	// escritura. El inicio del panel queda en el principal: se abre a
+	// cada rato y no puede esperar detrás de un reporte anual.
+	lectura *pgxpool.Pool
+	log     *slog.Logger
+	ahora   func() time.Time
 }
 
-// Nuevo arma el servicio.
+// Nuevo arma el servicio. Sin ConLectura, los reportes van por el mismo pool.
 func Nuevo(pool *pgxpool.Pool, log *slog.Logger) *Servicio {
-	return &Servicio{pool: pool, log: log, ahora: time.Now}
+	return &Servicio{pool: pool, lectura: pool, log: log, ahora: time.Now}
+}
+
+// ConLectura manda los reportes pesados por su propio pool.
+func (s *Servicio) ConLectura(p *pgxpool.Pool) *Servicio {
+	s.lectura = p
+	return s
 }
 
 // Filtros son los del reporte de ventas, además del período: el rubro del
@@ -72,7 +85,7 @@ const (
 )
 
 func (s *Servicio) filas(ctx context.Context, sql string, args []any, detalleEnProductos bool) ([]FilaDeReporte, error) {
-	rs, err := s.pool.Query(ctx, sql, args...)
+	rs, err := s.lectura.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +196,7 @@ func (s *Servicio) ReporteDeVentas(ctx context.Context, corte string, p Periodo,
 // los mismos filtros, con los meses sin ventas en cero.
 func (s *Servicio) VentasPorMes(ctx context.Context, p Periodo, f Filtros, meses int) ([]MesDelReporte, error) {
 	where, args := condiciones(p, f)
-	rs, err := s.pool.Query(ctx, `
+	rs, err := s.lectura.Query(ctx, `
 		SELECT to_char(date_trunc('month', o.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires'), 'YYYY-MM'), sum(o.total)
 		FROM orders o WHERE `+where+` GROUP BY 1`, args...)
 	if err != nil {

@@ -52,7 +52,7 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 	asientos := []Asiento{}
 	idesde, ihasta := instantes(desde, hasta)
 
-	rs, err := s.pool.Query(ctx, `
+	rs, err := s.lectura.Query(ctx, `
 		SELECT fecha_emision, tipo::text, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, exento
 		FROM invoices WHERE fecha_emision >= $1 AND fecha_emision <= $2 AND `+conCae+`
 		ORDER BY fecha_emision`, idesde, ihasta)
@@ -84,7 +84,7 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 	}
 	asientos = append(asientos, cobros...)
 
-	rs, err = s.pool.Query(ctx, `
+	rs, err = s.lectura.Query(ctx, `
 		SELECT f.fecha_emision, f.tipo::text, f.punto_venta, f.numero, s.nombre, f.neto, f.iva21, f.iva105, f.iva27, f.percepciones, f.total, f.exento
 		FROM purchase_invoices f JOIN suppliers s ON s.id = f.supplier_id
 		WHERE f.fecha_emision >= $1 AND f.fecha_emision <= $2 AND f.anulada_at IS NULL ORDER BY f.fecha_emision`, desde, hasta)
@@ -110,7 +110,7 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 		return nil, err
 	}
 
-	rs, err = s.pool.Query(ctx, `
+	rs, err = s.lectura.Query(ctx, `
 		SELECT p.fecha, s.nombre, p.referencia, p.total, p.neto, p.medio, p.anulado_at
 		FROM supplier_payments p JOIN suppliers s ON s.id = p.supplier_id
 		WHERE (p.fecha >= $1 AND p.fecha <= $2) OR (p.anulado_at >= $1 AND p.anulado_at <= $2)
@@ -145,7 +145,7 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 		return nil, err
 	}
 
-	rs, err = s.pool.Query(ctx, `
+	rs, err = s.lectura.Query(ctx, `
 		SELECT fecha, descripcion, categoria::text, importe, medio::text
 		FROM expenses WHERE fecha >= $1 AND fecha <= $2 ORDER BY fecha`, desde, hasta)
 	if err != nil {
@@ -184,7 +184,7 @@ type PendienteDelCierre struct {
 func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Time) ([]PendienteDelCierre, error) {
 	var borradores, cajas, sinFactura int
 	_, ihasta := instantes(desde, hasta)
-	err := s.pool.QueryRow(ctx, `
+	err := s.lectura.QueryRow(ctx, `
 		SELECT
 		  (SELECT count(*)::int FROM goods_receipts WHERE estado = 'borrador' AND fecha >= $1 AND fecha <= $2),
 		  (SELECT count(*)::int FROM cash_sessions WHERE estado = 'abierta' AND abierta_at <= $3),
@@ -244,7 +244,7 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	var r ResumenDelMes
 	idesde, ihasta := instantes(desde, hasta)
 	var vn, vi, vt, cn, ci, ct, g, rp, rs jsmath.Num
-	err := s.pool.QueryRow(ctx, `
+	err := s.lectura.QueryRow(ctx, `
 		SELECT
 		  coalesce(sum(CASE WHEN tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * neto), 0),
 		  coalesce(sum(CASE WHEN tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * (iva21 + iva105 + iva27)), 0),
@@ -255,7 +255,7 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	if err != nil {
 		return r, err
 	}
-	err = s.pool.QueryRow(ctx, `
+	err = s.lectura.QueryRow(ctx, `
 		SELECT
 		  coalesce(sum(CASE WHEN tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * neto), 0),
 		  coalesce(sum(CASE WHEN tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * (iva21 + iva105 + iva27))
@@ -269,7 +269,7 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	}
 	// Las retenciones de un pago anulado no cuentan.
 	practicadas := " AND anulada_at IS NULL"
-	err = s.pool.QueryRow(ctx, `
+	err = s.lectura.QueryRow(ctx, `
 		SELECT
 		  (SELECT coalesce(sum(importe), 0) FROM expenses WHERE fecha >= $1 AND fecha <= $2),
 		  (SELECT count(*)::int FROM expenses WHERE fecha >= $1 AND fecha <= $2),

@@ -50,7 +50,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	asientos := []Asiento{}
 
 	// 1. Los cobros de una factura de antes de los recibos.
-	rs, err := s.pool.Query(ctx, `
+	rs, err := s.lectura.Query(ctx, `
 		SELECT p.fecha, i.tipo::text, i.punto_venta, i.numero, i.receptor_nombre, p.monto, p.medio::text
 		FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id
 		WHERE p.fecha >= $1 AND p.fecha <= $2 AND p.medio <> 'cuenta_corriente' AND p.receipt_id IS NULL
@@ -76,7 +76,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	}
 
 	// 2. Los recibos emitidos o anulados en el período.
-	rs, err = s.pool.Query(ctx, `
+	rs, err = s.lectura.Query(ctx, `
 		SELECT r.id, r.numero, r.recibido_de, r.created_at, r.anulado_at, p.medio::text, p.importe
 		FROM receipts r JOIN receipt_parts p ON p.receipt_id = r.id
 		WHERE (r.created_at >= $1 AND r.created_at <= $2) OR (r.anulado_at >= $1 AND r.anulado_at <= $2)
@@ -125,7 +125,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 
 	// 3. El tramo de un reintegro parcial de un pago con recibo: solo el que
 	// devolvió deuda a la cuenta (con movimiento), igual que la cuenta.
-	rs, err = s.pool.Query(ctx, `
+	rs, err = s.lectura.Query(ctx, `
 		SELECT f.created_at, f.importe, r.numero, r.recibido_de, x.medio::text
 		FROM payment_refunds f
 		JOIN receipt_parts x ON x.payment_id = f.payment_id
@@ -155,7 +155,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	// facturados, y la deuda pagada antes de los recibos. Qué cae en el
 	// período (el cobro, el reintegro o un tramo) se decide en Go, con la
 	// fecha corrida a la de la factura.
-	rs, err = s.pool.Query(ctx, `
+	rs, err = s.lectura.Query(ctx, `
 		SELECT p.id, p.tipo::text, coalesce(p.medio, ''), p.monto, p.estado::text, p.updated_at,
 		       coalesce(p.acreditado_at, CASE WHEN p.proveedor = 'mostrador' THEN coalesce(o.cobrada_at, o.created_at) END,
 		                p.conciliado_at, p.created_at),

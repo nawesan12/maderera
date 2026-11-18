@@ -23,7 +23,7 @@ import (
 // baja: la baja no cancela la deuda, y el contador la necesita igual (ya
 // quedan afuera los que no deben, por el saldo).
 func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, error) {
-	rs, err := s.pool.Query(ctx, `
+	rs, err := s.lectura.Query(ctx, `
 		SELECT c.id, coalesce(c.codigo_legacy, ''), c.nombre, coalesce(c.cuit, ''), coalesce(c.telefono, ''), m.monto, m.created_at
 		FROM customers c JOIN account_movements m ON m.customer_id = c.id
 		ORDER BY c.id, m.created_at`)
@@ -96,7 +96,7 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 // CsvCuentasAPagar son las facturas de compra con saldo, la que vence antes
 // primero, con los días de atraso.
 func (s *Servicio) CsvCuentasAPagar(ctx context.Context, ahora time.Time) (string, error) {
-	rs, err := s.pool.Query(ctx, `
+	rs, err := s.lectura.Query(ctx, `
 		SELECT s.nombre, coalesce(s.cuit, ''), f.tipo::text, f.punto_venta, f.numero, f.fecha_emision, f.fecha_vencimiento, f.total,
 		       `+saldoDeCompra+` AS saldo
 		FROM purchase_invoices f JOIN suppliers s ON s.id = f.supplier_id

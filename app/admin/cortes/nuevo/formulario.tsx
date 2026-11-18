@@ -129,6 +129,8 @@ export function FormularioCorte({
    */
   desdeConsulta?: {
     token: string;
+    /** Cuál de las placas de la consulta; 0 es la primera. */
+    grupo: number;
     placa: PlacaElegida | null;
     mitad: Mitad;
     cantoDescripcion: string;
@@ -283,6 +285,9 @@ export function FormularioCorte({
       )}
       {desdeConsulta && (
         <input type="hidden" name="consulta" value={desdeConsulta.token} />
+      )}
+      {desdeConsulta && desdeConsulta.grupo > 0 && (
+        <input type="hidden" name="consultaGrupo" value={desdeConsulta.grupo} />
       )}
       {cliente && <input type="hidden" name="customerId" value={cliente.id} />}
       {placa && (

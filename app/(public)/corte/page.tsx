@@ -3,7 +3,7 @@ import { DatosEstructurados } from "@/components/datos-estructurados";
 import { metadatosDePagina, migasJsonLd } from "@/lib/seo";
 import Link from "next/link";
 import { Ruler } from "lucide-react";
-import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
+import { placasCortablesPublicas, tapacantosDelCatalogo } from "@/lib/dal/cortes-publico";
 import { anchoDeSierra } from "@/lib/dal/sierra";
 import { HORARIO_CORTES } from "@/lib/sucursales";
 import { VistaDeCorteDeQuienMira } from "./vista";
@@ -52,10 +52,11 @@ export default async function CortePage() {
    * de precios corresponde, era pagar dos veces. El precio del profesional
    * llega aparte, en la misma respuesta: ver `VistaDeCorteDeQuienMira`.
    */
-  const [placas, sierra, sucursales] = await Promise.all([
+  const [placas, sierra, sucursales, tapacantos] = await Promise.all([
     placasCortablesPublicas(),
     anchoDeSierra(),
     listarSucursalesPublicas(),
+    tapacantosDelCatalogo(),
   ]);
 
   return (
@@ -98,6 +99,7 @@ export default async function CortePage() {
               // Sin esperar: la pantalla sale armada y solo el precio espera.
               precios={preciosDePlacas()}
               placas={placas}
+              tapacantos={tapacantos}
               anchoSierra={sierra}
               sucursales={sucursales.map((s) => ({ slug: s.slug, nombre: s.nombre, whatsapp: s.whatsapp }))}
             />

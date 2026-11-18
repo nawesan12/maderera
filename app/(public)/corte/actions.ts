@@ -45,13 +45,18 @@ export async function quitarCorteDelCarrito(id: string): Promise<EstadoCorte> {
  * Guarda el corte que se manda por WhatsApp y devuelve el token del enlace.
  * Go lo valida con las mismas reglas que el carrito y le pone el freno por IP;
  * anda con la tienda apagada, que es justamente cuando más se usa.
+ *
+ * Va con todas las placas del pedido (`grupos`): un solo token y un solo
+ * mensaje aunque el mueble mezcle melamina de 18 con un fondo de 3 mm.
  */
 export async function guardarConsultaDeCorte(datos: {
-  variantId: string;
-  mitad?: "largo" | "ancho" | null;
-  cantoDescripcion?: string | null;
   sucursal: string;
-  piezas: unknown[];
+  grupos: {
+    variantId: string;
+    mitad?: "largo" | "ancho" | null;
+    cantoDescripcion?: string | null;
+    piezas: unknown[];
+  }[];
 }): Promise<{ token?: string; error?: string }> {
   const r = await (await api()).POST("/api/v1/cortes/consulta", { body: datos as Record<string, unknown> });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá las medidas.") };

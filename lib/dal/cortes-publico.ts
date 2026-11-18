@@ -5,6 +5,7 @@ import { apiInterna, apiPublica, datos } from "@/lib/api/servidor";
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 import { listaVigente } from "@/lib/dal/precios-sesion";
 import type { PlacaCortable } from "@/lib/cortes/tipos";
+import type { Tapacanto } from "@/lib/cortes/armador";
 
 /**
  * Las placas que se pueden mandar a cortar desde el sitio: con las dos
@@ -37,3 +38,26 @@ export const placasCortables = cache(async (): Promise<PlacaCortable[]> => {
 
 /** Las placas a precio de público, las mismas para todo el que entre. */
 export const placasCortablesPublicas = cache(async (): Promise<PlacaCortable[]> => placasDeLaLista(null));
+
+/**
+ * Los tapacantos del catálogo para el desplegable del armador. Sin precio, así
+ * que son los mismos para todos y van al caché compartido con el catálogo.
+ *
+ * Si Go no contesta, lista vacía y el armador sigue con el campo de texto
+ * libre. Vacía y no un error a propósito: con `cacheComponents`, una función
+ * de `unstable_cache` que tira deja el hueco sin llenar y el prerender de
+ * /corte entero se cae como «datos sin caché fuera de Suspense» (pasa al
+ * armar Next contra un Go que todavía no tiene la ruta). La lista vacía se
+ * corrige sola con la próxima edición del catálogo o con el vencimiento.
+ */
+export const tapacantosDelCatalogo = cachearPublico(
+  async (): Promise<Tapacanto[]> => {
+    try {
+      return (await apiPublica.GET("/api/v1/cortes/tapacantos")).data ?? [];
+    } catch {
+      return [];
+    }
+  },
+  ["cortes", "tapacantos"],
+  ETIQUETAS.catalogo,
+);

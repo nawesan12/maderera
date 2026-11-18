@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import { urlAbsoluta } from "@/lib/seo";
+import { TONOS, marcaDePlaca, tonoDePlaca } from "@/lib/catalogo/placa";
 
 /**
  * La tarjeta que se ve al compartir un producto, una categoría o una sucursal.
@@ -61,6 +62,7 @@ export async function tarjeta({
   detalle,
   pie,
   foto,
+  placa,
 }: {
   antetitulo: string;
   titulo: string;
@@ -68,9 +70,18 @@ export async function tarjeta({
   detalle?: string | null;
   pie: string;
   foto?: string | null;
+  /**
+   * Sin foto, la misma placa que dibuja el sitio (hallazgo 25): quien recibe
+   * el enlace ve lo mismo que va a encontrar al abrirlo. Va en el lugar de la
+   * foto; la veta queda afuera, el generador no entiende filtros de SVG.
+   */
+  placa?: { rubro: string; categoria: string; marca?: string | null } | null;
 }): Promise<Response> {
   const largo = titulo.length;
-  const cuerpo = foto ? (largo > 40 ? 50 : 60) : largo > 40 ? 60 : 72;
+  const conPanel = Boolean(foto || placa);
+  const cuerpo = conPanel ? (largo > 40 ? 50 : 60) : largo > 40 ? 60 : 72;
+  const tono = placa && !foto ? TONOS[tonoDePlaca(placa.categoria)].claro : null;
+  const linea = placa && !foto ? marcaDePlaca(placa.marca) : null;
 
   const png = new ImageResponse(
     (
@@ -96,13 +107,44 @@ export async function tarjeta({
           />
         )}
 
+        {!foto && placa && tono && (
+          <div
+            style={{
+              width: 520,
+              height: 630,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              padding: 52,
+              background: tono.fondo,
+              color: tono.texto,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div style={{ width: 64, height: 7, borderRadius: 4, background: NARANJA, display: "flex" }} />
+              {linea && <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: 5 }}>{linea}</div>}
+            </div>
+            <div
+              style={{
+                fontSize: placa.rubro.length > 14 ? 58 : 72,
+                fontWeight: 800,
+                lineHeight: 1,
+                textTransform: "uppercase",
+                display: "flex",
+              }}
+            >
+              {placa.rubro}
+            </div>
+          </div>
+        )}
+
         <div
           style={{
             flex: 1,
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            padding: foto ? "0 56px" : "0 72px",
+            padding: conPanel ? "0 56px" : "0 72px",
           }}
         >
           <div

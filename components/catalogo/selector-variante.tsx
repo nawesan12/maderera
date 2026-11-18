@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, use, useState, type ComponentProps } from "react";
-import { Check, Loader2, MessageCircle, Plus, Scissors } from "lucide-react";
+import { Check, Loader2, Plus, Scissors } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DisponibilidadPorSucursal } from "@/components/catalogo/disponibilidad";
@@ -9,6 +9,8 @@ import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { cantidadDeConsulta, enlaceDeConsulta, textoDeConsulta } from "@/lib/catalogo/consulta";
 import { presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
 import type { PreciosDeFicha } from "@/lib/dal/visitante";
 import type { VarianteDetalle } from "@/lib/dal/catalog";
@@ -26,6 +28,7 @@ import {
   admiteDecimales,
   formatearCantidad,
   formatearUnidadLarga,
+  formatearUnidadPlural,
   leerCantidad,
   pasoDeCantidad,
 } from "@/lib/unidades";
@@ -146,12 +149,9 @@ export function SelectorVariante({
         <p className="text-sm text-muted-foreground">
           Este producto todavía no tiene medidas cargadas.
         </p>
-        <a href={whatsapp} target="_blank" rel="noopener noreferrer">
-          <Button variant="outline" className="mt-3">
-            <MessageCircle className="h-4 w-4" />
-            Consultar por WhatsApp
-          </Button>
-        </a>
+        <BotonWhatsapp enlace={whatsapp} variante="secundario" className="mt-3">
+          Consultar por WhatsApp
+        </BotonWhatsapp>
       </div>
     );
   }
@@ -251,9 +251,7 @@ export function SelectorVariante({
           area={area}
           aPedido={aPedido}
           stockVisible={tienda.stockVisible}
-          enlace={(texto) =>
-            numeroWhatsapp ? `https://wa.me/${numeroWhatsapp}?text=${encodeURIComponent(texto)}` : whatsapp
-          }
+          enlace={(texto) => (numeroWhatsapp ? enlaceDeConsulta(numeroWhatsapp, texto) : whatsapp)}
         />
       ) : (
         <>
@@ -312,17 +310,27 @@ export function SelectorVariante({
                     ? "Este producto se cotiza según la medida y el trabajo."
                     : "Ahora mismo no tenemos stock de esta medida."}
               </p>
-              <a
-                href={whatsapp}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-block"
+              {/* El mismo texto que con la tienda apagada: producto, medida y
+                  código, para que quien atiende no tenga que preguntar cuál. */}
+              <BotonWhatsapp
+                className="mt-3"
+                enlace={
+                  numeroWhatsapp
+                    ? enlaceDeConsulta(
+                        numeroWhatsapp,
+                        textoDeConsulta({
+                          producto: productName,
+                          medida: elegida.label,
+                          como: conMedia && presentacion ? nombreDePresentacion(presentacion)?.toLowerCase() : null,
+                          unidad: unidadVendida,
+                          codigo: elegida.sku,
+                        }),
+                      )
+                    : whatsapp
+                }
               >
-                <Button className="bg-verde-whatsapp text-white hover:bg-brand-green/90">
-                  <MessageCircle className="h-4 w-4" />
-                  {sinPrecio ? "Pedir cotización" : "Consultar disponibilidad"}
-                </Button>
-              </a>
+                {sinPrecio ? "Pedir cotización" : "Consultar disponibilidad"}
+              </BotonWhatsapp>
             </div>
           ) : (
             <>
@@ -450,9 +458,26 @@ function ConsultaDeLaMedida({
   stockVisible: boolean;
   enlace: (texto: string) => string;
 }) {
+  /*
+   * La cantidad, opcional y vacía al empezar (hallazgo 45, 18/11/2026): el
+   * precio de 1 placa y el de 40 no son el mismo mensaje, y era lo primero
+   * que preguntaba el vendedor. Si queda vacía el texto sale como antes.
+   * Lleva la unidad adentro, a la derecha: «12» solo puede ser placas,
+   * metros o m², y no es texto explicativo, es parte del dato.
+   */
+  const [cantidadTexto, setCantidadTexto] = useState("");
+  const cantidad = cantidadDeConsulta(cantidadTexto, unidad);
   const detalles = [medida.material, medida.color, medida.terminacion, medida.calidad].filter(Boolean);
   const como = presentacion ? nombreDePresentacion(presentacion)?.toLowerCase() : null;
-  const texto = `Hola! Quería el precio de ${productName} — ${medida.label}${como ? ` (${como})` : ""}. ¿Tienen disponible?`;
+  const texto = textoDeConsulta({
+    producto: productName,
+    medida: medida.label,
+    como,
+    cantidad,
+    unidad,
+    codigo: medida.sku,
+  });
+  const sufijo = formatearUnidad(unidad);
 
   return (
     <>
@@ -479,15 +504,25 @@ function ConsultaDeLaMedida({
         )}
       </div>
 
-      <a
-        href={enlace(texto)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex h-[50px] w-full items-center justify-center gap-2.5 rounded-[10px] bg-verde-whatsapp text-base font-semibold text-white transition-colors hover:bg-brand-green/90"
-      >
-        <MessageCircle className="h-[18px] w-[18px]" />
-        Consultar precio por WhatsApp
-      </a>
+      <div className="flex items-stretch gap-2.5">
+        <label className="flex h-[50px] w-[124px] flex-none items-center rounded-[10px] border border-linea bg-card pr-3 focus-within:border-accion">
+          <input
+            value={cantidadTexto}
+            onChange={(e) => setCantidadTexto(e.target.value)}
+            inputMode="decimal"
+            autoComplete="off"
+            placeholder="Cant."
+            aria-label={`Cantidad, en ${formatearUnidadPlural(unidad)}`}
+            className="tabular h-full w-full min-w-0 bg-transparent pl-3.5 text-[17px] font-semibold outline-none placeholder:text-[15px] placeholder:font-normal placeholder:text-texto-3"
+          />
+          <span aria-hidden className="text-[14.5px] text-texto-2">
+            {sufijo}
+          </span>
+        </label>
+        <BotonWhatsapp enlace={enlace(texto)} tamano="grande" className="min-w-0 flex-1 px-3">
+          <span className="truncate">Consultar precio</span>
+        </BotonWhatsapp>
+      </div>
     </>
   );
 }

@@ -6,12 +6,12 @@ import {
   ChevronRight,
   FileText,
   Lock,
-  MessageCircle,
   Store,
   Truck,
 } from "lucide-react";
 import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { SelectorVarianteDeQuienMira } from "@/components/catalogo/selector-variante";
 import { tienda } from "@/lib/dal/contenido";
 import { preciosDeFicha } from "@/lib/dal/visitante";
@@ -262,11 +262,16 @@ export default async function ProductoPage({
             dentro de una pista de 342 y empujaba el ancho del documento entero:
             en el teléfono la página quedaba corrida y se podía arrastrar de
             costado. Medido: 403 px de scroll en una pantalla de 390. */}
-        <div className="grid gap-9 lg:grid-cols-2 lg:items-start [&>*]:min-w-0">
+        {/* `data-sin-flotantes`: el WhatsApp flotante tapaba «Consultar precio
+            por WhatsApp», que acá ya está con la medida escrita (hallazgo 27). */}
+        <div data-sin-flotantes className="grid gap-9 lg:grid-cols-2 lg:items-start [&>*]:min-w-0">
           <GaleriaProducto
             imagenes={producto.imagenes}
             nombre={producto.name}
             destacado={producto.featured}
+            rubro={producto.subcategory ?? producto.categoryName}
+            categoria={producto.categorySlug}
+            marca={producto.brand}
           />
 
           <div>
@@ -338,15 +343,9 @@ export default async function ProductoPage({
             {/* Con la tienda apagada el WhatsApp ya es el botón principal del
                 selector, con la medida escrita: otro igual acá abajo sobra. */}
             {laTienda.activa && (
-              <a
-                href={whatsapp}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 flex h-[50px] items-center justify-center gap-2.5 rounded-[10px] border border-verde-whatsapp/35 bg-verde-whatsapp/10 text-[15.5px] font-semibold text-verde-whatsapp transition-colors hover:bg-verde-whatsapp/20"
-              >
-                <MessageCircle className="h-[18px] w-[18px]" />
+              <BotonWhatsapp enlace={whatsapp} variante="secundario" tamano="grande" className="mt-3 w-full">
                 Consultar por WhatsApp
-              </a>
+              </BotonWhatsapp>
             )}
           </div>
         </div>

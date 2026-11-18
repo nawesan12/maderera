@@ -211,31 +211,33 @@ type TributoDeFactura struct {
 
 // Completo es el comprobante con renglones, cobros y tributos (leerComprobante).
 type Completo struct {
-	ID                   string             `json:"id"`
-	Tipo                 string             `json:"tipo"`
-	PuntoVenta           int64              `json:"puntoVenta"`
-	Numero               int64              `json:"numero"`
-	Estado               string             `json:"estado"`
-	CustomerID           *string            `json:"customerId"`
-	OrderID              *string            `json:"orderId"`
-	ReceptorNombre       string             `json:"receptorNombre"`
-	ReceptorCuit         *string            `json:"receptorCuit"`
-	ReceptorCondicionIva string             `json:"receptorCondicionIva"`
-	ReceptorDomicilio    *string            `json:"receptorDomicilio"`
-	Neto                 string             `json:"neto"`
-	Iva21                string             `json:"iva21"`
-	Iva105               string             `json:"iva105"`
-	Iva27                string             `json:"iva27"`
-	Exento               string             `json:"exento"`
-	TributosTotal        string             `json:"tributosTotal"`
-	Total                string             `json:"total"`
-	Cae                  *string            `json:"cae"`
-	CaeVencimiento       *time.Time         `json:"caeVencimiento"`
-	ObservacionesArca    *string            `json:"observacionesArca"`
-	ComprobanteOrigenID  *string            `json:"comprobanteOrigenId"`
-	Acreditado           string             `json:"acreditado"`
-	Debitado             string             `json:"debitado"`
-	FechaEmision         time.Time          `json:"fechaEmision"`
+	ID                   string     `json:"id"`
+	Tipo                 string     `json:"tipo"`
+	PuntoVenta           int64      `json:"puntoVenta"`
+	Numero               int64      `json:"numero"`
+	Estado               string     `json:"estado"`
+	CustomerID           *string    `json:"customerId"`
+	OrderID              *string    `json:"orderId"`
+	ReceptorNombre       string     `json:"receptorNombre"`
+	ReceptorCuit         *string    `json:"receptorCuit"`
+	ReceptorCondicionIva string     `json:"receptorCondicionIva"`
+	ReceptorDomicilio    *string    `json:"receptorDomicilio"`
+	Neto                 string     `json:"neto"`
+	Iva21                string     `json:"iva21"`
+	Iva105               string     `json:"iva105"`
+	Iva27                string     `json:"iva27"`
+	Exento               string     `json:"exento"`
+	TributosTotal        string     `json:"tributosTotal"`
+	Total                string     `json:"total"`
+	Cae                  *string    `json:"cae"`
+	CaeVencimiento       *time.Time `json:"caeVencimiento"`
+	ObservacionesArca    *string    `json:"observacionesArca"`
+	ComprobanteOrigenID  *string    `json:"comprobanteOrigenId"`
+	Acreditado           string     `json:"acreditado"`
+	Debitado             string     `json:"debitado"`
+	FechaEmision         time.Time  `json:"fechaEmision"`
+	// La fecha con que se emitió, si al reintentar salió con la del día.
+	FechaEmisionOriginal *time.Time         `json:"fechaEmisionOriginal"`
 	FechaVencimiento     *time.Time         `json:"fechaVencimiento"`
 	Observaciones        *string            `json:"observaciones"`
 	PuntoVentaNombre     *string            `json:"puntoVentaNombre"`
@@ -256,12 +258,13 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Completo, error) {
 	err := s.pool.QueryRow(ctx, `SELECT i.id, i.tipo::text, i.punto_venta, i.numero, i.estado::text, i.customer_id, i.order_id,
 		i.receptor_nombre, i.receptor_cuit, i.receptor_condicion_iva::text, i.receptor_domicilio, i.neto::text, i.iva21::text,
 		i.iva105::text, i.iva27::text, i.exento::text, i.tributos::text, i.total::text, i.cae, i.cae_vencimiento, i.observaciones_arca,
-		i.comprobante_origen_id, i.acreditado::text, i.debitado::text, i.fecha_emision, i.fecha_vencimiento, i.observaciones, p.nombre, b.name
+		i.comprobante_origen_id, i.acreditado::text, i.debitado::text, i.fecha_emision, i.fecha_vencimiento, i.observaciones, p.nombre, b.name,
+		i.fecha_emision_original
 		FROM invoices i LEFT JOIN puntos_venta p ON p.id = i.punto_venta_id LEFT JOIN branches b ON b.id = p.branch_id
 		WHERE i.id = $1`, id).Scan(&c.ID, &c.Tipo, &c.PuntoVenta, &c.Numero, &c.Estado, &c.CustomerID, &c.OrderID, &c.ReceptorNombre,
 		&c.ReceptorCuit, &c.ReceptorCondicionIva, &c.ReceptorDomicilio, &c.Neto, &c.Iva21, &c.Iva105, &c.Iva27, &c.Exento,
 		&c.TributosTotal, &c.Total, &c.Cae, &c.CaeVencimiento, &c.ObservacionesArca, &c.ComprobanteOrigenID, &c.Acreditado,
-		&c.Debitado, &c.FechaEmision, &c.FechaVencimiento, &c.Observaciones, &c.PuntoVentaNombre, &c.Sucursal)
+		&c.Debitado, &c.FechaEmision, &c.FechaVencimiento, &c.Observaciones, &c.PuntoVentaNombre, &c.Sucursal, &c.FechaEmisionOriginal)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}

@@ -5519,6 +5519,7 @@ type Invoice struct {
 	Iva27                jsmath.Num        `json:"iva27"`
 	Acreditado           jsmath.Num        `json:"acreditado"`
 	Debitado             jsmath.Num        `json:"debitado"`
+	FechaEmisionOriginal *time.Time        `json:"fechaEmisionOriginal"`
 }
 
 type InvoiceItem struct {
@@ -5556,6 +5557,25 @@ type InvoiceTributo struct {
 	BaseImponible jsmath.Num `json:"baseImponible"`
 	Alicuota      jsmath.Num `json:"alicuota"`
 	Importe       jsmath.Num `json:"importe"`
+}
+
+type InvoicesDadasDeBaja struct {
+	ID             string          `json:"id"`
+	InvoiceID      string          `json:"invoiceId"`
+	Tipo           TipoComprobante `json:"tipo"`
+	PuntoVenta     int32           `json:"puntoVenta"`
+	Numero         int32           `json:"numero"`
+	ReceptorNombre string          `json:"receptorNombre"`
+	CustomerID     *string         `json:"customerId"`
+	OrderID        *string         `json:"orderId"`
+	Total          jsmath.Num      `json:"total"`
+	FechaEmision   time.Time       `json:"fechaEmision"`
+	Motivo         string          `json:"motivo"`
+	UsuarioID      *string         `json:"usuarioId"`
+	UsuarioNombre  string          `json:"usuarioNombre"`
+	CreatedAt      time.Time       `json:"createdAt"`
+	Renumerados    json.RawMessage `json:"renumerados"`
+	Comprobante    json.RawMessage `json:"comprobante"`
 }
 
 type MigrationRun struct {

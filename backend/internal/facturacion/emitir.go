@@ -141,6 +141,11 @@ func (s *Servicio) EmitirEnTransaccion(ctx context.Context, tx pgx.Tx, d DatosEm
 		}
 	}
 	im := fiscal.Importes(entradas, d.TributosDados, config.PercibeIibb, jsmath.Numero(config.AlicuotaPercepcionIibb))
+	// Una B sin documento desde el umbral: ARCA la rechaza y el número
+	// quemado traba a los que vienen detrás. Se frena antes de tomarlo.
+	if m := fiscal.FaltaIdentificarComprador(tipo, im.Total, d.ReceptorCuit, s.ahora()); m != "" {
+		return "", errEmision(m)
+	}
 
 	numero, err := s.siguienteNumero(ctx, tx, p.numero, tipo)
 	if err != nil {

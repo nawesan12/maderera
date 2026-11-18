@@ -197,6 +197,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/facturacion/comprobantes/{id}/serie": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Lo que la ficha de un comprobante sin CAE muestra antes de reintentar o de darlo de baja: cuántos anteriores sin CAE se autorizan antes, qué pendientes bajan un número con la baja, la deuda que se va con él y por qué no se puede dar de baja (sin consultar a ARCA). Solo el admin. */
+        get: operations["SerieDelComprobante"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/facturacion/comprobantes/{id}/baja": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Saca de la serie un comprobante que ARCA no autorizó y corre un número para abajo los pendientes que vienen detrás. Se frena si tiene CAE, si un posterior tiene CAE, si tiene notas, si tiene cobros (con recibo vivo o sin recibo) o si ARCA ya tiene el número. Lo que era queda en el listado de dados de baja. Solo el admin. */
+        post: operations["DarDeBajaComprobante"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/facturacion/dados-de-baja": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Los comprobantes dados de baja, el más nuevo primero, con quién, cuándo, por qué y a quién se le corrió el número. Solo el admin. */
+        get: operations["ListarDadosDeBaja"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/facturacion/comprobantes/{id}/anular": {
         parameters: {
             query?: never;
@@ -448,6 +503,45 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Corrimiento: {
+            invoiceId: string;
+            /** Format: int64 */
+            de: number;
+            /** Format: int64 */
+            a: number;
+            receptorNombre: string;
+            customerId: string | null;
+        };
+        SerieDelComprobante: {
+            anterioresSinCae: number;
+            corren: components["schemas"]["Corrimiento"][];
+            /** Format: double */
+            deuda: number;
+            bloqueo: string | null;
+        };
+        ResultadoDeBaja: {
+            id: string;
+            etiqueta: string;
+            corridos: components["schemas"]["Corrimiento"][];
+        };
+        DadoDeBaja: {
+            id: string;
+            tipo: string;
+            /** Format: int64 */
+            puntoVenta: number;
+            /** Format: int64 */
+            numero: number;
+            receptorNombre: string;
+            /** Format: double */
+            total: number;
+            /** Format: date-time */
+            fechaEmision: string;
+            motivo: string;
+            usuarioNombre: string;
+            /** Format: date-time */
+            createdAt: string;
+            renumerados: components["schemas"]["Corrimiento"][];
+        };
         Problema: {
             title: string;
             status: number;
@@ -605,6 +699,11 @@ export interface components {
             debitado: string;
             /** Format: date-time */
             fechaEmision: string;
+            /**
+             * Format: date-time
+             * @description La fecha con que se emitió, si al reintentar salió con la del día
+             */
+            fechaEmisionOriginal?: string | null;
             /** Format: date-time */
             fechaVencimiento: string | null;
             observaciones: string | null;
@@ -1099,6 +1198,78 @@ export interface operations {
                 };
             };
             422: components["responses"]["Problema"];
+        };
+    };
+    SerieDelComprobante: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La serie */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SerieDelComprobante"];
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    DarDeBajaComprobante: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    motivo: string;
+                };
+            };
+        };
+        responses: {
+            /** @description La baja */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultadoDeBaja"];
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    ListarDadosDeBaja: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las bajas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DadoDeBaja"][];
+                };
+            };
         };
     };
     AnularComprobante: {

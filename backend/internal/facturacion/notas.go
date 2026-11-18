@@ -18,7 +18,7 @@ type original struct {
 	id, tipo, estado, receptorNombre, condicion string
 	puntoVenta, numero                          int64
 	customerID, orderID, receptorCuit           *string
-	receptorDomicilio, puntoVentaID             *string
+	receptorDomicilio, puntoVentaID, cae        *string
 	neto, iva21, iva105, iva27, exento          float64
 	total, acreditado, debitado                 float64
 }
@@ -27,15 +27,22 @@ func bloquearOriginal(ctx context.Context, tx pgx.Tx, id string) (*original, err
 	var o original
 	err := tx.QueryRow(ctx, `SELECT id, tipo::text, estado::text, receptor_nombre, receptor_condicion_iva::text, punto_venta, numero,
 		customer_id, order_id, receptor_cuit, receptor_domicilio, punto_venta_id, neto::float8, iva21::float8, iva105::float8,
-		iva27::float8, exento::float8, total::float8, acreditado::float8, debitado::float8
+		iva27::float8, exento::float8, total::float8, acreditado::float8, debitado::float8, cae
 		FROM invoices WHERE id = $1 FOR UPDATE`, id).Scan(&o.id, &o.tipo, &o.estado, &o.receptorNombre, &o.condicion, &o.puntoVenta,
 		&o.numero, &o.customerID, &o.orderID, &o.receptorCuit, &o.receptorDomicilio, &o.puntoVentaID, &o.neto, &o.iva21, &o.iva105,
-		&o.iva27, &o.exento, &o.total, &o.acreditado, &o.debitado)
+		&o.iva27, &o.exento, &o.total, &o.acreditado, &o.debitado, &o.cae)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	return &o, err
 }
+
+// sinCAE es el motivo para no anular ni hacer notas sobre un comprobante que
+// ARCA no autorizó. Una nota necesita el asociado autorizado (ARCA la
+// rechaza), y anularlo lo dejaba «anulado sin CAE»: un número que ARCA sigue
+// esperando y que ya no se puede mandar, con la serie trabada detrás. Lo que
+// no tiene CAE se da de baja (DarDeBaja).
+const sinCAE = "Sin CAE no hay nada que anular: dalo de baja."
 
 // NotaDeCredito emite una nota de crédito, entera (parciales nil) o parcial.
 // Una parcial no anula el original ni llegando al 100 %: anular es explícito.
@@ -58,6 +65,8 @@ func (s *Servicio) NotaDeCredito(ctx context.Context, invoiceID, motivo string, 
 			return errEmision("Ese comprobante ya está anulado.")
 		case o.estado == "borrador":
 			return errEmision("Un borrador no necesita nota de crédito.")
+		case o.cae == nil:
+			return errEmision(sinCAE)
 		}
 		items, err := itemsOriginales(ctx, tx, invoiceID)
 		if err != nil {
@@ -199,6 +208,20 @@ func tributosDe(ctx context.Context, c consultor, id string) ([]fiscal.Tributo, 
 func (s *Servicio) Anular(ctx context.Context, invoiceID, motivo string, userID *string) (string, error) {
 	var restante []fiscal.CantidadAAcreditar
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		// El atajo de abajo cambia el estado sin pasar por NotaDeCredito:
+		// el CAE se mira acá también.
+		o, err := bloquearOriginal(ctx, tx, invoiceID)
+		if err != nil {
+			return err
+		}
+		switch {
+		case o == nil:
+			return errEmision("No encontramos el comprobante.")
+		case o.estado == "anulada":
+			return errEmision("Ese comprobante ya está anulado.")
+		case o.cae == nil:
+			return errEmision(sinCAE)
+		}
 		acreditadas, err := yaAcreditado(ctx, tx, invoiceID)
 		if err != nil {
 			return err
@@ -219,11 +242,11 @@ func (s *Servicio) Anular(ctx context.Context, invoiceID, motivo string, userID 
 		return nil
 	})
 	if err != nil {
-		return "", err
+		return "", s.comoEmision(err, "fiscal.anular", "No se pudo anular el comprobante.")
 	}
 	if restante != nil && len(restante) == 0 {
 		// Ya acreditada entera: el papel está corregido, falta el estado.
-		if _, err := s.pool.Exec(ctx, `UPDATE invoices SET estado = 'anulada', updated_at = now() WHERE id = $1`, invoiceID); err != nil {
+		if _, err := s.pool.Exec(ctx, `UPDATE invoices SET estado = 'anulada', updated_at = now() WHERE id = $1 AND cae IS NOT NULL`, invoiceID); err != nil {
 			return "", err
 		}
 		return invoiceID, nil
@@ -250,6 +273,8 @@ func (s *Servicio) NotaDeDebito(ctx context.Context, invoiceID, motivo string, l
 			return errEmision("Un borrador no se puede debitar.")
 		case o.estado == "anulada":
 			return errEmision("Ese comprobante está anulado: no se le puede cargar nada encima.")
+		case o.cae == nil:
+			return errEmision(sinCAE)
 		}
 		nueva, err = s.EmitirEnTransaccion(ctx, tx, DatosEmision{CustomerID: o.customerID, OrderID: o.orderID, ReceptorNombre: o.receptorNombre,
 			ReceptorCuit: o.receptorCuit, ReceptorCondicionIva: o.condicion, ReceptorDomicilio: o.receptorDomicilio, PuntoVentaID: o.puntoVentaID,

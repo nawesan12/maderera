@@ -42,6 +42,7 @@ import { Cobro } from "./cobro";
 import { CorteAMedida } from "./corte-a-medida";
 import { sumar, Lineas } from "./lineas";
 import { cobrarSinConexion as guardarSinConexion, useColaDelMostrador } from "./sin-conexion";
+import { faltaIdentificarComprador } from "@/lib/fiscal/umbral";
 import {
   MEDIOS_DE_CONTADO,
   type TipoDeOperacion,
@@ -271,8 +272,15 @@ export function VistaMostrador({
    * Los carteles que explican *por qué* no se puede —falta caja, falta
    * cliente— los arma el panel de cobro, que es donde se leen.
    */
+  // Una B desde el monto que fija ARCA lleva el documento del comprador: se
+  // pide acá, antes de cobrar, y no al emitir con el cliente pagando.
+  const pideDocumento =
+    comprobante === "fiscal" && faltaIdentificarComprador(letra, total, []);
+  const faltaDocumento = pideDocumento && faltaIdentificarComprador(letra, total, [cliente?.cuit, cuit]);
+
   const puedeCobrar =
     lineas.length > 0 &&
+    !faltaDocumento &&
     !enviando &&
     !(medio === "efectivo" && !turno) &&
     !(medio === "cuenta_corriente" && !cliente) &&
@@ -757,6 +765,7 @@ export function VistaMostrador({
             onComprobante={setComprobante}
             cuit={cuit}
             onCuit={setCuit}
+            pideDocumento={pideDocumento}
             letra={letraVisible}
             medio={medio}
             onMedio={elegirMedio}

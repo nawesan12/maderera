@@ -10,7 +10,7 @@ info:
     facturar un pedido y ver si ya se facturó, quien entra a /admin/pedidos
     (el botón está en la ficha del pedido); un comprobante, quien entra a
     /admin/pedidos o su cliente; anular, las notas, corregir el receptor de
-    un rechazado, el libro IVA ventas, el emisor y los puntos de venta: solo
+    un rechazado, dar de baja uno sin CAE, el libro IVA ventas, el emisor y los puntos de venta: solo
     el admin. El emisor, el comprobante y su PDF
     los puede pedir también el servidor de Next con el secreto interno (las
     hojas impresas, los avisos, WhatsApp), y las rutas /interno son solo
@@ -185,6 +185,58 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ResultadoDeAutorizacion" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/comprobantes/{id}/serie:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: SerieDelComprobante
+      description: >-
+        Lo que la ficha de un comprobante sin CAE muestra antes de reintentar o de darlo de baja: cuántos anteriores
+        sin CAE se autorizan antes, qué pendientes bajan un número con la baja, la deuda que se va con él y por qué no
+        se puede dar de baja (sin consultar a ARCA). Solo el admin.
+      responses:
+        "200":
+          description: La serie
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SerieDelComprobante" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/comprobantes/{id}/baja:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: DarDeBajaComprobante
+      description: >-
+        Saca de la serie un comprobante que ARCA no autorizó y corre un número para abajo los pendientes que vienen
+        detrás. Se frena si tiene CAE, si un posterior tiene CAE, si tiene notas, si tiene cobros (con recibo vivo o
+        sin recibo) o si ARCA ya tiene el número. Lo que era queda en el listado de dados de baja. Solo el admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [motivo]
+              additionalProperties: false
+              properties:
+                motivo: { type: string }
+      responses:
+        "200":
+          description: La baja
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResultadoDeBaja" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/dados-de-baja:
+    get:
+      operationId: ListarDadosDeBaja
+      description: Los comprobantes dados de baja, el más nuevo primero, con quién, cuándo, por qué y a quién se le corrió el número. Solo el admin.
+      responses:
+        "200":
+          description: Las bajas
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/DadoDeBaja" } }
   /api/v1/admin/facturacion/comprobantes/{id}/anular:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -421,6 +473,45 @@ components:
               invoiceId: { type: string }
               aviso: { type: string, description: "Solo la factura manual de contado: el efectivo no entró a ningún arqueo" }
   schemas:
+    Corrimiento:
+      type: object
+      required: [invoiceId, de, a, receptorNombre, customerId]
+      properties:
+        invoiceId: { type: string }
+        de: { type: integer, format: int64 }
+        a: { type: integer, format: int64 }
+        receptorNombre: { type: string }
+        customerId: { type: string, nullable: true }
+    SerieDelComprobante:
+      type: object
+      required: [anterioresSinCae, corren, deuda, bloqueo]
+      properties:
+        anterioresSinCae: { type: integer }
+        corren: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
+        deuda: { type: number, format: double }
+        bloqueo: { type: string, nullable: true }
+    ResultadoDeBaja:
+      type: object
+      required: [id, etiqueta, corridos]
+      properties:
+        id: { type: string }
+        etiqueta: { type: string }
+        corridos: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
+    DadoDeBaja:
+      type: object
+      required: [id, tipo, puntoVenta, numero, receptorNombre, total, fechaEmision, motivo, usuarioNombre, createdAt, renumerados]
+      properties:
+        id: { type: string }
+        tipo: { type: string }
+        puntoVenta: { type: integer, format: int64 }
+        numero: { type: integer, format: int64 }
+        receptorNombre: { type: string }
+        total: { type: number, format: double }
+        fechaEmision: { type: string, format: date-time }
+        motivo: { type: string }
+        usuarioNombre: { type: string }
+        createdAt: { type: string, format: date-time }
+        renumerados: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
     Problema:
       type: object
       required: [title, status]
@@ -581,6 +672,7 @@ components:
         acreditado: { type: string }
         debitado: { type: string }
         fechaEmision: { type: string, format: date-time }
+        fechaEmisionOriginal: { type: string, format: date-time, nullable: true, description: "La fecha con que se emitió, si al reintentar salió con la del día" }
         fechaVencimiento: { type: string, format: date-time, nullable: true }
         observaciones: { type: string, nullable: true }
         puntoVentaNombre: { type: string, nullable: true }

@@ -78,9 +78,32 @@ const sinValorFiscal = "Emitido sin autorización de ARCA. El comprobante no tie
 // una vez antes de pedir que alguien mire qué pasó.
 const maxAnteriores = 50
 
+// FechaMovida es un comprobante que salió a ARCA con la fecha del día en vez
+// de la suya (arca.alDia).
+type FechaMovida struct {
+	InvoiceID string    `json:"invoiceId"`
+	Etiqueta  string    `json:"etiqueta"`
+	De        time.Time `json:"de"`
+	A         time.Time `json:"a"`
+}
+
 // Autorizar manda el comprobante a ARCA y guarda el CAE. Devuelve el mensaje
 // para mostrar, o un ErrorDeEmision con el motivo.
 func (s *Servicio) Autorizar(ctx context.Context, id string) (string, error) {
+	m, _, err := s.AutorizarConFechas(ctx, id)
+	return m, err
+}
+
+// AutorizarConFechas es Autorizar, y además dice qué comprobantes salieron
+// con la fecha de hoy (este y los anteriores que autorizó la cadena), para
+// dejarlo en la bitácora.
+func (s *Servicio) AutorizarConFechas(ctx context.Context, id string) (string, []FechaMovida, error) {
+	a := &arca{s: s}
+	m, err := s.autorizar(ctx, id, a)
+	return m, a.movidas, err
+}
+
+func (s *Servicio) autorizar(ctx context.Context, id string, a *arca) (string, error) {
 	c, err := leerParaArca(ctx, s.pool, id)
 	if err != nil {
 		return "", err
@@ -128,7 +151,7 @@ func (s *Servicio) Autorizar(ctx context.Context, id string) (string, error) {
 	if c.estado == "anulada" {
 		return "", errEmision("El comprobante está anulado.")
 	}
-	a := &arca{s: s, cfg: cfg}
+	a.cfg = cfg
 	// El camino corto: si el anterior tiene CAE en esta base, este es el
 	// siguiente para ARCA y se pide directo (una sola llamada). Si ARCA dice
 	// que no es el siguiente (10016) —otro sistema numeró, o un CAE se perdió
@@ -185,9 +208,8 @@ func (a *arca) largo(ctx context.Context, c *comprobanteArca) (string, error) {
 // datos nuevos (paraArca lee la fila en cada pedido).
 //
 // La letra no cambia: con otra letra el comprobante sería de otra serie y
-// este número quedaría vacío en la suya. Ese caso (y el de un rechazo que no
-// es del receptor) todavía no tiene salida desde el panel: hace falta poder
-// dar de baja el rechazado y que otro comprobante tome su número.
+// este número quedaría vacío en la suya. Para eso (y para un rechazo que no
+// es del receptor) está la baja (DarDeBaja).
 func (s *Servicio) CorregirReceptor(ctx context.Context, id string, c map[string]string) error {
 	cab, err := validarCabecera(c)
 	if err != nil {
@@ -205,7 +227,9 @@ func (s *Servicio) CorregirReceptor(ctx context.Context, id string, c map[string
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var tipo, estado string
 		var cae *string
-		err := tx.QueryRow(ctx, `SELECT tipo::text, estado::text, cae FROM invoices WHERE id = $1 FOR UPDATE`, id).Scan(&tipo, &estado, &cae)
+		var total float64
+		err := tx.QueryRow(ctx, `SELECT tipo::text, estado::text, cae, total::float8 FROM invoices WHERE id = $1 FOR UPDATE`, id).
+			Scan(&tipo, &estado, &cae, &total)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errEmision("No encontramos el comprobante.")
 		}
@@ -228,6 +252,9 @@ func (s *Servicio) CorregirReceptor(ctx context.Context, id string, c map[string
 				return errEmision(m)
 			}
 		}
+		if m := fiscal.FaltaIdentificarComprador(tipo, total, cuit, s.ahora()); m != "" {
+			return errEmision(m)
+		}
 		_, err = tx.Exec(ctx, `UPDATE invoices SET receptor_nombre = $2, receptor_cuit = $3, receptor_condicion_iva = $4::condicion_iva,
 			receptor_domicilio = $5, estado = 'emitida', observaciones_arca = NULL, updated_at = now() WHERE id = $1`,
 			id, cab.nombre, cuit, cab.condicion, cab.domicilio)
@@ -240,6 +267,8 @@ type arca struct {
 	s      *Servicio
 	cfg    *fiscal.Config
 	ticket *fiscal.Ticket
+	// movidas son los que salieron con la fecha de hoy (alDia).
+	movidas []FechaMovida
 }
 
 func (a *arca) auth(ctx context.Context) (string, error) {
@@ -354,6 +383,9 @@ func (a *arca) solicitar(ctx context.Context, c *comprobanteArca) (string, error
 
 // pedir manda FECAESolicitar y devuelve lo que contestó ARCA, sin tocar la base.
 func (a *arca) pedir(ctx context.Context, c *comprobanteArca) (fiscal.Resultado, error) {
+	if err := a.alDia(ctx, c); err != nil {
+		return fiscal.Resultado{}, err
+	}
 	aut, err := a.s.paraArca(ctx, c)
 	if err != nil {
 		return fiscal.Resultado{}, err
@@ -373,6 +405,37 @@ func (a *arca) pedir(ctx context.Context, c *comprobanteArca) (fiscal.Resultado,
 		return fiscal.Resultado{}, sinConexion(err)
 	}
 	return fiscal.LeerAutorizacion(body), nil
+}
+
+// alDia pasa a la fecha de hoy un comprobante que se emitió otro día.
+//
+// ARCA acepta unos cinco días para atrás y nunca una fecha anterior a la del
+// último que autorizó en la serie. Lo emitido sin certificado, o rechazado y
+// reintentado una semana después, salía con su fecha original y ARCA lo
+// rechazaba para siempre. Siempre hoy, aunque esté dentro de los cinco días:
+// un pendiente con fecha vieja detrás de uno autorizado hoy también se
+// rechazaría.
+//
+// Va acá y no en Autorizar porque cubre también los anteriores que autoriza
+// la cadena. La fecha con que se emitió queda en fecha_emision_original (si
+// era de un mes ya cerrado, la venta pasa al mes de hoy y el cierre lo
+// muestra), y quien pidió el CAE lo deja en la bitácora (AutorizarConFechas).
+// El reloj es el del servicio, no now() de la base: las pruebas lo mueven.
+func (a *arca) alDia(ctx context.Context, c *comprobanteArca) error {
+	hoy := a.s.ahora()
+	if fiscal.FechaArca(c.fecha) >= fiscal.FechaArca(hoy) {
+		return nil
+	}
+	tag, err := a.s.pool.Exec(ctx, `UPDATE invoices SET fecha_emision = $2, fecha_emision_original = coalesce(fecha_emision_original, fecha_emision),
+		updated_at = now() WHERE id = $1 AND cae IS NULL`, c.id, hoy)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		a.movidas = append(a.movidas, FechaMovida{InvoiceID: c.id, Etiqueta: etiqueta(c.tipo, c.puntoVenta, c.numero), De: c.fecha, A: hoy})
+		c.fecha = hoy
+	}
+	return nil
 }
 
 // aplicar guarda lo que contestó ARCA: el CAE, o el rechazo con su motivo.

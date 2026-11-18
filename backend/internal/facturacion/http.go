@@ -115,6 +115,13 @@ func (o respuesta) VisitAutorizarComprobanteInternoResponse(w http.ResponseWrite
 	return o.escribir(w)
 }
 func (o respuesta) VisitLetraQueSaldriaResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitSerieDelComprobanteResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitDarDeBajaComprobanteResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitListarDadosDeBajaResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitComprobanteDeLaVentaResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -453,7 +460,14 @@ func (a *API) AutorizarComprobante(ctx context.Context, r facturacionapi.Autoriz
 // autorizarYAnotar pide el CAE, deja el intento en la bitácora y, si salió,
 // encola el aviso al cliente.
 func (a *API) autorizarYAnotar(ctx context.Context, ses *auth.Sesion, id string) (respuesta, error) {
-	m, err := a.s.Autorizar(ctx, id)
+	m, movidas, err := a.s.AutorizarConFechas(ctx, id)
+	// Las fechas se movieron aunque ARCA después haya rechazado: quedan
+	// anotadas igual.
+	for _, f := range movidas {
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "factura", f.InvoiceID,
+			f.Etiqueta+" sale a ARCA con fecha "+f.A.In(fiscal.Argentina).Format("02/01/2006")+" (se emitió el "+
+				f.De.In(fiscal.Argentina).Format("02/01/2006")+")", f)
+	}
 	motivo := Mensaje(err)
 	if err != nil && motivo == "" {
 		return respuesta{}, err
@@ -488,6 +502,50 @@ func (a *API) CorregirReceptorYReintentar(ctx context.Context, r facturacionapi.
 		return nil, err
 	}
 	return res, nil
+}
+
+func (a *API) SerieDelComprobante(ctx context.Context, r facturacionapi.SerieDelComprobanteRequestObject) (facturacionapi.SerieDelComprobanteResponseObject, error) {
+	if _, err := admin(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.Serie(ctx, r.Id.String())
+	if errors.Is(err, ErrNoEsta) {
+		return nil, noEsta("No encontramos el comprobante.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
+func (a *API) DarDeBajaComprobante(ctx context.Context, r facturacionapi.DarDeBajaComprobanteRequestObject) (facturacionapi.DarDeBajaComprobanteResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	motivo := trimJS(r.Body.Motivo)
+	if largoJS(motivo) < 4 {
+		return nil, comoProblema(errEmision("Escribí el motivo de la baja."))
+	}
+	if largoJS(motivo) > 300 {
+		return nil, comoProblema(errEmision("El motivo es muy largo."))
+	}
+	v, err := a.s.DarDeBaja(ctx, ses, r.Id.String(), motivo)
+	if err != nil {
+		return nil, comoProblema(err)
+	}
+	return ok(v), nil
+}
+
+func (a *API) ListarDadosDeBaja(ctx context.Context, _ facturacionapi.ListarDadosDeBajaRequestObject) (facturacionapi.ListarDadosDeBajaResponseObject, error) {
+	if _, err := admin(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.DadosDeBaja(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
 }
 
 func (a *API) AnularComprobante(ctx context.Context, r facturacionapi.AnularComprobanteRequestObject) (facturacionapi.AnularComprobanteResponseObject, error) {

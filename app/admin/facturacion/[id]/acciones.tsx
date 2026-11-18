@@ -14,13 +14,22 @@ import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
 
 const inicial: EstadoFactura = {};
 
-/** Manda el comprobante a ARCA. Se puede reintentar si fue rechazado. */
+/**
+ * Manda el comprobante a ARCA. Se puede reintentar si fue rechazado.
+ *
+ * `consecuencias` es lo que el envío cambia sin que se vea: que sale con la
+ * fecha de hoy (y, si cambia el mes, a qué mes pasa la venta) y cuántos
+ * anteriores sin CAE salen antes. Va pegado al botón y no en un texto aparte
+ * porque es lo que hay que saber justo antes de apretarlo.
+ */
 export function BotonAutorizar({
   id,
   rechazado,
+  consecuencias = [],
 }: {
   id: string;
   rechazado: boolean;
+  consecuencias?: string[];
 }) {
   const [estado, accion, pendiente] = useActionState(autorizar, inicial);
 
@@ -41,6 +50,9 @@ export function BotonAutorizar({
           {rechazado ? "Reenviar a ARCA" : "Autorizar en ARCA"}
         </button>
       </form>
+      {consecuencias.length > 0 && (
+        <p className="text-sm text-muted-foreground">{consecuencias.join(" · ")}</p>
+      )}
 
       {estado.error && (
         <p

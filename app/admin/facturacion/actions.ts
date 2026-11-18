@@ -126,6 +126,30 @@ export async function corregirReceptor(
   return r.data;
 }
 
+/**
+ * Da de baja un comprobante sin CAE: sale de la serie y los pendientes que
+ * vienen detrás bajan un número. Después no hay ficha a la que volver: se va
+ * al listado de los dados de baja, donde está a quién reenviarle el suyo.
+ */
+export async function darDeBaja(
+  _previo: EstadoFactura,
+  formData: FormData,
+): Promise<EstadoFactura> {
+  const id = String(formData.get("id") ?? "");
+  if (!UUID.test(id)) return { error: "No encontramos el comprobante." };
+
+  const r = await (await api()).POST("/api/v1/admin/facturacion/comprobantes/{id}/baja", {
+    params: { path: { id } },
+    body: { motivo: String(formData.get("motivo") ?? "") },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+
+  refrescar(id);
+  revalidatePath("/admin/facturacion/dados-de-baja");
+  revalidatePath("/admin/clientes");
+  redirect("/admin/facturacion/dados-de-baja");
+}
+
 export async function anular(
   _previo: EstadoFactura,
   formData: FormData,

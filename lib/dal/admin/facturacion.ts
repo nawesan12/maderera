@@ -113,9 +113,11 @@ type Crudo = Esquemas["ComprobanteCompleto"];
 type CobroCrudo = Crudo["cobros"][number];
 
 export interface ComprobanteCompleto
-  extends Omit<Crudo, "fechaEmision" | "fechaVencimiento" | "caeVencimiento" | "cobros"> {
+  extends Omit<Crudo, "fechaEmision" | "fechaVencimiento" | "caeVencimiento" | "cobros" | "fechaEmisionOriginal"> {
   tipo: TipoComprobante;
   fechaEmision: Date;
+  /** La fecha con que se emitió, si al reintentar salió con la del día. */
+  fechaEmisionOriginal: Date | null;
   fechaVencimiento: Date | null;
   caeVencimiento: Date | null;
   cobros: (Omit<CobroCrudo, "fecha" | "createdAt"> & { fecha: Date; createdAt: Date })[];
@@ -125,6 +127,7 @@ function conFechas(c: Crudo): ComprobanteCompleto {
   return {
     ...c,
     fechaEmision: new Date(c.fechaEmision),
+    fechaEmisionOriginal: c.fechaEmisionOriginal ? new Date(c.fechaEmisionOriginal) : null,
     fechaVencimiento: c.fechaVencimiento ? new Date(c.fechaVencimiento) : null,
     caeVencimiento: c.caeVencimiento ? new Date(c.caeVencimiento) : null,
     cobros: c.cobros.map((p) => ({ ...p, fecha: new Date(p.fecha), createdAt: new Date(p.createdAt) })),
@@ -157,6 +160,36 @@ export async function comprobanteDelCliente(id: string, customerId: string) {
   const comprobante = await obtenerComprobante(id);
   if (!comprobante || comprobante.customerId !== customerId) return null;
   return comprobante;
+}
+
+/**
+ * La serie de un comprobante sin CAE: cuántos anteriores arrastra el
+ * reintento, quiénes bajan un número si se lo da de baja, la deuda que se va
+ * con él y por qué no se puede (sin preguntarle a ARCA: eso lo hace la baja).
+ */
+export async function serieDelComprobante(id: string) {
+  const r = await (await api()).GET("/api/v1/admin/facturacion/comprobantes/{id}/serie", {
+    params: { path: { id } },
+  });
+  if (r.response.status === 404 || r.response.status === 403) return null;
+  return datos(r);
+}
+
+export type DadoDeBaja = Omit<Esquemas["DadoDeBaja"], "fechaEmision" | "createdAt" | "tipo"> & {
+  tipo: TipoComprobante;
+  fechaEmision: Date;
+  createdAt: Date;
+};
+
+/** Los comprobantes dados de baja, el más nuevo primero. */
+export async function dadosDeBaja(): Promise<DadoDeBaja[]> {
+  const filas = datos(await (await api()).GET("/api/v1/admin/facturacion/dados-de-baja"));
+  return filas.map((f) => ({
+    ...f,
+    tipo: f.tipo as TipoComprobante,
+    fechaEmision: new Date(f.fechaEmision),
+    createdAt: new Date(f.createdAt),
+  }));
 }
 
 /** Números del período, para la cabecera de la pantalla. */

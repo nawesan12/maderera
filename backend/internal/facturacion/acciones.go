@@ -108,8 +108,14 @@ func (s *Servicio) FacturarPedido(ctx context.Context, ses *auth.Sesion, orderID
 	}
 	var id string
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `SELECT 1 FROM orders WHERE id = $1 FOR UPDATE`, orderID); err != nil {
+		// Una venta anulada no se factura: el pedido cancelado que perdió su
+		// comprobante en una baja no vuelve a la cola de facturar.
+		var estadoPedido string
+		if err := tx.QueryRow(ctx, `SELECT estado::text FROM orders WHERE id = $1 FOR UPDATE`, orderID).Scan(&estadoPedido); err != nil {
 			return err
+		}
+		if estadoPedido == "cancelado" {
+			return errEmision("El pedido está cancelado: no se factura.")
 		}
 		var n int64
 		err := tx.QueryRow(ctx, `SELECT numero FROM invoices WHERE order_id = $1 AND estado <> 'anulada' LIMIT 1`, orderID).Scan(&n)

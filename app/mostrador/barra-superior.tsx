@@ -1,0 +1,100 @@
+"use client";
+
+import Link from "next/link";
+import { Banknote, WifiOff } from "lucide-react";
+import { formatearMonto } from "@/lib/formato";
+import type { EstadoCola } from "@/lib/mostrador/offline/use-cola";
+import type { EstadoConexion } from "@/lib/mostrador/offline/use-conexion";
+import type { Sucursal, Turno } from "./tipos";
+
+export function BarraSuperior({
+  conexion,
+  cola,
+  usuario,
+  sucursales,
+  sucursal,
+  turno,
+  onCaja,
+}: {
+  conexion: EstadoConexion;
+  cola: EstadoCola;
+  usuario: { nombre: string };
+  sucursales: Sucursal[];
+  sucursal: Sucursal;
+  turno: Turno | null;
+  onCaja: () => void;
+}) {
+  return (
+    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-linea px-4">
+      <Link href="/admin" className="text-base font-bold tracking-tight">
+        Mostrador
+      </Link>
+
+      <div className="flex items-center gap-1.5">
+        {sucursales.map((s) => (
+          <Link
+            key={s.id}
+            href={`/mostrador?sucursal=${s.slug}`}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              s.id === sucursal.id
+                ? "bg-accion text-white"
+                : "text-muted-foreground hover:bg-hundida"
+            }`}
+          >
+            {s.nombre}
+          </Link>
+        ))}
+      </div>
+
+      {/* El estado de conexión, medido con el latido y no con
+          `navigator.onLine`, que en un wifi sin salida a internet dice que sí.
+          Va acá arriba porque cambia lo que se puede hacer: sin servidor no se
+          abre ni se cierra caja, y el comprobante fiscal queda deshabilitado. */}
+      {!conexion.enLinea && (
+        <span className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-espera">
+          <WifiOff className="h-3.5 w-3.5" />
+          Sin conexión
+        </span>
+      )}
+
+      {cola.sinSubir > 0 && (
+        <span
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-espera"
+          title="Se suben solas cuando vuelva la conexión."
+        >
+          {cola.sinSubir} ventas sin enviar
+        </span>
+      )}
+
+      {cola.atascadas > 0 && (
+        <span className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-problema">
+          {cola.atascadas} venta{cola.atascadas > 1 ? "s" : ""} trabada
+          {cola.atascadas > 1 ? "s" : ""}
+        </span>
+      )}
+
+      {conexion.desfasajeMin !== null && (
+        <span
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-problema"
+          title="La hora de esta máquina se usa para las ventas hechas sin conexión."
+        >
+          Reloj corrido {conexion.desfasajeMin} min
+        </span>
+      )}
+
+      <button
+        onClick={onCaja}
+        className={`ml-auto inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${
+          turno
+            ? "estado-ok bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
+            : "estado-problema bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
+        }`}
+      >
+        <Banknote className="h-4 w-4" />
+        {turno ? `Caja ${formatearMonto(turno.esperado)}` : "Caja cerrada"}
+      </button>
+
+      <span className="text-sm text-muted-foreground">{usuario.nombre}</span>
+    </header>
+  );
+}

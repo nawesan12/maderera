@@ -1,0 +1,213 @@
+/*
+ * La venta sin conexión: el latido, la caja de esta máquina, la cola y el
+ * cobro que se guarda acá para subir después.
+ *
+ * Todo lo que toca la cola de ventas del mostrador vive en este módulo. La
+ * pantalla solo llama a `useColaDelMostrador` y a `cobrarSinConexion`.
+ */
+
+import { useCallback, useEffect, useRef } from "react";
+import {
+  revisarVenta,
+  type LineaDeVenta,
+  type MedioDeMostrador,
+  type PagoDeVenta,
+} from "@/lib/mostrador/importes";
+import { encolarVenta } from "@/lib/mostrador/offline/cola";
+import { numeroProvisorio } from "@/lib/mostrador/offline/numero-provisorio";
+import { useCaja } from "@/lib/mostrador/offline/use-caja";
+import { useCola } from "@/lib/mostrador/offline/use-cola";
+import { useConexion, type InformeDeCaja } from "@/lib/mostrador/offline/use-conexion";
+import { documentoDeVenta } from "@/lib/mostrador/ticket";
+import type { Aviso, Cliente, Turno, UltimaVenta } from "./tipos";
+
+/**
+ * La conexión, la caja física y la cola de ventas sin subir.
+ *
+ * Son hooks que se necesitan entre sí, y por eso van juntos y en este orden.
+ */
+export function useColaDelMostrador(branchId: string) {
+  /*
+   * Lo que esta máquina cuenta de sí misma en cada latido.
+   *
+   * Va por ref y no por dependencia porque el orden de los hooks lo pide: el
+   * latido necesita saber cuántas ventas hay sin subir, y la cola necesita
+   * saber si hay conexión. Con la ref, cada uno lee del otro el valor del
+   * momento sin que ninguno tenga que existir antes.
+   */
+  const informeRef = useRef<InformeDeCaja>({ caja: null, pendientes: 0 });
+  const informe = useCallback(() => informeRef.current, []);
+
+  // La verdad sobre si hay servidor, medida y no adivinada.
+  const conexion = useConexion(branchId, informe);
+  const {
+    caja: cajaFisica,
+    vincular: vincularCaja,
+    avanzar: avanzarContador,
+  } = useCaja();
+
+  /*
+   * La cola de ventas sin subir. Drena sola al volver la conexión; acá se usa
+   * para mostrar cuántas faltan, que es lo que quien atiende necesita ver antes
+   * de cerrar el turno.
+   */
+  const cola = useCola(conexion.enLinea);
+
+  useEffect(() => {
+    informeRef.current = {
+      caja: cajaFisica
+        ? { id: cajaFisica.id, secreto: cajaFisica.secreto }
+        : null,
+      // Las atascadas cuentan igual: esa plata está en el cajón y todavía no en
+      // el turno, que es exactamente lo que el cierre de caja tiene que saber.
+      pendientes: cola.sinSubir + cola.atascadas,
+    };
+  }, [cajaFisica, cola.sinSubir, cola.atascadas]);
+
+  return { conexion, cajaFisica, vincularCaja, avanzarContador, cola };
+}
+
+type CajaFisica = ReturnType<typeof useCaja>["caja"];
+type ContextoDelTicket = Parameters<typeof documentoDeVenta>[1];
+
+/** Lo que la pantalla tiene cargado al momento de cobrar sin conexión. */
+export interface VentaSinConexion {
+  clave: string;
+  branchId: string;
+  usuarioId: string;
+  lineas: LineaDeVenta[];
+  cliente: Cliente | null;
+  medio: MedioDeMostrador;
+  /** Se arma recién al encolar, igual que con conexión. */
+  pagosDeLaVenta: () => PagoDeVenta[] | undefined;
+  acopio: boolean;
+  cuit: string;
+  /** El descuento total, el que figura en el ticket. */
+  descuento: number;
+  motivoDelDescuento: string;
+  /** El tipeado a mano: el de la forma de pago lo vuelve a calcular el servidor. */
+  descuentoManual: number;
+  motivoDesc: string;
+  turno: Turno | null;
+  cajaFisica: CajaFisica;
+  avanzarContador: () => Promise<unknown>;
+  contextoDelTicket: ContextoDelTicket;
+}
+
+/** Lo que el cobro sin conexión le devuelve a la pantalla. */
+export interface AlCobrarSinConexion {
+  setAviso: (aviso: Aviso | null) => void;
+  setUltima: (ultima: UltimaVenta | null) => void;
+  limpiar: () => void;
+}
+
+/**
+ * El cobro cuando no hay servidor.
+ *
+ * Toma el número de la caja, arma el ticket con lo que hay en pantalla y
+ * guarda las dos cosas en la misma transacción local. No hay comprobante
+ * fiscal: eso necesita ARCA en línea, y la pantalla ya lo deshabilitó.
+ */
+export async function cobrarSinConexion(
+  {
+    clave,
+    branchId,
+    usuarioId,
+    lineas,
+    cliente,
+    medio,
+    pagosDeLaVenta,
+    acopio,
+    cuit,
+    descuento,
+    motivoDelDescuento,
+    descuentoManual,
+    motivoDesc,
+    turno,
+    cajaFisica,
+    avanzarContador,
+    contextoDelTicket,
+  }: VentaSinConexion,
+  { setAviso, setUltima, limpiar }: AlCobrarSinConexion,
+) {
+  const problema = revisarVenta(lineas, medio, cliente?.id ?? null);
+
+  if (problema) {
+    setAviso({ tipo: "error", texto: problema });
+    return;
+  }
+
+  if (!cajaFisica) {
+    setAviso({
+      tipo: "error",
+      texto: "Esta máquina todavía no está vinculada a una caja. Conectate una vez para vincularla.",
+    });
+    return;
+  }
+
+  if (medio === "efectivo" && !turno) {
+    setAviso({
+      tipo: "error",
+      texto: "No hay caja abierta en esta sucursal. Abrila antes de cobrar en efectivo.",
+    });
+    return;
+  }
+
+  try {
+    const numero = numeroProvisorio(cajaFisica.codigo, cajaFisica.proximoNumero);
+    const cobradaAt = new Date().toISOString();
+
+    const pagos = pagosDeLaVenta();
+
+    const ticket = documentoDeVenta(
+      {
+        numero,
+        provisorio: true,
+        cobradaAt,
+        contactoNombre: cliente?.nombre ?? "Consumidor final",
+        medioPago: medio,
+        pagos,
+        acopio,
+        descuento,
+        descuentoMotivo: motivoDelDescuento || null,
+        lineas,
+      },
+      contextoDelTicket,
+    );
+
+    await encolarVenta(
+      {
+        clave,
+        numeroProvisorio: numero,
+        branchId,
+        lineas,
+        customerId: cliente?.id ?? null,
+        contactoNombre: cliente?.nombre ?? "Consumidor final",
+        medioPago: medio,
+        pagos,
+        acopio,
+        comprobante: "interno",
+        cuit: cuit || null,
+        descuento: descuentoManual,
+        descuentoMotivo: motivoDesc || null,
+        usuarioId,
+        cobradaAt,
+      },
+      ticket,
+    );
+
+    await avanzarContador();
+
+    setUltima({ numero, orderId: null, invoiceId: undefined, clave });
+    setAviso({
+      tipo: "ok",
+      texto: `${numero} cobrada sin conexión. Se sube sola cuando vuelva internet.`,
+    });
+    limpiar();
+  } catch {
+    setAviso({
+      tipo: "error",
+      texto: "No se pudo guardar la venta en esta máquina. Anotala en papel y avisá.",
+    });
+  }
+}

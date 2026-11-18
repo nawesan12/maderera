@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
-import { ETIQUETAS } from "@/lib/cache-publico";
+import { esEtiquetaValida } from "@/lib/cache-publico";
 
 /**
  * El aviso del backend en Go de que algo cambió y hay que volver a armar lo
@@ -15,8 +15,6 @@ import { ETIQUETAS } from "@/lib/cache-publico";
  * Como /api/tareas: sin secreto configurado la ruta no existe (404), y se
  * compara en tiempo constante.
  */
-const VALIDAS = new Set<string>(Object.values(ETIQUETAS));
-
 export async function POST(request: NextRequest) {
   const secreto = process.env.REVALIDAR_SECRETO?.trim();
   if (!secreto) return new NextResponse(null, { status: 404 });
@@ -32,7 +30,9 @@ export async function POST(request: NextRequest) {
 
   // Una etiqueta que no existe es un error de quien la mandó: mejor que falle
   // a la vista (el worker la reintenta y queda en el registro) que en silencio.
-  const desconocidas = etiquetas.filter((e) => !VALIDAS.has(e));
+  // Las finas del catálogo (`catalogo:placas`, `producto:fenolico`) las manda
+  // el aviso del stock.
+  const desconocidas = etiquetas.filter((e) => !esEtiquetaValida(e));
   if (desconocidas.length > 0) {
     return NextResponse.json({ error: `Etiquetas desconocidas: ${desconocidas.join(", ")}` }, { status: 400 });
   }

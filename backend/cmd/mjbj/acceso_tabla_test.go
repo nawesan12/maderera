@@ -173,6 +173,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"GuardarEmisorFiscal":            "/admin/facturacion",            // PUT /api/v1/admin/facturacion/emisor
 	"LibroIvaVentasCsv":              "/admin/facturacion",            // GET /api/v1/admin/facturacion/libro-iva/csv
 	"LibroIvaVentas":                 "/admin/facturacion",            // GET /api/v1/admin/facturacion/libro-iva
+	"LibroIvaDigital":                "/admin/arca",                   // GET /api/v1/admin/facturacion/libro-iva/digital
 	"FacturarPedido":                 "/admin/pedidos",                // POST /api/v1/admin/facturacion/pedidos/{id}/facturar
 	"PedidoParaFacturar":             "/admin/pedidos",                // GET /api/v1/admin/facturacion/pedidos/{id}
 	"ListarPuntosDeVenta":            "/admin/facturacion",            // GET /api/v1/admin/facturacion/puntos-de-venta

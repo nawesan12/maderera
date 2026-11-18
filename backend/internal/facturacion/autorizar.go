@@ -426,21 +426,8 @@ func (s *Servicio) paraArca(ctx context.Context, c *comprobanteArca) (*fiscal.AA
 			filas.Close()
 			return nil, err
 		}
-		if alic <= 0 {
-			continue
-		}
-		i := -1
-		for k, x := range a.Iva {
-			if x.Alicuota == alic {
-				i = k
-			}
-		}
-		if i < 0 {
-			a.Iva = append(a.Iva, fiscal.IvaDeAlicuota{Alicuota: alic})
-			i = len(a.Iva) - 1
-		}
-		a.Iva[i].Base = fiscal.Redondear(a.Iva[i].Base + neto)
-		a.Iva[i].Importe = fiscal.Redondear(a.Iva[i].Importe + iva)
+		// La misma cuenta que el libro IVA digital (fiscal.AgruparIva).
+		a.Iva = fiscal.AgruparIva(a.Iva, alic, neto, iva)
 	}
 	filas.Close()
 	if err := filas.Err(); err != nil {

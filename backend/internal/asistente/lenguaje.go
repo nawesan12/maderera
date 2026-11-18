@@ -71,6 +71,9 @@ type Pieza struct {
 	Cantidad   int
 	CantoLargo int
 	CantoAncho int
+	// Veta es que la pieza no se puede girar en la placa: el dibujo corre a
+	// lo largo. Viaja en el enlace al cortador como una «v» al final.
+	Veta bool
 }
 
 // Despiece es «4 de 600x400 en melamina blanca con canto».
@@ -368,7 +371,8 @@ var (
 	reTodoCanto  = regexp.MustCompile(`canto (en )?(todo|todos|los 4|los cuatro|4 lados|cuatro lados)`)
 	reConCanto   = regexp.MustCompile(`\b(con canto|con tapacanto|tapacanto|canteado)\b`)
 	reSinCanto   = regexp.MustCompile(`\bsin (tapa)?canto\b`)
-	reNoMaterial = regexp.MustCompile(`^(piezas?|corte|cortes|cortar|cortame|cortan|despiece|canto|tapacanto|todo|todos|lados|cuatro|unidades|sin|placa|placas|en)$`)
+	reConVeta    = regexp.MustCompile(`\b(con|respetando|siguiendo|a) (la )?veta\b`)
+	reNoMaterial = regexp.MustCompile(`^(piezas?|corte|cortes|cortar|cortame|cortan|despiece|canto|tapacanto|todo|todos|lados|cuatro|unidades|sin|placa|placas|en|veta|respetando|siguiendo)$`)
 )
 
 // LeerDespiece lee las piezas de un corte escritas con palabras: «4 de
@@ -425,10 +429,11 @@ func LeerDespiece(texto string) *Despiece {
 	todo := reTodoCanto.MatchString(t)
 	conCanto := todo || reConCanto.MatchString(t)
 	sin := reSinCanto.MatchString(t)
+	veta := reConVeta.MatchString(t)
 
 	d := &Despiece{}
 	for _, e := range enc {
-		p := Pieza{LargoMm: max(e.largo, e.ancho), AnchoMm: min(e.largo, e.ancho), Cantidad: e.cantidad}
+		p := Pieza{LargoMm: max(e.largo, e.ancho), AnchoMm: min(e.largo, e.ancho), Cantidad: e.cantidad, Veta: veta}
 		if p.Cantidad == 0 {
 			p.Cantidad = 1
 		}
@@ -478,6 +483,11 @@ func EnlaceDelDespiece(d Despiece) string {
 		s := strconv.Itoa(p.LargoMm) + "x" + strconv.Itoa(p.AnchoMm) + "x" + strconv.Itoa(p.Cantidad)
 		if p.CantoLargo != 0 || p.CantoAncho != 0 {
 			s += "c" + strconv.Itoa(p.CantoLargo) + strconv.Itoa(p.CantoAncho)
+		}
+		// La veta va al final y sola: los enlaces viejos, sin «v», siguen
+		// leyéndose igual (lib/cortes/enlace.ts).
+		if p.Veta {
+			s += "v"
 		}
 		partes = append(partes, s)
 	}

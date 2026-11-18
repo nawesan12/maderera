@@ -106,6 +106,84 @@ export function usePlano(pedido: PedidoDePlano): {
   return { plano: datos?.plano ?? vacio, cuenta: datos?.cuenta ?? null, calculando, error };
 }
 
+type Calculado = { plano: PlanoDeCorte; cuenta?: PresupuestoDeCorte } | { error: string };
+
+/**
+ * Los planos de varios despieces a la vez: el armador del sitio con varias
+ * placas en el mismo pedido. La cantidad de grupos cambia, así que no puede
+ * ser un `usePlano` por grupo; acá se pide a Go solo el grupo que cambió (lo
+ * ya calculado queda guardado por su cuerpo) y, mientras llega, cada grupo
+ * sigue mostrando su último plano.
+ */
+export function usePlanos(pedidos: PedidoDePlano[]): {
+  planos: PlanoDeCorte[];
+  cuentas: (PresupuestoDeCorte | null)[];
+  calculando: boolean;
+} {
+  const claves = pedidos.map((p) => JSON.stringify(p));
+  const todas = JSON.stringify(claves);
+  const [hechos, setHechos] = useState<{ porClave: Record<string, Calculado>; porIndice: Calculado[] }>({
+    porClave: {},
+    porIndice: [],
+  });
+  const pendientes = claves.filter((k) => !(k in hechos.porClave));
+  const faltan = JSON.stringify([...new Set(pendientes)]);
+
+  useEffect(() => {
+    const pedir = JSON.parse(faltan) as string[];
+    if (pedir.length === 0) return;
+    const control = new AbortController();
+    const reloj = setTimeout(async () => {
+      const llegados = await Promise.all(
+        pedir.map(async (cuerpo): Promise<[string, Calculado] | null> => {
+          try {
+            const r = await fetch("/api/v1/cortes/plano", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: cuerpo,
+              signal: control.signal,
+            });
+            const j = await r.json();
+            if (r.ok) return [cuerpo, j];
+            return [cuerpo, { error: j?.detail ?? "No se pudo calcular." }];
+          } catch (e) {
+            if ((e as Error).name === "AbortError") return null;
+            return [cuerpo, { error: "No se pudo calcular: revisá la conexión." }];
+          }
+        }),
+      );
+      if (control.signal.aborted) return;
+      const vigentes = JSON.parse(todas) as string[];
+      setHechos((previo) => {
+        // Solo se guarda lo que sigue en pantalla: lo demás ya no se dibuja.
+        const porClave: Record<string, Calculado> = {};
+        for (const k of vigentes) if (k in previo.porClave) porClave[k] = previo.porClave[k]!;
+        for (const l of llegados) if (l) porClave[l[0]] = l[1];
+        const porIndice = vigentes.map((k, i) => {
+          const r = porClave[k];
+          return r && !("error" in r) ? r : previo.porIndice[i];
+        });
+        return { porClave, porIndice: porIndice as Calculado[] };
+      });
+    }, ESPERA_MS);
+    return () => {
+      clearTimeout(reloj);
+      control.abort();
+    };
+  }, [faltan, todas]);
+
+  const planos: PlanoDeCorte[] = [];
+  const cuentas: (PresupuestoDeCorte | null)[] = [];
+  pedidos.forEach((p, i) => {
+    const propio = hechos.porClave[claves[i]!];
+    const ultimo = propio && !("error" in propio) ? propio : hechos.porIndice[i];
+    const bueno = ultimo && !("error" in ultimo) ? ultimo : null;
+    planos.push(bueno?.plano ?? planoVacio(p.placaLargo, p.placaAncho, p.anchoSierra ?? 5));
+    cuentas.push(bueno?.cuenta ?? null);
+  });
+  return { planos, cuentas, calculando: pendientes.length > 0 };
+}
+
 /** Las piezas como las pide el plano: solo lo que el contrato acepta. */
 export function piezasParaElPlano(
   piezas: {

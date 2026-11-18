@@ -386,6 +386,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"ZonasDeEnvio":                   "publico",                       // GET /api/v1/contenido/zonas-envio
 	"CotizarCorte":                   "publico",                       // POST /api/v1/cortes/cotizar
 	"PlacasCortables":                "publico",                       // GET /api/v1/cortes/placas
+	"TapacantosDelCatalogo":          "publico",                       // GET /api/v1/cortes/tapacantos
 	"CalcularPlano":                  "publico",                       // POST /api/v1/cortes/plano
 	"MisComprobantes":                "sesion",                        // GET /api/v1/cuenta/comprobantes
 	"MiCuentaCorriente":              "sesion",                        // GET /api/v1/cuenta/corriente

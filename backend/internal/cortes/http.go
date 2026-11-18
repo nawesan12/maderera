@@ -82,6 +82,7 @@ func (o respuesta) VisitParametrosDeCalculoResponse(w http.ResponseWriter) error
 	return o.escribir(w)
 }
 func (o respuesta) VisitPlacasCortablesResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitTapacantosDelCatalogoResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitResolverCarritoResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitTarifasActivasResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 
@@ -123,7 +124,7 @@ func (a *API) CrearCorte(ctx context.Context, r cortesapi.CrearCorteRequestObjec
 		PlacaLargoMm: texto(b.PlacaLargoMm), PlacaAnchoMm: texto(b.PlacaAnchoMm), Mitad: texto(b.Mitad),
 		Placas: texto(b.Placas), CantoDescripcion: texto(b.CantoDescripcion), Urgente: b.Urgente != nil && *b.Urgente,
 		Notas: texto(b.Notas), AcomodoManual: texto(b.AcomodoManual), AnchoSierraMm: texto(b.AnchoSierraMm),
-		Consulta: texto(b.Consulta),
+		Consulta: texto(b.Consulta), ConsultaGrupo: texto(b.ConsultaGrupo),
 	}
 	for _, p := range b.Piezas {
 		crudo, err := json.Marshal(p)
@@ -394,6 +395,16 @@ func (a *API) PlacasCortables(ctx context.Context, r cortesapi.PlacasCortablesRe
 		for i := range v {
 			v[i].Precio, v[i].PrecioPorPasada, v[i].PrecioPorMetroCanto = 0, 0, 0
 		}
+	}
+	return ok(v), nil
+}
+
+// TapacantosDelCatalogo es la lista del desplegable del armador. Sin precios,
+// así que no depende de la lista de quien mira ni de la tienda.
+func (a *API) TapacantosDelCatalogo(ctx context.Context, _ cortesapi.TapacantosDelCatalogoRequestObject) (cortesapi.TapacantosDelCatalogoResponseObject, error) {
+	v, err := a.s.Tapacantos(ctx)
+	if err != nil {
+		return nil, err
 	}
 	return ok(v), nil
 }

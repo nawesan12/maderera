@@ -72,7 +72,7 @@ func (s *Servicio) Placas(ctx context.Context, l catalogo.Lista) ([]PlacaCortabl
 		if t == nil || t.PrecioPorPasada <= 0 {
 			continue
 		}
-		p.Descripcion = producto + " — " + medida
+		p.Descripcion = producto + " — " + MedidaEnOrden(medida, largo, ancho)
 		p.LargoMm, p.AnchoMm, p.Precio, p.PrecioMediaPct = float64(largo), float64(ancho), precio.F(), float64(pct)
 		p.AdmiteMedia = forma == "entera_o_media"
 		p.PrecioPorPasada, p.PrecioPorMetroCanto = t.PrecioPorPasada, t.PrecioPorMetroCanto

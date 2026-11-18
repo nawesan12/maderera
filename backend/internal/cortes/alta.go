@@ -47,8 +47,12 @@ type FormCorte struct {
 	AnchoSierraMm       string `json:"anchoSierraMm"`
 	// Consulta es el token del corte que vino por WhatsApp, si nació de ahí:
 	// queda atada al corte y su enlace deja de ofrecer pasarla otra vez.
-	Consulta string            `json:"consulta"`
-	Piezas   []json.RawMessage `json:"piezas"`
+	Consulta string `json:"consulta"`
+	// ConsultaGrupo es cuál de las placas de la consulta se pasa (desde la
+	// 00118 una consulta trae varias, y cada una es su propia orden). Vacío
+	// es la primera, la única que había antes.
+	ConsultaGrupo string            `json:"consultaGrupo"`
+	Piezas        []json.RawMessage `json:"piezas"`
 }
 
 type piezaNueva struct {
@@ -227,6 +231,15 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 		return "", error422(msgDemasiadasPiezas)
 	}
 
+	grupo := 0
+	if f.ConsultaGrupo != "" {
+		n := jsmath.Numero(f.ConsultaGrupo)
+		if msg := validarNumero(n, reglaNumero{entero: true, min: pf(0), max: pf(MaximoDeGrupos - 1)}); msg != "" {
+			return "", error422(msg)
+		}
+		grupo = int(n)
+	}
+
 	sierra := LeerAnchoDeSierra(f.AnchoSierraMm)
 	if sierra == nil {
 		p, err := s.Parametros(ctx)
@@ -242,7 +255,7 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 		// La consulta primero, con candado: dos altas de la misma consulta a
 		// la vez daban dos órdenes de corte.
 		if f.Consulta != "" {
-			if err := tomarConsulta(ctx, tx, f.Consulta); err != nil {
+			if err := tomarConsulta(ctx, tx, f.Consulta, grupo); err != nil {
 				return err
 			}
 		}
@@ -281,8 +294,16 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 			}
 		}
 		if f.Consulta != "" {
-			tag, err := tx.Exec(ctx, `UPDATE consultas_corte SET cutting_order_id = $1
-				WHERE token = $2 AND cutting_order_id IS NULL`, id, f.Consulta)
+			sql := `UPDATE consultas_corte SET cutting_order_id = $1
+				WHERE token = $2 AND cutting_order_id IS NULL`
+			args := []any{id, f.Consulta}
+			if grupo > 0 {
+				sql = `UPDATE consultas_corte_grupos g SET cutting_order_id = $1
+					FROM consultas_corte c
+					WHERE c.id = g.consulta_id AND c.token = $2 AND g.orden = $3 AND g.cutting_order_id IS NULL`
+				args = append(args, grupo)
+			}
+			tag, err := tx.Exec(ctx, sql, args...)
 			if err != nil {
 				return err
 			}
@@ -300,14 +321,25 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 	return numero, nil
 }
 
-// tomarConsulta bloquea la consulta que se pasa a corte y avisa si no está o
-// si ya se pasó: el error deshace el alta entera (y el número).
-func tomarConsulta(ctx context.Context, tx pgx.Tx, token string) error {
+// tomarConsulta bloquea la placa de la consulta que se pasa a corte y avisa
+// si no está o si ya se pasó: el error deshace el alta entera (y el número).
+// El grupo 0 vive en consultas_corte; los demás, en consultas_corte_grupos.
+func tomarConsulta(ctx context.Context, tx pgx.Tx, token string, grupo int) error {
 	var corte, numero *string
-	err := tx.QueryRow(ctx, `
-		SELECT c.cutting_order_id::text, co.numero
-		FROM consultas_corte c LEFT JOIN cutting_orders co ON co.id = c.cutting_order_id
-		WHERE c.token = $1 FOR UPDATE OF c`, token).Scan(&corte, &numero)
+	var err error
+	if grupo == 0 {
+		err = tx.QueryRow(ctx, `
+			SELECT c.cutting_order_id::text, co.numero
+			FROM consultas_corte c LEFT JOIN cutting_orders co ON co.id = c.cutting_order_id
+			WHERE c.token = $1 FOR UPDATE OF c`, token).Scan(&corte, &numero)
+	} else {
+		err = tx.QueryRow(ctx, `
+			SELECT g.cutting_order_id::text, co.numero
+			FROM consultas_corte c
+			JOIN consultas_corte_grupos g ON g.consulta_id = c.id AND g.orden = $2
+			LEFT JOIN cutting_orders co ON co.id = g.cutting_order_id
+			WHERE c.token = $1 FOR UPDATE OF g`, token, grupo).Scan(&corte, &numero)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return error422("No encontramos esa consulta: revisá el enlace.")
 	}

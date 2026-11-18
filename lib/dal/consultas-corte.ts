@@ -4,6 +4,7 @@ import { apiPublica } from "@/lib/api/servidor";
 import type { components } from "@/lib/api/tipos/cortes";
 
 export type ConsultaDeCorte = components["schemas"]["ConsultaDeCorte"];
+export type GrupoDeConsulta = components["schemas"]["GrupoDeConsulta"];
 
 /**
  * Un corte que alguien mandó por WhatsApp, por el token del enlace. Null si

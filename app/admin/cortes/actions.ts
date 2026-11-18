@@ -72,6 +72,7 @@ export async function crearCorte(_previo: EstadoCorte, formData: FormData): Prom
       notas: campo("notas"),
       acomodoManual: campo("acomodoManual"),
       consulta: campo("consulta"),
+      consultaGrupo: campo("consultaGrupo"),
       anchoSierraMm: campo("anchoSierraMm"),
       piezas,
     },

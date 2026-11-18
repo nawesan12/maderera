@@ -29,11 +29,11 @@ export const metadata = { title: "Nuevo corte" };
 export default async function NuevoCortePage({
   searchParams,
 }: {
-  searchParams: Promise<{ pedido?: string; consulta?: string; cliente?: string }>;
+  searchParams: Promise<{ pedido?: string; consulta?: string; grupo?: string; cliente?: string }>;
 }) {
   const usuario = await requireStaff();
 
-  const { pedido: pedidoId, consulta: token, cliente: clienteId } = await searchParams;
+  const { pedido: pedidoId, consulta: token, grupo: grupoPedido, cliente: clienteId } = await searchParams;
   const [sucursales, pedido, sierra, consulta, placas, cliente] = await Promise.all([
     listarSucursalesPublicas(),
     pedidoId ? obtenerPedido(pedidoId) : Promise.resolve(null),
@@ -43,10 +43,17 @@ export default async function NuevoCortePage({
     clienteId && esUuid(clienteId) ? obtenerCliente(clienteId) : Promise.resolve(null),
   ]);
   if (token && !consulta) notFound();
+  // Una consulta con varias placas se pasa de a una (`?grupo=`): cada placa es
+  // su propia orden de corte. Sin grupo, la primera, como antes.
+  const orden = Number(grupoPedido ?? 0);
+  const grupo = consulta
+    ? (consulta.grupos?.find((g) => g.orden === orden) ?? (orden === 0 ? { ...consulta, orden: 0 } : undefined))
+    : undefined;
+  if (consulta && !grupo) notFound();
   // Una consulta que ya se pasó a corte no se ofrece otra vez: el alta la
   // rechazaría, y mostrar el formulario lleno invita a cargarla dos veces.
-  const yaPasada = consulta?.corteId ? await obtenerCorte(consulta.corteId) : null;
-  if (consulta?.corteId) {
+  const yaPasada = grupo?.corteId ? await obtenerCorte(grupo.corteId) : null;
+  if (grupo?.corteId) {
     return (
       <div className="space-y-6">
         <Link
@@ -61,7 +68,7 @@ export default async function NuevoCortePage({
           <Scissors className="h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
           <span>
             Esta consulta ya se pasó a corte:{" "}
-            <Link href={`/admin/cortes/${consulta.corteId}`} className="font-semibold underline underline-offset-4">
+            <Link href={`/admin/cortes/${grupo.corteId}`} className="font-semibold underline underline-offset-4">
               {yaPasada ? `ver el ${yaPasada.numero}` : "ver el corte"}
             </Link>
             .
@@ -72,7 +79,7 @@ export default async function NuevoCortePage({
   }
   // La placa entera de la consulta: lo guardado es la medida ya partida, y el
   // formulario parte la entera él mismo.
-  const placaDeLaConsulta = consulta?.variantId ? placas.find((p) => p.variantId === consulta.variantId) : undefined;
+  const placaDeLaConsulta = grupo?.variantId ? placas.find((p) => p.variantId === grupo.variantId) : undefined;
 
   // Un id de pedido que no existe no es lo mismo que no haber pasado ninguno:
   // seguir de largo dejaría un corte suelto creyendo que quedó atado.
@@ -107,21 +114,22 @@ export default async function NuevoCortePage({
       <FormularioCorte
         sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
         desdeConsulta={
-          consulta
+          consulta && grupo
             ? {
                 token: consulta.token,
+                grupo: grupo.orden,
                 placa: placaDeLaConsulta
                   ? {
                       variantId: placaDeLaConsulta.variantId,
-                      descripcion: consulta.material,
+                      descripcion: grupo.material,
                       largoMm: placaDeLaConsulta.largoMm,
                       anchoMm: placaDeLaConsulta.anchoMm,
                       color: placaDeLaConsulta.color,
                     }
                   : null,
-                mitad: consulta.mitad === "largo" || consulta.mitad === "ancho" ? consulta.mitad : null,
-                cantoDescripcion: consulta.cantoDescripcion ?? "",
-                piezas: consulta.piezas.map((p) => ({
+                mitad: grupo.mitad === "largo" || grupo.mitad === "ancho" ? grupo.mitad : null,
+                cantoDescripcion: grupo.cantoDescripcion ?? "",
+                piezas: grupo.piezas.map((p) => ({
                   largoMm: p.largoMm,
                   anchoMm: p.anchoMm,
                   cantidad: p.cantidad,

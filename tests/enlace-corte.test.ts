@@ -14,10 +14,16 @@ describe("leerEnlaceDeCorte", () => {
     expect(leerEnlaceDeCorte("#piezas=600x400x4c20_300x200x2&material=melamina+blanca", placas)).toEqual({
       placa: "b",
       piezas: [
-        { largo: 600, ancho: 400, cantidad: 4, cantoLargo: 2, cantoAncho: 0 },
-        { largo: 300, ancho: 200, cantidad: 2, cantoLargo: 0, cantoAncho: 0 },
+        { largo: 600, ancho: 400, cantidad: 4, cantoLargo: 2, cantoAncho: 0, veta: false },
+        { largo: 300, ancho: 200, cantidad: 2, cantoLargo: 0, cantoAncho: 0, veta: false },
       ],
     });
+  });
+  it("con la veta, que el asistente manda como una «v» al final", () => {
+    expect(leerEnlaceDeCorte("#piezas=600x400x4c20v_300x200x2v&material=melamina+blanca", placas).piezas).toEqual([
+      { largo: 600, ancho: 400, cantidad: 4, cantoLargo: 2, cantoAncho: 0, veta: true },
+      { largo: 300, ancho: 200, cantidad: 2, cantoLargo: 0, cantoAncho: 0, veta: true },
+    ]);
   });
   it("lo que no se entiende se ignora", () => {
     expect(leerEnlaceDeCorte("#piezas=hola_99x&placa=zz", placas)).toEqual({ placa: null, piezas: [] });

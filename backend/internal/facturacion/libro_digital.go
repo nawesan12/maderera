@@ -138,6 +138,13 @@ func (s *Servicio) comprasDelLibroDigital(ctx context.Context, desde, hasta time
 		if c.Discrimina {
 			c.Alicuotas = fiscal.NetosDeCompra(neto, i21, i105, i27)
 			c.CreditoFiscal = jsmath.Redondear2(i21 + i105 + i27)
+			// Una A con neto y sin ningún IVA (un proveedor que factura
+			// conceptos no gravados): sin alícuotas, el neto no iba a ningún
+			// campo y el registro no cerraba contra el total. Va a «no
+			// integra el neto gravado».
+			if len(c.Alicuotas) == 0 && neto > 0 {
+				c.NoGravado = jsmath.Redondear2(c.NoGravado + neto)
+			}
 		}
 		lista = append(lista, c)
 	}

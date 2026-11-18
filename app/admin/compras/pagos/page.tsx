@@ -48,24 +48,39 @@ export default async function PagosPage({
 
   const [pagos, proveedores, regimenes, sucursales] = await Promise.all([
     listarPagosAProveedores(),
-    listarProveedores({ estado: "activo" }),
+    // Todos, no solo los activos: dejar de comprarle a alguien no salda su
+    // cuenta. Se ofrecen los activos y los inactivos que deben, así la
+    // deuda se puede pagar y el total es el mismo «Debo» del Resumen.
+    listarProveedores(),
     regimenesActivos(),
     sucursalesParaGasto(),
   ]);
 
   const conDeuda = proveedores.filter((p) => p.saldo > 0.005);
-  // Los que tienen deuda, primero: son a los que se les paga.
-  const ordenados = [...conDeuda, ...proveedores.filter((p) => p.saldo <= 0.005)];
+  // Un anticipo no resta la deuda con otro, pero tiene que verse: es plata
+  // que ya salió.
+  const aFavor = proveedores.filter((p) => p.saldo < -0.005);
+  // Los que tienen deuda, primero: son a los que se les paga. Un inactivo
+  // sin deuda no se ofrece.
+  const ordenados = [
+    ...conDeuda,
+    ...proveedores.filter((p) => p.saldo <= 0.005 && p.estado === "activo"),
+  ];
+  const resumen = [
+    conDeuda.length > 0
+      ? `Se les deben ${formatearMonto(conDeuda.reduce((s, p) => s + p.saldo, 0))} a ${plural(conDeuda.length, "proveedor", "proveedores")}`
+      : "Sin deuda con proveedores",
+    aFavor.length > 0 &&
+      `${formatearMonto(-aFavor.reduce((s, p) => s + p.saldo, 0))} a favor con ${plural(aFavor.length, "proveedor", "proveedores")}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Pagos a proveedores"
-        resumen={
-          conDeuda.length > 0
-            ? `Se les deben ${formatearMonto(conDeuda.reduce((s, p) => s + p.saldo, 0))} a ${plural(conDeuda.length, "proveedor", "proveedores")}`
-            : "Sin deuda con proveedores"
-        }
+        resumen={resumen}
       >
         {/* Es un archivo (una ruta que contesta un CSV), no una página: el
             enlace tiene que ser una descarga. La regla lo confunde con la
@@ -81,7 +96,11 @@ export default async function PagosPage({
       </EncabezadoPanel>
 
       <FormularioPago
-        proveedores={ordenados.map((p) => ({ id: p.id, nombre: p.nombre, saldo: p.saldo }))}
+        proveedores={ordenados.map((p) => ({
+          id: p.id,
+          nombre: p.estado === "inactivo" ? `${p.nombre} · inactivo` : p.nombre,
+          saldo: p.saldo,
+        }))}
         regimenes={regimenes.map((r) => ({
           id: r.id,
           codigo: r.codigo,

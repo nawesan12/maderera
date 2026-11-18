@@ -23,10 +23,13 @@ import (
 //     positivo es deuda), con lo vencido según el aging de cobros
 //     (cobros.CalcularAging, los días de crédito de cada cliente): el mismo
 //     cálculo que la cartera de clientes.
-//   - **Debo** son las facturas de compra con saldo (total menos lo imputado
-//     en pagos), sin las notas de crédito: el mismo saldo que «Pagar» de
-//     compras. Lo que entró con remito y todavía no tiene factura no está acá:
-//     no tiene vencimiento.
+//   - **Debo** es el libro de cada proveedor (supplier_movements), el mismo
+//     saldo que Pagos a proveedores: ahí están el saldo inicial que vino de
+//     ISIS, los ajustes a mano y la deuda que nace con el remito, que las
+//     facturas solas no tienen. Lo vencido y lo de esta semana siguen
+//     saliendo de las facturas (son las que tienen vencimiento), topeados por
+//     el libro de cada proveedor; lo que el libro tiene por encima de sus
+//     facturas es «sin factura».
 //   - **Cheques de la semana**: los recibidos en cartera que ya se pueden
 //     depositar o se pueden en los próximos siete días (a cobrar), y los
 //     propios entregados que debitan en ese lapso (a cubrir). Los de terceros
@@ -46,7 +49,7 @@ type MeDeben struct {
 	ClientesConVencido int     `json:"clientesConVencido"`
 }
 
-// Debo son las facturas de compra con saldo.
+// Debo es lo que se les debe a los proveedores, según sus libros.
 type Debo struct {
 	Total              float64 `json:"total"`
 	Facturas           int     `json:"facturas"`
@@ -54,6 +57,11 @@ type Debo struct {
 	FacturasVencidas   int     `json:"facturasVencidas"`
 	EstaSemana         float64 `json:"estaSemana"`
 	FacturasEstaSemana int     `json:"facturasEstaSemana"`
+	// Lo que el libro debe por encima de las facturas con saldo: el saldo
+	// inicial, los ajustes, lo recibido con remito y sin factura.
+	SinFactura float64 `json:"sinFactura"`
+	// A cuántos proveedores se les debe.
+	Proveedores int `json:"proveedores"`
 }
 
 // Monto es un total con cuántos lo forman.
@@ -198,22 +206,79 @@ func (s *Servicio) MeDeben(ctx context.Context, ahora time.Time) (MeDeben, error
 // no son deuda: restan aparte en la cuenta del proveedor).
 const saldoDeCompra = `(f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0))`
 
-// Debo suma las facturas de compra con saldo, lo vencido y lo que vence en
-// los próximos siete días.
+// Debo suma, proveedor por proveedor, lo que dice su libro.
+//
+// Cada proveedor por separado: un saldo a favor con uno (un anticipo, una
+// nota de crédito) no descuenta lo que se le debe a otro, y se muestra aparte
+// en Pagos. Lo vencido y lo de esta semana salen de sus facturas pero nunca
+// pasan su libro: un pago a cuenta sin imputar baja el libro y no las
+// facturas, y sin el tope lo vencido quedaba por encima de lo que se debe.
+// Entran los proveedores inactivos con deuda: dejar de comprarle a alguien no
+// salda la cuenta (Pagos los lista también, por lo mismo).
 func (s *Servicio) Debo(ctx context.Context, ahora time.Time) (Debo, error) {
 	var d Debo
-	var total, vencido, semana jsmath.Num
 	hoy := InicioDelDia(ahora)
-	err := s.pool.QueryRow(ctx, `
-		SELECT coalesce(sum(saldo), 0), count(*)::int,
-		  coalesce(sum(saldo) FILTER (WHERE vence < $1), 0), (count(*) FILTER (WHERE vence < $1))::int,
-		  coalesce(sum(saldo) FILTER (WHERE vence >= $1 AND vence < $2), 0), (count(*) FILTER (WHERE vence >= $1 AND vence < $2))::int
-		FROM (SELECT `+saldoDeCompra+` AS saldo, f.fecha_vencimiento AS vence FROM purchase_invoices f
-		      WHERE f.tipo::text NOT LIKE 'nota_credito%' AND f.anulada_at IS NULL) x
-		WHERE saldo > 0.009`, hoy, hoy.AddDate(0, 0, 7)).
-		Scan(&total, &d.Facturas, &vencido, &d.FacturasVencidas, &semana, &d.FacturasEstaSemana)
-	d.Total, d.Vencido, d.EstaSemana = total.F(), vencido.F(), semana.F()
-	return d, err
+	rs, err := s.pool.Query(ctx, `
+		SELECT coalesce(l.saldo, 0)::float8,
+		  coalesce(sum(x.saldo), 0)::float8, count(x.saldo)::int,
+		  coalesce(sum(x.saldo) FILTER (WHERE x.vence < $1), 0)::float8, (count(*) FILTER (WHERE x.vence < $1))::int,
+		  coalesce(sum(x.saldo) FILTER (WHERE x.vence >= $1 AND x.vence < $2), 0)::float8,
+		  (count(*) FILTER (WHERE x.vence >= $1 AND x.vence < $2))::int
+		FROM suppliers s
+		LEFT JOIN (SELECT supplier_id, sum(monto) AS saldo FROM supplier_movements GROUP BY supplier_id) l ON l.supplier_id = s.id
+		LEFT JOIN (SELECT f.supplier_id, `+saldoDeCompra+` AS saldo, f.fecha_vencimiento AS vence FROM purchase_invoices f
+		      WHERE f.tipo::text NOT LIKE 'nota_credito%' AND f.anulada_at IS NULL) x ON x.supplier_id = s.id AND x.saldo > 0.009
+		WHERE s.active
+		GROUP BY s.id, l.saldo`, hoy, hoy.AddDate(0, 0, 7))
+	if err != nil {
+		return d, err
+	}
+	var libro, facturado, vencido, semana float64
+	var facturas, vencidas, deLaSemana int
+	if _, err := pgx.ForEachRow(rs, []any{&libro, &facturado, &facturas, &vencido, &vencidas, &semana, &deLaSemana}, func() error {
+		r := DeudaConProveedor(libro, facturado, vencido, semana)
+		if !(r.Debe > 0) {
+			return nil
+		}
+		d.Total += r.Debe
+		d.Proveedores++
+		d.Facturas += facturas
+		d.SinFactura += r.SinFactura
+		if r.Vencido > 0 {
+			d.Vencido += r.Vencido
+			d.FacturasVencidas += vencidas
+		}
+		if r.EstaSemana > 0 {
+			d.EstaSemana += r.EstaSemana
+			d.FacturasEstaSemana += deLaSemana
+		}
+		return nil
+	}); err != nil {
+		return d, err
+	}
+	d.Total, d.Vencido = jsmath.Redondear2(d.Total), jsmath.Redondear2(d.Vencido)
+	d.EstaSemana, d.SinFactura = jsmath.Redondear2(d.EstaSemana), jsmath.Redondear2(d.SinFactura)
+	return d, nil
+}
+
+// DeudaDeUnProveedor es el reparto de lo que se le debe a uno.
+type DeudaDeUnProveedor struct {
+	Debe, Vencido, EstaSemana, SinFactura float64
+}
+
+// DeudaConProveedor reparte el libro de un proveedor: lo que se debe es el
+// libro si es positivo; lo vencido, lo vencido de las facturas sin pasar el
+// libro; lo de esta semana, sin pasar lo que queda; y lo que el libro tiene
+// por encima de las facturas con saldo, sin factura.
+func DeudaConProveedor(libro, facturado, vencido, semana float64) DeudaDeUnProveedor {
+	if !(libro > 0.005) {
+		return DeudaDeUnProveedor{}
+	}
+	r := DeudaDeUnProveedor{Debe: libro}
+	r.Vencido = min(vencido, libro)
+	r.EstaSemana = max(min(semana, jsmath.Redondear2(libro-r.Vencido)), 0)
+	r.SinFactura = max(jsmath.Redondear2(libro-facturado), 0)
+	return r
 }
 
 // InicioDelDia es el día argentino de `ahora`, a las 0.

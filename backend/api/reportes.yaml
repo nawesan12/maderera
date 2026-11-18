@@ -452,7 +452,10 @@ components:
             clientesConVencido: { type: integer }
         debo:
           type: object
-          required: [total, facturas, vencido, facturasVencidas, estaSemana, facturasEstaSemana]
+          description: >-
+            El libro de cada proveedor (supplier_movements), como Pagos a proveedores, con los inactivos que deben.
+            Lo vencido y lo de esta semana salen de las facturas, sin pasar el libro de cada uno.
+          required: [total, facturas, vencido, facturasVencidas, estaSemana, facturasEstaSemana, sinFactura, proveedores]
           properties:
             total: { type: number, format: double }
             facturas: { type: integer }
@@ -460,6 +463,8 @@ components:
             facturasVencidas: { type: integer }
             estaSemana: { type: number, format: double }
             facturasEstaSemana: { type: integer }
+            sinFactura: { type: number, format: double, description: "Lo que el libro debe por encima de las facturas con saldo (saldo inicial, ajustes, remitos)" }
+            proveedores: { type: integer }
         cheques:
           type: object
           required: [aCobrar, aCubrir]

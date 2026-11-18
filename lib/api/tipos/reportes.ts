@@ -505,6 +505,7 @@ export interface components {
                 clientes: number;
                 clientesConVencido: number;
             };
+            /** @description El libro de cada proveedor (supplier_movements), como Pagos a proveedores, con los inactivos que deben. Lo vencido y lo de esta semana salen de las facturas, sin pasar el libro de cada uno. */
             debo: {
                 /** Format: double */
                 total: number;
@@ -515,6 +516,12 @@ export interface components {
                 /** Format: double */
                 estaSemana: number;
                 facturasEstaSemana: number;
+                /**
+                 * Format: double
+                 * @description Lo que el libro debe por encima de las facturas con saldo (saldo inicial, ajustes, remitos)
+                 */
+                sinFactura: number;
+                proveedores: number;
             };
             cheques: {
                 aCobrar: components["schemas"]["Monto"];

@@ -413,10 +413,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nombre, email, motivo, mensaje]
+              required: [nombre, motivo, mensaje]
               additionalProperties: false
               properties:
                 nombre: { type: string }
+                # WhatsApp o correo: alguno de los dos (lo controla validar()).
                 email: { type: string }
                 telefono: { type: string }
                 motivo: { type: string }

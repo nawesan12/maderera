@@ -536,17 +536,22 @@ func (a *API) Sitemap(ctx context.Context, r contenidoapi.SitemapRequestObject) 
 }
 
 func (a *API) EnviarConsulta(ctx context.Context, r contenidoapi.EnviarConsultaRequestObject) (contenidoapi.EnviarConsultaResponseObject, error) {
-	c := Consulta{Nombre: r.Body.Nombre, Email: r.Body.Email, Motivo: r.Body.Motivo, Mensaje: r.Body.Mensaje}
+	c := Consulta{Nombre: r.Body.Nombre, Motivo: r.Body.Motivo, Mensaje: r.Body.Mensaje}
+	if r.Body.Email != nil {
+		c.Email = *r.Body.Email
+	}
 	if r.Body.Telefono != nil {
 		c.Telefono = *r.Body.Telefono
 	}
 	if err := c.validar(); err != nil {
 		return nil, err
 	}
-	// Por IP y por correo, como el TS: la validación va antes, así un
-	// formulario mal llenado no gasta intentos.
+	// Por IP y por correo —o por teléfono, si no dejó correo—: la IP cuenta
+	// siempre. La validación va antes, así un formulario mal llenado no gasta
+	// intentos.
 	ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
-	if v := a.lim.PorAmbos(ctx, limites.Contacto, ip, "correo", c.Email); !v.Permitido {
+	nombre, valor := c.ClaveDelLimite()
+	if v := a.lim.PorAmbos(ctx, limites.Contacto, ip, nombre, valor); !v.Permitido {
 		return nil, plataforma.NuevoProblema(http.StatusTooManyRequests, limites.AvisoDeEspera(v))
 	}
 	res, err := a.s.EnviarConsulta(ctx, a.envio, a.contacto, c)

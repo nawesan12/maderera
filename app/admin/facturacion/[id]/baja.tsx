@@ -22,8 +22,10 @@ interface Corrimiento {
  * libre y los pendientes que vienen detrás bajan uno. Por eso va plegado,
  * como acción secundaria debajo de reintentar y corregir, y antes de
  * confirmar muestra lo que se corre y a quién (el que tenía el PDF del 0005
- * ahora tiene el 0004) y la deuda que se va con él. Si Go dice que no se
- * puede, se muestra el porqué en vez del formulario.
+ * ahora tiene el 0004) y la deuda que se va con él. La lista viaja con el
+ * formulario: si mientras se escribe el motivo entra otro comprobante en la
+ * serie, Go no corre a nadie que no se vio. Si Go dice que no se puede, se
+ * muestra el porqué en vez del formulario.
  */
 export function DarDeBaja({
   id,
@@ -92,6 +94,9 @@ export function DarDeBaja({
       className="space-y-3 rounded-xl border bg-background p-4"
     >
       <input type="hidden" name="id" value={id} />
+      {corren.map((c) => (
+        <input key={c.invoiceId} type="hidden" name="corren" value={c.invoiceId} />
+      ))}
 
       <p className="text-base font-medium">Libera el {propio}</p>
 
@@ -114,6 +119,12 @@ export function DarDeBaja({
         <p className="text-base">
           Sale <span className="tabular font-medium">{moneda.format(deuda)}</span> de la cuenta
           corriente de {receptor}.
+        </p>
+      )}
+      {deuda < 0 && (
+        <p className="text-base">
+          {receptor} vuelve a deber{" "}
+          <span className="tabular font-medium">{moneda.format(-deuda)}</span>.
         </p>
       )}
 

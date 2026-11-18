@@ -227,7 +227,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Saca de la serie un comprobante que ARCA no autorizó y corre un número para abajo los pendientes que vienen detrás. Se frena si tiene CAE, si un posterior tiene CAE, si tiene notas, si tiene cobros (con recibo vivo o sin recibo) o si ARCA ya tiene el número. Lo que era queda en el listado de dados de baja. Solo el admin. */
+        /** @description Saca de la serie un comprobante que ARCA no autorizó y corre un número para abajo los pendientes que vienen detrás. Se frena si tiene CAE, si un posterior tiene CAE, si tiene notas, si tiene cobros (con recibo vivo o con plata sin recibo), si ARCA ya tiene el número o si los que se corren no son los que vio el admin (`corren`, los ids en orden). Lo que era queda en el listado de dados de baja. Solo el admin. */
         post: operations["DarDeBajaComprobante"];
         delete?: never;
         options?: never;
@@ -511,6 +511,7 @@ export interface components {
             a: number;
             receptorNombre: string;
             customerId: string | null;
+            recibos?: string[];
         };
         SerieDelComprobante: {
             anterioresSinCae: number;
@@ -1236,6 +1237,7 @@ export interface operations {
             content: {
                 "application/json": {
                     motivo: string;
+                    corren: string[];
                 };
             };
         };

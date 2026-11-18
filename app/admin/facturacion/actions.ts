@@ -140,7 +140,10 @@ export async function darDeBaja(
 
   const r = await (await api()).POST("/api/v1/admin/facturacion/comprobantes/{id}/baja", {
     params: { path: { id } },
-    body: { motivo: String(formData.get("motivo") ?? "") },
+    body: {
+      motivo: String(formData.get("motivo") ?? ""),
+      corren: formData.getAll("corren").map(String),
+    },
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
 

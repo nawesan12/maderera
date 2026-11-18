@@ -209,17 +209,19 @@ paths:
       description: >-
         Saca de la serie un comprobante que ARCA no autorizó y corre un número para abajo los pendientes que vienen
         detrás. Se frena si tiene CAE, si un posterior tiene CAE, si tiene notas, si tiene cobros (con recibo vivo o
-        sin recibo) o si ARCA ya tiene el número. Lo que era queda en el listado de dados de baja. Solo el admin.
+        con plata sin recibo), si ARCA ya tiene el número o si los que se corren no son los que vio el admin (`corren`,
+        los ids en orden). Lo que era queda en el listado de dados de baja. Solo el admin.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [motivo]
+              required: [motivo, corren]
               additionalProperties: false
               properties:
                 motivo: { type: string }
+                corren: { type: array, items: { type: string } }
       responses:
         "200":
           description: La baja
@@ -482,6 +484,7 @@ components:
         a: { type: integer, format: int64 }
         receptorNombre: { type: string }
         customerId: { type: string, nullable: true }
+        recibos: { type: array, items: { type: string } }
     SerieDelComprobante:
       type: object
       required: [anterioresSinCae, corren, deuda, bloqueo]

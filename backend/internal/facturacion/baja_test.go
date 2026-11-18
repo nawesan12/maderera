@@ -38,9 +38,23 @@ func emitirA(t *testing.T, e *entorno, admin *http.Client, precio string) string
 	return leerJSON[map[string]string](t, b)["invoiceId"]
 }
 
+// darDeBaja confirma la baja con la lista de corridos que muestra la ficha
+// en ese momento, como el formulario.
 func darDeBaja(t *testing.T, e *entorno, admin *http.Client, id string) (int, string) {
 	t.Helper()
-	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/baja", map[string]string{"motivo": "Rechazado por ARCA"})
+	vistos := []string{}
+	if serie, err := e.s.Serie(context.Background(), id); err == nil {
+		for _, k := range serie.Corren {
+			vistos = append(vistos, k.InvoiceID)
+		}
+	}
+	return darDeBajaViendo(t, admin, e, id, vistos)
+}
+
+func darDeBajaViendo(t *testing.T, admin *http.Client, e *entorno, id string, vistos []string) (int, string) {
+	t.Helper()
+	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/baja",
+		map[string]any{"motivo": "Rechazado por ARCA", "corren": vistos})
 	return st, string(b)
 }
 
@@ -194,8 +208,8 @@ func TestLoQueFrenaLaBaja(t *testing.T) {
 	frena(dos, "Tiene notas encima")
 	e.exec(t, `DELETE FROM invoices WHERE comprobante_origen_id = $1`, dos)
 
-	// Un pase a cuenta corriente: sin recibo, es el único rastro.
-	e.exec(t, `INSERT INTO invoice_payments (invoice_id, medio, monto) VALUES ($1, 'cuenta_corriente', 100)`, dos)
+	// Plata sin recibo: es el único rastro.
+	e.exec(t, `INSERT INTO invoice_payments (invoice_id, medio, monto) VALUES ($1, 'efectivo', 100)`, dos)
 	frena(dos, "cobros sin recibo")
 	e.exec(t, `DELETE FROM invoice_payments WHERE invoice_id = $1`, dos)
 
@@ -485,5 +499,139 @@ func TestElReciboFijaSuReparto(t *testing.T) {
 	}
 	if d != 1000 || a != 0 || bb != 0 {
 		t.Fatalf("con CAE: deudores %v, anticipo %v, B %v", d, a, bb)
+	}
+}
+
+// **La baja de una nota deshace lo que la nota hizo.** Factura A con CAE de
+// Gómez; se anula y ARCA rechaza la nota de crédito. Antes la baja borraba la
+// nota y dejaba la factura «anulada» sin nota detrás y el crédito en la
+// cuenta del cliente. Ahora la factura vuelve a estar autorizada, sin
+// acreditar, y la cuenta queda como antes de la nota. Lo mismo con una nota
+// de débito y lo `debitado`.
+func TestBajaDeUnaNota(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	admin := e.staff(t, "admin@mjbj.test", sqlc.StaffRoleAdmin)
+	cliente := conFichaDeGomez(t, e)
+	factura := emitirA(t, e, admin, "12100")
+	e.exec(t, `UPDATE invoices SET cae = '71', estado = 'autorizada' WHERE id = $1`, factura)
+	saldo := func() float64 {
+		var s float64
+		e.uno(t, `SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1`, &s, cliente)
+		return s
+	}
+	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+factura+"/anular", map[string]string{"motivo": "Error de carga"})
+	if st != 200 {
+		t.Fatalf("anular: %d %s", st, b)
+	}
+	nc := leerJSON[map[string]string](t, b)["invoiceId"]
+	if saldo() != 0 {
+		t.Fatalf("con la nota: %v", saldo())
+	}
+	serie, err := e.s.Serie(ctx, nc)
+	if err != nil || serie.Bloqueo != nil || serie.Deuda != -12100 {
+		t.Fatalf("serie de la nota: %+v %v", serie, err)
+	}
+	if st, b := darDeBaja(t, e, admin, nc); st != 200 {
+		t.Fatalf("baja de la nota: %d %s", st, b)
+	}
+	c, _ := e.s.Obtener(ctx, factura)
+	if c.Estado != "autorizada" || c.Acreditado != "0.00" || saldo() != 12100 {
+		t.Fatalf("la factura quedó %s, acreditado %s, saldo %v", c.Estado, c.Acreditado, saldo())
+	}
+	// Se puede volver a anular.
+	st, b = pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+factura+"/nota-de-debito",
+		map[string]any{"motivo": "Flete olvidado", "concepto": "Flete", "importe": 5000, "alicuota": 21})
+	if st != 200 {
+		t.Fatalf("débito: %d %s", st, b)
+	}
+	nd := leerJSON[map[string]string](t, b)["invoiceId"]
+	if saldo() != 17100 {
+		t.Fatalf("con el débito: %v", saldo())
+	}
+	if st, b := darDeBaja(t, e, admin, nd); st != 200 {
+		t.Fatalf("baja del débito: %d %s", st, b)
+	}
+	c, _ = e.s.Obtener(ctx, factura)
+	if c.Estado != "autorizada" || c.Debitado != "0.00" || saldo() != 12100 {
+		t.Fatalf("después del débito: %s, debitado %s, saldo %v", c.Estado, c.Debitado, saldo())
+	}
+}
+
+// **El fiado no traba la serie.** Una factura pasada a cuenta corriente y
+// rechazada por ARCA: el pase no es plata, es la marca de que la deuda quedó
+// en la cuenta, y esa deuda se va con la baja.
+func TestBajaDeUnaFacturaFiada(t *testing.T) {
+	e := armar(t, false)
+	admin := e.staff(t, "admin@mjbj.test", sqlc.StaffRoleAdmin)
+	cliente := conFichaDeGomez(t, e)
+	id := emitirA(t, e, admin, "12100")
+	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/cobros",
+		map[string]string{"modo": "cuenta_corriente", "monto": "12100"})
+	if st != 200 {
+		t.Fatalf("pasar a cuenta: %d %s", st, b)
+	}
+	if st, b := darDeBaja(t, e, admin, id); st != 200 {
+		t.Fatalf("baja: %d %s", st, b)
+	}
+	var saldo float64
+	var cobrosEnFoto int
+	e.uno(t, `SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1`, &saldo, cliente)
+	e.uno(t, `SELECT jsonb_array_length(comprobante->'cobros') FROM invoices_dadas_de_baja`, &cobrosEnFoto)
+	if saldo != 0 || cobrosEnFoto != 1 {
+		t.Fatalf("saldo %v, cobros en la foto %d", saldo, cobrosEnFoto)
+	}
+}
+
+// **Lo que se confirma es lo que se corre.** El admin ve «correr 1»; mientras
+// escribe el motivo se emite otro en la serie. La baja no sigue.
+func TestLaSerieCambioAntesDeConfirmar(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	admin := e.staff(t, "admin@mjbj.test", sqlc.StaffRoleAdmin)
+	conFichaDeGomez(t, e)
+	uno, dos := emitirA(t, e, admin, "1000"), emitirA(t, e, admin, "2000")
+	serie, _ := e.s.Serie(ctx, uno)
+	if len(serie.Corren) != 1 || serie.Corren[0].InvoiceID != dos {
+		t.Fatalf("serie: %+v", serie)
+	}
+	emitirA(t, e, admin, "3000")
+	if st, b := darDeBajaViendo(t, admin, e, uno, []string{dos}); st != 422 || !strings.Contains(b, "La serie cambió") {
+		t.Fatalf("con la serie cambiada: %d %s", st, b)
+	}
+	if st, b := darDeBaja(t, e, admin, uno); st != 200 {
+		t.Fatalf("con la lista nueva: %d %s", st, b)
+	}
+}
+
+// **El recibo del corrido nombra su número nuevo.** El 2 se cobró con
+// recibo; se da de baja el 1 y el 2 pasa a 1: el concepto del recibo y su
+// renglón en la cuenta dicen el 1, y Dados de baja lista el recibo para
+// reenviarlo.
+func TestElReciboDelCorridoCambiaDeNumero(t *testing.T) {
+	e := armar(t, false)
+	admin := e.staff(t, "admin@mjbj.test", sqlc.StaffRoleAdmin)
+	conFichaDeGomez(t, e)
+	uno, dos := emitirA(t, e, admin, "1000"), emitirA(t, e, admin, "2000")
+	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+dos+"/cobros",
+		map[string]string{"partes": `[{"medio":"transferencia","importe":"2000"}]`})
+	if st != 200 {
+		t.Fatalf("cobrar: %d %s", st, b)
+	}
+	recibo := *leerJSON[ResultadoDeCobro](t, b).ReceiptID
+	if st, b := darDeBaja(t, e, admin, uno); st != 200 {
+		t.Fatalf("baja: %d %s", st, b)
+	}
+	var concepto, detalle, numero string
+	e.uno(t, `SELECT concepto FROM receipts WHERE id = $1`, &concepto, recibo)
+	e.uno(t, `SELECT detalle FROM account_movements WHERE receipt_id = $1`, &detalle, recibo)
+	e.uno(t, `SELECT numero FROM receipts WHERE id = $1`, &numero, recibo)
+	if concepto != "Cobro de Factura A 0003-00000001" || !strings.HasPrefix(detalle, "Cobro de Factura A 0003-00000001") {
+		t.Fatalf("el recibo dice %q, la cuenta %q", concepto, detalle)
+	}
+	_, b = pedir(t, admin, "GET", e.srv.URL+"/api/v1/admin/facturacion/dados-de-baja", nil)
+	lista := leerJSON[[]DadoDeBaja](t, b)
+	if len(lista) != 1 || len(lista[0].Renumerados) != 1 || len(lista[0].Renumerados[0].Recibos) != 1 || lista[0].Renumerados[0].Recibos[0] != numero {
+		t.Fatalf("dados de baja: %s", b)
 	}
 }

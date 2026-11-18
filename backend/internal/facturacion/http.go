@@ -534,7 +534,7 @@ func (a *API) DarDeBajaComprobante(ctx context.Context, r facturacionapi.DarDeBa
 	if largoJS(motivo) > 300 {
 		return nil, comoProblema(errEmision("El motivo es muy largo."))
 	}
-	v, err := a.s.DarDeBaja(ctx, ses, r.Id.String(), motivo)
+	v, err := a.s.DarDeBaja(ctx, ses, r.Id.String(), motivo, r.Body.Corren)
 	if err != nil {
 		return nil, comoProblema(err)
 	}

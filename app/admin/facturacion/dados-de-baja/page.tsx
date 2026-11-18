@@ -80,7 +80,12 @@ export default async function DadosDeBajaPage() {
                         </span>
                         <ArrowRight className="h-4 w-4 text-muted-foreground" aria-label="pasó a" />
                         <span className="tabular font-medium">{numeroFormateado(b.puntoVenta, r.a)}</span>
-                        <span className="min-w-0 flex-1 truncate">{r.receptorNombre}</span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {r.receptorNombre}
+                          {r.recibos?.length ? (
+                            <span className="text-muted-foreground"> · {r.recibos.join(" · ")}</span>
+                          ) : null}
+                        </span>
                         <span className="text-sm font-medium text-acento-texto">Reenviar</span>
                       </Link>
                     </li>

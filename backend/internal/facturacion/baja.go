@@ -11,6 +11,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/fiscal"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/sqlc"
 )
 
@@ -35,11 +36,21 @@ import (
 //   - que un posterior de la serie tenga CAE (ARCA ya pasó ese número);
 //   - que tenga notas encima (se dan de baja primero);
 //   - que tenga cobros: con recibo vivo se anula el recibo primero, a la
-//     vista, y sin recibo (un pase a cuenta corriente) serían el único rastro
-//     de esa plata, que se iría con el borrado;
+//     vista, y sin recibo con un medio de plata serían el único rastro de
+//     esa plata, que se iría con el borrado. El pase a cuenta corriente no
+//     frena: no es plata, es la marca de que la deuda quedó en la cuenta, y
+//     esa deuda (el movimiento de la emisión) ya se va con la baja;
 //   - que ARCA ya tenga el número (se reintenta: recupera el CAE).
 //
-// Nada se renumera ni se da de baja solo: lo hace el admin, con motivo.
+// Nada se renumera ni se da de baja solo: lo hace el admin, con motivo, y
+// sobre la lista de corridos que vio (si entró un comprobante mientras
+// escribía el motivo, la baja no sigue).
+//
+// La baja de una nota deshace lo que la nota le hizo al original: le resta
+// lo acreditado o debitado, le devuelve el estado si la nota lo había anulado
+// y borra el movimiento de cuenta que cargó. Si no, una factura con CAE
+// quedaba «anulada» sin ninguna nota detrás y el cliente con un crédito que
+// ARCA nunca autorizó.
 
 // Corrimiento es un comprobante pendiente que baja un número.
 type Corrimiento struct {
@@ -48,6 +59,10 @@ type Corrimiento struct {
 	A              int64   `json:"a"`
 	ReceptorNombre string  `json:"receptorNombre"`
 	CustomerID     *string `json:"customerId"`
+	// Recibos son los recibos vivos que cobraron el corrido: su concepto
+	// nombraba el número viejo y se corrigió; el cliente tiene el papel con
+	// el número viejo y hay que reenviárselo.
+	Recibos []string `json:"recibos,omitempty"`
 }
 
 // SerieDelComprobante es lo que la ficha de un comprobante sin CAE muestra
@@ -73,22 +88,22 @@ type ResultadoDeBaja struct {
 }
 
 type aBajar struct {
-	id, tipo, estado, receptor string
-	pv, numero                 int64
-	cae, customerID, orderID   *string
-	total                      float64
-	fecha                      time.Time
+	id, tipo, estado, receptor       string
+	pv, numero                       int64
+	cae, customerID, orderID, origen *string
+	total                            float64
+	fecha, creado                    time.Time
 }
 
 func leerABajar(ctx context.Context, c consultor, id string, bloquear bool) (*aBajar, error) {
 	var x aBajar
 	sql := `SELECT id, tipo::text, estado::text, receptor_nombre, punto_venta, numero, cae, customer_id, order_id, total::float8,
-		fecha_emision FROM invoices WHERE id = $1`
+		fecha_emision, comprobante_origen_id, created_at FROM invoices WHERE id = $1`
 	if bloquear {
 		sql += ` FOR UPDATE`
 	}
 	err := c.QueryRow(ctx, sql, id).Scan(&x.id, &x.tipo, &x.estado, &x.receptor, &x.pv, &x.numero, &x.cae, &x.customerID,
-		&x.orderID, &x.total, &x.fecha)
+		&x.orderID, &x.total, &x.fecha, &x.origen, &x.creado)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -123,7 +138,7 @@ func bloqueoDeBaja(ctx context.Context, c consultor, x *aBajar) (string, error) 
 	var sinRecibo int
 	if err := c.QueryRow(ctx, `SELECT (SELECT r.numero FROM invoice_payments p JOIN receipts r ON r.id = p.receipt_id
 		  WHERE p.invoice_id = $1 AND r.estado <> 'anulado' ORDER BY r.numero LIMIT 1),
-		(SELECT count(*)::int FROM invoice_payments WHERE invoice_id = $1 AND receipt_id IS NULL)`, x.id).Scan(&recibo, &sinRecibo); err != nil {
+		(SELECT count(*)::int FROM invoice_payments WHERE invoice_id = $1 AND receipt_id IS NULL AND medio <> 'cuenta_corriente')`, x.id).Scan(&recibo, &sinRecibo); err != nil {
 		return "", err
 	}
 	if recibo != nil {
@@ -161,6 +176,16 @@ func (s *Servicio) Serie(ctx context.Context, id string) (*SerieDelComprobante, 
 		if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE `+movimientosDe,
 			*x.customerID, etiqueta(x.tipo, x.pv, x.numero)).Scan(&out.Deuda); err != nil {
 			return nil, err
+		}
+	}
+	// Una nota: lo que cargó en la cuenta está bajo la etiqueta del original.
+	if x.origen != nil {
+		o, err := leerOriginalDeNota(ctx, s.pool, x)
+		if err != nil {
+			return nil, err
+		}
+		if o != nil && o.movimiento != nil {
+			out.Deuda = o.monto
 		}
 	}
 	m, err := bloqueoDeBaja(ctx, s.pool, x)
@@ -205,7 +230,7 @@ func posteriores(ctx context.Context, c consultor, x *aBajar, bloquear bool) ([]
 // de la numeración de la serie (el de siguienteNumero: nadie toma un número
 // mientras se corren). Autorizar nunca toma el de la serie y la emisión nunca
 // toma el del CAE, así que no hay espera cruzada.
-func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo string) (*ResultadoDeBaja, error) {
+func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo string, vistos []string) (*ResultadoDeBaja, error) {
 	s.cae.Lock()
 	defer s.cae.Unlock()
 	conn, err := s.pool.Acquire(ctx)
@@ -274,6 +299,21 @@ func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo s
 		if err != nil {
 			return err
 		}
+		// La lista que el admin confirmó tiene que ser la que se corre: si
+		// mientras escribía el motivo el mostrador emitió en esta serie, a
+		// un cliente que no vio se le cambiaría el número.
+		if !mismosCorridos(corren, vistos) {
+			return errEmision("La serie cambió: revisá la lista antes de confirmar.")
+		}
+		for i := range corren {
+			if corren[i].Recibos, err = recibosDe(ctx, tx, corren[i].InvoiceID); err != nil {
+				return err
+			}
+		}
+		nota, err := leerOriginalDeNota(ctx, tx, x)
+		if err != nil {
+			return err
+		}
 		// La foto, antes de tocar nada. arca_log pierde el invoice_id con el
 		// borrado: lo que contestó ARCA queda acá.
 		var foto json.RawMessage
@@ -284,8 +324,9 @@ func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo s
 			'cobros', coalesce((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.fecha) FROM invoice_payments p WHERE p.invoice_id = i.id), '[]'::jsonb),
 			'arca', coalesce((SELECT jsonb_agg(to_jsonb(l) ORDER BY l.created_at) FROM arca_log l WHERE l.invoice_id = i.id), '[]'::jsonb),
 			'movimientos', coalesce((SELECT jsonb_agg(to_jsonb(m) ORDER BY m.created_at) FROM account_movements m
-			  WHERE `+movimientosDeEn("m", "$2", "$3")+`), '[]'::jsonb))
-			FROM invoices i WHERE i.id = $1`, x.id, cliente, et).Scan(&foto); err != nil {
+			  WHERE `+movimientosDeEn("m", "$2", "$3")+` OR m.id = $4), '[]'::jsonb),
+			'original', $5::jsonb)
+			FROM invoices i WHERE i.id = $1`, x.id, cliente, et, nota.idMovimiento(), nota.foto()).Scan(&foto); err != nil {
 			return err
 		}
 		renumerados, _ := json.Marshal(corren)
@@ -304,7 +345,11 @@ func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo s
 				return err
 			}
 		}
-		// Los cobros con recibo anulado se van en cascada (están en la foto).
+		if err := nota.deshacer(ctx, tx); err != nil {
+			return err
+		}
+		// Los cobros con recibo anulado y los pases a cuenta corriente se van
+		// en cascada (están en la foto).
 		if _, err := tx.Exec(ctx, `DELETE FROM invoices WHERE id = $1`, x.id); err != nil {
 			return err
 		}
@@ -318,13 +363,23 @@ func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo s
 			}
 			viejo, nuevo := etiqueta(x.tipo, x.pv, k.De), etiqueta(x.tipo, x.pv, k.A)
 			// Solo los movimientos de ese comprobante: su cliente y su
-			// etiqueta exacta, sin reemplazar texto en ningún otro lado.
+			// etiqueta exacta.
 			if k.CustomerID != nil {
-				if _, err := tx.Exec(ctx, `UPDATE account_movements SET referencia = $3,
-					detalle = CASE WHEN detalle = $2 THEN $3 ELSE detalle END WHERE `+movimientosDe,
-					*k.CustomerID, viejo, nuevo); err != nil {
+				if _, err := tx.Exec(ctx, `UPDATE account_movements SET referencia = $3, detalle = replace(detalle, $2, $3)
+					WHERE `+movimientosDe, *k.CustomerID, viejo, nuevo); err != nil {
 					return err
 				}
+			}
+			// Y los recibos que lo cobraron: «Cobro de Factura B 0003-00000005»
+			// seguía nombrando un número que mañana es de otro cliente, en el
+			// recibo y en su renglón de la cuenta corriente. Se reemplaza la
+			// etiqueta exacta (son de ancho fijo: la 0005 no es parte de otra).
+			// De abajo hacia arriba, ningún reemplazo pisa al siguiente.
+			if _, err := tx.Exec(ctx, `WITH r AS (SELECT DISTINCT receipt_id FROM invoice_payments WHERE invoice_id = $1 AND receipt_id IS NOT NULL),
+				_ AS (UPDATE receipts SET concepto = replace(concepto, $2, $3) WHERE id IN (SELECT receipt_id FROM r) AND concepto LIKE '%' || $2 || '%')
+				UPDATE account_movements SET detalle = replace(detalle, $2, $3)
+				WHERE receipt_id IN (SELECT receipt_id FROM r) AND detalle LIKE '%' || $2 || '%'`, k.InvoiceID, viejo, nuevo); err != nil {
+				return err
 			}
 			bitacora.Anotar(ctx, q, s.log, ses, sqlc.AccionAuditoriaEditar, "factura", k.InvoiceID,
 				viejo+" pasa a ser el "+fiscal.NumeroFormateado(x.pv, k.A)+" por la baja del "+fiscal.NumeroFormateado(x.pv, x.numero),
@@ -338,6 +393,156 @@ func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo s
 		return nil, s.comoEmision(err, "fiscal.baja", "No se pudo dar de baja el comprobante.")
 	}
 	return &res, nil
+}
+
+// mismosCorridos compara los corridos de ahora con los que vio el admin, en
+// orden.
+func mismosCorridos(corren []Corrimiento, vistos []string) bool {
+	if len(corren) != len(vistos) {
+		return false
+	}
+	for i, k := range corren {
+		if k.InvoiceID != vistos[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// recibosDe son los números de los recibos vivos que cobraron el comprobante.
+func recibosDe(ctx context.Context, c consultor, id string) ([]string, error) {
+	filas, err := c.Query(ctx, `SELECT DISTINCT r.numero FROM invoice_payments p JOIN receipts r ON r.id = p.receipt_id
+		WHERE p.invoice_id = $1 AND r.estado <> 'anulado' ORDER BY r.numero`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	var out []string
+	for filas.Next() {
+		var n string
+		if err := filas.Scan(&n); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, filas.Err()
+}
+
+// originalDeNota es lo que una nota sin CAE le hizo a su comprobante de
+// origen y que su baja tiene que deshacer.
+type originalDeNota struct {
+	id         string
+	cae        *string
+	estado     string
+	total      float64
+	acreditado float64
+	debitado   float64
+	// sobreAcreditado: la nota salió de NotaDeCredito (también la nota de
+	// débito que revierte una de crédito) y sumó en `acreditado`; si no, es
+	// una nota de débito de NotaDeDebito y sumó en `debitado`.
+	sobreAcreditado bool
+	importe         float64
+	// El movimiento que la nota cargó en la cuenta del cliente: va con la
+	// etiqueta del original y en la misma transacción que la nota (el mismo
+	// created_at).
+	movimiento *string
+	monto      float64
+}
+
+func leerOriginalDeNota(ctx context.Context, c consultor, x *aBajar) (*originalDeNota, error) {
+	if x.origen == nil {
+		return nil, nil
+	}
+	o := originalDeNota{importe: x.total}
+	var tipo string
+	var pv, numero int64
+	var cliente, pedido *string
+	err := c.QueryRow(ctx, `SELECT id, tipo::text, punto_venta, numero, cae, estado::text, total::float8, acreditado::float8, debitado::float8,
+		customer_id, order_id FROM invoices WHERE id = $1`, *x.origen).
+		Scan(&o.id, &tipo, &pv, &numero, &o.cae, &o.estado, &o.total, &o.acreditado, &o.debitado, &cliente, &pedido)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	// Las líneas de NotaDeCredito apuntan a los renglones del original; las de
+	// NotaDeDebito son conceptos nuevos.
+	if fiscal.EsNotaDeCredito(x.tipo) {
+		o.sobreAcreditado = true
+	} else if err := c.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM invoice_items WHERE invoice_id = $1 AND invoice_item_origen_id IS NOT NULL)`,
+		x.id).Scan(&o.sobreAcreditado); err != nil {
+		return nil, err
+	}
+	if cliente != nil && pedido == nil {
+		tipoMov := "nota_debito"
+		if fiscal.EsNotaDeCredito(x.tipo) {
+			tipoMov = "nota_credito"
+		}
+		err := c.QueryRow(ctx, `SELECT id, monto::float8 FROM account_movements WHERE customer_id = $1 AND referencia = $2
+			AND tipo = $3::tipo_movimiento_cuenta AND created_at = $4 AND receipt_id IS NULL AND cheque_id IS NULL ORDER BY id LIMIT 1`,
+			*cliente, etiqueta(tipo, pv, numero), tipoMov, x.creado).Scan(&o.movimiento, &o.monto)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+	}
+	return &o, nil
+}
+
+func (o *originalDeNota) idMovimiento() *string {
+	if o == nil {
+		return nil
+	}
+	return o.movimiento
+}
+
+// foto es cómo estaba el original antes de la baja de su nota.
+func (o *originalDeNota) foto() json.RawMessage {
+	if o == nil {
+		return json.RawMessage("null")
+	}
+	b, _ := json.Marshal(map[string]any{"invoiceId": o.id, "estado": o.estado, "acreditado": o.acreditado, "debitado": o.debitado})
+	return b
+}
+
+func (o *originalDeNota) deshacer(ctx context.Context, tx pgx.Tx) error {
+	if o == nil {
+		return nil
+	}
+	if o.sobreAcreditado {
+		acreditado := fiscal.Redondear(o.acreditado - o.importe)
+		if acreditado < 0 {
+			acreditado = 0
+		}
+		// Si la nota lo había anulado y ya no queda acreditado entero, vuelve
+		// a estar vigente: autorizado si tiene CAE.
+		estado := o.estado
+		if estado == "anulada" && acreditado < o.total-0.005 {
+			estado = "emitida"
+			if o.cae != nil {
+				estado = "autorizada"
+			}
+		}
+		if _, err := tx.Exec(ctx, `UPDATE invoices SET acreditado = $2::numeric, estado = $3::estado_comprobante, updated_at = now() WHERE id = $1`,
+			o.id, jsmath.Fijo2(acreditado), estado); err != nil {
+			return err
+		}
+	} else {
+		debitado := fiscal.Redondear(o.debitado - o.importe)
+		if debitado < 0 {
+			debitado = 0
+		}
+		if _, err := tx.Exec(ctx, `UPDATE invoices SET debitado = $2::numeric, updated_at = now() WHERE id = $1`,
+			o.id, jsmath.Fijo2(debitado)); err != nil {
+			return err
+		}
+	}
+	if o.movimiento != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM account_movements WHERE id = $1`, *o.movimiento); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // movimientosDeEn es movimientosDe con otro alias y otros parámetros.

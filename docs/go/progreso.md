@@ -1930,3 +1930,45 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   50 × 25 mm con `@page`); se arma en `/admin/stock/etiquetas`.
 - Sin migraciones: los índices que hacen falta (trigramas de nombre, sku,
   etiqueta y marca; `inventory` por variante) ya estaban.
+
+## T8, escala antes de migrar ISIS (18/11, rama `carril-d`)
+
+- **Migraciones 00168 y 00169**, números fijos de este carril dentro del
+  rango 00160–00169. La 00168 es `-- +goose NO TRANSACTION` con un
+  `CREATE INDEX CONCURRENTLY IF NOT EXISTS` por sentencia: con datos reales,
+  un índice común frena las escrituras de la tabla mientras se arma.
+- **La expresión de un índice tiene que ser letra por letra la de la
+  consulta**: los de dígitos copian `busqueda.Digitos`. El test
+  `buscador/indices_test.go` lo verifica con EXPLAIN (con `enable_seqscan` e
+  `enable_indexscan` apagados, una rama sin índice vuelve a «Seq Scan»), y otro
+  prueba que con 100.000 pedidos el planificador elige el índice solo. Con
+  pocas filas elige la tabla y está bien. El buscador ignora palabras de menos
+  de tres letras: con dos, los trigramas recorren todo.
+- **Ojo con los experimentos en la plantilla**: un INSERT masivo con ROLLBACK
+  deja los índices inflados (880 páginas para 60 filas) y los planes de los
+  tests cambian. Se arregla con `VACUUM FULL` de esas tablas en la plantilla.
+- **Pools de la API** (`cmd/mjbj/api.go`): principal con 30 s por consulta,
+  10 s por candado y 1 min de transacción ociosa; reportes pesados con 4
+  conexiones de solo lectura (`default_transaction_read_only`) y 1 min; la
+  migración de ISIS con 2 conexiones y 10 min. Los candados de sesión que se
+  esperan durante una llamada externa (CAE, ticket de ARCA, turno del bot)
+  usan `plataforma.SinTopes`. El worker no cambia.
+- **El stock avisa al catálogo con un trigger** (00169), como los de la 00075:
+  un solo trabajo `next.revalidar` pendiente a dos minutos que junta
+  etiquetas finas (`catalogo:<categoria>`, `catalogo:todo`,
+  `producto:<slug>`), buscado con SKIP LOCKED para que ninguna venta espere a
+  otra. Next las acepta en `/api/interno/revalidar` y las pone en cada
+  entrada de `cachearPublico`.
+- **Catálogo en dos fases**: `Claves` filtra y ordena sin fotos ni
+  descripción, `Hidratar` las agrega solo a lo que se muestra. No hay LIMIT
+  en SQL a propósito: el orden sale del precio y el stock armados en Go.
+  Ruta nueva `GET /api/v1/catalogo/productos/resumen`. La búsqueda libre ya
+  no se cachea en Next y Go le pone tope por IP (120/min), solo cuando hay
+  una IP de visitante.
+- **Márgenes de los reportes**: se agrupan solo los renglones de los pedidos
+  del período (`margenesDe(where)`). Se midió el LATERAL que proponía el plan
+  y perdía en rangos largos (494 ms contra 189 en un año).
+- **Cartera**: «Por cobrar» con los 60 más urgentes y «Al día» de a 30. El
+  aging de cada deudor se calcula con los movimientos posteriores al último
+  saldo exactamente cero (ventana en SQL, con numeric): da lo mismo que con
+  todos, y está probado contra la cuenta de antes.

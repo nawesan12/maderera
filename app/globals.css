@@ -1595,3 +1595,18 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
 .ficha-interruptor [data-slot="switch"][data-checked] {
   background-color: var(--accion);
 }
+
+/* En /corte (la página se marca con `data-sin-flotantes`) el WhatsApp
+   flotante sobra —la página tiene su propio «Pedir por WhatsApp»— y en el
+   teléfono los dos botones tapaban el canto y la veta de la pieza. Va en CSS
+   y no con `usePathname`: leer la ruta en el layout frena el prerender de
+   /corte/c/[token]. */
+body:has([data-sin-flotantes]) .flotante-whatsapp {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  body:has([data-sin-flotantes]) .flotante-asistente {
+    display: none;
+  }
+}

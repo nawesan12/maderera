@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   ArrowRight,
   MessageCircle,
@@ -67,8 +66,6 @@ type Renglon =
  */
 export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }) {
   const [abierto, setAbierto] = useState(false);
-  // En el teléfono, cerrado, no va en /corte: tapaba el dibujo del canto.
-  const enCorte = usePathname().startsWith("/corte");
   const [paso, setPaso] = useState<PasoDelGuion>(() => pasoPorId(PASO_INICIAL)!);
   const [renglones, setRenglones] = useState<Renglon[]>([
     { tipo: "asistente", texto: pasoPorId(PASO_INICIAL)!.mensaje },
@@ -263,7 +260,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
         type="button"
         onClick={() => setAbierto(true)}
         aria-label="Abrir el asistente"
-        className={`fixed bottom-4 right-[4.25rem] z-50 ${enCorte ? "hidden sm:flex" : "flex"} h-12 w-12 items-center sm:bottom-6 sm:right-[5.5rem] sm:h-14 sm:w-14 justify-center rounded-full bg-accion text-white shadow-lg transition-all hover:scale-110 hover:shadow-xl`}
+        className="flotante-asistente fixed bottom-4 right-[4.25rem] z-50 flex h-12 w-12 items-center justify-center rounded-full bg-accion text-white shadow-lg transition-all hover:scale-110 hover:shadow-xl sm:bottom-6 sm:right-[5.5rem] sm:h-14 sm:w-14"
       >
         <PersonajeAsistente className="h-7 w-7" />
       </button>

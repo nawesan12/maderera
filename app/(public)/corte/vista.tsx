@@ -346,7 +346,7 @@ function VistaDeCorte({
   }
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[1fr_360px]">
+    <div data-sin-flotantes className="grid items-start gap-6 lg:grid-cols-[1fr_360px]">
       <div className="space-y-5">
         <section className="rounded-xl superficie p-5">
           <label className="block">

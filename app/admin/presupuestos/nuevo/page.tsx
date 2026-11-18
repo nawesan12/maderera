@@ -40,11 +40,9 @@ export default async function NuevoPresupuestoPage({
       </Link>
 
       <div>
+        {/* Para lo que entra por teléfono o por el mostrador: queda en la
+            misma cola que los del sitio y pasa a pedido con un botón. */}
         <h1 className="text-3xl font-bold text-foreground">Nuevo presupuesto</h1>
-        <p className="mt-1 text-base text-muted-foreground">
-          Para lo que entra por teléfono o por el mostrador. Queda en la misma
-          cola que los del sitio y se convierte en pedido con un botón.
-        </p>
       </div>
 
       <FormularioPresupuesto

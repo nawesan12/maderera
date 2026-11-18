@@ -686,7 +686,7 @@ function EditorDeGrupo({
                     className="h-10 w-full rounded-lg border border-linea bg-background px-3 text-base"
                   />
                 </label>
-                <div className="grid flex-1 grid-cols-[1fr_1fr_64px] gap-2 @2xl:contents">
+                <div className="grid w-full grid-cols-[1fr_1fr_72px] gap-2 @2xl:contents">
                   <Numero etiqueta="Largo" valor={f.largo} alCambiar={(v) => actualizar(i, "largo", v)} placeholder="1200" marca="largo" />
                   <Numero etiqueta="Ancho" valor={f.ancho} alCambiar={(v) => actualizar(i, "ancho", v)} placeholder="400" />
                   <Numero etiqueta="Cant." valor={f.cantidad} alCambiar={(v) => actualizar(i, "cantidad", v)} />

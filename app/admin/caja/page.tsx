@@ -97,7 +97,9 @@ export default async function CajaPage({
 
       <section className="grid gap-3 sm:grid-cols-2">
         {sucursales.map((s) => (
-          <article key={s.id} className="tarjeta flex items-center gap-3.5 p-4">
+          // En el teléfono el botón baja a su propio renglón: al lado, el
+          // nombre, el turno y el cambio fijo quedaban partidos en tres.
+          <article key={s.id} className="tarjeta flex flex-wrap items-center gap-3.5 p-4 lg:flex-nowrap">
             <span
               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
                 s.turnoId
@@ -130,7 +132,7 @@ export default async function CajaPage({
             </div>
             <Link
               href="/mostrador"
-              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-linea px-3.5 text-sm font-medium transition-colors hover:bg-hundida"
+              className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-linea px-3.5 text-sm font-medium transition-colors hover:bg-hundida lg:w-auto"
             >
               <Store className="h-4 w-4" />
               Ir al mostrador

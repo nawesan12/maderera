@@ -30,7 +30,15 @@ import (
 	"mjbj/internal/migrar"
 )
 
-const plantilla = "mjbj_plantilla"
+// La plantilla se puede cambiar con MJBJ_PRUEBA_PLANTILLA: ramas que trabajan
+// en paralelo con migraciones distintas no pueden compartir la misma, porque
+// cada una la migra a su gusto y las pruebas de la otra ven columnas ajenas.
+var plantilla = func() string {
+	if p := os.Getenv("MJBJ_PRUEBA_PLANTILLA"); p != "" {
+		return p
+	}
+	return "mjbj_plantilla"
+}()
 
 func conBase(servidor, base string) string {
 	u, _ := url.Parse(servidor)

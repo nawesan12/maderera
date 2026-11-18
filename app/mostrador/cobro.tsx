@@ -222,16 +222,12 @@ export function Cobro({
                 </p>
                 {cliente ? (
                   <p className="mt-2.5 rounded-xl border border-linea p-3.5 text-base">
+                    {/* Se lleva la mercadería y el total queda como deuda en su cuenta. */}
                     <span className="font-medium">{cliente.nombre}</span>
-                    <span className="block text-muted-foreground">
-                      Se lleva la mercadería y el total queda como deuda en su
-                      cuenta.
-                    </span>
                   </p>
                 ) : (
                   <p className="estado-espera mt-2.5 rounded-xl bg-[var(--estado-fondo)] p-3.5 text-base text-[var(--estado-tinta)]">
-                    Elegí el cliente: la cuenta corriente necesita saber a quién
-                    anotarle la deuda.{" "}
+                    Elegí el cliente.{" "}
                     <kbd className="whitespace-nowrap rounded border border-current px-1.5 py-0.5 text-xs">
                       Alt + C
                     </kbd>
@@ -257,7 +253,7 @@ export function Cobro({
                         disabled={bloqueado}
                         title={
                           bloqueado
-                            ? "El precio de profesional es de contado. Cobrá por transferencia, débito o efectivo, o pasá la venta a consumidor final."
+                            ? "El precio de profesional es de contado."
                             : `Alt + ${i + 1}`
                         }
                         className={`inline-flex h-12 items-center justify-center gap-1.5 rounded-xl border px-2 text-base font-medium transition-colors ${
@@ -279,9 +275,8 @@ export function Cobro({
 
                 {precioProfesional && (
                   <p className="mt-2 rounded-lg bg-hundida px-3 py-2 text-sm text-muted-foreground">
-                    Precio de profesional: es de contado. En cuotas con tarjeta
-                    corre el precio de catálogo, así que la venta va a
-                    consumidor final.
+                    {/* En cuotas con tarjeta corre el precio de catálogo, así que la venta va a consumidor final. */}
+                    Precio de profesional: en cuotas va a consumidor final.
                   </p>
                 )}
               </>

@@ -81,8 +81,8 @@ export function PanelDeCaja({
           {!turno ? (
             <div>
               <p className="text-base text-muted-foreground">
-                No hay caja abierta en esta sucursal. Abrila con el efectivo con
-                el que arrancás el día.
+                {/* Se abre con el efectivo con el que se arranca el día. */}
+                No hay caja abierta en esta sucursal.
                 {baseDeCambio > 0 && (
                   <>
                     {" "}
@@ -128,9 +128,9 @@ export function PanelDeCaja({
                   base. Dos máquinas abriendo sin conexión terminarían con dos
                   turnos y las ventas del día repartidas entre los dos. */}
               {!enLinea && (
+                // Las ventas sin conexión entran al turno cuando vuelve.
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Sin conexión no se puede abrir la caja. Se puede seguir
-                  vendiendo: las ventas entran al turno cuando vuelva.
+                  Sin conexión no se puede abrir la caja; sí se puede seguir vendiendo.
                 </p>
               )}
             </div>
@@ -385,10 +385,10 @@ export function PanelDeCaja({
                   Cerrar el turno
                 </button>
                 {!enLinea && (
+                  // Además faltaría contar las ventas que todavía no subieron:
+                  // esa plata está en el cajón pero no en el turno.
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Sin conexión no se puede cerrar. Además faltaría contar las
-                    ventas que todavía no subieron: esa plata está en el cajón
-                    pero no en el turno.
+                    Sin conexión no se puede cerrar.
                   </p>
                 )}
               </section>

@@ -51,13 +51,10 @@ export function PromosDelBanco({ promos }: { promos: PromoVigente[] }) {
 
       {abierto && (
         <div className="border-t border-linea px-4 py-3">
+          {/* Son para contarle al cliente: el descuento por contado o
+              transferencia se aplica solo al elegir el medio de pago. */}
           <p className="mb-3 text-base text-muted-foreground">
-            Son para contarle al cliente.{" "}
-            <strong className="text-foreground">
-              Ninguna se descuenta acá
-            </strong>
-            : el descuento por contado o transferencia se aplica solo al elegir
-            el medio de pago.
+            <strong className="text-foreground">Ninguna se descuenta acá.</strong>
           </p>
 
           <ul className="space-y-2.5">

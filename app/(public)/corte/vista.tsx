@@ -436,7 +436,7 @@ function VistaDeCorte({
           plano, las tres a la vista en una pantalla ancha. En el teléfono las
           placas pasan a pestañas y piezas y plano se alternan. */}
       <div className="mt-4 grid gap-4 lg:h-[calc(100dvh-230px)] lg:min-h-[560px] lg:grid-cols-[220px_minmax(0,1.5fr)_minmax(0,1fr)]">
-        <nav aria-label="Placas del pedido" className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-y-auto lg:pb-0">
+        <nav aria-label="Placas del pedido" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:flex lg:flex-col lg:overflow-y-auto">
           {resueltos.map((r, i) => {
             const plano = planos[i]!;
             const cuantas = r.piezas.reduce((n, p) => n + p.cantidad, 0);
@@ -451,7 +451,7 @@ function VistaDeCorte({
                 type="button"
                 onClick={() => setActivo(i)}
                 aria-current={i === iActivo ? "true" : undefined}
-                className={`min-w-[190px] shrink-0 rounded-xl px-4 py-3 text-left transition-colors lg:min-w-0 ${
+                className={`min-w-0 rounded-xl px-4 py-3 text-left transition-colors ${
                   i === iActivo ? "bg-oscuro-marca text-white" : "superficie hover:bg-sitio-alt"
                 }`}
               >
@@ -471,7 +471,7 @@ function VistaDeCorte({
           <button
             type="button"
             onClick={agregarPlaca}
-            className="inline-flex min-w-[150px] shrink-0 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-linea px-4 py-3 text-[15px] font-semibold text-texto-2 transition-colors hover:bg-sitio-alt lg:min-w-0"
+            className="inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-linea px-4 py-3 text-[15px] font-semibold text-texto-2 transition-colors hover:bg-sitio-alt"
           >
             <Plus className="h-4 w-4" />
             Otra placa
@@ -593,7 +593,10 @@ function EditorDeGrupo({
     alCambiar({ filas: [...filas.slice(0, i), ...nuevas, ...filas.slice(i + 1).filter((f) => f.largo || f.ancho)] });
   }
 
-  const columnas = "md:grid md:grid-cols-[minmax(120px,1fr)_84px_84px_60px_92px_68px_36px] md:items-center md:gap-2";
+  // La planilla se arma según el ancho de su columna (`@container`), no el de
+  // la pantalla: a 1024 px la columna del centro mide ~430 px y las columnas
+  // fijas se salían de costado.
+  const columnas = "@2xl:grid @2xl:grid-cols-[minmax(120px,1fr)_84px_84px_60px_92px_68px_36px] @2xl:items-center @2xl:gap-2";
 
   return (
     <>
@@ -650,7 +653,7 @@ function EditorDeGrupo({
       </div>
 
       {modo === "piezas" ? (
-        <div ref={lista} className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+        <div ref={lista} className="@container min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4">
           <div className={`sticky top-0 z-10 hidden bg-card py-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-texto-3 ${columnas}`}>
             <span>Pieza</span>
             <span>Largo</span>
@@ -672,7 +675,7 @@ function EditorDeGrupo({
                   if (i === filas.length - 1) agregarFila();
                 }}
               >
-                <label className="block w-full md:w-auto">
+                <label className="block w-full @2xl:w-auto">
                   <span className="sr-only">Pieza</span>
                   <input
                     type="text"
@@ -683,7 +686,7 @@ function EditorDeGrupo({
                     className="h-10 w-full rounded-lg border border-linea bg-background px-3 text-base"
                   />
                 </label>
-                <div className="grid flex-1 grid-cols-[1fr_1fr_64px] gap-2 md:contents">
+                <div className="grid flex-1 grid-cols-[1fr_1fr_64px] gap-2 @2xl:contents">
                   <Numero etiqueta="Largo" valor={f.largo} alCambiar={(v) => actualizar(i, "largo", v)} placeholder="1200" marca="largo" />
                   <Numero etiqueta="Ancho" valor={f.ancho} alCambiar={(v) => actualizar(i, "ancho", v)} placeholder="400" />
                   <Numero etiqueta="Cant." valor={f.cantidad} alCambiar={(v) => actualizar(i, "cantidad", v)} />
@@ -706,7 +709,7 @@ function EditorDeGrupo({
                   type="button"
                   onClick={() => alCambiar({ filas: filas.length === 1 ? [filaVacia()] : filas.filter((_, j) => j !== i) })}
                   aria-label={`Sacar la medida ${i + 1}`}
-                  className="ml-auto flex h-10 w-10 items-center justify-center rounded-lg text-texto-3 transition-colors hover:bg-sitio-alt hover:text-destructive md:ml-0"
+                  className="ml-auto flex h-10 w-10 items-center justify-center rounded-lg text-texto-3 transition-colors hover:bg-sitio-alt hover:text-destructive @2xl:ml-0"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -885,7 +888,7 @@ function Numero({
 }) {
   return (
     <label className="block">
-      <span className={visible ? "mb-1 block text-sm font-medium" : "mb-0.5 block text-xs text-texto-3 md:sr-only"}>{etiqueta}</span>
+      <span className={visible ? "mb-1 block text-sm font-medium" : "mb-0.5 block text-xs text-texto-3 @2xl:sr-only"}>{etiqueta}</span>
       <input
         type={decimal ? "text" : "number"}
         inputMode={decimal ? "decimal" : "numeric"}

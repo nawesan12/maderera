@@ -49,17 +49,20 @@ const FORMA_DE_LA_COPIA = 3;
 export const CADA_CUANTO_MS = 10 * 60 * 1000;
 
 /** Lo más que se espera para sincronizar después de un aviso en vivo. */
-export const RETARDO_MAXIMO_MS = 30_000;
+export const RETARDO_MAXIMO_MS = 1_500;
 
 /**
  * Cuánto esperar antes de sincronizar cuando llega el aviso de que cambiaron
- * los precios: entre cero y treinta segundos, al azar.
+ * los precios: menos de un segundo y medio, al azar.
  *
- * El aviso les llega a todas las cajas en el mismo instante. Si salen todas
- * juntas, la base recibe las mismas consultas a la vez, justo después de un
- * cambio masivo de precios que ya la tuvo ocupada. Repartidas en medio
- * minuto, cada una llega sola; y medio minuto con el precio viejo es lo que
- * ya pasaba con la sincronización cada diez minutos, pero mucho menos.
+ * Mientras se espera, la caja cobra con el precio de la copia, que ya se
+ * sabe viejo: el buscador saca el precio de ahí también con conexión, y Go
+ * guarda el que manda la caja. Por eso la espera es corta. Hubo una de hasta
+ * treinta segundos para que las cajas no salieran todas juntas, pero son
+ * tres o cuatro, y el pedido de «lo que cambió» va por los índices de
+ * updated_at (migración 00168): no hay estampida que repartir, y sí ventas
+ * que salían con el precio de antes. El segundo y medio alcanza para juntar
+ * los avisos de un cambio masivo, que llegan en ráfaga, en un solo pedido.
  */
 export function retardoDeAviso(azar: () => number = Math.random): number {
   const r = azar();

@@ -6,19 +6,20 @@ import {
 
 /*
  * Cuando cambian los precios, el aviso les llega a todas las cajas a la vez.
- * Cada una espera un rato al azar antes de sincronizar: siempre entre cero y
- * treinta segundos, nunca negativo ni más, aunque el azar devuelva cualquier
- * cosa.
+ * Cada una espera un instante al azar antes de sincronizar: siempre menos de
+ * un segundo y medio —más es cobrar con el precio viejo—, nunca negativo,
+ * aunque el azar devuelva cualquier cosa.
  */
 describe("retardo después del aviso de precios", () => {
-  it("cae siempre en [0, 30 s)", () => {
+  it("cae siempre en [0, 1,5 s)", () => {
     for (const azar of [0, 0.5, 0.999_999_9, 1, -1, 2, Number.NaN, Number.POSITIVE_INFINITY]) {
       const r = retardoDeAviso(() => azar);
       expect(r, String(azar)).toBeGreaterThanOrEqual(0);
       expect(r, String(azar)).toBeLessThan(RETARDO_MAXIMO_MS);
       expect(Number.isInteger(r)).toBe(true);
     }
-    expect(retardoDeAviso(() => 0.5)).toBe(15_000);
+    expect(retardoDeAviso(() => 0.5)).toBe(750);
+    expect(RETARDO_MAXIMO_MS).toBeLessThanOrEqual(2_000);
   });
 
   it("con el azar de verdad, también", () => {

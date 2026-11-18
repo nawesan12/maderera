@@ -153,9 +153,10 @@ export function useCopiaLocal(branchId: string): CopiaLista {
   /*
    * Un precio que cambia en el panel llega acá enseguida (ver `lib/vivo`):
    * antes el mostrador podía cobrar hasta diez minutos con el precio viejo.
-   * Cada caja espera un rato al azar (`retardoDeAviso`) para no salir todas
-   * a la vez. La sincronización periódica sigue: es la red cuando no hay
-   * tiempo real.
+   * La espera es de menos de un segundo y medio (`retardoDeAviso`): junta la
+   * ráfaga de un cambio masivo sin dejar a la caja cobrando con el precio
+   * viejo. La sincronización periódica sigue: es la red cuando no hay tiempo
+   * real.
    */
   const pendiente = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEnVivo(["precios"], () => {

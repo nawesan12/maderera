@@ -133,13 +133,10 @@ func (c *Consulta) Comunes(f Filtros, variante string) {
 	}
 }
 
-// SoloQuienCompra devuelve el filtro por proveedor solo para quien entra a
-// Compras. La pantalla ya lo escondía a los demás, pero la API lo aceptaba:
-// con el id de un proveedor, un vendedor podía deducir qué le compra la
-// maderera a quién.
-func SoloQuienCompra(ctx context.Context, proveedor string) string {
-	if proveedor == "" || !roles.PuedeEntrar("/admin/compras", auth.DeContexto(ctx).RolStaff) {
-		return ""
-	}
-	return proveedor
+// ProveedorSiCompra es SoloQuienCompra para quien tiene el contexto y el
+// filtro suelto: los listados de productos, precios y stock.
+func ProveedorSiCompra(ctx context.Context, proveedor string) string {
+	f := Filtros{Proveedor: proveedor}
+	SoloQuienCompra(auth.DeContexto(ctx), &f)
+	return f.Proveedor
 }

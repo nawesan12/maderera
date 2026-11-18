@@ -96,7 +96,7 @@ func (a *API) GrillaDePrecios(ctx context.Context, r preciosapi.GrillaDePreciosR
 		return nil, err
 	}
 	f := listado.Filtros{Busqueda: texto(r.Params.Busqueda), Categoria: texto(r.Params.Categoria),
-		Marca: texto(r.Params.Marca), Proveedor: listado.SoloQuienCompra(ctx, texto(r.Params.Proveedor))}
+		Marca: texto(r.Params.Marca), Proveedor: listado.ProveedorSiCompra(ctx, texto(r.Params.Proveedor))}
 	if r.Params.Limite != nil {
 		f.Limite = *r.Params.Limite
 	}

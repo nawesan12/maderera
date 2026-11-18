@@ -23,6 +23,9 @@ export async function GET(request: Request) {
     formato: searchParams.get("formato") === "pdf" ? ("pdf" as const) : ("csv" as const),
     ...(searchParams.get("buscar") ? { buscar: searchParams.get("buscar")! } : {}),
     ...(searchParams.get("cat") ? { cat: searchParams.get("cat")! } : {}),
+    ...(searchParams.get("estado") ? { estado: searchParams.get("estado")! } : {}),
+    ...(searchParams.get("marca") ? { marca: searchParams.get("marca")! } : {}),
+    ...(searchParams.get("prov") ? { prov: searchParams.get("prov")! } : {}),
     ...(searchParams.get("lista") ? { lista: searchParams.get("lista")! } : {}),
   };
 

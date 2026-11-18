@@ -18,6 +18,7 @@ import (
 
 	"mjbj/internal/api/preciosapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/listado"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/pruebas"
 	"mjbj/internal/sqlc"
@@ -362,8 +363,13 @@ func TestGrillaPorEstadoYPaginas(t *testing.T) {
 	if r := leer("?limite=2&desplazamiento=2"); len(r.Filas) != 1 || r.Total != 3 {
 		t.Errorf("segunda página: %+v", r)
 	}
-	todo, err := Nuevo(e.pool, silencio).ListarTodo(ctx, "", "", time.Now())
+	todo, err := Nuevo(e.pool, silencio).ListarTodo(ctx, listado.Filtros{}, time.Now())
 	if err != nil || len(todo) != 3 {
 		t.Errorf("exportar: %d %v", len(todo), err)
+	}
+	// La exportación respeta el estado de la pantalla.
+	todo, err = Nuevo(e.pool, silencio).ListarTodo(ctx, listado.Filtros{Estado: "sin-precio"}, time.Now())
+	if err != nil || len(todo) != 1 || todo[0].SKU != "MEL18" {
+		t.Errorf("exportar sin precio: %+v %v", todo, err)
 	}
 }

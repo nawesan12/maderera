@@ -104,9 +104,6 @@ export default async function PresupuestosPage({
         <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
           <ClipboardList className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-base font-medium">No hay presupuestos que mostrar</p>
-          <p className="mt-1 text-base text-muted-foreground">
-            Probá con otro filtro o buscá por número.
-          </p>
         </div>
       ) : (
         <>

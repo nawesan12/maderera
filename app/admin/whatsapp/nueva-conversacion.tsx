@@ -61,9 +61,9 @@ export function NuevaConversacion({ onCerrar }: { onCerrar: () => void }) {
         </button>
       </div>
 
+      {/* Se acepta con o sin 0, 15 o +54. Si nunca escribió, el primer mensaje tiene que ser uno preparado. */}
       <p className="text-sm text-muted-foreground">
-        Como lo tengas: con o sin 0, 15 o +54. Sin característica se toma la de Mar del Plata. Si nunca escribió,
-        el primer mensaje tiene que ser uno preparado.
+        Sin característica se toma la de Mar del Plata.
       </p>
 
       {estado.error && (

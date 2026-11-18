@@ -203,18 +203,14 @@ export function Entregas({
                 <Campo
                   nombre="receptorNombre"
                   etiqueta="Quién retira"
-                  ayuda="Puede no ser el titular: el flete, un oficial."
+                  // Puede no ser el titular: el flete, un oficial.
                 />
                 <Campo
                   nombre="receptorDocumento"
                   etiqueta={
                     tipoEntrega === "retiro" ? "Documento (obligatorio)" : "Documento"
                   }
-                  ayuda={
-                    tipoEntrega === "retiro"
-                      ? "Sin el documento la firma no identifica a nadie."
-                      : undefined
-                  }
+                  // En el retiro es obligatorio: sin el documento la firma no identifica a nadie.
                 />
 
                 {tipoEntrega === "envio" && (
@@ -222,7 +218,7 @@ export function Entregas({
                     <Campo
                       nombre="transportista"
                       etiqueta="Transportista"
-                      ayuda="Andreani, CDI, flete propio…"
+                      // Andreani, CDI, flete propio…
                     />
                     <Campo
                       nombre="numeroSeguimiento"

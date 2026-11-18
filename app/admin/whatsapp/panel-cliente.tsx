@@ -155,7 +155,7 @@ function Avisos({ detalle }: { detalle: DetalleConversacion }) {
           {estado.ok}
         </p>
       )}
-      <p className="mt-2 text-sm text-muted-foreground">Si escribe BAJA se registra solo; con ALTA vuelve.</p>
+      {/* Si escribe BAJA se registra solo; con ALTA vuelve. */}
     </section>
   );
 }
@@ -190,9 +190,7 @@ function SinFicha({ detalle }: { detalle: DetalleConversacion }) {
         <UserPlus className="h-5 w-5 text-muted-foreground" />
         Sin ficha de cliente
       </h2>
-      <p className="mt-1.5 text-base text-muted-foreground">
-        El número no coincide con ningún cliente. Si ya es cliente, buscalo; si no, creale la ficha.
-      </p>
+      {/* El número no coincide con ningún cliente: si ya es cliente se lo busca; si no, se le crea la ficha. */}
 
       <label className="mt-3 block">
         <span className="sr-only">Buscar cliente</span>

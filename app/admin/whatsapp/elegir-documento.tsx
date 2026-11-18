@@ -62,7 +62,7 @@ export function ElegirDocumento({
 
       {documentos.length === 0 ? (
         <p className="rounded-lg bg-background px-3 py-2.5 text-base text-muted-foreground">
-          Vinculá la conversación con la ficha del cliente para ver sus presupuestos, facturas y remitos.
+          Vinculá la conversación con un cliente.
         </p>
       ) : (
         <div className="space-y-2.5">
@@ -104,14 +104,14 @@ export function ElegirDocumento({
             <input
               name="epigrafe"
               maxLength={1000}
-              placeholder="Texto que acompaña (opcional), por ejemplo: «Te paso lo que me pediste»"
+              placeholder="Texto que acompaña (opcional)"
               aria-label="Texto que acompaña al documento"
               className="h-10 w-full rounded-lg border bg-background px-2.5 text-base"
             />
           ) : (
             <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-sm text-[var(--estado-tinta)]">
-              Pasaron más de 24 horas: el PDF sale pegado al mensaje preparado «documento adjunto», que Meta cobra
-              como de utilidad.
+              {/* Sale pegado al mensaje preparado «documento adjunto», que Meta cobra como de utilidad. */}
+              Pasaron más de 24 horas: sale con un mensaje preparado y se cobra.
             </p>
           )}
 

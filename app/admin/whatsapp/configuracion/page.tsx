@@ -77,10 +77,10 @@ export default async function ConfiguracionWhatsappPage() {
 
         {enDemo ? (
           <div className="tarjeta-atencion p-5">
+            {/* Para conectar el número hay que hacer el trámite en Meta (paso a paso en
+                docs/WHATSAPP.md) y cargar las variables en el servidor. */}
             <p className="text-base">
               Hoy está en <span className="font-medium">modo demostración</span>: la bandeja guarda todo pero no envía.
-              Para conectar el número hay que hacer el trámite en Meta (está paso a paso en{" "}
-              <span className="tabular">docs/WHATSAPP.md</span>) y cargar las variables en el servidor.
             </p>
           </div>
         ) : (
@@ -238,9 +238,10 @@ export default async function ConfiguracionWhatsappPage() {
 
         <div className="tarjeta-hundida p-5">
           <h3 className="mb-1 text-base font-medium">Tope y tarifas</h3>
+          {/* Las tarifas son las de Meta para un número argentino; Meta las revisa cada
+              trimestre, así que se cambian acá sin tocar el sistema. */}
           <p className="mb-3 max-w-2xl text-base text-muted-foreground">
-            Las tarifas son las de Meta para un número argentino; Meta las revisa cada trimestre, así que se pueden
-            cambiar acá sin tocar el sistema. Un tope de 0 es «por la API, ningún aviso automático».
+            Un tope de 0 corta todos los avisos automáticos por la API.
           </p>
           <FormularioTope tope={gasto.tope} tarifas={gasto.tarifas} />
         </div>
@@ -331,9 +332,9 @@ export default async function ConfiguracionWhatsappPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-lg font-medium">Mensajes que tiene que aprobar Meta</h2>
+            {/* Se cargan en el administrador de WhatsApp de Meta. El texto exacto y los ejemplos están en docs/WHATSAPP.md. */}
             <p className="mt-1 max-w-2xl text-base text-muted-foreground">
-              Hay que cargarlos en el administrador de WhatsApp de Meta con el mismo nombre, idioma «Spanish
-              (ARG)» y categoría «Utility». El texto exacto y los ejemplos están en docs/WHATSAPP.md.
+              Con el mismo nombre, idioma «Spanish (ARG)» y categoría «Utility».
             </p>
           </div>
           {!enDemo && <BotonAccion accion="sincronizar" texto="Traer de Meta" icono={<RefreshCw className="h-5 w-5" />} />}

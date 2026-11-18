@@ -113,14 +113,8 @@ export default async function ProfesionalesAdminPage() {
           <h2 className="mt-4 text-lg font-medium">
             Todavía no pidió acceso nadie
           </h2>
-          <p className="mx-auto mt-1 max-w-md text-base text-muted-foreground">
-            Las solicitudes entran desde{" "}
-            <Link href="/profesionales" className="underline">
-              la página de profesionales
-            </Link>
-            . También se puede marcar a un cliente como profesional desde su
-            ficha.
-          </p>
+          {/* Las solicitudes entran desde /profesionales. También se puede marcar
+              a un cliente como profesional desde su ficha. */}
         </section>
       )}
 

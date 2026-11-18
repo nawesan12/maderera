@@ -83,9 +83,6 @@ export default async function PedidosPage({
         <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
           <Package className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-base font-medium">No hay pedidos que mostrar</p>
-          <p className="mt-1 text-base text-muted-foreground">
-            Probá buscando por número, cliente o dirección.
-          </p>
         </div>
       ) : (
         <>

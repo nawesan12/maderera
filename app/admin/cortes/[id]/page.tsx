@@ -171,11 +171,10 @@ export default async function FichaCortePage({
               pantalla de la máquina antes de arrancar. Ver docs/PTX.md. */}
           {plano.placas.length > 0 && (
             <div className="estado-marca flex flex-wrap items-center justify-between gap-3 border-b border-linea bg-[var(--estado-fondo)] px-5 py-3">
+              {/* El programa para la seccionadora todavía no se probó en la máquina del taller. */}
               <p className="max-w-2xl text-base">
-                <strong>En prueba:</strong> el programa para la seccionadora
-                todavía no se probó en la máquina del taller. Antes de cortar,
-                el operario tiene que abrirlo en WinCut y comparar el dibujo de
-                la pantalla con la hoja de corte.
+                <strong>En prueba:</strong> antes de cortar, compará el dibujo
+                en WinCut con la hoja de corte.
               </p>
               <a
                 href={`/api/cortes/${corte.id}/ptx`}
@@ -292,12 +291,12 @@ export default async function FichaCortePage({
                 </li>
               ))}
             </ul>
+            {/* Lo que no sale en piezas se va entre estos sobrantes y lo que se
+                lleva la sierra en cada pasada. */}
             <p className="mt-2 text-sm text-muted-foreground">
-              Del material comprado, el{" "}
-              {Math.round(plano.aprovechadoTotal * 100)}% sale en piezas; el
-              resto se va entre estos sobrantes y los {formatearSierra(plano.anchoSierra)} que
-              se lleva la sierra en cada una de las {plano.pasadas}{" "}
-              {plano.pasadas === 1 ? "pasada" : "pasadas"}.
+              {Math.round(plano.aprovechadoTotal * 100)}% del material sale en
+              piezas · sierra de {formatearSierra(plano.anchoSierra)} ·{" "}
+              {plano.pasadas} {plano.pasadas === 1 ? "pasada" : "pasadas"}
             </p>
           </div>
 

@@ -323,7 +323,7 @@ export default async function FichaClientePage({
             />
             {historial.hayMas && (
               <p className="border-t border-linea px-5 py-3 text-sm text-muted-foreground">
-                Se muestran los últimos 200. Achicá el período o filtrá para ver el resto.
+                Se muestran los últimos 200.
               </p>
             )}
           </section>

@@ -45,10 +45,8 @@ export function AvisoCuentaWeb({
       <p className="mt-1.5 text-base text-muted-foreground">
         Hay una cuenta web a nombre de{" "}
         <span className="font-medium text-foreground">{cuentaWeb.nombre}</span>{" "}
-        con el mismo correo. Si es la misma persona, al vincularla va a poder ver
-        los pedidos, presupuestos y la cuenta corriente de{" "}
-        <span className="font-medium text-foreground">{nombreCliente}</span>{" "}
-        desde el sitio.
+        con el mismo correo.
+        {/* Al vincularla ve desde el sitio los pedidos, presupuestos y la cuenta corriente de la ficha. */}
       </p>
 
       <form action={accion} className="mt-4">

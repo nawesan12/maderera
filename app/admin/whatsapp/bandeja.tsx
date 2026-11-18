@@ -48,6 +48,7 @@ export function Bandeja({
   modoDemo,
   pantallaCompleta = false,
   gasto = null,
+  mensajes = null,
 }: {
   conversaciones: ConversacionListada[];
   detalle: DetalleConversacion | null;
@@ -60,6 +61,8 @@ export function Bandeja({
   pantallaCompleta?: boolean;
   /** Lo que va del mes en Meta contra el tope, para decirlo chico. */
   gasto?: { usd: number; tope: number; proporcion: number; alcanzado: boolean } | null;
+  /** Los mensajes del mes contra el tope (el bot ahorra desde el 80 %). */
+  mensajes?: { usados: number; tope: number; ahorro: boolean; alcanzado: boolean } | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -168,6 +171,16 @@ export function Bandeja({
               Meta este mes: <span className="tabular">{dolares(gasto.usd)}</span> de{" "}
               <span className="tabular">{dolares(gasto.tope)}</span>
               {gasto.alcanzado ? " · tope alcanzado: contestá desde el teléfono" : " · desde el teléfono es gratis"}
+            </p>
+          )}
+          {mensajes && (
+            <p
+              className={`text-sm ${mensajes.alcanzado ? "estado-problema font-medium text-[var(--estado-tinta)]" : mensajes.ahorro ? "estado-espera font-medium text-[var(--estado-tinta)]" : "text-muted-foreground"}`}
+              data-mensajes-whatsapp
+            >
+              Mensajes del mes: <span className="tabular">{mensajes.usados}</span> de{" "}
+              <span className="tabular">{mensajes.tope}</span>
+              {mensajes.alcanzado ? " · el bot no contesta" : mensajes.ahorro ? " · bot en ahorro" : ""}
             </p>
           )}
         </div>

@@ -26,7 +26,7 @@ export async function VistaWhatsapp({
   // avisa a WhatsApp (los dos tildes azules del lado del cliente). La
   // conversación abierta se elige por la URL, así el enlace a una charla
   // concreta se puede compartir entre el equipo y sobrevive a recargar.
-  const { conversaciones, estado, plantillas, contadores, personal, gasto, detalle, filtro: vista } = await abrirBandeja(filtro, chat);
+  const { conversaciones, estado, plantillas, contadores, personal, gasto, mensajes, detalle, filtro: vista } = await abrirBandeja(filtro, chat);
 
   return (
     <>
@@ -45,6 +45,7 @@ export async function VistaWhatsapp({
         modoDemo={estado.proveedor === "demo"}
         pantallaCompleta={pantallaCompleta}
         gasto={gasto}
+        mensajes={mensajes}
       />
     </>
   );

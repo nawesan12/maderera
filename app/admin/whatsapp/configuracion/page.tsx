@@ -35,6 +35,7 @@ export default async function ConfiguracionWhatsappPage() {
     guardadas,
     diagnostico: diagnosticoGuardado,
     gasto,
+    mensajes,
     bajas,
     cortados,
     webhookSecreto,
@@ -68,7 +69,7 @@ export default async function ConfiguracionWhatsappPage() {
         titulo="WhatsApp: configuración"
       />
 
-      <ConfiguracionDelBot encendido={botEncendido === "si"} numero={numeroHumano} />
+      <ConfiguracionDelBot encendido={botEncendido === "si"} numero={numeroHumano} mensajes={mensajes} />
 
       {/* 1. Conexión */}
       <section className="space-y-4">

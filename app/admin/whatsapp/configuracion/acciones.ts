@@ -84,10 +84,14 @@ export async function guardarTope(_previo: EstadoAviso, formData: FormData): Pro
 }
 
 /**
- * El bot: encendido o apagado, y el número al que deriva. Son dos ajustes del
- * sitio (migración 00096); Go los lee en cada mensaje que entra.
+ * El bot: encendido o apagado, el número al que deriva y el tope de mensajes
+ * del mes. Son ajustes del sitio (migraciones 00096 y 00106); Go los lee en
+ * cada mensaje que entra.
  */
-async function guardarAjusteDelBot(clave: "whatsapp_bot" | "whatsapp_numero_humano", valor: string): Promise<EstadoAviso> {
+async function guardarAjusteDelBot(
+  clave: "whatsapp_bot" | "whatsapp_numero_humano" | "whatsapp_tope_mensajes",
+  valor: string,
+): Promise<EstadoAviso> {
   const r = await (await api()).PUT("/api/v1/admin/contenido/ajustes/{clave}", {
     params: { path: { clave } },
     body: { valor },
@@ -95,7 +99,18 @@ async function guardarAjusteDelBot(clave: "whatsapp_bot" | "whatsapp_numero_huma
   if (r.error) return { error: mensajeDe(r.error as Problema, "No se pudo guardar.") };
   updateTag(ETIQUETAS.ajustes);
   revalidatePath("/admin/whatsapp/configuracion");
+  revalidatePath("/admin/whatsapp");
   return { ok: "Listo." };
+}
+
+/** Cuántos mensajes pueden salir en el mes, entre el bot y las personas. */
+export async function guardarTopeMensajes(_previo: EstadoAviso, formData: FormData): Promise<EstadoAviso> {
+  const texto = String(formData.get("tope") ?? "").replace(/\D/g, "");
+  const tope = Number(texto);
+  if (!texto || !Number.isSafeInteger(tope) || tope > 1_000_000) {
+    return { error: "Poné un número de mensajes: 1000, por ejemplo." };
+  }
+  return guardarAjusteDelBot("whatsapp_tope_mensajes", String(tope));
 }
 
 export async function cambiarBot(encender: boolean): Promise<EstadoAviso> {

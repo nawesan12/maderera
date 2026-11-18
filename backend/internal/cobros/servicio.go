@@ -229,9 +229,12 @@ func (s *Servicio) CargarCheque(ctx context.Context, ses *auth.Sesion, f FormChe
 	if f.Tipo == "echeq" && f.Circuito == "negro" {
 		return mal("circuito", "Un e-Cheq no puede ir por el circuito B: queda registrado en el banco a nombre de la empresa.")
 	}
-	fecha, err := time.ParseInLocation("2006-01-02T15:04:05", f.FechaPago+"T12:00:00", argentina)
-	if err != nil {
-		return mal("fechaPago", "Poné la fecha de pago: es lo que ordena la cartera.")
+	fecha, ok := LeerFechaDeCheque(f.FechaPago)
+	if !ok {
+		return mal("fechaPago", "Esa fecha no existe.")
+	}
+	if m := RevisarFechaDeCheque(fecha, time.Now()); m != "" {
+		return mal("fechaPago", m)
 	}
 	if f.Sentido == "recibido" {
 		if _, err := s.q.ChequeRepetido(ctx, sqlc.ChequeRepetidoParams{Numero: numero, Banco: banco}); err == nil {

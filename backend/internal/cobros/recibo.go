@@ -75,6 +75,11 @@ func EmitirRecibo(ctx context.Context, tx pgx.Tx, c Cobro) (ReciboEmitido, error
 	if p := Revisar(c.Partes, c.Circuito); p != "" {
 		return ReciboEmitido{}, errCobro(p)
 	}
+	// Aparte de Revisar, que es el revisarPartes del TS con su golden: la
+	// fecha depende de hoy.
+	if p := RevisarFechasDeCheques(c.Partes, time.Now()); p != "" {
+		return ReciboEmitido{}, errCobro(p)
+	}
 	total := TotalDePartes(importes(c.Partes))
 
 	recibidoDe := strings.TrimSpace(c.RecibidoDe)

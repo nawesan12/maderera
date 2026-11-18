@@ -13,6 +13,7 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"time"
 
 	"mjbj/internal/cobros"
 	"mjbj/internal/jsmath"
@@ -163,6 +164,26 @@ func RevisarChequeDePago(c *ChequeDePago) string {
 	}
 	if !reFecha.MatchString(c.FechaPago) {
 		return "Poné la fecha de pago del cheque."
+	}
+	if _, ok := cobros.LeerFechaDeCheque(c.FechaPago); !ok {
+		return "La fecha de pago del cheque no existe."
+	}
+	return ""
+}
+
+// RevisarFechasDeCheques es el rango de cobros.RevisarFechaDeCheque para los
+// cheques de una venta. Va aparte de RevisarPagos (el revisarPagos del TS,
+// con su golden) porque depende de hoy.
+func RevisarFechasDeCheques(pagos []PagoDeVenta, ahora time.Time) string {
+	for _, p := range pagos {
+		if p.Medio != Cheque || p.Cheque == nil {
+			continue
+		}
+		if f, ok := cobros.LeerFechaDeCheque(p.Cheque.FechaPago); ok {
+			if m := cobros.RevisarFechaDeCheque(f, ahora); m != "" {
+				return m
+			}
+		}
 	}
 	return ""
 }

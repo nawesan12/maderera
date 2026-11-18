@@ -197,6 +197,15 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario st
 	if p := ventas.RevisarPagos(pagos, total, v.CustomerID); p != "" {
 		return fallo(p), nil
 	}
+	// Contra la fecha de la venta: una de la cola con un cheque se cobró
+	// cuando se cobró.
+	momento := ahora
+	if v.CobradaAt != nil {
+		momento = ventas.FechaAcotada(*v.CobradaAt, ahora)
+	}
+	if p := ventas.RevisarFechasDeCheques(pagos, momento); p != "" {
+		return fallo(p), nil
+	}
 	medioPago := ventas.MedioPrincipal(pagos)
 	parteEfectivo := ventas.ImportePorMedio(pagos, ventas.Efectivo)
 	parteCuenta := ventas.ImportePorMedio(pagos, ventas.CuentaCorriente)

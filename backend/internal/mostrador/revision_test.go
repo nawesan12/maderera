@@ -3,6 +3,7 @@ package mostrador
 import (
 	"context"
 	"testing"
+	"time"
 
 	"mjbj/internal/sqlc"
 )
@@ -96,7 +97,7 @@ func TestCobroDeCuentaDesdeMostrador(t *testing.T) {
 	ven := e.staff(t, "v@prueba.test", sqlc.StaffRoleVendedor)
 	v := e.venta("cheque", e.lineaPlaca(1))
 	v["customerId"] = e.cliente
-	v["pagos"] = []map[string]any{{"medio": "cheque", "importe": 45000.5, "cheque": map[string]any{"numero": "11112222", "banco": "Galicia", "fechaPago": "2026-12-01"}}}
+	v["pagos"] = []map[string]any{{"medio": "cheque", "importe": 45000.5, "cheque": map[string]any{"numero": "11112222", "banco": "Galicia", "fechaPago": time.Now().AddDate(0, 0, 10).Format("2006-01-02")}}}
 	if _, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v); m["ok"] != true {
 		t.Fatalf("%s", b)
 	}

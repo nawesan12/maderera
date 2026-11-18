@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, use, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
+import { Suspense, use, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, MessageCircle, Plus, RotateCcw, ShoppingCart, Trash2 } from "lucide-react";
 import type { PlacaCortable } from "@/lib/dal/cortes-publico";
@@ -24,12 +24,13 @@ import {
   type PiezaDelPedido,
   type Tapacanto,
 } from "@/lib/cortes/armador";
-import type { PlanoDeCorte, PresupuestoDeCorte } from "@/lib/cortes/tipos";
+import type { PresupuestoDeCorte } from "@/lib/cortes/tipos";
 import { PlanoSimple } from "@/components/cortes/plano-simple";
 import { contarCanto, SelectorDeCanto } from "@/components/cortes/selector-canto";
 import { formatearMonto } from "@/lib/formato";
 import { agregarCorteAlCarrito, guardarConsultaDeCorte } from "./actions";
 import { useTienda } from "@/lib/tienda-context";
+import { HORARIO_CORTES } from "@/lib/sucursales";
 
 /**
  * El despiece a medio cargar queda en el navegador: en la obra se corta la
@@ -338,139 +339,229 @@ function VistaDeCorte({
     { placas: 0, pasadas: 0, metros: 0, total: 0 },
   );
 
+  // La placa que se está editando. Con una sola, siempre es esa.
+  const [activo, setActivo] = useState(0);
+  const iActivo = Math.min(activo, grupos.length - 1);
+  // En el teléfono no entran las tres columnas: piezas o plano, de a uno.
+  const [enMovil, setEnMovil] = useState<"piezas" | "plano">("piezas");
+
+  function sacarPlaca(i: number) {
+    setGrupos((previos) => previos.filter((_, j) => j !== i));
+    setActivo((a) => (a >= i && a > 0 ? a - 1 : a));
+  }
+
+  function agregarPlaca() {
+    otraPlaca();
+    setActivo(grupos.length);
+    setEnMovil("piezas");
+  }
+
+  const actual = resueltos[iActivo]!;
+  const planoActual = planos[iActivo]!;
+  const cuentaActual = cuentaDe(iActivo);
+
+  const botonWhatsapp = (
+    <button
+      type="button"
+      onClick={pedirPorWhatsapp}
+      disabled={!sePuede || guardando || !destino?.whatsapp}
+      className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-[10px] bg-verde-whatsapp px-5 text-base font-semibold text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
+    >
+      {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+      Pedir por WhatsApp
+    </button>
+  );
+
   return (
-    <div data-sin-flotantes className="grid items-start gap-6 lg:grid-cols-[1fr_360px]">
-      <div className="space-y-5">
-        {guardado && !hayCarga && (
-          <button
-            type="button"
-            onClick={() => retomar(guardado)}
-            className="inline-flex h-11 items-center gap-2 rounded-lg bg-naranja-claro px-4 text-[14.5px] font-semibold text-acento-sobre-claro"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Seguir con el corte anterior ({medidasDelBorrador(guardado)}{" "}
-            {medidasDelBorrador(guardado) === 1 ? "medida" : "medidas"})
-          </button>
+    <div data-sin-flotantes className="pb-28 lg:pb-0">
+      {/* La barra del pedido entero: lo que suma todo y el botón para
+          mandarlo, siempre a la vista. Antes estaba en una tarjeta al
+          costado y, con varias placas, quedaba lejos de lo que se cargaba. */}
+      <header className="superficie flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl px-5 py-3.5">
+        <div className="mr-auto">
+          <h1 className="text-[24px] font-bold leading-tight tracking-[-0.02em]">Corte de placas a medida</h1>
+          <p className="text-sm text-texto-2">En el aserradero · {HORARIO_CORTES}</p>
+        </div>
+
+        <dl className="hidden items-center gap-6 sm:flex">
+          <Cifra valor={totales.placas} nombre={totales.placas === 1 ? "placa" : "placas"} />
+          <Cifra valor={totales.pasadas} nombre={totales.pasadas === 1 ? "pasada" : "pasadas"} />
+          <Cifra valor={Math.round(totales.metros * 100) / 100} nombre="m de canto" />
+          {activa && totales.total > 0 && <Cifra valor={formatearMonto(totales.total)} nombre="total" />}
+        </dl>
+
+        {sucursales.length > 1 && (
+          <div className="flex gap-1.5" role="group" aria-label="Sucursal">
+            {sucursales.map((s) => (
+              <Chip key={s.slug} activo={sucursal === s.slug} onClick={() => setSucursal(s.slug)}>
+                {s.nombre}
+              </Chip>
+            ))}
+          </div>
         )}
 
-        {resueltos.map((r, i) => (
-          <GrupoDeCorte
-            key={r.grupo.clave}
-            numero={varios ? i + 1 : null}
-            resuelto={r}
-            plano={planos[i]!}
-            placas={placas}
-            tapacantos={tapacantos}
-            activa={activa}
-            alCambiar={(cambio) => cambiarGrupo(i, cambio)}
-            alSacar={varios ? () => setGrupos((previos) => previos.filter((_, j) => j !== i)) : undefined}
-          />
-        ))}
-
-        <button
-          type="button"
-          onClick={otraPlaca}
-          className="inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-xl superficie text-base font-semibold transition-colors hover:bg-sitio-alt"
-        >
-          <Plus className="h-4 w-4" />
-          Otra placa
-        </button>
-      </div>
-
-      <aside className="space-y-3 lg:sticky lg:top-[92px]">
-        <section className="rounded-xl superficie p-5">
-          <dl className="grid grid-cols-3 gap-2 text-center">
-            <Cifra valor={totales.placas} nombre={totales.placas === 1 ? "placa" : "placas"} />
-            <Cifra valor={totales.pasadas} nombre={totales.pasadas === 1 ? "pasada" : "pasadas"} />
-            <Cifra valor={Math.round(totales.metros * 100) / 100} nombre="m de canto" />
-          </dl>
-
-          {activa && listos.length > 0 && (
-            <>
-              {listos.map((r) => {
-                const cuenta = cuentaDe(r.i);
-                return (
-                  <dl key={r.grupo.clave} className="mt-4 space-y-1.5 border-t border-linea pt-3 text-[14.5px]">
-                    {varios && (
-                      <div className="flex items-baseline justify-between gap-3">
-                        <dt className="font-semibold">Placa {r.i + 1}</dt>
-                        <dd className="tabular font-semibold">{formatearMonto(cuenta.total)}</dd>
-                      </div>
-                    )}
-                    {cuenta.placasEnteras > 0 && <Renglon que="Placas" cuanto={cuenta.subtotalPlacas} />}
-                    {cuenta.subtotalCorte > 0 && <Renglon que="Corte" cuanto={cuenta.subtotalCorte} />}
-                    {cuenta.subtotalCanto > 0 && <Renglon que="Tapacanto" cuanto={cuenta.subtotalCanto} />}
-                  </dl>
-                );
-              })}
-              <div className="mt-3 flex items-baseline justify-between border-t border-linea pt-3">
-                <span className="text-base font-semibold">Total</span>
-                <span className="tabular text-2xl font-bold">{formatearMonto(totales.total)}</span>
-              </div>
-              {listos.some((r) => cuentaDe(r.i).placasEnteras > 0) && (
-                <p className="mt-2 text-sm text-texto-2">
-                  Más de media placa se vende entera y el corte va sin cargo.
-                </p>
-              )}
-            </>
-          )}
-
-          {sucursales.length > 1 && (
-            <div className="mt-5 flex gap-2" role="group" aria-label="Sucursal">
-              {sucursales.map((s) => (
-                <Chip key={s.slug} activo={sucursal === s.slug} onClick={() => setSucursal(s.slug)} ancho>
-                  {s.nombre}
-                </Chip>
-              ))}
-            </div>
-          )}
-
-          {aviso && (
-            <p className="mt-3 rounded-lg bg-[#fdf1ea] px-3.5 py-2.5 text-[14.5px] text-[#8a3b12]">{aviso}</p>
-          )}
-
-          <button
-            type="button"
-            onClick={pedirPorWhatsapp}
-            disabled={!sePuede || guardando || !destino?.whatsapp}
-            className="mt-3 inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-[10px] bg-verde-whatsapp text-base font-semibold text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
-          >
-            {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-            Pedir por WhatsApp
-          </button>
-
+        <div className="hidden gap-2 lg:flex">
           {activa && (
             <button
               type="button"
               onClick={comprar}
               disabled={!sePuede || guardando}
-              className="mt-2 inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-[10px] bg-accion text-base font-semibold text-white transition-colors hover:bg-accion-hover disabled:opacity-50"
+              aria-label="Agregarlo al carrito"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] bg-accion px-4 text-base font-semibold text-white transition-colors hover:bg-accion-hover disabled:opacity-50"
             >
               <ShoppingCart className="h-4 w-4" />
-              Agregarlo al carrito
             </button>
           )}
+          {botonWhatsapp}
+        </div>
+      </header>
+
+      {aviso && (
+        <p className="mt-3 rounded-lg bg-[#fdf1ea] px-3.5 py-2.5 text-[14.5px] text-[#8a3b12]">{aviso}</p>
+      )}
+
+      {guardado && !hayCarga && (
+        <button
+          type="button"
+          onClick={() => retomar(guardado)}
+          className="mt-3 inline-flex h-11 items-center gap-2 rounded-lg bg-naranja-claro px-4 text-[14.5px] font-semibold text-acento-sobre-claro"
+        >
+          <RotateCcw className="h-4 w-4" />
+          Seguir con el corte anterior ({medidasDelBorrador(guardado)}{" "}
+          {medidasDelBorrador(guardado) === 1 ? "medida" : "medidas"})
+        </button>
+      )}
+
+      {/* El espacio de trabajo: las placas del pedido, la que se edita y su
+          plano, las tres a la vista en una pantalla ancha. En el teléfono las
+          placas pasan a pestañas y piezas y plano se alternan. */}
+      <div className="mt-4 grid gap-4 lg:h-[calc(100dvh-230px)] lg:min-h-[560px] lg:grid-cols-[220px_minmax(0,1.5fr)_minmax(0,1fr)]">
+        <nav aria-label="Placas del pedido" className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-y-auto lg:pb-0">
+          {resueltos.map((r, i) => {
+            const plano = planos[i]!;
+            const cuantas = r.piezas.reduce((n, p) => n + p.cantidad, 0);
+            const aprovechado =
+              plano.placas.length > 0
+                ? Math.round((plano.placas.reduce((n, h) => n + h.aprovechado, 0) / plano.placas.length) * 100)
+                : null;
+            const [material, ...resto] = (r.placa?.descripcion ?? "Placa").split(" — ");
+            return (
+              <button
+                key={r.grupo.clave}
+                type="button"
+                onClick={() => setActivo(i)}
+                aria-current={i === iActivo ? "true" : undefined}
+                className={`min-w-[190px] shrink-0 rounded-xl px-4 py-3 text-left transition-colors lg:min-w-0 ${
+                  i === iActivo ? "bg-oscuro-marca text-white" : "superficie hover:bg-sitio-alt"
+                }`}
+              >
+                <span className="block text-[15px] font-semibold leading-snug">{material}</span>
+                <span className={`block text-[13px] ${i === iActivo ? "text-white/70" : "text-texto-2"}`}>
+                  {resto.at(-1)}
+                  {r.mitad ? " · media" : ""}
+                </span>
+                <span className={`tabular mt-1.5 block text-[13px] ${i === iActivo ? "text-white/85" : "text-texto-3"}`}>
+                  {cuantas} {cuantas === 1 ? "pieza" : "piezas"}
+                  {aprovechado !== null && ` · ${plano.placas.length} ${plano.placas.length === 1 ? "placa" : "placas"} · ${aprovechado}%`}
+                  {plano.noEntran.length > 0 && " · no entra"}
+                </span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={agregarPlaca}
+            className="inline-flex min-w-[150px] shrink-0 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-linea px-4 py-3 text-[15px] font-semibold text-texto-2 transition-colors hover:bg-sitio-alt lg:min-w-0"
+          >
+            <Plus className="h-4 w-4" />
+            Otra placa
+          </button>
+        </nav>
+
+        <div className="flex gap-1.5 lg:hidden" role="group" aria-label="Qué ver">
+          <Chip activo={enMovil === "piezas"} onClick={() => setEnMovil("piezas")} ancho>
+            Piezas
+          </Chip>
+          <Chip activo={enMovil === "plano"} onClick={() => setEnMovil("plano")} ancho>
+            Plano{planoActual.placas.length > 0 ? ` (${planoActual.placas.length})` : ""}
+          </Chip>
+        </div>
+
+        <section className={`superficie flex min-h-0 flex-col rounded-2xl ${enMovil === "plano" ? "hidden lg:flex" : ""}`}>
+          <EditorDeGrupo
+            key={actual.grupo.clave}
+            resuelto={actual}
+            placas={placas}
+            tapacantos={tapacantos}
+            activa={activa}
+            alCambiar={(cambio) => cambiarGrupo(iActivo, cambio)}
+            alSacar={varios ? () => sacarPlaca(iActivo) : undefined}
+          />
         </section>
-      </aside>
+
+        <section
+          aria-label="Plano"
+          className={`superficie min-h-0 overflow-y-auto rounded-2xl p-4 ${enMovil === "piezas" ? "hidden lg:block" : ""}`}
+        >
+          {planoActual.noEntran.length > 0 && (
+            <p className="mb-3 rounded-lg bg-[#fdf1ea] px-3.5 py-2.5 text-[14.5px] text-[#8a3b12]">
+              {planoActual.noEntran.length === 1
+                ? "Una medida no entra en la placa"
+                : `${planoActual.noEntran.length} medidas no entran en la placa`}
+              : {planoActual.noEntran.map((p) => `${p.largoMm} × ${p.anchoMm} mm`).join(", ")}.
+            </p>
+          )}
+          {planoActual.placas.length > 0 ? (
+            <PlanoSimple plano={planoActual} unaColumna />
+          ) : (
+            <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl bg-hundida">
+              <span className="tabular text-texto-3">
+                {actual.medida.largo} × {actual.medida.ancho} mm
+              </span>
+            </div>
+          )}
+          {activa && actual.piezas.length > 0 && (
+            <dl className="mt-4 space-y-1.5 text-[14.5px]">
+              {cuentaActual.placasEnteras > 0 && <Renglon que="Placas" cuanto={cuentaActual.subtotalPlacas} />}
+              {cuentaActual.subtotalCorte > 0 && <Renglon que="Corte" cuanto={cuentaActual.subtotalCorte} />}
+              {cuentaActual.subtotalCanto > 0 && <Renglon que="Tapacanto" cuanto={cuentaActual.subtotalCanto} />}
+            </dl>
+          )}
+        </section>
+      </div>
+
+      {/* En el teléfono, la cuenta y el botón abajo y fijos: con el teclado
+          abierto y veinte medidas, el botón quedaba al final de todo. */}
+      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 bg-card px-4 py-3 shadow-[0_-8px_24px_-12px_rgb(60_50_40_/_0.35)] lg:hidden">
+        <p className="tabular mr-auto text-[14px] leading-tight text-texto-2">
+          <strong className="text-base text-foreground">
+            {totales.placas} {totales.placas === 1 ? "placa" : "placas"}
+          </strong>
+          <br />
+          {activa && totales.total > 0
+            ? formatearMonto(totales.total)
+            : `${totales.pasadas} ${totales.pasadas === 1 ? "pasada" : "pasadas"}`}
+        </p>
+        {botonWhatsapp}
+      </div>
     </div>
   );
 }
 
-/** Una placa del pedido: la placa, sus piezas, su tapacanto y su plano. */
-function GrupoDeCorte({
-  numero,
+/**
+ * La placa que se edita: material, media placa y tapacanto en una fila, y las
+ * piezas como una planilla. En pantalla ancha cada pieza es un renglón con
+ * los encabezados arriba una sola vez.
+ */
+function EditorDeGrupo({
   resuelto: { grupo, placa, mitad, medida, piezas },
-  plano,
   placas,
   tapacantos,
   activa,
   alCambiar,
   alSacar,
 }: {
-  /** Con una sola placa no se numera. */
-  numero: number | null;
   resuelto: GrupoResuelto;
-  plano: PlanoDeCorte;
   placas: PlacaCortable[];
   tapacantos: Tapacanto[];
   activa: boolean;
@@ -478,13 +569,20 @@ function GrupoDeCorte({
   alSacar?: () => void;
 }) {
   const { filas, tiras, modo } = grupo;
+  const lista = useRef<HTMLDivElement>(null);
 
   function actualizar<K extends keyof Fila>(i: number, campo: K, valor: Fila[K]) {
     alCambiar({ filas: filas.map((f, j) => (j === i ? { ...f, [campo]: valor } : f)) });
   }
 
+  // Enter en el último renglón agrega otro y salta a su largo: se carga un
+  // despiece entero sin tocar el mouse.
   function agregarFila() {
     alCambiar({ filas: [...filas, filaVacia()] });
+    requestAnimationFrame(() => {
+      const largos = lista.current?.querySelectorAll<HTMLInputElement>("[data-largo]");
+      largos?.[largos.length - 1]?.focus();
+    });
   }
 
   // Lo pegado reemplaza el renglón donde se pegó (y los vacíos de abajo).
@@ -495,173 +593,167 @@ function GrupoDeCorte({
     alCambiar({ filas: [...filas.slice(0, i), ...nuevas, ...filas.slice(i + 1).filter((f) => f.largo || f.ancho)] });
   }
 
+  const columnas = "md:grid md:grid-cols-[minmax(120px,1fr)_84px_84px_60px_92px_68px_36px] md:items-center md:gap-2";
+
   return (
     <>
-      <section className="rounded-xl superficie p-5">
-        <div className="flex items-end gap-2">
-          <label className="block flex-1">
-            <span className="text-base font-semibold">{numero ? `Placa ${numero}` : "Placa"}</span>
-            <select
-              value={placa?.variantId ?? ""}
-              onChange={(e) => alCambiar({ variantId: e.target.value })}
-              className="mt-2 h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
-            >
-              {placas.map((p) => (
-                <option key={p.variantId} value={p.variantId}>
-                  {activa ? `${p.descripcion} — ${formatearMonto(p.precio)}` : p.descripcion}
-                </option>
-              ))}
-            </select>
-          </label>
-          {alSacar && (
-            <button
-              type="button"
-              onClick={alSacar}
-              aria-label={`Sacar la placa ${numero}`}
-              className="flex h-11 w-11 items-center justify-center rounded-lg text-texto-3 transition-colors hover:bg-sitio-alt hover:text-destructive"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
+      <div className="flex flex-wrap items-end gap-2 border-b border-linea-tenue p-4">
+        <label className="block min-w-[240px] flex-1">
+          <span className="sr-only">Placa</span>
+          <select
+            value={placa?.variantId ?? ""}
+            onChange={(e) => alCambiar({ variantId: e.target.value })}
+            className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base font-medium"
+          >
+            {placas.map((p) => (
+              <option key={p.variantId} value={p.variantId}>
+                {activa ? `${p.descripcion} — ${formatearMonto(p.precio)}` : p.descripcion}
+              </option>
+            ))}
+          </select>
+        </label>
         {placa?.admiteMedia && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="flex gap-1.5" role="group" aria-label="Placa entera o media">
             {([null, "largo", "ancho"] as const).map((m) => (
               <Chip key={m ?? "entera"} activo={mitad === m} onClick={() => alCambiar({ mitad: m })}>
-                {m === null ? "Placa entera" : m === "largo" ? "Media a lo largo" : "Media al ancho"}
+                {m === null ? "Entera" : m === "largo" ? "½ largo" : "½ ancho"}
               </Chip>
             ))}
           </div>
         )}
-
-        <p className="tabular mt-3 text-sm text-texto-2">
-          {nombreDeLaMitad(mitad)} · {medida.largo} × {medida.ancho} mm
-        </p>
-      </section>
-
-      <section className="rounded-xl superficie p-5">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Qué querés cortar">
-          <Chip activo={modo === "piezas"} onClick={() => alCambiar({ modo: "piezas" })}>
-            Piezas
-          </Chip>
-          <Chip activo={modo === "tiras"} onClick={() => alCambiar({ modo: "tiras" })}>
-            Tiras por metro
-          </Chip>
+        {alSacar && (
+          <button
+            type="button"
+            onClick={alSacar}
+            aria-label="Sacar esta placa del pedido"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-texto-3 transition-colors hover:bg-sitio-alt hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+        <div className="flex w-full flex-wrap items-end gap-2">
+          <div className="flex gap-1.5" role="group" aria-label="Qué querés cortar">
+            <Chip activo={modo === "piezas"} onClick={() => alCambiar({ modo: "piezas" })}>
+              Piezas
+            </Chip>
+            <Chip activo={modo === "tiras"} onClick={() => alCambiar({ modo: "tiras" })}>
+              Tiras
+            </Chip>
+          </div>
+          <div className="min-w-[220px] flex-1">
+            <ElegirTapacanto key={grupo.clave} grupo={grupo} tapacantos={tapacantos} alCambiar={alCambiar} />
+          </div>
+          <span className="tabular pb-3 text-sm text-texto-3">
+            {nombreDeLaMitad(mitad)} · {medida.largo} × {medida.ancho} mm
+          </span>
         </div>
+      </div>
 
-        {modo === "piezas" ? (
-          <>
-            <div className="mt-4 divide-y divide-linea-tenue">
-              {filas.map((f, i) => (
-                <div
-                  key={i}
-                  className="flex flex-wrap items-center gap-x-4 gap-y-3 py-3 first:pt-0"
-                  onPaste={(e) => pegarLista(i, e)}
-                  onKeyDown={(e) => {
-                    if (e.key !== "Enter") return;
-                    e.preventDefault();
-                    if (i === filas.length - 1) agregarFila();
-                  }}
-                >
-                  <div className="grid min-w-[18rem] flex-1 grid-cols-[1fr_1fr_64px] gap-2 sm:grid-cols-[1.1fr_1fr_1fr_72px]">
-                    <label className="col-span-3 block sm:col-span-1">
-                      <span className={i > 0 ? "sr-only" : "mb-1 block text-sm font-medium"}>Pieza</span>
-                      <input
-                        type="text"
-                        value={f.nombre}
-                        onChange={(e) => actualizar(i, "nombre", e.target.value)}
-                        placeholder="Lateral"
-                        maxLength={40}
-                        className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
-                      />
-                    </label>
-                    <Numero etiqueta="Largo (mm)" valor={f.largo} alCambiar={(v) => actualizar(i, "largo", v)} oculta={i > 0} placeholder="1200" />
-                    <Numero etiqueta="Ancho (mm)" valor={f.ancho} alCambiar={(v) => actualizar(i, "ancho", v)} oculta={i > 0} placeholder="400" />
-                    <Numero etiqueta="Cant." valor={f.cantidad} alCambiar={(v) => actualizar(i, "cantidad", v)} oculta={i > 0} />
-                  </div>
-
+      {modo === "piezas" ? (
+        <div ref={lista} className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+          <div className={`sticky top-0 z-10 hidden bg-card py-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-texto-3 ${columnas}`}>
+            <span>Pieza</span>
+            <span>Largo</span>
+            <span>Ancho</span>
+            <span>Cant.</span>
+            <span className="text-center">Canto</span>
+            <span className="text-center">Veta</span>
+            <span />
+          </div>
+          <div className="divide-y divide-linea-tenue">
+            {filas.map((f, i) => (
+              <div
+                key={i}
+                className={`flex flex-wrap items-center gap-2 py-2.5 ${columnas}`}
+                onPaste={(e) => pegarLista(i, e)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  if (i === filas.length - 1) agregarFila();
+                }}
+              >
+                <label className="block w-full md:w-auto">
+                  <span className="sr-only">Pieza</span>
+                  <input
+                    type="text"
+                    value={f.nombre}
+                    onChange={(e) => actualizar(i, "nombre", e.target.value)}
+                    placeholder="Lateral"
+                    maxLength={40}
+                    className="h-10 w-full rounded-lg border border-linea bg-background px-3 text-base"
+                  />
+                </label>
+                <div className="grid flex-1 grid-cols-[1fr_1fr_64px] gap-2 md:contents">
+                  <Numero etiqueta="Largo" valor={f.largo} alCambiar={(v) => actualizar(i, "largo", v)} placeholder="1200" marca="largo" />
+                  <Numero etiqueta="Ancho" valor={f.ancho} alCambiar={(v) => actualizar(i, "ancho", v)} placeholder="400" />
+                  <Numero etiqueta="Cant." valor={f.cantidad} alCambiar={(v) => actualizar(i, "cantidad", v)} />
+                </div>
+                <div className="flex justify-center">
                   <SelectorDeCanto
+                    chico
                     largo={Number(f.largo) || 0}
                     ancho={Number(f.ancho) || 0}
                     lados={f.lados}
                     alCambiar={(lados) => actualizar(i, "lados", lados)}
                   />
-
-                  <div className="flex items-center gap-1">
-                    <Chip activo={f.veta} onClick={() => actualizar(i, "veta", !f.veta)}>
-                      Veta
-                    </Chip>
-                    <button
-                      type="button"
-                      onClick={() => alCambiar({ filas: filas.length === 1 ? [filaVacia()] : filas.filter((_, j) => j !== i) })}
-                      aria-label={`Sacar la medida ${i + 1}`}
-                      className="flex h-11 w-11 items-center justify-center rounded-lg text-texto-3 transition-colors hover:bg-sitio-alt hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
                 </div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={agregarFila}
-              className="mt-2 inline-flex h-11 items-center gap-2 rounded-lg border border-linea px-4 text-[14.5px] font-semibold transition-colors hover:bg-sitio-alt"
-            >
-              <Plus className="h-4 w-4" />
-              Otra medida
-            </button>
-          </>
-        ) : (
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3">
-            <div className="grid min-w-[15rem] flex-1 grid-cols-2 gap-2">
-              <Numero
-                etiqueta="Ancho de la tira (mm)"
-                valor={tiras.ancho}
-                alCambiar={(v) => alCambiar({ tiras: { ...tiras, ancho: v } })}
-                placeholder="80"
-              />
-              <Numero
-                etiqueta="Metros en total"
-                valor={tiras.metros}
-                alCambiar={(v) => alCambiar({ tiras: { ...tiras, metros: v } })}
-                placeholder="12"
-                decimal
-              />
-            </div>
-            <SelectorDeCanto
-              largo={medida.largo}
-              ancho={Number(tiras.ancho) || 80}
-              soloLargos
-              lados={{ ...tiras.lados, izquierda: false, derecha: false }}
-              alCambiar={(lados) => alCambiar({ tiras: { ...tiras, lados: { ...lados, izquierda: false, derecha: false } } })}
-            />
-            {piezas[0] && (
-              <p className="tabular w-full text-sm text-texto-2">
-                {piezas[0].cantidad} tiras de {piezas[0].largoMm} × {piezas[0].anchoMm} mm
-              </p>
-            )}
+                <div className="flex justify-center">
+                  <Chip activo={f.veta} onClick={() => actualizar(i, "veta", !f.veta)}>
+                    Veta
+                  </Chip>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => alCambiar({ filas: filas.length === 1 ? [filaVacia()] : filas.filter((_, j) => j !== i) })}
+                  aria-label={`Sacar la medida ${i + 1}`}
+                  className="ml-auto flex h-10 w-10 items-center justify-center rounded-lg text-texto-3 transition-colors hover:bg-sitio-alt hover:text-destructive md:ml-0"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
           </div>
-        )}
-
-        <ElegirTapacanto grupo={grupo} tapacantos={tapacantos} alCambiar={alCambiar} />
-      </section>
-
-      {plano.noEntran.length > 0 && (
-        <p className="rounded-lg border border-[#e7b3a0] bg-[#fdf1ea] px-4 py-3 text-base text-[#8a3b12]">
-          {plano.noEntran.length === 1
-            ? "Una medida no entra en la placa"
-            : `${plano.noEntran.length} medidas no entran en la placa`}
-          : {plano.noEntran.map((p) => `${p.largoMm} × ${p.anchoMm} mm`).join(", ")}.
-        </p>
-      )}
-
-      {plano.placas.length > 0 && (
-        <section className="rounded-xl superficie p-5">
-          <PlanoSimple plano={plano} />
-        </section>
+          <button
+            type="button"
+            onClick={agregarFila}
+            className="mt-2 inline-flex h-11 items-center gap-2 rounded-lg px-3 text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-sitio-alt"
+          >
+            <Plus className="h-4 w-4" />
+            Otra medida
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
+          <div className="grid min-w-[15rem] flex-1 grid-cols-2 gap-2">
+            <Numero
+              etiqueta="Ancho de la tira (mm)"
+              valor={tiras.ancho}
+              alCambiar={(v) => alCambiar({ tiras: { ...tiras, ancho: v } })}
+              placeholder="80"
+              visible
+            />
+            <Numero
+              etiqueta="Metros en total"
+              valor={tiras.metros}
+              alCambiar={(v) => alCambiar({ tiras: { ...tiras, metros: v } })}
+              placeholder="12"
+              decimal
+              visible
+            />
+          </div>
+          <SelectorDeCanto
+            largo={medida.largo}
+            ancho={Number(tiras.ancho) || 80}
+            soloLargos
+            lados={{ ...tiras.lados, izquierda: false, derecha: false }}
+            alCambiar={(lados) => alCambiar({ tiras: { ...tiras, lados: { ...lados, izquierda: false, derecha: false } } })}
+          />
+          {piezas[0] && (
+            <p className="tabular w-full text-sm text-texto-2">
+              {piezas[0].cantidad} tiras de {piezas[0].largoMm} × {piezas[0].anchoMm} mm
+            </p>
+          )}
+        </div>
       )}
     </>
   );
@@ -689,24 +781,24 @@ function ElegirTapacanto({
     <input
       value={grupo.canto}
       onChange={(e) => alCambiar({ canto: e.target.value, cantoId: null })}
-      placeholder="Blanco, o el mismo de la placa"
+      placeholder="Tapacanto: blanco, o el de la placa"
       aria-label={tapacantos.length > 0 ? "Otro tapacanto" : undefined}
-      className="mt-1 h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
+      className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
     />
   );
   if (tapacantos.length === 0) {
     return (
-      <label className="mt-5 block">
-        <span className="text-sm font-medium">Color del tapacanto</span>
+      <label className="block">
+        <span className="sr-only">Color del tapacanto</span>
         {libre}
       </label>
     );
   }
   const enOtro = (abierto || valor === OTRO_CANTO) && !elegido;
   return (
-    <div className="mt-5">
+    <div>
       <label className="block">
-        <span className="text-sm font-medium">Tapacanto</span>
+        <span className="sr-only">Tapacanto</span>
         <select
           value={enOtro ? OTRO_CANTO : valor}
           onChange={(e) => {
@@ -715,9 +807,9 @@ function ElegirTapacanto({
             setAbierto(v === OTRO_CANTO);
             alCambiar(t ? { canto: nombreDelTapacanto(t), cantoId: t.variantId } : { canto: "", cantoId: null });
           }}
-          className="mt-1 h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
+          className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
         >
-          <option value="">Sin elegir</option>
+          <option value="">Tapacanto: sin elegir</option>
           {tapacantos.map((t) => (
             <option key={t.variantId} value={t.variantId}>
               {nombreDelTapacanto(t)}
@@ -726,7 +818,7 @@ function ElegirTapacanto({
           <option value={OTRO_CANTO}>Otro</option>
         </select>
       </label>
-      {enOtro && libre}
+      {enOtro && <div className="mt-2">{libre}</div>}
     </div>
   );
 }
@@ -776,21 +868,24 @@ function Numero({
   etiqueta,
   valor,
   alCambiar,
-  oculta,
+  visible,
   placeholder,
   decimal,
+  marca,
 }: {
   etiqueta: string;
   valor: string;
   alCambiar: (v: string) => void;
-  /** En los renglones de abajo la etiqueta queda solo para el lector de pantalla. */
-  oculta?: boolean;
+  /** En la planilla la etiqueta va chica en el teléfono y en el encabezado en pantalla ancha. */
+  visible?: boolean;
   placeholder?: string;
   decimal?: boolean;
+  /** `largo`: el campo al que salta el foco al agregar un renglón. */
+  marca?: "largo";
 }) {
   return (
     <label className="block">
-      <span className={oculta ? "sr-only" : "mb-1 block text-sm font-medium"}>{etiqueta}</span>
+      <span className={visible ? "mb-1 block text-sm font-medium" : "mb-0.5 block text-xs text-texto-3 md:sr-only"}>{etiqueta}</span>
       <input
         type={decimal ? "text" : "number"}
         inputMode={decimal ? "decimal" : "numeric"}
@@ -798,18 +893,19 @@ function Numero({
         value={valor}
         onChange={(e) => alCambiar(e.target.value)}
         placeholder={placeholder}
-        className="tabular h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
+        data-largo={marca === "largo" ? "" : undefined}
+        className="tabular h-10 w-full rounded-lg border border-linea bg-background px-3 text-base"
       />
     </label>
   );
 }
 
-function Cifra({ valor, nombre }: { valor: number; nombre: string }) {
+function Cifra({ valor, nombre }: { valor: number | string; nombre: string }) {
   return (
     <div className="flex flex-col-reverse">
-      <dt className="mt-1 text-sm text-texto-2">{nombre}</dt>
-      <dd className="tabular text-[28px] font-bold leading-none tracking-[-0.02em]">
-        {String(valor).replace(".", ",")}
+      <dt className="mt-0.5 text-[13px] text-texto-2">{nombre}</dt>
+      <dd className="tabular text-[22px] font-bold leading-none tracking-[-0.02em]">
+        {typeof valor === "number" ? String(valor).replace(".", ",") : valor}
       </dd>
     </div>
   );

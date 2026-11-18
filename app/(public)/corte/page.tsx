@@ -2,10 +2,8 @@ import type { Metadata } from "next";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { metadatosDePagina, migasJsonLd } from "@/lib/seo";
 import Link from "next/link";
-import { Ruler } from "lucide-react";
 import { placasCortablesPublicas, tapacantosDelCatalogo } from "@/lib/dal/cortes-publico";
 import { anchoDeSierra } from "@/lib/dal/sierra";
-import { HORARIO_CORTES } from "@/lib/sucursales";
 import { VistaDeCorteDeQuienMira } from "./vista";
 import { preciosDePlacas } from "@/lib/dal/visitante";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
@@ -67,25 +65,13 @@ export default async function CortePage() {
           { nombre: "Corte a medida", ruta: "/corte" },
         ])}
       />
-      <div className="contenedor py-10">
-        <div className="max-w-2xl">
-          <p className="inline-flex items-center gap-2 rounded-full bg-naranja-claro px-3 py-1 text-[13px] font-semibold text-acento-sobre-claro">
-            <Ruler className="h-4 w-4" />
-            Melamina, MDF, fenólicos y tableros
-          </p>
-          {/* El título dice lo que se busca —«corte de placas a medida»— y
-              la invitación va abajo. Antes el único título era la invitación,
-              y la página no nombraba en ningún encabezado lo que ofrece. */}
-          <h1 className="mt-3 text-[34px] font-bold leading-[1.1] tracking-[-0.03em]">
-            Corte de placas a medida
-          </h1>
-          <p className="mt-2.5 text-base text-texto-2">
-            En el aserradero · {HORARIO_CORTES}
-          </p>
-        </div>
-
+      {/* El armador es una herramienta de trabajo: ocupa el ancho entero y el
+          título va en su propia barra, junto a la cuenta del pedido. */}
+      <div className="mx-auto max-w-[1680px] px-4 py-5 lg:px-6">
         {placas.length === 0 ? (
-          <p className="mt-8 rounded-xl superficie px-5 py-6 text-base">
+          <>
+          <h1 className="text-[30px] font-bold tracking-[-0.03em]">Corte de placas a medida</h1>
+          <p className="mt-4 rounded-xl superficie px-5 py-6 text-base">
             Por ahora el corte a medida se cotiza por WhatsApp o en el
             mostrador.{" "}
             <Link href="/contacto" className="font-medium underline underline-offset-2">
@@ -93,8 +79,9 @@ export default async function CortePage() {
             </Link>{" "}
             y te pasamos el precio con tu despiece.
           </p>
+          </>
         ) : (
-          <div className="mt-8">
+          <div>
             <VistaDeCorteDeQuienMira
               // Sin esperar: la pantalla sale armada y solo el precio espera.
               precios={preciosDePlacas()}

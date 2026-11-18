@@ -20,11 +20,18 @@ import type { PlacaDelPlano, PlanoDeCorte } from "@/lib/cortes/tipos";
  * sin una sola palabra, por qué dos piezas de 900 no entran en una placa de
  * 1830.
  */
-export function PlanoSimple({ plano }: { plano: PlanoDeCorte }) {
+export function PlanoSimple({
+  plano,
+  unaColumna,
+}: {
+  plano: PlanoDeCorte;
+  /** En la columna del armador las placas van una abajo de otra, grandes. */
+  unaColumna?: boolean;
+}) {
   if (plano.placas.length === 0) return null;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className={`grid gap-4 ${unaColumna ? "" : "sm:grid-cols-2"}`}>
       {plano.placas.map((placa) => (
         <figure key={placa.numero} className="m-0 space-y-1.5">
           <figcaption className="flex flex-wrap items-baseline gap-x-2 gap-y-1">

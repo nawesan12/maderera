@@ -34,6 +34,7 @@ export function SelectorDeCanto({
   lados,
   alCambiar,
   soloLargos,
+  chico,
 }: {
   largo: number;
   ancho: number;
@@ -41,11 +42,17 @@ export function SelectorDeCanto({
   alCambiar: (lados: LadosConCanto) => void;
   /** Las tiras: los cortes del ancho no llevan canto. */
   soloLargos?: boolean;
+  /** En la planilla del armador: casi a altura fija, para que los renglones
+   *  no cambien de alto según la forma de la pieza. */
+  chico?: boolean;
 }) {
   // La pieza a escala, con un tope para que una tira de 2 m no quede como una
   // raya ni un cuadrado como una estampilla.
-  const proporcion = largo > 0 && ancho > 0 ? Math.min(2.6, Math.max(1.1, largo / ancho)) : 1.6;
-  const anchoPx = 104;
+  const proporcion =
+    largo > 0 && ancho > 0
+      ? Math.min(chico ? 2.4 : 2.6, Math.max(chico ? 1.5 : 1.1, largo / ancho))
+      : 1.6;
+  const anchoPx = chico ? 64 : 104;
   const altoPx = Math.round(anchoPx / proporcion);
 
   const lado = (cual: keyof LadosConCanto, nombre: string, clase: string, barra: string) => (

@@ -150,6 +150,14 @@ func (s *Servicio) GuardarConsulta(ctx context.Context, m map[string]any, ip str
 		if mitad != nil && !placa.AdmiteMedia {
 			return "", cual(i, "Esa placa se vende solo entera: armá el corte sobre la placa completa.")
 		}
+		// El tope del pedido entero se mira antes de calcular este plano: si
+		// no, ocho grupos de mil piezas se calculaban enteros antes del rechazo.
+		for _, p := range piezas {
+			unidades += p.Cantidad
+		}
+		if unidades > MaximoDePiezas {
+			return "", error422(fmt.Sprintf("Son demasiadas piezas para calcular acá (el máximo es %d). Pedinos el despiece por WhatsApp y lo armamos nosotros.", MaximoDePiezas))
+		}
 		medida := ResolverMedida(nil, nil, &placa.LargoMm, &placa.AnchoMm, mitad)
 		plano := CalcularPlano(DatosDelPlano{Piezas: piezas, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho, AnchoSierra: &sierra})
 		if n := len(plano.NoEntran); n == 1 {
@@ -159,9 +167,6 @@ func (s *Servicio) GuardarConsulta(ctx context.Context, m map[string]any, ip str
 		}
 		if canto != nil && *canto == "" {
 			canto = nil
-		}
-		for _, p := range piezas {
-			unidades += p.Cantidad
 		}
 		crudas, err := json.Marshal(piezas)
 		if err != nil {

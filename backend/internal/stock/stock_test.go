@@ -380,10 +380,26 @@ func TestGrillaPaginadaYSucursalesDeLaBase(t *testing.T) {
 	var prov string
 	_ = e.pool.QueryRow(ctx, `insert into suppliers (nombre) values ('Maderas Sur') returning id`).Scan(&prov)
 	_, _ = e.pool.Exec(ctx, `insert into supplier_variant_codes (supplier_id, variant_id, codigo) values ($1, $2, 'X1')`, prov, e.tornillo)
-	if r := leer("?proveedor=" + prov); r.Total != 1 || r.Filas[0].VariantID != e.tornillo {
-		t.Errorf("por proveedor: %+v", r)
+	// El depósito no entra a Compras: el filtro por proveedor se ignora (con
+	// el id de un proveedor se deducía qué le compra la maderera a quién).
+	if r := leer("?proveedor=" + prov); r.Total != 14 {
+		t.Errorf("el depósito no filtra por proveedor: %d", r.Total)
 	}
-	if r := leer("?proveedor=no-es-un-id"); r.Total != 0 {
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	porProveedor := func(q string) GrillaDeStock {
+		t.Helper()
+		c, b := pedir(t, adm, "GET", u+q, nil)
+		if c != 200 {
+			t.Fatalf("%s: %d %s", q, c, b)
+		}
+		var g GrillaDeStock
+		_ = json.Unmarshal([]byte(b), &g)
+		return g
+	}
+	if r := porProveedor("?proveedor=" + prov); r.Total != 1 || r.Filas[0].VariantID != e.tornillo {
+		t.Errorf("por proveedor: %+v", r.Total)
+	}
+	if r := porProveedor("?proveedor=no-es-un-id"); r.Total != 0 {
 		t.Errorf("proveedor inválido: %d", r.Total)
 	}
 	// El ajuste rápido anda en la sucursal nueva: antes solo aceptaba las dos

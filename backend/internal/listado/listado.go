@@ -8,10 +8,13 @@
 package listado
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	"mjbj/internal/auth"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/roles"
 )
 
 // Filtros son los de la URL de las tres pantallas.
@@ -119,4 +122,15 @@ func (c *Consulta) Comunes(f Filtros, variante string) {
 			c.Y("EXISTS (SELECT 1 FROM supplier_variant_codes sc JOIN product_variants pv ON pv.id = sc.variant_id WHERE pv.product_id = p.id AND sc.supplier_id = " + prov + "::uuid)")
 		}
 	}
+}
+
+// SoloQuienCompra devuelve el filtro por proveedor solo para quien entra a
+// Compras. La pantalla ya lo escondía a los demás, pero la API lo aceptaba:
+// con el id de un proveedor, un vendedor podía deducir qué le compra la
+// maderera a quién.
+func SoloQuienCompra(ctx context.Context, proveedor string) string {
+	if proveedor == "" || !roles.PuedeEntrar("/admin/compras", auth.DeContexto(ctx).RolStaff) {
+		return ""
+	}
+	return proveedor
 }

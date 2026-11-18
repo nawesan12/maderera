@@ -116,7 +116,7 @@ func (a *API) ListarProductos(ctx context.Context, r productosapi.ListarProducto
 		return nil, err
 	}
 	f := listado.Filtros{Busqueda: texto(r.Params.Busqueda), Categoria: texto(r.Params.Categoria),
-		Marca: texto(r.Params.Marca), Proveedor: texto(r.Params.Proveedor),
+		Marca: texto(r.Params.Marca), Proveedor: listado.SoloQuienCompra(ctx, texto(r.Params.Proveedor)),
 		Limite: entero(r.Params.Limite), Desde: entero(r.Params.Desplazamiento)}
 	if r.Params.Estado != nil {
 		f.Estado = string(*r.Params.Estado)

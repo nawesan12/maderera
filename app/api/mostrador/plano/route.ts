@@ -43,13 +43,21 @@ interface Pedido {
   fijadas: PiezaFijada[];
 }
 
+const MAX_PLACAS = 60;
+
 export async function POST(request: Request) {
   const usuario = await staffOrNull();
   if (!usuario || !puedeEntrar("/mostrador", usuario.staffRole)) {
     return new NextResponse("No autorizado", { status: 403 });
   }
 
+  // Un despiece de mostrador son decenas de piezas: un cuerpo de más de
+  // 512 KB no es un despiece.
+  if (Number(request.headers.get("content-length") ?? 0) > 512 * 1024) {
+    return new NextResponse("El despiece es demasiado grande.", { status: 413 });
+  }
   const pedido = (await request.json().catch(() => null)) as Pedido | null;
+  const texto = (v: unknown) => (typeof v === "string" ? v : "");
   if (!pedido || typeof pedido.material !== "string" || !Array.isArray(pedido.piezas) || pedido.piezas.length === 0) {
     return new NextResponse("Falta el despiece.", { status: 400 });
   }
@@ -68,18 +76,23 @@ export async function POST(request: Request) {
   if (!r.data) return new NextResponse("No se pudo armar el plano.", { status: r.response.status === 422 ? 422 : 502 });
   const plano = r.data.plano as PlanoDeCorte;
   if (plano.placas.length === 0) return new NextResponse("El plano está vacío.", { status: 422 });
+  // Cada placa es una hoja o más: un pedido de miles de placas armaría miles
+  // de páginas en memoria. Un trabajo de mostrador no pasa de unas decenas.
+  if (plano.placas.length > MAX_PLACAS) {
+    return new NextResponse(`Son más de ${MAX_PLACAS} placas: partilo en varios planos.`, { status: 422 });
+  }
 
   const datos = {
     numero: "BORRADOR",
-    cliente: pedido.cliente?.trim().slice(0, 120) || "Mostrador",
+    cliente: texto(pedido.cliente).trim().slice(0, 120) || "Mostrador",
     material: pedido.material.slice(0, 200),
-    deQueSale: String(pedido.deQueSale ?? "").slice(0, 60),
+    deQueSale: texto(pedido.deQueSale).slice(0, 60),
     createdAt: new Date(),
   };
   const reporte = await cortePdf(
     {
       ...datos,
-      cantoDescripcion: pedido.canto?.slice(0, 200) || null,
+      cantoDescripcion: texto(pedido.canto).slice(0, 200) || null,
       metrosCanto: Number(pedido.metrosCanto) || 0,
       superficieSierra: (r.data.superficies ?? []).reduce((t, x) => t + x, 0),
     },

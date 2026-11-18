@@ -69,7 +69,7 @@ func (a *API) GrillaDeStock(ctx context.Context, r stockapi.GrillaDeStockRequest
 		return nil, err
 	}
 	f := listado.Filtros{Busqueda: texto(r.Params.Busqueda), Categoria: texto(r.Params.Categoria),
-		Marca: texto(r.Params.Marca), Proveedor: texto(r.Params.Proveedor),
+		Marca: texto(r.Params.Marca), Proveedor: listado.SoloQuienCompra(ctx, texto(r.Params.Proveedor)),
 		Limite: entero(r.Params.Limite, 0), Desde: entero(r.Params.Desplazamiento, 0)}
 	if r.Params.Estado != nil {
 		f.Estado = string(*r.Params.Estado)

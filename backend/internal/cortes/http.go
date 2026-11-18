@@ -454,7 +454,9 @@ func (a *API) CalcularPlano(ctx context.Context, r cortesapi.CalcularPlanoReques
 	// (18/11/2026). Solo el staff: al público no le sirve y cuesta armarla. Un
 	// plano que no se puede cortar en guillotina sale sin hoja, como en la
 	// ficha del corte.
-	if b.Hoja != nil && *b.Hoja && auth.DeContexto(ctx).EsStaff() && len(plano.Placas) > 0 {
+	// Con un tope: cada placa es una hoja, y el PDF del mostrador no arma más
+	// de 60 (ver app/api/mostrador/plano).
+	if b.Hoja != nil && *b.Hoja && auth.DeContexto(ctx).EsStaff() && len(plano.Placas) > 0 && len(plano.Placas) <= 60 {
 		if hoja, err := ArmarHojaDeCorte(plano); err == nil {
 			sup := make([]float64, len(plano.Placas))
 			for i, p := range plano.Placas {

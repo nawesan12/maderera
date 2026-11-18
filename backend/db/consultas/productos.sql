@@ -206,7 +206,9 @@ SELECT DISTINCT imputacion::text FROM products WHERE imputacion IS NOT NULL ORDE
 SELECT p.unit::text FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1;
 
 -- name: SucursalPorSlug :one
-SELECT id, name FROM branches WHERE slug = $1;
+-- Solo las activas: en una dada de baja el stock quedaba escrito donde
+-- ninguna pantalla lo muestra ni lo suma.
+SELECT id, name FROM branches WHERE slug = $1 AND active;
 
 -- name: StockYReservado :one
 SELECT qty, reservado FROM inventory WHERE variant_id = $1 AND branch_id = $2;

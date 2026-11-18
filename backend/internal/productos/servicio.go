@@ -85,7 +85,9 @@ const (
 		JOIN price_list_items pli ON pli.variant_id = v.id
 		JOIN price_lists pl ON pl.id = pli.price_list_id AND pl.is_default
 		WHERE v.product_id = p.id AND pli.price > 0)`
-	stockDelProducto = `coalesce((SELECT sum(i.qty) FROM product_variants v JOIN inventory i ON i.variant_id = v.id WHERE v.product_id = p.id), 0)`
+	// Las sucursales activas, como la pantalla de Stock: si no, «sin stock»
+	// contaba distinto en una y otra.
+	stockDelProducto = `coalesce((SELECT sum(i.qty) FROM product_variants v JOIN inventory i ON i.variant_id = v.id JOIN branches b ON b.id = i.branch_id AND b.active WHERE v.product_id = p.id), 0)`
 )
 
 var estadosDeProducto = map[string]string{
@@ -277,6 +279,11 @@ func (l listasYSucursales) activas() []SucursalDeFicha {
 // sucursal busca la de un stock: por id, o por slug en el formato viejo.
 func (l listasYSucursales) sucursal(st StockDeSucursal) *string {
 	for i, b := range l.sucursales {
+		// Solo en una activa: en una dada de baja el stock quedaría donde la
+		// grilla no lo muestra ni el total lo suma.
+		if !b.Active {
+			continue
+		}
 		if st.Sucursal != "" && b.ID == st.Sucursal || st.Sucursal == "" && b.Slug == st.Slug {
 			return &l.sucursales[i].ID
 		}

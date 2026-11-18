@@ -1155,7 +1155,7 @@ func (q *Queries) StockYReservado(ctx context.Context, arg StockYReservadoParams
 }
 
 const sucursalPorSlug = `-- name: SucursalPorSlug :one
-SELECT id, name FROM branches WHERE slug = $1
+SELECT id, name FROM branches WHERE slug = $1 AND active
 `
 
 type SucursalPorSlugRow struct {
@@ -1163,6 +1163,8 @@ type SucursalPorSlugRow struct {
 	Name string `json:"name"`
 }
 
+// Solo las activas: en una dada de baja el stock quedaba escrito donde
+// ninguna pantalla lo muestra ni lo suma.
 func (q *Queries) SucursalPorSlug(ctx context.Context, slug string) (SucursalPorSlugRow, error) {
 	row := q.db.QueryRow(ctx, sucursalPorSlug, slug)
 	var i SucursalPorSlugRow

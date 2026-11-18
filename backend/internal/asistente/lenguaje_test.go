@@ -158,3 +158,78 @@ func TestEnlaceDelDespiece(t *testing.T) {
 		t.Errorf("enlace: %s", got)
 	}
 }
+
+// Frases como llegan al WhatsApp de una maderera: sin acentos, con tipeos,
+// en mayúsculas, con emojis y abreviadas (18/11/2026). Cada una es un caso
+// en que el bot contestaba mal o mandaba un «no lo encontré» de más.
+func TestFrasesDeClientes(t *testing.T) {
+	casos := []struct {
+		frase    string
+		quiere   Intencion
+		consulta string
+		espesor  int
+	}{
+		{"tenes fenolico de 18?", Buscar, "fenolico", 18},
+		{"precio del machimbre", Buscar, "machimbre", 0},
+		{"hacen envíos a batan", Envios, "", 0},
+		{"Mandan a Miramar?", Envios, "", 0},
+		{"a que hora cierran el sabado", Horarios, "", 0},
+		{"hasta que hora estan?", Horarios, "", 0},
+		{"estan abiertos?", Horarios, "", 0},
+		{"dnd estan ubicados?", Horarios, "", 0},
+		{"Buenas, abren los domingos?", Horarios, "", 0},
+		{"quiero hablar con alguien", Persona, "", 0},
+		{"hay alguien?", Persona, "", 0},
+		{"me podes llamar?", Persona, "", 0},
+		{"cortan melamina?", Cortes, "", 0},
+		{"TENES MDF DE 15??", Buscar, "mdf", 15},
+		{"Hola buen día! tienen osb de 9mm", Buscar, "osb", 9},
+		{"cuanto esta la placa de melamina blanca 18", Buscar, "placa melamina blanca", 18},
+		{"me pasas precio de fenolico 18", Buscar, "fenolico", 18},
+		{"fenolico 18 cuanto sale", Buscar, "fenolico", 18},
+		{"q onda tienen tirantes de 3x6", Buscar, "tirantes", 0},
+		{"fenolco 18", Buscar, "fenolico", 18},
+		{"melanina blanca", Buscar, "melamina blanca", 0},
+		{"tienen durlok?", Buscar, "durlock", 0},
+		{"TIENEN MACHIMBRE??? 🙏", Buscar, "machimbre", 0},
+		{"fenolico 18mm 😊", Buscar, "fenolico", 18},
+		{"holaaa buenasss", Saludo, "", 0},
+		{"mil gracias!!", Gracias, "", 0},
+		{"graciasss", Gracias, "", 0},
+		{"se puede pagar con mp?", Pagos, "", 0},
+		{"hacen factura A?", Factura, "", 0},
+	}
+	for _, c := range casos {
+		e := Entender(c.frase)
+		if e.Intencion != c.quiere {
+			t.Errorf("Entender(%q) = %s, quería %s", c.frase, e.Intencion, c.quiere)
+		}
+		if c.consulta != "" && e.Consulta != c.consulta {
+			t.Errorf("consulta de %q = %q, quería %q", c.frase, e.Consulta, c.consulta)
+		}
+		if e.Medida.EspesorMm != c.espesor {
+			t.Errorf("espesor de %q = %d, quería %d", c.frase, e.Medida.EspesorMm, c.espesor)
+		}
+	}
+	// El número suelto no es un espesor cuando atrás viene el producto.
+	if m := Entender("necesito 10 tirantes de pino").Medida; m.EspesorMm != 0 {
+		t.Errorf("«10 tirantes» no es un espesor: %+v", m)
+	}
+}
+
+func TestCorregir(t *testing.T) {
+	casos := map[string]string{
+		"holaaa":          "hola",
+		"fenolco de 18?":  "fenolico de 18?",
+		"q onda":          "que onda",
+		"tienen durlok":   "tienen durlock",
+		"llamame":         "llamame",
+		"carretilla":      "carretilla",
+		"melanina blanca": "melamina blanca",
+	}
+	for entra, sale := range casos {
+		if got := Corregir(entra); got != sale {
+			t.Errorf("Corregir(%q) = %q, quería %q", entra, got, sale)
+		}
+	}
+}

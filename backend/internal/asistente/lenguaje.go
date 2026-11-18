@@ -116,6 +116,49 @@ func Normalizar(texto string) string {
 	return strings.TrimSpace(t)
 }
 
+// Los tipeos más comunes de quien escribe rápido desde el teléfono, palabra
+// por palabra y ya normalizados. No va en Normalizar: esa tiene que dar lo
+// mismo que la de TypeScript (lib/asistente/lenguaje.ts) y que f_unaccent.
+var tipeos = map[string]string{
+	"melanina": "melamina", "melamida": "melamina", "melamna": "melamina", "melamin": "melamina",
+	"fenolco": "fenolico", "fenolito": "fenolico", "fenolic": "fenolico", "fenoliko": "fenolico", "fenoico": "fenolico",
+	"machinbre": "machimbre", "machiembre": "machimbre", "machimbr": "machimbre", "machimbe": "machimbre",
+	"durlok": "durlock", "durloc": "durlock", "durlog": "durlock", "durlo": "durlock",
+	"aglomerao": "aglomerado", "aglomerdo": "aglomerado", "terciao": "terciado", "fibrofacl": "fibrofacil",
+	"tiranters": "tirantes", "tiranes": "tirantes",
+	"orario": "horario", "orarios": "horarios", "habren": "abren", "sierran": "cierran",
+	"grax": "gracias", "grasias": "gracias", "gracia": "gracias", "grcias": "gracias", "graciass": "gracias",
+	"tene": "tenes", "tenen": "tienen", "tiene": "tienen", "tenian": "tienen",
+	"embio": "envio", "embios": "envios", "enbio": "envio", "enbios": "envios",
+	"xq": "porque", "pq": "porque", "q": "que", "k": "que", "dnd": "donde", "tmb": "tambien", "tb": "tambien",
+	"xfa": "por favor", "porfa": "por favor", "porfis": "por favor",
+	"presu": "presupuesto", "precion": "precio", "presio": "precio",
+}
+
+// reLetrasRepetidas: «holaaa», «graciasss», «buenasss». Tres o más iguales
+// seguidas no se escriben en castellano; «ll» y «rr» quedan.
+var reLetrasRepetidas = regexp.MustCompile(`(a{3,}|e{3,}|i{3,}|o{3,}|u{3,}|s{3,}|r{3,}|l{3,}|n{3,})`)
+
+// Corregir arregla los tipeos de un texto ya normalizado: estira las letras
+// repetidas y cambia las palabras mal escritas que se conocen.
+func Corregir(normalizado string) string {
+	t := reLetrasRepetidas.ReplaceAllStringFunc(normalizado, func(m string) string { return m[:1] })
+	ps := strings.Fields(t)
+	cambio := false
+	for i, p := range ps {
+		// La puntuación pegada («fenolco?») no impide reconocer la palabra.
+		limpia := strings.TrimRight(p, ".,?!")
+		if c, ok := tipeos[limpia]; ok && c != limpia {
+			ps[i] = c + p[len(limpia):]
+			cambio = true
+		}
+	}
+	if !cambio {
+		return t
+	}
+	return strings.Join(ps, " ")
+}
+
 type senal struct {
 	intencion Intencion
 	palabras  []string
@@ -125,10 +168,10 @@ type senal struct {
 // Las palabras de cada intención, en el orden en que se prueban. Escritas
 // como las dice la gente: «hacen envio», «me lo cortan», «fiado».
 var senales = []senal{
-	{Saludo, []string{"hola", "buenas", "buen dia", "buenas tardes", "que tal", "hey"}, 1},
-	{Gracias, []string{"gracias", "genial", "perfecto", "barbaro", "buenisimo", "dale gracias"}, 1},
+	{Saludo, []string{"hola", "buenas", "buen dia", "buenas tardes", "buenas noches", "que tal", "hey"}, 1},
+	{Gracias, []string{"gracias", "genial", "perfecto", "barbaro", "buenisimo", "dale gracias", "mil gracias", "muchas gracias", "joya"}, 1},
 	{Envios, []string{"envio", "envios", "envian", "mandan", "entrega", "entregan", "domicilio", "flete", "reparto", "llevan", "traen"}, 1},
-	{Horarios, []string{"horario", "horarios", "abren", "cierran", "abierto", "atienden", "direccion", "donde estan", "donde queda", "sucursal", "sucursales", "local", "locales", "telefono"}, 1},
+	{Horarios, []string{"horario", "horarios", "abren", "cierran", "abierto", "atienden", "direccion", "donde estan", "donde queda", "donde quedan", "ubicados", "ubicacion", "que hora", "a que hora", "hasta que hora", "abiertos", "sucursal", "sucursales", "local", "locales", "telefono"}, 1},
 	{Pagos, []string{"pago", "pagar", "pagos", "tarjeta", "credito", "debito", "cuotas", "transferencia", "efectivo", "mercado pago", "financiacion"}, 1},
 	{Cortes, []string{"corte", "cortes", "cortar", "cortan", "a medida", "despiece", "aserradero", "me lo cortan"}, 1},
 	{Cuenta, []string{"cuenta corriente", "cuenta", "fiado", "credito comercial", "profesional", "mayorista", "descuento por cantidad", "revendedor", "carpintero", "constructor"}, 1},
@@ -139,7 +182,7 @@ var senales = []senal{
 	{Acopio, []string{"acopio", "acopiar", "dejar guardado", "retirar despues", "retiro en partes", "de a poco"}, 1},
 	{Factura, []string{"factura a", "factura b", "factura", "facturan", "cuit", "responsable inscripto", "monotributo"}, 1},
 	{Eventos, []string{"capacitacion", "capacitaciones", "curso", "cursos", "charla", "charlas", "evento", "eventos", "taller"}, 1},
-	{Persona, []string{"hablar con alguien", "una persona", "vendedor", "atienden", "llamar", "whatsapp", "asesor", "humano"}, 1},
+	{Persona, []string{"hablar con alguien", "con alguien", "hay alguien", "una persona", "vendedor", "vendedora", "atienden", "llamar", "llamame", "llamen", "whatsapp", "asesor", "humano", "atencion al cliente"}, 1},
 	{Stock, []string{"tenes", "tienen", "hay stock", "stock", "disponible", "queda", "quedan"}, 1},
 	{Precio, []string{"precio", "cuanto sale", "cuanto vale", "cuanto cuesta", "vale", "sale"}, 1},
 	{Buscar, []string{"busco", "necesito", "quiero", "estoy buscando", "me sirve", "para hacer"}, 1},
@@ -168,7 +211,9 @@ func init() {
 	for _, p := range strings.Fields(`hola buenas gracias por favor quiero queria necesito
 		busco buscando estoy tenes tienen hay el la los las un una unos unas de del para con y o
 		que cual cuanto cuanta sale vale cuesta precio me mi es en a al se su algo alguna algun
-		sirve puede podrian ustedes tengo hacer haria mm tardes dia dias noches che ah eh ok si no`) {
+		sirve puede podrian ustedes tengo hacer haria mm tardes dia dias noches che ah eh ok si no
+		buen buenos buenas onda pasas pasa pasame pasan esta estan info informacion consulta consultaba
+		queria saber favor jaja jeje porque tambien hacen venden manejan trabajan`) {
 		vacias[p] = true
 	}
 }
@@ -182,8 +227,12 @@ var (
 	// «¿y en 18?»: con «en», solo si el número cierra la frase; «lo
 	// necesito en 15 días» no es un espesor.
 	reEspesorEn = regexp.MustCompile(`\ben\s+(\d{1,2})\s*(?:mm)?\s*[?!.]*$`)
-	reM2        = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*(?:m2|m²|metros? cuadrados?)`)
-	reMetros    = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*(?:m|metros?|ml)\b`)
+	// «fenólico 18», «melamina blanca 18», «fenolico 18 cuanto sale»: el
+	// número suelto atrás de una palabra, al final o antes de la pregunta.
+	// «necesito 10 tirantes» no: atrás del número viene el producto.
+	reEspesorSuelto = regexp.MustCompile(`\b[a-z]{3,}\s+(\d{1,2})(?:\s*[?!.]*$|\s+(?:cuanto|que|precio|hay|tenes|tienen|sale|salen|vale|por favor)\b)`)
+	reM2            = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*(?:m2|m²|metros? cuadrados?)`)
+	reMetros        = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*(?:m|metros?|ml)\b`)
 )
 
 func leerMedida(texto string) Medida {
@@ -204,6 +253,9 @@ func leerMedida(texto string) Medida {
 	}
 	if g == nil {
 		g = reEspesorEn.FindStringSubmatch(texto)
+	}
+	if g == nil {
+		g = reEspesorSuelto.FindStringSubmatch(texto)
 	}
 	if g != nil {
 		if v, _ := strconv.Atoi(g[1]); v >= 3 && v <= 50 {
@@ -260,7 +312,7 @@ var (
 // catálogo busca por nombre, no por la medida de la variante, y la medida se
 // aplica después como filtro.
 func ConsultaLimpia(texto string) string {
-	t := rePuntuacion.ReplaceAllString(Normalizar(texto), " ")
+	t := rePuntuacion.ReplaceAllString(Corregir(Normalizar(texto)), " ")
 	var quedan []string
 	for _, p := range reEspacioJS.Split(t, -1) {
 		if len(p) > 1 && !vacias[p] && !reSoloNumero.MatchString(p) && !reSoloPorPor.MatchString(p) {
@@ -279,7 +331,7 @@ var servicios = []Intencion{Envios, Horarios, Pagos, Cortes, Cuenta, Persona, Ca
 
 // Entender lee la intención y los datos de un texto.
 func Entender(original string) Entendido {
-	texto := Normalizar(original)
+	texto := Corregir(Normalizar(original))
 
 	// Un despiece le gana a todo: si escribieron piezas, quieren el corte.
 	if d := LeerDespiece(texto); d != nil {
@@ -351,6 +403,18 @@ func Entender(original string) Entendido {
 	}
 
 	// Un saludo con algo más atrás no es un saludo: es la pregunta que sigue.
+	// «Buenas, abren los domingos?» es la pregunta por el horario.
+	if mejor == Saludo {
+		otra, p := SinIdea, 0
+		for _, i := range servicios {
+			if reconocidas[i] > p {
+				otra, p = i, reconocidas[i]
+			}
+		}
+		if otra != SinIdea {
+			return Entendido{Intencion: otra, Puntaje: p, Consulta: consulta, Medida: medida, Cantidad: cantidad, Rubro: rubro}
+		}
+	}
 	if mejor == Saludo && len(consulta) >= 3 {
 		return Entendido{Intencion: Buscar, Puntaje: 1, Consulta: consulta, Medida: medida, Cantidad: cantidad, Rubro: rubro}
 	}

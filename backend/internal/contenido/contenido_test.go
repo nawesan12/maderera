@@ -549,8 +549,12 @@ func TestContactoSoloWhatsapp(t *testing.T) {
 	if c, b := desde("10.0.0.1", map[string]string{"nombre": "Raúl", "motivo": "presupuesto", "mensaje": "12 placas de fenólico"}); c != 422 || !strings.Contains(b, `"contacto"`) || !strings.Contains(b, "WhatsApp o un correo") {
 		t.Errorf("sin WhatsApp ni correo: %d %s", c, b)
 	}
-	if c, b := desde("10.0.0.1", base("1234")); c != 422 || !strings.Contains(b, `"telefono"`) {
-		t.Errorf("un teléfono de cuatro dígitos pasó: %d %s", c, b)
+	// Lo que no se puede contestar con un toque se rechaza, aunque tenga
+	// ocho dígitos o más: un número de Buenos Aires con uno de menos.
+	for _, tel := range []string{"1234", "12345678", "11 2345 678"} {
+		if c, b := desde("10.0.0.1", base(tel)); c != 422 || !strings.Contains(b, `"telefono"`) {
+			t.Errorf("%q pasó y no tiene a quién contestar: %d %s", tel, c, b)
+		}
 	}
 	if c, b := desde("10.0.0.2", base("0223 15-590-3118")); c != 200 || !strings.Contains(b, `"resultado":"enviada"`) {
 		t.Fatalf("solo WhatsApp: %d %s", c, b)
@@ -580,6 +584,26 @@ func TestContactoSoloWhatsapp(t *testing.T) {
 	_, _ = desde("10.0.0.9", base("223 111 4444"))
 	if c, b := desde("10.0.0.9", base("223 111 5555")); c != 429 {
 		t.Errorf("la cuarta desde la misma IP con otro teléfono: %d %s", c, b)
+	}
+}
+
+// El número local de siete dígitos, como lo dice la gente de acá, pasa: el
+// normalizador le pone el 223.
+func TestTelefonoDeLaConsulta(t *testing.T) {
+	casos := map[string]bool{
+		"590-3118":           true,
+		"15 590-3118":        true,
+		"0223 15-590-3118":   true,
+		"+54 9 11 2345-6789": true,
+		"12345678":           false,
+		"11 2345 678":        false,
+		"1234":               false,
+	}
+	for tel, vale := range casos {
+		c := Consulta{Nombre: "Raúl Pérez", Telefono: tel, Motivo: "presupuesto", Mensaje: "12 placas de fenólico de 18"}
+		if err := c.validar(); (err == nil) != vale {
+			t.Errorf("%q: se esperaba válido=%v y dio %v", tel, vale, err)
+		}
 	}
 }
 

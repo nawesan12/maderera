@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { enlaceDeConsulta } from "@/lib/catalogo/consulta";
+import { MOTIVOS, textoDeContacto } from "@/lib/contacto/consulta";
 import { enviarConsulta, type EstadoConsulta } from "./actions";
 
 /**
@@ -24,15 +26,6 @@ import { enviarConsulta, type EstadoConsulta } from "./actions";
  * que baja al navegador: el resto —los datos de cada sucursal, los accesos
  * directos, el texto— se arma en el servidor.
  */
-
-const MOTIVOS = [
-  { valor: "presupuesto", etiqueta: "Pedido de presupuesto" },
-  { valor: "stock", etiqueta: "Consulta de stock" },
-  { valor: "envio", etiqueta: "Envíos y entregas" },
-  { valor: "corte", etiqueta: "Servicio de corte" },
-  { valor: "profesional", etiqueta: "Cuenta de profesional" },
-  { valor: "otro", etiqueta: "Otra consulta" },
-];
 
 export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
   const [estado, accion, enviando] = useActionState<EstadoConsulta, FormData>(
@@ -128,7 +121,7 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
                 type="tel"
                 inputMode="tel"
                 autoComplete="tel"
-                placeholder="223 590-3118"
+                placeholder="223 15 123-4567"
                 defaultValue={valor("telefono")}
                 aria-invalid={errorDe("telefono") || errorDelPar ? true : undefined}
                 aria-describedby={describe("telefono")}
@@ -205,9 +198,13 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
           {enviando ? "Enviando…" : "Enviar consulta"}
         </Button>
 
-        {/* Si el correo no salió, WhatsApp pasa a ser la acción principal. */}
+        {/* Si el correo no salió, WhatsApp pasa a ser la acción principal y
+            se abre con lo que ya escribió: no tiene que tipearlo de nuevo. */}
         <BotonWhatsapp
-          enlace={`https://wa.me/${whatsapp}`}
+          enlace={(() => {
+            const texto = estado.usarWhatsapp ? textoDeContacto(estado.valores) : null;
+            return texto ? enlaceDeConsulta(whatsapp, texto) : `https://wa.me/${whatsapp}`;
+          })()}
           variante={estado.usarWhatsapp ? "lleno" : "secundario"}
           className="sm:flex-1"
         >

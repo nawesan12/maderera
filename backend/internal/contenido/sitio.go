@@ -233,12 +233,6 @@ type Consulta struct {
 // WhatsApp) o fallida.
 type ResultadoConsulta string
 
-// MinimoDeDigitos es lo menos que tiene un teléfono que sirve para contestar:
-// un fijo de Mar del Plata sin la característica tiene seis, uno con
-// característica diez. Ocho deja pasar «223 4567890» a medias y frena «1» o
-// «1234», que con el correo opcional pasaban como contacto válido.
-const MinimoDeDigitos = 8
-
 // validar sigue el esquema de zod del TS, con los mismos mensajes.
 //
 // **WhatsApp o correo, alguno de los dos** (hallazgo 47, 18/11/2026). El
@@ -257,8 +251,15 @@ func (c *Consulta) validar() error {
 	if c.Email == "" && c.Telefono == "" {
 		return plataforma.Invalido(map[string]string{"contacto": "Dejanos un WhatsApp o un correo para contestarte."})
 	}
-	if c.Telefono != "" && (largo(c.Telefono) > 40 || len(whatsapp.SoloDigitos(c.Telefono)) < MinimoDeDigitos) {
-		return plataforma.Invalido(map[string]string{"telefono": "Revisá el WhatsApp: con la característica, como 223 590-3118."})
+	// El WhatsApp vale si se le puede contestar con un toque: lo decide el
+	// mismo normalizador que arma el enlace del correo y la clave del
+	// limitador (corrección de T5). Antes se contaban ocho dígitos, y eso
+	// rechazaba «590-3118» —un número de acá de siete, que se completa con
+	// el 223— y dejaba pasar «12345678», que llegaba sin el botón para
+	// contestar mientras a la persona se le decía «te contestamos por
+	// WhatsApp». El ejemplo del mensaje no es el número de la casa.
+	if c.Telefono != "" && (largo(c.Telefono) > 40 || whatsapp.AWaId(c.Telefono) == "") {
+		return plataforma.Invalido(map[string]string{"telefono": "Revisá el WhatsApp: con la característica, como 223 15 123-4567."})
 	}
 	if c.Email != "" && !plataforma.CorreoValido(c.Email) {
 		return plataforma.Invalido(map[string]string{"email": "Revisá el correo: es por donde te contestamos."})

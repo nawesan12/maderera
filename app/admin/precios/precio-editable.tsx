@@ -16,10 +16,19 @@ export function PrecioEditable({
   variantId,
   priceListId,
   valor,
+  rotulo,
+  tactil = false,
 }: {
   variantId: string;
   priceListId: string;
   valor: string;
+  /** De qué lista es («Lista», «Profesional»): va en lo que lee el lector de pantalla. */
+  rotulo?: string;
+  /**
+   * En el teléfono se toca con el dedo: 44 px de alto como mínimo, o se
+   * abre el precio de al lado. Un precio mal cargado es plata perdida.
+   */
+  tactil?: boolean;
 }) {
   const router = useRouter();
   const [editando, setEditando] = useState(false);
@@ -66,6 +75,9 @@ export function PrecioEditable({
     });
   }
 
+  const alto = tactil ? "min-h-11 py-2" : "py-1";
+  const de = rotulo ? ` de ${rotulo.toLowerCase()}` : "";
+
   if (!editando) {
     return (
       <button
@@ -73,8 +85,8 @@ export function PrecioEditable({
           setTexto(valor);
           setEditando(true);
         }}
-        className="tabular w-full rounded-md px-2 py-1 text-right text-base transition-colors hover:bg-muted"
-        aria-label={`Editar precio, actualmente ${formateado}`}
+        className={`tabular w-full whitespace-nowrap rounded-md px-2 ${alto} text-right text-base transition-colors hover:bg-muted`}
+        aria-label={`Editar precio${de}, actualmente ${formateado}`}
       >
         {Number(valor) > 0 ? formateado : "—"}
       </button>
@@ -100,8 +112,8 @@ export function PrecioEditable({
          al campo siguiente como en el resto del panel. Ver
          `components/admin/enter-avanza.tsx`. */
       data-enter="enviar"
-      className="tabular w-full rounded-md border border-brand-orange bg-card px-2 py-1 text-right text-base outline-none"
-      aria-label="Nuevo precio"
+      className={`tabular w-full rounded-md border border-brand-orange bg-card px-2 ${alto} text-right text-base outline-none`}
+      aria-label={`Nuevo precio${de}`}
     />
   );
 }

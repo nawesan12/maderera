@@ -291,8 +291,12 @@ export default async function CajaPage({
             titulo="No se emitió nada en el mes elegido"
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-base">
+          <>
+          {/* La tabla, de `md` para arriba; en el teléfono, dos renglones por
+              venta. Apilada era «Cuándo:», «Venta:», «Total:» uno abajo del
+              otro, y el número del pedido se partía en «PED-» / «1086». */}
+          <div className="hidden overflow-x-auto md:block">
+            <table data-tabla="fija" className="w-full min-w-[820px] text-base">
               <thead>
                 <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-semibold">Cuándo</th>
@@ -337,38 +341,106 @@ export default async function CajaPage({
                     </td>
                     <td className="tabular px-5 py-3 text-right font-semibold">
                       {formatearMonto(Number(v.total))}
+                      {v.medioPago && (
+                        <span className="block text-sm font-normal text-muted-foreground">
+                          {MEDIOS[v.medioPago] ?? v.medioPago}
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <span className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-sm">
-                        <a
-                          href={`/ticket/${v.orderId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-brand-orange hover:underline"
-                        >
-                          Ticket
-                        </a>
-                        {v.invoiceId && (
-                          <Link
-                            href={`/admin/facturacion/${v.invoiceId}`}
-                            className="hover:text-brand-orange hover:underline"
-                          >
-                            {nombreComprobante(v.invoiceTipo as TipoComprobante)}{" "}
-                            <span className="tabular">
-                              {String(v.invoicePuntoVenta).padStart(4, "0")}-
-                              {String(v.invoiceNumero).padStart(8, "0")}
-                            </span>
-                          </Link>
-                        )}
-                      </span>
+                      <Papeles venta={v} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          <ul className="divide-y divide-linea md:hidden">
+            {emitido.map((v) => (
+              <li key={v.orderId} className="px-4 py-3">
+                <p className="flex items-baseline justify-between gap-3">
+                  <Link
+                    href={`/admin/pedidos/${v.orderId}`}
+                    className="tabular whitespace-nowrap font-medium hover:text-brand-orange hover:underline"
+                  >
+                    {v.numero}
+                  </Link>
+                  <span className="tabular whitespace-nowrap font-semibold">
+                    {formatearMonto(Number(v.total))}
+                  </span>
+                </p>
+                {/* Con qué pagó va a la vista: efectivo o transferencia es
+                    lo primero que se mira para que no falte plata. */}
+                <p className="mt-0.5 flex items-baseline gap-3 text-sm text-muted-foreground">
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="tabular">
+                      {v.createdAt.toLocaleTimeString("es-AR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: ZONA,
+                      })}
+                    </span>
+                    {" · "}
+                    {v.cliente}
+                    {v.operadora && ` · ${v.operadora}`}
+                  </span>
+                  {v.medioPago && (
+                    <span className="shrink-0 whitespace-nowrap">
+                      {MEDIOS[v.medioPago] ?? v.medioPago}
+                    </span>
+                  )}
+                </p>
+                <div className="mt-1">
+                  <Papeles venta={v} />
+                </div>
+              </li>
+            ))}
+          </ul>
+          </>
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * El ticket y la factura de una venta: la usan la tabla y la lista del
+ * teléfono, para que no se desfasen.
+ */
+function Papeles({
+  venta: v,
+}: {
+  venta: {
+    orderId: string;
+    invoiceId: string | null;
+    invoiceTipo: string | null;
+    invoicePuntoVenta: number | null;
+    invoiceNumero: number | null;
+  };
+}) {
+  return (
+    <span className="flex flex-wrap gap-x-4 gap-y-1 text-sm md:justify-end md:gap-x-3">
+      <a
+        href={`/ticket/${v.orderId}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex min-h-11 items-center hover:text-brand-orange hover:underline md:min-h-0"
+      >
+        Ticket
+      </a>
+      {v.invoiceId && (
+        <Link
+          href={`/admin/facturacion/${v.invoiceId}`}
+          className="inline-flex min-h-11 items-center gap-1 whitespace-nowrap hover:text-brand-orange hover:underline md:min-h-0"
+        >
+          {nombreComprobante(v.invoiceTipo as TipoComprobante)}{" "}
+          <span className="tabular">
+            {String(v.invoicePuntoVenta).padStart(4, "0")}-
+            {String(v.invoiceNumero).padStart(8, "0")}
+          </span>
+        </Link>
+      )}
+    </span>
   );
 }

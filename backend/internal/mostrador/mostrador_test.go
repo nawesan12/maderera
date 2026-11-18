@@ -234,8 +234,13 @@ func TestVentaEnLineaYAnulacion(t *testing.T) {
 	if st != 422 {
 		t.Fatalf("anular sin motivo: %d %v", st, m)
 	}
+	// La venta tenía factura sin CAE: no lleva nota de crédito, se da de baja.
+	if _, err := e.pool.Exec(ctx, `INSERT INTO invoices (tipo, punto_venta, numero, estado, receptor_nombre, total, order_id)
+		VALUES ('factura_b', 3, 1, 'emitida', 'Consumidor final', 81000.9, $1)`, pedido); err != nil {
+		t.Fatal(err)
+	}
 	st, m, _ = pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas/"+pedido+"/anular", map[string]any{"motivo": "Se equivocó de medida"})
-	if st != 200 || m["ok"] != "Venta anulada." {
+	if st != 200 || m["ok"] != "Venta anulada." || m["facturaPendiente"] == nil || m["facturaSinCae"] != true {
 		t.Fatalf("anular: %d %v", st, m)
 	}
 	if q := e.num(t, `select qty::float8 from inventory where variant_id = $1 and branch_id = $2`, e.placa, e.central); q != 100 {

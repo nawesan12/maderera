@@ -26,6 +26,9 @@ se cargue el certificado, hay que resolver lo pendiente de una de dos formas.
    hizo, cuándo y por qué.
 
 Nada de esto se hace solo: cada comprobante lo decide alguien desde el panel.
+Una venta nueva del mostrador no arrastra lo pendiente de días anteriores:
+queda esperando hasta que esto se resuelva. Un comprobante de una venta que
+se anuló no se manda a ARCA: se da de baja.
 
 **A decidir:** ¿se autoriza todo lo pendiente con fecha de hoy, o prefieren
 dar de baja y reemitir alguna parte (por ejemplo, lo de meses ya cerrados)?

@@ -90,6 +90,7 @@ paths:
                 properties:
                   ok: { type: string }
                   facturaPendiente: { type: string }
+                  facturaSinCae: { type: boolean }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/mostrador/buscar:
     get:

@@ -19,7 +19,10 @@ type ResultadoAnulacion struct {
 	Ok               bool
 	Error            string
 	FacturaPendiente *string
-	Numero           string
+	// FacturaSinCAE: la pendiente no tiene CAE, y sin CAE no hay nota de
+	// crédito posible (no hay nada que acreditar ante ARCA): se da de baja.
+	FacturaSinCAE bool
+	Numero        string
 }
 
 // Anular es anularVentaDeMostrador: **nada se borra, todo se revierte.** El
@@ -234,11 +237,13 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 	var factura struct {
 		id     string
 		estado string
+		sinCAE bool
 	}
-	err = tx.QueryRow(ctx, `SELECT id, estado::text FROM invoices WHERE order_id = $1 LIMIT 1`, id).Scan(&factura.id, &factura.estado)
+	err = tx.QueryRow(ctx, `SELECT id, estado::text, cae IS NULL FROM invoices WHERE order_id = $1 LIMIT 1`, id).Scan(&factura.id, &factura.estado, &factura.sinCAE)
 	r := ResultadoAnulacion{Ok: true, Numero: p.numero}
 	if err == nil && factura.estado != "anulada" {
 		r.FacturaPendiente = &factura.id
+		r.FacturaSinCAE = factura.sinCAE
 	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return ResultadoAnulacion{}, err
 	}

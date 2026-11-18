@@ -565,6 +565,7 @@ export interface operations {
                     "application/json": {
                         ok: string;
                         facturaPendiente?: string;
+                        facturaSinCae?: boolean;
                     };
                 };
             };

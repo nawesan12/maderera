@@ -460,10 +460,10 @@ func (a *API) AutorizarComprobante(ctx context.Context, r facturacionapi.Autoriz
 // autorizarYAnotar pide el CAE, deja el intento en la bitácora y, si salió,
 // encola el aviso al cliente.
 func (a *API) autorizarYAnotar(ctx context.Context, ses *auth.Sesion, id string) (respuesta, error) {
-	m, movidas, err := a.s.AutorizarConFechas(ctx, id)
+	m, cadena, err := a.s.AutorizarConFechas(ctx, id)
 	// Las fechas se movieron aunque ARCA después haya rechazado: quedan
 	// anotadas igual.
-	for _, f := range movidas {
+	for _, f := range cadena.Movidas {
 		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "factura", f.InvoiceID,
 			f.Etiqueta+" sale a ARCA con fecha "+f.A.In(fiscal.Argentina).Format("02/01/2006")+" (se emitió el "+
 				f.De.In(fiscal.Argentina).Format("02/01/2006")+")", f)
@@ -477,11 +477,15 @@ func (a *API) autorizarYAnotar(ctx context.Context, ses *auth.Sesion, id string)
 		desc = "Intentó autorizar un comprobante en ARCA y falló: " + motivo
 	}
 	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "factura", id, desc, nil)
+	// Cada comprobante que la cadena autorizó (este y los anteriores) tiene
+	// su cliente esperando el definitivo, aunque ARCA después rechace este.
+	for _, autorizado := range cadena.Autorizados {
+		if err := a.s.AvisarFactura(ctx, autorizado); err != nil {
+			a.s.log.Error("encolando el aviso de la factura", "invoiceId", autorizado, "error", err)
+		}
+	}
 	if motivo != "" {
 		return ok(map[string]string{"error": motivo}), nil
-	}
-	if err := a.s.AvisarFactura(ctx, id); err != nil {
-		a.s.log.Error("encolando el aviso de la factura", "invoiceId", id, "error", err)
 	}
 	return mensaje(m), nil
 }
@@ -667,7 +671,7 @@ func (a *API) AutorizarComprobanteInterno(ctx context.Context, r facturacionapi.
 	if err := a.soloInterno(ctx); err != nil {
 		return nil, err
 	}
-	m, err := a.s.Autorizar(ctx, r.Id.String())
+	m, err := a.s.AutorizarAlEmitir(ctx, r.Id.String())
 	if motivo := Mensaje(err); motivo != "" {
 		return ok(map[string]string{"error": motivo}), nil
 	}

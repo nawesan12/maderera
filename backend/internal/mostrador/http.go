@@ -144,6 +144,7 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 	out := map[string]any{"ok": "Venta anulada."}
 	if res.FacturaPendiente != nil {
 		out["facturaPendiente"] = *res.FacturaPendiente
+		out["facturaSinCae"] = res.FacturaSinCAE
 	}
 	return ok(out), nil
 }

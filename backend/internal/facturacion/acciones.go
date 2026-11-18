@@ -530,7 +530,7 @@ func (s *Servicio) EmitirParaLaVenta(ctx context.Context, p PedidoDeComprobante)
 		}
 		return ResultadoComprobante{Aviso: "La venta quedó registrada, pero el comprobante no se pudo crear: " + m}, nil
 	}
-	if _, err := s.Autorizar(ctx, id); err != nil {
+	if _, err := s.AutorizarAlEmitir(ctx, id); err != nil {
 		m := Mensaje(err)
 		if m == "" {
 			m = "error desconocido"

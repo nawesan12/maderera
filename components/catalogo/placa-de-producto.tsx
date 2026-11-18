@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { TONOS, marcaDePlaca, tonoDePlaca } from "@/lib/catalogo/placa";
+import { TONOS, escalaDelRubro, marcaDePlaca, tonoDePlaca } from "@/lib/catalogo/placa";
 import { cn } from "@/lib/utils";
 
 /**
@@ -41,6 +41,10 @@ export function PlacaDeProducto({
     "--placa-fondo-oscuro": tono.oscuro.fondo,
     "--placa-texto-oscuro": tono.oscuro.texto,
   } as CSSProperties;
+  // Un rubro de una palabra larga («Terminaciones») se achica hasta entrar en
+  // el renglón; `overflow-wrap:anywhere` y el guion son la red para un rubro
+  // nuevo que pase la cuenta.
+  const escala = { "--escala-rubro": escalaDelRubro(rubro, tamano) } as CSSProperties;
 
   return (
     <span
@@ -61,9 +65,13 @@ export function PlacaDeProducto({
         )}
       </span>
       <span
+        lang="es"
+        style={escala}
         className={cn(
-          "line-clamp-2 font-extrabold uppercase leading-[0.98] tracking-[0.01em] text-balance",
-          tamano === "ficha" ? "text-[clamp(30px,6vw,46px)]" : "text-[clamp(24px,7vw,32px)] sm:text-[clamp(22px,2.2vw,28px)]",
+          "line-clamp-2 font-extrabold uppercase leading-[0.98] tracking-[0.01em] text-balance hyphens-auto [overflow-wrap:anywhere]",
+          tamano === "ficha"
+            ? "text-[length:calc(clamp(30px,6vw,46px)*var(--escala-rubro))]"
+            : "text-[length:calc(clamp(24px,7vw,32px)*var(--escala-rubro))] sm:text-[length:calc(clamp(22px,2.2vw,28px)*var(--escala-rubro))]",
         )}
       >
         {rubro}

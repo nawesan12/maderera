@@ -78,3 +78,40 @@ export function contraste(a: string, b: string): number {
   const [claro, oscuro] = [luminancia(a), luminancia(b)].sort((x, y) => y - x);
   return (claro + 0.05) / (oscuro + 0.05);
 }
+
+/*
+ * El largo del rubro estampado (corrección de T5).
+ *
+ * El rubro va en extrabold mayúscula y una palabra sola no se parte:
+ * «TERMINACIONES» a 72 px ocupaba unos 650 px en los 416 útiles de la imagen
+ * para compartir, y en la grilla de cuatro columnas se cortaba contra el
+ * borde. El tamaño se calcula por la **palabra más larga** y no por el largo
+ * total: «Pisos flotantes» tiene 15 letras y entra en dos renglones cómodos;
+ * «Terminaciones» tiene 13 y no entra en uno.
+ *
+ * ANCHO_DE_LETRA es el ancho medio de una mayúscula extrabold, en em, con
+ * margen para las anchas (M, W).
+ */
+export const ANCHO_DE_LETRA = 0.72;
+
+/** Cuántas letras entran en un renglón al tamaño base de cada placa. */
+export const LETRAS_POR_RENGLON = { tarjeta: 9, ficha: 13 } as const;
+
+/** El ancho útil del panel de la imagen para compartir: 520 − 2 × 52. */
+export const ANCHO_UTIL_OG = 416;
+
+export function palabraMasLarga(rubro: string): number {
+  return Math.max(0, ...rubro.split(/\s+/).map((p) => [...p].length));
+}
+
+/** Por cuánto achicar el tamaño base para que la palabra más larga entre. */
+export function escalaDelRubro(rubro: string, tamano: keyof typeof LETRAS_POR_RENGLON): number {
+  const largo = palabraMasLarga(rubro);
+  return largo <= LETRAS_POR_RENGLON[tamano] ? 1 : LETRAS_POR_RENGLON[tamano] / largo;
+}
+
+/** El tamaño del rubro en la imagen para compartir, en px. */
+export function tamanoDelRubroEnOg(rubro: string): number {
+  const largo = Math.max(1, palabraMasLarga(rubro));
+  return Math.min(72, Math.floor(ANCHO_UTIL_OG / (largo * ANCHO_DE_LETRA)));
+}

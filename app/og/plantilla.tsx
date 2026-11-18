@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import { urlAbsoluta } from "@/lib/seo";
-import { TONOS, marcaDePlaca, tonoDePlaca } from "@/lib/catalogo/placa";
+import { TONOS, marcaDePlaca, tamanoDelRubroEnOg, tonoDePlaca } from "@/lib/catalogo/placa";
 
 /**
  * La tarjeta que se ve al compartir un producto, una categoría o una sucursal.
@@ -82,6 +82,10 @@ export async function tarjeta({
   const cuerpo = conPanel ? (largo > 40 ? 50 : 60) : largo > 40 ? 60 : 72;
   const tono = placa && !foto ? TONOS[tonoDePlaca(placa.categoria)].claro : null;
   const linea = placa && !foto ? marcaDePlaca(placa.marca) : null;
+  // Con la placa a la izquierda, el antetítulo no repite lo que ya está
+  // estampado: era «MELAMINA» dos veces en la misma imagen.
+  const ante =
+    placa && !foto && antetitulo.trim().toLowerCase() === placa.rubro.trim().toLowerCase() ? "" : antetitulo;
 
   const png = new ImageResponse(
     (
@@ -126,7 +130,7 @@ export async function tarjeta({
             </div>
             <div
               style={{
-                fontSize: placa.rubro.length > 14 ? 58 : 72,
+                fontSize: tamanoDelRubroEnOg(placa.rubro),
                 fontWeight: 800,
                 lineHeight: 1,
                 textTransform: "uppercase",
@@ -147,20 +151,22 @@ export async function tarjeta({
             padding: conPanel ? "0 56px" : "0 72px",
           }}
         >
+          {ante && (
+            <div
+              style={{
+                fontSize: 26,
+                fontWeight: 700,
+                letterSpacing: 2,
+                color: NARANJA,
+                textTransform: "uppercase",
+                marginBottom: 18,
+              }}
+            >
+              {ante}
+            </div>
+          )}
           <div
             style={{
-              fontSize: 26,
-              fontWeight: 700,
-              letterSpacing: 2,
-              color: NARANJA,
-              textTransform: "uppercase",
-            }}
-          >
-            {antetitulo}
-          </div>
-          <div
-            style={{
-              marginTop: 18,
               fontSize: cuerpo,
               fontWeight: 700,
               color: TINTA,

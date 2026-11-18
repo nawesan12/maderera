@@ -26,15 +26,18 @@ export async function GET(
     .filter((n) => Number.isFinite(n) && n > 0);
   const desde = precios.length ? Math.min(...precios) : null;
 
+  const foto = await fotoParaTarjeta(producto.imagenes[0]);
   return tarjeta({
-    antetitulo: producto.subcategoryName ?? producto.categoryName,
+    // Con foto, el rubro; sin foto el rubro ya va en la placa y arriba del
+    // título queda la categoría madre (si es la misma, la plantilla lo saca).
+    antetitulo: foto ? (producto.subcategoryName ?? producto.categoryName) : producto.categoryName,
     titulo: producto.name,
     // Sin precio, la medida: lo mismo que la tarjeta del catálogo (hallazgo 26).
     detalle: desde
       ? `${precios.length > 1 ? "Desde " : ""}${precioEnTexto(desde)}`
       : (medidaPrincipal(producto.variantes.map((v) => v.label))?.texto ?? null),
     pie: "Mar del Plata",
-    foto: await fotoParaTarjeta(producto.imagenes[0]),
+    foto,
     placa: {
       rubro: producto.subcategory ?? producto.categoryName,
       categoria: producto.categorySlug,

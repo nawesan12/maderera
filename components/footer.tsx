@@ -152,7 +152,9 @@ export async function Footer() {
           <p>&copy; {anio} Maderera Juan B. Justo. Todos los derechos reservados.</p>
           {/* Obligación de la Ley 27.743, no un eslogan: el pie es el lugar donde
               se declara una vez para todo el sitio. */}
-          <p>Precios finales con IVA incluido &middot; Ley 27.743</p>
+          {/* La leyenda de la Ley 27.743 acompaña precios: sin tienda el sitio no
+              muestra ninguno. */}
+          {laTienda.activa && <p>Precios finales con IVA incluido &middot; Ley 27.743</p>}
         </div>
       </div>
     </footer>

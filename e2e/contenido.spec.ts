@@ -48,25 +48,31 @@ test("un banner cargado en el panel sale en la portada, y al borrarlo se va", as
   await expect.poll(async () => (await page.request.get("/").then((r) => r.text())).includes(titulo), { timeout: 20_000 }).toBe(false);
 });
 
-test("una reseña del negocio cargada a mano sale en la portada, y al borrarla se va", async ({ page }) => {
+// La portada muestra las reseñas desde tres: con una sola, «5,0 sobre 1
+// opinión» parecía un sitio sin terminar. Se cargan tres y se borran las tres.
+test("las reseñas del negocio cargadas a mano salen en la portada, y al borrarlas se van", async ({ page }) => {
   test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
-  const autor = `Prueba ${Date.now()}`;
-  await page.goto("/admin/contenido/resenas-negocio");
-
-  await page.locator("input[name=autor]").fill(autor);
-  await page.locator("textarea[name=texto]").fill("Muy buena atención y la madera llegó a tiempo.");
-  await interruptor(page, "Mostrarla en el sitio", true);
-  await page.getByRole("button", { name: "Guardar", exact: true }).click();
-  await expect(page.getByText("Publicada.").first()).toBeVisible();
+  const base = Date.now();
+  const autores = [0, 1, 2].map((n) => `Prueba ${base + n}`);
+  for (const autor of autores) {
+    await page.goto("/admin/contenido/resenas-negocio");
+    await page.locator("input[name=autor]").fill(autor);
+    await page.locator("textarea[name=texto]").fill("Muy buena atención y la madera llegó a tiempo.");
+    await interruptor(page, "Mostrarla en el sitio", true);
+    await page.getByRole("button", { name: "Guardar", exact: true }).click();
+    await expect(page.getByText("Publicada.").first()).toBeVisible();
+  }
 
   // Ver la nota del banner: la portada puede tardar una visita en rehacerse.
-  await expect.poll(async () => (await page.request.get("/").then((r) => r.text())).includes(autor), { timeout: 20_000 }).toBe(true);
+  await expect.poll(async () => (await page.request.get("/").then((r) => r.text())).includes(autores[0]), { timeout: 20_000 }).toBe(true);
 
-  await page.goto("/admin/contenido/resenas-negocio");
-  await page.getByRole("button", { name: `Borrar la reseña de ${autor}` }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Borrar la reseña" }).click();
-  await expect(page.getByRole("button", { name: `Borrar la reseña de ${autor}` })).toHaveCount(0);
-  await expect.poll(async () => (await page.request.get("/").then((r) => r.text())).includes(autor), { timeout: 20_000 }).toBe(false);
+  for (const autor of autores) {
+    await page.goto("/admin/contenido/resenas-negocio");
+    await page.getByRole("button", { name: `Borrar la reseña de ${autor}` }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Borrar la reseña" }).click();
+    await expect(page.getByRole("button", { name: `Borrar la reseña de ${autor}` })).toHaveCount(0);
+  }
+  await expect.poll(async () => (await page.request.get("/").then((r) => r.text())).includes(autores[0]), { timeout: 20_000 }).toBe(false);
 });
 
 test("un documento publicado sale en /documentacion, y dado de baja se va", async ({ page }) => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { MessageCircle } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 /**
  * El enlace baja por prop porque el número es editable desde el panel y esto
@@ -14,13 +15,17 @@ import { MessageCircle } from "lucide-react";
  * aparecer. Con `prefers-reduced-motion` no se anima nada.
  */
 export function WhatsAppButton({ enlace }: { enlace: string }) {
+  // En /corte la página tiene su propio «Mandar por WhatsApp», y en el
+  // teléfono el botón flotante tapaba el canto y la veta de la pieza.
+  const ruta = usePathname();
+  if (ruta.startsWith("/corte")) return null;
   return (
     <a
       href={enlace}
       aria-label="Escribinos por WhatsApp"
       target="_blank"
       rel="noopener noreferrer"
-      className="fixed bottom-6 right-6 z-50 flex h-14 w-14 animate-in items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition-all zoom-in fill-mode-backwards duration-300 [animation-delay:1s] hover:scale-110 hover:shadow-xl active:scale-95 motion-reduce:animate-none"
+      className="fixed bottom-4 right-4 z-50 flex h-12 w-12 sm:bottom-6 sm:right-6 sm:h-14 sm:w-14 animate-in items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition-all zoom-in fill-mode-backwards duration-300 [animation-delay:1s] hover:scale-110 hover:shadow-xl active:scale-95 motion-reduce:animate-none"
     >
       <MessageCircle className="h-7 w-7" />
     </a>

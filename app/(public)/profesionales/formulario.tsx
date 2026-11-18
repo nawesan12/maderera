@@ -9,7 +9,7 @@ const inicial: EstadoSolicitud = {};
 const RUBROS = [
   { valor: "arquitecto", texto: "Arquitectura" },
   { valor: "constructora", texto: "Constructora" },
-  { valor: "carpintero", texto: "Carpintería" },
+  { valor: "carpintero", texto: "Carpintería y mueblería" },
   { valor: "disenador", texto: "Diseño de interiores" },
   { valor: "woodframer", texto: "Wood frame" },
   { valor: "instalador", texto: "Instalación" },
@@ -102,7 +102,7 @@ export function FormularioProfesional({
                     name="rubro"
                     value={r.valor}
                     required
-                    defaultChecked={(previo?.rubro || "arquitecto") === r.valor}
+                    defaultChecked={previo?.rubro === r.valor}
                     className="sr-only"
                   />
                   {r.texto}

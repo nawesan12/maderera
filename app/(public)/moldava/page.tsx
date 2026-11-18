@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Factory, Ruler, Truck } from "lucide-react";
@@ -42,19 +43,17 @@ const PROCESO = [
   {
     icono: Factory,
     titulo: "Producción propia",
-    detalle:
-      "Moldava nació dentro del proceso productivo de la maderera: la línea completa de molduras y listonería se elabora en nuestra planta.",
+    detalle: "Hecha en nuestra planta.",
   },
   {
     icono: Ruler,
     titulo: "Sistema Finger Joint",
-    detalle:
-      "El dentado y pegado elimina las imperfecciones de la madera y la vuelve a ensamblar. El resultado es pino sin nudos, en piezas uniformes de 3,05 m de largo estándar.",
+    detalle: "Pino sin nudos, en piezas de 3,05 m.",
   },
   {
     icono: Truck,
     titulo: "Mayorista con entrega en puerta",
-    detalle: `Se comercializa a consumidor final y a clientes mayoristas de ${ALCANCE_MOLDAVA}, con coordinación de envíos y entregas.`,
+    detalle: `Entrega en puerta en ${ALCANCE_MOLDAVA}.`,
   },
 ];
 
@@ -93,6 +92,7 @@ export default async function MoldavaPage() {
       />
 
       <EncabezadoPublico
+        foto="/fotos/photo-1571062618385-7cf10f16a2f4.jpg"
         titulo="Moldava"
         bajada="Nuestra línea propia de molduras y listonería en pino finger joint."
       />
@@ -129,21 +129,31 @@ export default async function MoldavaPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-3">
-          {PROCESO.map((paso) => (
-            <article
-              key={paso.titulo}
-              className="rounded-[14px] superficie p-6"
-            >
-              <span className="flex h-11 w-11 items-center justify-center rounded-[11px] bg-naranja-claro text-acento-texto">
-                <paso.icono className="h-5 w-5" />
-              </span>
-              <h2 className="mt-4 text-lg font-bold">{paso.titulo}</h2>
-              <p className="mt-2 text-[15px] leading-relaxed text-texto-2">
-                {paso.detalle}
-              </p>
-            </article>
-          ))}
+        {/* La moldura a la vista y el proceso en tres renglones: eran tres
+            tarjetas de párrafo y ninguna foto del producto propio. */}
+        <section className="grid items-center gap-8 lg:grid-cols-[1.2fr_1fr]">
+          <div className="relative h-[300px] overflow-hidden rounded-2xl sm:h-[420px]">
+            <Image
+              src="/fotos/photo-1764283824453-02cd00e49143.jpg"
+              alt="Moldura de pino colocada en el encuentro de pared y techo"
+              fill
+              className="object-cover"
+              sizes="(max-width: 1024px) 100vw, 55vw"
+            />
+          </div>
+          <ul className="space-y-6">
+            {PROCESO.map((paso) => (
+              <li key={paso.titulo} className="flex items-center gap-4">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-naranja-claro text-acento-texto">
+                  <paso.icono className="h-6 w-6" />
+                </span>
+                <span>
+                  <h2 className="text-xl font-bold tracking-[-0.01em]">{paso.titulo}</h2>
+                  <p className="text-[15px] text-texto-2">{paso.detalle}</p>
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
 
         <section>
@@ -152,8 +162,8 @@ export default async function MoldavaPage() {
               <h2 className="text-2xl font-bold">La línea</h2>
               <p className="mt-0.5 text-[15px] text-texto-2">
                 {productos.length > 0
-                  ? "Zócalos, marcos, cornisas y listonería, con stock por sucursal."
-                  : "Estamos cargando el catálogo de la línea. Mientras tanto, consultanos por WhatsApp."}
+                  ? "Zócalos, marcos, cornisas y listonería."
+                  : "Consultanos la línea por WhatsApp."}
               </p>
             </div>
             <Link
@@ -174,24 +184,6 @@ export default async function MoldavaPage() {
           )}
         </section>
 
-        <section className="rounded-[14px] border border-linea bg-chip p-8 text-center">
-          <h2 className="text-xl font-bold">Armamos tu cotización</h2>
-          <p className="mx-auto mt-2 max-w-xl text-[15px] leading-relaxed text-texto-2">
-            La línea completa se entrega en puerta en {ALCANCE_MOLDAVA}, con
-            coordinación de envíos. Escribinos y la armamos con tu lista de
-            precios.
-          </p>
-          <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <a
-              href={whatsapp}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-11 items-center rounded-[10px] bg-accion px-5 font-semibold text-white transition-colors hover:bg-accion-hover"
-            >
-              Consultar por WhatsApp
-            </a>
-          </div>
-        </section>
       </div>
     </div>
   );

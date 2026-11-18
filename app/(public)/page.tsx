@@ -10,7 +10,8 @@ import {
   MessageCircle,
   Phone,
   Scissors,
-  Warehouse,
+  Search,
+  Truck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -113,26 +114,24 @@ export default async function HomePage() {
 
       {portada.ofertas.length > 0 && <Ofertas productos={portada.ofertas} />}
 
-      <BannerCorte />
-
-      <MediosDePago promos={promos} escalasPago={escalasPago} />
-
+      {/* Primero qué se vende: los medios de pago, con seis promos
+          bancarias, empujaban las categorías al tercer pantallazo del
+          celular. */}
       <Categorias categorias={portada.categorias} />
 
       <Destacados productos={portada.destacados} />
 
-      <Herramientas tienda={laTienda} />
+      <BannerCorte />
+
+      <ComoComprar tienda={laTienda} />
+
+      <MediosDePago promos={promos} escalasPago={escalasPago} />
 
       <ResenasDelNegocio resenas={resenas} resumen={resumenResenas} />
 
-      <BannerProfesionales sucursales={sucursales} />
+      <BannerProfesionales />
 
-      <Historia
-        anios={numeros.anios}
-        productos={numeros.productos}
-        sucursales={numeros.sucursales}
-        rubros={numeros.rubros}
-      />
+      <Historia anios={numeros.anios} />
 
 
       <Sucursales sucursales={sucursales} />
@@ -356,11 +355,14 @@ function BannerCorte() {
                 </Link>
               </div>
             </div>
-            <div
-              className="relative hidden min-h-[230px] bg-[repeating-linear-gradient(-45deg,#3a352f_0_10px,#332f29_10px_20px)] md:block"
-              aria-hidden="true"
-            >
-              <Scissors className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 text-white/10" />
+            <div className="relative order-first min-h-[200px] md:order-none md:min-h-[260px]" aria-hidden="true">
+              <Image
+                src="/fotos/photo-1631396328075-9c65a7406f09.jpg"
+                alt=""
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 40vw"
+              />
             </div>
           </div>
         </div>
@@ -444,7 +446,7 @@ function MediosDePago({
               <p className="text-[14px] text-white/70">
                 {mediosDeContado.charAt(0).toUpperCase() +
                   mediosDeContado.slice(1)}
-                . Se aplica solo en el carrito y en el mostrador.
+                .
               </p>
             </div>
           </div>
@@ -453,7 +455,9 @@ function MediosDePago({
         <MarcasQueAceptamos />
 
         {promos.length > 0 && (
-          <div className="mt-[18px] grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
+          // Una fila que se desliza: apiladas, seis promos ocupaban 1.500 px
+          // del celular.
+          <div className="-mx-4 mt-[18px] flex snap-x gap-[18px] overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
             {promos.map((p) => {
               // Sin imagen cargada, el logo fijo de la marca si es una de
               // las conocidas; si tampoco, el nombre escrito.
@@ -461,7 +465,8 @@ function MediosDePago({
               return (
               <article
                 key={p.id}
-                className="flex flex-col rounded-2xl superficie px-5 py-[18px]"
+                title={p.detalle ?? undefined}
+                className="flex w-[260px] shrink-0 snap-start flex-col rounded-2xl superficie px-5 py-[18px]"
               >
                 {/* El logo del banco, si lo cargaron. Se reconoce antes que
                     el nombre escrito, que es para lo que la clienta lo pidió.
@@ -491,7 +496,7 @@ function MediosDePago({
                   {p.titulo}
                 </h3>
                 {p.detalle && (
-                  <p className="mt-2 text-[13.5px] leading-relaxed text-texto-2">
+                  <p className="mt-2 line-clamp-2 text-[13.5px] leading-relaxed text-texto-2">
                     {p.detalle}
                   </p>
                 )}
@@ -567,7 +572,8 @@ function LogoDeMarca({
 }
 
 /**
- * Portal de profesionales y las dos sucursales.
+ * Portal de profesionales. Al lado iba «Dos sucursales en la ciudad», que la
+ * portada ya muestra abajo con sus fotos: el local aparecía tres veces.
  *
  * **Acá había una escala de descuentos por cantidad —3 %, 5 %, 8 % desde 10,
  * 25 y 50 unidades— y la maderera no trabaja así.** Lo que tiene una cuenta
@@ -578,35 +584,17 @@ function LogoDeMarca({
  * Si algún día existe de verdad, se anuncia con los números de la base y no
  * con ejemplos escritos acá.
  */
-function BannerProfesionales({
-  sucursales,
-}: {
-  sucursales: Awaited<ReturnType<typeof listarSucursalesPublicas>>;
-}) {
-  /*
-   * La foto sale de la ficha de la sucursal si está cargada, y esa es la que
-   * vale: es el local de verdad. Mientras no haya ninguna, va madera apilada.
-   *
-   * Antes el respaldo era una veta dibujada, para no hacer pasar una foto
-   * ajena por el local. El encuadre lo resuelve: se ve el material, no una
-   * fachada, así que no afirma «este es nuestro depósito» —eso lo dice el
-   * texto, y lo que muestra es cierto: hay stock propio—. En cuanto se cargue
-   * la foto de Casa Central o del Aserradero, esta desaparece sola.
-   */
-  const foto =
-    sucursales.find((s) => s.imagenUrl)?.imagenUrl ??
-    "/fotos/photo-1634672652995-ee7525bce595.jpg";
-
+function BannerProfesionales() {
   return (
-    <section className="bg-sitio-fondo pb-[48px]">
+    <section className="bg-sitio-fondo py-[48px]">
       <div className="contenedor">
-        <div className="grid gap-[18px] lg:grid-cols-2">
-          <article className="flex flex-col overflow-hidden rounded-2xl border border-linea bg-sitio-alt">
+        <div>
+          <article className="superficie grid overflow-hidden rounded-2xl md:grid-cols-2">
             {/* La foto arriba: son carpinteros trabajando con la madera que
                 vende la casa, que es exactamente a quién le habla el bloque.
                 `priority` no: está abajo del hero y cargarla antes le saca
                 ancho de banda a lo primero que se ve. */}
-            <div className="relative h-[190px] shrink-0">
+            <div className="relative h-[220px] md:h-auto md:min-h-[320px]">
               <Image
                 src="/fotos/photo-1773430272778-28c224216811.jpg"
                 alt=""
@@ -616,7 +604,7 @@ function BannerProfesionales({
               />
             </div>
 
-            <div className="flex flex-1 flex-col px-8 py-8 sm:px-[34px]">
+            <div className="flex flex-col justify-center px-8 py-8 sm:px-[34px]">
               <span className="inline-block w-fit rounded-full bg-naranja-claro px-[11px] py-[5px] text-xs font-bold uppercase tracking-[0.08em] text-acento-sobre-claro">
                 Portal profesionales
               </span>
@@ -624,9 +612,7 @@ function BannerProfesionales({
                 Tu propia lista de precios
               </h3>
               <p className="mt-2 text-[15.5px] leading-relaxed text-texto-2">
-                Carpinteros, arquitectos y constructoras compran con la lista
-                que les corresponde y con cuenta corriente. Se solicita una vez
-                y queda habilitada.
+                Precios de gremio y cuenta corriente.
               </p>
 
               <Link
@@ -638,129 +624,55 @@ function BannerProfesionales({
             </div>
           </article>
 
-          <article className="relative min-h-[340px] overflow-hidden rounded-2xl bg-brand-wood-light">
-            <Image
-              src={foto}
-              alt=""
-              fill
-              className="object-cover"
-              sizes="(max-width: 1024px) 100vw, 50vw"
-            />
-            <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(28_25_22_/_0.9),rgb(28_25_22_/_0.15)_60%,transparent)]" />
-            <div className="absolute inset-x-8 bottom-7 text-white">
-              <h3 className="text-[26px] font-bold tracking-[-0.025em]">
-                Dos sucursales en la ciudad
-              </h3>
-              <p className="mt-2 text-[15.5px] leading-snug text-white/80">
-                Casa Central sobre Juan B. Justo y el Aserradero, con corte y
-                stock propio.
-              </p>
-              <div className="mt-[18px] flex flex-wrap gap-2.5">
-                <Link
-                  href="/sucursales"
-                  className="flex h-[46px] items-center rounded-[10px] bg-white px-5 text-[15px] font-semibold text-oscuro-marca transition-colors hover:bg-white/90"
-                >
-                  Ver sucursales
-                </Link>
-              </div>
-            </div>
-          </article>
+
         </div>
       </div>
     </section>
   );
 }
 
-function Herramientas({ tienda }: { tienda: Tienda }) {
-  const todas = [
-    {
-      icono: Scissors,
-      titulo: "Corte a medida",
-      texto:
-        "Cargá el despiece en milímetros, mirá el plano y comprá el corte hecho.",
-      href: "/corte",
-      cta: "Armar mi corte",
-    },
-    {
-      icono: ClipboardList,
-      titulo: "Presupuesto online",
-      texto:
-        "Armá tu lista, pedí precio y seguí la respuesta desde tu cuenta.",
-      href: "/carrito",
-      cta: "Armar presupuesto",
-    },
-    {
-      icono: Warehouse,
-      titulo: "Consulta de stock",
-      texto:
-        "Mirá qué hay en Casa Central y en el Aserradero antes de venir.",
-      href: "/stock",
-      cta: "Ver stock",
-    },
+/**
+ * Cómo se compra, en tres pasos. Con la tienda apagada no hay carrito, y quien
+ * no conoce el negocio no sabía qué hacer después de mirar el catálogo: la
+ * sección de herramientas tenía una sola tarjeta, el corte, que repetía el
+ * banner de arriba.
+ */
+function ComoComprar({ tienda }: { tienda: Tienda }) {
+  const pasos = [
+    { icono: Search, titulo: "Elegí", texto: "Lo que necesitás, del catálogo." },
+    tienda.activa
+      ? { icono: ClipboardList, titulo: "Pedí", texto: "Armá el carrito o pedí presupuesto." }
+      : { icono: MessageCircle, titulo: "Escribinos", texto: "Te pasamos el precio por WhatsApp." },
+    { icono: Truck, titulo: "Retirá o te lo llevamos", texto: "En el local o en tu obra." },
   ];
-  // Sin tienda no hay carrito donde armar el presupuesto, y el stock no se
-  // muestra hasta que esté cargado.
-  const herramientas = todas.filter(
-    (h) => (h.href !== "/carrito" || tienda.activa) && (h.href !== "/stock" || tienda.stockVisible),
-  );
-
   return (
     <section className="bg-sitio-alt py-[48px]">
       <div className="contenedor">
-        <TituloSeccion>Herramientas</TituloSeccion>
-
-        <div className="mt-7 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
-          {herramientas.map((h) => (
-            <article
-              key={h.titulo}
-              className="overflow-hidden rounded-[14px] superficie shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]"
-            >
-              <span className="block h-1 bg-brand-orange" aria-hidden="true" />
-              <div className="px-[22px] pb-6 pt-[22px]">
-                <span className="flex h-[42px] w-[42px] items-center justify-center rounded-[11px] bg-naranja-claro text-acento-texto">
-                  <h.icono className="h-5 w-5" />
+        <TituloSeccion>Cómo comprar</TituloSeccion>
+        <ol className="mt-7 grid gap-[18px] sm:grid-cols-3">
+          {pasos.map((p, i) => (
+            <li key={p.titulo} className="superficie flex items-center gap-4 rounded-2xl px-6 py-5">
+              <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-naranja-claro text-acento-texto">
+                <p.icono className="h-6 w-6" />
+                <span className="tabular absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-accion text-[13px] font-bold text-white">
+                  {i + 1}
                 </span>
-                <h3 className="mt-4 text-xl font-bold tracking-[-0.02em]">
-                  {h.titulo}
-                </h3>
-                <p className="mt-[7px] text-[15px] leading-normal text-texto-2">
-                  {h.texto}
-                </p>
-                <Link
-                  href={h.href}
-                  className="mt-3.5 inline-block text-[15px] font-semibold text-acento-texto hover:underline"
-                >
-                  {h.cta} &rarr;
-                </Link>
-              </div>
-            </article>
+              </span>
+              <span>
+                <span className="block text-lg font-bold tracking-[-0.01em]">{p.titulo}</span>
+                <span className="block text-[15px] text-texto-2">{p.texto}</span>
+              </span>
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
     </section>
   );
 }
 
-function Historia({
-  anios,
-  productos,
-  sucursales,
-  rubros,
-}: {
-  anios: number;
-  productos: number;
-  sucursales: number;
-  rubros: number;
-}) {
-  // Los cuatro números son verificables. El que decía "1000+ Clientes" no lo
-  // era: nadie lo contó nunca, y es el tipo de cifra que un cliente grande
-  // pregunta de dónde sale.
-  const stats = [
-    { valor: String(anios), label: "Años" },
-    { valor: String(sucursales), label: "Sucursales" },
-    { valor: String(productos), label: "Productos" },
-    { valor: String(rubros), label: "Rubros" },
-  ];
+// Los números (años, sucursales, productos) ya están en el hero: acá se
+// repetían, con un párrafo genérico de «sinónimo de calidad».
+function Historia({ anios }: { anios: number }) {
 
   return (
     <section className="bg-sitio-fondo py-[48px]">
@@ -773,24 +685,10 @@ function Historia({
               construyendo confianza
             </TituloSeccion>
             <p className="mb-8 text-lg leading-relaxed text-texto-2">
-              Desde 1981, Maderera Juan B. Justo es sinónimo de calidad en Mar
-              del Plata. Con dos sucursales, marca propia Moldava y un equipo
-              apasionado por la madera, acompañamos cada proyecto de principio a
-              fin.
+              Desde 1981 en Mar del Plata. Dos sucursales y marca propia,
+              Moldava.
             </p>
 
-            <dl className="mb-8 grid grid-cols-2 gap-6 sm:grid-cols-4">
-              {stats.map((s) => (
-                <div key={s.label}>
-                  <dd className="tabular text-[30px] font-bold tracking-[-0.03em] text-acento-texto">
-                    {s.valor}
-                  </dd>
-                  <dt className="mt-1 text-xs uppercase tracking-[0.07em] text-texto-3">
-                    {s.label}
-                  </dt>
-                </div>
-              ))}
-            </dl>
 
             <Button
               render={<Link href="/nosotros" />}
@@ -803,16 +701,16 @@ function Historia({
           </div>
 
           <div className="relative">
-            <div className="relative h-[460px] overflow-hidden rounded-3xl">
+            <div className="relative h-[360px] overflow-hidden rounded-3xl lg:h-[480px]">
               <Image
-                src="/fotos/photo-1504307651254-35680f356dfd.jpg"
-                alt="Nuestro depósito"
+                src="/fotos/photo-1634672652995-ee7525bce595.jpg"
+                alt="Tablas apiladas en el depósito"
                 fill
                 className="object-cover"
                 sizes="(max-width: 1024px) 100vw, 50vw"
               />
             </div>
-            <div className="absolute -bottom-6 -left-6 max-w-[240px] rounded-2xl border bg-card p-6 shadow-2xl">
+            <div className="superficie absolute -bottom-6 -left-2 max-w-[240px] rounded-2xl p-6 sm:-left-6">
               <p className="mb-1 text-lg font-bold">Moldava</p>
               {/* Decía "distribución nacional", que venía del prototipo. El
                   alcance real es el que dio la clienta y vive en
@@ -838,16 +736,24 @@ function Sucursales({
     <section className="bg-sitio-fondo py-[48px]">
       <div className="contenedor">
         <TituloSeccion>Nuestras sucursales</TituloSeccion>
-        <p className="mb-7 mt-3 text-lg text-texto-2">
-          Dos puntos en Mar del Plata para retirar o pedir asesoramiento.
-        </p>
 
-        <div className="grid gap-[18px] md:grid-cols-2">
+        <div className="mt-7 grid gap-[18px] md:grid-cols-2">
           {sucursales.map((s) => (
             <Card
               key={s.id}
-              className="overflow-hidden rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]"
+              className="superficie overflow-hidden rounded-2xl border-0 py-0"
             >
+              {s.imagenUrl && (
+                <div className="relative h-48 sm:h-56">
+                  <Image
+                    src={s.imagenUrl}
+                    alt={`El local de ${s.nombre}`}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                  />
+                </div>
+              )}
               <CardContent className="p-7">
                 <h3 className="mb-3 text-xl font-bold">{s.nombre}</h3>
                 <ul className="space-y-2.5 text-sm">
@@ -864,6 +770,21 @@ function Sucursales({
                 </ul>
 
                 <div className="mt-5 flex flex-wrap gap-2.5">
+                  <Button
+                    render={
+                      <a
+                        href={s.mapUrl ?? `https://maps.google.com/?q=${encodeURIComponent(s.direccion)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      />
+                    }
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full"
+                  >
+                    <MapPin className="mr-1.5 h-3.5 w-3.5" />
+                    Cómo llegar
+                  </Button>
                   {/* El número sale de la sucursal de la tarjeta: estaba fijo
                       en el de Casa Central, así que "Llamar" en la ficha del
                       Aserradero discaba al otro local. */}
@@ -924,7 +845,7 @@ async function CierreCta() {
             ¿Arrancamos tu proyecto?
           </h2>
           <p className="mt-2.5 text-[17px] text-white/70">
-            Armá tu presupuesto online o escribinos y lo hacemos juntos.
+            Escribinos y lo armamos juntos.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">

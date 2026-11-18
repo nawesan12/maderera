@@ -69,10 +69,9 @@ export function PrecioDeTarjeta({
 
   if (sinPrecio) {
     return (
-      <div className="flex flex-col gap-1">
-        <p className="text-[19px] font-bold tracking-[-0.02em] text-foreground">A consultar</p>
-        <p className="text-xs text-texto-3">Te pasamos el precio por WhatsApp</p>
-      </div>
+      // El «te pasamos el precio por WhatsApp» lo dice el botón verde de la
+      // tarjeta; repetido en cada una, la grilla era un muro de texto.
+      <p className="text-[19px] font-bold tracking-[-0.02em] text-foreground">A consultar</p>
     );
   }
 

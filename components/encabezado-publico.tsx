@@ -23,8 +23,11 @@ export function EncabezadoPublico({
   bajada,
   migas = [],
   ruta,
+  foto,
 }: {
   titulo: string;
+  /** Foto de fondo, atenuada. Sin ella la banda era rayas y texto en todas las páginas. */
+  foto?: string;
   /** La ruta de la página: si está, emite las migas como datos estructurados. */
   ruta?: string;
   bajada?: string;
@@ -32,7 +35,7 @@ export function EncabezadoPublico({
   migas?: { nombre: string; ruta: string }[];
 }) {
   return (
-    <section className="relative overflow-hidden bg-oscuro-marca pb-[42px] pt-[38px] text-white">
+    <section className={`relative overflow-hidden bg-oscuro-marca text-white ${foto ? "pb-16 pt-12 lg:pb-20 lg:pt-14" : "pb-[42px] pt-[38px]"}`}>
       {ruta && (
         <DatosEstructurados
           datos={migasJsonLd([
@@ -42,10 +45,20 @@ export function EncabezadoPublico({
           ])}
         />
       )}
-      <div
-        className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.07)_0_12px,transparent_12px_24px)]"
-        aria-hidden="true"
-      />
+      {foto ? (
+        <>
+          <Image src={foto} alt="" fill priority className="object-cover" sizes="100vw" />
+          <div
+            className="absolute inset-0 bg-[linear-gradient(to_right,rgb(38_35_31_/_0.92),rgb(38_35_31_/_0.7)_55%,rgb(38_35_31_/_0.45))]"
+            aria-hidden="true"
+          />
+        </>
+      ) : (
+        <div
+          className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.07)_0_12px,transparent_12px_24px)]"
+          aria-hidden="true"
+        />
+      )}
       {/* La «M» del logo, grande y a un costado: la firma de la maderera en
           cada sección (notas del 9/11/2026). */}
       <Image
@@ -53,8 +66,9 @@ export function EncabezadoPublico({
         alt=""
         width={180}
         height={180}
-        className="pointer-events-none absolute -right-6 top-1/2 hidden -translate-y-1/2 rotate-[-8deg] rounded-[40px] opacity-[0.13] md:block"
+        className="pointer-events-none absolute -right-6 top-1/2 hidden data-[foto=true]:!hidden -translate-y-1/2 rotate-[-8deg] rounded-[40px] opacity-[0.13] md:block"
         aria-hidden="true"
+        data-foto={Boolean(foto)}
       />
       <div className="contenedor relative">
         <nav

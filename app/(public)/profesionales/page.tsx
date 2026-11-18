@@ -10,7 +10,6 @@ import {
   Check,
   Clock,
   FileText,
-  Lock,
   MessageCircle,
   Download,
   Package,
@@ -23,7 +22,6 @@ import { getSession } from "@/lib/dal/session";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import {
-  documentosReservados,
   documentosVisibles,
   estadoProfesional,
   eventosProximos,
@@ -41,7 +39,7 @@ export const metadata: Metadata = {
 };
 
 const BENEFICIOS = [
-  { icono: Percent, titulo: "Lista propia", detalle: "Precios de gremio en todo el catálogo." },
+  { icono: Percent, titulo: "Precios de gremio", detalle: "Tu propia lista de precios." },
   { icono: Wallet, titulo: "Cuenta corriente", detalle: "Comprás ahora y pagás después." },
   { icono: Clock, titulo: "Presupuesto en 24 h", detalle: "Mandás la lista de la obra y te contestamos." },
   { icono: FileText, titulo: "Documentación técnica", detalle: "Fichas y tablas de carga para el pliego." },
@@ -85,20 +83,20 @@ export default async function ProfesionalesPage() {
   /* El teléfono estaba escrito a mano —"(0223) 474-3328"— y no era el de
      ninguna de las dos sucursales. Sale de `branches` como el resto del sitio. */
   const [casaCentral] = await listarSucursalesPublicas();
-  const [estado, sesion, cliente, eventos, documentos, reservados, laTienda] =
+  const [estado, sesion, cliente, eventos, documentos, laTienda] =
     await Promise.all([
       estadoProfesional(),
       getSession(),
       clienteDeLaSesion(),
       eventosProximos(),
       documentosVisibles(),
-      documentosReservados(),
       tienda(),
     ]);
 
   return (
     <div className="min-h-screen">
       <EncabezadoPublico
+        foto="/fotos/photo-1687422810663-c316494f725a.jpg"
         ruta="/profesionales"
         titulo="Cuenta profesional"
         bajada={
@@ -146,14 +144,6 @@ export default async function ProfesionalesPage() {
                 </ol>
               </section>
 
-              {reservados > 0 && (
-                <p className="flex items-center gap-2 text-base text-texto-2">
-                  <Lock className="h-4 w-4 shrink-0" />
-                  {reservados === 1
-                    ? "1 documento técnico reservado para profesionales"
-                    : `${reservados} documentos técnicos reservados para profesionales`}
-                </p>
-              )}
 
               <section>
                 <h2 className="text-[28px] font-bold tracking-[-0.03em]">Preguntas frecuentes</h2>
@@ -171,7 +161,10 @@ export default async function ProfesionalesPage() {
               </section>
             </div>
 
-            <aside id="pedir" className="lg:sticky lg:top-[96px]">
+            {/* En el teléfono el formulario va primero: quedaba al final, después
+                de las preguntas frecuentes, y quien venía a pedir la cuenta no
+                lo encontraba. */}
+            <aside id="pedir" className="order-first lg:sticky lg:top-[96px] lg:order-none">
               {estado.solicitud?.estado === "pendiente" ? (
                 <EstadoDeSolicitud fecha={estado.solicitud.createdAt} />
               ) : estado.solicitud?.estado === "rechazada" ? (

@@ -353,7 +353,11 @@ export default async function ProductoPage({
 
         <FichaTecnica producto={producto} medidas={conMedidas} />
 
-        <ResenasDelProducto resenas={resenas} resumen={resumenResenas} />
+        {/* «Solo de quien compró» con la tienda apagada no tiene a nadie que
+            opine: sin opiniones cargadas el bloque no aparece. */}
+        {(laTienda.activa || resenas.length > 0) && (
+          <ResenasDelProducto resenas={resenas} resumen={resumenResenas} />
+        )}
 
         {/*
           Sugeridos. Los complementarios van primero y solo si alguien los

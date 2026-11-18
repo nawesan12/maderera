@@ -1,3 +1,4 @@
+import { tienda } from "@/lib/dal/contenido";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -73,7 +74,7 @@ function renglones(texto: string): string[] {
 }
 
 export default async function SucursalesPage() {
-  const sucursales = await listarSucursalesPublicas();
+  const [sucursales, laTienda] = await Promise.all([listarSucursalesPublicas(), tienda()]);
 
   const marcado = [
     ...sucursales.map((s) =>
@@ -102,6 +103,7 @@ export default async function SucursalesPage() {
       <DatosEstructurados datos={marcado} />
 
       <EncabezadoPublico
+        foto="/sucursales/casa-central.jpg"
         titulo="Sucursales"
         bajada={
           sucursales.length === 1
@@ -112,7 +114,6 @@ export default async function SucursalesPage() {
 
       <div className="contenedor space-y-16 py-12">
         {sucursales.map((sucursal) => {
-          const servicios = renglones(sucursal.servicios);
           const destacados = renglones(sucursal.destacados);
           const comoLlegar =
             sucursal.mapUrl ??
@@ -122,7 +123,7 @@ export default async function SucursalesPage() {
             <section
               key={sucursal.id}
               id={sucursal.slug}
-              className="overflow-hidden rounded-2xl border bg-card shadow-sm"
+              className="superficie overflow-hidden rounded-2xl"
             >
               <div className="grid lg:grid-cols-2">
                 {/* Sin foto real del local se muestra una placa de marca. Una
@@ -241,25 +242,6 @@ export default async function SucursalesPage() {
                     )}
                   </dl>
 
-                  {servicios.length > 0 && (
-                    <div className="border-t pt-5">
-                      <h2 className="mb-3 font-semibold">Servicios</h2>
-                      <ul className="grid gap-2 sm:grid-cols-2">
-                        {servicios.map((servicio) => (
-                          <li
-                            key={servicio}
-                            className="flex items-start gap-2 text-sm text-muted-foreground"
-                          >
-                            <span
-                              aria-hidden
-                              className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-green"
-                            />
-                            {servicio}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
 
                   {/* Anclas con estilo de botón: un <button> adentro de un <a>
                       es HTML inválido, y acá lo que se hace es navegar. */}
@@ -305,6 +287,7 @@ export default async function SucursalesPage() {
           );
         })}
 
+        {laTienda.stockVisible && (
         <p className="text-center text-base text-muted-foreground">
           ¿Buscás algo puntual?{" "}
           <Link href="/stock" className="font-medium text-acento-texto hover:underline">
@@ -312,6 +295,7 @@ export default async function SucursalesPage() {
           </Link>
           .
         </p>
+        )}
       </div>
     </div>
   );

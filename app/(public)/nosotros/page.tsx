@@ -67,7 +67,8 @@ export default async function NosotrosPage() {
         ])}
       />
 
-      <EncabezadoPublico titulo="Nosotros" bajada={`Empresa familiar de Mar del Plata desde ${ANIO_FUNDACION}.`} />
+      <EncabezadoPublico
+        foto="/fotos/photo-1634672652995-ee7525bce595.jpg" titulo="Nosotros" bajada={`Empresa familiar de Mar del Plata desde ${ANIO_FUNDACION}.`} />
 
       <section className="border-b border-linea bg-card">
         <dl className="contenedor grid grid-cols-2 divide-linea py-10 md:grid-cols-4 md:divide-x">

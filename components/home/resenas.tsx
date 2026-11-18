@@ -21,7 +21,9 @@ export function ResenasDelNegocio({
   resenas: ResenaDelNegocio[];
   resumen: { promedio: number; cuantas: number } | null;
 }) {
-  if (resenas.length === 0) return null;
+  // Con una o dos opiniones el bloque resta: «5,0 sobre 1 opinión» parece
+  // un sitio recién armado. Aparece cuando hay con qué convencer.
+  if (resenas.length < 3) return null;
 
   return (
     <section className="bg-sitio-alt py-14">

@@ -1,3 +1,4 @@
+import { tienda } from "@/lib/dal/contenido";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -77,6 +78,7 @@ export default async function SucursalPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const laTienda = await tienda();
   const sucursal = sucursalPublicada(slug);
   if (!sucursal) notFound();
 
@@ -237,6 +239,7 @@ export default async function SucursalPage({
                 </li>
               ))}
             </ul>
+            {laTienda.stockVisible && (
             <p className="mt-5 text-[15px] text-texto-2">
               Antes de venir,{" "}
               <Link href="/stock" className="font-medium text-acento-texto hover:underline">
@@ -248,6 +251,7 @@ export default async function SucursalPage({
               </Link>
               .
             </p>
+            )}
           </section>
 
           <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">

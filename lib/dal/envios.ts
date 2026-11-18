@@ -42,7 +42,9 @@ export const listarSucursalesPublicas = cache(
           email: ficha?.email ?? null,
           mapUrl: ficha?.mapUrl ?? null,
           geo: ficha?.geo ?? null,
-          imagenUrl: ficha?.imagenUrl ?? null,
+          // Sin foto cargada, la del frente del local: el degradado vacío
+          // que quedaba en su lugar no le mostraba a nadie a dónde venir.
+          imagenUrl: ficha?.imagenUrl ?? ficha?.foto?.ruta ?? null,
           foto: ficha?.foto ?? null,
           servicios: ficha?.servicios ?? "",
           destacados: ficha?.destacados ?? "",

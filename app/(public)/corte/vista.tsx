@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, use, useMemo, useState, useSyncExternalStore, useTransition } from "react";
+import { Suspense, use, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, MessageCircle, Plus, ShoppingCart, Trash2 } from "lucide-react";
+import { Loader2, MessageCircle, Plus, RotateCcw, ShoppingCart, Trash2 } from "lucide-react";
 import type { PlacaCortable } from "@/lib/dal/cortes-publico";
 import type { PreciosDePlaca } from "@/lib/dal/visitante";
 import { usePlano } from "@/lib/cortes/en-vivo";
@@ -16,6 +16,8 @@ import { agregarCorteAlCarrito, guardarConsultaDeCorte } from "./actions";
 import { useTienda } from "@/lib/tienda-context";
 
 interface Fila {
+  /** «Lateral», «Estante»: viaja al plano y al mensaje, para que el taller rotule. */
+  nombre: string;
   largo: string;
   ancho: string;
   cantidad: string;
@@ -23,7 +25,51 @@ interface Fila {
   lados: LadosConCanto;
 }
 
-const vacia = (): Fila => ({ largo: "", ancho: "", cantidad: "1", veta: false, lados: SIN_CANTO });
+const vacia = (): Fila => ({ nombre: "", largo: "", ancho: "", cantidad: "1", veta: false, lados: SIN_CANTO });
+
+/**
+ * El despiece a medio cargar queda en el navegador: en la obra se corta la
+ * señal o se cierra la pestaña, y perder veinte medidas es tener que volver a
+ * medir.
+ */
+const BORRADOR = "mjbj:corte:borrador";
+
+interface Borrador {
+  variantId: string;
+  canto: string;
+  filas: Fila[];
+}
+
+function leerBorrador(crudo: string | null): Borrador | null {
+  if (!crudo) return null;
+  try {
+    const b = JSON.parse(crudo) as Borrador;
+    return Array.isArray(b.filas) && b.filas.some((f) => f.largo && f.ancho) ? b : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Una lista pegada desde una planilla o un programa de despiece: un renglón
+ * por pieza, con largo, ancho y cantidad en ese orden (la cantidad, si falta,
+ * es 1). Un texto adelante es el nombre de la pieza. Devuelve null si lo
+ * pegado no parece una lista, y entonces el pegado sigue de largo.
+ */
+export function leerListaPegada(texto: string): Fila[] | null {
+  const renglones = texto.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (renglones.length < 2 && !/\t/.test(texto)) return null;
+  const filas: Fila[] = [];
+  for (const renglon of renglones) {
+    const numeros = renglon.match(/\d+(?:[.,]\d+)?/g) ?? [];
+    if (numeros.length < 2) continue;
+    const primero = renglon.search(/\d/);
+    const nombre = renglon.slice(0, primero).replace(/[\t;:,|-]+$/, "").trim();
+    const [largo, ancho, cantidad = "1"] = numeros.map((n) => String(Math.round(Number(n.replace(",", ".")))));
+    filas.push({ ...vacia(), nombre, largo, ancho, cantidad });
+  }
+  return filas.length > 0 ? filas : null;
+}
 
 /** A dónde va el pedido por WhatsApp: cada sucursal con su número. */
 export interface SucursalDelCorte {
@@ -129,6 +175,7 @@ function VistaDeCorte({
   const [filas, setFilas] = useState<Fila[]>(() =>
     delEnlace.piezas.length > 0
       ? delEnlace.piezas.map((p) => ({
+          nombre: "",
           largo: String(p.largo),
           ancho: String(p.ancho),
           cantidad: String(p.cantidad),
@@ -170,7 +217,7 @@ function VistaDeCorte({
         cantidad: Math.round(Number(f.cantidad) || 0),
         respetaVeta: f.veta ? 1 : 0,
         ...contarCanto(f.lados),
-        etiqueta: null,
+        etiqueta: f.nombre.trim() || null,
       }))
       .filter((p) => p.largoMm > 0 && p.anchoMm > 0 && p.cantidad > 0);
   }, [modo, filas, tiras, medida.largo]);
@@ -218,6 +265,47 @@ function VistaDeCorte({
 
   function agregarFila() {
     setFilas((previas) => [...previas, vacia()]);
+  }
+
+  // Lo pegado reemplaza el renglón donde se pegó (y los vacíos de abajo).
+  function pegarLista(i: number, e: React.ClipboardEvent) {
+    const nuevas = leerListaPegada(e.clipboardData.getData("text"));
+    if (!nuevas) return;
+    e.preventDefault();
+    setFilas((previas) => [...previas.slice(0, i), ...nuevas, ...previas.slice(i + 1).filter((f) => f.largo || f.ancho)]);
+  }
+
+  // Sin enlace que mande otra cosa, se ofrece retomar el último despiece.
+  const crudoGuardado = useSyncExternalStore(
+    () => () => {},
+    () => {
+      try {
+        return localStorage.getItem(BORRADOR);
+      } catch {
+        return null;
+      }
+    },
+    () => null,
+  );
+  const [retomado, setRetomado] = useState(false);
+  const guardado = delEnlace.piezas.length === 0 && !retomado ? leerBorrador(crudoGuardado) : null;
+  const hayCarga = filas.some((f) => f.largo && f.ancho);
+
+  useEffect(() => {
+    if (!hayCarga) return;
+    try {
+      localStorage.setItem(BORRADOR, JSON.stringify({ variantId, canto, filas } satisfies Borrador));
+    } catch {
+      // Sin almacenamiento (modo privado) el armador anda igual.
+    }
+  }, [hayCarga, variantId, canto, filas]);
+
+  function retomar(b: Borrador) {
+    if (placas.some((p) => p.variantId === b.variantId)) setVariantId(b.variantId);
+    setCanto(b.canto ?? "");
+    setFilas(b.filas.map((f) => ({ ...vacia(), ...f })));
+    setModo("piezas");
+    setRetomado(true);
   }
 
   const pedido = () => ({
@@ -303,18 +391,41 @@ function VistaDeCorte({
 
           {modo === "piezas" ? (
             <>
+              {guardado && !hayCarga && (
+                <button
+                  type="button"
+                  onClick={() => retomar(guardado)}
+                  className="mt-4 inline-flex h-11 items-center gap-2 rounded-lg bg-naranja-claro px-4 text-[14.5px] font-semibold text-acento-sobre-claro"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Seguir con el corte anterior ({guardado.filas.filter((f) => f.largo && f.ancho).length}{" "}
+                  {guardado.filas.filter((f) => f.largo && f.ancho).length === 1 ? "medida" : "medidas"})
+                </button>
+              )}
               <div className="mt-4 divide-y divide-linea-tenue">
                 {filas.map((f, i) => (
                   <div
                     key={i}
                     className="flex flex-wrap items-center gap-x-4 gap-y-3 py-3 first:pt-0"
+                    onPaste={(e) => pegarLista(i, e)}
                     onKeyDown={(e) => {
                       if (e.key !== "Enter") return;
                       e.preventDefault();
                       if (i === filas.length - 1) agregarFila();
                     }}
                   >
-                    <div className="grid min-w-[15rem] flex-1 grid-cols-[1fr_1fr_72px] gap-2">
+                    <div className="grid min-w-[18rem] flex-1 grid-cols-[1fr_1fr_64px] gap-2 sm:grid-cols-[1.1fr_1fr_1fr_72px]">
+                      <label className="col-span-3 block sm:col-span-1">
+                        <span className={i > 0 ? "sr-only" : "mb-1 block text-sm font-medium"}>Pieza</span>
+                        <input
+                          type="text"
+                          value={f.nombre}
+                          onChange={(e) => actualizar(i, "nombre", e.target.value)}
+                          placeholder="Lateral"
+                          maxLength={40}
+                          className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
+                        />
+                      </label>
                       <Numero etiqueta="Largo (mm)" valor={f.largo} alCambiar={(v) => actualizar(i, "largo", v)} oculta={i > 0} placeholder="1200" />
                       <Numero etiqueta="Ancho (mm)" valor={f.ancho} alCambiar={(v) => actualizar(i, "ancho", v)} oculta={i > 0} placeholder="400" />
                       <Numero etiqueta="Cant." valor={f.cantidad} alCambiar={(v) => actualizar(i, "cantidad", v)} oculta={i > 0} />
@@ -594,7 +705,8 @@ function enlaceDelPedido(
     "Hola! Quería pedir este corte:",
     `Placa: ${placa}${mitad ? ` (media, al ${mitad})` : ""}`,
     ...piezas.map(
-      (p) => `• ${p.cantidad} de ${p.largoMm} × ${p.anchoMm} mm${p.respetaVeta ? ", con veta" : ""}${lados(p)}`,
+      (p) =>
+        `• ${p.etiqueta ? `${p.etiqueta}: ` : ""}${p.cantidad} de ${p.largoMm} × ${p.anchoMm} mm${p.respetaVeta ? ", con veta" : ""}${lados(p)}`,
     ),
     ...(canto.trim() ? [`Tapacanto: ${canto.trim()}`] : []),
     `${window.location.origin}/corte/c/${token}`,

@@ -38,7 +38,9 @@ export function Hero({
         aria-hidden="true"
       />
 
-      <div className="absolute inset-y-0 right-0 hidden w-[46%] lg:block">
+      {/* En el teléfono la foto va de fondo, atenuada: sin ella lo primero que
+          se veía era texto sobre rayas. */}
+      <div className="absolute inset-0 lg:left-auto lg:w-[46%]">
         <Image
           src="/fotos/premium_photo-1663133630972-d9b620dfea27.jpg"
           alt="Corte de madera con sierra en el aserradero"
@@ -46,19 +48,16 @@ export function Hero({
           className="object-cover object-center"
           preload
           fetchPriority="high"
-          // En el teléfono este panel está oculto (`hidden lg:block`), pero el
-          // preload se baja igual: con `46vw` el navegador elegía una foto de
-          // 640 px que nadie veía, compitiendo con el texto del hero. Con
-          // `1px` debajo de `lg` se baja la más chica de la lista.
-          sizes="(min-width: 1024px) 46vw, 1px"
+          sizes="(min-width: 1024px) 46vw, 100vw"
         />
         {/* El degradado solo funde el borde contra el fondo del texto. Antes
             cubría el 38% del panel y se comía justo la sierra, que es lo que
             hay que ver. */}
         <div
-          className="absolute inset-0 bg-[linear-gradient(to_right,var(--color-oscuro-marca),rgb(38_35_31_/_0.45)_14%,transparent_34%)]"
+          className="absolute inset-0 hidden bg-[linear-gradient(to_right,var(--color-oscuro-marca),rgb(38_35_31_/_0.45)_14%,transparent_34%)] lg:block"
           aria-hidden="true"
         />
+        <div className="absolute inset-0 bg-oscuro-marca/80 lg:hidden" aria-hidden="true" />
       </div>
 
       <div className="contenedor relative pb-[76px] pt-[88px]">

@@ -114,10 +114,10 @@ export function AccionesDeRecepcion({
             Anular
           </button>
         </div>
+        {/* El costo promedio queda como quedó: revertir la mezcla exigiría
+            recalcular todas las recepciones posteriores de esa mercadería. */}
         <p className="mt-2 text-sm text-muted-foreground">
-          El stock vuelve atrás y la deuda se acredita. El costo promedio queda
-          como quedó: revertir la mezcla exigiría recalcular todas las
-          recepciones posteriores de esa mercadería.
+          El stock vuelve atrás y la deuda se acredita. El costo promedio no se toca.
         </p>
       </details>
     </section>

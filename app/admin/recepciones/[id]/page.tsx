@@ -85,8 +85,8 @@ export default async function RecepcionPage({
 
       {recepcion.estado === "borrador" && (
         <p className="estado-espera rounded-xl bg-[var(--estado-fondo)] px-4 py-3 text-base">
-          Todavía no tocó nada. Al confirmar entra el stock, se mezcla el costo
-          promedio y sube la deuda con el proveedor.{" "}
+          {/* Al confirmar entra el stock, se mezcla el costo promedio y sube la deuda con el proveedor. */}
+          Todavía no tocó nada.{" "}
           <strong>El costo promedio no se puede revertir después.</strong>
         </p>
       )}

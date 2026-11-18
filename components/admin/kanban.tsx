@@ -59,23 +59,28 @@ export function ColumnaTablero({
   const ocultas = tarjetas.length - visibles.length;
 
   return (
-    <section className="flex flex-col overflow-hidden rounded-[10px] border border-linea bg-hundida">
-      {/* La cabecera se levanta sobre la columna, que es `bg-hundida`.
-          Decía `bg-sidebar`, que no es una superficie clara sino **el lateral
-          oscuro del panel**: el título quedaba en negro sobre negro y no se
-          leía ni acá ni en el taller. */}
-      <header className="sticky top-0 z-[2] border-b border-linea bg-card px-3.5 pb-[11px] pt-3">
+    // La pizarra del aserradero: el nombre de la etapa y, grande, cuánto hay
+    // en ella. La raya de color aparece solo donde hay trabajo; vacía, la
+    // columna queda baja y en gris (pedido de Nahuel, 18/11: «menos genérico»).
+    <section className="tarjeta-hundida flex flex-col overflow-hidden rounded-xl">
+      <header className="sticky top-0 z-[2] px-3.5 pb-2 pt-3">
         <span
-          className={`${claseDeFamilia(estado)} mb-3 block h-[3px] w-[34px] rounded-full bg-[var(--estado-acento)]`}
+          className={`${claseDeFamilia(estado)} mb-2.5 block h-[3px] w-[34px] rounded-full ${
+            cantidad > 0 ? "bg-[var(--estado-acento)]" : "bg-linea"
+          }`}
           aria-hidden="true"
         />
-        <div className="flex items-baseline gap-2">
-          <h2 className="text-[15px] font-semibold tracking-[-0.01em]">
-            {titulo}
-          </h2>
-          <span className="tabular inline-grid h-5 min-w-[22px] place-items-center rounded-full bg-chip px-1.5 text-[13px] font-semibold text-texto-2">
+        <div className="flex items-baseline gap-2.5">
+          <span
+            className={`tabular text-[28px] font-bold leading-none tracking-[-0.03em] ${
+              cantidad > 0 ? "text-foreground" : "text-texto-3"
+            }`}
+          >
             {cantidad}
           </span>
+          <h2 className={`text-[15px] font-semibold tracking-[-0.01em] ${cantidad > 0 ? "" : "text-texto-2"}`}>
+            {titulo}
+          </h2>
           {detalle && (
             <span className="tabular ml-auto text-[13px] text-texto-2">
               {detalle}
@@ -90,9 +95,9 @@ export function ColumnaTablero({
         para ver qué hay en las otras, que es justo lo que el tablero venía a
         resolver.
       */}
-      <div className="flex max-h-[calc(100vh-300px)] flex-col gap-2.5 overflow-y-auto p-2.5">
+      <div className="flex max-h-[calc(100vh-300px)] flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
         {cantidad === 0 ? (
-          <p className="px-2.5 py-[34px] text-center text-sm text-texto-3">
+          <p className="px-1 pb-2 text-sm text-texto-3">
             {vacio}
           </p>
         ) : (

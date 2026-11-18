@@ -1850,3 +1850,54 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
   font-family: inherit;
   font-weight: 500;
 }
+
+/* Los selectores del panel (18/11/2026): «Todas / Casa Central / Aserradero»,
+   «En curso / Historial», «Contado / Cuenta corriente». Eran botones naranjas
+   macizos, el mismo naranja que «Nueva factura»: el color de «hacé algo» se
+   gastaba en «esto está elegido». Ahora el grupo es un carril hundido y la
+   opción elegida una pieza en relieve; el naranja queda para las acciones.
+   Vale para todo grupo de botones que se prenden y apagan (`aria-pressed`),
+   sin tocar las pantallas una por una. */
+.panel main [role="group"]:has(> button[aria-pressed]) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--hundida);
+  box-shadow: inset 0 1px 3px rgb(60 50 40 / 0.14);
+}
+.panel main [role="group"] > button[aria-pressed] {
+  border: 0 !important;
+  border-radius: 9px;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--texto-2, var(--muted-foreground));
+}
+.panel main [role="group"] > button[aria-pressed]:hover {
+  color: var(--foreground);
+}
+.panel main [role="group"] > button[aria-pressed="true"] {
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+  font-weight: 600;
+  box-shadow: var(--relieve-suave, 0 1px 2px rgb(60 50 40 / 0.18)) !important;
+}
+
+/* El número de un comprobante, como el pintado en el paquete de madera:
+   PED-1067, CRT-1, REM-0005. Es lo que se dicta por teléfono, así que va
+   igual en todas partes, estampado sobre la superficie. */
+.codigo {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--hundida);
+  box-shadow: inset 0 1px 1px rgb(60 50 40 / 0.14);
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--texto-2, var(--muted-foreground));
+  white-space: nowrap;
+}

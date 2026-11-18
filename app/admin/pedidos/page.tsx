@@ -132,7 +132,7 @@ export default async function PedidosPage({
                     >
                       {p.cliente}
                     </Link>
-                    <span className="tabular text-base text-muted-foreground">
+                    <span className="codigo">
                       {p.numero}
                     </span>
                     <span className="text-base text-muted-foreground">
@@ -273,7 +273,7 @@ async function Historial({
                 {p.cliente}
                 {p.empresa && <span className="text-muted-foreground"> · {p.empresa}</span>}
               </Link>
-              <span className="tabular text-base text-muted-foreground">{p.numero}</span>
+              <span className="codigo">{p.numero}</span>
               <span className="text-base text-muted-foreground">
                 {p.createdAt.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}
               </span>
@@ -316,7 +316,7 @@ function TarjetaPedido({ pedido, aviso }: { pedido: PedidoListado; aviso: AvisoM
         >
           {pedido.cliente}
         </Link>
-        <span className="tabular shrink-0 text-sm text-muted-foreground">
+        <span className="codigo shrink-0">
           {pedido.numero}
         </span>
       </div>

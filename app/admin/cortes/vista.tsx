@@ -113,7 +113,7 @@ function TarjetaCorte({
             {corte.cliente}
           </Link>
         </div>
-        <span className="tabular shrink-0 text-sm text-muted-foreground">
+        <span className="codigo shrink-0">
           {corte.numero}
         </span>
       </div>

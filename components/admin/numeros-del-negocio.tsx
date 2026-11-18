@@ -166,8 +166,10 @@ function Tarjeta({
     >
       <h3 className="text-base font-semibold text-texto-2">{titulo}</h3>
       <p
-        className={`tabular text-[34px] font-bold leading-none tracking-[-0.03em] ${
-          valor < 0 ? "text-saldo-debe" : "text-foreground"
+        // Un cero se apaga: el ojo tiene que caer en lo que se movió, no en
+        // «$ 0» al mismo tamaño que «$ 484.000».
+        className={`tabular font-bold leading-none tracking-[-0.03em] ${
+          valor === 0 ? "text-[24px] text-texto-3" : valor < 0 ? "text-[34px] text-saldo-debe" : "text-[34px] text-foreground"
         }`}
       >
         {moneda.format(valor)}

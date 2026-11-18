@@ -91,7 +91,12 @@ export function TarjetaIndicador({
         </span>
       </div>
 
-      <p className="tabular mt-3.5 text-[30px] font-semibold leading-none tracking-[-0.03em]">
+      <p
+        className={`tabular mt-3.5 font-semibold leading-none tracking-[-0.03em] ${
+          // Un cero se apaga: el ojo cae en lo que se movió.
+          valorNumerico === 0 ? "text-[22px] text-texto-3" : "text-[30px]"
+        }`}
+      >
         {valorNumerico !== undefined ? (
           <AnimatedCounter
             target={valorNumerico}

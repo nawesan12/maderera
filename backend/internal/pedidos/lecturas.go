@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/ventas/fragmentos"
 	"mjbj/internal/zodjs"
 )
 
@@ -248,7 +249,17 @@ type PedidoListado struct {
 	Items            int       `json:"items"`
 	CustomerID       *string   `json:"customerId"`
 	CreatedAt        time.Time `json:"createdAt"`
+	// SinCobrar es lo que falta cobrar fuera de la cuenta corriente
+	// (fragmentos.SinCobrarDelPedido): la confirmación al entregar y el
+	// «Cobrar $X» del reparto lo leen de acá, con la misma regla que «Me
+	// deben».
+	SinCobrar *float64 `json:"sinCobrar"`
 }
+
+// EstadoSinCobrar es el filtro del historial que lleva el renglón «N
+// pedidos sin cobrar» de «Me deben»: los entregados a los que les falta
+// cobrar, el más viejo primero (el primero a reclamar).
+const EstadoSinCobrar = "sin-cobrar"
 
 // VistaDePedidos acota el listado: el tablero no necesita el historial
 // entero (lo traía todo, desde el primer pedido), y el historial va por
@@ -272,12 +283,17 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 	var a argumentos
 	var cond []string
 	pie := ""
+	orden := "o.created_at DESC"
 	switch v.Vista {
 	case "tablero":
 		cond = append(cond, "(o.estado NOT IN ('entregado', 'cancelado') OR o.updated_at >= now() - interval '7 days')")
 	case "historial":
 		if f.Estado == "" || f.Estado == "todos" {
 			cond = append(cond, "o.estado IN ('entregado', 'cancelado')")
+		}
+		if f.Estado == EstadoSinCobrar {
+			cond = append(cond, "o.estado = 'entregado'", fragmentos.SinCobrarDelPedido+" > 0.009")
+			orden = "o.created_at ASC"
 		}
 		if v.Desde != "" {
 			cond = append(cond, "o.created_at >= ("+a.poner(v.Desde)+"::date AT TIME ZONE 'America/Argentina/Buenos_Aires')")
@@ -291,7 +307,7 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 		}
 		pie = fmt.Sprintf(" LIMIT %d OFFSET %d", PorPaginaDeHistorial+1, (pagina-1)*PorPaginaDeHistorial)
 	}
-	if f.Estado != "" && f.Estado != "todos" {
+	if f.Estado != "" && f.Estado != "todos" && f.Estado != EstadoSinCobrar {
 		cond = append(cond, "o.estado::text = "+a.poner(f.Estado))
 	}
 	if f.Sucursal != "" && f.Sucursal != "todas" {
@@ -305,13 +321,13 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 	filas, err := s.pool.Query(ctx, `
 		SELECT o.id, o.numero, o.contacto_nombre, c.razon_social, b.name, b.slug, o.estado::text, o.tipo_entrega::text,
 		       o.direccion_entrega, o.medio_pago::text, o.estado_pago::text, o.total::text, o.created_at,
-		       coalesce(conteo.items, 0), o.customer_id, o.zona_envio
+		       coalesce(conteo.items, 0), o.customer_id, o.zona_envio, `+fragmentos.SinCobrarDelPedido+`::float8
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
 		LEFT JOIN (SELECT order_id, count(*)::int AS items FROM order_items GROUP BY order_id) conteo ON conteo.order_id = o.id`+
 		donde(cond)+`
-		ORDER BY o.created_at DESC`+pie, a...)
+		ORDER BY `+orden+pie, a...)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +337,7 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 		var p PedidoListado
 		var total string
 		if err := filas.Scan(&p.ID, &p.Numero, &p.Cliente, &p.Empresa, &p.Sucursal, &p.SucursalSlug, &p.Estado, &p.TipoEntrega,
-			&p.DireccionEntrega, &p.MedioPago, &p.EstadoPago, &total, &p.CreatedAt, &p.Items, &p.CustomerID, &p.ZonaEnvio); err != nil {
+			&p.DireccionEntrega, &p.MedioPago, &p.EstadoPago, &total, &p.CreatedAt, &p.Items, &p.CustomerID, &p.ZonaEnvio, &p.SinCobrar); err != nil {
 			return nil, err
 		}
 		p.Total = jsmath.Numero(total)
@@ -406,6 +422,8 @@ type FichaDePedido struct {
 	SaldoCliente *float64 `json:"saldoCliente"`
 	// EntregarEl es el día comprometido (AAAA-MM-DD).
 	EntregarEl *string `json:"entregarEl"`
+	// SinCobrar: como en PedidoListado.
+	SinCobrar *float64 `json:"sinCobrar"`
 }
 
 // Pedido es la ficha, o nil si no existe. Con `conMargen`, el margen de la
@@ -419,7 +437,7 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		       o.medio_pago::text, o.estado_pago::text, o.notas, o.created_at, o.quote_id, q.numero,
 		       CASE WHEN o.customer_id IS NULL THEN NULL
 		            ELSE (SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = o.customer_id) END,
-		       to_char(o.entregar_el, 'YYYY-MM-DD')
+		       to_char(o.entregar_el, 'YYYY-MM-DD'), `+fragmentos.SinCobrarDelPedido+`::float8
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -427,7 +445,7 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		WHERE o.id = $1`, id).Scan(&p.ID, &p.Numero, &p.NumeroProvisorio, &p.Cliente, &p.Email, &p.Telefono, &p.Empresa,
 		&p.BranchID, &p.CustomerID, &p.Sucursal, &p.Estado, &p.Origen, &p.TipoEntrega, &p.DireccionEntrega,
 		&p.ZonaEnvio, &p.CostoEnvio, &p.Subtotal, &p.Descuento, &p.DescuentoMotivo, &p.Total,
-		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt, &p.QuoteID, &p.NumeroPresupuesto, &p.SaldoCliente, &p.EntregarEl)
+		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt, &p.QuoteID, &p.NumeroPresupuesto, &p.SaldoCliente, &p.EntregarEl, &p.SinCobrar)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

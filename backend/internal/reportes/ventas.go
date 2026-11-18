@@ -58,16 +58,35 @@ func condiciones(p Periodo, f Filtros) (string, []any) {
 // Las columnas de margen, por renglón (los cortes por producto, rubro y
 // elaboración) o por pedido ya agregado (cliente, vendedor, sucursal y canal:
 // sumar renglones sin agregar antes multiplicaría cada pedido).
+//
+// **Un costo es conocido solo si es mayor a 0.** La Bisagra Cierre Suave
+// salía con margen del 100 %: una recepción cargada a $0 dejó su costo en
+// cero, y cada venta sumaba venta sin costo. Ahora el renglón a $0 cuenta
+// como «sin costo», igual que el que no tiene. Va en el SQL y no al congelar
+// el costo de la venta, así también corrige lo que ya se vendió.
+//
+// neto es la venta sin IVA de todos los renglones (el «Vendido sin IVA» de
+// Reportes, el del cierre y el de la Ganancia del mes: el mismo número);
+// neto_costeado, la de los renglones con costo, que es contra lo que se
+// mide el margen. Restar el costo de una parte al neto del todo inflaba el
+// margen de cada fila que mezclaba renglones con y sin costo. bruto es la
+// suma de los subtotales con IVA, para prorratear el total del pedido.
 const (
-	margenPorRenglon = `sum(oi.subtotal / (1 + coalesce(oi.alicuota_iva, 21) / 100)),
-		sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE oi.costo_unitario IS NOT NULL),
-		count(*) FILTER (WHERE oi.costo_unitario IS NULL)::int`
-	margenPorPedido = `sum(coalesce(margenes.neto, 0)), sum(margenes.costo), coalesce(sum(margenes.sin_costo), 0)::int`
-	margenes        = `LEFT JOIN (
+	costoConocido    = `oi.costo_unitario > 0`
+	netoDelRenglon   = `oi.subtotal / (1 + coalesce(oi.alicuota_iva, 21) / 100)`
+	margenPorRenglon = `sum(` + netoDelRenglon + `),
+		sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE ` + costoConocido + `),
+		count(*) FILTER (WHERE oi.costo_unitario IS NULL OR oi.costo_unitario <= 0)::int,
+		coalesce(sum(` + netoDelRenglon + `) FILTER (WHERE ` + costoConocido + `), 0)`
+	margenPorPedido = `sum(coalesce(margenes.neto, 0)), sum(margenes.costo), coalesce(sum(margenes.sin_costo), 0)::int,
+		coalesce(sum(margenes.neto_costeado), 0)`
+	margenes = `LEFT JOIN (
 		SELECT oi.order_id,
-		       sum(oi.subtotal / (1 + coalesce(oi.alicuota_iva, 21) / 100)) AS neto,
-		       sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE oi.costo_unitario IS NOT NULL) AS costo,
-		       count(*) FILTER (WHERE oi.costo_unitario IS NULL)::int AS sin_costo
+		       sum(` + netoDelRenglon + `) AS neto,
+		       sum(oi.subtotal) AS bruto,
+		       sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE ` + costoConocido + `) AS costo,
+		       count(*) FILTER (WHERE oi.costo_unitario IS NULL OR oi.costo_unitario <= 0)::int AS sin_costo,
+		       sum(` + netoDelRenglon + `) FILTER (WHERE ` + costoConocido + `) AS neto_costeado
 		FROM order_items oi GROUP BY oi.order_id) margenes ON margenes.order_id = o.id`
 )
 
@@ -83,10 +102,12 @@ func (s *Servicio) filas(ctx context.Context, sql string, args []any, detalleEnP
 		var clave, etiqueta *string
 		var cantidad, total jsmath.Num
 		var neto, costo *jsmath.Num
+		var costeado jsmath.Num
 		var sinCosto int
-		if err := rs.Scan(&clave, &etiqueta, &f.Detalle, &cantidad, &total, &neto, &costo, &sinCosto); err != nil {
+		if err := rs.Scan(&clave, &etiqueta, &f.Detalle, &cantidad, &total, &neto, &costo, &sinCosto, &costeado); err != nil {
 			return nil, err
 		}
+		f.NetoCosteado = costeado.F()
 		f.Clave, f.Etiqueta = deTexto(clave, "sin-origen"), deTexto(etiqueta, "sin origen")
 		f.Cantidad, f.Total, f.LineasSinCosto = cantidad.F(), total.F(), float64(sinCosto)
 		if neto != nil {

@@ -153,7 +153,7 @@ func (a *API) ReporteDeVentasArchivo(ctx context.Context, r reportesapi.ReporteD
 		Filas: make([]pdf.FilaDeReporte, len(filas))}
 	for i, f := range filas {
 		d.Filas[i] = pdf.FilaDeReporte{Clave: f.Clave, Etiqueta: f.Etiqueta, Detalle: f.Detalle, Cantidad: f.Cantidad, Total: f.Total,
-			NetoVenta: f.NetoVenta, Costo: f.Costo, LineasSinCosto: f.LineasSinCosto}
+			NetoVenta: f.NetoVenta, Costo: f.Costo, LineasSinCosto: f.LineasSinCosto, NetoCosteado: f.NetoCosteado}
 	}
 	b, err := pdf.ReporteDeVentas(d, a.s.ahora())
 	if err != nil {

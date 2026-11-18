@@ -23,7 +23,10 @@ paths:
       operationId: ListarPedidos
       parameters:
         - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
-        - { name: estado, in: query, schema: { type: string } }
+        - name: estado
+          in: query
+          description: Un estado del pedido, o sin-cobrar en el historial (los entregados sin cobrar, el más viejo primero)
+          schema: { type: string }
         - { name: sucursal, in: query, schema: { type: string } }
         - name: vista
           in: query
@@ -345,7 +348,7 @@ components:
     PedidoListado:
       type: object
       required: [id, numero, cliente, empresa, sucursal, sucursalSlug, estado, tipoEntrega, direccionEntrega, medioPago, estadoPago,
-        total, items, customerId, createdAt, zonaEnvio]
+        total, items, customerId, createdAt, zonaEnvio, sinCobrar]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -363,6 +366,14 @@ components:
         items: { type: integer }
         customerId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
+        sinCobrar: { $ref: "#/components/schemas/SinCobrar" }
+    SinCobrar:
+      type: number
+      format: double
+      nullable: true
+      description: >-
+        Lo que falta cobrar sin pasar por la cuenta corriente (el total menos lo cobrado en línea); null si no falta
+        nada o si la deuda está en la cuenta del cliente. La misma regla que «Me deben».
     ItemDePedido:
       type: object
       required: [id, orderId, variantId, descripcion, unidad, cantidad, precioUnitario, subtotal, presentacion, stockPorUnidad,
@@ -414,7 +425,7 @@ components:
       type: object
       required: [id, numero, numeroProvisorio, cliente, email, telefono, empresa, branchId, customerId, sucursal, estado, origen,
         tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, descuento, descuentoMotivo, total, medioPago, estadoPago,
-        notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente, entregarEl]
+        notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente, entregarEl, sinCobrar]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -451,3 +462,4 @@ components:
         numeroPresupuesto: { type: string, nullable: true }
         saldoCliente: { type: number, format: double, nullable: true, description: Positivo, debe }
         entregarEl: { type: string, nullable: true, description: AAAA-MM-DD }
+        sinCobrar: { $ref: "#/components/schemas/SinCobrar" }

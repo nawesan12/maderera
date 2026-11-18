@@ -442,3 +442,52 @@ func TestAsignarLaMismaVentaALaVez(t *testing.T) {
 		}
 	}
 }
+
+// La venta anulada sale como anulada en «Emitido en el mostrador», con quién,
+// cuándo y el motivo (sin el prefijo del historial), y si su factura sigue
+// viva; la vigente no trae nada de eso. Con factura y nota de crédito, la
+// venta sale una sola vez y con la factura.
+func TestEmitidoConLaAnulacion(t *testing.T) {
+	e := armar(t)
+	adm, quien := e.staff(t, "admin@prueba.test", "admin")
+	vigente := e.venta(t, "M-1", e.central, "efectivo", 100, time.Date(2026, 10, 15, 10, 0, 0, 0, Argentina), nil, true)
+	anulada := e.venta(t, "M-2", e.central, "efectivo", 200, time.Date(2026, 10, 15, 11, 0, 0, 0, Argentina), nil, true)
+	cuando := time.Date(2026, 10, 15, 14, 32, 0, 0, Argentina)
+	e.id(t, `update orders set estado = 'cancelado' where id = $1 returning id`, anulada)
+	e.id(t, `insert into order_status_history (order_id, estado, nota, created_by_user_id, created_at)
+		values ($1, 'cancelado', 'Anulada en el mostrador: se equivocó de medida', $2, $3) returning id`, anulada, quien, cuando)
+	for i, tipo := range []string{"factura_b", "nota_credito_b"} {
+		e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
+			values ($1, 3, $2, 'X', 100, 21, 0, 0, 0, 121, 'autorizada', '2026-10-15T15:00:00Z', '761', $3) returning id`, tipo, i+1, anulada)
+	}
+	_, b := pedir(t, adm, "GET", e.u+"emitido?periodo=2026-10", nil)
+	var filas []Emitido
+	if err := json.Unmarshal([]byte(b), &filas); err != nil {
+		t.Fatal(b)
+	}
+	if len(filas) != 2 {
+		t.Fatalf("la anulada con factura y nota sale una vez: %s", b)
+	}
+	for _, f := range filas {
+		switch f.OrderID {
+		case vigente:
+			if f.Anulada || f.AnuladaPor != nil || f.AnuladaAt != nil || f.Motivo != nil || f.FacturaViva {
+				t.Errorf("vigente: %+v", f)
+			}
+		case anulada:
+			if !f.Anulada || f.AnuladaPor == nil || *f.AnuladaPor != "Persona admin" || f.AnuladaAt == nil || !f.AnuladaAt.Equal(cuando) ||
+				f.Motivo == nil || *f.Motivo != "se equivocó de medida" || f.InvoiceTipo == nil || *f.InvoiceTipo != "factura_b" {
+				t.Errorf("anulada: %+v", f)
+			}
+			// La nota de crédito está, pero no la anula entera: sigue viva.
+			if !f.FacturaViva {
+				t.Errorf("factura viva: %+v", f)
+			}
+		}
+	}
+	e.id(t, `update invoices set estado = 'anulada' where tipo = 'factura_b' returning id`)
+	_, b = pedir(t, adm, "GET", e.u+"emitido?periodo=2026-10", nil)
+	if strings.Contains(b, `"facturaViva":true`) {
+		t.Errorf("con la factura anulada ya no está viva: %s", b)
+	}
+}

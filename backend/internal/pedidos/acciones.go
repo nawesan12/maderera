@@ -14,11 +14,13 @@ import (
 	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
 	"mjbj/internal/entregas"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Las acciones de app/admin/ventas-actions.ts. Los avisos al cliente
@@ -48,6 +50,10 @@ type Resultado struct {
 	Numero string `json:"numero,omitempty"`
 	Estado string `json:"estado,omitempty"`
 }
+
+// NotaEntregadoSinCobrar encabeza la nota del historial de un pedido que se
+// entregó con algo sin cobrar.
+const NotaEntregadoSinCobrar = "Entregado sin cobrar"
 
 // OrdenDelPedido es el recorrido, fijo y de una sola dirección.
 var OrdenDelPedido = []string{"pendiente", "preparando", "listo", "en-camino", "entregado"}
@@ -150,11 +156,26 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id string) (*R
 				return err
 			}
 		}
+		// Entregar sin cobrar se puede (existe el pago contra entrega), pero
+		// deja firma: la pantalla pregunta y el historial guarda cuánto
+		// faltaba y quién soltó la mercadería. Si no, «Entregar igual» se
+		// toca sin leer y nadie sabe después quién entregó.
+		var nota *string
+		if siguiente == "entregado" {
+			var falta *float64
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.SinCobrarDelPedido+`::float8 FROM orders o WHERE o.id = $1`, id).Scan(&falta); err != nil {
+				return err
+			}
+			if falta != nil && *falta > 0.009 {
+				n := NotaEntregadoSinCobrar + " · " + formato.Moneda(*falta)
+				nota = &n
+			}
+		}
 		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = $2, updated_at = now() WHERE id = $1`, id, siguiente); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, created_by_user_id) VALUES ($1, $2, $3)`,
-			id, siguiente, ses.UserID); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $2, $3, $4)`,
+			id, siguiente, nota, ses.UserID); err != nil {
 			return err
 		}
 		_, err = cola.Encolar(ctx, sqlc.New(tx), TrabajoCambioDeEstado, map[string]string{"orderId": id, "estado": siguiente}, time.Time{})

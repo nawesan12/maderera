@@ -8,6 +8,7 @@ import (
 
 	"mjbj/internal/cobros"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Los números del dueño: lo que contesta el inicio del panel para el admin.
@@ -22,7 +23,9 @@ import (
 //   - **Me deben** es la cuenta corriente de los clientes (account_movements,
 //     positivo es deuda), con lo vencido según el aging de cobros
 //     (cobros.CalcularAging, los días de crédito de cada cliente): el mismo
-//     cálculo que la cartera de clientes.
+//     cálculo que la cartera de clientes. Más lo que se entregó sin cobrar y
+//     no pasó por la cuenta (fragmentos.SinCobrarDelPedido): el dueño vio «Me
+//     deben $0» con mercadería entregada y sin cobrar.
 //   - **Debo** son las facturas de compra con saldo (total menos lo imputado
 //     en pagos), sin las notas de crédito: el mismo saldo que «Pagar» de
 //     compras. Lo que entró con remito y todavía no tiene factura no está acá:
@@ -38,12 +41,15 @@ import (
 //   - **Ganancia del mes**: ventas netas (sin IVA) − costo de lo vendido −
 //     gastos, contra el mismo lapso del mes anterior.
 
-// MeDeben es la cuenta corriente de los clientes.
+// MeDeben es la cuenta corriente de los clientes más los pedidos entregados
+// sin cobrar. Total los suma; Vencido es solo el de la cuenta corriente (el
+// aging), porque los pedidos van en su propio renglón.
 type MeDeben struct {
 	Total              float64 `json:"total"`
 	Vencido            float64 `json:"vencido"`
 	Clientes           int     `json:"clientes"`
 	ClientesConVencido int     `json:"clientesConVencido"`
+	PedidosSinCobrar   Monto   `json:"pedidosSinCobrar"`
 }
 
 // Debo son las facturas de compra con saldo.
@@ -104,6 +110,25 @@ type ResultadoComparado struct {
 	Variacion *float64  `json:"variacion"`
 }
 
+// Anuladas son las ventas del mostrador anuladas en los últimos siete días
+// argentinos (hoy incluido): con «hoy» solo, el lunes no se veían las del
+// sábado.
+//
+// Devuelto es el efectivo que salió de la caja por esas anulaciones (los
+// cash_movements «devolucion», con la fecha del movimiento): el mismo número
+// que ve el arqueo. La parte con tarjeta, Mercado Pago, transferencia,
+// cheque o cuenta corriente no salió del cajón, y la anulación de una venta
+// cobrada así no es plata que se fue.
+//
+// ConFacturaViva son las que siguen con su factura autorizada y sin nota de
+// crédito que la anule: para el fisco esa venta existe y su IVA se debe.
+type Anuladas struct {
+	Cantidad       int     `json:"cantidad"`
+	Total          float64 `json:"total"`
+	Devuelto       float64 `json:"devuelto"`
+	ConFacturaViva int     `json:"conFacturaViva"`
+}
+
 // NumerosDelDueno es todo junto.
 type NumerosDelDueno struct {
 	MeDeben  MeDeben            `json:"meDeben"`
@@ -111,6 +136,7 @@ type NumerosDelDueno struct {
 	Cheques  ChequesDeLaSemana  `json:"cheques"`
 	PlataHoy PlataHoy           `json:"plataHoy"`
 	Ganancia ResultadoComparado `json:"ganancia"`
+	Anuladas Anuladas           `json:"anuladas"`
 }
 
 // NumerosDelDueno arma los cinco bloques.
@@ -130,7 +156,10 @@ func (s *Servicio) NumerosDelDueno(ctx context.Context) (NumerosDelDueno, error)
 	if n.PlataHoy, err = s.PlataHoy(ctx, ahora); err != nil {
 		return n, err
 	}
-	n.Ganancia, err = s.GananciaDelMes(ctx, ahora)
+	if n.Ganancia, err = s.GananciaDelMes(ctx, ahora); err != nil {
+		return n, err
+	}
+	n.Anuladas, err = s.AnuladasDeLaSemana(ctx, ahora)
 	return n, err
 }
 
@@ -190,8 +219,40 @@ func (s *Servicio) MeDeben(ctx context.Context, ahora time.Time) (MeDeben, error
 			m.ClientesConVencido++
 		}
 	}
-	m.Total, m.Vencido = jsmath.Redondear2(m.Total), jsmath.Redondear2(m.Vencido)
+	var sinCobrar jsmath.Num
+	if err := s.pool.QueryRow(ctx, `
+		SELECT coalesce(sum(saldo), 0), count(*)::int
+		FROM (SELECT `+fragmentos.SinCobrarDelPedido+` AS saldo FROM orders o WHERE o.estado = 'entregado') x
+		WHERE saldo > 0.009`).Scan(&sinCobrar, &m.PedidosSinCobrar.Cantidad); err != nil {
+		return m, err
+	}
+	m.PedidosSinCobrar.Total = sinCobrar.F()
+	m.Total = jsmath.Redondear2(float64(m.Total + m.PedidosSinCobrar.Total))
+	m.Vencido = jsmath.Redondear2(m.Vencido)
 	return m, nil
+}
+
+// anuladaEn es el momento de la anulación de la fila `o`: el último paso a
+// «cancelado» del historial (mostrador.Anular lo deja ahí).
+const anuladaEn = `(SELECT max(h.created_at) FROM order_status_history h WHERE h.order_id = o.id AND h.estado = 'cancelado')`
+
+// AnuladasDeLaSemana cuenta las ventas del mostrador anuladas desde el
+// inicio del día de hace seis días.
+func (s *Servicio) AnuladasDeLaSemana(ctx context.Context, ahora time.Time) (Anuladas, error) {
+	var a Anuladas
+	var total, devuelto jsmath.Num
+	desde := InicioDelDia(ahora).AddDate(0, 0, -6)
+	hasta := InicioDelDia(ahora).AddDate(0, 0, 1)
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*)::int, coalesce(sum(o.total), 0), (count(*) FILTER (WHERE `+fragmentos.FacturaViva+`))::int,
+		  (SELECT coalesce(-sum(m.monto), 0) FROM cash_movements m
+		   JOIN orders d ON d.id = m.order_id AND d.origen = 'mostrador' AND d.estado = 'cancelado'
+		   WHERE m.tipo = 'devolucion' AND m.created_at >= $1 AND m.created_at < $2)
+		FROM orders o
+		WHERE o.origen = 'mostrador' AND o.estado = 'cancelado' AND `+anuladaEn+` >= $1 AND `+anuladaEn+` < $2`, desde, hasta).
+		Scan(&a.Cantidad, &total, &a.ConFacturaViva, &devuelto)
+	a.Total, a.Devuelto = total.F(), devuelto.F()
+	return a, err
 }
 
 // saldoDeCompra es el saldo de cada factura de compra (las notas de crédito

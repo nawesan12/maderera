@@ -225,7 +225,7 @@ components:
         etiqueta: { type: string }
     CajaEmitido:
       type: object
-      required: [orderId, numero, numeroProvisorio, cliente, total, medioPago, createdAt, sucursal, operadora, invoiceId, invoicePuntoVenta, invoiceNumero, invoiceTipo]
+      required: [orderId, numero, numeroProvisorio, cliente, total, medioPago, createdAt, sucursal, operadora, invoiceId, invoicePuntoVenta, invoiceNumero, invoiceTipo, anulada, anuladaPor, anuladaAt, motivo, facturaViva]
       properties:
         orderId: { type: string }
         numero: { type: string }
@@ -240,3 +240,8 @@ components:
         invoicePuntoVenta: { type: integer, nullable: true }
         invoiceNumero: { type: integer, format: int64, nullable: true }
         invoiceTipo: { type: string, nullable: true }
+        anulada: { type: boolean }
+        anuladaPor: { type: string, nullable: true }
+        anuladaAt: { type: string, format: date-time, nullable: true }
+        motivo: { type: string, nullable: true, description: El de la anulación }
+        facturaViva: { type: boolean, description: Anulada con la factura autorizada y sin nota de crédito }

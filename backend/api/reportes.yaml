@@ -242,7 +242,7 @@ components:
   schemas:
     ReporteFila:
       type: object
-      required: [clave, etiqueta, detalle, cantidad, total, netoVenta, costo, lineasSinCosto]
+      required: [clave, etiqueta, detalle, cantidad, total, netoVenta, costo, lineasSinCosto, netoCosteado]
       properties:
         clave: { type: string }
         etiqueta: { type: string }
@@ -251,7 +251,8 @@ components:
         total: { type: number, format: double }
         netoVenta: { type: number, format: double, description: Sin IVA, renglón por renglón }
         costo: { type: number, format: double, nullable: true, description: null si ningún renglón tiene costo }
-        lineasSinCosto: { type: number, format: double }
+        lineasSinCosto: { type: number, format: double, description: Renglones sin costo o con costo en cero }
+        netoCosteado: { type: number, format: double, description: Sin IVA, solo los renglones con costo; el margen es netoCosteado − costo }
     ReporteMes:
       type: object
       required: [clave, etiqueta, total]
@@ -335,9 +336,12 @@ components:
         cantidad: { type: integer }
     CierreResumen:
       type: object
-      required: [ventas, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva, resultado]
+      required: [ventas, sinFactura, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva, resultado]
       properties:
         ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
+        # Lo vendido en el mes sin factura autorizada, sin IVA (el total del pedido prorrateado por la
+        # alícuota de sus renglones). Es del circuito interno: no entra en los asientos ni en ningún archivo.
+        sinFactura: { $ref: "#/components/schemas/CierreTotales" }
         compras: { $ref: "#/components/schemas/CierreTotalesConIva" }
         gastos: { $ref: "#/components/schemas/CierreTotales" }
         retencionesPracticadas: { $ref: "#/components/schemas/CierreTotales" }
@@ -430,7 +434,7 @@ components:
         costo: { type: number, format: double }
         gastos: { type: number, format: double }
         resultado: { type: number, format: double }
-        lineasSinCosto: { type: integer, description: Renglones vendidos sin costo cargado }
+        lineasSinCosto: { type: integer, description: Renglones vendidos sin costo cargado o con costo en cero }
     ResultadoComparado:
       type: object
       required: [actual, anterior, variacion]
@@ -440,16 +444,26 @@ components:
         variacion: { type: number, format: double, nullable: true }
     NumerosDelDueno:
       type: object
-      required: [meDeben, debo, cheques, plataHoy, ganancia]
+      required: [meDeben, debo, cheques, plataHoy, ganancia, anuladas]
       properties:
         meDeben:
           type: object
-          required: [total, vencido, clientes, clientesConVencido]
+          required: [total, vencido, clientes, clientesConVencido, pedidosSinCobrar]
           properties:
-            total: { type: number, format: double }
-            vencido: { type: number, format: double }
+            total: { type: number, format: double, description: La cuenta corriente más los pedidos entregados sin cobrar }
+            vencido: { type: number, format: double, description: Solo de la cuenta corriente }
             clientes: { type: integer }
             clientesConVencido: { type: integer }
+            pedidosSinCobrar: { $ref: "#/components/schemas/Monto" }
+        anuladas:
+          type: object
+          description: Las ventas del mostrador anuladas en los últimos siete días
+          required: [cantidad, total, devuelto, conFacturaViva]
+          properties:
+            cantidad: { type: integer }
+            total: { type: number, format: double }
+            devuelto: { type: number, format: double, description: El efectivo que salió de la caja por esas anulaciones }
+            conFacturaViva: { type: integer, description: Las que siguen con factura autorizada y sin nota de crédito }
         debo:
           type: object
           required: [total, facturas, vencido, facturasVencidas, estaSemana, facturasEstaSemana]

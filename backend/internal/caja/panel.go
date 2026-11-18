@@ -21,6 +21,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/ventas/fragmentos"
 	"mjbj/internal/zodjs"
 )
 
@@ -433,18 +434,41 @@ type Emitido struct {
 	InvoicePuntoVenta *int32    `json:"invoicePuntoVenta"`
 	InvoiceNumero     *int64    `json:"invoiceNumero"`
 	InvoiceTipo       *string   `json:"invoiceTipo"`
+	// La anulación, si la hubo: quién, cuándo y por qué, del último paso a
+	// «cancelado» del historial (mostrador.Anular). La Caja mostraba la venta
+	// anulada como si fuera válida.
+	Anulada    bool       `json:"anulada"`
+	AnuladaPor *string    `json:"anuladaPor"`
+	AnuladaAt  *time.Time `json:"anuladaAt"`
+	Motivo     *string    `json:"motivo"`
+	// FacturaViva: anulada y con la factura autorizada sin su nota de
+	// crédito (fragmentos.FacturaViva).
+	FacturaViva bool `json:"facturaViva"`
 }
+
+// notaDeAnulacion es el prefijo con que mostrador.Anular deja el motivo en
+// el historial.
+const notaDeAnulacion = "Anulada en el mostrador: "
 
 // EmitidoPorCaja es emitidoPorCaja: lo emitido en el mostrador entre
 // `desde` y `hasta` (incluido), lo más nuevo primero, hasta 200.
 func (p *Panel) EmitidoPorCaja(ctx context.Context, desde, hasta time.Time) ([]Emitido, error) {
 	filas, err := p.pool.Query(ctx, `
 		SELECT o.id, o.numero, o.numero_provisorio, o.contacto_nombre, o.total, o.medio_pago::text, o.created_at,
-		       b.name, u.name, i.id, i.punto_venta, i.numero::bigint, i.tipo::text
+		       b.name, u.name, i.id, i.punto_venta, i.numero::bigint, i.tipo::text,
+		       o.estado = 'cancelado', anulacion.quien, anulacion.created_at, anulacion.nota,
+		       o.estado = 'cancelado' AND `+fragmentos.FacturaViva+`
 		FROM orders o
 		LEFT JOIN branches b ON b.id = o.branch_id
 		LEFT JOIN "user" u ON u.id = o.created_by_user_id
-		LEFT JOIN invoices i ON i.order_id = o.id
+		-- La factura y no su nota de crédito: con las dos, la venta salía
+		-- dos veces.
+		LEFT JOIN LATERAL (SELECT f.id, f.punto_venta, f.numero, f.tipo FROM invoices f
+		                   WHERE f.order_id = o.id ORDER BY f.tipo::text LIKE 'nota_credito%', f.created_at LIMIT 1) i ON true
+		LEFT JOIN LATERAL (SELECT h.created_at, h.nota, hu.name AS quien FROM order_status_history h
+		                   LEFT JOIN "user" hu ON hu.id = h.created_by_user_id
+		                   WHERE h.order_id = o.id AND h.estado = 'cancelado'
+		                   ORDER BY h.created_at DESC LIMIT 1) anulacion ON o.estado = 'cancelado'
 		WHERE o.origen = 'mostrador' AND o.created_at >= $1 AND o.created_at <= $2
 		ORDER BY o.created_at DESC
 		LIMIT 200`, desde, hasta)
@@ -457,10 +481,18 @@ func (p *Panel) EmitidoPorCaja(ctx context.Context, desde, hasta time.Time) ([]E
 		var e Emitido
 		var total jsmath.Num
 		if err := filas.Scan(&e.OrderID, &e.Numero, &e.NumeroProvisorio, &e.Cliente, &total, &e.MedioPago, &e.CreatedAt,
-			&e.Sucursal, &e.Operadora, &e.InvoiceID, &e.InvoicePuntoVenta, &e.InvoiceNumero, &e.InvoiceTipo); err != nil {
+			&e.Sucursal, &e.Operadora, &e.InvoiceID, &e.InvoicePuntoVenta, &e.InvoiceNumero, &e.InvoiceTipo,
+			&e.Anulada, &e.AnuladaPor, &e.AnuladaAt, &e.Motivo, &e.FacturaViva); err != nil {
 			return nil, err
 		}
 		e.Total = total.F()
+		if e.Motivo != nil {
+			m := strings.TrimSpace(strings.TrimPrefix(*e.Motivo, notaDeAnulacion))
+			e.Motivo = &m
+			if m == "" {
+				e.Motivo = nil
+			}
+		}
 		out = append(out, e)
 	}
 	return out, filas.Err()

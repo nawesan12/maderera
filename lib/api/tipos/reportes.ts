@@ -314,8 +314,16 @@ export interface components {
              * @description null si ningún renglón tiene costo
              */
             costo: number | null;
-            /** Format: double */
+            /**
+             * Format: double
+             * @description Renglones sin costo o con costo en cero
+             */
             lineasSinCosto: number;
+            /**
+             * Format: double
+             * @description Sin IVA
+             */
+            netoCosteado: number;
         };
         ReporteMes: {
             clave: string;
@@ -395,6 +403,7 @@ export interface components {
         };
         CierreResumen: {
             ventas: components["schemas"]["CierreTotalesConIva"];
+            sinFactura: components["schemas"]["CierreTotales"];
             compras: components["schemas"]["CierreTotalesConIva"];
             gastos: components["schemas"]["CierreTotales"];
             retencionesPracticadas: components["schemas"]["CierreTotales"];
@@ -487,7 +496,7 @@ export interface components {
             gastos: number;
             /** Format: double */
             resultado: number;
-            /** @description Renglones vendidos sin costo cargado */
+            /** @description Renglones vendidos sin costo cargado o con costo en cero */
             lineasSinCosto: number;
         };
         ResultadoComparado: {
@@ -498,12 +507,32 @@ export interface components {
         };
         NumerosDelDueno: {
             meDeben: {
-                /** Format: double */
+                /**
+                 * Format: double
+                 * @description La cuenta corriente más los pedidos entregados sin cobrar
+                 */
                 total: number;
-                /** Format: double */
+                /**
+                 * Format: double
+                 * @description Solo de la cuenta corriente
+                 */
                 vencido: number;
                 clientes: number;
                 clientesConVencido: number;
+                pedidosSinCobrar: components["schemas"]["Monto"];
+            };
+            /** @description Las ventas del mostrador anuladas en los últimos siete días */
+            anuladas: {
+                cantidad: number;
+                /** Format: double */
+                total: number;
+                /**
+                 * Format: double
+                 * @description El efectivo que salió de la caja por esas anulaciones
+                 */
+                devuelto: number;
+                /** @description Las que siguen con factura autorizada y sin nota de crédito */
+                conFacturaViva: number;
             };
             debo: {
                 /** Format: double */

@@ -8,6 +8,7 @@ import (
 
 	"mjbj/internal/compras"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // El cierre del mes (lib/dal/admin/cierre-mensual.ts): los asientos del
@@ -180,17 +181,19 @@ type PendienteDelCierre struct {
 }
 
 // PendientesDelCierre es pendientesDelCierre: recepciones en borrador,
-// turnos de caja sin cerrar y recepciones sin factura de compra.
+// turnos de caja sin cerrar, recepciones sin factura de compra y ventas
+// anuladas que siguen con su factura viva.
 func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Time) ([]PendienteDelCierre, error) {
-	var borradores, cajas, sinFactura int
+	var borradores, cajas, sinFactura, facturasVivas int
 	_, ihasta := instantes(desde, hasta)
 	err := s.pool.QueryRow(ctx, `
 		SELECT
 		  (SELECT count(*)::int FROM goods_receipts WHERE estado = 'borrador' AND fecha >= $1 AND fecha <= $2),
 		  (SELECT count(*)::int FROM cash_sessions WHERE estado = 'abierta' AND abierta_at <= $3),
 		  (SELECT count(*)::int FROM goods_receipts g WHERE g.estado = 'confirmada' AND g.fecha >= $1 AND g.fecha <= $2
-		     AND NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = g.id AND f.anulada_at IS NULL))`, desde, hasta, ihasta).
-		Scan(&borradores, &cajas, &sinFactura)
+		     AND NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = g.id AND f.anulada_at IS NULL)),
+		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND o.created_at <= $3 AND `+fragmentos.FacturaViva+`)`, desde, hasta, ihasta).
+		Scan(&borradores, &cajas, &sinFactura, &facturasVivas)
 	if err != nil {
 		return nil, err
 	}
@@ -206,6 +209,13 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 	if sinFactura > 0 {
 		out = append(out, PendienteDelCierre{"facturas", "Recepciones sin factura de compra",
 			"Entró la mercadería pero falta el papel: ese IVA todavía no se computa como crédito.", sinFactura, "/admin/compras/facturas"})
+	}
+	// Una venta anulada con CAE y sin nota de crédito sigue en el libro IVA
+	// ventas: su débito se debe aunque la venta ya no exista
+	// (mostrador.Anular no toca el comprobante, lo avisa).
+	if facturasVivas > 0 {
+		out = append(out, PendienteDelCierre{"facturas-vivas", "Ventas anuladas con factura viva",
+			"Falta la nota de crédito: su IVA sigue como débito.", facturasVivas, "/admin/facturacion"})
 	}
 	return out, nil
 }
@@ -226,7 +236,11 @@ type TotalesConIva struct {
 
 // ResumenDelMes es lo que devuelve resumenDelMes.
 type ResumenDelMes struct {
-	Ventas                 TotalesConIva `json:"ventas"`
+	Ventas TotalesConIva `json:"ventas"`
+	// SinFactura: lo vendido en el mes que no tiene factura autorizada (ver
+	// sinFacturaDelMes). Solo para la pantalla: no va a los asientos ni a
+	// ningún archivo del contador.
+	SinFactura             Totales       `json:"sinFactura"`
 	Compras                TotalesConIva `json:"compras"`
 	Gastos                 Totales       `json:"gastos"`
 	RetencionesPracticadas Totales       `json:"retencionesPracticadas"`
@@ -285,5 +299,38 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	r.Compras.Neto, r.Compras.Iva, r.Compras.Total = numero(cn), numero(ci), numero(ct)
 	r.Gastos.Total, r.RetencionesPracticadas.Total, r.RetencionesSufridas.Total = numero(g), numero(rp), numero(rs)
 	r.PosicionIva = r.Ventas.Iva - r.Compras.Iva
-	return r, nil
+	r.SinFactura, err = s.sinFacturaDelMes(ctx, idesde, ihasta)
+	return r, err
+}
+
+// sinFacturaDelMes es lo vendido en el mes argentino que no tiene factura
+// autorizada: el Cierre decía «Vendido $3.843» y debajo «Ventas netas $0»,
+// una cifra de lo vendido y otra de lo facturado con el mismo nombre. Ahora
+// la tarjeta es «Facturado neto» y al lado va esto.
+//
+// Es una cifra propia y no la resta de lo vendido menos lo facturado: las
+// facturas y los pedidos se cortan por fechas distintas (un pedido del 31
+// facturado el 1) y la resta podía dar negativa.
+//
+//   - El neto sale de la cabecera del pedido, como el de la factura: el
+//     total (con envío y descuento) sin su IVA, prorrateado por la alícuota
+//     de los renglones. Sacarlo de los renglones (margenes.neto) dejaba
+//     afuera el envío y el descuento, y la diferencia parecía venta sin
+//     facturar cuando era criterio.
+//   - Un pedido con cualquier factura autorizada que no sea nota de crédito
+//     está facturado, sea del mes que sea: el de octubre facturado en
+//     noviembre no es «sin factura». Uno con nota de crédito parcial sigue
+//     facturado (el comprobante existe); uno con la factura en borrador no.
+//   - Los cancelados no cuentan.
+func (s *Servicio) sinFacturaDelMes(ctx context.Context, idesde, ihasta time.Time) (Totales, error) {
+	var t Totales
+	var total jsmath.Num
+	err := s.pool.QueryRow(ctx, `
+		SELECT coalesce(sum(CASE WHEN margenes.bruto > 0 THEN o.total * margenes.neto / margenes.bruto ELSE o.total / 1.21 END), 0), count(*)::int
+		FROM orders o `+margenes+`
+		WHERE o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2
+		  AND NOT EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.`+conCae+` AND f.tipo::text NOT LIKE 'nota_credito%')`,
+		idesde, ihasta).Scan(&total, &t.Cantidad)
+	t.Total = jsmath.Redondear2(total.F())
+	return t, err
 }

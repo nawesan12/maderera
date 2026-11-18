@@ -233,6 +233,19 @@ type FilaDeReporte struct {
 	NetoVenta      float64  `json:"netoVenta"`
 	Costo          *float64 `json:"costo"`
 	LineasSinCosto float64  `json:"lineasSinCosto"`
+	// NetoCosteado: la venta sin IVA de los renglones con costo. El margen
+	// es NetoCosteado − Costo, nunca NetoVenta − Costo (ver ventas.go).
+	NetoCosteado float64 `json:"netoCosteado"`
+}
+
+// MargenDeLaFila es lo que deja la fila sobre lo que tiene costo; nil si
+// nada lo tiene.
+func MargenDeLaFila(f FilaDeReporte) *float64 {
+	if f.Costo == nil {
+		return nil
+	}
+	m := f.NetoCosteado - *f.Costo
+	return &m
 }
 
 // Plural es plural de lib/formato.ts.
@@ -266,28 +279,31 @@ func CsvReporteDeVentas(corte string, filas []FilaDeReporte) string {
 		t("Costo"), t("Margen"), t("Renglones sin costo")}, ";")}
 	for _, f := range filas {
 		costo, margen := "", ""
-		if f.Costo != nil {
+		if m := MargenDeLaFila(f); m != nil {
 			costo = numero(*f.Costo)
-			margen = numero(f.NetoVenta - *f.Costo)
+			margen = numero(*m)
 		}
 		lineas = append(lineas, strings.Join([]string{t(f.Etiqueta), texto(f.Detalle), cantidad(f.Cantidad), numero(f.Total),
 			numero(f.NetoVenta), costo, margen, entero(f.LineasSinCosto)}, ";"))
 	}
-	var total, netoTotal, costoTotal, sinCosto float64
+	// El neto del total es el de todas las filas, como «Vendido sin IVA» en
+	// pantalla; el margen, el de lo costeado.
+	var total, netoTotal, costeado, costoTotal, sinCosto float64
 	costeados := 0
 	for _, f := range filas {
 		total = float64(total + f.Total)
+		netoTotal = float64(netoTotal + f.NetoVenta)
 		sinCosto = float64(sinCosto + f.LineasSinCosto)
 		if f.Costo != nil {
 			costeados++
-			netoTotal = float64(netoTotal + f.NetoVenta)
+			costeado = float64(costeado + f.NetoCosteado)
 			costoTotal = float64(costoTotal + *f.Costo)
 		}
 	}
 	costo, margen := "", ""
 	if costeados > 0 {
 		costo = numero(costoTotal)
-		margen = numero(netoTotal - costoTotal)
+		margen = numero(costeado - costoTotal)
 	}
 	lineas = append(lineas, strings.Join([]string{t("Total"), t(""), t(""), numero(total), numero(netoTotal), costo, margen, entero(sinCosto)}, ";"))
 	return "\ufeff" + strings.Join(lineas, "\r\n") + "\r\n"

@@ -321,7 +321,13 @@ export interface components {
             customerId: string | null;
             /** Format: date-time */
             createdAt: string;
+            sinCobrar: components["schemas"]["SinCobrar"];
         };
+        /**
+         * Format: double
+         * @description Lo que falta cobrar sin pasar por la cuenta corriente (el total menos lo cobrado en línea); null si no falta nada o si la deuda está en la cuenta del cliente. La misma regla que «Me deben».
+         */
+        SinCobrar: number | null;
         ItemDePedido: {
             id: string;
             orderId: string;
@@ -405,6 +411,7 @@ export interface components {
             saldoCliente: number | null;
             /** @description AAAA-MM-DD */
             entregarEl: string | null;
+            sinCobrar: components["schemas"]["SinCobrar"];
         };
     };
     responses: {
@@ -438,6 +445,7 @@ export interface operations {
         parameters: {
             query?: {
                 busqueda?: string;
+                /** @description Un estado del pedido, o sin-cobrar en el historial (los entregados sin cobrar, el más viejo primero) */
                 estado?: string;
                 sucursal?: string;
                 /** @description tablero: lo que está en curso más lo entregado o cancelado en la última semana. historial: lo cerrado, de a 50 (pagina), con desde y hasta. Sin vista, todo (como antes). */

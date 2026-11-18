@@ -24,6 +24,9 @@ type FilaDeReporte struct {
 	NetoVenta      float64  `json:"netoVenta"`
 	Costo          *float64 `json:"costo"`
 	LineasSinCosto float64  `json:"lineasSinCosto"`
+	// NetoCosteado: la venta sin IVA de los renglones con costo, contra la
+	// que se mide el margen (la misma cuenta que la pantalla y el CSV).
+	NetoCosteado float64 `json:"netoCosteado"`
 }
 
 // DatosReporteVentas es lo que recibe reporteDeVentasPdf.
@@ -54,15 +57,16 @@ func ReporteDeVentas(d DatosReporteVentas, _ time.Time) ([]byte, error) {
 	h.Raya(y, 0, Color{})
 	y -= 16
 
-	total, netoTotal, costoTotal, sinCosto := 0.0, 0.0, 0.0, 0.0
+	total, netoTotal, costeado, costoTotal, sinCosto := 0.0, 0.0, 0.0, 0.0, 0.0
 	costeadas := 0
 	for _, f := range d.Filas {
 		total = total + f.Total
 	}
 	for _, f := range d.Filas {
+		netoTotal = netoTotal + f.NetoVenta
 		if f.Costo != nil {
 			costeadas++
-			netoTotal = netoTotal + f.NetoVenta
+			costeado = costeado + f.NetoCosteado
 		}
 	}
 	for _, f := range d.Filas {
@@ -76,14 +80,14 @@ func ReporteDeVentas(d DatosReporteVentas, _ time.Time) ([]byte, error) {
 
 	cifras := [][2]string{{Moneda(total), "vendido, con IVA"}}
 	if costeadas > 0 {
-		base := netoTotal
-		if base == 0 || base != base { // netoTotal || 1
+		base := costeado
+		if base == 0 || base != base { // costeado || 1
 			base = 1
 		}
 		cifras = append(cifras,
 			[2]string{Moneda(netoTotal), "neto sin IVA"},
 			[2]string{Moneda(costoTotal), "costo"},
-			[2]string{numeroJS(jsmath.Round(((netoTotal-costoTotal)/base)*100)) + "%", "margen"},
+			[2]string{numeroJS(jsmath.Round(((costeado-costoTotal)/base)*100)) + "%", "margen"},
 		)
 	}
 
@@ -146,7 +150,7 @@ func ReporteDeVentas(d DatosReporteVentas, _ time.Time) ([]byte, error) {
 		}
 		margen := "—"
 		if f.Costo != nil {
-			margen = Moneda(f.NetoVenta - *f.Costo)
+			margen = Moneda(f.NetoCosteado - *f.Costo)
 		}
 		participacion := "—"
 		if total > 0 {

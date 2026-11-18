@@ -91,6 +91,9 @@ func TestNumerosDelDueno(t *testing.T) {
 		('2026-10-03T00:00:00Z', 'flete', 'a', 100, 'efectivo'), ('2026-09-15T00:00:00Z', 'flete', 'b', 50, 'efectivo'),
 		('2026-09-16T00:00:00Z', 'flete', 'c', 30, 'efectivo')`)
 
+	// Las ventas del mostrador se cobran en el acto: ninguna es «sin cobrar».
+	e.exec(t, `update orders set estado_pago = 'pagado' where origen = 'mostrador'`)
+
 	c200, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
 	var n NumerosDelDueno
 	if err := json.Unmarshal([]byte(cuerpo), &n); c200 != 200 || err != nil {
@@ -185,5 +188,200 @@ func TestParaHoyLoQueSeSumo(t *testing.T) {
 	e.exec(t, `update site_settings set valor = 'si' where clave = 'tienda_activa'`)
 	if _, cuerpo, _ = pedir(t, adm, e.u+"inicio/pendientes"); strings.Contains(cuerpo, "catalogo-") {
 		t.Errorf("tienda encendida: %s", cuerpo)
+	}
+}
+
+// «Me deben» suma lo entregado sin cobrar que no pasó por la cuenta
+// corriente, por su saldo: el dueño vio «Me deben $0» con mercadería
+// entregada y sin cobrar. Lo que ya es deuda de la cuenta no se cuenta dos
+// veces.
+func TestMeDebenConPedidosSinCobrar(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	cliente := e.id(t, `insert into customers (nombre, dias_credito) values ('Constructora', 30) returning id`)
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, referencia, created_at) values ($1, 'compra', 1000, 'P-CC', '2026-10-10T15:00:00Z')`, cliente)
+	cuando := time.Date(2026, 10, 12, 10, 0, 0, 0, Argentina)
+	pedido := func(numero, origen, estado, estadoPago string, medio any, total float64, cli *string) string {
+		id := e.pedido(t, numero, e.central, estado, origen, cuando, cli)
+		e.exec(t, `update orders set estado_pago = $2, medio_pago = $3, total = $4 where id = $1`, id, estadoPago, medio, total)
+		return id
+	}
+	// Cuentan: el entregado en efectivo y pendiente, y el señado (por su saldo).
+	pedido("P-1", "presupuesto", "entregado", "pendiente", "efectivo", 500, nil)
+	senado := pedido("P-2", "tienda", "entregado", "pendiente", "transferencia", 800, nil)
+	e.exec(t, `insert into payments (order_id, tipo, proveedor, medio, monto, estado, acreditado_at) values ($1, 'pedido', 'transferencia', 'transferencia', 200, 'aprobado', '2026-10-11T15:00:00Z')`, senado)
+	// No cuentan: a cuenta corriente (ya está en la cuenta: la de P-CC),
+	// pagado, cancelado, todavía «listo», la venta del mostrador «parcial» y
+	// el del checkout que asentó su compra en la cuenta.
+	pedido("P-CC", "presupuesto", "entregado", "pendiente", "cuenta_corriente", 1000, &cliente)
+	pedido("P-3", "presupuesto", "entregado", "pagado", "efectivo", 300, nil)
+	pedido("P-4", "presupuesto", "cancelado", "pendiente", "efectivo", 300, nil)
+	pedido("P-5", "presupuesto", "listo", "pendiente", "efectivo", 300, nil)
+	pedido("P-6", "mostrador", "entregado", "parcial", "efectivo", 300, &cliente)
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, referencia, created_at) values ($1, 'compra', 200, 'P-7', '2026-10-12T15:00:00Z')`, cliente)
+	pedido("P-7", "tienda", "entregado", "pendiente", nil, 200, &cliente)
+
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	if err := json.Unmarshal([]byte(cuerpo), &n); err != nil {
+		t.Fatal(cuerpo)
+	}
+	// La cuenta corriente: 1000 + 200 (P-7) del único cliente, nada vencido.
+	quiere := MeDeben{Total: 2300, Vencido: 0, Clientes: 1, ClientesConVencido: 0, PedidosSinCobrar: Monto{Total: 1100, Cantidad: 2}}
+	if n.MeDeben != quiere {
+		t.Errorf("me deben: %+v, quería %+v", n.MeDeben, quiere)
+	}
+}
+
+// Las anuladas de los últimos siete días: Devuelto es el efectivo que salió
+// de la caja (el mismo número que el arqueo), no el total de la venta; y
+// las que siguen con su factura viva se cuentan aparte.
+func TestAnuladasDeLaSemana(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	usuario := e.id(t, `select id from "user" limit 1`)
+	turno := e.id(t, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, '2026-10-08T11:00:00Z') returning id`, e.central, usuario)
+	anulada := func(numero string, total float64, cuando time.Time, efectivo float64) string {
+		id := e.pedido(t, numero, e.central, "cancelado", "mostrador", cuando.Add(-time.Hour), nil)
+		e.exec(t, `update orders set total = $2, estado_pago = 'reintegrado' where id = $1`, id, total)
+		e.exec(t, `insert into order_status_history (order_id, estado, nota, created_by_user_id, created_at) values ($1, 'cancelado', 'Anulada en el mostrador: error', $2, $3)`, id, usuario, cuando)
+		if efectivo > 0 {
+			e.exec(t, `insert into cash_movements (session_id, tipo, monto, order_id, created_at) values ($1, 'devolucion', $2, $3, $4)`, turno, -efectivo, id, cuando)
+		}
+		return id
+	}
+	factura := func(pedido, tipo, estado string, numero int) {
+		e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
+			values ($1, 3, $2, 'X', 100, 21, 0, 0, 0, 121, $3, '2026-10-14T15:00:00Z', '7612345678', $4)`, tipo, numero, estado, pedido)
+	}
+	// Hoy: 300 en efectivo y 200 con tarjeta, con la factura viva.
+	conFactura := anulada("M-1", 500, time.Date(2026, 10, 15, 10, 0, 0, 0, Argentina), 300)
+	factura(conFactura, "factura_b", "autorizada", 1)
+	// Ayer, a cuenta corriente: no salió plata.
+	anulada("M-2", 400, time.Date(2026, 10, 14, 18, 0, 0, 0, Argentina), 0)
+	// El sábado, con tarjeta: tampoco salió del cajón. Su factura ya tiene
+	// la nota de crédito que la anula.
+	conNota := anulada("M-3", 250, time.Date(2026, 10, 10, 18, 0, 0, 0, Argentina), 0)
+	factura(conNota, "factura_b", "anulada", 2)
+	factura(conNota, "nota_credito_b", "autorizada", 3)
+	// Hace siete días a las 23:30: afuera, con su devolución.
+	anulada("M-4", 999, time.Date(2026, 10, 8, 23, 30, 0, 0, Argentina), 999)
+	// Una venta vigente no cuenta.
+	e.pedido(t, "M-5", e.central, "entregado", "mostrador", time.Date(2026, 10, 15, 9, 0, 0, 0, Argentina), nil)
+
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	if err := json.Unmarshal([]byte(cuerpo), &n); err != nil {
+		t.Fatal(cuerpo)
+	}
+	if quiere := (Anuladas{Cantidad: 3, Total: 1150, Devuelto: 300, ConFacturaViva: 1}); n.Anuladas != quiere {
+		t.Errorf("anuladas: %+v, quería %+v", n.Anuladas, quiere)
+	}
+}
+
+// Un costo en $0 no es un costo: el renglón cuenta como sin costo y no suma
+// al margen. La fila que mezcla renglones con y sin costo mide su margen
+// contra la venta de los que tienen (NetoCosteado). Y Reportes, la Ganancia
+// del mes y el resultado del Cierre dan la misma venta sin IVA.
+func TestCostoCeroYUnSoloVendido(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, tirante := e.catalogo(t)
+	// 1210 con costo 600, 605 a costo $0 (la recepción cargada en cero) y
+	// 121 sin costo: vendido sin IVA 1000 + 500 + 100.
+	e.pedido(t, "V-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina), nil,
+		[4]any{placa, 1.0, 1210.0, 600.0}, [4]any{placa, 1.0, 605.0, 0.0}, [4]any{tirante, 1.0, 121.0, nil})
+
+	_, cuerpo, _ := pedir(t, adm, e.u+"reportes/ventas?corte=producto&periodo=mes")
+	var filas []FilaDeReporte
+	if err := json.Unmarshal([]byte(cuerpo), &filas); err != nil {
+		t.Fatal(cuerpo)
+	}
+	var vendido float64
+	for _, f := range filas {
+		vendido += f.NetoVenta
+		if f.Etiqueta == "Fenólico" {
+			if f.Costo == nil || *f.Costo != 600 || f.NetoCosteado != 1000 || f.NetoVenta != 1500 || f.LineasSinCosto != 1 {
+				t.Errorf("fenólico: %+v", f)
+			}
+			if m := MargenDeLaFila(f); m == nil || *m != 400 {
+				t.Errorf("margen del fenólico: %v", m)
+			}
+		}
+	}
+	if vendido != 1600 {
+		t.Errorf("vendido sin IVA en Reportes: %v", vendido)
+	}
+	_, cuerpo, _ = pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	_ = json.Unmarshal([]byte(cuerpo), &n)
+	if g := n.Ganancia.Actual; g.VentasNetas != vendido || g.Costo != 600 || g.LineasSinCosto != 2 {
+		t.Errorf("ganancia: %+v", g)
+	}
+	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
+	var r ResumenDelMes
+	_ = json.Unmarshal([]byte(cuerpo), &r)
+	if r.Resultado.Actual.VentasNetas != vendido {
+		t.Errorf("resultado del cierre: %+v", r.Resultado.Actual)
+	}
+}
+
+// «Sin factura» del Cierre: lo vendido en el mes sin factura autorizada, con
+// el neto de la cabecera (envío y descuento incluidos). La factura en
+// borrador no factura; la cancelada no cuenta; la venta facturada en otro
+// mes tampoco es «sin factura». Y no llega a los asientos.
+func TestCierreSinFactura(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, _ := e.catalogo(t)
+	octubre := time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina)
+	factura := func(pedido, estado string, numero int, cae any, emitida string) {
+		e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
+			values ('factura_b', 3, $1, 'X', 1000, 210, 0, 0, 0, 1210, $2, $3, $4, $5)`, numero, estado, emitida, cae, pedido)
+	}
+	facturado := e.pedido(t, "F-1", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 1210.0, 600.0})
+	factura(facturado, "autorizada", 1, "761", "2026-10-05T15:00:00Z")
+	// Sin factura: 1210 con IVA más 121 de envío → 1100 sin IVA.
+	sinFactura := e.pedido(t, "F-2", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 1210.0, 600.0})
+	e.exec(t, `update orders set total = 1331 where id = $1`, sinFactura)
+	// En borrador: 605 → 500.
+	borrador := e.pedido(t, "F-3", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 605.0, 300.0})
+	factura(borrador, "borrador", 2, nil, "2026-10-05T15:00:00Z")
+	e.pedido(t, "F-4", e.central, "cancelado", "mostrador", octubre, nil, [4]any{placa, 1.0, 999.0, 1.0})
+	// De octubre, facturado el 2 de noviembre: no es «sin factura».
+	tarde := e.pedido(t, "F-5", e.central, "entregado", "mostrador", time.Date(2026, 10, 31, 20, 0, 0, 0, Argentina), nil, [4]any{placa, 1.0, 1210.0, 600.0})
+	factura(tarde, "autorizada", 3, "762", "2026-11-02T15:00:00Z")
+
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
+	var r ResumenDelMes
+	if err := json.Unmarshal([]byte(cuerpo), &r); err != nil {
+		t.Fatal(cuerpo)
+	}
+	if r.SinFactura != (Totales{Total: 1600, Cantidad: 2}) {
+		t.Errorf("sin factura: %+v", r.SinFactura)
+	}
+	if r.Ventas.Cantidad != 1 || r.Ventas.Neto != 1000 {
+		t.Errorf("facturado: %+v", r.Ventas)
+	}
+	_, asientos, _ := pedir(t, adm, e.u+"cierre/asientos?periodo=2026-10")
+	if strings.Contains(asientos, "1600") || strings.Contains(strings.ToLower(asientos), "sin factura") {
+		t.Errorf("«sin factura» no va a los asientos: %s", asientos)
+	}
+}
+
+// Una venta anulada con factura viva es un pendiente del cierre.
+func TestCierreAnuladaConFacturaViva(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	viva := e.pedido(t, "A-1", e.central, "cancelado", "mostrador", time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina), nil)
+	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
+		values ('factura_b', 3, 1, 'X', 100, 21, 0, 0, 0, 121, 'autorizada', '2026-10-05T15:00:00Z', '761', $1)`, viva)
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	if !strings.Contains(cuerpo, `"clave":"facturas-vivas"`) || !strings.Contains(cuerpo, `"cantidad":1`) {
+		t.Errorf("pendientes: %s", cuerpo)
+	}
+	e.exec(t, `update invoices set estado = 'anulada'`)
+	if _, cuerpo, _ = pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10"); strings.Contains(cuerpo, "facturas-vivas") {
+		t.Errorf("con la nota de crédito ya no es pendiente: %s", cuerpo)
 	}
 }

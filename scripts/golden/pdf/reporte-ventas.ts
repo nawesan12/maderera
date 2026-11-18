@@ -20,15 +20,22 @@ function filas(n: number, conCosto: number): FilaDeReporte[] {
     const total = azar() < 0.05 ? azar() * 1e11 : Math.round(azar() * 5e6 * 100) / 100;
     const neto = total / (azar() < 0.2 ? 1.105 : 1.21);
     const r = azar();
+    // En el orden de antes: el azar es una sola serie.
+    const etiqueta = sinEmoji(palabras(1 + entero(10)));
+    const cantidad = azar() < 0.1 ? -azar() * 3 : azar() * 20000;
+    const costo = r < conCosto ? neto * (0.3 + azar() * 0.9) : null;
     return {
       clave: `k${i}`,
-      etiqueta: sinEmoji(palabras(1 + entero(10))),
+      etiqueta,
       detalle: null,
-      cantidad: azar() < 0.1 ? -azar() * 3 : azar() * 20000,
+      cantidad,
       total,
       netoVenta: neto,
-      costo: r < conCosto ? neto * (0.3 + azar() * 0.9) : null,
+      costo,
       lineasSinCosto: r < conCosto ? (azar() < 0.2 ? entero(3) : 0) : 1 + entero(5),
+      // Desde T2 (18/11) el margen se mide contra lo costeado; los casos
+      // guardados llevan lo de antes: todo el neto de la fila con costo.
+      netoCosteado: costo === null ? 0 : neto,
     };
   });
 }
@@ -37,7 +44,7 @@ export const casos: CasoPdf[] = [
   caso("vacio", { filas: [], titulo: "Por producto", periodo: "marzo de 2026", filtros: null, emisor: null }),
   caso("sin-costos", { filas: filas(8, 0), titulo: "Por rubro", periodo: "Últimos 30 días", filtros: "Carpintería · Casa Central", emisor: EMISOR }),
   caso("un-renglon", {
-    filas: [{ clave: "a", etiqueta: "Machimbre de pino 1/2\" × 4\" — cepillado “primera”", detalle: null, cantidad: 0.4, total: 0, netoVenta: 0, costo: 0, lineasSinCosto: 1 }],
+    filas: [{ clave: "a", etiqueta: "Machimbre de pino 1/2\" × 4\" — cepillado “primera”", detalle: null, cantidad: 0.4, total: 0, netoVenta: 0, costo: 0, lineasSinCosto: 1, netoCosteado: 0 }],
     titulo: "Por cliente",
     periodo: "1/3/2026 al 5/3/2026",
     filtros: "",

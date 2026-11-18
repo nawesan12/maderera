@@ -22,6 +22,13 @@ import (
 // debe más y hace más tiempo va arriba. Van también los clientes dados de
 // baja: la baja no cancela la deuda, y el contador la necesita igual (ya
 // quedan afuera los que no deben, por el saldo).
+//
+// **No lleva los pedidos entregados sin cobrar**, que «Me deben» del
+// Resumen sí suma (fragmentos.SinCobrarDelPedido): este archivo es el mayor
+// de la cuenta corriente, lo que el contador concilia contra deudores por
+// ventas, y esos pedidos no tienen asiento de deuda ni cliente obligado (son
+// de contado que no se cobró). Por eso los dos totales difieren
+// en ese renglón, que el Resumen muestra aparte.
 func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, error) {
 	rs, err := s.pool.Query(ctx, `
 		SELECT c.id, coalesce(c.codigo_legacy, ''), c.nombre, coalesce(c.cuit, ''), coalesce(c.telefono, ''), m.monto, m.created_at

@@ -264,6 +264,14 @@ export interface components {
             /** Format: int64 */
             invoiceNumero: number | null;
             invoiceTipo: string | null;
+            anulada: boolean;
+            anuladaPor: string | null;
+            /** Format: date-time */
+            anuladaAt: string | null;
+            /** @description El de la anulación */
+            motivo: string | null;
+            /** @description Anulada con la factura autorizada y sin nota de crédito */
+            facturaViva: boolean;
         };
     };
     responses: {

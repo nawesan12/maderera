@@ -1930,3 +1930,25 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   50 × 25 mm con `@page`); se arma en `/admin/stock/etiquetas`.
 - Sin migraciones: los índices que hacen falta (trigramas de nombre, sku,
   etiqueta y marca; `inventory` por variante) ya estaban.
+
+## T5 del comité: el sitio con cara propia (18/11, rama `carril-c`)
+
+- **Migración 00150**: saca de `product_images` las fotos de banco (las 8
+  portadas, las 3 viejas de la 00105 y la «madera» del sembrado). Copia en
+  `product_images_rubro_00150`; el Down la devuelve con su id y su orden.
+  `db/migracion_00150_test.go` la corre sobre datos. **Antes de aplicarla en
+  producción**, contar con la consulta del encabezado de la migración las
+  filas `/fotos/%` creadas después del 18/11: esas no vinieron de la 00105.
+- **La migración encola `next.revalidar`** (etiqueta `catalogo`, `/`,
+  `/catalogo`, `/moldava`) si borró algo: sin eso las fichas armadas de
+  antemano seguirían con la foto vieja. Hace falta el worker corriendo con
+  `REVALIDAR_SECRETO`; si no está, revalidar a mano por
+  `/api/interno/revalidar`.
+- **Contacto**: `email` dejó de ser obligatorio en el contrato. Go pide
+  WhatsApp o correo (`contacto`), el teléfono con 8 dígitos o más, y el
+  limitador cuenta por IP y por correo o por el `wa_id` del teléfono.
+- **Pendiente de la clienta**: dónde se cortan las placas
+  (`DONDE_SE_CORTA` en `lib/sucursales.ts`).
+- **Sin verificar a ojo** (no hay servidor en el carril): la placa en
+  celular y escritorio, en claro y en oscuro; la veta al 7 %; la hoja del
+  asistente en el celular. Va para el carril que verifica.

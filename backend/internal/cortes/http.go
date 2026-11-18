@@ -82,7 +82,9 @@ func (o respuesta) VisitParametrosDeCalculoResponse(w http.ResponseWriter) error
 	return o.escribir(w)
 }
 func (o respuesta) VisitPlacasCortablesResponse(w http.ResponseWriter) error { return o.escribir(w) }
-func (o respuesta) VisitTapacantosDelCatalogoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitTapacantosDelCatalogoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitResolverCarritoResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitTarifasActivasResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 

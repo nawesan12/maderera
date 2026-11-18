@@ -43,7 +43,7 @@ func armar(t *testing.T) *entorno {
 	t.Helper()
 	pool := pruebas.Base(t)
 	ses := auth.Nuevo(auth.Config{Secreto: "secreto-de-prueba-del-mostrador-de-32-caracteres", URL: "http://localhost"}, pool)
-	svc := Nuevo(pool, silencio)
+	svc := Nuevo(pool, silencio).ConClaveDeCola("secreto-de-prueba-del-mostrador-de-32-caracteres")
 	m := http.NewServeMux()
 	svc.Rutas(m)
 	mostradorapi.HandlerWithOptions(

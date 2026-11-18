@@ -32,6 +32,8 @@ type Servicio struct {
 	pool  *pgxpool.Pool
 	log   *slog.Logger
 	ahora func() time.Time
+	// claveCola firma las ventas encoladas sin conexión (firma.go).
+	claveCola []byte
 }
 
 // Nuevo arma el servicio.

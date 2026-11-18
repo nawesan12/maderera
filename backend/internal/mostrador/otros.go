@@ -304,11 +304,17 @@ func (s *Servicio) Latido(ctx context.Context, ses *auth.Sesion, cuerpo map[stri
 	if ses.RolStaff != nil {
 		rol = string(*ses.RolStaff)
 	}
-	return map[string]any{
+	out := map[string]any{
 		"sesion":     map[string]any{"userId": ses.UserID, "nombre": ses.Nombre, "staffRole": rol},
 		"turno":      turno,
 		"servidorAt": FechaJS(s.ahora()),
-	}, nil
+	}
+	// La firma con que esta sesión deja sus ventas en la cola (firma.go). Un
+	// sw.js viejo la ignora.
+	if firma, vence := s.FirmaDeCola(ses.UserID, s.ahora()); firma != "" {
+		out["firmaCola"] = map[string]any{"usuarioId": ses.UserID, "firma": firma, "vence": FechaJS(vence)}
+	}
+	return out, nil
 }
 
 var _ = strings.TrimSpace

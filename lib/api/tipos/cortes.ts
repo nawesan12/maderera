@@ -292,6 +292,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cortes/tapacantos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TapacantosDelCatalogo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cortes/plano": {
         parameters: {
             query?: never;
@@ -415,6 +431,8 @@ export interface components {
             acomodoManual?: string;
             anchoSierraMm?: string;
             consulta?: string;
+            /** @description Cuál de las placas de la consulta (vacío es la primera) */
+            consultaGrupo?: string;
             piezas: {
                 [key: string]: unknown;
             }[];
@@ -824,6 +842,32 @@ export interface components {
             corteId: string | null;
             /** Format: date-time */
             createdAt: string;
+            grupos: components["schemas"]["GrupoDeConsulta"][];
+        };
+        GrupoDeConsulta: {
+            orden: number;
+            variantId: string | null;
+            material: string;
+            /** Format: double */
+            placaLargoMm: number;
+            /** Format: double */
+            placaAnchoMm: number;
+            mitad: string | null;
+            cantoDescripcion: string | null;
+            piezas: components["schemas"]["PiezaAcortar"][];
+            /** Format: double */
+            metrosCanto: number;
+            plano: components["schemas"]["Plano"];
+            corteId: string | null;
+        };
+        Tapacanto: {
+            variantId: string;
+            descripcion: string;
+            color: string | null;
+            /** Format: double */
+            espesorMm: number | null;
+            /** @description PVC, Melamínico o ABS */
+            tipo: string | null;
         };
         PlacaCortable: {
             variantId: string;
@@ -1415,6 +1459,26 @@ export interface operations {
                 };
             };
             403: components["responses"]["Problema"];
+        };
+    };
+    TapacantosDelCatalogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los tapacantos del catálogo, sin precio, para elegir en el armador */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tapacanto"][];
+                };
+            };
         };
     };
     CalcularPlano: {

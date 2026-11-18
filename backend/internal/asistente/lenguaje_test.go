@@ -123,12 +123,16 @@ func TestEntenderDatos(t *testing.T) {
 
 func TestLeerDespiece(t *testing.T) {
 	d := LeerDespiece("Necesito 4 de 600x400 en melamina blanca con canto")
-	if d == nil || !reflect.DeepEqual(d.Piezas, []Pieza{{600, 400, 4, 2, 0}}) || d.Material != "melamina blanca" {
+	if d == nil || !reflect.DeepEqual(d.Piezas, []Pieza{{600, 400, 4, 2, 0, false}}) || d.Material != "melamina blanca" {
 		t.Errorf("simple: %+v", d)
 	}
 	d = LeerDespiece("cortame 2 piezas de 400 x 900 y 300x200 x 6, canto en los 4 lados")
-	if d == nil || !reflect.DeepEqual(d.Piezas, []Pieza{{900, 400, 2, 2, 2}, {300, 200, 6, 2, 2}}) {
+	if d == nil || !reflect.DeepEqual(d.Piezas, []Pieza{{900, 400, 2, 2, 2, false}, {300, 200, 6, 2, 2, false}}) {
 		t.Errorf("varias: %+v", d)
+	}
+	d = LeerDespiece("4 de 600x400 en roble con veta")
+	if d == nil || !reflect.DeepEqual(d.Piezas, []Pieza{{600, 400, 4, 0, 0, true}}) || d.Material != "roble" {
+		t.Errorf("con veta: %+v", d)
 	}
 	if LeerDespiece("tenés fenólico 2440x1220?") != nil || LeerDespiece("hola") != nil {
 		t.Error("una placa entera no es un despiece")
@@ -153,8 +157,12 @@ func TestConContexto(t *testing.T) {
 }
 
 func TestEnlaceDelDespiece(t *testing.T) {
-	got := EnlaceDelDespiece(Despiece{Piezas: []Pieza{{600, 400, 4, 2, 0}}, Material: "melamina blanca"})
+	got := EnlaceDelDespiece(Despiece{Piezas: []Pieza{{600, 400, 4, 2, 0, false}}, Material: "melamina blanca"})
 	if got != "/corte#piezas=600x400x4c20&material=melamina+blanca" {
 		t.Errorf("enlace: %s", got)
+	}
+	got = EnlaceDelDespiece(Despiece{Piezas: []Pieza{{600, 400, 4, 2, 0, true}, {300, 200, 1, 0, 0, true}}})
+	if got != "/corte#piezas=600x400x4c20v_300x200x1v" {
+		t.Errorf("enlace con veta: %s", got)
 	}
 }

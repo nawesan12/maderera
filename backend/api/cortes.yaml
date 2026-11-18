@@ -328,6 +328,15 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/PlacaCortable" } }
         "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/cortes/tapacantos:
+    get:
+      operationId: TapacantosDelCatalogo
+      responses:
+        "200":
+          description: Los tapacantos del catálogo, sin precio, para elegir en el armador
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Tapacanto" } }
   /api/v1/cortes/plano:
     post:
       operationId: CalcularPlano
@@ -488,6 +497,7 @@ components:
         acomodoManual: { type: string }
         anchoSierraMm: { type: string }
         consulta: { type: string, maxLength: 40 }
+        consultaGrupo: { type: string, maxLength: 2, description: Cuál de las placas de la consulta (vacío es la primera) }
         piezas: { type: array, maxItems: 500, items: { type: object, additionalProperties: true } }
     PiezaDelCorte:
       type: object
@@ -868,7 +878,7 @@ components:
             pvc: { $ref: "#/components/schemas/MedidaDeTabla" }
     ConsultaDeCorte:
       type: object
-      required: [token, variantId, material, placaLargoMm, placaAnchoMm, mitad, cantoDescripcion, piezas, anchoSierraMm, sucursal, metrosCanto, plano, corteId, createdAt]
+      required: [token, variantId, material, placaLargoMm, placaAnchoMm, mitad, cantoDescripcion, piezas, anchoSierraMm, sucursal, metrosCanto, plano, corteId, createdAt, grupos]
       properties:
         token: { type: string }
         variantId: { type: string, nullable: true }
@@ -884,6 +894,31 @@ components:
         plano: { $ref: "#/components/schemas/Plano" }
         corteId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
+        grupos: { type: array, items: { $ref: "#/components/schemas/GrupoDeConsulta" } }
+    GrupoDeConsulta:
+      type: object
+      required: [orden, variantId, material, placaLargoMm, placaAnchoMm, mitad, cantoDescripcion, piezas, metrosCanto, plano, corteId]
+      properties:
+        orden: { type: integer }
+        variantId: { type: string, nullable: true }
+        material: { type: string }
+        placaLargoMm: { type: number, format: double }
+        placaAnchoMm: { type: number, format: double }
+        mitad: { type: string, nullable: true }
+        cantoDescripcion: { type: string, nullable: true }
+        piezas: { type: array, items: { $ref: "#/components/schemas/PiezaAcortar" } }
+        metrosCanto: { type: number, format: double }
+        plano: { $ref: "#/components/schemas/Plano" }
+        corteId: { type: string, nullable: true }
+    Tapacanto:
+      type: object
+      required: [variantId, descripcion, color, espesorMm, tipo]
+      properties:
+        variantId: { type: string }
+        descripcion: { type: string }
+        color: { type: string, nullable: true }
+        espesorMm: { type: number, format: double, nullable: true }
+        tipo: { type: string, nullable: true, description: "PVC, Melamínico o ABS" }
     PlacaCortable:
       type: object
       required: [variantId, descripcion, largoMm, anchoMm, color, precio, admiteMedia, precioMediaPct, precioPorPasada, precioPorMetroCanto]

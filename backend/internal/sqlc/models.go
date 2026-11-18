@@ -5115,6 +5115,19 @@ type ConsultasCorte struct {
 	CreatedAt        pgtype.Timestamptz `json:"createdAt"`
 }
 
+type ConsultasCorteGrupo struct {
+	ConsultaID       string          `json:"consultaId"`
+	Orden            int32           `json:"orden"`
+	VariantID        *string         `json:"variantId"`
+	Material         string          `json:"material"`
+	PlacaLargoMm     jsmath.Num      `json:"placaLargoMm"`
+	PlacaAnchoMm     jsmath.Num      `json:"placaAnchoMm"`
+	Mitad            *string         `json:"mitad"`
+	CantoDescripcion *string         `json:"cantoDescripcion"`
+	Piezas           json.RawMessage `json:"piezas"`
+	CuttingOrderID   *string         `json:"cuttingOrderId"`
+}
+
 type CorreoHilo struct {
 	Casilla       string     `json:"casilla"`
 	Hilo          string     `json:"hilo"`
@@ -5609,6 +5622,7 @@ type Order struct {
 	CobradaAt        *time.Time   `json:"cobradaAt"`
 	SincronizadaAt   *time.Time   `json:"sincronizadaAt"`
 	SellerID         *string      `json:"sellerId"`
+	EntregarEl       pgtype.Date  `json:"entregarEl"`
 }
 
 type OrderItem struct {

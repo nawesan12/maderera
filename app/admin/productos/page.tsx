@@ -120,9 +120,6 @@ export default async function AdminProductosPage({
         <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
           <Package className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-base font-medium">Ningún producto coincide</p>
-          <p className="mt-1 text-base text-muted-foreground">
-            Probá con otras palabras o quitá el filtro de categoría.
-          </p>
         </div>
       ) : (
         <div className="mt-[22px]">

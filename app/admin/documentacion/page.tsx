@@ -59,7 +59,7 @@ export default async function DocumentacionAdminPage() {
           {reservados.length > 0 && (
             <Grupo
               titulo="Solo para profesionales"
-              detalle="Parte del valor del acceso"
+              // Parte del valor del acceso.
               icono={Lock}
               documentos={reservados}
               peso={peso}
@@ -69,7 +69,7 @@ export default async function DocumentacionAdminPage() {
           {publicos.length > 0 && (
             <Grupo
               titulo="Visibles para cualquiera"
-              detalle="Sirven para posicionar el sitio"
+              // Sirven para posicionar el sitio.
               icono={Unlock}
               documentos={publicos}
               peso={peso}
@@ -113,14 +113,12 @@ export default async function DocumentacionAdminPage() {
 
 function Grupo({
   titulo,
-  detalle,
   icono: Icono,
   documentos,
   peso,
   todasLasCategorias,
 }: {
   titulo: string;
-  detalle: string;
   icono: React.ComponentType<{ className?: string }>;
   documentos: Awaited<ReturnType<typeof listarDocumentos>>;
   peso: (bytes: number | null) => string;
@@ -133,7 +131,6 @@ function Grupo({
           <Icono className="h-5 w-5 text-muted-foreground" />
           {titulo}
         </h2>
-        <p className="text-base text-muted-foreground">{detalle}</p>
       </div>
 
       <ul className="divide-y">

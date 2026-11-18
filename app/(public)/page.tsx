@@ -29,6 +29,7 @@ import { ALCANCE_MOLDAVA } from "@/lib/empresa";
 import { SliderDePromos } from "@/components/home/slider-promos";
 import { FranjaBeneficios } from "@/components/franja-beneficios";
 import { bannerDelProfesional } from "@/lib/profesionales/beneficios";
+import { LetraChica } from "@/components/home/letra-chica";
 import { BotonCrearCuenta } from "@/components/boton-crear-cuenta";
 import { MARCAS_DE_PAGO, marcaDelMedio, type MarcaDePago } from "@/lib/medios-de-pago";
 import { metadatosDePagina } from "@/lib/seo";
@@ -497,24 +498,9 @@ function MediosDePago({
                 </h3>
                 {/* Se cortaba a dos renglones justo en la condición («…con
                     tope de reintegro de»), que es lo que hay que leer
-                    (hallazgo 47). Corto va entero; largo —Go lo deja llegar a
-                    600 caracteres— se despliega, para que una promo con letra
-                    chica no estire la fila entera de la grilla. El texto
-                    completo está en el `<summary>`, recortado mientras está
-                    cerrado: no se escribe dos veces. */}
-                {p.detalle &&
-                  (p.detalle.length <= 90 ? (
-                    <p className="mt-2 text-[13.5px] leading-relaxed text-texto-2">{p.detalle}</p>
-                  ) : (
-                    <details className="group mt-2 text-[13.5px] leading-relaxed text-texto-2">
-                      <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                        <span className="line-clamp-3 group-open:line-clamp-none">{p.detalle}</span>
-                        <span className="mt-1 inline-block font-semibold text-acento-texto group-open:hidden">
-                          Ver más
-                        </span>
-                      </summary>
-                    </details>
-                  ))}
+                    (hallazgo 47). Va entera si entra; si no, tres renglones
+                    y «Ver más», medido de verdad en `LetraChica`. */}
+                {p.detalle && <LetraChica texto={p.detalle} />}
                 <p className="mt-auto pt-3 text-[12.5px] font-medium text-texto-2">
                   {p.dias}
                   {p.dias && p.vigenciaHasta && " · "}

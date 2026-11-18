@@ -6,6 +6,10 @@ import {
   Tablero,
 } from "@/components/admin/kanban";
 import { haceCuanto } from "@/components/admin/formato";
+import { diasDesde } from "@/lib/formato";
+
+/** Más de esto en el tablero, el corte se marca como demorado. */
+const DIAS_DE_DEMORA = 3;
 import type { CorteListado } from "@/lib/dal/admin/cortes";
 import { AccionesCorte } from "./acciones";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
@@ -94,8 +98,12 @@ function TarjetaCorte({
   aviso: AvisoManualListo | null;
   soloMaquina?: boolean;
 }) {
+  // Un trabajo que lleva más de tres días sin terminar avisa solo: en la
+  // pizarra uno de hace dos meses se veía igual que uno de hoy.
+  const dias = diasDesde(corte.createdAt);
+  const demorado = corte.estado !== "retirado" && dias > DIAS_DE_DEMORA;
   return (
-    <TarjetaTablero destacada={corte.urgente}>
+    <TarjetaTablero destacada={corte.urgente || demorado}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           {posicion !== undefined && (
@@ -138,7 +146,7 @@ function TarjetaCorte({
         <p className="mt-2 text-sm text-muted-foreground">{corte.notas}</p>
       )}
 
-      <p className="mt-2 text-sm text-muted-foreground">
+      <p className={`mt-2 text-sm ${demorado ? "estado-problema font-medium" : "text-muted-foreground"}`}>
         {corte.sucursal} · {haceCuanto(corte.createdAt)}
       </p>
 

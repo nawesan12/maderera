@@ -7,6 +7,7 @@ import {
   Tablero,
 } from "@/components/admin/kanban";
 import { haceCuanto, moneda, plural } from "@/components/admin/formato";
+import { diasDesde } from "@/lib/formato";
 import { BuscadorPedidos } from "./buscador";
 import { listarPedidos, type PedidoListado } from "@/lib/dal/admin/ventas";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
@@ -306,9 +307,12 @@ async function Historial({
 
 function TarjetaPedido({ pedido, aviso }: { pedido: PedidoListado; aviso: AvisoManualListo | null }) {
   const sinCobrar = pedido.estadoPago !== "pagado";
+  // Un pedido que lleva más de dos días sin prepararse avisa solo.
+  const demorado =
+    ["pendiente", "preparando"].includes(pedido.estado) && diasDesde(pedido.createdAt) > 2;
 
   return (
-    <TarjetaTablero destacada={sinCobrar && pedido.estado === "listo"}>
+    <TarjetaTablero destacada={(sinCobrar && pedido.estado === "listo") || demorado}>
       <div className="flex items-start justify-between gap-2">
         <Link
           href={`/admin/pedidos/${pedido.id}`}
@@ -332,7 +336,7 @@ function TarjetaPedido({ pedido, aviso }: { pedido: PedidoListado; aviso: AvisoM
       <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
         <span>{plural(pedido.items, "producto")}</span>
         <span aria-hidden="true">·</span>
-        <span>{haceCuanto(pedido.createdAt)}</span>
+        <span className={demorado ? "estado-problema font-medium" : ""}>{haceCuanto(pedido.createdAt)}</span>
       </p>
 
       {pedido.tipoEntrega === "envio" ? (

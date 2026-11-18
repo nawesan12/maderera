@@ -365,3 +365,8 @@ export function enlaceDeWhatsapp(telefono: string, mensaje?: string): string {
   const base = `https://wa.me/${whatsappDestino(telefono)}`;
   return mensaje ? `${base}?text=${encodeURIComponent(mensaje)}` : base;
 }
+
+/** Días enteros desde una fecha hasta hoy. */
+export function diasDesde(fecha: Date): number {
+  return Math.max(0, Math.floor((Date.now() - fecha.getTime()) / 86_400_000));
+}

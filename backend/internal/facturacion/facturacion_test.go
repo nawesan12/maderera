@@ -466,6 +466,9 @@ func TestNotasYAnulacion(t *testing.T) {
 	admin := e.staff(t, "admin@mjbj.test", sqlc.StaffRoleAdmin)
 	campos := map[string]string{"receptorNombre": "Gómez SRL", "receptorCuit": "30-71234567-1", "receptorCondicionIva": "responsable_inscripto",
 		"guardarComoCliente": "on", "receptorDomicilio": "Juan B. Justo 1"}
+	// A cuenta corriente pasa por cobros.Credito: la ficha ya existe con límite.
+	var conLimite string
+	e.uno(t, `INSERT INTO customers (nombre, cuit, condicion_iva, limite_credito) VALUES ('Gómez SRL', '30712345671', 'responsable_inscripto', 1000000) RETURNING id`, &conLimite)
 	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(campos,
 		[4]string{"Fenólico", "10", "12100", "21"}, [4]string{"Tornillos", "4", "121", "21"}))
 	if st != 200 {

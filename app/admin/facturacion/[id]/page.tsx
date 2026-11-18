@@ -65,10 +65,16 @@ export async function generateMetadata({
 
 export default async function FichaComprobantePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ aviso?: string }>;
 }) {
   const { id } = await params;
+  // Lo deja la factura manual de contado cuando el efectivo no pudo entrar a
+  // ninguna caja. Es un código y no el texto, para que un enlace armado no
+  // pueda poner cualquier cosa en la pantalla.
+  const sinArqueo = (await searchParams).aviso === "caja";
   if (!esUuid(id)) notFound();
   const comprobante = await obtenerComprobante(id);
 
@@ -133,6 +139,16 @@ export default async function FichaComprobantePage({
           <MandarPorWhatsapp tipo="comprobante" id={comprobante.id} />
         </div>
       </div>
+
+      {sinArqueo && (
+        <p
+          role="status"
+          className="estado-espera flex items-center gap-2 rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base text-[var(--estado-tinta)]"
+        >
+          <ShieldAlert className="h-5 w-5 shrink-0" />
+          El efectivo no entró a ningún arqueo: registralo a mano desde el mostrador.
+        </p>
+      )}
 
       {/* Estado fiscal: es lo primero que hay que saber del comprobante */}
       {comprobante.cae ? (

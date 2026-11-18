@@ -792,6 +792,8 @@ export interface components {
             content: {
                 "application/json": {
                     invoiceId: string;
+                    /** @description Solo la factura manual de contado: el efectivo no entró a ningún arqueo */
+                    aviso?: string;
                 };
             };
         };

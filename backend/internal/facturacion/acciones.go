@@ -153,10 +153,14 @@ func en(xs []string, i int) valor {
 // EmitirManual es emitirManual: la venta que no pasó por un pedido. Con
 // «guardar como cliente» crea la ficha antes de emitir (o usa la que ya tiene
 // ese CUIT), y a un cliente con ficha la factura le genera la deuda.
-func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[string]string, ls LineasManuales) (string, error) {
+//
+// Devuelve, además del id, el aviso del cobro de contado cuando el efectivo no
+// pudo entrar a ningún arqueo (como Cobrar): sin él, con dos cajas abiertas
+// la plata quedaba fuera de las dos y nadie se enteraba.
+func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[string]string, ls LineasManuales) (string, *string, error) {
 	cab, err := validarCabecera(c)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	nombre, cuit, condicion, cliente := cab.nombre, cab.cuit, cab.condicion, cab.cliente
 	domicilio, obs := cab.domicilio, cab.obs
@@ -166,21 +170,31 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 	// lo que hacía siempre la factura manual.
 	comoPaga, medio, err := leerComoPaga(c)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if comoPaga == "cuenta_corriente" && c["comoPaga"] != "" && strings.TrimSpace(cliente) == "" && !guardar {
-		return "", errEmision("Para dejarlo en cuenta corriente elegí el cliente o guardalo como cliente nuevo.")
+		return "", nil, errEmision("Para dejarlo en cuenta corriente elegí el cliente o guardalo como cliente nuevo.")
+	}
+	// La caja a la que entra el efectivo de contado. La factura manual no
+	// tiene pedido del que sacar la sucursal (como Cobrar): con una sola caja
+	// abierta va a esa, y con varias la elige el formulario.
+	var sucursal *string
+	if suc := strings.TrimSpace(c["sucursal"]); suc != "" && comoPaga == "contado" {
+		if !plataforma.UUIDValido(suc) {
+			return "", nil, errEmision("Elegí la caja a la que entra el efectivo.")
+		}
+		sucursal = &suc
 	}
 	// El documento, con su dígito verificador: un CUIT mal tipeado no va a
 	// ARCA. Y una A sin CUIT salía con DocTipo 99 (consumidor final), que
 	// ARCA rechaza.
 	if strings.TrimSpace(cuit) != "" {
 		if _, msj := clientes.LeerDocumento(cuit); msj != "" {
-			return "", errEmision(msj)
+			return "", nil, errEmision(msj)
 		}
 	}
 	if m := faltaCuitParaLaA(condicion, &cuit); m != "" {
-		return "", errEmision(m)
+		return "", nil, errEmision(m)
 	}
 
 	var lineas []Linea
@@ -190,15 +204,15 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 		}
 		desc, cant, precio, alic, ok := validarLinea(texto(d), en(ls.Cantidad, i), en(ls.Precio, i), en(ls.Alicuota, i))
 		if !ok {
-			return "", errEmision("Revisá la línea " + jsmath.Texto(float64(i+1)) + ": cantidad y precio deben ser mayores a cero.")
+			return "", nil, errEmision("Revisá la línea " + jsmath.Texto(float64(i+1)) + ": cantidad y precio deben ser mayores a cero.")
 		}
 		if !fiscal.AlicuotaValida(alic) {
-			return "", errEmision("Revisá la línea " + jsmath.Texto(float64(i+1)) + ": " + fiscal.MensajeAlicuota)
+			return "", nil, errEmision("Revisá la línea " + jsmath.Texto(float64(i+1)) + ": " + fiscal.MensajeAlicuota)
 		}
 		lineas = append(lineas, Linea{LineaEntrada: fiscal.LineaEntrada{Descripcion: desc, Cantidad: cant, PrecioFinalUnitario: precio, Alicuota: ptr(alic)}})
 	}
 	if len(lineas) == 0 {
-		return "", errEmision("Agregá al menos un renglón a la factura.")
+		return "", nil, errEmision("Agregá al menos un renglón a la factura.")
 	}
 
 	var customerID *string
@@ -208,16 +222,22 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 	if customerID == nil && guardar {
 		doc, msj := clientes.LeerDocumento(cuit)
 		if msj != "" {
-			return "", errEmision(msj)
+			return "", nil, errEmision(msj)
 		}
 		id, _, existe, err := clientes.PorDocumento(ctx, s.pool, doc)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 		if !existe {
+			// Una ficha nueva nace sin límite de crédito: a cuenta corriente
+			// Credito la rechazaría igual, pero después de crearla. Se frena
+			// antes, con el mismo mensaje, para no dejar una ficha huérfana.
+			if comoPaga == "cuenta_corriente" {
+				return "", nil, errEmision("Este cliente no tiene cuenta corriente habilitada. Cobralo de otra forma o revisá la ficha del cliente.")
+			}
 			if id, err = clientes.CrearRapido(ctx, s.pool, clientes.ClienteNuevo{Nombre: nombre, Documento: doc, CondicionIva: condicion,
 				Direccion: domicilio, Notas: ptr("Ficha creada al emitir una factura.")}); err != nil {
-				return "", err
+				return "", nil, err
 			}
 			bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "cliente", id, "Dio de alta a "+nombre+" al facturar", nil)
 		}
@@ -248,6 +268,14 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 			return err
 		}
 		et := etiqueta(tipo, pv, n)
+		// A cuenta corriente, el mismo control que Cobrar: límite, mora y
+		// cuenta bloqueada. Sin él, la factura manual era la puerta para
+		// venderle fiado a quien el resto del sistema ya no le fía.
+		if customerID != nil && comoPaga == "cuenta_corriente" {
+			if err := s.puedeACuenta(ctx, tx, *customerID, jsmath.Numero(total)); err != nil {
+				return err
+			}
+		}
 		if customerID != nil {
 			if _, err := tx.Exec(ctx, `INSERT INTO account_movements (customer_id, tipo, monto, detalle, referencia, created_by_user_id)
 				VALUES ($1, 'compra', $2::numeric, $3, $3, $4)`, *customerID, jsmath.Fijo2(jsmath.Numero(total)), et, ses.UserID); err != nil {
@@ -258,7 +286,7 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 		// transacción que la factura. Con ficha, el recibo deja el pago que
 		// cancela la compra de arriba; el efectivo entra a la caja abierta.
 		if comoPaga == "contado" {
-			r, err := cobrarConRecibo(ctx, tx, ses, id, customerID, nombre, nil, et,
+			r, err := cobrarConRecibo(ctx, tx, ses, id, customerID, nombre, sucursal, et,
 				[]cobros.Parte{{Medio: medio, Importe: jsmath.Numero(total)}})
 			if err != nil {
 				return err
@@ -270,16 +298,36 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 	if err != nil {
 		var ec *cobros.ErrorDeCobro
 		if errors.As(err, &ec) {
-			return "", errEmision(ec.Mensaje)
+			return "", nil, errEmision(ec.Mensaje)
 		}
-		return "", s.comoEmision(err, "fiscal.emitir", "No se pudo emitir el comprobante. Intentá de nuevo.")
+		return "", nil, s.comoEmision(err, "fiscal.emitir", "No se pudo emitir el comprobante. Intentá de nuevo.")
 	}
+	var aviso *string
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "factura", id, "Emitió un comprobante manual a "+nombre, nil)
 	if recibo != nil {
 		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCobrar, "factura", id,
 			"Cobró de contado con el recibo "+recibo.Numero+" por "+jsmath.Fijo2(recibo.Total), map[string]any{"receiptId": recibo.ReceiptID})
+		if recibo.Aviso != nil && *recibo.Aviso != "" {
+			aviso = recibo.Aviso
+		}
 	}
-	return id, nil
+	return id, aviso, nil
+}
+
+// puedeACuenta es el control de crédito de Cobrar, con el mismo mensaje.
+func (s *Servicio) puedeACuenta(ctx context.Context, tx pgx.Tx, cliente string, monto float64) error {
+	credito, err := cobros.Credito(ctx, s.q.WithTx(tx), cliente, monto, s.ahora())
+	if err != nil {
+		return err
+	}
+	if !credito.Puede {
+		motivo := "No se puede cargar a cuenta corriente."
+		if credito.Motivo != nil {
+			motivo = *credito.Motivo
+		}
+		return errEmision(motivo + " Cobralo de otra forma o revisá la ficha del cliente.")
+	}
+	return nil
 }
 
 // mediosDeLaManual son los medios de la factura manual de contado, con los

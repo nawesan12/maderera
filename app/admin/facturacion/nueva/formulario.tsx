@@ -100,8 +100,11 @@ const LINEA_VACIA: Linea = {
  */
 export function FormularioFacturaManual({
   condicionEmisor,
+  cajas,
 }: {
   condicionEmisor: CondicionIva;
+  /** Las sucursales con la caja abierta. */
+  cajas: { valor: string; texto: string }[];
 }) {
   const [estado, accion, pendiente] = useActionState(emitirManual, inicial);
 
@@ -109,6 +112,10 @@ export function FormularioFacturaManual({
   const [lineas, setLineas] = useState<Linea[]>([{ ...LINEA_VACIA }]);
   const [comoPaga, setComoPaga] = useState<ComoPaga>("contado");
   const [medio, setMedio] = useState<Medio>("efectivo");
+  // Con una sola caja abierta, Go la usa sola; con varias, el efectivo no
+  // entraba a ningún arqueo, así que se elige acá.
+  const [caja, setCaja] = useState<string | null>(null);
+  const eligeCaja = comoPaga === "contado" && medio === "efectivo" && cajas.length > 1;
 
   /*
    * A quién se le factura.
@@ -394,6 +401,7 @@ export function FormularioFacturaManual({
           {comoPaga === "contado" && (
             <input type="hidden" name="medio" value={medio} />
           )}
+          {eligeCaja && caja && <input type="hidden" name="sucursal" value={caja} />}
           <div className="space-y-3">
             <Elegir
               etiqueta="Cómo paga"
@@ -408,6 +416,19 @@ export function FormularioFacturaManual({
                 valor={medio}
                 alCambiar={setMedio}
               />
+            )}
+            {eligeCaja && (
+              <div className="space-y-2">
+                <p className="text-base text-muted-foreground">
+                  ¿A qué caja entra el efectivo?
+                </p>
+                <Elegir
+                  etiqueta="Caja"
+                  opciones={cajas}
+                  valor={caja}
+                  alCambiar={setCaja}
+                />
+              </div>
             )}
           </div>
         </Seccion>
@@ -453,7 +474,7 @@ export function FormularioFacturaManual({
         <button
           type="button"
           onClick={() => formulario.current?.reportValidity() && setConfirmando(true)}
-          disabled={pendiente || totales.total <= 0}
+          disabled={pendiente || totales.total <= 0 || (eligeCaja && !caja)}
           className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
         >
           {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}

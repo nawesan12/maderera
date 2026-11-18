@@ -43,7 +43,9 @@ test("un banner cargado en el panel sale en la portada, y al borrarlo se va", as
   const suyo = page.locator("form").filter({ has: page.locator(`input[name=titulo][value="${titulo}"]`) });
   await suyo.getByRole("button", { name: "Borrar" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Borrar el banner" }).click();
-  await expect(suyo.getByText("Banner borrado.")).toBeVisible();
+  // Borrado, su formulario se va de la lista: el aviso «Banner borrado.»
+  // vive adentro y a veces se desmonta antes de que se lo alcance a ver.
+  await expect(suyo).toHaveCount(0);
 
   await expect.poll(async () => (await page.request.get("/").then((r) => r.text())).includes(titulo), { timeout: 20_000 }).toBe(false);
 });

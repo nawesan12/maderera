@@ -67,8 +67,9 @@ type Renglon =
  *
  * **Cerrado no dibuja nada** (hallazgo 27, 18/11/2026). Era un círculo
  * naranja flotante al lado del WhatsApp: no decía qué era y en la ficha tapaba
- * el botón principal. Ahora lo abren el buscador del catálogo, el menú del
- * celular y la página de «no existe», con `abrirAsistente()`.
+ * el botón principal. Ahora lo abren la barra de escritorio, el buscador del
+ * catálogo, el menú del celular y la página de «no existe», con
+ * `abrirAsistente()`.
  *
  * Abierto es un diálogo: en el celular, una hoja desde abajo; desde `sm`, una
  * ventana en la esquina. El foco entra al campo, Tab no se escapa del panel,

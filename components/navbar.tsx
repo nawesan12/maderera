@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { PersonajeAsistente } from "@/components/asistente/personaje";
+import { ETIQUETA_ASISTENTE, abrirAsistente } from "@/lib/asistente/abrir";
 import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
 import { useEstado } from "@/lib/estado-context";
@@ -627,6 +629,25 @@ export function Navbar({
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Y además
                   </p>
+                  {/* El asistente, como una fila más. Se abre recién cuando el
+                      cajón terminó de irse (200 ms): el cajón le devuelve el
+                      foco a la hamburguesa al desmontarse, y si el asistente
+                      ya estaba abierto le sacaba el foco del campo. Así, al
+                      cerrar el asistente el foco vuelve a la hamburguesa. */}
+                  <button
+                    type="button"
+                    aria-haspopup="dialog"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setTimeout(abrirAsistente, 220);
+                    }}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-bold uppercase tracking-[0.045em] hover:bg-sitio-alt"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-naranja-claro">
+                      <PersonajeAsistente className="h-[18px] w-[18px] text-acento-sobre-claro" />
+                    </span>
+                    {ETIQUETA_ASISTENTE}
+                  </button>
                   {lasHerramientas.map((h) => (
                     <Link
                       key={h.href}

@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   Clock,
   MapPin,
-  MessageCircle,
   Store,
   Truck,
 } from "lucide-react";
@@ -24,6 +23,7 @@ import {
 } from "@/lib/formato";
 import { VolverAPedir } from "./volver-a-pedir";
 import { tienda } from "@/lib/dal/contenido";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 const COMO_SIGUE: Record<string, string> = {
   mercado_pago: "Te mandamos el enlace para pagar por WhatsApp.",
@@ -325,15 +325,7 @@ export default async function DetallePedidoPage({
       <div className="flex flex-wrap gap-3">
         {/* Volver a pedir carga el carrito: sin tienda no hay dónde. */}
         {laTienda.activa && <VolverAPedir numero={pedido.numero} />}
-        <a
-          href={`${whatsapp}?text=${mensaje}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-4 font-medium text-white transition-colors hover:bg-brand-green/90"
-        >
-          <MessageCircle className="h-4 w-4" />
-          Consultar por este pedido
-        </a>
+        <BotonWhatsapp enlace={`${whatsapp}?text=${mensaje}`}>Consultar por este pedido</BotonWhatsapp>
       </div>
     </div>
   );

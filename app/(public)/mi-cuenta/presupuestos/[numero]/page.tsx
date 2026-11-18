@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarClock, MessageCircle, Store } from "lucide-react";
+import { ArrowLeft, CalendarClock, Store } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_PRESUPUESTO, Pasos } from "@/components/admin/pasos";
 import { miPresupuesto } from "@/lib/dal/cuenta";
@@ -14,6 +14,7 @@ import {
   plural,
 } from "@/lib/formato";
 import { RespuestaPresupuesto } from "../respuesta";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 export async function generateMetadata({
   params,
@@ -194,15 +195,7 @@ export default async function DetallePresupuestoPage({
           </div>
         </section>
       ) : (
-        <a
-          href={`${whatsapp}?text=${mensaje}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-4 font-medium text-white transition-colors hover:bg-brand-green/90"
-        >
-          <MessageCircle className="h-4 w-4" />
-          Consultar por este presupuesto
-        </a>
+        <BotonWhatsapp enlace={`${whatsapp}?text=${mensaje}`}>Consultar por este presupuesto</BotonWhatsapp>
       )}
 
       {presupuesto.asesor && (

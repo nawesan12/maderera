@@ -124,9 +124,10 @@ export default async function PublicLayout({
           pedido —ver `EnlaceDeSeccion` en `components/navbar.tsx`—. */}
       <WhatsAppButton enlace={`${whatsapp}?text=${encodeURIComponent("Hola! Quisiera consultar sobre...")}`} />
 
-      {/* El asistente va al lado del botón de WhatsApp y no encima: son dos
-          caminos distintos y quien quiere hablar con una persona tiene que
-          poder hacerlo sin pasar por acá. */}
+      {/* El asistente ya no flota (hallazgo 27): cerrado no dibuja nada y lo
+          abren el buscador del catálogo, el menú del celular y la página de
+          «no existe» (`lib/asistente/abrir.ts`). Vive acá, una sola vez, para
+          que la conversación siga si se abre desde otro lado. */}
       <PanelDelAsistente
         enlaceWhatsapp={`${whatsapp}?text=${encodeURIComponent("Hola! Vengo del asistente de la web y quería consultar por...")}`}
       />

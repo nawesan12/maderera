@@ -64,13 +64,15 @@ export async function NumerosDelNegocio({
             debo.vencido > 0
               ? `${moneda.format(debo.vencido)} vencido · ${plural(debo.facturasVencidas, "factura")}`
               : "Nada vencido",
-            // Lo que se debe sin factura (el saldo de ISIS, un remito) explica
-            // por qué el total pasa a las facturas: va antes que la semana.
-            debo.sinFactura > 0
-              ? `${moneda.format(debo.sinFactura)} sin factura`
-              : debo.estaSemana > 0
-                ? `${moneda.format(debo.estaSemana)} vence esta semana`
-                : "Nada vence esta semana",
+            // Lo de la semana es la cifra con que el dueño decide los pagos:
+            // va siempre. Lo que se debe sin factura (el saldo de ISIS, un
+            // remito) explica por qué el total pasa a las facturas, pero
+            // después de la migración casi todos los proveedores lo tienen:
+            // si reemplazaba a la semana, la semana no se veía nunca más.
+            debo.estaSemana > 0
+              ? `${moneda.format(debo.estaSemana)} vence esta semana`
+              : "Nada vence esta semana",
+            ...(debo.sinFactura > 0 ? [`${moneda.format(debo.sinFactura)} sin factura`] : []),
           ]}
         />
         <Tarjeta
